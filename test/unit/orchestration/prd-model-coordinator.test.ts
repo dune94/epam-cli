@@ -50,8 +50,18 @@ describe('prd-model-coordinator — profile existence', () => {
     expect(agent.length).toBeGreaterThan(300);
   });
 
-  it('profiles.json and profiles.json.original have the same key count', () => {
-    expect(Object.keys(profiles).length).toBe(Object.keys(profilesOrig).length);
+  // WAS: an equal key count. That is only true BETWEEN runs. The roster is ephemeral by
+  // design — a run mints project agents into profiles.json and pre-run-reset restores the
+  // floor at the start of the next one — so mid-run the live file legitimately holds more
+  // (62 vs 57 while AMSD-2041 sat at pause 1 on 2026-08-08, with five agents minted). The
+  // test failed and passed depending on nothing but whether a run had minted since the last
+  // reset, which reads as flake and trains you to ignore it.
+  //
+  // The real invariant is the one the launchers state: original is the FLOOR. Anything extra
+  // is this run's roster; anything missing means an engine agent was deleted.
+  it('profiles.json contains every role profiles.json.original restores (original is the floor)', () => {
+    const missing = Object.keys(profilesOrig).filter((k) => !(k in profiles));
+    expect(missing, `profiles.json is missing restored role(s): ${missing.join(', ')}`).toEqual([]);
   });
 });
 

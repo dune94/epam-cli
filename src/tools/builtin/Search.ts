@@ -56,15 +56,39 @@ export class SearchTool implements Tool {
         searchPath,
       ].filter(Boolean);
 
-      // Try rg first, fall back to grep
-      let result;
-      try {
-        result = await execa('rg', args, { reject: false, timeout: 10000 });
-      } catch {
+      // Try rg first, fall back to grep.
+      //
+      // `reject: false` means execa RETURNS a failure instead of throwing, so the catch below
+      // never fired and the fallback was unreachable dead code. On this machine `rg` is a
+      // shell function with no binary on PATH, so every spawn was ENOENT, every search
+      // returned empty, and the tool reported "(no matches found)" — indistinguishable from a
+      // repository that genuinely contains nothing. An estate survey then concluded
+      // "greenfield" about a brownfield estate with 243 matching files in one codeline
+      // (2026-08-08). grep was at /usr/bin/grep the whole time and never once ran.
+      //
+      // Exit codes: 0 = matches, 1 = no matches (a real answer), anything else — or a spawn
+      // failure, which surfaces as a non-numeric exitCode — means the search DID NOT RUN.
+      const ran = (r: { exitCode?: number }) => r.exitCode === 0 || r.exitCode === 1;
+
+      let result = await execa('rg', args, { reject: false, timeout: 10000 });
+      if (!ran(result)) {
         const grepArgs = ['-r', '-n', caseSensitive ? '' : '-i', pattern, searchPath].filter(
           Boolean
         );
         result = await execa('grep', grepArgs, { reject: false, timeout: 10000 });
+      }
+
+      // Neither searcher ran. Reporting absence here is the one answer that must never be
+      // given: the caller cannot tell it from a successful empty search, and will act on it.
+      if (!ran(result)) {
+        return {
+          toolUseId: '',
+          content:
+            'Error: the search could not be run — neither ripgrep nor grep executed ' +
+            `(${result.shortMessage ?? 'no exit code'}). This is NOT a statement that the ` +
+            'pattern is absent; nothing was searched.',
+          isError: true,
+        };
       }
 
       const output = (result.stdout ?? '').trim();

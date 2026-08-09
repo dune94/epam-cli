@@ -1153,6 +1153,29 @@ const MANIFEST_GROUNDING_BLOCK = [
 // architecturally correct answer for a multi-story call, not a workaround.
 // Only a SINGLE-story, single-codeline call (SPEC_AGENT for openspec/
 // speckit) has one real repoPath to hand it, so only those get real tools.
+/**
+ * How many tool calls an ESTATE SURVEY may spend, scaled to the ground it must cover.
+ *
+ * Every spec-mode agent shared one ceiling of 8. That is a sane budget for an agent looking at
+ * one codeline and an impossible one for a survey whose own prompt says "For EVERY codeline
+ * above, OPEN IT". Live 2026-08-08 the survey ran seven distinct search patterns against three
+ * separate repositories under that ceiling, saw nothing conclusive, and reported "no existing
+ * live preview infrastructure — this is greenfield work" about a brownfield estate with 243
+ * matching source files in the first codeline alone. That verdict went into estate-survey.json,
+ * which the investigators and the detective read next.
+ *
+ * The rate is per codeline and the count comes from the caller's own list, so no estate size
+ * is written here. An explicit SPEC_MODE_MAX_TOOL_CALLS still wins — an operator capping cost
+ * must not be silently overridden.
+ */
+function surveyToolBudget(codelines, env = process.env) {
+  if (env.SPEC_MODE_MAX_TOOL_CALLS) return String(env.SPEC_MODE_MAX_TOOL_CALLS);
+  const n = Math.max(1, (Array.isArray(codelines) ? codelines : []).filter(Boolean).length);
+  const perCodeline = parseInt(env.EPAM_SURVEY_TOOL_CALLS_PER_CODELINE || '', 10);
+  const rate = Number.isFinite(perCodeline) && perCodeline > 0 ? perCodeline : 8;
+  return String(n * rate);
+}
+
 function specAgentEnv(env = process.env, repoPath = '') {
   const out = {};
   if (env.SPEC_MODE_MAX_OUTPUT_TOKENS) out.EPAM_MAX_OUTPUT_TOKENS = env.SPEC_MODE_MAX_OUTPUT_TOKENS;
@@ -3219,6 +3242,31 @@ ${depBlock ? `WHAT EACH CODELINE DECLARES IT DEPENDS ON (its own manifest — gr
 THE CODELINES IN SCOPE, and where each is checked out:
 ${_named.map((c) => `- ${c.name}: ${c.path || '(path unknown)'}`).join('\n')}
 
+HOW TO LOOK — USE THE SYMBOL INDEX, NOT TEXT SEARCH.
+
+Every codeline above is already indexed in CodeGraph. Use codegraph_query as your PRIMARY
+instrument, and call it iteratively — 5-10 calls is normal:
+  - codegraph_query explore "<domain nouns from the ticket>"  — START HERE, per codeline
+  - codegraph_query query|callers|callees "<symbol>"          — trace what explore surfaced
+  - codegraph_query show "<file> [start] [end]"               — read the real lines before
+                                                                quoting anything as evidence
+It returns real symbols, their definition sites, who calls them, and which have tests. That is
+the question you are actually asking: where does this codeline wire the thing the ticket is
+about. Text search cannot answer it and ranks a vendored copy of a package alongside the one
+line that initialises it.
+
+Reserve 'search' for what a symbol index cannot hold — a config key, an environment variable
+name, a literal string. Then treat its result with suspicion:
+
+  A SEARCH THAT RETURNS NOTHING IS NOT EVIDENCE THAT NOTHING IS THERE.
+
+On 2026-08-08 this survey reported "searched for seven patterns, all returned zero matches, no
+existing infrastructure was found, meaning this is greenfield work" about three codelines
+holding 243, 102 and 158 matching source files. The search tool was silently broken and every
+call returned "(no matches found)". The reasoning was sound and the premise was false. If a
+search comes back empty, confirm with codegraph_query before concluding absence — and if the
+two disagree, say so in your evidence rather than picking one.
+
 YOUR JOB, and its limits:
 
 1. For EVERY codeline above, OPEN IT and decide whether this work reaches it. The ticket's
@@ -3262,6 +3310,10 @@ inside these fields — a prose report outside this JSON is discarded unread, ho
     _env.AI_GATE_ALLOW_TOOLS = '1';
     _env.EPAM_ALLOWED_TOOLS = toolGrant;
   }
+  // Scaled to the number of codelines this survey must open. specAgentEnv's flat ceiling of 8
+  // is a single-codeline budget; applied to an estate it produced a "greenfield" verdict about
+  // a brownfield estate because the sweep could not finish. See surveyToolBudget.
+  _env.EPAM_MAX_TOOL_CALLS = surveyToolBudget(_named, process.env);
 
   let payload = null;
   try {
@@ -8606,6 +8658,7 @@ module.exports = {
     TOOL_TICKET_LINKS,
   },
   specAgentEnv,
+  surveyToolBudget,
   reviewTicketLinks,
   normaliseTicketLinks,
   coveringTestFiles,

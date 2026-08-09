@@ -44,7 +44,19 @@ export class AgentActivityLogger {
   private logPath: string;
 
   constructor(projectRoot: string) {
-    this.logPath = join(projectRoot, 'orchestrations', 'logs', 'agent-activity.jsonl');
+    // THE ENGINE'S LOG DIRECTORY, WHEN THE ENGINE SAYS WHERE IT IS.
+    //
+    // projectRoot is the repository the agent is working IN, which for an orchestration writer
+    // is the CLIENT codeline. Live 2026-08-09 that put 125 activity events inside
+    // next.gotransit.com/orchestrations/logs/ — never committed (engine_paths_filter excludes
+    // it) but an engine artefact in a client checkout, and invisible where anyone would look.
+    //
+    // The orchestration knows its own LOG_DIR and passes it; a direct `epam run` sets nothing
+    // and keeps the original project-root behaviour.
+    const explicit = process.env.EPAM_ACTIVITY_LOG_DIR;
+    this.logPath = explicit
+      ? join(explicit, 'agent-activity.jsonl')
+      : join(projectRoot, 'orchestrations', 'logs', 'agent-activity.jsonl');
   }
 
   /**

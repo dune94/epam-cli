@@ -90,7 +90,7 @@ export function createRunCommand(): Command {
 
       // Labels come from what the orchestration already exports; a bare `epam run` records the
       // calls with generic labels rather than not recording them.
-      const agentName = process.env.EPAM_AGENT_NAME || 'epam-run';
+      const agentName = resolveAgentLabel(process.env);
       const storyLabel = process.env.EPAM_STORY_ID || undefined;
       const phaseLabel = process.env.PHASE || undefined;
       const activityLogger = config.projectRoot ? getActivityLogger(config.projectRoot) : null;
@@ -195,4 +195,19 @@ export function summariseToolArgs(
     out[k] = s.length > maxValueChars ? `${s.slice(0, maxValueChars)}…(${s.length} chars)` : s;
   }
   return out;
+}
+
+/**
+ * Which agent an activity event is attributed to.
+ *
+ * EPAM_AGENT_ROLE is what the orchestration exports at the writer invocation (claude.sh).
+ * EPAM_AGENT_NAME was a variable invented CLI-side that nothing sets, so every live event on
+ * 2026-08-09 came out as the fallback and no per-agent breakdown was possible.
+ *
+ * Exported and pure so this is testable by CALLING it. The first version of this check asserted
+ * that run.ts mentioned EPAM_AGENT_ROLE, and a mutation removing the variable still passed —
+ * the comment above it contained the string.
+ */
+export function resolveAgentLabel(env: NodeJS.ProcessEnv): string {
+  return env.EPAM_AGENT_NAME || env.EPAM_AGENT_ROLE || 'epam-run';
 }

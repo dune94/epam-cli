@@ -376,10 +376,13 @@ export class AgentRunner {
       }));
 
       this.totalToolCalls += toolCallRequests.length;
-      this.options.onToolCall?.(
-        toolCallRequests.map(r => r.name).join(', '),
-        toolCallRequests[0]?.input ?? {}
-      );
+      // ONE CALL PER TOOL. This joined the whole batch into a single string, so a model that
+      // asks for three tools in one turn produced the "tool name" "bash, read_file, bash" —
+      // live 2026-08-09, alongside "bash, bash". Per-tool counts were wrong whenever the model
+      // batched, which is most turns, and the first input was reported for all of them.
+      for (const req of toolCallRequests) {
+        this.options.onToolCall?.(req.name, req.input ?? {});
+      }
 
       // Loop protection: block exact-repeat tool calls (same tool + same args
       // seen too many times in the recent window) BEFORE they execute, so a

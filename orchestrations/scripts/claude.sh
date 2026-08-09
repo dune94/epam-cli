@@ -8850,6 +8850,7 @@ ${_trimmed_amendment}"
                         EPAM_DANGEROUS_SKIP_APPROVAL=1 \
                         EPAM_AGENT_ROLE="${_story_agent_role}" \
                         EPAM_STORY_ID="${story_id}" \
+                        EPAM_ACTIVITY_LOG_DIR="${LOG_DIR}" \
                         EPAM_REQUIRED_SYMBOLS="${_req_symbols}" \
                         EPAM_REQUIRED_SYMBOL_SCOPE="${_req_scope}" \
                         EPAM_ALLOWED_WRITE_PATHS="${_allowed_write_paths}" \

@@ -5248,6 +5248,53 @@ update_monitor_status() {
             ;;
     esac
 }
+# _classify_declared_paths <newline-separated-paths>
+#
+# Splits the story's declared output paths into those that ALREADY EXIST and those that do not,
+# and reports the size of each existing one.
+#
+# WHY THIS EXISTS. The planner was given a bare list under the heading "Files to Create/Modify"
+# and nothing else. It cannot know that pageService.ts already holds 537 lines, so "Create
+# src/services/pageService.ts" is the reasonable output — and that is exactly what it produced
+# live on 2026-08-09, ten steps of it, while build_implementation_prompt simultaneously told the
+# writer "these files already exist, their content is injected below". The writer got both halves
+# of the contradiction and wrote nothing.
+#
+# FACTUAL, NOT LEXICAL. An earlier draft scanned plan steps for create-ish verbs.
+# lib/guard-vocabulary.js forbids that in terms this project has already paid to learn: a
+# deterministic guard may be deterministic in enforcement, but its CONTENT may never be a
+# hardcoded list — "not in engine code, not in config, not as a 'generic' list somebody promises
+# to maintain". So nothing here matches words. The filesystem is asked; existence is a fact,
+# derived per story, naming no domain and no vocabulary.
+#
+# Creation stays expressible: a path that genuinely does not exist is listed as creatable, so a
+# greenfield story is unaffected.
+_classify_declared_paths() {
+    local _paths="${1:-}"
+    local _existing="" _new="" _p _abs _lines
+    while IFS= read -r _p; do
+        [ -n "$_p" ] || continue
+        case "$_p" in /*) _abs="$_p" ;; *) _abs="${PROJECT_ROOT}/${_p}" ;; esac
+        if [ -f "$_abs" ]; then
+            _lines=$(wc -l < "$_abs" 2>/dev/null | tr -d " ")
+            _existing="${_existing}  - ${_p} (${_lines:-0} lines, already implemented)
+"
+        else
+            _new="${_new}  - ${_p}
+"
+        fi
+    done <<< "$_paths"
+
+    # No line may begin with `}` — several extractors in this repo (and its tests) isolate a
+    # function with /^}/, and a multi-line parameter default whose closing brace lands in column
+    # zero truncates the function silently. That is how the first version of this helper broke
+    # its own test.
+    [ -n "$_existing" ] || _existing="  (none)"
+    [ -n "$_new" ] || _new="  (none)"
+    printf '## Files that ALREADY EXIST — your steps MODIFY these; they are already written\n%s\n' "$_existing"
+    printf '## Files that DO NOT EXIST YET — only these may be created\n%s\n' "$_new"
+}
+
 
 # run_planning_phase <story_id> <planner_model>
 # Invokes the planner model with a focused planning prompt.
@@ -5267,7 +5314,10 @@ run_planning_phase() {
     # use these verbatim. Without them, the planner invents paths based on convention
     # (e.g. tests/ instead of src/skyscanner/), which the executor faithfully follows
     # to the wrong location and exhausts all turns trying to recover (151K token bloat).
-    local declared_files
+    local declared_files declared_files_raw
+    declared_files_raw=$(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .technicalNotes.files // [] | .[]' \
+        "$prd_target" 2>/dev/null || echo "")
     declared_files=$(jq -r --arg id "$story_id" \
         '.stories[] | select(.id == $id) | .technicalNotes.files // [] | .[]' \
         "$prd_target" 2>/dev/null | sed 's/^/  - /' || echo "")
@@ -5291,14 +5341,14 @@ $(cat "$_cf")
 
 Story: ${story_id} — ${title}
 
-## Files to Create/Modify (EXACT ABSOLUTE PATHS — your plan MUST reference ONLY these paths for output steps, never invent alternatives)
-${declared_files:-  (none declared)}
+## Output paths (EXACT — your plan MUST reference ONLY these paths for output steps, never invent alternatives)
+$(_classify_declared_paths "${declared_files_raw}")
 
 ## Acceptance Criteria
 ${ac}
 $([ -n "$plan_dep_contracts" ] && printf '\n## Dependency Contracts (ground-truth import paths and signatures — use these verbatim in read/import steps)\n%s\n' "$plan_dep_contracts" || true)
 $([ -n "${CROSS_CODELINE_CONTRACT:-}" ] && [ -f "${CROSS_CODELINE_CONTRACT}" ] && printf '\n## Cross-Codeline API Contract (upstream codeline exports — use these types and endpoints verbatim when integrating)\n%s\n' "$(cat "${CROSS_CODELINE_CONTRACT}")" || true)
-Produce 5-10 numbered implementation steps. Your write/create steps MUST use the exact paths listed under 'Files to Create/Modify' above. Be specific about function signatures and test requirements."
+Produce 5-10 numbered implementation steps. Your output steps MUST use the exact paths listed under 'Output paths' above, and must respect which of them already exist: a file listed as ALREADY EXIST is modified, never created. Be specific about function signatures and test requirements."
 
     local plan_result_file
     plan_result_file=$(mktemp /tmp/plan-${story_id}-XXXXXX.json)

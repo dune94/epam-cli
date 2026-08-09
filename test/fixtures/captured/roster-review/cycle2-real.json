@@ -1,0 +1,30 @@
+{
+  "verdict": "defects_found",
+  "findings": [
+    {
+      "agent": "contentstack-live-preview-engineer",
+      "severity": "blocking",
+      "claim": "All three are NextJS projects using the `contentstack` Delivery SDK and `@contentstack/utils`, written in TypeScript with ts-jest.",
+      "checked": "dependency_available",
+      "found": "metrolinx does NOT declare ts-jest",
+      "verification": {
+        "codeline": "metrolinx",
+        "expected": "present"
+      }
+    },
+    {
+      "agent": "contentstack-live-preview-engineer",
+      "severity": "blocking",
+      "claim": "Tests in all three codelines use `jest` with `ts-jest`",
+      "checked": "dependency_available",
+      "found": "metrolinx does NOT declare ts-jest",
+      "verification": {
+        "codeline": "metrolinx",
+        "expected": "present"
+      }
+    }
+  ],
+  "refuted": [],
+  "reviewed": 4,
+  "cycles": 2
+}

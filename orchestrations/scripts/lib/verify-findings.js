@@ -60,9 +60,10 @@ function declaredNames(repoPath) {
 /**
  * verifyFindings(findings, codelines) -> { kept, refuted, unsettled }
  *
- * kept      — confirmed by the repository, or not mechanically checkable (a judgement).
- * refuted   — the repository contradicts the finding. Dropped.
- * unsettled — checkable in principle, but the check could not run. Kept, and flagged.
+ * kept      — the repository CONTRADICTS the brief (a real defect), or the finding is a
+ *             judgement no tool settles.
+ * refuted   — the repository AGREES with the brief, so there is no defect. Dropped.
+ * unsettled — malformed (dropped), or checkable in principle but unrunnable (kept, flagged).
  */
 function verifyFindings(findings, codelines) {
   const byName = new Map((Array.isArray(codelines) ? codelines : []).map((c) => [c.name, c.path]));
@@ -72,12 +73,33 @@ function verifyFindings(findings, codelines) {
 
   for (const f of (Array.isArray(findings) ? findings : [])) {
     const v = f && f.verification;
-    if (!v || !v.kind || v.kind === 'not_mechanically_checkable') { kept.push(f); continue; }
+
+    // No verification block, or an explicit "no tool settles this": a judgement about
+    // ownership, overlap or vagueness. The reviewer's to make, and kept untouched.
+    if (!v || v.kind === 'not_mechanically_checkable') { kept.push(f); continue; }
+
+    // A finding that claims a mechanical basis must supply the fields the check needs.
+    // The schema declared none of them required, so live output carried {codeline, expected}
+    // and nothing else — and the old code's `!v.kind` bail-out KEPT every such finding as a
+    // trusted blocking defect. The whole re-check was inert in production (2026-08-08).
+    // Malformed is now surfaced and NOT kept: an unverifiable claim must not halt a run.
+    const subject = typeof v.subject === 'string' ? v.subject.trim() : '';
+    if (!v.kind || !subject || !v.codeline || !v.expected) {
+      unsettled.push({
+        ...f,
+        _why: 'malformed verification: a mechanically-checkable finding must name kind, ' +
+          'codeline, subject and expected',
+      });
+      continue;
+    }
+    // briefAsserts may be absent on older payloads. Then only the reviewer's READ can be
+    // checked, which is the 2026-08-07 protection; defect-ness cannot be settled, so the
+    // finding is kept if the read holds. Stated rather than silently assumed.
+    const briefAsserts = v.briefAsserts === 'present' || v.briefAsserts === 'absent'
+      ? v.briefAsserts : null;
 
     const repo = byName.get(v.codeline);
-    const subject = typeof v.subject === 'string' ? v.subject.trim() : '';
-    const expectPresent = v.expected === 'present';
-    if (!repo || !subject) { unsettled.push({ ...f, _why: 'no such codeline, or no subject named' }); kept.push(f); continue; }
+    if (!repo) { unsettled.push({ ...f, _why: `no such codeline: ${v.codeline}` }); kept.push(f); continue; }
 
     let actuallyPresent = null;
     if (v.kind === 'dependency_declared') {
@@ -90,14 +112,38 @@ function verifyFindings(findings, codelines) {
     }
 
     if (actuallyPresent === null) { unsettled.push({ ...f, _why: 'the check could not be run' }); kept.push(f); continue; }
-    if (actuallyPresent === expectPresent) { kept.push({ ...f, _verified: true }); }
-    else {
+
+    // TWO questions, in order. They are different and a single comparison cannot answer both.
+    //
+    // 1. DID THE REVIEWER READ THE REPOSITORY CORRECTLY? `expected` is what it says it found.
+    //    Live 2026-08-07 a reviewer reported a package absent from a codeline that declares it
+    //    in devDependencies. A careless read must cost nothing, so a wrong read is refuted here
+    //    and never reaches the second question.
+    const reviewerSaysPresent = v.expected === 'present';
+    if (actuallyPresent !== reviewerSaysPresent) {
       refuted.push({
         ...f,
-        _refutedBy: `${v.kind}: "${subject}" is ${actuallyPresent ? 'present' : 'absent'} in ${v.codeline}, ` +
-          `the finding says ${expectPresent ? 'present' : 'absent'}`,
+        _refutedBy: `${v.kind}: "${subject}" is ${actuallyPresent ? 'present' : 'absent'} in ` +
+          `${v.codeline}, the finding says ${reviewerSaysPresent ? 'present' : 'absent'}`,
       });
+      continue;
     }
+
+    // 2. GIVEN A CORRECT READ, IS THE BRIEF ACTUALLY WRONG? Only a contradiction between the
+    //    brief and the repository is a defect. Live 2026-08-08 the reviewer raised NINE
+    //    findings whose own evidence read "This claim is sound" — it verified the brief and
+    //    reported it as blocking anyway, which burned the entire correction budget before a
+    //    genuine defect arrived. A confirmed brief is not a finding.
+    if (briefAsserts !== null && actuallyPresent === (briefAsserts === 'present')) {
+      refuted.push({
+        ...f,
+        _refutedBy: `${v.kind}: the brief says "${subject}" is ${briefAsserts} in ${v.codeline}, ` +
+          'and it is — the brief is correct, so this is not a defect',
+      });
+      continue;
+    }
+
+    kept.push({ ...f, _verified: true });
   }
   return { kept, refuted, unsettled };
 }

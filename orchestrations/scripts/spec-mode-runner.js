@@ -3880,9 +3880,27 @@ const TOOL_ROSTER_REVIEW = {
                 expected: {
                   type: 'string',
                   enum: ['present', 'absent'],
-                  description: 'What you found: is the subject present in that codeline, or absent?',
+                  description: 'What YOU FOUND: is the subject present in that codeline, or absent?',
+                },
+                briefAsserts: {
+                  type: 'string',
+                  enum: ['present', 'absent'],
+                  description:
+                    'What THE BRIEF claims about the subject — which may differ from what you ' +
+                    'found. That difference IS the defect. If the brief turns out to be right, ' +
+                    'there is nothing to report and you should not raise a finding at all.',
                 },
               },
+              // TWO facts, deliberately separate, because one field cannot carry both and a
+              // live run proved it: 2026-08-07 the reviewer used this slot for what it found
+              // (claiming absent what the manifest declared — a careless read the re-check
+              // must refute), and 2026-08-08 it used the same slot for what the BRIEF asserted.
+              // Splitting them lets the pipeline catch a misread AND drop a confirmation.
+              //
+              // Required, because nothing was: live output carried only {codeline, expected},
+              // and verifyFindings' `!v.kind` bail-out then kept every finding UNCHECKED. The
+              // whole mechanical re-check was inert in production until 2026-08-08.
+              required: ['kind', 'codeline', 'subject', 'expected', 'briefAsserts'],
             },
           },
         },
@@ -4043,6 +4061,12 @@ async function reviewRoster({
     findings = v.kept;
     refuted = v.refuted;
     for (const f of refuted) console.warn(`spec-mode: roster finding DISCARDED — ${f._refutedBy}`);
+    // Unsettled findings are NOT silently gone. A malformed one is dropped (an unverifiable
+    // claim must not halt a run), and that is exactly how a reviewer could disable this gate
+    // by omitting fields — so every one is named, with why, where an operator will see it.
+    for (const f of (v.unsettled || [])) {
+      console.warn(`spec-mode: roster finding UNSETTLED — ${f._why} — agent=${f.agent || '?'} claim=${JSON.stringify(f.claim || '')}`);
+    }
   } catch (err) {
     console.warn(`spec-mode: could not verify roster findings (${err && err.message}) — keeping all of them`);
   }

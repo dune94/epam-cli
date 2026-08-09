@@ -9963,8 +9963,23 @@ run_implementation() {
             # lane (every remaining story in it) over one story's commit
             # being correctly skipped. The failure is already fully logged
             # inside the function; there is nothing more to do here.
-            commit_completed_story "$story_id" || true
+            # THE GUARD STAYS, THE OUTCOME IS ACTED ON.
+            #
+            # `|| true` is correct: this script runs under `set -e`, and a bare failure here
+            # would kill the whole lane over one story's commit. But the return code used to be
+            # DISCARDED, and that is a different thing. Live 2026-08-09 the credential scan
+            # unstaged a story's work, `git add` then failed, and the run reported
+            # "Implemented: 1, Failed: 0" with 43 lines sitting uncommitted in the working
+            # tree — every downstream reader told the story was delivered.
+            local _commit_rc=0
+            commit_completed_story "$story_id" || _commit_rc=$?
             log "  [post-story] Commit step complete for $story_id"
+            if [ "$_commit_rc" -ne 0 ]; then
+                error "  [post-story] $story_id: work is UNCOMMITTED (commit step exit ${_commit_rc}) — the story is not delivered; demoting from implemented"
+                update_story_status "$story_id" "failed"
+                failed=$((failed + 1))
+                implemented=$((implemented - 1))
+            fi
 
             # Same post-story guards the main lane's Step 1 loop runs after a
             # successful story (run-agent-orchestration.sh) — parity per

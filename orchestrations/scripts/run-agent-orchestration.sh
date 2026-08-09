@@ -7396,6 +7396,16 @@ if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/vc-coverage-check.sh" 
             # Never silent: "no test to check" and "everything covered" must not
             # look the same in the report.
             warning "  [vc-coverage] no test file in the writer manifest for ${_vc_story} — coverage NOT checked"
+            # AND NEVER ABSENT. The warning goes to a log; the ARTIFACT is what a report, a
+            # rerun or a human reads, and writing nothing meant absence had to be interpreted —
+            # indistinguishable from a check that ran and found everything covered. That is the
+            # shape of the coverage gate returning `complete: null` while claude.sh read null
+            # as pass, which ran fail-open for its entire life. The survey sanitiser already
+            # states the rule: silence is not a state.
+            printf '%s\n' "$(jq -n --arg s "$_vc_story" \
+                '{state:"not_checked", story:$s, results:[],
+                  reason:"no test file in the writer manifest for this story — nothing to check the verification criteria against"}')" \
+                > "$LOG_DIR/vc-coverage-${_vc_story}.json" 2>/dev/null || true
         fi
     done < <(phase_stories_brownfield_scope "$PRD_FILE" "$PHASE")
 fi

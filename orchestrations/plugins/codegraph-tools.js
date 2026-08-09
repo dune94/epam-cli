@@ -38,6 +38,64 @@ const QUERY_SCRIPT = path.join(__dirname, '..', 'scripts', 'codegraph-agent-quer
 
 const MODES = ['explore', 'query', 'callers', 'callees', 'impact', 'helpers', 'show'];
 
+/**
+ * Turns a typed (or legacy) tool call into the argv for codegraph-agent-query.sh.
+ *
+ * Pure and exported so the contract is testable without spawning anything. Returns
+ * {ok:true, argv} or {ok:false, error} — and the error NAMES THE FIELD, because "args is
+ * required for mode query" sent the agent back to a paragraph while "query requires 'symbol'"
+ * tells it exactly what to send.
+ */
+const MODE_FIELDS = {
+  explore:  { field: 'terms',  split: true },
+  helpers:  { field: 'terms',  split: true },
+  query:    { field: 'symbol', split: false },
+  callers:  { field: 'symbol', split: false },
+  callees:  { field: 'symbol', split: false },
+  impact:   { field: 'symbol', split: false },
+  show:     { field: 'file',   split: false },
+};
+
+function buildArgv(input) {
+  const mode = input && input.mode;
+  if (!mode || !MODES.includes(mode)) {
+    return { ok: false, error: `mode must be one of ${MODES.join(', ')}.` };
+  }
+  const spec = MODE_FIELDS[mode];
+  const typed = input[spec.field];
+  const legacy = typeof input.args === 'string' ? input.args.trim() : '';
+
+  // A typed field always wins: a stale `args` alongside a real `symbol` is the shape a
+  // half-migrated caller sends, and honouring the vaguer one would be the wrong choice.
+  if (typed === undefined || typed === null || String(typed).trim() === '') {
+    if (!legacy) {
+      return { ok: false, error: `mode "${mode}" requires '${spec.field}'.` };
+    }
+    return { ok: true, argv: [mode, ...legacy.split(/\s+/).filter(Boolean)] };
+  }
+
+  const value = String(typed).trim();
+  const argv = spec.split ? [mode, ...value.split(/\s+/).filter(Boolean)] : [mode, value];
+
+  if (mode === 'show') {
+    for (const key of ['startLine', 'endLine']) {
+      const raw = input[key];
+      if (raw === undefined || raw === null || raw === '') continue;
+      // Refused rather than shell-quoted: a non-numeric line bound reaching argv is a bug and
+      // an injection surface at the same time.
+      if (!Number.isInteger(Number(raw)) || String(raw).trim() !== String(Number(raw))) {
+        return { ok: false, error: `'${key}' must be an integer line number, got '${raw}'.` };
+      }
+      argv.push(String(Number(raw)));
+    }
+    const s = Number(input.startLine), e = Number(input.endLine);
+    if (Number.isInteger(s) && Number.isInteger(e) && e < s) {
+      return { ok: false, error: `'endLine' (${e}) is before 'startLine' (${s}).` };
+    }
+  }
+  return { ok: true, argv };
+}
+
 const codegraphQueryTool = {
   name: 'codegraph_query',
   pluginApiVersion: PLUGIN_API_VERSION,
@@ -66,31 +124,53 @@ const codegraphQueryTool = {
           enum: MODES,
           description: 'Which CodeGraph query to run.',
         },
+        // TYPED PER MODE, rather than one `args` string meaning five different things.
+        //
+        // `mode` was enum-constrained and machine-checked; `args` was checked by nobody, so a
+        // wrong shape reached the query script and came back as prose the model had to read,
+        // interpret and retry — a paid round trip for something a schema can make impossible.
+        // Only `mode` is universally required because what else is needed DEPENDS on it;
+        // buildArgv() enforces that and names the missing field.
+        symbol: {
+          type: 'string',
+          description: 'For query/callers/callees/impact: the exact symbol name, e.g. "applyReportDiscountsService".',
+        },
+        terms: {
+          type: 'string',
+          description: 'For explore/helpers: domain nouns, e.g. "discount refund". Not symptom or UI words.',
+        },
+        file: {
+          type: 'string',
+          description: 'For show: the file to read, e.g. "src/services/discount.ts".',
+        },
+        startLine: {
+          type: 'integer',
+          description: 'For show: first line to read (1-based). Optional.',
+        },
+        endLine: {
+          type: 'integer',
+          description: 'For show: last line to read. Optional; must not precede startLine.',
+        },
         args: {
           type: 'string',
           description:
-            'Arguments for the chosen mode: domain nouns for explore/helpers (e.g. "discount refund"), ' +
-            'a symbol name for query/callers/callees/impact (e.g. "applyReportDiscountsService"), ' +
-            'or "<file> [startLine] [endLine]" for show (e.g. "src/services/discount.ts 40 90").',
+            'LEGACY, deprecated — prefer the typed fields above. Free-form arguments in the old ' +
+            'form: domain nouns for explore/helpers, a symbol for query/callers/callees/impact, ' +
+            'or "<file> [startLine] [endLine]" for show. Kept so an agent built against the older ' +
+            'contract keeps working; a typed field always wins over it.',
         },
       },
-      required: ['mode', 'args'],
+      required: ['mode'],
     },
   },
   async execute(input) {
     try {
       const mode = input && input.mode;
-      const args = input && typeof input.args === 'string' ? input.args : '';
-      if (!mode || !MODES.includes(mode)) {
-        return {
-          toolUseId: '',
-          content: `Error: mode must be one of ${MODES.join(', ')}.`,
-          isError: true,
-        };
+      const built = buildArgv(input || {});
+      if (!built.ok) {
+        return { toolUseId: '', content: `Error: ${built.error}`, isError: true };
       }
-      if (!args.trim()) {
-        return { toolUseId: '', content: `Error: args is required for mode "${mode}".`, isError: true };
-      }
+      const args = built.argv.slice(1).join(' ');
       if (!existsSync(QUERY_SCRIPT)) {
         return {
           toolUseId: '',
@@ -100,7 +180,7 @@ const codegraphQueryTool = {
       }
 
       const projectRoot = process.cwd();
-      const argv = args.split(/\s+/).filter(Boolean);
+      const argv = built.argv.slice(1);
       let output;
       try {
         output = execFileSync('bash', [QUERY_SCRIPT, mode, ...argv], {
@@ -137,4 +217,5 @@ const codegraphQueryTool = {
 
 module.exports = {
   tools: [codegraphQueryTool],
+  buildArgv,
 };

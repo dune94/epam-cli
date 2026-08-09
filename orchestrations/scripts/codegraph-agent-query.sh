@@ -118,7 +118,10 @@ case "$sub" in
     if [ -z "$_end" ]; then
       # Whole file, capped: an unbounded dump swamps the context window on a
       # repository of this size.
-      _cap=300
+      # Configured, and generous: the declared files on a live story run to 537 lines, so a
+      # 300-line window silently cut the largest ones — and a file that appears to end early is
+      # how an agent concludes an export does not exist and invents a plausible one.
+      _cap="${EPAM_CODEGRAPH_SHOW_MAX_LINES:-800}"
       _end=$(( _start + _cap - 1 ))
       [ "$_end" -gt "$_total" ] && _end="$_total"
       awk -v s="$_start" -v e="$_end" 'NR>=s && NR<=e {printf "%6d  %s\n", NR, $0}' "$_abs"

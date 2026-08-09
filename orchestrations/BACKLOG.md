@@ -16,6 +16,7 @@ Source: competitive gap analysis (`dark-factory-gap-analysis.md`).
 | # | ID | Title | Status | Source |
 |---|---|---|---|---|
 | 1 | VC-1 | **Investigate VC agent drift — fallback VCs poison the whole downstream chain** | pending | Live metrolinx repro-gate block, 2026-07-25 |
+| 2 | TOKEN-ROOT-CAUSE-1 | **Writer prompt scales with the SPEC's breadth, not the change: 12 declared files injected, 1 changed** | pending | Token root-cause analysis, 2026-08-09 |
 | 2 | TOKEN-VISIBILITY-1 | **Tool usage is not recorded, so grep-vs-codegraph and per-tool tokens cannot be measured** | pending | Agent tooling review, 2026-08-09 |
 | 2 | PROMPT-BUDGET-1 | **Prompt trim measures total size but cuts only guidance — file injection is 39% and untrimmable** | pending | Live AMSD-2041, 2026-08-09 |
 | 2 | TEST-GAP-1 | **Writer-phase test coverage gaps — see "Writer-Phase Test Coverage Gaps" below** | pending | Coverage audit, 2026-08-09 |
@@ -1546,3 +1547,56 @@ but again, only measurable after Finding 1.
 `_EXISTING_FILE_MAX_LINES = 400` WAS a literal inside build_implementation_prompt and is now
 configuration, since it is the single largest term in prompt size and an operator could not
 reach it. Fixed 2026-08-09.
+
+---
+
+## Root Cause of the Token Problem (TOKEN-ROOT-CAUSE-1)
+
+Investigated 2026-08-09. The writer prompt measured 86,809 chars, of which 34,510 (39%) was
+verbatim file injection. The question was why.
+
+### The chain
+
+1. The spec pass declares a deliberately BROAD candidate set. It is designed to over-declare —
+   claude.sh documents "locationHint's 2-3 file guesses" per fix site — because missing the real
+   fix site is worse than naming extra ones. That reasoning is sound.
+2. `build_implementation_prompt` treats every declared file as a READING LIST and injects each
+   one verbatim, up to the per-file line budget.
+3. So prompt size is proportional to how broadly the SPEC guessed, not to how large the change
+   is.
+4. And it is re-paid on every attempt, up to 8.
+
+### The measurement, live on AMSD-2041 / gotransit
+
+| | |
+|---|---|
+| Files declared for the lane | **12** |
+| Files the commit actually touched | **1** (`src/services/contentstack.ts`) |
+| Total lines in the declared set | **2,106** |
+| Largest declared file | `pageService.ts`, 537 lines |
+
+Eleven of twelve files were injected in full so that one could be edited. The deliverable gate
+itself reports this every run — "Verified 12 declared deliverable(s)" — with the soft
+"unchanged" signal on the other eleven, which is the same fact stated from the other end.
+
+### Why the obvious fix is not simply "inject less"
+
+The injection exists for a real failure: 2026-07-23, an agent told "do NOT investigate" invented
+a non-existent `@eps/utils` import across 8 attempts at every model tier. Removing injection
+without replacing it re-opens that.
+
+What makes a replacement viable now: the WRITER's tool budget is unlimited
+(llm-settings.schema.json — "null = unlimited; this cap is not set anywhere today"), so it can
+afford to read what it needs. It is the GATE agents that were capped, at 6, below
+codegraph_query's own advertised 5-10 iterative calls — fixed 2026-08-09 by raising to 24.
+
+### Proposed experiment, now measurable
+
+Rank the declared files (the spec already scores fix sites), inject the top N in full, list the
+remainder by path with their line counts, and direct the writer to `codegraph_query show` or
+ReadFile for anything else. Both knobs are already configuration:
+`existingFileInjection.maxLinesPerFile` and `EPAM_CODEGRAPH_SHOW_MAX_LINES`.
+
+Do not run this experiment before TOKEN-VISIBILITY-1's tool logging has produced a baseline —
+the whole point is to compare tool calls and tokens before and after, and until 2026-08-09
+neither was recorded.

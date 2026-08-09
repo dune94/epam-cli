@@ -5403,7 +5403,14 @@ ${dependency_contracts}"
         EPAM_CLI="$EPAM_CLI" \
         AI_GATE_ALLOW_TOOLS=1 \
         EPAM_ALLOWED_TOOLS="$ORCH_GATE_ALLOWED_TOOLS" \
-        EPAM_MAX_TOOL_CALLS="${PLAN_REVIEW_MAX_TOOL_CALLS:-6}" \
+        # 24, raised from 6 on 2026-08-09. codegraph_query tells the agent in its own
+        # description that "5-10 times is normal", so a budget of 6 was exhausted by one tool's
+        # documented usage with nothing read afterwards — leaving the one-shot grep as the only
+        # affordable option, which is exactly the behaviour the tooling review was asked to
+        # explain. These budgets bound TOOL calls, not model turns: a read is cheap next to the
+        # wrong answer it prevents, and every one of these agents exists to avoid a retry that
+        # costs a full attempt.
+        EPAM_MAX_TOOL_CALLS="${PLAN_REVIEW_MAX_TOOL_CALLS:-24}" \
         bash "$SCRIPT_DIR/ai-run.sh" --provider "$_orch_provider" \
         ${ORCH_GATE_MODEL:+--model "$ORCH_GATE_MODEL"} \
         2>/dev/null || echo "")
@@ -6015,7 +6022,7 @@ Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[\"<issue1>\"],\"reason\":\"<15
         EPAM_TEMPERATURE="0.7" \
         AI_GATE_ALLOW_TOOLS=1 \
         EPAM_ALLOWED_TOOLS="$ORCH_GATE_ALLOWED_TOOLS" \
-        EPAM_MAX_TOOL_CALLS="${PRD_CHANGE_REVIEWER_MAX_TOOL_CALLS:-6}" \
+        EPAM_MAX_TOOL_CALLS="${PRD_CHANGE_REVIEWER_MAX_TOOL_CALLS:-24}" \
         bash "$SCRIPT_DIR/ai-run.sh" --provider "$gate_provider" \
         ${gate_model:+--model "$gate_model"} \
         2>/dev/null || echo '{"verdict":"fail","issues":["the reviewer could not be reached — the change was NOT reviewed"],"reason":"reviewer unavailable"}')
@@ -6590,7 +6597,7 @@ ANALYST_PROMPT_END
                 EPAM_TEMPERATURE="0.7" \
                 AI_GATE_ALLOW_TOOLS=1 \
                 EPAM_ALLOWED_TOOLS="$ORCH_GATE_ALLOWED_TOOLS" \
-                EPAM_MAX_TOOL_CALLS="${FAILURE_ANALYST_MAX_TOOL_CALLS:-6}" \
+                EPAM_MAX_TOOL_CALLS="${FAILURE_ANALYST_MAX_TOOL_CALLS:-24}" \
                 bash "$SCRIPT_DIR/ai-run.sh" --provider "$gate_provider" \
                 ${gate_model:+--model "$gate_model"} \
                 2>>"$output_file"); then

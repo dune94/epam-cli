@@ -16,6 +16,7 @@ Source: competitive gap analysis (`dark-factory-gap-analysis.md`).
 | # | ID | Title | Status | Source |
 |---|---|---|---|---|
 | 1 | VC-1 | **Investigate VC agent drift — fallback VCs poison the whole downstream chain** | pending | Live metrolinx repro-gate block, 2026-07-25 |
+| 2 | SPEC-PRUNE-1 | **The spec review scores the declared file list but cannot narrow it — all-or-nothing** | pending | Spec-artifact review, 2026-08-09 |
 | 2 | TOKEN-ROOT-CAUSE-1 | **Writer prompt scales with the SPEC's breadth, not the change: 12 declared files injected, 1 changed** | pending | Token root-cause analysis, 2026-08-09 |
 | 2 | TOKEN-VISIBILITY-1 | **Tool usage is not recorded, so grep-vs-codegraph and per-tool tokens cannot be measured** | pending | Agent tooling review, 2026-08-09 |
 | 2 | PROMPT-BUDGET-1 | **Prompt trim measures total size but cuts only guidance — file injection is 39% and untrimmable** | pending | Live AMSD-2041, 2026-08-09 |
@@ -1600,3 +1601,56 @@ ReadFile for anything else. Both knobs are already configuration:
 Do not run this experiment before TOKEN-VISIBILITY-1's tool logging has produced a baseline —
 the whole point is to compare tool calls and tokens before and after, and until 2026-08-09
 neither was recorded.
+
+---
+
+## The Spec Review Can Score The Manifest But Not Narrow It (SPEC-PRUNE-1)
+
+Asked on 2026-08-09 whether the spec artifact is reviewed before the writer consumes it, and
+whether the review can modify it. Reviewed: yes. Modify: only the verification criteria.
+
+### What the review does today
+
+- Path existence is computed DETERMINISTICALLY (`manifestPathStatus`) and handed to the reviewer
+  as evidence. This was itself a fix: the reviewer had been given EPAM_ALLOWED_TOOLS and told to
+  verify paths with list_files, but runAgentForJson's direct-exec route is a single-shot text
+  call with no tool loop — so it emitted tool calls nobody ran and produced no verdict at all.
+  Three consecutive live runs lost their review that way (87 bytes, no <SPEC_REVIEW>), and the
+  gate downstream guarded nothing.
+- The reviewer judges what a script cannot: whether the ACs are testable, and explicitly
+  "whether the manifest is plausible for the change".
+- It emits qualityScore + flags + verdict, persisted to `.specification.coordinatorReview`.
+- `spec_review_gate` blocks on a needs_review verdict AND at least one flag.
+
+### The gap
+
+The only content the review can remove is VERIFICATION CRITERIA — partial retention drops
+flagged criteria and keeps clean ones. There is no equivalent for `technicalNotes.files` or
+`fixSiteAnalysis`: the file list is scored and flagged, never narrowed. The decision is
+all-or-nothing — block the whole spec, or pass all 12 declared files to the writer, where each is
+injected verbatim (see TOKEN-ROOT-CAUSE-1: 12 declared, 2,106 lines, 1 actually changed).
+
+The reviewer is already asked the right question and already holds the right evidence
+(per-path existence plus neighbour paths). It is one field away from being able to say "these
+are fix sites, these are candidates".
+
+### Two ways to spend it, and they are not equivalent
+
+| | Review-side pruning (this item) | Prompt-side ranking (TOKEN-ROOT-CAUSE-1) |
+|---|---|---|
+| Where | Spec phase; reviewer marks fix-site vs candidate | build_implementation_prompt, at render time |
+| Changes | The ARTEFACT — every consumer sees it | Only the prompt |
+| Benefits | Deliverable gate, writer, coverage, reports | The writer's prompt only |
+| Risk | A wrongly pruned fix site is GONE — the writer cannot see the file it needs | Low: a mis-ranked file is still listed, one tool call away |
+| Needs | Reviewer judgement, a schema field, gate changes | Nothing new — both budgets are already configuration |
+
+### Precedent and its warning
+
+VC partial retention is the model to copy, and its comments record what it cost to get right:
+discarding criteria that were never flagged was itself the defect, and exactly one deterministic
+flag type is always dropped. A file-pruning equivalent needs the same discipline, with a
+stronger asymmetry — an extra injected file is expensive, a missing one is fatal to the story.
+
+Sequence: prompt-side ranking first (reversible, no artefact change), and only move the decision
+into the review once the tool logging from TOKEN-VISIBILITY-1 shows what the writer actually
+reads. Neither before that baseline exists.

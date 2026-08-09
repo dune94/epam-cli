@@ -16,6 +16,7 @@ Source: competitive gap analysis (`dark-factory-gap-analysis.md`).
 | # | ID | Title | Status | Source |
 |---|---|---|---|---|
 | 1 | VC-1 | **Investigate VC agent drift — fallback VCs poison the whole downstream chain** | pending | Live metrolinx repro-gate block, 2026-07-25 |
+| 2 | PROMPT-BUDGET-1 | **Prompt trim measures total size but cuts only guidance — file injection is 39% and untrimmable** | pending | Live AMSD-2041, 2026-08-09 |
 | 2 | TEST-GAP-1 | **Writer-phase test coverage gaps — see "Writer-Phase Test Coverage Gaps" below** | pending | Coverage audit, 2026-08-09 |
 | 2 | SCHEMA-1 | **Schema-bind agent output — BLOCKED on the reviewer: strict schema suppresses tool calls** | blocked | Live metrolinx failures + probe, 2026-07-25 |
 | 3 | GAP-P5 | Intra-story planner/executor model split | done | Aider, CrewAI |
@@ -1446,3 +1447,41 @@ declared path does not resolve in this repo". The deliverable gate ignores it, s
 story-fatal, but naming an unresolvable path in a writer prompt invites the writer to create it.
 Proposal: exclude `unresolved` from the writer prompt (keep it in the spec artefacts).
 
+---
+
+## Prompt Budget Is Measured Against The Wrong Thing (PROMPT-BUDGET-1)
+
+Live AMSD-2041, 2026-08-09. The writer's prompt was 86,809 chars against a 16,000 threshold.
+
+`claude.sh` triggers on TOTAL prompt size but trims only `COORDINATOR_PROMPT_AMENDMENT` — the
+accumulated guidance from prior attempts. It cannot touch anything else.
+
+| Component | Chars | Trimmable |
+|---|---|---|
+| Injected file contents ("do NOT ReadFile these") | 34,510 (39%) | no |
+| Root Cause Analysis (authoritative) | 12,670 | no |
+| BLOCKERS | 6,056 | no |
+| Project Tools | 5,200 | no |
+| Coordinator guidance | remainder | YES — the only thing cut |
+
+Three consequences:
+
+1. It fired on ATTEMPT 1 (82,276 chars), when there was almost no accumulated guidance. The
+   trigger had nothing to do with what it cut.
+2. It structurally cannot do what its comment claims ("bound unbounded prompt growth"): after
+   trimming to 3 sections the prompt is still ~70K, because 39% is file contents. It will fire on
+   every attempt of every brownfield story with real files and never approach 16,000.
+3. Guidance pays for the files' size — making the exact failure the config comment warns about
+   (a run repeating a mistake five retries after being corrected) MORE likely on large files.
+
+The 16,000 default was tuned when prompts were guidance-dominated. Deterministic file injection
+was a later, deliberate choice to save ReadFile round-trips, and the two have never been
+reconciled.
+
+**Proposed fix:** budget per component instead of one global threshold. Trigger the guidance trim
+on GUIDANCE size; give file injection its own budget (rank by relevance to the fix sites, cap the
+total, let the agent ReadFile the remainder). Both budgets belong beside `thresholdChars` in
+orchestrations/config/spec-mode-defaults.json — no new literals.
+
+**Interim:** `EPAM_PROMPT_SCRATCHPAD_THRESHOLD_CHARS=0` disables trimming so no guidance is
+discarded. Used for the 2026-08-09 clean-run attempt.

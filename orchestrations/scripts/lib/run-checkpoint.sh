@@ -144,13 +144,76 @@ should_pause_after_agent_mint() {
 # resume_skip_env <run-id> — emit the env assignments a resume must apply, derived from
 # the stage the checkpoint was actually taken at. Skipping too little wastes the pause;
 # skipping too much silently drops work that was never done.
+# _stage_rank <stage> — how far a stage is through the run. Higher is further.
+_stage_rank() {
+    case "${1:-}" in
+        post-roster) echo 1 ;;
+        post-spec)   echo 2 ;;
+        pre-writer)  echo 3 ;;
+        *)           echo 0 ;;
+    esac
+}
+
+# run_stage <run-id> — how far the RUN got, derived from its lanes.
+#
+# THE STAGE IS RECORDED PER LANE AND READ BY THE PARENT. checkpoint_dir() resolves per lane
+# (2026-08-03, after three codelines overwrote one another), so `save_run_checkpoint pre-writer`
+# — which runs inside a lane — writes to runs/<id>/lanes/<codeline>/checkpoint, while the
+# parent's post-roster save goes to runs/<id>/checkpoint. resume_skip_env runs in the PARENT and
+# only ever read the parent's file, so a multi-codeline run resumed at post-roster and replayed
+# the whole spec pass. Live 2026-08-09: ~50 minutes per resume, and it REGENERATED the specs the
+# operator had just approved at pause 2 — the writer would have built against artefacts nobody
+# reviewed.
+#
+# The run is as far along as its LEAST advanced lane, the same way a spanning story is complete
+# only when no lane is outstanding. That is what makes skipping safe: a lane that never ran its
+# spec pass can never be skipped past it. The parent's own stage is a floor, never lowered by a
+# stale lane.
+run_stage() {
+    local _rid="${1:-}"
+    local _base="${EPAM_PROJECT_CONFIG_DIR:-${PROJECT_CONFIG_DIR:-}}"
+    [ -n "$_base" ] && [ -n "$_rid" ] || return 1
+
+    local _parent="$_base/runs/$_rid/checkpoint/checkpoint.json"
+    local _stage="" _rank=0
+    if [ -f "$_parent" ]; then
+        _stage=$(jq -r '.stage // empty' "$_parent" 2>/dev/null)
+        _rank=$(_stage_rank "$_stage")
+    fi
+
+    # Lanes, if this run has any. The minimum across them is the run's progress.
+    local _lane_min="" _lane_min_rank=99 _seen=0 _f _ls _lr
+    for _f in "$_base/runs/$_rid"/lanes/*/checkpoint/checkpoint.json; do
+        [ -f "$_f" ] || continue
+        _seen=1
+        _ls=$(jq -r '.stage // empty' "$_f" 2>/dev/null)
+        _lr=$(_stage_rank "$_ls")
+        if [ "$_lr" -lt "$_lane_min_rank" ]; then _lane_min_rank=$_lr; _lane_min="$_ls"; fi
+    done
+
+    if [ "$_seen" = "1" ] && [ "$_lane_min_rank" -gt "$_rank" ]; then
+        _stage="$_lane_min"
+    fi
+    [ -n "$_stage" ] || return 1
+    printf '%s' "$_stage"
+}
+
 resume_skip_env() {
     local _rid="${1:-}"
     local _dir; _dir=$(checkpoint_dir "$_rid") || return 1
-    [ -f "$_dir/checkpoint.json" ] || {
-        echo "[checkpoint] no checkpoint for run '${_rid}'" >&2; return 1; }
-
-    local _stage; _stage=$(jq -r '.stage // empty' "$_dir/checkpoint.json" 2>/dev/null)
+    # PARENT ONLY. Inside a lane the lane's OWN stage governs: a lane at post-spec must not be
+    # told to skip the CPA it never ran because a sibling reached pre-writer. Deriving from all
+    # lanes answers the parent's question — "how far did the RUN get" — and only the parent asks
+    # it, before any lane exists.
+    local _stage=""
+    if declare -F is_parent >/dev/null 2>&1 && is_parent; then
+        _stage=$(run_stage "$_rid" 2>/dev/null) || _stage=""
+    fi
+    if [ -z "$_stage" ]; then
+        [ -f "$_dir/checkpoint.json" ] || {
+            echo "[checkpoint] no checkpoint for run '${_rid}'" >&2; return 1; }
+        _stage=$(jq -r '.stage // empty' "$_dir/checkpoint.json" 2>/dev/null)
+    fi
     case "$_stage" in
         post-roster)
             # The roster and the assignments are on disk and the mint is not repeated —

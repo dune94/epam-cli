@@ -30,7 +30,10 @@
  * the verdict is entropy and syntax.
  */
 
-const PLUGIN_API_VERSION = 1;
+// A SEMVER STRING, like every other plugin. Declared as the number 1, validatePlugin's
+// `pluginApiVersion.split('.')` threw, the whole plugin failed to load, and scan_secrets was
+// never available to any reviewer — visible only as one warning line inside an agent log.
+const PLUGIN_API_VERSION = '1.0.0';
 
 // Names that make a value worth examining. This is a property of the WORD, not of any project —
 // a variable called `token` means the same thing in every codebase.

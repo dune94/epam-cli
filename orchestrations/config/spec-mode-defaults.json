@@ -54,8 +54,9 @@
       ],
       "$note": "sed is deliberately NOT redirected: it is used for editing as well as reading, and blocking it would break real work. A verb absent from this map is allowed."
     },
-    "readDedupe": true,
+    "readDedupe": false,
     "readDedupeEnv": "EPAM_READ_DEDUPE",
-    "bashExplorationRedirectEnv": "EPAM_BASH_EXPLORATION_REDIRECT"
+    "bashExplorationRedirectEnv": "EPAM_BASH_EXPLORATION_REDIRECT",
+    "$readDedupeNote": "DISABLED 2026-08-09 after a live failure. The dedupe notice told the model 'call again with force: true'; the writer spent its entire attempt emitting <read_file force=\"true\" /> as TEXT rather than as tool calls and wrote nothing. 13 green tests missed it because every fixture exercised a compliant caller. Re-enable only with a fixture that reproduces a model reacting to the notice."
   }
 }

@@ -8864,7 +8864,9 @@ ${_trimmed_amendment}"
                         EPAM_AGENT_ROLE="${_story_agent_role}" \
                         EPAM_STORY_ID="${story_id}" \
                         EPAM_ACTIVITY_LOG_DIR="${LOG_DIR}" \
-                        EPAM_READ_DEDUPE="${EPAM_READ_DEDUPE:-1}" \
+                        # DEFAULT OFF. See toolPolicy.$readDedupeNote — the notice sent the writer
+                        # into a force:true loop and it produced no code at all.
+                        EPAM_READ_DEDUPE="${EPAM_READ_DEDUPE:-0}" \
                         EPAM_BASH_EXPLORATION_REDIRECT="${_tool_policy_redirect}" \
                         EPAM_REQUIRED_SYMBOLS="${_req_symbols}" \
                         EPAM_REQUIRED_SYMBOL_SCOPE="${_req_scope}" \

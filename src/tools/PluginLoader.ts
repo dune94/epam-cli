@@ -84,10 +84,25 @@ export class PluginLoader {
       }
       return;
     }
-    const majorVersion = parseInt(plugin.pluginApiVersion.split('.')[0] ?? '1', 10);
+    // ADVISORY, NOT FATAL. This field exists to WARN about a version mismatch, and a value it
+    // cannot parse must not take the plugin off the table. Live 2026-08-09: secret-scan-tools
+    // declared the number 1, `1.split('.')` threw, loadAll caught it as a load failure, and
+    // scan_secrets was silently absent from every review — one warning line in an agent log the
+    // only trace. gate_allowed_tools already states the principle beside this one: "one bad
+    // plugin must not blank the allowlist".
+    const declared = plugin.pluginApiVersion;
+    if (typeof declared !== 'string') {
+      if (this.warn) {
+        process.stderr.write(
+          `[epam] Plugin "${plugin.name}" declares a non-string pluginApiVersion ` +
+          `(${JSON.stringify(declared)}) — assuming ${PLUGIN_API_MAJOR}.0.0 and loading it anyway\n`);
+      }
+      return;
+    }
+    const majorVersion = parseInt(declared.split('.')[0] ?? '1', 10);
     if (majorVersion !== PLUGIN_API_MAJOR && this.warn) {
       process.stderr.write(
-        `[epam] Plugin "${plugin.name}" built for API v${plugin.pluginApiVersion}, ` +
+        `[epam] Plugin "${plugin.name}" built for API v${declared}, ` +
         `runtime API is v${PLUGIN_API_MAJOR}.x — may have compatibility issues\n`
       );
     }

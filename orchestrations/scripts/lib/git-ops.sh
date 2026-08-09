@@ -120,6 +120,18 @@ _provision_epam_plugin_config() {
 . "$(dirname "${BASH_SOURCE[0]}")/codeline-write-perimeter.sh"
 
 # git_add_client_outputs <repo> [timeout_secs]
+# Report a staging failure with git's own words. Writes to stderr so it lands in the run log
+# beside the WARNING the caller emits; a bare "exit 1" is not a diagnosis.
+_git_add_report_failure() {
+    local _repo="$1" _rc="$2" _stderr="$3" _summary="$4"
+    echo "[git-add] FAILED in ${_repo} (exit ${_rc}): ${_summary}" >&2
+    if [ -n "$_stderr" ]; then
+        printf '%s\n' "$_stderr" | head -20 | sed 's/^/[git-add]   /' >&2
+    else
+        echo "[git-add]   (git printed nothing)" >&2
+    fi
+}
+
 # Stage every client change, never an engine artefact. Returns git's exit code.
 #
 # There is deliberately NO fallback that stages without the exclusions. Every previous
@@ -145,7 +157,16 @@ git_add_client_outputs() {
         _excludes+=( ":!${_d}/*" ":!*/${_d}/*" )
     done
 
-    timeout "$_timeout" git -C "$_repo" add -A -- "${_excludes[@]}" 2>/dev/null
+    # CAPTURE THE REASON. This was `2>/dev/null`, and live 2026-08-09 a run halted on
+    # "git add failed (exit 1)" with no diagnosis at all: the deliverable gate had passed, tsc
+    # had passed, the work was real, and two fixtures reproducing the plausible causes both
+    # returned 0 — the actual reason was unknown, because this line deleted it. git's message
+    # here is specific and useful ("index file smaller than expected", "The following paths are
+    # ignored by one of your .gitignore files") and is the difference between a fix and a theory.
+    # Held in a variable rather than passed straight through, so the success path stays silent:
+    # an ignored-path warning is normal and must not print on every story.
+    local _add_stderr
+    _add_stderr=$(timeout "$_timeout" git -C "$_repo" add -A -- "${_excludes[@]}" 2>&1)
     local _rc=$?
 
     # Belt and braces, run unconditionally: if the pathspec form above failed for any
@@ -173,6 +194,7 @@ git_add_client_outputs() {
     # converts a hang into a clean commit — which it did, until
     # per-story-commit-and-partial-merge.test.ts caught it.
     if [ "$_rc" -eq 124 ]; then
+        _git_add_report_failure "$_repo" "$_rc" "$_add_stderr" "timed out after ${_timeout}s"
         return $_rc
     fi
 
@@ -187,9 +209,14 @@ git_add_client_outputs() {
     _pending=$(timeout "$_timeout" git -C "$_repo" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
     if [ "$_rc" -ne 0 ] && [ "${_pending:-0}" -eq 0 ]; then
         # git could not even report status: the repository is genuinely unusable.
-        timeout "$_timeout" git -C "$_repo" status --porcelain >/dev/null 2>&1 || return "$_rc"
+        if ! timeout "$_timeout" git -C "$_repo" status --porcelain >/dev/null 2>&1; then
+            _git_add_report_failure "$_repo" "$_rc" "$_add_stderr" "the repository is unusable — git cannot even report status"
+            return "$_rc"
+        fi
     fi
     [ "${_pending:-0}" -eq 0 ] && return 0
+    _git_add_report_failure "$_repo" "$_rc" "$_add_stderr" \
+        "nothing reached the index although ${_pending} path(s) are pending"
     return $_rc
 }
 

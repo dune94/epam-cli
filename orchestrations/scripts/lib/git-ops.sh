@@ -152,6 +152,34 @@ git_add_client_outputs() {
     # reason, anything engine-owned that slipped into the index comes straight back out.
     # This is what makes the no-fallback rule safe rather than merely strict.
     timeout "$_timeout" git -C "$_repo" reset -q -- "${_resets[@]}" 2>/dev/null || true
+
+    # ASK THE INDEX, NOT THE EXIT CODE.
+    #
+    # `git add` exits non-zero merely for NAMING an ignored path — which is exactly what the
+    # exclusion pathspecs above do. Live 2026-08-09: the writer installed a dependency, so a
+    # gitignored top-level node_modules appeared, git printed "The following paths are ignored
+    # by one of your .gitignore files" and exited 1 — with all 323 insertions correctly staged.
+    # The raw code propagated to commit_completed_story, the story was demoted as undelivered,
+    # the phase aborted and the remaining two codelines never ran.
+    #
+    # Whether work is staged is a fact, so read it. A non-zero exit with a populated index is a
+    # warning. A non-zero exit with an EMPTY index, when there was something to stage, is a real
+    # failure and still fails. The comment above already predicted this class ("returns non-zero
+    # in ordinary situations") without handling it.
+    local _staged _pending
+    # wc -l, not `grep -c . || echo 0`: on empty input grep prints 0 AND exits 1, so the
+    # fallback appends a second 0 and the numeric comparison below errors out.
+    _staged=$(timeout "$_timeout" git -C "$_repo" diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
+    if [ "${_staged:-0}" -gt 0 ]; then
+        return 0
+    fi
+    # Nothing staged. If nothing was stageable either, that is a correct no-op, not a failure.
+    _pending=$(timeout "$_timeout" git -C "$_repo" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$_rc" -ne 0 ] && [ "${_pending:-0}" -eq 0 ]; then
+        # git could not even report status: the repository is genuinely unusable.
+        timeout "$_timeout" git -C "$_repo" status --porcelain >/dev/null 2>&1 || return "$_rc"
+    fi
+    [ "${_pending:-0}" -eq 0 ] && return 0
     return $_rc
 }
 

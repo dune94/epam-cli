@@ -4167,6 +4167,60 @@ async function reviewRoster({
   return { verdict, findings, refuted, reviewed: _minted.length };
 }
 
+/**
+ * The assignment prompt, built where a test can execute it.
+ *
+ * Extracted because its defect was a self-contradiction in the text itself, which no test
+ * could see while the string was welded inside a 200-line function.
+ */
+function buildAssignmentPrompt(stories, roles) {
+  const _stories = Array.isArray(stories) ? stories : [];
+  const roleBlock = (Array.isArray(roles) ? roles : [])
+    .map((r) => `- ${r.name}\n    ${String(r.brief || '').replace(/\s+/g, ' ').slice(0, 320)}`)
+    .join('\n');
+  const storyBlock = _stories
+    .map((s) => {
+      const cls = Array.isArray(s.codelines) && s.codelines.length ? s.codelines : (s.codeline ? [s.codeline] : []);
+      const clLine = cls.length > 1
+        ? `\n    codelines — ${cls.length} assignments required, one for EACH of: ${cls.join(', ')}`
+        : (cls.length ? `\n    codeline: ${cls[0]}` : '');
+      return `- ${s.id}: ${s.title || ''}${clLine}\n    ${String(s.description || '').replace(/\s+/g, ' ')}`;
+    })
+    .join('\n');
+
+  // THE PROMPT USED TO CONTRADICT ITSELF. It required "ONE ASSIGNMENT PER CODELINE" and then,
+  // four lines later, "Every story must be assigned exactly one role" — a sentence written
+  // before stories could span codelines. One needs three assignments, the other needs one.
+  // Live 2026-08-09 a model resolved it by returning a single assignment for a three-codeline
+  // story; the run aborted with two lanes unowned after spending its entire retry and ladder
+  // budget re-answering a question that had no consistent answer. The old wording is NOT
+  // quoted in the prompt below: restating a rejected instruction to the model reintroduces it.
+  return `Assign an implementation agent role to every story below.
+
+AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
+nothing else; the name you return must match one of them verbatim:
+${roleBlock}
+
+STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
+${storyBlock}
+
+Pick the role whose stated expertise actually covers the work the story describes. If two
+roles could plausibly own a story, prefer the one whose brief names the surface the story
+touches.
+
+THE UNIT OF ASSIGNMENT IS A (STORY, CODELINE) PAIR, NOT A STORY. A story listing three
+codelines needs THREE assignments — the repositories differ, so the right owner can differ.
+Count the codelines listed against each story and return exactly that many assignments for it,
+naming the codeline on every one. A story is not assigned until every codeline it lists is.
+
+THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
+the one whose brief names those files or directories. A role whose brief is about settings in
+a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
+a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
+no source files, and all such a role can produce is a configuration note. Where the story needs
+both console configuration and code, the code owner is the assignee.`;
+}
+
 async function assignAgentRoles({ promptExec, stories, profilesPath, logDir, repoPath, validateOnly }) {
   const _stories = Array.isArray(stories) ? stories : [];
   if (!_stories.length) return { assigned: [], stories: [] };
@@ -4191,42 +4245,10 @@ async function assignAgentRoles({ promptExec, stories, profilesPath, logDir, rep
     );
   }
 
-  const roleBlock = candidates
-    .map((r) => `- ${r}\n    ${String(profiles[r] || '').replace(/\s+/g, ' ').slice(0, 400)}`)
-    .join('\n');
-  // NOT truncated. The description is the only substantive field a brownfield ticket carries,
-  // and cutting it is how a role gets chosen from half a sentence. A cap here would also be a
-  // fifth different number for one field across this file — five caps for one field means none
-  // was chosen.
-  const storyBlock = _stories
-    .map((s) => {
-      const cls = Array.isArray(s.codelines) && s.codelines.length ? s.codelines : (s.codeline ? [s.codeline] : []);
-      const clLine = cls.length > 1
-        ? `\n    codelines (assign one role for EACH): ${cls.join(', ')}`
-        : (cls.length ? `\n    codeline: ${cls[0]}` : '');
-      return `- ${s.id}: ${s.title || ''}${clLine}\n    ${String(s.description || '').replace(/\s+/g, ' ')}`;
-    })
-    .join('\n');
-
-  const prompt = `Assign an implementation agent role to every story below.
-
-AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
-nothing else; the name you return must match one of them verbatim:
-${roleBlock}
-
-STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
-${storyBlock}
-
-Pick the role whose stated expertise actually covers the work the story describes. If two
-roles could plausibly own a story, prefer the one whose brief names the surface the story
-touches. Every story must be assigned exactly one role.
-
-THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
-the one whose brief names those files or directories. A role whose brief is about settings in
-a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
-a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
-no source files, and all such a role can produce is a configuration note. Where the story needs
-both console configuration and code, the code owner is the assignee.`;
+  const prompt = buildAssignmentPrompt(
+    _stories,
+    candidates.map((r) => ({ name: r, brief: profiles[r] || '' })),
+  );
 
   // VALIDATE, DO NOT REGENERATE. On a resume the operator has inspected the roster at the
   // pause and may have edited profiles.json, the project-roles registry, or the stories'
@@ -8735,6 +8757,7 @@ module.exports = {
   TOOL_PROJECT_AGENTS,
   assignAgentRoles,
   candidateRoles,
+  buildAssignmentPrompt,
   TOOL_ROLE_ASSIGNMENTS,
   reviewRoster,
   detectivePrescription,

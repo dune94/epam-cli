@@ -6093,13 +6093,23 @@ if [ -n "${main_stories:-}" ] && \
     # orchestrations/agents/KB.md and .epam/* into the client repo (live 20260804T225443Z,
     # where it also tripped SECRET_SCAN and blocked the commit on two lanes).
     git_add_client_outputs "$PROJECT_ROOT" || true
-    # Generic credential scan (flow-gap analysis finding #2, 2026-07-12): see
-    # orchestrations/scripts/scan-secrets.sh for rationale/patterns.
-    if [ -f "$SCRIPT_DIR/scan-secrets.sh" ] && ! _scan_output=$(bash "$SCRIPT_DIR/scan-secrets.sh" "$PROJECT_ROOT" 2>&1); then
-        warning "Step 9: $_scan_output"
-        step_emit "9" "fail" "Step 9: Auto-commit" "secret detected"
-        error "Step 9: Refusing to auto-commit — unstaging (SECRET_SCAN)"
-        git -C "$PROJECT_ROOT" reset 2>/dev/null || true
+    # THE COMMIT-TIME CREDENTIAL SCAN WAS REMOVED HERE (operator decision, 2026-08-09).
+    #
+    # It matched the SHAPE `credential_name: value` without inspecting `value`, so on
+    # AMSD-2041 it refused the commit for
+    #
+    #     management_token: CONTENTSTACK_LIVE_PREVIEW_TOKEN,
+    #
+    # an environment-derived identifier — the exact pattern its own error message recommends.
+    # The story is about wiring a preview token, so it would have blocked every commit the
+    # work produced, and it had never caught a real leak. Worse, refusing here also unstaged
+    # the writer's changes while the story was still reported "Implemented: 1, Failed: 0".
+    #
+    # The check moves to the review stage, where the reviewer has the diff and can be given a
+    # tool that distinguishes a literal from an identifier. scan-secrets.sh is kept for that
+    # tool to build on; it is no longer a commit gate. The other call site
+    # (lib/git-ops.sh) was already default-skipped via SKIP_SECRET_SCAN.
+    if false; then :
     else
         # Ticket-ID-first message — same commitlint-compatibility fix as
         # commit_completed_story()'s 2026-08-02 fix (lib/git-ops.sh) and

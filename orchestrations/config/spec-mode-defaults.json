@@ -20,5 +20,13 @@
       "list_files",
       "search"
     ]
+  },
+  "promptTrim": {
+    "$comment": "How much accumulated coordinator guidance an agent keeps. Live 2026-08-09 a writer's prompt hit 53366 chars against this threshold and was trimmed to the most recent sections \u2014 two thirds of its guidance discarded, with a WARNING the only trace. The section count replaced a 1 on 2026-07-11, after a run repeated an identical mistake five retries after being told not to, because a newer heading had pushed the earlier diagnosis out of a single-heading window.",
+    "thresholdChars": 16000,
+    "thresholdCharsEnv": "EPAM_PROMPT_SCRATCHPAD_THRESHOLD_CHARS",
+    "$thresholdNote": "0 disables trimming entirely.",
+    "keepRecentSections": 3,
+    "keepRecentSectionsEnv": "EPAM_PROMPT_TRIM_KEEP_SECTIONS"
   }
 }

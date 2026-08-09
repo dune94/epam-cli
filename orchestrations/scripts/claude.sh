@@ -29,6 +29,8 @@ source "$SCRIPT_DIR/lib/tc-writer-gate.sh"
 # shellcheck source=lib/story-guards.sh
 source "$SCRIPT_DIR/lib/story-guards.sh"
 source "$SCRIPT_DIR/lib/flags.sh"
+# Prompt-trim budgets, from config rather than literals (see lib/prompt-budget.sh).
+source "$SCRIPT_DIR/lib/prompt-budget.sh"
 source "$SCRIPT_DIR/lib/project-tools.sh"
 # shellcheck source=lib/git-ops.sh
 source "$SCRIPT_DIR/lib/git-ops.sh"
@@ -8305,7 +8307,13 @@ ${COORDINATOR_PROMPT_AMENDMENT}"
         # relevant guidance; it just isn't re-reading every prior attempt's guidance
         # every single retry. Opt-out: EPAM_PROMPT_SCRATCHPAD_THRESHOLD_CHARS=0
         # disables trimming entirely.
-        local _scratchpad_threshold="${EPAM_PROMPT_SCRATCHPAD_THRESHOLD_CHARS:-16000}"
+        # Both trim budgets come from orchestrations/config/spec-mode-defaults.json — see
+        # lib/prompt-budget.sh. They were literals here; live 2026-08-09 a writer's prompt hit
+        # 53366 chars against the threshold and ran with most of its coordinator guidance
+        # discarded, which is exactly the value an operator needs to reach without editing code.
+        local _scratchpad_threshold _keep_sections
+        _scratchpad_threshold="$(prompt_trim_threshold)" || return 1
+        _keep_sections="$(prompt_trim_keep_sections)" || return 1
         if [ "$_scratchpad_threshold" -gt 0 ] && [ "${#prompt}" -gt "$_scratchpad_threshold" ]; then
             local _scratchpad_dir="${LOG_DIR}/kb-scratchpad"
             mkdir -p "$_scratchpad_dir" 2>/dev/null || true
@@ -8324,12 +8332,14 @@ ${COORDINATOR_PROMPT_AMENDMENT}"
             # the last 3 distinct headings instead of 1 still bounds prompt growth
             # (the original purpose of this trim) while giving recent-but-not-
             # newest guidance a real chance to stay visible for a few more retries.
-            _trimmed_amendment=$(printf '%s' "$COORDINATOR_PROMPT_AMENDMENT" | python3 -c "
-import sys
+            _trimmed_amendment=$(printf '%s' "$COORDINATOR_PROMPT_AMENDMENT" | EPAM_PROMPT_TRIM_KEEP="$_keep_sections" python3 -c "
+import os, sys
 text = sys.stdin.read()
 lines = text.split(chr(10))
+# How many recent guidance sections survive: config, not a literal. See lib/prompt-budget.sh.
+KEEP = int(os.environ['EPAM_PROMPT_TRIM_KEEP'])
 heading_idxs = [i for i, l in enumerate(lines) if l.startswith('## ')]
-keep_from = heading_idxs[-3] if len(heading_idxs) >= 3 else (heading_idxs[0] if heading_idxs else 0)
+keep_from = heading_idxs[-KEEP] if len(heading_idxs) >= KEEP else (heading_idxs[0] if heading_idxs else 0)
 print(chr(10).join(lines[keep_from:]) if heading_idxs else text)
 " 2>/dev/null || echo "$COORDINATOR_PROMPT_AMENDMENT")
 

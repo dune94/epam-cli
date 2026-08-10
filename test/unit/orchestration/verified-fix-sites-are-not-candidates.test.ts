@@ -1,10 +1,10 @@
 /**
  * A VERIFIED FIX SITE IS NOT A GUESS, AND THE GATE TREATED THEM THE SAME.
  *
- * Live 2026-08-09. The spec produced four fix sites for gotransit, every one fixVerified:true
+ * Live 2026-08-09. The spec produced four fix sites for one codeline, every one fixVerified:true
  * with a named helper. The writer changed ONE of them — 12 lines — and the story was committed
- * and reported complete, unable to satisfy its own criterion ("the rendered page displays the
- * DRAFT content values") because the fetch path and the context were never touched.
+ * and reported complete, unable to satisfy its own criterion (the rendered page must display
+ * DRAFT values) because the fetch path and the context were never touched.
  *
  * verify_story_deliverables passed it by design:
  *

@@ -1,18 +1,18 @@
 /**
  * THE GUARD CHECKED ONE HELPER OUT OF FOUR.
  *
- * Live 2026-08-09. The spec identified FOUR fix sites for gotransit, every one fixVerified:true
+ * Live 2026-08-09. The spec identified FOUR fix sites for one codeline, every one fixVerified:true
  * with a named helper:
  *
- *     src/services/contentstack.ts        options
- *     src/context/ContentstackContext.tsx useContentstackContext
- *     src/services/pageService.ts         getEntry
- *     src/hooks/useContent.ts             getValue
+ *     a service module        + its config helper
+ *     a context provider      + its accessor hook
+ *     a data-fetch module     + its entry getter
+ *     a consuming hook        + its value reader
  *
- * The writer changed contentstack.ts and nothing else — 12 lines wiring a live_preview option
- * onto the Stack. That cannot satisfy its own verification criterion ("the rendered page displays
- * the DRAFT content values"), which needs the fetch path to pass preview params and the context
- * to hold the hash. The story was committed and reported complete.
+ * The writer changed the first and nothing else — 12 lines wiring one config option. That cannot
+ * satisfy its own verification criterion (the rendered page must display DRAFT values), which
+ * needs the fetch path to pass preview parameters and the context to hold the state. The story
+ * was committed and reported complete.
  *
  * verify_prescribed_helper_used exists to catch precisely "the agent hand-rolled instead of
  * reusing the helper we verified". Its selection is:
@@ -103,7 +103,13 @@ ${lift('verify_prescribed_helper_used')}
   };
 }
 
-const FOUR = ['options', 'useContentstackContext', 'getEntry', 'getValue'];
+/**
+ * Synthetic, deliberately. A fixture built from one project's helper names only ever exercises
+ * that project's vocabulary, and the guard is supposed to work from whatever the spec produced.
+ * Four of them because the live shape had four verified sites — the COUNT is the fixture's
+ * point, not the names.
+ */
+const FOUR = ['helperAlpha', 'helperBeta', 'helperGamma', 'helperDelta'];
 
 describe('the fixture reproduces the live shape', () => {
   it('four verified helpers, all existing in the repo', () => {

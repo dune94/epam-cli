@@ -2590,12 +2590,24 @@ verify_prescribed_helper_used() {
     local prd_target="${MAIN_PRD_FILE:-${PRD_FILE:-}}"
     [ -f "$prd_target" ] || return 0
 
-    local _helper
-    _helper=$(jq -r --arg id "$story_id" '
+    # EVERY VERIFIED HELPER, not the first one.
+    #
+    # This selected `.[0].helper` and checked that alone. Live 2026-08-09 the spec verified FOUR
+    # fix sites for one codeline — options, useContentstackContext, getEntry, getValue — the
+    # writer used `options`, the guard fell silent, and the other three were never asked about.
+    # The story shipped 1 of 4 verified sites and was reported complete, unable to satisfy its own
+    # criterion ("the rendered page displays the DRAFT content values") because the fetch path
+    # and context were never touched.
+    #
+    # fixVerified:true is a strong claim — the spec CONFIRMED the site and named the helper that
+    # owns it. Unverified sites stay optional, since those are guesses and demanding them would
+    # fail stories over a candidate the agent correctly ignored.
+    local _helpers
+    _helpers=$(jq -r --arg id "$story_id" '
         .stories[] | select(.id == $id) | (.fixSiteAnalysis // [])
         | map(select((.fixVerified == true) and ((.helper // "") != "")))
-        | (.[0].helper // "")' "$prd_target" 2>/dev/null)
-    [ -n "$_helper" ] && [ "$_helper" != "null" ] || return 0
+        | map(.helper) | unique | .[]' "$prd_target" 2>/dev/null)
+    [ -n "$_helpers" ] || return 0
 
     local _ref=""
     [ -f "${LOG_DIR:-}/phase-baseline-sha.txt" ] &&         _ref=$(tr -d '[:space:]' < "$LOG_DIR/phase-baseline-sha.txt" 2>/dev/null)
@@ -2605,7 +2617,19 @@ verify_prescribed_helper_used() {
     local _diff
     _diff=$(git -C "$PROJECT_ROOT" diff "$_ref" 2>/dev/null)
     [ -n "$_diff" ] || return 0
-    printf '%s' "$_diff" | grep -q -- "$_helper" && return 0
+
+    # Collect every verified helper the change does NOT use. Reporting only the first would
+    # make the writer fix them one attempt at a time, which is the retry ladder spent on
+    # information the guard already had.
+    local _missing=() _h
+    while IFS= read -r _h; do
+        [ -n "$_h" ] || continue
+        printf '%s' "$_diff" | grep -q -- "$_h" || _missing+=("$_h")
+    done <<< "$_helpers"
+    [ ${#_missing[@]} -eq 0 ] && return 0
+    local _helper="${_missing[0]}"
+    local _missing_list
+    _missing_list=$(printf '%s, ' "${_missing[@]}"); _missing_list="${_missing_list%, }"
 
     local _note=""
     if [ -n "${retry_count:-}" ] && [ -n "${MAX_RETRIES:-}" ]; then
@@ -2630,7 +2654,7 @@ verify_prescribed_helper_used() {
     # appears in the diff or it does not — so it belongs in that class.
     DETERMINISTIC_CHECK_FAILURE=1
     export DETERMINISTIC_CHECK_FAILURE
-    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe prescribed helper `%s` EXISTS in this repository and your change does not use it — you re-implemented logic the repository already owns, which is how a fix comes to match on the wrong format and silently never work. Import and use `%s` instead of hand-rolling it, then make the change again.\n' "$_helper" "$_helper")
+    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\n%d prescribed helper(s) EXIST in this repository and your change does not use them: %s\n\nEach was VERIFIED by the spec as owning part of this fix, so re-implementing that logic is how a fix comes to match on the wrong format and silently never work. Import and use every one of them, then make the change again. Using only some of them leaves the story incomplete.\n' "${#_missing[@]}" "$_missing_list")
     warning "Story $story_id: the prescribed helper \`${_helper}\` EXISTS in this repository but does NOT appear in the change. The agent hand-rolled the logic instead of reusing it — live 2026-07-26 that produced a fix matching on '-' when the repository's own separator is '#', so the fix could never work. Import and use ${_helper}, which owns that format, rather than re-implementing it.${_note}"
     return 1
 }
@@ -2798,6 +2822,17 @@ verify_story_deliverables() {
     fi
 
     local unchanged=()
+    # Declared paths the spec VERIFIED (fixVerified:true). Read once so the per-file loop below
+    # can separate a CONFIRMED fix site from a speculative candidate — a distinction the PRD
+    # already carries and this gate previously discarded.
+    local _verified_sites=() _vs
+    while IFS= read -r _vs; do
+        [ -n "$_vs" ] && _verified_sites+=("$_vs")
+    done < <(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | (.fixSiteAnalysis // [])
+         | map(select(.fixVerified == true)) | .[].file // empty' \
+        "$prd_target" 2>/dev/null)
+    local _unchanged_verified=()
     local _declared_files=()
     while IFS= read -r file; do
         [ -n "$file" ] || continue
@@ -2894,6 +2929,10 @@ verify_story_deliverables() {
                         # exist at baseline) has no such ambiguity — that one
                         # stays a hard requirement via missing[] above.
                         unchanged+=("$file")
+                        local _vsite
+                        for _vsite in "${_verified_sites[@]}"; do
+                            [ "$_vsite" = "$file" ] && _unchanged_verified+=("$file") && break
+                        done
                     fi
                 fi
             fi
@@ -2987,6 +3026,24 @@ verify_story_deliverables() {
         for file in "${unchanged[@]}"; do
             warning "  $file"
         done
+        return 1
+    elif [ ${#_unchanged_verified[@]} -gt 0 ]; then
+        # A VERIFIED FIX SITE IS NOT A CANDIDATE. The branch below — one real change is
+        # sufficient, not a majority — exists for AMSD-1820, where the spec named 3 CANDIDATE
+        # paths and the agent correctly edited 2; requiring all would false-fail a correct
+        # story. fixVerified:true is a different claim: the spec CONFIRMED the site and named
+        # the helper that owns it. Live 2026-08-09 four sites were verified, the writer changed
+        # ONE (12 lines), and the story was committed and reported complete — unable to satisfy
+        # its own criterion because the fetch path and context it also verified were never
+        # touched. The signal was in the data and no gate read it.
+        error "Story $story_id: ${#_unchanged_verified[@]} VERIFIED fix site(s) left unchanged — the spec confirmed each and named the helper that owns it, so the story is incomplete:"
+        for file in "${_unchanged_verified[@]}"; do
+            error "  $file"
+        done
+        DETERMINISTIC_CHECK_FAILURE=1
+        export DETERMINISTIC_CHECK_FAILURE
+        VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\n%d fix site(s) the spec VERIFIED for this story are unchanged: %s\n\nThese are not candidate paths — each was confirmed as owning part of this fix. Change every one of them, or the story cannot satisfy its verification criteria.\n' "${#_unchanged_verified[@]}" "$(printf '%s, ' "${_unchanged_verified[@]}" | sed 's/, $//')")
+        STORY_REJECTION_KEY="unchanged-verified:$(printf '%s,' "${_unchanged_verified[@]}")"
         return 1
     elif [ ${#unchanged[@]} -gt 0 ]; then
         warning "Story $story_id: ${#unchanged[@]}/$declared declared candidate file(s) were unchanged (real work landed in the others) — informational, not a failure:"

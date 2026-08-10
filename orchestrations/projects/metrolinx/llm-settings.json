@@ -2,30 +2,106 @@
   "$schema": "../../config/llm-settings.schema.json",
   "temperatureFloor": 0,
   "rungs": [
-    { "rung": 0, "retryRange": [0, 1], "reasoningEffort": "low", "temperature": 0, "iterationBump": 0, "outputTokenBump": null },
-    { "rung": 1, "retryRange": [2, 3], "reasoningEffort": "medium", "temperature": 0.2, "iterationBump": 10, "outputTokenBump": 8192 },
-    { "rung": 2, "retryRange": [4, 5], "reasoningEffort": "high", "temperature": 0.5, "iterationBump": 20, "outputTokenBump": 16384 },
-    { "rung": 3, "retryRange": [6, 7], "reasoningEffort": "high", "temperature": 0.7, "iterationBump": 30, "outputTokenBump": 24576 }
+    {
+      "rung": 0,
+      "retryRange": [
+        0,
+        1
+      ],
+      "reasoningEffort": "low",
+      "temperature": 0,
+      "iterationBump": 0,
+      "outputTokenBump": null
+    },
+    {
+      "rung": 1,
+      "retryRange": [
+        2,
+        3
+      ],
+      "reasoningEffort": "medium",
+      "temperature": 0.2,
+      "iterationBump": 10,
+      "outputTokenBump": 8192
+    },
+    {
+      "rung": 2,
+      "retryRange": [
+        4,
+        5
+      ],
+      "reasoningEffort": "high",
+      "temperature": 0.5,
+      "iterationBump": 20,
+      "outputTokenBump": 16384
+    },
+    {
+      "rung": 3,
+      "retryRange": [
+        6,
+        7
+      ],
+      "reasoningEffort": "high",
+      "temperature": 0.7,
+      "iterationBump": 30,
+      "outputTokenBump": 24576
+    }
   ],
   "ladders": {
     "high": {
       "modelLadder": [
-        { "from": "MiniMax-M2.5", "to": "MiniMax-M3" },
-        { "from": "MiniMax-M3", "to": "z-ai/glm-5.2" },
-        { "from": "zhipuai/glm-z1-9b", "to": "zhipuai/glm-z1-32b" },
-        { "from": "zhipuai/glm-z1-32b", "to": "z-ai/glm-5.2" },
-        { "from": "z-ai/glm-5.1", "to": "z-ai/glm-5.2" },
-        { "from": "z-ai/glm-5.2", "to": "moonshotai/kimi-k2.5" },
-        { "from": "moonshotai/kimi-k2.5", "to": "moonshotai/kimi-k3" }
+        {
+          "from": "MiniMax-M2.5",
+          "to": "MiniMax-M3"
+        },
+        {
+          "from": "MiniMax-M3",
+          "to": "z-ai/glm-5.2"
+        },
+        {
+          "from": "zhipuai/glm-z1-9b",
+          "to": "zhipuai/glm-z1-32b"
+        },
+        {
+          "from": "zhipuai/glm-z1-32b",
+          "to": "z-ai/glm-5.2"
+        },
+        {
+          "from": "z-ai/glm-5.1",
+          "to": "z-ai/glm-5.2"
+        },
+        {
+          "from": "z-ai/glm-5.2",
+          "to": "moonshotai/kimi-k2.5"
+        },
+        {
+          "from": "moonshotai/kimi-k2.5",
+          "to": "moonshotai/kimi-k3"
+        }
       ]
     },
     "medium": {
       "modelLadder": [
-        { "from": "MiniMax-M2.5", "to": "MiniMax-M3" },
-        { "from": "MiniMax-M3", "to": "z-ai/glm-5.2" },
-        { "from": "zhipuai/glm-z1-9b", "to": "zhipuai/glm-z1-32b" },
-        { "from": "zhipuai/glm-z1-32b", "to": "z-ai/glm-5.2" },
-        { "from": "z-ai/glm-5.1", "to": "z-ai/glm-5.2" }
+        {
+          "from": "MiniMax-M2.5",
+          "to": "MiniMax-M3"
+        },
+        {
+          "from": "MiniMax-M3",
+          "to": "z-ai/glm-5.2"
+        },
+        {
+          "from": "zhipuai/glm-z1-9b",
+          "to": "zhipuai/glm-z1-32b"
+        },
+        {
+          "from": "zhipuai/glm-z1-32b",
+          "to": "z-ai/glm-5.2"
+        },
+        {
+          "from": "z-ai/glm-5.1",
+          "to": "z-ai/glm-5.2"
+        }
       ]
     }
   },
@@ -75,7 +151,10 @@
   },
   "retries": {
     "maxRetries": 7,
-    "selfHeal": { "enabled": true, "extensionMax": 2 }
+    "selfHeal": {
+      "enabled": true,
+      "extensionMax": 2
+    }
   },
   "timeouts": {
     "storyTimeoutSecs": 1800,
@@ -90,8 +169,9 @@
     "defaultAutoCompressEveryNIterations": 20
   },
   "costControls": {
-    "maxToolCallsPerStory": 300,
-    "storyBudgetWarningUsd": 3.50,
-    "storyBudgetHardLimitUsd": 15.00
+    "maxToolCallsPerStory": 600,
+    "storyBudgetWarningUsd": 3.5,
+    "storyBudgetHardLimitUsd": 15.0,
+    "$maxToolCallsNote": "Raised 300 -> 600 on 2026-08-09. Measured live: one attempt recorded 318 tool_run events and read_file alone reached 202 in an earlier run, so 300 was being reached mid-attempt on a 12-file brownfield story. The budget bounds TOOL calls, not spend \u2014 storyBudgetHardLimitUsd ($15.00) is the actual cost stop, and it is unchanged."
   }
 }

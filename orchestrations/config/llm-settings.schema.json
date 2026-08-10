@@ -2,36 +2,80 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://epam-cli.internal/schemas/llm-settings.schema.json",
   "title": "LLM Settings",
-  "description": "Per-project ladder/retry/self-heal/cost-control settings for orchestrations/scripts/claude.sh, loaded from EPAM_PROJECT_CONFIG_DIR/llm-settings.json by load_llm_settings_json(). Every field is a FALLBACK DEFAULT ONLY — an already-exported EPAM_* env var (from the launch shell or a project .env file) always wins; see claude.sh's load_llm_settings_json() docstring.",
+  "description": "Per-project ladder/retry/self-heal/cost-control settings for orchestrations/scripts/claude.sh, loaded from EPAM_PROJECT_CONFIG_DIR/llm-settings.json by load_llm_settings_json(). Every field is a FALLBACK DEFAULT ONLY \u2014 an already-exported EPAM_* env var (from the launch shell or a project .env file) always wins; see claude.sh's load_llm_settings_json() docstring.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "$schema": { "type": "string" },
+    "$schema": {
+      "type": "string"
+    },
     "temperatureFloor": {
-      "type": ["number", "null"],
+      "type": [
+        "number",
+        "null"
+      ],
       "minimum": 0,
       "maximum": 2,
-      "description": "EPAM_TEMPERATURE — the project-wide base temperature every story starts at (rung 0), restored after any mid-story override. Shared by both ladders; there is only one floor per project."
+      "description": "EPAM_TEMPERATURE \u2014 the project-wide base temperature every story starts at (rung 0), restored after any mid-story override. Shared by both ladders; there is only one floor per project."
     },
     "rungs": {
       "type": "array",
       "minItems": 4,
       "maxItems": 4,
-      "description": "The 4-rung escalation structure (0-3), matching claude.sh's fixed retry_count/2 case statement. This structure is SHARED by both the high and medium ladders — only the model each rung resolves to differs (see ladders.*.modelLadder). Rung 0 is the initial attempt; rungs 1-3 are entered every 2 retries.",
+      "description": "The 4-rung escalation structure (0-3), matching claude.sh's fixed retry_count/2 case statement. This structure is SHARED by both the high and medium ladders \u2014 only the model each rung resolves to differs (see ladders.*.modelLadder). Rung 0 is the initial attempt; rungs 1-3 are entered every 2 retries.",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["rung", "retryRange", "reasoningEffort"],
+        "required": [
+          "rung",
+          "retryRange",
+          "reasoningEffort"
+        ],
         "properties": {
-          "rung": { "type": "integer", "minimum": 0, "maximum": 3 },
+          "rung": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          },
           "retryRange": {
-            "type": "array", "items": { "type": "integer" }, "minItems": 2, "maxItems": 2,
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 2,
+            "maxItems": 2,
             "description": "[minRetryCount, maxRetryCount] inclusive, e.g. [2,3] for rung 1."
           },
-          "reasoningEffort": { "type": "string", "enum": ["low", "medium", "high"], "description": "Wired: read by load_llm_settings_json() into EPAM_RUNG{0,1,2,3}_REASONING_EFFORT, applied in the rung case statement." },
-          "temperature": { "type": ["number", "null"], "minimum": 0, "maximum": 2, "description": "Wired (rungs 1-3 only, via EPAM_RUNG{1,2,3}_TEMPERATURE). null = no rung-level override; inherits temperatureFloor." },
-          "iterationBump": { "type": "integer", "minimum": 0, "description": "NOT WIRED — documentation of current behavior only. The real iteration bump on entering a rung is computed dynamically by _brownfield_rung_bump() (10% of CPA's iterationEstimate, floored at 5), not read from this field. Editing this value has no effect; it exists so the grid can be read as a whole without cross-referencing claude.sh." },
-          "outputTokenBump": { "type": ["integer", "null"], "description": "NOT WIRED — documentation of current behavior only, hardcoded in the rung case statement (8192/12288) and applied only if it exceeds the story's current ceiling, which in brownfield mode is already the brownfield.minOutputTokens floor — see that field's own note about this making the bump inert at its current default. Editing this value has no effect." }
+          "reasoningEffort": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "description": "Wired: read by load_llm_settings_json() into EPAM_RUNG{0,1,2,3}_REASONING_EFFORT, applied in the rung case statement."
+          },
+          "temperature": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 2,
+            "description": "Wired (rungs 1-3 only, via EPAM_RUNG{1,2,3}_TEMPERATURE). null = no rung-level override; inherits temperatureFloor."
+          },
+          "iterationBump": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "NOT WIRED \u2014 documentation of current behavior only. The real iteration bump on entering a rung is computed dynamically by _brownfield_rung_bump() (10% of CPA's iterationEstimate, floored at 5), not read from this field. Editing this value has no effect; it exists so the grid can be read as a whole without cross-referencing claude.sh."
+          },
+          "outputTokenBump": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "NOT WIRED \u2014 documentation of current behavior only, hardcoded in the rung case statement (8192/12288) and applied only if it exceeds the story's current ceiling, which in brownfield mode is already the brownfield.minOutputTokens floor \u2014 see that field's own note about this making the bump inert at its current default. Editing this value has no effect."
+          }
         }
       }
     },
@@ -40,26 +84,43 @@
       "additionalProperties": false,
       "description": "The only thing that differs between ladder tiers: which models each rung actually resolves to (via the shared rungs[] structure above).",
       "properties": {
-        "high": { "$ref": "#/definitions/ladderModelChain" },
-        "medium": { "$ref": "#/definitions/ladderModelChain" }
+        "high": {
+          "$ref": "#/definitions/ladderModelChain"
+        },
+        "medium": {
+          "$ref": "#/definitions/ladderModelChain"
+        }
       }
     },
     "modelOverrides": {
       "type": "object",
-      "description": "Keyed by an arbitrary label (e.g. \"minimax-m2.5\", \"kimi\", \"glm-5.2\") — the key is just a lookup name; matching happens purely via matchOn/matchValue|matchSubstring against the FINAL resolved STORY_PROVIDER/STORY_MODEL for that attempt (a story that escalated away from a match correctly does not receive it). Any number of entries is allowed, so distinct model tiers sharing one provider (MiniMax-M2.5 vs MiniMax-M3) can carry different budgets. Checked in object key order in claude.sh's resolver; the FIRST entry that matches wins. Applied AFTER the rung's own effort/temperature default — unconditionally replaces it, by design, rather than merely filling a gap.",
-      "additionalProperties": { "$ref": "#/definitions/modelOverride" }
+      "description": "Keyed by an arbitrary label (e.g. \"minimax-m2.5\", \"kimi\", \"glm-5.2\") \u2014 the key is just a lookup name; matching happens purely via matchOn/matchValue|matchSubstring against the FINAL resolved STORY_PROVIDER/STORY_MODEL for that attempt (a story that escalated away from a match correctly does not receive it). Any number of entries is allowed, so distinct model tiers sharing one provider (MiniMax-M2.5 vs MiniMax-M3) can carry different budgets. Checked in object key order in claude.sh's resolver; the FIRST entry that matches wins. Applied AFTER the rung's own effort/temperature default \u2014 unconditionally replaces it, by design, rather than merely filling a gap.",
+      "additionalProperties": {
+        "$ref": "#/definitions/modelOverride"
+      }
     },
     "retries": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "maxRetries": { "type": "integer", "minimum": 0, "description": "EPAM_MAX_RETRIES. Total ladder-driven retries before self-heal extension is considered." },
+        "maxRetries": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "EPAM_MAX_RETRIES. Total ladder-driven retries before self-heal extension is considered."
+        },
         "selfHeal": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "enabled": { "type": "boolean", "description": "EPAM_RETRY_EXTENSION_ENABLED" },
-            "extensionMax": { "type": "integer", "minimum": 0, "description": "EPAM_RETRY_EXTENSION_MAX — additional attempts granted beyond maxRetries when self-heal analysis judges the story recoverable." }
+            "enabled": {
+              "type": "boolean",
+              "description": "EPAM_RETRY_EXTENSION_ENABLED"
+            },
+            "extensionMax": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "EPAM_RETRY_EXTENSION_MAX \u2014 additional attempts granted beyond maxRetries when self-heal analysis judges the story recoverable."
+            }
           }
         }
       }
@@ -68,50 +129,121 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "storyTimeoutSecs": { "type": "integer", "minimum": 1, "description": "EPAM_STORY_TIMEOUT_SECS — wall-clock kill per story attempt. Wraps BOTH the plan pass (tool-free, capped separately at EPAM_PLAN_TIMEOUT_SECS, default 90) and the implementation pass — a deadline sized for the implementation pass alone would kill agents that used to finish comfortably, so this value should generally exceed EPAM_PLAN_TIMEOUT_SECS by that much headroom. Also read by run-agent-orchestration.sh's run_story_with_watchdog() as a flat override (skips storyEffortTimeoutSecs scaling below) — loaded there by _load_timeout_config() (lib/story-guards.sh), NOT by claude.sh's load_llm_settings_json(), since claude.sh runs too late (as a subprocess of run_story_with_watchdog itself) to influence its own wrapping timeout." },
-        "gateTimeoutSecs": { "type": "integer", "minimum": 1, "description": "EPAM_GATE_TIMEOUT_SECS — wall-clock kill per QA testing-gate invocation." },
+        "storyTimeoutSecs": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "EPAM_STORY_TIMEOUT_SECS \u2014 wall-clock kill per story attempt. Wraps BOTH the plan pass (tool-free, capped separately at EPAM_PLAN_TIMEOUT_SECS, default 90) and the implementation pass \u2014 a deadline sized for the implementation pass alone would kill agents that used to finish comfortably, so this value should generally exceed EPAM_PLAN_TIMEOUT_SECS by that much headroom. Also read by run-agent-orchestration.sh's run_story_with_watchdog() as a flat override (skips storyEffortTimeoutSecs scaling below) \u2014 loaded there by _load_timeout_config() (lib/story-guards.sh), NOT by claude.sh's load_llm_settings_json(), since claude.sh runs too late (as a subprocess of run_story_with_watchdog itself) to influence its own wrapping timeout."
+        },
+        "gateTimeoutSecs": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "EPAM_GATE_TIMEOUT_SECS \u2014 wall-clock kill per QA testing-gate invocation."
+        },
         "storyEffortTimeoutSecs": {
           "type": "object",
           "additionalProperties": false,
-          "description": "Per-effort-tier base timeout (seconds), read by run-agent-orchestration.sh's run_story_with_watchdog() before scaling by roleTimeoutMultipliers. Replaces the previously-hardcoded case statement (low=600/medium=1200/high=2400/default=900) with a configurable, project-tunable one — no project-specific fact should be baked into pipeline code. Any tier left unset keeps its hardcoded default.",
+          "description": "Per-effort-tier base timeout (seconds), read by run-agent-orchestration.sh's run_story_with_watchdog() before scaling by roleTimeoutMultipliers. Replaces the previously-hardcoded case statement (low=600/medium=1200/high=2400/default=900) with a configurable, project-tunable one \u2014 no project-specific fact should be baked into pipeline code. Any tier left unset keeps its hardcoded default.",
           "properties": {
-            "low": { "type": "integer", "minimum": 1, "description": "EPAM_STORY_EFFORT_TIMEOUT_LOW_SECS. Default when unset: 600." },
-            "medium": { "type": "integer", "minimum": 1, "description": "EPAM_STORY_EFFORT_TIMEOUT_MEDIUM_SECS. Default when unset: 1200." },
-            "high": { "type": "integer", "minimum": 1, "description": "EPAM_STORY_EFFORT_TIMEOUT_HIGH_SECS. Default when unset: 2400." },
-            "default": { "type": "integer", "minimum": 1, "description": "EPAM_STORY_EFFORT_TIMEOUT_DEFAULT_SECS — used when a story's effort field is missing/unrecognized. Default when unset: 900." }
+            "low": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "EPAM_STORY_EFFORT_TIMEOUT_LOW_SECS. Default when unset: 600."
+            },
+            "medium": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "EPAM_STORY_EFFORT_TIMEOUT_MEDIUM_SECS. Default when unset: 1200."
+            },
+            "high": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "EPAM_STORY_EFFORT_TIMEOUT_HIGH_SECS. Default when unset: 2400."
+            },
+            "default": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "EPAM_STORY_EFFORT_TIMEOUT_DEFAULT_SECS \u2014 used when a story's effort field is missing/unrecognized. Default when unset: 900."
+            }
           }
         },
         "roleTimeoutMultipliers": {
           "type": "object",
-          "description": "Per-agentRole multiplier applied to the effort-tier base timeout, keyed by whatever agentRole value the pipeline itself assigned in prd.json (Step 0.5/0.9) — never a hardcoded role name. Serialized 1:1 into EPAM_ROLE_TIMEOUT_MULTIPLIER_MAP's 'role=mult|role2=mult2' string (the format resolve_role_timeout_multiplier() already parses). An unlisted role gets multiplier 1.0. Default when unset: {\"test-engineer\": 1.5}, matching the prior hardcoded default.",
-          "additionalProperties": { "type": "number", "minimum": 0 }
+          "description": "Per-agentRole multiplier applied to the effort-tier base timeout, keyed by whatever agentRole value the pipeline itself assigned in prd.json (Step 0.5/0.9) \u2014 never a hardcoded role name. Serialized 1:1 into EPAM_ROLE_TIMEOUT_MULTIPLIER_MAP's 'role=mult|role2=mult2' string (the format resolve_role_timeout_multiplier() already parses). An unlisted role gets multiplier 1.0. Default when unset: {\"test-engineer\": 1.5}, matching the prior hardcoded default.",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0
+          }
         },
-        "watchdogRetryMultiplier": { "type": "number", "minimum": 0, "description": "EPAM_WATCHDOG_RETRY_MULTIPLIER — scales the timeout on a retry after a story timed out once (rationale: a story that already burned self-heal attempts within one budget has a larger cumulative prompt on retry, so the same flat budget that already proved insufficient is the wrong one to hand it again). Default when unset: 1.5. Set to 1 to restore flat-timeout-on-retry behavior." }
+        "watchdogRetryMultiplier": {
+          "type": "number",
+          "minimum": 0,
+          "description": "EPAM_WATCHDOG_RETRY_MULTIPLIER \u2014 scales the timeout on a retry after a story timed out once (rationale: a story that already burned self-heal attempts within one budget has a larger cumulative prompt on retry, so the same flat budget that already proved insufficient is the wrong one to hand it again). Default when unset: 1.5. Set to 1 to restore flat-timeout-on-retry behavior."
+        }
       }
     },
     "brownfield": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "minOutputTokens": { "type": "integer", "minimum": 0, "description": "EPAM_BROWNFIELD_MIN_OUTPUT_TOKENS — output-token floor applied to every brownfield story regardless of effort tier. NOTE: at its current default (24576) this floor already exceeds every rung's own outputTokenBump, making those bumps inert — see the current-vs-best-practice report." },
-        "maxScaledIterations": { "type": "integer", "minimum": 1, "description": "EPAM_BROWNFIELD_MAX_SCALED_ITERATIONS — ceiling on CPA's iterationEstimate-scaled iteration floor." }
+        "minOutputTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "EPAM_BROWNFIELD_MIN_OUTPUT_TOKENS \u2014 output-token floor applied to every brownfield story regardless of effort tier. NOTE: at its current default (24576) this floor already exceeds every rung's own outputTokenBump, making those bumps inert \u2014 see the current-vs-best-practice report."
+        },
+        "maxScaledIterations": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "EPAM_BROWNFIELD_MAX_SCALED_ITERATIONS \u2014 ceiling on CPA's iterationEstimate-scaled iteration floor."
+        }
       }
     },
     "compaction": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "defaultAutoCompressAt": { "type": "integer", "minimum": 0, "description": "EPAM_AUTO_COMPRESS_AT — token-count compaction trigger, used when the resolved model has no modelOverrides entry of its own." },
-        "defaultAutoCompressEveryNIterations": { "type": ["integer", "null"], "minimum": 1, "description": "EPAM_AUTO_COMPRESS_EVERY_N_ITERATIONS — iteration-count compaction trigger; null disables it, leaving only the token trigger." }
+        "defaultAutoCompressAt": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "EPAM_AUTO_COMPRESS_AT \u2014 token-count compaction trigger, used when the resolved model has no modelOverrides entry of its own."
+        },
+        "defaultAutoCompressEveryNIterations": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "description": "EPAM_AUTO_COMPRESS_EVERY_N_ITERATIONS \u2014 iteration-count compaction trigger; null disables it, leaving only the token trigger."
+        }
       }
     },
     "costControls": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "maxToolCallsPerStory": { "type": ["integer", "null"], "minimum": 1, "description": "EPAM_MAX_TOOL_CALLS for the main story implementer invocation. null = unlimited (current behavior — this cap is not set anywhere today)." },
-        "storyBudgetWarningUsd": { "type": ["number", "null"], "minimum": 0, "description": "Logged as a warning once a single story's cumulative real cost (summed from phase-cost.jsonl across all its retry/ladder attempts) crosses this. null = no warning. Advisory only — does not halt the story." },
-        "storyBudgetHardLimitUsd": { "type": ["number", "null"], "minimum": 0, "description": "Enforced (added 2026-08-01): once a story's cumulative real cost across all its retry/ladder attempts (summed from phase-cost.jsonl) reaches this, no further retries are granted — including skipping the self-heal retry-extension coordinator, so a budget stop cannot be overridden into more spend. The attempt already in flight when the threshold is crossed is allowed to finish normally (its cost was already committed); only the NEXT retry is blocked. null = no hard limit (current default — unlimited spend per story, bounded only by EPAM_MAX_RETRIES and EPAM_STORY_TIMEOUT_SECS)." }
+        "maxToolCallsPerStory": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "description": "EPAM_MAX_TOOL_CALLS for the main story implementer invocation. null = unlimited. This IS set per project \u2014 see orchestrations/projects/*/llm-settings.json \u2014 and is wired at claude.sh:248 into EPAM_STORY_MAX_TOOL_CALLS, which the writer invocation passes as EPAM_MAX_TOOL_CALLS. Check the project file for the live value; an earlier version of this description asserted the cap was unused, which was read as 'the writer is uncapped' and reported as such on 2026-08-09 while a 300 cap was in force."
+        },
+        "storyBudgetWarningUsd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Logged as a warning once a single story's cumulative real cost (summed from phase-cost.jsonl across all its retry/ladder attempts) crosses this. null = no warning. Advisory only \u2014 does not halt the story."
+        },
+        "storyBudgetHardLimitUsd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Enforced (added 2026-08-01): once a story's cumulative real cost across all its retry/ladder attempts (summed from phase-cost.jsonl) reaches this, no further retries are granted \u2014 including skipping the self-heal retry-extension coordinator, so a budget stop cannot be overridden into more spend. The attempt already in flight when the threshold is crossed is allowed to finish normally (its cost was already committed); only the NEXT retry is blocked. null = no hard limit (current default \u2014 unlimited spend per story, bounded only by EPAM_MAX_RETRIES and EPAM_STORY_TIMEOUT_SECS)."
+        }
       }
     }
   },
@@ -119,16 +251,54 @@
     "modelOverride": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["matchOn"],
+      "required": [
+        "matchOn"
+      ],
       "properties": {
-        "matchOn": { "type": "string", "enum": ["provider", "model"], "description": "\"provider\" matches the exact resolved STORY_PROVIDER against matchValue (e.g. all minimax-routed calls). \"model\" matches STORY_MODEL by substring against matchSubstring (needed for models like kimi/glm that share one provider with others)." },
-        "matchValue": { "type": "string", "description": "Exact STORY_PROVIDER to match. Required (and only used) when matchOn is \"provider\"." },
-        "matchSubstring": { "type": "string", "description": "Substring tested against STORY_MODEL via a plain string contains(), not a glob/regex. Required (and only used) when matchOn is \"model\"." },
-        "reasoningEffort": { "type": "string", "description": "Sent as EPAM_REASONING_EFFORT. \"low\"/\"medium\"/\"high\" are real OpenRouter reasoning.effort values for GLM/Kimi; \"adaptive\"/\"enabled\"/\"disabled\" are MiniMax's documented `thinking` values, NOT `reasoning_effort` — MiniMaxProvider.ts currently sends whatever string is set here as `reasoning_effort` verbatim, which vendor docs suggest MiniMax's endpoint does not act on. See the current-vs-best-practice report; this is a known, unfixed transport-layer gap, not a schema constraint to enforce here." },
-        "temperature": { "type": ["number", "null"], "minimum": 0, "maximum": 2, "description": "Sent as EPAM_TEMPERATURE. NOTE: per Moonshot's own docs, OpenRouter fixes temperature/top_p server-side for Kimi K3 — a temperature set here for a kimi-matched entry is sent but likely has no effect through that route." },
-        "maxIterations": { "type": "integer", "minimum": 1 },
-        "autoCompressAt": { "type": "integer", "minimum": 0 },
-        "autoCompressEveryNIterations": { "type": ["integer", "null"], "minimum": 1 }
+        "matchOn": {
+          "type": "string",
+          "enum": [
+            "provider",
+            "model"
+          ],
+          "description": "\"provider\" matches the exact resolved STORY_PROVIDER against matchValue (e.g. all minimax-routed calls). \"model\" matches STORY_MODEL by substring against matchSubstring (needed for models like kimi/glm that share one provider with others)."
+        },
+        "matchValue": {
+          "type": "string",
+          "description": "Exact STORY_PROVIDER to match. Required (and only used) when matchOn is \"provider\"."
+        },
+        "matchSubstring": {
+          "type": "string",
+          "description": "Substring tested against STORY_MODEL via a plain string contains(), not a glob/regex. Required (and only used) when matchOn is \"model\"."
+        },
+        "reasoningEffort": {
+          "type": "string",
+          "description": "Sent as EPAM_REASONING_EFFORT. \"low\"/\"medium\"/\"high\" are real OpenRouter reasoning.effort values for GLM/Kimi; \"adaptive\"/\"enabled\"/\"disabled\" are MiniMax's documented `thinking` values, NOT `reasoning_effort` \u2014 MiniMaxProvider.ts currently sends whatever string is set here as `reasoning_effort` verbatim, which vendor docs suggest MiniMax's endpoint does not act on. See the current-vs-best-practice report; this is a known, unfixed transport-layer gap, not a schema constraint to enforce here."
+        },
+        "temperature": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Sent as EPAM_TEMPERATURE. NOTE: per Moonshot's own docs, OpenRouter fixes temperature/top_p server-side for Kimi K3 \u2014 a temperature set here for a kimi-matched entry is sent but likely has no effect through that route."
+        },
+        "maxIterations": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "autoCompressAt": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "autoCompressEveryNIterations": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        }
       }
     },
     "ladderModelChain": {
@@ -137,14 +307,21 @@
       "properties": {
         "modelLadder": {
           "type": "array",
-          "description": "Ordered current=>next model transitions, mirrored 1:1 into EPAM_MODEL_LADDER_HIGH/MEDIUM's 'cur=next|cur2=next2' string. A model with no 'from' entry here has no escalation path — it is the ladder's ceiling.",
+          "description": "Ordered current=>next model transitions, mirrored 1:1 into EPAM_MODEL_LADDER_HIGH/MEDIUM's 'cur=next|cur2=next2' string. A model with no 'from' entry here has no escalation path \u2014 it is the ladder's ceiling.",
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["from", "to"],
+            "required": [
+              "from",
+              "to"
+            ],
             "properties": {
-              "from": { "type": "string" },
-              "to": { "type": "string" }
+              "from": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              }
             }
           }
         }

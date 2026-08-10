@@ -2859,7 +2859,24 @@ verify_story_deliverables() {
                 case "$_rel_path" in
                     "$PROJECT_ROOT"/*) _rel_path="${_rel_path#"$PROJECT_ROOT"/}" ;;
                 esac
-                if git -C "$PROJECT_ROOT" cat-file -e "${_baseline_ref}:${_rel_path}" 2>/dev/null; then
+                # A GITIGNORED FILE CAN NEVER BE AT BASELINE, so its absence there proves
+                # nothing. The rule below treats "absent at baseline" as "a genuinely NEW file,
+                # fully proven by exists + non-empty" — correct for a tracked file the story
+                # created, and wrong for one git will never track.
+                #
+                # Live 2026-08-09, twice: `.env.local` was declared, exists on disk, is
+                # gitignored. It counted as satisfied work, which moved the tally from
+                # 12/12-unchanged to 11/12 — one below the threshold — so the hard
+                # "all declared deliverables UNCHANGED, no real work done" failure never fired.
+                # The writer produced a paragraph of prose, called WriteFile zero times, changed
+                # nothing, and the run reported "Implemented: 1, Failed: 0". One such path in a
+                # declared list disables that gate for every story, on every run.
+                #
+                # Treated as unchanged rather than missing: the file is genuinely there, it is
+                # simply not evidence that this story did anything.
+                if git -C "$PROJECT_ROOT" check-ignore -q "$_rel_path" 2>/dev/null; then
+                    unchanged+=("$file")
+                elif git -C "$PROJECT_ROOT" cat-file -e "${_baseline_ref}:${_rel_path}" 2>/dev/null; then
                     if git -C "$PROJECT_ROOT" diff --quiet "$_baseline_ref" -- "$_rel_path" 2>/dev/null; then
                         # Soft signal, NOT added to missing[] — declared files
                         # that pre-existed at baseline (the normal case for a

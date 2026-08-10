@@ -23,7 +23,7 @@
 
 import { describe, it, expect, afterEach } from 'vitest';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -419,4 +419,95 @@ describe('verify_story_deliverables — brownfield: ZERO declared files must sti
     const falsePasses = outcomes.filter(o => o.rc === 0);
     expect(falsePasses, `${falsePasses.length}/${RUNS} incorrectly passed`).toHaveLength(0);
   }, 30000);
+});
+
+/**
+ * A GITIGNORED DECLARED FILE CAN NEVER APPEAR AT BASELINE — so it can never be evidence of work.
+ *
+ * Live 2026-08-09, twice. The writer explored for 161 tool calls, produced a paragraph of prose
+ * about SSG versus client rendering, called WriteFile zero times, changed nothing — and the run
+ * reported:
+ *
+ *     Commit step complete for AMSD-2041
+ *     Implemented: 1, Failed: 0, Skipped: 0
+ *
+ * The gate that exists to catch exactly this — "all declared deliverables exist but are
+ * UNCHANGED since baseline, no real work done anywhere" — has a hard `return 1`, and it never
+ * fired. It logged "11/12 declared candidate file(s) were unchanged (real work landed in the
+ * others)", which was false: nothing landed anywhere.
+ *
+ * The 12th file was `.env.local`. It is GITIGNORED, so it exists on disk and is absent from
+ * origin/develop. The brownfield rule reads that as "a genuinely NEW file, proven by exists +
+ * non-empty, no diff required" and counts it as satisfied. One such path in the declared list
+ * moves the tally from 12/12-unchanged to 11/12 — one below the threshold — and permanently
+ * disables the only check that catches a story doing nothing. For every story, on every run.
+ *
+ * THE TEST SUITE ABOVE HAS 25 CASES: partial-change matrices, all-unchanged, truly-missing
+ * files, zero-declared-files, 10x determinism loops. Not one of them declared a gitignored file.
+ * It reads as exhaustive, which is worse than reading as thin — the gap is invisible precisely
+ * because the surrounding coverage looks complete.
+ */
+describe('verify_story_deliverables — a gitignored declared file is not evidence of work', () => {
+  /** Adds a gitignored file that exists on disk, exactly like .env.local in the live codeline. */
+  function withIgnoredFile(clone: string, name = '.env.local') {
+    writeFileSync(join(clone, '.gitignore'), `${name}\n`);
+    execFileSync('git', ['add', '.gitignore'], { cwd: clone });
+    execFileSync('git', ['commit', '-m', 'ignore', '--quiet'], { cwd: clone });
+    writeFileSync(join(clone, name), 'SECRET=1\n');
+    return name;
+  }
+
+  it('the fixture reproduces the live shape: on disk, absent at baseline, ignored', () => {
+    const { clone } = makeBrownfieldFixture();
+    const ignored = withIgnoredFile(clone);
+    expect(existsSync(join(clone, ignored))).toBe(true);
+    const atBaseline = spawnSync('git', ['cat-file', '-e', `origin/develop:${ignored}`], { cwd: clone });
+    expect(atBaseline.status, 'the file is present at baseline — fixture is wrong').not.toBe(0);
+    const isIgnored = spawnSync('git', ['check-ignore', '-q', ignored], { cwd: clone });
+    expect(isIgnored.status, 'the file is not actually gitignored — fixture is wrong').toBe(0);
+  });
+
+  it('THE DEFECT: an unchanged pre-existing file plus a gitignored one still FAILS', () => {
+    // This is the live tally in miniature: one real declared file that nobody touched, plus
+    // .env.local. Before the fix the ignored file counted as work and the story "passed".
+    const { clone } = makeBrownfieldFixture();
+    const ignored = withIgnoredFile(clone);
+    const { rc, output } = run({ projectRoot: clone, declaredFiles: ['src/existing.ts', ignored] });
+    expect(
+      rc,
+      'a story that changed nothing was reported as delivered, because one gitignored path ' +
+      'counted as a genuinely new file',
+    ).not.toBe(0);
+    expect(output).toMatch(/unchanged/i);
+  });
+
+  it('a gitignored file alone cannot satisfy the gate', () => {
+    const { clone } = makeBrownfieldFixture();
+    const ignored = withIgnoredFile(clone);
+    expect(run({ projectRoot: clone, declaredFiles: [ignored] }).rc).not.toBe(0);
+  });
+
+  it('a REAL new file (not ignored) still passes on existence alone', () => {
+    // The rule being narrowed must survive: a genuinely new tracked file has no baseline to
+    // diff against and existence is the correct proof.
+    const { clone } = makeBrownfieldFixture();
+    writeFileSync(join(clone, 'src/brand-new.ts'), 'export const n = 1;\n');
+    expect(run({ projectRoot: clone, declaredFiles: ['src/brand-new.ts'] }).rc).toBe(0);
+  });
+
+  it('a gitignored file alongside a genuinely CHANGED file still passes', () => {
+    // The fix must not fail a story that did real work merely because .env.local was declared.
+    const { clone } = makeBrownfieldFixture();
+    const ignored = withIgnoredFile(clone);
+    writeFileSync(join(clone, 'src/existing.ts'), 'export const original = 2;\n');
+    expect(run({ projectRoot: clone, declaredFiles: ['src/existing.ts', ignored] }).rc).toBe(0);
+  });
+
+  it('run 10x — deterministically fails, never a false pass', () => {
+    for (let i = 0; i < 10; i++) {
+      const { clone } = makeBrownfieldFixture();
+      const ignored = withIgnoredFile(clone);
+      expect(run({ projectRoot: clone, declaredFiles: ['src/existing.ts', ignored] }).rc).not.toBe(0);
+    }
+  });
 });

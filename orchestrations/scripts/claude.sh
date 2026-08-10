@@ -2622,6 +2622,14 @@ verify_prescribed_helper_used() {
     # 2026-08-09 attempts 1 and 2 produced the identical violation for exactly that reason,
     # and all eight would have. VERIFICATION_FAILURE is the channel the failure analyst reads
     # and turns into the next attempt's prompt.
+    # THE FLAG IS WHAT DELIVERS IT. VERIFICATION_FAILURE alone goes nowhere: the retry loop
+    # routes it into COORDINATOR_PROMPT_AMENDMENT — the text the next attempt actually reads —
+    # only when DETERMINISTIC_CHECK_FAILURE=1. Setting the variable without the flag is what
+    # made attempts 2 and 5 byte-identical live on 2026-08-09: the finding was assigned and
+    # dropped, and the writer was never told. This IS a deterministic check — the helper either
+    # appears in the diff or it does not — so it belongs in that class.
+    DETERMINISTIC_CHECK_FAILURE=1
+    export DETERMINISTIC_CHECK_FAILURE
     VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe prescribed helper `%s` EXISTS in this repository and your change does not use it — you re-implemented logic the repository already owns, which is how a fix comes to match on the wrong format and silently never work. Import and use `%s` instead of hand-rolling it, then make the change again.\n' "$_helper" "$_helper")
     warning "Story $story_id: the prescribed helper \`${_helper}\` EXISTS in this repository but does NOT appear in the change. The agent hand-rolled the logic instead of reusing it — live 2026-07-26 that produced a fix matching on '-' when the repository's own separator is '#', so the fix could never work. Import and use ${_helper}, which owns that format, rather than re-implementing it.${_note}"
     return 1
@@ -2899,6 +2907,10 @@ verify_story_deliverables() {
         STORY_REJECTION_KEY="missing:$(printf '%s,' "${missing[@]}")"
         # Told to the WRITER, not only to the log: a rejection the next attempt cannot read is
         # a rejection it cannot act on. See every-gate-tells-the-writer-why.test.ts.
+        # Same routing requirement as above — a missing declared file is a deterministic fact,
+        # and without the flag the writer is rejected without ever being told which file.
+        DETERMINISTIC_CHECK_FAILURE=1
+        export DETERMINISTIC_CHECK_FAILURE
         VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe story declares deliverable(s) that do not exist. Create each one at the exact path listed, or correct the declaration if the path is wrong:\n\n%s\n' "$(printf '  - %s\n' "${missing[@]}")")
         error "Story $story_id is missing ${#missing[@]} declared deliverable(s) in $PROJECT_ROOT:"
         for file in "${missing[@]}"; do

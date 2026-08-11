@@ -74,6 +74,13 @@ function run() {
   const git = (...a: string[]) => execFileSync('git', a, { cwd: repo, encoding: 'utf8' });
   mkdirSync(join(repo, 'src'), { recursive: true });
   writeFileSync(join(repo, 'package.json'), '{"name":"t","private":true}');
+  // The project declares HOW it verifies itself; the engine runs that rather than a compiler it
+  // chose. A fixture without this manifest has declared nothing, which the gate reports as
+  // UNKNOWN — so the typecheck rejection under test never fires.
+  mkdirSync(join(repo, '.epam'), { recursive: true });
+  writeFileSync(join(repo, '.epam', 'verification.json'), JSON.stringify({
+    typecheck: { command: './node_modules/.bin/tsc --noEmit' },
+  }));
   writeFileSync(join(repo, 'tsconfig.json'), JSON.stringify({
     compilerOptions: { strict: true, noEmit: true, target: 'ES2020', module: 'ESNext',
       moduleResolution: 'node', skipLibCheck: true, types: [] },
@@ -98,6 +105,8 @@ function run() {
       env: { ...process.env, EPAM_BROWNFIELD: '1', PROJECT_ROOT: repo, PRD_FILE: prd,
              LOG_DIR: logDir, JIRA_BASELINE_BRANCH: 'develop', KB_ROOT: kbRoot,
              NODE_BIN: NODE20, AI_RUNNER_CMD: makeStub(capture, repo),
+             // The verification helper resolves the plugin under AUTOMATION_DIR.
+             AUTOMATION_DIR: join(REPO, 'orchestrations'),
              STORY_ROLE: 'repro-test-writer' },
     });
   } catch { /* the writer is expected to end blocked — we assert on prompts */ }

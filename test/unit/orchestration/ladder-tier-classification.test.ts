@@ -116,9 +116,13 @@ describe('claude.sh — get_model_ladder_step() resolves ladder by tier param', 
 });
 
 describe('claude.sh — Rung 2 wires classify_ladder_tier into get_model_ladder_step', () => {
-  it('calls classify_ladder_tier before get_model_ladder_step', () => {
+  it('classifies the tier BEFORE deciding the ladder step', () => {
+    // The step call is now next_ladder_step, which takes the classified tier as an argument and
+    // calls get_model_ladder_step internally (executed tests: next-ladder-step.test.ts). The
+    // ordering this guards is unchanged: classify first, then decide, so the decision is made on
+    // the story's real tier rather than a default.
     const classifyIdx = claudeSrc.indexOf('_ladder_tier=$(classify_ladder_tier "$story_id")');
-    const stepIdx = claudeSrc.indexOf('ladder_step_r2=$(get_model_ladder_step "${STORY_MODEL:-}" "$_ladder_tier")');
+    const stepIdx = claudeSrc.indexOf('_decided_r2=$(next_ladder_step 2 "${STORY_MODEL:-}"');
     expect(classifyIdx).toBeGreaterThan(-1);
     expect(stepIdx).toBeGreaterThan(classifyIdx);
   });

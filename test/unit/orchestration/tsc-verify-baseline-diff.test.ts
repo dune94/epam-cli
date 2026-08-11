@@ -24,7 +24,7 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync , mkdirSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -41,6 +41,7 @@ function extractTscVerifyFunction(): string {
   return claudeSrc.slice(start, end);
 }
 
+const AUTOMATION_DIR_FOR_TEST = join(__dirname, '../../../orchestrations');
 const cleanupDirs: string[] = [];
 afterEach(() => {
   for (const d of cleanupDirs.splice(0)) {
@@ -52,6 +53,13 @@ function makeGitFixture(): string {
   const dir = mkdtempSync(join(tmpdir(), 'tsc-verify-fixture-'));
   cleanupDirs.push(dir);
   symlinkSync(join(REPO_ROOT, 'node_modules'), join(dir, 'node_modules'));
+  // The project declares HOW it verifies itself; the engine runs that declared command
+  // rather than a compiler it named. A fixture that declares nothing is reported as
+  // UNKNOWN by the gate, so the behaviour under test never fires.
+  mkdirSync(join(dir, '.epam'), { recursive: true });
+  writeFileSync(join(dir, '.epam', 'verification.json'), JSON.stringify({
+    typecheck: { command: './node_modules/.bin/tsc --noEmit' },
+  }));
   writeFileSync(
     join(dir, 'tsconfig.json'),
     JSON.stringify({ compilerOptions: { target: 'ES2022', module: 'CommonJS', strict: true, noEmit: true }, include: ['src/**/*.ts'] }, null, 2)
@@ -88,6 +96,7 @@ set -uo pipefail
 PROJECT_ROOT="${projectRoot}"
 LOG_DIR="${logDir}"
 NODE_CMD="${NODE_BIN}"
+AUTOMATION_DIR="${AUTOMATION_DIR_FOR_TEST}"
 warning() { echo "WARNING: $*"; }
 success() { echo "SUCCESS: $*"; }
 
@@ -180,6 +189,7 @@ set -uo pipefail
 PROJECT_ROOT="${dir}"
 LOG_DIR="${logDir}"
 NODE_CMD="${NODE_BIN}"
+AUTOMATION_DIR="${AUTOMATION_DIR_FOR_TEST}"
 warning() { echo "WARNING: $*"; }
 success() { echo "SUCCESS: $*"; }
 

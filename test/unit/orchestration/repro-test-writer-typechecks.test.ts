@@ -42,6 +42,15 @@ function repoWith(specBody: string, extraFiles: Record<string, string> = {}) {
     include: ['src/**/*.ts'],
   }));
   symlinkSync(join(REPO, 'node_modules'), join(d, 'node_modules'));
+  // The project declares HOW it verifies itself. The engine no longer runs a compiler it chose;
+  // it runs the project's declared command (orchestrations/plugins/verification-tools.js), so a
+  // fixture without this manifest is a repo that has declared nothing — which the gate correctly
+  // reports as UNKNOWN rather than as passing. A real checkout gets this written at provisioning
+  // time by _epam_write_verification_manifest.
+  mkdirSync(join(d, '.epam'), { recursive: true });
+  writeFileSync(join(d, '.epam', 'verification.json'), JSON.stringify({
+    typecheck: { command: './node_modules/.bin/tsc --noEmit' },
+  }));
   writeFileSync(join(d, 'src', 'x.spec.ts'), specBody);
   for (const [rel, body] of Object.entries(extraFiles)) writeFileSync(join(d, rel), body);
   return d;
@@ -50,11 +59,20 @@ function repoWith(specBody: string, extraFiles: Record<string, string> = {}) {
 function validate(dir: string): number {
   const fnFile = join(dir, '_fn.sh');
   execFileSync('bash', ['-c',
-    `sed -n '/^_typecheck_written_test() {/,/^}/p' ${JSON.stringify(WRITER_SH)} > ${JSON.stringify(fnFile)} && sed -n '/^_validate_written_test() {/,/^}/p' ${JSON.stringify(WRITER_SH)} >> ${JSON.stringify(fnFile)}`]);
+    // _run_project_verification is extracted too: the typecheck no longer invokes a compiler the
+    // engine names, it calls that helper (which runs the project's DECLARED command). Without it
+    // in the harness the call is a missing command, the grep matches nothing, and a spec that
+    // does not compile is reported as passing — the harness would prove the opposite of its name.
+    `for f in _run_project_verification _typecheck_written_test _validate_written_test; do ` +
+    `sed -n "/^\${f}() {/,/^}/p" ${JSON.stringify(WRITER_SH)}; done > ${JSON.stringify(fnFile)}`]);
   const script = [
     'set -uo pipefail',
     `PROJECT_ROOT=${JSON.stringify(dir)}`,
     `NODE_BIN=${JSON.stringify(process.execPath)}`,
+    // The verification helper resolves the plugin under AUTOMATION_DIR, which the real script
+    // always has. Without it the helper cannot find the plugin, returns "missing", and the
+    // harness reports a non-compiling spec as accepted.
+    `AUTOMATION_DIR=${JSON.stringify(join(REPO, 'orchestrations'))}`,
     '_writer_log=/dev/null',
     `source ${JSON.stringify(fnFile)}`,
     '_validate_written_test "src/x.spec.ts"; echo "RC=$?"',

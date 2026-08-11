@@ -121,7 +121,7 @@ describe('claude.sh — Rung 3 respects the PRD-classified tier (no hardcoded "h
     // documented last-resort for model diversity when self-healing is confirmed broken.
     // That call is guarded by _healed_count_r3 >= 1 && skipLadder=true, making it
     // distinct from the main path.
-    expect(rung3Body).toMatch(/get_model_ladder_step "\$\{STORY_MODEL:-\}" "\$_ladder_tier_r3"/);
+    expect(rung3Body).toMatch(/next_ladder_step\s+3\s+"\$\{STORY_MODEL:-\}"[^\n]*_ladder_tier_r3/);
     // The HealingBroken override's "high" literal must be inside its own guard block,
     // not the main classify_ladder_tier() branch.
     const mainBranchIdx = rung3Body.indexOf('_ladder_tier_r3=$(classify_ladder_tier');

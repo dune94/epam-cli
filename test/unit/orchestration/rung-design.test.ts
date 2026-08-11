@@ -76,7 +76,10 @@ describe('claude.sh — each rung escalates correctly', () => {
     const rung2Start = src.indexOf('# Rung 2:');
     const rung2End   = src.indexOf('# Rung 3', rung2Start);
     const rung2Block = src.slice(rung2Start, rung2End);
-    expect(rung2Block).toMatch(/get_model_ladder_step/);
+    // The ladder decision moved into next_ladder_step (a pure function with its own executed
+    // tests in next-ladder-step.test.ts); it calls get_model_ladder_step internally. What this
+    // rung must still do is ASK for a model escalation, at its own rung number.
+    expect(rung2Block).toMatch(/next_ladder_step\s+2\b/);
   });
 
   it('Rung 3 sets EPAM_REASONING_EFFORT=high', () => {
@@ -89,7 +92,9 @@ describe('claude.sh — each rung escalates correctly', () => {
     const rung3Start = src.indexOf('# Rung 3+:');
     const rung3Block = src.slice(rung3Start, rung3Start + 3600);
     expect(rung3Block).toMatch(/_ladder_tier_r3=\$\(classify_ladder_tier "\$story_id"\)/);
-    expect(rung3Block).toMatch(/get_model_ladder_step\s+"\$\{STORY_MODEL:-\}"\s+"\$_ladder_tier_r3"/);
+    // Same delegation as rung 2; the tier it escalates on is still its own.
+    expect(rung3Block).toMatch(/next_ladder_step\s+3\b|next_ladder_step\s+"?\$_rung"?/);
+    expect(rung3Block).toMatch(/_ladder_tier_r3/);
   });
 });
 

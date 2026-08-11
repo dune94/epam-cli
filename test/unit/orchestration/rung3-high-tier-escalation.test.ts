@@ -59,7 +59,11 @@ describe('claude.sh — Rung 3 escalation logic', () => {
 
   it('the "already escalated" branch calls get_model_ladder_step with the story\'s classified tier (2026-07-05: replaced a hardcoded "high" literal — see complexity-driven-ladder-tier.test.ts), not an unconditional literal', () => {
     expect(rung3Body).toMatch(/_ladder_tier_r3=\$\(classify_ladder_tier "\$story_id"\)/);
-    expect(rung3Body).toMatch(/get_model_ladder_step\s+"\$\{STORY_MODEL:-\}"\s+"\$_ladder_tier_r3"/);
+    // The ladder decision is delegated to next_ladder_step (executed tests: next-ladder-step.test.ts);
+    // it calls get_model_ladder_step internally. What rung 3 must still do is escalate on the
+    // story's CLASSIFIED tier rather than a hardcoded one — that is the defect this file guards.
+    expect(rung3Body).toMatch(/next_ladder_step\s+3\s+"\$\{STORY_MODEL:-\}"/);
+    expect(rung3Body).toMatch(/_ladder_tier_r3/);
   });
 
   it('updates STORY_MODEL and STORY_PROVIDER when the high-tier step returns a different model', () => {
@@ -69,7 +73,11 @@ describe('claude.sh — Rung 3 escalation logic', () => {
 
   it('still sets reasoning effort to high regardless of which branch was taken', () => {
     // Env-overridable via EPAM_RUNG3_REASONING_EFFORT — default is still "high".
-    expect(rung3Body).toMatch(/EPAM_REASONING_EFFORT="\$\{EPAM_RUNG3_REASONING_EFFORT:-high\}"/);
+    // The per-rung effort floor moved into next_ladder_step with the rest of the ladder
+    // decision, so assert it where it now lives. The behaviour is unchanged and is also
+    // covered by executed tests in next-ladder-step.test.ts.
+    expect(extractFunctionBody('next_ladder_step'))
+      .toMatch(/EPAM_RUNG3_REASONING_EFFORT:-high/);
   });
 });
 

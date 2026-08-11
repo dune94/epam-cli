@@ -50,7 +50,7 @@
  * pattern matching.
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync , mkdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -77,6 +77,13 @@ function runTscVerification(opts: { agentRole: string; testFileContent: string }
 } {
   const dir = mkdtempSync(join(tmpdir(), 'tsc-gate-blindspot-'));
   try {
+  // The project declares HOW it verifies itself; the engine runs that declared command
+  // rather than a compiler it named. A fixture that declares nothing is reported as
+  // UNKNOWN by the gate, so the behaviour under test never fires.
+  mkdirSync(join(dir, '.epam'), { recursive: true });
+  writeFileSync(join(dir, '.epam', 'verification.json'), JSON.stringify({
+    typecheck: { command: './node_modules/.bin/tsc --noEmit' },
+  }));
     writeFileSync(
       join(dir, 'tsconfig.json'),
       JSON.stringify({ compilerOptions: { target: 'ES2022', module: 'CommonJS', strict: true, noEmit: true }, include: ['src'] }),

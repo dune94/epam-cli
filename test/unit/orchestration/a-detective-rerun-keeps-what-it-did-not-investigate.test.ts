@@ -224,6 +224,42 @@ describe('THE POINT OF THE RE-RUN: it reports whether the field actually arrived
   });
 });
 
+describe('THE INVESTIGATION IS NOT STARVED — the live failure of 2026-08-11', () => {
+  it('the detective is handed an executor, so vocabulary derivation can run', async () => {
+    const { runRerun } = load();
+    const prd = prdFixture();
+    const seen: any[] = [];
+
+    await runRerun({
+      prd, codelines: ['cl-two'], logDir: tmp(),
+      promptExec: { cmd: 'stub-runner', args: [] },
+      detective: async (_s: any, _l: any, opts: any) => { seen.push(opts); return [found('c.x', true)]; },
+    });
+
+    expect(seen.length).toBe(1);
+    expect(
+      seen[0] && seen[0].promptExec,
+      'opts.promptExec was not passed — deriveGuardVocabulary throws on null and the detective ' +
+      'seeds with an unfiltered query, which is what burned its budget and timed it out',
+    ).toBeTruthy();
+    expect(seen[0].promptExec.cmd).toBe('stub-runner');
+  });
+
+  it('an executor that cannot be resolved is passed as null, not as a broken object', async () => {
+    const { runRerun } = load();
+    const prd = prdFixture();
+    const seen: any[] = [];
+    await runRerun({
+      prd, codelines: ['cl-two'], logDir: tmp(),
+      promptExec: null,
+      detective: async (_s: any, _l: any, opts: any) => { seen.push(opts); return [found('c.x', true)]; },
+    });
+    // Explicit null is the documented "no executor" value; it must not become undefined,
+    // which would make the default kick in and silently re-resolve.
+    expect(seen[0].promptExec).toBeNull();
+  });
+});
+
 describe('the PRD is not overwritten without a backup beside it', () => {
   it('writing the PRD leaves a restorable copy', () => {
     const { writePrd } = load();

@@ -53,6 +53,14 @@ function project(opts: {
   const dir = mkdtempSync(join(tmpdir(), 'utgate-')); dirs.push(dir);
   mkdirSync(join(dir, 'logs'), { recursive: true });
   writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'x' }));
+  // THE PROJECT DECLARES HOW IT VERIFIES ITSELF. The gate no longer invokes a compiler; it runs
+  // this command through orchestrations/plugins/verification-plugin.js. A project that declares
+  // nothing reports UNKNOWN and is REFUSED — deliberately, because the old behaviour was to skip
+  // (which every caller read as "verified"). A healthy fixture therefore declares one, exactly
+  // as a real codeline does.
+  mkdirSync(join(dir, '.epam'), { recursive: true });
+  writeFileSync(join(dir, '.epam', 'verification.json'),
+    JSON.stringify({ typecheck: { command: `exit ${opts.tscExit ?? 0}` } }));
   // The gate asks the PRD whether this phase has unit-test stories, with jq, and returns 0
   // when it does not. A shell stub cannot answer that — the function computes it into a local
   // — so the fixture supplies a real PRD. Without this every case below returned 0 for the
@@ -102,6 +110,9 @@ function runGate(p: ReturnType<typeof project>, env: Record<string, string> = {}
      is_truthy() { case "\${1:-}" in true|1|yes) return 0 ;; *) return 1 ;; esac; }
      detect_node() { echo ${JSON.stringify(p.node)}; }
      step_emit() { :; }
+     ${'AUTOMATION_DIR=' + JSON.stringify(join(__dirname, '../../../orchestrations'))}
+     ${'NODE_CMD=' + JSON.stringify(process.execPath)}
+     ${lift('_run_project_verification')}
 ${lift('run_unit_tests_gate')}
      run_unit_tests_gate core; echo "RC=$?"`,
   ], { encoding: 'utf8' });

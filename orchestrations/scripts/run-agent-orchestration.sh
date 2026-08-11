@@ -33,7 +33,7 @@ set -e
 _run_project_verification() {
     local _root="${1:-$PROJECT_ROOT}"
     local _auto="${AUTOMATION_DIR:-$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")}"
-    local _plugin="${_auto}/plugins/verification-tools.js"
+    local _plugin="${_auto}/plugins/verification-plugin.js"
     local _node="${NODE_CMD:-${NODE_BIN:-node}}"
     if [ ! -f "$_plugin" ]; then echo "verification plugin missing at $_plugin"; return 2; fi
     "$_node" -e '
@@ -2988,7 +2988,7 @@ KNOWNFIXES_EOF
 
     # ── Plugin provisioning: config-driven, zero project-specific hardcoding ──
     # This script has no idea what a "plugin" IS or does, with ONE exception:
-    # CodeGraph's query tool (orchestrations/plugins/codegraph-tools.js) ships
+    # CodeGraph's query tool (orchestrations/plugins/codegraph-plugin.js) ships
     # with epam-cli itself — the same way ReadFile/Bash are always available
     # regardless of project — so it's provisioned for EVERY codeline
     # unconditionally, merged with whatever the project's own plugins.json
@@ -3003,7 +3003,7 @@ KNOWNFIXES_EOF
       _project_tools_json=$(jq -c '.tools // []' "${EPAM_PROJECT_CONFIG_DIR}/plugins.json" 2>/dev/null || echo "[]")
     fi
     local _codegraph_plugin_abs=""
-    local _codegraph_plugin_src="${SCRIPT_DIR}/../plugins/codegraph-tools.js"
+    local _codegraph_plugin_src="${SCRIPT_DIR}/../plugins/codegraph-plugin.js"
     if [ -f "$_codegraph_plugin_src" ]; then
       _codegraph_plugin_abs="$(cd "$(dirname "$_codegraph_plugin_src")" 2>/dev/null && pwd)/$(basename "$_codegraph_plugin_src")"
     fi
@@ -7534,8 +7534,65 @@ if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/update-invalidated-tes
     # the gate and killed a run whose fix and test were both committed and whose
     # reviewer had approved the same change standalone.
     # The repro-gate remains the enforcer.
+    # RECORDED ON THE STORY, NOT ONLY LOGGED.
+    #
+    # This step stays NON-BLOCKING for the reason above. But "leaving it for the repro-gate to
+    # judge" was a promise nothing kept: Step 3.55 selects via phase_stories_for_repro_gate(),
+    # which excludes storyKind "novel" (lib/story-guards.sh:887, deliberately — a novel story
+    # has no bug to reproduce and can never satisfy fail-on-baseline). So for a novel story the
+    # deferral targets a gate that never examines it: the loop iterates zero stories,
+    # _repro_blocked stays 0, and the phase reports "passed for all phase stories" — true of the
+    # empty set.
+    #
+    # Live 2026-08-11, AMSD-2041/gotransit (novel): the suite was RED with ten broken suites,
+    # this step deferred, 3.55 examined nothing, the phase reported SUCCESS, and the broken code
+    # was already committed.
+    #
+    # A finding that exists only in a log line cannot be inherited. Stamped onto the story here
+    # — the same mechanism 3.55 already uses when IT blocks (reviewStatus/reproGate below) — so
+    # any later gate can see it regardless of which stories that gate selects.
+    # INHERITED FAILURES ARE NOT THIS RUN'S TO ANSWER FOR.
+    #
+    # Operator policy: "For brownfield we [inherit] existing test failures, but we cannot be
+    # expected to fix them." Without a baseline this step stamps suiteState=red on ANY red suite,
+    # so a codeline carrying pre-existing failures would block every run on breakage it did not
+    # cause — the inverse of the policy.
+    #
+    # Same mechanism the type check already uses: run the suite at the baseline SHA in a
+    # throwaway worktree, cache by SHA, subtract on identity. The suite output this step already
+    # captured is handed in, so the current run is not repeated.
+    #
+    # An UNDECLARED parse (no test.failurePattern) returns unknown, the delta declines, and the
+    # stamp proceeds — reporting everything rather than guessing. That refusal is deliberate.
+    if [ "$_uit_failed" -ne 0 ] && command -v baseline_new_failures >/dev/null 2>&1; then
+        _uit_log="$LOG_DIR/update-invalidated-tests-${PHASE}.log"
+        if [ -f "$_uit_log" ]; then
+            if baseline_new_failures "$PROJECT_ROOT" "${NODE_CMD:-${NODE_BIN:-node}}" \
+                   "$LOG_DIR" test "$_uit_log" >/dev/null 2>&1; then
+                success "Step 3.545: the suite is red, but every failing suite was already failing at the baseline — none introduced by this phase."
+                _uit_failed=0
+            fi
+        fi
+    fi
+
     if [ "$_uit_failed" -ne 0 ]; then
-        warning "Step 3.545: could not reconcile a failing test — leaving it for the repro-gate (Step 3.55) to judge. NOT blocking."
+        warning "Step 3.545: could not reconcile a failing test — recording suiteState=red on the affected stories; a later gate must resolve or fail on it."
+        while IFS= read -r _uit_story; do
+            [ -z "$_uit_story" ] && continue
+            _tmp_prd="$(mktemp)"
+            if jq --arg id "$_uit_story" \
+                '(.stories[] | select(.id == $id)) |= (. + {suiteState: "red", suiteStateStep: "3.545"})' \
+                "$PRD_FILE" > "$_tmp_prd" 2>/dev/null; then
+                mv "$_tmp_prd" "$PRD_FILE"
+            else
+                rm -f "$_tmp_prd"
+                error "Step 3.545: could not record suiteState on $_uit_story — refusing to continue with an unrecorded RED suite."
+                exit 2
+            fi
+        done < <(jq -r --arg phase "$PHASE" \
+            '(.implementationOrder[$phase] // []) as $ids |
+             .stories[] | select(.id as $id | $ids | index($id) != null) | .id' \
+            "$PRD_FILE" 2>/dev/null)
     fi
 fi
 
@@ -7571,7 +7628,27 @@ if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/brownfield-repro-test-
         error "Step 3.55: one or more stories failed the bug-reproduction test gate — the fix does not ship a test that reproduces the bug. Blocking before review."
         exit 2
     fi
-    success "Step 3.55: bug-reproduction test gate passed for all phase stories"
+
+    # INHERITED RED, from a step that could not judge it itself.
+    #
+    # The loop above deliberately skips novel stories, so `_repro_blocked` alone says nothing
+    # about them — it reports the empty set as a pass. Step 3.545 records suiteState=red when it
+    # cannot reconcile a failing test; this is where that finding is enforced, for EVERY story in
+    # the phase rather than only the ones this gate selects.
+    #
+    # Without it: AMSD-2041 (novel), ten broken suites, both steps individually correct, phase
+    # green, broken code committed.
+    _inherited_red=$(jq -r --arg phase "$PHASE" \
+        '(.implementationOrder[$phase] // []) as $ids |
+         [ .stories[] | select(.id as $id | $ids | index($id) != null)
+                      | select(.suiteState == "red") | .id ] | join(" ")' \
+        "$PRD_FILE" 2>/dev/null)
+    if [ -n "${_inherited_red// /}" ]; then
+        error "Step 3.55: the test suite is RED for: ${_inherited_red}. Step 3.545 could not reconcile it and this gate does not examine these stories (novel stories are excluded by design), so nothing downstream would judge it. Blocking before review."
+        exit 2
+    fi
+
+    success "Step 3.55: bug-reproduction test gate passed, and no story carries an unresolved RED suite"
 fi
 
 # ──────────────────────────────────────────────
@@ -10885,7 +10962,21 @@ run_unit_tests_gate() {
         # Bounded like the npm install and vitest calls above. tsc was the one unbounded
         # command in this gate, so a type-check that never returns hung the phase with no
         # watchdog over it.
-        cd "$PROJECT_ROOT" && timeout "${EPAM_TSC_TIMEOUT_SECS:-${EPAM_TEST_TIMEOUT_SECS:-300}}" _run_project_verification "$PROJECT_ROOT" >> "$gate_log" 2>&1 || tsc_exit=$?
+        # `timeout` EXECS A BINARY — it cannot see a shell function, so wrapping
+        # _run_project_verification directly made this fail with "command not found" on every
+        # run, i.e. the gate's type check reported FAILED unconditionally. Re-entering bash with
+        # the function exported keeps the bound (an unbounded type check hangs the phase with no
+        # watchdog above it) while actually invoking the function.
+        # AUTOMATION_DIR and NODE_CMD are carried EXPLICITLY. A child `bash -c` inherits only
+        # EXPORTED variables, and both are ordinarily plain assignments — so without this the
+        # child resolved an empty plugin path and the helper returned 2 ("plugin missing"),
+        # reported as a type-check failure on a project that type-checks fine.
+        export -f _run_project_verification
+        cd "$PROJECT_ROOT" && \
+            AUTOMATION_DIR="${AUTOMATION_DIR:-}" NODE_CMD="${NODE_CMD:-${NODE_BIN:-node}}" \
+            timeout "${EPAM_TSC_TIMEOUT_SECS:-${EPAM_TEST_TIMEOUT_SECS:-300}}" \
+            bash -c 'export AUTOMATION_DIR NODE_CMD; _run_project_verification "$1"' _ "$PROJECT_ROOT" \
+            >> "$gate_log" 2>&1 || tsc_exit=$?
         if [ "$tsc_exit" -eq 0 ]; then
             success "Step 4.5: Unit test gate PASSED"
             "$SCRIPT_DIR/update-monitor.sh" event "unit_test_pass" \

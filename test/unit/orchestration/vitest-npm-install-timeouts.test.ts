@@ -33,18 +33,35 @@ describe('run-agent-orchestration.sh — every vitest/npm install call is now bo
     expect(block).toMatch(/timeout "\$\{EPAM_TEST_TIMEOUT_SECS:-300\}" "\$_node_bin" \.\/node_modules\/\.bin\/vitest run/);
   });
 
-  it("the unit-test gate's tsc run is wrapped with timeout too", () => {
-    // Found while re-pointing the test above: npm install (180s) and vitest (300s) are both
-    // bounded and tsc was not, so a type-check that never returns hangs the phase with no
-    // watchdog above it. The deleted helper had the same gap, which is why removing it did not
-    // surface this on its own.
+  /**
+   * THE TYPE CHECK MOVED, THE INVARIANT DID NOT.
+   *
+   * This asserted that run_unit_tests_gate's own `./node_modules/.bin/tsc` invocation was
+   * wrapped in `timeout`. That invocation no longer exists: the gate stopped naming a compiler
+   * when verification became a project declaration (.epam/verification.json, run through
+   * orchestrations/plugins/verification-plugin.js). Asserting on the old literal would now fail
+   * for the RIGHT reason, which makes it a test of the wrong thing.
+   *
+   * The requirement is unchanged and must still hold somewhere: a type check that never returns
+   * hangs the phase with no watchdog above it. It is now bounded inside the plugin, for every
+   * stack rather than for one.
+   */
+  it("the project's declared verification is bounded by a timeout", () => {
+    const plugin = readFileSync(
+      join(REPO_ROOT, 'orchestrations/plugins/verification-plugin.js'), 'utf8');
+    const fn = plugin.slice(plugin.indexOf('function runVerification('));
+    const call = fn.slice(0, fn.indexOf('\n}'));
+    expect(call, 'an unbounded type check hangs the phase indefinitely').toMatch(/timeout:/);
+  });
+
+  it("the engine no longer names a compiler in the unit-test gate", () => {
     const idx = orchSrc.indexOf('run_unit_tests_gate() {');
-    const body = orchSrc.slice(idx, orchSrc.indexOf('\n}\n', idx));
-    // Match the INVOCATION, not the log line that mentions it: `log "Running type check
-    // (tsc --noEmit)..."` appears first and would make this assert against a string literal.
-    const tscCall = body.split('\n').find((l) => l.includes('.bin/tsc') && !l.trim().startsWith('#'));
-    expect(tscCall, 'the gate no longer type-checks at all').toBeTruthy();
-    expect(tscCall, 'an unbounded tsc hangs the phase indefinitely').toMatch(/timeout /);
+    const body = orchSrc.slice(idx, orchSrc.indexOf('\n}\n', idx))
+      .split('\n').filter((l) => !l.trim().startsWith('#')).join('\n');
+    expect(
+      body,
+      'which checker runs is the project\'s declaration, not the engine\'s knowledge',
+    ).not.toContain('.bin/tsc');
   });
 
   it("the unit-test gate's own vitest run is wrapped with timeout", () => {

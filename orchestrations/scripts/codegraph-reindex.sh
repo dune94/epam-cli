@@ -23,7 +23,7 @@
 # returned a false negative on the writer's own output.
 #
 # (Blast radius note, so this is not over-claimed: resolve_test_file in
-# plugins/codeline-context-tools.js does real fs.existsSync lookups, not index
+# plugins/codeline-context-plugin.js does real fs.existsSync lookups, not index
 # reads, so it always saw in-flight writes correctly. Only codegraph_query was
 # affected.)
 #

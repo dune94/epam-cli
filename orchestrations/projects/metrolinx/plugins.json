@@ -1,8 +1,8 @@
 {
   "tools": [
-    "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/plugins/codeline-context-tools.js",
-    "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/plugins/dependency-contract-tools.js",
-    "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/plugins/secret-scan-tools.js",
-    "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/plugins/verification-tools.js"
+    "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/plugins/codeline-context-plugin.js",
+    "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/plugins/dependency-contract-plugin.js",
+    "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/plugins/secret-scan-plugin.js",
+    "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/plugins/verification-plugin.js"
   ]
 }

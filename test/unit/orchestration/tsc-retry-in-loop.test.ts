@@ -40,13 +40,34 @@ describe('claude.sh — run_tsc_verification exists and mirrors the external gat
     expect(fnBlock).toMatch(/SKIP_STORY_TSC_GATE/);
   });
 
-  it('skips when tsconfig.json does not exist yet', () => {
-    expect(fnBlock).toMatch(/! -f "\$PROJECT_ROOT\/tsconfig\.json"/);
+  /**
+   * THE PRECONDITIONS THESE ASSERTED WERE A FAIL-OPEN, AND WERE REMOVED (89e3cd7).
+   *
+   * They were:
+   *     [ ! -f "$PROJECT_ROOT/tsconfig.json" ] && return 0
+   *     _ts_count=$(find "$PROJECT_ROOT/src" -name "*.ts" | grep -v node_modules | wc -l)
+   *     [ "$_ts_count" -eq 0 ] && return 0
+   *
+   * return 0 is PASS. So the gate stopped naming a compiler and kept naming the ecosystem, in
+   * the one place where the answer is "skip" — which every caller reads as "verified". Point it
+   * at a repository with no src/*.ts and it reported success having checked nothing.
+   *
+   * They were also REDUNDANT. runVerification() already reports UNKNOWN for a project that has
+   * declared no check, and every caller treats a non-zero exit as failure — so the project's own
+   * declaration is the only condition needed, and an undeclared repo is refused rather than
+   * silently passed.
+   */
+  it('decides whether to verify from the project declaration, not from a language', () => {
+    for (const banned of ['tsconfig.json', '_ts_count', 'PROJECT_ROOT/src']) {
+      expect(
+        fnBlock,
+        `'${banned}': a gate that skips what it cannot recognise passes everything else`,
+      ).not.toContain(banned);
+    }
   });
 
-  it('skips when src/ has no .ts files (scaffold-only state)', () => {
-    expect(fnBlock).toMatch(/find.*src.*-name.*\.ts.*grep.*node_modules.*wc -l/s);
-    expect(fnBlock).toMatch(/_ts_count.*-eq 0/);
+  it('routes through the verification plugin, which reports UNKNOWN rather than passing', () => {
+    expect(fnBlock).toContain('_run_project_verification');
   });
 
   it('does NOT blanket-skip test-engineer role stories (fixed 2026-07-12 — see tsc-gate-test-engineer-blindspot.test.ts)', () => {

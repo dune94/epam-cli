@@ -50,7 +50,7 @@
 # none of Metrolinx's 3 codelines ignore it) has exactly one place to restore
 # it from, instead of independently drifting copies.
 #
-# CodeGraph's query tool (orchestrations/plugins/codegraph-tools.js) ships
+# CodeGraph's query tool (orchestrations/plugins/codegraph-plugin.js) ships
 # with epam-cli itself — provisioned into .epam/settings.json's "tools"
 # array for EVERY codeline unconditionally (mirroring run-agent-
 # orchestration.sh's own per-codeline provisioning step), merged with
@@ -65,18 +65,29 @@
 # unrecognised stack writes no manifest, and the plugin then reports UNKNOWN rather than a pass.
 _epam_write_verification_manifest() {
     local _root="$1"
-    local _plugin="${AUTOMATION_DIR:-$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")}/plugins/verification-tools.js"
+    local _plugin="${AUTOMATION_DIR:-$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")}/plugins/verification-plugin.js"
     [ -f "$_plugin" ] || return 0
     local _node="${NODE_CMD:-${NODE_BIN:-node}}"
     command -v "$_node" >/dev/null 2>&1 || return 0
     "$_node" -e '
       const p = require(process.argv[1]);
       const root = process.argv[2];
-      const d = p.detectVerification(root);
-      if (!d) process.exit(3);
+      // BOTH sections. This wrote only `typecheck`, so the `test` section never existed and
+      // every reader of it fell back to an engine-side guess. Detection is independent: a repo
+      // may declare one and not the other, and writing a partial manifest is correct — the
+      // reader reports UNKNOWN for whichever half is absent, never a pass.
+      const d = { ...(p.detectVerification(root) || {}), ...(p.detectTests(root) || {}) };
+      if (!Object.keys(d).length) process.exit(3);
       const fs = require("node:fs"), path = require("node:path");
+      // PRESERVE WHAT THE PROJECT ALREADY DECLARED. Detection is a default, not an authority:
+      // an operator who hand-tuned a command must not have it silently overwritten on the next
+      // provisioning pass.
+      const out = path.join(root, ".epam", "verification.json");
+      let existing = {};
+      try { existing = JSON.parse(fs.readFileSync(out, "utf8")) || {}; } catch { existing = {}; }
+      const merged = { ...d, ...existing };
       fs.mkdirSync(path.join(root, ".epam"), { recursive: true });
-      fs.writeFileSync(path.join(root, ".epam", "verification.json"), JSON.stringify(d, null, 2) + "\n");
+      fs.writeFileSync(out, JSON.stringify(merged, null, 2) + "\n");
     ' "$_plugin" "$_root" 2>/dev/null || true
 }
 
@@ -89,7 +100,7 @@ _provision_epam_plugin_config() {
     fi
 
     local _codegraph_plugin_abs=""
-    local _codegraph_plugin_src="${SCRIPT_DIR:-}/../plugins/codegraph-tools.js"
+    local _codegraph_plugin_src="${SCRIPT_DIR:-}/../plugins/codegraph-plugin.js"
     if [ -n "${SCRIPT_DIR:-}" ] && [ -f "$_codegraph_plugin_src" ]; then
         _codegraph_plugin_abs="$(cd "$(dirname "$_codegraph_plugin_src")" 2>/dev/null && pwd)/$(basename "$_codegraph_plugin_src")"
     fi

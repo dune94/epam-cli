@@ -360,6 +360,22 @@ while IFS= read -r story_id; do
         '.stories[] | select(.id == $id) | (.verificationCriteria // []) | map("- " + .) | join("\n")' \
         "$PRD_FILE" 2>/dev/null || echo "")
 
+    # CRITERIA WITH NO TEST BEHIND THEM.
+    #
+    # vc-coverage-check.sh already compares every verification criterion against the tests the
+    # story produced, and wrote its answer to $LOG_DIR/vc-coverage-<story>.json — which nothing
+    # read. Live 2026-08-11 (AMSD-2041) it had recorded that the feature's central behaviour was
+    # unverified, and that one test re-implemented the very function it was meant to exercise.
+    # Both are review findings by definition, and the reviewer was never shown either.
+    #
+    # It reaches the REVIEWER rather than only the writer because judging whether a criterion is
+    # genuinely untestable here — an unreachable third-party service, a browser-only behaviour —
+    # is a judgement, not something the engine can decide.
+    STORY_UNCOVERED_VC=$("${NODE_BIN:-node}" \
+        "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/vc-coverage-findings.js" \
+        "${LOG_DIR:-}" "$story_id" \
+        "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../config/agent-contract.json" 2>/dev/null || echo "")
+
     STORY_FIX_ANALYSIS=$(jq -r --arg id "$story_id" '
         .stories[] | select(.id == $id) | (.fixSiteAnalysis // []) | map(
           "- **\(.file)**" + (if (.function // "") != "" then " (`\(.function)`)" else "" end) + ": \(.reason)"
@@ -476,6 +492,7 @@ $STORY_DESC
 ACCEPTANCE CRITERIA:
 $STORY_ACS
 $([ -n "$STORY_VC" ] && printf '\nVERIFICATION CRITERIA (the observable checks this change MUST satisfy — judge the diff against every one):\n%s\n' "$STORY_VC" || true)
+$([ -n "$STORY_UNCOVERED_VC" ] && printf '\n%s\n' "$STORY_UNCOVERED_VC" || true)
 $([ -n "$STORY_FIX_ANALYSIS" ] && printf '\nROOT CAUSE ANALYSIS & PRESCRIBED MINIMAL FIX (from prior code investigation — the plan of record the implementer was given):\n%s\n\nThe acceptance criteria describe the desired BEHAVIOR to verify; they are NOT a blueprint. The correct implementation is the minimal fix above. Judge the diff against BOTH.\n' "$STORY_FIX_ANALYSIS" || true)
 
 RELEVANT FILES (fix files + the reproducing test the pipeline shipped — review BOTH): $STORY_FILES ${_test_files:-}

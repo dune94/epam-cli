@@ -52,6 +52,10 @@ const AGENT_SITES = [
   'claude.sh',
   'spec-mode-runner.js',
   'mint-agents-step.js',
+  // Re-runs the fix-site investigation on its own, outside a full spec pass. It invokes the
+  // detective through the pipeline's own seam (spec-mode-runner's runCodeGraphDetective), so it
+  // inherits that seam's ladder, budget and cost capture rather than setting its own.
+  'detective-rerun-step.js',
   'lib/cpa-inference.js',
   'lib/ac-gate.js',
   'lib/codeline-discovery.js',

@@ -32,7 +32,7 @@ import { join } from 'node:path';
 const REPO_ROOT = join(__dirname, '../../../');
 const SPEC_RUNNER = join(REPO_ROOT, 'orchestrations/scripts/spec-mode-runner.js');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const plugin = require('../../../orchestrations/plugins/dependency-contract-tools.js');
+const plugin = require('../../../orchestrations/plugins/dependency-contract-plugin.js');
 
 function codeline(declared: Record<string, string>, installed: string[]) {
   const root = mkdtempSync(join(tmpdir(), 'plan-'));

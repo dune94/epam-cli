@@ -41,14 +41,29 @@
 # Extensions ESLint can parse. A property of the linter, not of any one
 # project's stack — deriving targets from what is present is what keeps a
 # JS-shaped assumption out of the engine.
-_ESLINT_LINTABLE_EXTS="js jsx mjs cjs ts tsx mts cts vue svelte"
+# WHICH FILES ARE LINTABLE IS A PROJECT FACT. This was a literal list of ten extensions from
+# one ecosystem — the same fact the project already declares as scanFileExtensions in
+# .epam/dependency-check.json, and the same class of hardcoding that made the tsc baseline gate
+# report PASS on any repo it could not parse. Read, never assumed; a project that declares none
+# gets no tree-glob fallback rather than a guessed one.
+_eslint_lintable_exts() {
+    local _root="${1:-$PROJECT_ROOT}"
+    local _cfg="$_root/.epam/dependency-check.json"
+    [ -f "$_cfg" ] || _cfg="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+    [ -f "$_cfg" ] || return 0
+    jq -r '.scanFileExtensions[]? // empty' "$_cfg" 2>/dev/null | sed 's/^\.//' | tr '\n' ' '
+}
 
 # Paths the pipeline itself writes into a client repo. Never story output.
 _ESLINT_INCIDENTAL_RE='^(\.codegraph/|\.epam/)'
 
+# The root is THREADED, never read from a global. eslint_baseline_gate takes project_root as a
+# parameter and $PROJECT_ROOT is not guaranteed to be set in its callers — reading the global
+# made the extension list come back empty, nothing was lintable, and the gate passed everything.
+# Exactly the fail-open this conversion was meant to remove, reintroduced by a scoping slip.
 _eslint_is_lintable() {
-    local _f="$1" _e
-    for _e in $_ESLINT_LINTABLE_EXTS; do
+    local _f="$1" _root="${2:-${PROJECT_ROOT:-}}" _e
+    for _e in $(_eslint_lintable_exts "$_root"); do
         case "$_f" in *."$_e") return 0 ;; esac
     done
     return 1
@@ -56,13 +71,48 @@ _eslint_is_lintable() {
 
 # Whole-tree glob targets, used when there is no scope to narrow to (greenfield).
 _eslint_tree_globs() {
-    local _root="$1" _ext
-    for _ext in $_ESLINT_LINTABLE_EXTS; do
-        if [ -n "$(find "$_root/src" -type f -name "*.${_ext}" \
-                    -not -path '*/node_modules/*' -print -quit 2>/dev/null)" ]; then
-            printf '%s\n' "src/**/*.${_ext}"
-        fi
+    local _root="$1" _ext _mr _prune=()
+    # WHERE the source lives and WHICH directories are vendored are both project declarations.
+    # This hardcoded src/ and node_modules — a repo whose sources sit elsewhere matched nothing
+    # and the gate examined no files while reporting a verdict.
+    local _vd
+    while IFS= read -r _vd; do
+        [ -n "$_vd" ] && _prune+=(-not -path "*/$(basename "$_vd")/*")
+    done < <(_eslint_vendor_dirs "$_root" 2>/dev/null)
+
+    for _mr in $(_eslint_source_roots "$_root"); do
+        [ -d "$_root/$_mr" ] || continue
+        for _ext in $(_eslint_lintable_exts "$_root"); do
+            if [ -n "$(find "$_root/$_mr" -type f -name "*.${_ext}" \
+                        "${_prune[@]}" -print -quit 2>/dev/null)" ]; then
+                printf '%s\n' "${_mr}/**/*.${_ext}"
+            fi
+        done
     done
+}
+
+# SELF-CONTAINED ON PURPOSE. _get_vendor_dirs lives in claude.sh, which does not source this
+# file — run-agent-orchestration.sh does. Calling it here would silently return nothing: no
+# vendor prune, no baseline symlink, and a linter that cannot resolve at baseline reports every
+# pre-existing finding as new. Same declaration, read locally.
+_eslint_vendor_dirs() {
+    local _root="${1:-$PROJECT_ROOT}"
+    local _cfg="$_root/.epam/dependency-check.json"
+    [ -f "$_cfg" ] || _cfg="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+    [ -f "$_cfg" ] || return 0
+    jq -r '.vendorDirs[]? // empty' "$_cfg" 2>/dev/null | while IFS= read -r _d; do
+        [ -n "$_d" ] && [ -d "$_root/$_d" ] && echo "$_root/$_d"
+    done
+}
+
+# The project's declared module roots, from .epam/dependency-check.json. Absent = no tree-glob
+# fallback, which is correct: a gate that cannot find the source must not claim to have linted it.
+_eslint_source_roots() {
+    local _root="${1:-$PROJECT_ROOT}"
+    local _cfg="$_root/.epam/dependency-check.json"
+    [ -f "$_cfg" ] || _cfg="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+    [ -f "$_cfg" ] || return 0
+    jq -r '.moduleRoots[]? // empty' "$_cfg" 2>/dev/null | grep -v '^$' | tr '\n' ' '
 }
 
 eslint_baseline_gate() {
@@ -87,7 +137,7 @@ eslint_baseline_gate() {
         while IFS= read -r _f; do
             [ -n "$_f" ] || continue
             printf '%s' "$_f" | grep -qE "$_ESLINT_INCIDENTAL_RE" && continue
-            _eslint_is_lintable "$_f" || continue
+            _eslint_is_lintable "$_f" "$project_root" || continue
             [ -f "$project_root/$_f" ] || continue
             scope_files+=("$_f")
         done < "$manifest"
@@ -99,7 +149,7 @@ eslint_baseline_gate() {
         while IFS= read -r _f; do
             [ -n "$_f" ] || continue
             printf '%s' "$_f" | grep -qE "$_ESLINT_INCIDENTAL_RE" && continue
-            _eslint_is_lintable "$_f" || continue
+            _eslint_is_lintable "$_f" "$project_root" || continue
             [ -f "$project_root/$_f" ] || continue
             scope_files+=("$_f")
         done < <(git -C "$project_root" diff --name-only "$baseline_sha" 2>/dev/null || true)
@@ -120,8 +170,19 @@ eslint_baseline_gate() {
         greenfield=1
         while IFS= read -r _g; do [ -n "$_g" ] && targets+=("$_g"); done < <(_eslint_tree_globs "$project_root")
         if [ ${#targets[@]} -eq 0 ]; then
-            info "  [lint] eslint: SKIP (no lintable source files under src/)"
-            echo "eslint: SKIP — no lintable source files under src/" >> "$lint_log"
+            # UNDECLARED IS NOT THE SAME AS NOTHING TO LINT, and collapsing them is a fail-open
+            # I introduced on 2026-08-11: replacing the hardcoded extension list with the
+            # project's declaration meant a project that declares neither scanFileExtensions nor
+            # moduleRoots produced zero targets, and this branch returned 0 — the gate reporting
+            # PASS having examined nothing. The hardcoded list had always produced targets, so
+            # the branch was only ever reached in the genuine case.
+            if [ -z "$(_eslint_lintable_exts "$project_root")" ] || [ -z "$(_eslint_source_roots "$project_root")" ]; then
+                warning "  [lint] eslint: NOT PERFORMED — this project declares no scanFileExtensions/moduleRoots in .epam/dependency-check.json, so there is nothing to scope the lint to. This is not a pass."
+                echo "eslint: NOT PERFORMED — no scanFileExtensions/moduleRoots declared" >> "$lint_log"
+                return 0
+            fi
+            info "  [lint] eslint: SKIP (the declared source roots contain no lintable files)"
+            echo "eslint: SKIP — declared source roots contain no lintable files" >> "$lint_log"
             return 0
         fi
         info "  [lint] scope: whole tree (greenfield — no phase baseline to compare against)"
@@ -163,7 +224,14 @@ eslint_baseline_gate() {
                 # findings, and every current finding then reads as new — the
                 # exact inverse of this function's purpose. Same trap, and the
                 # same fix, as tsc-baseline-gate.sh.
-                ln -s "$project_root/node_modules" "$wt_dir/node_modules" 2>/dev/null || true
+                # The vendored directories the PROJECT declares, symlinked so the linter can
+                # resolve at baseline. `worktree add` checks out tracked files only, and this
+                # named one ecosystem's directory outright — the last literal in this file.
+                local _vd
+                while IFS= read -r _vd; do
+                    [ -n "$_vd" ] && [ -e "$_vd" ] \
+                        && ln -s "$_vd" "$wt_dir/$(basename "$_vd")" 2>/dev/null || true
+                done < <(_eslint_vendor_dirs "$project_root" 2>/dev/null)
                 local -a baseline_targets=()
                 local _f
                 for _f in "${targets[@]}"; do

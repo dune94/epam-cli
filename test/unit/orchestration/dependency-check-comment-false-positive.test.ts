@@ -43,6 +43,20 @@ import { tmpdir } from 'node:os';
 const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
 const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
 
+const PREAMBLE = [
+  // The extracted function is a reporter now: it calls
+  // orchestrations/plugins/dependency-scan-plugin.js and reads the project's declaration through
+  // helpers. Without these it emits nothing, which is indistinguishable from "found nothing".
+  `AUTOMATION_DIR=${JSON.stringify(join(__dirname, '../../../orchestrations'))}`,
+  `NODE_CMD=${JSON.stringify(process.execPath)}`,
+  'warning() { echo "$*"; }',
+  'info()    { echo "$*"; }',
+  ...['_project_dep_config_value', '_project_manifest_file', '_project_install_command'].map((n) => {
+    const s = claudeSrc.indexOf(`${n}()`);
+    return s < 0 ? '' : claudeSrc.slice(s, claudeSrc.indexOf('\n}', s) + 2);
+  }),
+].join('\n');
+
 function extractFunctionBody(src: string, name: string): string {
   const lines = src.split('\n');
   const startIdx = lines.findIndex((l) => l.trim() === `${name}() {`);
@@ -71,6 +85,13 @@ const NPM_CONFIG_BASE = {
   importPattern:
     "from\\s+['\"]([^./][^'\"]*)['\"]|require\\(\\s*['\"]([^./][^'\"]*)['\"]\\s*\\)",
   installCommand: 'echo WOULD_INSTALL:{package} >> installed.log',
+  // The engine no longer installs on its own verdict — acting unbidden on a regex match is what
+  // put an unrelated public package into a client manifest. A project that wants installs says so.
+  autoInstall: true,
+  // REQUIRED. Without it the scan refuses rather than guessing — the legacy ran with its
+  // declaration absent, kept working on hardcoded literals, and installed a public package
+  // named after one of the repo's own directories.
+  vendorDirs: ['node_modules'],
   ignorePackages: ['url', 'path', 'fs', 'http', 'node:url', 'node:path'],
 };
 
@@ -98,7 +119,7 @@ function runDependencyCheck(configExtra: Record<string, unknown>) {
 
     const fnBody = extractFunctionBody(claudeSrc, 'run_dependency_check');
     const scriptPath = join(dir, 'run.sh');
-    writeFileSync(scriptPath, `cd ${JSON.stringify(dir)}\n${fnBody}\nrun_dependency_check ${JSON.stringify(dir)}\n`);
+    writeFileSync(scriptPath, `cd ${JSON.stringify(dir)}\n${PREAMBLE}\n${fnBody}\nrun_dependency_check ${JSON.stringify(dir)}\n`);
     execFileSync('bash', [scriptPath], { encoding: 'utf8', timeout: 15000 });
 
     const logPath = join(dir, 'installed.log');

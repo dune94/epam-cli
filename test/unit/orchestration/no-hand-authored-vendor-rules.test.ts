@@ -52,7 +52,7 @@ describe('project config carries no hand-authored, failure-derived rules', () =>
       offenders,
       'A hand-written "known wrong pattern" rule is an answer key, not configuration: it was ' +
         'authored after watching one ticket fail and cannot help any other project or SDK. ' +
-        'Discover the fact instead — see orchestrations/plugins/dependency-contract-tools.js, ' +
+        'Discover the fact instead — see orchestrations/plugins/dependency-contract-plugin.js, ' +
         'which reports which option keys an installed package actually consumes.',
     ).toEqual([]);
   });
@@ -109,7 +109,7 @@ describe('project config carries no hand-authored, failure-derived rules', () =>
 
   it('the discovered replacement exists and is registered by any project that needs it', () => {
     // The guard above only bites if there is somewhere better for the knowledge to live.
-    const plugin = join(__dirname, '../../../orchestrations/plugins/dependency-contract-tools.js');
+    const plugin = join(__dirname, '../../../orchestrations/plugins/dependency-contract-plugin.js');
     expect(existsSync(plugin), 'the dependency_contract plugin must exist as the replacement').toBe(true);
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { tools } = require(plugin) as { tools: Array<{ name: string }> };

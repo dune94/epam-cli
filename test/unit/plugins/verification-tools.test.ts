@@ -23,7 +23,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const plugin = require(join(__dirname, '../../../orchestrations/plugins/verification-tools.js'));
+const plugin = require(join(__dirname, '../../../orchestrations/plugins/verification-plugin.js'));
 
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
@@ -85,7 +85,7 @@ describe('THE CONTRACT: the project declares the command, the engine runs it', (
 
   it('no tool name, extension, directory or runtime path is baked into the plugin', () => {
     const src = require('node:fs').readFileSync(
-      join(__dirname, '../../../orchestrations/plugins/verification-tools.js'), 'utf8');
+      join(__dirname, '../../../orchestrations/plugins/verification-plugin.js'), 'utf8');
     const code = src.split('\n').filter((l: string) => !l.trim().startsWith('*') &&
       !l.trim().startsWith('//') && !l.trim().startsWith('/*')).join('\n');
     for (const banned of ['tsconfig.json', 'node_modules/.bin', '.nvm/versions', 'tsc ']) {

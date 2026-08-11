@@ -96,11 +96,11 @@ describe('the replacement is actually wired', () => {
   });
 
   it('the plugin exists and is registered for the project', () => {
-    expect(existsSync(join(ROOT, 'orchestrations/plugins/verification-tools.js'))).toBe(true);
+    expect(existsSync(join(ROOT, 'orchestrations/plugins/verification-plugin.js'))).toBe(true);
     const reg = JSON.parse(readFileSync(
       join(ROOT, 'orchestrations/projects/metrolinx/plugins.json'), 'utf8'));
     expect(
-      (reg.tools as string[]).some((t) => t.endsWith('verification-tools.js')),
+      (reg.tools as string[]).some((t) => t.endsWith('verification-plugin.js')),
       'the plugin is not registered, so no agent can call verify_typecheck',
     ).toBe(true);
   });

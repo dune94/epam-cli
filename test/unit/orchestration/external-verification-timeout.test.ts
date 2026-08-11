@@ -151,6 +151,21 @@ describe('run_external_verification() — REAL execution, proves the timeout act
           `run_dynamic_tools_in_unlocked_window() { :; }`,
           `_vendor_unlock() { :; }`,
           `run_mock_completeness_check() { return 0; }`,
+          // The suite command is a PROJECT declaration now, read via
+          // orchestrations/plugins/verification-plugin.js. Stubbed like the checks above so this
+          // test isolates only the timeout behaviour; the PRD fixture supplies testCommand.
+          `_project_repo_has_tests() { echo "true"; }`,
+          `_project_test_command() { echo "npm test"; }`,
+          `_project_owned_test_files() { :; }`,
+          `_project_scoped_test_command() { :; }`,
+          `_project_dep_config_value() { :; }`,
+          // The worktree provisioning install is declaration-driven now: WHICH manifest, WHICH
+          // vendor dir and WHICH command all come from dependency-check.json. Supplied here so
+          // the install branch actually runs — the invariant under test (a hang is bounded by a
+          // timeout) is unchanged, only its source is.
+          `_project_manifest_file() { echo "package.json"; }`,
+          `_project_install_command() { echo "npm install --silent"; }`,
+          `_get_vendor_dirs() { echo "node_modules"; }`,
           fnBody,
           `run_external_verification "SKY-TEST" "/dev/null"`,
           `echo "EXIT:$?"`,
@@ -255,6 +270,21 @@ describe('run_external_verification() — bounded npm-install timeout (found liv
           `run_dynamic_tools_in_unlocked_window() { :; }`,
           `_vendor_unlock() { :; }`,
           `run_mock_completeness_check() { return 0; }`,
+          // The suite command is a PROJECT declaration now, read via
+          // orchestrations/plugins/verification-plugin.js. Stubbed like the checks above so this
+          // test isolates only the timeout behaviour; the PRD fixture supplies testCommand.
+          `_project_repo_has_tests() { echo "true"; }`,
+          `_project_test_command() { echo "npm test"; }`,
+          `_project_owned_test_files() { :; }`,
+          `_project_scoped_test_command() { :; }`,
+          `_project_dep_config_value() { :; }`,
+          // The worktree provisioning install is declaration-driven now: WHICH manifest, WHICH
+          // vendor dir and WHICH command all come from dependency-check.json. Supplied here so
+          // the install branch actually runs — the invariant under test (a hang is bounded by a
+          // timeout) is unchanged, only its source is.
+          `_project_manifest_file() { echo "package.json"; }`,
+          `_project_install_command() { echo "npm install --silent"; }`,
+          `_get_vendor_dirs() { echo "node_modules"; }`,
           fnBody,
           `run_external_verification "SKY-TEST" "/dev/null"`,
           `echo "EXIT:$?"`,
@@ -280,7 +310,7 @@ describe('run_external_verification() — bounded npm-install timeout (found liv
   it('REPRODUCES the exact live failure: a hanging `npm install` (simulating a slow/unreachable registry) is killed by the timeout instead of blocking indefinitely', () => {
     const hangingNpm = '#!/usr/bin/env bash\nsleep 300\n';
     const result = runVerificationNoNodeModules({ npmScript: hangingNpm, prdStories: BASE_STORY });
-    expect(result.stdout).toMatch(/npm install TIMED OUT after 1s/);
+    expect(result.stdout).toMatch(/dependency install TIMED OUT after 1s/);
     expect(result.durationMs).toBeLessThan(10000);
   });
 

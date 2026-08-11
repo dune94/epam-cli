@@ -83,7 +83,7 @@ describe('THE DEFECT: a provisioned plugin reaches the agent', () => {
   it('the real codegraph plugin yields codegraph_query', () => {
     const dir = mkdtempSync(join(tmpdir(), 'cg-')); dirs.push(dir);
     mkdirSync(join(dir, '.epam'), { recursive: true });
-    const real = join(__dirname, '../../../orchestrations/plugins/codegraph-tools.js');
+    const real = join(__dirname, '../../../orchestrations/plugins/codegraph-plugin.js');
     writeFileSync(join(dir, '.epam', 'settings.json'), JSON.stringify({ tools: [real] }));
     expect(grant([dir])).toContain('codegraph_query');
   });

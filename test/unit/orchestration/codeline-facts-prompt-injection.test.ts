@@ -4,7 +4,7 @@
  * marker (not re-implemented).
  *
  * Built 2026-08-02: the codeline_facts plugin tool (a real
- * ToolPlugin, see orchestrations/plugins/codeline-context-tools.js) existed
+ * ToolPlugin, see orchestrations/plugins/codeline-context-plugin.js) existed
  * and was correct, but across a full Writer Retest run the model called it
  * exactly ZERO times — it called git_state once and never the
  * facts tool that would have told it the right Contentstack token key.

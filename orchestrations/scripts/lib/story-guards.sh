@@ -3,10 +3,18 @@
 # _run_project_verification <project_root>
 # The project's declared check (.epam/verification.json) via the verification plugin. The engine
 # names no tool, extension, directory or runtime path. Undeclared -> non-zero with a reason.
+# The baseline-delta implementation lives in ONE place. Sourced here rather than re-implemented:
+# this file used to carry its own copy, complete with a tsc error regex and a node_modules
+# literal, and so did claude.sh and eslint-baseline-gate.sh — four copies, four independent
+# fail-open paths on any repo whose checker speaks a different dialect.
+_SG_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+[ -f "$_SG_LIB_DIR/tsc-baseline-gate.sh" ] && . "$_SG_LIB_DIR/tsc-baseline-gate.sh"
+
 _run_project_verification() {
     local _root="${1:-$PROJECT_ROOT}"
     local _auto="${AUTOMATION_DIR:-$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")}"
-    local _plugin="${_auto}/plugins/verification-tools.js"
+    local _plugin="${_auto}/plugins/verification-plugin.js"
     local _node="${NODE_CMD:-${NODE_BIN:-node}}"
     if [ ! -f "$_plugin" ]; then echo "verification plugin missing at $_plugin"; return 2; fi
     "$_node" -e '
@@ -273,30 +281,21 @@ story_tsc_gate() {
         # diff against JIRA_BASELINE_BRANCH via a git worktree (symlinking
         # node_modules in, since worktree checkouts don't include gitignored
         # dirs), only failing on errors the story's own commit introduced.
+        # ONE IMPLEMENTATION, in lib/tsc-baseline-gate.sh. This was a fourth copy of the same
+        # baseline-delta logic, each carrying its own tsc error regex and its own `node_modules`
+        # literal — so each one failed open independently on a repo whose checker speaks a
+        # different dialect: the grep matches nothing, the baseline set is empty, there is
+        # nothing to subtract, and the gate reports PASS having verified nothing.
+        #
+        # The output is passed in because it has already been captured; re-running the check
+        # here would double the cost of the most expensive gate in the run.
         local _new_errors
         _new_errors="$(cat "$_tsc_log")"
-        local _baseline_sha_file="$LOG_DIR/phase-baseline-sha.txt"
-        if [ -f "$_baseline_sha_file" ]; then
-            local _baseline_sha
-            _baseline_sha=$(tr -d '[:space:]' < "$_baseline_sha_file")
-            if [ -n "$_baseline_sha" ]; then
-                local _baseline_cache="$LOG_DIR/tsc-baseline-errors-${_baseline_sha:0:12}.txt"
-                if [ ! -f "$_baseline_cache" ]; then
-                    local _wt_dir
-                    _wt_dir=$(mktemp -d)
-                    if git -C "$PROJECT_ROOT" worktree add --detach "$_wt_dir" "$_baseline_sha" >/dev/null 2>&1; then
-                        ln -s "$PROJECT_ROOT/node_modules" "$_wt_dir/node_modules" 2>/dev/null || true
-                        ( _run_project_verification "$_wt_dir" 2>&1 \
-                            | grep -oE '^[^(]+\([0-9]+,[0-9]+\): error [A-Z0-9]+' ) > "$_baseline_cache" 2>/dev/null || true
-                        git -C "$PROJECT_ROOT" worktree remove --force "$_wt_dir" >/dev/null 2>&1 || true
-                    fi
-                    rm -rf "$_wt_dir" 2>/dev/null || true
-                fi
-                if [ -f "$_baseline_cache" ]; then
-                    _new_errors=$(grep -oE '^[^(]+\([0-9]+,[0-9]+\): error [A-Z0-9]+.*$' "$_tsc_log" \
-                        | grep -vFf "$_baseline_cache" || true)
-                fi
-            fi
+        if command -v baseline_new_failures >/dev/null 2>&1; then
+            local _delta_out _delta_rc=0
+            _delta_out=$(baseline_new_failures "$PROJECT_ROOT" "${NODE_CMD:-${NODE_BIN:-node}}" \
+                "$LOG_DIR" typecheck "$_tsc_log") || _delta_rc=$?
+            [ "$_delta_rc" -eq 0 ] && _new_errors="" || _new_errors="$_delta_out"
         fi
 
         if [ -z "$(echo "$_new_errors" | tr -d '[:space:]')" ]; then

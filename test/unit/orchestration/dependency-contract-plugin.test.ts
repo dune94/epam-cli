@@ -29,7 +29,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'nod
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-const PLUGIN_PATH = join(__dirname, '../../../orchestrations/plugins/dependency-contract-tools.js');
+const PLUGIN_PATH = join(__dirname, '../../../orchestrations/plugins/dependency-contract-plugin.js');
 
 const cleanupDirs: string[] = [];
 afterEach(() => {

@@ -14,7 +14,7 @@
 # nothing checked whether the symbol was used the way the package intends.
 #
 # This wraps the same plugin tool the writer already gets automatically
-# (orchestrations/plugins/codeline-context-tools.js, resolve_package_symbol) so
+# (orchestrations/plugins/codeline-context-plugin.js, resolve_package_symbol) so
 # the code-graph-detective — restricted to the bash tool only — can call it too,
 # during fix-site investigation, before prescribing a fix that names a
 # third-party symbol.
@@ -31,7 +31,7 @@ set -uo pipefail
 
 REPO="${PROJECT_ROOT:-$(pwd)}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLUGIN="$SCRIPT_DIR/../plugins/codeline-context-tools.js"
+PLUGIN="$SCRIPT_DIR/../plugins/codeline-context-plugin.js"
 NODE_BIN="${NODE_BIN:-node}"
 
 err() { echo "[resolve-package-symbol] $*" >&2; }

@@ -27,7 +27,7 @@ import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const plugin = require(join(__dirname, '../../../orchestrations/plugins/codegraph-tools.js'));
+const plugin = require(join(__dirname, '../../../orchestrations/plugins/codegraph-plugin.js'));
 const tool = plugin.tools[0];
 const schema = tool.definition.inputSchema;
 const { buildArgv } = plugin;

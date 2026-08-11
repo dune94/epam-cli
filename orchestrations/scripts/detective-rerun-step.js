@@ -123,7 +123,43 @@ async function runRerun({
   logDir = '',
   storyIds = null,
   onProgress = null,
+  promptExec = undefined,
+  agentsDir = null,
 } = {}) {
+  // THE MINTED BRIEFS, RE-APPLIED BEFORE ANYTHING IS INVOKED.
+  //
+  // profiles.json is restored to its canonical base at launch, which deletes every brief the
+  // mint wrote; the project's own copy is re-applied by the step that owns the roster. This
+  // step invokes an agent WITHOUT going through that step, so without this the detective runs
+  // on the canonical fallback and the per-codeline investigator — the whole reason one is
+  // minted — is silently unused. Live 2026-08-11: exactly that, reported as "no investigator
+  // is bound to this codeline" when three were bound and none had a brief.
+  const _agentsDir = agentsDir || path.join(__dirname, '..', 'agents');
+  try {
+    const roster = require('./lib/agent-roster.js');
+    const applied = roster.applyProjectProfiles(path.join(_agentsDir, 'profiles.json'), _agentsDir);
+    if (applied && applied.length) {
+      process.stderr.write(`[detective-rerun] re-applied ${applied.length} project brief(s): ${applied.join(', ')}\n`);
+    }
+  } catch (err) {
+    // Not fatal: the canonical detective is a real fallback. Said out loud, because a run on
+    // the generic brief answers differently from one on the codeline's own.
+    process.stderr.write(`[detective-rerun] could not re-apply project briefs (${err && err.message}) — using canonical profiles\n`);
+  }
+
+  // THE SEARCH-VOCABULARY DERIVATION NEEDS AN EXECUTOR, AND HAD NONE.
+  //
+  // deriveGuardVocabulary reads opts.promptExec. Passing {} left it null, so the derivation
+  // threw ("Cannot read properties of null (reading 'cmd')"), the detective seeded with an
+  // UNFILTERED query, and its first and most expensive tool call went on noise. It then ran out
+  // of time. The pipeline's own caller supplies this; a standalone driver must too.
+  const _promptExec = promptExec !== undefined
+    ? promptExec
+    : (() => {
+      try {
+        return spec.resolvePromptExec(process.env.AI_RUNNER_CMD || path.join(__dirname, 'ai-run.sh'));
+      } catch { return null; }
+    })();
   const declared = codelinesFromPrd(prd);
   const byName = new Map(declared.map((c) => [c.name, c]));
   const selected = (codelines && codelines.length ? codelines : declared.map((c) => c.name))
@@ -160,7 +196,7 @@ async function runRerun({
         let findings = null;
         let error = '';
         try {
-          findings = await detective(laneStory, logDir, {});
+          findings = await detective(laneStory, logDir, { promptExec: _promptExec });
         } catch (err) {
           error = (err && err.message) || String(err);
         }

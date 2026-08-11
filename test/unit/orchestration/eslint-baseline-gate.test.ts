@@ -164,7 +164,20 @@ function makeFixture(baselineFiles: Record<string, string>, opts: { brownfield?:
   execFileSync('git', ['init', '--quiet', '--initial-branch=develop'], { cwd: seed });
   execFileSync('git', ['config', 'user.email', 't@t.com'], { cwd: seed });
   execFileSync('git', ['config', 'user.name', 'T'], { cwd: seed });
-  for (const [rel, content] of Object.entries(baselineFiles)) {
+  // WHAT IS LINTABLE AND WHERE THE SOURCE LIVES ARE PROJECT DECLARATIONS. The gate used to
+  // carry a literal extension list and a hardcoded src/ glob; both now come from
+  // .epam/dependency-check.json, the same file the dependency scan reads. A fixture that
+  // declares neither is a project the gate cannot scope, and it now says so loudly instead of
+  // returning a silent pass.
+  const declared: Record<string, string> = {
+    '.epam/dependency-check.json': JSON.stringify({
+      scanFileExtensions: ['.ts', '.tsx', '.js', '.jsx'],
+      moduleRoots: ['src'],
+      vendorDirs: ['node_modules'],
+    }),
+    ...baselineFiles,
+  };
+  for (const [rel, content] of Object.entries(declared)) {
     const abs = join(seed, rel);
     mkdirSync(dirname(abs), { recursive: true });
     writeFileSync(abs, content);

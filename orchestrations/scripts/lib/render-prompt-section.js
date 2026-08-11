@@ -31,11 +31,32 @@ function fill(text, data) {
     Object.prototype.hasOwnProperty.call(data, key) ? String(data[key]) : whole);
 }
 
-function render(section, data, startIndex) {
+/**
+ * A section may append rules SHARED with other sections, via `"shared": "<key>"`.
+ *
+ * Without this, a rule that applies to two arms of a branch has to be written into both, and
+ * that is exactly what happened: two rules sat byte-identical in brownfieldNovel and
+ * brownfieldExisting, and a comment claimed they had been de-duplicated when they had not. Each
+ * copy then needs maintaining, and the copies drift — which is how one rule became two, written
+ * nine lines apart, in the script this catalog replaced.
+ *
+ * Shared rules are appended AFTER the section's own, so a mode's specific instructions come
+ * first and the universal ones close the list. Numbering runs continuously across both.
+ */
+function render(section, data, startIndex, catalog) {
   if (typeof section === 'string') return fill(section, data);
   if (!section || typeof section !== 'object') return '';
   const header = section.header ? fill(section.header, data) : '';
-  const rules = Array.isArray(section.rules) ? section.rules : [];
+  const own = Array.isArray(section.rules) ? section.rules : [];
+
+  let shared = [];
+  if (section.shared && catalog) {
+    const ref = String(section.shared).split('.').reduce((acc, k) => (acc == null ? acc : acc[k]), catalog);
+    if (Array.isArray(ref)) shared = ref;
+    else if (ref && Array.isArray(ref.rules)) shared = ref.rules;
+  }
+
+  const rules = [...own, ...shared];
   if (!header && !rules.length) return '';
   const n = Number.isFinite(startIndex) ? startIndex : 1;
   const numbered = rules.map((r, i) => `${n + i}. ${fill(r, data)}`);
@@ -69,7 +90,7 @@ function main() {
   // Dotted keys address nested sections, so one catalog can hold a whole prompt without the
   // caller needing a second file per section.
   const section = key.split('.').reduce((acc, k) => (acc == null ? acc : acc[k]), catalog);
-  const out = render(section, data, startIndex);
+  const out = render(section, data, startIndex, catalog);
   if (out) process.stdout.write(out);
   process.exit(0);
 }

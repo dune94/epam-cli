@@ -56,9 +56,13 @@ describe('run_external_verification — env sanitization wiring (static)', () =>
   });
 
   it('the npm install invocation is wrapped with the unset prefix via bash -c', () => {
-    const idx = claudeSrc.indexOf('npm install --silent');
+    // The literal `npm install --silent` is gone: the command comes from the project's
+    // dependency-check.json (installCommand). The INVARIANT is unchanged — whatever the project
+    // declares must still be wrapped by the unset prefix, or the orchestrator's own .env leaks
+    // into the child and the install resolves against the wrong registry/credentials.
+    const idx = claudeSrc.indexOf('${_orch_env_unset_prefix}${_dep_install_all}');
     const block = claudeSrc.slice(Math.max(0, idx - 200), idx + 50);
-    expect(block).toMatch(/bash -c "\$\{_orch_env_unset_prefix\}npm install --silent"/);
+    expect(block).toMatch(/bash -c "\$\{_orch_env_unset_prefix\}\$\{_dep_install_all\}"/);
   });
 
   it('the test-command invocation is wrapped with the unset prefix via bash -c', () => {
@@ -68,7 +72,7 @@ describe('run_external_verification — env sanitization wiring (static)', () =>
 
   it('the sanitization is computed BEFORE the npm install call site (so it protects both install and test)', () => {
     const unsetIdx = claudeSrc.indexOf('_orch_env_unset_prefix=""');
-    const installIdx = claudeSrc.indexOf('npm install --silent');
+    const installIdx = claudeSrc.indexOf('${_orch_env_unset_prefix}${_dep_install_all}');
     expect(unsetIdx).toBeGreaterThan(-1);
     expect(installIdx).toBeGreaterThan(unsetIdx);
   });
@@ -125,6 +129,18 @@ describe('run_external_verification — env sanitization REAL execution', () => 
       'run_named_import_check() { return 0; }',
       'run_anti_pattern_check() { return 0; }',
       'run_mock_completeness_check() { return 0; }',
+      // THE SUITE COMMAND IS NOW A PROJECT DECLARATION, read through
+      // orchestrations/plugins/verification-plugin.js. These helpers are what run_external_
+      // verification calls to obtain it; stubbed here because this test isolates ONLY the
+      // env-sanitization behaviour, exactly like the checks stubbed above. The PRD fixture
+      // supplies technicalNotes.testCommand, so the declaration path is not exercised.
+      '_project_repo_has_tests() { echo "true"; }',
+      '_project_test_command() { :; }',
+      '_project_owned_test_files() { :; }',
+      '_project_scoped_test_command() { :; }',
+      '_project_dep_config_value() { :; }',
+      '_project_manifest_file() { :; }',
+      '_project_install_command() { :; }',
       fnBody,
       'PRD_FILE=$(mktemp)',
       `cat > "$PRD_FILE" <<'PRDEOF'`,

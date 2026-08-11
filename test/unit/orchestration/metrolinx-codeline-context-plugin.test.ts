@@ -1,5 +1,5 @@
 /**
- * Metrolinx codeline-context plugin (orchestrations/plugins/codeline-context-tools.js)
+ * Metrolinx codeline-context plugin (orchestrations/plugins/codeline-context-plugin.js)
  * — the first real ToolPlugin built against the epam-cli plugin architecture
  * (src/tools/plugin.ts / PluginLoader.ts), added 2026-08-01 after two live
  * mistakes in the same session: a writer created a test file at a path that
@@ -19,7 +19,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-const PLUGIN_PATH = join(__dirname, '../../../orchestrations/plugins/codeline-context-tools.js');
+const PLUGIN_PATH = join(__dirname, '../../../orchestrations/plugins/codeline-context-plugin.js');
 
 const cleanupDirs: string[] = [];
 afterEach(() => {

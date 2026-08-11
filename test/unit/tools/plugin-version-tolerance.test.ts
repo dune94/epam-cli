@@ -3,7 +3,7 @@
  *
  * Live 2026-08-09, in the writer's own output:
  *
- *     [epam] Plugin load warning: .../orchestrations/plugins/secret-scan-tools.js
+ *     [epam] Plugin load warning: .../orchestrations/plugins/secret-scan-plugin.js
  *            — plugin.pluginApiVersion.split is not a function
  *
  * validatePlugin() runs per TOOL and calls .split() on pluginApiVersion. The three working
@@ -53,14 +53,14 @@ function load(file: string): string[] {
 }
 
 describe('the real plugin declares a version the loader can read', () => {
-  it('secret-scan-tools loads at all', () => {
-    const tools = load(join(__dirname, '../../../orchestrations/plugins/secret-scan-tools.js'));
+  it('secret-scan-plugin loads at all', () => {
+    const tools = load(join(__dirname, '../../../orchestrations/plugins/secret-scan-plugin.js'));
     expect(tools, 'scan_secrets is still absent — the reviewer cannot call it')
       .toContain('scan_secrets');
   });
 
   it('and every shipped plugin loads', () => {
-    for (const p of ['codegraph-tools', 'codeline-context-tools', 'dependency-contract-tools', 'secret-scan-tools']) {
+    for (const p of ['codegraph-plugin', 'codeline-context-plugin', 'dependency-contract-plugin', 'secret-scan-plugin']) {
       const tools = load(join(__dirname, `../../../orchestrations/plugins/${p}.js`));
       expect(tools.length, `${p} loaded no tools`).toBeGreaterThan(0);
     }

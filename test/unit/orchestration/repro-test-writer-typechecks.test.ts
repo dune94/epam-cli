@@ -43,7 +43,7 @@ function repoWith(specBody: string, extraFiles: Record<string, string> = {}) {
   }));
   symlinkSync(join(REPO, 'node_modules'), join(d, 'node_modules'));
   // The project declares HOW it verifies itself. The engine no longer runs a compiler it chose;
-  // it runs the project's declared command (orchestrations/plugins/verification-tools.js), so a
+  // it runs the project's declared command (orchestrations/plugins/verification-plugin.js), so a
   // fixture without this manifest is a repo that has declared nothing — which the gate correctly
   // reports as UNKNOWN rather than as passing. A real checkout gets this written at provisioning
   // time by _epam_write_verification_manifest.

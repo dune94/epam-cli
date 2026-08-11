@@ -4,7 +4,7 @@
  *
  * Root cause: .epam/settings.json and .epam/codeline-facts.json (the
  * Metrolinx codeline-context plugin's wiring — see
- * orchestrations/plugins/codeline-context-tools.js) are UNTRACKED, so a
+ * orchestrations/plugins/codeline-context-plugin.js) are UNTRACKED, so a
  * lane's first hard reset (`git clean -fd`) silently wiped them, with
  * nothing re-provisioning them afterward. Found live in a Writer Retest run:
  * confirmed via `.epam/settings.json` present on the one lane that never hit

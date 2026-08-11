@@ -80,7 +80,7 @@ function provisionPlugins(codelines) {
     const parsed = JSON.parse(fs.readFileSync(path.join(cfgDir, 'plugins.json'), 'utf8'));
     if (Array.isArray(parsed.tools)) tools = parsed.tools;
   } catch { /* no project plugins declared */ }
-  const builtin = path.join(__dirname, '..', 'plugins', 'codegraph-tools.js');
+  const builtin = path.join(__dirname, '..', 'plugins', 'codegraph-plugin.js');
   if (fs.existsSync(builtin)) tools = [...new Set([builtin, ...tools])];
   if (!tools.length) return [];
 

@@ -103,6 +103,11 @@ function repo(opts: { importInChangedFile?: boolean; importInUntouchedFile?: boo
     // installed package as internal repo source — skipped long before the node_modules check
     // under test. The fixture must not be more permissive than the configuration it stands in for.
     vendorDirs: ['node_modules'],
+    // The assertion is about what gets INSTALLED, so this fixture declares that the project
+    // wants installs. The engine no longer installs on its own verdict — acting unbidden on a
+    // regex match is what put an unrelated public package into a client manifest — so a project
+    // that wants it says so.
+    autoInstall: true,
   }, null, 2));
   return dir;
 }
@@ -117,11 +122,26 @@ function depCheck(dir: string) {
     return src.slice(start, end + 3);
   })();
 
+  // THE FUNCTION HAS COLLABORATORS NOW. It was self-contained embedded Python; it is now a
+  // reporter that calls orchestrations/plugins/dependency-scan-plugin.js and reads the project's
+  // declaration through helpers. Without AUTOMATION_DIR / NODE_CMD / those helpers it produces
+  // nothing at all, which is indistinguishable from "found nothing".
+  const src = readFileSync(CLAUDE_SH, 'utf8');
+  const helper = (name: string) => {
+    const s = src.indexOf(`${name}()`);
+    return s < 0 ? '' : src.slice(s, src.indexOf('\n}', s) + 2);
+  };
+  const helpers = ['_project_dep_config_value', '_project_manifest_file', '_project_install_command']
+    .map(helper).join('\n');
+
   const out = execFileSync('bash', ['-c',
     `set -u
+     AUTOMATION_DIR=${JSON.stringify(join(__dirname, '../../../orchestrations'))}
+     NODE_CMD=${JSON.stringify(process.execPath)}
      log() { echo "LOG:$*"; }; error() { echo "ERR:$*"; }
      warning() { echo "WARN:$*"; }; success() { echo "OK:$*"; }; info() { echo "INFO:$*"; }
      is_truthy() { case "\${1:-}" in true|1|yes) return 0 ;; *) return 1 ;; esac; }
+${helpers}
 ${fn}
      run_dependency_check ${JSON.stringify(dir)} 2>&1; echo "RC=$?"`,
   ], { encoding: 'utf8' });

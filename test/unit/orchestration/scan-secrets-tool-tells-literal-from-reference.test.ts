@@ -26,7 +26,7 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 
-const plugin = require('../../../orchestrations/plugins/secret-scan-tools.js');
+const plugin = require('../../../orchestrations/plugins/secret-scan-plugin.js');
 const tool = (plugin.tools || []).find(
   (t: any) => (t.name || (t.definition && t.definition.name)) === 'scan_secrets',
 );
@@ -140,14 +140,14 @@ describe('the reviewer is both granted the tool and told to use it', () => {
   it('the plugin is provisioned for the project', () => {
     const cfg = JSON.parse(fs.readFileSync(PLUGINS, 'utf8'));
     expect(
-      cfg.tools.some((t: string) => t.endsWith('secret-scan-tools.js')),
+      cfg.tools.some((t: string) => t.endsWith('secret-scan-plugin.js')),
       'the tool exists but no codeline provisions it, so no agent is granted it',
     ).toBe(true);
   });
 
   it('the provisioned path resolves to a real file that exports the tool', () => {
     const cfg = JSON.parse(fs.readFileSync(PLUGINS, 'utf8'));
-    const p = cfg.tools.find((t: string) => t.endsWith('secret-scan-tools.js'));
+    const p = cfg.tools.find((t: string) => t.endsWith('secret-scan-plugin.js'));
     expect(fs.existsSync(p), `provisioned path does not exist: ${p}`).toBe(true);
     expect(require(p).tools.map((t: any) => t.name)).toContain('scan_secrets');
   });

@@ -2397,6 +2397,20 @@ RULE: Before you add ANY new function, run \`helpers\` for what it would do. If 
         fi
     fi
 
+    # CRITERIA A PREVIOUS ATTEMPT LEFT UNTESTED.
+    #
+    # vc-coverage-check.sh (Step 3.56) compares every verification criterion against the tests a
+    # story produced and writes $LOG_DIR/vc-coverage-<story>.json. Nothing read it until now.
+    #
+    # TIMING, STATED PLAINLY: that check runs AFTER the writer, so on the first attempt of a
+    # fresh run no artifact exists and this block is empty. It carries a previous attempt's or a
+    # previous run's findings into a RESUME or a RETRY — which is exactly when the writer has
+    # already produced tests that missed something and can still act on it. It is advisory here;
+    # the REVIEWER is where an uncovered criterion is judged, because deciding that a criterion
+    # is genuinely untestable in this environment is a judgement, not an engine rule.
+    _uncovered_vc_block=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/vc-coverage-findings.js" \
+        "${LOG_DIR:-}" "$story_id" "$SCRIPT_DIR/../config/agent-contract.json" 2>/dev/null || echo "")
+
     # New-dependency directive. Live metrolinx 2026-07-30/31: the model's own
     # output, at every tier including the top of the model ladder, was the
     # identical stall — it correctly diagnosed that the fix needed a package
@@ -2586,6 +2600,7 @@ $([ -n "$codeline_facts_block" ] && printf '%s\n' "$codeline_facts_block" || tru
 $([ -n "$project_tools_block" ] && printf '%s\n' "$project_tools_block" || true)
 $([ -n "$test_ownership_block" ] && printf '%s\n' "$test_ownership_block" || true)
 $([ -n "$codegraph_tool_block" ] && printf '\n%s\n' "$codegraph_tool_block" || true)
+$([ -n "$_uncovered_vc_block" ] && printf '\n%s\n' "$_uncovered_vc_block" || true)
 $([ -n "$brownfield_test_policy" ] && printf '\n%s\n' "$brownfield_test_policy" || true)
 $([ -n "$new_dependency_directive" ] && printf '\n%s\n' "$new_dependency_directive" || true)
 $([ -n "$tc_facts" ] && printf '\n## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)\n%s\n' "$tc_facts" || true)
@@ -3757,377 +3772,147 @@ PYEOF
     _generate_contract_from_files "$_root" "$_contract_file" "$_files_json" "vendor:${_package}" "$_config"
 }
 
+# run_dependency_check <project_root>
+#
+# SCANNING IS A PLUGIN. This was 371 lines of Python embedded in a heredoc here, which scanned
+# source for imports, classified each specifier, and AUTO-INSTALLED whatever it called missing.
+# Import scanning and module resolution are language facts, so they moved to
+# orchestrations/plugins/dependency-scan-plugin.js. This is now a reporter.
+#
+# WHY IT MOVED. Live 2026-08-11 (AMSD-2041/gotransit) the old code installed
+# "components": "^0.1.0" — an unrelated 2013 public npm package — into a transit operator's
+# production manifest. `components` is that repository's OWN directory. It happened because the
+# scanner hardcoded ecosystem facts the project already declares (vendorDirs was DECLARED while
+# 'node_modules' was written literally four times in the same function), so when the declaration
+# was absent the literals kept it running and it produced a confident wrong answer instead of
+# stopping.
+#
+# THE ENGINE NO LONGER DECIDES. An unresolvable import is a FINDING. Installing happens only
+# when the PROJECT declares autoInstall, using the installCommand the project declares — never
+# on this script's own verdict.
 run_dependency_check() {
     local project_root="$1"
-    local config_file="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
-    if [ -z "${EPAM_PROJECT_CONFIG_DIR:-}" ] || [ ! -f "$config_file" ]; then
-        config_file="${project_root}/.epam/dependency-check.json"
+    local _plugin="${AUTOMATION_DIR}/plugins/dependency-scan-plugin.js"
+    local _node="${NODE_CMD:-${NODE_BIN:-node}}"
+    [ -f "$_plugin" ] || { warning "  [dependency-scan] plugin missing at $_plugin — no scan performed"; return 0; }
+
+    # PRE-SCAN HOOK — the project's own reconciliation, before anything is inspected.
+    #
+    # Some estates need a full package-manager reconciliation before an agent touches code: e.g.
+    # stripping a private-registry dependency, running a full install, restoring the manifest.
+    # Live 2026-07-21: a codeline with a GitHub-Packages dependency 401'd on every per-package
+    # install, and copy workarounds left truncated files. A single project-declared full install
+    # fixed it. Non-fatal by design — a hook that fails must not stop the agent working.
+    local _hook _hook_timeout
+    _hook=$(_project_dep_config_value "$project_root" preInstallHook)
+    if [ -n "$_hook" ]; then
+        info "  [dependency-check] Running preInstallHook..."
+        _hook_timeout="${EPAM_DEP_HOOK_TIMEOUT_SECS:-300}"
+        if ( cd "$project_root" && timeout "$_hook_timeout" bash -c "$_hook" ); then
+            info "  [dependency-check] preInstallHook complete"
+        else
+            _hook_rc=$?
+            if [ "$_hook_rc" -eq 124 ]; then
+                info "  [dependency-check] preInstallHook TIMED OUT after ${_hook_timeout}s (non-fatal — continuing)"
+            else
+                info "  [dependency-check] preInstallHook exited ${_hook_rc} (non-fatal — continuing)"
+            fi
+        fi
     fi
-    [ -f "$config_file" ] || return 0
 
-    python3 - "$project_root" "$config_file" << 'PYEOF'
-import json, re, subprocess, sys, os, signal
-
-project_root, config_file = sys.argv[1], sys.argv[2]
-
-with open(config_file) as f:
-    cfg = json.load(f)
-
-# preInstallHook (optional): a one-time shell command run ONCE before any
-# per-package scanning or installation. Intended for brownfield repos that
-# need a full package-manager reconciliation before the agent touches any
-# code — e.g. stripping a private-registry dep from package.json, running
-# a full package install with --prefer-offline --ignore-scripts, restoring.
-# This runs in project_root as cwd.  The hook failing is non-fatal: dep-
-# check logs the error and continues so the agent can still attempt work.
-# Live bug (2026-07-21): Metrolinx azure.commerce.cdts had cx-shared (GitHub
-# Packages, requires auth) causing every per-package install to 401,
-# and cp -rn workarounds left truncated files (tsc.js 435KB, ~5MB expected).
-# A single full install with cx-shared stripped fixes everything.
-hook_cmd = cfg.get('preInstallHook', '')
-if hook_cmd:
-    print('  [dependency-check] Running preInstallHook...')
-    hook_timeout = int(os.environ.get('EPAM_DEP_HOOK_TIMEOUT_SECS', '300'))
-    hook_proc = subprocess.Popen(hook_cmd, shell=True, cwd=project_root, start_new_session=True)
-    try:
-        hook_rc = hook_proc.wait(timeout=hook_timeout)
-        if hook_rc != 0:
-            print(f'  [dependency-check] preInstallHook exited {hook_rc} (non-fatal — continuing)')
-        else:
-            print('  [dependency-check] preInstallHook complete')
-    except subprocess.TimeoutExpired:
-        try:
-            os.killpg(os.getpgid(hook_proc.pid), signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        hook_proc.wait()
-        print(f'  [dependency-check] preInstallHook TIMED OUT after {hook_timeout}s (non-fatal — continuing)')
-
-manifest_path = os.path.join(project_root, cfg['manifestFile'])
-if not os.path.exists(manifest_path):
-    sys.exit(0)
-with open(manifest_path) as f:
-    manifest = json.load(f)
-
-declared = set()
-for key in cfg.get('manifestKeys', []):
-    declared.update(manifest.get(key, {}).keys())
-
-pattern = re.compile(cfg['importPattern'])
-# Live bug (2026-07-06): scanning EVERY file under project_root (no extension
-# filter) meant the import regex also ran against orchestration artifacts like
-# spec-summary.json, whose free-text LLM coordinator notes can contain prose
-# that coincidentally matches an import pattern (e.g. a sentence describing
-# "mapping from 'from/to' to 'origin/destination'" was parsed as `from '...'`
-# and treated as a missing third-party package named "from/to", which then
-# hung retrying against the npm registry indefinitely). Restrict scanning to
-# actual source file extensions, config-supplied so this stays generic across
-# languages/stacks rather than hardcoding '.ts'/'.js'.
-scan_extensions = tuple(cfg.get('scanFileExtensions', []))
-imported = set()
-
-# WHICH FILES DID THIS STORY CHANGE?
-#
-# Needed to tell "this repo has always imported that" from "this story started importing that".
-# An installed-but-undeclared package is a brownfield fact of life in the first case and a
-# broken commit in the second, and the check below treats them differently.
-#
-# Uncommitted state is the right question at the point this runs: the writer's work is still in
-# the working tree when the dependency check fires. If git cannot answer, the set stays empty and
-# every import keeps the older, lenient treatment — a missing signal must not invent failures.
-_changed_files = set()
-try:
-    _st = subprocess.run(['git', '-C', project_root, 'status', '--porcelain'],
-                         capture_output=True, text=True, timeout=30)
-    for _line in _st.stdout.splitlines():
-        _p = _line[3:].strip() if len(_line) > 3 else ''
-        if ' -> ' in _p:            # renames report "old -> new"; the new path is the one that exists
-            _p = _p.split(' -> ')[-1]
-        _p = _p.strip('"')
-        if _p:
-            _changed_files.add(os.path.normpath(os.path.join(project_root, _p)))
-except Exception:
-    pass
-imported_in_changed = set()
-# Monorepos can nest an independent sub-project (its own package.json/requirements.txt/
-# etc.) inside project_root — e.g. a standalone React tool under scripts/. Its imports
-# are declared in ITS OWN manifest, not the root's, so scanning into it here would find
-# "missing" packages that are actually just undeclared at the wrong scope and try to
-# install them at project_root. Stop descending once a directory (other than
-# project_root itself) contains the same manifestFile — that subtree manages its own
-# dependencies independently.
-manifest_file = cfg['manifestFile']
-for root, dirs, files in os.walk(project_root):
-    dirs[:] = [
-        d for d in dirs
-        if d not in ('node_modules', 'dist', '.git', '__pycache__', '.venv')
-        and not os.path.isfile(os.path.join(root, d, manifest_file))
-    ]
-    for fname in files:
-        if scan_extensions and not fname.endswith(scan_extensions):
-            continue
-        fpath = os.path.join(root, fname)
-        try:
-            with open(fpath, encoding='utf-8', errors='ignore') as f:
-                content = f.read()
-        except OSError:
-            continue
-        # Strip comment text before scanning for imports. importPattern matches
-        # raw text with no concept of a comment or string literal — the word
-        # "from" followed by a quoted string is enough, whether or not it is
-        # real import syntax. Live 2026-07-30: a JSDoc comment reading
-        # 'Convert time from "11:30" to "11-30" format' matched exactly, and
-        # dependency-check tried to install a package literally named "11:30".
-        # This is the SAME defect class as the 2026-07-06 incident above
-        # (free text "mapping from 'from/to' to...") — that fix narrowed WHICH
-        # FILES get scanned; it never addressed WHERE WITHIN a file the
-        # pattern may match, and real source files have real comments.
-        #
-        # commentPatterns is OPTIONAL and config-supplied — no built-in
-        # knowledge of `//`, `/* */`, `#`, or any other comment syntax. A
-        # project that does not configure it keeps today's behaviour exactly;
-        # this is additive grounding, never a requirement.
-        _scan_content = content
-        for _cp in cfg.get('commentPatterns', []) or []:
-            try:
-                _scan_content = re.sub(_cp, '', _scan_content)
-            except re.error:
-                continue
-        for m in pattern.finditer(_scan_content):
-            pkg = next((g for g in m.groups() if g), None)
-            if pkg:
-                imported.add(pkg)
-                # A directory the story changed counts too: a NEW file lands inside one, and
-                # git reports the directory rather than each file when it is untracked.
-                _fp = os.path.normpath(fpath)
-                if _fp in _changed_files or any(
-                    _fp.startswith(_c + os.sep) for _c in _changed_files
-                ):
-                    imported_in_changed.add(pkg)
-
-# A declared entry satisfies an import if it matches exactly or is a prefix
-# component (handles npm scoped packages / subpath imports generically,
-# without hardcoding npm's specific scoping syntax).
-# ignorePackages is config-supplied (e.g. Node builtins like 'url', 'fs') —
-# this function has no language-specific knowledge of what counts as a
-# builtin; the orchestration's manifest declares that list.
-ignore_packages = set(cfg.get('ignorePackages', []))
-
-# Collect tsconfig path alias prefixes from ALL tsconfig*.json files under
-# project_root. Path aliases (e.g. @background/*, @commerce/*) are local
-# module mappings, not npm packages — trying to install them fails with 404.
-# Generic: reads any tsconfig.json found; no alias names are hardcoded here.
-# Live bug (2026-07-21): Metrolinx azure.commerce.cdts has 15+ workspace path
-# aliases that aren't npm packages, causing 20+ min dep-check stalls per turn.
-import glob as _glob
-# Top-level directories that could act as module roots. Discovered, never named:
-# whatever this repo happens to contain, minus vendor dirs and dot dirs. The
-# repo root itself is included so 'src/x/y' style imports resolve too.
-_module_roots = [project_root]
-try:
-    for _entry in sorted(os.listdir(project_root)):
-        if _entry.startswith('.'):
-            continue
-        _full = os.path.join(project_root, _entry)
-        if not os.path.isdir(_full):
-            continue
-        if _entry in set(cfg.get('vendorDirs', []) or []):
-            continue
-        _module_roots.append(_full)
-except OSError:
-    pass
-
-_resolve_cache = {}
-
-def _resolves_inside_repo(spec):
-    """True if `spec` names a file under any discovered module root.
-
-    Checks '<root>/<spec><ext>' and '<root>/<spec>/index<ext>' for each
-    extension the project declares. Memoised: the scan asks about the same
-    specifier many times, and a miss costs len(roots) x len(exts) stats.
-    """
-    if spec in _resolve_cache:
-        return _resolve_cache[spec]
-    _hit = False
-    _exts = cfg.get('scanFileExtensions', []) or []
-    for _root in _module_roots:
-        _base = os.path.join(_root, *spec.split('/'))
-        # A DIRECTORY SETTLES IT.
-        #
-        # The file checks below ask '<root>/<spec><ext>' and '<root>/<spec>/index<ext>'. Live
-        # 2026-08-09 the specifier
-        # 'components/RoutesAndDepartures/DeparturesTab/DepartureDetailsSection' is a directory
-        # holding .tsx files and NO index, so both missed and an internal path alias was
-        # classified as a third-party package — 'Installing missing import: components'.
-        #
-        # This is the surviving tail of the defect that once cost a run its whole budget: three
-        # lanes attempted 346, 553 and 506 installs of 'components', 'api' and 'interface'. The
-        # file-based resolution fixed the common case and left the directory case behind.
-        #
-        # Whatever such an import does at runtime — and this one may well be broken — it is this
-        # repository's own code, and running a package manager against its first path segment is
-        # never the right answer. A broken internal import is a job for the import checks, not
-        # for the dependency installer.
-        if os.path.isdir(_base):
-            _hit = True
-            break
-        for _ext in _exts:
-            if os.path.isfile(_base + _ext) or os.path.isfile(os.path.join(_base, 'index' + _ext)):
-                _hit = True
-                break
-        if _hit:
-            break
-    _resolve_cache[spec] = _hit
-    return _hit
-
-_tsconfig_aliases = set()
-for _tc_path in _glob.glob(os.path.join(project_root, '**/tsconfig*.json'), recursive=True):
-    if 'node_modules' in _tc_path:
-        continue
-    try:
-        with open(_tc_path) as _f:
-            _tc = json.load(_f)
-        for _alias in _tc.get('compilerOptions', {}).get('paths', {}):
-            # Strip trailing /* glob: "@background/*" -> "@background"
-            _clean = _alias.rstrip('/*').rstrip('/')
-            if _clean:
-                _tsconfig_aliases.add(_clean)
-    except Exception:
-        pass
-
-missing = []
-for pkg in sorted(imported):
-    if pkg in ignore_packages:
-        continue
-    # Path alias prefixes (~, #) are never real package names.
-    # ~ is a TypeScript/webpack path alias (e.g. ~/controllers/foo).
-    # # is a Node.js subpath import alias (e.g. #internal/utils).
-    # Passing them to the package manager always fails (live bug: Metrolinx codebase).
-    if pkg.startswith('~') or pkg.startswith('#'):
-        continue
-    # Template literal strings in import paths are not package names
-    # (e.g. `import x from '${currentPayment.state.value}'`). The import
-    # scanner picks up the raw string before interpolation, so `${` in a
-    # matched group means it's dynamic code, not an installable package.
-    if '${' in pkg:
-        continue
-    # Tsconfig path aliases are project-local module mappings, not npm packages.
-    # Collected above from all tsconfig*.json files under project_root.
-    if any(pkg == a or pkg.startswith(a + '/') for a in _tsconfig_aliases):
-        continue
-    # Live bug (2026-07-06): a Node builtin SUBPATH import (e.g. 'fs/promises',
-    # 'node:fs/promises') was only recognized if the exact subpath string was
-    # itself enumerated in ignorePackages — 'fs' being listed didn't cover
-    # 'fs/promises', so it was treated as a missing THIRD-PARTY package and
-    # the configured package manager was invoked on 'fs/promises' as if it
-    # were a third-party package, which tries to git-clone a nonexistent
-    # GitHub repo and fails outright. Prefix-match against
-    # ignorePackages the same way declared deps are already prefix-matched
-    # below — generic (any builtin's subpath is covered, not just fs's),
-    # not a hardcoded 'fs/promises' special case.
-    if any(pkg == d or pkg.startswith(d + '/') for d in ignore_packages):
-        continue
-    if pkg in declared:
-        continue
-    if any(pkg == d or pkg.startswith(d + '/') or d.startswith(pkg + '/') for d in declared):
-        continue
-    # ── Does this specifier name a file in THIS repo? ────────────────────────
-    # If it does, it is internal source, not a package. Live metrolinx
-    # 2026-07-29: three lanes tried to npm-install 'components', 'api' and
-    # 'interface' — hundreds of times (gotransit 346, upexpress 553,
-    # metrolinx 506) — because the codelines declare `baseUrl: "./src"` with
-    # `paths: null`, so `components/x` means `src/components/x`. The alias
-    # handling above reads compilerOptions.paths ONLY, found nothing, and
-    # classified every internal import as missing. That loop consumed the story
-    # budget, and installing non-existent packages is also the likely cause of
-    # "REPAIR DESTROYED WHAT IT FOUND ... 1134 entries -> 1011" the same day.
+    # WHAT THIS STORY TOUCHED — the signal that separates a new problem from estate condition.
     #
-    # Deliberately a FILESYSTEM question, not a tsconfig one: reading baseUrl
-    # would fix TypeScript and leave the next stack broken, and would put stack
-    # knowledge in a loop that runs once per import. Roots are DISCOVERED (the
-    # repo's own top-level directories, minus vendor/dot dirs and any subtree
-    # with its own manifest, which is already pruned above); extensions come
-    # from the project's declared scanFileExtensions. No tsconfig, no baseUrl,
-    # no language, no package names.
-    if _resolves_inside_repo(pkg):
-        continue
-    # Brownfield repos often have packages installed in node_modules but not
-    # declared in package.json (undeclared transitive deps, pre-existing installs).
-    # If the top-level package directory already exists in node_modules, it is
-    # satisfiable at runtime — skip the install to avoid modifying a brownfield
-    # repo's package.json unnecessarily.
-    top_pkg = pkg.split('/')[0] if not pkg.startswith('@') else '/'.join(pkg.split('/')[:2])
-    # INSTALLED IS NOT DECLARED.
+    # A package present in a vendor directory but absent from the manifest builds locally and
+    # breaks for anyone installing from the manifest. It is also the steady state of many
+    # brownfield repos: reporting every instance on every run buries the one that matters. So it
+    # is reported only when the importing file is one this story changed.
     #
-    # This skip exists for brownfield repos carrying undeclared transitive deps and pre-existing
-    # installs, where rewriting the manifest for code no story touched is not our business. That
-    # reasoning does not survive contact with a package THIS STORY introduced: the writer runs
-    # an install, the package lands in node_modules — which is gitignored — and the import ships
-    # declared by nothing.
-    #
-    # Live 2026-08-09, AMSD-2041 on gotransit: the first story this pipeline committed to a
-    # client codeline did not build from a clean checkout for exactly this reason, and tsc
-    # --noEmit passed the whole way because tsc resolves against node_modules, never against
-    # what the manifest can reproduce.
-    #
-    # So the skip now applies only where its reasoning holds: an import in a file the story did
-    # not touch. Satisfiable at runtime in a directory that is never committed is not
-    # satisfiable at all.
-    if os.path.isdir(os.path.join(project_root, 'node_modules', top_pkg)) \
-            and pkg not in imported_in_changed:
-        continue
-    missing.append(pkg)
+    # Derived from the repo's own status, not from a story manifest: an agent can import from a
+    # file it never declared, and that is exactly the case worth catching.
+    local _changed
+    _changed=$(git -C "$project_root" status --porcelain 2>/dev/null \
+        | sed 's/^...//' | sed 's/^.* -> //' | tr '\n' '\036')
 
-# requiredDevDependencies (added 2026-07-07): tooling packages invoked as a
-# CLI binary (e.g. `tsc`, from the 'typescript' package) are never `import`ed
-# in source code, so the import-scanning logic above structurally cannot
-# detect them as missing — found live when a scaffold story's package.json
-# genuinely omitted 'typescript' entirely; nothing ever caught it until the
-# phase-level pre-review gate's `tsc --noEmit` call failed with
-# "Cannot find module '.../node_modules/.bin/tsc'". Config-supplied (not
-# engine-hardcoded) list of package names that must always be present in
-# devDependencies regardless of whether anything imports them.
-for pkg in cfg.get('requiredDevDependencies', []):
-    if pkg not in declared and pkg not in missing:
-        missing.append(pkg)
+    local _out
+    _out=$(EPAM_SCAN_CHANGED_FILES="$_changed" "$_node" -e '
+      const p = require(process.argv[1]);
+      const changed = String(process.env.EPAM_SCAN_CHANGED_FILES || "")
+        .split("").map((s) => s.trim()).filter(Boolean);
+      const r = p.scanImports(process.argv[2], process.env, { changedFiles: changed });
+      if (r.status === "unknown") { console.log("UNKNOWN\t" + r.reason); process.exit(0); }
+      for (const f of r.findings) console.log(f.verdict + "\t" + f.specifier + "\t" + f.file);
+      // Only when it could have changed the answer. A clean scan stays silent — a note on every
+      // run is noise, and noise is what stops anyone reading the line that matters.
+      if (r.findings.length && !r.moduleRootsDeclared) console.log("NOTE\tmodule roots were discovered, not declared — an unresolvable import may be internal");
+    ' "$_plugin" "$project_root" 2>&1) || true
 
-for pkg in missing:
-    # Install the top-level package, not a scoped/subpath import string
-    # (found live, 2026-07-06): a package.json missing its devDependencies
-    # entirely made a real dependency ('vitest', imported as 'vitest/config'
-    # in vitest.config.ts) look undeclared. The install command was then
-    # built from the FULL matched string — 'vitest/config' — which isn't a
-    # real package name, so npm hung retrying against the registry
-    # indefinitely (no timeout on this call at all, on top of that). Scoped
-    # packages (@scope/name) keep their first TWO segments; anything else
-    # keeps only the first segment before a subpath.
-    parts = pkg.split('/')
-    install_pkg = '/'.join(parts[:2]) if pkg.startswith('@') else parts[0]
-    cmd = cfg['installCommand'].format(package=install_pkg)
-    print(f"  [dependency-check] Installing missing import: {install_pkg} (from '{pkg}')" if install_pkg != pkg else f"  [dependency-check] Installing missing import: {pkg}")
-    install_timeout = int(os.environ.get('EPAM_DEPENDENCY_INSTALL_TIMEOUT_SECS', '120'))
-    # start_new_session=True + killing the whole process GROUP on timeout
-    # (not just subprocess.run(timeout=...)'s default, which only kills the
-    # immediate shell): with shell=True, the immediate child is `/bin/sh -c
-    # "..."` — if that shell has already forked a real grandchild (npm and
-    # ITS children) before the timeout fires, killing just the shell leaves
-    # the grandchild orphaned, still running and still holding the shared
-    # stdout file descriptor open. Any caller doing a proper read-until-EOF
-    # on that output (a test harness capturing output, or a future caller
-    # piping this function's output) would then hang waiting for that
-    # orphaned process to exit — potentially for as long as the ORIGINAL
-    # unbounded hang this fix exists to prevent.
-    proc = subprocess.Popen(cmd, shell=True, cwd=project_root, start_new_session=True)
-    try:
-        proc.wait(timeout=install_timeout)
-    except subprocess.TimeoutExpired:
-        try:
-            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        proc.wait()
-        print(f"  [dependency-check] Install of '{install_pkg}' TIMED OUT after {install_timeout}s — skipping")
-PYEOF
+    [ -z "$_out" ] && return 0
+
+    local _line _kind _rest
+    while IFS= read -r _line; do
+        [ -z "$_line" ] && continue
+        _kind="${_line%%	*}"; _rest="${_line#*	}"
+        case "$_kind" in
+            UNKNOWN)
+                # Absent declaration is not "no problems found". Said out loud so a project that
+                # has not declared how it scans is visibly unscanned rather than silently clean.
+                warning "  [dependency-scan] not performed: ${_rest}"
+                ;;
+            malformed)
+                warning "  [dependency-scan] malformed import capture (NOT a package): ${_rest}"
+                ;;
+            unknown_external)
+                warning "  [dependency-scan] undeclared import: ${_rest}"
+                ;;
+            installed_undeclared)
+                # Present in a vendor directory, absent from the manifest, and imported by a file
+                # THIS story changed. It builds here and breaks from a clean checkout — live
+                # 2026-08-09 the first story ever committed to a client codeline was undeliverable
+                # for exactly this reason, and every gate passed because tsc validates against
+                # node_modules, never against what the manifest can reproduce.
+                warning "  [dependency-scan] imported but NOT DECLARED (present in a vendor dir only): ${_rest}"
+                ;;
+            NOTE)
+                info "  [dependency-scan] ${_rest}"
+                ;;
+        esac
+    done <<< "$_out"
+
+    # Only when the PROJECT asks for it, and only with the command the PROJECT declares.
+    local _auto _install_tpl
+    _auto=$(_project_dep_config_value "$project_root" autoInstall)
+    [ "$_auto" = "true" ] || return 0
+    _install_tpl=$(_project_install_command "$project_root")
+    [ -n "$_install_tpl" ] || { warning "  [dependency-scan] autoInstall declared but no installCommand — nothing installed"; return 0; }
+
+    local _spec _pkg _cmd _timeout="${EPAM_DEPENDENCY_INSTALL_TIMEOUT_SECS:-120}"
+    while IFS= read -r _line; do
+        case "$_line" in unknown_external*|installed_undeclared*) ;; *) continue ;; esac
+        _rest="${_line#*	}"; _spec="${_rest%%	*}"
+        _pkg=$("$_node" -e '
+          const s = process.argv[1];
+          const parts = s.split("/");
+          console.log(s.startsWith("@") ? parts.slice(0,2).join("/") : parts[0]);
+        ' "$_spec" 2>/dev/null)
+        [ -n "$_pkg" ] || continue
+        _cmd="${_install_tpl//\{package\}/$_pkg}"
+        info "  [dependency-scan] autoInstall declared — installing ${_pkg} (from '${_spec}')"
+        # The installer's OWN output is surfaced, not swallowed. Redirecting it to /dev/null
+        # hides a failing install behind a one-line summary — the same "a green tick is the only
+        # visible outcome" shape this conversion exists to remove.
+        #
+        # A TIMEOUT IS NOT A FAILURE, and must not read as one. Live: an install against an
+        # unreachable registry hung with no timeout at all and consumed a whole story budget.
+        # `timeout` reports 124; collapsing that into a generic failure loses the one detail that
+        # tells an operator the registry is unreachable rather than the package wrong.
+        local _install_rc=0
+        ( cd "$project_root" && timeout "$_timeout" bash -c "$_cmd" 2>&1 ) || _install_rc=$?
+        if [ "$_install_rc" -eq 124 ]; then
+            warning "  [dependency-scan] install of '${_pkg}' TIMED OUT after ${_timeout}s"
+        elif [ "$_install_rc" -ne 0 ]; then
+            warning "  [dependency-scan] install of '${_pkg}' failed (exit ${_install_rc})"
+        fi
+    done <<< "$_out"
 }
 
 # run_mock_completeness_check <project_root> <output_file>
@@ -5024,44 +4809,60 @@ run_external_verification() {
         '.stories[] | select(.id == $id) | .technicalNotes.testCommand // ""' \
         "$prd_target" 2>/dev/null || echo "")
 
-    # Fall back to npm test if package.json has a test script — but only for
-    # stories that actually own a test file. Without this guard, a scaffold
-    # story whose only job is writing package.json (with a required
-    # scripts.test entry, per its own ACs) would trip external verification
-    # the moment it does its job correctly: npm test then fails because no
-    # test files exist ANYWHERE yet (true on the very first scaffold story),
-    # the failure-analyst misdiagnoses "missing test files" and tries to
-    # create one, and the scope-guard correctly blocks that write since the
-    # story never declared ownership of any .test.ts/.spec.ts file — a
-    # structurally guaranteed infinite retry loop, confirmed live 2026-07-08
-    # on SKY-001A (package.json-only story, retries 0-2 all hit the same
-    # "no test files found" diagnosis before HEALING_BROKEN fired each time).
-    if [ -z "$test_cmd" ] && [ -f "$PROJECT_ROOT/package.json" ]; then
-        local has_test
-        has_test=$(jq -r '.scripts.test // ""' "$PROJECT_ROOT/package.json" 2>/dev/null || echo "")
-        local _owns_test_file
-        _owns_test_file=$(jq -r --arg id "$story_id" \
-            '.stories[] | select(.id == $id) | (.technicalNotes.files // []) | map(select(test("\\.(test|spec)\\.[jt]sx?$"))) | length' \
-            "$prd_target" 2>/dev/null || echo 0)
-        if [ -n "$has_test" ] && [ "${_owns_test_file:-0}" -gt 0 ]; then
-            # Derive owned test file paths so the command runs ONLY those files,
-            # preventing failures in other stories' test files from contaminating
-            # this story's verification result (found live: a broken cli.test.ts
-            # caused the server test story to fail even though server.test.ts
-            # passed 15/15 on its own). Extract paths from technicalNotes.files,
-            # filter to test/spec files, and append them to the base test command
-            # from scripts.test. Most runners (vitest, jest, mocha, tap) accept
-            # file paths as trailing positional arguments — no runner-specific
-            # flags needed. Falls back to full "npm test" if no files are found.
-            local _owned_test_files
-            _owned_test_files=$(jq -r --arg id "$story_id" \
-                '.stories[] | select(.id == $id) | (.technicalNotes.files // [])[] | select(test("\\.(test|spec)\\.[jt]sx?$"))' \
-                "$prd_target" 2>/dev/null | tr '\n' ' ' | xargs)
-            if [ -n "$_owned_test_files" ]; then
-                test_cmd="npm test -- $_owned_test_files"
-            else
-                test_cmd="npm test"
-            fi
+    # THE PROJECT DECLARES HOW IT RUNS ITS SUITE. The engine asks; it does not know.
+    #
+    # This block used to hardcode four ecosystem facts — a manifest filename, a key inside it,
+    # a command, and a test-file naming convention — in engine code, where hardcoding is not
+    # permitted. They now live in the project's own .epam/verification.json `test` section and
+    # are read by orchestrations/plugins/verification-plugin.js.
+    #
+    # THE GUARD THAT USED TO LIVE HERE ASKED THE WRONG QUESTION. It required the STORY to own a
+    # test file. It was added 2026-07-08 for SKY-001A, a scaffold story whose only job was
+    # writing a manifest: running the suite then failed because no test files existed ANYWHERE
+    # yet, the analyst misdiagnosed "missing test files", tried to create one, and the
+    # scope-guard blocked the write — a guaranteed infinite loop. That state is real and is
+    # still skipped, via repoHasTests.
+    #
+    # But a BROWNFIELD story modifying existing code declares source files, never test files,
+    # so `_owns_test_file` was 0 by definition. Live 2026-08-11 (AMSD-2041/gotransit): the
+    # command stayed empty, the function returned 0 = PASS, and the writer was told its change
+    # passed the tests. Nothing had run. It had added an import of a package shipping
+    # untranspiled sources, and ten previously-green suites failed at import time — invisible to
+    # all 8 retry attempts. "This repo has no tests" and "this story declares no test file" are
+    # different states; only the first justifies skipping.
+    if [ -z "$test_cmd" ]; then
+        local _repo_has_tests
+        _repo_has_tests=$(_project_repo_has_tests "$PROJECT_ROOT")
+        # unknown (no declared convention) is NOT "no tests" — it must not silently skip.
+        if [ "$_repo_has_tests" = "false" ]; then
+            info "  [test-gate] the project declares a suite but this repo contains no test files — skipping"
+            return 0
+        fi
+        if [ "$_repo_has_tests" = "unknown" ]; then
+            warning "  [test-gate] this project declares no test-file convention in .epam/verification.json — the suite cannot be scoped or skipped safely"
+        fi
+        local _declared_test_cmd
+        _declared_test_cmd=$(_project_test_command "$PROJECT_ROOT")
+        if [ -n "$_declared_test_cmd" ]; then
+            test_cmd="$_declared_test_cmd"
+        fi
+    fi
+    # SCOPE THE RUN TO THIS STORY'S OWN TEST FILES, when the project says how.
+    #
+    # A broken test file belonging to ANOTHER story used to fail this story's verification (live:
+    # a broken cli.test.ts failed the server story while server.test.ts passed 15/15). Running
+    # only the files this story owns removes that contamination.
+    #
+    # Both halves are project declarations now: which paths ARE test files (test.testFilePattern)
+    # and how this runner accepts a file list (test.scopedCommand, e.g. "npm test -- {files}").
+    # A project that declares neither runs its whole suite, which is correct and never silent.
+    if [ -n "$test_cmd" ]; then
+        local _owned_test_files
+        _owned_test_files=$(_project_owned_test_files "$PROJECT_ROOT" "$story_id" "$prd_target")
+        if [ -n "$_owned_test_files" ]; then
+            local _scoped
+            _scoped=$(_project_scoped_test_command "$PROJECT_ROOT" "$_owned_test_files")
+            [ -n "$_scoped" ] && test_cmd="$_scoped"
         fi
     fi
 
@@ -5149,8 +4950,18 @@ run_external_verification() {
     # consumed the rest of the 600s budget with zero further signal. Same
     # class of bug as the npm test / git-operation hangs fixed earlier this
     # session — this was the third unbounded external command, missed then.
-    if [ -f "$PROJECT_ROOT/package.json" ] && [ ! -d "$PROJECT_ROOT/node_modules" ]; then
-        log "  Installing dependencies (node_modules missing in worktree)..."
+    # WHICH manifest, WHICH vendor directory, and WHICH install command are PROJECT facts.
+    # They were three ecosystem literals in engine code; the project already declares all three
+    # in .epam/dependency-check.json (manifestFile / vendorDirs / installCommand), which is the
+    # same file _get_vendor_dirs() and the dependency plugin read. A project that declares none
+    # of them provisions nothing here rather than having an ecosystem guessed for it.
+    local _dep_manifest _dep_vendor _dep_install
+    _dep_manifest=$(_project_manifest_file "$PROJECT_ROOT")
+    _dep_vendor=$(_get_vendor_dirs "$PROJECT_ROOT" 2>/dev/null | head -1)
+    _dep_install=$(_project_install_command "$PROJECT_ROOT")
+    if [ -n "$_dep_manifest" ] && [ -n "$_dep_vendor" ] && [ -n "$_dep_install" ] \
+       && [ -f "$PROJECT_ROOT/$_dep_manifest" ] && [ ! -d "$PROJECT_ROOT/$_dep_vendor" ]; then
+        log "  Installing dependencies ($_dep_vendor missing in worktree)..."
         local _install_timeout="${EPAM_INSTALL_TIMEOUT_SECS:-180}"
         # Capture $? directly from the command substitution — NOT via
         # `if ! (cmd); then`, which collapses any non-zero exit code (124
@@ -5159,12 +4970,15 @@ run_external_verification() {
         # shipped in the first version of this fix and was caught by its own
         # test suite: the TIMED OUT branch never fired).
         local _install_output
-        _install_output=$(cd "$PROJECT_ROOT" && timeout "$_install_timeout" bash -c "${_orch_env_unset_prefix}npm install --silent" 2>&1)
+        # {package} is the placeholder the project's own installCommand uses for a single
+        # package; a bare provisioning install substitutes it away.
+        local _dep_install_all="${_dep_install//\{package\}/}"
+        _install_output=$(cd "$PROJECT_ROOT" && timeout "$_install_timeout" bash -c "${_orch_env_unset_prefix}${_dep_install_all}" 2>&1)
         local _install_rc=$?
         if [ "$_install_rc" -eq 124 ]; then
-            warning "  npm install TIMED OUT after ${_install_timeout}s — test may still fail"
+            warning "  dependency install TIMED OUT after ${_install_timeout}s — test may still fail"
         elif [ "$_install_rc" -ne 0 ]; then
-            warning "  npm install failed — test may still fail"
+            warning "  dependency install failed — test may still fail"
         fi
     fi
 
@@ -5434,7 +5248,7 @@ run_repo_lint_verification() {
 # `[ ! -f tsconfig.json ] && return 0` did for every non-TypeScript stack.
 _run_project_verification() {
     local _root="${1:-$PROJECT_ROOT}"
-    local _plugin="${AUTOMATION_DIR}/plugins/verification-tools.js"
+    local _plugin="${AUTOMATION_DIR}/plugins/verification-plugin.js"
     local _node="${NODE_CMD:-${NODE_BIN:-node}}"
     if [ ! -f "$_plugin" ]; then
         echo "verification plugin missing at $_plugin"; return 2
@@ -5446,6 +5260,97 @@ _run_project_verification() {
       if (r.output) console.log(r.output);
       process.exit(r.status === "pass" ? 0 : (r.exitCode || 1));
     ' "$_plugin" "$_root"
+}
+
+# ── The project's SUITE declaration, read through the plugin ──────────────────
+#
+# Four ecosystem facts used to live in run_external_verification: a manifest filename, a key
+# inside it, a command, and a test-file naming convention. Hardcoding is permitted in plugins
+# and nowhere else, so all four moved to .epam/verification.json's `test` section, read by
+# orchestrations/plugins/verification-plugin.js. These wrappers carry no stack knowledge — they
+# print what the project declared, or nothing.
+
+_verification_plugin_call() {
+    # $1 = exported function name, $2.. = JSON-encodable string args
+    local _fn="$1"; shift
+    local _plugin="${AUTOMATION_DIR}/plugins/verification-plugin.js"
+    local _node="${NODE_CMD:-${NODE_BIN:-node}}"
+    [ -f "$_plugin" ] || { printf ''; return 1; }
+    "$_node" -e '
+      const p = require(process.argv[1]);
+      const fn = p[process.argv[2]];
+      if (typeof fn !== "function") { process.exit(3); }
+      const out = fn.apply(null, process.argv.slice(3));
+      if (out === null || out === undefined) { console.log("unknown"); }
+      else if (typeof out === "object") { console.log(JSON.stringify(out)); }
+      else { console.log(String(out)); }
+    ' "$_plugin" "$_fn" "$@" 2>/dev/null
+}
+
+# The project's declared manifest filename / install command, from .epam/dependency-check.json —
+# the same file _get_vendor_dirs() reads. Empty when undeclared, so a caller provisions nothing
+# rather than having an ecosystem guessed for it.
+_project_dep_config_value() {
+    local _root="${1:-$PROJECT_ROOT}" _key="$2"
+    local _cfg="$_root/.epam/dependency-check.json"
+    [ -f "$_cfg" ] || _cfg="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+    [ -f "$_cfg" ] || return 0
+    jq -r --arg k "$_key" '.[$k] // empty' "$_cfg" 2>/dev/null
+}
+_project_manifest_file()  { _project_dep_config_value "${1:-$PROJECT_ROOT}" manifestFile; }
+_project_install_command() { _project_dep_config_value "${1:-$PROJECT_ROOT}" installCommand; }
+
+# "true" | "false" | "unknown" — unknown when the project declared no test-file convention.
+_project_repo_has_tests() {
+    local _out
+    _out=$(_verification_plugin_call repoHasTests "${1:-$PROJECT_ROOT}")
+    case "$_out" in true|false) printf '%s' "$_out" ;; *) printf 'unknown' ;; esac
+}
+
+# The declared suite command, or empty when the project declared none.
+_project_test_command() {
+    local _root="${1:-$PROJECT_ROOT}"
+    local _plugin="${AUTOMATION_DIR}/plugins/verification-plugin.js"
+    local _node="${NODE_CMD:-${NODE_BIN:-node}}"
+    [ -f "$_plugin" ] || return 0
+    "$_node" -e '
+      const p = require(process.argv[1]);
+      const m = p.readTestManifest(process.argv[2]);
+      if (m && m.ok) console.log(m.command);
+    ' "$_plugin" "$_root" 2>/dev/null
+}
+
+# This story's declared files that the PROJECT recognises as test files, space separated.
+_project_owned_test_files() {
+    local _root="$1" _sid="$2" _prd="$3"
+    local _plugin="${AUTOMATION_DIR}/plugins/verification-plugin.js"
+    local _node="${NODE_CMD:-${NODE_BIN:-node}}"
+    [ -f "$_plugin" ] && [ -f "$_prd" ] || return 0
+    "$_node" -e '
+      const fs = require("fs");
+      const p = require(process.argv[1]);
+      const [, , , root, sid, prdPath] = process.argv;
+      let prd; try { prd = JSON.parse(fs.readFileSync(prdPath, "utf8")); } catch { process.exit(0); }
+      const s = (prd.stories || []).find((x) => x && x.id === sid);
+      const files = (s && s.technicalNotes && s.technicalNotes.files) || [];
+      const owned = files.filter((f) => p.isTestFile(root, f) === true);
+      if (owned.length) console.log(owned.join(" "));
+    ' "$_plugin" "$_root" "$_sid" "$_prd" 2>/dev/null
+}
+
+# The declared scoped-run command with {files} substituted, or empty when undeclared.
+_project_scoped_test_command() {
+    local _root="$1" _files="$2"
+    local _plugin="${AUTOMATION_DIR}/plugins/verification-plugin.js"
+    local _node="${NODE_CMD:-${NODE_BIN:-node}}"
+    [ -f "$_plugin" ] || return 0
+    "$_node" -e '
+      const p = require(process.argv[1]);
+      const m = p.readTestManifest(process.argv[2]);
+      if (!m || !m.ok) process.exit(0);
+      const tpl = m.manifest && m.manifest.test && m.manifest.test.scopedCommand;
+      if (typeof tpl === "string" && tpl.trim()) console.log(tpl.replace(/\{files\}/g, process.argv[3]));
+    ' "$_plugin" "$_root" "$_files" 2>/dev/null
 }
 
 run_tsc_verification() {
@@ -5492,39 +5397,32 @@ run_tsc_verification() {
         # from JIRA_BASELINE_BRANCH (the same baseline review-ranger/mutant-hunter
         # already use) — only fail on errors NEW relative to that baseline, i.e.
         # errors this story's own changes actually introduced.
+        # ONE IMPLEMENTATION, in lib/tsc-baseline-gate.sh. This block was one of four copies of
+        # the same baseline-delta logic, each with its own tsc error regex and its own
+        # node_modules literal. On a repo whose checker speaks a different dialect the regex
+        # matched nothing, the baseline set came back empty, there was nothing to subtract, and
+        # the gate reported PASS having verified nothing — four independent fail-open paths.
+        #
+        # The already-captured output is handed in: this runs per ATTEMPT, up to 8 times a story,
+        # and re-running the check here would multiply the most expensive gate in the run.
         local _new_errors="$_tsc_output"
-        local _baseline_sha_file="$LOG_DIR/phase-baseline-sha.txt"
-        if [ -f "$_baseline_sha_file" ]; then
-            local _baseline_sha
-            _baseline_sha=$(tr -d '[:space:]' < "$_baseline_sha_file")
-            if [ -n "$_baseline_sha" ]; then
-                local _baseline_cache="$LOG_DIR/tsc-baseline-errors-${_baseline_sha:0:12}.txt"
-                if [ ! -f "$_baseline_cache" ]; then
-                    local _wt_dir
-                    _wt_dir=$(mktemp -d)
-                    if git -C "$PROJECT_ROOT" worktree add --detach "$_wt_dir" "$_baseline_sha" >/dev/null 2>&1; then
-                        # node_modules is gitignored — `worktree add` only checks out
-                        # tracked files, so it's absent in the new worktree. Without
-                        # it, tsc silently fails to run (module not found) and the
-                        # baseline cache ends up empty, making every current-state
-                        # error look "new" — the exact opposite of this fix's intent.
-                        ln -s "$PROJECT_ROOT/node_modules" "$_wt_dir/node_modules" 2>/dev/null || true
-                        ( cd "$_wt_dir" && _run_project_verification "$_wt_dir" 2>&1 \
-                            | grep -oE '^[^(]+\([0-9]+,[0-9]+\): error [A-Z0-9]+' ) > "$_baseline_cache" 2>/dev/null || true
-                        git -C "$PROJECT_ROOT" worktree remove --force "$_wt_dir" >/dev/null 2>&1 || true
-                    fi
-                    rm -rf "$_wt_dir" 2>/dev/null || true
-                fi
-                if [ -f "$_baseline_cache" ]; then
-                    # Extract the same "<file>(<line>,<col>): error <CODE>" key from
-                    # the current output, then keep only lines whose key is absent
-                    # from the baseline set — genuinely new errors this story introduced.
-                    _new_errors=$(echo "$_tsc_output" | grep -oE '^[^(]+\([0-9]+,[0-9]+\): error [A-Z0-9]+.*$' \
-                        | grep -vFf "$_baseline_cache" || true)
-                fi
-            fi
+        if command -v baseline_new_failures >/dev/null 2>&1; then
+            local _tsc_out_file _delta_rc=0 _delta_out
+            _tsc_out_file=$(mktemp)
+            printf '%s' "$_tsc_output" > "$_tsc_out_file"
+            _delta_out=$(baseline_new_failures "$PROJECT_ROOT" "${NODE_CMD:-${NODE_BIN:-node}}" \
+                "$LOG_DIR" typecheck "$_tsc_out_file") || _delta_rc=$?
+            rm -f "$_tsc_out_file"
+            [ "$_delta_rc" -eq 0 ] && _new_errors="" || _new_errors="$_delta_out"
         fi
 
+        # EVERY FAILURE WAS PRE-EXISTING. The check is red, but nothing here is this story's
+        # doing, so the story passes — that is the entire purpose of the baseline diff, and the
+        # operator policy it implements: inherit what the codeline already had, never add to it.
+        #
+        # This guard was lost when the inline baseline block was replaced by the shared library,
+        # and an empty delta fell straight through to the failure branch below — reporting
+        # "TypeScript errors" with an EMPTY error list, which is how it was caught.
         if [ -z "$(echo "$_new_errors" | tr -d '[:space:]')" ]; then
             success "  [tsc-verify] $story_id: the type check has only pre-existing baseline errors — none introduced by this story"
             return 0

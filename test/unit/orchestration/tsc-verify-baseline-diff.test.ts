@@ -38,7 +38,32 @@ function extractTscVerifyFunction(): string {
   const start = claudeSrc.indexOf('run_tsc_verification() {');
   if (start === -1) throw new Error('run_tsc_verification() start anchor not found');
   const end = claudeSrc.indexOf('\n}\n', start) + '\n}'.length;
-  return claudeSrc.slice(start, end);
+  const fn = claudeSrc.slice(start, end);
+
+  // THE GATE HAS A COLLABORATOR NOW. It no longer invokes a compiler: it runs the command the
+  // PROJECT declares in .epam/verification.json, through _run_project_verification and
+  // orchestrations/plugins/verification-plugin.js. Extracted alone, that helper is undefined and
+  // the gate fails for a reason that has nothing to do with baselines.
+  const helper = (name: string) => {
+    const i = claudeSrc.indexOf(`${name}() {`);
+    return i < 0 ? '' : claudeSrc.slice(i, claudeSrc.indexOf('\n}\n', i) + 2);
+  };
+  // The baseline-delta logic now lives in ONE place, lib/tsc-baseline-gate.sh — it used to be
+  // copy-pasted into this function, story-guards.sh and eslint-baseline-gate.sh, each with its
+  // own tsc regex and node_modules literal. The harness sources it exactly as claude.sh does
+  // (via story-guards.sh), otherwise the gate degrades to reporting the full output.
+  const LIB = readFileSync(join(__dirname, '../../../orchestrations/scripts/lib/tsc-baseline-gate.sh'), 'utf8');
+  return [
+    'is_truthy() { case "${1:-}" in true|1|yes) return 0 ;; *) return 1 ;; esac; }',
+    helper('_run_project_verification'),
+    // WHICH directories are vendored is the project's declaration. The baseline worktree checks
+    // out tracked files only, so without symlinking them the checker cannot resolve anything at
+    // baseline, its failure set comes back wrong, and every current error looks new — the exact
+    // inverse of the gate's purpose.
+    helper('_get_vendor_dirs'),
+    LIB,
+    fn,
+  ].join('\n');
 }
 
 const AUTOMATION_DIR_FOR_TEST = join(__dirname, '../../../orchestrations');
@@ -53,12 +78,29 @@ function makeGitFixture(): string {
   const dir = mkdtempSync(join(tmpdir(), 'tsc-verify-fixture-'));
   cleanupDirs.push(dir);
   symlinkSync(join(REPO_ROOT, 'node_modules'), join(dir, 'node_modules'));
+  // WHICH directories are vendored is the project's declaration, and the baseline worktree needs
+  // them symlinked in: `worktree add` checks out tracked files only, so without this the checker
+  // cannot resolve anything at baseline, its failure set comes back empty, and every current
+  // failure is reported as new — the exact inverse of the gate.
+  mkdirSync(join(dir, '.epam'), { recursive: true });
+  writeFileSync(join(dir, '.epam', 'dependency-check.json'),
+    JSON.stringify({ vendorDirs: ['node_modules'] }));
   // The project declares HOW it verifies itself; the engine runs that declared command
   // rather than a compiler it named. A fixture that declares nothing is reported as
   // UNKNOWN by the gate, so the behaviour under test never fires.
   mkdirSync(join(dir, '.epam'), { recursive: true });
+  // HOW ITS FAILURES ARE IDENTIFIED is declared alongside how they are produced. Without
+  // failurePattern the parse is UNDECLARED, and the delta correctly declines to guess: it
+  // reports the full output rather than subtracting against an empty set. That refusal is the
+  // fix — the old code's grep matched nothing on an unrecognised dialect, subtracted nothing,
+  // and returned PASS. The identity omits the COLUMN on purpose: editing a line above shifts
+  // columns, and a baseline keyed on column reports every pre-existing error as new.
   writeFileSync(join(dir, '.epam', 'verification.json'), JSON.stringify({
-    typecheck: { command: './node_modules/.bin/tsc --noEmit' },
+    typecheck: {
+      command: './node_modules/.bin/tsc --noEmit',
+      failurePattern: '^([^(]+)\\((\\d+),(\\d+)\\): error ([A-Z0-9]+)',
+      failureIdentity: '{1}:{2}:{4}',
+    },
   }));
   writeFileSync(
     join(dir, 'tsconfig.json'),
@@ -199,7 +241,7 @@ run_tsc_verification "STORY-1" "${join(logDir, 'out1.txt')}"
 echo "FIRST_EXIT:$?"
 run_tsc_verification "STORY-2" "${join(logDir, 'out2.txt')}"
 echo "SECOND_EXIT:$?"
-ls "${logDir}"/tsc-baseline-errors-*.txt 2>/dev/null | wc -l
+ls "${logDir}"/baseline-failures-*.txt 2>/dev/null | wc -l
 `);
     execFileSync('chmod', ['+x', scriptPath]);
     const result = spawnSync('bash', [scriptPath], { encoding: 'utf8', timeout: 60000 });
@@ -215,19 +257,29 @@ describe('run_tsc_verification — source invariants', () => {
   const fnBody = extractTscVerifyFunction();
 
   it('reads the baseline SHA from phase-baseline-sha.txt — the same file review-ranger/mutant-hunter already use', () => {
-    expect(fnBody).toContain('phase-baseline-sha.txt');
+    expect(libBody).toContain('phase-baseline-sha.txt');
   });
 
-  it('uses git worktree (not a full clone) to check out the baseline for the tsc comparison', () => {
-    expect(fnBody).toContain('git -C "$PROJECT_ROOT" worktree add');
+  // THE MECHANICS MOVED TO ONE PLACE. These assertions described an inline block in
+  // run_tsc_verification that was one of four copies — story-guards.sh, eslint-baseline-gate.sh
+  // and claude.sh each carried the same worktree/cache/subtract logic with its own tsc regex and
+  // node_modules literal, so each failed open independently. The requirements are unchanged; the
+  // file they hold for is now lib/tsc-baseline-gate.sh.
+  const libBody = readFileSync(
+    join(__dirname, '../../../orchestrations/scripts/lib/tsc-baseline-gate.sh'), 'utf8');
+
+  it('uses git worktree (not a full clone) to check out the baseline', () => {
+    expect(libBody).toContain('worktree add --detach');
   });
 
   it('removes the temporary worktree after use (no leftover worktrees)', () => {
-    expect(fnBody).toContain('git -C "$PROJECT_ROOT" worktree remove');
+    expect(libBody).toContain('worktree remove --force');
   });
 
-  it('caches the baseline error set keyed by SHA — does not recompute per story', () => {
-    expect(fnBody).toMatch(/tsc-baseline-errors-.*\.txt/);
+  it('caches the baseline failure set keyed by SHA — does not recompute per story', () => {
+    // Keyed by SECTION too: the same mechanism now serves type errors and the test suite, and a
+    // shared key would let one overwrite the other.
+    expect(libBody).toMatch(/baseline-failures-\$\{section\}-\$\{baseline_sha/);
   });
 
   it('falls back to failing on ANY error when no baseline is available (greenfield safe default)', () => {

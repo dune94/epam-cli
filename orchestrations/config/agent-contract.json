@@ -12,25 +12,36 @@
     "rules": [
       "FIND THE ATTACHMENT POINT: There is no existing bug and no existing code path implementing this capability — searching for one wastes time. Before writing code, locate the existing file/function/provider/hook/route/component this new capability must plug INTO (Search, Glob, or Read). Do not skip this step.",
       "SMALLEST INTEGRATION, NOT A REWRITE: Extend the attachment point with the minimal addition that provides the new capability. Do not restructure, refactor, or rewrite surrounding code that already works.",
-      "NEW FILES ARE EXPECTED WHEN THE CAPABILITY GENUINELY NEEDS THEM: Do not withhold a new file, component, or module waiting for the story description to say 'create' or 'add new' — a bare or underspecified description is not evidence the work is smaller than it is. Create what the capability requires; do not invent an abstraction it does not.\"",
-      "USE EXISTING HELPERS: Before writing any new function or utility, search the codebase for an existing one that already serves the same purpose.",
-      "VERIFY THIRD-PARTY SDK CALLS: before calling a method on a package you did not write, confirm its real shape with the codegraph_query tool or \\`bash orchestrations/scripts/resolve-package-symbol.sh <package> <method>\\` — a symbol existing in node_modules is not proof it is a static call, an instance method, or the package's own intended usage. Calling it wrong produces code that type-checks and fails at runtime.\""
-    ]
+      "NEW FILES ARE EXPECTED WHEN THE CAPABILITY GENUINELY NEEDS THEM: Do not withhold a new file, component, or module waiting for the story description to say 'create' or 'add new' — a bare or underspecified description is not evidence the work is smaller than it is. Create what the capability requires; do not invent an abstraction it does not.\""
+    ],
+    "shared": "brownfieldShared"
   },
   "brownfieldExisting": {
     "header": "BROWNFIELD SURGEON MODE — non-negotiable (applies to every story in this run):",
     "rules": [
       "FIND FIRST: Before writing a single line of code, locate the existing code path that handles the behavior described in this story. Use Search, Glob, or Read. Do not skip this step.",
       "FIX MINIMALLY: Make the smallest change that corrects the behavior. Do not restructure, refactor, or extend surrounding code.",
-      "NO NEW FILES BY DEFAULT: Do not create new files, services, or abstractions unless the story description explicitly uses the words 'create', 'add new', or 'build new'. A bug report or a change request means modifying existing code.\"",
-      "USE EXISTING HELPERS: Before writing any new function or utility, search the codebase for an existing one that already serves the same purpose.",
-      "VERIFY THIRD-PARTY SDK CALLS: before calling a method on a package you did not write, confirm its real shape with the codegraph_query tool or \\`bash orchestrations/scripts/resolve-package-symbol.sh <package> <method>\\` — a symbol existing in node_modules is not proof it is a static call, an instance method, or the package's own intended usage. Calling it wrong produces code that type-checks and fails at runtime.\""
-    ]
+      "NO NEW FILES BY DEFAULT: Do not create new files, services, or abstractions unless the story description explicitly uses the words 'create', 'add new', or 'build new'. A bug report or a change request means modifying existing code.\""
+    ],
+    "shared": "brownfieldShared"
   },
   "$brownfieldComment": "Surgeon-mode rules appended for brownfield stories, by story kind. The last two rules are shared by both modes; they were previously copy-pasted into each arm of the branch in claude.sh, byte-identical, nine lines apart, and each copy needed maintaining separately.",
   "brownfieldTestPolicy": {
     "$comment": "Two complementary branches, selected by whether the changed files already have covering tests — NOT contradictory. One asks for a single focused test on the uncovered files; the other asks for none. {uncovered} is the bullet list of files lacking coverage.",
     "someUncovered": "## Brownfield Testing Policy (READ — do not write unnecessary tests)\nThis is a change to EXISTING code. The existing test suite already runs after your change (regression gate) — you do NOT need to re-prove already-tested behavior. Add a test ONLY for the file(s) below, which currently have NO covering tests, and add just ONE focused test covering the specific behavior you changed. Do NOT add tests for any other file, and do NOT expand scope:\n{uncovered}",
     "allCovered": "## Brownfield Testing Policy (READ — do not write unnecessary tests)\nThis is a change to EXISTING code, and every file you are modifying ALREADY has covering tests. Do NOT write any new test file. Make your code change; the existing test suite runs automatically and will verify it. Writing new tests here is out of scope."
+  },
+  "brownfieldShared": {
+    "$comment": "Rules that apply to EVERY brownfield story, whatever its kind. Referenced by both arms via \"shared\", so the text exists ONCE. They used to be copy-pasted into each arm byte-identically while a comment claimed they had been de-duplicated — each copy then needed maintaining, and copies drift.",
+    "rules": [
+      "USE EXISTING HELPERS: Before writing any new function or utility, search the codebase for an existing one that already serves the same purpose.",
+      "VERIFY THIRD-PARTY SDK CALLS: before calling a method on a package you did not write, confirm its real shape with the codegraph_query tool or \\`bash orchestrations/scripts/resolve-package-symbol.sh <package> <method>\\` — a symbol existing in node_modules is not proof it is a static call, an instance method, or the package's own intended usage. Calling it wrong produces code that type-checks and fails at runtime.\"",
+      "PRESERVE WHAT THE CODE ALREADY GUARANTEES: every behaviour, guarantee and performance characteristic of the code you modify must survive your change. When you convert one construct into another — a cached value into mutable state, a synchronous call into an asynchronous one, a pure function into a stateful one — carry the original's properties across rather than dropping one because the new construct made it inconvenient. BEFORE YOU FINISH, RE-READ YOUR OWN DIFF AND ANSWER IT EXPLICITLY: for each construct you replaced, which properties did the original have, and does the replacement still have every one? If preserving a property is genuinely incompatible with the change, say so in your output and name the property — a silent drop is the failure this rule exists to prevent, and an unstated one cannot be reviewed."
+    ]
+  },
+  "uncoveredCriteria": {
+    "$comment": "Rendered into the reviewer and the writer when vc-coverage-check.sh found a verification criterion with no test behind it. The artifact was written and read by nothing until 2026-08-11; on AMSD-2041 it had recorded that the feature's central behaviour was unverified and that one test re-implemented the function it was supposed to be testing.",
+    "header": "VERIFICATION CRITERIA WITH NO TEST BEHIND THEM\n\nA deterministic check compared this story's verification criteria against the tests it actually produced. The criteria below have none. Each is followed by why nothing covers it.\n\n{findings}\n\nThese are findings, not accusations: a criterion may be genuinely untestable in this environment — an unreachable third-party service, a behaviour only observable in a real browser. Judge each one. If it is testable, it needs a test. If it is not, say which and why, so the gap is a recorded decision rather than an omission nobody noticed.",
+    "rules": []
   }
 }

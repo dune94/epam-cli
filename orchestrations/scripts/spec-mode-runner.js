@@ -5413,6 +5413,36 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
           try { return fs.existsSync(path.resolve(repoPath, file.replace(/^\.?\//, ''))); }
           catch { return null; }
         })(),
+        // TWO FIELDS THE PROMPT CALLS REQUIRED AND THIS PARSER THREW AWAY.
+        //
+        // This builds a NEW object from a hand-written list of keys, so anything the prompt
+        // asks for and this list omits is discarded silently — the model answers correctly and
+        // the answer is destroyed forty lines later. Both of these were omitted:
+        //
+        //   changeRequired   — the gate at claude.sh:3021 demands a real diff for every
+        //                      verified site not explicitly false. Absent means required, by
+        //                      design. So a site whose own prescription reads "No edit
+        //                      required" was demanded to show one: the writer correctly changed
+        //                      nothing, the gate rejected the story, and every retry reproduced
+        //                      it. Live AMSD-2041, all three codelines, three runs, ~nine
+        //                      attempts. Verified 2026-08-11 that the model DOES emit it
+        //                      (false/true/true/true/false across five sites) — the prompt was
+        //                      never the problem.
+        //   requiredPackages — the dependency gate at ~6385 reads it to check a prescribed fix
+        //                      against what the codeline actually installs. It has never fired:
+        //                      the field is absent from every PRD this pipeline has written.
+        //
+        // undefined, NOT false, for an absent changeRequired. The gate distinguishes "the
+        // detective said no edit" from "nothing said anything", and defaulting here would
+        // silently exempt every site the model declined to answer for.
+        //
+        // The deeper defect stands: this list and the JSON example in the prompt are two
+        // hand-maintained copies of one schema, and they drifted. They should be generated from
+        // a single declaration so a required field cannot be dropped by omission again.
+        changeRequired: typeof h.changeRequired === 'boolean' ? h.changeRequired : undefined,
+        requiredPackages: Array.isArray(h.requiredPackages)
+          ? h.requiredPackages.filter((n) => typeof n === 'string' && n.trim()).map((n) => n.trim())
+          : [],
       });
     }
     return findings;
@@ -6392,7 +6422,7 @@ ${storyPayload}${publishedContracts(repoPath, story)}
         ];
         if (declaredPkgs.length) {
           // eslint-disable-next-line global-require
-          const { checkPackageAvailability } = require('../plugins/dependency-contract-tools.js');
+          const { checkPackageAvailability } = require('../plugins/dependency-contract-plugin.js');
           const projectRoot = process.env.PROJECT_ROOT || process.cwd();
           story.requiredPackagesCheck = checkPackageAvailability(projectRoot, declaredPkgs);
           if (!story.requiredPackagesCheck.allAvailable) {

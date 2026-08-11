@@ -115,6 +115,13 @@ function runTscVerification(opts: { agentRole: string; testFileContent: string }
         `PRD_FILE=${JSON.stringify(prdPath)}`,
         `MAIN_PRD_FILE=${JSON.stringify(prdPath)}`,
         `NODE_CMD=${JSON.stringify(nodeBin)}`,
+        // The gate calls _run_project_verification, which runs the command the PROJECT declares
+        // in .epam/verification.json via orchestrations/plugins/verification-plugin.js. Extracting
+        // run_tsc_verification alone leaves the plugin unreachable, and the helper then reports
+        // "verification plugin missing" (exit 2) — which looks exactly like a type error.
+        `AUTOMATION_DIR=${JSON.stringify(join(REPO_ROOT, 'orchestrations'))}`,
+        extractFunctionBody('_run_project_verification'),
+        'is_truthy() { case "${1:-}" in true|1|yes) return 0 ;; *) return 1 ;; esac; }',
         'log() { echo "LOG: $*" >&2; }',
         'warning() { echo "WARN: $*" >&2; }',
         'success() { echo "SUCCESS: $*" >&2; }',

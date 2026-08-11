@@ -1,5 +1,5 @@
 /**
- * CodeGraph query tool (orchestrations/plugins/codegraph-tools.js) —
+ * CodeGraph query tool (orchestrations/plugins/codegraph-plugin.js) —
  * provisioned as a first-class, built-in plugin for EVERY codeline
  * unconditionally, merged with whatever project-specific plugins.json adds.
  *
@@ -16,7 +16,7 @@
  * tools when they do exist.
  *
  * Real files, real jq, no mocking — SCRIPT_DIR points at the real repo so
- * the real codegraph-tools.js path is resolved, matching production.
+ * the real codegraph-plugin.js path is resolved, matching production.
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs';
@@ -27,7 +27,7 @@ import { tmpdir } from 'node:os';
 const REPO_ROOT = join(__dirname, '../../../');
 const SCRIPT_DIR = join(REPO_ROOT, 'orchestrations/scripts');
 const GIT_OPS_SH = join(SCRIPT_DIR, 'lib/git-ops.sh');
-const CODEGRAPH_PLUGIN = join(REPO_ROOT, 'orchestrations/plugins/codegraph-tools.js');
+const CODEGRAPH_PLUGIN = join(REPO_ROOT, 'orchestrations/plugins/codegraph-plugin.js');
 const gitOpsSrc = readFileSync(GIT_OPS_SH, 'utf8');
 
 function extractFn(name: string): string {
@@ -64,7 +64,7 @@ function runProvision(projectRoot: string, configDir: string | null): { stdout: 
 }
 
 describe('_provision_epam_plugin_config — built-in CodeGraph plugin provisioning', () => {
-  it('the real codegraph-tools.js plugin file exists at the path production code expects', () => {
+  it('the real codegraph-plugin.js plugin file exists at the path production code expects', () => {
     expect(existsSync(CODEGRAPH_PLUGIN)).toBe(true);
   });
 
@@ -110,7 +110,7 @@ describe('_provision_epam_plugin_config — built-in CodeGraph plugin provisioni
   });
 });
 
-describe('codegraph-tools.js — the plugin module itself', () => {
+describe('codegraph-plugin.js — the plugin module itself', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const plugin = require(CODEGRAPH_PLUGIN);
 

@@ -36,6 +36,33 @@ function extractFunctionBody(src: string, name: string): string {
   return src.slice(start, end);
 }
 
+/**
+ * The preamble the extracted function needs to run standalone.
+ *
+ * run_dependency_check was 371 lines of self-contained embedded Python. It is now a reporter
+ * that calls orchestrations/plugins/dependency-scan-plugin.js and reads the project's declaration
+ * through helper functions. Extracting the function alone produces NO OUTPUT AT ALL — the plugin
+ * path resolves empty and `warning` is not a defined command — which is indistinguishable from
+ * "found nothing". Every harness in this file builds its script through here so that cannot
+ * happen silently in one of them.
+ */
+function runnerScript(dir: string, prelude = ''): string {
+  const helpers = ['_project_dep_config_value', '_project_manifest_file', '_project_install_command']
+    .map((n) => extractFunctionBody(claudeSrc, n))
+    .join('\n');
+  return [
+    prelude,
+    `AUTOMATION_DIR="${join(REPO_ROOT, 'orchestrations')}"`,
+    `NODE_CMD="${process.execPath}"`,
+    'warning() { echo "$*"; }',
+    'info()    { echo "$*"; }',
+    helpers,
+    extractFunctionBody(claudeSrc, 'run_dependency_check'),
+    `run_dependency_check "${dir}"`,
+    '',
+  ].filter(Boolean).join('\n');
+}
+
 function runDependencyCheck(fixtureFiles: Record<string, string>, config: object | null): string {
   const dir = mkdtempSync(join(tmpdir(), 'dep-check-test-'));
   try {
@@ -48,9 +75,8 @@ function runDependencyCheck(fixtureFiles: Record<string, string>, config: object
       mkdirSync(join(dir, '.epam'), { recursive: true });
       writeFileSync(join(dir, '.epam/dependency-check.json'), JSON.stringify(config));
     }
-    const fnBody = extractFunctionBody(claudeSrc, 'run_dependency_check');
     const scriptPath = join(dir, 'run.sh');
-    writeFileSync(scriptPath, `${fnBody}\nrun_dependency_check "${dir}"\n`);
+    writeFileSync(scriptPath, runnerScript(dir));
     return execFileSync('bash', [scriptPath], { encoding: 'utf8' });
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -64,6 +90,12 @@ const NPM_CONFIG = {
   importPattern:
     "from\\s+['\"]([^./][^'\"]*)['\"]|require\\(\\s*['\"]([^./][^'\"]*)['\"]\\s*\\)",
   installCommand: 'echo WOULD_INSTALL:{package}',
+  autoInstall: true,
+  vendorDirs: ['node_modules'],
+  buildArtifactDirs: ['dist'],
+  indexFileNames: ['index'],
+  moduleConfigGlob: 'tsconfig*.json',
+  moduleAliasPath: 'compilerOptions.paths',
   ignorePackages: ['url', 'path', 'fs', 'http', 'node:url', 'node:path'],
 };
 
@@ -76,16 +108,34 @@ describe('claude.sh — run_dependency_check() design constraints (static)', () 
     expect(pyBody).not.toMatch(/\bnpm install\b|\bpip install\b|\bcargo add\b/);
   });
 
-  it('reads everything stack-specific from .epam/dependency-check.json', () => {
-    expect(body).toMatch(/\.epam\/dependency-check\.json/);
-    expect(body).toMatch(/manifestFile/);
-    expect(body).toMatch(/manifestKeys/);
-    expect(body).toMatch(/importPattern/);
-    expect(body).toMatch(/installCommand/);
+  it('reads everything stack-specific through the plugin, not in engine code', () => {
+    // The keys still drive everything — they moved to the plugin, which is where hardcoding is
+    // permitted. The engine's job is now to call it and report, so the assertion follows them.
+    expect(body, 'the engine must route through the scan plugin').toContain('dependency-scan-plugin.js');
+    const plugin = readFileSync(join(REPO_ROOT, 'orchestrations/plugins/dependency-scan-plugin.js'), 'utf8');
+    for (const key of ['manifestFile', 'manifestKeys', 'importPattern', 'scanFileExtensions', 'vendorDirs']) {
+      expect(plugin, `${key} must be read from the project's declaration`).toContain(key);
+    }
   });
 
-  it('no-ops (returns 0) when the manifest config file is absent', () => {
-    expect(body).toMatch(/\[ -f "\$config_file" \] \|\| return 0/);
+  it('the engine no longer scans, classifies or installs on its own', () => {
+    // 371 lines of embedded Python did all three. Its verdict is what installed a public package
+    // into a client manifest.
+    //
+    // COMMENTS STRIPPED — the explanatory prose NAMES the things it forbids, so an unstripped
+    // assertion fails on its own documentation. Mutation-verified across four files today that a
+    // source-text assertion is satisfied by a comment or a log line; only executable lines count.
+    const code = body.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
+    for (const banned of ['python3', 'PYEOF', 'node_modules', 'tsconfig']) {
+      expect(code, `'${banned}' belongs to the plugin or the declaration, not here`).not.toContain(banned);
+    }
+  });
+
+  it('an ABSENT declaration is reported, not silently treated as clean', () => {
+    // Was: `[ -f "$config_file" ] || return 0` — a silent no-op. The legacy scanner ran with its
+    // declaration missing on 2026-08-11, kept working on hardcoded literals, and produced a
+    // confident wrong answer. "Nothing was checked" and "nothing is wrong" must not look alike.
+    expect(body).toMatch(/not performed/);
   });
 
   it('is wired into run_external_verification before the test command runs', () => {
@@ -98,12 +148,15 @@ describe('claude.sh — run_dependency_check() design constraints (static)', () 
 });
 
 describe('run_dependency_check — REAL execution', () => {
-  it('no-ops silently when no manifest config exists (feature is opt-in)', () => {
+  it('says so when no declaration exists — absent is not clean', () => {
+    // Was: expected TOTAL SILENCE. That is the shape that hid the 2026-08-11 failure: the scan
+    // ran with no declaration, and "no output" was indistinguishable from "no problems".
     const output = runDependencyCheck(
       { 'src/server.test.ts': "import request from 'supertest';" },
       null
     );
-    expect(output).toBe('');
+    expect(output).toContain('not performed');
+    expect(output, 'and it must not have scanned anyway').not.toContain('WOULD_INSTALL');
   });
 
   it('REPRODUCES the exact live defect: detects a missing supertest import and installs it', () => {
@@ -226,24 +279,22 @@ describe('run_dependency_check — REAL execution', () => {
     expect(output).toBe('');
   });
 
-  it('scanFileExtensions is opt-in — omitting it preserves old (scan-everything) behavior for callers that have not adopted the fix yet', () => {
-    const { scanFileExtensions, ...configWithoutExtensions } = NPM_CONFIG;
+  it('an INCOMPLETE declaration refuses to scan and names the missing key', () => {
+    // Was: omitting scanFileExtensions "preserved old scan-everything behaviour". Scanning
+    // everything is how an LLM coordinator note was parsed as an import and a fake package was
+    // installed. A declaration that cannot support a scan now refuses, and says which key is
+    // missing so it is actionable.
+    const { scanFileExtensions, ...withoutExts } = NPM_CONFIG as Record<string, unknown>;
     const output = runDependencyCheck(
       {
         'package.json': JSON.stringify({ dependencies: {} }),
-        'notes.json': "from 'from/to' to 'origin/destination'",
+        'src/app.ts': "import x from 'somepkg';",
       },
-      configWithoutExtensions
+      withoutExts
     );
-    // The misparsed "package" is still scanned (scanFileExtensions opt-out
-    // preserved), but the subpath-stripping fix (added 2026-07-06, see the
-    // "subpath stripping + bounded timeout" describe block below) now
-    // correctly installs just the top-level segment "from", not the literal
-    // (invalid) package name "from/to" — this is a strict improvement, not a
-    // regression: the underlying scanFileExtensions behavior under test here
-    // is unchanged.
-    expect(output).toContain('WOULD_INSTALL:from');
-    expect(output).not.toContain('WOULD_INSTALL:from/to');
+    expect(output).toContain('not performed');
+    expect(output).toContain('scanFileExtensions');
+    expect(output).not.toContain('WOULD_INSTALL');
   });
 });
 
@@ -339,13 +390,11 @@ describe('run_dependency_check — subpath stripping + bounded timeout on the in
       writeFileSync(join(dir, '.epam/dependency-check.json'), JSON.stringify(hangConfig));
       writeFileSync(join(dir, 'package.json'), JSON.stringify({ dependencies: {}, devDependencies: {} }));
       writeFileSync(join(dir, 'vitest.config.ts'), "import { defineConfig } from 'vitest/config';");
-
-      const fnBody = extractFunctionBody(claudeSrc, 'run_dependency_check');
       const scriptPath = join(dir, 'run.sh');
       // EPAM_DEPENDENCY_INSTALL_TIMEOUT_SECS makes the 120s production default
       // configurable — set it to 1s so this test can observe the timeout
       // actually firing without waiting the full 2 minutes.
-      writeFileSync(scriptPath, `export EPAM_DEPENDENCY_INSTALL_TIMEOUT_SECS=1\n${fnBody}\nrun_dependency_check "${dir}"\n`);
+      writeFileSync(scriptPath, runnerScript(dir, "export EPAM_DEPENDENCY_INSTALL_TIMEOUT_SECS=1"));
 
       const start = Date.now();
       const output = execFileSync('bash', [scriptPath], { encoding: 'utf8', timeout: 15000 });
@@ -692,9 +741,8 @@ describe('run_dependency_check — preInstallHook (brownfield full-install befor
         join(dir, '.epam/dependency-check.json'),
         JSON.stringify({ ...NPM_CONFIG, preInstallHook: 'sleep 999' })
       );
-      const fnBody = extractFunctionBody(claudeSrc, 'run_dependency_check');
       const scriptPath = join(dir, 'run.sh');
-      writeFileSync(scriptPath, `${fnBody}\nrun_dependency_check "${dir}"\n`);
+      writeFileSync(scriptPath, runnerScript(dir));
       const output = execFileSync('bash', [scriptPath], {
         encoding: 'utf8',
         env: { ...process.env, EPAM_DEP_HOOK_TIMEOUT_SECS: '1' },
@@ -714,8 +762,15 @@ describe('run_dependency_check — preInstallHook (brownfield full-install befor
   });
 
   it('hook runs before scanning — packages installed by hook are visible to the missing-import check', () => {
-    // Hook creates a fake node_modules entry; dep-check should then see it as
-    // "already installed" and not emit an install line for it.
+    // The hook RECONCILES THE MANIFEST — which is what a real one does (the live case was
+    // stripping a private-registry dependency out of package.json before a full install). If the
+    // hook runs first, the scan sees its result and reports nothing.
+    //
+    // This used to create a bare node_modules/express and assert the scan treated it as
+    // satisfied. That premise is now rejected: "present in node_modules but absent from the
+    // manifest" is exactly the state dependency_available calls unusable — "the build passes and
+    // real users break" — and a sibling test asserts an undeclared package must be detected even
+    // when node_modules has it. Installed is not declared.
     const output = runDependencyCheck(
       {
         'package.json': JSON.stringify({ dependencies: {} }),
@@ -723,10 +778,12 @@ describe('run_dependency_check — preInstallHook (brownfield full-install befor
       },
       {
         ...NPM_CONFIG,
-        preInstallHook: 'mkdir -p node_modules/express && echo "{}" > node_modules/express/package.json',
+        preInstallHook: `${process.execPath} -e "const f='package.json',fs=require('fs');`
+          + `const p=JSON.parse(fs.readFileSync(f,'utf8'));p.dependencies.express='^4.0.0';`
+          + `fs.writeFileSync(f,JSON.stringify(p))"`,
       }
     );
-    expect(output).not.toContain('WOULD_INSTALL:express');
+    expect(output, 'the hook declared express before the scan ran').not.toContain('WOULD_INSTALL:express');
   });
 });
 
@@ -772,15 +829,13 @@ describe('run_dependency_check — config lives in epam-cli, never in a client r
         join(projectRoot, '.epam/dependency-check.json'),
         JSON.stringify({ ...NPM_CONFIG, ignorePackages: ['fromconfigdir'] })
       );
-
-      const fnBody = extractFunctionBody(claudeSrc, 'run_dependency_check');
       const scriptPath = join(projectRoot, 'run.sh');
-      writeFileSync(scriptPath, `${fnBody}\nrun_dependency_check "${projectRoot}"\n`);
+      writeFileSync(scriptPath, runnerScript(projectRoot));
       const output = execFileSync('bash', [scriptPath], {
         encoding: 'utf8',
         env: { ...process.env, EPAM_PROJECT_CONFIG_DIR: configDir },
       });
-      expect(output).toContain('Installing missing import: fromconfigdir');
+      expect(output).toContain('installing fromconfigdir');
     } finally {
       rmSync(projectRoot, { recursive: true, force: true });
       rmSync(configDir, { recursive: true, force: true });
@@ -795,15 +850,13 @@ describe('run_dependency_check — config lives in epam-cli, never in a client r
       writeFileSync(join(projectRoot, 'src/app.ts'), "import express from 'express';");
       mkdirSync(join(projectRoot, '.epam'), { recursive: true });
       writeFileSync(join(projectRoot, '.epam/dependency-check.json'), JSON.stringify(NPM_CONFIG));
-
-      const fnBody = extractFunctionBody(claudeSrc, 'run_dependency_check');
       const scriptPath = join(projectRoot, 'run.sh');
-      writeFileSync(scriptPath, `${fnBody}\nrun_dependency_check "${projectRoot}"\n`);
+      writeFileSync(scriptPath, runnerScript(projectRoot));
       const output = execFileSync('bash', [scriptPath], {
         encoding: 'utf8',
         env: { ...process.env, EPAM_PROJECT_CONFIG_DIR: '' },
       });
-      expect(output).toContain('Installing missing import: express');
+      expect(output).toContain('installing express');
     } finally {
       rmSync(projectRoot, { recursive: true, force: true });
     }
@@ -817,15 +870,13 @@ describe('run_dependency_check — config lives in epam-cli, never in a client r
       writeFileSync(join(projectRoot, 'src/app.ts'), "import express from 'express';");
       mkdirSync(join(projectRoot, '.epam'), { recursive: true });
       writeFileSync(join(projectRoot, '.epam/dependency-check.json'), JSON.stringify(NPM_CONFIG));
-
-      const fnBody = extractFunctionBody(claudeSrc, 'run_dependency_check');
       const scriptPath = join(projectRoot, 'run.sh');
-      writeFileSync(scriptPath, `${fnBody}\nrun_dependency_check "${projectRoot}"\n`);
+      writeFileSync(scriptPath, runnerScript(projectRoot));
       const output = execFileSync('bash', [scriptPath], {
         encoding: 'utf8',
         env: { ...process.env, EPAM_PROJECT_CONFIG_DIR: '/nonexistent/path/does-not-exist' },
       });
-      expect(output).toContain('Installing missing import: express');
+      expect(output).toContain('installing express');
     } finally {
       rmSync(projectRoot, { recursive: true, force: true });
     }

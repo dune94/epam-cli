@@ -38,7 +38,18 @@ function extractStoryTscGate(): string {
   // a missing command and the gate's verdict is decided by the wrong thing entirely.
   const hStart = guardsSrc.indexOf('_run_project_verification() {');
   const hEnd = guardsSrc.indexOf('\n}\n', hStart) + '\n}'.length;
-  return `${guardsSrc.slice(hStart, hEnd)}\n${guardsSrc.slice(start, end)}`;
+  // The baseline-delta logic lives in ONE place now — lib/tsc-baseline-gate.sh. It used to be
+  // copy-pasted into this gate, claude.sh and eslint-baseline-gate.sh, each with its own tsc
+  // regex and node_modules literal, so each failed open independently. story-guards.sh sources
+  // it in the real script; the harness does the same.
+  const LIB = readFileSync(
+    join(__dirname, '../../../orchestrations/scripts/lib/tsc-baseline-gate.sh'), 'utf8');
+  const vStart = guardsSrc.indexOf('_get_vendor_dirs() {');
+  const vendor = vStart < 0
+    ? readFileSync(join(__dirname, '../../../orchestrations/scripts/claude.sh'), 'utf8')
+        .match(/_get_vendor_dirs\(\) \{[\s\S]*?\n\}/)?.[0] ?? ''
+    : guardsSrc.slice(vStart, guardsSrc.indexOf('\n}\n', vStart) + 2);
+  return [guardsSrc.slice(hStart, hEnd), vendor, LIB, guardsSrc.slice(start, end)].join('\n');
 }
 
 const AUTOMATION_DIR_FOR_TEST = join(__dirname, '../../../orchestrations');
@@ -51,12 +62,27 @@ function makeGitFixture(): string {
   const dir = mkdtempSync(join(tmpdir(), 'tsc-gate-fixture-'));
   cleanupDirs.push(dir);
   symlinkSync(join(REPO_ROOT, 'node_modules'), join(dir, 'node_modules'));
+  // The baseline worktree checks out tracked files only, so the vendored directories must be
+  // symlinked in or the checker cannot resolve at baseline and every current failure looks new.
+  mkdirSync(join(dir, '.epam'), { recursive: true });
+  writeFileSync(join(dir, '.epam', 'dependency-check.json'),
+    JSON.stringify({ vendorDirs: ['node_modules'] }));
   // The project declares HOW it verifies itself; the engine runs that declared command
   // rather than a compiler it named. A fixture that declares nothing is reported as
   // UNKNOWN by the gate, so the behaviour under test never fires.
   mkdirSync(join(dir, '.epam'), { recursive: true });
+  // HOW ITS FAILURES ARE IDENTIFIED sits beside how they are produced. Without failurePattern
+  // the parse is UNDECLARED and the delta declines to guess — it reports the full output rather
+  // than subtracting against an empty set. That refusal is the fix: the old grep matched nothing
+  // on an unrecognised dialect, subtracted nothing, and returned PASS. The identity omits the
+  // COLUMN deliberately — editing a line above shifts columns, and a baseline keyed on column
+  // reports every pre-existing error as new.
   writeFileSync(join(dir, '.epam', 'verification.json'), JSON.stringify({
-    typecheck: { command: './node_modules/.bin/tsc --noEmit' },
+    typecheck: {
+      command: './node_modules/.bin/tsc --noEmit',
+      failurePattern: '^([^(]+)\\((\\d+),(\\d+)\\): error ([A-Z0-9]+)',
+      failureIdentity: '{1}:{2}:{4}',
+    },
   }));
   writeFileSync(
     join(dir, 'tsconfig.json'),
@@ -165,23 +191,34 @@ describe('story_tsc_gate — baseline diff (real git repos, real tsc)', () => {
 describe('story_tsc_gate — source invariants', () => {
   const fnBody = extractStoryTscGate();
 
+  // THE MECHANICS MOVED, THE REQUIREMENTS DID NOT. These described an inline block in
+  // story_tsc_gate that was one of four copies; they now hold for lib/tsc-baseline-gate.sh.
+  const libBody = readFileSync(
+    join(__dirname, '../../../orchestrations/scripts/lib/tsc-baseline-gate.sh'), 'utf8');
+
   it('reads the baseline SHA from phase-baseline-sha.txt', () => {
-    expect(fnBody).toContain('phase-baseline-sha.txt');
+    expect(libBody).toContain('phase-baseline-sha.txt');
   });
 
   it('uses git worktree for the baseline comparison', () => {
-    expect(fnBody).toContain('git -C "$PROJECT_ROOT" worktree add');
+    expect(libBody).toContain('worktree add --detach');
   });
 
-  it('symlinks node_modules into the worktree (worktree checkouts omit gitignored dirs)', () => {
-    expect(fnBody).toContain('ln -s "$PROJECT_ROOT/node_modules"');
+  it('symlinks the DECLARED vendor directories into the worktree', () => {
+    // Was: expect(fnBody).toContain('ln -s "$PROJECT_ROOT/node_modules"'). Naming one
+    // ecosystem's directory is the hardcoding this conversion removed — WHICH directories are
+    // vendored is the project's declaration (dependency-check.json vendorDirs). The requirement
+    // is unchanged: worktree checkouts omit gitignored dirs, so without the symlink the checker
+    // cannot resolve at baseline and every current failure is reported as new.
+    expect(libBody).toContain('_get_vendor_dirs');
+    expect(libBody).toMatch(/ln -s "\$_vd"/);
   });
 
   it('removes the temporary worktree after use', () => {
-    expect(fnBody).toContain('git -C "$PROJECT_ROOT" worktree remove');
+    expect(libBody).toContain('worktree remove --force');
   });
 
   it('caches the baseline error set keyed by SHA', () => {
-    expect(fnBody).toMatch(/tsc-baseline-errors-.*\.txt/);
+    expect(libBody).toMatch(/baseline-failures-\$\{section\}-\$\{baseline_sha/);
   });
 });

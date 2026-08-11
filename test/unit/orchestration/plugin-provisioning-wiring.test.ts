@@ -151,7 +151,7 @@ describe('plugin provisioning wiring — codeline-facts.json', () => {
 describe('plugin provisioning wiring — both files together, per real Metrolinx shape', () => {
   it('provisions settings.json AND codeline-facts.json in one pass for 3 codelines independently', () => {
     const { configDir } = makeFixture();
-    writeFileSync(join(configDir, 'plugins.json'), JSON.stringify({ tools: ['/abs/codeline-context-tools.js'] }));
+    writeFileSync(join(configDir, 'plugins.json'), JSON.stringify({ tools: ['/abs/codeline-context-plugin.js'] }));
     writeFileSync(
       join(configDir, 'codeline-facts.json'),
       JSON.stringify({
@@ -174,7 +174,7 @@ describe('plugin provisioning wiring — both files together, per real Metrolinx
       runSnippet(cl, wt, configDir);
 
       expect(JSON.parse(readFileSync(join(wt, '.epam/settings.json'), 'utf8'))).toEqual({
-        tools: ['/abs/codeline-context-tools.js'],
+        tools: ['/abs/codeline-context-plugin.js'],
       });
       expect(JSON.parse(readFileSync(join(wt, '.epam/codeline-facts.json'), 'utf8'))).toEqual({
         facts: [expectedFact],

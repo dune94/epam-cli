@@ -59,7 +59,7 @@ describe('the base set is intact', () => {
 });
 
 describe('registered plugin tools are admitted', () => {
-  const out = () => allowed({ tools: [join(PLUGINS, 'dependency-contract-tools.js')] });
+  const out = () => allowed({ tools: [join(PLUGINS, 'dependency-contract-plugin.js')] });
 
   it('THE GAP: the project plugin\'s tools reach the gate', () => {
     expect(
@@ -75,8 +75,8 @@ describe('registered plugin tools are admitted', () => {
 
   it('a second plugin contributes too', () => {
     const both = allowed({ tools: [
-      join(PLUGINS, 'dependency-contract-tools.js'),
-      join(PLUGINS, 'codeline-context-tools.js'),
+      join(PLUGINS, 'dependency-contract-plugin.js'),
+      join(PLUGINS, 'codeline-context-plugin.js'),
     ] });
     expect(both).toContain('dependency_available');
     expect(both).toContain('codeline_facts');
@@ -85,7 +85,7 @@ describe('registered plugin tools are admitted', () => {
   it('a plugin that cannot load does not take the others down', () => {
     const out2 = allowed({ tools: [
       '/nonexistent/plugin.js',
-      join(PLUGINS, 'dependency-contract-tools.js'),
+      join(PLUGINS, 'dependency-contract-plugin.js'),
     ] });
     expect(out2).toContain('dependency_available');
     for (const t of BASE) expect(out2).toContain(t);
@@ -95,8 +95,8 @@ describe('registered plugin tools are admitted', () => {
 describe('the read-only boundary is not widened', () => {
   it('write_file is never admitted — it is what stops a reviewer rewriting what it judges', () => {
     const out2 = allowed({ tools: [
-      join(PLUGINS, 'dependency-contract-tools.js'),
-      join(PLUGINS, 'codeline-context-tools.js'),
+      join(PLUGINS, 'dependency-contract-plugin.js'),
+      join(PLUGINS, 'codeline-context-plugin.js'),
     ] });
     expect(out2).not.toContain('write_file');
   });

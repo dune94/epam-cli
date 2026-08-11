@@ -32,7 +32,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const plugin = require('../../../orchestrations/plugins/dependency-contract-tools.js');
+const plugin = require('../../../orchestrations/plugins/dependency-contract-plugin.js');
 
 const tool = () => {
   const t = plugin.tools.find((x: { name: string }) => x.name === 'dependency_available');
@@ -145,7 +145,7 @@ describe('it is driven by configuration, not by assumption', () => {
   it('names no package and no vendor in its own source', async () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const src: string = require('node:fs').readFileSync(
-      join(__dirname, '../../../orchestrations/plugins/dependency-contract-tools.js'),
+      join(__dirname, '../../../orchestrations/plugins/dependency-contract-plugin.js'),
       'utf8',
     );
     const body = src

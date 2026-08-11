@@ -41,7 +41,21 @@ afterEach(() => {
 function makeTree(files: Record<string, string>): string {
   const root = mkdtempSync(join(tmpdir(), 'lint-targets-'));
   cleanupDirs.push(root);
-  for (const [rel, content] of Object.entries(files)) {
+  // WHICH EXTENSIONS ARE LINTABLE AND WHERE SOURCE LIVES ARE PROJECT DECLARATIONS. The gate
+  // carried a literal ten-extension list and a hardcoded src/ glob until 2026-08-11; both now
+  // come from .epam/dependency-check.json, the same file the dependency scan reads. A tree that
+  // declares neither is one the gate cannot scope, and it now says so rather than passing
+  // silently — so a fixture exercising target derivation has to declare, exactly as a real
+  // codeline does.
+  const declared: Record<string, string> = {
+    '.epam/dependency-check.json': JSON.stringify({
+      scanFileExtensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'],
+      moduleRoots: ['src'],
+      vendorDirs: ['node_modules'],
+    }),
+    ...files,
+  };
+  for (const [rel, content] of Object.entries(declared)) {
     const abs = join(root, rel);
     mkdirSync(dirname(abs), { recursive: true });
     writeFileSync(abs, content);

@@ -32,7 +32,7 @@ import { join } from 'node:path';
 const ROOT = join(__dirname, '../../..');
 const CLAUDE_SH = readFileSync(join(ROOT, 'orchestrations/scripts/claude.sh'), 'utf8');
 const QUERY_SH = readFileSync(join(ROOT, 'orchestrations/scripts/codegraph-agent-query.sh'), 'utf8');
-const CODEGRAPH = readFileSync(join(ROOT, 'orchestrations/plugins/codegraph-tools.js'), 'utf8');
+const CODEGRAPH = readFileSync(join(ROOT, 'orchestrations/plugins/codegraph-plugin.js'), 'utf8');
 
 /** The upper bound of the tool's own advertised iterative usage. */
 function statedIterativeUsage(): number {

@@ -174,9 +174,18 @@ describe('B12 — pipeline wiring', () => {
     // 2600, not 1600: the rationale comment sits between the invocation and the
     // warning, and a fixed window reported a correct change as absent. Fourth time
     // today a fixed-size window has produced a false negative.
-    const near = ORCH.slice(i, i + 2600);
+    // Widened again: the step now also subtracts the baseline before it stamps, and explains
+    // why, so the window between the invocation and the verdict grew.
+    const near = ORCH.slice(i, i + 5200);
     expect(near).toMatch(/PIPESTATUS\[0\]/);        // still reads the real exit code
-    expect(near).toMatch(/NOT blocking/i);          // but does not fail the phase
-    expect(near).not.toMatch(/exit 1/);
+
+    // STILL NON-BLOCKING, but no longer SILENT. The literal words "NOT blocking" are gone
+    // because the behaviour changed on 2026-08-11: the step used to say it was deferring to the
+    // repro-gate, which excludes novel stories and therefore never judged them — the phase
+    // reported SUCCESS over an empty loop while ten suites were broken. It now RECORDS
+    // suiteState=red on the story so a later gate inherits it. The requirement this assertion
+    // exists for is unchanged: this step must not fail the phase itself.
+    expect(near, 'the step must record the state rather than only logging it').toMatch(/suiteState/);
+    expect(near, 'and must still not fail the phase from here').not.toMatch(/\bexit 1\b/);
   });
 });

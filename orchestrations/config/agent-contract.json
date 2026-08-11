@@ -1,0 +1,10 @@
+{
+  "$comment": "The agent behavioural contract, injected as a system-prompt prefix on every invocation. It lived as a heredoc in claude.sh, where it could not be changed per project, could not be translated, and named four tools from one ecosystem inside a rule labelled NON-NEGOTIABLE. Rules are stated as CAPABILITIES the orchestrator owns, never as named tools: a rule that lists 'tsc, vitest, jest, npm test' is wrong for every project that uses none of them, and silently incomplete for every project that uses something else. Order is preserved; edit freely — no code change, no rebuild.",
+  "rules": [
+    "Filesystem boundary: Never write, edit, or delete files outside PROJECT_ROOT ({projectRoot}). All output must land inside the project directory.",
+    "Write code only: Write all files required by the story spec. Do NOT run this project's build, test, type-check or lint commands — the orchestrator runs the project's own declared checks after your turn completes, and reports their real output back to you.",
+    "Reading: The context you need is in this prompt, including the contents of the files you are changing. Read a file when you genuinely need more than you were given — a file that was truncated, or one not shown here. Do not re-read a file whose contents are already above.",
+    "Protected paths: Never modify, rename, or delete files under {engineDirs}, or any path listed in .epam/protected-files. Never modify environment or credential files — these contain secrets and are immutable to agents.",
+    "Credential safety: Never echo, log, print, or expose any environment variable or file content whose name contains KEY, TOKEN, SECRET, PASSWORD, or CREDENTIAL."
+  ]
+}

@@ -1300,12 +1300,32 @@ normalize_provider_json() {
 # prompt prefix. Rules are non-negotiable; they cannot be overridden by story
 # prompts or KB content. Kept minimal: only invariants that prevent data loss or
 # security incidents if violated.
-AGENT_CONSTITUTION="AGENT BEHAVIORAL CONTRACT — NON-NEGOTIABLE:
-1. Filesystem boundary: Never write, edit, or delete files outside PROJECT_ROOT (${PROJECT_ROOT}). All output must land inside the project directory.
-2. Write code only: Write all files required by the story spec. Do NOT run compilers (tsc), test suites (vitest/jest/npm test), or linters. The orchestrator verifies correctness externally after your turn completes.
-3. No pre-flight reads: Do NOT read any files before writing your first implementation file. Start writing immediately. Do NOT read KB.md, AGENTS.md, or any existing source files for context — all necessary context is in this prompt. Only read a file if you must modify it (and only after writing all new files first).
-4. Protected paths: Never modify, rename, or delete files under .epam/, orchestrations/, or any path listed in .epam/protected-files. Never modify .env or any file matching *.env, .env.*, or *credentials* — these contain secrets and are immutable to agents.
-5. Credential safety: Never echo, log, print, or expose any environment variable or file content whose name contains KEY, TOKEN, SECRET, PASSWORD, or CREDENTIAL."
+# Read from orchestrations/config/agent-contract.json — not composed here.
+#
+# It was a heredoc: five rules of English in engine code, which no project could change,
+# nothing could translate, and which named tsc, vitest, jest and npm inside a rule labelled
+# NON-NEGOTIABLE. A rule that lists one ecosystem's tools is wrong for every project that uses
+# none of them and silently incomplete for every project that uses something else — so the rules
+# now name CAPABILITIES the orchestrator owns, and the project supplies the wording.
+#
+# Two contradictions went with it. The old rule 3 asserted "all necessary context is in this
+# prompt" and forbade reading before the first write, while the prompt body told the agent to
+# read files not listed — measured live: 126 read_file calls against a rule labelled
+# non-negotiable. It now states one thing: read when you need more than you were given.
+#
+# Falls back to empty rather than to a built-in default: a contract nobody can read is a contract
+# that should be visibly absent, not silently replaced by whatever was compiled in.
+AGENT_CONSTITUTION="$("${NODE_BIN:-node}" -e '
+  try {
+    const c = require(process.argv[1]);
+    const rules = Array.isArray(c.rules) ? c.rules : [];
+    if (!rules.length) { process.stdout.write(""); process.exit(0); }
+    const filled = rules.map((r, i) => `${i + 1}. ` + String(r)
+      .replace(/\{projectRoot\}/g, process.argv[2] || "")
+      .replace(/\{engineDirs\}/g, process.argv[3] || ""));
+    process.stdout.write("AGENT BEHAVIORAL CONTRACT — NON-NEGOTIABLE:\n" + filled.join("\n"));
+  } catch (_) { process.stdout.write(""); }
+' "$SCRIPT_DIR/../config/agent-contract.json" "${PROJECT_ROOT:-}" ".epam/, orchestrations/" 2>/dev/null || echo "")"
 
 # Claude CLI permission flags
 # These allow Claude to read/write files and execute commands without prompting
@@ -8743,19 +8763,21 @@ implement_story() {
 BROWNFIELD SURGEON MODE — NOVEL CAPABILITY (non-negotiable, applies to this story):
 6. FIND THE ATTACHMENT POINT: There is no existing bug and no existing code path implementing this capability — searching for one wastes time. Before writing code, locate the existing file/function/provider/hook/route/component this new capability must plug INTO (Search, Glob, or Read). Do not skip this step.
 7. SMALLEST INTEGRATION, NOT A REWRITE: Extend the attachment point with the minimal addition that provides the new capability. Do not restructure, refactor, or rewrite surrounding code that already works.
-8. NEW FILES ARE EXPECTED WHEN THE CAPABILITY GENUINELY NEEDS THEM: Do not withhold a new file, component, or module waiting for the story description to say 'create' or 'add new' — a bare or underspecified description is not evidence the work is smaller than it is. Create what the capability requires; do not invent an abstraction it does not.
-9. USE EXISTING HELPERS: Before writing any new function or utility, search the codebase for an existing one that already serves the same purpose.
-10. VERIFY THIRD-PARTY SDK CALLS: before calling a method on a package you did not write, confirm its real shape with the codegraph_query tool or \`bash orchestrations/scripts/resolve-package-symbol.sh <package> <method>\` — a symbol existing in node_modules is not proof it is a static call, an instance method, or the package's own intended usage. Calling it wrong produces code that type-checks and fails at runtime."
+8. NEW FILES ARE EXPECTED WHEN THE CAPABILITY GENUINELY NEEDS THEM: Do not withhold a new file, component, or module waiting for the story description to say 'create' or 'add new' — a bare or underspecified description is not evidence the work is smaller than it is. Create what the capability requires; do not invent an abstraction it does not."
         else
             DYNAMIC_CONSTITUTION="${DYNAMIC_CONSTITUTION}
 
 BROWNFIELD SURGEON MODE — non-negotiable (applies to every story in this run):
 6. FIND FIRST: Before writing a single line of code, locate the existing code path that handles the behavior described in this story. Use Search, Glob, or Read. Do not skip this step.
 7. FIX MINIMALLY: Make the smallest change that corrects the behavior. Do not restructure, refactor, or extend surrounding code.
-8. NO NEW FILES BY DEFAULT: Do not create new files, services, or abstractions unless the story description explicitly uses the words 'create', 'add new', or 'build new'. A bug report or a change request means modifying existing code.
+8. NO NEW FILES BY DEFAULT: Do not create new files, services, or abstractions unless the story description explicitly uses the words 'create', 'add new', or 'build new'. A bug report or a change request means modifying existing code."
+        fi
+        # Rules 9 and 10 apply to BOTH modes and were copy-pasted into each arm — byte-identical,
+        # nine lines apart. One of them then had to be maintained twice, which is how a rule ends
+        # up saying two different things in one file. Appended once, after the branch.
+        DYNAMIC_CONSTITUTION="${DYNAMIC_CONSTITUTION}
 9. USE EXISTING HELPERS: Before writing any new function or utility, search the codebase for an existing one that already serves the same purpose.
 10. VERIFY THIRD-PARTY SDK CALLS: before calling a method on a package you did not write, confirm its real shape with the codegraph_query tool or \`bash orchestrations/scripts/resolve-package-symbol.sh <package> <method>\` — a symbol existing in node_modules is not proof it is a static call, an instance method, or the package's own intended usage. Calling it wrong produces code that type-checks and fails at runtime."
-        fi
     fi
     # GAP-P17: inject outputSchema instruction when story defines one
     local schema_block=""

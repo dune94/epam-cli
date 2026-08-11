@@ -98,6 +98,9 @@ LOG_DIR=${JSON.stringify(logDir)}
 JIRA_BASELINE_BRANCH=main
 STORY_FILES="src/declared.x"
 engine_paths_filter() { grep -v -E '^(\\.codegraph/|\\.epam/)' || true; }
+# The real script sources lib/engine-paths.sh, which defines both. Stub the pathspec form
+# the same way, so the harness exercises the exclusion the runtime actually applies.
+engine_paths_pathspec() { printf ':!%s/*\\n:!*/%s/*\\n' .epam .epam; printf ':!%s/*\\n:!*/%s/*\\n' .codegraph .codegraph; }
 warning() { :; }
 log() { :; }
 ${block}

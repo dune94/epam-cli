@@ -55,6 +55,9 @@ AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
 # burning ladder rungs on a re-implementation nobody needed.
 # shellcheck source=lib/seam-ladder.sh
 . "$SCRIPT_DIR/lib/seam-ladder.sh" 2>/dev/null || true
+# engine_paths_pathspec — the owned-path set as git exclusions, one definition.
+# shellcheck source=lib/engine-paths.sh
+[ -f "$SCRIPT_DIR/lib/engine-paths.sh" ] && . "$SCRIPT_DIR/lib/engine-paths.sh"
 command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "team-lead-review"
 source "$SCRIPT_DIR/lib/project-tools.sh"
 source "$SCRIPT_DIR/lib/story-retry-state.sh"
@@ -392,8 +395,28 @@ while IFS= read -r story_id; do
         # never the reviewer's QUALITY judgment. The test-writer is an agent; its test must be
         # reviewed like the fix (2026-07-24). Add test files changed vs the story's baseline.
         _test_files=$(git -C "$PROJECT_ROOT" diff --name-only "$_rev_base" HEAD 2>/dev/null | grep -iE '\.(spec|test)\.|/__tests__/|_test\.' | tr '\n' ' ' || true)
-        _diff_full=$(git -C "$PROJECT_ROOT" diff "$_rev_base" HEAD -- \
-            $(echo "$STORY_FILES $_test_files") 2>/dev/null || true)
+        # THE WHOLE CHANGE, NOT THE DECLARED PART OF IT.
+        #
+        # This filtered the diff by pathspec to the story's declared files. That hid any file
+        # nobody predicted: the reviewer returned a verdict on a partial change with no
+        # indication it had seen a partial change. It had already happened once here — the
+        # test-writer's output lives at co-located paths outside technicalNotes.files, and was
+        # bolted onto the pathspec rather than fixing the rule. The scope guard now permits
+        # writes to files no other story owns, so a third category exists and a fourth will.
+        #
+        # The pathspec is REDUNDANT, not merely incomplete: it existed to keep unrelated
+        # upstream commits out when the base was HEAD~5. The base is now the story branch's
+        # own SHA, so everything in this diff already belongs to the story — filtering by
+        # filename can only remove the story's own work.
+        #
+        # Engine-owned paths are excluded through the single existing definition
+        # (lib/engine-paths.sh), so the reviewer does not spend its budget on pipeline state.
+        local _diff_excludes=()
+        if command -v engine_paths_pathspec >/dev/null 2>&1; then
+            mapfile -t _diff_excludes < <(engine_paths_pathspec)
+        fi
+        _diff_full=$(git -C "$PROJECT_ROOT" diff "$_rev_base" HEAD -- . \
+            "${_diff_excludes[@]+"${_diff_excludes[@]}"}" 2>/dev/null || true)
         if [ -z "$_diff_full" ]; then
             _diff_full=$(git -C "$PROJECT_ROOT" diff "$_rev_base" HEAD 2>/dev/null || true)
         fi

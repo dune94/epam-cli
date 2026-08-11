@@ -474,18 +474,23 @@ describe('story_tsc_gate — shared implementation (lib/story-guards.sh), called
     expect(claudeSrc).toContain('source "$SCRIPT_DIR/lib/story-guards.sh"');
   });
 
-  it('tsc gate runs tsc --noEmit with PIPESTATUS[0] exit capture', () => {
+  it('the gate runs the PROJECT\'s declared check, with PIPESTATUS[0] exit capture', () => {
+    // The engine no longer names a compiler: it calls _run_project_verification, which runs the
+    // command the project declared in .epam/verification.json.
     const fnIdx = guardsSrc.indexOf('story_tsc_gate()');
     const block = guardsSrc.slice(fnIdx, fnIdx + 1200);
-    expect(block).toContain('tsc --noEmit');
+    expect(block).toContain('_run_project_verification');
     expect(block).toContain('PIPESTATUS[0]');
   });
 
-  it('tsc gate is skipped when tsconfig.json does not exist', () => {
+  it('the gate has NO stack precondition — an undeclared project is refused, not skipped', () => {
+    // This asserted the opposite: that the gate skips when tsconfig.json is absent. Skipping
+    // returns 0, which callers read as PASS, so any repository without that file was reported
+    // verified without being checked. runVerification reports UNKNOWN for a project that declared
+    // nothing and callers treat non-zero as failure — see verification-gates-name-no-stack.test.ts.
     const fnIdx = guardsSrc.indexOf('story_tsc_gate()');
     const block = guardsSrc.slice(fnIdx, fnIdx + 1200);
-    expect(block).toContain('tsconfig.json');
-    expect(block).toMatch(/return 0/);
+    expect(block).not.toContain('tsconfig.json');
   });
 
   it('tsc gate is skipped for test-engineer role stories', () => {

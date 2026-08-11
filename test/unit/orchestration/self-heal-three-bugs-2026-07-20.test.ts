@@ -112,7 +112,11 @@ describe('Bug 3 fix — skipLadder + HealingBroken forces HIGH-tier escalation a
     const rung2Idx = claudeSrc.indexOf('InferenceLadder[Rung2/R${retry_count}]: tier=');
     const block = claudeSrc.slice(rung2Idx, rung2Idx + 3000);
     expect(block).toContain('HealingBroken+skipLadder');
-    expect(block).toContain('get_model_ladder_step "${STORY_MODEL:-}" "high"');
+    // The HIGH-tier forced escalation is delegated to next_ladder_step, which calls
+    // get_model_ladder_step internally (executed tests: next-ladder-step.test.ts). The
+    // invariant this guards — forcing the HIGH tier rather than the story's own — is unchanged.
+    expect(block).toMatch(/next_ladder_step\s+\d+\s+"\$\{STORY_MODEL:-\}"/);
+    expect(block).toContain('"high"');
   });
 
   it('Rung 2 HIGH-tier override is keyed by story_id (not global healing count)', () => {
@@ -126,7 +130,11 @@ describe('Bug 3 fix — skipLadder + HealingBroken forces HIGH-tier escalation a
     expect(rung3Idx).toBeGreaterThan(-1);
     const block = claudeSrc.slice(rung3Idx, rung3Idx + 3500);
     expect(block).toContain('HealingBroken+skipLadder');
-    expect(block).toContain('get_model_ladder_step "${STORY_MODEL:-}" "high"');
+    // The HIGH-tier forced escalation is delegated to next_ladder_step, which calls
+    // get_model_ladder_step internally (executed tests: next-ladder-step.test.ts). The
+    // invariant this guards — forcing the HIGH tier rather than the story's own — is unchanged.
+    expect(block).toMatch(/next_ladder_step\s+\d+\s+"\$\{STORY_MODEL:-\}"/);
+    expect(block).toContain('"high"');
     expect(block).toContain('_healed_count_r3');
   });
 

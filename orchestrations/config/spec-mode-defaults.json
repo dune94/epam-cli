@@ -1,7 +1,7 @@
 {
   "$comment": "ENGINE-WIDE defaults for the spec pass. These were literals inside spec-mode-runner.js, changeable only by editing a 9,000-line script. An operator overrides any of them per run with the environment variable named beside each.",
   "toolCalls": {
-    "$comment": "How much an agent may LOOK before it must answer \u2014 the most consequential number in the spec pass. Live 2026-08-08 a survey told to open three repositories ran out of calls, reported 'no existing infrastructure, this is greenfield work' about a brownfield estate with 243 matching source files in the first codeline, and a roster was minted on that verdict.",
+    "$comment": "How much an agent may LOOK before it must answer — the most consequential number in the spec pass. Live 2026-08-08 a survey told to open three repositories ran out of calls, reported 'no existing infrastructure, this is greenfield work' about a brownfield estate with 243 matching source files in the first codeline, and a roster was minted on that verdict.",
     "perAgent": 8,
     "perAgentEnv": "SPEC_MODE_MAX_TOOL_CALLS",
     "perCodelineSurvey": 8,
@@ -22,7 +22,7 @@
     ]
   },
   "promptTrim": {
-    "$comment": "How much accumulated coordinator guidance an agent keeps. Live 2026-08-09 a writer's prompt hit 53366 chars against this threshold and was trimmed to the most recent sections \u2014 two thirds of its guidance discarded, with a WARNING the only trace. The section count replaced a 1 on 2026-07-11, after a run repeated an identical mistake five retries after being told not to, because a newer heading had pushed the earlier diagnosis out of a single-heading window.",
+    "$comment": "How much accumulated coordinator guidance an agent keeps. Live 2026-08-09 a writer's prompt hit 53366 chars against this threshold and was trimmed to the most recent sections — two thirds of its guidance discarded, with a WARNING the only trace. The section count replaced a 1 on 2026-07-11, after a run repeated an identical mistake five retries after being told not to, because a newer heading had pushed the earlier diagnosis out of a single-heading window.",
     "thresholdChars": 16000,
     "thresholdCharsEnv": "EPAM_PROMPT_SCRATCHPAD_THRESHOLD_CHARS",
     "$thresholdNote": "0 disables trimming entirely.",
@@ -30,13 +30,13 @@
     "keepRecentSectionsEnv": "EPAM_PROMPT_TRIM_KEEP_SECTIONS"
   },
   "existingFileInjection": {
-    "$comment": "How much of each declared file is injected verbatim into the writer prompt under '## Existing File Contents'. Measured live 2026-08-09 on AMSD-2041: that block was 34,510 of 86,809 prompt chars \u2014 39% \u2014 and is paid again on every attempt. It is the term that DOMINATES prompt size: the guidance trim can only cut accumulated coordinator notes, and no amount of trimming touches the injected files. Lowering this shrinks the prompt directly and pushes the writer toward codegraph_query and ReadFile for what it actually needs. Was a literal 400 inside build_implementation_prompt.",
+    "$comment": "How much of each declared file is injected verbatim into the writer prompt under '## Existing File Contents'. Measured live 2026-08-09 on AMSD-2041: that block was 34,510 of 86,809 prompt chars — 39% — and is paid again on every attempt. It is the term that DOMINATES prompt size: the guidance trim can only cut accumulated coordinator notes, and no amount of trimming touches the injected files. Lowering this shrinks the prompt directly and pushes the writer toward codegraph_query and ReadFile for what it actually needs. Was a literal 400 inside build_implementation_prompt.",
     "maxLinesPerFile": 400,
     "maxLinesPerFileEnv": "EPAM_EXISTING_FILE_MAX_LINES",
-    "$note": "Truncation stays visible to the writer either way \u2014 a file silently cut is how an agent concludes an export does not exist and invents one."
+    "$note": "Truncation stays visible to the writer either way — a file silently cut is how an agent concludes an export does not exist and invents one."
   },
   "toolPolicy": {
-    "$comment": "What the writer's tools do instead of shelling out. Measured live 2026-08-09 on one story: bash 330 calls / 0.5 MB (56 grep, 45 cat, 21 ls, 16 sed, 10 find) and read_file 202 calls / 1.1 MB, against codegraph_query 1. Three of the four causes were BROKEN TOOLS, fixed the same day: search silently returned '(no matches found)' for patterns that existed (grep fallback lost -E and --include), read_file ignored startLine/endLine and returned whole files, and an unchanged file was re-sent in full on every read. This policy is the fourth part \u2014 it stops the shell being used for work the indexes answer better, and only makes sense now the tools it points at actually work.",
+    "$comment": "What the writer's tools do instead of shelling out. Measured live 2026-08-09 on one story: bash 330 calls / 0.5 MB (56 grep, 45 cat, 21 ls, 16 sed, 10 find) and read_file 202 calls / 1.1 MB, against codegraph_query 1. Three of the four causes were BROKEN TOOLS, fixed the same day: search silently returned '(no matches found)' for patterns that existed (grep fallback lost -E and --include), read_file ignored startLine/endLine and returned whole files, and an unchanged file was re-sent in full on every read. This policy is the fourth part — it stops the shell being used for work the indexes answer better, and only makes sense now the tools it points at actually work.",
     "bashExplorationRedirect": {
       "verbs": {
         "grep": "codegraph_query (mode \"explore\" for a feature, \"query\"/\"callers\" for a symbol) or the search tool",
@@ -49,14 +49,14 @@
       "pathOverrides": [
         {
           "match": "node_modules",
-          "use": "resolve_package_symbol (a symbol's real declared shape) or dependency_contract (which option keys a dependency accepts) \u2014 codegraph_query indexes THIS repository only and cannot answer questions about a dependency"
+          "use": "resolve_package_symbol (a symbol's real declared shape) or dependency_contract (which option keys a dependency accepts) — codegraph_query indexes THIS repository only and cannot answer questions about a dependency"
         }
       ],
       "$note": "sed is deliberately NOT redirected: it is used for editing as well as reading, and blocking it would break real work. A verb absent from this map is allowed."
     },
-    "readDedupe": false,
+    "readDedupe": true,
     "readDedupeEnv": "EPAM_READ_DEDUPE",
     "bashExplorationRedirectEnv": "EPAM_BASH_EXPLORATION_REDIRECT",
-    "$readDedupeNote": "DISABLED 2026-08-09 after a live failure. The dedupe notice told the model 'call again with force: true'; the writer spent its entire attempt emitting <read_file force=\"true\" /> as TEXT rather than as tool calls and wrote nothing. 13 green tests missed it because every fixture exercised a compliant caller. Re-enable only with a fixture that reproduces a model reacting to the notice."
+    "$readDedupeNote": "RE-ENABLED 2026-08-10. Disabled 2026-08-09 after a live failure: the notice told the model 'call again with force: true', and the writer spent its whole attempt emitting <read_file force=\"true\" /> as TEXT rather than as tool calls, wrote nothing, and died. 13 green tests missed it because every fixture exercised a compliant caller. The stated precondition for re-enabling was a fixture reproducing a model that MISHANDLES the notice: test/unit/tools/read-dedupe-survives-a-noncompliant-model.test.ts, 11 tests, both behaviours mutation-verified. The DESIGN changed with it — recovery no longer requires the model to emit anything. A second request for the same unchanged file returns the body automatically, because asking again is itself evidence that compaction evicted it. `force` is still honoured, including as the string models actually send. Measured on the attempt that motivated this: 126 read_file calls, 44 distinct paths, 65.1% duplicates, one already-injected file read 34 times."
   }
 }

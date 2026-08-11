@@ -65,6 +65,14 @@ function run(env: NodeJS.ProcessEnv, projectRoot: string, storyFiles: string[]):
   const script = `
 run_extracted() {
   local PROJECT_ROOT='${projectRoot}'
+  # Config accessors added to claude.sh after this harness was written. Unstubbed, the
+  # extracted block aborts and every assertion fails during SETUP rather than on what it
+  # asserts — the failure reads as a product defect and is a missing stub.
+  existing_file_max_lines(){ echo 400; }
+  existing_file_injection_enabled(){ return 0; }
+  build_project_tools_block(){ echo '[[TOOLS]]'; }
+  # Resolves a declared path against the project root; the harness works in absolute paths.
+  _resolve_deliverable_path(){ echo "$1"; }
   local story_json='${storyJson}'
 ${fileLoopBlock}
 ${directiveBlock}

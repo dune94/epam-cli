@@ -37,8 +37,23 @@ function extractFunctionBody(src: string, name: string): string {
 // function name.
 function extractModelOverrideResolverBlock(src: string): string {
   const start = src.indexOf('local _effective_max_iterations="${STORY_MAX_ITERATIONS:-6}"');
-  const end = src.indexOf('\n                fi\n', start) + '\n                fi\n'.length;
+  // Anchored to the ModelOverride log line, which is emitted AFTER every override value is
+  // applied. The previous anchor was the first 16-space `fi`, so any new conditional added
+  // inside the resolver silently truncated the lifted block and the harness reported empty
+  // values for overrides the pipeline was applying correctly.
+  const marker = src.indexOf('ModelOverride[', start);
+  const end = src.indexOf('\n                fi\n', marker) + '\n                fi\n'.length;
   return src.slice(start, end);
+}
+
+
+/** The effort helpers claude.sh's override resolver depends on, lifted from the real source. */
+function effortHelpers(): string {
+  return ['effort_rank', 'max_effort', 'next_effort'].map((n) => {
+    const m = new RegExp(`^${n}\\(\\) \\{$`, 'm').exec(claudeSrc);
+    if (!m) return '';
+    return claudeSrc.slice(m.index, claudeSrc.indexOf('\n}\n', m.index) + 3);
+  }).join('\n');
 }
 
 function resolveModelOverride(settings: object, provider: string, model: string): Record<string, string> {
@@ -53,6 +68,10 @@ function resolveModelOverride(settings: object, provider: string, model: string)
         `STORY_PROVIDER="${provider}"\n` +
         `STORY_MODEL="${model}"\n` +
         `log() { :; }\n` +
+        // The resolver now applies effort via max_effort() (an override is a FLOOR, not an
+        // overwrite, so a rung's escalation survives). Undefined here, it returns empty and
+        // the harness reports no override for one the pipeline applies correctly.
+        `${effortHelpers()}\n` +
         `resolve_override() {\n${block}\n` +
         `  echo "EPAM_REASONING_EFFORT=${'$'}{EPAM_REASONING_EFFORT:-}"\n` +
         `  echo "EPAM_TEMPERATURE=${'$'}{EPAM_TEMPERATURE:-}"\n` +
@@ -125,7 +144,7 @@ describe('load_llm_settings_json() — applies JSON as fallback defaults', () =>
     expect(env.EPAM_RETRY_EXTENSION_MAX).toBe('2');
     expect(env.EPAM_STORY_TIMEOUT_SECS).toBe('1800');
     expect(env.EPAM_GATE_TIMEOUT_SECS).toBe('2400');
-    expect(env.EPAM_RUNG0_REASONING_EFFORT).toBe('low');
+    expect(env.EPAM_RUNG0_REASONING_EFFORT).toBe('medium');
     expect(env.EPAM_RUNG1_REASONING_EFFORT).toBe('medium');
     expect(env.EPAM_RUNG2_REASONING_EFFORT).toBe('high');
     expect(env.EPAM_RUNG3_REASONING_EFFORT).toBe('high');
@@ -133,7 +152,9 @@ describe('load_llm_settings_json() — applies JSON as fallback defaults', () =>
     expect(env.EPAM_RUNG2_TEMPERATURE).toBe('0.5');
     expect(env.EPAM_RUNG3_TEMPERATURE).toBe('0.7');
     expect(env.EPAM_MODEL_LADDER_HIGH).toBe(
-      'MiniMax-M2.5=MiniMax-M3|MiniMax-M3=z-ai/glm-5.2|zhipuai/glm-z1-9b=zhipuai/glm-z1-32b|zhipuai/glm-z1-32b=z-ai/glm-5.2|z-ai/glm-5.1=z-ai/glm-5.2|z-ai/glm-5.2=moonshotai/kimi-k2.5|moonshotai/kimi-k2.5=moonshotai/kimi-k3'
+      // glm-5.2 now escalates straight to kimi-k3: kimi-k2.5 is the one route measured at 0%
+      // prompt-cache utilisation, so it repurchases the whole prefix every turn.
+      'MiniMax-M2.5=MiniMax-M3|MiniMax-M3=z-ai/glm-5.2|zhipuai/glm-z1-9b=zhipuai/glm-z1-32b|zhipuai/glm-z1-32b=z-ai/glm-5.2|z-ai/glm-5.1=z-ai/glm-5.2|z-ai/glm-5.2=moonshotai/kimi-k3|moonshotai/kimi-k2.5=moonshotai/kimi-k3',
     );
     expect(env.EPAM_MODEL_LADDER_MEDIUM).toBe(
       'MiniMax-M2.5=MiniMax-M3|MiniMax-M3=z-ai/glm-5.2|zhipuai/glm-z1-9b=zhipuai/glm-z1-32b|zhipuai/glm-z1-32b=z-ai/glm-5.2|z-ai/glm-5.1=z-ai/glm-5.2'
@@ -151,7 +172,7 @@ describe('load_llm_settings_json() — applies JSON as fallback defaults', () =>
 
   it('exports the real (non-null) cost controls set 2026-08-01: tool-call cap, warning, and enforced hard limit', () => {
     const env = runLoader(METROLINX_SETTINGS);
-    expect(env.EPAM_STORY_MAX_TOOL_CALLS).toBe('300');
+    expect(env.EPAM_STORY_MAX_TOOL_CALLS).toBe('600');
     expect(env.EPAM_STORY_BUDGET_WARNING_USD).toBe('3.5');
     // Bumped 8 -> 15 on 2026-08-01: the $8 cap killed a Writer Retest run mid-way
     // through a real, correct fix (metrolinx needed ~$8.5 across its retry ladder).
@@ -252,7 +273,7 @@ describe('llm-settings.schema.json / metrolinx llm-settings.json — structural 
     expect(fromGlm51[0].to).toBe('z-ai/glm-5.2');
     const fromGlm52 = highChain.filter((t: any) => t.from === 'z-ai/glm-5.2');
     expect(fromGlm52).toHaveLength(1);
-    expect(fromGlm52[0].to).toBe('moonshotai/kimi-k2.5');
+    expect(fromGlm52[0].to).toBe('moonshotai/kimi-k3');
     const fromKimiK25 = highChain.filter((t: any) => t.from === 'moonshotai/kimi-k2.5');
     expect(fromKimiK25).toHaveLength(1);
     expect(fromKimiK25[0].to).toBe('moonshotai/kimi-k3');
@@ -320,7 +341,7 @@ describe('model-override resolver — picks the right entry per resolved STORY_P
 
   it('kimi-k2.5 (intermediate escalation step) gets its own distinct, lighter budget than kimi-k3', () => {
     const env = resolveModelOverride(METROLINX_SETTINGS, 'qwen', 'moonshotai/kimi-k2.5');
-    expect(env.EPAM_TEMPERATURE).toBe('0.7');
+    expect(env.EPAM_TEMPERATURE).toBe('1');
     expect(env.EPAM_REASONING_EFFORT).toBe('medium');
     expect(env._effective_max_iterations).toBe('60');
     expect(env._effective_compress_at).toBe('128000');
@@ -329,7 +350,7 @@ describe('model-override resolver — picks the right entry per resolved STORY_P
   it('kimi-k3 gets its own temperature/compaction override, distinct from kimi-k2.5 (no substring collision)', () => {
     const env = resolveModelOverride(METROLINX_SETTINGS, 'qwen', 'moonshotai/kimi-k3');
     expect(env.EPAM_TEMPERATURE).toBe('1');
-    expect(env.EPAM_REASONING_EFFORT).toBe('high');
+    expect(env.EPAM_REASONING_EFFORT).toBe('max');
     expect(env._effective_max_iterations).toBe('150');
     expect(env._effective_compress_at).toBe('400000');
   });

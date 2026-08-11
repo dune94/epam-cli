@@ -1,4 +1,23 @@
 #!/usr/bin/env bash
+
+# _run_project_verification <project_root>
+# The project's declared check (.epam/verification.json) via the verification plugin. The engine
+# names no tool, extension, directory or runtime path. Undeclared -> non-zero with a reason.
+_run_project_verification() {
+    local _root="${1:-$PROJECT_ROOT}"
+    local _auto="${AUTOMATION_DIR:-$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")}"
+    local _plugin="${_auto}/plugins/verification-tools.js"
+    local _node="${NODE_CMD:-${NODE_BIN:-node}}"
+    if [ ! -f "$_plugin" ]; then echo "verification plugin missing at $_plugin"; return 2; fi
+    "$_node" -e '
+      const p = require(process.argv[1]);
+      const r = p.runVerification(process.argv[2]);
+      if (r.status === "unknown") { console.log("verification not declared: " + r.reason); process.exit(2); }
+      if (r.output) console.log(r.output);
+      process.exit(r.status === "pass" ? 0 : (r.exitCode || 1));
+    ' "$_plugin" "$_root"
+}
+
 # Shared per-story orchestration guards — single source of truth, sourced by
 # BOTH run-agent-orchestration.sh (main lane, Step 1) and claude.sh
 # (run_implementation(), worktree Step 3a/3b lanes).
@@ -237,7 +256,7 @@ story_tsc_gate() {
     local _tsc_log="$LOG_DIR/tsc-gate-${_sid}.log"
 
     set +e
-    cd "$PROJECT_ROOT" && "$_node_cmd" ./node_modules/.bin/tsc --noEmit 2>&1 | tee "$_tsc_log"
+    _run_project_verification "$PROJECT_ROOT" 2>&1 | tee "$_tsc_log"
     local _tsc_exit=${PIPESTATUS[0]}
     set -e
 
@@ -267,7 +286,7 @@ story_tsc_gate() {
                     _wt_dir=$(mktemp -d)
                     if git -C "$PROJECT_ROOT" worktree add --detach "$_wt_dir" "$_baseline_sha" >/dev/null 2>&1; then
                         ln -s "$PROJECT_ROOT/node_modules" "$_wt_dir/node_modules" 2>/dev/null || true
-                        ( cd "$_wt_dir" && "$_node_cmd" ./node_modules/.bin/tsc --noEmit 2>&1 \
+                        ( _run_project_verification "$_wt_dir" 2>&1 \
                             | grep -oE '^[^(]+\([0-9]+,[0-9]+\): error [A-Z0-9]+' ) > "$_baseline_cache" 2>/dev/null || true
                         git -C "$PROJECT_ROOT" worktree remove --force "$_wt_dir" >/dev/null 2>&1 || true
                     fi
@@ -281,7 +300,7 @@ story_tsc_gate() {
         fi
 
         if [ -z "$(echo "$_new_errors" | tr -d '[:space:]')" ]; then
-            success "  [tsc-gate] $_sid: tsc --noEmit has only pre-existing baseline errors — none introduced by this story"
+            success "  [tsc-gate] $_sid: the type check has only pre-existing baseline errors — none introduced by this story"
             record_brownfield_verified_baseline
             return 0
         fi
@@ -291,7 +310,7 @@ story_tsc_gate() {
         reset_brownfield_story_commit "$_sid"
         return 1
     fi
-    success "  [tsc-gate] $_sid: tsc --noEmit passed"
+    success "  [tsc-gate] $_sid: the project's type check passed"
     record_brownfield_verified_baseline
     return 0
 }
@@ -588,6 +607,13 @@ _load_timeout_config() {
 
     _v=$(_lt_get '.timeouts.storyTimeoutSecs'); [ -z "${EPAM_STORY_TIMEOUT_SECS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_TIMEOUT_SECS="$_v"
     _v=$(_lt_get '.timeouts.gateTimeoutSecs'); [ -z "${EPAM_GATE_TIMEOUT_SECS:-}" ] && [ -n "$_v" ] && export EPAM_GATE_TIMEOUT_SECS="$_v"
+
+    # Loaded HERE, in the parent, because the watchdog that consumes them runs in this process
+    # — claude.sh's own loader is a subprocess and too late by construction (the reason this
+    # function exists at all). secondsPerIteration x the attempt's iteration budget derives a
+    # wall that can actually accommodate the work; storyTimeoutMaxSecs caps it.
+    _v=$(_lt_get '.timeouts.secondsPerIteration'); [ -z "${EPAM_SECONDS_PER_ITERATION:-}" ] && [ -n "$_v" ] && export EPAM_SECONDS_PER_ITERATION="$_v"
+    _v=$(_lt_get '.timeouts.storyTimeoutMaxSecs'); [ -z "${EPAM_STORY_TIMEOUT_MAX_SECS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_TIMEOUT_MAX_SECS="$_v"
 
     _v=$(_lt_get '.timeouts.storyEffortTimeoutSecs.low'); [ -z "${EPAM_STORY_EFFORT_TIMEOUT_LOW_SECS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_EFFORT_TIMEOUT_LOW_SECS="$_v"
     _v=$(_lt_get '.timeouts.storyEffortTimeoutSecs.medium'); [ -z "${EPAM_STORY_EFFORT_TIMEOUT_MEDIUM_SECS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_EFFORT_TIMEOUT_MEDIUM_SECS="$_v"

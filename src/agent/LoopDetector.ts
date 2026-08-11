@@ -7,13 +7,47 @@ export interface LoopDetectorConfig {
   maxIdenticalErrorOutcomes: number;
   /** How many recent calls/errors to consider "recent" for repeat detection. */
   slidingWindowSize: number;
+  /**
+   * Block a tool call once it has targeted the SAME thing this many times within the window,
+   * regardless of whether the payload differed.
+   *
+   * Distinct from maxIdenticalToolCalls, which hashes {tool + args} and therefore cannot see a
+   * rewrite loop: live 2026-08-10 one attempt wrote the same file 32 times, each with slightly
+   * different content, so all 32 hashed differently and every one passed. The attempt ran to
+   * 11.7M input tokens (up from 7.1M) because each rewrite added a turn and every turn re-sends
+   * the whole history.
+   *
+   * Deliberately more permissive than the identical-args threshold: editing one file two or
+   * three times is ordinary work, and only persistent re-targeting is a loop.
+   */
+  maxSameTargetCalls: number;
 }
 
 const DEFAULT_CONFIG: LoopDetectorConfig = {
   maxIdenticalToolCalls: 2,
   maxIdenticalErrorOutcomes: 2,
   slidingWindowSize: 6,
+  // Generous next to the identical-args rule, and far below the 32 observed live. The window for
+  // this rule is the whole attempt rather than the sliding window: a rewrite loop interleaved
+  // with reads would otherwise fall out of a 6-call window and never be counted.
+  maxSameTargetCalls: 8,
 };
+
+/**
+ * The thing a call acts ON, when it names one.
+ *
+ * Tools spell the argument differently, so a rule that knows one spelling silently covers one
+ * tool. Nothing here names a tool, an extension or a directory — a plugin tool that mutates a
+ * path is covered the day it is added. A call with no path-like argument has no target and is
+ * left entirely to the identical-args rule.
+ */
+function callTarget(toolArgs: Record<string, unknown>): string | null {
+  for (const key of ['path', 'file_path', 'file', 'filename', 'target']) {
+    const v = toolArgs?.[key];
+    if (typeof v === 'string' && v.trim() !== '') return v.trim();
+  }
+  return null;
+}
 
 function stableStringify(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
@@ -57,6 +91,8 @@ function hashPayload(data: unknown): string {
 export class LoopDetector {
   private callHistory: string[] = [];
   private errorHistory: string[] = [];
+  /** Per-attempt count of calls per {tool + target}, for the same-target rule. */
+  private targetCounts = new Map<string, number>();
 
   constructor(private config: LoopDetectorConfig = DEFAULT_CONFIG) {}
 
@@ -68,6 +104,28 @@ export class LoopDetector {
     const signature = `${toolName}:${hashPayload(toolArgs)}`;
     const recentWindow = this.callHistory.slice(-this.config.slidingWindowSize);
     const duplicateCount = recentWindow.filter(s => s === signature).length;
+
+    // SAME TARGET, DIFFERENT PAYLOAD, FOREVER. Checked before the identical-args rule because a
+    // rewrite loop never trips that one — every payload differs. Counted across the whole attempt
+    // rather than the sliding window, since a loop interleaved with reads would otherwise keep
+    // falling out of the window.
+    const target = callTarget(toolArgs);
+    if (target !== null) {
+      const targetKey = `${toolName}@${target}`;
+      const seen = this.targetCounts.get(targetKey) ?? 0;
+      if (seen >= this.config.maxSameTargetCalls) {
+        return {
+          blocked: true,
+          interventionMessage:
+            `LOOP PROTECTION: "${toolName}" has now targeted the same file ${seen + 1} times in ` +
+            `this attempt. Repeatedly rewriting one target is not making progress — the call was ` +
+            `NOT executed. Something is blocking the change you are trying to make: read the last ` +
+            `error you received, and if a different file or permission is required, say so and ` +
+            `stop rather than editing this one again.`,
+        };
+      }
+      this.targetCounts.set(targetKey, seen + 1);
+    }
 
     if (duplicateCount >= this.config.maxIdenticalToolCalls) {
       return {

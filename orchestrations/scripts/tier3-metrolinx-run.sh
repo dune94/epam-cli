@@ -237,8 +237,40 @@ echo ""
 # for any codeline with no marker yet (nothing known-good to reset to) or
 # already at its verified baseline.
 info "Predictable teardown: resetting codelines to last verified baseline..."
+#
+# WITH A CODELINE SELECTION, RESET ONLY WHAT THIS LAUNCH WILL RUN.
+#
+# The sweep above is correct when the target is discovered: every candidate must be clean because
+# any of them might be chosen. When EPAM_ONLY_CODELINES names the codelines, nothing is being
+# discovered, and the sweep becomes actively destructive — brownfield-preflight-reset.sh runs
+# `git reset --hard <baseline>` plus `clean -fd`, and `reset --hard` MOVES THE BRANCH POINTER.
+# It discards commits, not merely working-tree edits.
+#
+# So without this guard, the intended workflow — finish gotransit, pause, launch metrolinx —
+# would silently destroy the finished codeline, commits included, and the second launch's log
+# would look entirely normal. Losing a completed lane is worse than any state this reset prevents.
+#
+# Same variable as the lane selection in run-agent-orchestration.sh, deliberately: two independent
+# selection mechanisms would drift, and here the drift only ever shows up as destroyed work.
+# Matching is on the codeline name, which is the directory name under the codeline root.
 for _cl_dir in "$JIRA_CODELINE_ROOT"/*/; do
   [ -d "${_cl_dir}.git" ] || continue
+  if [ -n "${EPAM_ONLY_CODELINES:-}" ]; then
+    _cl_name="$(basename "${_cl_dir%/}")"
+    _cl_selected=0
+    _orig_ifs="$IFS"
+    IFS='|,'
+    for _sel in ${EPAM_ONLY_CODELINES}; do
+      # The lane list keys on the PRD's codeline name while the reset walks directories, and the
+      # two are not always spelled identically. A containment test in either direction keeps a
+      # selected codeline from being skipped — the safe failure here is resetting one repo too
+      # many, never one too few, because an unreset selected repo starts from unknown state.
+      case "$_cl_name" in *"$_sel"*) _cl_selected=1 ;; esac
+      case "$_sel" in *"$_cl_name"*) _cl_selected=1 ;; esac
+    done
+    IFS="$_orig_ifs"
+    [ "$_cl_selected" = "1" ] || continue
+  fi
   bash "$SCRIPT_DIR/brownfield-preflight-reset.sh" "${_cl_dir%/}" || true
 done
 echo ""

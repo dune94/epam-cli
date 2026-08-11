@@ -49,6 +49,13 @@ export class ReadFileTool implements Tool {
   private alreadySent = new Map<string, string>();
 
   /**
+   * Consecutive dedupe notices issued per resolved path. One notice is a saving; a second request
+   * for the same unchanged file means the model no longer holds it, and it is served rather than
+   * told again — see the dedupe block in execute().
+   */
+  private dedupeHits = new Map<string, number>();
+
+  /**
    * Line bounds, accepting the string forms models actually send. Refused rather than coerced
    * to a default: a range silently reinterpreted is how the caller comes to believe it saw a
    * window it never saw.
@@ -131,24 +138,47 @@ export class ReadFileTool implements Tool {
       // path, an explicit encoding). Its contract is "identical call". This keys on WHAT WAS
       // RETURNED instead — the resolved path and a hash of the content.
       //
-      // It never permanently withholds. A file whose content CHANGED is always returned in full,
-      // and the notice names the escape hatch, because context compaction can genuinely evict
-      // earlier output and an agent that no longer has the file must be able to get it back.
-      if (process.env.EPAM_READ_DEDUPE === '1' && input.force !== true) {
+      // It never permanently withholds. A file whose content CHANGED is always returned in full.
+      //
+      // RECOVERY MUST NOT DEPEND ON THE MODEL DOING SOMETHING SPECIAL.
+      //
+      // The notice used to end with "call read_file again with force: true". Live 2026-08-09 the
+      // writer emitted `<read_file force="true" />` as literal TEXT, never as a tool call, got the
+      // notice again, and looped until the attempt died having written nothing. Coercing the
+      // string (below) fixes the nearly-compliant caller, but the deeper fault is routing the
+      // escape hatch through a parameter the model has to emit correctly. Instruction-based
+      // control is what failed everywhere else in this prompt: measured 2026-08-10, the writer
+      // read files the prompt told it three times not to read (34x on one injected file) and
+      // shelled out 78 times against an ACTIVE bash-exploration redirect.
+      //
+      // So the second request IS the escape hatch. Asking again after being told "you already have
+      // this" is itself evidence that it does not — compaction can genuinely evict earlier output.
+      // Serving the body then requires no cooperation, no parameter and no syntax. `force` stays
+      // honoured, including as the string models actually emit, for callers that do use it.
+      const _forced = input.force === true || String(input.force).toLowerCase() === 'true';
+      if (process.env.EPAM_READ_DEDUPE === '1' && !_forced) {
         const digest = createHash('sha256').update(fullText).digest('hex').slice(0, 16);
         const seen = this.alreadySent.get(resolved);
         if (seen === digest) {
-          return {
-            toolUseId: '',
-            content:
-              `You already read ${resolved} earlier in this attempt and it has NOT changed since ` +
-              `(${text.length} bytes). Its contents are unchanged from the copy you already have — ` +
-              `re-use that rather than re-reading. If you genuinely no longer have it, call ` +
-              `read_file again with force: true.`,
-            isError: false,
-          };
+          const hits = (this.dedupeHits.get(resolved) ?? 0) + 1;
+          if (hits === 1) {
+            this.dedupeHits.set(resolved, hits);
+            return {
+              toolUseId: '',
+              content:
+                `You already read ${resolved} earlier in this attempt and it has NOT changed since ` +
+                `(${text.length} bytes). Re-use the copy you already have. If you no longer have it, ` +
+                `request this file again and the full contents will be returned.`,
+              isError: false,
+            };
+          }
+          // Asked again despite the notice — it genuinely does not have the file. Serve it, and
+          // reset so the NEXT duplicate is suppressed again rather than the path becoming exempt.
+          this.dedupeHits.set(resolved, 0);
+          return { toolUseId: '', content: text, isError: false };
         }
         this.alreadySent.set(resolved, digest);
+        this.dedupeHits.set(resolved, 0);
       }
 
       return { toolUseId: '', content: text, isError: false };

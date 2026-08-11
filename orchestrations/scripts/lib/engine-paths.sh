@@ -35,3 +35,18 @@ engine_paths_filter() {
         printf '%s\n' "$_line"
     done
 }
+
+# engine_paths_pathspec — the same owned set, as git pathspec exclusions.
+#
+# engine_paths_filter above filters a LIST of paths. Some callers need the exclusion applied by
+# git itself, because their output is a patch rather than a list and there are no paths to filter.
+# Both read _ENGINE_OWNED_DIRS, so the set is defined once: restating it in pathspec form at a
+# call site is how this rule has already drifted three ways.
+#
+# Usage:  mapfile -t _ex < <(engine_paths_pathspec); git diff <ref> -- . "${_ex[@]}"
+engine_paths_pathspec() {
+    local _d
+    for _d in "${_ENGINE_OWNED_DIRS[@]}"; do
+        printf ':!%s/*\n:!*/%s/*\n' "$_d" "$_d"
+    done
+}

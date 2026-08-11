@@ -32,16 +32,19 @@ describe('the resume decision precedes the work', () => {
     ).toBeLessThan(dispatch);
   });
 
+  // Window widened 2026-08-10: resume_spec_output_present() (the guard that refuses a resume
+  // whose spec output has been overwritten) is defined between this comment and the resume
+  // block, so a 2200-char slice no longer reached restore_run_checkpoint.
   it('it restores the checkpoint and derives what to skip', () => {
     const start = ORCH.indexOf('# RESUME IS DECIDED BEFORE ANY WORK');
-    const block = ORCH.slice(start, start + 2200);
+    const block = ORCH.slice(start, start + 6000);
     expect(block).toMatch(/restore_run_checkpoint/);
     expect(block).toMatch(/resume_skip_env/);
   });
 
   it('the resumed run adopts the run id its roster was stored against', () => {
     const start = ORCH.indexOf('# RESUME IS DECIDED BEFORE ANY WORK');
-    const block = ORCH.slice(start, start + 2200);
+    const block = ORCH.slice(start, start + 6000);
     expect(
       block,
       'the roster store is keyed by run id — without adopting it, the reviewed roster is not re-applied',
@@ -50,14 +53,14 @@ describe('the resume decision precedes the work', () => {
 
   it('a resume that cannot be honoured HALTS rather than running on stale state', () => {
     const start = ORCH.indexOf('# RESUME IS DECIDED BEFORE ANY WORK');
-    const block = ORCH.slice(start, start + 2200);
+    const block = ORCH.slice(start, start + 6000);
     expect(block).toMatch(/refusing to continue against un-restored state/);
     expect(block).toMatch(/refusing to guess/);
   });
 
   it('lanes do not resume — the parent decides and they inherit', () => {
     const start = ORCH.indexOf('# RESUME IS DECIDED BEFORE ANY WORK');
-    const block = ORCH.slice(start, start + 2200);
+    const block = ORCH.slice(start, start + 6000);
     expect(
       block,
       'each lane would restore the checkpoint over its own state',

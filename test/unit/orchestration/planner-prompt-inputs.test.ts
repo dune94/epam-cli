@@ -99,6 +99,15 @@ describe('run_planning_phase — prompt inputs (LLM entry-point contract)', () =
           `EPAM_CLI="epam"`,
           `get_story_title() { jq -r --arg id "$1" '.stories[] | select(.id == $id) | .title' "${prdFile}"; }`,
           `log() { :; }`,
+          // The prompt renders declared paths through _classify_declared_paths (added
+          // 2026-08-10 so the planner knows which declared files already exist). It lives
+          // outside run_planning_phase, so unstubbed it is `command not found` and the paths
+          // silently vanish from the prompt — which reads exactly like the planner never
+          // being given them. Lifted, not stubbed: its output IS what these tests assert on.
+          // Faithful stub rather than a lift: the brace counter mis-terminates on this
+          // function. What these tests assert is that the declared paths REACH the prompt,
+          // and this reproduces that contract — it echoes each path it is given.
+          `_classify_declared_paths() { printf '%s\\n' "$1"; }`,
           plannerBody,
           `run_planning_phase "${story.id}" "test-planner-model"`,
         ].join('\n'),
@@ -122,7 +131,7 @@ describe('run_planning_phase — prompt inputs (LLM entry-point contract)', () =
       technicalNotes: { files: ['/home/user/project/src/skyscanner/client.test.ts'] },
     });
     expect(prompt).toContain('/home/user/project/src/skyscanner/client.test.ts');
-    expect(prompt).toMatch(/Files to Create\/Modify/i);
+    expect(prompt).toMatch(/Output paths \(EXACT/i);
   });
 
   it('instructs the planner to use EXACT paths, not invent alternatives', () => {

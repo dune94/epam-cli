@@ -72,7 +72,14 @@ function workspace() {
   const prd = join(root, 'prd.json');
   writeFileSync(
     prd,
-    JSON.stringify({ project: { name: 'demo' }, stories: [{ id: 'ST-1', title: 'T' }] }),
+    // fixSiteAnalysis present because a resume that SKIPS the spec pass is now refused when
+    // the PRD carries none of that pass's output — a fresh ingest overwriting the spec is
+    // what sent a writer in blind for 23 invocations on 2026-08-10. A fixture modelling a
+    // valid resume must therefore look like the spec pass really ran.
+    JSON.stringify({
+      project: { name: 'demo' },
+      stories: [{ id: 'ST-1', title: 'T', fixSiteAnalysis: [{ file: 'src/a.ts', fixVerified: true }] }],
+    }),
   );
   return { root, projectDir, logDir, prd };
 }
@@ -88,6 +95,10 @@ function runBlock(body: string, w: ReturnType<typeof workspace>, extra: Record<s
       'info(){ echo "[info] $*"; }; warning(){ echo "[warn] $*"; }',
       'error(){ echo "[error] $*" >&2; }; success(){ echo "[ok] $*"; }',
       'step_emit(){ :; }',
+      // Defined outside the extracted region. Unstubbed it is `command not found`, and the
+      // guard's `! resume_spec_output_present` then reads as TRUE and refuses every resume —
+      // a harness gap that looks exactly like the guard rejecting valid state.
+      'resume_spec_output_present(){ return 0; }',
       // extracted blocks guard themselves with is_parent/is_lane
       roleHelpersSrc(),
       `source ${JSON.stringify(FLAGS)}`,

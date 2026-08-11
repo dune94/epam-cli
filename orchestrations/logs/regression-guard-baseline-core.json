@@ -1,1 +1,1 @@
-{"stable": true, "failures": ["src/components/pages/ShoppingCartPage/__tests__/ProductContainer.spec.tsx"]}
+{"stable": true, "failures": ["src/components/Schedules/__tests__/schedules.spec.tsx"]}

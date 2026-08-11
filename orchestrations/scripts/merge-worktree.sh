@@ -22,6 +22,26 @@
 
 set -euo pipefail
 
+# _run_project_verification <project_root>
+# Runs the project's declared check (.epam/verification.json) via the verification plugin.
+# The engine names no tool, extension, directory or runtime path. Undeclared -> non-zero with a
+# reason, never a silent pass.
+_run_project_verification() {
+    local _root="${1:-$PROJECT_ROOT}"
+    local _auto="${AUTOMATION_DIR:-$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")}"
+    local _plugin="${_auto}/plugins/verification-tools.js"
+    local _node="${NODE_CMD:-${NODE_BIN:-node}}"
+    if [ ! -f "$_plugin" ]; then echo "verification plugin missing at $_plugin"; return 2; fi
+    "$_node" -e '
+      const p = require(process.argv[1]);
+      const r = p.runVerification(process.argv[2]);
+      if (r.status === "unknown") { console.log("verification not declared: " + r.reason); process.exit(2); }
+      if (r.output) console.log(r.output);
+      process.exit(r.status === "pass" ? 0 : (r.exitCode || 1));
+    ' "$_plugin" "$_root"
+}
+
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -207,7 +227,7 @@ else
     # Check if Node.js project with vitest exists
     if [ -f "$PROJECT_ROOT/package.json" ]; then
         log "  Checking TypeScript compilation..."
-        if (cd "$PROJECT_ROOT" && ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsc --noEmit > /dev/null 2>&1); then
+        if (cd "$PROJECT_ROOT" && _run_project_verification "$PROJECT_ROOT" > /dev/null 2>&1); then
             success "  TypeScript compilation passed"
             tests_passed=true
         else

@@ -142,31 +142,7 @@ export function createRunCommand(): Command {
         // confirmed spend is exactly the bug this field exists to prevent
         // (see feedback_real_cost_tracking_critical memory: real cost
         // capture is the required primary path).
-        const isEstimate = result.usage.costUsd == null;
-        const cost = isEstimate
-          ? calculateCost(config.model, result.usage.inputTokens, result.usage.outputTokens)
-          : result.usage.costUsd!;
-        const output = {
-          result: result.finalResponse,
-          model: config.model,
-          provider: config.provider,
-          usage: {
-            inputTokens: result.usage.inputTokens,
-            outputTokens: result.usage.outputTokens,
-            totalTokens: result.usage.inputTokens + result.usage.outputTokens,
-          },
-          cost_usd: Math.round(cost * 10000) / 10000,
-          cost_is_estimate: isEstimate,
-          toolCallCount: result.toolCallCount,
-          iterations: result.iterations,
-          // Model-latency / tool-execution split per iteration. Small (one entry
-          // per round-trip) and additive to the existing shape — jq-based
-          // consumers that don't ask for it are unaffected. This is what makes a
-          // slow reasoning call distinguishable from a slow tool call (e.g. a
-          // large CodeGraph query) from OUTSIDE the process, which nothing
-          // before this could do (see AgentRunner's onIterationTiming comment).
-          timings: result.timings,
-        };
+        const output = buildRunResultJson(result, config);
         process.stdout.write(JSON.stringify(output, null, 2) + '\n');
       } else {
         if (process.stdout.isTTY) process.stdout.write('\n');
@@ -174,6 +150,65 @@ export function createRunCommand(): Command {
 
       await flushLangfuse();
     });
+}
+
+/**
+ * The machine-readable result the orchestration pipeline parses.
+ *
+ * Extracted from the command body so it can be asserted on directly. It was inline, which meant
+ * the only way to check what the pipeline receives was to run the pipeline — and that is exactly
+ * how `cache_read_input_tokens` stayed broken: claude.sh:9677 reads that key, nothing ever wrote
+ * it, and jq's `// 0` turned the missing field into a confident zero on every record.
+ *
+ * The key is `cached_input_tokens`, NOT Anthropic's `cache_read_input_tokens`, and the
+ * difference is load-bearing. Anthropic reports `input_tokens` EXCLUDING cached tokens, so
+ * claude.sh:9678 adds them back. OpenAI-shaped providers — both of ours — report
+ * `prompt_tokens` INCLUDING them. Emitting into the Anthropic key would have made that addition
+ * double-count every cached token, inflating both the recorded spend and the budget guard that
+ * reads it. Two different semantics get two different names.
+ *
+ * The key is OMITTED, not zeroed, when the provider reported no cache detail — a provider that
+ * says nothing must stay distinguishable from one that says "none".
+ */
+export function buildRunResultJson(
+  result: {
+    finalResponse: string;
+    usage: { inputTokens: number; outputTokens: number; costUsd?: number; cachedInputTokens?: number };
+    toolCallCount: number;
+    iterations: number;
+    timings?: unknown;
+  },
+  config: { model: string; provider: string },
+): Record<string, unknown> {
+  // Prefer the provider's REAL billed cost (populated when every turn's provider call reported
+  // it — see AgentRunner.buildResult) over the local pricing-table estimate. The estimate is
+  // fallback-only, and cost_is_estimate says which one this is — silently presenting an estimate
+  // as confirmed spend is the bug that field exists to prevent (feedback_real_cost_tracking_critical).
+  const isEstimate = result.usage.costUsd == null;
+  const cost = isEstimate
+    ? calculateCost(config.model, result.usage.inputTokens, result.usage.outputTokens)
+    : result.usage.costUsd!;
+  return {
+    result: result.finalResponse,
+    model: config.model,
+    provider: config.provider,
+    usage: {
+      inputTokens: result.usage.inputTokens,
+      outputTokens: result.usage.outputTokens,
+      totalTokens: result.usage.inputTokens + result.usage.outputTokens,
+      ...(typeof result.usage.cachedInputTokens === 'number'
+        ? { cached_input_tokens: result.usage.cachedInputTokens }
+        : {}),
+    },
+    cost_usd: Math.round(cost * 10000) / 10000,
+    cost_is_estimate: isEstimate,
+    toolCallCount: result.toolCallCount,
+    iterations: result.iterations,
+    // Model-latency / tool-execution split per iteration. Small (one entry per round-trip) and
+    // additive — jq consumers that don't ask for it are unaffected. This is what makes a slow
+    // reasoning call distinguishable from a slow tool call from OUTSIDE the process.
+    timings: result.timings,
+  };
 }
 
 /**

@@ -1,1 +1,3 @@
-src/services/contentstack.ts
+.eslintignore
+package.json
+src/interface/contentstack.ts

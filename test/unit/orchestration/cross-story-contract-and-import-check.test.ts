@@ -110,7 +110,7 @@ describe('run_relative_import_check — REAL execution against the exact live de
       const outLog = join(dir, 'out.log');
       writeFileSync(
         scriptPath,
-        `VERIFICATION_FAILURE=""\n${fnBody}\nrun_relative_import_check "${dir}" "${outLog}"\necho "RC=$?"\necho "VF=$VERIFICATION_FAILURE"\n`
+        `VERIFICATION_FAILURE=""\n# Logging helpers the extracted function calls. Unstubbed, bash aborts on the first call\n# and the assertion fails during SETUP. They must ECHO: the auto-fix confirmation this\n# file asserts on is emitted through log(), and a silent stub hides the output under test.\nwarning(){ echo "$1"; }\nlog(){ echo "$1"; }\nerror(){ echo "$1"; }\nsuccess(){ echo "$1"; }\ninfo(){ echo "$1"; }\n${fnBody}\nrun_relative_import_check "${dir}" "${outLog}"\necho "RC=$?"\necho "VF=$VERIFICATION_FAILURE"\n`
       );
       const output = execFileSync('bash', [scriptPath], { encoding: 'utf8' });
       const rc = parseInt(output.match(/RC=(\d+)/)?.[1] ?? '-1', 10);
@@ -281,7 +281,21 @@ describe('run_relative_import_check — auto-fix (REAL execution)', () => {
           `VERIFICATION_FAILURE=""`,
           `PRD_FILE="${prdFile}"`,
           `log() { echo "$1"; }`,
+          // The extracted check also calls warning/error/success; unstubbed they abort it.
+          // They must ECHO, not swallow: the auto-fix confirmation this file asserts on is
+          // emitted through one of them, and a silent stub hides the very output under test.
+          `warning() { echo "$1"; }`, `error() { echo "$1"; }`,
+          `success() { echo "$1"; }`, `info() { echo "$1"; }`,
           opts.autoFix ? `EPAM_AUTO_FIX_RELATIVE_IMPORTS="true"` : '',
+          // Helpers claude.sh gained after this harness was written — unstubbed the render
+          // aborts and assertions fail during SETUP rather than on what they assert.
+          `_current_lane() { echo ""; }`,
+          `build_project_tools_block() { echo '[[TOOLS]]'; }`,
+          `existing_file_max_lines() { echo 400; }`,
+          `existing_file_injection_enabled() { return 0; }`,
+          `_resolve_deliverable_path() { echo "$1"; }`,
+          `_render_technical_notes() { echo '[[TECHNICAL_NOTES]]'; }`,
+          `log() { :; }`, `warning() { :; }`, `error() { :; }`, `success() { :; }`, `info() { :; }`,
           fnBody,
           `run_relative_import_check "${dir}" "${outLog}" "SKY-999"`,
           `echo "RC=$?"`,
@@ -435,6 +449,15 @@ describe('build_implementation_prompt() — spec-reality cross-check REAL execut
           `PROJECT_ROOT="${dir}"`,
           `GIT_WORK_ROOT="${dir}"`,
           `get_story_details() { echo '${JSON.stringify(storyJson).replace(/'/g, "'\\''")}'; }`,
+          // Helpers build_implementation_prompt gained after this harness was written.
+          // Unstubbed, the render aborts and every assertion fails during SETUP.
+          `_current_lane() { echo ""; }`,
+          `build_project_tools_block() { echo '[[TOOLS]]'; }`,
+          `existing_file_max_lines() { echo 400; }`,
+          `existing_file_injection_enabled() { return 0; }`,
+          `_resolve_deliverable_path() { echo "$1"; }`,
+          `_render_technical_notes() { echo '[[TECHNICAL_NOTES]]'; }`,
+          `log() { :; }`, `warning() { :; }`, `error() { :; }`, `success() { :; }`, `info() { :; }`,
           fnBody,
           `build_implementation_prompt "${storyJson.id}"`,
         ].join('\n'),
@@ -561,6 +584,15 @@ describe('build_implementation_prompt() — Exact String Invariant guardrail REA
           `PROJECT_ROOT="${dir}"`,
           `GIT_WORK_ROOT="${dir}"`,
           `get_story_details() { echo '${JSON.stringify(storyJson).replace(/'/g, "'\\''")}'; }`,
+          // Helpers claude.sh gained after this harness was written — unstubbed the render
+          // aborts and assertions fail during SETUP rather than on what they assert.
+          `_current_lane() { echo ""; }`,
+          `build_project_tools_block() { echo '[[TOOLS]]'; }`,
+          `existing_file_max_lines() { echo 400; }`,
+          `existing_file_injection_enabled() { return 0; }`,
+          `_resolve_deliverable_path() { echo "$1"; }`,
+          `_render_technical_notes() { echo '[[TECHNICAL_NOTES]]'; }`,
+          `log() { :; }`, `warning() { :; }`, `error() { :; }`, `success() { :; }`, `info() { :; }`,
           fnBody,
           `build_implementation_prompt "${storyJson.id}"`,
         ].join('\n'),

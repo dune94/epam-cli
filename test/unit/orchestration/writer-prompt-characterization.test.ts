@@ -99,6 +99,13 @@ function renderPrompt(story: Story, env: Record<string, string> = {}): string {
       '#!/usr/bin/env bash',
       'set -uo pipefail',
       'log(){ :; }; warning(){ :; }; success(){ :; }; error(){ :; }',
+      // build_project_tools_block was added to build_implementation_prompt without being
+      // stubbed here, so every render aborted with `command not found` and all ten
+      // assertions failed on harness setup rather than on anything they assert.
+      'build_project_tools_block(){ echo "[[PROJECT_TOOLS_BLOCK]]"; }',
+      'existing_file_max_lines(){ echo 400; }',
+      'existing_file_injection_enabled(){ return 0; }',
+      'prompt_trim_keep_sections(){ echo 3; }',
       'run_dependency_check(){ :; }',
       '_discover_vendor_packages(){ :; }',
       '_generate_vendor_contract(){ :; }',

@@ -21,6 +21,26 @@
 # Exit: always 0 (best-effort). The repro-gate is the enforcer. Escape: EPAM_SKIP_REPRO_TEST_WRITER=1.
 set -uo pipefail
 
+# _run_project_verification <project_root>
+# Runs the project's declared check (.epam/verification.json) via the verification plugin.
+# The engine names no tool, extension, directory or runtime path. Undeclared -> non-zero with a
+# reason, never a silent pass.
+_run_project_verification() {
+    local _root="${1:-$PROJECT_ROOT}"
+    local _auto="${AUTOMATION_DIR:-$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")}"
+    local _plugin="${_auto}/plugins/verification-tools.js"
+    local _node="${NODE_CMD:-${NODE_BIN:-node}}"
+    if [ ! -f "$_plugin" ]; then echo "verification plugin missing at $_plugin"; return 2; fi
+    "$_node" -e '
+      const p = require(process.argv[1]);
+      const r = p.runVerification(process.argv[2]);
+      if (r.status === "unknown") { console.log("verification not declared: " + r.reason); process.exit(2); }
+      if (r.output) console.log(r.output);
+      process.exit(r.status === "pass" ? 0 : (r.exitCode || 1));
+    ' "$_plugin" "$_root"
+}
+
+
 STORY_ID="${1:-}"
 PROJECT_ROOT="${PROJECT_ROOT:-}"
 PRD_FILE="${PRD_FILE:-}"
@@ -184,7 +204,7 @@ You are a TEST ENGINEER. Your ONLY job in this turn is to ${_prompt_role}. Do NO
 
 ## VERIFY IT COMPILES BEFORE YOU FINISH
 Your test must TYPECHECK, not merely run — a spec that passes the test runner but fails tsc blocks the whole pipeline five steps later. Mock objects are the usual cause: they must satisfy the FULL type, with every required property, and no property the type does not declare. After writing the file, run:
-  cd "${PROJECT_ROOT}" && ./node_modules/.bin/tsc --noEmit 2>&1 | grep "${_target_rel}"
+  _run_project_verification "${PROJECT_ROOT}" 2>&1 | grep "${_target_rel}"
 If that prints anything, FIX YOUR FILE and re-check before finishing.
 
 ## ${_diff_heading}
@@ -270,12 +290,10 @@ _test_validated=0
 # failing on any tsc error would reject good tests in every real client repo.
 _typecheck_written_test() {
     local rel="$1"
-    local _tsc="$PROJECT_ROOT/node_modules/.bin/tsc"
-    [ -x "$_tsc" ] || return 0
-    [ -f "$PROJECT_ROOT/tsconfig.json" ] || return 0
-
+    # The PROJECT's declared check. The old form required a specific binary AND a specific
+    # manifest filename, so any other stack returned 0 — a silent pass, not a check.
     local _out
-    _out=$(cd "$PROJECT_ROOT" && "$_tsc" --noEmit 2>&1)
+    _out=$(_run_project_verification "$PROJECT_ROOT" 2>&1) || true
     if printf '%s\n' "$_out" | grep -qF "${rel}("; then
         _typecheck_feedback="
 

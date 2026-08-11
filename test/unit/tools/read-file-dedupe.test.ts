@@ -120,13 +120,28 @@ describe('it never permanently withholds', () => {
     expect(r.content).not.toMatch(DEDUPED);
   });
 
-  it('the notice tells the agent how to force a re-read', async () => {
+  it('the notice asks NOTHING of the agent, and a repeat request restores the body', async () => {
+    // THIS TEST ASSERTED THE OPPOSITE, and that assertion is why the failure was reproducible
+    // but not prevented. It required the notice to name `force`. Live 2026-08-09 the writer read
+    // that instruction and emitted `<read_file force="true" />` as literal TEXT rather than as a
+    // tool call, got the notice again, and looped until the attempt died having written nothing.
+    //
+    // An escape hatch routed through a parameter only works for a model that already behaves;
+    // the models that need the hatch are exactly the ones that cannot use it. So the SECOND
+    // request is the escape hatch: asking again after being told "you already have this" is
+    // itself evidence that it does not, and the body is served with no special syntax.
+    // `force` remains honoured for callers that do use it — see the test below.
     const { file } = fixture();
     const tool = new ReadFileTool();
     await tool.execute({ path: file });
-    const r = await tool.execute({ path: file });
-    expect(r.content, 'a dead end — compaction can evict content and the agent must recover')
-      .toMatch(/force/i);
+
+    const notice = await tool.execute({ path: file });
+    expect(notice.content, 'the notice instructs the agent to emit a parameter').not.toMatch(/force/i);
+
+    const recovered = await tool.execute({ path: file });
+    expect(recovered.content, 'a plain repeat request did not restore the body — the agent has ' +
+      'no way back that does not depend on emitting a parameter correctly').not.toMatch(DEDUPED);
+    expect(recovered.content, 'the recovery returned neither a notice nor the file').toContain('line 1');
   });
 
   it('and forcing really does return the content', async () => {

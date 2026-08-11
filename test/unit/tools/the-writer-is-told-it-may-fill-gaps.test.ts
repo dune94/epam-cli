@@ -51,7 +51,14 @@ function project() {
   for (const f of ['a/mine.x', 'a/theirs.x', 'a/nobodys.x']) writeFileSync(join(dir, f), 'x\n');
   return dir;
 }
-const write = (p: string) => new WriteFileTool().execute({ path: p, content: 'c\n' });
+// Wording now lives in the project catalog, not the engine (src/tools/messages.ts). Point at the
+// shipped catalog, exactly as the runtime invocation does, so this asserts the words an agent
+// really sees rather than words compiled into the tool.
+const CATALOG = join(__dirname, '../../../orchestrations/config/agent-messages.json');
+const write = (p: string) => {
+  process.env.EPAM_AGENT_MESSAGE_CATALOG = CATALOG;
+  return new WriteFileTool().execute({ path: p, content: 'c\n' });
+};
 
 describe('a refusal explains WHICH case it is', () => {
   it('taking another story\'s file says so, and names the remedy', async () => {

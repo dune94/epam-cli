@@ -9622,6 +9622,7 @@ ${_trimmed_amendment}"
                         EPAM_OTHER_STORY_PATHS="${_other_story_paths}" \
                         EPAM_STORY_OWNERSHIP_KNOWN="${_story_ownership_known}" \
                         EPAM_SCOPE_WIDENING_LOG="${LOG_DIR}/scope-widenings.jsonl" \
+                        EPAM_AGENT_MESSAGE_CATALOG="${EPAM_AGENT_MESSAGE_CATALOG:-${AUTOMATION_DIR}/config/agent-messages.json}" \
                         EPAM_MAX_ITERATIONS="${_effective_max_iterations}" \
                         EPAM_AUTO_COMPRESS_AT="${_effective_compress_at}" \
                         EPAM_AUTO_COMPRESS_EVERY_N_ITERATIONS="${_effective_compress_every_n}" \

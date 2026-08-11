@@ -31,6 +31,11 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ReadFileTool } from '../../../src/tools/builtin/ReadFile';
 
+// Wording lives in the project catalog now (src/tools/messages.ts); point at the shipped
+// one so this asserts the words an agent really sees.
+process.env.EPAM_AGENT_MESSAGE_CATALOG =
+  join(__dirname, '../../../orchestrations/config/agent-messages.json');
+
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
 

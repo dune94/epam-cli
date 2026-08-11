@@ -1,0 +1,13 @@
+{
+  "$comment": "Agent-facing wording, owned by the project. The engine emits {code, ...data} and never composes a sentence (src/tools/messages.ts); this file supplies the words. Edit freely — no rebuild, no code change. A code with no entry here renders as its structured form, which is bare on purpose: the fix is to add wording here, never to add a default sentence to the engine. Placeholders are {name} and are filled from the data the tool reported; an unmatched placeholder is left visible rather than blanked, because a message that silently loses a value reads as complete while being wrong.",
+
+  "read_deduped": "You already read {path} earlier in this attempt and it has NOT changed since ({bytes} bytes). Re-use the copy you already have. If you no longer have it, request this file again and the full contents will be returned.",
+
+  "write_refused_owned_by_other_story": "Write blocked: {path} is declared by ANOTHER story, and taking it would overwrite that story's work. Do not edit it: escalate to the owning story instead, or achieve the change within your own files. Files this story declared: {declared}. Files outside that list are writable when no other story owns them, so this refusal is specific — rewriting a different file instead will not resolve it.",
+
+  "write_refused_ownership_unknown": "Write blocked: {path} — this story's file ownership could not be determined, so the write is refused to be safe. This is missing pipeline data, not a judgement about this file. Report it rather than working around it. Files this story declared: {declared}.",
+
+  "same_target_repeat": "LOOP PROTECTION: \"{tool}\" has now targeted {target} {count} times in this attempt. Repeatedly rewriting one target is not making progress — the call was NOT executed. Something is blocking the change you are trying to make: read the last error you received, and if a different file or permission is required, say so and stop rather than editing this one again.",
+
+  "identical_call_repeat": "LOOP PROTECTION: \"{tool}\" was just called with identical parameters {count} times in a row. This is not making progress — the call was NOT executed. Do not repeat this exact call again. Re-read the prior output or error, form a different hypothesis, or inspect a different file. If genuinely stuck, say so and stop."
+}

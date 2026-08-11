@@ -1,0 +1,798 @@
+diff --git a/.env.local.sample b/.env.local.sample
+index e35a391b..6622c577 100644
+--- a/.env.local.sample
++++ b/.env.local.sample
+@@ -27,6 +27,13 @@ CONTENTSTACK_BRANCH=""
+ CONTENTSTACK_DELIVERY_TOKEN=""
+ CONTENTSTACK_ENVIRONMENT=""
+ CONTENTSTACK_FETCH_TIMEOUT=""
++# Live Preview: set CONTENTSTACK_LIVE_PREVIEW to "true" to enable live preview mode.
++# Provide the management token and host from the Contentstack dashboard
++# (Settings > Stack > Live Preview). Custom preview URL patterns are configured
++# in the dashboard, not here.
++CONTENTSTACK_LIVE_PREVIEW=""
++CONTENTSTACK_LIVE_PREVIEW_HOST=""
++CONTENTSTACK_LIVE_PREVIEW_TOKEN=""
+ 
+ # Ecommerce
+ ECOMMERCE_APIM_BASE_URL=""
+diff --git a/package-lock.json b/package-lock.json
+index 6c649c54..3ff384ca 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -10,6 +10,7 @@
+       "dependencies": {
+         "@algolia/autocomplete-js": "^1.7.2",
+         "@azure/search-documents": "^11.3.1",
++        "@contentstack/live-preview-utils": "^4.4.5",
+         "@contentstack/utils": "^1.1.2",
+         "@googlemaps/js-api-loader": "^1.15.1",
+         "@hookform/error-message": "^2.0.1",
+@@ -28,6 +29,7 @@
+         "busboy": "^1.6.0",
+         "classnames": "^2.3.2",
+         "cloudinary": "^2.8.0",
++        "components": "^0.1.0",
+         "contentstack": "^3.15.3",
+         "core-js": "^3.30.1",
+         "country-state-city": "^3.2.0",
+@@ -1510,6 +1512,43 @@
+         "node": ">=8"
+       }
+     },
++    "node_modules/@contentstack/live-preview-utils": {
++      "version": "4.4.5",
++      "resolved": "https://registry.npmjs.org/@contentstack/live-preview-utils/-/live-preview-utils-4.4.5.tgz",
++      "integrity": "sha512-GFXIdvvj4mtnJKaqontuVerdVNeVTJT5Pu5eAMF+xPkmFsTSqfOmJpj4bawqf/3jObh8pyut/8Yet/ZBtuYtvQ==",
++      "license": "MIT",
++      "dependencies": {
++        "@floating-ui/dom": "^1.7.2",
++        "@preact/compat": "^18.3.1",
++        "@preact/signals": "^2.0.0",
++        "classnames": "^2.5.1",
++        "dayjs": "^1.11.13",
++        "deepsignal": "^1.5.0",
++        "dompurify": "^3.4.12",
++        "get-xpath": "^3.2.0",
++        "goober": "^2.1.16",
++        "lodash-es": "^4.18.1",
++        "mustache": "^4.2.0",
++        "preact": "^10.28.2",
++        "uuid": "^14.0.0"
++      },
++      "optionalDependencies": {
++        "@rollup/rollup-linux-x64-gnu": "4.9.5"
++      }
++    },
++    "node_modules/@contentstack/live-preview-utils/node_modules/uuid": {
++      "version": "14.0.1",
++      "resolved": "https://registry.npmjs.org/uuid/-/uuid-14.0.1.tgz",
++      "integrity": "sha512-6ZxzVpzDXDa3bJWaHilVayA+BH/1zmxCJoVgvmqJnid/gPoKHxUrS/aC/T6LGQtNHT+XHG9fXPJB4d+IrU30Ew==",
++      "funding": [
++        "https://github.com/sponsors/broofa",
++        "https://github.com/sponsors/ctavan"
++      ],
++      "license": "MIT",
++      "bin": {
++        "uuid": "dist-node/bin/uuid"
++      }
++    },
+     "node_modules/@contentstack/management": {
+       "version": "1.11.0",
+       "resolved": "https://registry.npmjs.org/@contentstack/management/-/management-1.11.0.tgz",
+@@ -2272,18 +2311,30 @@
+       }
+     },
+     "node_modules/@floating-ui/core": {
+-      "version": "1.2.0",
+-      "resolved": "https://registry.npmjs.org/@floating-ui/core/-/core-1.2.0.tgz",
+-      "integrity": "sha512-GHUXPEhMEmTpnpIfesFA2KAoMJPb1SPQw964tToQwt+BbGXdhqTCWT1rOb0VURGylsxsYxiGMnseJ3IlclVpVA=="
++      "version": "1.8.0",
++      "resolved": "https://registry.npmjs.org/@floating-ui/core/-/core-1.8.0.tgz",
++      "integrity": "sha512-0CIZ5itps/8x7BG8dEIhs53BvCUH2PCoogtakwRTut+Arm58sJooJ0AuZhLw2HJYIR5cMLNPBSS728sPho2khQ==",
++      "license": "MIT",
++      "dependencies": {
++        "@floating-ui/utils": "^0.2.12"
++      }
+     },
+     "node_modules/@floating-ui/dom": {
+-      "version": "1.2.0",
+-      "resolved": "https://registry.npmjs.org/@floating-ui/dom/-/dom-1.2.0.tgz",
+-      "integrity": "sha512-QXzg57o1cjLz3cGETzKXjI3kx1xyS49DW9l7kV2jw2c8Yftd434t2hllX0sVGn2Q8MtcW/4pNm8bfE1/4n6mng==",
++      "version": "1.8.0",
++      "resolved": "https://registry.npmjs.org/@floating-ui/dom/-/dom-1.8.0.tgz",
++      "integrity": "sha512-yXSrzeHZBTZadLOlfyhCkJHNeLJnHRnRInwdZ40L7ZiaAtrBwoYlsDrX3v5zB1Utk7CLfzcOVnVVWoXEky7Ceg==",
++      "license": "MIT",
+       "dependencies": {
+-        "@floating-ui/core": "^1.2.0"
++        "@floating-ui/core": "^1.8.0",
++        "@floating-ui/utils": "^0.2.12"
+       }
+     },
++    "node_modules/@floating-ui/utils": {
++      "version": "0.2.12",
++      "resolved": "https://registry.npmjs.org/@floating-ui/utils/-/utils-0.2.12.tgz",
++      "integrity": "sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==",
++      "license": "MIT"
++    },
+     "node_modules/@formatjs/ecma402-abstract": {
+       "version": "2.0.0",
+       "resolved": "https://registry.npmjs.org/@formatjs/ecma402-abstract/-/ecma402-abstract-2.0.0.tgz",
+@@ -3833,6 +3884,41 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/@preact/compat": {
++      "version": "18.3.2",
++      "resolved": "https://registry.npmjs.org/@preact/compat/-/compat-18.3.2.tgz",
++      "integrity": "sha512-5vSl55K5yLMvocT7PBKxDOHGgYPjMrKQqqr6roSNjIXcJOtSgDDMjpiCAF3s7klRdmGrN75b/Przmjw8gmlg/w==",
++      "license": "MIT",
++      "peerDependencies": {
++        "preact": "*"
++      }
++    },
++    "node_modules/@preact/signals": {
++      "version": "2.11.0",
++      "resolved": "https://registry.npmjs.org/@preact/signals/-/signals-2.11.0.tgz",
++      "integrity": "sha512-mmrZ8I/Wef+tmSsQSjZySLRlnvuYAVfSZEy1+HrFvSwBtQf8/zSM+bV7odllUXIhKzUkBjsNk+TLZ20nt7p6Gg==",
++      "license": "MIT",
++      "dependencies": {
++        "@preact/signals-core": "^1.14.4"
++      },
++      "funding": {
++        "type": "opencollective",
++        "url": "https://opencollective.com/preact"
++      },
++      "peerDependencies": {
++        "preact": ">= 10.25.0 || >=11.0.0-0"
++      }
++    },
++    "node_modules/@preact/signals-core": {
++      "version": "1.14.4",
++      "resolved": "https://registry.npmjs.org/@preact/signals-core/-/signals-core-1.14.4.tgz",
++      "integrity": "sha512-HNB6HYeYKhQbJ1aKl+YRjrS4+QWHLKX6qKoUsfS/m0vqzsVaEBiZiaKbG/e+NKk2ch5ALQr/ihWaMHxiCuuWHA==",
++      "license": "MIT",
++      "funding": {
++        "type": "opencollective",
++        "url": "https://opencollective.com/preact"
++      }
++    },
+     "node_modules/@react-aria/breadcrumbs": {
+       "version": "3.5.13",
+       "resolved": "https://registry.npmjs.org/@react-aria/breadcrumbs/-/breadcrumbs-3.5.13.tgz",
+@@ -5320,6 +5406,22 @@
+         "react": "^16.8.0 || ^17.0.0-rc.1 || ^18.0.0"
+       }
+     },
++    "node_modules/@rollup/rollup-linux-x64-gnu": {
++      "version": "4.9.5",
++      "resolved": "https://registry.npmjs.org/@rollup/rollup-linux-x64-gnu/-/rollup-linux-x64-gnu-4.9.5.tgz",
++      "integrity": "sha512-Dq1bqBdLaZ1Gb/l2e5/+o3B18+8TI9ANlA1SkejZqDgdU/jK/ThYaMPMJpVMMXy2uRHvGKbkz9vheVGdq3cJfA==",
++      "cpu": [
++        "x64"
++      ],
++      "libc": [
++        "glibc"
++      ],
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ]
++    },
+     "node_modules/@rtsao/scc": {
+       "version": "1.1.0",
+       "resolved": "https://registry.npmjs.org/@rtsao/scc/-/scc-1.1.0.tgz",
+@@ -8125,9 +8227,10 @@
+       }
+     },
+     "node_modules/classnames": {
+-      "version": "2.3.2",
+-      "resolved": "https://registry.npmjs.org/classnames/-/classnames-2.3.2.tgz",
+-      "integrity": "sha512-CSbhY4cFEJRe6/GQzIk5qXZ4Jeg5pcsP7b5peFSDpffpe1cqjASH/n9UTjBwOp6XpMSTwQ8Za2K5V02ueA7Tmw=="
++      "version": "2.5.1",
++      "resolved": "https://registry.npmjs.org/classnames/-/classnames-2.5.1.tgz",
++      "integrity": "sha512-saHYOzhIQs6wy2sVxTM6bUDsQO4F50V9RQ22qBpEdCW+I+/Wmke2HOl6lS6dTpdxVhb88/I6+Hs+438c3lfUow==",
++      "license": "MIT"
+     },
+     "node_modules/clean-stack": {
+       "version": "2.2.0",
+@@ -8415,6 +8518,11 @@
+         "dot-prop": "^5.1.0"
+       }
+     },
++    "node_modules/components": {
++      "version": "0.1.0",
++      "resolved": "https://registry.npmjs.org/components/-/components-0.1.0.tgz",
++      "integrity": "sha512-4xKUO3dL9LBs8WiOKy2kvLfnwKZLps9xDT5cFS0GL4UiXrr/dNUYus7Uf1bRPG66cUpEmwFAWVOlE9cxQgG+QA=="
++    },
+     "node_modules/concat-map": {
+       "version": "0.0.1",
+       "resolved": "https://registry.npmjs.org/concat-map/-/concat-map-0.0.1.tgz",
+@@ -8948,6 +9056,12 @@
+         "node": "*"
+       }
+     },
++    "node_modules/dayjs": {
++      "version": "1.11.21",
++      "resolved": "https://registry.npmjs.org/dayjs/-/dayjs-1.11.21.tgz",
++      "integrity": "sha512-98IT+HOahAisibz/yjKbzuOBwYcjJ7BCLPzARyHiyEBmRz4fatF+KPJszEHXsGYjUG234aH/cOjW1wwTbKUZlA==",
++      "license": "MIT"
++    },
+     "node_modules/debounce": {
+       "version": "1.2.1",
+       "resolved": "https://registry.npmjs.org/debounce/-/debounce-1.2.1.tgz",
+@@ -9033,6 +9147,32 @@
+         "node": ">=0.10.0"
+       }
+     },
++    "node_modules/deepsignal": {
++      "version": "1.6.0",
++      "resolved": "https://registry.npmjs.org/deepsignal/-/deepsignal-1.6.0.tgz",
++      "integrity": "sha512-oplhhOSfBRKmx96B0PzbhRaX2W7iDpH6BEqvyGLIZPO2pdHQD+/P3u4Z8wi/sKXjCE7ht8C7ULTEzLSJbgwccA==",
++      "license": "MIT",
++      "peerDependencies": {
++        "@preact/signals": "^1.1.4 || ^2.0.0",
++        "@preact/signals-core": "^1.5.1",
++        "@preact/signals-react": "^1.3.8 || ^2.0.0 || ^3.0.0",
++        "preact": "^10.16.0"
++      },
++      "peerDependenciesMeta": {
++        "@preact/signals": {
++          "optional": true
++        },
++        "@preact/signals-core": {
++          "optional": true
++        },
++        "@preact/signals-react": {
++          "optional": true
++        },
++        "preact": {
++          "optional": true
++        }
++      }
++    },
+     "node_modules/define-data-property": {
+       "version": "1.1.4",
+       "resolved": "https://registry.npmjs.org/define-data-property/-/define-data-property-1.1.4.tgz",
+@@ -10970,6 +11110,12 @@
+         "url": "https://github.com/wojtekmaj/get-user-locale?sponsor=1"
+       }
+     },
++    "node_modules/get-xpath": {
++      "version": "3.3.0",
++      "resolved": "https://registry.npmjs.org/get-xpath/-/get-xpath-3.3.0.tgz",
++      "integrity": "sha512-AKbHVEHSlSDS9AJDmjfSxV010xSVRFzkS4UkGCb8CaGvorp83GCuKwcmzF/64CVp3M5wjgy9tc6y1uR2V+c5Xw==",
++      "license": "MIT"
++    },
+     "node_modules/git-raw-commits": {
+       "version": "2.0.11",
+       "resolved": "https://registry.npmjs.org/git-raw-commits/-/git-raw-commits-2.0.11.tgz",
+@@ -11163,6 +11309,15 @@
+       "integrity": "sha512-uHJgbwAMwNFf5mLst7IWLNg14x1CkeqglJb/K3doi4dw6q2IvAAmM/Y81kevy83wP+Sst+nutFTYOGg3d1lsxg==",
+       "dev": true
+     },
++    "node_modules/goober": {
++      "version": "2.1.19",
++      "resolved": "https://registry.npmjs.org/goober/-/goober-2.1.19.tgz",
++      "integrity": "sha512-U7veizMqxyKlM58+Z5j2ngJBH/r9siDmxpvNxSw0PylF6WQvrASJEZrxh1hidRBJc2jqoBVSyOban5u8m+6Rxg==",
++      "license": "MIT",
++      "peerDependencies": {
++        "csstype": "^3.0.10"
++      }
++    },
+     "node_modules/gopd": {
+       "version": "1.2.0",
+       "resolved": "https://registry.npmjs.org/gopd/-/gopd-1.2.0.tgz",
+@@ -15350,6 +15505,12 @@
+       "integrity": "sha512-dMInicTPVE8d1e5otfwmmjlxkZoUpiVLwyeTdUsi/Caj/gfzzblBcCE5sRHV/AsjuCmxWrte2TNGSYuCeCq+0Q==",
+       "license": "MIT"
+     },
++    "node_modules/lodash-es": {
++      "version": "4.18.1",
++      "resolved": "https://registry.npmjs.org/lodash-es/-/lodash-es-4.18.1.tgz",
++      "integrity": "sha512-J8xewKD/Gk22OZbhpOVSwcs60zhd95ESDwezOFuA3/099925PdHJ7OFHNTGtajL3AlZkykD32HykiMo+BIBI8A==",
++      "license": "MIT"
++    },
+     "node_modules/lodash.camelcase": {
+       "version": "4.3.0",
+       "resolved": "https://registry.npmjs.org/lodash.camelcase/-/lodash.camelcase-4.3.0.tgz",
+@@ -16057,6 +16218,15 @@
+       "integrity": "sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==",
+       "license": "MIT"
+     },
++    "node_modules/mustache": {
++      "version": "4.2.0",
++      "resolved": "https://registry.npmjs.org/mustache/-/mustache-4.2.0.tgz",
++      "integrity": "sha512-71ippSywq5Yb7/tVYyGbkBggbU8H3u5Rz56fH60jGFgr8uHwxs+aSKeqmluIVzM0m0kB7xQjKS6qPfd0b2ZoqQ==",
++      "license": "MIT",
++      "bin": {
++        "mustache": "bin/mustache"
++      }
++    },
+     "node_modules/mux.js": {
+       "version": "7.0.3",
+       "resolved": "https://registry.npmjs.org/mux.js/-/mux.js-7.0.3.tgz",
+@@ -18341,12 +18511,21 @@
+       "dev": true
+     },
+     "node_modules/preact": {
+-      "version": "10.12.0",
+-      "resolved": "https://registry.npmjs.org/preact/-/preact-10.12.0.tgz",
+-      "integrity": "sha512-+w8ix+huD8CNZemheC53IPjMUFk921i02o30u0K6h53spMX41y/QhVDnG/nU2k42/69tvqWmVsgNLIiwRAcmxg==",
++      "version": "10.29.8",
++      "resolved": "https://registry.npmjs.org/preact/-/preact-10.29.8.tgz",
++      "integrity": "sha512-ej2aVZ+vZ8WO7tvlQWRM9N63A0KzF9q4mWJfDUHgYaIofWY9hu74QdnQrjoPMmZi2/nZ5gN0bJCQF49xQqx09Q==",
++      "license": "MIT",
+       "funding": {
+         "type": "opencollective",
+         "url": "https://opencollective.com/preact"
++      },
++      "peerDependencies": {
++        "preact-render-to-string": ">=5"
++      },
++      "peerDependenciesMeta": {
++        "preact-render-to-string": {
++          "optional": true
++        }
+       }
+     },
+     "node_modules/preact-render-to-string": {
+diff --git a/package.json b/package.json
+index 7203ce3f..34c7ab2d 100644
+--- a/package.json
++++ b/package.json
+@@ -36,6 +36,7 @@
+   "dependencies": {
+     "@algolia/autocomplete-js": "^1.7.2",
+     "@azure/search-documents": "^11.3.1",
++    "@contentstack/live-preview-utils": "^4.4.5",
+     "@contentstack/utils": "^1.1.2",
+     "@googlemaps/js-api-loader": "^1.15.1",
+     "@hookform/error-message": "^2.0.1",
+@@ -54,6 +55,7 @@
+     "busboy": "^1.6.0",
+     "classnames": "^2.3.2",
+     "cloudinary": "^2.8.0",
++    "components": "^0.1.0",
+     "contentstack": "^3.15.3",
+     "core-js": "^3.30.1",
+     "country-state-city": "^3.2.0",
+diff --git a/src/context/ContentstackContext.tsx b/src/context/ContentstackContext.tsx
+index 26c18920..d59237af 100644
+--- a/src/context/ContentstackContext.tsx
++++ b/src/context/ContentstackContext.tsx
+@@ -1,4 +1,4 @@
+-import { createContext, ReactNode, useContext, useMemo } from "react";
++import { createContext, ReactNode, useContext, useEffect, useState } from "react";
+ import { ContentTypes } from "constants/contentstack";
+ import { IAbandonedCartPrompt } from "interface/content/abandonedCartPrompt";
+ import { IGlobalDictionary } from "interface/content/globalDictionary";
+@@ -56,12 +56,11 @@ export const ContentstackProvider = ({
+   defaultContent = {},
+   children,
+ }: IContentStackProviderProps) => {
+-  const context = useMemo(
+-    () => ({
+-      content: defaultContent,
+-    }),
+-    [defaultContent],
+-  );
++  const [content, setContent] = useState<IContentstackContent>(defaultContent);
+ 
+-  return <ContentstackContext.Provider value={context}>{children}</ContentstackContext.Provider>;
++  useEffect(() => {
++    setContent(defaultContent);
++  }, [defaultContent]);
++
++  return <ContentstackContext.Provider value={{ content }}>{children}</ContentstackContext.Provider>;
+ };
+diff --git a/src/hooks/useContent.ts b/src/hooks/useContent.ts
+index 8e6efec9..5b32054f 100644
+--- a/src/hooks/useContent.ts
++++ b/src/hooks/useContent.ts
+@@ -1,16 +1,20 @@
+-import { useCallback } from "react";
++import { useMemo } from "react";
+ import { useContentstackContext } from "context/ContentstackContext";
+ import { getValue } from "utils/getValue";
+ 
+ export const useContent = () => {
+   const { content } = useContentstackContext();
+ 
+-  const getContentByKey = useCallback(
+-    <T>(path: string, defaultValue: T) => getValue<T>(content, path, defaultValue),
++  // Recompute the returned object whenever the context `content` value
++  // changes. This ensures that updates pushed via the live-preview
++  // `onEntryChange` callback (which mutates ContentstackProvider state)
++  // are reflected immediately in every consumer of `getContentByKey`.
++  const getContentByKey = useMemo(
++    () => <T>(path: string, defaultValue: T) => getValue<T>(content, path, defaultValue),
+     [content],
+   );
+ 
+   return {
+     getContentByKey,
+   };
+-};
++};
+\ No newline at end of file
+diff --git a/src/interface/content/page.ts b/src/interface/content/page.ts
+index bbf676f5..15d54446 100644
+--- a/src/interface/content/page.ts
++++ b/src/interface/content/page.ts
+@@ -55,6 +55,12 @@ export interface IPromoSignupBanner {
+   icon: ICloudinaryImage[];
+ }
+ 
++export interface IContentstackQuote {
++  quote: string;
++  author?: string;
++  role?: string;
++}
++
+ interface IGalleryItem {
+   gallery_item: {
+     image_gallery_image: ICloudinaryImage[];
+diff --git a/src/interface/contentstack.ts b/src/interface/contentstack.ts
+index 7826dead..d363663e 100644
+--- a/src/interface/contentstack.ts
++++ b/src/interface/contentstack.ts
+@@ -11,6 +11,7 @@ export interface ICommonContentstackConfig {
+ export interface IContentstackPageConfig extends ICommonContentstackConfig {
+   jsonRtePath?: string[];
+   includeFields?: string[];
++  live_preview?: boolean;
+ }
+ 
+ export interface IContentstackGetEntry extends IContentstackPageConfig {
+@@ -33,12 +34,14 @@ export interface ICreateQueryConfig extends ICommonContentstackConfig {
+   count?: boolean;
+   skip?: number;
+   limit?: number;
++  live_preview?: boolean;
+ }
+ 
+ export interface ICreateEntryConfig extends ICommonContentstackConfig {
+   contentTypeUid: string;
+   lang: ContentstackLocales;
+   entryUid: string;
++  live_preview?: boolean;
+ }
+ 
+ export interface IEnrichedPublishedPage {
+diff --git a/src/pages/_app.tsx b/src/pages/_app.tsx
+index 707f334c..5d4c7bf3 100644
+--- a/src/pages/_app.tsx
++++ b/src/pages/_app.tsx
+@@ -5,11 +5,13 @@ import "core-js/es/array/at";
+ import "resize-observer-polyfill/dist/ResizeObserver.global";
+ import "styles/globals.css";
+ import { AppProps } from "next/app";
++import { useRouter } from "next/router";
+ import { ComponentType, useEffect, useMemo, useState } from "react";
+ import { UniformContext } from "@uniformdev/context-react";
+ import { SessionProvider } from "next-auth/react";
+ import { appWithTranslation } from "next-i18next";
+ import { ErrorBoundary, FallbackProps } from "react-error-boundary";
++import ContentstackLivePreview from "@contentstack/live-preview-utils";
+ import { AppEnvironmentProvider } from "@metrolinx/cx-shared/build/src/context/AppEnvironmentContext";
+ import { AppImage } from "components/AppImage";
+ import { AppLink } from "components/AppLink";
+@@ -45,6 +47,7 @@ interface IAppProps extends AppProps {
+ 
+ function MyApp({ Component, pageProps }: IAppProps) {
+   const { content, lineColors } = pageProps;
++  const router = useRouter();
+ 
+   const { session, isLoading, refetchInterval } = useAuthRefetchInterval();
+ 
+@@ -59,6 +62,16 @@ function MyApp({ Component, pageProps }: IAppProps) {
+     root?.setAttribute("tabindex", "-1");
+   }, []);
+ 
++  useEffect(() => {
++    if (typeof window === "undefined") return;
++    if (process.env.NEXT_PUBLIC_CONTENTSTACK_LIVE_PREVIEW !== "true") return;
++
++    ContentstackLivePreview.init({ ssr: false });
++    ContentstackLivePreview.onEntryChange(() => {
++      router.replace(router.asPath);
++    });
++  }, [router]);
++
+   useClearStoragesOnSignOut(isSignedOut);
+ 
+   const defaultStationCtxValue = useMemo(
+diff --git a/src/services/contentstack.ts b/src/services/contentstack.ts
+index 4e4cde73..f5241896 100644
+--- a/src/services/contentstack.ts
++++ b/src/services/contentstack.ts
+@@ -1,6 +1,7 @@
+ /* eslint-disable @typescript-eslint/no-explicit-any */
++import ContentstackLivePreview from "@contentstack/live-preview-utils";
+ import * as Utils from "@contentstack/utils";
+-import contentstack from "contentstack";
++import contentstack, { LivePreview } from "contentstack";
+ import { IContentstackContentType } from "interface/content/contentType";
+ import { IContentstackPage } from "interface/content/page";
+ import { isTestEnv } from "utils/envs";
+@@ -21,6 +22,9 @@ const {
+   CONTENTSTACK_API_HOST = "",
+   CONTENTSTACK_BRANCH = "",
+   CONTENTSTACK_FETCH_TIMEOUT = "",
++  CONTENTSTACK_LIVE_PREVIEW = "",
++  CONTENTSTACK_LIVE_PREVIEW_TOKEN = "",
++  CONTENTSTACK_LIVE_PREVIEW_HOST = "",
+ } = process?.env || {};
+ 
+ const QUERY_RESPONSE_LIMIT = 100;
+@@ -52,7 +56,14 @@ if (!isTestEnv()) {
+   }
+ }
+ 
+-export const options = {
++export const options: {
++  api_key: string;
++  delivery_token: string;
++  environment: string;
++  branch: string;
++  fetchOptions?: { timeout: number };
++  live_preview?: LivePreview;
++} = {
+   api_key: CONTENTSTACK_API_KEY,
+   delivery_token: CONTENTSTACK_DELIVERY_TOKEN,
+   environment: CONTENTSTACK_ENVIRONMENT,
+@@ -64,6 +75,17 @@ export const options = {
+         },
+       }
+     : {}),
++  ...(CONTENTSTACK_LIVE_PREVIEW === "true" &&
++  CONTENTSTACK_LIVE_PREVIEW_HOST &&
++  CONTENTSTACK_LIVE_PREVIEW_TOKEN
++    ? {
++        live_preview: {
++          enable: true,
++          host: CONTENTSTACK_LIVE_PREVIEW_HOST,
++          management_token: CONTENTSTACK_LIVE_PREVIEW_TOKEN,
++        },
++      }
++    : {}),
+ };
+ 
+ export const Stack = contentstack.Stack(options);
+@@ -72,6 +94,26 @@ if (CONTENTSTACK_API_HOST) {
+   Stack.setHost(CONTENTSTACK_API_HOST);
+ }
+ 
++if (CONTENTSTACK_LIVE_PREVIEW === "true" && CONTENTSTACK_LIVE_PREVIEW_HOST) {
++  Stack.livePreviewQuery({
++    live_preview: "true",
++    content_type_uid: "*",
++  });
++  ContentstackLivePreview.init({
++    enable: true,
++    ssr: false,
++    mode: "preview",
++    clientUrlParams: {
++      host: CONTENTSTACK_LIVE_PREVIEW_HOST,
++    },
++    stackDetails: {
++      apiKey: CONTENTSTACK_API_KEY,
++      environment: CONTENTSTACK_ENVIRONMENT,
++      branch: CONTENTSTACK_BRANCH,
++    },
++  });
++}
++
+ const renderOption = {
+   span: (node: { children: any }, next: (arg0: any) => any) => next(node.children),
+ };
+@@ -194,6 +236,13 @@ export const getEntry = async <T>({
+     limit: QUERY_RESPONSE_LIMIT,
+   });
+ 
++  if (Stack.livePreviewQuery) {
++    Stack.livePreviewQuery({
++      live_preview: "true",
++      content_type_uid: contentTypeUid,
++    });
++  }
++
+   try {
+     const [response, count] = await _query.find();
+     result.push(...response);
+@@ -210,6 +259,13 @@ export const getEntry = async <T>({
+         limit: QUERY_RESPONSE_LIMIT,
+       });
+ 
++      if (Stack.livePreviewQuery) {
++        Stack.livePreviewQuery({
++          live_preview: "true",
++          content_type_uid: contentTypeUid,
++        });
++      }
++
+       const [response]: any = await _query.find();
+ 
+       result.push(...response);
+@@ -253,6 +309,13 @@ export const getSingleEntry = async ({
+     lang,
+   });
+ 
++  if (Stack.livePreviewQuery) {
++    Stack.livePreviewQuery({
++      live_preview: "true",
++      content_type_uid: contentTypeUid,
++    });
++  }
++
+   try {
+     const result = await query.fetch();
+ 
+@@ -297,6 +360,13 @@ export const findSingletonEntry = async <
+     limit: 1,
+   });
+ 
++  if (Stack.livePreviewQuery) {
++    Stack.livePreviewQuery({
++      live_preview: "true",
++      content_type_uid: contentTypeUid,
++    });
++  }
++
+   try {
+     const [[result]]: T[][] = await query.find();
+ 
+@@ -338,6 +408,13 @@ export const getSingletonEntry = async <
+     stack: Stack,
+   }).createContentTypeQuery({ contentTypeUid, referenceFieldPath, only, except, where, lang });
+ 
++  if (Stack.livePreviewQuery) {
++    Stack.livePreviewQuery({
++      live_preview: "true",
++      content_type_uid: contentTypeUid,
++    });
++  }
++
+   try {
+     const result = await query.findOne();
+ 
+diff --git a/src/services/pageService.ts b/src/services/pageService.ts
+index 3cec90e4..04b09644 100644
+--- a/src/services/pageService.ts
++++ b/src/services/pageService.ts
+@@ -30,7 +30,9 @@ import { userAccountService } from "./userAccountService";
+ export const excludedContentTypes = [ContentTypes.StationDetailPage];
+ 
+ class PageService {
+-  async getAllPublishedPages(): Promise<IEnrichedPublishedPage[]> {
++  async getAllPublishedPages(
++    { preview = false, live_preview: livePreview = false }: { preview?: boolean; live_preview?: boolean } = {},
++  ): Promise<IEnrichedPublishedPage[]> {
+     const contentTypes = await getPageContentTypes();
+     const contentTypesUids = contentTypes
+       .map((contentType) => contentType.uid)
+@@ -52,6 +54,7 @@ class PageService {
+         jsonRtePath,
+         only,
+         lang: ContentstackLocales.EN,
++        live_preview: preview && livePreview ? true : undefined,
+       }).then(
+         this.getEnrichedPageDetails(contentTypeUid, ContentstackLocales.EN),
+         handlePageEntriesError(contentTypeUid, ContentstackLocales.EN),
+@@ -62,6 +65,7 @@ class PageService {
+         jsonRtePath,
+         only,
+         lang: ContentstackLocales.FR,
++        live_preview: preview && livePreview ? true : undefined,
+       }).then(
+         this.getEnrichedPageDetails(contentTypeUid, ContentstackLocales.FR),
+         handlePageEntriesError(contentTypeUid, ContentstackLocales.FR),
+@@ -98,11 +102,27 @@ class PageService {
+     }, {} as IMappedByLocalePageSlugs);
+   }
+ 
+-  async getHeaderAndFooter({ lang }: { lang: ContentstackLocales }) {
++  async getHeaderAndFooter({
++    lang,
++    preview = false,
++    live_preview: livePreview = false,
++  }: {
++    lang: ContentstackLocales;
++    preview?: boolean;
++    live_preview?: boolean;
++  }) {
+     try {
+       const [footer, header] = await Promise.all([
+-        getEntry({ contentTypeUid: ContentTypes.GlobalFooter, lang }),
+-        getEntry({ contentTypeUid: ContentTypes.GlobalHeader, lang }),
++        getEntry({
++          contentTypeUid: ContentTypes.GlobalFooter,
++          lang,
++          live_preview: preview && livePreview ? true : undefined,
++        }),
++        getEntry({
++          contentTypeUid: ContentTypes.GlobalHeader,
++          lang,
++          live_preview: preview && livePreview ? true : undefined,
++        }),
+       ]);
+ 
+       return {
+@@ -128,11 +148,27 @@ class PageService {
+     }
+   }
+ 
+-  async getPageLevelServiceAlerts({ lang }: { lang: ContentstackLocales }) {
++  async getPageLevelServiceAlerts({
++    lang,
++    preview = false,
++    live_preview: livePreview = false,
++  }: {
++    lang: ContentstackLocales;
++    preview?: boolean;
++    live_preview?: boolean;
++  }) {
+     try {
+       const [maintenance, secondary] = await Promise.all([
+-        getEntry({ contentTypeUid: ContentTypes.MaintenanceBanner, lang }),
+-        getEntry({ contentTypeUid: ContentTypes.SecondaryBanner, lang }),
++        getEntry({
++          contentTypeUid: ContentTypes.MaintenanceBanner,
++          lang,
++          live_preview: preview && livePreview ? true : undefined,
++        }),
++        getEntry({
++          contentTypeUid: ContentTypes.SecondaryBanner,
++          lang,
++          live_preview: preview && livePreview ? true : undefined,
++        }),
+       ]);
+ 
+       return {
+@@ -147,12 +183,21 @@ class PageService {
+     }
+   }
+ 
+-  async getCookiesBanner({ lang }: { lang: ContentstackLocales }) {
++  async getCookiesBanner({
++    lang,
++    preview = false,
++    live_preview: livePreview = false,
++  }: {
++    lang: ContentstackLocales;
++    preview?: boolean;
++    live_preview?: boolean;
++  }) {
+     try {
+       return await getEntry({
+         contentTypeUid: ContentTypes.CookiesBlock,
+         referenceFieldPath: [],
+         lang,
++        live_preview: preview && livePreview ? true : undefined,
+       });
+     } catch (e) {
+       logger.error(e, `Error retrieving cookie banner by locale: ${lang}`);
+@@ -160,11 +205,20 @@ class PageService {
+     }
+   }
+ 
+-  async getGlobalDictionary({ lang }: { lang: ContentstackLocales }) {
++  async getGlobalDictionary({
++    lang,
++    preview = false,
++    live_preview: livePreview = false,
++  }: {
++    lang: ContentstackLocales;
++    preview?: boolean;
++    live_preview?: boolean;
++  }) {
+     try {
+       return await getEntry<[IGlobalDictionary]>({
+         contentTypeUid: ContentTypes.GlobalDictionary,
+         lang,
++        live_preview: preview && livePreview ? true : undefined,
+       });
+     } catch (e) {
+       logger.error(e, `Error retrieving global dictionary by locale: ${lang}`);

@@ -24,6 +24,12 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ReadFileTool } from '../../../src/tools/builtin/ReadFile';
 
+// Wording lives in the project catalog now, not the engine (src/tools/messages.ts). Point at
+// the shipped catalog exactly as the runtime invocation does, so these assert the words an
+// agent really sees rather than words compiled into the tool.
+process.env.EPAM_AGENT_MESSAGE_CATALOG =
+  join(__dirname, '../../../orchestrations/config/agent-messages.json');
+
 const readFileTool = new ReadFileTool();
 
 let dir: string;

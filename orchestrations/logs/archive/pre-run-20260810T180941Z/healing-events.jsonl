@@ -1,0 +1,1 @@
+{"ts":"2026-08-10T16:20:57Z","story_id":"AMSD-2041","retry":0,"rung":0,"target":"skill","diagnosis":"onEntryChange is a static method on the default export, not a named export of @contentstack/live-preview-utils","patches_applied":0,"profile_updated":true}

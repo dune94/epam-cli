@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { renderAgentMessage } from '../messages.js';
 import type { Tool, ToolResult } from '../types.js';
 import { ensureDir } from '../../utils/fs.js';
 import { ENGINE_OWNED_DIRS, breachesEnginePerimeter } from '../../config/enginePaths.js';
@@ -176,20 +177,14 @@ export class WriteFileTool implements Tool {
           // file belongs to another story (a real conflict — escalate to its owner), or ownership
           // could not be determined (missing data — not a statement about this file at all).
           const ownershipKnown = process.env.EPAM_STORY_OWNERSHIP_KNOWN === '1';
-          const reason = ownershipKnown
-            ? `it is declared by ANOTHER story, and taking it would overwrite that story's work. ` +
-              `Do not edit it: escalate to the owning story instead, or achieve the change within ` +
-              `your own files.`
-            : `this story's file ownership could not be determined, so the write is refused to be ` +
-              `safe. This is missing pipeline data, not a judgement about this file — report it ` +
-              `rather than working around it.`;
+          // Two refusals, two remedies, two codes — the project supplies the words.
+          // Collapsing them into one message is what made a refusal read as "never", and the
+          // writer answered that by rewriting a file it could already write, 32 times.
           return {
             toolUseId: '',
-            content:
-              `[scope-guard] Write blocked: ${resolved} — ${reason}\n` +
-              `Files this story declared: ${allowed.join(', ')}. ` +
-              `Files outside that list are writable when no other story owns them, so this ` +
-              `refusal is specific: rewriting a different file instead will not resolve it.`,
+            content: renderAgentMessage(
+              ownershipKnown ? 'write_refused_owned_by_other_story' : 'write_refused_ownership_unknown',
+              { path: resolved, declared: allowed.join(',') }),
             isError: true,
           };
         }

@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { createHash } from 'node:crypto';
+import { renderAgentMessage } from '../messages.js';
 import type { Tool, ToolResult } from '../types.js';
 
 export class ReadFileTool implements Tool {
@@ -165,10 +166,12 @@ export class ReadFileTool implements Tool {
             this.dedupeHits.set(resolved, hits);
             return {
               toolUseId: '',
-              content:
-                `You already read ${resolved} earlier in this attempt and it has NOT changed since ` +
-                `(${text.length} bytes). Re-use the copy you already have. If you no longer have it, ` +
-                `request this file again and the full contents will be returned.`,
+              // Wording is the PROJECT's (see src/tools/messages.ts). The engine states the fact:
+              // this path was already returned, unchanged, at this size. A dedupe notice whose
+              // wording lived here once told a model to emit `force: true`, which it emitted as
+              // text and looped on until the attempt died — the phrasing is behaviour, and it
+              // belongs where an operator can change it without editing the engine.
+              content: renderAgentMessage('read_deduped', { path: resolved, bytes: text.length }),
               isError: false,
             };
           }

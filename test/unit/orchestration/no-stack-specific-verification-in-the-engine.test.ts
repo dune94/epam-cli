@@ -35,14 +35,22 @@ function engineScripts(): Array<{ file: string; lines: string[] }> {
 function invocationSites(): string[] {
   const out: string[] = [];
   // Binaries an engine must never name: they belong to one ecosystem.
-  const BINARIES = [/node_modules\/\.bin\/tsc/, /\btsc\s+--noEmit/, /\bmypy\b/, /\bgo\s+build\b/];
+  // Invocation forms AND bare mentions: a tool named in an instruction is still the engine
+  // naming an ecosystem. Deliberately a closed list of ecosystem tools, not a language model
+  // of English — it fails on the specific thing the engine must never know about.
+  const BINARIES = [/node_modules\/\.bin\/tsc/, /\btsc\b/, /\bmypy\b/, /\bgo\s+build\b/,
+                    /\bvitest\b/, /\bjest\b/, /\bnpm\s+test\b/, /\bpytest\b/];
   for (const { file, lines } of engineScripts()) {
     lines.forEach((l, i) => {
       const t = l.trim();
       if (t.startsWith('#')) return;                       // prose
       if (/--showConfig|readlink|echo "tsc=/.test(l)) return;        // diagnostics, not verification
       if (/^(log|echo|success|warning|error|info|printf)\b/.test(t)) return; // a MESSAGE, not a call
-      if (/^You are|^A lint gate/.test(t)) return;                     // prompt prose
+      // THE PROSE EXEMPTION IS GONE. It was the reason this sweep reported the class closed
+      // while the engine's own NON-NEGOTIABLE contract told every agent, every turn:
+      //   "Do NOT run compilers (tsc), test suites (vitest/jest/npm test), or linters."
+      // A rule that names a stack is a stack fact whether it is executed or merely stated —
+      // it is shipped to the model either way, and cannot be changed per project.
       if (BINARIES.some((re) => re.test(l))) out.push(`${file}:${i + 1}  ${t.slice(0, 90)}`);
     });
   }

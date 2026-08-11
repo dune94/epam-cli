@@ -656,7 +656,15 @@ $description
 ## Technical Notes
 $([ -n "$technical_notes" ] && echo "$technical_notes" | jq -r 'to_entries | map("- \(.key): \(.value)") | join("\n")' 2>/dev/null || echo "None specified")
 
-## Files to Create/Modify
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — start here; this list is not exhaustive)
+These are the files the analysis identified. Use these exact paths for them. The list is a
+STARTING POINT, not a fence: it is derived from the ticket and may be incomplete or may name
+a path this repository spells differently. If your change genuinely requires another file in
+this repository, write it — the only files closed to you are ones another story OWNS, and
+attempting one of those returns a specific refusal saying so. Do NOT work around a refusal by
+repeatedly rewriting a file you can already write; that is never the fix. When you write a
+file that is not listed here, say which file and why in your final message, so the reviewer
+sees the whole change.
 $files
 
 ## Dependencies

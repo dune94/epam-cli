@@ -217,3 +217,46 @@ describe('DERIVING MUST NOT REQUIRE RE-INVESTIGATING', () => {
     expect(block).toMatch(/nothing to add/);
   });
 });
+
+describe('THE CANDIDATE MUST REACH THE LIST THE WRITER ACTUALLY READS', () => {
+  /**
+   * fixSiteAnalysis is NOT the writer's file list. build_implementation_prompt iterates
+   * story_declared_files(), which reads technicalNotes.perCodeline[cl].files (falling back
+   * to technicalNotes.files). fixSiteAnalysis only decides whether a DECLARED file gets its
+   * content injected, and supplies the "- **file**: reason" line.
+   *
+   * So a candidate written to one and not the other is INVISIBLE. Verified live 2026-08-11
+   * against the real PRD with the real shell functions: before this, jest.config.js was in
+   * fixSiteAnalysis and absent from the writer's 12-file list. Caught by reading the prompt
+   * builder rather than by a live run.
+   */
+  const stepSrc = () => require('node:fs')
+    .readFileSync(join(ROOT, 'orchestrations/scripts/detective-rerun-step.js'), 'utf8');
+
+  it('the derive path appends to technicalNotes, not only fixSiteAnalysis', () => {
+    const s = stepSrc();
+    const i = s.indexOf("hasFlag('--derive-config-candidates')");
+    const block = s.slice(i, s.indexOf('process.exit(0);', i));
+    expect(block).toContain('technicalNotes');
+    expect(block, 'the per-codeline list is the one the writer reads first').toContain('perCodeline');
+  });
+
+  it('a missing technicalNotes list is REPORTED, not silently skipped', () => {
+    const s = stepSrc();
+    const i = s.indexOf("hasFlag('--derive-config-candidates')");
+    const block = s.slice(i, s.indexOf('process.exit(0);', i));
+    expect(block, 'the candidate would be undeliverable and nobody would be told')
+      .toMatch(/WILL NOT reach the writer/);
+  });
+
+  it('the candidate carries an EMPTY function, never absent', () => {
+    // The writer prompt renders "- **file** (`function`): reason" via jq, and jq treats a
+    // MISSING .function as null — which renders a literal (`null`) to the model. Asserted
+    // on the emitting source because `derive` is scoped to the sibling block above.
+    const s = stepSrc();
+    const i = s.indexOf('function dependencyConfigCandidates');
+    const block = s.slice(i, s.indexOf('\n}', i));
+    expect(block, "a candidate with no .function renders as (`null`) in the prompt")
+      .toMatch(/function:\s*''/);
+  });
+});

@@ -116,6 +116,9 @@ function dependencyConfigCandidates(sites, projectRoot, env, plugin) {
       reason: `This story adds ${packages.join(', ')}. ${file} is declared as a file a new `
         + 'dependency can force a change to. Investigate whether this package requires a change '
         + 'here, and record changeRequired accordingly.',
+      // The writer prompt renders "- **file** (`function`): reason" and jq treats a MISSING
+      // .function as null, which renders a literal (`null`). Empty string, not absent.
+      function: '',
       requiredPackages: packages,
       candidateFrom: 'dependency-sensitive-config',
     }));
@@ -421,6 +424,28 @@ if (require.main !== module) return;
             ...derived.candidates.map((c) => ({ ...c, codeline: cl })),
           ];
           row.added = derived.candidates.map((c) => c.file);
+
+          // AND INTO THE LIST THE WRITER ACTUALLY READS.
+          //
+          // fixSiteAnalysis is NOT the writer's file list. build_implementation_prompt
+          // iterates story_declared_files(), which reads technicalNotes.perCodeline[cl].files
+          // (falling back to technicalNotes.files); fixSiteAnalysis only decides whether a
+          // DECLARED file gets its content injected. A candidate present in one and absent
+          // from the other is invisible to the writer — the same "wired one end of the
+          // contract, never checked the other" shape as the defects this whole exercise is
+          // cleaning up. Caught by reading the prompt builder, not by a live run.
+          const tn = story.technicalNotes || (story.technicalNotes = {});
+          const perCl = tn.perCodeline && tn.perCodeline[cl] && Array.isArray(tn.perCodeline[cl].files);
+          const list = perCl ? tn.perCodeline[cl].files : (Array.isArray(tn.files) ? tn.files : null);
+          if (list) {
+            for (const c of derived.candidates) if (!list.includes(c.file)) list.push(c.file);
+            row.declaredIn = perCl ? `technicalNotes.perCodeline.${cl}.files` : 'technicalNotes.files';
+          } else {
+            // No list to append to means the writer would never be told. Say so; do not
+            // pretend the candidate was delivered.
+            row.note = `${row.note ? `${row.note}; ` : ''}no technicalNotes file list for ${cl} — `
+              + 'the candidate is in fixSiteAnalysis but WILL NOT reach the writer';
+          }
         }
         rows.push(row);
       }
@@ -430,7 +455,8 @@ if (require.main !== module) return;
     for (const r of rows) {
       process.stderr.write(
         `[detective-rerun] ${r.storyId}/${r.codeline}: packages=[${r.packages.join(', ')}] `
-        + `candidates=[${r.added.join(', ')}]${r.note ? ` — ${r.note}` : ''}\n`);
+        + `candidates=[${r.added.join(', ')}]${r.declaredIn ? ` -> ${r.declaredIn}` : ''}`
+        + `${r.note ? ` — ${r.note}` : ''}\n`);
     }
     if (anyAdded) {
       const backup = writePrd(PRD_PATH, prd, getArg('--stamp', ''));

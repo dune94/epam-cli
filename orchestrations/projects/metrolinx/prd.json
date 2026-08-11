@@ -447,6 +447,7 @@
         {
           "file": "jest.config.js",
           "reason": "This story adds @contentstack/live-preview-utils. jest.config.js is declared as a file a new dependency can force a change to. Investigate whether this package requires a change here, and record changeRequired accordingly.",
+          "function": "",
           "requiredPackages": [
             "@contentstack/live-preview-utils"
           ],
@@ -615,7 +616,8 @@
               "src/components/contentstack/ContentStackStaticMaps/ContentStackStaticMaps.tsx",
               "src/components/contentstack/ContentStackVideoPlayer/ContentStackVideoPlayer.tsx",
               "src/context/ContentstackContext.tsx",
-              ".env.local.sample"
+              ".env.local.sample",
+              "jest.config.js"
             ],
             "resolved": [
               {
@@ -1089,6 +1091,7 @@
           {
             "file": "jest.config.js",
             "reason": "This story adds @contentstack/live-preview-utils. jest.config.js is declared as a file a new dependency can force a change to. Investigate whether this package requires a change here, and record changeRequired accordingly.",
+            "function": "",
             "requiredPackages": [
               "@contentstack/live-preview-utils"
             ],

@@ -177,3 +177,43 @@ describe('the engine names no stack facts', () => {
     }
   });
 });
+
+describe('DERIVING MUST NOT REQUIRE RE-INVESTIGATING', () => {
+  /**
+   * The derivation reads requiredPackages off the prescription that already stands and needs
+   * no LLM call. Coupling it to the re-investigation would mean the only way to add a
+   * build-config candidate is to take a FRESH DRAW of the whole prescription.
+   *
+   * Live 2026-08-11: a re-run of AMSD-2041/gotransit replaced a correct prescription (3 sites
+   * changeRequired:true, one carrying requiredPackages) with one asserting changeRequired:false
+   * on ALL FIVE sites and no packages at all — and reported "every selected site carries
+   * changeRequired", which was true, and all false. Reverted from the backup. A cheap
+   * deterministic step must not be reachable only through an expensive nondeterministic one.
+   */
+  const STEP = join(ROOT, 'orchestrations/scripts/detective-rerun-step.js');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+  const src = () => require('node:fs').readFileSync(STEP, 'utf8');
+
+  it('a standalone derive mode exists', () => {
+    expect(src()).toContain('--derive-config-candidates');
+  });
+
+  it('the derive path makes NO detective call', () => {
+    const s = src();
+    const i = s.indexOf("hasFlag('--derive-config-candidates')");
+    expect(i, 'derive mode not found').toBeGreaterThan(-1);
+    // Everything from the flag check to its exit must not invoke the investigation.
+    const block = s.slice(i, s.indexOf('process.exit(0);', i));
+    expect(block, 'the cheap path calls the expensive one').not.toContain('runRerun');
+    expect(block).not.toContain('await detective');
+  });
+
+  it('it leaves the PRD untouched when there is nothing to add', () => {
+    const s = src();
+    const i = s.indexOf("hasFlag('--derive-config-candidates')");
+    const block = s.slice(i, s.indexOf('process.exit(0);', i));
+    // A write with no change still rewrites the file and spawns a backup — noise that makes
+    // real changes harder to spot in a folder that already accumulates them.
+    expect(block).toMatch(/nothing to add/);
+  });
+});

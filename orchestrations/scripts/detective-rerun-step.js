@@ -391,6 +391,56 @@ if (require.main !== module) return;
     process.exit(0);
   }
 
+  if (hasFlag('--derive-config-candidates')) {
+    // DERIVE WITHOUT RE-INVESTIGATING.
+    //
+    // The candidate derivation reads requiredPackages off the prescription that already
+    // stands; it needs no LLM call. Coupling it to the re-investigation would mean the only
+    // way to add a build-config candidate is to take a FRESH DRAW of the whole prescription
+    // — and a fresh draw can come back worse. Live 2026-08-11: a re-run of AMSD-2041/gotransit
+    // replaced a correct prescription (3 sites changeRequired:true, one carrying
+    // requiredPackages) with one asserting changeRequired:false on ALL FIVE sites and no
+    // packages at all, then reported "✓ every selected site carries changeRequired" — true,
+    // and all false. Reverted from the backup.
+    //
+    // So this mode exists to make the cheap, deterministic half available on its own.
+    const rows = [];
+    for (const story of prd.stories || []) {
+      if (storyIds.length && !storyIds.includes(story.id)) continue;
+      const per = story.fixSiteAnalysisPerCodeline || {};
+      for (const cl of Object.keys(per)) {
+        if (only.length && !only.includes(cl)) continue;
+        const current = Array.isArray(per[cl]) ? per[cl] : [];
+        const repo = (codelinesFromPrd(prd).find((c) => c.name === cl) || {}).path || process.env.PROJECT_ROOT || '';
+        const derived = dependencyConfigCandidates(current, repo, process.env, depPlugin);
+        const row = { storyId: story.id, codeline: cl, packages: derived.packages, added: [] };
+        if (derived.note) row.note = derived.note;
+        if (derived.candidates.length) {
+          story.fixSiteAnalysisPerCodeline[cl] = [
+            ...current,
+            ...derived.candidates.map((c) => ({ ...c, codeline: cl })),
+          ];
+          row.added = derived.candidates.map((c) => c.file);
+        }
+        rows.push(row);
+      }
+      if (story.fixSiteAnalysisPerCodeline) story.fixSiteAnalysis = rebuildFlat(story);
+    }
+    const anyAdded = rows.some((r) => r.added.length);
+    for (const r of rows) {
+      process.stderr.write(
+        `[detective-rerun] ${r.storyId}/${r.codeline}: packages=[${r.packages.join(', ')}] `
+        + `candidates=[${r.added.join(', ')}]${r.note ? ` — ${r.note}` : ''}\n`);
+    }
+    if (anyAdded) {
+      const backup = writePrd(PRD_PATH, prd, getArg('--stamp', ''));
+      process.stderr.write(`[detective-rerun] PRD written; previous copy at ${backup}\n`);
+    } else {
+      process.stderr.write('[detective-rerun] nothing to add — PRD left untouched\n');
+    }
+    process.exit(0);
+  }
+
   fs.mkdirSync(LOG_DIR, { recursive: true });
   process.stderr.write(
     `[detective-rerun] re-investigating ${only.length ? only.join(', ') : 'every declared codeline'}\n`);

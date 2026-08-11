@@ -13,7 +13,14 @@
 # reason — a pinned nvm path is valid on one machine until the day it is upgraded.
 #
 # Usage:
-#   detective-rerun.sh --project <name> [--codelines a,b] [--story ID] [--report]
+#   detective-rerun.sh --project <name> [--codelines a,b] [--story ID] [--report] [--derive-config-candidates]
+#
+# --derive-config-candidates is CHEAP and makes NO LLM CALL: it reads requiredPackages off
+# the prescription that already stands and appends the project-declared build-config files as
+# candidates. Use it instead of a full re-investigation when you only need those candidates —
+# a re-investigation is a fresh draw and can come back worse (live 2026-08-11: a re-run
+# replaced a correct AMSD-2041/gotransit prescription with changeRequired:false on all five
+# sites, and reported success).
 #
 # --report is read-only: it prints which sites lack changeRequired and exits without calling
 # an agent or writing anything. Run it first.
@@ -36,7 +43,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[ -z "$PROJECT" ] && { echo "Usage: detective-rerun.sh --project <name> [--codelines a,b] [--story ID] [--report]" >&2; exit 1; }
+[ -z "$PROJECT" ] && { echo "Usage: detective-rerun.sh --project <name> [--codelines a,b] [--story ID] [--report] [--derive-config-candidates]" >&2; exit 1; }
 
 PROJECT_DIR="$REPO_ROOT/orchestrations/projects/$PROJECT"
 CONFIG="$PROJECT_DIR/config.env"

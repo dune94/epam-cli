@@ -6,5 +6,26 @@
     "Reading: The context you need is in this prompt, including the contents of the files you are changing. Read a file when you genuinely need more than you were given — a file that was truncated, or one not shown here. Do not re-read a file whose contents are already above.",
     "Protected paths: Never modify, rename, or delete files under {engineDirs}, or any path listed in .epam/protected-files. Never modify environment or credential files — these contain secrets and are immutable to agents.",
     "Credential safety: Never echo, log, print, or expose any environment variable or file content whose name contains KEY, TOKEN, SECRET, PASSWORD, or CREDENTIAL."
-  ]
+  ],
+  "brownfieldNovel": {
+    "header": "BROWNFIELD SURGEON MODE — NOVEL CAPABILITY (non-negotiable, applies to this story):",
+    "rules": [
+      "FIND THE ATTACHMENT POINT: There is no existing bug and no existing code path implementing this capability — searching for one wastes time. Before writing code, locate the existing file/function/provider/hook/route/component this new capability must plug INTO (Search, Glob, or Read). Do not skip this step.",
+      "SMALLEST INTEGRATION, NOT A REWRITE: Extend the attachment point with the minimal addition that provides the new capability. Do not restructure, refactor, or rewrite surrounding code that already works.",
+      "NEW FILES ARE EXPECTED WHEN THE CAPABILITY GENUINELY NEEDS THEM: Do not withhold a new file, component, or module waiting for the story description to say 'create' or 'add new' — a bare or underspecified description is not evidence the work is smaller than it is. Create what the capability requires; do not invent an abstraction it does not.\"",
+      "USE EXISTING HELPERS: Before writing any new function or utility, search the codebase for an existing one that already serves the same purpose.",
+      "VERIFY THIRD-PARTY SDK CALLS: before calling a method on a package you did not write, confirm its real shape with the codegraph_query tool or \\`bash orchestrations/scripts/resolve-package-symbol.sh <package> <method>\\` — a symbol existing in node_modules is not proof it is a static call, an instance method, or the package's own intended usage. Calling it wrong produces code that type-checks and fails at runtime.\""
+    ]
+  },
+  "brownfieldExisting": {
+    "header": "BROWNFIELD SURGEON MODE — non-negotiable (applies to every story in this run):",
+    "rules": [
+      "FIND FIRST: Before writing a single line of code, locate the existing code path that handles the behavior described in this story. Use Search, Glob, or Read. Do not skip this step.",
+      "FIX MINIMALLY: Make the smallest change that corrects the behavior. Do not restructure, refactor, or extend surrounding code.",
+      "NO NEW FILES BY DEFAULT: Do not create new files, services, or abstractions unless the story description explicitly uses the words 'create', 'add new', or 'build new'. A bug report or a change request means modifying existing code.\"",
+      "USE EXISTING HELPERS: Before writing any new function or utility, search the codebase for an existing one that already serves the same purpose.",
+      "VERIFY THIRD-PARTY SDK CALLS: before calling a method on a package you did not write, confirm its real shape with the codegraph_query tool or \\`bash orchestrations/scripts/resolve-package-symbol.sh <package> <method>\\` — a symbol existing in node_modules is not proof it is a static call, an instance method, or the package's own intended usage. Calling it wrong produces code that type-checks and fails at runtime.\""
+    ]
+  },
+  "$brownfieldComment": "Surgeon-mode rules appended for brownfield stories, by story kind. The last two rules are shared by both modes; they were previously copy-pasted into each arm of the branch in claude.sh, byte-identical, nine lines apart, and each copy needed maintaining separately."
 }

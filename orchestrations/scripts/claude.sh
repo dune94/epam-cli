@@ -8757,27 +8757,21 @@ implement_story() {
         _bfw_story_kind=$(jq -r --arg id "$story_id" \
             '.stories[] | select(.id == $id) | .storyKind // ""' \
             "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "")
-        if [ "$_bfw_story_kind" = "novel" ]; then
-            DYNAMIC_CONSTITUTION="${DYNAMIC_CONSTITUTION}
-
-BROWNFIELD SURGEON MODE — NOVEL CAPABILITY (non-negotiable, applies to this story):
-6. FIND THE ATTACHMENT POINT: There is no existing bug and no existing code path implementing this capability — searching for one wastes time. Before writing code, locate the existing file/function/provider/hook/route/component this new capability must plug INTO (Search, Glob, or Read). Do not skip this step.
-7. SMALLEST INTEGRATION, NOT A REWRITE: Extend the attachment point with the minimal addition that provides the new capability. Do not restructure, refactor, or rewrite surrounding code that already works.
-8. NEW FILES ARE EXPECTED WHEN THE CAPABILITY GENUINELY NEEDS THEM: Do not withhold a new file, component, or module waiting for the story description to say 'create' or 'add new' — a bare or underspecified description is not evidence the work is smaller than it is. Create what the capability requires; do not invent an abstraction it does not."
-        else
-            DYNAMIC_CONSTITUTION="${DYNAMIC_CONSTITUTION}
-
-BROWNFIELD SURGEON MODE — non-negotiable (applies to every story in this run):
-6. FIND FIRST: Before writing a single line of code, locate the existing code path that handles the behavior described in this story. Use Search, Glob, or Read. Do not skip this step.
-7. FIX MINIMALLY: Make the smallest change that corrects the behavior. Do not restructure, refactor, or extend surrounding code.
-8. NO NEW FILES BY DEFAULT: Do not create new files, services, or abstractions unless the story description explicitly uses the words 'create', 'add new', or 'build new'. A bug report or a change request means modifying existing code."
+        # Surgeon-mode rules come from orchestrations/config/agent-contract.json, rendered by
+        # lib/render-prompt-section.js — a real file, not `node -e`, because the inline form
+        # broke this script three times: the JS carries braces and quotes that must survive a
+        # double-quoted shell string inside a command substitution.
+        #
+        # The two rules shared by both modes are defined ONCE in the catalog. They were
+        # copy-pasted into each arm of this branch, byte-identical, nine lines apart, and each
+        # copy then had to be maintained separately.
+        _bfw_section="brownfieldExisting"
+        [ "$_bfw_story_kind" = "novel" ] && _bfw_section="brownfieldNovel"
+        _bfw_rules=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/render-prompt-section.js" \
+            "$SCRIPT_DIR/../config/agent-contract.json" "$_bfw_section" "_startIndex=6" 2>/dev/null || echo "")
+        if [ -n "$_bfw_rules" ]; then
+            DYNAMIC_CONSTITUTION="${DYNAMIC_CONSTITUTION}"$'\n\n'"${_bfw_rules}"
         fi
-        # Rules 9 and 10 apply to BOTH modes and were copy-pasted into each arm — byte-identical,
-        # nine lines apart. One of them then had to be maintained twice, which is how a rule ends
-        # up saying two different things in one file. Appended once, after the branch.
-        DYNAMIC_CONSTITUTION="${DYNAMIC_CONSTITUTION}
-9. USE EXISTING HELPERS: Before writing any new function or utility, search the codebase for an existing one that already serves the same purpose.
-10. VERIFY THIRD-PARTY SDK CALLS: before calling a method on a package you did not write, confirm its real shape with the codegraph_query tool or \`bash orchestrations/scripts/resolve-package-symbol.sh <package> <method>\` — a symbol existing in node_modules is not proof it is a static call, an instance method, or the package's own intended usage. Calling it wrong produces code that type-checks and fails at runtime."
     fi
     # GAP-P17: inject outputSchema instruction when story defines one
     local schema_block=""

@@ -34,6 +34,9 @@ const fs = require('fs');
 const path = require('path');
 
 const spec = require('./spec-mode-runner.js');
+// Which build-config files a new dependency can force a change to is a STACK FACT. It lives
+// in the project's declaration and is read through the plugin — never inferred here.
+const depPlugin = require('../plugins/dependency-scan-plugin.js');
 
 const argv = process.argv.slice(2);
 const getArg = (flag, def = '') => {
@@ -60,6 +63,63 @@ function storyCodelines(story) {
   const list = Array.isArray(story.codelines) ? story.codelines.filter(Boolean) : [];
   if (list.length) return list;
   return story.codeline ? [story.codeline] : [];
+}
+
+/**
+ * A NEW DEPENDENCY IMPLICATES BUILD CONFIGURATION, AND NOTHING ELSE DERIVES THAT.
+ *
+ * The detective enumerates CODE fix sites from the ticket; verification criteria are
+ * behavioural by design (all four on AMSD-2041 were about rendering and auth). So when a
+ * story adds a package, the files that must be told about it — the test runner's transform
+ * list, the bundler's resolver, the type checker's paths — are owned by NO ACTOR.
+ *
+ * Live AMSD-2041/gotransit, 2026-08-11: @contentstack/live-preview-utils is ESM;
+ * jest.config.js hard-codes which packages to transpile; Jest died on `export` every
+ * attempt. jest.config.js was writable the whole run — THE WRITER WAS NOT BLOCKED, IT WAS
+ * UNGUIDED. This is not fixed by widening permissions.
+ *
+ * WHICH files are dependency-sensitive is a STACK FACT, declared in the project's
+ * dependency-check.json and read through the plugin. The engine never infers it and it
+ * never enters a generic agent prompt: true here, wrong for the next project.
+ *
+ * WHAT IT EMITS: a candidate carrying NEITHER verdict.
+ *   changeRequired absent — "not yet investigated", NOT "no change needed". Collapsing
+ *     those two is what made a story unwinnable once already.
+ *   fixVerified absent    — the detective has not confirmed this site, and claiming it had
+ *     would put the file straight into the enforcement gate on the strength of a guess.
+ * The candidate is therefore VISIBLE (it is a fix site, with a reason) and NOT YET ENFORCED,
+ * which is exactly what an uninvestigated lead should be.
+ */
+function dependencyConfigCandidates(sites, projectRoot, env, plugin) {
+  const packages = [...new Set(
+    (Array.isArray(sites) ? sites : [])
+      .flatMap((f) => (f && Array.isArray(f.requiredPackages) ? f.requiredPackages : []))
+      .filter((p) => typeof p === 'string' && p.trim()),
+  )];
+  if (!packages.length) return { candidates: [], packages, note: '' };
+
+  let decl;
+  try {
+    decl = plugin.dependencySensitiveConfigFiles(projectRoot, env);
+  } catch (e) {
+    return { candidates: [], packages, note: `dependency-sensitive config lookup failed: ${e && e.message}` };
+  }
+  // Undeclared is UNKNOWN, and the caller reports it. Silence here would read as
+  // "this project has no build config", which is a claim nobody made.
+  if (!decl.ok) return { candidates: [], packages, note: decl.reason };
+
+  const already = new Set((Array.isArray(sites) ? sites : []).map((f) => f && f.file));
+  const candidates = decl.files
+    .filter((file) => !already.has(file))
+    .map((file) => ({
+      file,
+      reason: `This story adds ${packages.join(', ')}. ${file} is declared as a file a new `
+        + 'dependency can force a change to. Investigate whether this package requires a change '
+        + 'here, and record changeRequired accordingly.',
+      requiredPackages: packages,
+      candidateFrom: 'dependency-sensitive-config',
+    }));
+  return { candidates, packages, note: '' };
 }
 
 /** Sites carry a boolean or they carry nothing — `undefined` is the state this step repairs. */
@@ -219,6 +279,19 @@ async function runRerun({
           }
         }
 
+        // Derive build-config candidates from whatever prescription now stands for this
+        // codeline — after the detective, so a replaced set is the one examined, and so a
+        // failed/kept lane still gets candidates from its retained sites.
+        const current = (story.fixSiteAnalysisPerCodeline || {})[cl] || [];
+        const derived = dependencyConfigCandidates(current, repo || process.env.PROJECT_ROOT || '', process.env, depPlugin);
+        if (derived.candidates.length) {
+          const withCodeline = derived.candidates.map((c) => ({ ...c, codeline: cl }));
+          story.fixSiteAnalysisPerCodeline = {
+            ...(story.fixSiteAnalysisPerCodeline || {}),
+            [cl]: [...current, ...withCodeline],
+          };
+        }
+
         const after = (story.fixSiteAnalysisPerCodeline || {})[cl] || [];
         const row = {
           storyId: story.id,
@@ -228,6 +301,13 @@ async function runRerun({
           after: after.length,
           missingField: sitesMissingTheField(after).map((f) => f.file),
         };
+        if (derived.packages.length) {
+          row.requiredPackages = derived.packages;
+          row.configCandidates = derived.candidates.map((c) => c.file);
+          // An undeclared manifest key is reported, never swallowed: "we could not tell which
+          // build-config files a dependency affects" must not read as "there are none".
+          if (derived.note) row.configCandidatesNote = derived.note;
+        }
         if (error) row.error = error;
         results.push(row);
         if (onProgress) onProgress(row);

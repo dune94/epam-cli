@@ -106,5 +106,8 @@
     "",
     "src"
   ],
-  "autoInstall": false
+  "autoInstall": false,
+  "dependencySensitiveConfigFiles": [
+    "jest.config.js"
+  ]
 }

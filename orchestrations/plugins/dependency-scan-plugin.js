@@ -50,6 +50,9 @@ const MANIFEST_REL = join('.epam', 'dependency-check.json');
  * Listed as data so the reason names the missing key: "the scan cannot run" is not actionable,
  * "no importPattern declared" is.
  */
+/** Optional manifest key. Absent means UNKNOWN, never "none" — see dependencySensitiveConfigFiles. */
+const DEPENDENCY_SENSITIVE_KEY = 'dependencySensitiveConfigFiles';
+
 const REQUIRED_KEYS = [
   'manifestFile',
   'manifestKeys',
@@ -427,10 +430,53 @@ const dependencyScanTool = {
   },
 };
 
+/**
+ * dependencySensitiveConfigFiles — the files a NEW RUNTIME DEPENDENCY may force a change to.
+ *
+ * A story that adds a package almost never only adds a package: the test runner has to be
+ * told to transpile it, the bundler to resolve it, the type checker to see its types. Which
+ * files those are is a STACK FACT — true for this project, wrong for the next — so it is
+ * declared here, in config, and never inferred by the engine or written into a generic
+ * agent prompt.
+ *
+ * Live AMSD-2041/gotransit, 2026-08-11: @contentstack/live-preview-utils is ESM, and
+ * jest.config.js hard-codes an allow-list of packages to transpile. Jest died on `export`
+ * on every attempt. NO ACTOR OWNED THE FILE — the detective enumerates code fix sites from
+ * the ticket, and verification criteria are behavioural by design, so nothing connected
+ * "this story adds a package" to "this config must be revisited". The run failed on build
+ * configuration; the generated code was fine.
+ *
+ * NOT in REQUIRED_KEYS: a project may legitimately have no such files. But UNDECLARED IS
+ * NOT THE SAME AS NONE, so absence returns ok:false with a reason for the caller to report,
+ * never a silent empty list. "We could not tell" must never render as "there are none".
+ */
+function dependencySensitiveConfigFiles(projectRoot, env = process.env) {
+  const m = readScanManifest(projectRoot, env);
+  if (!m.ok) return { ok: false, reason: m.reason };
+
+  const raw = m.cfg[DEPENDENCY_SENSITIVE_KEY];
+  if (raw === undefined || raw === null) {
+    return {
+      ok: false,
+      declared: false,
+      from: m.from,
+      reason: `${DEPENDENCY_SENSITIVE_KEY} is not declared in ${m.from} — cannot tell which `
+        + 'build-config files a new dependency affects, so none will be investigated',
+    };
+  }
+  if (!Array.isArray(raw)) {
+    return { ok: false, declared: true, from: m.from, reason: `${DEPENDENCY_SENSITIVE_KEY} must be an array` };
+  }
+  const files = raw.filter((s) => typeof s === 'string' && s.trim()).map((s) => s.trim());
+  return { ok: true, declared: true, from: m.from, files };
+}
+
 module.exports = {
   pluginApiVersion: PLUGIN_API_VERSION,
   tools: [dependencyScanTool],
   readScanManifest,
+  dependencySensitiveConfigFiles,
+  DEPENDENCY_SENSITIVE_KEY,
   scanImports,
   classifySpecifier,
   resolvesInsideRepo,

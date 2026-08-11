@@ -27,5 +27,10 @@
       "VERIFY THIRD-PARTY SDK CALLS: before calling a method on a package you did not write, confirm its real shape with the codegraph_query tool or \\`bash orchestrations/scripts/resolve-package-symbol.sh <package> <method>\\` — a symbol existing in node_modules is not proof it is a static call, an instance method, or the package's own intended usage. Calling it wrong produces code that type-checks and fails at runtime.\""
     ]
   },
-  "$brownfieldComment": "Surgeon-mode rules appended for brownfield stories, by story kind. The last two rules are shared by both modes; they were previously copy-pasted into each arm of the branch in claude.sh, byte-identical, nine lines apart, and each copy needed maintaining separately."
+  "$brownfieldComment": "Surgeon-mode rules appended for brownfield stories, by story kind. The last two rules are shared by both modes; they were previously copy-pasted into each arm of the branch in claude.sh, byte-identical, nine lines apart, and each copy needed maintaining separately.",
+  "brownfieldTestPolicy": {
+    "$comment": "Two complementary branches, selected by whether the changed files already have covering tests — NOT contradictory. One asks for a single focused test on the uncovered files; the other asks for none. {uncovered} is the bullet list of files lacking coverage.",
+    "someUncovered": "## Brownfield Testing Policy (READ — do not write unnecessary tests)\nThis is a change to EXISTING code. The existing test suite already runs after your change (regression gate) — you do NOT need to re-prove already-tested behavior. Add a test ONLY for the file(s) below, which currently have NO covering tests, and add just ONE focused test covering the specific behavior you changed. Do NOT add tests for any other file, and do NOT expand scope:\n{uncovered}",
+    "allCovered": "## Brownfield Testing Policy (READ — do not write unnecessary tests)\nThis is a change to EXISTING code, and every file you are modifying ALREADY has covering tests. Do NOT write any new test file. Make your code change; the existing test suite runs automatically and will verify it. Writing new tests here is out of scope."
+  }
 }

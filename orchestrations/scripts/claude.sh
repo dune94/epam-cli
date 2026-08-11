@@ -2317,12 +2317,13 @@ ${_body}
                 # anything; fall back to the default AC-driven behavior.
                 brownfield_test_policy=""
             elif [ -n "$_uncovered" ]; then
-                brownfield_test_policy="## Brownfield Testing Policy (READ — do not write unnecessary tests)
-This is a change to EXISTING code. The existing test suite already runs after your change (regression gate) — you do NOT need to re-prove already-tested behavior. Add a test ONLY for the file(s) below, which currently have NO covering tests, and add just ONE focused test covering the specific behavior you changed. Do NOT add tests for any other file, and do NOT expand scope:
-$(printf '%s\n' "$_uncovered" | sed 's/^/  - /')"
+                brownfield_test_policy=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/render-prompt-section.js" \
+                    "$SCRIPT_DIR/../config/agent-contract.json" "brownfieldTestPolicy.someUncovered" \
+                    "uncovered=$(printf '%s\n' "$_uncovered" | sed 's/^/  - /')" 2>/dev/null || echo "")
             else
-                brownfield_test_policy="## Brownfield Testing Policy (READ — do not write unnecessary tests)
-This is a change to EXISTING code, and every file you are modifying ALREADY has covering tests. Do NOT write any new test file. Make your code change; the existing test suite runs automatically and will verify it. Writing new tests here is out of scope."
+                brownfield_test_policy=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/render-prompt-section.js" \
+                    "$SCRIPT_DIR/../config/agent-contract.json" "brownfieldTestPolicy.allCovered" \
+                    "uncovered=$(printf '%s\n' "$_uncovered" | sed 's/^/  - /')" 2>/dev/null || echo "")
             fi
         fi
     fi

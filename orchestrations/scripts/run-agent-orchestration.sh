@@ -8074,10 +8074,9 @@ if ! is_truthy "${SKIP_PRE_REVIEW_GATE:-}" && [ -f "$PROJECT_ROOT/package.json" 
 
         log "  Running the project's declared type check..."
         _tsc_exit=0
-        _pre_review_ts_count=$(find "$PROJECT_ROOT/src" -name "*.ts" 2>/dev/null | grep -v node_modules | wc -l)
-        if [ "$_pre_review_ts_count" -eq 0 ]; then
-            success "  tsc: SKIP (no .ts files in src/ yet)"
-        else
+        # No stack precondition — see lib/story-guards.sh. An undeclared project is refused
+        # by the helper, not skipped, so there is nothing to pre-check here.
+        if true; then
             _run_project_verification "$PROJECT_ROOT" 2>&1 | tee -a "$_pre_review_log"
             _tsc_exit=${PIPESTATUS[0]}
             if [ "$_tsc_exit" -eq 0 ]; then
@@ -8152,10 +8151,8 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
     # ── tsc --noEmit ──────────────────────────────────────────────────────────
     log "  [lint] Running the project's declared type check..."
     _lint_tsc_exit=0
-    _lint_ts_count=$(find "$PROJECT_ROOT/src" -name "*.ts" 2>/dev/null | grep -v node_modules | wc -l)
-    if [ "$_lint_ts_count" -eq 0 ]; then
-        success "  [lint] tsc: SKIP (no .ts files in src/ yet)"
-    else
+    # No stack precondition — see lib/story-guards.sh.
+    if true; then
         _run_project_verification "$PROJECT_ROOT" 2>&1 | tee -a "$_lint_log"
         _lint_tsc_exit=${PIPESTATUS[0]}
         if [ "$_lint_tsc_exit" -eq 0 ]; then
@@ -9041,9 +9038,8 @@ PYEOF
             fi
 
             if [ $_tsc_rc -eq 0 ]; then
-                local _src_count
-                _src_count=$(find "$PROJECT_ROOT/src" -name "*.ts" 2>/dev/null | wc -l || echo "?")
-                tsc_summary="tsc: PASS (exit 0) — $_src_count .ts files checked, no errors"
+                # The engine does not know what the project checked, only that it passed.
+                tsc_summary="verification: PASS (exit 0)"
             else
                 # grep -c already prints "0" on zero matches while also exiting 1 —
                 # `|| echo "?"` would double-print ("0\n?"), garbling this message.

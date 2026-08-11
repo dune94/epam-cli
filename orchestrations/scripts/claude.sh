@@ -5431,12 +5431,11 @@ run_tsc_verification() {
     local story_id="$1"
     local output_file="${2:-/dev/null}"
     is_truthy "${SKIP_STORY_TSC_GATE:-}" && return 0
-    [ ! -f "$PROJECT_ROOT/tsconfig.json" ] && return 0
-
-    # Skip when no .ts source files exist yet (scaffold phase creates structure but no source)
-    local _ts_count
-    _ts_count=$(find "$PROJECT_ROOT/src" -name "*.ts" 2>/dev/null | grep -v node_modules | wc -l)
-    [ "$_ts_count" -eq 0 ] && return 0
+    # No stack precondition. runVerification reports UNKNOWN for a project that has declared
+    # no check, and every caller treats non-zero as failure — so an undeclared repo is
+    # refused rather than skipped. Counting a language's files here meant "skip", which
+    # callers read as PASS: the fail-open the verification plugin exists to remove, moved
+    # from the invocation to the condition.
 
     # NOTE: this gate used to skip test-engineer-role stories entirely ("they
     # extend existing files, not create TS modules"). That reasoning doesn't

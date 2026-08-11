@@ -103,7 +103,8 @@ function runStep19(projectRoot: string): { rc: number; output: string } {
 describe('Step 19 (Pre-review build gate) — REAL execution of the actual run-agent-orchestration.sh code', () => {
   it('extracted the real block, not an empty/wrong slice', () => {
     expect(step19Block).toMatch(/Running vitest/);
-    expect(step19Block).toMatch(/Running tsc --noEmit/);
+    // The engine no longer names the tool — it runs what the project declared.
+    expect(step19Block).toMatch(/_run_project_verification/);
     expect(step19Block.length).toBeGreaterThan(200);
   });
 

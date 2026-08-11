@@ -171,15 +171,19 @@ describe('step 3.8 lint gate', () => {
     const lintIdx = orchSrc.indexOf('step_emit "20" "running"');
     expect(lintIdx).toBeGreaterThan(-1);
     const block = orchSrc.slice(lintIdx, lintIdx + 2500);
-    expect(block).toContain('tsc --noEmit');
+    // The engine runs the project's DECLARED command; it no longer names a compiler.
+    expect(block).toContain('_run_project_verification');
     expect(block).toContain('PIPESTATUS[0]');
   });
 
-  it('lint gate skips tsc when src/ has no .ts files (avoids TS18003 on scaffold-only phase)', () => {
-    const lintIdx = orchSrc.indexOf('step_emit "20" "running"');
-    const block = orchSrc.slice(lintIdx, lintIdx + 2500);
-    expect(block).toMatch(/find.*src.*\.ts.*wc -l|_lint_ts_count/);
-    expect(block).toMatch(/\[ "\$_lint_ts_count" -eq 0 \]|\[ \$_lint_ts_count -eq 0 \]/);
+  it('lint gate verifies unconditionally — no stack precondition', () => {
+    // The empty-src guard was REMOVED. Counting a language's files to decide whether to
+    // verify meant "skip", which callers read as PASS, so any repository without that
+    // language passed without being checked. runVerification reports UNKNOWN for a
+    // project that declared nothing and callers treat non-zero as failure, so the
+    // project's own declaration is the only condition — see
+    // verification-gates-name-no-stack.test.ts for the sweep.
+    expect(orchSrc).not.toMatch(/_lint_ts_count/);
   });
 
   it('lint gate remediation uses AUTOMATION_DIR not SCRIPT_DIR for profiles path', () => {
@@ -272,7 +276,7 @@ describe('step 3.7 pre-review gate tsc exit code handling', () => {
 
   it('pre-review gate does NOT use bare `if tsc ... | tee` pattern', () => {
     // Locate the pre-review gate tsc block
-    const preReviewIdx = orchSrc.indexOf('Running tsc --noEmit');
+    const preReviewIdx = orchSrc.indexOf("Running the project's declared type check");
     expect(preReviewIdx).toBeGreaterThan(-1);
     const block = orchSrc.slice(preReviewIdx, preReviewIdx + 400);
     // Must NOT have the broken pattern where tsc output is piped to tee inside an `if` condition
@@ -284,20 +288,21 @@ describe('step 3.7 pre-review gate tsc exit code handling', () => {
   });
 
   it('pre-review gate marks _pre_review_failed=1 when tsc exits non-zero', () => {
-    const preReviewIdx = orchSrc.indexOf('Running tsc --noEmit');
+    const preReviewIdx = orchSrc.indexOf("Running the project's declared type check");
     const block = orchSrc.slice(preReviewIdx, preReviewIdx + 3000);
     // After the tsc invocation, _pre_review_failed must be set on non-zero exit
     expect(block).toContain('_pre_review_failed=1');
     expect(block).toContain('PIPESTATUS');
   });
 
-  it('pre-review gate skips tsc when src/ has no .ts files (avoids TS18003 on scaffold-only phase)', () => {
-    // Without this guard, tsc --noEmit fails with TS18003 "No inputs were found"
-    // after the scaffold story runs (src/ exists but is empty until impl stories write files).
-    const preReviewIdx = orchSrc.indexOf('Running tsc --noEmit');
-    const block = orchSrc.slice(preReviewIdx, preReviewIdx + 900);
-    expect(block).toMatch(/find.*src.*\.ts.*wc -l|_pre_review_ts_count/);
-    expect(block).toMatch(/\[ "\$_pre_review_ts_count" -eq 0 \]|\[ \$_pre_review_ts_count -eq 0 \]/);
+  it('pre-review gate verifies unconditionally — no stack precondition', () => {
+    // The empty-src guard was REMOVED. Counting a language's files to decide whether to
+    // verify meant "skip", which callers read as PASS, so any repository without that
+    // language passed without being checked. runVerification reports UNKNOWN for a
+    // project that declared nothing and callers treat non-zero as failure, so the
+    // project's own declaration is the only condition — see
+    // verification-gates-name-no-stack.test.ts for the sweep.
+    expect(orchSrc).not.toMatch(/_pre_review_ts_count/);
   });
 });
 

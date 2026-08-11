@@ -15,12 +15,13 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { join } from 'node:path';
+import { engineAndPrompt } from '../../helpers/analyst-prompt';
 
 const CLAUDE_SH     = join(__dirname, '../../../orchestrations/scripts/claude.sh');
 const MOCK_PRD      = join(__dirname, '../../fixtures/mock-prd.json');
 const MOCK_PROFILES = join(__dirname, '../../fixtures/mock-profiles.json');
 
-const claudeSrc  = readFileSync(CLAUDE_SH, 'utf8');
+const claudeSrc  = engineAndPrompt(readFileSync(CLAUDE_SH, 'utf8'));
 const mockPrd    = JSON.parse(readFileSync(MOCK_PRD, 'utf8'));
 const mockProfiles = JSON.parse(readFileSync(MOCK_PROFILES, 'utf8'));
 

@@ -331,7 +331,10 @@ describe('claude.sh — reviewer wired before skill note persistence', () => {
   it('logs the rejection but still persists an "[unreviewed-fallback]"-tagged version instead of discarding the note entirely', () => {
     expect(claudeSrc).toMatch(/Skill note rejected by reviewer/i);
     expect(claudeSrc).toMatch(/persisting raw fallback \(unreviewed\)/i);
-    expect(claudeSrc).toMatch(/\[unreviewed-fallback\] \$\{skill_note:0:200\}/);
+    // The BEHAVIOUR under test (rescue the note rather than discard it) is unchanged; the
+    // note is now persisted WHOLE. It used to be `${skill_note:0:200}` — a rescue that
+    // severed the rule it was rescuing. 2026-08-11.
+    expect(claudeSrc).toMatch(/\[unreviewed-fallback\] \$\{skill_note\}/);
   });
 
   it('the fallback path goes through the SAME persist code as an approved note', () => {

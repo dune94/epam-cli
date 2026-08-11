@@ -89,10 +89,19 @@ describe('_ensure_imperative_opener() — REAL execution', () => {
     },
   );
 
-  it('truncates to 200 characters if normalization would push it over the length cap', () => {
+  it('NEVER truncates — prepending an opener must not cost the end of the instruction', () => {
+    // INVERTED 2026-08-11. This test used to assert `normalized.length <= 200`, i.e. it
+    // RATIFIED the defect: a function that PREPENDS text was expected to cut the tail to
+    // compensate. Live AMSD-2041/gotransit, that cut delivered "...change the pattern to
+    // '/node_modules/(?!swiper|@azure|uu" to the writer — told to change a regex, never
+    // told to what. Eight attempts, three ladder rungs, the run lost.
+    //
+    // Length is a REJECTION criterion upstream (the note goes back for rewrite), never a
+    // mutilation applied here. A test that goes red when the system is fixed is backwards.
     const longNote = 'When the buffer overflows, ' + 'x'.repeat(190);
     const normalized = normalize(longNote);
-    expect(normalized.length).toBeLessThanOrEqual(200);
+    expect(normalized, 'the note was truncated').toContain(longNote);
+    expect(normalized.length, 'prepending must lengthen, never shorten').toBeGreaterThan(longNote.length);
   });
 
   it('is a no-op on an empty note', () => {

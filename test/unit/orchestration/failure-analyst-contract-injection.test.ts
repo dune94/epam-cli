@@ -21,10 +21,11 @@ import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync 
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineAndPrompt, provisionAnalystPrompt, analystPromptEnv } from '../../helpers/analyst-prompt';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
+const claudeSrc = engineAndPrompt(readFileSync(CLAUDE_SH, 'utf8'));
 
 function extractFunctionBody(name: string): string {
   const fnStart = claudeSrc.indexOf(`${name}() {`);
@@ -33,7 +34,11 @@ function extractFunctionBody(name: string): string {
 }
 
 describe('run_failure_analyst — dependency contract injection (static)', () => {
-  const body = extractFunctionBody('run_failure_analyst');
+  // The function BODY assembles the contract text; the PROMPT decides where it is injected
+  // and what the analyst is told about it. Since 2026-08-11 those live in two files — the
+  // engine and the project-authority prompt — so assertions about the analyst's
+  // instructions must see both.
+  const body = engineAndPrompt(extractFunctionBody('run_failure_analyst'));
 
   it('reads .dependencies / technicalNotes.dependsOn, same field-lookup as build_implementation_prompt()', () => {
     expect(body).toMatch(/\.dependencies \/\/ \.technicalNotes\.dependsOn/);
@@ -106,10 +111,13 @@ describe('run_failure_analyst — REAL execution: contract injection prevents th
         }),
       );
 
+      provisionAnalystPrompt(dir);
+
       const fnBody = extractFunctionBody('run_failure_analyst');
       const script = `
 exec 2>&1
 SCRIPT_DIR="${dir}"
+${analystPromptEnv(dir)}
 PROJECT_ROOT="${dir}"
 ORCH_GATE_PROVIDER="fake"
 ORCH_GATE_MODEL="fake-model"

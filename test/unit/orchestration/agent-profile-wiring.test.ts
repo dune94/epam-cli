@@ -11,6 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineAndPrompt } from '../../helpers/analyst-prompt';
 
 const REPO = join(__dirname, '../../../');
 const PROFILES_FILE    = join(REPO, 'orchestrations/agents/profiles.json');
@@ -19,7 +20,7 @@ const TC_WRITER_SH     = join(REPO, 'orchestrations/scripts/post-impl-tc-writer.
 const SPEC_RUNNER_JS   = join(REPO, 'orchestrations/scripts/spec-mode-runner.js');
 
 const profiles = JSON.parse(readFileSync(PROFILES_FILE, 'utf8'));
-const claudeSrc    = readFileSync(CLAUDE_SH, 'utf8');
+const claudeSrc    = engineAndPrompt(readFileSync(CLAUDE_SH, 'utf8'));
 const tcWriterSrc  = readFileSync(TC_WRITER_SH, 'utf8');
 const specRunnerSrc = readFileSync(SPEC_RUNNER_JS, 'utf8');
 
@@ -77,9 +78,15 @@ describe('failure-analyst — profile and wiring', () => {
     expect(claudeSrc).toContain('__ANALYST_PROFILE__');
   });
 
-  it('claude.sh substitutes __ANALYST_PROFILE__ before sending to LLM', () => {
-    const substIdx = claudeSrc.indexOf('analyst_prompt//__ANALYST_PROFILE__');
-    expect(substIdx).toBeGreaterThan(-1);
+  it('__ANALYST_PROFILE__ is supplied as a render value before sending to LLM', () => {
+    // Substitution moved out of the engine on 2026-08-11. It used to be a bash
+    // `${analyst_prompt//__ANALYST_PROFILE__/...}` expansion; the prompt now lives in a
+    // project-authority JSON file and lib/prompt-library.js renders it. The library REFUSES
+    // to emit a prompt with any placeholder left unresolved, which is a stronger guarantee
+    // than this test ever made — a missed substitution used to sail through as literal text.
+    const i = claudeSrc.indexOf('"__ANALYST_PROFILE__":$profile');
+    expect(i, 'the profile is no longer passed to the renderer').toBeGreaterThan(-1);
+    expect(claudeSrc).toContain('prompt-library.js');
   });
 
   it('claude.sh has a fallback when profile is empty', () => {

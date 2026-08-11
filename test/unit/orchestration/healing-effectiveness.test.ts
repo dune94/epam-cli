@@ -70,11 +70,16 @@ describe('claude.sh — target=kb structural contract', () => {
     expect(kbBody).not.toMatch(/\/KB\.md/);
   });
 
-  it('kb entry is truncated at 200 chars to bound context injection size', () => {
+  it('kb entry is NOT character-truncated — a severed rule is not a bounded rule', () => {
+    // INVERTED 2026-08-11. This asserted `${skill_note:0:200}`, ratifying the truncation
+    // that lost AMSD-2041: a KB rule carrying a regex is destroyed, not bounded, by a
+    // character cut. Context size is bounded by dropping WHOLE entries, never by cutting
+    // inside one.
     const kbCaseStart = claudeSrc.indexOf('\n                kb)');
     const kbCaseEnd   = claudeSrc.indexOf('\n                    ;;', kbCaseStart);
     const kbBody      = claudeSrc.slice(kbCaseStart, kbCaseEnd);
-    expect(kbBody).toMatch(/\$\{skill_note:0:200\}/);
+    expect(kbBody.length, 'kb case not found — the test is stale, not the code').toBeGreaterThan(50);
+    expect(kbBody, 'the KB entry is still being character-truncated').not.toMatch(/skill_note:0:\d+/);
   });
 
   it('kb entry format is compact — single bullet line, not a verbose markdown section', () => {

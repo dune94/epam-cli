@@ -11,12 +11,13 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineAndPrompt } from '../../helpers/analyst-prompt';
 
 const CLAUDE_SH    = join(__dirname, '../../../orchestrations/scripts/claude.sh');
 const MOCK_PRD     = join(__dirname, '../../fixtures/mock-prd.json');
 const MOCK_PROFILES = join(__dirname, '../../fixtures/mock-profiles.json');
 
-const src          = readFileSync(CLAUDE_SH, 'utf8');
+const src          = engineAndPrompt(readFileSync(CLAUDE_SH, 'utf8'));
 const mockPrd      = JSON.parse(readFileSync(MOCK_PRD, 'utf8'));
 const mockProfiles = JSON.parse(readFileSync(MOCK_PROFILES, 'utf8'));
 

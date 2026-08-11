@@ -19,6 +19,7 @@ import { readFileSync, mkdtempSync, writeFileSync, chmodSync, rmSync } from 'nod
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { provisionAnalystPrompt, analystPromptEnv } from '../../helpers/analyst-prompt';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
@@ -88,9 +89,12 @@ awk -v RS='%%%DELIM%%%' -v n="$n" 'NR==n' "${responsesFile}" | sed '/^$/d' | hea
       const fnEnd = claudeSrc.indexOf('\n}', fnStart + 50);
       const fnBody = claudeSrc.slice(fnStart, fnEnd + 2);
 
+      provisionAnalystPrompt(dir);
+
       const script = `
 exec 2>&1
 SCRIPT_DIR="${dir}"
+${analystPromptEnv(dir)}
 ORCH_GATE_PROVIDER="fake"
 ORCH_GATE_MODEL="fake-model"
 MAIN_PRD_FILE=""

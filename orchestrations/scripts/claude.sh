@@ -6720,7 +6720,14 @@ _ensure_imperative_opener() {
         printf '%s' "$note"
         return 0
     fi
-    printf '%s' "${SKILL_NOTE_NORMALIZATION_OPENER}: ${note}" | cut -c1-200
+    # NO TRUNCATION. This function PREPENDS an opener, which makes the string LONGER;
+    # cutting the tail to compensate destroys the END of the instruction — where the fix
+    # lives. Live 2026-08-11, AMSD-2041/gotransit: the analyst correctly diagnosed a Jest
+    # ESM failure and this line delivered "...change the pattern to
+    # '/node_modules/(?!swiper|@azure|uu" to the writer. Told to change a regex, never told
+    # to what. Eight attempts, three ladder rungs, the run lost, on a one-line config fix.
+    # A severed instruction is not shorter guidance, it is confidently wrong guidance.
+    printf '%s' "${SKILL_NOTE_NORMALIZATION_OPENER}: ${note}"
 }
 
 # _tool_recipe_reinvokes_test_cmd <recipe> <test_cmd>
@@ -7000,60 +7007,42 @@ $(cat "$_fa_vendor_contract")
     [ -z "$dependency_contracts" ] && dependency_contracts="(no dependency contracts available)"
 
     local analyst_prompt
-    analyst_prompt=$(cat << 'ANALYST_PROMPT_END'
-__ANALYST_PROFILE__
+    # THE ANALYST PROMPT IS A PROJECT-AUTHORITY FILE, never a heredoc in this engine.
+    # orchestrations/prompts/templates/failure-analyst.json is the immutable generic source
+    # it was minted from and is NEVER executed. A missing project prompt is a HARD FAILURE:
+    # there is deliberately nothing to fall back to, because a silent degrade to a generic
+    # template is how an engine-embedded prompt runs for a whole campaign unnoticed.
+    #
+    # Values go via a JSON file, not argv: they routinely carry newlines, quotes and
+    # megabytes of test output. The renderer substitutes with a replacer FUNCTION, so a \$&
+    # or \$1 inside a diff or a log is inserted literally instead of being read as a
+    # replacement pattern.
+    local _analyst_values _analyst_values_err
+    _analyst_values=$(mktemp /tmp/analyst-values-XXXXXX.json)
+    _analyst_values_err="${_analyst_values}.err"
+    jq -n \
+        --arg profile "$analyst_profile" \
+        --arg story_id "$story_id" \
+        --arg story_role "$story_role" \
+        --arg story_acs "$story_acs" \
+        --arg skill_addendum "$skill_addendum" \
+        --arg dependency_contracts "$dependency_contracts" \
+        --arg verification_failure "${VERIFICATION_FAILURE:-}" \
+        '{"__ANALYST_PROFILE__":$profile,
+          "__STORY_ID__":$story_id,
+          "__STORY_ROLE__":$story_role,
+          "__STORY_ACS__":$story_acs,
+          "__SKILL_ADDENDUM__":$skill_addendum,
+          "__DEPENDENCY_CONTRACTS__":$dependency_contracts,
+          "__VERIFICATION_FAILURE__":$verification_failure}' > "$_analyst_values" 2>/dev/null
 
-STORY: __STORY_ID__
-AGENT ROLE: __STORY_ROLE__
-
-CURRENT TEST CRITERIA (TC facts when available, ACs as fallback):
-__STORY_ACS__
-
-AGENT SKILL ADDENDUM (instructions in the agent's system prompt):
-__SKILL_ADDENDUM__
-
-DEPENDENCY CONTRACTS (ground truth — auto-generated from actual source, not
-model-transcribed; trust this over any assumption you'd otherwise make about
-what a dependency exports, including its exact class/function names and
-casing):
-__DEPENDENCY_CONTRACTS__
-
-TEST FAILURE OUTPUT:
-__VERIFICATION_FAILURE__
-
-You have read-only tools available (list/search/read files, run read-only
-shell commands). If the failure claims something about the filesystem or an
-installed package — "not installed," "missing," "does not exist," a wrong
-path — VERIFY it with your tools before stating it as your diagnosis. Do not
-assume; a confident wrong diagnosis is worse than a slower correct one,
-because every retry after it repeats the same mistake unchanged. Your tool
-budget is small — check the ONE fact your diagnosis depends on, not the
-whole codebase.
-
-Output ONLY a single JSON object. No markdown fences, no prose outside the JSON:
-{"diagnosis":"<one sentence: what specifically went wrong in the code>","target":"prd|tc|skill|kb|tool|none","ac_patches":[{"index":<0-based AC index>,"new_text":"<exact replacement text for that AC>"}],"tc_patches":[{"index":<0-based TC fact index>,"new_text":"<exact replacement text for that TC fact>"}],"skill_note":"<if target=skill or target=kb: concrete coding instruction>","tool_spec":{"name":"<kebab-case tool name, e.g. add-dependency>","purpose":"<one sentence: what repeated mechanical step this automates>","recipe":"<the exact shell commands the tool script should run, using $1 $2 ... for its arguments>"},"reason":"<why this change prevents the same failure on retry>"}
-
-Decision rules:
-- target=prd: the AC wording was ambiguous or contradictory, causing the agent to write wrong code. Fix the AC.
-- target=tc: the testCriteria facts are wrong or incomplete — the test agent followed them but they described incorrect behavior. Fix the TC facts.
-- target=skill: the agent used a bad coding pattern that should be injected into this retry's prompt only. This INCLUDES any diagnosis that names a specific, checkable fact about a type, property, field, or signature (e.g. "missing required X field", "Config doesn't match Y's type", "wrong argument count for Z") — that fact will not change no matter how many times or how strong a model you retry with, so it must be told, not re-guessed.
-- target=kb: the failure reveals a reusable coding rule that ALL future agents with this agent role should know — append to the role-specific KB.
-- target=tool: the failure is a repeated MECHANICAL step (not a knowledge gap) that a small shell script can perform reliably every time — e.g. "add a package to package.json and install it before importing it". Only use target=tool when a KB rule alone has already failed to prevent the same class of failure, or the fix is a multi-step shell recipe error-prone to repeat by hand. Provide tool_spec.
-- target=none: reserved for a genuinely non-reproducible mistake — a stray typo, a one-off slip with no identifiable pattern — where your own diagnosis does not name a specific, checkable, nameable fact (a property, type, field, or signature) that a future attempt could look up and get right. If your diagnosis DOES name such a fact, that is deterministic, not transient, and target=none is the wrong answer even if you are uncertain what the exact correct value should be — use target=skill and describe the fact you found, even incompletely, rather than defaulting to a retry that cannot discover it on its own.
-- Only include ac_patches when target=prd, tc_patches when target=tc; use [] for other targets. Only include tool_spec when target=tool; omit otherwise.
-- skill_note must be a concrete "do/don't" instruction (e.g. "Never use backtick template literals in test files — use single-quoted strings only").
-- tool_spec.recipe must be idempotent shell — safe to run more than once (e.g. check before installing).
-- Keep diagnosis under 20 words, reason under 15 words.
-ANALYST_PROMPT_END
-    )
-    # Substitute placeholders (safe substitution avoids heredoc quoting issues)
-    analyst_prompt="${analyst_prompt//__ANALYST_PROFILE__/$analyst_profile}"
-    analyst_prompt="${analyst_prompt//__STORY_ID__/$story_id}"
-    analyst_prompt="${analyst_prompt//__STORY_ROLE__/$story_role}"
-    analyst_prompt="${analyst_prompt//__STORY_ACS__/$story_acs}"
-    analyst_prompt="${analyst_prompt//__SKILL_ADDENDUM__/$skill_addendum}"
-    analyst_prompt="${analyst_prompt//__DEPENDENCY_CONTRACTS__/$dependency_contracts}"
-    analyst_prompt="${analyst_prompt//__VERIFICATION_FAILURE__/$VERIFICATION_FAILURE}"
+    if ! analyst_prompt=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/prompt-library.js" \
+            render failure-analyst "${EPAM_PROJECT_CONFIG_DIR:-}" "$_analyst_values" 2>"$_analyst_values_err"); then
+        error "  [FailureAnalyst] cannot build prompt: $(cat "$_analyst_values_err" 2>/dev/null | head -c 500)"
+        rm -f "$_analyst_values" "$_analyst_values_err"
+        return 1
+    fi
+    rm -f "$_analyst_values" "$_analyst_values_err"
 
     local analyst_raw="" analyst_json="" _analyst_call_ok="false"
     local _analyst_max_attempts=3 _analyst_attempt=1
@@ -7387,7 +7376,9 @@ PYEOF
                                 # 3 times — persist a length-safe, tagged-unreviewed fallback
                                 # instead of losing the knowledge outright.
                                 warning "  [FailureAnalyst] Skill note rejected by reviewer after 3 attempts — persisting raw fallback (unreviewed) instead of discarding"
-                                _skill_note_to_persist="[unreviewed-fallback] ${skill_note:0:200}"
+                                # Persist the note WHOLE. An unreviewed-but-complete rule is
+                                # usable; an unreviewed-and-severed one is worse than none.
+                                _skill_note_to_persist="[unreviewed-fallback] ${skill_note}"
                             fi
                             REVIEWER_RETRY_TEXT="$_skill_note_to_persist"
                             # THE ROSTER IS SET AFTER THE MINT. Nothing writes it afterwards.
@@ -7432,8 +7423,11 @@ PYEOF
                         local kb_file; kb_file=$(_kb_file_for_story "$story_id" "$kb_dir")
                         local kb_ts
                         kb_ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "unknown")
-                        # Truncate to 200 chars — entries are single actionable rules, not essays
-                        local short_note="${skill_note:0:200}"
+                        # NO TRUNCATION — entries are single actionable rules, and a rule
+                        # carrying a regex, path or command is destroyed by a character cut.
+                        # Length is a REJECTION criterion upstream (the note goes back for
+                        # rewrite), never a mutilation silently applied here.
+                        local short_note="${skill_note}"
                         # Exact-duplicate check against the FULL kb_file BEFORE ever calling
                         # the reviewer (found live, 2026-07-12): unlike the skill_note case
                         # above (which does exactly this grep against the full profile text),

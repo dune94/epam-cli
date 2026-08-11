@@ -181,6 +181,11 @@ describe('STRUCTURAL: no new gate joins the inert class', () => {
     check_plan_mode_required: 'a PREDICATE: returns 1 to mean "plan mode is not required"',
     run_implementation: 'phase-level aggregate over all stories, not a per-attempt rejection',
     run_change_with_reviewer_retry: 'reviews a proposed skill-note/KB change, not writer output',
+    run_failure_analyst:
+      'DIAGNOSES a failure, never rejects the writer. Returns 1 when it cannot build its own ' +
+      'project-authority prompt — the same "proceed without analyst guidance" posture it already ' +
+      'takes when all 3 response attempts are unparseable. VERIFICATION_FAILURE is its INPUT, ' +
+      'not its output; setting it here would overwrite the very failure being diagnosed.',
   };
 
   function rejectingGates(): string[] {

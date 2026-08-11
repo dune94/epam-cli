@@ -31,8 +31,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineAndPrompt, analystPromptBody } from '../../helpers/analyst-prompt';
 
-const SRC = readFileSync(join(__dirname, '../../../orchestrations/scripts/claude.sh'), 'utf8');
+const SRC = engineAndPrompt(readFileSync(join(__dirname, '../../../orchestrations/scripts/claude.sh'), 'utf8'));
 // ORCH_GATE_ALLOWED_TOOLS's default lives in the orchestrator, not claude.sh.
 const ORCH_SRC = readFileSync(join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
 
@@ -84,9 +85,10 @@ describe('the tool grant is bounded, not unlimited', () => {
 
 describe('the prompt tells the analyst to use the tools, not just receive them', () => {
   it('instructs verification before stating a claim as fact', () => {
-    const i = SRC.indexOf("analyst_prompt=$(cat << 'ANALYST_PROMPT_END'");
-    const end = SRC.indexOf('\nANALYST_PROMPT_END', i);
-    const template = SRC.slice(i, end);
+    // The prompt left claude.sh on 2026-08-11 and is now a project-authority JSON file, so
+    // there is no heredoc to slice. Read the prompt itself — the artifact that reaches the
+    // model — rather than the engine that renders it.
+    const template = analystPromptBody();
     expect(template, 'tools were granted but the prompt never tells the analyst to use ' +
       'them before asserting a fact — a model with unused tool access behaves identically ' +
       'to one with none')

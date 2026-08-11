@@ -21,6 +21,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineAndPrompt, provisionAnalystPrompt, analystPromptEnv } from '../../helpers/analyst-prompt';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
@@ -28,7 +29,7 @@ const PROFILES  = join(REPO_ROOT, 'orchestrations/agents/profiles.json');
 const PROFILES_ORIG = join(REPO_ROOT, 'orchestrations/agents/profiles.json.original');
 const CREATE_TOOLS = join(REPO_ROOT, 'src/tools/createTools.ts');
 
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
+const claudeSrc = engineAndPrompt(readFileSync(CLAUDE_SH, 'utf8'));
 const profiles = JSON.parse(readFileSync(PROFILES, 'utf8'));
 const profilesOrig = JSON.parse(readFileSync(PROFILES_ORIG, 'utf8'));
 const createToolsSrc = readFileSync(CREATE_TOOLS, 'utf8');

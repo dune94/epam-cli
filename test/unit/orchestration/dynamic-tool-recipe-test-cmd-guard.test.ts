@@ -33,10 +33,11 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync, chmodSync, existsSync
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineAndPrompt, provisionAnalystPrompt, analystPromptEnv } from '../../helpers/analyst-prompt';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
+const claudeSrc = engineAndPrompt(readFileSync(CLAUDE_SH, 'utf8'));
 
 function extractFunctionBody(name: string): string {
   const fnStart = claudeSrc.indexOf(`${name}() {`);
@@ -135,9 +136,11 @@ describe('run_failure_analyst — REAL execution: a tool_creation targeting the 
 
       const fnBody = extractFunctionBody('run_failure_analyst');
       const helperBody = extractFunctionBody('_tool_recipe_reinvokes_test_cmd');
+      provisionAnalystPrompt(dir);
       const script = `
 exec 2>&1
 SCRIPT_DIR="${dir}"
+${analystPromptEnv(dir)}
 PROJECT_ROOT="${dir}"
 ORCH_GATE_PROVIDER="fake"
 ORCH_GATE_MODEL="fake-model"

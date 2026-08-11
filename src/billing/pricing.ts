@@ -3,6 +3,17 @@ import { dirname, join } from 'path';
 export interface ModelPricing {
   inputPerMillion: number;  // USD per 1M input tokens
   outputPerMillion: number; // USD per 1M output tokens
+  /**
+   * Largest per-REQUEST input, in tokens, still billed at the base rate.
+   *
+   * Some vendors tier by request size rather than by volume: MiniMax-M3 bills input up to 512K at
+   * the base rate and DOUBLES above it. Crossing that is invisible — the request succeeds and
+   * returns normally, it simply costs twice as much per token from that turn onward.
+   *
+   * Optional, and absent means UNCAPPED rather than capped at a default. Inventing a ceiling for a
+   * model whose pricing we have not checked would throttle it against a number we made up.
+   */
+  standardTierMaxInputTokens?: number;
 }
 
 /**
@@ -60,9 +71,28 @@ export const PRICING_AS_OF: string = _loaded.asOf ?? 'unknown';
 
 export const MODEL_PRICING: Record<string, ModelPricing> = _loaded.models ?? {};
 
+/** Is this model priced at all? An unpriced model costs $0 to every consumer of calculateCost. */
+export function isPriced(model: string): boolean {
+  return Boolean(MODEL_PRICING[model]);
+}
+
+/**
+ * Cost from the local pricing table. ALWAYS an estimate — no vendor bills from this file.
+ *
+ * An unpriced model returns 0, which is indistinguishable from a free call to every caller,
+ * including the story budget guard that sums these numbers to enforce storyBudgetHardLimitUsd.
+ * A model missing from config would therefore be invisible to the only mechanism that stops a
+ * runaway story. It is warned about loudly rather than silently costing nothing — callers that
+ * need certainty should check isPriced() first.
+ */
 export function calculateCost(model: string, inputTokens: number, outputTokens: number): number {
   const pricing = MODEL_PRICING[model];
-  if (!pricing) return 0;
+  if (!pricing) {
+    process.emitWarning?.(
+      `[pricing] no entry for '${model}' in ${PRICING_CONFIG_REL} — this call is being counted ` +
+      `as $0.00 and is INVISIBLE to the story budget guard. Add it to keep spend enforceable.`);
+    return 0;
+  }
   return (
     (inputTokens  / 1_000_000) * pricing.inputPerMillion +
     (outputTokens / 1_000_000) * pricing.outputPerMillion
@@ -77,4 +107,17 @@ export function formatCost(usd: number): string {
 
 export function getPricing(model: string): ModelPricing | null {
   return MODEL_PRICING[model] ?? null;
+}
+
+/**
+ * The largest per-request input this model still bills at the base rate, or null when the model
+ * declares no tier.
+ *
+ * null means "no known ceiling", NOT "zero" and NOT some default — callers must treat it as
+ * uncapped. The recurring defect in this pipeline is an unknown rendering as a legal value; a
+ * fabricated ceiling would force compaction on a model whose real limit is higher.
+ */
+export function standardTierMaxInputTokens(model: string): number | null {
+  const v = MODEL_PRICING[model]?.standardTierMaxInputTokens;
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null;
 }

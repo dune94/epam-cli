@@ -58,6 +58,28 @@
 # top. codeline-facts.json remains purely project-config-driven and is a
 # silent no-op when no project config dir is set or the codeline can't be
 # matched against project.outputDirs.
+
+# _epam_write_verification_manifest <project_root>
+# Generates .epam/verification.json by asking the verification plugin to detect how THIS repo
+# checks itself (its own package scripts, its own lockfile). Never invents a command: an
+# unrecognised stack writes no manifest, and the plugin then reports UNKNOWN rather than a pass.
+_epam_write_verification_manifest() {
+    local _root="$1"
+    local _plugin="${AUTOMATION_DIR:-$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")}/plugins/verification-tools.js"
+    [ -f "$_plugin" ] || return 0
+    local _node="${NODE_CMD:-${NODE_BIN:-node}}"
+    command -v "$_node" >/dev/null 2>&1 || return 0
+    "$_node" -e '
+      const p = require(process.argv[1]);
+      const root = process.argv[2];
+      const d = p.detectVerification(root);
+      if (!d) process.exit(3);
+      const fs = require("node:fs"), path = require("node:path");
+      fs.mkdirSync(path.join(root, ".epam"), { recursive: true });
+      fs.writeFileSync(path.join(root, ".epam", "verification.json"), JSON.stringify(d, null, 2) + "\n");
+    ' "$_plugin" "$_root" 2>/dev/null || true
+}
+
 _provision_epam_plugin_config() {
     local _project_root="$1"
 
@@ -74,6 +96,10 @@ _provision_epam_plugin_config() {
 
     if [ -n "$_codegraph_plugin_abs" ] || [ "$_project_tools_json" != "[]" ]; then
         mkdir -p "${_project_root}/.epam"
+        # Verification manifest, generated from the repo's OWN scripts (never a tool name baked
+        # into the engine). Written per codeline at provisioning time so every writer, gate and
+        # worktree has it. detect + emit live in the plugin; this only places the file.
+        _epam_write_verification_manifest "${_project_root}"
         jq -n --argjson project "$_project_tools_json" --arg cg "$_codegraph_plugin_abs" \
             '{tools: (((if $cg != "" then [$cg] else [] end) + $project) | unique)}' \
             > "${_project_root}/.epam/settings.json"

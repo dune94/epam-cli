@@ -98,7 +98,10 @@ describe('verify_story_deliverables — absolute path rewriting in worktree mode
     // Widened from 800 (2026-07-12): the vendor-dir-skip fix added a
     // comment block + vendor-dir-reading code before the WORKTREE_MODE
     // rewrite logic, pushing it further into the function.
-    const block = claudeSrc.slice(fnIdx, fnIdx + 2200);
+    // Widened 2026-08-10: the verified-fix-site collection and the gitignored-path discount
+    // were added ahead of the worktree rewrite, pushing it past a 2200-char slice. The
+    // PRESENCE and ORDER of the rewrite is what these assert; the window only has to reach it.
+    const block = claudeSrc.slice(fnIdx, fnIdx + 7000);
     expect(block).toContain('WORKTREE_MODE');
     expect(block).toContain('MAIN_PROJECT_ROOT');
   });
@@ -106,14 +109,20 @@ describe('verify_story_deliverables — absolute path rewriting in worktree mode
   it('rewrite uses string substitution (not just PROJECT_ROOT prefix)', () => {
     // Pattern: ${PROJECT_ROOT}${file#${MAIN_PROJECT_ROOT}}
     const fnIdx = claudeSrc.indexOf('verify_story_deliverables()');
-    const block = claudeSrc.slice(fnIdx, fnIdx + 2200);
+    // Widened 2026-08-10: the verified-fix-site collection and the gitignored-path discount
+    // were added ahead of the worktree rewrite, pushing it past a 2200-char slice. The
+    // PRESENCE and ORDER of the rewrite is what these assert; the window only has to reach it.
+    const block = claudeSrc.slice(fnIdx, fnIdx + 7000);
     expect(block).toMatch(/PROJECT_ROOT.*MAIN_PROJECT_ROOT|MAIN_PROJECT_ROOT.*PROJECT_ROOT/);
   });
 
   it('rewrite only applies when file starts with MAIN_PROJECT_ROOT (not all absolute paths)', () => {
     // System absolute paths like /tmp/foo should not be rewritten
     const fnIdx = claudeSrc.indexOf('verify_story_deliverables()');
-    const block = claudeSrc.slice(fnIdx, fnIdx + 2200);
+    // Widened 2026-08-10: the verified-fix-site collection and the gitignored-path discount
+    // were added ahead of the worktree rewrite, pushing it past a 2200-char slice. The
+    // PRESENCE and ORDER of the rewrite is what these assert; the window only has to reach it.
+    const block = claudeSrc.slice(fnIdx, fnIdx + 7000);
     // Must guard with: [[ "$file" = "${MAIN_PROJECT_ROOT}"* ]]
     expect(block).toMatch(/MAIN_PROJECT_ROOT.*\*/);
   });
@@ -135,8 +144,12 @@ describe('agent write-first prompt — absolute paths rewritten in worktree mode
     // Both must use bash parameter substitution: ${PROJECT_ROOT}${f#${MAIN_PROJECT_ROOT}}
     const verifyIdx = claudeSrc.indexOf('verify_story_deliverables()');
     // Widened from 1000 (2026-07-12): see the vendor-dir-skip fix comment above.
-    const verifyBlock = claudeSrc.slice(verifyIdx, verifyIdx + 2400);
-    const promptBlock = claudeSrc.slice(promptIdx, promptIdx + 3000);
+    // Same widening as above — this compares the TWO rewrites for equivalence, so both
+    // windows must actually reach their rewrite.
+    const verifyBlock = claudeSrc.slice(verifyIdx, verifyIdx + 7000);
+    // The write-first block gained the brownfield directive and existing-file injection
+    // between its start and the path rewrite it shares with verify_story_deliverables.
+    const promptBlock = claudeSrc.slice(promptIdx, promptIdx + 9000);
 
     expect(verifyBlock).toMatch(/PROJECT_ROOT.*#.*MAIN_PROJECT_ROOT/);
     expect(promptBlock).toMatch(/PROJECT_ROOT.*#.*MAIN_PROJECT_ROOT/);
@@ -323,12 +336,12 @@ describe('scope guard — EPAM_ALLOWED_WRITE_PATHS rewritten to worktree in work
 
   it('_allowed_write_paths rewrite appears AFTER jq extraction and BEFORE EPAM_ALLOWED_WRITE_PATHS export', () => {
     expect(sgCommentIdx).toBeGreaterThan(-1);
-    // Window widened three times: a fix-site-path union block, the reuse
-    // guard's symbol/scope derivation, and then the model/provider-specific
-    // (minimax/kimi) override block, now sit between the worktree rewrite and
-    // the env export. The ORDER asserted below is what matters; the window only
-    // has to be wide enough to still contain the export.
-    const block = claudeSrc.slice(sgCommentIdx, sgCommentIdx + 9000);
+    // Window widened four times now: a fix-site-path union block, the reuse guard's
+    // symbol/scope derivation, the model/provider-specific override block, and (2026-08-10)
+    // the per-retry effort escalation, settings invariant, top_p and provider-order handling
+    // all sit between the worktree rewrite and the env export. The ORDER asserted below is
+    // what matters; the window only has to be wide enough to still contain the export.
+    const block = claudeSrc.slice(sgCommentIdx, sgCommentIdx + 16000);
     const jqIdx = block.indexOf('jq -r');
     const rewriteIdx = block.search(/_allowed_write_paths=.*\$\{_allowed_write_paths\/\//);
     const exportIdx = block.indexOf('EPAM_ALLOWED_WRITE_PATHS=');

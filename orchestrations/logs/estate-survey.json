@@ -3,47 +3,40 @@
     {
       "codeline": "gotransit",
       "state": "in_scope",
-      "evidence": "codegraph_query found the Contentstack Delivery SDK Stack initialization at src/services/contentstack.ts:69 ('contentstack.Stack(options)') and a wide Contentstack component infrastructure (ContentstackLink, ContentstackImage, ContentstackTable, ContentstackValues, etc.) all consuming a useContent hook. Searched src/ for 'live_preview', 'live-preview-utils', 'ContentstackLivePreview', and 'onEntryChange' — all returned zero matches in source. The @contentstack/live-preview-utils package is NOT in the manifest. The live_preview config key appears only in node_modules/contentstack/ type definitions and defaults, not in application source. This codeline uses Contentstack as its CMS but has zero existing live preview infrastructure — the work is greenfield here.",
+      "evidence": "Opened src/services/contentstack.ts which initializes contentstack.Stack(options) at line 69 with api_key, delivery_token, environment, branch — but NO live_preview config block. Searched entire codeline for live_preview, preview_token, onEntryChange, live-preview-utils, ContentstackLivePreview — zero matches. Also opened src/context/ContentstackContext.tsx (React context provider for content data, no preview wiring) and src/hooks/useContent.ts (reads from context, no preview logic). The @contentstack/live-preview-utils package is absent from the manifest. The Stack() initialization site is the integration point per the Contentstack CSR Live Preview docs.",
       "surfaces": [
         "src/services/contentstack.ts",
-        "src/components/contentstack/",
-        "src/hooks/useContent"
+        "src/context/ContentstackContext.tsx",
+        "src/hooks/useContent.ts"
       ],
       "filesRead": [
         "src/services/contentstack.ts",
-        "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
-        "src/components/contentstack/ContentstackImage/ContentstackImage.tsx",
-        "src/components/contentstack/ContentstackTable/ContentstackTable.tsx"
+        "src/context/ContentstackContext.tsx",
+        "src/hooks/useContent.ts"
       ],
       "evidenceGap": false
     },
     {
       "codeline": "upexpress",
       "state": "in_scope",
-      "evidence": "Searched src/ for 'live_preview', 'live-preview-utils', 'onEntryChange', 'Contentstack.Stack', and 'from contentstack' — all returned zero matches in source. However, a .git/lost-found/other/ review verdict file (bc98f3a...) reveals a PRIOR FAILED ATTEMPT at this exact ticket: it references src/context/ContentstackContext.ts, src/hooks/useContent.ts, src/components/contentstack/ContentstackLink/ContentstackLink.tsx, and _app.tsx. The review states '@contentstack/live-preview-utils is not even installed (confirmed: NOT_INSTALLED)' and the implementation was rejected ('changes_requested') with all blockers. The migration-scripts/initial_backup/uat/custom-roles/custom-roles.json contains a 'live_preview' key in a Contentstack roles backup. No Contentstack.Stack initialization was found in src/ via search — the codeline may initialize Contentstack through @metrolinx/cx-shared or another shared path. The package is not in the manifest. No working live preview infrastructure exists; a prior attempt was made and rejected.",
+      "evidence": "Opened src/services/contentstack.ts which initializes contentstack.Stack(options) with api_key, delivery_token, environment, branch — no live_preview config. Searched entire codeline for live_preview, preview_token, onEntryChange, live-preview-utils, ContentstackLivePreview — zero matches. The file is structurally near-identical to gotransit's contentstack service. @contentstack/live-preview-utils is absent from the manifest. The Stack() init site is the integration point.",
       "surfaces": [
-        "src/context/ContentstackContext.ts",
-        "src/hooks/useContent.ts",
-        "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
-        "migration-scripts/initial_backup/"
+        "src/services/contentstack.ts"
       ],
       "filesRead": [
-        ".git/lost-found/other/bc98f3a496c6d9e59a802588bdeb8da93aa78d7d",
-        "migration-scripts/initial_backup/uat/custom-roles/custom-roles.json"
+        "src/services/contentstack.ts"
       ],
       "evidenceGap": false
     },
     {
       "codeline": "metrolinx",
       "state": "in_scope",
-      "evidence": "The @contentstack/live-preview-utils package IS physically present in node_modules (README.md, package.json, dist/ all found via search), though it is NOT listed in the declared manifest dependencies — suggesting it may be a transitive dependency or was installed but not yet committed. Searched src/ for 'live_preview', 'live-preview-utils', 'ContentstackLivePreview', 'onEntryChange', 'Contentstack.Stack', and 'from contentstack' — all returned zero matches in source. No ContentstackLivePreview.init() call, no onEntryChange subscription, and no live_preview config block exist in application source. No Contentstack.Stack initialization was found in src/ — the codeline may use @metrolinx/cx-shared for Contentstack access. The package being in node_modules but not wired into any source file indicates someone may have begun the work but not completed it, or it arrived as a transitive dependency. No functional live preview infrastructure exists.",
+      "evidence": "Opened src/services/contentstack.ts which initializes contentstack.Stack(options) with api_key, delivery_token, environment, branch, and additional fetchOptions (debug, logHandler, retryCondition) — but no live_preview config. Searched entire codeline for live_preview, preview_token, onEntryChange, live-preview-utils, ContentstackLivePreview — zero matches. This codeline also has a separate interactive maps stack config (INTERACTIVE_MAPS_STACK_* env vars) but neither stack has preview wiring. @contentstack/live-preview-utils is absent from the manifest. The Stack() init site is the integration point.",
       "surfaces": [
-        "node_modules/@contentstack/live-preview-utils/"
+        "src/services/contentstack.ts"
       ],
       "filesRead": [
-        "node_modules/@contentstack/live-preview-utils/README.md",
-        "node_modules/@contentstack/live-preview-utils/package.json",
-        "node_modules/@contentstack/live-preview-utils/dist/legacy/light-sdk.js"
+        "src/services/contentstack.ts"
       ],
       "evidenceGap": false
     }
@@ -51,18 +44,18 @@
   "recommendedInvestigators": [
     {
       "codeline": "gotransit",
-      "focus": "The Contentstack Stack initialization at src/services/contentstack.ts — this is where live_preview config must be added. Then trace how useContent and the Contentstack context provider (likely in _app.tsx or a context file) distribute content to the 236+ consuming components — this is where onEntryChange subscription must be wired.",
-      "why": "This codeline has the clearest Stack initialization point (src/services/contentstack.ts:69) and the broadest Contentstack component surface. The investigator should confirm whether @contentstack/live-preview-utils needs to be added to package.json and how the existing content delivery flow (getStaticProps → context → useContent) can be adapted for reactive preview updates."
+      "focus": "Wire Contentstack Live Preview into src/services/contentstack.ts Stack() initialization by adding live_preview config (preview_token, enable, host). Install @contentstack/live-preview-utils and initialize it in a separate utils file. Then wire onEntryChange into the client-side data fetching layer (src/context/ContentstackContext.tsx and src/hooks/useContent.ts) so draft entries refresh in preview mode.",
+      "why": "Stack() at line 69 of src/services/contentstack.ts is the sole Contentstack delivery SDK init site and has no live_preview block. The React context layer (ContentstackContext/useContent) is where content is injected into the component tree, making it the natural place to trigger re-fetches on entry change."
     },
     {
       "codeline": "upexpress",
-      "focus": "Examine src/context/ContentstackContext.ts and _app.tsx to understand the current content provider pattern. A prior attempt at this exact ticket was rejected — the review verdict in .git/lost-found/other/ describes what went wrong: the SDK was never installed, a URL-param approach was used instead of SDK-driven onEntryChange, and the provider was never mounted. The investigator should start from that review to understand what NOT to do.",
-      "why": "There is a documented failed prior attempt with specific feedback on what was wrong. The investigator must understand why the previous approach was rejected and implement the SDK-based approach correctly. The absence of a found Contentstack.Stack call in src/ suggests Contentstack may be initialized through @metrolinx/cx-shared — this needs confirmation."
+      "focus": "Same pattern as gotransit: add live_preview config to Stack() in src/services/contentstack.ts, install and init @contentstack/live-preview-utils, and wire onEntryChange into the content context/hook layer. Verify whether this codeline shares a content context structure with gotransit or has its own variant.",
+      "why": "src/services/contentstack.ts is structurally near-identical to gotransit's, with the same Stack() init and no live_preview. The codeline has its own content context (confirmed by search showing ContentstackContext imports across components)."
     },
     {
       "codeline": "metrolinx",
-      "focus": "Determine why @contentstack/live-preview-utils is in node_modules but not in the manifest — is it transitive or was it installed speculatively? Then find where Contentstack is initialized (possibly through @metrolinx/cx-shared) and where the content context provider lives, to identify where live_preview config and onEntryChange would be wired.",
-      "why": "This codeline is in an ambiguous state: the SDK package is physically present but not wired into any source. The investigator needs to determine if this is a transitive dependency artifact or evidence of an incomplete prior attempt, and then identify the Contentstack initialization and content distribution path (which may differ from gotransit/upexpress if it goes through cx-shared)."
+      "focus": "Add live_preview config to Stack() in src/services/contentstack.ts (note this file has a more complex options object with fetchOptions/debug/retry — live_preview must coexist). Install and init @contentstack/live-preview-utils. Wire onEntryChange into the content context layer (this codeline uses context/contentstackContext.tsx per search results). Also consider whether the interactive maps stack needs its own preview config.",
+      "why": "src/services/contentstack.ts has a richer Stack() config than the other two codelines (debug logging, retry, interactive maps stack) but still lacks live_preview. The metrolinx codeline has its own contentstackContext.tsx (different file name from gotransit's ContentstackContext.tsx) that will need onEntryChange wiring."
     }
   ],
   "violations": [],

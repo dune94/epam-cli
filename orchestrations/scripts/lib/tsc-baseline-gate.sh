@@ -1,4 +1,23 @@
 #!/usr/bin/env bash
+
+# _run_project_verification <project_root>
+# The project's declared check (.epam/verification.json) via the verification plugin. The engine
+# names no tool, extension, directory or runtime path. Undeclared -> non-zero with a reason.
+_run_project_verification() {
+    local _root="${1:-$PROJECT_ROOT}"
+    local _auto="${AUTOMATION_DIR:-$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")}"
+    local _plugin="${_auto}/plugins/verification-tools.js"
+    local _node="${NODE_CMD:-${NODE_BIN:-node}}"
+    if [ ! -f "$_plugin" ]; then echo "verification plugin missing at $_plugin"; return 2; fi
+    "$_node" -e '
+      const p = require(process.argv[1]);
+      const r = p.runVerification(process.argv[2]);
+      if (r.status === "unknown") { console.log("verification not declared: " + r.reason); process.exit(2); }
+      if (r.output) console.log(r.output);
+      process.exit(r.status === "pass" ? 0 : (r.exitCode || 1));
+    ' "$_plugin" "$_root"
+}
+
 # tsc-baseline-gate.sh — shared "new errors only" tsc filtering, used by
 # BOTH claude.sh's per-story tsc-verify/tsc-gate AND run-agent-orchestration.sh's
 # Step 19 pre-review gate.
@@ -24,7 +43,7 @@ tsc_baseline_new_errors() {
     local log_dir="$3"
 
     local tsc_output tsc_exit=0
-    tsc_output=$(cd "$project_root" && "$node_cmd" ./node_modules/.bin/tsc --noEmit 2>&1) || tsc_exit=$?
+    tsc_output=$(_run_project_verification "$project_root" 2>&1) || tsc_exit=$?
 
     if [ "$tsc_exit" -eq 0 ]; then
         return 0
@@ -47,7 +66,7 @@ tsc_baseline_new_errors() {
                     # baseline cache ends up empty, making every current-state
                     # error look "new" — the exact opposite of this fix's intent.
                     ln -s "$project_root/node_modules" "$wt_dir/node_modules" 2>/dev/null || true
-                    ( cd "$wt_dir" && "$node_cmd" ./node_modules/.bin/tsc --noEmit 2>&1 \
+                    ( _run_project_verification "$wt_dir" 2>&1 \
                         | grep -oE '^[^(]+\([0-9]+,[0-9]+\): error [A-Z0-9]+' ) > "$baseline_cache" 2>/dev/null || true
                     git -C "$project_root" worktree remove --force "$wt_dir" >/dev/null 2>&1 || true
                 fi

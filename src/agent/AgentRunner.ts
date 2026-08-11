@@ -11,7 +11,19 @@ import { logger } from '../utils/logger.js';
 import type { MemoryLoader } from '../memory/MemoryLoader.js';
 import { LoopDetector } from './LoopDetector.js';
 
-const DEFAULT_MAX_TOOL_OUTPUT_CHARS = 8_192;   // was 32768 — keeps tool results lean in history
+// Back to 8_192 (2026-08-10, same day it was raised). The raise argued that truncation "mutates
+// content inside the cacheable prefix" and that a larger stable result is cheaper than a smaller
+// one that shifts the prefix. That reasoning was wrong: truncation is DETERMINISTIC, so the same
+// result cut the same way yields the same prefix, merely shorter. Nothing shifts.
+//
+// What the raise did do was double the rate at which history grows, and history is re-sent on
+// every turn of the loop. Measured the same day: a 120-turn attempt sent 7.5M input tokens, of
+// which ~5.4M (72%) was accumulated history, with per-turn growth spiking to 53,721 tokens — an
+// order only reachable by several large tool results landing in one turn.
+//
+// Caching discounts that traffic, it does not make it free, and no cached rate is even wired into
+// the cost model yet. A smaller result is a smaller prefix every turn thereafter.
+const DEFAULT_MAX_TOOL_OUTPUT_CHARS = 8_192;
 const DEFAULT_AUTO_COMPRESS_AT = 24_000;       // was 80000 — compress earlier to prevent history explosion
 const DEFAULT_MAX_OUTPUT_TOKENS = 4_096;       // was 16384 — enough for any code file, prevents verbose runaway
 
@@ -62,6 +74,10 @@ export class AgentRunner {
   private iterationCount = 0;
   private totalInputTokens = 0;
   private totalOutputTokens = 0;
+  /** undefined until some provider reports cache detail — see the accumulation site. */
+  private totalCachedInputTokens: number | undefined;
+  /** Set when this turn's history was compacted, so the trace can attribute a cache collapse. */
+  private compactedThisTurn = false;
   private totalCostUsd = 0;
   /** False the moment any turn's provider call didn't report real cost —
    * once false, totalCostUsd is a partial/incomplete sum, not the real total
@@ -133,6 +149,22 @@ export class AgentRunner {
         autoCompressEveryNIterations > 0 &&
         iterationsSinceCompress >= autoCompressEveryNIterations;
       const tokenTriggerHit = estimateTokens(messages) > autoCompressAt;
+
+      // NOT YET WIRED: the per-request billing-tier ceiling.
+      //
+      // MiniMax-M3 bills input up to 512K per REQUEST at the base rate and DOUBLES above it. The
+      // vendor fact is recorded — model-pricing.json declares standardTierMaxInputTokens and
+      // pricing.ts exposes standardTierMaxInputTokens() — but nothing consults it here yet, and
+      // the contract is written in test/unit/agent/request-never-crosses-the-billing-tier.test.ts.
+      //
+      // Deliberately deferred past the 2026-08-10 measurement run: the guard belongs in THIS
+      // block, which is the same code whose reconfiguration took prompt caching from 0% to 96%
+      // and, as a side effect, produced zero compactions across 1,154 turns. Adding a new
+      // compaction trigger immediately before a run whose whole purpose is to measure a
+      // read-dedupe delta would confound that measurement and re-disturb the most fragile path in
+      // the loop. It is also not urgent: the measured maximum request was 126,942 tokens, 24.2%
+      // of the ceiling, and at the observed 359 tokens/turn growth a request would need ~1,411
+      // turns to reach it against a 120-150 turn budget.
       if ((tokenTriggerHit || iterationTriggerHit) && messages.length > 6) {
         try {
           logger.debug(
@@ -145,6 +177,7 @@ export class AgentRunner {
             this.options.model,
           );
           iterationAtLastCompress = this.iterationCount;
+          this.compactedThisTurn = true;
         } catch {
           logger.warn('Auto-compression failed, continuing with full history');
         }
@@ -255,6 +288,33 @@ export class AgentRunner {
 
       this.totalInputTokens += response.usage.inputTokens;
       this.totalOutputTokens += response.usage.outputTokens;
+      // Accumulated only when the provider actually reported it, so a provider that says
+      // nothing stays distinguishable from one that reports zero cached tokens. Without this
+      // the field died here: the provider parsed it and the CLI emitted it, but the aggregate
+      // in between dropped it, and an end-to-end run showed `undefined` while every unit test
+      // on either side of this line passed.
+      if (typeof response.usage.cachedInputTokens === 'number') {
+        this.totalCachedInputTokens = (this.totalCachedInputTokens ?? 0) + response.usage.cachedInputTokens;
+      }
+      this.writeUsageProgress();
+      // PER-TURN usage, appended. The aggregate alone cannot show WHERE cache utilisation
+      // collapses across a long writer loop — and the leading hypothesis (compressHistory
+      // replacing the message array, destroying the prefix) predicts a drop to zero on the
+      // turn after each compaction. This makes that visible instead of inferred.
+      if (process.env.EPAM_USAGE_TRACE_FILE) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          require('node:fs').appendFileSync(process.env.EPAM_USAGE_TRACE_FILE, JSON.stringify({
+            iteration: this.iterationCount,
+            inputTokens: response.usage.inputTokens,
+            outputTokens: response.usage.outputTokens,
+            cachedInputTokens: response.usage.cachedInputTokens ?? null,
+            compacted: this.compactedThisTurn,
+            model: this.options.model,
+          }) + '\n');
+        } catch { /* observability must never break the run */ }
+        this.compactedThisTurn = false;
+      }
       this.anyTurnRan = true;
       if (typeof response.usage.costUsd === 'number') {
         this.totalCostUsd += response.usage.costUsd;
@@ -610,10 +670,45 @@ export class AgentRunner {
         inputTokens: this.totalInputTokens,
         outputTokens: this.totalOutputTokens,
         ...(costUsd != null ? { costUsd } : {}),
+        ...(this.totalCachedInputTokens != null
+          ? { cachedInputTokens: this.totalCachedInputTokens }
+          : {}),
       },
       messages,
       timings: this.timings,
     };
+  }
+
+  /**
+   * Persist usage-so-far after every turn, so a KILLED attempt still reports what it spent.
+   *
+   * The watchdog SIGKILLs an attempt at 1800s. The cost record is written by the code that runs
+   * after the invocation returns — which, for a killed attempt, never runs. Live 2026-08-10:
+   * 10 of 23 writer invocations were killed, and those were the LONGEST and most expensive ones
+   * (25.4 min, ~2.2M input tokens each). Every one contributed exactly $0 to the story's
+   * running total, so the $15 hard limit was summing only the cheap attempts that finished.
+   * The guard was blindest precisely where the money went.
+   *
+   * Written after each turn rather than at the end, because "at the end" is the case that does
+   * not happen. Best-effort and silent on failure: an observability write must never be able to
+   * take down the run it is observing.
+   */
+  private writeUsageProgress(): void {
+    const path = process.env.EPAM_USAGE_PROGRESS_FILE;
+    if (!path) return;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const fs = require('node:fs');
+      fs.writeFileSync(path, JSON.stringify({
+        inputTokens: this.totalInputTokens,
+        outputTokens: this.totalOutputTokens,
+        iterations: this.iterationCount,
+        toolCalls: this.totalToolCalls,
+        ...(this.totalCachedInputTokens != null
+          ? { cachedInputTokens: this.totalCachedInputTokens } : {}),
+        ...(this.anyTurnRan && this.allTurnsHadRealCost ? { costUsd: this.totalCostUsd } : {}),
+      }));
+    } catch { /* observability must not break the run */ }
   }
 
   /**

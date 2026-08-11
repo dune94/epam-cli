@@ -69,13 +69,18 @@ describe('the ladder\'s 3 rung transitions all call the ceiling cap (real source
     // 2026-08-01: a second, symptom-driven bump (_iteration_exhaustion_bump)
     // was added alongside CPA's estimate-based one — see
     // iteration-exhaustion-bump.test.ts. Same 3 call sites, same shape.
-    const bumpMarker = 'STORY_MAX_ITERATIONS=$(( STORY_MAX_ITERATIONS + $(_brownfield_rung_bump "$story_id") + $(_iteration_exhaustion_bump "$story_id") ))';
+    // 2026-08-10: the bump is now computed into _rung_iter_bump first, so it can also be
+    // ACCUMULATED into STORY_ITERATION_BUMP_TOTAL and survive a model override (which used to
+    // replace the iteration budget outright, discarding every rung's escalation). Same 3 call
+    // sites, same requirement: a ceiling call must follow each one.
+    const bumpMarker = '_rung_iter_bump=$(( $(_brownfield_rung_bump "$story_id") + $(_iteration_exhaustion_bump "$story_id") ))';
     let idx = -1;
     let count = 0;
     // eslint-disable-next-line no-cond-assign
     while ((idx = CLAUDE_SH.indexOf(bumpMarker, idx + 1)) !== -1) {
       count++;
-      const nextLines = CLAUDE_SH.slice(idx, idx + 300);
+      // Widened: the bump total accumulation now sits between the bump and the ceiling call.
+      const nextLines = CLAUDE_SH.slice(idx, idx + 700);
       expect(nextLines, `bump #${count} at offset ${idx} has no ceiling call within the next few lines`)
         .toMatch(/_cap_brownfield_iterations_ceiling/);
     }

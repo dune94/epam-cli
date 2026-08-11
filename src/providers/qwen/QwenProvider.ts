@@ -6,7 +6,7 @@
  */
 
 import type { LLMProvider, ProviderRequest, ProviderResponse, StreamHandler, Message, ContentPart } from '../types.js';
-import { resolveTemperature } from '../types.js';
+import { resolveTemperature, resolveTopP } from '../types.js';
 import { logger } from '../../utils/logger.js';
 
 /**
@@ -78,6 +78,49 @@ export interface QwenConfig {
 }
 
 export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
+
+/**
+ * OpenRouter sticky-routing session id — the thing that makes prompt caching possible at all.
+ *
+ * OpenRouter load-balances a model across upstream providers. Without a session id, consecutive
+ * turns of one agent run can land on different providers, and a prefix cached on one is useless
+ * to another. Measured 2026-08-10 on z-ai/glm-5.2 with a 23K-token prefix:
+ *
+ *   no session_id : turn 2 cached=0      cost $0.01768   (two calls, possibly two providers)
+ *   session_id    : turn 2 cached=23168  cost $0.00332   (both CoreWeave) — 99.6%, 81% cheaper
+ *
+ * I previously concluded this model "does not cache" from a probe that omitted it. It caches;
+ * the routing was the variable.
+ *
+ * Stability is the whole point: every turn of one story attempt must send the SAME id, and
+ * different attempts should differ (a new attempt rebuilds its prompt anyway). The pipeline
+ * supplies EPAM_SESSION_ID per attempt; absent that, one id is generated per process, which is
+ * exactly one agent run for the `epam run` path the orchestration uses.
+ */
+let _processSessionId: string | undefined;
+/**
+ * Deterministic upstream routing. OpenRouter spreads a slug across hosts that differ in price,
+ * cache size and parameter semantics — measured 2026-08-10 on kimi-k3: pinning to Moonshot AI
+ * cut a warm turn from $0.00747 to $0.00440 and raised the cache hit from 12,288 to 13,568.
+ * allow_fallbacks:false so a silent reroute cannot reintroduce the variance.
+ * Config-driven (modelOverrides.providerOrder) — no host names in code.
+ */
+export function openRouterProviderOrder(): string[] | undefined {
+  const raw = process.env.EPAM_PROVIDER_ORDER;
+  if (!raw) return undefined;
+  const order = raw.split(',').map((p) => p.trim()).filter(Boolean);
+  return order.length ? order : undefined;
+}
+
+export function openRouterSessionId(): string {
+  const fromEnv = process.env.EPAM_SESSION_ID;
+  if (fromEnv) return fromEnv;
+  if (!_processSessionId) {
+    _processSessionId = `epam-${process.pid}-${Date.now().toString(36)}`;
+  }
+  return _processSessionId;
+}
+
 export const DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/api/v1';
 
 export class QwenProvider implements LLMProvider {
@@ -140,7 +183,10 @@ export class QwenProvider implements LLMProvider {
    *  This is a native API parameter — completely separate from temperature. */
   private resolveOpenRouterReasoning(request: ProviderRequest): Record<string, unknown> | undefined {
     const effort = request.reasoningEffort ?? process.env.EPAM_REASONING_EFFORT as string | undefined;
-    if (effort === 'low' || effort === 'medium' || effort === 'high') {
+    // 'max' is supported by GLM-5.2 and Kimi K3 and is the rung ABOVE high — without it the
+    // ladder has no escalation left once effort reaches 'high', which is exactly where the
+    // top-of-chain models sit. Previously this whitelist silently dropped it.
+    if (effort === 'low' || effort === 'medium' || effort === 'high' || effort === 'max') {
       return { reasoning: { effort } };
     }
     return undefined;
@@ -175,12 +221,19 @@ export class QwenProvider implements LLMProvider {
         'Authorization': `Bearer ${this.apiKey}`,
         'HTTP-Referer': 'https://epam.com',
         'X-Title': 'EPAM CLI',
+        ...(this.openRouterMode ? { 'x-session-id': openRouterSessionId() } : {}),
       },
       body: JSON.stringify({
         model,
         messages,
         max_tokens: request.maxTokens || 4096,
         temperature: resolveTemperature(request, 0.7),
+        ...(resolveTopP(request) !== undefined ? { top_p: resolveTopP(request) } : {}),
+        // Sticky routing — see openRouterSessionId(). Sent in the body as well as the header
+        // because the documented activation path is the body field; the header is belt-and-braces.
+        ...(this.openRouterMode ? { session_id: openRouterSessionId() } : {}),
+        ...(this.openRouterMode && openRouterProviderOrder()
+          ? { provider: { order: openRouterProviderOrder(), allow_fallbacks: false } } : {}),
         // usage.include=true asks OpenRouter to return REAL, billed cost in
         // the response's usage.cost field — the actual amount charged to
         // this account for this exact call, not a locally-estimated price.
@@ -251,6 +304,13 @@ export class QwenProvider implements LLMProvider {
         // absent, so callers can distinguish "confirmed $0" from "unknown,
         // fall back to an estimate."
         ...(typeof data['usage']?.cost === 'number' ? { costUsd: data['usage'].cost } : {}),
+        // OpenRouter reports this per model. Measured 2026-08-10 on z-ai/glm-5.2: 0 cached and
+        // 0 written on an identical 23,247-token prefix, WITH and WITHOUT an explicit
+        // cache_control breakpoint — that model does not cache, and recording the measured
+        // zero is what makes the comparison against a caching model arguable from evidence.
+        ...(typeof data['usage']?.prompt_tokens_details?.cached_tokens === 'number'
+          ? { cachedInputTokens: data['usage'].prompt_tokens_details.cached_tokens }
+          : {}),
       },
     };
   }
@@ -270,12 +330,19 @@ export class QwenProvider implements LLMProvider {
         'Authorization': `Bearer ${this.apiKey}`,
         'HTTP-Referer': 'https://epam.com',
         'X-Title': 'EPAM CLI',
+        ...(this.openRouterMode ? { 'x-session-id': openRouterSessionId() } : {}),
       },
       body: JSON.stringify({
         model,
         messages,
         max_tokens: request.maxTokens || 4096,
         temperature: resolveTemperature(request, 0.7),
+        ...(resolveTopP(request) !== undefined ? { top_p: resolveTopP(request) } : {}),
+        // Sticky routing — see openRouterSessionId(). Sent in the body as well as the header
+        // because the documented activation path is the body field; the header is belt-and-braces.
+        ...(this.openRouterMode ? { session_id: openRouterSessionId() } : {}),
+        ...(this.openRouterMode && openRouterProviderOrder()
+          ? { provider: { order: openRouterProviderOrder(), allow_fallbacks: false } } : {}),
         stream: true,
         // Streaming mode needs BOTH flags: stream_options.include_usage asks
         // for a final usage-only chunk at all (off by default when
@@ -306,6 +373,7 @@ export class QwenProvider implements LLMProvider {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let accumulatedText = '';
+    let cachedInputTokens: number | undefined;
     let inputTokens = 0;
     let outputTokens = 0;
     let costUsd: number | undefined;
@@ -344,6 +412,11 @@ export class QwenProvider implements LLMProvider {
           if (choice?.finish_reason) stopReason = this.mapStopReason(choice.finish_reason);
           if (parsed.usage) {
             inputTokens = parsed.usage.prompt_tokens || 0;
+            // The STREAMING path builds its own usage object — patching complete() alone
+            // left cached tokens undefined end-to-end while unit tests on both sides passed.
+            if (typeof parsed.usage.prompt_tokens_details?.cached_tokens === 'number') {
+              cachedInputTokens = parsed.usage.prompt_tokens_details.cached_tokens;
+            }
             outputTokens = parsed.usage.completion_tokens || 0;
             if (typeof parsed.usage.cost === 'number') costUsd = parsed.usage.cost;
           }
@@ -378,7 +451,8 @@ export class QwenProvider implements LLMProvider {
     return {
       content: content.length > 0 ? content : [{ type: 'text', text: accumulatedText }],
       stopReason,
-      usage: { inputTokens, outputTokens, ...(costUsd != null ? { costUsd } : {}) },
+      usage: { inputTokens, outputTokens, ...(costUsd != null ? { costUsd } : {}),
+        ...(cachedInputTokens != null ? { cachedInputTokens } : {}) },
     };
   }
 
@@ -401,6 +475,7 @@ export class QwenProvider implements LLMProvider {
           parameters: {
             max_tokens: request.maxTokens || 4096,
             temperature: resolveTemperature(request, 0.7),
+        ...(resolveTopP(request) !== undefined ? { top_p: resolveTopP(request) } : {}),
             result_format: 'message',
           },
         }),
@@ -455,6 +530,7 @@ export class QwenProvider implements LLMProvider {
           parameters: {
             max_tokens: request.maxTokens || 4096,
             temperature: resolveTemperature(request, 0.7),
+        ...(resolveTopP(request) !== undefined ? { top_p: resolveTopP(request) } : {}),
             result_format: 'message',
             incremental_output: true,
           },

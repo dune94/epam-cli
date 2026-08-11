@@ -151,10 +151,14 @@ describe('_selective_worktree_reset — re-provisions plugin config after a real
     expect(existsSync(join(clone, '.epam/settings.json'))).toBe(false);
   });
 
-  it('does not re-provision when the reset itself was skipped (tsc passed, nothing was wiped)', () => {
+  it('does not re-provision when the reset itself was skipped (a fix site changed, nothing wiped)', () => {
     const { clone } = makeFixture();
     mkdirSync(join(clone, '.epam'), { recursive: true });
     writeFileSync(join(clone, '.epam/settings.json'), JSON.stringify({ tools: ['/abs/original.js'] }));
+    writeFileSync(join(clone, '..', 'prd.json'), JSON.stringify({
+      stories: [{ id: 'SKY-TEST', fixSiteAnalysis: [{ file: 'src/tracked.ts', fixVerified: true }] }],
+    }));
+    writeFileSync(join(clone, 'src/tracked.ts'), 'export const original = 1;\nexport const realFix = true;\n');
     const configDir = mkdtempSync(join(tmpdir(), 'worktree-reset-cfg-'));
     cleanupDirs.push(configDir);
     // A DIFFERENT plugins.json than what's already there — if re-provisioning
@@ -171,7 +175,9 @@ describe('_selective_worktree_reset — re-provisions plugin config after a real
         'JIRA_BASELINE_BRANCH=develop',
         `EPAM_PROJECT_CONFIG_DIR=${JSON.stringify(configDir)}`,
         'log() { echo "LOG: $*" >&2; }',
-        'LAST_ATTEMPT_TSC_PASSED=true', // tsc PASSED -> reset is skipped entirely
+        // A VERIFIED fix site changed -> the reset is skipped entirely, so .epam is untouched.
+        // (Was 'LAST_ATTEMPT_TSC_PASSED=true' — the compiler no longer decides this.)
+        `MAIN_PRD_FILE=${JSON.stringify(join(clone, '..', 'prd.json'))}`,
         FN_BODY,
         '_selective_worktree_reset "SKY-TEST"',
       ].join('\n'),

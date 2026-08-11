@@ -189,9 +189,11 @@ describe('claude.sh — HEALING_BROKEN uses token-overlap matching to tolerate a
 
 // ── 6. EPAM_REASONING_EFFORT scoping ─────────────────────────────────────────
 describe('claude.sh — reasoning effort is scoped per-story (no leakage)', () => {
-  it('effort is reset to "low" at the start of each story', () => {
-    // Env-overridable via EPAM_RUNG0_REASONING_EFFORT — default is still "low".
-    expect(src).toMatch(/export EPAM_REASONING_EFFORT="\$\{EPAM_RUNG0_REASONING_EFFORT:-low\}"/);
+  it('effort is reset to "medium" at the start of each story — never "low"', () => {
+    // Operator rule 2026-08-10: rung 0 is never 'low'. A story's FIRST attempt is not a cheap
+    // probe — an underspecified brownfield story looks cheap and is exactly the expensive case
+    // (see classify_ladder_tier's CPA note). Env-overridable via EPAM_RUNG0_REASONING_EFFORT.
+    expect(src).toMatch(/export EPAM_REASONING_EFFORT="\$\{EPAM_RUNG0_REASONING_EFFORT:-medium\}"/);
   });
 
   it('effort is exported so ai-run.sh subprocess receives it', () => {

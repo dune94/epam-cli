@@ -37,7 +37,12 @@ const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
 function shippedSelector(): string {
   const src = readFileSync(CLAUDE_SH, 'utf8');
   const m = src.match(
-    /done < <\(jq -r --arg id "\$story_id" \\\n\s*'([\s\S]*?)' \\\n\s*"\$prd_target"/,
+    // Anchored on perCodeline — the selector that IS the codeline scoping. claude.sh contains
+    // several `done < <(jq …)` loops over the PRD: the fixSiteAnalysis one (which yielded an
+    // empty set, so every assertion compared against []) and _scope_lock's deliberate UNION
+    // read (which is correct for scope-locking OTHER stories' files, and wrong to assert here).
+    // Matching either tested a function this file is not about.
+    /done < <\(jq -r --arg id "\$story_id" \\\n\s*'([^']*perCodeline[^']*)' \\\n\s*"\$prd_target"/,
   );
   expect(m, 'the deliverable jq selector was not found — this test is pinned to stale text').toBeTruthy();
   return (m as RegExpMatchArray)[1];

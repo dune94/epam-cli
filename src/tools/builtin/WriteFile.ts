@@ -116,11 +116,80 @@ export class WriteFileTool implements Tool {
       const allowedPathsEnv = process.env.EPAM_ALLOWED_WRITE_PATHS;
       if (allowedPathsEnv) {
         const allowed = allowedPathsEnv.split(':').filter(Boolean).map(p => path.resolve(p));
-        const inScope = allowed.some(a => resolved === a || resolved.startsWith(a + path.sep));
+        let inScope = allowed.some(a => resolved === a || resolved.startsWith(a + path.sep));
+
+        // AN UNOWNED FILE IS NECESSARY WORK, NOT THEFT.
+        //
+        // This guard exists to stop one story overwriting another's implementation. A file that
+        // belongs to NO other story is not that case, and refusing it turns "not on a list" into
+        // a dead end the writer cannot get out of.
+        //
+        // Live 2026-08-10: the feature needed a type added to a file the ticket never declared
+        // and the detective never listed. The write was refused in 1ms, the run's own log said
+        // "Could not resolve an owning story" for that path, the writer worked around a second
+        // refusal by shelling out to the package manager, and then rewrote the one file it WAS
+        // allowed to touch 32 times in a single attempt — 7.1M to 11.7M input tokens. The dead
+        // end did not prevent bad work; it produced a thrash loop.
+        //
+        // Ownership is data the caller already has. UNKNOWN ownership is not "owned by nobody":
+        // when the list is unset or empty the write stays refused, so a caller that forgets to
+        // pass it cannot silently switch the guard off.
+        // Ownership is TRI-STATE, and the third state is the one that matters. "No other story
+        // declares anything" is a real, common answer — a single-story PRD is the normal case —
+        // and it is not the same as "nobody computed this". An empty string cannot tell them
+        // apart, so the caller states explicitly that it looked, and only then does an unowned
+        // path become writable. Without the marker the write stays refused, so a caller that
+        // never computes ownership cannot switch the guard off by omission.
+        let widened = false;
+        if (!inScope && process.env.EPAM_STORY_OWNERSHIP_KNOWN === '1') {
+          const others = (process.env.EPAM_OTHER_STORY_PATHS ?? '')
+            .split(':').filter(Boolean).map(p => path.resolve(p));
+          const ownedByAnother = others.some(o => resolved === o || resolved.startsWith(o + path.sep));
+          if (!ownedByAnother) { inScope = true; widened = true; }
+        }
+
+        // A widening nobody can see is how scope quietly stops meaning anything. Recorded to a
+        // co-located log rather than only the console, for the same reason the settings guard is:
+        // whoever reviews the change needs it without diffing git history mid-run. Best-effort —
+        // an audit write must never be able to take down the run it is auditing.
+        if (widened) {
+          const auditPath = process.env.EPAM_SCOPE_WIDENING_LOG;
+          if (auditPath) {
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-var-requires
+              require('node:fs').appendFileSync(auditPath,
+                `${new Date().toISOString()} story=${process.env.EPAM_STORY_ID ?? ''} ` +
+                `role=${process.env.EPAM_AGENT_ROLE ?? ''} wrote ${resolved} ` +
+                `(outside declared scope; no other story owns it)\n`);
+            } catch { /* observability must not break the run */ }
+          }
+        }
+
         if (!inScope) {
+          // TWO DIFFERENT REFUSALS, TWO DIFFERENT REMEDIES.
+          //
+          // The old message said only "outside declared scope. Permitted paths: …", which reads
+          // as "never" whatever the actual reason. Live 2026-08-10 the writer took it that way
+          // and rewrote the one file it was allowed to touch 32 times rather than escalating.
+          //
+          // Now a refusal means one of exactly two things, and they are not interchangeable: the
+          // file belongs to another story (a real conflict — escalate to its owner), or ownership
+          // could not be determined (missing data — not a statement about this file at all).
+          const ownershipKnown = process.env.EPAM_STORY_OWNERSHIP_KNOWN === '1';
+          const reason = ownershipKnown
+            ? `it is declared by ANOTHER story, and taking it would overwrite that story's work. ` +
+              `Do not edit it: escalate to the owning story instead, or achieve the change within ` +
+              `your own files.`
+            : `this story's file ownership could not be determined, so the write is refused to be ` +
+              `safe. This is missing pipeline data, not a judgement about this file — report it ` +
+              `rather than working around it.`;
           return {
             toolUseId: '',
-            content: `[scope-guard] Write blocked: ${resolved} is outside this story's declared scope. Permitted paths: ${allowed.join(', ')}. Only modify files listed in the story's technicalNotes.files.`,
+            content:
+              `[scope-guard] Write blocked: ${resolved} — ${reason}\n` +
+              `Files this story declared: ${allowed.join(', ')}. ` +
+              `Files outside that list are writable when no other story owns them, so this ` +
+              `refusal is specific: rewriting a different file instead will not resolve it.`,
             isError: true,
           };
         }

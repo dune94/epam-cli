@@ -551,14 +551,15 @@ describe('claude.sh InferenceLadder — skipLadder (VERY HIGH complexity) skips 
     // block).
     const rung2SkipIdx = claudeSrc.indexOf('InferenceLadder[Rung2/R${retry_count}]: skipLadder=true');
     expect(rung2SkipIdx).toBeGreaterThan(-1);
-    const rung2End = claudeSrc.indexOf('export EPAM_REASONING_EFFORT="${EPAM_RUNG2_REASONING_EFFORT:-medium}"', rung2SkipIdx);
+    const rung2End = claudeSrc.indexOf('export EPAM_REASONING_EFFORT="${EPAM_RUNG2_REASONING_EFFORT:-high}"', rung2SkipIdx);
     const rung2Block = claudeSrc.slice(rung2SkipIdx, rung2End + 90);
     // EPAM_REASONING_EFFORT=... must appear OUTSIDE the skipLadder if/else
     // (after the closing fi of the inner if), so it always runs regardless of
     // skipLadder — same unconditional `fi \n export EPAM_REASONING_EFFORT`
     // pattern as before this change. Now env-overridable via
-    // EPAM_RUNG2_REASONING_EFFORT — default is still "medium".
-    expect(rung2Block).toMatch(/fi\s*\n\s*fi\s*\n\s*export EPAM_REASONING_EFFORT="\$\{EPAM_RUNG2_REASONING_EFFORT:-medium\}"/);
+    // EPAM_RUNG2_REASONING_EFFORT — default raised to "high" 2026-08-10 (operator rule:
+    // effort must never decrease as rungs climb; rung 2 defaulting to "medium" undercut rung 1).
+    expect(rung2Block).toMatch(/fi\s*\n\s*fi\s*\n\s*export EPAM_REASONING_EFFORT="\$\{EPAM_RUNG2_REASONING_EFFORT:-high\}"/);
   });
 });
 

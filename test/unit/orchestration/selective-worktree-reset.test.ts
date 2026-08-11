@@ -76,6 +76,10 @@ function makeFixture(): { clone: string } {
 }
 
 function runReset(projectRoot: string, tscPassed: boolean, opts: { brownfield?: boolean } = {}): string {
+  writeFileSync(join(projectRoot, '..', 'prd.json'), JSON.stringify({
+    stories: [{ id: 'SKY-TEST',
+      fixSiteAnalysis: [{ file: 'src/tracked.ts', fixVerified: true }] }],
+  }));
   const scriptPath = join(projectRoot, '..', 'run.sh');
   writeFileSync(
     scriptPath,
@@ -85,6 +89,8 @@ function runReset(projectRoot: string, tscPassed: boolean, opts: { brownfield?: 
       `EPAM_BROWNFIELD=${opts.brownfield === false ? '0' : '1'}`,
       'JIRA_BASELINE_BRANCH=develop',
       'log() { echo "LOG: $*" >&2; }',
+      // The reset now asks the SPEC which files matter, not a compiler.
+      `MAIN_PRD_FILE=${JSON.stringify(join(projectRoot, '..', 'prd.json'))}`,
       `LAST_ATTEMPT_TSC_PASSED=${tscPassed}`,
       `LAST_VERIFIED_TOUCHED_FILES="src/tracked.ts"`,
       `LAST_VERIFIED_UNCHANGED_FILES=""`,
@@ -98,25 +104,30 @@ function runReset(projectRoot: string, tscPassed: boolean, opts: { brownfield?: 
 }
 
 describe('_selective_worktree_reset — tsc-validated preservation', () => {
-  it('preserves EVERYTHING (including undeclared files) when the last attempt tsc-passed', () => {
+  it('preserves EVERYTHING (including undeclared files) when a VERIFIED fix site changed', () => {
     const { clone } = makeFixture();
     writeFileSync(join(clone, 'src/tracked.ts'), 'export const original = 1;\nexport const realFix = true;\n');
     mkdirSync(join(clone, 'src/new'), { recursive: true });
     writeFileSync(join(clone, 'src/new/undeclared-but-real.ts'), 'export const undeclaredRealWork = true;\n');
     runReset(clone, true);
-    expect(readFileSync(join(clone, 'src/tracked.ts'), 'utf-8')).toContain('realFix');
+    expect(
+      readFileSync(join(clone, 'src/tracked.ts'), 'utf-8'),
+      'a change to a VERIFIED fix site was destroyed',
+    ).toContain('realFix');
     expect(existsSync(join(clone, 'src/new/undeclared-but-real.ts'))).toBe(true);
     expect(readFileSync(join(clone, 'src/new/undeclared-but-real.ts'), 'utf-8')).toContain('undeclaredRealWork');
   });
 
-  it('fully resets to baseline (tracked files) when tsc did NOT pass — no positive evidence anything is good', () => {
+  it('fully resets to baseline when NO verified fix site changed — nothing of value was produced', () => {
+    // Redesigned 2026-08-10: the compiler no longer decides. Work on a file the spec never
+    // named is discarded, which keeps a failed attempt's noise out of the next one.
     const { clone } = makeFixture();
-    writeFileSync(join(clone, 'src/tracked.ts'), 'export const original = 1;\nexport const brokenHalfWrite = ');
+    writeFileSync(join(clone, 'src/unrelated.ts'), 'export const noise = 1;\n');
     runReset(clone, false);
-    expect(readFileSync(join(clone, 'src/tracked.ts'), 'utf-8')).toBe('export const original = 1;\n');
+    expect(existsSync(join(clone, 'src/unrelated.ts'))).toBe(false);
   });
 
-  it('removes untracked files too when tsc did NOT pass', () => {
+  it('removes untracked files too when no fix site changed', () => {
     const { clone } = makeFixture();
     writeFileSync(join(clone, 'src/stray-corruption.ts'), 'garbage from a broken write');
     runReset(clone, false);
@@ -125,13 +136,17 @@ describe('_selective_worktree_reset — tsc-validated preservation', () => {
 
   it('clears LAST_VERIFIED_TOUCHED_FILES/UNCHANGED_FILES on a real reset, so the next prompt note does not claim erased work is "already done"', () => {
     const { clone } = makeFixture();
-    writeFileSync(join(clone, 'src/tracked.ts'), 'export const original = 1;\nexport const brokenHalfWrite = ');
+    writeFileSync(join(clone, 'src/unrelated.ts'), 'export const noise = 1;\n');
     const out = runReset(clone, false);
     expect(out).toContain('TOUCHED_AFTER=[]');
   });
 
-  it('does NOT clear LAST_VERIFIED_TOUCHED_FILES when tsc passed (nothing was reset)', () => {
+  it('does NOT clear LAST_VERIFIED_TOUCHED_FILES when a fix site changed (nothing was reset)', () => {
     const { clone } = makeFixture();
+    // The fix site must actually DIFFER from baseline — an untouched tree means no fix site
+    // changed, which is correctly a reset. Previously this passed because the compiler branch
+    // preserved regardless of whether any work existed.
+    writeFileSync(join(clone, 'src/tracked.ts'), 'export const original = 1;\nexport const realFix = true;\n');
     const out = runReset(clone, true);
     expect(out).toContain('TOUCHED_AFTER=[src/tracked.ts]');
   });

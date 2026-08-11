@@ -51,7 +51,8 @@
             "enum": [
               "low",
               "medium",
-              "high"
+              "high",
+              "max"
             ],
             "description": "Wired: read by load_llm_settings_json() into EPAM_RUNG{0,1,2,3}_REASONING_EFFORT, applied in the rung case statement."
           },
@@ -89,6 +90,10 @@
         },
         "medium": {
           "$ref": "#/definitions/ladderModelChain"
+        },
+        "highest": {
+          "$ref": "#/definitions/ladderModelChain",
+          "description": "The escalation chain for stories requesting the HIGHEST effort tier. Separate from 'high' so the most expensive models can be reserved for work that asked for them, rather than reached by every story that happens to retry enough times."
         }
       }
     },
@@ -96,7 +101,16 @@
       "type": "object",
       "description": "Keyed by an arbitrary label (e.g. \"minimax-m2.5\", \"kimi\", \"glm-5.2\") \u2014 the key is just a lookup name; matching happens purely via matchOn/matchValue|matchSubstring against the FINAL resolved STORY_PROVIDER/STORY_MODEL for that attempt (a story that escalated away from a match correctly does not receive it). Any number of entries is allowed, so distinct model tiers sharing one provider (MiniMax-M2.5 vs MiniMax-M3) can carry different budgets. Checked in object key order in claude.sh's resolver; the FIRST entry that matches wins. Applied AFTER the rung's own effort/temperature default \u2014 unconditionally replaces it, by design, rather than merely filling a gap.",
       "additionalProperties": {
-        "$ref": "#/definitions/modelOverride"
+        "$ref": "#/definitions/modelOverride",
+        "properties": {
+          "providerOrder": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Ordered OpenRouter upstream providers, most preferred first. Sent as provider.order with allow_fallbacks:false so routing is deterministic \u2014 hosts differ in price, cache behaviour and parameter semantics."
+          }
+        }
       }
     },
     "retries": {
@@ -178,6 +192,16 @@
           "type": "number",
           "minimum": 0,
           "description": "EPAM_WATCHDOG_RETRY_MULTIPLIER \u2014 scales the timeout on a retry after a story timed out once (rationale: a story that already burned self-heal attempts within one budget has a larger cumulative prompt on retry, so the same flat budget that already proved insufficient is the wrong one to hand it again). Default when unset: 1.5. Set to 1 to restore flat-timeout-on-retry behavior."
+        },
+        "secondsPerIteration": {
+          "type": "number",
+          "minimum": 1,
+          "description": "Wall-clock seconds to allow per agent iteration when deriving a story timeout from its iteration budget."
+        },
+        "storyTimeoutMaxSecs": {
+          "type": "number",
+          "minimum": 1,
+          "description": "Upper bound on a derived story timeout, so a large iteration budget cannot produce an unbounded wall."
         }
       }
     },
@@ -245,6 +269,36 @@
           "description": "Enforced (added 2026-08-01): once a story's cumulative real cost across all its retry/ladder attempts (summed from phase-cost.jsonl) reaches this, no further retries are granted \u2014 including skipping the self-heal retry-extension coordinator, so a budget stop cannot be overridden into more spend. The attempt already in flight when the threshold is crossed is allowed to finish normally (its cost was already committed); only the NEXT retry is blocked. null = no hard limit (current default \u2014 unlimited spend per story, bounded only by EPAM_MAX_RETRIES and EPAM_STORY_TIMEOUT_SECS)."
         }
       }
+    },
+    "effortLadder": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "description": "Ordered reasoning-effort levels, weakest first. Defines BOTH the rank comparison and what 'one notch up' means, so adding a vendor's new level is a config change, not a code change. Levels a given model does not support are filtered by that model's own override."
+    },
+    "planning": {
+      "type": "object",
+      "properties": {
+        "autoPlannerTiers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Ladder tiers that receive an automatic planning turn. Config, so a new tier does not silently lose its planner."
+        },
+        "temperature": {
+          "type": "number"
+        },
+        "topP": {
+          "type": "number"
+        },
+        "reasoningEffort": {
+          "type": "string"
+        }
+      },
+      "description": "The planning stage of plan-then-execute: which tiers get one, and the sampling it uses."
     }
   },
   "definitions": {

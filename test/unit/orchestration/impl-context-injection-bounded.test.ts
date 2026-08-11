@@ -50,6 +50,11 @@ function runInjection(repo: string, files: string[], fixSites: string[]): string
 run_it() {
   local PROJECT_ROOT='${repo}'
   local story_json='${storyJson}'
+  # Config accessors claude.sh gained after this harness was written. Unstubbed the block
+  # aborts, and the assertion fails during SETUP instead of on the bound being tested.
+  existing_file_max_lines(){ echo 400; }
+  existing_file_injection_enabled(){ return 0; }
+  _resolve_deliverable_path(){ echo "$1"; }
 ${block}
   printf '%s' "$existing_file_contents"
 }

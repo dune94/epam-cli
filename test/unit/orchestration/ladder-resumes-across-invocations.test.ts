@@ -118,14 +118,14 @@ describe('claude.sh persists retry_count at both exit paths (structural — the 
     // LATER one in the file — see the sibling test for the success-path site.
     const idx = SRC.lastIndexOf('write_story_retry_count "$LOG_DIR" "$story_id" "$retry_count"');
     expect(idx, 'no persistence call found in the retry-iteration path at all').toBeGreaterThan(-1);
-    const after = SRC.slice(idx, idx + 300);
+    const after = SRC.slice(idx, idx + 800);
     expect(after).toMatch(/if \[ \$retry_count -le \$MAX_RETRIES \]; then/);
   });
 
   it('persists on the success return, so a review rejection after a first-try success still resumes correctly', () => {
     const successIdx = SRC.indexOf('post_completion_message "$story_id" "completed"');
     expect(successIdx).toBeGreaterThan(-1);
-    const before = SRC.slice(Math.max(0, successIdx - 300), successIdx);
+    const before = SRC.slice(Math.max(0, successIdx - 800), successIdx);
     expect(before).toMatch(/write_story_retry_count "\$LOG_DIR" "\$story_id" "\$retry_count"/);
   });
 });

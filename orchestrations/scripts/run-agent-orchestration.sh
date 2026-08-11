@@ -26,6 +26,26 @@ trap '_release_write_perimeter' EXIT
 
 set -e
 
+# _run_project_verification <project_root>
+# Runs the project's declared check (.epam/verification.json) via the verification plugin.
+# The engine names no tool, extension, directory or runtime path. Undeclared -> non-zero with a
+# reason, never a silent pass.
+_run_project_verification() {
+    local _root="${1:-$PROJECT_ROOT}"
+    local _auto="${AUTOMATION_DIR:-$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")}"
+    local _plugin="${_auto}/plugins/verification-tools.js"
+    local _node="${NODE_CMD:-${NODE_BIN:-node}}"
+    if [ ! -f "$_plugin" ]; then echo "verification plugin missing at $_plugin"; return 2; fi
+    "$_node" -e '
+      const p = require(process.argv[1]);
+      const r = p.runVerification(process.argv[2]);
+      if (r.status === "unknown") { console.log("verification not declared: " + r.reason); process.exit(2); }
+      if (r.output) console.log(r.output);
+      process.exit(r.status === "pass" ? 0 : (r.exitCode || 1));
+    ' "$_plugin" "$_root"
+}
+
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 
@@ -1333,7 +1353,7 @@ Project root: ${PROJECT_ROOT}"
 
         # 2. it still compiles
         if [ "$_lf_ok" = "1" ] && [ -n "${_node_bin:-}" ]; then
-            ( cd "$PROJECT_ROOT" && "$_node_bin" ./node_modules/.bin/tsc --noEmit ) \
+            ( _run_project_verification "$PROJECT_ROOT" ) \
                 >/dev/null 2>&1 || _lf_ok=0
         fi
 
@@ -2009,6 +2029,34 @@ print(math.ceil(${timeout_secs} * ${role_multiplier}))
 " 2>/dev/null || echo "$timeout_secs")
     fi
 
+    # THE WALL MUST HONOUR THE ITERATION BUDGET IT IS POLICING.
+    #
+    # timeout_secs above is a FLOOR. The attempt's real work is bounded by its iteration budget,
+    # and the two were set independently: measured 2026-08-10, kimi-k3 allows 150 iterations plus
+    # a +30 rung bump = 180, against a flat 1800s wall — 10 seconds per turn including tool
+    # execution. 10 of 23 invocations were SIGKILLed mid-flight having produced nothing, and they
+    # were the most expensive attempts of the run. A budget the clock cannot honour is not a
+    # budget; it is a guaranteed kill that still bills.
+    #
+    # Derived, capped, and never LOWER than the configured floor. Both knobs are config
+    # (timeouts.secondsPerIteration / timeouts.storyTimeoutMaxSecs) — no numbers here.
+    local _spi="${EPAM_SECONDS_PER_ITERATION:-}"
+    local _tmax="${EPAM_STORY_TIMEOUT_MAX_SECS:-}"
+    if [ -n "$_spi" ] && [ -n "${EPAM_MAX_ITERATIONS:-}" ]; then
+        local _derived
+        _derived=$(awk -v it="${EPAM_MAX_ITERATIONS:-0}" -v spi="$_spi" -v cur="$timeout_secs" \
+            -v cap="${_tmax:-0}" 'BEGIN {
+                d = it * spi;
+                if (cap > 0 && d > cap) d = cap;
+                if (d < cur) d = cur;
+                printf "%d", d
+            }')
+        if [ -n "$_derived" ] && [ "$_derived" != "$timeout_secs" ]; then
+            log "[orch] story timeout ${timeout_secs}s -> ${_derived}s (derived from ${EPAM_MAX_ITERATIONS} iterations x ${_spi}s/iteration, cap ${_tmax:-none})"
+            timeout_secs="$_derived"
+        fi
+    fi
+
     set +e
     timeout "$timeout_secs" "$CLAUDE_SH" "$story_id" 2>&1 | tee "$log_file"
     _rc=${PIPESTATUS[0]}
@@ -2089,11 +2137,29 @@ print(math.ceil(${timeout_secs} * ${EPAM_WATCHDOG_RETRY_MULTIPLIER:-1.5}))
             error "Watchdog: $story_id timed out twice (${timeout_secs}s then ${retry_timeout_secs:-$timeout_secs}s) — skipping story and continuing"
             warning "  Set EPAM_PAUSE_ON_TIMEOUT=true to pause for operator intervention instead"
             # Log the timeout as a failed cost record so dashboards reflect it
+            # A killed attempt spent real money. Recording only {status:"timeout"} made the
+            # most expensive invocations of the run contribute $0 to the story's running total,
+            # so the budget guard that sums task_cost_usd could never see them. AgentRunner
+            # persists usage-so-far after every turn to EPAM_USAGE_PROGRESS_FILE precisely so
+            # this record can be truthful about an attempt that never got to report for itself.
+            _to_progress="${EPAM_USAGE_PROGRESS_FILE:-$LOG_DIR/usage-progress-${story_id}.json}"
+            _to_in=0; _to_out=0; _to_cached=0; _to_cost=0
+            if [ -f "$_to_progress" ]; then
+                _to_in=$(jq -r '.inputTokens // 0' "$_to_progress" 2>/dev/null || echo 0)
+                _to_out=$(jq -r '.outputTokens // 0' "$_to_progress" 2>/dev/null || echo 0)
+                _to_cached=$(jq -r '.cachedInputTokens // 0' "$_to_progress" 2>/dev/null || echo 0)
+                _to_cost=$(jq -r '.costUsd // 0' "$_to_progress" 2>/dev/null || echo 0)
+            fi
             jq -cn \
                 --arg pid "${CURRENT_PHASE:-unknown}" \
                 --arg sid "$story_id" \
                 --arg s   "timeout" \
-                '{phase_id:$pid, story_id:$sid, status:$s, timestamp:(now|todate)}' \
+                --arg rid "${ORCH_RUN_ID:-}" \
+                --argjson ti "${_to_in:-0}" --argjson to "${_to_out:-0}" \
+                --argjson cr "${_to_cached:-0}" --argjson cu "${_to_cost:-0}" \
+                '{phase_id:$pid, story_id:$sid, run_id:$rid, status:$s, task_tokens_in:$ti,
+                  task_tokens_out:$to, cache_read_tokens:$cr, task_cost_usd:$cu,
+                  timestamp:(now|todate)}' \
                 >> "${PHASE_COST_FILE:-$LOG_DIR/phase-cost.jsonl}" 2>/dev/null || true
 
             # Root cause fix (found live, 2026-07-10, tier3-travel-app run): this
@@ -2728,6 +2794,44 @@ _run_codeline_loop() {
       if (cl && dir) console.log(cl + ':' + dir);
     }
   " 2>/dev/null)
+
+  # CODELINE SELECTION — run a subset of the story's codelines, one launch at a time.
+  #
+  # A story spanning several repositories otherwise runs all of them in one launch. Naming a
+  # subset makes each launch a natural pause: a failure blasts one lane instead of every lane,
+  # each pause is an inspection point, and spend is bounded per launch instead of per story.
+  #
+  # Filtered HERE because this array is the single source every downstream path reads — the
+  # parallel fan-out, the sequential loop, and the post-run merges. Filtering at any one of those
+  # would leave the others running codelines nobody asked for.
+  #
+  # UNSET OR EMPTY MEANS ALL, so a run that does not use this is byte-for-byte today's run.
+  # An unmatched selection yields NOTHING rather than everything: failing open here would run
+  # every codeline when the operator asked for one, which is the expensive direction of a typo,
+  # and the caller below already treats an empty list as a hard error rather than a silent pass.
+  #
+  # Matching is on the codeline NAME (the part before the colon), never the path, so a selection
+  # cannot accidentally match a directory that merely contains the same text.
+  if [ -n "${EPAM_ONLY_CODELINES:-}" ]; then
+    local _sel_entries=() _sel _e
+    local _orig_ifs="$IFS"
+    while IFS= read -r _e; do
+      [ -n "$_e" ] || continue
+      # IFS is established for THIS split only. A pipe-delimited value iterated without it is one
+      # token containing the whole string, silently, which is how a config split has broken here
+      # before.
+      IFS='|,'
+      for _sel in ${EPAM_ONLY_CODELINES}; do
+        if [ "${_e%%:*}" = "$_sel" ]; then _sel_entries+=("$_e"); break; fi
+      done
+      IFS="$_orig_ifs"
+    done < <(printf '%s\n' "${_cl_entries[@]}")
+    IFS="$_orig_ifs"
+    # Declared order is preserved: the merges run in declared order, and a reordered run is a
+    # different run. The loop walks _cl_entries, not the selection, precisely for that reason.
+    log "[orch] Codeline selection active (EPAM_ONLY_CODELINES=${EPAM_ONLY_CODELINES}): ${#_sel_entries[@]} of ${#_cl_entries[@]} codeline(s)"
+    _cl_entries=("${_sel_entries[@]+"${_sel_entries[@]}"}")
+  fi
 
   if [ ${#_cl_entries[@]} -eq 0 ]; then
     error "[orch] No codeline/worktree entries found in PRD: ${_prd_path}"
@@ -3745,6 +3849,39 @@ unset _ep_i _ep_j
 #
 # Top level only: lanes re-invoke this script and would each restore the checkpoint over their
 # own state. The parent decides what to resume; the lanes inherit the result.
+# resume_spec_output_present <prd_file>
+# Did the spec pass leave anything behind in this PRD?
+#
+# A resume exports EPAM_SPEC_MODE=0 to mean "the spec pass already ran, skip it". That is a
+# statement about HISTORY, and history stops being a safe proxy the moment something overwrites
+# the PRD in between. Live 2026-08-10: a fresh (non-resume) launch re-ingested Jira over the
+# same file, emptying fixSiteAnalysis (13->0), verificationCriteria (14->0) and the declared
+# file list (13->0). The next resume skipped the spec pass exactly as instructed and handed the
+# writer a story with nothing to aim at — 23 invocations, 10 watchdog kills, $11.76, no code.
+#
+# PRESENCE, not content: any one of the spec pass's own output fields being non-empty proves it
+# ran and survived. Nothing here names a story, a file, a codeline or a project, so a PRD from
+# any project passes the moment its spec pass has left something behind.
+#
+# Fails CLOSED — unreadable, absent or malformed all count as "not present". A guard against
+# missing state must not treat "I could not tell" as "fine".
+resume_spec_output_present() {
+    local _prd="${1:-}"
+    [ -n "$_prd" ] && [ -f "$_prd" ] || return 1
+    "${NODE_BIN:-node}" -e "
+      try {
+        const p = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
+        const stories = Array.isArray(p.stories) ? p.stories : [];
+        const has = (v) => Array.isArray(v) ? v.length > 0
+          : (v && typeof v === 'object') ? Object.keys(v).length > 0 : false;
+        const survived = stories.some((s) => s && (
+          has(s.fixSiteAnalysis) || has(s.verificationCriteria) ||
+          has(s.specification) || has((s.technicalNotes || {}).files)));
+        process.exit(survived ? 0 : 1);
+      } catch { process.exit(1); }
+    " "$_prd" 2>/dev/null
+}
+
 if is_parent && [ -n "${EPAM_RESUME_RUN:-}" ]; then
     # The roster and its briefs are stored against the run that minted them, so a resumed run
     # must BE that run — otherwise the store reads as another run's and is not re-applied.
@@ -3765,6 +3902,21 @@ if is_parent && [ -n "${EPAM_RESUME_RUN:-}" ]; then
         export "${_assign?}"
         info "[orch]   resume: ${_assign}"
     done <<< "$_resume_env"
+    # Skipping the spec pass is only safe while its output still exists. restore_run_checkpoint
+    # and resume_skip_env both refuse rather than guess; this is the third case and was the
+    # silent one. Gated on the skip actually being in force — a resume that is about to RUN the
+    # spec pass has nothing to protect.
+    if [ "${EPAM_SPEC_MODE:-1}" = "0" ] && ! resume_spec_output_present "$PRD_FILE"; then
+        error "[orch] resume '${EPAM_RESUME_RUN}' skips the spec pass (EPAM_SPEC_MODE=0), but the PRD"
+        error "[orch] at ${PRD_FILE} carries none of its output — no fixSiteAnalysis, no"
+        error "[orch] verificationCriteria, no declared files, no specification block."
+        error "[orch] Something overwrote the PRD after the spec pass ran. Running now would hand the"
+        error "[orch] writer a story with nothing to aim at — measured 2026-08-10 at \$11.76 and no code."
+        error "[orch] Recover with ONE of:"
+        error "[orch]   - restore the PRD that carries the spec (git, or a run archive), then resume again"
+        error "[orch]   - re-run the spec pass for this run: EPAM_SPEC_MODE=1 with the same EPAM_RESUME_RUN"
+        exit 1
+    fi
     success "[orch] RESUMED run ${EPAM_RESUME_RUN} — continuing from its checkpoint"
 fi
 
@@ -7920,13 +8072,13 @@ if ! is_truthy "${SKIP_PRE_REVIEW_GATE:-}" && [ -f "$PROJECT_ROOT/package.json" 
             _pre_review_failed=1
         fi
 
-        log "  Running tsc --noEmit..."
+        log "  Running the project's declared type check..."
         _tsc_exit=0
         _pre_review_ts_count=$(find "$PROJECT_ROOT/src" -name "*.ts" 2>/dev/null | grep -v node_modules | wc -l)
         if [ "$_pre_review_ts_count" -eq 0 ]; then
             success "  tsc: SKIP (no .ts files in src/ yet)"
         else
-            "$_node_bin" ./node_modules/.bin/tsc --noEmit 2>&1 | tee -a "$_pre_review_log"
+            _run_project_verification "$PROJECT_ROOT" 2>&1 | tee -a "$_pre_review_log"
             _tsc_exit=${PIPESTATUS[0]}
             if [ "$_tsc_exit" -eq 0 ]; then
                 success "  tsc: PASS"
@@ -7998,13 +8150,13 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
     echo "=== Lint Gate: $PHASE @ $(date -Iseconds) ===" > "$_lint_log"
 
     # ── tsc --noEmit ──────────────────────────────────────────────────────────
-    log "  [lint] Running tsc --noEmit..."
+    log "  [lint] Running the project's declared type check..."
     _lint_tsc_exit=0
     _lint_ts_count=$(find "$PROJECT_ROOT/src" -name "*.ts" 2>/dev/null | grep -v node_modules | wc -l)
     if [ "$_lint_ts_count" -eq 0 ]; then
         success "  [lint] tsc: SKIP (no .ts files in src/ yet)"
     else
-        cd "$PROJECT_ROOT" && "$_node_bin" ./node_modules/.bin/tsc --noEmit 2>&1 | tee -a "$_lint_log"
+        _run_project_verification "$PROJECT_ROOT" 2>&1 | tee -a "$_lint_log"
         _lint_tsc_exit=${PIPESTATUS[0]}
         if [ "$_lint_tsc_exit" -eq 0 ]; then
             success "  [lint] tsc: PASS"
@@ -8105,7 +8257,7 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
 
         if ! is_truthy "${SKIP_GATE_REMEDIATION:-}" && [ -f "$_lint_log" ]; then
             # ── Self-heal KB (episodic tier) ─────────────────────────────────
-            # The lint log is tsc --noEmit + eslint output — deterministic tool
+            # The lint log is the project's type check + eslint output — deterministic tool
             # signal, exactly what the signature must be derived from. Recorded
             # here because gate remediation is a DIFFERENT mechanism from
             # claude.sh's story-implementation heal: a mock run proved the story
@@ -8119,7 +8271,7 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
             fi
             info "  [lint-gate:analyst] Extracting grounded finding from lint log..."
             _lint_finding_prompt="$(cat <<LINT_FIND_EOF
-You are the gate-finding-analyst. A lint gate (tsc --noEmit + eslint) failed during the '$PHASE' phase of an automated TypeScript project build.
+You are the gate-finding-analyst. A lint gate (the project's type check + eslint) failed during the '$PHASE' phase of an automated TypeScript project build.
 
 ## Lint Gate Log
 $(cat "$_lint_log" 2>/dev/null | head -200)
@@ -8808,10 +8960,11 @@ $sast_prompt"
         local tsc_summary=""
         local _tsc_node_bin
         _tsc_node_bin=$(detect_node 2>/dev/null || true)
-        if [ -n "$_tsc_node_bin" ] && [ -f "$PROJECT_ROOT/node_modules/.bin/tsc" ]; then
+        # Guarded on the project having DECLARED a check, not on a specific binary existing.
+        if [ -f "$PROJECT_ROOT/.epam/verification.json" ]; then
             set +e
             local _tsc_out
-            _tsc_out=$( cd "$PROJECT_ROOT" && "$_tsc_node_bin" ./node_modules/.bin/tsc --noEmit 2>&1 )
+            _tsc_out=$( cd "$PROJECT_ROOT" && _run_project_verification "$PROJECT_ROOT" 2>&1 )
             local _tsc_rc=$?
             set -e
 
@@ -8874,7 +9027,7 @@ PYEOF
                 if [ -n "$_placeholder_created" ]; then
                     warning "  [scaffold-self-heal] tsconfig.json include glob matched zero files (TS18003) — created minimal placeholder: $_placeholder_created"
                     set +e
-                    _tsc_out=$( cd "$PROJECT_ROOT" && "$_tsc_node_bin" ./node_modules/.bin/tsc --noEmit 2>&1 )
+                    _tsc_out=$( cd "$PROJECT_ROOT" && _run_project_verification "$PROJECT_ROOT" 2>&1 )
                     _tsc_rc=$?
                     set -e
                     if [ $_tsc_rc -eq 0 ]; then
@@ -10731,12 +10884,12 @@ run_unit_tests_gate() {
     echo "$vitest_output" >> "$gate_log"
 
     if [ "$vitest_exit" -eq 0 ]; then
-        log "  Running type check (tsc --noEmit)..."
+        log "  Running the project's declared type check..."
         local tsc_exit=0
         # Bounded like the npm install and vitest calls above. tsc was the one unbounded
         # command in this gate, so a type-check that never returns hung the phase with no
         # watchdog over it.
-        cd "$PROJECT_ROOT" && timeout "${EPAM_TSC_TIMEOUT_SECS:-${EPAM_TEST_TIMEOUT_SECS:-300}}" "$_node_bin" ./node_modules/.bin/tsc --noEmit >> "$gate_log" 2>&1 || tsc_exit=$?
+        cd "$PROJECT_ROOT" && timeout "${EPAM_TSC_TIMEOUT_SECS:-${EPAM_TEST_TIMEOUT_SECS:-300}}" _run_project_verification "$PROJECT_ROOT" >> "$gate_log" 2>&1 || tsc_exit=$?
         if [ "$tsc_exit" -eq 0 ]; then
             success "Step 4.5: Unit test gate PASSED"
             "$SCRIPT_DIR/update-monitor.sh" event "unit_test_pass" \
@@ -10798,9 +10951,9 @@ run_unit_tests_gate() {
         echo "$vitest_output" >> "$gate_log"
 
         if [ "$vitest_exit" -eq 0 ]; then
-            log "  Running type check (tsc --noEmit)..."
+            log "  Running the project's declared type check..."
             tsc_exit=0
-            cd "$PROJECT_ROOT" && "$_node_bin" ./node_modules/.bin/tsc --noEmit >> "$gate_log" 2>&1 || tsc_exit=$?
+            _run_project_verification "$PROJECT_ROOT" >> "$gate_log" 2>&1 || tsc_exit=$?
             if [ "$tsc_exit" -eq 0 ]; then
                 success "Step 4.5: Unit test gate PASSED after bug fix round $bug_round"
                 "$SCRIPT_DIR/update-monitor.sh" event "unit_test_pass" \

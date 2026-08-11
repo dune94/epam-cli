@@ -11,7 +11,7 @@
  */
 
 import type { LLMProvider, ProviderRequest, ProviderResponse, StreamHandler, Message, ContentPart } from '../types.js';
-import { resolveTemperature } from '../types.js';
+import { resolveTemperature, resolveTopP } from '../types.js';
 import { stripThinkingBlocks, parseMarkupToolCalls } from '../qwen/QwenProvider.js';
 import { logger } from '../../utils/logger.js';
 
@@ -77,6 +77,7 @@ export class MiniMaxProvider implements LLMProvider {
         messages,
         max_tokens: request.maxTokens || 4096,
         temperature: resolveTemperature(request, 0.7),
+        ...(resolveTopP(request) !== undefined ? { top_p: resolveTopP(request) } : {}),
         ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
         ...(tools && tools.length > 0 ? { tools } : {}),
         ...(this.resolveResponseFormat(request) ? { response_format: this.resolveResponseFormat(request) } : {}),
@@ -144,6 +145,13 @@ export class MiniMaxProvider implements LLMProvider {
         // until/unless a separate MiniMax account/usage-API integration is
         // built (see feedback_real_cost_tracking_critical memory).
         ...(typeof data['usage']?.total_cost === 'number' ? { costUsd: data['usage'].total_cost } : {}),
+        // MiniMax caches prompt prefixes automatically — no cache_control breakpoint is sent
+        // or needed. Measured 2026-08-10: an identical 13,676-token prefix returned
+        // cached_tokens=128 cold and 13,568 warm (99.2%). Reading it is what makes the
+        // pipeline's cache_read_tokens a real number instead of a permanent zero.
+        ...(typeof data['usage']?.prompt_tokens_details?.cached_tokens === 'number'
+          ? { cachedInputTokens: data['usage'].prompt_tokens_details.cached_tokens }
+          : {}),
       },
     };
   }
@@ -168,6 +176,7 @@ export class MiniMaxProvider implements LLMProvider {
         messages,
         max_tokens: request.maxTokens || 4096,
         temperature: resolveTemperature(request, 0.7),
+        ...(resolveTopP(request) !== undefined ? { top_p: resolveTopP(request) } : {}),
         ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
         stream: true,
         stream_options: { include_usage: true },
@@ -187,6 +196,7 @@ export class MiniMaxProvider implements LLMProvider {
     const decoder = new TextDecoder();
     let accumulatedText = '';
     let inputTokens = 0;
+    let cachedInputTokens: number | undefined;
     let outputTokens = 0;
     let costUsd: number | undefined;
     let stopReason: ProviderResponse['stopReason'] = 'end_turn';
@@ -224,6 +234,11 @@ export class MiniMaxProvider implements LLMProvider {
           if (choice?.finish_reason) stopReason = this.mapStopReason(choice.finish_reason);
           if (parsed.usage) {
             inputTokens = parsed.usage.prompt_tokens || 0;
+            // The STREAMING path builds its own usage object. Patching only complete()
+            // left this undefined end-to-end while every unit test passed — the CLI streams.
+            if (typeof parsed.usage.prompt_tokens_details?.cached_tokens === 'number') {
+              cachedInputTokens = parsed.usage.prompt_tokens_details.cached_tokens;
+            }
             outputTokens = parsed.usage.completion_tokens || 0;
             // See completeOpenRouter/complete's comment: not a documented
             // MiniMax field, opportunistic only.
@@ -265,7 +280,8 @@ export class MiniMaxProvider implements LLMProvider {
     return {
       content: content.length > 0 ? content : [{ type: 'text', text: accumulatedText }],
       stopReason,
-      usage: { inputTokens: finalIn, outputTokens: finalOut, ...(costUsd != null ? { costUsd } : {}) },
+      usage: { inputTokens: finalIn, outputTokens: finalOut, ...(costUsd != null ? { costUsd } : {}),
+        ...(cachedInputTokens != null ? { cachedInputTokens } : {}) },
     };
   }
 

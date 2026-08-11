@@ -65,6 +65,74 @@ write_story_retry_count() {
     echo "$count" > "$f" 2>/dev/null || true
 }
 
+_story_retry_model_file() {
+    local log_dir="$1" story_id="$2"
+    echo "$(_story_retry_state_dir "$log_dir")/${story_id}.model"
+}
+
+# read_story_retry_model <log_dir> <story_id>
+# The model the ladder had escalated to when the last process exited, or "" if none.
+#
+# retry_count alone was persisted until 2026-08-10, and the counter is only a PROXY for the
+# thing the ladder exists to control. STORY_MODEL is re-derived from the PRD on every
+# invocation (claude.sh:1028), so a story re-entering after a Step 3.6 review rejection or a
+# watchdog retry reset to the PRD model and took ONE step from there — it never resumed the
+# climb. Live 2026-08-10: `InferenceLadder[Rung3/R8]: model 'MiniMax-M3' -> 'z-ai/glm-5.2'`,
+# the rung-1 model at rung 3, burning rung 3's retry budget and its largest iteration budget.
+#
+# Empty is returned for a missing/blank file so the caller keeps the PRD model — a first
+# attempt has nothing to resume, and that must stay distinguishable from a persisted value.
+read_story_retry_model() {
+    local log_dir="$1" story_id="$2"
+    local f
+    f="$(_story_retry_model_file "$log_dir" "$story_id")"
+    if [ -f "$f" ]; then
+        local v
+        v="$(tr -d '\n\r' < "$f" 2>/dev/null)"
+        printf '%s' "$v"
+    else
+        printf ''
+    fi
+}
+
+write_story_retry_model() {
+    local log_dir="$1" story_id="$2" model="$3"
+    # Never persist an empty model: it would read as "no state" on resume and silently restart
+    # the climb, which is the defect this exists to fix.
+    [ -n "$model" ] || return 0
+    local dir f
+    dir="$(_story_retry_state_dir "$log_dir")"
+    mkdir -p "$dir" 2>/dev/null || true
+    f="$(_story_retry_model_file "$log_dir" "$story_id")"
+    printf '%s' "$model" > "$f" 2>/dev/null || true
+}
+
+_story_retry_bump_file() {
+    local log_dir="$1" story_id="$2"
+    echo "$(_story_retry_state_dir "$log_dir")/${story_id}.iterbump"
+}
+
+# The accumulated rung iteration bump. Same reason as the model: it is computed per rung and
+# lives in the process, so a re-invocation restarted the story at the base budget. Observed
+# live 2026-08-10 — maxIter went 185 at attempt 3, then back to 120 on the next invocation,
+# discarding every rung's escalation exactly as the model did.
+read_story_iteration_bump() {
+    local f; f="$(_story_retry_bump_file "$1" "$2")"
+    if [ -f "$f" ]; then
+        local v; v="$(tr -dc '0-9' < "$f" 2>/dev/null)"
+        echo "${v:-0}"
+    else
+        echo 0
+    fi
+}
+
+write_story_iteration_bump() {
+    local log_dir="$1" story_id="$2" bump="$3"
+    case "$bump" in ''|*[!0-9]*) return 0 ;; esac
+    mkdir -p "$(_story_retry_state_dir "$log_dir")" 2>/dev/null || true
+    printf '%s' "$bump" > "$(_story_retry_bump_file "$log_dir" "$story_id")" 2>/dev/null || true
+}
+
 # rung = retry_count / 2 (matches claude.sh's own `_rung=$(( retry_count / 2 ))`)
 story_ladder_rung() {
     local retry_count="$1"

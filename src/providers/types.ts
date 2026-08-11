@@ -41,7 +41,7 @@ export interface ProviderRequest {
   maxTokens?: number;
   temperature?: number;
   /** Reasoning effort level — controls thinking depth. Providers map this to their native parameter. */
-  reasoningEffort?: 'low' | 'medium' | 'high';
+  reasoningEffort?: 'low' | 'medium' | 'high' | 'max';
   /**
    * Bind the model's output to a shape.
    *
@@ -55,6 +55,12 @@ export interface ProviderRequest {
    * structured reply, so a schema does not remove the output-budget requirement.
    */
   responseFormat?: 'json_object' | JsonSchemaFormat;
+  /** Nucleus sampling. Model-specific and NOT interchangeable with temperature — measured
+   * guidance 2026-08-10: MiniMax M3 wants 0.85 with low temperature for code precision;
+   * GLM-5.2 wants top_p LOCKED at 0.95 with temperature as the only lever ("never tune both");
+   * Kimi K3 wants 1.0 for agentic tool loops. Previously never sent at all, so every model ran
+   * at its vendor default and none of that was expressible. */
+  topP?: number;
 }
 
 export interface TokenUsage {
@@ -68,6 +74,14 @@ export interface TokenUsage {
    * feedback_real_cost_tracking_critical memory — real cost capture is the
    * required primary path, estimation is fallback-only). */
   costUsd?: number;
+  /** How many of `inputTokens` the provider served from its prompt cache — a SUBSET of
+   * inputTokens, never an addition to it. `undefined` means the API reported no cache detail
+   * at all; `0` means it reported that nothing was cached. Those are different findings and
+   * must not be collapsed: measured 2026-08-10, MiniMax-M3 returns 99.2% cached on an
+   * identical prefix while z-ai/glm-5.2 via OpenRouter returns 0 with or without an explicit
+   * cache_control breakpoint. Without this field the pipeline recorded both as zero and the
+   * cheaper model was indistinguishable from the costlier one. */
+  cachedInputTokens?: number;
 }
 
 export interface ProviderResponse {
@@ -122,6 +136,23 @@ export function resolveTemperature(request: ProviderRequest, defaultTemperature:
     if (!Number.isNaN(parsed)) return parsed;
   }
   return defaultTemperature;
+}
+
+/**
+ * Effective top_p for a request: explicit request.topP, else EPAM_TOP_P (set per-model by the
+ * orchestration layer from modelOverrides.topP), else undefined so the vendor default stands.
+ *
+ * Deliberately returns undefined rather than a number when unset — sending a top_p the operator
+ * never configured would silently override a vendor default that may be the documented one.
+ */
+export function resolveTopP(request: ProviderRequest): number | undefined {
+  if (typeof request.topP === 'number') return request.topP;
+  const env = process.env.EPAM_TOP_P;
+  if (env !== undefined && env !== '') {
+    const parsed = parseFloat(env);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  return undefined;
 }
 
 export interface LLMProvider {

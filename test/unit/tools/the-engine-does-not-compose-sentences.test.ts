@@ -110,9 +110,21 @@ describe('THE SWEEP: no agent-facing sentence is composed in the tools', () => {
     const offenders: string[] = [];
     for (const rel of FILES) {
       const src = readFileSync(join(__dirname, '../../../', rel), 'utf8');
+      let inSchema = false;
       src.split('\n').forEach((line, i) => {
+        if (/inputSchema\s*:/.test(line)) inSchema = true;
+        if (inSchema && /^\s{4}\}[,;]?\s*$/.test(line)) inSchema = false;
         const t = line.trim();
         if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) return;
+        // A tool's inputSchema `description` is its INTERFACE, not a message about an event.
+        // It must always be present and meaningful — a model that reads `read_file_description`
+        // instead of a sentence does not know the tool exists or what its parameters mean, so it
+        // cannot degrade to a bare code the way a runtime message can. The catalog may still
+        // override it; what it must not do is disappear. Runtime messages are the opposite: the
+        // code IS the truth and the words are the project's.
+        if (/^description:/.test(t)) return;
+        if (/^readonly description\s*=/.test(t)) return;   // the tool's own interface, same rule
+        if (inSchema) return;
         // A quoted run of >=4 words containing a lowercase English connective.
         const m = line.match(/['"`][^'"`]*\b(you|the|this|that|is|are|was|has|not|please)\b[^'"`]{15,}['"`]/i);
         if (m) offenders.push(`${rel}:${i + 1}  ${m[0].slice(0, 70)}`);

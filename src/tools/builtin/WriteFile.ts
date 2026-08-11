@@ -70,12 +70,8 @@ export class WriteFileTool implements Tool {
           WriteFileTool.symbolBlocks.set(resolved, seen + 1);
           return {
             toolUseId: '',
-            content:
-              `[reuse-guard] Write blocked: ${resolved} is the prescribed fix site for ` +
-              `${requiredSymbols.join(' or ')}, which already exists in this repository, but the ` +
-              `content you wrote does not reference it. Import and call it rather than ` +
-              `re-implementing its logic — a hand-rolled equivalent has produced fixes that ` +
-              `could never work. Rewrite this file using ${requiredSymbols.join(' or ')}.`,
+            content: renderAgentMessage('write_refused_reuse_guard',
+              { path: resolved, symbols: requiredSymbols.join(', ') }),
             isError: true,
           };
         }
@@ -97,12 +93,8 @@ export class WriteFileTool implements Tool {
       if (breachesEnginePerimeter(resolved)) {
         return {
           toolUseId: '',
-          content:
-            `[engine-perimeter] Write blocked: ${resolved} is an epam-cli engine path ` +
-            `(${ENGINE_OWNED_DIRS.join(', ')}) and must never be created inside this ` +
-            `repository. The engine's knowledge base, profiles, logs and indexes live in ` +
-            `the engine's own installation, not in the codeline you are working on. If you ` +
-            `were asked to record a note, skip it — do not write it here.`,
+          content: renderAgentMessage('write_refused_engine_path',
+            { path: resolved, engineDirs: ENGINE_OWNED_DIRS.join(', ') }),
           isError: true,
         };
       }
@@ -204,10 +196,8 @@ export class WriteFileTool implements Tool {
           return {
             toolUseId: '',
             content:
-              `[settings-guard] Write blocked: ${resolved} may only be written by the ` +
-              `'${requiredRole}' role (this call ran as '${callerRole || 'unknown'}'). ` +
-              `LLM ladder/cost/model settings are not something a story implementer should ` +
-              `change as a side effect of its own task.`,
+              renderAgentMessage('write_refused_settings_guard',
+                { path: resolved, requiredRole, callerRole: callerRole || 'unknown' }),
             isError: true,
           };
         }
@@ -241,12 +231,11 @@ export class WriteFileTool implements Tool {
         try {
           JSON.parse(finalContent);
         } catch (parseErr) {
-          const hint = append
-            ? 'Appending to an existing JSON file produces invalid JSON unless the appended text is not itself a full document — write the complete merged document instead with append=false (or omitted).'
-            : 'The content is not a single, complete, valid JSON document.';
+          // A reason CODE, not a sentence — the catalog decides how to say it.
+          const hint = append ? 'append_breaks_json' : 'content_not_valid_json';
           return {
             toolUseId: '',
-            content: `Error: refused to write ${resolved} — resulting content is not valid JSON (${(parseErr as Error).message}). ${hint}`,
+            content: renderAgentMessage('write_refused_invalid_json', { path: resolved }),
             isError: true,
           };
         }

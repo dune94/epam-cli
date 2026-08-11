@@ -120,8 +120,8 @@ export class ReadFileTool implements Tool {
         if (from > total) {
           return {
             toolUseId: '',
-            content: `${resolved} has only ${total} lines; startLine ${from} is past the end. ` +
-              `Nothing was returned — this is a statement about the request, not the file.`,
+            content: renderAgentMessage('read_range_past_end',
+              { path: resolved, total, startLine: from }),
             isError: false,
           };
         }

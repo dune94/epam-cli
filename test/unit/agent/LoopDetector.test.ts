@@ -9,7 +9,14 @@
  *     (e.g. grep results) never counts as a failure.
  */
 import { describe, it, expect } from 'vitest';
+import { join } from 'node:path';
 import { LoopDetector } from '../../../src/agent/LoopDetector.js';
+
+// Wording lives in the project catalog now, not the engine (src/tools/messages.ts). Point at
+// the shipped catalog exactly as the runtime invocation does, so these assert the words an
+// agent really sees rather than words compiled into the tool.
+process.env.EPAM_AGENT_MESSAGE_CATALOG =
+  join(__dirname, '../../../orchestrations/config/agent-messages.json');
 
 describe('LoopDetector.preToolCheck — identical tool-call repetition', () => {
   it('allows the first N calls (maxIdenticalToolCalls) through unblocked', () => {

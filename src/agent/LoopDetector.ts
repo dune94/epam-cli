@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { renderAgentMessage } from '../tools/messages.js';
 
 export interface LoopDetectorConfig {
   /** Block a tool call once it's been seen this many times (exact same tool + args) within the sliding window. */
@@ -116,12 +117,8 @@ export class LoopDetector {
       if (seen >= this.config.maxSameTargetCalls) {
         return {
           blocked: true,
-          interventionMessage:
-            `LOOP PROTECTION: "${toolName}" has now targeted the same file ${seen + 1} times in ` +
-            `this attempt. Repeatedly rewriting one target is not making progress — the call was ` +
-            `NOT executed. Something is blocking the change you are trying to make: read the last ` +
-            `error you received, and if a different file or permission is required, say so and ` +
-            `stop rather than editing this one again.`,
+          interventionMessage: renderAgentMessage('same_target_repeat',
+            { tool: toolName, target, count: seen + 1 }),
         };
       }
       this.targetCounts.set(targetKey, seen + 1);
@@ -130,11 +127,8 @@ export class LoopDetector {
     if (duplicateCount >= this.config.maxIdenticalToolCalls) {
       return {
         blocked: true,
-        interventionMessage:
-          `LOOP PROTECTION: "${toolName}" was just called with identical parameters ` +
-          `${duplicateCount + 1} times in a row. This is not making progress — the call was NOT ` +
-          `executed. Do not repeat this exact call again. Re-read the prior output or error, form ` +
-          `a different hypothesis, or inspect a different file. If genuinely stuck, say so and stop.`,
+        interventionMessage: renderAgentMessage('identical_call_repeat',
+          { tool: toolName, count: duplicateCount + 1 }),
       };
     }
 
@@ -158,10 +152,7 @@ export class LoopDetector {
     if (repeatCount >= this.config.maxIdenticalErrorOutcomes) {
       return {
         repeating: true,
-        feedbackMessage:
-          `\n\n[LOOP PROTECTION: this failed the same way as a previous attempt in this conversation. ` +
-          `Stop repeating this modification strategy — pivot to a different file/approach, or revert ` +
-          `the recent change.]`,
+        feedbackMessage: `\n\n${renderAgentMessage('repeated_error_outcome', { count: repeatCount + 1 })}`,
       };
     }
     return { repeating: false };

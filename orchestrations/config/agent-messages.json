@@ -1,13 +1,16 @@
 {
   "$comment": "Agent-facing wording, owned by the project. The engine emits {code, ...data} and never composes a sentence (src/tools/messages.ts); this file supplies the words. Edit freely — no rebuild, no code change. A code with no entry here renders as its structured form, which is bare on purpose: the fix is to add wording here, never to add a default sentence to the engine. Placeholders are {name} and are filled from the data the tool reported; an unmatched placeholder is left visible rather than blanked, because a message that silently loses a value reads as complete while being wrong.",
-
   "read_deduped": "You already read {path} earlier in this attempt and it has NOT changed since ({bytes} bytes). Re-use the copy you already have. If you no longer have it, request this file again and the full contents will be returned.",
-
   "write_refused_owned_by_other_story": "Write blocked: {path} is declared by ANOTHER story, and taking it would overwrite that story's work. Do not edit it: escalate to the owning story instead, or achieve the change within your own files. Files this story declared: {declared}. Files outside that list are writable when no other story owns them, so this refusal is specific — rewriting a different file instead will not resolve it.",
-
   "write_refused_ownership_unknown": "Write blocked: {path} — this story's file ownership could not be determined, so the write is refused to be safe. This is missing pipeline data, not a judgement about this file. Report it rather than working around it. Files this story declared: {declared}.",
-
   "same_target_repeat": "LOOP PROTECTION: \"{tool}\" has now targeted {target} {count} times in this attempt. Repeatedly rewriting one target is not making progress — the call was NOT executed. Something is blocking the change you are trying to make: read the last error you received, and if a different file or permission is required, say so and stop rather than editing this one again.",
-
-  "identical_call_repeat": "LOOP PROTECTION: \"{tool}\" was just called with identical parameters {count} times in a row. This is not making progress — the call was NOT executed. Do not repeat this exact call again. Re-read the prior output or error, form a different hypothesis, or inspect a different file. If genuinely stuck, say so and stop."
+  "identical_call_repeat": "LOOP PROTECTION: \"{tool}\" was just called with identical parameters {count} times in a row. This is not making progress — the call was NOT executed. Do not repeat this exact call again. Re-read the prior output or error, form a different hypothesis, or inspect a different file. If genuinely stuck, say so and stop.",
+  "read_range_past_end": "{path} has only {total} lines; startLine {startLine} is past the end. Nothing was returned — this is a statement about the request, not the file.",
+  "repeated_error_outcome": "[LOOP PROTECTION: this failed the same way as a previous attempt in this conversation ({count} times). Stop repeating this modification strategy — pivot to a different file/approach, or revert the recent change.]",
+  "write_refused_reuse_guard": "[reuse-guard] Write blocked: {path} is a prescribed fix site for {symbols}, which already exists in this repository, but the content you wrote does not reference it. Import and call it rather than re-implementing its logic.",
+  "write_refused_engine_path": "[engine-perimeter] Write blocked: {path} is an epam-cli engine path ({engineDirs}) and must never be created inside this repository. The engine's knowledge base, profiles, logs and indexes live in the engine's own installation, not in the codeline you are working on. If you were asked to record a note, skip it — do not write it here.",
+  "write_refused_settings_guard": "[settings-guard] Write blocked: {path} may only be written by the '{requiredRole}' role (this call ran as '{callerRole}'). LLM ladder/cost/model settings are not something a story implementer should change as a side effect of its own task.",
+  "write_refused_invalid_json": "Error: refused to write {path} — the resulting content is not valid JSON ({hint}).",
+  "append_breaks_json": "appending to an existing JSON file produces invalid JSON unless the appended text is not itself a full document",
+  "content_not_valid_json": "the content is not a single, complete, valid JSON document"
 }

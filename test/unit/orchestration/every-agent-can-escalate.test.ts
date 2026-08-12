@@ -133,7 +133,7 @@ describe('A DYNAMIC AGENT INHERITS ITS SEAM\'S LADDER', () => {
     process.env.EPAM_MODEL_LADDER_HIGHEST = 'model-a=model-b';
     const env = seamInvocationEnv('code-graph-detective', '');
     expect(
-      env.EPAM_MODEL_LADDER_HIGH,
+      env.EPAM_MODEL_LADDER,
       'the per-codeline investigator minted for this project runs at this seam and inherits this',
     ).toBe('model-a=model-b');
     expect(env.EPAM_MODEL, 'and starts on the first rung, not the run default').toBe('model-a');

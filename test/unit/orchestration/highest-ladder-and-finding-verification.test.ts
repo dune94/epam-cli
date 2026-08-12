@@ -113,7 +113,10 @@ describe('the ladder binds by configuration, not by code', () => {
     process.env.AGENT_PROFILES_REGISTRY = REG;
     process.env.EPAM_MODEL_LADDER_HIGHEST = 'model-a=model-b';
     const env = spec.seamInvocationEnv('roster-review', 'orchestrations/logs');
-    expect(env.EPAM_MODEL_LADDER_HIGH).toBe('model-a=model-b');
+    // The chain is exported under the GENERIC name every consumer reads. It used to also be
+    // written to EPAM_MODEL_LADDER_HIGH — from a HIGHEST-tier ladder — which was a mis-named
+    // export that could have handed a seam the wrong tier's chain.
+    expect(env.EPAM_MODEL_LADDER).toBe('model-a=model-b');
     expect(env.EPAM_MODEL, 'the seam does not START on the first rung').toBe('model-a');
     expect(env.EPAM_REASONING_EFFORT).toBe('high');
   });
@@ -133,7 +136,7 @@ describe('the ladder binds by configuration, not by code', () => {
   it('a seam with no ladder is untouched — nothing is bound implicitly', () => {
     process.env.AGENT_PROFILES_REGISTRY = REG;
     const env = spec.seamInvocationEnv('tc-writer', 'orchestrations/logs');
-    expect(env.EPAM_MODEL_LADDER_HIGH).toBeUndefined();
+    expect(env.EPAM_MODEL_LADDER).toBeUndefined();
     expect(env.EPAM_MODEL).toBeUndefined();
   });
 
@@ -147,7 +150,7 @@ describe('the ladder binds by configuration, not by code', () => {
     for (const seam of ['roster-review', 'code-graph-detective', 'team-lead-review',
                         'codeline-discovery', 'guard-vocabulary']) {
       const env = spec.seamInvocationEnv(seam, 'orchestrations/logs');
-      expect(env.EPAM_MODEL_LADDER_HIGH, `${seam} is not on the configured ladder`).toBe('model-a=model-b');
+      expect(env.EPAM_MODEL_LADDER, `${seam} is not on the configured ladder`).toBe('model-a=model-b');
       expect(env.EPAM_REASONING_EFFORT, `${seam} is not at high effort`).toBe('high');
     }
   });
@@ -155,21 +158,29 @@ describe('the ladder binds by configuration, not by code', () => {
   it('seams that PRODUCE rather than judge are left alone — their output is reviewed', () => {
     process.env.AGENT_PROFILES_REGISTRY = REG;
     for (const seam of ['tc-writer', 'ac-elaboration', 'prd-change-summarizer']) {
-      expect(spec.seamInvocationEnv(seam, 'orchestrations/logs').EPAM_MODEL_LADDER_HIGH,
+      expect(spec.seamInvocationEnv(seam, 'orchestrations/logs').EPAM_MODEL_LADDER,
         `${seam} was bound to a ladder it does not need`).toBeUndefined();
     }
   });
 
-  it('an unknown seam gets nothing rather than a default someone else chose', () => {
+  it('an unresolvable agent THROWS rather than silently getting nothing', () => {
+    // INVERTED 2026-08-12. This asserted {} — the fail-open that left all 64 MINTED agents
+    // unconfigured, with nothing said. Resolution is now total: an agent that matches no
+    // profile, no cross-reference, no pattern and no declared default is a registry error,
+    // raised where it can be fixed rather than three hours into a run.
     process.env.AGENT_PROFILES_REGISTRY = REG;
-    expect(spec.seamInvocationEnv('no-such-seam', 'orchestrations/logs')).toEqual({});
+    // With a defaultSeam declared, an unknown agent resolves to it — that IS the fix. The
+    // throw is for a registry that declares neither a pattern nor a default, proven in
+    // seam-resolution-is-total.test.ts against a fixture.
+    expect(spec.seamInvocationEnv('no-such-seam', 'orchestrations/logs'),
+      'an unknown agent still gets nothing').not.toEqual({});
   });
 
   it('a named ladder with no models configured does not silently invent one', () => {
     process.env.AGENT_PROFILES_REGISTRY = REG;
     delete process.env.EPAM_MODEL_LADDER_HIGHEST;
     const env = spec.seamInvocationEnv('roster-review', 'orchestrations/logs');
-    expect(env.EPAM_MODEL_LADDER_HIGH).toBeUndefined();
+    expect(env.EPAM_MODEL_LADDER).toBeUndefined();
     expect(env.EPAM_REASONING_EFFORT, 'the rest of the profile was discarded too').toBe('high');
   });
 });

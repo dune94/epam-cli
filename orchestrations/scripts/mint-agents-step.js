@@ -337,7 +337,71 @@ function writeRosterDiff(profilesPath, agentsDir, logDir, mintedThisRun, mintedD
   return diff;
 }
 
-module.exports = { resolveRepoPath, resolveCodelines, declaredDependencies, writeRosterDiff, mintTools, provisionPlugins };
+/**
+ * THE AGENT→SEAM CROSS-REFERENCE, WRITTEN WHERE THE AGENTS ARE CREATED.
+ *
+ * Minting is the only moment the pipeline knows what it just made. A run mints ~64 agents
+ * whose names cannot exist in a registry written before the project did —
+ * gotransit-investigator, contentstack-live-preview-integration-engineer — and until now every
+ * one of them resolved to {} at runtime: no ladder, no effort, no temperature, and nothing
+ * said so.
+ *
+ * Operator: "you cannot just say after mint - oh, it has no seam and then treat it as a bug -
+ * that will not work at all and is a poor design." And: "Cross reference must be
+ * updated/re-created during minting."
+ *
+ * So every agent in the roster is resolved through THE SAME resolver the runtime uses — two
+ * implementations of "which seam is this agent" would be two answers to one question — and the
+ * result is recorded. The mapping stops being implicit-by-pattern and becomes a record an
+ * operator can read, diff and override.
+ *
+ * AN AGENT THAT RESOLVES TO NOTHING FAILS THE MINT, and nothing is written. The failure lands
+ * before any story runs, where it can be fixed.
+ *
+ * No agent name and no seam name appears here: the roster supplies the names, the registry
+ * supplies the shapes.
+ */
+function writeAgentSeamCrossReference(profilesPath, registryPath) {
+  const { resolveSeam } = require('./lib/seam-invocation.js');
+
+  const roster = JSON.parse(fs.readFileSync(profilesPath, 'utf8'));
+  const registry = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+  const profiles = registry.profiles || {};
+  const previous = registry.agentSeams || {};
+
+  // RE-CREATED, not merged: an agent dropped from the roster must not linger. Rebuilt from the
+  // roster alone, so the cross-reference always describes the agents that actually exist.
+  const next = {};
+  const unresolved = [];
+  for (const agent of Object.keys(roster)) {
+    // An agent that IS a seam already wins at resolution; recording it too would create a
+    // second place to drift from.
+    if (profiles[agent]) continue;
+    // A deliberate decision about an agent that still exists survives a re-mint. Regenerating
+    // the mapping must not silently revert an operator's override.
+    if (Object.prototype.hasOwnProperty.call(previous, agent) && profiles[previous[agent]]) {
+      next[agent] = previous[agent];
+      continue;
+    }
+    try {
+      next[agent] = resolveSeam(agent, registryPath);
+    } catch (e) {
+      unresolved.push(`${agent}: ${(e && e.message) || e}`);
+    }
+  }
+
+  if (unresolved.length) {
+    throw new Error(
+      `${unresolved.length} minted agent(s) resolve to no seam, so they would run unconfigured. `
+      + `Add a seamPattern or a defaultSeam to ${registryPath}:\n  ` + unresolved.join('\n  '));
+  }
+
+  registry.agentSeams = next;
+  fs.writeFileSync(registryPath, `${JSON.stringify(registry, null, 2)}\n`);
+  return next;
+}
+
+module.exports = { resolveRepoPath, resolveCodelines, declaredDependencies, writeRosterDiff, mintTools, provisionPlugins, writeAgentSeamCrossReference };
 
 if (require.main !== module) return;
 
@@ -706,6 +770,13 @@ if (require.main !== module) return;
   fs.writeFileSync(PRD_PATH, JSON.stringify(prd, null, 2));
 
   writeRosterDiff(PROFILES_PATH, AGENTS_DIR, LOG_DIR, _mintedNames, _mintedDetail);
+
+  // Record which seam every agent just minted enters the pipeline by. Throws if any of them
+  // resolves to nothing, which fails the mint — that is the point: an unconfigured agent is
+  // caught here, before any story runs, not three hours into a run.
+  const _xref = writeAgentSeamCrossReference(PROFILES_PATH,
+    process.env.AGENT_PROFILES_REGISTRY || path.join(AGENTS_DIR, "invocation-profiles.json"));
+  process.stderr.write(`[mint-step] agent→seam cross-reference written for ${Object.keys(_xref).length} agent(s)\n`);
   process.stderr.write(`[mint-step] ✓ roster and assignments written to ${PRD_PATH}\n`);
 })().catch((err) => {
   process.stderr.write(`[mint-step] FAILED: ${(err && err.message) || err}\n`);

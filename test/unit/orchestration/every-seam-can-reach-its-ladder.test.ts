@@ -131,7 +131,10 @@ describe('A SEAM NOW RESOLVES TO A MODEL, NOT JUST AN EFFORT', () => {
     expect(seamEnv('impl-failure-analyst', env).EPAM_MODEL).toBe(first);
   });
 
-  it('a seam with no profile still gets nothing — nothing is bound implicitly', () => {
-    expect(seamEnv('not-a-real-seam', loadInParent())).toEqual({});
+  it('an agent matching nothing resolves to the DECLARED default, never {}', () => {
+    // INVERTED 2026-08-12: written an hour before the minted-agent design fix, this asserted
+    // the very fail-open that left 64 minted agents unconfigured.
+    const out = seamEnv('not-a-real-seam', loadInParent());
+    expect(out, 'an unknown agent still gets nothing').not.toEqual({});
   });
 });

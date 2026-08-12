@@ -199,5 +199,118 @@
       "maxIterations": 25,
       "timeoutSecs": 900
     }
-  }
+  },
+  "_seamResolution": [
+    "HOW ANY AGENT — INCLUDING ONE MINTED THIS RUN — FINDS ITS SEAM.",
+    "A run mints agents whose names cannot exist in this file: gotransit-investigator,",
+    "contentstack-live-preview-integration-engineer. On 2026-08-11 it minted 64 against 17 named",
+    "profiles, and every unnamed one resolved to {} — no ladder, no effort, no temperature, and",
+    "nothing said so. Resolution is now TOTAL and is tried in this order:",
+    "  1. profiles[<agent>]     the agent IS a seam",
+    "  2. agentSeams[<agent>]   explicit cross-reference: this agent enters by this seam",
+    "  3. seamPatterns          a name SHAPE maps to a seam, so agents not yet invented resolve",
+    "  4. defaultSeam           declared fallback",
+    "  5. THROW                 never {}. An unresolvable agent fails at mint time, where it can",
+    "                           be fixed, not three hours into a run running unconfigured.",
+    "The engine holds none of these names. Adding an agent kind is an edit HERE."
+  ],
+  "seamPatterns": [
+    {
+      "match": "-investigator$",
+      "seam": "code-graph-detective",
+      "_why": "investigates one codeline and reports where the work lands"
+    },
+    {
+      "match": "-detective$",
+      "seam": "code-graph-detective",
+      "_why": "same investigation seam under its other minted suffix"
+    },
+    {
+      "match": "-analyst$",
+      "seam": "impl-failure-analyst",
+      "_why": "diagnoses why something failed"
+    },
+    {
+      "match": "-reviewer$",
+      "seam": "code-review-cycle",
+      "_why": "reviews produced work"
+    },
+    {
+      "match": "-ranger$",
+      "seam": "code-review-cycle",
+      "_why": "review sweep"
+    },
+    {
+      "match": "-sentinel$",
+      "seam": "code-review-cycle",
+      "_why": "standing review check (SAST, perf)"
+    },
+    {
+      "match": "-validator$",
+      "seam": "prd-change-reviewer",
+      "_why": "validates a proposed artefact before it is applied"
+    },
+    {
+      "match": "-checker$",
+      "seam": "prd-change-reviewer",
+      "_why": "checks an artefact against a standard"
+    },
+    {
+      "match": "-detector$",
+      "seam": "prd-change-reviewer",
+      "_why": "detects a defect class in an artefact"
+    },
+    {
+      "match": "-hunter$",
+      "seam": "repro-test-writer",
+      "_why": "authors adversarial tests"
+    },
+    {
+      "match": "-weaver$",
+      "seam": "repro-test-writer",
+      "_why": "authors generated tests"
+    },
+    {
+      "match": "-remediator$",
+      "seam": "ac-elaboration",
+      "_why": "rewrites acceptance criteria"
+    },
+    {
+      "match": "-augmentor$",
+      "seam": "ac-elaboration",
+      "_why": "elaborates an existing artefact"
+    },
+    {
+      "match": "-author$",
+      "seam": "tc-writer",
+      "_why": "authors written deliverables"
+    },
+    {
+      "match": "-generator$",
+      "seam": "tc-writer",
+      "_why": "generates written deliverables"
+    },
+    {
+      "match": "-builder$",
+      "seam": "tc-writer",
+      "_why": "assembles written deliverables"
+    },
+    {
+      "match": "-coordinator$",
+      "seam": "cpa-inference",
+      "_why": "plans and estimates rather than producing code"
+    },
+    {
+      "match": "-engineer$",
+      "seam": "impl-failure-analyst",
+      "_why": "implementer seam: high ladder, matching the story writer tier"
+    },
+    {
+      "match": "-agent$",
+      "seam": "cpa-inference",
+      "_why": "generic minted worker; medium ladder until given a specific seam"
+    }
+  ],
+  "agentSeams": {},
+  "defaultSeam": "cpa-inference"
 }

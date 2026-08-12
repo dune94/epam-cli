@@ -2040,21 +2040,48 @@ print(math.ceil(${timeout_secs} * ${role_multiplier}))
     #
     # Derived, capped, and never LOWER than the configured floor. Both knobs are config
     # (timeouts.secondsPerIteration / timeouts.storyTimeoutMaxSecs) — no numbers here.
+    # THE ITERATION COUNT COMES FROM THE CHILD, WHICH IS THE ONLY THING THAT KNOWS IT.
+    #
+    # This used to read EPAM_MAX_ITERATIONS, which is UNSET here: claude.sh computes
+    # _effective_max_iterations per model, per attempt, minutes AFTER this function fixes the
+    # wall. So the branch NEVER EXECUTED, its log line has never appeared in any run, and the
+    # wall silently stayed at the FLOOR — measured live 2026-08-11, 185 iterations x 12s =
+    # 2,220s of authorised work under an 1,800s wall, with a 5,400s cap never approached. The
+    # kill was scheduled at authorisation time, twice in one day.
+    #
+    # claude.sh now persists what it granted; this reads it. A first attempt has nothing
+    # persisted yet and correctly uses the floor — the point is that every attempt AFTER an
+    # escalation is policed by the budget that escalation actually handed out.
     local _spi="${EPAM_SECONDS_PER_ITERATION:-}"
     local _tmax="${EPAM_STORY_TIMEOUT_MAX_SECS:-}"
-    if [ -n "$_spi" ] && [ -n "${EPAM_MAX_ITERATIONS:-}" ]; then
+    _derive_story_wall() {
+        local _base="$1" _iters="$2"
+        [ -n "$_spi" ] || { echo "$_base"; return 0; }
+        case "$_iters" in ''|*[!0-9]*|0) echo "$_base"; return 0 ;; esac
+        awk -v it="$_iters" -v spi="$_spi" -v cur="$_base" -v cap="${_tmax:-0}" 'BEGIN {
+            d = it * spi;
+            if (cap > 0 && d > cap) d = cap;
+            if (d < cur) d = cur;
+            printf "%d", d
+        }'
+    }
+    local _persisted_iters
+    _persisted_iters=$(read_story_effective_iterations "$LOG_DIR" "$story_id" 2>/dev/null || echo 0)
+    if [ -n "$_spi" ]; then
         local _derived
-        _derived=$(awk -v it="${EPAM_MAX_ITERATIONS:-0}" -v spi="$_spi" -v cur="$timeout_secs" \
-            -v cap="${_tmax:-0}" 'BEGIN {
-                d = it * spi;
-                if (cap > 0 && d > cap) d = cap;
-                if (d < cur) d = cur;
-                printf "%d", d
-            }')
+        _derived=$(_derive_story_wall "$timeout_secs" "$_persisted_iters")
         if [ -n "$_derived" ] && [ "$_derived" != "$timeout_secs" ]; then
-            log "[orch] story timeout ${timeout_secs}s -> ${_derived}s (derived from ${EPAM_MAX_ITERATIONS} iterations x ${_spi}s/iteration, cap ${_tmax:-none})"
+            log "[orch] story timeout ${timeout_secs}s -> ${_derived}s (derived from ${_persisted_iters} iterations x ${_spi}s/iteration, cap ${_tmax:-none})"
             timeout_secs="$_derived"
+        elif [ "${_persisted_iters:-0}" -eq 0 ]; then
+            # First attempt for this story: nothing granted yet, so the floor is correct — and
+            # saying so is what makes the silent skip impossible to mistake for a decision.
+            log "[orch] story timeout ${timeout_secs}s (floor — no iteration budget granted yet for $story_id)"
         fi
+    else
+        # A configured secondsPerIteration is what makes derivation possible. Its absence is a
+        # config gap, not a licence to police an unknown budget with a fixed number.
+        warning "[orch] timeouts.secondsPerIteration is not configured — the story wall cannot be derived and stays at ${timeout_secs}s"
     fi
 
     set +e
@@ -2111,6 +2138,21 @@ print(math.ceil(${timeout_secs} * ${EPAM_WATCHDOG_RETRY_MULTIPLIER:-1.5}))
                 break
             fi
             _lad_attempt=$(( _lad_attempt + 1 ))
+            # RE-DERIVE AFTER THE ESCALATION, NOT BEFORE IT.
+            #
+            # hot_swap_story_model_if_unstable just moved this story to a new rung, and rungs
+            # change the iteration budget — live 2026-08-11 a rung bump took maxIter from 28 to
+            # 185, and again to 345 on kimi-k3. Scaling the OLD wall by a fixed multiplier
+            # polices the new budget with the previous rung's arithmetic, which is how
+            # escalation kept WIDENING the gap between work authorised and time permitted. The
+            # child persisted what it granted on the attempt that just timed out; use it.
+            local _retry_iters _retry_derived
+            _retry_iters=$(read_story_effective_iterations "$LOG_DIR" "$story_id" 2>/dev/null || echo 0)
+            _retry_derived=$(_derive_story_wall "$retry_timeout_secs" "$_retry_iters")
+            if [ -n "$_retry_derived" ] && [ "$_retry_derived" != "$retry_timeout_secs" ]; then
+                log "[orch] retry wall ${retry_timeout_secs}s -> ${_retry_derived}s (re-derived from ${_retry_iters} iterations granted on the attempt that timed out)"
+                retry_timeout_secs="$_retry_derived"
+            fi
             warning "Watchdog: $story_id timed out after ${timeout_secs}s — attempt ${_lad_attempt}/${_lad_max} on the next ladder rung with a ${retry_timeout_secs}s budget..."
             set +e
             timeout "$retry_timeout_secs" "$CLAUDE_SH" "$story_id" 2>&1 | tee -a "$log_file"

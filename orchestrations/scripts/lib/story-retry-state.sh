@@ -133,6 +133,44 @@ write_story_iteration_bump() {
     printf '%s' "$bump" > "$(_story_retry_bump_file "$log_dir" "$story_id")" 2>/dev/null || true
 }
 
+_story_effective_iters_file() {
+    local log_dir="$1" story_id="$2"
+    echo "$(_story_retry_state_dir "$log_dir")/${story_id}.effiter"
+}
+
+# THE WALL MUST BE DERIVED FROM THE BUDGET IT POLICES, AND ONLY THE CHILD KNOWS THAT BUDGET.
+#
+# run-agent-orchestration.sh sizes each story's watchdog timeout from
+# secondsPerIteration x iterations, capped at storyTimeoutMaxSecs. It reads iterations from
+# EPAM_MAX_ITERATIONS — which is UNSET in the parent, because claude.sh computes
+# _effective_max_iterations per model, per attempt, several minutes AFTER the parent has
+# already fixed its wall. The value flows DOWNWARD to the LLM invocation and never UPWARD to
+# the watchdog policing it, so the derivation branch has never once executed and the wall has
+# always silently stayed at the configured FLOOR.
+#
+# Measured live 2026-08-11: MiniMax-M3 was granted 185 iterations at 12s each = 2,220s of
+# AUTHORISED work, policed by an 1,800s wall, with a 5,400s cap never approached. The story
+# was authorised to do 37 minutes of work and killed at 30. The kill was scheduled at
+# authorisation time, and the same 1800s timeout fired again on the 23:34 run.
+#
+# So the child writes what it actually granted, and the parent reads it on EVERY attempt.
+read_story_effective_iterations() {
+    local f; f="$(_story_effective_iters_file "$1" "$2")"
+    if [ -f "$f" ]; then
+        local v; v="$(tr -dc '0-9' < "$f" 2>/dev/null)"
+        echo "${v:-0}"
+    else
+        echo 0
+    fi
+}
+
+write_story_effective_iterations() {
+    local log_dir="$1" story_id="$2" iters="$3"
+    case "$iters" in ''|*[!0-9]*) return 0 ;; esac
+    mkdir -p "$(_story_retry_state_dir "$log_dir")" 2>/dev/null || true
+    printf '%s' "$iters" > "$(_story_effective_iters_file "$log_dir" "$story_id")" 2>/dev/null || true
+}
+
 # rung = retry_count / 2 (matches claude.sh's own `_rung=$(( retry_count / 2 ))`)
 story_ladder_rung() {
     local retry_count="$1"

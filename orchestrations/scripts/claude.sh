@@ -9515,6 +9515,14 @@ ${_trimmed_amendment}"
                         log "  ModelOverride[${STORY_MODEL:-$STORY_PROVIDER}]: effort=${_ov_effort:-unchanged} temp=${_ov_temp:-unchanged} maxIter=${_effective_max_iterations} compaction=$([ -n "$_effective_compress_every_n" ] && echo "every ${_effective_compress_every_n} iter" || echo "token-threshold") (tokenThreshold=${_effective_compress_at:-none})"
                     fi
                 fi
+                # TELL THE WATCHDOG WHAT WE ACTUALLY GRANTED.
+                #
+                # The parent sizes the story's wall from iterations x secondsPerIteration, but
+                # this number is decided HERE — per model, per attempt, minutes after the parent
+                # already fixed that wall — so its derivation branch never ran and the wall
+                # silently stayed at the floor. Persisting it is the only way the value travels
+                # upward. See lib/story-retry-state.sh for the measured cost.
+                write_story_effective_iterations "$LOG_DIR" "$story_id" "$_effective_max_iterations"
                 if echo "$prompt" | \
                         EPAM_DANGEROUS_SKIP_APPROVAL=1 \
                         EPAM_AGENT_ROLE="${_story_agent_role}" \

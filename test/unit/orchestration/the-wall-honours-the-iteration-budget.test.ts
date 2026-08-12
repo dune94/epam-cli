@@ -20,12 +20,15 @@
  * runs there. claude.sh's own loader is a subprocess and too late by construction — the reason
  * _load_timeout_config exists at all, and a trap this change nearly fell into.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 const ROOT = join(__dirname, '../../../');
+const tmpDirs: string[] = [];
+afterAll(() => { for (const d of tmpDirs) rmSync(d, { recursive: true, force: true }); });
 const ORCH = readFileSync(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
 const GUARDS = readFileSync(join(ROOT, 'orchestrations/scripts/lib/story-guards.sh'), 'utf8');
 const CFG = JSON.parse(readFileSync(join(ROOT, 'orchestrations/projects/metrolinx/llm-settings.json'), 'utf8'));
@@ -34,18 +37,37 @@ const SPI: number = CFG.timeouts.secondsPerIteration;
 const CAP: number = CFG.timeouts.storyTimeoutMaxSecs;
 const FLOOR: number = CFG.timeouts.storyTimeoutSecs;
 
-/** Executes the real derivation block from run-agent-orchestration.sh. */
+/**
+ * Executes the real derivation block from run-agent-orchestration.sh.
+ *
+ * UPDATED 2026-08-11. This used to hand the block `EPAM_MAX_ITERATIONS=<n>` as an env var —
+ * and it passed, for months, against code that NEVER EXECUTED IN A REAL RUN. The parent
+ * process does not have that variable: claude.sh computes the iteration budget per model,
+ * per attempt, minutes after the parent has fixed the wall. The harness supplied the one
+ * input reality never did, so a green test certified a dead feature. Testing the CALLER
+ * instead of the RECEIVER, exactly.
+ *
+ * The budget now travels the way it does in production: the child PERSISTS it via
+ * lib/story-retry-state.sh and the parent READS it back. So the harness persists it too.
+ */
 function derive(iterations: number, floor = FLOOR): number {
-  const i = ORCH.indexOf('    # THE WALL MUST HONOUR THE ITERATION BUDGET');
+  const i = ORCH.indexOf('    # THE ITERATION COUNT COMES FROM THE CHILD');
   expect(i, 'the derivation block moved — re-anchor this test').toBeGreaterThan(-1);
   const block = ORCH.slice(i, ORCH.indexOf('    set +e', i)).replace(/\blocal /g, '');
+  const dir = mkdtempSync(join(tmpdir(), 'wallbudget-'));
+  tmpDirs.push(dir);
+  const stateLib = join(ROOT, 'orchestrations/scripts/lib/story-retry-state.sh');
   const out = execFileSync('bash', ['-c',
     `set -u
      log() { :; }
+     warning() { :; }
+     . '${stateLib}'
+     LOG_DIR='${dir}'
+     story_id='AMSD-TEST'
+     ${iterations > 0 ? `write_story_effective_iterations "$LOG_DIR" "$story_id" ${iterations}` : ':'}
      timeout_secs=${floor}
      EPAM_SECONDS_PER_ITERATION=${SPI}
      EPAM_STORY_TIMEOUT_MAX_SECS=${CAP}
-     EPAM_MAX_ITERATIONS=${iterations}
 ${block}
      printf '%s' "$timeout_secs"`], { encoding: 'utf8' });
   return Number(out.trim());
@@ -84,7 +106,7 @@ describe('the floor and the cap both hold', () => {
 
 describe('it degrades safely when the knobs are absent', () => {
   it('no secondsPerIteration means the flat timeout is used, unchanged', () => {
-    const i = ORCH.indexOf('    # THE WALL MUST HONOUR THE ITERATION BUDGET');
+    const i = ORCH.indexOf('    # THE ITERATION COUNT COMES FROM THE CHILD');
     const block = ORCH.slice(i, ORCH.indexOf('    set +e', i)).replace(/\blocal /g, '');
     const out = execFileSync('bash', ['-c',
       `set -u\nlog() { :; }\ntimeout_secs=1800\nEPAM_MAX_ITERATIONS=180\n${block}\nprintf '%s' "$timeout_secs"`],
@@ -93,12 +115,11 @@ describe('it degrades safely when the knobs are absent', () => {
   });
 
   it('no iteration budget means the flat timeout is used, unchanged', () => {
-    const i = ORCH.indexOf('    # THE WALL MUST HONOUR THE ITERATION BUDGET');
-    const block = ORCH.slice(i, ORCH.indexOf('    set +e', i)).replace(/\blocal /g, '');
-    const out = execFileSync('bash', ['-c',
-      `set -u\nlog() { :; }\ntimeout_secs=1800\nEPAM_SECONDS_PER_ITERATION=${SPI}\n${block}\nprintf '%s' "$timeout_secs"`],
-      { encoding: 'utf8' });
-    expect(Number(out.trim())).toBe(1800);
+    // A story's FIRST attempt has nothing persisted yet — the child has not run, so no budget
+    // has been granted. The floor is correct there, and the block now says so out loud rather
+    // than skipping silently. Uses the same environment as derive(): the real state library,
+    // a real LOG_DIR, and simply nothing written.
+    expect(derive(0)).toBe(FLOOR);
   });
 });
 
@@ -112,7 +133,7 @@ describe('the knobs are loaded where the watchdog can see them', () => {
   });
 
   it('no seconds are hardcoded in the derivation', () => {
-    const i = ORCH.indexOf('    # THE WALL MUST HONOUR THE ITERATION BUDGET');
+    const i = ORCH.indexOf('    # THE ITERATION COUNT COMES FROM THE CHILD');
     const block = ORCH.slice(i, ORCH.indexOf('    set +e', i));
     const code = block.split('\n').filter((l) => !l.trim().startsWith('#')).join('\n');
     expect(/\b(1800|2700|5400|12)\b/.test(code), 'a literal timeout crept into the engine').toBe(false);

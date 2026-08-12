@@ -550,14 +550,14 @@ credential-shaped name. It deliberately does NOT report references (an identifie
 expression, a process.env read), because those are the correct practice: a pasted key is always
 a literal, so nothing real is missed by ignoring them.
 
-  scan_secrets(diff="<the GIT DIFF above>")
+  scan_secrets(diff=\"<the GIT DIFF above>\")
 
 Judge what it returns; it does not block anything. A finding is a blocker — a credential in
 source is not fixable after the fact once committed. An empty result is not proof of safety on
 its own, so if the diff introduces configuration you can still say so in your own words.
 
-This check used to run at commit time and matched `name: value` on shape alone. On 2026-08-09
-it refused a correct commit for `management_token: CONTENTSTACK_LIVE_PREVIEW_TOKEN` — an
+This check used to run at commit time and matched \`name: value\` on shape alone. On 2026-08-09
+it refused a correct commit for \`management_token: CONTENTSTACK_LIVE_PREVIEW_TOKEN\` — an
 environment-derived identifier — and had never caught a real leak. It is yours now because you
 have the diff and can tell the two apart.
 

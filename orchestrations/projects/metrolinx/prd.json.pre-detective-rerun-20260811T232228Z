@@ -445,16 +445,6 @@
           "codeline": "gotransit"
         },
         {
-          "file": "jest.config.js",
-          "reason": "This story adds @contentstack/live-preview-utils. jest.config.js is declared as a file a new dependency can force a change to. Investigate whether this package requires a change here, and record changeRequired accordingly.",
-          "function": "",
-          "requiredPackages": [
-            "@contentstack/live-preview-utils"
-          ],
-          "candidateFrom": "dependency-sensitive-config",
-          "codeline": "gotransit"
-        },
-        {
           "file": "src/services/contentstack.ts",
           "function": "options",
           "reason": "WHERE IT IS SET UP — the Stack initialization config object passed to contentstack.Stack() at line 69. The live_preview block must be added here (enable: true, host, preview_token) so the Delivery SDK includes preview hashes in API responses. Currently has api_key, delivery_token, environment, branch, and optional fetchOptions — no live_preview key exists.",
@@ -616,8 +606,7 @@
               "src/components/contentstack/ContentStackStaticMaps/ContentStackStaticMaps.tsx",
               "src/components/contentstack/ContentStackVideoPlayer/ContentStackVideoPlayer.tsx",
               "src/context/ContentstackContext.tsx",
-              ".env.local.sample",
-              "jest.config.js"
+              ".env.local.sample"
             ],
             "resolved": [
               {
@@ -947,8 +936,7 @@
             ],
             "unresolved": []
           }
-        },
-        "failureReason": "watchdog_timeout: story exceeded timeout twice and was skipped"
+        }
       },
       "estimatedAiMinutes": 3.0889,
       "estimatedCost": 0.5963,
@@ -1087,16 +1075,6 @@
             "requiredPackages": [],
             "prescriptionNote": "",
             "prescriptionUnderspecified": false,
-            "codeline": "gotransit"
-          },
-          {
-            "file": "jest.config.js",
-            "reason": "This story adds @contentstack/live-preview-utils. jest.config.js is declared as a file a new dependency can force a change to. Investigate whether this package requires a change here, and record changeRequired accordingly.",
-            "function": "",
-            "requiredPackages": [
-              "@contentstack/live-preview-utils"
-            ],
-            "candidateFrom": "dependency-sensitive-config",
             "codeline": "gotransit"
           }
         ],
@@ -1264,8 +1242,8 @@
           "setup": "The live-preview-utils client is mocked to emit an onEntryChange event; the page is loaded with standard published content"
         }
       ],
-      "lastAttempt": "2026-08-12T14:41:36+00:00",
-      "actualCost": 0.0118
+      "lastAttempt": "2026-08-11T19:57:55+00:00",
+      "actualCost": 2.5533
     }
   ],
   "currentIteration": 8,

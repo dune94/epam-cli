@@ -67,7 +67,7 @@
       "title": "[GO, UP, MX] Live Preview of Content in CMS",
       "description": "AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website. This requires integrating Contentstack's Live Preview SDK for a Next.js CSR (Pages Router) application: adding a live_preview config block (enable, host) to the Stack initialization in src/services/contentstack.ts, installing and initializing @contentstack/live-preview-utils on the client side in src/pages/_app.tsx, wiring the onEntryChange callback to trigger a re-render through the existing ContentstackContext/useContent pipeline (note: per Contentstack documentation, onEntryChange takes no arguments — the re-render relies on the SDK's internal state update, not a callback parameter), and documenting the live_preview.enable and live_preview.host environment variables in .env.local.sample. Custom preview URL patterns are configured in the Contentstack dashboard (Settings > Stack > Live Preview), not via application environment variables. Limitation: Protected pages may not be previewable because the authentication gate cannot be bypassed by preview parameters.",
       "acceptanceCriteria": [],
-      "codeline": "gotransit",
+      "codeline": "metrolinx",
       "status": "in-progress",
       "completed": false,
       "agentRole": "contentstack-live-preview-integration-engineer",
@@ -372,8 +372,6 @@
           "fixVerified": true,
           "evidenceVerified": true,
           "fileVerified": true,
-          "changeRequired": true,
-          "requiredPackages": [],
           "prescriptionNote": "",
           "prescriptionUnderspecified": false,
           "codeline": "gotransit"
@@ -388,10 +386,6 @@
           "fixVerified": false,
           "evidenceVerified": true,
           "fileVerified": true,
-          "changeRequired": true,
-          "requiredPackages": [
-            "@contentstack/live-preview-utils"
-          ],
           "prescriptionNote": "",
           "prescriptionUnderspecified": false,
           "codeline": "gotransit"
@@ -406,8 +400,6 @@
           "fixVerified": true,
           "evidenceVerified": null,
           "fileVerified": true,
-          "changeRequired": false,
-          "requiredPackages": [],
           "prescriptionNote": "",
           "prescriptionUnderspecified": false,
           "codeline": "gotransit"
@@ -422,8 +414,6 @@
           "fixVerified": null,
           "evidenceVerified": null,
           "fileVerified": true,
-          "changeRequired": true,
-          "requiredPackages": [],
           "prescriptionNote": "",
           "prescriptionUnderspecified": false,
           "codeline": "gotransit"
@@ -438,20 +428,8 @@
           "fixVerified": true,
           "evidenceVerified": null,
           "fileVerified": true,
-          "changeRequired": false,
-          "requiredPackages": [],
           "prescriptionNote": "",
           "prescriptionUnderspecified": false,
-          "codeline": "gotransit"
-        },
-        {
-          "file": "jest.config.js",
-          "reason": "This story adds @contentstack/live-preview-utils. jest.config.js is declared as a file a new dependency can force a change to. Investigate whether this package requires a change here, and record changeRequired accordingly.",
-          "function": "",
-          "requiredPackages": [
-            "@contentstack/live-preview-utils"
-          ],
-          "candidateFrom": "dependency-sensitive-config",
           "codeline": "gotransit"
         },
         {
@@ -616,8 +594,7 @@
               "src/components/contentstack/ContentStackStaticMaps/ContentStackStaticMaps.tsx",
               "src/components/contentstack/ContentStackVideoPlayer/ContentStackVideoPlayer.tsx",
               "src/context/ContentstackContext.tsx",
-              ".env.local.sample",
-              "jest.config.js"
+              ".env.local.sample"
             ],
             "resolved": [
               {
@@ -947,8 +924,7 @@
             ],
             "unresolved": []
           }
-        },
-        "failureReason": "watchdog_timeout: story exceeded timeout twice and was skipped"
+        }
       },
       "estimatedAiMinutes": 3.0889,
       "estimatedCost": 0.5963,
@@ -965,7 +941,7 @@
       "reasoningEffort": "medium",
       "perCodeline": {
         "gotransit": {
-          "status": "failed",
+          "status": "pending",
           "completed": false,
           "completedAt": null,
           "reviewStatus": null
@@ -1017,8 +993,6 @@
             "fixVerified": true,
             "evidenceVerified": true,
             "fileVerified": true,
-            "changeRequired": true,
-            "requiredPackages": [],
             "prescriptionNote": "",
             "prescriptionUnderspecified": false,
             "codeline": "gotransit"
@@ -1033,10 +1007,6 @@
             "fixVerified": false,
             "evidenceVerified": true,
             "fileVerified": true,
-            "changeRequired": true,
-            "requiredPackages": [
-              "@contentstack/live-preview-utils"
-            ],
             "prescriptionNote": "",
             "prescriptionUnderspecified": false,
             "codeline": "gotransit"
@@ -1051,8 +1021,6 @@
             "fixVerified": true,
             "evidenceVerified": null,
             "fileVerified": true,
-            "changeRequired": false,
-            "requiredPackages": [],
             "prescriptionNote": "",
             "prescriptionUnderspecified": false,
             "codeline": "gotransit"
@@ -1067,8 +1035,6 @@
             "fixVerified": null,
             "evidenceVerified": null,
             "fileVerified": true,
-            "changeRequired": true,
-            "requiredPackages": [],
             "prescriptionNote": "",
             "prescriptionUnderspecified": false,
             "codeline": "gotransit"
@@ -1083,20 +1049,8 @@
             "fixVerified": true,
             "evidenceVerified": null,
             "fileVerified": true,
-            "changeRequired": false,
-            "requiredPackages": [],
             "prescriptionNote": "",
             "prescriptionUnderspecified": false,
-            "codeline": "gotransit"
-          },
-          {
-            "file": "jest.config.js",
-            "reason": "This story adds @contentstack/live-preview-utils. jest.config.js is declared as a file a new dependency can force a change to. Investigate whether this package requires a change here, and record changeRequired accordingly.",
-            "function": "",
-            "requiredPackages": [
-              "@contentstack/live-preview-utils"
-            ],
-            "candidateFrom": "dependency-sensitive-config",
             "codeline": "gotransit"
           }
         ],
@@ -1263,9 +1217,7 @@
           "surface": "browser developer tools console and React error boundary fallback UI",
           "setup": "The live-preview-utils client is mocked to emit an onEntryChange event; the page is loaded with standard published content"
         }
-      ],
-      "lastAttempt": "2026-08-12T14:41:36+00:00",
-      "actualCost": 0.0118
+      ]
     }
   ],
   "currentIteration": 8,

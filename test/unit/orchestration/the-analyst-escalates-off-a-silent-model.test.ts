@@ -86,7 +86,10 @@ describe('the machinery already exists — this reuses it, it does not reinvent 
 
   it('the analyst profile declares its tier', () => {
     const reg = JSON.parse(readFileSync(join(ROOT, 'orchestrations/agents/invocation-profiles.json'), 'utf8'));
-    expect(reg.profiles['impl-failure-analyst'].ladder).toBe('high');
+    // HIGHEST since 2026-08-12: this analyst diagnoses why an attempt failed and its answer
+    // drives model escalation, so it runs on the strongest ladder — and it now has tools, so
+    // it can actually look at the code it is diagnosing.
+    expect(String(reg.profiles['impl-failure-analyst'].ladder).toUpperCase()).toBe('HIGHEST');
   });
 });
 

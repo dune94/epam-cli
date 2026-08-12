@@ -76,9 +76,10 @@
     "code-review-cycle": {
       "_what": "Per-iteration code review pass.",
       "maxOutputTokens": 32768,
-      "reasoningEffort": "medium",
+      "reasoningEffort": "high",
       "timeoutSecs": 600,
-      "ladder": "highest"
+      "ladder": "HIGHEST",
+      "allowedTools": "bash,read_file,list_files,search"
     },
     "agent-failure-analyst": {
       "_what": "Diagnoses a no-output/failed agent attempt, prescribes a corrective directive.",
@@ -86,7 +87,8 @@
       "maxIterations": 1,
       "reasoningEffort": "high",
       "timeoutSecs": 360,
-      "ladder": "high"
+      "ladder": "HIGHEST",
+      "allowedTools": "bash,read_file,list_files,search"
     },
     "repro-test-writer": {
       "_what": "Writes the bug-reproducing test for a brownfield fix.",
@@ -140,7 +142,8 @@
       "reasoningEffort": "high",
       "temperature": "0.7",
       "timeoutSecs": 360,
-      "ladder": "high"
+      "ladder": "HIGHEST",
+      "allowedTools": "bash,read_file,list_files,search"
     },
     "ac-classification": {
       "_what": "Classifies acceptance criteria.",

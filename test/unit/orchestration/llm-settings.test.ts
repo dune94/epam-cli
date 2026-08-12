@@ -138,19 +138,28 @@ const METROLINX_SETTINGS = JSON.parse(readFileSync(METROLINX_SETTINGS_FILE, 'utf
 describe('load_llm_settings_json() — applies JSON as fallback defaults', () => {
   it('exports the ladder/retry/timeout/temperature settings from the metrolinx fixture', () => {
     const env = runLoader(METROLINX_SETTINGS);
-    expect(env.EPAM_TEMPERATURE).toBe('0');
-    expect(env.EPAM_MAX_RETRIES).toBe('7');
+    // ALL IN FOR THE WRITER, 2026-08-12 (operator decision). These assert that the loader
+    // EXPORTS what the project declares — so they track llm-settings.json rather than pinning
+    // a number for its own sake. The values changed because temperature 0 and effort medium
+    // are the two settings least suited to an agent whose job is to INFER what the
+    // prescription left unsaid, and a temp-0 retry on the same model repeats itself.
+    expect(env.EPAM_TEMPERATURE).toBe('0.2');
+    expect(env.EPAM_MAX_RETRIES).toBe('11');
     expect(env.EPAM_RETRY_EXTENSION_ENABLED).toBe('1');
     expect(env.EPAM_RETRY_EXTENSION_MAX).toBe('2');
     expect(env.EPAM_STORY_TIMEOUT_SECS).toBe('1800');
     expect(env.EPAM_GATE_TIMEOUT_SECS).toBe('2400');
-    expect(env.EPAM_RUNG0_REASONING_EFFORT).toBe('medium');
-    expect(env.EPAM_RUNG1_REASONING_EFFORT).toBe('medium');
+    // ALL IN FOR THE WRITER (2026-08-12). No rung below "high"; the top rung runs "max".
+    // Rungs 0 and 1 ran at MEDIUM, so the first FOUR attempts of every story were below the
+    // effort the model overrides themselves ask for (MiniMax-M3 declares high) — the rung
+    // config was overriding it DOWNWARD.
+    expect(env.EPAM_RUNG0_REASONING_EFFORT).toBe('high');
+    expect(env.EPAM_RUNG1_REASONING_EFFORT).toBe('high');
     expect(env.EPAM_RUNG2_REASONING_EFFORT).toBe('high');
-    expect(env.EPAM_RUNG3_REASONING_EFFORT).toBe('high');
-    expect(env.EPAM_RUNG1_TEMPERATURE).toBe('0.2');
-    expect(env.EPAM_RUNG2_TEMPERATURE).toBe('0.5');
-    expect(env.EPAM_RUNG3_TEMPERATURE).toBe('0.7');
+    expect(env.EPAM_RUNG3_REASONING_EFFORT).toBe('max');
+    expect(env.EPAM_RUNG1_TEMPERATURE).toBe('0.4');
+    expect(env.EPAM_RUNG2_TEMPERATURE).toBe('0.6');
+    expect(env.EPAM_RUNG3_TEMPERATURE).toBe('0.8');
     expect(env.EPAM_MODEL_LADDER_HIGH).toBe(
       // glm-5.2 now escalates straight to kimi-k3: kimi-k2.5 is the one route measured at 0%
       // prompt-cache utilisation, so it repurchases the whole prefix every turn.

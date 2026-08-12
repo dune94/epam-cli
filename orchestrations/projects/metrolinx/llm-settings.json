@@ -1,6 +1,6 @@
 {
   "$schema": "../../config/llm-settings.schema.json",
-  "temperatureFloor": 0,
+  "temperatureFloor": 0.2,
   "rungs": [
     {
       "rung": 0,
@@ -8,8 +8,8 @@
         0,
         1
       ],
-      "reasoningEffort": "medium",
-      "temperature": 0,
+      "reasoningEffort": "high",
+      "temperature": 0.2,
       "iterationBump": 0,
       "outputTokenBump": null
     },
@@ -19,9 +19,9 @@
         2,
         3
       ],
-      "reasoningEffort": "medium",
-      "temperature": 0.2,
-      "iterationBump": 10,
+      "reasoningEffort": "high",
+      "temperature": 0.4,
+      "iterationBump": 20,
       "outputTokenBump": 8192
     },
     {
@@ -31,8 +31,8 @@
         5
       ],
       "reasoningEffort": "high",
-      "temperature": 0.5,
-      "iterationBump": 20,
+      "temperature": 0.6,
+      "iterationBump": 40,
       "outputTokenBump": 16384
     },
     {
@@ -41,9 +41,9 @@
         6,
         7
       ],
-      "reasoningEffort": "high",
-      "temperature": 0.7,
-      "iterationBump": 30,
+      "reasoningEffort": "max",
+      "temperature": 0.8,
+      "iterationBump": 60,
       "outputTokenBump": 24576
     }
   ],
@@ -195,7 +195,7 @@
     }
   },
   "retries": {
-    "maxRetries": 7,
+    "maxRetries": 11,
     "selfHeal": {
       "enabled": true,
       "extensionMax": 2

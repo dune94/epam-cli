@@ -102,9 +102,14 @@ describe('run_external_verification() — bounded test-command timeout (static)'
     const timeoutBlock = body.slice(timeoutIdx, timeoutIdx + 400);
     expect(timeoutBlock).toMatch(/VERIFICATION_FAILURE=/);
     const genericIdx = body.indexOf('"$test_exit" -ne 0');
-    // Window must be large enough to skip past the warning + comment block + local
-    // var declarations that precede the VERIFICATION_FAILURE= assignment (~650 chars).
-    const genericBlock = body.slice(genericIdx, genericIdx + 1200);
+    expect(genericIdx, 'the generic-failure branch is gone — the test is stale').toBeGreaterThan(-1);
+    // Bound by the BRANCH, not a character count. This was a fixed 1200-char window whose
+    // own comment conceded it had to "be large enough to skip past" the preceding code — so
+    // it broke the moment the branch grew (2026-08-12: the baseline-delta subtraction was
+    // added ahead of the assignment). A window sized to today's code asserts nothing about
+    // tomorrow's.
+    const genericBlock = body.slice(genericIdx, body.indexOf('\n        return 1', genericIdx));
+    expect(genericBlock.length, 'empty slice — the assertion would be vacuous').toBeGreaterThan(100);
     expect(genericBlock).toMatch(/VERIFICATION_FAILURE=/);
   });
 });

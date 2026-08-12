@@ -5089,21 +5089,61 @@ run_external_verification() {
 
     if [ "$test_exit" -ne 0 ]; then
         warning "External verification failed for $story_id (exit $test_exit)"
+
+        # A BROWNFIELD STORY CANNOT BE FAILED FOR TESTS IT DID NOT BREAK.
+        #
+        # Operator policy: "For brownfield we can inherit existing test failures, but we
+        # cannot be expected to fix them." The type-check path has implemented that for a
+        # while — run the check, run it again at the baseline SHA, subtract by IDENTITY, pass
+        # when everything left is pre-existing. This path did not: a raw non-zero exit failed
+        # the story, so ONE pre-existing failing test failed it on every attempt, forever,
+        # while the message below told the writer to "fix the code so the tests pass".
+        # An unwinnable gate, the same shape as the changeRequired one that cost three runs.
+        #
+        # Live 2026-08-12, the analyst diagnosed it in plain text and the story failed anyway:
+        # "Failing tests are pre-existing — schedules.spec.tsx fails identically with and
+        # without agent changes."
+        #
+        # The already-captured output is handed in rather than re-run: this executes per
+        # ATTEMPT, up to 8 times a story, and the suite is the most expensive gate in the run.
+        local _new_test_failures="$test_output"
+        if command -v baseline_new_failures >/dev/null 2>&1; then
+            local _test_out_file _tdelta_rc=0 _tdelta_out
+            _test_out_file=$(mktemp)
+            printf '%s' "$test_output" > "$_test_out_file"
+            _tdelta_out=$(baseline_new_failures "$PROJECT_ROOT" "${NODE_CMD:-${NODE_BIN:-node}}" \
+                "$LOG_DIR" test "$_test_out_file") || _tdelta_rc=$?
+            rm -f "$_test_out_file"
+            [ "$_tdelta_rc" -eq 0 ] && _new_test_failures="" || _new_test_failures="$_tdelta_out"
+        fi
+
+        # EVERY FAILURE WAS PRE-EXISTING — the story passes. That is the whole purpose of the
+        # baseline diff, and the policy it implements: inherit what the codeline already had,
+        # never add to it. The tsc path lost precisely this guard once and an empty delta fell
+        # through to the failure branch, reporting errors with an EMPTY error list.
+        if [ -z "$(echo "$_new_test_failures" | tr -d '[:space:]')" ]; then
+            success "External verification for $story_id: only pre-existing baseline test failures — none introduced by this story"
+            return 0
+        fi
+
         # Include both the head AND tail of test output so errors that appear at
         # the end (e.g. "Unhandled Rejection" summaries emitted after per-test
         # results) reach the failure analyst — a head-only truncation causes
         # misdiagnosis when the real root cause is in the final lines
         # (found live: analyst diagnosed "missing env var" from truncated head
         # while the real cause — async main() rejection — was in the tail).
-        local _test_head="${test_output:0:2000}"
+        # The writer is shown the NEW failures, not the whole suite. Handing it every
+        # pre-existing failure as if it were its own is how an attempt gets sent chasing
+        # breakage it did not cause — and the instruction below now says so explicitly.
+        local _test_head="${_new_test_failures:0:2000}"
         local _test_tail=""
-        if [ "${#test_output}" -gt 2000 ]; then
-            _test_tail=$(printf '%s' "$test_output" | tail -c 2000)
+        if [ "${#_new_test_failures}" -gt 2000 ]; then
+            _test_tail=$(printf '%s' "$_new_test_failures" | tail -c 2000)
             _test_tail="
 [... output truncated ...]
 $_test_tail"
         fi
-        VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe orchestrator ran `%s` after your files were written and it failed (exit code %d). Fix the code so the tests pass.\n\n```\n%s%s\n```\n' \
+        VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe orchestrator ran `%s` after your files were written and it failed (exit code %d). The failures below are the ones YOUR CHANGES INTRODUCED — failures the codeline already had have been subtracted and are not your responsibility. Fix these.\n\n```\n%s%s\n```\n' \
             "$test_cmd" "$test_exit" "$_test_head" "$_test_tail")
         {
             echo ""

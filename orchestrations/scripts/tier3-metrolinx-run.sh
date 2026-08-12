@@ -301,8 +301,11 @@ echo ""
 # agent-status.json. Emitting preflight events before that reset would have
 # them wiped a moment later, before the dashboard ever showed them.
 info "Wiring dashboard to serve this run's live PRD + logs..."
-bash orchestrations/scripts/pre-run-reset.sh --prd "$PRD_FILE" || \
-  info "  pre-run-reset.sh failed or Docker unavailable — dashboard may show stale data (non-fatal, continuing)"
+# Contamination ABORTS the launch; everything else stays non-fatal. One gate,
+# lib/pre-run-reset-gate.sh, for all launchers — this used to be five copies of
+# "|| info", all of which swallowed a contaminated-state exit as a Docker problem.
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/pre-run-reset-gate.sh"
+pre_run_reset_or_abort --prd "$PRD_FILE"
 echo "${OUTPUT_DIR:-$JIRA_CODELINE_ROOT}" > "orchestrations/dashboards/.active-output-dir" 2>/dev/null || true
 echo ""
 

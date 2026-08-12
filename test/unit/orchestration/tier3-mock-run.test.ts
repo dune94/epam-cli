@@ -13,7 +13,7 @@
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, copyFileSync, chmodSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, copyFileSync, chmodSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -44,7 +44,14 @@ function makeStubbedRepo(opts: {
   // dashboard to assess.
   const libDir = join(scriptsDir, 'lib');
   mkdirSync(libDir, { recursive: true });
-  copyFileSync(join(REAL_SCRIPTS, 'lib/preflight.sh'), join(libDir, 'preflight.sh'));
+  // EVERY lib the launcher might source, BY PATTERN — not a named list. Naming them one by
+  // one is what broke this harness when the launcher started sourcing pre-run-reset-gate.sh:
+  // the source failed, the launcher died, and ten tests reported it as a call-sequence defect.
+  // A harness that has to be edited whenever the real script gains a dependency is a harness
+  // that will one day certify a launcher that cannot start.
+  for (const f of readdirSync(join(REAL_SCRIPTS, 'lib')).filter((n) => n.endsWith('.sh'))) {
+    copyFileSync(join(REAL_SCRIPTS, 'lib', f), join(libDir, f));
+  }
   writeFileSync(
     join(scriptsDir, 'preflight-check.sh'),
     `#!/usr/bin/env bash\necho "preflight-check.sh $*" >> ${JSON.stringify(callLogPath)}\nexit \${PREFLIGHT_EXIT:-0}\n`,

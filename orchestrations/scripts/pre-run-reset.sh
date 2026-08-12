@@ -60,6 +60,11 @@ info()    { echo -e "${YELLOW}[pre-run-reset]${NC} $*"; }
 success() { echo -e "${GREEN}[pre-run-reset] ✓${NC} $*"; }
 fail()    { echo -e "${RED}[pre-run-reset] ✗${NC} $*" >&2; exit 1; }
 
+# Contamination gets its OWN exit code (9) so no launcher can swallow it as a Docker
+# problem. See lib/contamination-exit.sh.
+# shellcheck source=lib/contamination-exit.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/contamination-exit.sh"
+
 # ── Parse args ────────────────────────────────────────────────────────────────
 PRD_FILE=""
 LOG_DIR_ARG=""
@@ -305,6 +310,37 @@ done < <(find "$LOG_DIR" -type f \( -name '*.log' -o -name 'story-outputs-*.txt'
 # added and nobody updates the sweep. This directory exists ONLY for per-story retry state and
 # none of it may survive a run, so clear ALL of it — a file type added tomorrow is covered
 # without anyone remembering this code exists.
+# ── Run-scoped feedback artefacts ───────────────────────────────────────────
+# NOTHING FROM A PREVIOUS RUN MAY REACH THIS ONE.
+#
+# review-feedback-<story>.json is written when a review REQUESTS CHANGES and deleted only when
+# a LATER review APPROVES — cleanup that depends on a success which may never come. Live:
+# review-feedback-AMSD-2041.json was written 2026-08-09 08:26 and was still being handed to the
+# writer on 2026-08-12, under the heading "The team-lead reviewer examined YOUR PREVIOUS ATTEMPT
+# ... This is the highest priority." It was a different run, against code that no longer
+# existed. Its blockers demanded work on files that HAD since been modified, and a dependency
+# that does not exist. The writer obeyed all of it, and was blamed for over-reaching.
+#
+# Operator, 2026-08-12: "I never granted permission to persist ANY such file across runs" and
+# "if it is frail - DELETE it after each run - simple."
+#
+# BY PATTERN, NOT BY NAME. This reset has now been caught twice enumerating specific names —
+# '*.count' while .model and .iterbump survived, and the PRD/roster while review feedback
+# survived. A feedback artefact added tomorrow is covered without anyone remembering this code.
+_RUN_ARTIFACT_DIR="${LOG_DIR:-}"
+if [ -n "$_RUN_ARTIFACT_DIR" ] && [ -d "$_RUN_ARTIFACT_DIR" ]; then
+    _RA_CLEARED=$(find "$_RUN_ARTIFACT_DIR" -maxdepth 1 -type f -name 'review-*.json' 2>/dev/null | wc -l)
+    find "$_RUN_ARTIFACT_DIR" -maxdepth 1 -type f -name 'review-*.json' -delete 2>/dev/null || true
+    _RA_LEFT=$(find "$_RUN_ARTIFACT_DIR" -maxdepth 1 -type f -name 'review-*.json' 2>/dev/null | wc -l)
+    if [ "$_RA_LEFT" -gt 0 ]; then
+        # Starting a run on another run's review findings is the whole defect. Never announce a
+        # clean slate this script did not deliver.
+        fail_contamination "$_RA_LEFT run-scoped review artefact(s) could NOT be cleared in $_RUN_ARTIFACT_DIR — a run started now would act on a previous run's findings"
+    elif [ "$_RA_CLEARED" -gt 0 ]; then
+        info "  Cleared $_RA_CLEARED run-scoped review artefact(s) — no prior run's findings reach this one"
+    fi
+fi
+
 _RETRY_STATE_DIR="$LOG_DIR/story-retry-state"
 if [ -d "$_RETRY_STATE_DIR" ]; then
     _RETRY_CLEARED=$(find "$_RETRY_STATE_DIR" -maxdepth 1 -type f 2>/dev/null | wc -l)
@@ -314,7 +350,7 @@ if [ -d "$_RETRY_STATE_DIR" ]; then
         # ABORT rather than announce a clean slate we did not deliver. Surviving state means
         # the run starts mid-ladder on a model nobody chose, which is precisely what went
         # unnoticed through two runs — and this script's whole job is the clean slate.
-        fail "$_RETRY_LEFT inference-ladder state file(s) could NOT be cleared in $_RETRY_STATE_DIR — a run started now would resume mid-ladder"
+        fail_contamination "$_RETRY_LEFT inference-ladder state file(s) could NOT be cleared in $_RETRY_STATE_DIR — a run started now would resume mid-ladder"
     elif [ "$_RETRY_CLEARED" -gt 0 ]; then
         info "  Cleared $_RETRY_CLEARED inference-ladder state file(s) — every story starts this run at rung 0 on its PRD-declared model"
     fi
@@ -334,8 +370,11 @@ fi
 # Cleared here rather than in the mint step so no launcher can skip it, and so the
 # base is clean even for a run that never reaches the mint.
 #
-# NOT cleared: KB-<role>.md. Per-agent knowledge is the one thing meant to persist
-# across runs (879c705) — profiles.json is ephemeral, the KB files are the store.
+# KB-<role>.md USED to be exempt here: "per-agent knowledge is the one thing meant to
+# persist across runs" (879c705). That exemption is REVOKED — operator, 2026-08-12, after
+# KB-gotransit.md was found carrying conclusions from four separate days into every run.
+# All agent KB is now cleared by kb_clear_agent_residue (lib/kb-canonical.sh), invoked from
+# Step 3b below. Nothing an agent concluded survives the run that concluded it.
 _ROSTER_CLEARED=0
 _PROJECT_CFG_DIR="${EPAM_PROJECT_CONFIG_DIR:-}"
 # A RESUME KEEPS THE ROSTER IT IS RESUMING WITH.

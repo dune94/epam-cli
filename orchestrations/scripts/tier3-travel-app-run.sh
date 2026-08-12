@@ -409,8 +409,11 @@ echo ""
 # OUTPUT_DIR. pre-run-reset.sh defaults to that same path so the docker
 # /logs-dir mount is always correct.
 info "Wiring dashboard to serve this run's live PRD + logs..."
-bash orchestrations/scripts/pre-run-reset.sh --prd "$PRD_FILE" || \
-  info "  pre-run-reset.sh failed or Docker unavailable — dashboard may show stale data (non-fatal, continuing)"
+# Contamination ABORTS the launch; everything else stays non-fatal. One gate,
+# lib/pre-run-reset-gate.sh, for all launchers — this used to be five copies of
+# "|| info", all of which swallowed a contaminated-state exit as a Docker problem.
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/pre-run-reset-gate.sh"
+pre_run_reset_or_abort --prd "$PRD_FILE"
 echo ""
 
 run_phase() {

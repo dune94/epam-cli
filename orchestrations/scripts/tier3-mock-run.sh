@@ -201,8 +201,15 @@ fi
 # dashboard picks up the real content automatically with no second wiring.
 [ -f "$PRD_FILE" ] || { mkdir -p "$(dirname "$PRD_FILE")" && echo '{}' > "$PRD_FILE"; }
 
-bash orchestrations/scripts/pre-run-reset.sh --prd "$PRD_FILE" || \
-  info "  pre-run-reset.sh failed (e.g. Docker unavailable) — dashboard may show stale data (non-fatal, matching tier3-metrolinx-run.sh's own real fallback)"
+# Contamination ABORTS the launch; everything else stays non-fatal. One gate,
+
+# lib/pre-run-reset-gate.sh, for all launchers — this used to be five copies of
+
+# "|| info", all of which swallowed a contaminated-state exit as a Docker problem.
+
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/pre-run-reset-gate.sh"
+
+pre_run_reset_or_abort --prd "$PRD_FILE"
 
 info "Log: $LOG_FILE"
 

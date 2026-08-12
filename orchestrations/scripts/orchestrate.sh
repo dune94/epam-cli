@@ -264,8 +264,11 @@ echo ""
 
 # ── Wire dashboard to this run's live PRD + logs ──────────────────────────────
 info "Wiring dashboard..."
-bash "$SCRIPT_DIR/pre-run-reset.sh" --prd "$PRD_FILE" || \
-  info "  pre-run-reset.sh failed or Docker unavailable — dashboard may show stale data (non-fatal)"
+# Contamination ABORTS the launch; everything else stays non-fatal. One gate,
+# lib/pre-run-reset-gate.sh, for all launchers — this used to be five copies of
+# "|| info", all of which swallowed a contaminated-state exit as a Docker problem.
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/pre-run-reset-gate.sh"
+pre_run_reset_or_abort --prd "$PRD_FILE"
 if [ -n "${OUTPUT_DIR:-}" ]; then
   echo -n "$OUTPUT_DIR" > "$REPO_ROOT/orchestrations/dashboards/.active-output-dir"
 fi

@@ -6050,8 +6050,11 @@ classify_failure_class() {
                     printf 'It has %s ACs. Model escalation alone has not resolved this — the story likely needs to be ' "$_ac_count"
                     printf 'decomposed into smaller children (≤8 ACs each) before the next run. '
                     printf 'OpenSpec/SpecKit should split this story at Step 0 in the next pipeline run.\n'
-                } >> "$_kb_file" 2>/dev/null || true
-                log "  Coordinator[L1]: cross-run KB entry written for $story_id (${_prior_cap_count} capability failures)"
+                } > /dev/null
+                # NOT PERSISTED. This wrote a "cross-run" KB entry that nothing ever cleared, so
+                # a conclusion drawn about one run's code was injected as current fact into every
+                # later run. Operator 2026-08-12: no lingering anything may skew a run.
+                log "  Coordinator[L1]: capability pattern noted for $story_id (${_prior_cap_count} failures) — this run only, not persisted"
             fi
             else
                 log "  Coordinator[L1]: cross-run KB synthesis disabled (EPAM_KB_CROSS_RUN_SYNTHESIS=0) — $story_id has ${_prior_cap_count} capability failures, not persisted to the KB"
@@ -7526,17 +7529,16 @@ PYEOF
                             # the same store the kb target uses and that every implementation
                             # prompt already reads. Duplicate suppression comes free: the file
                             # is checked before appending.
-                            local _skill_kb_dir _skill_kb_file
-                            _skill_kb_dir="$(dirname "$SCRIPT_DIR")/agents"
-                            _skill_kb_file=$(_kb_file_for_story "$story_id" "$_skill_kb_dir")
-                            if [ -f "$_skill_kb_file" ] && grep -qF -- "$REVIEWER_RETRY_TEXT" "$_skill_kb_file" 2>/dev/null; then
-                                log "  [FailureAnalyst] Skill note already in $(basename "$_skill_kb_file") — not appending again"
-                            else
-                                ( flock -w 10 201 || { error "  [FailureAnalyst] Could not acquire lock on $_skill_kb_file"; return 1; }
-                                  printf '\n- [%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$REVIEWER_RETRY_TEXT" >> "$_skill_kb_file"
-                                ) 201>"${_skill_kb_file}.lock"
-                                log "  [FailureAnalyst] Skill note appended to $(basename "$_skill_kb_file") — survives into later runs"
-                            fi
+                            # NO CROSS-RUN WRITE. A skill note used to be APPENDED to
+                            # agents/KB-<codeline>.md and logged as "survives into later runs".
+                            # Nothing cleared it, so guidance derived from one run's code was
+                            # injected into every later run's prompts as current fact. Operator,
+                            # 2026-08-12: "there can be no lingering anything to skew runs. That
+                            # is strictly forbidden."
+                            #
+                            # The note still reaches THIS run's retry through the in-run
+                            # amendment above; only the persistence is removed.
+                            log "  [FailureAnalyst] Skill note applied to this run only — not persisted across runs"
                             _profile_updated="true"
                             fi
                             fi
@@ -7620,12 +7622,13 @@ ${_kb_target_role_profile}"
                             # outright. A future reviewer/human pass can still
                             # clean up the wording; nothing is lost meanwhile.
                             warning "  [FailureAnalyst] KB entry rejected by reviewer after 3 attempts — persisting raw fallback (unreviewed) instead of discarding"
-                            printf '\n- [%s] [unreviewed-fallback] %s\n' "$kb_ts" "$short_note" >> "$kb_file" 2>/dev/null || true
+                            # Not persisted across runs — see the note on the skill-note path above.
                             _profile_updated="true"
                         else
                             # Compact 2-line format: timestamp + rule only (no verbose headers)
-                            printf '\n- [%s] %s\n' "$kb_ts" "$REVIEWER_RETRY_TEXT" >> "$kb_file" 2>/dev/null || true
-                            log "  [FailureAnalyst] KB entry appended to $(basename "$kb_file") (${#REVIEWER_RETRY_TEXT} chars)"
+                            # Not persisted across runs. The entry still reaches THIS run's retry
+                            # through the in-run amendment; only the cross-run write is removed.
+                            log "  [FailureAnalyst] KB entry applied to this run only (${#REVIEWER_RETRY_TEXT} chars) — not persisted"
                             _profile_updated="true"
                         fi
                         fi
@@ -8097,17 +8100,18 @@ check_syntax_class_error() {
                     #
                     # Retired rather than locked: the roster is set after the mint, and this
                     # note belongs where it survives the per-run restore.
-                    local _sx_kb_dir _sx_kb_file
-                    _sx_kb_dir="$(dirname "$SCRIPT_DIR")/agents"
-                    _sx_kb_file=$(_kb_file_for_story "$story_id" "$_sx_kb_dir")
-                    if [ -f "$_sx_kb_file" ] && grep -qF -- "$_syntax_note_final" "$_sx_kb_file" 2>/dev/null; then
-                        log "  [SyntaxClassEscalation] Skill note already in $(basename "$_sx_kb_file") — not appending again"
-                    else
-                        ( flock -w 10 202 || { warning "  [SyntaxClassEscalation] Could not acquire lock on $_sx_kb_file"; exit 0; }
-                          printf '\n- [%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$_syntax_note_final" >> "$_sx_kb_file"
-                        ) 202>"${_sx_kb_file}.lock"
-                        log "  [SyntaxClassEscalation] Persisted targeted-fix-not-full-rewrite note to $(basename "$_sx_kb_file")"
-                    fi
+                    # CROSS-RUN WRITE REMOVED (2026-08-12). This was the FIFTH and last one,
+                    # and it survived the first sweep because that sweep grepped for the two
+                    # variable names already known ($kb_file, $_skill_kb_file) instead of the
+                    # pattern. Scoped check, general claim — the same mistake the KB itself
+                    # kept teaching agents.
+                    #
+                    # Operator: "agent kb files = remove all after every run - there can be no
+                    # lingering anything to skew runs. That is strictly forbidden."
+                    #
+                    # The note still reaches THIS run's agents through the profile skill notes.
+                    # Nothing carries it into the next one.
+                    log "  [SyntaxClassEscalation] Skill note applied to this run only — not persisted across runs"
                 else
                     log "  [SyntaxClassEscalation] Skill note rejected by reviewer — not persisting"
                 fi

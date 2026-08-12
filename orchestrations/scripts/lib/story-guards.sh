@@ -620,6 +620,21 @@ _load_timeout_config() {
     _v=$(_lt_get '.timeouts.perAttemptOverheadSecs'); [ -z "${EPAM_PER_ATTEMPT_OVERHEAD_SECS:-}" ] && [ -n "$_v" ] && export EPAM_PER_ATTEMPT_OVERHEAD_SECS="$_v"
     _v=$(_lt_get '.timeouts.storyWallMaxSecs'); [ -z "${EPAM_STORY_WALL_MAX_SECS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_WALL_MAX_SECS="$_v"
 
+    # HOW MANY ATTEMPTS RUN INSIDE ONE STORY WALL — needed HERE, in the parent.
+    #
+    # The watchdog multiplies the per-attempt wall by maxRetries+1 to size the story wall.
+    # EPAM_MAX_RETRIES is loaded by CLAUDE.SH from .retries.maxRetries, in claude.sh's process,
+    # and the watchdog runs in this one. So the multiplier defaulted to 0+1 = 1 and the story
+    # wall collapsed back to exactly one attempt — the two-scope fix was INERT on its first
+    # live run, which printed the floor branch:
+    #
+    #   [orch] story timeout 1800s (floor — no iteration budget granted yet for AMSD-2041)
+    #
+    # The tests passed because they SET EPAM_MAX_RETRIES in their own harness, supplying the
+    # one input reality never did: the caller tested instead of the receiver, the same error
+    # that left the 2026-08-10 wall derivation dead for two days.
+    _v=$(_lt_get '.retries.maxRetries'); [ -z "${EPAM_MAX_RETRIES:-}" ] && [ -n "$_v" ] && export EPAM_MAX_RETRIES="$_v"
+
     # THE MODEL LADDERS, LOADED WHERE THE ORCHESTRATOR CAN SEE THEM.
     #
     # A LADDER A SEAM CANNOT REACH IS NOT A LADDER ASSIGNMENT.

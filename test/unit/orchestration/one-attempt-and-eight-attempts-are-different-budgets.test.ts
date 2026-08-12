@@ -178,3 +178,78 @@ describe('NO SECONDS IN THE ENGINE', () => {
     }
   });
 });
+
+describe('THE MULTIPLIER MUST SURVIVE THE PROCESS BOUNDARY', () => {
+  /**
+   * CAUGHT LIVE 2026-08-12, on the first run after this change shipped.
+   *
+   *     [orch] story timeout 1800s (floor — no iteration budget granted yet for AMSD-2041)
+   *
+   * The FLOOR branch, not the derived one. _derive_story_wall_total multiplies the
+   * per-attempt wall by ${EPAM_MAX_RETRIES:-0} + 1, and EPAM_MAX_RETRIES is loaded by
+   * CLAUDE.SH from .retries.maxRetries — in claude.sh's process. The watchdog runs in the
+   * PARENT, where it was never set, so the multiplier was 0+1 = 1 and the story wall
+   * collapsed back to exactly one attempt. The whole two-scope fix was inert on its first run.
+   *
+   * The tests above passed because THEY SET EPAM_MAX_RETRIES IN THE HARNESS — supplying the
+   * one input reality never did. Testing the caller instead of the receiver, which is the
+   * same error that let the 2026-08-10 wall derivation sit dead for two days, and the third
+   * instance of it found today.
+   *
+   * So this asserts the PARENT LOADER provides it, with nothing injected.
+   */
+  const GUARDS = join(ROOT, 'orchestrations/scripts/lib/story-guards.sh');
+  const PROJECT = join(ROOT, 'orchestrations/projects/metrolinx');
+
+  /** Load exactly as the orchestrator does — no variable supplied by the test. */
+  function loadedInParent(name: string): string {
+    const r = execFileSync('bash', ['-c', `
+      . '${GUARDS}' 2>/dev/null || true
+      EPAM_PROJECT_CONFIG_DIR='${PROJECT}'
+      command -v _load_timeout_config >/dev/null 2>&1 && _load_timeout_config >/dev/null 2>&1
+      printf '%s' "\${${name}:-}"`], { encoding: 'utf8' });
+    return r.trim();
+  }
+
+  it('THE DEFECT: the parent loader provides EPAM_MAX_RETRIES', () => {
+    expect(loadedInParent('EPAM_MAX_RETRIES'),
+      'the watchdog multiplies by maxRetries+1 and the parent never had it — story wall = 1 attempt')
+      .toBeTruthy();
+  });
+
+  it('it matches what the project declared', () => {
+    expect(Number(loadedInParent('EPAM_MAX_RETRIES'))).toBe(CFG.retries.maxRetries);
+  });
+
+  it('the per-attempt overhead reaches the parent too', () => {
+    expect(Number(loadedInParent('EPAM_PER_ATTEMPT_OVERHEAD_SECS'))).toBe(CFG.timeouts.perAttemptOverheadSecs);
+  });
+
+  it('and the story ceiling', () => {
+    expect(Number(loadedInParent('EPAM_STORY_WALL_MAX_SECS'))).toBe(CFG.timeouts.storyWallMaxSecs);
+  });
+
+  it('END TO END, nothing injected: the story wall exceeds one attempt', () => {
+    // The assertion that would have caught this before it ran. Everything comes from the
+    // loader; the test supplies only the iteration count the child would have persisted.
+    const out = execFileSync('bash', ['-c', `
+      . '${GUARDS}' 2>/dev/null || true
+      EPAM_PROJECT_CONFIG_DIR='${PROJECT}'
+      _load_timeout_config >/dev/null 2>&1
+      log() { :; }; warning() { :; }
+      _spi="\${EPAM_SECONDS_PER_ITERATION:-}"; _tmax="\${EPAM_STORY_TIMEOUT_MAX_SECS:-}"
+      ${(() => {
+        // Reuse the brace-balanced extractor. Hand-rolled slice arithmetic here produced
+        // `}    _derive_story_wall_total() {` on one line — both functions undefined, both
+        // helpers printing empty, and a failure that looked like a wrong implementation.
+        const src = readFileSync(ORCH, 'utf8');
+        return [extractFn(src, '_derive_attempt_wall'), extractFn(src, '_derive_story_wall_total')].join('\n');
+      })()}
+      printf 'attempt=%s story=%s' "$(_derive_attempt_wall ${FLOOR} 120)" "$(_derive_story_wall_total ${FLOOR} 120)"`],
+      { encoding: 'utf8' });
+    const m = out.match(/attempt=(\d+) story=(\d+)/);
+    expect(m, `unparseable: ${out}`).toBeTruthy();
+    expect(Number(m![2]), 'the story wall is still one attempt — the multiplier never arrived')
+      .toBeGreaterThan(Number(m![1]));
+  });
+});

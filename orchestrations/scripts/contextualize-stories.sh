@@ -41,6 +41,17 @@ info()    { echo -e "${MAGENTA}[CPA]${NC} $1" >&2; }
 
 # ── Paths ───────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# THIS SEAM ASKS FOR ITS LADDER.
+#
+# The CPA inference pass. Found by the completeness check in
+# every-seam-script-asks-for-its-ladder.test.ts rather than by being remembered — which is the
+# only reason it is here: a seam script that invokes an agent and asks for no ladder runs on a
+# fixed model silently, and there were sixteen of those.
+# shellcheck source=lib/seam-ladder.sh
+. "$SCRIPT_DIR/lib/seam-ladder.sh" 2>/dev/null || true
+command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "cpa-inference"
+
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 # Unconditional assignment here (no ${PROJECT_ROOT:-...} fallback) always
 # overwrote the caller's real codeline path with epam-cli's own repo root —

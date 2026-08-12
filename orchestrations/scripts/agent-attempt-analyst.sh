@@ -36,6 +36,20 @@ FAILURE_CLASS="${1:-}"
 FAILED_OUTPUT_FILE="${2:-/dev/null}"
 CONTEXT_FILE="${3:-/dev/null}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# THIS SEAM ASKS FOR ITS LADDER.
+#
+# Until 2026-08-12 only team-lead-review.sh called this, so sixteen of seventeen seams kept
+# whatever fixed model their script hardcoded while the registry looked authoritative. The
+# ask must come BEFORE any model is resolved below: seam_ladder_export sets EPAM_MODEL, and
+# a later assignment that wins makes the whole thing decorative.
+#
+# Guarded: these run mid-pipeline, and a packaging error must degrade to the previous fixed
+# model rather than kill a run.
+# shellcheck source=lib/seam-ladder.sh
+. "$SCRIPT_DIR/lib/seam-ladder.sh" 2>/dev/null || true
+command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "agent-failure-analyst"
+
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
 
 log() { echo "[agent-attempt-analyst] $*" >&2; }

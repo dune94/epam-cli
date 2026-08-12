@@ -5185,6 +5185,106 @@ function _promptLibrary() {
   return _promptLibraryMod;
 }
 
+function parseDetectiveFindings(out, repoPath) {
+  const m = out && out.match(/\[\s*\{[\s\S]*?\}\s*\]/);
+  if (!m) return null;
+  let arr;
+  try { arr = JSON.parse(m[0]); } catch { return null; }
+  const seen = new Set();
+  const findings = [];
+  for (const h of (Array.isArray(arr) ? arr : [])) {
+    if (!h || typeof h.file !== 'string') continue;
+    const file = h.file.replace(/^\.?\//, '');
+    if (!file || seen.has(file)) continue;
+    seen.add(file);
+    const helper = typeof h.helper === 'string' ? h.helper : '';
+    const brokenLine = typeof h.brokenLine === 'string' ? h.brokenLine : '';
+    findings.push({
+      file,
+      function: typeof h.function === 'string' ? h.function : '',
+      reason: typeof h.reason === 'string' ? h.reason : '',
+      fix: typeof h.fix === 'string' ? h.fix : '',
+      helper,
+      brokenLine,
+      // true = named helper exists; false = named but not found (likely
+      // hallucinated); null = no helper named. Only false downgrades the fix.
+      fixVerified: verifyDetectiveHelper(helper, repoPath),
+      // true = the quoted broken expression is really in the named file;
+      // false = it is not (a diagnosis about code that does not exist —
+      // the live 2026-07-26 failure); null = nothing quoted.
+      evidenceVerified: verifyDetectiveEvidence(brokenLine, file, repoPath),
+      // PROVENANCE. A feature has no broken line to quote, so "does the file you named
+      // actually exist" is the grounding available to it — and it is the thing the novel
+      // prompt asks for. true = present, false = named but absent (invented), null = could
+      // not be checked.
+      fileVerified: (() => {
+        if (!file || !repoPath) return null;
+        try { return fs.existsSync(path.resolve(repoPath, file.replace(/^\.?\//, ''))); }
+        catch { return null; }
+      })(),
+      // TWO FIELDS THE PROMPT CALLS REQUIRED AND THIS PARSER THREW AWAY.
+      //
+      // This builds a NEW object from a hand-written list of keys, so anything the prompt
+      // asks for and this list omits is discarded silently — the model answers correctly and
+      // the answer is destroyed forty lines later. Both of these were omitted:
+      //
+      //   changeRequired   — the gate at claude.sh:3021 demands a real diff for every
+      //                      verified site not explicitly false. Absent means required, by
+      //                      design. So a site whose own prescription reads "No edit
+      //                      required" was demanded to show one: the writer correctly changed
+      //                      nothing, the gate rejected the story, and every retry reproduced
+      //                      it. Live AMSD-2041, all three codelines, three runs, ~nine
+      //                      attempts. Verified 2026-08-11 that the model DOES emit it
+      //                      (false/true/true/true/false across five sites) — the prompt was
+      //                      never the problem.
+      //   requiredPackages — the dependency gate at ~6385 reads it to check a prescribed fix
+      //                      against what the codeline actually installs. It has never fired:
+      //                      the field is absent from every PRD this pipeline has written.
+      //
+      // undefined, NOT false, for an absent changeRequired. The gate distinguishes "the
+      // detective said no edit" from "nothing said anything", and defaulting here would
+      // silently exempt every site the model declined to answer for.
+      //
+      // The deeper defect stands: this list and the JSON example in the prompt are two
+      // hand-maintained copies of one schema, and they drifted. They should be generated from
+      // a single declaration so a required field cannot be dropped by omission again.
+      changeRequired: typeof h.changeRequired === 'boolean' ? h.changeRequired : undefined,
+      requiredPackages: Array.isArray(h.requiredPackages)
+        ? h.requiredPackages.filter((n) => typeof n === 'string' && n.trim()).map((n) => n.trim())
+        : [],
+      // WHAT THIS CHANGE DOES TO THE VALUE, and WHERE IT RUNS. Both undefined when unstated —
+      // never defaulted. A plan whose sites all "carry" describes delivering a value it never
+      // obtains, which is what shipped on 2026-08-12: a signal was wired, a re-render was
+      // forced, and the data on the page was still the one fetched at page load.
+      deliveryRole: ['produces', 'carries', 'verifies'].includes(h.deliveryRole)
+        ? h.deliveryRole : undefined,
+      runsIn: ['server', 'browser', 'both', 'n/a'].includes(h.runsIn) ? h.runsIn : undefined,
+    });
+  }
+  return findings;
+}
+
+
+/**
+ * Does this prescription ever OBTAIN the value it promises to deliver?
+ *
+ * Live 2026-08-12: every site carried or verified and none produced. The plan wired a change
+ * signal, forced a re-render, and never fetched anything — so the page re-rendered the data it
+ * had loaded at page load. The writer built it exactly as prescribed and the review approved it.
+ *
+ * FAILS CLOSED. A site that did not state a deliveryRole does not count as a producer: "not
+ * stated" and "produces" are different claims, and collapsing them is the shape of nearly every
+ * defect this pipeline has shipped.
+ *
+ * Structural and generic: it knows nothing about fetching, HTTP, or any framework — only that
+ * SOMETHING in a plan must be the thing that makes the new value exist.
+ */
+function prescriptionMissingSource(sites) {
+  const list = Array.isArray(sites) ? sites.filter(Boolean) : [];
+  if (!list.length) return true;
+  return !list.some((f) => f && f.deliveryRole === 'produces');
+}
+
 async function runCodeGraphDetective(story, logDir, opts = {}) {
   if (process.env.EPAM_BROWNFIELD !== '1') return [];
   const repoPath = resolveCodelinePath(story);
@@ -5363,77 +5463,7 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
   // not actually answer (e.g. it wandered off and called WriteFile, returning
   // "The file has been written successfully" instead of the JSON). null → retry;
   // an explicit [] → the model's real answer of "no fix site".
-  const parseFindings = (out) => {
-    const m = out && out.match(/\[\s*\{[\s\S]*?\}\s*\]/);
-    if (!m) return null;
-    let arr;
-    try { arr = JSON.parse(m[0]); } catch { return null; }
-    const seen = new Set();
-    const findings = [];
-    for (const h of (Array.isArray(arr) ? arr : [])) {
-      if (!h || typeof h.file !== 'string') continue;
-      const file = h.file.replace(/^\.?\//, '');
-      if (!file || seen.has(file)) continue;
-      seen.add(file);
-      const helper = typeof h.helper === 'string' ? h.helper : '';
-      const brokenLine = typeof h.brokenLine === 'string' ? h.brokenLine : '';
-      findings.push({
-        file,
-        function: typeof h.function === 'string' ? h.function : '',
-        reason: typeof h.reason === 'string' ? h.reason : '',
-        fix: typeof h.fix === 'string' ? h.fix : '',
-        helper,
-        brokenLine,
-        // true = named helper exists; false = named but not found (likely
-        // hallucinated); null = no helper named. Only false downgrades the fix.
-        fixVerified: verifyDetectiveHelper(helper, repoPath),
-        // true = the quoted broken expression is really in the named file;
-        // false = it is not (a diagnosis about code that does not exist —
-        // the live 2026-07-26 failure); null = nothing quoted.
-        evidenceVerified: verifyDetectiveEvidence(brokenLine, file, repoPath),
-        // PROVENANCE. A feature has no broken line to quote, so "does the file you named
-        // actually exist" is the grounding available to it — and it is the thing the novel
-        // prompt asks for. true = present, false = named but absent (invented), null = could
-        // not be checked.
-        fileVerified: (() => {
-          if (!file || !repoPath) return null;
-          try { return fs.existsSync(path.resolve(repoPath, file.replace(/^\.?\//, ''))); }
-          catch { return null; }
-        })(),
-        // TWO FIELDS THE PROMPT CALLS REQUIRED AND THIS PARSER THREW AWAY.
-        //
-        // This builds a NEW object from a hand-written list of keys, so anything the prompt
-        // asks for and this list omits is discarded silently — the model answers correctly and
-        // the answer is destroyed forty lines later. Both of these were omitted:
-        //
-        //   changeRequired   — the gate at claude.sh:3021 demands a real diff for every
-        //                      verified site not explicitly false. Absent means required, by
-        //                      design. So a site whose own prescription reads "No edit
-        //                      required" was demanded to show one: the writer correctly changed
-        //                      nothing, the gate rejected the story, and every retry reproduced
-        //                      it. Live AMSD-2041, all three codelines, three runs, ~nine
-        //                      attempts. Verified 2026-08-11 that the model DOES emit it
-        //                      (false/true/true/true/false across five sites) — the prompt was
-        //                      never the problem.
-        //   requiredPackages — the dependency gate at ~6385 reads it to check a prescribed fix
-        //                      against what the codeline actually installs. It has never fired:
-        //                      the field is absent from every PRD this pipeline has written.
-        //
-        // undefined, NOT false, for an absent changeRequired. The gate distinguishes "the
-        // detective said no edit" from "nothing said anything", and defaulting here would
-        // silently exempt every site the model declined to answer for.
-        //
-        // The deeper defect stands: this list and the JSON example in the prompt are two
-        // hand-maintained copies of one schema, and they drifted. They should be generated from
-        // a single declaration so a required field cannot be dropped by omission again.
-        changeRequired: typeof h.changeRequired === 'boolean' ? h.changeRequired : undefined,
-        requiredPackages: Array.isArray(h.requiredPackages)
-          ? h.requiredPackages.filter((n) => typeof n === 'string' && n.trim()).map((n) => n.trim())
-          : [],
-      });
-    }
-    return findings;
-  };
+  const parseFindings = (out) => parseDetectiveFindings(out, repoPath);
 
   // The detective is a LOAD-BEARING step for a brownfield defect: if it yields
   // nothing, the implementer gets symptom ACs with no root cause (the exact
@@ -8951,6 +8981,8 @@ module.exports = {
   capReviewSnapshot,
   getDeterministicCandidateFiles,
   buildBrownfieldSearchQuery,
+  parseDetectiveFindings,
+  prescriptionMissingSource,
   runCodeGraphDetective,
   runSpecAgent,
   publishedContracts,

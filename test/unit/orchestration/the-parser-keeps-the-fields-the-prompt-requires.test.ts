@@ -42,9 +42,22 @@ const RUNNER = join(ROOT, 'orchestrations/scripts/spec-mode-runner.js');
  * against the object literal it builds, and then proves the WHOLE chain end-to-end below using
  * the real gate. The literal check is the unit; the chain check is the one that matters.
  */
+// REPOINTED 2026-08-12. This read the findings.push OBJECT LITERAL out of engine source and
+// asserted field names appeared in it — so it passed on a field mentioned in a comment, and
+// broke the moment the parser moved to module level. The parser is now exported, so the fields
+// are asserted on the PARSED RESULT: the artifact, not the source that produces it.
+function parsed(extra: Record<string, unknown> = {}): any {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const spec = require(RUNNER);
+  const out = spec.parseDetectiveFindings(
+    JSON.stringify([{ file: 'a.ts', reason: 'r', fix: 'f', ...extra }]), '/nonexistent');
+  expect(out, 'the parser returned nothing for a well-formed answer').toBeTruthy();
+  return out[0];
+}
+
 function parserLiteral(): string {
   const src = readFileSync(RUNNER, 'utf8');
-  const start = src.indexOf('      findings.push({');
+  const start = src.indexOf('    findings.push({');
   expect(start, 'the findings.push literal moved — this test is anchored on it').toBeGreaterThan(0);
   const end = src.indexOf('      });', start);
   const block = src.slice(start, end);

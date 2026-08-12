@@ -2054,14 +2054,43 @@ print(math.ceil(${timeout_secs} * ${role_multiplier}))
     # escalation is policed by the budget that escalation actually handed out.
     local _spi="${EPAM_SECONDS_PER_ITERATION:-}"
     local _tmax="${EPAM_STORY_TIMEOUT_MAX_SECS:-}"
-    _derive_story_wall() {
+    # ONE ATTEMPT. iterations x secondsPerIteration is a good estimator of the WRITER —
+    # measured 2026-08-12, 120 x 12 = 1440s against 1460s of real writer time — but an attempt
+    # is not only its iterations. It also pays planning, gates, verification and the failure
+    # analyst, none of which the iteration budget can express. That overhead is declared.
+    _derive_attempt_wall() {
         local _base="$1" _iters="$2"
         [ -n "$_spi" ] || { echo "$_base"; return 0; }
         case "$_iters" in ''|*[!0-9]*|0) echo "$_base"; return 0 ;; esac
-        awk -v it="$_iters" -v spi="$_spi" -v cur="$_base" -v cap="${_tmax:-0}" 'BEGIN {
-            d = it * spi;
+        awk -v it="$_iters" -v spi="$_spi" -v cur="$_base" -v cap="${_tmax:-0}" \
+            -v oh="${EPAM_PER_ATTEMPT_OVERHEAD_SECS:-0}" 'BEGIN {
+            d = it * spi + oh;
             if (cap > 0 && d > cap) d = cap;
             if (d < cur) d = cur;
+            printf "%d", d
+        }'
+    }
+
+    # THE WHOLE STORY, WHICH IS NOT ONE ATTEMPT.
+    #
+    # THE DEFECT THIS EXISTS FOR: EPAM_STORY_TIMEOUT_SECS bounded BOTH scopes. claude.sh
+    # wraps each single LLM invocation in `timeout $EPAM_STORY_TIMEOUT_SECS` (claude.sh:9265)
+    # and this watchdog wrapped ALL of claude.sh — up to MAX_RETRIES+1 = 8 attempts — in the
+    # same number. One attempt was permitted exactly as much wall clock as eight together, so
+    # the outer wall could not accommodate what the inner loop was authorised to do at ANY
+    # value of secondsPerIteration. Live 2026-08-12: two attempts consumed 1780s of an 1800s
+    # wall and the story was SIGKILLed with six attempts still nominally available.
+    #
+    # The story wall is therefore a HANG DETECTOR, not a work ration: it is what the inner
+    # loop may need, bounded by an operator ceiling that is declared separately from the
+    # per-attempt cap.
+    _derive_story_wall_total() {
+        local _attempt; _attempt=$(_derive_attempt_wall "$1" "$2")
+        local _attempts=$(( ${EPAM_MAX_RETRIES:-0} + 1 ))
+        [ "$_attempts" -gt 0 ] 2>/dev/null || _attempts=1
+        awk -v a="$_attempt" -v n="$_attempts" -v cap="${EPAM_STORY_WALL_MAX_SECS:-0}" 'BEGIN {
+            d = a * n;
+            if (cap > 0 && d > cap) d = cap;
             printf "%d", d
         }'
     }
@@ -2069,7 +2098,7 @@ print(math.ceil(${timeout_secs} * ${role_multiplier}))
     _persisted_iters=$(read_story_effective_iterations "$LOG_DIR" "$story_id" 2>/dev/null || echo 0)
     if [ -n "$_spi" ]; then
         local _derived
-        _derived=$(_derive_story_wall "$timeout_secs" "$_persisted_iters")
+        _derived=$(_derive_story_wall_total "$timeout_secs" "$_persisted_iters")
         if [ -n "$_derived" ] && [ "$_derived" != "$timeout_secs" ]; then
             log "[orch] story timeout ${timeout_secs}s -> ${_derived}s (derived from ${_persisted_iters} iterations x ${_spi}s/iteration, cap ${_tmax:-none})"
             timeout_secs="$_derived"
@@ -2148,7 +2177,7 @@ print(math.ceil(${timeout_secs} * ${EPAM_WATCHDOG_RETRY_MULTIPLIER:-1.5}))
             # child persisted what it granted on the attempt that just timed out; use it.
             local _retry_iters _retry_derived
             _retry_iters=$(read_story_effective_iterations "$LOG_DIR" "$story_id" 2>/dev/null || echo 0)
-            _retry_derived=$(_derive_story_wall "$retry_timeout_secs" "$_retry_iters")
+            _retry_derived=$(_derive_story_wall_total "$retry_timeout_secs" "$_retry_iters")
             if [ -n "$_retry_derived" ] && [ "$_retry_derived" != "$retry_timeout_secs" ]; then
                 log "[orch] retry wall ${retry_timeout_secs}s -> ${_retry_derived}s (re-derived from ${_retry_iters} iterations granted on the attempt that timed out)"
                 retry_timeout_secs="$_retry_derived"

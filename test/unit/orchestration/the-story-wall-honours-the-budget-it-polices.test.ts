@@ -56,14 +56,21 @@ function roundTrip(iters: string): { written: string; read: string } {
   return { written: iters, read: r.stdout.trim() };
 }
 
-/** Run the REAL _derive_story_wall from run-agent-orchestration.sh. */
+/**
+ * Run the REAL per-attempt derivation.
+ *
+ * Renamed 2026-08-12 from _derive_story_wall to _derive_attempt_wall when the two scopes were
+ * separated: this one bounds ONE attempt (iterations x spi + perAttemptOverhead), while
+ * _derive_story_wall_total bounds the whole story across every attempt the inner loop may run.
+ * The overhead is passed explicitly so these cases assert the arithmetic, not the config.
+ */
 function derive(base: number, iters: number, spi: string, cap: string): string {
   const src = readFileSync(ORCH, 'utf8');
-  const start = src.indexOf('    _derive_story_wall() {');
+  const start = src.indexOf('    _derive_attempt_wall() {');
   expect(start, 'the derivation helper is gone — the test is stale, not the code').toBeGreaterThan(-1);
   const end = src.indexOf('\n    }\n', start) + 6;
   const fn = src.slice(start, end).replace(/^ {4}/gm, '');
-  const script = [`_spi='${spi}'`, `_tmax='${cap}'`, fn, `_derive_story_wall ${base} ${iters}`].join('\n');
+  const script = [`_spi='${spi}'`, `_tmax='${cap}'`, `EPAM_PER_ATTEMPT_OVERHEAD_SECS=0`, fn, `_derive_attempt_wall ${base} ${iters}`].join('\n');
   const r = spawnSync('bash', ['-c', script], { encoding: 'utf8' });
   expect(r.status, r.stderr).toBe(0);
   return r.stdout.trim();
@@ -148,7 +155,7 @@ describe('IT IS RE-DERIVED PER ATTEMPT, NOT ONCE PER STORY', () => {
     const loop = src.slice(start, src.indexOf('\n        done', start));
     expect(loop.length, 'empty slice — the assertions below would be meaningless').toBeGreaterThan(200);
     expect(loop).toContain('read_story_effective_iterations');
-    expect(loop).toContain('_derive_story_wall');
+    expect(loop).toContain('_derive_story_wall_total');
   });
 
   it('the derivation is announced when it changes the wall', () => {

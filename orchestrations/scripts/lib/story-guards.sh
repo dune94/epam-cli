@@ -613,6 +613,12 @@ _load_timeout_config() {
     # wall that can actually accommodate the work; storyTimeoutMaxSecs caps it.
     _v=$(_lt_get '.timeouts.secondsPerIteration'); [ -z "${EPAM_SECONDS_PER_ITERATION:-}" ] && [ -n "$_v" ] && export EPAM_SECONDS_PER_ITERATION="$_v"
     _v=$(_lt_get '.timeouts.storyTimeoutMaxSecs'); [ -z "${EPAM_STORY_TIMEOUT_MAX_SECS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_TIMEOUT_MAX_SECS="$_v"
+    # TWO SCOPES, TWO WALLS. The knobs above bound ONE ATTEMPT. A story runs up to
+    # maxRetries+1 attempts inside a single watchdog window, and each attempt also pays
+    # planning, gates, verification and the analyst — none of which are iterations. Measured
+    # 2026-08-12: two attempts consumed 1780s of an 1800s wall that also claimed to bound eight.
+    _v=$(_lt_get '.timeouts.perAttemptOverheadSecs'); [ -z "${EPAM_PER_ATTEMPT_OVERHEAD_SECS:-}" ] && [ -n "$_v" ] && export EPAM_PER_ATTEMPT_OVERHEAD_SECS="$_v"
+    _v=$(_lt_get '.timeouts.storyWallMaxSecs'); [ -z "${EPAM_STORY_WALL_MAX_SECS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_WALL_MAX_SECS="$_v"
 
     _v=$(_lt_get '.timeouts.storyEffortTimeoutSecs.low'); [ -z "${EPAM_STORY_EFFORT_TIMEOUT_LOW_SECS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_EFFORT_TIMEOUT_LOW_SECS="$_v"
     _v=$(_lt_get '.timeouts.storyEffortTimeoutSecs.medium'); [ -z "${EPAM_STORY_EFFORT_TIMEOUT_MEDIUM_SECS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_EFFORT_TIMEOUT_MEDIUM_SECS="$_v"

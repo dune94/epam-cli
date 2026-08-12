@@ -7202,6 +7202,35 @@ for i, c in enumerate(text):
             _analyst_call_ok="false"
             warning "  [FailureAnalyst] Gate invocation FAILED for ${gate_model:-unknown} (attempt ${_analyst_attempt}/${_analyst_max_attempts}) — no response to parse"
         fi
+
+        # RETRYING A MODEL THAT SAID NOTHING IS NOT A RECOVERY STRATEGY.
+        #
+        # gate_model was chosen once and never reconsidered, so a model returning 0 bytes got
+        # called three times and the story then retried with NO diagnosis. Live 2026-08-12:
+        # z-ai/glm-5.2 returned empty on roughly half its first calls and burned one whole
+        # analyst cycle that way. Three identical calls to a silent endpoint is exactly the
+        # gamble the ladder exists to avoid.
+        #
+        # Nothing new is built: get_model_ladder_step already resolves the next rung from
+        # EPAM_MODEL_LADDER_<TIER>, this file's own loader exports those from llm-settings.json,
+        # and the high ladder already carries z-ai/glm-5.2 -> moonshotai/kimi-k3. The tier comes
+        # from THIS SEAM'S declared profile, not from a literal here.
+        #
+        # The ANALYST's model moves; the writer's does not. The writer is not what failed, and
+        # spending the story's escalation budget on a diagnostic problem is the category error
+        # that HealingBroken already makes.
+        if [ -z "$analyst_json" ] && [ "$_analyst_attempt" -lt "$_analyst_max_attempts" ]; then
+            local _analyst_tier _next_gate_model
+            _analyst_tier=$(jq -r '.profiles["impl-failure-analyst"].ladder // "high"' \
+                "${AGENT_PROFILES_REGISTRY:-$(dirname "$SCRIPT_DIR")/agents/invocation-profiles.json}" 2>/dev/null || echo "high")
+            _next_gate_model=$(get_model_ladder_step "$gate_model" "$_analyst_tier" 2>/dev/null || echo "")
+            if [ -n "$_next_gate_model" ]; then
+                warning "  [FailureAnalyst] escalating analyst model '${gate_model}' → '${_next_gate_model}' (tier=${_analyst_tier}) — the previous rung produced nothing usable"
+                gate_model="$_next_gate_model"
+            else
+                warning "  [FailureAnalyst] analyst ladder exhausted at '${gate_model}' (tier=${_analyst_tier}) — retrying the same rung"
+            fi
+        fi
         _analyst_attempt=$((_analyst_attempt + 1))
     done
 

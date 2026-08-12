@@ -5202,13 +5202,23 @@ run_repo_lint_verification() {
         "$PROJECT_ROOT/.git/hooks/pre-commit"; do
         [ -f "$_candidate" ] && { _hook="$_candidate"; break; }
     done
-    [ -n "$_hook" ] || return 0
+    # AN ABSENT CHECK IS NOT A PASS. These three exits used to be silent `return 0`s, so
+    # "lint could not run" was indistinguishable from "lint found nothing" — the same fail-open
+    # shape as every other defect in this pipeline. The story is not failed for them (the writer
+    # cannot install a hook or a linter), but the run says so out loud.
+    if [ -z "$_hook" ]; then
+        warning "  [repo-lint] $story_id: no pre-commit hook in $PROJECT_ROOT — lint was NOT run; nothing here proves the change is clean"
+        return 0
+    fi
 
     local _eslint_bin=""
     for _candidate in "$PROJECT_ROOT/node_modules/.bin/eslint" "$(command -v eslint 2>/dev/null)"; do
         [ -x "$_candidate" ] && { _eslint_bin="$_candidate"; break; }
     done
-    [ -n "$_eslint_bin" ] || return 0
+    if [ -z "$_eslint_bin" ]; then
+        warning "  [repo-lint] $story_id: no eslint binary in $PROJECT_ROOT or on PATH — lint was NOT run; nothing here proves the change is clean"
+        return 0
+    fi
 
     # Changed = modified/added tracked files plus untracked ones, which is the set that will be
     # staged — minus anything the ENGINE owns. Live next.gotransit.com carries untracked
@@ -5223,7 +5233,12 @@ run_repo_lint_verification() {
                   git -C "$PROJECT_ROOT" diff --cached --name-only --diff-filter=d 2>/dev/null
                   git -C "$PROJECT_ROOT" ls-files --others --exclude-standard 2>/dev/null; } \
                 | sort -u | engine_paths_filter)
-    [ -n "$_changed" ] || return 0
+    if [ -z "$_changed" ]; then
+        # Genuinely nothing to lint. Distinct from the two above: the check RAN and had no
+        # subject, rather than being unable to run.
+        log "  [repo-lint] $story_id: no changed files to lint"
+        return 0
+    fi
 
     # WHICH of the changed files does the hook actually send to this linter?
     #

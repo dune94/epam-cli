@@ -166,13 +166,7 @@ describe('THE CHAIN: a verify-only site is exempted by the real gate', () => {
 });
 
 describe('the gate expression this test mirrors still exists', () => {
-  it('claude.sh still selects verified sites and excludes changeRequired:false', () => {
-    const sh = readFileSync(join(ROOT, 'orchestrations/scripts/claude.sh'), 'utf8');
-    expect(existsSync(join(ROOT, 'orchestrations/scripts/claude.sh'))).toBe(true);
-    expect(sh).toContain('map(select(.fixVerified == true))');
-    expect(
-      sh,
-      'the gate stopped reading changeRequired — this test would then be mirroring nothing',
-    ).toContain('changeRequired');
-  });
+  // REMOVED 2026-08-12: mirrored the verified-fix-site gate's jq. The gate is deleted; the
+  // parser still carries changeRequired (asserted above on the PARSED RESULT) because the
+  // reviewer and the reset guard read it — only the gate that DEMANDED edits is gone.
 });

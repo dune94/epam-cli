@@ -3070,17 +3070,6 @@ verify_story_deliverables() {
     # is the exact failure it was added to prevent (four sites verified, one changed, story
     # reported complete). Only an explicit boolean false exempts a site; null, "false", 0 and ""
     # are all absent.
-    local _verified_sites=() _vs
-    while IFS= read -r _vs; do
-        [ -n "$_vs" ] && _verified_sites+=("$_vs")
-    done < <(jq -r --arg id "$story_id" \
-        '.stories[] | select(.id == $id) | (.fixSiteAnalysis // [])
-         | map(select(.fixVerified == true))
-         | map(select((.changeRequired | type == "boolean" and . == false) | not))
-         | .[].file // empty' \
-        "$prd_target" 2>/dev/null)
-    # END VERIFIED-SITE SELECTION
-    local _unchanged_verified=()
     local _declared_files=()
     while IFS= read -r file; do
         [ -n "$file" ] || continue
@@ -3177,10 +3166,6 @@ verify_story_deliverables() {
                         # exist at baseline) has no such ambiguity — that one
                         # stays a hard requirement via missing[] above.
                         unchanged+=("$file")
-                        local _vsite
-                        for _vsite in "${_verified_sites[@]}"; do
-                            [ "$_vsite" = "$file" ] && _unchanged_verified+=("$file") && break
-                        done
                     fi
                 fi
             fi
@@ -3275,27 +3260,31 @@ verify_story_deliverables() {
             warning "  $file"
         done
         return 1
-    elif [ ${#_unchanged_verified[@]} -gt 0 ]; then
-        # A VERIFIED FIX SITE IS NOT A CANDIDATE. The branch below — one real change is
-        # sufficient, not a majority — exists for AMSD-1820, where the spec named 3 CANDIDATE
-        # paths and the agent correctly edited 2; requiring all would false-fail a correct
-        # story. fixVerified:true is a different claim: the spec CONFIRMED the site and named
-        # the helper that owns it. Live 2026-08-09 four sites were verified, the writer changed
-        # ONE (12 lines), and the story was committed and reported complete — unable to satisfy
-        # its own criterion because the fetch path and context it also verified were never
-        # touched. The signal was in the data and no gate read it.
-        error "Story $story_id: ${#_unchanged_verified[@]} VERIFIED fix site(s) left unchanged — the spec confirmed each and named the helper that owns it, so the story is incomplete:"
-        # Deduped: a file appearing in more than one verified fix site was listed once per
-        # site, so the rejection told the writer the same path twice and the count
-        # disagreed with the list it printed.
-        while IFS= read -r file; do
-            error "  $file"
-        done < <(printf '%s\n' "${_unchanged_verified[@]}" | sort -u)
-        DETERMINISTIC_CHECK_FAILURE=1
-        export DETERMINISTIC_CHECK_FAILURE
-        VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\n%d fix site(s) the spec VERIFIED for this story are unchanged: %s\n\nThese are not candidate paths — each was confirmed as owning part of this fix. Change every one of them, or the story cannot satisfy its verification criteria.\n' "${#_unchanged_verified[@]}" "$(printf '%s, ' "${_unchanged_verified[@]}" | sed 's/, $//')")
-        STORY_REJECTION_KEY="unchanged-verified:$(printf '%s,' "${_unchanged_verified[@]}")"
-        return 1
+    # THE VERIFIED-FIX-SITE GATE WAS DELETED HERE (2026-08-12, operator decision).
+    #
+    # It demanded a real diff in EVERY site the spec marked fixVerified. That is conformance to
+    # the plan — and the plan is GUIDANCE. The detective points the writer at the right region
+    # of a real codebase; the writer READS THE CODE and fills the gaps. Gating on "did every
+    # prescribed file change" makes a story unwinnable the moment the plan is imperfect, which
+    # by design it is expected to be.
+    #
+    # Record: ONE true catch (2026-08-09, four verified sites, one changed, story reported
+    # complete) against at least three false failures. Its own comment recorded "three runs and
+    # roughly nine attempts died on it", and on 2026-08-12 it blocked AMSD-2041 by demanding a
+    # diff in a file whose own prescription reads "No code change required in useContent
+    # itself".
+    #
+    # No weaker setting works either: relaxed to "at least one verified site changed", the very
+    # incident it was built for PASSES, because the writer did change one. It substituted a
+    # structural proxy (file diffs) for a question about behaviour (can this satisfy its
+    # criterion), and a structural proxy over a guidance artefact gives exactly what was seen:
+    # false rejections of correct work, silence on incorrect work.
+    #
+    # What holds instead: the tests and the verification criteria — what a user observes, which
+    # cannot be satisfied by over-reach or under-delivery. The VC coverage check is weak today
+    # (word overlap; it scored a working and a broken prescription alike as "complete"), and
+    # strengthening it is the replacement for this gate rather than another proxy.
+
     elif [ ${#unchanged[@]} -gt 0 ]; then
         warning "Story $story_id: ${#unchanged[@]}/$declared declared candidate file(s) were unchanged (real work landed in the others) — informational, not a failure:"
         for file in "${unchanged[@]}"; do

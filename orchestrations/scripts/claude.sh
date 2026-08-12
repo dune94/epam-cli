@@ -7177,11 +7177,30 @@ for i, c in enumerate(text):
                 break
             fi
             analyst_json=""
+            # AN EMPTY RESPONSE IS NOT A MALFORMED ONE, AND BOTH USED TO SAY "could not parse".
+            #
+            # Live 2026-08-12: the analyst failed on roughly half its first calls and the
+            # result files on disk were 0 BYTES — the model returned nothing at all. From the
+            # log that was indistinguishable from prose or a truncated object, so diagnosing it
+            # meant going to /tmp and measuring file sizes. The parser is not at fault: it tries
+            # a whole-text parse and then brace-matches for the first balanced object, so if it
+            # finds nothing there was nothing to find. Name which of the two happened, and show
+            # what came back when there was something.
+            local _analyst_snippet
+            _analyst_snippet=$(printf '%s' "${analyst_raw:-}" | tr -d '\r' | tr '\n' ' ')
             if [ "$_analyst_attempt" -lt "$_analyst_max_attempts" ]; then
-                warning "  [FailureAnalyst] Could not parse JSON from analyst response — retrying gate call (attempt $((_analyst_attempt + 1))/${_analyst_max_attempts})"
+                if [ -z "$(printf '%s' "${analyst_raw:-}" | tr -d '[:space:]')" ]; then
+                    warning "  [FailureAnalyst] Analyst returned an EMPTY response (0 bytes) from ${gate_model:-unknown} — retrying gate call (attempt $((_analyst_attempt + 1))/${_analyst_max_attempts})"
+                else
+                    warning "  [FailureAnalyst] Analyst response contained no JSON object — retrying gate call (attempt $((_analyst_attempt + 1))/${_analyst_max_attempts}). It began: ${_analyst_snippet:0:200}"
+                fi
             fi
         else
+            # NEVER SILENT. This branch set _analyst_call_ok=false and logged nothing, so an
+            # unreachable or erroring gate model left NO trace in the run log — the operator
+            # saw a story retry with no guidance and no reason given.
             _analyst_call_ok="false"
+            warning "  [FailureAnalyst] Gate invocation FAILED for ${gate_model:-unknown} (attempt ${_analyst_attempt}/${_analyst_max_attempts}) — no response to parse"
         fi
         _analyst_attempt=$((_analyst_attempt + 1))
     done

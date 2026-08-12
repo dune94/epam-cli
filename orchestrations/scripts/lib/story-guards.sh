@@ -620,6 +620,39 @@ _load_timeout_config() {
     _v=$(_lt_get '.timeouts.perAttemptOverheadSecs'); [ -z "${EPAM_PER_ATTEMPT_OVERHEAD_SECS:-}" ] && [ -n "$_v" ] && export EPAM_PER_ATTEMPT_OVERHEAD_SECS="$_v"
     _v=$(_lt_get '.timeouts.storyWallMaxSecs'); [ -z "${EPAM_STORY_WALL_MAX_SECS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_WALL_MAX_SECS="$_v"
 
+    # THE MODEL LADDERS, LOADED WHERE THE ORCHESTRATOR CAN SEE THEM.
+    #
+    # A LADDER A SEAM CANNOT REACH IS NOT A LADDER ASSIGNMENT.
+    #
+    # agents/invocation-profiles.json assigns a ladder to 17 seams, and lib/seam-invocation.js
+    # turns that into a MODEL — it exports EPAM_MODEL (the first rung) and EPAM_MODEL_LADDER —
+    # but only if EPAM_MODEL_LADDER_<TIER> exists in the CALLING process. Otherwise it warns and
+    # returns effort and temperature alone, and the seam keeps whatever fixed model its script
+    # hardcoded.
+    #
+    # The project declares its ladders in llm-settings.json. Until now ONLY claude.sh's loader
+    # read them, exporting _HIGH and _MEDIUM inside claude.sh's own process; config.env sets
+    # _HIGHEST and deliberately not the others ("they live in one place"). Seam scripts are
+    # children of the ORCHESTRATOR, not of claude.sh, so they inherited _HIGHEST and nothing
+    # else — and every seam declaring "high" or "medium" resolved to no model at all:
+    #
+    #   [seam-invocation] seam 'impl-failure-analyst' asks for ladder 'high' but
+    #                     EPAM_MODEL_LADDER_HIGH is unset — using the run's default ladder
+    #
+    # 17 ladders were assigned on 2026-08-11 and reported as "every agent can escalate". The
+    # field was present and selected a model for none of them.
+    #
+    # Loaded HERE for the same reason _load_timeout_config exists at all: the parent runs the
+    # watchdog and spawns the seams, and anything exported inside claude.sh is invisible to
+    # both. Existing values are never overwritten, so an explicit override still wins.
+    local _ladder_tier _ladder_var _ladder_chain
+    for _ladder_tier in high medium highest; do
+        _ladder_var="EPAM_MODEL_LADDER_$(printf '%s' "$_ladder_tier" | tr '[:lower:]' '[:upper:]')"
+        [ -n "${!_ladder_var:-}" ] && continue
+        _ladder_chain=$(_lt_get "[.ladders.${_ladder_tier}.modelLadder[]? | \"\\(.from)=\\(.to)\"] | join(\"|\")")
+        [ -n "$_ladder_chain" ] && export "$_ladder_var=$_ladder_chain"
+    done
+
     _v=$(_lt_get '.timeouts.storyEffortTimeoutSecs.low'); [ -z "${EPAM_STORY_EFFORT_TIMEOUT_LOW_SECS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_EFFORT_TIMEOUT_LOW_SECS="$_v"
     _v=$(_lt_get '.timeouts.storyEffortTimeoutSecs.medium'); [ -z "${EPAM_STORY_EFFORT_TIMEOUT_MEDIUM_SECS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_EFFORT_TIMEOUT_MEDIUM_SECS="$_v"
     _v=$(_lt_get '.timeouts.storyEffortTimeoutSecs.high'); [ -z "${EPAM_STORY_EFFORT_TIMEOUT_HIGH_SECS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_EFFORT_TIMEOUT_HIGH_SECS="$_v"

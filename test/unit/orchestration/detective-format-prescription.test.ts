@@ -113,17 +113,36 @@ describe('a format-dependent fix must name the format', () => {
   });
 });
 
+
+// THE PROMPT MOVED OUT OF THE ENGINE (2026-08-12) into
+// orchestrations/prompts/templates/code-graph-detective.json. Asserting its text against the
+// SOURCE of spec-mode-runner.js now proves nothing — and asserting prompt text against source
+// never proved much: it passes on a comment or a dead branch. This renders the real prompt and
+// asserts what the model is actually sent.
+const DETECTIVE_PROMPT = (() => {
+  const lib = require('node:path').join(__dirname, '../../../orchestrations/scripts/lib/prompt-library.js');
+  return require(lib).buildPrompt(
+    'code-graph-detective',
+    require('node:path').join(__dirname, '../../../orchestrations/projects/metrolinx'),
+    {
+      __DETECTIVE_PROFILE__: '', __REPO_PATH__: '/REPO', __TOOL_PATH__: '/TOOL',
+      __STORY_TITLE__: 'T', __STORY_DESCRIPTION__: '', __STORY_ACS__: '- AC',
+      __KIND_AND_CORRECTIVE_CONTEXT__: '', __PRESEED_BLOCK__: '', __PRESCRIPTION_RULES__: '',
+    },
+  );
+})();
+
 describe('the detective enforces it', () => {
   const SPEC = require('node:fs').readFileSync(
     join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'), 'utf8');
 
   it('asks for the literal or the constant, not a description of it', () => {
-    expect(SPEC, 'the prompt still permits "a prefix match" with no separator named')
+    expect(DETECTIVE_PROMPT, 'the prompt still permits "a prefix match" with no separator named')
       .toMatch(/NAME THE FORMAT/);
   });
 
   it('tells the detective to prescribe the parser, not the writer', () => {
-    expect(SPEC).toMatch(/PREFER THE PARSER OVER THE WRITER/);
+    expect(DETECTIVE_PROMPT).toMatch(/PREFER THE PARSER OVER THE WRITER/);
   });
 
   it('checks the prescription and retries when it is under-specified', () => {

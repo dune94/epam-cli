@@ -149,6 +149,92 @@ function rebuildFlat(story) {
 }
 
 /**
+ * Does replacing `before` with `after` LOSE GROUND?
+ *
+ * The step's whole safety argument is that it is reversible — "the backup is what makes this
+ * step reversible, which is the only reason it is safe to run at all". A backup is reversible
+ * only if somebody compares it, and nobody did. Live 2026-08-11 the same detective, same
+ * codeline, same ticket, 40 minutes apart, replaced a prescription carrying the step that
+ * built the feature with one that had neither it nor the file it lived in — and the row this
+ * step logs said `before: 13, after: 14`. THE COUNT WENT UP. Counting cannot see this.
+ *
+ * Structural only. Nothing here knows what the project is, what a good fix looks like, or what
+ * any file does — it asks whether the new prescription still covers what the old one covered:
+ *
+ *   site-lost              a file that had a site has none now
+ *   change-required-lost   a site that had to be EDITED is now exempt
+ *   packages-lost          a declared package requirement vanished
+ *   fix-verified-lost      a site whose helper was verified no longer is
+ *
+ * Returns [] when the replacement holds its ground (including replacing a prescription with
+ * itself). Additions are never regressions — a fresh draw finding MORE is the point of it.
+ */
+function prescriptionRegressions(before, after) {
+  const prev = Array.isArray(before) ? before.filter(Boolean) : [];
+  const next = Array.isArray(after) ? after.filter(Boolean) : [];
+  if (!prev.length) return [];
+
+  const byFile = (list) => {
+    const m = new Map();
+    for (const f of list) {
+      const k = String(f.file || '');
+      if (!k) continue;
+      if (!m.has(k)) m.set(k, []);
+      m.get(k).push(f);
+    }
+    return m;
+  };
+  const P = byFile(prev);
+  const N = byFile(next);
+  const out = [];
+
+  for (const [file, was] of P) {
+    const now = N.get(file);
+    if (!now || !now.length) {
+      out.push({
+        kind: 'site-lost',
+        file,
+        detail: 'the previous prescription had a fix site here and the replacement has none',
+      });
+      continue;
+    }
+    // Required-ness: only an explicit false is exempt, matching the enforcement gate's own
+    // reading (claude.sh: `changeRequired | type == "boolean" and . == false`). A site that was
+    // required and is now exempt means the replacement claims work is unnecessary that the
+    // previous investigation said was essential — the 2026-08-11 "all five false" shape.
+    const wasRequired = was.some((f) => f.changeRequired === true);
+    const nowExempt = now.every((f) => f.changeRequired === false);
+    if (wasRequired && nowExempt) {
+      out.push({
+        kind: 'change-required-lost',
+        file,
+        detail: 'was marked as needing an edit; the replacement marks it exempt',
+      });
+    }
+    const pkgs = (list) => new Set(list.flatMap((f) => (Array.isArray(f.requiredPackages) ? f.requiredPackages : [])));
+    const wasPkgs = pkgs(was);
+    const nowPkgs = pkgs(now);
+    for (const pkg of wasPkgs) {
+      if (!nowPkgs.has(pkg)) {
+        out.push({
+          kind: 'packages-lost',
+          file,
+          detail: `declared package "${pkg}" is no longer declared`,
+        });
+      }
+    }
+    if (was.some((f) => f.fixVerified === true) && now.every((f) => f.fixVerified === false)) {
+      out.push({
+        kind: 'fix-verified-lost',
+        file,
+        detail: 'the named helper was verified to exist before and is not verified now',
+      });
+    }
+  }
+  return out;
+}
+
+/**
  * Write the PRD, leaving a restorable copy of what was there.
  *
  * Not a convenience. The prescriptions being replaced are the output of an expensive run, and
@@ -231,6 +317,10 @@ async function runRerun({
   const stories = (Array.isArray(prd.stories) ? prd.stories : [])
     .filter((s) => s && (!storyIds || !storyIds.length || storyIds.includes(s.id) || storyIds.includes(s.jiraKey)));
 
+  // A regression may be accepted only by EXPLICIT permission — never by default, and never
+  // silently: the row records it either way.
+  const allowRegression = String(process.env.EPAM_ALLOW_PRESCRIPTION_REGRESSION || '') === '1';
+
   const results = [];
   const saved = {
     PROJECT_ROOT: process.env.PROJECT_ROOT,
@@ -265,6 +355,7 @@ async function runRerun({
         }
 
         let status;
+        let regressions = [];
         if (error) {
           status = 'failed';
         } else if (!Array.isArray(findings) || !findings.length) {
@@ -275,8 +366,26 @@ async function runRerun({
             .filter((f) => f && f.reason)
             .map((f) => (f.codeline ? f : { ...f, codeline: cl }));
           if (stamped.length) {
-            story.fixSiteAnalysisPerCodeline = { ...(story.fixSiteAnalysisPerCodeline || {}), [cl]: stamped };
-            status = 'replaced';
+            // DOES THIS DRAW HOLD ITS GROUND? A fresh draw that LOSES a prescribed site, or
+            // downgrades one from "must edit" to "exempt", or drops a package declaration, is
+            // contained here rather than written over the prescription that already stands.
+            // Live 2026-08-11 this exact replacement went through and reported success; the
+            // row said before:13 after:14, because counting cannot see a lost instruction.
+            // The previous prescription is KEPT — it is the one with evidence behind it — and
+            // the loss is named so a human can decide, which is what the backup was always
+            // supposed to enable and never did.
+            regressions = prescriptionRegressions(before, stamped);
+            if (regressions.length && !allowRegression) {
+              status = 'rejected-regression';
+            } else {
+              if (regressions.length) {
+                // Explicitly permitted: still recorded, never silent.
+                status = 'replaced-with-regression';
+              } else {
+                status = 'replaced';
+              }
+              story.fixSiteAnalysisPerCodeline = { ...(story.fixSiteAnalysisPerCodeline || {}), [cl]: stamped };
+            }
           } else {
             status = 'kept';
           }
@@ -311,6 +420,7 @@ async function runRerun({
           // build-config files a dependency affects" must not read as "there are none".
           if (derived.note) row.configCandidatesNote = derived.note;
         }
+        if (regressions.length) row.regressions = regressions;
         if (error) row.error = error;
         results.push(row);
         if (onProgress) onProgress(row);
@@ -361,6 +471,7 @@ function report(prd, codelines = null) {
 
 module.exports = {
   codelinesFromPrd,
+  prescriptionRegressions,
   storyCodelines,
   sitesMissingTheField,
   rebuildFlat,

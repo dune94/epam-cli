@@ -5178,6 +5178,13 @@ function detectiveAnswerIsGrounded({ findings, kind } = {}) {
 // converges on the cause. Returns an array of repo-relative fix-site files
 // (may be empty). Best-effort: any failure (no repo, tool unavailable, parse
 // error, timeout) returns [] so the spec pass proceeds unblocked.
+// Lazy require: this module is loaded by tools that never invoke an agent.
+let _promptLibraryMod = null;
+function _promptLibrary() {
+  if (!_promptLibraryMod) _promptLibraryMod = require('./lib/prompt-library');
+  return _promptLibraryMod;
+}
+
 async function runCodeGraphDetective(story, logDir, opts = {}) {
   if (process.env.EPAM_BROWNFIELD !== '1') return [];
   const repoPath = resolveCodelinePath(story);
@@ -5301,51 +5308,31 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
   // ~3273) — the same feedback shape this file already trusts, applied to the detective.
   const correctiveContext = renderDetectiveCorrection(opts.correctiveContext);
 
-  const prompt = `${detectiveProfile ? detectiveProfile + '\n\n' : ''}You are investigating this ticket. The repository is at: ${repoPath}
-${_kindHintBlock}${correctiveContext}
-TICKET (read it, then decide for YOURSELF which few domain nouns matter — do not treat every word as a search term):
-Title: ${story.title || ''}
-${story.description ? 'Description: ' + String(story.description) + '\n' : ''}Acceptance criteria:
-${(story.acceptanceCriteria || []).map((a) => '- ' + String(a)).join('\n')}
-
-Your CodeGraph tool is the shell script at: ${toolPath}
-Invoke it with the Bash tool, always passing PROJECT_ROOT:
-  PROJECT_ROOT="${repoPath}" bash "${toolPath}" explore <domain nouns>
-  PROJECT_ROOT="${repoPath}" bash "${toolPath}" callers <SymbolName>
-  PROJECT_ROOT="${repoPath}" bash "${toolPath}" callees <SymbolName>
-  PROJECT_ROOT="${repoPath}" bash "${toolPath}" show <file> [startLine] [endLine]
-
-${preseedBlock}
-${detectivePrescription(_kindHint)}
-READ THE FILE BEFORE YOU QUOTE IT. Once you have a candidate file, run \`show <file>\` and look at the real lines. Your "brokenLine" must be COPIED EXACTLY from that output — it is checked character-for-character against the file, after whitespace normalisation. Do NOT reconstruct the line from symbol names: on 2026-07-26 that produced \`lineItemKey === orderLineItem.id\`, a plausible-looking expression using an identifier that exists nowhere in the repository, and the answer was rejected. \`show\` accepts a line range so you can read just the region you care about.
-
-CRITICAL REALITY ANCHOR: if the CodeGraph tool does not return a file or symbol, it does NOT exist in this codebase. Do not infer, assume, or extrapolate file paths, function signatures, or variable names from naming patterns — that is exactly how \`lineItemKey\` was invented. The index answers only for what it parsed, so a miss is a question, not an answer. If you believe something exists and CodeGraph did not return it, PROVE it before reasoning about it:
-
-    bash orchestrations/scripts/ripgrep-search.sh --string "<exact symbol>" [--glob "*.ts"]
-    bash orchestrations/scripts/ripgrep-search.sh --file "<part of a filename>"
-
-If your fix calls a method or function from a THIRD-PARTY package (not this repo's own code), a name existing somewhere in that package is not the same as it being the RIGHT way to call it — a symbol can be a real, internal implementation detail the package's own docs never call directly, or a static class method vs. an instance method, and picking the wrong one produces code that type-checks and fails at runtime. PROVE the real shape before naming it:
-
-    bash orchestrations/scripts/resolve-package-symbol.sh "<package name>" "<method or function name>"
-
-It reports whether the symbol is a direct/static call or needs an instance, and surfaces the package's own documented usage examples (README and JSDoc) so you can prefer the intended pattern over an internal detail that happens to exist.
-
-That searches the real working tree, so a hit is ground truth and "NOT FOUND" is definitive absence. If both tools come back empty, the thing does not exist — say so and revise your hypothesis. Never write a name into your answer that no tool has shown you.
-
-CRITICAL — HOW TO ANSWER: Emit the JSON array as TEXT directly in your reply. Do NOT call WriteFile and do NOT write your answer to any file — the pipeline reads your reply text, not a file. If you write your answer to a file, it is LOST and the whole investigation is wasted. Use the Bash tool ONLY to run the CodeGraph query script above (including its \`show\` subcommand, which you MUST use before quoting a line); use no other tool.
-
-NAME THE FORMAT, DO NOT DESCRIBE IT. If your fix depends on the SHAPE of a string — a prefix, suffix, separator, delimiter — you must QUOTE THE EXACT LITERAL (e.g. '#') or name the constant that defines it (e.g. DIVIDER). Saying "a prefix match that accounts for the suffix" without stating the suffix is not implementable: on 2026-07-26 exactly that wording made the implementer guess '-' where the repository uses '#', and the fix could never match. This is machine-checked.
-
-PREFER THE PARSER OVER THE WRITER. If a helper CONSTRUCTS the value (getX/buildX/toX) and another READS it (parseX/fromX), prescribe the reader. Naming the writer invites the implementer to reconstruct the format by hand — which is how the above happened. The best fix does no string surgery at all, because the helper owns the format.
-
-VERIFY THIRD-PARTY METHOD CALLS with resolve-package-symbol.sh before prescribing them (see above) — a name existing in a package is not proof it is called the way you assume.
-
-SAY WHETHER THE FILE MUST BE EDITED — "changeRequired" is REQUIRED. Set it true when your fix means editing THIS file. Set it FALSE when the file is genuinely part of the fix but needs no edit of its own: it already does the right thing, and will simply behave correctly once the other sites change. A consumer that reads state from a provider you are fixing is the usual case. This is not a lesser finding and must not be dropped — a downstream gate requires a real diff in every site you mark true, so marking a verify-only file true makes the story impossible to complete: the implementer changes nothing (correctly), the gate rejects it, and every retry repeats. Saying it in the "fix" prose is not enough; nothing reads prose.
-
-DECLARE ANY PACKAGE YOUR FIX NEEDS — "requiredPackages" is REQUIRED and is machine-verified. List the BARE package names, exactly as they appear in this project's manifest (e.g. "some-sdk", "@scope/pkg"), for every third-party package your fix imports or configures. Use [] when the fix needs none — that is the common case and is not a failure. Each name is checked against what this codeline actually declares and installs: a package that is not there means your fix CANNOT be implemented as written, and prescribing it produces a change that type-checks, passes tests, and fails for a real user. Prefer a fix built on what is already installed; if the work genuinely requires a package this project does not have, still declare it — that is the honest answer and the pipeline needs to see it, whereas an approach invented to avoid naming it is the failure this field exists to prevent.
-
-Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" field is REQUIRED and must be a concrete, minimal instruction naming the exact change and any existing helper to reuse. The "helper" field must be the BARE SYMBOL NAME of the existing function you are telling the implementer to reuse (so it can be machine-verified to actually exist) — leave it "" if the fix genuinely needs no existing helper. Do NOT invent a helper name; only put a symbol you actually saw in the tool output:
-[{"file":"<repo-relative path>","function":"<symbol>","reason":"<why THIS computes the value, not just displays it>","brokenLine":"<the exact existing expression that is wrong, copied verbatim from that file>","fix":"<the exact minimal change: which line/expression to change, to what, and which EXISTING helper (symbol + import path) to reuse — never 'write a new function' if one already exists>","helper":"<bare existing symbol name to reuse, or empty>","changeRequired":<true if this file must be EDITED; false if it is implicated but needs NO edit — it already behaves correctly and only needs to be VERIFIED once the other sites change>,"requiredPackages":["<bare package name this fix needs>"]}]`;
+  // THE PROMPT IS A DOCUMENT, NOT A LITERAL.
+  //
+  // Migrated 2026-08-12 to orchestrations/prompts/templates/code-graph-detective.json, and the
+  // project-authority copy the library prefers. Byte-identical to the literal that stood here.
+  //
+  // This prompt decides where every ticket lands and what every writer builds, so how it
+  // reasons must be reviewable as a diff on a document rather than a patch to engine source.
+  // It was also the largest prompt in this file held as code, where every backtick and ${} in
+  // the prose was live — the failure mode that silently corrupted the reviewer's prompt.
+  const prompt = _promptLibrary().buildPrompt(
+    'code-graph-detective',
+    process.env.EPAM_PROJECT_CONFIG_DIR || '',
+    {
+      __DETECTIVE_PROFILE__: detectiveProfile ? detectiveProfile + '\n\n' : '',
+      __REPO_PATH__: repoPath,
+      __TOOL_PATH__: toolPath,
+      __STORY_TITLE__: story.title || '',
+      __STORY_DESCRIPTION__: story.description ? 'Description: ' + String(story.description) + '\n' : '',
+      __STORY_ACS__: (story.acceptanceCriteria || []).map((a) => '- ' + String(a)).join('\n'),
+      // Adjacent in the original with no separator; the library reads __A____B__ as one token.
+      __KIND_AND_CORRECTIVE_CONTEXT__: String(_kindHintBlock) + String(correctiveContext),
+      __PRESEED_BLOCK__: preseedBlock,
+      __PRESCRIPTION_RULES__: detectivePrescription(_kindHint),
+    },
+  );
 
   // Model ladder — cohesive with openspec/speckit (which escalate to their HIGH
   // model on retry). Attempt 1 uses the base HIGH model (glm-5.1); a retry

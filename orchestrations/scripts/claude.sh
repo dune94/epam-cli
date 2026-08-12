@@ -724,9 +724,33 @@ _selective_worktree_reset() {
     # coherent — precisely the work that never needed preserving. Live 2026-08-10: 25 file writes
     # across five invocations, zero survivors, on a story with 13 interdependent fix sites.
     #
-    # The right question is whether the writer moved any VERIFIED fix site. The spec already
-    # says which files matter; git already says which changed. No compiler required, and nothing
-    # stack-specific in the engine.
+    # The right question is whether the writer moved a file the spec says MUST CHANGE. The spec
+    # already says which files matter; git already says which changed. No compiler required, and
+    # nothing stack-specific in the engine.
+    #
+    # THE PREDICATE IS changeRequired, NOT fixVerified — corrected 2026-08-11.
+    #
+    # `fixVerified` means "the detective's PRESCRIPTION for this file was verified". "This file
+    # must be edited" is `changeRequired`. Reading the first to answer the second inverted this
+    # guard against its own stated intent. Measured on the live AMSD-2041/gotransit PRD:
+    #
+    #   changeRequired  fixVerified  file                                 was protected?
+    #   true            true         src/context/ContentstackContext.tsx   yes
+    #   true            FALSE        src/pages/_app.tsx                    NO
+    #   true            NULL         .env.local.sample                     NO
+    #   false           true         src/services/contentstack.ts          yes
+    #   false           true         src/hooks/useContent.ts               yes
+    #
+    # Two of the THREE files the story must edit were not evidence of progress, so an attempt
+    # that correctly edited _app.tsx and .env.local.sample and nothing else was DELETED as
+    # "changed no VERIFIED fix site". Both files the detective said to LEAVE ALONE did count, so
+    # an attempt that wrongly rewrote useContent.ts was PRESERVED — rewarding the exact failure
+    # mode that killed three runs.
+    #
+    # ABSENT MEANS PROTECT, matching the enforcement gate's own `!= false` reading: a site with
+    # no verdict has not been investigated, and "we do not know yet" is not grounds for deleting
+    # work. Only an explicit boolean false — the detective saying this file needs no edit —
+    # exempts a site from counting as progress.
     local _touched_fix_site=0
     if [ -n "${MAIN_PRD_FILE:-$PRD_FILE}" ]; then
         local _fs
@@ -737,11 +761,12 @@ _selective_worktree_reset() {
             fi
         done < <(jq -r --arg id "$story_id" '
             .stories[] | select(.id == $id) | (.fixSiteAnalysis // [])
-            | map(select(.fixVerified == true)) | .[].file // empty' \
+            | map(select((.changeRequired | type == "boolean" and . == false) | not))
+            | .[].file // empty' \
             "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null)
     fi
     if [ "$_touched_fix_site" -eq 1 ]; then
-        log "  WorktreeReset[$story_id]: skipped — the attempt changed at least one VERIFIED fix site; partial work preserved"
+        log "  WorktreeReset[$story_id]: skipped — the attempt changed at least one file the spec says MUST change; partial work preserved"
         return 0
     fi
 

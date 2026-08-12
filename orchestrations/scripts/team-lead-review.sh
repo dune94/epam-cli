@@ -71,6 +71,20 @@ _to_vals=$(mktemp); printf '{}' > "$_to_vals"
 TEST_OWNERSHIP_BLOCK=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/prompt-library.js" \
     render test-ownership "${EPAM_PROJECT_CONFIG_DIR:-}" "$_to_vals" reviewer 2>/dev/null || echo "")
 rm -f "$_to_vals"
+
+# WHAT MAY BE A BLOCKER. Same discipline as the policy above: declared once, in the prompt
+# layer, not invented here. A blocker the writer cannot satisfy is an unwinnable gate — live
+# 2026-08-12 this reviewer demanded a file the plan never named, and a package that does not
+# exist, and the writer failed on both repeatedly.
+BLOCKER_DISCIPLINE_BLOCK=""
+_bd_vals=$(mktemp); printf '{}' > "$_bd_vals"
+BLOCKER_DISCIPLINE_BLOCK=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/prompt-library.js" \
+    render blocker-discipline "${EPAM_PROJECT_CONFIG_DIR:-}" "$_bd_vals" reviewer 2>/dev/null || echo "")
+rm -f "$_bd_vals"
+if [ -z "$(printf '%s' "$BLOCKER_DISCIPLINE_BLOCK" | tr -d '[:space:]')" ]; then
+    echo "[team-lead-review] FATAL: blocker-discipline policy failed to render — refusing to review without it" >&2
+    exit 1
+fi
 if [ -z "$(printf '%s' "$TEST_OWNERSHIP_BLOCK" | tr -d '[:space:]')" ]; then
     echo "[team-lead-review] FATAL: test-ownership policy failed to render — refusing to review without it" >&2
     exit 1
@@ -394,7 +408,9 @@ while IFS= read -r story_id; do
 
     STORY_FIX_ANALYSIS=$(jq -r --arg id "$story_id" '
         .stories[] | select(.id == $id) | (.fixSiteAnalysis // []) | map(
-          "- **\(.file)**" + (if (.function // "") != "" then " (`\(.function)`)" else "" end) + ": \(.reason)"
+          "- **\(.file)**" + (if (.function // "") != "" then " (`\(.function)`)" else "" end)
+          + (if (.changeRequired | type == "boolean" and . == false) then "  [NO EDIT REQUIRED — part of the fix, correctly left unchanged; never raise a finding because this file is untouched]" else "" end)
+          + ": \(.reason)"
           + (if (.fix // "") != "" then "\n  - Prescribed minimal fix: \(.fix)" else "" end)
         ) | join("\n")' "$PRD_FILE" 2>/dev/null || echo "")
 
@@ -510,6 +526,7 @@ $STORY_ACS
 $([ -n "$STORY_VC" ] && printf '\nVERIFICATION CRITERIA (the observable checks this change MUST satisfy — judge the diff against every one):\n%s\n' "$STORY_VC" || true)
 $([ -n "$STORY_UNCOVERED_VC" ] && printf '\n%s\n' "$STORY_UNCOVERED_VC" || true)
 $([ -n "$STORY_FIX_ANALYSIS" ] && printf '\nROOT CAUSE ANALYSIS & PRESCRIBED MINIMAL FIX (from prior code investigation — the plan of record the implementer was given):\n%s\n\nThe acceptance criteria describe the desired BEHAVIOR to verify; they are NOT a blueprint. The correct implementation is the minimal fix above. Judge the diff against BOTH.\n' "$STORY_FIX_ANALYSIS" || true)
+${BLOCKER_DISCIPLINE_BLOCK}
 
 RELEVANT FILES (fix files + the reproducing test the pipeline shipped — review BOTH): $STORY_FILES ${_test_files:-}
 

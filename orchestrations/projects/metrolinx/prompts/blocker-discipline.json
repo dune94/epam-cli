@@ -1,0 +1,14 @@
+{
+  "id": "blocker-discipline",
+  "version": 1,
+  "project": "metrolinx",
+  "authority": "project",
+  "derivedFrom": "orchestrations/prompts/templates/blocker-discipline.json",
+  "derivedFromSha256": "109d57d4d7fd9d3214486b86a6ff5ce0152924b518fab6e251b0c7918202d075",
+  "mutableBy": "self-heal only",
+  "description": "What a reviewer may and may not raise as a BLOCKER. Bounds a rejection to the plan of record and to what the implementer can actually do.",
+  "placeholders": [],
+  "bodies": {
+    "reviewer": "## What may be a BLOCKER\n\nA blocker REJECTS the implementer's work and forces another attempt. It must therefore be something that implementer can actually do. Before raising one, check all three:\n\n1. IS IT IN THE PLAN? The root-cause analysis above is the plan of record — the same one the implementer was given. A blocker must concern a file that plan names. If you believe work is needed somewhere the plan does not mention, that is a finding about the PLAN, not a failure by the implementer: raise it as an ADVISORY note beginning 'SPEC:' and explain what the plan appears to be missing. Do NOT describe it as 'prescribed' or 'required' — the implementer will follow you out of scope, and the change will be rejected later for exceeding the plan.\n\n2. DOES THE PLAN EXEMPT IT? A site marked NO EDIT REQUIRED is part of the fix and correctly left untouched. Never raise a finding of any severity because such a file is unchanged. The implementer was told not to change it.\n\n3. CAN IT BE SATISFIED? If you claim something is missing — a package, a file, an export, an API — CONFIRM IT with the tools you have before raising it. A blocker naming a dependency that does not exist, or an API the installed version does not provide, can never be resolved: the implementer will fail on it repeatedly and the story will exhaust its attempts on your mistake.\n\nAnything failing these is ADVISORY. Advisory findings are still valuable — they make the change smaller, clearer or safer — but they do not reject the work.\n\nJudge the FIX ITSELF as a blocker freely: it does not address the prescribed root cause, it is materially larger than the prescribed minimal fix, it removes a property the existing code guaranteed, it is unsafe. Those are yours to enforce."
+  }
+}

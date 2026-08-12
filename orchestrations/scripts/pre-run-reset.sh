@@ -289,13 +289,35 @@ done < <(find "$LOG_DIR" -type f \( -name '*.log' -o -name 'story-outputs-*.txt'
 # The failure mode is not limited to a resume. A story that exhausts its ladder
 # is escalated after one rejection on EVERY future run, forever, until someone
 # deletes the file by hand.
+# CLEAR THE DIRECTORY, NOT A LIST OF EXTENSIONS.
+#
+# The 2026-08-07 repair above deleted '*.count' and said "every story starts this run at
+# rung 0". That was true of the counter and false of the run: lib/story-retry-state.sh also
+# persists <story>.model (the escalated MODEL) and <story>.iterbump, and neither matched the
+# glob. Live 2026-08-11, AMSD-2041.model held 'moonshotai/kimi-k3' from a FAILED 15:57 run;
+# a fresh 23:34 launch reset the counter to 0, announced rung 0, and then invoked the writer
+# with "resuming on 'moonshotai/kimi-k3' (escalated in an earlier invocation)" — the TOP rung,
+# with no escalation headroom left for the recovery mechanisms that exist to climb it. Worse,
+# the escalation encoded a verdict about MODEL CAPABILITY that was really a verdict about a
+# truncated prompt, a defect fixed hours earlier. The stale conclusion outlived its cause.
+#
+# An extension whitelist has now failed twice for the same reason: a new state file type gets
+# added and nobody updates the sweep. This directory exists ONLY for per-story retry state and
+# none of it may survive a run, so clear ALL of it — a file type added tomorrow is covered
+# without anyone remembering this code exists.
 _RETRY_STATE_DIR="$LOG_DIR/story-retry-state"
 if [ -d "$_RETRY_STATE_DIR" ]; then
-    _RETRY_CLEARED=$(find "$_RETRY_STATE_DIR" -maxdepth 1 -type f -name '*.count' 2>/dev/null | wc -l)
-    find "$_RETRY_STATE_DIR" -maxdepth 1 -type f -name '*.count' -delete 2>/dev/null || true
-    [ "$_RETRY_CLEARED" -gt 0 ] \
-        && info "  Cleared $_RETRY_CLEARED inference-ladder rung counter(s) — every story starts this run at rung 0" \
-        || true
+    _RETRY_CLEARED=$(find "$_RETRY_STATE_DIR" -maxdepth 1 -type f 2>/dev/null | wc -l)
+    find "$_RETRY_STATE_DIR" -maxdepth 1 -type f -delete 2>/dev/null || true
+    _RETRY_LEFT=$(find "$_RETRY_STATE_DIR" -maxdepth 1 -type f 2>/dev/null | wc -l)
+    if [ "$_RETRY_LEFT" -gt 0 ]; then
+        # ABORT rather than announce a clean slate we did not deliver. Surviving state means
+        # the run starts mid-ladder on a model nobody chose, which is precisely what went
+        # unnoticed through two runs — and this script's whole job is the clean slate.
+        fail "$_RETRY_LEFT inference-ladder state file(s) could NOT be cleared in $_RETRY_STATE_DIR — a run started now would resume mid-ladder"
+    elif [ "$_RETRY_CLEARED" -gt 0 ]; then
+        info "  Cleared $_RETRY_CLEARED inference-ladder state file(s) — every story starts this run at rung 0 on its PRD-declared model"
+    fi
 fi
 [ "$_ARCHIVED_LOGS" -gt 0 ] \
   && success "Moved $_ARCHIVED_LOGS stale *.log / manifest / baseline-cache file(s) → $ARCHIVE_DIR (absence now means 'this run did not write it')" \

@@ -59,6 +59,22 @@ AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
 # shellcheck source=lib/engine-paths.sh
 [ -f "$SCRIPT_DIR/lib/engine-paths.sh" ] && . "$SCRIPT_DIR/lib/engine-paths.sh"
 command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "team-lead-review"
+
+# THE SAME TEST-OWNERSHIP POLICY THE WRITER IS BOUND BY, from the one place it is declared.
+#
+# This reviewer had never heard of it and was told to "Check: ... test coverage", so it raised a
+# blocker for tests the implementer was FORBIDDEN to write — an unwinnable gate that cost whole
+# runs. Rendered here from prompts/test-ownership.json, the same document the writer renders its
+# own half from, so the rule cannot change for one agent and not the other.
+TEST_OWNERSHIP_BLOCK=""
+_to_vals=$(mktemp); printf '{}' > "$_to_vals"
+TEST_OWNERSHIP_BLOCK=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/prompt-library.js" \
+    render test-ownership "${EPAM_PROJECT_CONFIG_DIR:-}" "$_to_vals" reviewer 2>/dev/null || echo "")
+rm -f "$_to_vals"
+if [ -z "$(printf '%s' "$TEST_OWNERSHIP_BLOCK" | tr -d '[:space:]')" ]; then
+    echo "[team-lead-review] FATAL: test-ownership policy failed to render — refusing to review without it" >&2
+    exit 1
+fi
 source "$SCRIPT_DIR/lib/project-tools.sh"
 source "$SCRIPT_DIR/lib/story-retry-state.sh"
 ORCH_GATE_MODEL="${ORCH_GATE_MODEL:-z-ai/glm-5.2}"
@@ -523,7 +539,8 @@ environment-derived identifier — and had never caught a real leak. It is yours
 have the diff and can tell the two apart.
 
 Review the implementation against each acceptance criterion above.
-Check: TypeScript strict compliance, test coverage, error handling, security (OWASP).
+Check: TypeScript strict compliance, error handling, security (OWASP).
+${TEST_OWNERSHIP_BLOCK}
 
 CONCISION & REUSE (blocker-level checks):
 - If the change addresses the symptom but NOT the prescribed root cause above (e.g. adds new code paths the bug never reaches), that is a 'blocker' — request changes.

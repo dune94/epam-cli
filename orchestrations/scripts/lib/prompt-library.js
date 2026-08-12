@@ -71,7 +71,7 @@ function readJson(file) {
  * @param {string} id            prompt id, e.g. 'failure-analyst'
  * @param {string} projectConfigDir  EPAM_PROJECT_CONFIG_DIR
  */
-function loadProjectPrompt(id, projectConfigDir) {
+function loadProjectPrompt(id, projectConfigDir, opts) {
   if (!id || typeof id !== 'string') throw new Error('prompt id is required');
   if (!projectConfigDir) {
     throw new Error(
@@ -87,6 +87,31 @@ function loadProjectPrompt(id, projectConfigDir) {
     );
   }
   const doc = readJson(file);
+
+  // A MULTI-PART PROMPT: ONE POLICY, SEVERAL AUDIENCES.
+  //
+  // Some rules bind more than one agent, and the two halves must never drift. "Tests are NOT
+  // your job" lived only in the writer's prompt; the reviewer had never heard of it and raised
+  // a blocker for missing tests, so the writer was ordered to create what it was forbidden to
+  // create. Splitting that across two prompt files would recreate the same defect with extra
+  // steps, so a prompt may declare `bodies: { <part>: text }` and each consumer asks for its
+  // own part of the SAME document.
+  //
+  // A part is REQUIRED when bodies exist: silently picking one would make the caller's audience
+  // an accident of ordering.
+  if (doc && doc.bodies && typeof doc.bodies === 'object') {
+    const part = opts && opts.part;
+    if (!part) {
+      throw new Error(
+        `prompt '${id}' declares parts (${Object.keys(doc.bodies).join(', ')}) — ask for one by name`);
+    }
+    if (typeof doc.bodies[part] !== 'string' || !doc.bodies[part].trim()) {
+      throw new Error(
+        `prompt '${id}' has no part '${part}' (declares: ${Object.keys(doc.bodies).join(', ')})`);
+    }
+    return { ...doc, body: doc.bodies[part] };
+  }
+
   if (!doc || typeof doc.body !== 'string' || !doc.body.trim()) {
     throw new Error(`project-authority prompt has no body: ${file}`);
   }
@@ -145,8 +170,8 @@ function render(doc, values) {
 }
 
 /** Convenience: load + render in one call. */
-function buildPrompt(id, projectConfigDir, values) {
-  return render(loadProjectPrompt(id, projectConfigDir), values);
+function buildPrompt(id, projectConfigDir, values, opts) {
+  return render(loadProjectPrompt(id, projectConfigDir, opts), values);
 }
 
 module.exports = {
@@ -162,16 +187,16 @@ module.exports = {
 
 /**
  * CLI, so shell can use the library without reimplementing resolution:
- *   node prompt-library.js render <id> <projectConfigDir> <values.json>
+ *   node prompt-library.js render <id> <projectConfigDir> <values.json> [part]
  * Values arrive as a JSON file rather than argv because they routinely contain newlines,
  * quotes and megabytes of test output.
  */
 if (require.main === module) {
-  const [, , cmd, id, dir, valuesFile] = process.argv;
+  const [, , cmd, id, dir, valuesFile, part] = process.argv;
   try {
     if (cmd !== 'render') throw new Error(`unknown command '${cmd}' (expected: render)`);
     const values = valuesFile ? readJson(valuesFile) : {};
-    process.stdout.write(buildPrompt(id, dir, values));
+    process.stdout.write(buildPrompt(id, dir, values, part ? { part } : undefined));
   } catch (e) {
     process.stderr.write(`[prompt-library] ${e && e.message}\n`);
     process.exit(1);

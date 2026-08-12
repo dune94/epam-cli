@@ -2118,9 +2118,27 @@ build_implementation_prompt() {
     # Authorship is a brownfield property, not a fix-site property: brownfield-repro-test-writer
     # takes its own turn either way. Enforcement is untouched — the repro-gate still blocks a
     # fix that ships without a reproducing test.
+    # ONE POLICY, RENDERED FROM THE PROMPT LAYER, READ BY BOTH AGENTS.
+    #
+    # This was a heredoc HERE and nowhere else, so team-lead-review.sh had never heard of it and
+    # was told "Check: ... test coverage". It raised a blocker for missing tests; 33ee47b then
+    # hardened this side — "a BLOCKER is a required deliverable ... the only way to resolve it is
+    # to CREATE it" — leaving the writer ORDERED TO CREATE WHAT IT IS FORBIDDEN TO CREATE. Both
+    # halves now come from prompts/test-ownership.json, so the rule cannot be changed for one
+    # agent and not the other.
     local test_ownership_block=""
     if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
-        test_ownership_block=$(printf '\n## Tests are NOT your job this turn\nA dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.\n')
+        local _to_vals; _to_vals=$(mktemp)
+        printf '{}' > "$_to_vals"
+        test_ownership_block=$(printf '\n%s\n' "$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/prompt-library.js" \
+            render test-ownership "${EPAM_PROJECT_CONFIG_DIR:-}" "$_to_vals" writer 2>/dev/null)")
+        rm -f "$_to_vals"
+        # A policy that failed to render is not an empty policy: the writer would silently regain
+        # permission to write tests, which is the failure this whole change removes.
+        if [ -z "$(printf '%s' "$test_ownership_block" | tr -d '[:space:]')" ]; then
+            error "  [prompt] test-ownership policy failed to render — refusing to build a writer prompt without it"
+            return 1
+        fi
     fi
 
     # Reviewer feedback (review→re-implement loop): if a prior team-lead review

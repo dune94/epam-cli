@@ -459,7 +459,13 @@ while IFS= read -r story_id; do
         #
         # Engine-owned paths are excluded through the single existing definition
         # (lib/engine-paths.sh), so the reviewer does not spend its budget on pipeline state.
-        local _diff_excludes=()
+        # NOT `local` — this is top-level script body (the nearest function closes at line 285),
+        # and bash rejects `local` outside a function AT RUNTIME. `bash -n` accepts it, so the
+        # script parsed clean and died the moment this line executed. Introduced 2026-08-10 in
+        # 2bb230e; the reviewer produced no verdict for two days and the caller retried it 701
+        # times in a single run. shellcheck (SC2168) caught it the whole time.
+        # Re-initialised each pass on purpose: this block runs once per story.
+        _diff_excludes=()
         if command -v engine_paths_pathspec >/dev/null 2>&1; then
             mapfile -t _diff_excludes < <(engine_paths_pathspec)
         fi

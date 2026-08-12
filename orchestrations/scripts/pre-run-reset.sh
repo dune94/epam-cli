@@ -387,7 +387,15 @@ _PROJECT_CFG_DIR="${EPAM_PROJECT_CONFIG_DIR:-}"
 #
 # The ephemeral-roster rule is about a FRESH run starting from the canonical base. A resume is
 # the continuation of a run that already did so.
+# DECIDED ONCE, READ EVERYWHERE. The roster is reset in TWO places in this script, and until
+# 2026-08-12 only this one knew about resumes: the canonical restore further down replaced
+# agents/profiles.json unconditionally. Both lines printed in the same reset, seconds apart —
+# "keeping the roster this run already minted and reviewed", then "generated agents from prior
+# runs are gone" — and the resumed run died at assignment with no agent. Any roster reset added
+# later must read _IS_RESUME rather than re-deriving this.
+_IS_RESUME=0
 if [ -n "${EPAM_RESUME_RUN:-}" ]; then
+    _IS_RESUME=1
     _PROJECT_CFG_DIR=""
     info "  Resuming ${EPAM_RESUME_RUN} — keeping the roster this run already minted and reviewed"
 fi
@@ -420,7 +428,12 @@ fi
 # Overridable so this block is testable in isolation and so a project that keeps its
 # agents elsewhere is not assumed to keep them here.
 _AGENTS_DIR="${EPAM_AGENTS_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../agents" 2>/dev/null && pwd || true)}"
-if [ -n "$_AGENTS_DIR" ] && [ -f "$_AGENTS_DIR/profiles.json.original" ]; then
+if [ "$_IS_RESUME" = "1" ]; then
+    # A RESUME KEEPS THE ROSTER IT IS RESUMING WITH — including this one. The ephemeral-roster
+    # rule is about a FRESH run starting from the canonical base; a resume is the continuation
+    # of a run that already did so, and its roster was reviewed by a human at the pause.
+    info "  Resume — keeping agents/profiles.json as minted; not restoring from canonical"
+elif [ -n "$_AGENTS_DIR" ] && [ -f "$_AGENTS_DIR/profiles.json.original" ]; then
     cp "$_AGENTS_DIR/profiles.json.original" "$_AGENTS_DIR/profiles.json" 2>/dev/null \
         && info "  Roster restored from canonical original — generated agents from prior runs are gone" \
         || true

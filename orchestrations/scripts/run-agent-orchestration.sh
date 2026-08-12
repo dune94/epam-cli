@@ -8076,10 +8076,36 @@ while true; do
     # Re-implementing is the wrong response when the story was never the problem.
     if review_feedback_is_incomplete; then
         rm -f "$LOG_DIR/review-incomplete-${PHASE}.flag" 2>/dev/null || true
-        warning "Step 3.6: the REVIEWER did not produce a verdict (no per-story feedback) — re-running the REVIEW, not re-implementing (cycle $_review_cycle → $((_review_cycle + 1)))"
+
+        # BOUNDED. This branch used to `continue` straight past the safety valve below, so it
+        # was the ONE exit from `while true` with no ceiling on it. Live 2026-08-12: the
+        # reviewer died on a bash runtime error (`local` at top level, 2bb230e) and this ran
+        # 701 CYCLES on a story that had already implemented cleanly — 18 minutes, and it
+        # would have continued to the story wall.
+        #
+        # Retrying a missing verdict is right ONCE OR TWICE (a model can return junk once) and
+        # wrong forever after: a reviewer that cannot execute produces no verdict every time,
+        # and no number of retries changes that. The loop cannot tell those apart, which is
+        # exactly why it must be bounded rather than trusting.
+        #
+        # Reuses _review_max_cycles — the bound that already exists and already means "how many
+        # times may this loop go round". A second counter would be a second thing to maintain.
+        _review_noverdict_cycles=$(( ${_review_noverdict_cycles:-0} + 1 ))
+        if [ "$_review_noverdict_cycles" -ge "$_review_max_cycles" ]; then
+            error "Step 3.6: the REVIEWER produced NO VERDICT ${_review_noverdict_cycles} time(s) in a row (limit ${_review_max_cycles}) — it is not failing to approve, it is failing to RUN."
+            error "         Nothing was reviewed. The change is NOT approved and this phase must not proceed."
+            error "         Check the reviewer itself before re-running: bash -n does not catch a runtime error; try"
+            error "           shellcheck -S error orchestrations/scripts/team-lead-review.sh"
+            error "         and read the reviewer's own stderr in $LOG_DIR."
+            exit 2
+        fi
+        warning "Step 3.6: the REVIEWER did not produce a verdict (no per-story feedback) — re-running the REVIEW, not re-implementing (cycle $_review_cycle → $((_review_cycle + 1)), no-verdict ${_review_noverdict_cycles}/${_review_max_cycles})"
         _review_cycle=$((_review_cycle + 1))
         continue
     fi
+    # A verdict arrived: the reviewer is alive. Reset the streak so an earlier transient miss
+    # cannot accumulate across a healthy run and trip the limit later.
+    _review_noverdict_cycles=0
     # Partition rejected stories: a story whose ladder is ALREADY exhausted
     # (its persisted rung has reached the top — see lib/story-retry-state.sh)
     # has nothing left to try and escalates now, regardless of cycle count. A

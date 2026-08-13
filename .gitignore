@@ -90,3 +90,6 @@ orchestrations/jira/*.env
 !orchestrations/jira/*.env.example
 orchestrations/projects/*/runs/
 __pycache__/
+
+# CodeGraph index — a 63MB local cache, rebuilt on demand by lib/codegraph-context.js
+.codegraph/

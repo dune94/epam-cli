@@ -73,16 +73,12 @@ describe('#1 verifyDetectiveHelper — hallucination guard', () => {
 });
 
 describe('#1 injection — an UNVERIFIED helper is flagged as a hypothesis in the prompt', () => {
-  // Extract and run the real jq from claude.sh against a fixVerified:false finding.
-  function extractJq(): string {
-    const marker = 'fix_site_analysis=$(echo "$story_json" | jq -r ';
-    const start = claudeSrc.indexOf(marker);
-    const open = claudeSrc.indexOf("'", start);
-    const close = claudeSrc.indexOf("'", open + 1);
-    return claudeSrc.slice(open + 1, close);
-  }
-  const jq = extractJq();
-  const run = (o: object) => execFileSync('jq', ['-r', jq], { input: JSON.stringify(o), encoding: 'utf8' }).trim();
+  // RE-POINTED 2026-08-13: the rendering moved from a jq program inside claude.sh to its
+  // producer, lib/producers/fix-plan.js, so that the writer and the reviewer stop being told
+  // different things about the same finding. The assertions are unchanged.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { renderFixPlan } = require(join(ROOT, 'orchestrations/scripts/lib/producers/fix-plan.js'));
+  const run = (o: any) => renderFixPlan(o.fixSiteAnalysis).trim();
 
   it('appends the UNVERIFIED warning naming the missing helper when fixVerified=false', () => {
     const out = run({ fixSiteAnalysis: [{ file: 'src/a.ts', function: 'm', reason: 'match fails', fix: 'reuse fooBar', helper: 'fooBar', fixVerified: false }] });

@@ -166,3 +166,54 @@ describe('NO CONSUMER NAMES ANOTHER AGENT\'S FIELDS', () => {
     }
   });
 });
+
+describe('ONE STORE, REACHED FROM BOTH LANGUAGES', () => {
+  // Producers live in both: claude.sh and team-lead-review.sh are shell, while the detective's
+  // answer is persisted by spec-mode-runner.js. If the shell store and the JavaScript store were
+  // two implementations, they would drift — which is the defect this whole framework removes. So
+  // the seam is tested from both sides, in both directions.
+  const ROOT_DIR = join(__dirname, '../../../');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const io = require(join(ROOT_DIR, 'orchestrations/scripts/lib/agent-io.js'));
+
+  it('what JavaScript publishes, the shell collects', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'agent-io-x-')); dirs.push(dir);
+    const store = join(dir, 'io');
+    io.publish('detective', 'fix-plan', 'S-9', 'PUBLISHED-BY-JS', { AGENT_IO_DIR: store });
+    const out = execFileSync('bash', ['-c', `set -uo pipefail
+      export AGENT_IO_DIR=${JSON.stringify(store)}
+      . ${JSON.stringify(LIB)}
+      collect_agent_inputs S-9 fix-plan`], { encoding: 'utf8' });
+    expect(out, 'a JavaScript producer published where the shell consumer cannot see it')
+      .toContain('PUBLISHED-BY-JS');
+    expect(out, 'provenance was lost crossing the language boundary').toContain('detective');
+  });
+
+  it('what the shell publishes, JavaScript collects', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'agent-io-x-')); dirs.push(dir);
+    const store = join(dir, 'io');
+    execFileSync('bash', ['-c', `set -uo pipefail
+      export AGENT_IO_DIR=${JSON.stringify(store)}
+      . ${JSON.stringify(LIB)}
+      publish_agent_output reviewer review-feedback S-9 "PUBLISHED-BY-SHELL"`], { encoding: 'utf8' });
+    const out = io.collect('S-9', ['review-feedback'], { AGENT_IO_DIR: store });
+    expect(out).toContain('PUBLISHED-BY-SHELL');
+    expect(out).toContain('reviewer');
+  });
+
+  it('content that would break a shell survives the round trip intact', () => {
+    // Prompt text is full of quotes and backticks. A producer holds its rendering in a variable
+    // and passes "$var" — as every real caller does — and it must arrive as TEXT. This pipeline
+    // has executed prompt prose as shell before, which is why the content channel is stdin.
+    const dir = mkdtempSync(join(tmpdir(), 'agent-io-x-')); dirs.push(dir);
+    const store = join(dir, 'io');
+    const nasty = 'a "quoted" thing, `date`, $(whoami), \'single\', and a\nnewline';
+    execFileSync('bash', ['-c', `set -uo pipefail
+      export AGENT_IO_DIR=${JSON.stringify(store)}
+      . ${JSON.stringify(LIB)}
+      publish_agent_output detective fix-plan S-9 "$RENDERED"`],
+      { encoding: 'utf8', env: { ...process.env, AGENT_IO_DIR: store, RENDERED: nasty } });
+    const out = io.collect('S-9', ['fix-plan'], { AGENT_IO_DIR: store });
+    expect(out, 'the shell ate or executed part of the content').toContain(nasty);
+  });
+});

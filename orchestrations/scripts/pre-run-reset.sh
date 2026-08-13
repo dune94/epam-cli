@@ -341,6 +341,28 @@ if [ -n "$_RUN_ARTIFACT_DIR" ] && [ -d "$_RUN_ARTIFACT_DIR" ]; then
     fi
 fi
 
+# PUBLISHED AGENT INPUTS — the store agents read each other's outputs from.
+#
+# Same ruling as the review artefacts above, for the same reason and with a shorter fuse: the
+# detective re-runs every pass, and yesterday's fix-plan is indistinguishable from today's to
+# every consumer that collects it. A plan that outlives the investigation which produced it is a
+# writer implementing a finding that has since been withdrawn.
+#
+# BY DIRECTORY, NOT BY KIND. Kinds are added as producers are migrated onto the framework; naming
+# them here would mean the next one silently survives, which is how this reset has already been
+# caught twice.
+_AGENT_IO_DIR="${AGENT_IO_DIR:-${LOG_DIR:-}/agent-io}"
+if [ -n "${LOG_DIR:-}" ] && [ -d "$_AGENT_IO_DIR" ]; then
+    _AIO_CLEARED=$(find "$_AGENT_IO_DIR" -mindepth 1 -type f 2>/dev/null | wc -l)
+    rm -rf "$_AGENT_IO_DIR" 2>/dev/null || true
+    _AIO_LEFT=$(find "$_AGENT_IO_DIR" -mindepth 1 -type f 2>/dev/null | wc -l)
+    if [ "$_AIO_LEFT" -gt 0 ]; then
+        fail_contamination "$_AIO_LEFT published agent input(s) could NOT be cleared in $_AGENT_IO_DIR — a run started now would hand agents a previous run's outputs"
+    elif [ "$_AIO_CLEARED" -gt 0 ]; then
+        info "  Cleared $_AIO_CLEARED published agent input(s) — no prior run's outputs reach this one"
+    fi
+fi
+
 _RETRY_STATE_DIR="$LOG_DIR/story-retry-state"
 if [ -d "$_RETRY_STATE_DIR" ]; then
     _RETRY_CLEARED=$(find "$_RETRY_STATE_DIR" -maxdepth 1 -type f 2>/dev/null | wc -l)

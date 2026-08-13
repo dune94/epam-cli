@@ -37,30 +37,19 @@ const src = () => readFileSync(CLAUDE_SH, 'utf8');
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 
-/** The REAL jq program claude.sh uses to render fix sites for the writer. */
-function renderer(): string {
-  const s = src();
-  const start = s.indexOf('fix_site_analysis=$(echo "$story_json" | jq -r \'');
-  expect(start, 'the fix-site renderer moved — this test is anchored on it').toBeGreaterThan(0);
-  const from = s.indexOf("'", start) + 1;
-  // The jq program ends at the quote FOLLOWED BY ` 2>/dev/null` — searching for "'\n" found a
-  // later apostrophe and swallowed several hundred lines of the script into the "program".
-  const end = s.indexOf("' 2>/dev/null", from);
-  expect(end, 'the jq terminator moved').toBeGreaterThan(from);
-  return s.slice(from, end);
-}
+/*
+ * RE-POINTED 2026-08-13. This file used to lift the jq program out of claude.sh and run it. The
+ * rendering has since moved to its PRODUCER — lib/producers/fix-plan.js — because two consumers
+ * were each rendering the detective's answer their own way and had drifted apart. The assertions
+ * below are unchanged: they are about what the writer is told, which is the thing that matters,
+ * and they now run against the renderer that actually produces it.
+ */
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { renderFixPlan } = require(join(ROOT, 'orchestrations/scripts/lib/producers/fix-plan.js'));
 
+/** The REAL rendering the writer receives, from the agent that produces it. */
 function render(sites: any[]): string {
-  // The program goes to a FILE and is read with `jq -f`. Passing it as a shell argument breaks
-  // on the backticks and quotes inside the prompt prose it emits — the same class of hazard as
-  // prompt text living in a shell string.
-  const dir = mkdtempSync(join(tmpdir(), 'fixsite-render-'));
-  dirs.push(dir);
-  const prog = join(dir, 'render.jq');
-  const input = join(dir, 'story.json');
-  writeFileSync(prog, renderer());
-  writeFileSync(input, JSON.stringify({ fixSiteAnalysis: sites }));
-  return execFileSync('jq', ['-r', '-f', prog, input], { encoding: 'utf8' });
+  return renderFixPlan(sites);
 }
 
 const PRODUCER = {

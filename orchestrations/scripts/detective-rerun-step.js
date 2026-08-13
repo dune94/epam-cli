@@ -31,6 +31,7 @@
 'use strict';
 
 const fs = require('fs');
+const { publishFixPlans } = require('./lib/producers/fix-plan.js');
 const path = require('path');
 
 const spec = require('./spec-mode-runner.js');
@@ -255,6 +256,18 @@ function writePrd(prdPath, prd, stamp) {
   const tmp = `${prdPath}.tmp-${process.pid}`;
   fs.writeFileSync(tmp, JSON.stringify(prd, null, 2));
   fs.renameSync(tmp, prdPath);
+
+  // The plan changed, so every consumer's copy of it changes with it. Publishing HERE — at the
+  // one place a re-run persists its answer — is what stops a withdrawn finding being served for
+  // the rest of the run: publishFixPlans clears a story whose sites are now empty.
+  try {
+    const n = publishFixPlans(prd);
+    process.stderr.write(`[detective-rerun] published fix-plan for ${n} story(ies)\n`);
+  } catch (err) {
+    // Never fail the write because publication failed — but never hide it either.
+    process.stderr.write(`[detective-rerun] WARNING: fix-plan publication failed: ${(err && err.message) || err}\n`);
+  }
+
   return backup;
 }
 

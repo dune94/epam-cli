@@ -20,22 +20,21 @@ import { join } from 'node:path';
 const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
 const src = readFileSync(CLAUDE_SH, 'utf8');
 
-// Extract the exact jq program claude.sh uses for fix_site_analysis.
-function extractJqProgram(): string {
-  const marker = 'fix_site_analysis=$(echo "$story_json" | jq -r ';
-  const start = src.indexOf(marker);
-  if (start === -1) throw new Error('fix_site_analysis jq extraction not found');
-  const open = src.indexOf("'", start);
-  const close = src.indexOf("'", open + 1);
-  return src.slice(open + 1, close);
-}
-const jqProgram = extractJqProgram();
+/*
+ * RE-POINTED 2026-08-13. This file used to lift the jq program out of claude.sh and run it. The
+ * rendering has since moved to its PRODUCER — lib/producers/fix-plan.js — because two consumers
+ * were each rendering the detective's answer their own way and had drifted apart. The assertions
+ * below are unchanged: they are about what the writer is told, which is the thing that matters,
+ * and they now run against the renderer that actually produces it.
+ */
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { renderFixPlan } = require(join(__dirname, '../../../orchestrations/scripts/lib/producers/fix-plan.js'));
 
-function runJq(storyJson: object): string {
-  return execFileSync('jq', ['-r', jqProgram], { input: JSON.stringify(storyJson), encoding: 'utf8' }).trim();
+function runJq(storyJson: any): string {
+  return renderFixPlan(storyJson && storyJson.fixSiteAnalysis).trim();
 }
 
-describe('fix-site-analysis injection (real jq from claude.sh)', () => {
+describe('fix-site-analysis injection (the producer own renderer)', () => {
   it('formats a detective finding into a markdown bullet with file, function, and reason', () => {
     const out = runJq({
       fixSiteAnalysis: [{

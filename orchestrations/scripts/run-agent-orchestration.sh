@@ -259,6 +259,16 @@ export GATE_LOG="$LOG_DIR/phase-gates.jsonl"
 export COST_LOG="$LOG_DIR/phase-cost.jsonl"
 export MESSAGES_DIR="$LOG_DIR/messages"
 export LOG_DIR
+
+# WHERE PUBLISHED AGENT OUTPUTS LIVE, agreed explicitly rather than derived twice.
+#
+# The store defaults to $LOG_DIR/agent-io, but claude.sh reassigns LOG_DIR unconditionally from
+# its OWN location (claude.sh:25) and ignores what it inherited. A producer publishing under this
+# process's LOG_DIR and a consumer collecting under claude.sh's would be two stores, and the
+# consumer would simply find nothing — silently, which is the failure mode this framework exists
+# to end. Naming it here makes both sides agree. It stays under LOG_DIR so the pre-run reset
+# clears it with everything else: an input surviving into the next run is contamination.
+export AGENT_IO_DIR="${AGENT_IO_DIR:-$LOG_DIR/agent-io}"
 # PHASE reaches ai-run.sh so each agent plan is filed under the phase that
 # produced it. Unexported, every plan landed in plans-unknown.jsonl.
 export PHASE
@@ -4326,6 +4336,14 @@ run_specification_pass() {
         "$node_cmd" "$spec_runner" --phase "$phase_id" 2>&1 | tee "$LOG_DIR/spec-${phase_id}.log"
     local spec_rc=${PIPESTATUS[0]}
     set -e
+
+    # PUBLISH WHAT THE SPEC PASS PRODUCED. The detective's plan is rendered by the detective (see
+    # lib/producers/fix-plan.js) and published once, here, where the pass has just persisted it —
+    # rather than each consumer reading story.fixSiteAnalysis and inventing its own wording, which
+    # is how the writer and the reviewer came to be told different things about the same finding.
+    # A story whose sites are empty publishes nothing, which clears any earlier plan.
+    "$node_cmd" "$SCRIPT_DIR/lib/producers/fix-plan.js" --publish "$PRD_FILE" \
+        || warning "Step 1: fix-plan publication failed — consumers will find no published plan"
     # GAP-P22: emit spec runner cost record (token/cost estimated — spec runner
     # doesn't expose per-call usage; a future improvement can parse spec logs)
     # Real usage, measured from the records spec-mode-runner already emits —

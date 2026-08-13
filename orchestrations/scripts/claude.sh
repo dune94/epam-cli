@@ -2043,27 +2043,16 @@ build_implementation_prompt() {
     # count (found live 2026-07-23: attempt read 143k tokens tracing the bug,
     # wrote nothing). Each entry: the file, the function, and the root cause.
     local fix_site_analysis
-    fix_site_analysis=$(echo "$story_json" | jq -r '
-      . as $story | (.fixSiteAnalysis // []) | map(
-        "- **\(.file)**" + (if .function != "" then " (`\(.function)`)" else "" end) + ": \(.reason)"
-        + (if .deliveryRole == "produces" then "  <== **THIS CHANGE PRODUCES THE VALUE** — it is what makes the new or corrected data exist. Without it, every other change here only moves a value that never changed."
-           elif .deliveryRole == "carries"  then "  (carries the value — moves or re-exposes what something else produced)"
-           elif .deliveryRole == "verifies" then "  (verify only — no edit expected here)"
-           else "" end)
-        + (if (.runsIn // "") != "" and (.runsIn // "") != "n/a" then " [runs: \(.runsIn)]" else "" end)
-        + (if (.fix // "") != "" then "\n  - **Minimal fix:** \(.fix)"
-             + (if .fixVerified == false then " ⚠️ UNVERIFIED: the helper named here (`\(.helper // "?")`) was NOT found in the repo — treat it as a HYPOTHESIS, not fact. Confirm it exists with the CodeGraph tool before importing it; if it does not exist, do not invent it — solve the fix another minimal way." else "" end)
-             + (if .evidenceVerified == false then " ⛔ UNGROUNDED DIAGNOSIS: the detective quoted `\(.brokenLine // "?")` as the broken code, but that expression is NOT in this file. The root cause below is therefore a GUESS about code that does not exist — live 2026-07-26 an answer of exactly this shape prescribed halving a discount that is in fact never applied at all, because the real defect was a key mismatch elsewhere. Do NOT implement it as written: re-derive the cause from the actual file contents first, and if the prescribed change has no basis in the code you read, fix what IS broken instead." else "" end)
-           else "" end)
-      ) | join("\n")
-      + (
-        if (($story.fixSiteAnalysis // []) | map(select(.deliveryRole == "produces")) | length) > 0
-        then ""
-        elif (($story.fixSiteAnalysis // []) | map(select(.deliveryRole != null)) | length) > 0
-        then "\n\n⚠️ NONE OF THESE PRODUCE THE VALUE. Every site above only carries or verifies it — they move, expose or re-render something that already exists. If this story needs a value that does not exist yet, NO prescribed change obtains it, and implementing this plan exactly will produce code that runs, changes nothing a user can see, and passes every check. Find what must read, fetch, query or compute the new value, change that too, and say so in your final message."
-        else "" end
-      )
-    ' 2>/dev/null || echo "")
+    # RENDERED BY THE PRODUCER. The detective is the only actor that knows what its own fields
+    # mean, so it is the only one that turns them into words — see lib/producers/fix-plan.js for
+    # what two copies of this rendering had already cost. A failure to render is NOT an empty
+    # plan: a writer prompted without the root-cause analysis re-traces it from scratch, which is
+    # the 143k-token retry this block exists to prevent.
+    fix_site_analysis=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/producers/fix-plan.js" \
+        "$PRD_FILE" "$story_id") || {
+        error "  [prompt] fix-plan failed to render for $story_id — refusing to build a writer prompt without the prescribed fix"
+        return 1
+    }
 
     # Verification Criteria (VC) — the observable checks openspec-brownfield
     # produced (mechanism-free, from AC ∪ description). The impl agent must make

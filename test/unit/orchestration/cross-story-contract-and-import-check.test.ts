@@ -451,6 +451,14 @@ describe('build_implementation_prompt() — spec-reality cross-check REAL execut
           `get_story_details() { echo '${JSON.stringify(storyJson).replace(/'/g, "'\\''")}'; }`,
           // Helpers build_implementation_prompt gained after this harness was written.
           // Unstubbed, the render aborts and every assertion fails during SETUP.
+          //
+          // SCRIPT_DIR is one of them, and it is NOT a stub: the prescribed fix is now rendered
+          // by the agent that produced it (lib/producers/fix-plan.js), and claude.sh refuses to
+          // build a writer prompt it cannot render — a prompt missing the root-cause analysis
+          // sends the writer to re-trace it from scratch. Extracting the function means supplying
+          // the environment the script sets up around it, exactly as with the helpers below.
+          `SCRIPT_DIR="${join(__dirname, '../../../orchestrations/scripts')}"`,
+          `NODE_BIN="${process.execPath}"`,
           `_current_lane() { echo ""; }`,
           `build_project_tools_block() { echo '[[TOOLS]]'; }`,
           `existing_file_max_lines() { echo 400; }`,
@@ -586,6 +594,8 @@ describe('build_implementation_prompt() — Exact String Invariant guardrail REA
           `get_story_details() { echo '${JSON.stringify(storyJson).replace(/'/g, "'\\''")}'; }`,
           // Helpers claude.sh gained after this harness was written — unstubbed the render
           // aborts and assertions fail during SETUP rather than on what they assert.
+          `SCRIPT_DIR="${join(__dirname, '../../../orchestrations/scripts')}"`,
+          `NODE_BIN="${process.execPath}"`,
           `_current_lane() { echo ""; }`,
           `build_project_tools_block() { echo '[[TOOLS]]'; }`,
           `existing_file_max_lines() { echo 400; }`,

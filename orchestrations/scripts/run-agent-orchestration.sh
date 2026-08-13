@@ -278,6 +278,7 @@ export AGENT_IO_DIR="${AGENT_IO_DIR:-$LOG_DIR/agent-io}"
 # The mode declares which steps it turns off (config/run-modes.json); an unknown mode is refused
 # rather than silently running everything. A variable the operator set themselves always wins.
 . "$SCRIPT_DIR/lib/run-modes.sh"
+. "$SCRIPT_DIR/lib/cost-ledger.sh"
 if [ -n "${EPAM_RUN_MODE:-}" ]; then
     apply_run_mode "$EPAM_RUN_MODE" || exit 1
 fi
@@ -3712,7 +3713,10 @@ KNOWNFIXES_EOF
   fi
 
   [ "$_overall" = "0" ] \
-    && log "[orch] ✅ Pipeline complete." \
+    && # A RUN THAT SPENT MONEY MUST NOT REPORT NOTHING. Checked here, at the end, where the run knows
+# both what it did and what it recorded — see lib/cost-ledger.sh for the run this exists for.
+assert_cost_ledger_not_silently_empty || true
+log "[orch] ✅ Pipeline complete." \
     || error "[orch] ⚠️  Pipeline completed with errors."
 
   return $_overall

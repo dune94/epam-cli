@@ -18,6 +18,7 @@ truncated by whoever reads it next, and a severed entry reads as a complete one.
 | [TF-1](docs/testing-failures/TF-1-attempt-summary-not-delivered-across-processes.md) | 2026-08-13 | the writer was not told what its last attempt did, on the review-cycle path where it mattered most | test the requirement's ACTOR in the situation the requirement names; cross the process boundary the feature crosses | fixed (6e56c9e) |
 | [TF-2](docs/testing-failures/TF-2-lane-scoping-tested-at-the-renderer-not-the-seam.md) | 2026-08-13 | every lane's writer would have received every other lane's plan, with conflicting prescriptions for the same file | reproduce the TOPOLOGY, not just the unit — one of something cannot show a failure that only exists at two | fixed (4228f12) |
 | [TF-3](docs/testing-failures/TF-3-a-named-mode-shipped-half-applied.md) | 2026-08-13 | "writer-only" ran the regression guard anyway — a named intent, silently half-applied | test the SEQUENCE, not only the function; when a rule distinguishes two sources, construct both and show they diverge | fixed |
+| [TF-4](docs/testing-failures/TF-4-a-run-spent-7-dollars-and-recorded-nothing.md) | 2026-08-13 | a run spent $7.47 and every report said $0.00 | assert the OUTPUT of a run, not only the shape of its records; never let absent mean zero | guard fixed, cause open |
 
 ## Adding an entry
 

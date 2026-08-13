@@ -3810,7 +3810,36 @@ _run_jira_pipeline() {
   # Until now the roster was inherited wholesale: a client codeline ran with epam-cli's OWN
   # first-commit agents, and synthesize-prd-from-jira.js assigned every ticket to one of them
   # with a hardcoded literal. Nothing errored — it was simply always the wrong agent.
-  if [ "${EPAM_SKIP_AGENT_MINT:-0}" != "1" ] || [ -n "${EPAM_RESUME_RUN:-}" ]; then
+  # THE SKIP IS HONOURED, INCLUDING ON A RESUME.
+  #
+  # This used to read `|| [ -n "${EPAM_RESUME_RUN:-}" ]`, which forced the mint back ON for every
+  # checkpoint-based resume — exactly contradicting the instruction the checkpoint had just
+  # issued, and for the reason it states: the merge is additive, so each resume accumulated
+  # near-duplicate roles in a roster the operator had already settled.
+  #
+  # The danger the clause was reaching for is still real and is now handled properly: skipping the
+  # mint when nothing was ever minted would hand stories to agents that do not exist. That is a
+  # refusal, not a silent re-mint — the same rule as every other guard here, which is to stop
+  # rather than proceed on unknown state.
+  if [ "${EPAM_SKIP_AGENT_MINT:-0}" = "1" ]; then
+    _roster_file="${EPAM_AGENTS_DIR:-}/profiles.json"
+    _roster_n=0
+    [ -s "$_roster_file" ] && _roster_n=$("$NODE_BIN" -e '
+      try {
+        const r = require(process.argv[1]);
+        process.stdout.write(String(Object.keys(r.profiles || r || {}).length));
+      } catch (_) { process.stdout.write("0"); }
+    ' "$_roster_file" 2>/dev/null || echo 0)
+    if [ "${_roster_n:-0}" -lt 1 ]; then
+      error "[jira] EPAM_SKIP_AGENT_MINT=1 but no minted roster exists at ${_roster_file}."
+      error "[jira] Skipping the mint now would hand every story to an agent that was never"
+      error "[jira] defined. Mint first (unset EPAM_SKIP_AGENT_MINT), or point EPAM_AGENTS_DIR at"
+      error "[jira] the run whose roster you meant to reuse."
+      return 1
+    fi
+    log "[jira] Agent mint skipped (EPAM_SKIP_AGENT_MINT=1) — using the roster on disk (${_roster_n} agent(s))"
+  fi
+  if [ "${EPAM_SKIP_AGENT_MINT:-0}" != "1" ]; then
     log "[jira] Minting project agents and assigning roles..."
     if ! "$NODE_BIN" "$SCRIPT_DIR/mint-agents-step.js" \
         --prd "$_synth_prd" \

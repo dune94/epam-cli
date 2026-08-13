@@ -126,6 +126,29 @@ function renderFixPlan(sites) {
 }
 
 /**
+ * The sites that belong to THIS story's codeline.
+ *
+ * Three codelines run as parallel lanes and each has its own answer. The canonical PRD's flat list
+ * is the UNION of all of them — on AMSD-2041, 13 sites where gotransit has 4, including three
+ * different prescriptions for one file naming five different env vars, two of them mutually
+ * exclusive designs. A writer handed three conflicting instructions for the same file picks one,
+ * and nothing makes it pick its own lane's.
+ *
+ * run-agent-orchestration.sh already scopes each lane's PRD this way; doing it here as well means
+ * publication is correct from EITHER PRD, rather than depending on which one a caller passes.
+ *
+ * An explicitly EMPTY entry is honoured: "this lane found nothing" is a real state and differs
+ * from "this lane has not run". A codeline ABSENT from the map falls back to the flat list —
+ * never to nothing, which would hand a writer an empty plan.
+ */
+function sitesFor(story) {
+  const per = story && story.fixSiteAnalysisPerCodeline;
+  const lane = story && story.codeline;
+  if (lane && per && Object.prototype.hasOwnProperty.call(per, lane)) return per[lane];
+  return story && story.fixSiteAnalysis;
+}
+
+/**
  * Publish every story's plan, so consumers stop reading the detective's fields.
  *
  * A story with no sites publishes NOTHING, which clears any plan published earlier. That is the
@@ -141,7 +164,7 @@ function publishFixPlans(prd, env) {
   let published = 0;
   for (const story of stories) {
     if (!story || !story.id) continue;
-    const text = renderFixPlan(story.fixSiteAnalysis);
+    const text = renderFixPlan(sitesFor(story));
     agentIo.publish(PRODUCER, KIND, story.id, text, env);
     if (text !== '') published += 1;
   }

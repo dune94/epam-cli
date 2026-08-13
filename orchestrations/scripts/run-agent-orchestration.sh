@@ -3331,6 +3331,7 @@ KNOWNFIXES_EOF
       JIRA_CODELINE_RUN=1 \
       EPAM_CODELINE="$_cl" \
       LOG_DIR="$_lane_log_dir" \
+      AGENT_IO_DIR="$_lane_log_dir/agent-io" \
       PRD_FILE="$_cl_prd" \
       PROJECT_ROOT="$_wt" \
       OUTPUT_DIR="$_wt" \
@@ -3349,6 +3350,7 @@ KNOWNFIXES_EOF
         JIRA_CODELINE_RUN=1 \
       EPAM_CODELINE="$_cl" \
       LOG_DIR="$_lane_log_dir" \
+      AGENT_IO_DIR="$_lane_log_dir/agent-io" \
         PRD_FILE="$_cl_prd" \
         PROJECT_ROOT="$_wt" \
         OUTPUT_DIR="$_wt" \
@@ -4336,14 +4338,6 @@ run_specification_pass() {
         "$node_cmd" "$spec_runner" --phase "$phase_id" 2>&1 | tee "$LOG_DIR/spec-${phase_id}.log"
     local spec_rc=${PIPESTATUS[0]}
     set -e
-
-    # PUBLISH WHAT THE SPEC PASS PRODUCED. The detective's plan is rendered by the detective (see
-    # lib/producers/fix-plan.js) and published once, here, where the pass has just persisted it —
-    # rather than each consumer reading story.fixSiteAnalysis and inventing its own wording, which
-    # is how the writer and the reviewer came to be told different things about the same finding.
-    # A story whose sites are empty publishes nothing, which clears any earlier plan.
-    "$node_cmd" "$SCRIPT_DIR/lib/producers/fix-plan.js" --publish "$PRD_FILE" \
-        || warning "Step 1: fix-plan publication failed — consumers will find no published plan"
     # GAP-P22: emit spec runner cost record (token/cost estimated — spec runner
     # doesn't expose per-call usage; a future improvement can parse spec logs)
     # Real usage, measured from the records spec-mode-runner already emits —
@@ -4433,9 +4427,31 @@ else
     run_specification_pass "$PHASE"
 fi
 
+
 # Story-ID-loss invariant: snapshot the settled post-spec-pass story set for
 # this phase. See capture_story_ids_snapshot's own docstring above for why.
 capture_story_ids_snapshot "presplit"
+
+# PUBLISH THE PLAN THIS PROCESS WILL WORK FROM — outside the spec-pass branch, deliberately.
+#
+# The detective renders its own answer (lib/producers/fix-plan.js) and it is published once, from
+# THIS process's PRD, so consumers stop reading story.fixSiteAnalysis and inventing their own
+# wording of it. Publishing from this PRD is what keeps a lane's writer on its own plan: a lane
+# runs with its own scoped PRD, while the canonical one holds the UNION of every codeline — on
+# AMSD-2041 that is 13 sites where gotransit has 4, including three conflicting prescriptions for
+# one file.
+#
+# It sits OUTSIDE the spec-pass branch because a resume routinely skips the spec pass. Inside it,
+# a resumed run would publish nothing, the plan would simply be absent, and the writer would go in
+# blind — which looks exactly like a run that never had a plan.
+_publish_agent_outputs() {
+    local _node="${NODE_CMD:-${HOME}/.nvm/versions/node/v20.20.0/bin/node}"
+    [ -x "$_node" ] || _node="$(command -v node 2>/dev/null || echo node)"
+    [ -f "${PRD_FILE:-}" ] || return 0
+    "$_node" "$SCRIPT_DIR/lib/producers/fix-plan.js" --publish "$PRD_FILE" \
+        || warning "fix-plan publication failed — consumers will find no published plan"
+}
+_publish_agent_outputs
 
 # ── Checkpoint: the spec pass's output is now settled ────────────────────────
 # Persist it UNCONDITIONALLY, whether or not we are pausing. Anything generated and not

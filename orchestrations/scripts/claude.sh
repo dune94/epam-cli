@@ -5164,6 +5164,57 @@ $_test_tail"
     return 0
 }
 
+# _attempt_change_summary <story_id> [baseline_ref]
+#
+# WHAT THE LAST ATTEMPT ACTUALLY DID — the one piece of evidence neither the writer nor the
+# failure analyst has ever been given.
+#
+# The writer is told what is WRONG (reviewer blockers, verification failures, prior-run lessons)
+# and never what it DID, so it cannot tell "I tried this and it was rejected" from "I have not
+# tried anything", and re-derives an approach it has already been told is wrong. The analyst is
+# asked why an implementation failed while being shown no implementation — live 2026-08-12 it
+# answered "Target=none — Transient import slip", a fair reading of the text it had and useless
+# as guidance, and its answer escalates the model.
+#
+# COMPUTED, NOT ASKED FOR. Plain git against the story's own baseline. No agent, no judgement,
+# no summarisation: a model between a machine fact and the agent acting on it destroys
+# provenance, and this reviewer has already approved a change while misstating the diff.
+#
+# ONE SOURCE, TWO CONSUMERS — the writer's retry prompt and the analyst's evidence read the same
+# text. Two pipelines is how they drifted into being fed differently in the first place.
+_attempt_change_summary() {
+    local _story_id="${1:-}"
+    local _ref="${2:-origin/${JIRA_BASELINE_BRANCH:-develop}}"
+    local _stat=""
+
+    if [ -d "$PROJECT_ROOT/.git" ] && git -C "$PROJECT_ROOT" rev-parse --verify "$_ref" >/dev/null 2>&1; then
+        # Committed work on the branch plus anything still in the tree: an attempt that
+        # committed and an attempt that did not are both "what it did".
+        # Untracked files are NOT in `diff --stat`, and a brand-new file is the most common
+        # shape of "what the attempt did" — omitting them reports a real attempt as empty.
+        local _untracked
+        _untracked=$(git -C "$PROJECT_ROOT" ls-files --others --exclude-standard 2>/dev/null | head -40)
+        _stat=$( { git -C "$PROJECT_ROOT" diff --stat "$_ref" 2>/dev/null
+                   git -C "$PROJECT_ROOT" diff --stat --cached 2>/dev/null
+                   if [ -n "$_untracked" ]; then
+                       printf '%s\n' "$_untracked" | while IFS= read -r _u; do
+                           [ -n "$_u" ] || continue
+                           printf ' %s | new file\n' "$_u"
+                       done
+                   fi; } | grep -vE '^[[:space:]]*$' | head -60 )
+    fi
+
+    if [ -z "$(printf '%s' "$_stat" | tr -d '[:space:]')" ]; then
+        # THE MOST IMPORTANT CASE. An empty summary reads as "no information", and the next
+        # attempt then behaves as though it were the first. Say it plainly instead.
+        printf 'The previous attempt changed NO files — nothing was written. Treat this as an attempt that produced nothing, not as a fresh start.\n'
+        return 0
+    fi
+
+    printf 'The previous attempt changed these files (diffstat against %s):\n\n%s\n' "$_ref" "$_stat"
+    return 0
+}
+
 # run_repo_lint_verification <story_id> <output_file>
 #
 # THE REPO'S OWN LINT, RUN BEFORE THE COMMIT INSTEAD OF AFTER IT.
@@ -7118,13 +7169,15 @@ $(cat "$_fa_vendor_contract")
         --arg skill_addendum "$skill_addendum" \
         --arg dependency_contracts "$dependency_contracts" \
         --arg verification_failure "${VERIFICATION_FAILURE:-}" \
+        --arg attempt_changes "$(_attempt_change_summary "$story_id")" \
         '{"__ANALYST_PROFILE__":$profile,
           "__STORY_ID__":$story_id,
           "__STORY_ROLE__":$story_role,
           "__STORY_ACS__":$story_acs,
           "__SKILL_ADDENDUM__":$skill_addendum,
           "__DEPENDENCY_CONTRACTS__":$dependency_contracts,
-          "__VERIFICATION_FAILURE__":$verification_failure}' > "$_analyst_values" 2>/dev/null
+          "__VERIFICATION_FAILURE__":$verification_failure,
+          "__ATTEMPT_CHANGES__":$attempt_changes}' > "$_analyst_values" 2>/dev/null
 
     if ! analyst_prompt=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/prompt-library.js" \
             render failure-analyst "${EPAM_PROJECT_CONFIG_DIR:-}" "$_analyst_values" 2>"$_analyst_values_err"); then
@@ -9241,6 +9294,24 @@ $story_plan"
         # Uses _total_attempts, not retry_count — a free retry (deterministic-check
         # failure) doesn't advance retry_count, but it IS a real subsequent attempt
         # and must still see the guidance from what just failed.
+        # WHAT THE LAST ATTEMPT DID — facts, before anyone's opinion about them.
+        #
+        # The writer was told what was WRONG and never what it DID, so it could not tell "I tried
+        # this and it was rejected" from "I have not tried anything" and re-derived approaches it
+        # had already been told were wrong. Placed BEFORE the coordinator's one-line inference so
+        # the evidence is read first and the judgement second.
+        if [ "$_total_attempts" -gt 1 ]; then
+            local _attempt_changes
+            _attempt_changes=$(_attempt_change_summary "$story_id")
+            if [ -n "$_attempt_changes" ]; then
+                prompt="$prompt
+
+## What Your Last Attempt Did (retry ${retry_count})
+This is a diffstat, not a judgement — it is what is on disk, unedited.
+${_attempt_changes}"
+            fi
+        fi
+
         if [ "$_total_attempts" -gt 1 ] && [ -n "${COORDINATOR_PROMPT_AMENDMENT:-}" ]; then
             prompt="$prompt
 

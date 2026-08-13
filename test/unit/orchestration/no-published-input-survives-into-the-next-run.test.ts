@@ -44,7 +44,7 @@ function resetOver(files: Record<string, string>): { logDir: string; out: string
   // Lift the store-clearing block out of the real script and run it. Extracting by marker rather
   // than copying keeps this a test OF the reset, not a test of a paraphrase of it.
   const src = readFileSync(RESET, 'utf8');
-  const start = src.indexOf('_AGENT_IO_DIR=');
+  const start = src.indexOf('_AGENT_IO_DIRS=(');
   if (start === -1) {
     return { logDir, out: 'the reset does not clear the published-input store at all', rc: 99 };
   }
@@ -119,7 +119,7 @@ describe('IT NEVER ANNOUNCES A CLEAN SLATE IT DID NOT DELIVER', () => {
     writeFileSync(join(storyDir, 'fix-plan'), 'SURVIVES');
 
     const src = readFileSync(RESET, 'utf8');
-    const start = src.indexOf('_AGENT_IO_DIR=');
+    const start = src.indexOf('_AGENT_IO_DIRS=(');
     expect(start, 'the reset does not clear the published-input store at all').toBeGreaterThan(-1);
     const end = src.indexOf('\n\n', start);
     const block = src.slice(start, end === -1 ? undefined : end);
@@ -142,5 +142,34 @@ ${block}
     }
     expect(rc, `a run started on surviving published inputs. output:\n${out}`).toBe(9);
     expect(out).toMatch(/CONTAMINATION/);
+  });
+});
+
+describe('EVERY STORE GOES, INCLUDING THE PER-LANE ONES', () => {
+  it("a previous run's LANE store does not survive", () => {
+    // Parallel lanes each publish into $LOG_DIR/lanes/<codeline>/agent-io. Clearing only the
+    // parent's store leaves three lane stores intact and then REPORTS a clean slate — the exact
+    // thing this reset says it must never do. Found in the pre-launch review, 2026-08-13.
+    const r = resetOver({
+      'agent-io/AMSD-1/fix-plan': 'PARENT-STALE',
+      'lanes/gotransit/agent-io/AMSD-1/fix-plan': 'GOTRANSIT-STALE',
+      'lanes/upexpress/agent-io/AMSD-1/fix-plan': 'UPEXPRESS-STALE',
+    });
+    expect(r.rc, r.out).toBe(0);
+    expect(existsSync(join(r.logDir, 'agent-io/AMSD-1/fix-plan')), 'the parent store survived').toBe(false);
+    expect(existsSync(join(r.logDir, 'lanes/gotransit/agent-io/AMSD-1/fix-plan')),
+      "a lane kept a previous run's plan, and its writer would act on it").toBe(false);
+    expect(existsSync(join(r.logDir, 'lanes/upexpress/agent-io/AMSD-1/fix-plan')),
+      "a lane kept a previous run's plan, and its writer would act on it").toBe(false);
+  });
+
+  it('the count it reports includes what was in the lane stores', () => {
+    // "Cleared 1" while three files went is a report nobody can rely on.
+    const r = resetOver({
+      'agent-io/AMSD-1/fix-plan': 'a',
+      'lanes/gotransit/agent-io/AMSD-1/fix-plan': 'b',
+      'lanes/upexpress/agent-io/AMSD-1/fix-plan': 'c',
+    });
+    expect(r.out).toMatch(/Cleared 3 published agent input/);
   });
 });

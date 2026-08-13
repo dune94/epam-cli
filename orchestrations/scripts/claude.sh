@@ -9296,11 +9296,37 @@ print(count)
         next_kb_id=$(get_next_kb_id)
         local prompt
         if [ "${STORY_GENERATOR_MODE:-}" = "true" ]; then
-            prompt="$(build_generator_prompt "$story_id")
-$(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")"
+            _impl_section="$(build_generator_prompt "$story_id")" || {
+                error "  [prompt] build_generator_prompt REFUSED for $story_id — not invoking the writer"
+                return 1
+            }
+            _kb_section="$(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")" || {
+                error "  [prompt] build_kb_prompt_section REFUSED for $story_id — not invoking the writer"
+                return 1
+            }
+            # Same shape, same reason as the implementation branch below: a joined assignment takes
+            # its status from the LAST substitution, so a refusal in the first is lost. This branch
+            # has no refusal today, which is exactly when the hazard is cheap to remove.
+            prompt="$_impl_section
+$_kb_section"
         else
-            prompt="$(build_implementation_prompt "$story_id")
-$(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")"
+            _impl_section="$(build_implementation_prompt "$story_id")" || {
+                error "  [prompt] build_implementation_prompt REFUSED for $story_id — not invoking the writer"
+                return 1
+            }
+            _kb_section="$(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")" || {
+                error "  [prompt] build_kb_prompt_section REFUSED for $story_id — not invoking the writer"
+                return 1
+            }
+            # SEPARATE ASSIGNMENTS, DELIBERATELY. Joined as
+            #   prompt="$(build_implementation_prompt ...)\n$(build_kb_prompt_section ...)"
+            # the assignment takes its status from the LAST substitution, so every `return 1` in
+            # the builder was swallowed and `set -e` never fired. The writer was then invoked with
+            # the empty first line plus the KB section — no story, no criteria, no plan — and
+            # produced something confident that got committed. A blank that looks ordinary is the
+            # worst failure this pipeline can have.
+            prompt="$_impl_section
+$_kb_section"
         fi
         # Inject execution plan when planner/executor split is active
         if [ -n "${story_plan:-}" ]; then
@@ -9397,11 +9423,37 @@ print(chr(10).join(lines[keep_from:]) if heading_idxs else text)
             if [ -n "$_trimmed_amendment" ] && [ "${#_trimmed_amendment}" -lt "${#COORDINATOR_PROMPT_AMENDMENT}" ]; then
                 warning "  [PromptScratchpad] Prompt exceeded ${_scratchpad_threshold} chars ($(( ${#prompt} )) actual) — full history written to $_scratchpad_file, trimming to most recent guidance (up to 3)"
                 if [ "${STORY_GENERATOR_MODE:-}" = "true" ]; then
-                    prompt="$(build_generator_prompt "$story_id")
-$(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")"
+                    _impl_section="$(build_generator_prompt "$story_id")" || {
+                error "  [prompt] build_generator_prompt REFUSED for $story_id — not invoking the writer"
+                return 1
+            }
+            _kb_section="$(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")" || {
+                error "  [prompt] build_kb_prompt_section REFUSED for $story_id — not invoking the writer"
+                return 1
+            }
+            # Same shape, same reason as the implementation branch below: a joined assignment takes
+            # its status from the LAST substitution, so a refusal in the first is lost. This branch
+            # has no refusal today, which is exactly when the hazard is cheap to remove.
+            prompt="$_impl_section
+$_kb_section"
                 else
-                    prompt="$(build_implementation_prompt "$story_id")
-$(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")"
+                    _impl_section="$(build_implementation_prompt "$story_id")" || {
+                error "  [prompt] build_implementation_prompt REFUSED for $story_id — not invoking the writer"
+                return 1
+            }
+            _kb_section="$(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")" || {
+                error "  [prompt] build_kb_prompt_section REFUSED for $story_id — not invoking the writer"
+                return 1
+            }
+            # SEPARATE ASSIGNMENTS, DELIBERATELY. Joined as
+            #   prompt="$(build_implementation_prompt ...)\n$(build_kb_prompt_section ...)"
+            # the assignment takes its status from the LAST substitution, so every `return 1` in
+            # the builder was swallowed and `set -e` never fired. The writer was then invoked with
+            # the empty first line plus the KB section — no story, no criteria, no plan — and
+            # produced something confident that got committed. A blank that looks ordinary is the
+            # worst failure this pipeline can have.
+            prompt="$_impl_section
+$_kb_section"
                 fi
                 if [ -n "${story_plan:-}" ]; then
                     prompt="$prompt

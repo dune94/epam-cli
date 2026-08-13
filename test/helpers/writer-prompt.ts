@@ -33,7 +33,7 @@
  * thing it is here to watch.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, readdirSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, readdirSync, symlinkSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -161,10 +161,30 @@ log() { printf '%s\\n' "$*" >&2; }
 build_implementation_prompt ${JSON.stringify(storyId)}
 `;
 
-  // The script must live in the REAL scripts directory: claude.sh derives SCRIPT_DIR from its own
-  // BASH_SOURCE and resolves lib/, ../config/ and ../agents/ from it. Run from a scratch directory
-  // it cannot find its own libraries. It is removed in the finally below, whatever happens.
-  const scriptPath = join(SCRIPTS, `.writer-prompt-harness-${process.pid}-${dirs.length}.sh`);
+  // A MIRROR OF THE SCRIPTS DIRECTORY, not the directory itself.
+  //
+  // claude.sh derives SCRIPT_DIR from its own BASH_SOURCE and resolves lib/, ../config/ and
+  // ../agents/ from it, so the harness script must sit somewhere with that shape. Writing it into
+  // the real orchestrations/scripts/ satisfied that and introduced a worse problem: the repository
+  // has tests that SCAN that directory, and one of them caught a harness file mid-run and failed.
+  // A test helper must not put files where the code under test lives, even briefly.
+  //
+  // Symlinks give the same resolution with no repository writes at all.
+  // EVERY entry is linked, never a chosen few. A hand-picked list omitted
+  // brownfield-coverage-gate.sh, the gate call failed, and the prompt quietly switched to its
+  // "everything is already covered" branch — a different instruction to the writer, from a test
+  // helper. Mirroring wholesale is complete by construction and stays correct as scripts are added.
+  const mirror = join(dir, 'automation');
+  const mirrorScripts = join(mirror, 'scripts');
+  mkdirSync(mirrorScripts, { recursive: true });
+  for (const entry of readdirSync(SCRIPTS)) {
+    try { symlinkSync(join(SCRIPTS, entry), join(mirrorScripts, entry)); } catch (_) { /* name clash */ }
+  }
+  for (const entry of readdirSync(join(SCRIPTS, '..'))) {
+    if (entry === 'scripts') continue;
+    try { symlinkSync(join(SCRIPTS, '..', entry), join(mirror, entry)); } catch (_) { /* name clash */ }
+  }
+  const scriptPath = join(mirrorScripts, 'writer-prompt-harness.sh');
   writeFileSync(scriptPath, script);
 
   const env: NodeJS.ProcessEnv = {
@@ -191,8 +211,6 @@ build_implementation_prompt ${JSON.stringify(storyId)}
         + (e.status == null ? `\n[harness] bash did not run: ${e.code ?? e.message}` : ''),
       projectRoot,
     };
-  } finally {
-    rmSync(scriptPath, { force: true });
   }
 }
 

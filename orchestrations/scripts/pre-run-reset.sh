@@ -351,15 +351,33 @@ fi
 # BY DIRECTORY, NOT BY KIND. Kinds are added as producers are migrated onto the framework; naming
 # them here would mean the next one silently survives, which is how this reset has already been
 # caught twice.
-_AGENT_IO_DIR="${AGENT_IO_DIR:-${LOG_DIR:-}/agent-io}"
-if [ -n "${LOG_DIR:-}" ] && [ -d "$_AGENT_IO_DIR" ]; then
-    _AIO_CLEARED=$(find "$_AGENT_IO_DIR" -mindepth 1 -type f 2>/dev/null | wc -l)
-    rm -rf "$_AGENT_IO_DIR" 2>/dev/null || true
-    _AIO_LEFT=$(find "$_AGENT_IO_DIR" -mindepth 1 -type f 2>/dev/null | wc -l)
+# BY DIRECTORY NAME, EVERYWHERE UNDER LOG_DIR — not just the one this process would use.
+# Parallel lanes each publish into $LOG_DIR/lanes/<codeline>/agent-io, and clearing only the
+# parent's store left three lane stores intact while REPORTING a clean slate. Found in the
+# pre-launch review 2026-08-13, before it could reach a run.
+_AGENT_IO_DIRS=()
+if [ -n "${LOG_DIR:-}" ] && [ -d "$LOG_DIR" ]; then
+    while IFS= read -r _d; do [ -n "$_d" ] && _AGENT_IO_DIRS+=("$_d"); done \
+        < <(find "$LOG_DIR" -type d -name agent-io 2>/dev/null)
+fi
+# The configured store too, in case it was pointed outside LOG_DIR.
+if [ -n "${AGENT_IO_DIR:-}" ] && [ -d "$AGENT_IO_DIR" ]; then
+    _aio_known=" $(printf '%s ' "${_AGENT_IO_DIRS[@]+"${_AGENT_IO_DIRS[@]}"}")"
+    case "$_aio_known" in *" $AGENT_IO_DIR "*) ;; *) _AGENT_IO_DIRS+=("$AGENT_IO_DIR") ;; esac
+fi
+if [ "${#_AGENT_IO_DIRS[@]}" -gt 0 ]; then
+    _AIO_CLEARED=0
+    _AIO_LEFT=0
+    for _aio in "${_AGENT_IO_DIRS[@]}"; do
+        _n=$(find "$_aio" -mindepth 1 -type f 2>/dev/null | wc -l)
+        _AIO_CLEARED=$(( _AIO_CLEARED + _n ))
+        rm -rf "$_aio" 2>/dev/null || true
+        _AIO_LEFT=$(( _AIO_LEFT + $(find "$_aio" -mindepth 1 -type f 2>/dev/null | wc -l) ))
+    done
     if [ "$_AIO_LEFT" -gt 0 ]; then
-        fail_contamination "$_AIO_LEFT published agent input(s) could NOT be cleared in $_AGENT_IO_DIR — a run started now would hand agents a previous run's outputs"
+        fail_contamination "$_AIO_LEFT published agent input(s) could NOT be cleared under ${LOG_DIR:-?} — a run started now would hand agents a previous run's outputs"
     elif [ "$_AIO_CLEARED" -gt 0 ]; then
-        info "  Cleared $_AIO_CLEARED published agent input(s) — no prior run's outputs reach this one"
+        info "  Cleared $_AIO_CLEARED published agent input(s) across ${#_AGENT_IO_DIRS[@]} store(s) — no prior run's outputs reach this one"
     fi
 fi
 

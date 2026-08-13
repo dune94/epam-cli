@@ -141,7 +141,8 @@
       "consumes": [
         {
           "kind": "fix-plan",
-          "required": true
+          "required": false,
+          "_note": "NOT required, for the same reason as story-writer: DET-1 made \"investigated, found nothing\" a legitimate state. A reproducing test is written from the failure, and requiring a plan would refuse the story on any codeline where the detective found nothing — a hard failure for a state the pipeline treats as normal."
         },
         {
           "kind": "ticket"

@@ -24,12 +24,15 @@
  * The gate still blocks a fix that ships without a reproducing test — nothing about
  * enforcement changes here, only WHO is asked to author it.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { renderWriterPrompt, cleanupWriterPromptFixtures } from '../../helpers/writer-prompt';
 
 const CLAUDE_SH = readFileSync(
   join(__dirname, '../../../orchestrations/scripts/claude.sh'), 'utf8');
+
+afterAll(cleanupWriterPromptFixtures);
 
 describe('B1 — impl writes only the fix; the test-writer owns the test', () => {
   it('the impl prompt does NOT mandate that impl ship a bug-reproducing test', () => {
@@ -48,12 +51,40 @@ describe('B1 — impl writes only the fix; the test-writer owns the test', () =>
   });
 
   it('the DEFECT coverage-policy carve-out survives the removal', () => {
-    // The coverage policy ("file already has covering tests, do not write new
-    // ones") must still be SKIPPED for defects — it directly contradicted the
-    // repro-gate and caused the original missing-test failure. That carve-out
-    // keyed off `fix_site_analysis`, not off required_test_block, so it must
-    // remain intact.
-    expect(CLAUDE_SH).toMatch(/EPAM_BROWNFIELD:-0\}" = "1" \] && \[ -z "\$fix_site_analysis" \]/);
+    // The coverage policy ("this file already has covering tests, do not write new ones") must
+    // still be SKIPPED when there IS a prescribed fix: it directly contradicted the repro-gate and
+    // caused the original missing-test failure.
+    //
+    // RE-POINTED 2026-08-13: this matched a shell condition by regex, so it broke when the
+    // carve-out started asking the published store whether a plan exists instead of reading the
+    // detective's field. The carve-out is a BEHAVIOUR — assert the behaviour. A source match would
+    // also have passed on a commented-out condition.
+    const story = (id: string, extra: Record<string, unknown>) => ({
+      id, title: 't', description: 'd', acceptanceCriteria: ['ac'],
+      technicalNotes: { files: ['src/a.ts'] }, ...extra,
+    });
+    const opts = {
+      env: { EPAM_BROWNFIELD: '1' },
+      projectFiles: { 'src/a.ts': 'export const a = 1;\n' },
+    };
+
+    const withPlan = renderWriterPrompt({
+      story: story('CARVE-1', {
+        fixSiteAnalysis: [{ file: 'src/a.ts', function: 'f', reason: 'because', fix: 'do it' }],
+      }),
+      ...opts,
+    });
+    const withoutPlan = renderWriterPrompt({ story: story('CARVE-2', {}), ...opts });
+
+    expect(withPlan.rc, withPlan.stderr).toBe(0);
+    expect(withoutPlan.rc, withoutPlan.stderr).toBe(0);
+
+    expect(withoutPlan.text,
+      'a story with no prescribed fix lost the brownfield coverage policy')
+      .toMatch(/Brownfield Testing Policy/i);
+    expect(withPlan.text,
+      'the coverage policy reached a defect story, contradicting the repro-gate exactly as it did live')
+      .not.toMatch(/Brownfield Testing Policy/i);
   });
 
   it('the repro-gate still enforces that a reproducing test ships', () => {

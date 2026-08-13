@@ -335,7 +335,8 @@
         {
           "kind": "existing-code"
         }
-      ]
+      ],
+      "publishesVia": "agent-io"
     },
     "guard-vocabulary": {
       "_what": "Derives the vocabulary the verification-criteria guard enforces. A guard armed with the wrong terms reports clean.",
@@ -383,8 +384,10 @@
       "consumes": [
         {
           "kind": "fix-plan",
-          "required": true,
-          "authority": "plan of record — apply it"
+          "required": false,
+          "authority": "plan of record — apply it",
+          "framing": "fix-plan",
+          "_note": "NOT required: DET-1 made \"investigated, found nothing\" a legitimate state, and claude.sh has carried that reasoning since 2026-08-08. Requiring a plan would refuse to build prompts the pipeline is supposed to build. The authority under which the writer reads a plan that IS present lives in the story-writer prompt document, body \"fix-plan\" — prompt text belongs in a prompt file."
         },
         {
           "kind": "verification-criteria",
@@ -412,7 +415,8 @@
         {
           "kind": "existing-code"
         }
-      ]
+      ],
+      "template": "story-writer"
     }
   },
   "_seamResolution": [
@@ -600,5 +604,6 @@
     "proposed-change",
     "existing-code",
     "dependency-contracts"
-  ]
+  ],
+  "_publishesVia": "An archetype carrying publishesVia=\"agent-io\" has been migrated onto the published-inputs framework: it renders its own output and publishes it. Required-input enforcement applies ONLY to kinds whose producer carries this marker — a kind still rendered the old way has nothing in the store, and refusing every prompt over that would stop the pipeline rather than migrate it. Each producer gains the marker as it moves; when every producer has one, the marker and this note go."
 }

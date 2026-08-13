@@ -20,7 +20,6 @@ You are FORBIDDEN from paraphrasing, summarizing, or optimizing these strings �
 
 LITERAL STRINGS TO USE VERBATIM:
 - "sentinel-literal-string"
-
 ## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
 A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
 
@@ -29,6 +28,9 @@ The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — th
 HARD RULES:
 - Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
 - REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+
+_(fix-plan, from: code-graph-detective)_
+
 - **src/service.ts** (`SENTINEL_FUNCTION`): SENTINEL-ROOT-CAUSE the fetch is memoised  <== **THIS CHANGE PRODUCES THE VALUE** — it is what makes the new or corrected data exist. Without it, every other change here only moves a value that never changed. [runs: SENTINEL-RUNS-IN]
   - **Minimal fix:** SENTINEL-MINIMAL-FIX pass a cache-busting parameter
 - **src/consumer.ts**: SENTINEL-SECOND-SITE-REASON  (carries the value — moves or re-exposes what something else produced)

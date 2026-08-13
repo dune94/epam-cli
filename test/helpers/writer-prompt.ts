@@ -125,6 +125,14 @@ export function renderWriterPrompt(fx: WriterPromptFixture): RenderedPrompt {
     if (t.endsWith('.json')) writeFileSync(join(promptDir, t), readFileSync(join(templateDir, t)));
   }
 
+  // PUBLISH WHAT THE PRODUCERS PRODUCED, as the orchestrator does after the spec pass. Without
+  // this the writer's declared inputs are simply absent, which is a real behaviour but not the one
+  // being captured — and it would make every "nothing was lost" assertion pass on an empty prompt.
+  const agentIoDir = join(logDir, 'agent-io');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+  const { publishFixPlans } = require(join(SCRIPTS, 'lib/producers/fix-plan.js'));
+  publishFixPlans({ stories: [fx.story] }, { AGENT_IO_DIR: agentIoDir });
+
   for (const [rel, contents] of Object.entries(fx.projectFiles ?? {})) {
     const abs = join(projectRoot, rel);
     mkdirSync(dirname(abs), { recursive: true });
@@ -166,6 +174,9 @@ build_implementation_prompt ${JSON.stringify(storyId)}
     PRD_FILE: prd,
     AGENT_PROFILES_FILE: profiles,
     EPAM_PROJECT_CONFIG_DIR: projectConfig,
+    // Named explicitly, exactly as the orchestrator names it: claude.sh reassigns LOG_DIR from its
+    // own location, so a store derived from LOG_DIR would be written and read in two places.
+    AGENT_IO_DIR: agentIoDir,
     ...(fx.env ?? {}),
   };
 

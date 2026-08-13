@@ -2042,15 +2042,29 @@ build_implementation_prompt() {
     # to re-discover it — which is exactly what bloats a "bad" retry's token
     # count (found live 2026-07-23: attempt read 143k tokens tracing the bug,
     # wrote nothing). Each entry: the file, the function, and the root cause.
-    local fix_site_analysis
+    # DOES THE STORY HAVE A PLAN? A PRESENCE question, not a rendering one — the two decisions
+    # below turn on whether an investigation produced anything, never on how it reads. Asked of
+    # the published store rather than of the detective's fields, so this stays true for any
+    # producer of the kind.
+    local _has_fix_plan=""
+    if "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/agent-io.js" present "$story_id" fix-plan; then
+        _has_fix_plan="yes"
+    fi
     # RENDERED BY THE PRODUCER. The detective is the only actor that knows what its own fields
     # mean, so it is the only one that turns them into words — see lib/producers/fix-plan.js for
     # what two copies of this rendering had already cost. A failure to render is NOT an empty
     # plan: a writer prompted without the root-cause analysis re-traces it from scratch, which is
     # the 143k-token retry this block exists to prevent.
-    fix_site_analysis=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/producers/fix-plan.js" \
-        "$PRD_FILE" "$story_id") || {
-        error "  [prompt] fix-plan failed to render for $story_id — refusing to build a writer prompt without the prescribed fix"
+    # THE WRITER RECEIVES WHAT ITS ARCHETYPE DECLARED IT CONSUMES — see lib/agent-inputs.js.
+    # Not "the engine decides what to show the writer": the archetype lists the kinds, producers
+    # publish them, and each arrives under the authority the writer own prompt document gives it.
+    # A kind nobody published contributes nothing, which is why no conditional guards this.
+    # A REQUIRED kind nobody published is a hard failure: a prompt missing the root-cause analysis
+    # looks exactly like one that has it, and costs a whole retry to discover.
+    local agent_inputs
+    agent_inputs=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/agent-inputs.js" \
+        "$(echo "$story_json" | jq -r '.agentRole // "story-writer"')" "$story_id") || {
+        error "  [prompt] declared inputs did not render for $story_id — refusing to build a writer prompt without them"
         return 1
     }
 
@@ -2351,7 +2365,7 @@ ${_body}
     # cause of the missing test (AMSD-1820, 2026-07-24 — the agent was told the file
     # "ALREADY has covering tests. Do NOT write any new test file", so it shipped
     # none). The coverage policy still applies to non-defect brownfield changes.
-    if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -z "$fix_site_analysis" ]; then
+    if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -z "$_has_fix_plan" ]; then
         local _story_rel_files=()
         while IFS= read -r _sf; do
             [ -z "$_sf" ] && continue
@@ -2642,7 +2656,7 @@ $description
 ## Acceptance Criteria
 - $acceptance_criteria
 $([ -n "$string_invariants_block" ] && printf '%s\n' "$string_invariants_block" || true)
-$([ -n "$fix_site_analysis" ] && printf '\n## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)\nA code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.\n\nThe Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.\n\nHARD RULES:\n- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.\n- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.\n%s\n' "$fix_site_analysis" || true)
+$agent_inputs
 $([ -n "$review_feedback" ] && printf '\n## Reviewer Feedback — ADDRESS THESE (a prior code review requested changes)\nThe team-lead reviewer examined your previous attempt and requested the changes below. This is the highest priority.\n\nA BLOCKER is a required deliverable, not advice. If a blocker says something is MISSING — a test, a file, a case — the only way to resolve it is to CREATE it; leaving it out repeats the rejection. Minimality governs HOW MUCH you write, never WHETHER you write it.\n\nFor advisory points: make the smallest edits that resolve each one, and where a point says the change is over-engineered or an existing helper would do, REMOVE the excess rather than adding more.\n\nIf you genuinely cannot satisfy a blocker — no seam exists to test against, the behaviour lives entirely in a third-party package — say so explicitly in your final message, naming the blocker and why. An unexplained omission reads as a refusal and will be rejected again.\n%s\n' "$review_feedback" || true)
 $([ -n "$skill_note_block" ] && printf '%s\n' "$skill_note_block" || true)
 $([ -n "$verification_criteria" ] && printf '\n## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)\nThese are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:\n%s\n' "$verification_criteria" || true)

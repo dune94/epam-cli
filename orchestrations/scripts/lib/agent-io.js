@@ -105,6 +105,24 @@ function collect(story, kinds, env) {
   return parts.join('\n');
 }
 
+/**
+ * One published entry: its body and who produced it.
+ *
+ * collect() renders "## kind (from: agent)" for consumers that have no framing of their own. A
+ * consumer whose prompt document DOES frame the input needs the parts, not that heading — two
+ * headings in a row read as two sections, and the writer would see its plan of record announced
+ * twice under different names.
+ */
+function read(story, kind, env) {
+  const { file, from: fromFile } = pathsFor(story, kind, env);
+  let body;
+  try { body = fs.readFileSync(file, 'utf8'); } catch (_) { return null; }
+  if (body === '') return null;
+  let from = 'unknown';
+  try { from = fs.readFileSync(fromFile, 'utf8') || 'unknown'; } catch (_) { /* keep unknown */ }
+  return { body, from };
+}
+
 /** Every kind published for a story, for reporting — never for deciding what to render. */
 function published(story, env) {
   const { dir } = pathsFor(story, '', env);
@@ -115,7 +133,7 @@ function published(story, env) {
   }
 }
 
-module.exports = { publish, collect, present, published, storeDir };
+module.exports = { publish, collect, read, present, published, storeDir };
 
 if (require.main === module) {
   const [, , cmd, ...rest] = process.argv;

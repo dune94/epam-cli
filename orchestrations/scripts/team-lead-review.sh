@@ -519,85 +519,65 @@ while IFS= read -r story_id; do
     _review_plugin_tools="$(project_tool_names "$PROJECT_ROOT")"
 
     # Build review prompt
-    REVIEW_PROMPT="${REVIEW_PROFILE}
+    # THE CONDITIONAL BLOCKS, COMPUTED HERE INSTEAD OF INSIDE THE PROMPT.
+    #
+    # Each was an inline $( ... ) inside the prompt string: render this heading only when the
+    # value is non-empty. The prompt is now a document, so the CALLER decides what a block
+    # contains and the template just places it. Same text, same emptiness rule.
 
----
-REVIEW TASK: Story $story_id — $STORY_TITLE
+    _review_fix_analysis_block=$([ -n "$STORY_FIX_ANALYSIS" ] && printf '\nROOT CAUSE ANALYSIS & PRESCRIBED MINIMAL FIX (from prior code investigation — the plan of record the implementer was given):\n%s\n\nThe acceptance criteria describe the desired BEHAVIOR to verify; they are NOT a blueprint. The correct implementation is the minimal fix above. Judge the diff against BOTH.\n' "$STORY_FIX_ANALYSIS" || true)
+    _review_uncovered_block=$([ -n "$STORY_UNCOVERED_VC" ] && printf '\n%s\n' "$STORY_UNCOVERED_VC" || true)
+    _review_vc_block=$([ -n "$STORY_VC" ] && printf '\nVERIFICATION CRITERIA (the observable checks this change MUST satisfy — judge the diff against every one):\n%s\n' "$STORY_VC" || true)
+    _review_codegraph_block=$([ -n "$_review_codegraph_tool" ] && printf '\nEXISTING-CODE TOOL (call the codegraph_query tool directly, NOT via Bash, to check whether a helper already exists before accepting hand-rolled logic):\n  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter (symbol + import path)\n  codegraph_query(mode="query", args="<SymbolName>")        # exact definition site\n' || true)
+    _review_learned_block=$([ -n "$_review_kb" ] && printf '\nLEARNED REVIEW RULES (from prior runs — apply these):\n%s\n' "$_review_kb" || true)
 
-DESCRIPTION:
-$STORY_DESC
-
-ACCEPTANCE CRITERIA:
-$STORY_ACS
-$([ -n "$STORY_VC" ] && printf '\nVERIFICATION CRITERIA (the observable checks this change MUST satisfy — judge the diff against every one):\n%s\n' "$STORY_VC" || true)
-$([ -n "$STORY_UNCOVERED_VC" ] && printf '\n%s\n' "$STORY_UNCOVERED_VC" || true)
-$([ -n "$STORY_FIX_ANALYSIS" ] && printf '\nROOT CAUSE ANALYSIS & PRESCRIBED MINIMAL FIX (from prior code investigation — the plan of record the implementer was given):\n%s\n\nThe acceptance criteria describe the desired BEHAVIOR to verify; they are NOT a blueprint. The correct implementation is the minimal fix above. Judge the diff against BOTH.\n' "$STORY_FIX_ANALYSIS" || true)
-${BLOCKER_DISCIPLINE_BLOCK}
-
-RELEVANT FILES (fix files + the reproducing test the pipeline shipped — review BOTH): $STORY_FILES ${_test_files:-}
-
-GIT DIFF (recent changes):
-\`\`\`diff
-$STORY_DIFF
-\`\`\`
-
-PROJECT ROOT: $PROJECT_ROOT
-$([ -n "$_review_codegraph_tool" ] && printf '\nEXISTING-CODE TOOL (call the codegraph_query tool directly, NOT via Bash, to check whether a helper already exists before accepting hand-rolled logic):\n  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter (symbol + import path)\n  codegraph_query(mode="query", args="<SymbolName>")        # exact definition site\n' || true)
-
-CREDENTIALS. Call scan_secrets with the diff above before you finish. It reports values that
-have been PASTED INTO the code — a quoted, long, high-entropy literal assigned to a
-credential-shaped name. It deliberately does NOT report references (an identifier, a member
-expression, a process.env read), because those are the correct practice: a pasted key is always
-a literal, so nothing real is missed by ignoring them.
-
-  scan_secrets(diff=\"<the GIT DIFF above>\")
-
-Judge what it returns; it does not block anything. A finding is a blocker — a credential in
-source is not fixable after the fact once committed. An empty result is not proof of safety on
-its own, so if the diff introduces configuration you can still say so in your own words.
-
-This check used to run at commit time and matched \`name: value\` on shape alone. On 2026-08-09
-it refused a correct commit for \`management_token: CONTENTSTACK_LIVE_PREVIEW_TOKEN\` — an
-environment-derived identifier — and had never caught a real leak. It is yours now because you
-have the diff and can tell the two apart.
-
-Review the implementation against each acceptance criterion above.
-Check: TypeScript strict compliance, error handling, security (OWASP).
-${TEST_OWNERSHIP_BLOCK}
-
-CONCISION & REUSE (blocker-level checks):
-- If the change addresses the symptom but NOT the prescribed root cause above (e.g. adds new code paths the bug never reaches), that is a 'blocker' — request changes.
-- If a MORE CONCISE change (fewer lines) would achieve the same acceptance criteria, request changes and name the smaller change. Fewer lines of code is always better.
-- If the diff hand-rolls logic that an EXISTING function/helper already provides (verify with the tool above), that is a 'blocker' — request changes and name the helper to reuse instead.
-- Do NOT approve an over-engineered fix just because it satisfies the AC wording.
-
-TEST COVERAGE VERIFICATION (grounded, not a visual skim — found live 2026-08-03,
-Observed live: the reviewer claimed 2 of 3 required test scenarios were missing,
-TWICE in a row, against a diff that unambiguously contained all 3 as clearly-
-named \`it(...)\` blocks — a real, reproducible failure to verify a claim the
-tools below could have confirmed in one call):
-- Before flagging ANY acceptance-criteria test scenario as missing or absent, use
-  the search tool to grep the diff above (or read_file on the test file under
-  PROJECT_ROOT) for an \`it(\`/\`test(\` block whose name or body plausibly covers
-  that scenario. A large diff is easy to skim past a matching block — search for
-  it, do not judge from a visual read alone.
-- If your search finds a plausible match, do NOT flag that scenario as missing —
-  if the test's assertions are wrong or incomplete, say so specifically (quote
-  the test name and what it fails to assert); 'missing' and 'inadequate' are
-  different findings and must not be conflated.
-- If your search finds nothing, name the exact search you ran (tool + query) in
-  the issue description, so a genuinely absent test is distinguishable from an
-  unverified guess.
-Do NOT read from external URLs.
-$([ -n "$_review_kb" ] && printf '\nLEARNED REVIEW RULES (from prior runs — apply these):\n%s\n' "$_review_kb" || true)
-$([ -n "${_review_project_tools_block:-}" ] && printf '%s\n' "${_review_project_tools_block}" || true)
-
-Respond with ONLY a JSON object (no markdown fences):
-{\"verdict\":\"approved\",\"issues\":[],\"summary\":\"...\"}
-  OR
-{\"verdict\":\"changes_requested\",\"issues\":[{\"severity\":\"blocker|major|minor\",\"file\":\"...\",\"line\":0,\"description\":\"...\",\"suggestedFix\":\"...\"}],\"summary\":\"...\"}
-
-A 'blocker' issue MUST be fixed before merge. 'major' should be fixed. 'minor' is optional."
+    # THE PROMPT IS A DOCUMENT, NOT A SHELL STRING.
+    #
+    # Migrated 2026-08-13 to orchestrations/prompts/templates/team-lead-review.json and the
+    # project-authority copy the library renders. Byte-identical to the literal that stood here
+    # (3827 bytes, verified against a golden produced by evaluating that literal).
+    #
+    # It had to move. Prose inside a double-quoted bash string is LIVE CODE: a raw quote in the
+    # scan_secrets example closed the string so `<the GIT DIFF above>` parsed as an input
+    # redirection, and two backticks in the prose EXECUTED as commands and spliced their empty
+    # output into what the model was sent. The reviewer emitted no verdict for two days and the
+    # retry loop spun 701 cycles on a story that had already implemented cleanly.
+    # Values to a FILE, filter in SINGLE quotes. The first version inlined the jq filter inside
+    # a process substitution with nested quoting, and bash expanded $profile before jq ever saw
+    # it: "line 571: profile: unbound variable". This is the same shape the analyst render uses.
+    _review_vals=$(mktemp)
+    jq -n \
+        --arg profile "${REVIEW_PROFILE:-}" \
+        --arg blocker "${BLOCKER_DISCIPLINE_BLOCK:-}" \
+        --arg ownership "${TEST_OWNERSHIP_BLOCK:-}" \
+        --arg story_id "$story_id" \
+        --arg title "${STORY_TITLE:-}" \
+        --arg desc "${STORY_DESC:-}" \
+        --arg acs "${STORY_ACS:-}" \
+        --arg diff "${STORY_DIFF:-}" \
+        --arg files "${STORY_FILES:-}" \
+        --arg test_files "${_test_files:-}" \
+        --arg project_root "${PROJECT_ROOT:-}" \
+        --arg fix_analysis "${_review_fix_analysis_block:-}" \
+        --arg uncovered "${_review_uncovered_block:-}" \
+        --arg vc "${_review_vc_block:-}" \
+        --arg codegraph "${_review_codegraph_block:-}" \
+        --arg learned "${_review_learned_block:-}" \
+        --arg tools "${_review_project_tools_block:-}" \
+        '{"__REVIEW_PROFILE__":$profile,"__BLOCKER_DISCIPLINE__":$blocker,
+          "__TEST_OWNERSHIP__":$ownership,"__STORY_ID__":$story_id,"__STORY_TITLE__":$title,
+          "__STORY_DESC__":$desc,"__STORY_ACS__":$acs,"__STORY_DIFF__":$diff,
+          "__STORY_FILES__":$files,"__TEST_FILES__":$test_files,"__PROJECT_ROOT__":$project_root,
+          "__FIX_ANALYSIS_BLOCK__":$fix_analysis,"__UNCOVERED_VC_BLOCK__":$uncovered,
+          "__VC_BLOCK__":$vc,"__CODEGRAPH_TOOL_BLOCK__":$codegraph,
+          "__LEARNED_RULES_BLOCK__":$learned,"__PROJECT_TOOLS_BLOCK__":$tools}' > "$_review_vals"
+    if ! REVIEW_PROMPT=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/prompt-library.js" \
+            render team-lead-review "${EPAM_PROJECT_CONFIG_DIR:-}" "$_review_vals"); then
+        rm -f "$_review_vals"
+        echo "[team-lead-review] FATAL: could not render the review prompt" >&2
+        exit 1
+    fi
+    rm -f "$_review_vals"
 
     log "  Invoking review-agent for $story_id... (model=${ORCH_GATE_MODEL:-?} provider=${EPAM_ORCHESTRATION_PROVIDER:-?})"
     REVIEW_OUTPUT_FILE="$AUTOMATION_DIR/logs/review-agent-${story_id}.log"

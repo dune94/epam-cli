@@ -38,6 +38,14 @@ import { join } from 'node:path';
 const ROOT = join(__dirname, '../../../');
 const REVIEW_SH = join(ROOT, 'orchestrations/scripts/team-lead-review.sh');
 const src = () => readFileSync(REVIEW_SH, 'utf8');
+// THE REVIEWER PROMPT MOVED TO A DOCUMENT (2026-08-13):
+// orchestrations/prompts/templates/team-lead-review.json. Asserting prompt text against the
+// SCRIPT proved nothing even before the move — a grep passes on a comment — and now the text is
+// not there at all. These read the TEMPLATE BODY, which is what the model is sent.
+const REVIEW_PROMPT_BODY: string = JSON.parse(
+  readFileSync(join(__dirname, '../../../orchestrations/prompts/templates/team-lead-review.json'), 'utf8'),
+).body;
+
 const code = () => src().split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
 
 describe('the harness is anchored', () => {
@@ -73,7 +81,7 @@ describe('THE REVIEWER SEES WHICH SITES NEED NO EDIT', () => {
 
 describe('A BLOCKER IS BOUNDED BY THE PRESCRIPTION', () => {
   it('the reviewer is told a blocker must name a prescribed file', () => {
-    expect(code(), 'nothing stops a blocker demanding work on a file nobody prescribed')
+    expect(REVIEW_PROMPT_BODY, 'nothing stops a blocker demanding work on a file nobody prescribed')
       .toMatch(/blocker[\s\S]{0,400}(prescrib|plan of record)/i);
   });
 
@@ -118,12 +126,17 @@ describe('A BLOCKER MUST BE SOMETHING THE WRITER CAN DO', () => {
     // Caught by mutation: deleting ${BLOCKER_DISCIPLINE_BLOCK} from the prompt body left every
     // other assertion green. Rendering a policy into a variable nobody interpolates is the
     // "computed but never used" defect — correct code, zero effect, and it looks wired.
-    const s = code();
-    const promptStart = s.indexOf('ROOT CAUSE ANALYSIS & PRESCRIBED MINIMAL FIX');
-    expect(promptStart, 'the prescription section is gone — the test is stale').toBeGreaterThan(-1);
-    const after = s.slice(promptStart, promptStart + 1500);
-    expect(after, 'the policy is computed but never interpolated into the prompt the model sees')
-      .toMatch(/\$\{BLOCKER_DISCIPLINE_BLOCK\}/);
+    // The prescription HEADING is inside the block the caller computes (__FIX_ANALYSIS_BLOCK__),
+    // so it lives in the script; the POLICY placeholder lives in the template. Assert each where
+    // it actually is, rather than expecting both in one artefact.
+    expect(code(), 'the caller no longer builds a prescription block')
+      .toMatch(/ROOT CAUSE ANALYSIS & PRESCRIBED MINIMAL FIX/);
+    const after = REVIEW_PROMPT_BODY;
+    // The placeholder the library fills. A policy rendered into a shell variable nobody
+    // interpolates is the "computed but never used" defect; in a document the equivalent is a
+    // placeholder the body never names.
+    expect(after, 'the policy placeholder is absent from the prompt the model sees')
+      .toMatch(/__BLOCKER_DISCIPLINE__/);
   });
 });
 

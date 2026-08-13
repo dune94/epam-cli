@@ -20,6 +20,12 @@ import { join } from 'node:path';
 
 const REVIEW_SH = join(__dirname, '../../../orchestrations/scripts/team-lead-review.sh');
 const src = readFileSync(REVIEW_SH, 'utf8');
+// PROMPT TEXT moved to a document (2026-08-13); SCRIPT BEHAVIOUR (variable names, tool
+// enablement, block construction) stayed. Each assertion below now reads whichever artefact
+// actually carries the thing it is about.
+const PROMPT: string = JSON.parse(
+  readFileSync(join(__dirname, '../../../orchestrations/prompts/templates/team-lead-review.json'), 'utf8'),
+).body;
 
 // Pull out the exact jq program used for STORY_FIX_ANALYSIS and run it for real.
 function extractFixAnalysisJq(): string {
@@ -67,25 +73,27 @@ describe('team-lead-review — concision/reuse rejection directives', () => {
   it('injects the root-cause analysis and demotes ACs to verification', () => {
     expect(src).toContain('STORY_FIX_ANALYSIS');
     expect(src).toContain('ROOT CAUSE ANALYSIS & PRESCRIBED MINIMAL FIX');
+    // This phrase is inside the caller-computed __FIX_ANALYSIS_BLOCK__, which the script still
+    // builds — so it is asserted against the script, alongside the two lines above it.
     expect(src).toMatch(/NOT a blueprint/);
   });
 
   it('instructs the reviewer to reject a fix that misses the root cause', () => {
-    expect(src).toMatch(/NOT the prescribed root cause.*blocker/is);
+    expect(PROMPT).toMatch(/NOT the prescribed root cause.*blocker/is);
   });
 
   it('instructs the reviewer to reject when a more concise change would do', () => {
-    expect(src).toMatch(/MORE CONCISE change \(fewer lines\)/);
-    expect(src).toMatch(/Fewer lines of code is always better/);
+    expect(PROMPT).toMatch(/MORE CONCISE change \(fewer lines\)/);
+    expect(PROMPT).toMatch(/Fewer lines of code is always better/);
   });
 
   it('instructs the reviewer to reject hand-rolled logic an existing helper provides', () => {
-    expect(src).toMatch(/hand-rolls logic that an EXISTING function\/helper already provides/);
-    expect(src).toMatch(/name the helper to reuse/);
+    expect(PROMPT).toMatch(/hand-rolls logic that an EXISTING function\/helper already provides/);
+    expect(PROMPT).toMatch(/name the helper to reuse/);
   });
 
   it('does not let AC-satisfaction alone justify approval of an over-engineered fix', () => {
-    expect(src).toMatch(/Do NOT approve an over-engineered fix/);
+    expect(PROMPT).toMatch(/Do NOT approve an over-engineered fix/);
   });
 });
 

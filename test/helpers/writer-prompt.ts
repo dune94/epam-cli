@@ -73,6 +73,11 @@ export interface WriterPromptFixture {
   env?: Record<string, string>;
   /** agent-profiles.json contents, for the persisted-skill-note block. */
   profiles?: unknown;
+  /**
+   * Outputs already published when the prompt is built, as producers publish them in a run.
+   * The engine publishes attempt-evidence before a retry; agents publish their own kinds.
+   */
+  publish?: Array<{ from: string; kind: string; content: string }>;
 }
 
 export interface RenderedPrompt {
@@ -132,6 +137,11 @@ export function renderWriterPrompt(fx: WriterPromptFixture): RenderedPrompt {
   // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
   const { publishFixPlans } = require(join(SCRIPTS, 'lib/producers/fix-plan.js'));
   publishFixPlans({ stories: [fx.story] }, { AGENT_IO_DIR: agentIoDir });
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+  const agentIo = require(join(SCRIPTS, 'lib/agent-io.js'));
+  for (const p of fx.publish ?? []) {
+    agentIo.publish(p.from, p.kind, storyId, p.content, { AGENT_IO_DIR: agentIoDir });
+  }
 
   for (const [rel, contents] of Object.entries(fx.projectFiles ?? {})) {
     const abs = join(projectRoot, rel);

@@ -112,19 +112,21 @@ describe('IT SAYS WHAT CHANGED', () => {
 describe('BOTH CONSUMERS ARE FED FROM IT', () => {
   const code = () => src().split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
 
-  it('the WRITER prompt carries it on a retry', () => {
-    expect(code(), 'the writer is never told what its own last attempt did')
-      .toMatch(/_attempt_change_summary/);
-    // Searched in the RAW source: the comment filter strips lines beginning with '#', and the
-    // prompt's own markdown headings start with '##'. Filtering them out hid the very section
-    // this anchors on.
-    const raw = src();
-    expect(raw.indexOf('## Coordinator Guidance'),
-      'the retry-only prompt section is gone — this test is stale').toBeGreaterThan(-1);
-    expect(raw.indexOf('## What Your Last Attempt Did'),
-      'the writer prompt has no section carrying the attempt summary').toBeGreaterThan(-1);
+  it('the WRITER receives it — asserted on the rendered prompt, not on the source', () => {
+    // RE-POINTED 2026-08-13, TESTING-FAILURES.md TF-1. This asserted that claude.sh CONTAINS a
+    // '## What Your Last Attempt Did' heading. That heading is gone: the diffstat is published as
+    // the `attempt-evidence` kind and the writer renders it from its declared inputs, which is
+    // what fixed the defect — the old hand-rendered section was gated on a process-local counter
+    // and never reached a re-invoked writer.
+    //
+    // A source match could not tell those two situations apart. The rendered prompt can, and
+    // the-writer-is-told-what-it-did-on-every-retry.test.ts asserts exactly that, including the
+    // fresh-process case and the engine's own publication. This test keeps the piece that is
+    // genuinely about THIS file: the summary is still produced, deterministically, from git.
+    expect(code(), 'the diffstat producer is gone').toMatch(/_attempt_change_summary/);
+    expect(code(), 'the engine no longer publishes it as an input')
+      .toMatch(/publish_agent_output engine attempt-evidence/);
   });
-
   it('the ANALYST is given it as a value, not left to guess', () => {
     const s = code();
     const i = s.indexOf('__VERIFICATION_FAILURE__');

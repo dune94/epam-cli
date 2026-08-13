@@ -216,10 +216,24 @@ PIPELINE_EXIT=0
 
 # ── Restore profiles.json from canonical original ─────────────────────────────
 # Agent mutations (profile-augmentor additions) must not carry forward across runs.
-PROFILES_ORIG="$REPO_ROOT/orchestrations/agents/profiles.json.original"
+# THE PROJECT'S ROSTER IS THE PROJECT'S, NOT THE ENGINE'S.
+#
+# The shared orchestrations/agents/ roster is base state for EVERY project and must name no
+# client, codeline or ticket — an invariant three test files hold. The minted Metrolinx roster
+# (its per-codeline investigators and its implementer) is a project fact, so it lives in the
+# project and this run points EPAM_AGENTS_DIR at it.
+#
+# It is restored from the project's own .original for the same reason the shared one is: a run
+# starts from a known roster, never from whatever the last run left behind.
+if [ -d "$EPAM_PROJECT_CONFIG_DIR/agents" ]; then
+  export EPAM_AGENTS_DIR="$EPAM_PROJECT_CONFIG_DIR/agents"
+  PROFILES_ORIG="$EPAM_AGENTS_DIR/profiles.json.original"
+else
+  PROFILES_ORIG="$REPO_ROOT/orchestrations/agents/profiles.json.original"
+fi
 if [ -f "$PROFILES_ORIG" ]; then
-  cp "$PROFILES_ORIG" "$REPO_ROOT/orchestrations/agents/profiles.json"
-  info "profiles.json restored from canonical original"
+  cp "$PROFILES_ORIG" "$(dirname "$PROFILES_ORIG")/profiles.json"
+  info "profiles.json restored from canonical original ($(basename "$(dirname "$PROFILES_ORIG")")/)"
 else
   info "profiles.json.original not found — skipping profiles restore"
 fi

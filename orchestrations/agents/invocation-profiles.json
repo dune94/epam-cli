@@ -405,7 +405,8 @@
         },
         {
           "kind": "attempt-evidence",
-          "authority": "evidence, not instruction"
+          "authority": "evidence, not instruction",
+          "framing": "attempt-evidence"
         },
         {
           "kind": "test-criteria"

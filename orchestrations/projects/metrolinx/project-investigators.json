@@ -1,13 +1,12 @@
 {
-  "_what": "This project's minted READ-ONLY agents — investigators. They report what is in the code and never author it. The write perimeter does not read this file, and story assignment never offers these names.",
+  "_what": "This project READ-ONLY investigators, one per codeline. Registered here so the write perimeter can refuse them: an investigator that can write is an investigator that can quietly become an implementer.",
+  "_why": "Declared by the manifest as required and absent until 2026-08-13 — the declaration was intent nobody had fulfilled, and the project-owns-what-it-declares test was the thing that noticed.",
   "investigators": [
     "gotransit-contentstack-investigator",
+    "gotransit-investigator",
+    "metrolinx-contentstack-investigator",
+    "metrolinx-investigator",
     "upexpress-contentstack-investigator",
-    "metrolinx-contentstack-investigator"
-  ],
-  "byCodeline": {
-    "gotransit": "gotransit-contentstack-investigator",
-    "upexpress": "upexpress-contentstack-investigator",
-    "metrolinx": "metrolinx-contentstack-investigator"
-  }
+    "upexpress-investigator"
+  ]
 }

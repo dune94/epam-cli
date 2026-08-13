@@ -63,6 +63,7 @@ source "$SCRIPT_DIR/lib/project-tools.sh"
 source "$SCRIPT_DIR/lib/git-ops.sh"
 # shellcheck source=lib/story-retry-state.sh
 source "$SCRIPT_DIR/lib/story-retry-state.sh"
+. "$SCRIPT_DIR/lib/agent-io.sh"
 PROGRESS_LOG="$LOG_DIR/progress.txt"
 AGENTS_FILE="$AUTOMATION_DIR/agents/AGENTS.md"
 CLAUDE_OUTPUT_DIR="$LOG_DIR/claude_outputs"
@@ -9347,16 +9348,31 @@ $story_plan"
         # this and it was rejected" from "I have not tried anything" and re-derived approaches it
         # had already been told were wrong. Placed BEFORE the coordinator's one-line inference so
         # the evidence is read first and the judgement second.
-        if [ "$_total_attempts" -gt 1 ]; then
-            local _attempt_changes
-            _attempt_changes=$(_attempt_change_summary "$story_id")
-            if [ -n "$_attempt_changes" ]; then
-                prompt="$prompt
-
-## What Your Last Attempt Did (retry ${retry_count})
-This is a diffstat, not a judgement — it is what is on disk, unedited.
-${_attempt_changes}"
-            fi
+        # PUBLISHED, NOT APPENDED — and not gated on an attempt counter.
+        #
+        # This used to be `if [ "$_total_attempts" -gt 1 ]`, a variable local to this function.
+        # The review cycle re-invokes the writer as a NEW PROCESS, where that counter starts at
+        # zero, so the writer being asked to fix its own work was never told what its own work
+        # was. Recorded as TF-1 in TESTING-FAILURES.md.
+        #
+        # What is on disk does not depend on which process asks. The engine publishes it; every
+        # agent that DECLARES attempt-evidence receives it — the writer and both failure analysts
+        # today, the reviewer the moment it declares it. Empty publishes nothing, so a first
+        # attempt carries no section.
+        # WAS THERE A PREVIOUS ATTEMPT? Asked of DURABLE state, not a process-local counter.
+        # read_story_retry_count persists in story-retry-state/ and is cleared by the pre-run
+        # reset, so it answers the same question across a re-invocation — which is precisely
+        # where _total_attempts failed.
+        #
+        # It matters because _attempt_change_summary never returns empty: when nothing changed it
+        # says so in words, and that sentence is the important one (a previous attempt that wrote
+        # NOTHING must be reported, not silently omitted). Published unconditionally it would tell
+        # a FIRST attempt that a previous attempt changed no files, which is a lie the writer has
+        # no way to check.
+        local _prior_attempts
+        _prior_attempts=$(read_story_retry_count "$LOG_DIR" "$story_id" 2>/dev/null || echo 0)
+        if [ "${_prior_attempts:-0}" -gt 0 ] || [ "$_total_attempts" -gt 1 ]; then
+            publish_agent_output engine attempt-evidence "$story_id" "$(_attempt_change_summary "$story_id")"
         fi
 
         if [ "$_total_attempts" -gt 1 ] && [ -n "${COORDINATOR_PROMPT_AMENDMENT:-}" ]; then

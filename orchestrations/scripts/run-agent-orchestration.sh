@@ -269,6 +269,14 @@ export LOG_DIR
 # to end. Naming it here makes both sides agree. It stays under LOG_DIR so the pre-run reset
 # clears it with everything else: an input surviving into the next run is contamination.
 export AGENT_IO_DIR="${AGENT_IO_DIR:-$LOG_DIR/agent-io}"
+
+# NAMED RUN MODE. "Resume the writer" is one word, not six variables an operator must assemble.
+# The mode declares which steps it turns off (config/run-modes.json); an unknown mode is refused
+# rather than silently running everything. A variable the operator set themselves always wins.
+. "$SCRIPT_DIR/lib/run-modes.sh"
+if [ -n "${EPAM_RUN_MODE:-}" ]; then
+    apply_run_mode "$EPAM_RUN_MODE" || exit 1
+fi
 # PHASE reaches ai-run.sh so each agent plan is filed under the phase that
 # produced it. Unexported, every plan landed in plans-unknown.jsonl.
 export PHASE
@@ -564,6 +572,9 @@ print_step_checklist() {
         echo -e "${color}${planned}${reason_str}${NC}"
     }
 
+    if [ -n "${RESOLVED_RUN_MODE:-}" ]; then
+        echo -e "  ${CYAN}RUN MODE: ${RESOLVED_RUN_MODE}${NC} — the SKIP rows below are what it turns off"
+    fi
     _checklist_row "1"    "Specification pass"       "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "EPAM_SPEC_MODE=0"
     _checklist_row "1a"   "  openspec (elaboration)" "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "${SPEC_MODE_OPENSPEC_MODEL:-z-ai/glm-5.2}"
     _checklist_row "1b"   "  speckit (verification)" "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "${SPEC_MODE_SPECKIT_MODEL:-z-ai/glm-5.2}"

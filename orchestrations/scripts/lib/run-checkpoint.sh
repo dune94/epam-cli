@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+
+# Modes are declared once, in config/run-modes.json — see lib/run-modes.sh.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/run-modes.sh"
 # Run checkpoints — pause after the spec pass, resume at implementation.
 #
 # WHY. The spec pass is the expensive half of a run: ~12 agent calls, ~50 minutes
@@ -214,32 +217,22 @@ resume_skip_env() {
             echo "[checkpoint] no checkpoint for run '${_rid}'" >&2; return 1; }
         _stage=$(jq -r '.stage // empty' "$_dir/checkpoint.json" 2>/dev/null)
     fi
+
+    # THE STAGE NAMES A MODE; THE MODE DECLARES THE SKIPS. Both used to be hand-listed here, and
+    # the lists had already drifted: pre-writer omitted the regression guard, so a resume at the
+    # writer re-ran the whole existing suite to rebuild a baseline it did not need. One
+    # declaration (config/run-modes.json), read by the checkpoint and by EPAM_RUN_MODE alike.
+    local _mode=""
     case "$_stage" in
-        post-roster)
-            # The roster and the assignments are on disk and the mint is not repeated —
-            # re-minting would propose against an already-minted roster and the merge is
-            # additive, so a resume would accumulate near-duplicate roles.
-            echo "EPAM_SKIP_AGENT_MINT=1"
-            echo "EPAM_SKIP_JIRA_INGEST=1"
-            ;;
-        post-spec)
-            echo "EPAM_SPEC_MODE=0"
-            echo "EPAM_SKIP_AGENT_MINT=1"
-            echo "EPAM_SKIP_JIRA_INGEST=1"
-            ;;
-        pre-writer)
-            echo "EPAM_SPEC_MODE=0"
-            echo "EPAM_SKIP_AGENT_MINT=1"
-            echo "SKIP_CPA=1"
-            echo "SKIP_SKILL_ASSESSMENT=1"
-            echo "EPAM_SKIP_JIRA_INGEST=1"
-            ;;
+        post-roster) _mode="post-roster" ;;
+        post-spec)   _mode="post-spec" ;;
+        pre-writer)  _mode="writer-only" ;;
         *)
             echo "[checkpoint] checkpoint for run '${_rid}' records an unrecognised stage '${_stage}' — refusing to guess which steps to skip" >&2
             return 1
             ;;
     esac
-    return 0
+    run_mode_env "$_mode"
 }
 
 # save_run_checkpoint <phase> [stage]

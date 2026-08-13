@@ -12,11 +12,27 @@
 # TWO RULES:
 #   FAILS CLOSED — an unknown mode, or a declaration file that will not parse, is a hard error.
 #     Silently ignoring either runs every gate the operator believed they had turned off.
-#   THE OPERATOR WINS — a variable already set in the environment is never overwritten. A mode is
-#     a set of defaults for an intent, not a straitjacket: writer-only WITH the regression baseline
-#     is a legitimate thing to ask for.
+#   PRECEDENCE IS operator environment > mode > config-file default. A mode must beat a default
+#     (config.env carries SKIP_REGRESSION_GUARD=false, which silently defeated writer-only) while
+#     still yielding to a deliberate choice on the launch command — writer-only WITH the regression
+#     baseline is a legitimate thing to ask for. The two are only distinguishable before the config
+#     files load, which is what snapshot_operator_env captures.
 
 RUN_MODES_FILE="${RUN_MODES_FILE:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../config/run-modes.json}"
+
+# snapshot_operator_env — record which variables the OPERATOR set, before any config file is read.
+#
+# A mode must override a config-file DEFAULT (config.env carries SKIP_REGRESSION_GUARD=false, which
+# silently defeated writer-only on 2026-08-13) while still yielding to a deliberate choice on the
+# launch command. Those two are indistinguishable once both are in the environment — unless you
+# look BEFORE the config files load, which is the one moment only the operator's values exist.
+#
+# Launchers call this before their first load_env_file_safe. A caller that never calls it gets the
+# mode applied in full, which is the safe failure: a half-applied intent is worse than none.
+snapshot_operator_env() {
+    EPAM_OPERATOR_SET_VARS=" $(compgen -e 2>/dev/null | tr '\n' ' ')"
+    export EPAM_OPERATOR_SET_VARS
+}
 
 # run_mode_env <mode> — print the KEY=VALUE lines a mode declares. Non-zero if unknown.
 run_mode_env() {
@@ -62,11 +78,12 @@ apply_run_mode() {
         [ -n "$_line" ] || continue
         _key="${_line%%=*}"
         _val="${_line#*=}"
-        # Already set by the operator? Leave it. A mode supplies defaults for an intent.
-        _already="$(eval printf '%s' "\${${_key}+set}")"
-        if [ "$_already" = "set" ]; then
-            continue
-        fi
+        # Set by the OPERATOR — before any config file was read — so it wins. A value that only
+        # appeared once config.env loaded is a project default, and the mode is more specific than
+        # a default: the operator named this intent on the command line.
+        case "${EPAM_OPERATOR_SET_VARS:-}" in
+            *" ${_key} "*) continue ;;
+        esac
         eval "export ${_key}=\"\$_val\""
     done <<< "$_env"
 

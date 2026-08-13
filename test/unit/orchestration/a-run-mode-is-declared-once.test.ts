@@ -153,6 +153,9 @@ NODE_BIN=${JSON.stringify(process.execPath)}
 SKIP_REGRESSION_GUARD=false
 export RUN_MODES_FILE SKIP_REGRESSION_GUARD
 . ${JSON.stringify(LIB)}
+# A launcher snapshots the operator's environment before reading any config file; that snapshot
+# is what distinguishes a deliberate choice from a project default.
+snapshot_operator_env
 apply_run_mode writer-only
 printf 'SKIP_REGRESSION_GUARD=%s\\n' "$SKIP_REGRESSION_GUARD"
 printf 'SKIP_CPA=%s\\n' "$SKIP_CPA"`;

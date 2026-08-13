@@ -91,6 +91,10 @@ fail()    {
 }
 
 # ── Load .env then metrolinx project env ─────────────────────────────────────
+# Before ANY config file is read: what the operator set on the command line. A mode overrides a
+# project default but never this — see lib/run-modes.sh.
+. "$SCRIPT_DIR/lib/run-modes.sh"
+snapshot_operator_env
 load_env_file_safe "$REPO_ROOT/.env"
 ENV_FILE="$SCRIPT_DIR/../jira/metrolinx.env"
 [ -f "$ENV_FILE" ] && load_env_file_safe "$ENV_FILE" preserve || fail "metrolinx.env not found at $ENV_FILE"

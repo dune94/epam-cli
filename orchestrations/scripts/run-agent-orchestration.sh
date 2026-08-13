@@ -93,6 +93,10 @@ is_lane() { [ "$(orch_role)" = 'lane' ]; }
 # with whatever stale/wrong project is in jira/.env.
 if [ "${JIRA_PIPELINE:-0}" = "1" ] && is_parent && \
    [ -z "${JIRA_URL:-}" ] && [ -f "$AUTOMATION_DIR/jira/.env" ]; then
+  # Only when no launcher took it first — the earliest snapshot is the truthful one.
+  if [ -z "${EPAM_OPERATOR_SET_VARS:-}" ] && [ -f "$SCRIPT_DIR/lib/run-modes.sh" ]; then
+    . "$SCRIPT_DIR/lib/run-modes.sh"; snapshot_operator_env
+  fi
   load_env_file_safe "$AUTOMATION_DIR/jira/.env"
 fi
 

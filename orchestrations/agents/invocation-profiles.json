@@ -51,7 +51,9 @@
     "reasoning.max_tokens is NOT supported on these models (probed: glm-5.1 ignores it).",
     "The only working lever is full off: reasoning:{enabled:false} (5.1) /",
     "reasoning:{effort:'none'} (5.2), both verified. Worth using for structured-JSON",
-    "gates that do not need deep reasoning — safer and cheaper than budget-tuning."
+    "gates that do not need deep reasoning — safer and cheaper than budget-tuning.",
+    "agentSeams and seamPatterns map a MINTED AGENT to its ARCHETYPE — the base agent it is an instance of.",
+    "It is not a bag of invocation settings that happen to suit. The distinction matters because an archetype carries what an instance INHERITS; an implementer pointed at a diagnostician would inherit the wrong prompt, the wrong output kind and the wrong inputs."
   ],
   "defaults": {
     "maxOutputTokens": 32768,
@@ -201,6 +203,17 @@
       "maxOutputTokens": 32768,
       "maxIterations": 25,
       "timeoutSecs": 900
+    },
+    "story-writer": {
+      "_what": "Implements a story: writes the code that satisfies its criteria. The archetype every minted -engineer is an instance of.",
+      "ladder": "HIGHEST",
+      "reasoningEffort": "high",
+      "temperature": "0.2",
+      "maxOutputTokens": 32768,
+      "maxIterations": 120,
+      "timeoutSecs": 900,
+      "allowedTools": "bash,read_file,list_files,search",
+      "_note": "The writer is invoked today through claude.sh own rung ladder, not through this seam, so these settings are not yet the live invocation path. The record exists because an instance must inherit from the archetype it IS: -engineer resolved to impl-failure-analyst purely because that ladder matched the tier wanted, which makes an implementer an instance of a diagnostician."
     }
   },
   "_seamResolution": [
@@ -305,8 +318,8 @@
     },
     {
       "match": "-engineer$",
-      "seam": "impl-failure-analyst",
-      "_why": "implementer seam: high ladder, matching the story writer tier"
+      "seam": "story-writer",
+      "_why": "implements the story — the archetype it is an instance of, not merely a profile whose ladder matches"
     },
     {
       "match": "-agent$",
@@ -318,11 +331,11 @@
     "spec-coordinator-agent": "cpa-inference",
     "openspec-agent": "cpa-inference",
     "speckit-agent": "cpa-inference",
-    "typescript-engineer": "impl-failure-analyst",
-    "agent-systems-engineer": "impl-failure-analyst",
-    "billing-engineer": "impl-failure-analyst",
-    "cli-ux-engineer": "impl-failure-analyst",
-    "test-engineer": "impl-failure-analyst",
+    "typescript-engineer": "story-writer",
+    "agent-systems-engineer": "story-writer",
+    "billing-engineer": "story-writer",
+    "cli-ux-engineer": "story-writer",
+    "test-engineer": "story-writer",
     "team-lead-agent": "cpa-inference",
     "review-agent": "cpa-inference",
     "test-coordinator-agent": "cpa-inference",
@@ -352,8 +365,8 @@
     "agent-skills-agent": "cpa-inference",
     "dashboard-orchestrator-agent": "cpa-inference",
     "dashboard-test-agent": "cpa-inference",
-    "ui-engineer": "impl-failure-analyst",
-    "frontend-engineer": "impl-failure-analyst",
+    "ui-engineer": "story-writer",
+    "frontend-engineer": "story-writer",
     "dashboard-update-agent": "cpa-inference",
     "generator": "cpa-inference",
     "spike-agent": "cpa-inference",
@@ -370,8 +383,13 @@
     "ticket-link-agent": "cpa-inference",
     "discovery-vocabulary-agent": "cpa-inference",
     "roster-reviewer": "code-review-cycle",
-    "greeting-source-engineer": "impl-failure-analyst",
-    "mockhelloworld-investigator": "code-graph-detective"
+    "gotransit-investigator": "code-graph-detective",
+    "upexpress-investigator": "code-graph-detective",
+    "metrolinx-investigator": "code-graph-detective",
+    "contentstack-live-preview-integration-engineer": "story-writer",
+    "gotransit-contentstack-investigator": "code-graph-detective",
+    "upexpress-contentstack-investigator": "code-graph-detective",
+    "metrolinx-contentstack-investigator": "code-graph-detective"
   },
   "defaultSeam": "cpa-inference"
 }

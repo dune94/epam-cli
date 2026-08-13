@@ -96,6 +96,12 @@ describe('EVERY ENTRY POINT THAT INVOKES AN AGENT LOADS IT', () => {
       const code = s.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
       expect(code, `${f} does not load lib/model-ladders.sh, so its seams get whatever happens to be in the environment`)
         .toMatch(/model-ladders\.sh/);
+      // SOURCING IS NOT CALLING. The first version of this test asserted only the source line,
+      // and passed while detective-rerun.sh defined the function and never invoked it — the
+      // seam still reported "EPAM_MODEL_LADDER_HIGHEST is unset". A grep for a filename cannot
+      // see whether anything runs.
+      expect(code, `${f} sources the ladder lib but never calls export_model_ladders`)
+        .toMatch(/export_model_ladders\s+\S/);
     });
   }
 });

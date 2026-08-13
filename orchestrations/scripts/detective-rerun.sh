@@ -68,6 +68,14 @@ load_env_file_safe "$CONFIG"
 
 export EPAM_PROJECT_CONFIG_DIR="${EPAM_PROJECT_CONFIG_DIR:-$PROJECT_DIR}"
 
+# SOURCING THE LIB ONLY DEFINES THE FUNCTION — it has to be CALLED, and it needs the settings
+# file, which is only known once the project directory is resolved above. Without this the
+# detective resolved its seam, asked for the HIGHEST tier, found the variable unset and
+# investigated on whatever default applied:
+#   [seam-invocation] agent 'code-graph-detective' asks for ladder 'HIGHEST',
+#   but EPAM_MODEL_LADDER_HIGHEST is unset in this process
+export_model_ladders "$EPAM_PROJECT_CONFIG_DIR/llm-settings.json"
+
 # The detective returns immediately unless this is set — a brownfield investigation has no
 # meaning without an existing codebase to investigate. Stated rather than assumed so a project
 # whose config omits it fails visibly here instead of returning "no fix sites" and looking

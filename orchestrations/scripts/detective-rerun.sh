@@ -33,6 +33,10 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # Config files are DATA: load them without executing them. See lib/env-file.sh.
 . "$SCRIPT_DIR/lib/env-file.sh"
 . "$SCRIPT_DIR/lib/node-bin.sh"
+# The ladders a seam climbs are declared in llm-settings.json. Without this the detective
+# resolves its seam, asks for a tier, finds the variable unset, and investigates on whatever
+# default happens to apply — observed live 2026-08-13.
+. "$SCRIPT_DIR/lib/model-ladders.sh"
 
 PROJECT=""
 PASSTHRU=()

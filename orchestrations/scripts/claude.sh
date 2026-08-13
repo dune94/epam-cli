@@ -255,12 +255,18 @@ load_llm_settings_json() {
     # EPAM_MODEL_LADDER_HIGH/MEDIUM's existing format exactly (the format the
     # ladder-step lookup function further below already parses) — this is a
     # direct serialization, not a new format.
-    _v=$(_get '[.ladders.high.modelLadder[]? | "\(.from)=\(.to)"] | join("|")')
-    [ -z "${EPAM_MODEL_LADDER_HIGH:-}" ] && [ -n "$_v" ] && export EPAM_MODEL_LADDER_HIGH="$_v"
-    _v=$(_get '[.ladders.medium.modelLadder[]? | "\(.from)=\(.to)"] | join("|")')
-    [ -z "${EPAM_MODEL_LADDER_MEDIUM:-}" ] && [ -n "$_v" ] && export EPAM_MODEL_LADDER_MEDIUM="$_v"
-    _v=$(_get '[.ladders.highest.modelLadder[]? | "\(.from)=\(.to)"] | join("|")')
-    [ -z "${EPAM_MODEL_LADDER_HIGHEST:-}" ] && [ -n "$_v" ] && export EPAM_MODEL_LADDER_HIGHEST="$_v"
+    # ONE READER FOR THE LADDERS — lib/model-ladders.sh, shared with every other entry point.
+    # This used to be three hand-written lines here and NOWHERE ELSE, so a process that did not
+    # start from this script (detective-rerun.sh) had no ladders at all.
+    # ${SCRIPT_DIR:-} and a guarded source: this function runs under `set -e` AND is exercised
+    # under `set -u`, where a bare $SCRIPT_DIR aborts the WHOLE loader and every budget below it
+    # silently goes unset — which is exactly what happened when this was first written.
+    local _ml_lib="${SCRIPT_DIR:-$(dirname "${BASH_SOURCE[0]}")}/lib/model-ladders.sh"
+    if [ -f "$_ml_lib" ]; then
+        # shellcheck source=lib/model-ladders.sh
+        . "$_ml_lib" || true
+        command -v export_model_ladders >/dev/null 2>&1 && export_model_ladders "$_settings_file" || true
+    fi
 
     # Model-specific overrides (modelOverrides.*) are NOT flattened into env
     # vars here — there can be any number of entries (e.g. separate MiniMax-M2.5

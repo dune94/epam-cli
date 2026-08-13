@@ -164,6 +164,11 @@ describe('EVERY TIER IN USE IS ACTUALLY EXPORTED BY THE LOADER', () => {
        # The loader falls back to AUTOMATION_DIR when no project config dir is set, so both must
        # be defined for set -u to survive. Supplying them is what the real script does.
        AUTOMATION_DIR=${JSON.stringify(join(ROOT, 'orchestrations'))}
+       # SCRIPT_DIR too: the loader now reads the ladders through lib/model-ladders.sh, shared
+       # with every other entry point rather than hand-written inside claude.sh. Lifting the
+       # function out of the script means BASH_SOURCE points at the temp file, so the script
+       # directory has to be supplied — as the real script does.
+       SCRIPT_DIR=${JSON.stringify(join(ROOT, 'orchestrations/scripts'))}
        EPAM_PROJECT_CONFIG_DIR=${JSON.stringify(join(ROOT, 'orchestrations/projects/metrolinx'))}
        ${body}
        load_llm_settings_json >/dev/null 2>&1 || true

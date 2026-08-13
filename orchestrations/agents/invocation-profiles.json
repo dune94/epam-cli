@@ -73,7 +73,24 @@
       "allowedTools": "bash,read_file,list_files,search",
       "timeoutSecs": 900,
       "ladder": "HIGHEST",
-      "temperature": "0.1"
+      "temperature": "0.1",
+      "produces": "review-feedback",
+      "template": "team-lead-review",
+      "consumes": [
+        {
+          "kind": "implementation",
+          "required": true
+        },
+        {
+          "kind": "fix-plan"
+        },
+        {
+          "kind": "verification-criteria"
+        },
+        {
+          "kind": "test-criteria"
+        }
+      ]
     },
     "code-review-cycle": {
       "_what": "Per-iteration code review pass.",
@@ -81,7 +98,17 @@
       "reasoningEffort": "high",
       "timeoutSecs": 600,
       "ladder": "HIGHEST",
-      "allowedTools": "bash,read_file,list_files,search"
+      "allowedTools": "bash,read_file,list_files,search",
+      "produces": "review-feedback",
+      "consumes": [
+        {
+          "kind": "implementation",
+          "required": true
+        },
+        {
+          "kind": "fix-plan"
+        }
+      ]
     },
     "agent-failure-analyst": {
       "_what": "Diagnoses a no-output/failed agent attempt, prescribes a corrective directive.",
@@ -90,7 +117,18 @@
       "reasoningEffort": "high",
       "timeoutSecs": 360,
       "ladder": "HIGHEST",
-      "allowedTools": "bash,read_file,list_files,search"
+      "allowedTools": "bash,read_file,list_files,search",
+      "produces": "diagnosis",
+      "template": "failure-analyst",
+      "consumes": [
+        {
+          "kind": "failure-evidence",
+          "required": true
+        },
+        {
+          "kind": "attempt-evidence"
+        }
+      ]
     },
     "repro-test-writer": {
       "_what": "Writes the bug-reproducing test for a brownfield fix.",
@@ -98,7 +136,20 @@
       "maxIterations": 15,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "high"
+      "ladder": "high",
+      "produces": "repro-test",
+      "consumes": [
+        {
+          "kind": "fix-plan",
+          "required": true
+        },
+        {
+          "kind": "ticket"
+        },
+        {
+          "kind": "existing-code"
+        }
+      ]
     },
     "tc-writer": {
       "_what": "Writes post-implementation test criteria into the PRD.",
@@ -106,21 +157,48 @@
       "maxIterations": 6,
       "reasoningEffort": "medium",
       "timeoutSecs": 600,
-      "ladder": "high"
+      "ladder": "high",
+      "produces": "test-criteria",
+      "consumes": [
+        {
+          "kind": "implementation",
+          "required": true
+        },
+        {
+          "kind": "ticket"
+        }
+      ]
     },
     "cpa-gate": {
       "_what": "Judges a CPA estimate rewrite: pass/fail.",
       "maxOutputTokens": 16384,
       "reasoningEffort": "low",
       "timeoutSecs": 180,
-      "ladder": "highest"
+      "ladder": "highest",
+      "produces": "estimate-verdict",
+      "consumes": [
+        {
+          "kind": "estimate",
+          "required": true
+        }
+      ]
     },
     "cpa-inference": {
       "_what": "Produces the cost/effort estimate for a story.",
       "maxOutputTokens": 16384,
       "reasoningEffort": "medium",
       "timeoutSecs": 300,
-      "ladder": "medium"
+      "ladder": "medium",
+      "produces": "estimate",
+      "consumes": [
+        {
+          "kind": "ticket",
+          "required": true
+        },
+        {
+          "kind": "fix-plan"
+        }
+      ]
     },
     "prd-change-reviewer": {
       "_what": "Reviews a proposed PRD mutation before it is applied.",
@@ -128,7 +206,14 @@
       "reasoningEffort": "high",
       "temperature": "0.7",
       "timeoutSecs": 360,
-      "ladder": "highest"
+      "ladder": "highest",
+      "produces": "change-verdict",
+      "consumes": [
+        {
+          "kind": "proposed-change",
+          "required": true
+        }
+      ]
     },
     "prd-change-summarizer": {
       "_what": "Summarizes a rewrite for the change log.",
@@ -136,7 +221,14 @@
       "reasoningEffort": "high",
       "temperature": "0.7",
       "timeoutSecs": 240,
-      "ladder": "medium"
+      "ladder": "medium",
+      "produces": "change-summary",
+      "consumes": [
+        {
+          "kind": "proposed-change",
+          "required": true
+        }
+      ]
     },
     "impl-failure-analyst": {
       "_what": "Diagnoses why an implementation attempt failed.",
@@ -145,28 +237,66 @@
       "temperature": "0.7",
       "timeoutSecs": 360,
       "ladder": "HIGHEST",
-      "allowedTools": "bash,read_file,list_files,search"
+      "allowedTools": "bash,read_file,list_files,search",
+      "produces": "diagnosis",
+      "template": "failure-analyst",
+      "consumes": [
+        {
+          "kind": "failure-evidence",
+          "required": true
+        },
+        {
+          "kind": "attempt-evidence"
+        },
+        {
+          "kind": "verification-criteria"
+        },
+        {
+          "kind": "dependency-contracts"
+        }
+      ]
     },
     "ac-classification": {
       "_what": "Classifies acceptance criteria.",
       "maxOutputTokens": 16384,
       "reasoningEffort": "low",
       "timeoutSecs": 90,
-      "ladder": "medium"
+      "ladder": "medium",
+      "produces": "ac-classification",
+      "consumes": [
+        {
+          "kind": "ticket",
+          "required": true
+        }
+      ]
     },
     "ac-elaboration": {
       "_what": "Elaborates an acceptance criterion into verification criteria.",
       "maxOutputTokens": 32768,
       "reasoningEffort": "medium",
       "timeoutSecs": 180,
-      "ladder": "high"
+      "ladder": "high",
+      "produces": "verification-criteria",
+      "consumes": [
+        {
+          "kind": "ticket",
+          "required": true
+        }
+      ]
     },
     "codeline-discovery": {
       "_what": "Picks which local codeline a Jira ticket belongs to.",
       "maxOutputTokens": 16384,
       "reasoningEffort": "high",
       "timeoutSecs": 300,
-      "ladder": "HIGHEST"
+      "ladder": "HIGHEST",
+      "produces": "codeline-selection",
+      "consumes": [
+        {
+          "kind": "ticket",
+          "required": true
+        }
+      ]
     },
     "roster-review": {
       "_what": "Falsifies the claims in a generated agent roster before any implementer inherits them.",
@@ -175,7 +305,14 @@
       "temperature": "0.1",
       "maxOutputTokens": 32768,
       "maxIterations": 25,
-      "timeoutSecs": 900
+      "timeoutSecs": 900,
+      "produces": "roster-verdict",
+      "consumes": [
+        {
+          "kind": "roster",
+          "required": true
+        }
+      ]
     },
     "code-graph-detective": {
       "_what": "Investigates one codeline and reports where the work actually lands.",
@@ -184,7 +321,21 @@
       "temperature": "0.7",
       "maxOutputTokens": 32768,
       "maxIterations": 25,
-      "timeoutSecs": 900
+      "timeoutSecs": 900,
+      "produces": "fix-plan",
+      "template": "code-graph-detective",
+      "consumes": [
+        {
+          "kind": "ticket",
+          "required": true
+        },
+        {
+          "kind": "codeline-facts"
+        },
+        {
+          "kind": "existing-code"
+        }
+      ]
     },
     "guard-vocabulary": {
       "_what": "Derives the vocabulary the verification-criteria guard enforces. A guard armed with the wrong terms reports clean.",
@@ -193,7 +344,14 @@
       "temperature": "0.1",
       "maxOutputTokens": 32768,
       "maxIterations": 6,
-      "timeoutSecs": 900
+      "timeoutSecs": 900,
+      "produces": "guard-vocabulary",
+      "consumes": [
+        {
+          "kind": "verification-criteria",
+          "required": true
+        }
+      ]
     },
     "estate-survey": {
       "_what": "Surveys every codeline BEFORE the roster is minted: which ones the work actually reaches, and which need their own investigator. Breadth, never fix sites.",
@@ -202,7 +360,14 @@
       "temperature": "0.7",
       "maxOutputTokens": 32768,
       "maxIterations": 25,
-      "timeoutSecs": 900
+      "timeoutSecs": 900,
+      "produces": "estate-survey",
+      "consumes": [
+        {
+          "kind": "ticket",
+          "required": true
+        }
+      ]
     },
     "story-writer": {
       "_what": "Implements a story: writes the code that satisfies its criteria. The archetype every minted -engineer is an instance of.",
@@ -213,7 +378,41 @@
       "maxIterations": 120,
       "timeoutSecs": 900,
       "allowedTools": "bash,read_file,list_files,search",
-      "_note": "The writer is invoked today through claude.sh own rung ladder, not through this seam, so these settings are not yet the live invocation path. The record exists because an instance must inherit from the archetype it IS: -engineer resolved to impl-failure-analyst purely because that ladder matched the tier wanted, which makes an implementer an instance of a diagnostician."
+      "_note": "The writer is invoked today through claude.sh own rung ladder, not through this seam, so these settings are not yet the live invocation path. The record exists because an instance must inherit from the archetype it IS: -engineer resolved to impl-failure-analyst purely because that ladder matched the tier wanted, which makes an implementer an instance of a diagnostician.",
+      "produces": "implementation",
+      "consumes": [
+        {
+          "kind": "fix-plan",
+          "required": true,
+          "authority": "plan of record — apply it"
+        },
+        {
+          "kind": "verification-criteria",
+          "required": true,
+          "authority": "what a tester will confirm"
+        },
+        {
+          "kind": "review-feedback",
+          "authority": "must be addressed before this is accepted"
+        },
+        {
+          "kind": "diagnosis",
+          "authority": "why the last attempt failed"
+        },
+        {
+          "kind": "attempt-evidence",
+          "authority": "evidence, not instruction"
+        },
+        {
+          "kind": "test-criteria"
+        },
+        {
+          "kind": "dependency-contracts"
+        },
+        {
+          "kind": "existing-code"
+        }
+      ]
     }
   },
   "_seamResolution": [
@@ -391,5 +590,15 @@
     "upexpress-contentstack-investigator": "code-graph-detective",
     "metrolinx-contentstack-investigator": "code-graph-detective"
   },
-  "defaultSeam": "cpa-inference"
+  "defaultSeam": "cpa-inference",
+  "engineProduces": [
+    "ticket",
+    "codeline-facts",
+    "attempt-evidence",
+    "failure-evidence",
+    "roster",
+    "proposed-change",
+    "existing-code",
+    "dependency-contracts"
+  ]
 }

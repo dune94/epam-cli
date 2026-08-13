@@ -112,15 +112,32 @@ describe('EVERY MINTED AGENT IS RECORDED AGAINST THE SEAM IT ENTERS BY', () => {
 
   it('an operator override for a still-present agent is preserved', () => {
     // The cross-reference is regenerated, but a deliberate decision about an agent that still
-    // exists is not something a re-mint should silently revert.
+    // exists is not something a re-mint should silently revert. Since 2026-08-13 that decision
+    // has to SAY it is one: agentSeamOrigin records who chose the mapping.
     const f = fixture({ 'x-investigator': 'brief' }, {
       ...REGISTRY,
       agentSeams: { 'x-investigator': 'cpa-inference' },
+      agentSeamOrigin: { 'x-investigator': 'override' },
     });
     writeXref(f.roster, f.registry);
     const reg = JSON.parse(readFileSync(f.registry, 'utf8'));
     expect(reg.agentSeams['x-investigator'], 'an explicit override was overwritten by a pattern')
       .toBe('cpa-inference');
+  });
+
+  it('a mapping the MINT derived is re-derived, so a corrected rule reaches it', () => {
+    // The counterweight, and the reason provenance exists. Ten implementers were recorded as
+    // instances of the failure analyst; without this, correcting the rule would leave every one
+    // of them carrying the old answer forever, and each future correction would need a hand.
+    const f = fixture({ 'x-investigator': 'brief' }, {
+      ...REGISTRY,
+      agentSeams: { 'x-investigator': 'cpa-inference' },
+      agentSeamOrigin: { 'x-investigator': 'derived' },
+    });
+    writeXref(f.roster, f.registry);
+    const reg = JSON.parse(readFileSync(f.registry, 'utf8'));
+    expect(reg.agentSeams['x-investigator'], 'a stale derived mapping outlived the rule that made it')
+      .toBe('code-graph-detective');
   });
 });
 

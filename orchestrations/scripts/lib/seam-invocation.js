@@ -56,8 +56,13 @@ function readRegistry(file) {
  * @param {string} agent      any agent name, minted or hand-written
  * @param {string} [file]     registry path; defaults to the shipped one
  */
-function resolveSeam(agent, file) {
+function resolveSeam(agent, file, opts) {
   if (!agent) throw new Error('cannot resolve a seam for an empty agent name');
+  // ignoreXref: resolve from the RULES alone, as if this agent had never been mapped. The mint
+  // needs this to re-derive an entry it wrote itself — reading the cross-reference there would
+  // return the stale answer and a corrected rule could never land. Every other caller wants the
+  // recorded decision and gets it.
+  const _ignoreXref = !!(opts && opts.ignoreXref);
   const reg = readRegistry(file || registryPath());
   const profiles = reg.profiles || {};
 
@@ -68,7 +73,7 @@ function resolveSeam(agent, file) {
   // 2. The explicit cross-reference: this agent enters by this seam. Named agents that are
   //    not themselves profiles live here, and an entry always beats a pattern — a family rule
   //    must never override a decision someone made deliberately about one agent.
-  const xref = reg.agentSeams || {};
+  const xref = _ignoreXref ? {} : (reg.agentSeams || {});
   if (Object.prototype.hasOwnProperty.call(xref, agent)) {
     const seam = xref[agent];
     if (!profiles[seam]) {

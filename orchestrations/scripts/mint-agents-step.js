@@ -361,13 +361,34 @@ function writeRosterDiff(profilesPath, agentsDir, logDir, mintedThisRun, mintedD
  * No agent name and no seam name appears here: the roster supplies the names, the registry
  * supplies the shapes.
  */
+
+/**
+ * The roster file exists in TWO shapes in the wild: a flat { agent: brief } map, and a wrapper
+ * { runId, _what, profiles: { agent: brief } }. Reading one shape in one function and the other
+ * elsewhere is how a validator ends up examining `runId` and `_what` as if they were agents.
+ * One reader, both shapes.
+ */
+function rosterAgents(profilesPath) {
+  const parsed = JSON.parse(fs.readFileSync(profilesPath, 'utf8'));
+  const map = (parsed && typeof parsed.profiles === 'object' && parsed.profiles) ? parsed.profiles : parsed;
+  const out = {};
+  for (const [k, v] of Object.entries(map || {})) {
+    if (k.startsWith('_') || k === 'runId') continue;
+    out[k] = v;
+  }
+  return out;
+}
+
 function writeAgentSeamCrossReference(profilesPath, registryPath) {
   const { resolveSeam } = require('./lib/seam-invocation.js');
 
-  const roster = JSON.parse(fs.readFileSync(profilesPath, 'utf8'));
+  const roster = rosterAgents(profilesPath);
   const registry = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
   const profiles = registry.profiles || {};
   const previous = registry.agentSeams || {};
+  // Provenance lives BESIDE the map, not inside it: agentSeams stays a plain
+  // agent -> seam string, so seam-invocation.js and every other reader is untouched.
+  const origin = {};
 
   // RE-CREATED, not merged: an agent dropped from the roster must not linger. Rebuilt from the
   // roster alone, so the cross-reference always describes the agents that actually exist.
@@ -377,14 +398,28 @@ function writeAgentSeamCrossReference(profilesPath, registryPath) {
     // An agent that IS a seam already wins at resolution; recording it too would create a
     // second place to drift from.
     if (profiles[agent]) continue;
-    // A deliberate decision about an agent that still exists survives a re-mint. Regenerating
-    // the mapping must not silently revert an operator's override.
-    if (Object.prototype.hasOwnProperty.call(previous, agent) && profiles[previous[agent]]) {
+    // AN OVERRIDE SURVIVES; A DERIVED VALUE DOES NOT.
+    //
+    // This used to preserve ANY previous mapping, which is right for an operator's deliberate
+    // decision and wrong for a value the mint itself derived last time — and it could not tell
+    // them apart. Live 2026-08-13: the -engineer rule had pointed ten implementers at the
+    // failure analyst; correcting the rule reached none of them, because every stale entry
+    // outranked it. The correction had to be applied by hand, and so would the next one.
+    //
+    // A BARE STRING IS TREATED AS DERIVED. Every entry written before this change is one, and
+    // reading them as overrides would freeze today's mappings permanently.
+    const _prevOrigin = (registry.agentSeamOrigin || {})[agent];
+    if (_prevOrigin === 'override'
+        && Object.prototype.hasOwnProperty.call(previous, agent)
+        && profiles[previous[agent]]) {
       next[agent] = previous[agent];
+      origin[agent] = 'override';
       continue;
     }
     try {
-      next[agent] = resolveSeam(agent, registryPath);
+      // From the RULES, not from what we recorded last time — see resolveSeam's ignoreXref.
+      next[agent] = resolveSeam(agent, registryPath, { ignoreXref: true });
+      origin[agent] = 'derived';
     } catch (e) {
       unresolved.push(`${agent}: ${(e && e.message) || e}`);
     }
@@ -397,11 +432,64 @@ function writeAgentSeamCrossReference(profilesPath, registryPath) {
   }
 
   registry.agentSeams = next;
+  registry.agentSeamOrigin = origin;
   fs.writeFileSync(registryPath, `${JSON.stringify(registry, null, 2)}\n`);
   return next;
 }
 
-module.exports = { resolveRepoPath, resolveCodelines, declaredDependencies, writeRosterDiff, mintTools, provisionPlugins, writeAgentSeamCrossReference };
+
+/**
+ * validateWorkflow(profilesPath, registryPath)
+ *
+ * IS THIS ROSTER BUILDABLE? Every archetype declares what it produces and what it requires, so
+ * a roster containing a consumer whose REQUIRED input nobody produces is decidable from the
+ * data — before any story runs, with no model involved.
+ *
+ * That is the shape of every unwinnable story this pipeline has produced: an actor waiting for
+ * something nobody was configured to make. The mint already refuses a roster whose agent
+ * resolves to no seam, for the same reason and with the same timing — "caught here, before any
+ * story runs, not three hours into a run".
+ *
+ * OPTIONAL INPUTS ARE NOT CHECKED. Optional means the workflow runs without it; requiring a
+ * producer for every optional kind would force every roster to carry every archetype, which is
+ * the opposite of letting a project mint only what it needs.
+ */
+function validateWorkflow(profilesPath, registryPath) {
+  const registry = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+  const roster = rosterAgents(profilesPath);
+  const archetypes = registry.profiles || {};
+  const { resolveSeam } = require('./lib/seam-invocation.js');
+
+  // What this roster can produce: every archetype an agent resolves to, plus the engine.
+  const produced = new Set(registry.engineProduces || []);
+  const seamOf = {};
+  for (const agent of Object.keys(roster)) {
+    const seam = archetypes[agent] ? agent : resolveSeam(agent, registryPath);
+    seamOf[agent] = seam;
+    const p = archetypes[seam] && archetypes[seam].produces;
+    if (p) produced.add(String(p));
+  }
+
+  const missing = [];
+  for (const agent of Object.keys(roster)) {
+    const arch = archetypes[seamOf[agent]];
+    if (!arch) continue;
+    for (const c of arch.consumes || []) {
+      if (!c || !c.required) continue;
+      if (!produced.has(String(c.kind))) {
+        missing.push(`${agent} (${seamOf[agent]}) requires '${c.kind}', which nothing in this roster produces`);
+      }
+    }
+  }
+  if (missing.length) {
+    throw new Error(
+      `${missing.length} agent(s) in this roster require an input nobody produces, so they would `
+      + `wait forever. Mint a producer, or make the input optional:\n  ` + missing.join('\n  '));
+  }
+  return true;
+}
+
+module.exports = { resolveRepoPath, rosterAgents, resolveCodelines, declaredDependencies, writeRosterDiff, mintTools, provisionPlugins, writeAgentSeamCrossReference, validateWorkflow };
 
 if (require.main !== module) return;
 
@@ -774,9 +862,16 @@ if (require.main !== module) return;
   // Record which seam every agent just minted enters the pipeline by. Throws if any of them
   // resolves to nothing, which fails the mint — that is the point: an unconfigured agent is
   // caught here, before any story runs, not three hours into a run.
-  const _xref = writeAgentSeamCrossReference(PROFILES_PATH,
-    process.env.AGENT_PROFILES_REGISTRY || path.join(AGENTS_DIR, "invocation-profiles.json"));
+  const _registryPath = process.env.AGENT_PROFILES_REGISTRY || path.join(AGENTS_DIR, "invocation-profiles.json");
+  const _xref = writeAgentSeamCrossReference(PROFILES_PATH, _registryPath);
   process.stderr.write(`[mint-step] agent→seam cross-reference written for ${Object.keys(_xref).length} agent(s)\n`);
+
+  // And that the roster we just minted can actually RUN: every required input of every agent has
+  // somebody in this roster — or the engine — producing it. A writer waiting on a plan nobody was
+  // minted to make is the shape of every unwinnable story this pipeline has produced, and it is
+  // decidable here from the data alone, with no model involved and no tokens spent.
+  validateWorkflow(PROFILES_PATH, _registryPath);
+  process.stderr.write(`[mint-step] ✓ workflow is buildable: every required input has a producer\n`);
   process.stderr.write(`[mint-step] ✓ roster and assignments written to ${PRD_PATH}\n`);
 })().catch((err) => {
   process.stderr.write(`[mint-step] FAILED: ${(err && err.message) || err}\n`);

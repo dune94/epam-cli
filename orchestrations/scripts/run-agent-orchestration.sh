@@ -6378,12 +6378,15 @@ if [ -n "${main_stories:-}" ] && \
     git_add_client_outputs "$PROJECT_ROOT" || true
     # THE COMMIT-TIME CREDENTIAL SCAN WAS REMOVED HERE (operator decision, 2026-08-09).
     #
-    # It matched the SHAPE `credential_name: value` without inspecting `value`, so on
-    # AMSD-2041 it refused the commit for
+    # It matched the SHAPE `credential_name: value` without inspecting `value`, so it refused a
+    # commit for
     #
-    #     management_token: CONTENTSTACK_LIVE_PREVIEW_TOKEN,
+    #     management_token: SOME_SERVICE_API_TOKEN,
     #
     # an environment-derived identifier — the exact pattern its own error message recommends.
+    # (Client identifiers and ticket ids are kept out of engine source, comments included: they
+    # date the engine to one customer, and a generic prompt built from them is wrong for the
+    # next one.)
     # The story is about wiring a preview token, so it would have blocked every commit the
     # work produced, and it had never caught a real leak. Worse, refusing here also unstaged
     # the writer's changes while the story was still reported "Implemented: 1, Failed: 0".

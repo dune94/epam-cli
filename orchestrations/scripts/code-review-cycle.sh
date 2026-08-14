@@ -69,7 +69,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # model rather than kill a run.
 # shellcheck source=lib/seam-ladder.sh
 . "$SCRIPT_DIR/lib/seam-ladder.sh" 2>/dev/null || true
-command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "code-review-cycle"
+# WHICH AGENT THIS IS — declared ONCE, and exported so ai-run.sh keys this agent's ladder rung
+# state to it. Without it every agent shared one counter ("agent__<story>"): one agent escalating
+# advanced the ladder for all of them, and team-lead-review's cross-process resume read a key
+# nothing ever wrote.
+_SEAM_NAME="code-review-cycle"
+export EPAM_AGENT_NAME="$_SEAM_NAME"
+command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "$_SEAM_NAME"
 
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
@@ -78,7 +84,10 @@ REVIEW_LOG="${REVIEW_LOG:-$AUTOMATION_DIR/logs/code-reviews.jsonl}"
 MESSAGES_DIR="${MESSAGES_DIR:-$AUTOMATION_DIR/logs/messages}"
 AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$AUTOMATION_DIR/agents/profiles.json}"
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
-ORCH_GATE_MODEL="${ORCH_GATE_MODEL:-z-ai/glm-5.2}"
+# THE SEAM DECIDES. seam_ladder_export set EPAM_MODEL to the first rung of the chain this
+# seam's archetype declares; the literal that stood here overrode it silently, so editing the
+# declared tier moved no model. An operator value still wins; the unremovable default is gone.
+ORCH_GATE_MODEL="${ORCH_GATE_MODEL:-${EPAM_MODEL:-}}"
 
 run_review_prompt() {
     local prompt_text="$1"

@@ -33,6 +33,32 @@ export_model_ladders() {
     # to edit the engine, and a list would go stale exactly the way the pinned ladder did.
     for _tier in $(jq -r '(.ladders // {}) | keys[]' "$_settings" 2>/dev/null); do
         _var="EPAM_MODEL_LADDER_$(printf '%s' "$_tier" | tr '[:lower:]-' '[:upper:]_')"
+
+        # THE STARTING MODEL IS DECLARED, NEVER INFERRED FROM MAP ORDER — AND IT IS EXPORTED
+        # BEFORE THE OVERRIDE GUARD BELOW, WHICH IS A SEPARATE VALUE FROM THE CHAIN.
+        #
+        # modelLadder is a set of HOPS with several independent roots — MiniMax, zhipuai, z-ai and
+        # moonshotai chains all live in one map. Taking the first pair's "from" as the start meant
+        # whichever root happened to be listed first in the JSON became every seam's opening model.
+        #
+        # This export sat BELOW the `continue` when it was written. The orchestrator exports the
+        # chain first, so every later caller hit `continue` and never exported the start — the
+        # variable was unset in every seam process. seam_ladder_export then set no EPAM_MODEL, and
+        # because the hardcoded model fallbacks had been removed the same afternoon, the
+        # repro-test-writer REFUSED to run: "no model resolved for this seam". Step 3.55 then
+        # blocked the story for shipping no reproducing test, and the run could not converge.
+        # Live 2026-08-14, run 20260814T171533Z.
+        #
+        # It passed verification because that was run in a CLEAN shell, where the chain was not
+        # yet set and the `continue` never fired — the one condition under which the bug is
+        # invisible. The override guard protects an operator's CHAIN; it was never meant to gate
+        # the start model.
+        local _start
+        _start=$(jq -r --arg t "$_tier" '.ladders[$t].startModel // ""' "$_settings" 2>/dev/null)
+        [ -n "$_start" ] && [ -z "$(eval printf '%s' "\"\${${_var}_START:-}\"")" ] \
+            && export "${_var}_START=$_start"
+
+        # An ALREADY-SET chain is an operator override and outranks the declaration.
         [ -n "${!_var:-}" ] && continue
         _chain=$(jq -r --arg t "$_tier" \
             '[.ladders[$t].modelLadder[]? | "\(.from)=\(.to)"] | join("|")' "$_settings" 2>/dev/null)
@@ -49,5 +75,24 @@ export_model_ladders() {
     _order=$(jq -r '(.ladderTierOrder // []) | join(" ")' "$_settings" 2>/dev/null)
     [ -n "$_order" ] && [ -z "${EPAM_MODEL_LADDER_TIER_ORDER:-}" ] \
         && export "EPAM_MODEL_LADDER_TIER_ORDER=$_order"
+
+    # THE EFFORT VOCABULARY — PART OF THE LADDER'S SEMANTICS, NOT A SEPARATE SYSTEM.
+    #
+    # A rung is (model, effort). When the model chain runs out, effort is what still climbs:
+    # "at the top of its chain — effort is the remaining lever". So this is exported for the same
+    # consumers that walk the model chain — effort_rank, max_effort and next_effort — and it is
+    # PIPE-separated because that is what they already parse.
+    #
+    # ladderTierOrder above orders which CHAIN an agent gets (medium/high/highest); effortLadder
+    # orders how hard it works within a rung (low/medium/high/max). Two settings of one ladder,
+    # not two ladders.
+    #
+    # The engine ranked effort in four hand-written case statements that knew three of the four
+    # declared tiers, so a story asking for the project's highest effort ranked below its second
+    # highest.
+    local _effort
+    _effort=$(jq -r '(.effortLadder // []) | join("|")' "$_settings" 2>/dev/null)
+    [ -n "$_effort" ] && [ -z "${EPAM_EFFORT_LADDER:-}" ] \
+        && export "EPAM_EFFORT_LADDER=$_effort"
     return 0
 }

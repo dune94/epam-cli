@@ -56,9 +56,21 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 #
 # Guarded: these run mid-pipeline, and a packaging error must degrade to the previous fixed
 # model rather than kill a run.
+# WHICH SEAM THIS SCRIPT IS — stated ONCE, and used for both the ladder export and the rung state.
+# Two copies of a name is one defect waiting: the export and the escalation would drift apart and
+# the agent would climb a ladder recorded against a different identity than the one it declared.
+_SEAM_NAME="repro-test-writer"
 # shellcheck source=lib/seam-ladder.sh
 . "$SCRIPT_DIR/lib/seam-ladder.sh" 2>/dev/null || true
-command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "repro-test-writer"
+# WHICH AGENT THIS IS — declared ONCE, and exported so ai-run.sh keys this agent's ladder rung
+# state to it. Without it every agent shared one counter ("agent__<story>"): one agent escalating
+# advanced the ladder for all of them, and team-lead-review's cross-process resume read a key
+# nothing ever wrote.
+export EPAM_AGENT_NAME="$_SEAM_NAME"
+command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "$_SEAM_NAME"
+# The SHARED ladder handler — the same one the writer, reviewer and analyst use.
+# shellcheck source=lib/agent-ladder.sh
+. "$SCRIPT_DIR/lib/agent-ladder.sh" 2>/dev/null || true
 
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
 NODE_BIN="${NODE_BIN:-node}"
@@ -125,19 +137,47 @@ _is_testable_source() {
     esac
 }
 
+# WHICH FILE CARRIES THE FEATURE — ASKED, NOT GUESSED BY POSITION.
+#
+# What stood here took fixSiteAnalysis[0] — first in the list, an accident of ordering. On
+# AMSD-2041 that was the SETUP site (the SDK config), so the test asserted configuration flags
+# while the file carrying the behaviour was never a candidate, and vc-coverage then judged all
+# four criteria against it and reported three uncovered.
+#
+# The plan names several sites and says what each one DOES; picking by index discards that. The
+# agent already receives the plan and the verification criteria as declared inputs, so it is asked
+# which site a test would have to exercise to prove the criteria — one path, nothing else.
+#
+# ITS ANSWER IS VALIDATED, NOT TRUSTED. The chosen path becomes EPAM_ALLOWED_WRITE_PATHS, the only
+# place this agent may write, so an unchecked answer would widen the write perimeter on the
+# agent's own say-so. It must be a testable source file that this change actually touched.
 _primary_fix=""
-# 1. detective fix site, if it is present in this change and testable
-if [ -n "$PRD_FILE" ] && [ -f "$PRD_FILE" ]; then
-    _det_site=$(jq -r --arg id "$STORY_ID" \
-        '(.stories[]? | select(.id == $id) | .fixSiteAnalysis // [])[0].file // ""' \
-        "$PRD_FILE" 2>/dev/null || echo "")
-    if [ -n "$_det_site" ] && [ "$_det_site" != "null" ] && _is_testable_source "$_det_site"; then
-        for f in "${FIX_FILES[@]}"; do
-            [ "$f" = "$_det_site" ] && { _primary_fix="$_det_site"; break; }
-        done
-        # the detective may name a path the diff touched under a different prefix
-        [ -z "$_primary_fix" ] && [ -f "$PROJECT_ROOT/$_det_site" ] && _primary_fix="$_det_site"
-    fi
+_choose_target() {
+    [ -x "$AI_RUNNER_CMD" ] || return 1
+    local _sites _vcs _cands _ask _ans
+    _sites=$(jq -r --arg id "$STORY_ID" \
+        '(.stories[]? | select(.id == $id) | .fixSiteAnalysis // [])[] | "  - \(.file): \(.finding // .reason // .change // "")"' \
+        "$PRD_FILE" 2>/dev/null | head -20)
+    _vcs=$(jq -r --arg id "$STORY_ID" \
+        '(.stories[]? | select(.id == $id) | .verificationCriteria // [])[] | "  - \(if type=="object" then (.criterion // .text // tostring) else tostring end)"' \
+        "$PRD_FILE" 2>/dev/null | head -20)
+    _cands=$(printf '  - %s\n' "${FIX_FILES[@]}")
+    _ask=$(printf 'A change was made and must now be covered by ONE test.\n\nFiles this change touched:\n%s\n\nThe plan'"'"'s sites and what each does:\n%s\n\nWhat the test must prove:\n%s\n\nWhich ONE of the touched files carries the behaviour a test would exercise to prove those criteria? Not the file that merely configures or wires it — the one whose logic would be wrong if the criteria failed.\n\nReply with the file path only, exactly as listed above. No prose.\n' \
+        "$_cands" "${_sites:-  (none recorded)}" "${_vcs:-  (none recorded)}")
+    _ans=$(printf '%s' "$_ask" | EPAM_MAX_ITERATIONS=3 EPAM_MAX_OUTPUT_TOKENS=256 \
+        "$AI_RUNNER_CMD" 2>/dev/null | tr -d '\r' | grep -oE '[A-Za-z0-9_./-]+\.[A-Za-z]+' | head -1)
+    [ -n "$_ans" ] || return 1
+    _is_testable_source "$_ans" || { warning "target choice '"'"'$_ans'"'"' is not testable source — ignoring"; return 1; }
+    local _f
+    for _f in "${FIX_FILES[@]}"; do
+        if [ "$_f" = "$_ans" ]; then printf '%s' "$_ans"; return 0; fi
+    done
+    warning "target choice '"'"'$_ans'"'"' is not among the files this change touched — ignoring"
+    return 1
+}
+if [ -n "$PRD_FILE" ] && [ -f "$PRD_FILE" ] && [ "${EPAM_TEST_TARGET_ASK:-1}" = "1" ]; then
+    _primary_fix="$(_choose_target || echo "")"
+    [ -n "$_primary_fix" ] && log "target chosen by the agent from the plan and the criteria: $_primary_fix"
 fi
 # 2. first genuinely testable changed source file
 if [ -z "$_primary_fix" ]; then
@@ -261,12 +301,9 @@ _ladder_skip_reason() {
     fi
 }
 
-_ladder_next_model() {
-    local _m="$1" _map="${EPAM_MODEL_LADDER_HIGH:-${EPAM_MODEL_LADDER:-}}" _pair
-    IFS='|' read -ra _pairs <<< "$_map"
-    for _pair in "${_pairs[@]}"; do case "$_pair" in "${_m}="*) echo "${_pair#*=}"; return 0 ;; esac; done
-    echo ""
-}
+# _ladder_next_model was removed 2026-08-14: it walked a chain pinned to the HIGH tier while this
+# seam declares its own, and it became unreachable when the escalation moved to the shared handler.
+# A dead private chain is worse than none — the next reader assumes it is what runs.
 _provider_for_model() {
     local _m="$1" _map="${EPAM_MODEL_PROVIDER_MAP:-}" _pair _pat _prov
     IFS='|' read -ra _pairs <<< "$_map"
@@ -281,7 +318,19 @@ _provider_for_model() {
 # reusable agent-attempt-analyst to diagnose WHY and prepend a tailored corrective directive
 # to the next attempt — instead of blindly re-running the same prompt.
 _base_provider="${SPEC_MODE_PROVIDER:-${EPAM_ORCHESTRATION_PROVIDER:-qwen}}"
-_base_model="${SPEC_MODE_SPECKIT_MODEL:-${ESCALATION_MODEL_HIGH:-z-ai/glm-5.1}}"
+# THE SEAM DECIDES, NOT THIS FILE. seam_ladder_export (line ~61) sets EPAM_MODEL to the first rung
+# of the chain this seam's archetype declares. The literal that stood here overrode that silently:
+# the seam asked for its ladder, and the answer was thrown away one variable later, so changing the
+# declared tier changed nothing at all. A missing EPAM_MODEL is a misconfiguration to report, never
+# a model to guess.
+_base_model="${EPAM_MODEL:-}"
+if [ -z "$_base_model" ]; then
+    warning "no model resolved for this seam — its archetype declares no ladder, or the tier's chain is unset. Skipping test authorship rather than guessing a model."
+    exit 0
+fi
+# The identity the shared ladder records rungs against — the same seam name declared above, never
+# a second copy of it.
+_LADDER_AGENT="$_SEAM_NAME"
 _writer_log="${LOG_DIR:-$(dirname "$SCRIPT_DIR")/logs}/repro-test-writer-${STORY_ID}.log"
 _test_validated=0
 
@@ -434,15 +483,27 @@ _kb_apply_lib="$SCRIPT_DIR/lib/kb-apply.sh"
 [ -f "$_kb_apply_lib" ] && . "$_kb_apply_lib"
 
 
+# THE SHARED HANDLER, NOT A PRIVATE ONE. lib/agent-ladder.sh steps one rung per RECORDED failure
+# along the chain this seam's ARCHETYPE declares, so the tier in invocation-profiles.json is what
+# selects the model — here and in every other consumer, by the same code.
+#
+# The escalation this replaces stepped from _base_model on every attempt, so attempt 3 re-derived
+# the same hop attempt 2 had already taken: both logged an identical escalation and the rung never
+# advanced. Live 2026-08-14 the test-writer burned all three attempts without ever climbing.
+_model="$_base_model"
 for _attempt in $(seq 1 "$_max_attempts"); do
-    _model="$_base_model"; _provider="$_base_provider"
+    _provider="$_base_provider"
     if [ "$_attempt" -gt 1 ]; then
-        _next="$(_ladder_next_model "$_base_model")"
-        if [ -n "$_next" ]; then
+        _prev_model="$_model"
+        agent_ladder_record_failure "$_LADDER_AGENT" "$STORY_ID"
+        _next="$(agent_ladder_model "$_LADDER_AGENT" "$STORY_ID" "$_model")"
+        if [ -n "$_next" ] && [ "$_next" != "$_model" ]; then
             _model="$_next"; _provider="$(_provider_for_model "$_model")"; [ -z "$_provider" ] && _provider="$_base_provider"
-            log "ladder escalation (attempt ${_attempt}/${_max_attempts}) — ${_base_model} → ${_model}"
+            log "ladder escalation (attempt ${_attempt}/${_max_attempts}) — ${_prev_model} → ${_model}"
+        elif agent_ladder_exhausted "$_LADDER_AGENT" "$STORY_ID" "$_model"; then
+            warning "NO ladder escalation on attempt ${_attempt}/${_max_attempts} — at the top of the declared chain (${_model})"
         else
-            warning "NO ladder escalation on attempt ${_attempt}/${_max_attempts} — $(_ladder_skip_reason "$_base_model" "${EPAM_MODEL_LADDER_HIGH:-${EPAM_MODEL_LADDER:-}}")"
+            warning "NO ladder escalation on attempt ${_attempt}/${_max_attempts} — no chain declared for this seam's tier"
         fi
     fi
     # Prepend the self-heal corrective directive (empty on attempt 1). printf '%s' on the prompt

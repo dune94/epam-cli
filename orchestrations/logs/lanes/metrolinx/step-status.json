@@ -1,6 +1,6 @@
 {
   "phase": "core",
-  "updatedAt": "2026-08-10T15:46:47+00:00",
+  "updatedAt": "2026-08-14T19:25:55+00:00",
   "steps": [
     {"id":"1","label":"Step 1: Specification pass","status":"skip","detail":"EPAM_SPEC_MODE=0"},
     {"id":"1a","label":"  openspec (elaboration)","status":"skip","detail":"EPAM_SPEC_MODE=0"},

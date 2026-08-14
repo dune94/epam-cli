@@ -36,7 +36,18 @@ function run(failureClass: string, failedOutput: string, context: string): { out
   const promptCapture = join(dir, 'prompt.txt'); writeFileSync(promptCapture, '');
   const out = execFileSync('bash', [ANALYST, failureClass, outFile, ctxFile], {
     encoding: 'utf8',
-    env: { ...process.env, AI_RUNNER_CMD: stubRunner(dir, promptCapture) },
+    // A MODEL IS DECLARED, not inherited from a literal in the script.
+    //
+    // agent-attempt-analyst.sh used to end its resolution chain in a hardcoded model, so this
+    // harness never had to supply one and the script's own model resolution was never exercised.
+    // With the literal removed the script now refuses rather than guessing — the right behaviour,
+    // and it makes the omission here visible. This test is about the DIAGNOSIS the analyst
+    // produces, so it declares a model and moves on.
+    env: {
+      ...process.env,
+      AI_RUNNER_CMD: stubRunner(dir, promptCapture),
+      AGENT_ANALYST_MODEL: 'test-model',
+    },
   });
   let prompt = ''; try { prompt = execFileSync('cat', [promptCapture], { encoding: 'utf8' }); } catch { /* */ }
   return { out, prompt };

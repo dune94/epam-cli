@@ -1,7 +1,7 @@
 {
   "canonicalFile": "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/agents/profiles.canonical.json",
   "canonicalRoles": 57,
-  "liveRoles": 61,
+  "liveRoles": 64,
   "generated": [
     {
       "role": "gotransit-investigator",
@@ -21,6 +21,21 @@
     {
       "role": "contentstack-live-preview-integration-engineer",
       "briefChars": 5096,
+      "mintedThisRun": false
+    },
+    {
+      "role": "gotransit-contentstack-investigator",
+      "briefChars": 2590,
+      "mintedThisRun": false
+    },
+    {
+      "role": "upexpress-contentstack-investigator",
+      "briefChars": 2026,
+      "mintedThisRun": false
+    },
+    {
+      "role": "metrolinx-contentstack-investigator",
+      "briefChars": 2391,
       "mintedThisRun": false
     }
   ],

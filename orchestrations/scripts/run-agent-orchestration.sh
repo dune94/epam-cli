@@ -141,6 +141,33 @@ source "$SCRIPT_DIR/lib/story-retry-state.sh"
 # docstring in lib/story-guards.sh).
 _load_timeout_config
 
+# EXPORT THE LADDER CHAINS HERE, IN THE PARENT — for exactly the reason above.
+#
+# export_model_ladders turns the project's declared ladders into EPAM_MODEL_LADDER_<TIER> so that
+# seam_ladder_export can resolve a seam's declared tier to a real model. It was called in only two
+# places, neither of them this one: claude.sh (which runs as a SUBPROCESS of this script) and
+# detective-rerun.sh.
+#
+# Every seam script — team-lead-review.sh, brownfield-repro-test-writer.sh, agent-attempt-analyst.sh,
+# code-review-cycle.sh, post-impl-tc-writer.sh — is a child of THIS process, not of claude.sh. So
+# none of them inherited a chain, seam_ladder_export found nothing to resolve, and each fell back
+# to whatever fixed model its own script named. That is why every archetype's `ladder` declaration
+# was decorative: the declaration was read, and there was nothing on the other side of it.
+#
+# The literals are now gone, which turns that silence into a refusal — a seam with no resolvable
+# model declines rather than guessing. Correct, and useless if the chains never arrive. They must
+# be exported HERE, once, before any seam is invoked, the same reason _load_timeout_config is.
+# shellcheck source=lib/model-ladders.sh
+[ -f "$SCRIPT_DIR/lib/model-ladders.sh" ] && source "$SCRIPT_DIR/lib/model-ladders.sh"
+if command -v export_model_ladders >/dev/null 2>&1; then
+    export_model_ladders "${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json" || true
+else
+    # NOT SILENT. A missing loader here means every seam runs with no resolvable model and, now
+    # that the literals are gone, declines to run at all — the test-writer and the analyst would
+    # simply not happen, and the run would look normal while doing less than it reports.
+    echo "[orch] WARNING: lib/model-ladders.sh not loadable — no ladder chains exported; seams will have no resolvable model" >&2
+fi
+
 # Load project .env so API keys are available to all subprocesses (worktrees, epam-run, etc.)
 # Preserve caller-set gate overrides so tier scripts can override .env defaults.
 _pre_gate_provider="${ORCH_GATE_PROVIDER:-}"

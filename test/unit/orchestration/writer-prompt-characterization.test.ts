@@ -59,6 +59,14 @@ const REAL_FNS = [
   '_current_lane',
   '_render_technical_notes',
   '_resolve_deliverable_path',
+  // build_implementation_prompt calls this twice — once to list the deliverables in the prompt
+  // and once when walking them. It was missing from this list, and the harness only surfaced
+  // that when an unrelated edit shifted which lines the extractor reached: before, execution
+  // died earlier and never got to the call. A missing dependency here reads as
+  // "story_declared_files: command not found" from inside a temp fn.sh, which looks like a
+  // production defect and is not one. Fifth occurrence of this shape today — an extracted-
+  // function harness silently drifts from the function's real dependency set.
+  'story_declared_files',
   'build_implementation_prompt',
 ];
 

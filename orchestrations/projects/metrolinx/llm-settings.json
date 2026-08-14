@@ -134,7 +134,8 @@
           "from": "moonshotai/kimi-k2.5",
           "to": "moonshotai/kimi-k3"
         }
-      ]
+      ],
+      "startModel": "z-ai/glm-5.2"
     }
   },
   "modelOverrides": {

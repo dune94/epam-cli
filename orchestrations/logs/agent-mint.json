@@ -1,34 +1,10 @@
 {
   "minted": [
     {
-      "name": "gotransit-contentstack-investigator",
-      "kind": "investigator",
-      "codeline": "gotransit",
-      "rationale": "An investigator who knows the gotransit repository's Contentstack integration structure, file layout, and naming conventions is needed to ground the implementer's work in verified facts about this specific codebase.",
-      "surfaces": [
-        "profiles.json",
-        "kb",
-        "project-investigators",
-        "project-profiles"
-      ]
-    },
-    {
-      "name": "upexpress-contentstack-investigator",
-      "kind": "investigator",
-      "codeline": "upexpress",
-      "rationale": "An investigator who knows the upexpress repository's Contentstack integration structure is needed because the survey believes its contentstack service is near-identical to gotransit's but did not confirm its content context/hook file structure, which the implementer must wire onEntryChange into.",
-      "surfaces": [
-        "profiles.json",
-        "kb",
-        "project-investigators",
-        "project-profiles"
-      ]
-    },
-    {
       "name": "metrolinx-contentstack-investigator",
       "kind": "investigator",
       "codeline": "metrolinx",
-      "rationale": "An investigator who knows the metrolinx repository is needed because its Stack() config is more complex (fetchOptions, debug, retry, interactive maps stack) and its context file naming differs from the other codelines, so the implementer needs verified facts about this specific structure before adding live_preview config and wiring onEntryChange.",
+      "rationale": "This codeline has a mature Contentstack integration whose SDK init, data hooks, and component consumption patterns must be understood before any Live Preview wiring is attempted.",
       "surfaces": [
         "profiles.json",
         "kb",
@@ -37,70 +13,14 @@
       ]
     }
   ],
-  "rejected": [
-    {
-      "name": "gotransit-contentstack-live-preview-engineer",
-      "reason": "rationale says nothing (0 letters/digits, minimum 24) — it is what the operator reviews at the roster pause and what seeds the agent KB; state why THIS project needs THIS role"
-    },
-    {
-      "name": "upexpress-contentstack-live-preview-engineer",
-      "reason": "rationale says nothing (0 letters/digits, minimum 24) — it is what the operator reviews at the roster pause and what seeds the agent KB; state why THIS project needs THIS role"
-    },
-    {
-      "name": "metrolinx-contentstack-live-preview-engineer",
-      "reason": "rationale says nothing (0 letters/digits, minimum 24) — it is what the operator reviews at the roster pause and what seeds the agent KB; state why THIS project needs THIS role"
-    },
-    {
-      "name": "gotransit-investigator",
-      "reason": "rationale says nothing (0 letters/digits, minimum 24) — it is what the operator reviews at the roster pause and what seeds the agent KB; state why THIS project needs THIS role"
-    },
-    {
-      "name": "upexpress-investigator",
-      "reason": "rationale says nothing (0 letters/digits, minimum 24) — it is what the operator reviews at the roster pause and what seeds the agent KB; state why THIS project needs THIS role"
-    },
-    {
-      "name": "metrolinx-investigator",
-      "reason": "rationale says nothing (0 letters/digits, minimum 24) — it is what the operator reviews at the roster pause and what seeds the agent KB; state why THIS project needs THIS role"
-    }
-  ],
+  "rejected": [],
   "unchanged": [],
   "projectRoles": [],
   "projectInvestigators": [
-    "gotransit-contentstack-investigator",
-    "upexpress-contentstack-investigator",
     "metrolinx-contentstack-investigator"
   ],
-  "rejectedAcrossAttempts": [
-    {
-      "name": "contentstack-live-preview-engineer",
-      "reason": "brief names 1 path(s) that do not exist in any codeline: src/services/contentstack-live-preview.ts"
-    },
-    {
-      "name": "gotransit-contentstack-live-preview-engineer",
-      "reason": "rationale says nothing (0 letters/digits, minimum 24) — it is what the operator reviews at the roster pause and what seeds the agent KB; state why THIS project needs THIS role"
-    },
-    {
-      "name": "upexpress-contentstack-live-preview-engineer",
-      "reason": "rationale says nothing (0 letters/digits, minimum 24) — it is what the operator reviews at the roster pause and what seeds the agent KB; state why THIS project needs THIS role"
-    },
-    {
-      "name": "metrolinx-contentstack-live-preview-engineer",
-      "reason": "rationale says nothing (0 letters/digits, minimum 24) — it is what the operator reviews at the roster pause and what seeds the agent KB; state why THIS project needs THIS role"
-    },
-    {
-      "name": "gotransit-investigator",
-      "reason": "rationale says nothing (0 letters/digits, minimum 24) — it is what the operator reviews at the roster pause and what seeds the agent KB; state why THIS project needs THIS role"
-    },
-    {
-      "name": "upexpress-investigator",
-      "reason": "rationale says nothing (0 letters/digits, minimum 24) — it is what the operator reviews at the roster pause and what seeds the agent KB; state why THIS project needs THIS role"
-    },
-    {
-      "name": "metrolinx-investigator",
-      "reason": "rationale says nothing (0 letters/digits, minimum 24) — it is what the operator reviews at the roster pause and what seeds the agent KB; state why THIS project needs THIS role"
-    }
-  ],
-  "proposed": 10,
-  "attempts": 2,
+  "proposed": 1,
+  "rejectedAcrossAttempts": [],
+  "attempts": 1,
   "protectedRoles": 21
 }

@@ -368,10 +368,12 @@ resolve_effort_settings() {
     # (EPAM_MAX_ITERATIONS=1 "to prevent iterative retries"): taking room away from
     # an agent that ran out of it. Refused, and said out loud.
     if [ -n "${EPAM_EFFORT_TIER:-}" ]; then
-        local _rank_cur _rank_new
-        case "$effort" in low) _rank_cur=1 ;; high) _rank_cur=3 ;; *) _rank_cur=2 ;; esac
-        case "$EPAM_EFFORT_TIER" in low) _rank_new=1 ;; high) _rank_new=3 ;; medium) _rank_new=2 ;; *) _rank_new=0 ;; esac
-        if [ "$_rank_new" -gt "$_rank_cur" ]; then
+        # RANKED BY THE PROJECT'S DECLARED effortLadder, not by tier names written here. The four
+        # case statements this replaces knew three of the four declared tiers, so "max" ranked
+        # below "high" and the highest effort a project can ask for was silently treated as mid.
+        local _rank_new
+        _rank_new=$(effort_rank "$EPAM_EFFORT_TIER")
+        if effort_is_higher "$EPAM_EFFORT_TIER" "$effort"; then
             log "  EffortTier[KB] -> upgrading ${effort} → ${EPAM_EFFORT_TIER} (self-heal constraint)"
             effort="$EPAM_EFFORT_TIER"
         elif [ "$_rank_new" -gt 0 ]; then
@@ -406,11 +408,40 @@ resolve_effort_settings() {
         # the detective's own coverage must never silently leave a story at "low".
         case "$_proposed_tier" in high) : ;; *) _proposed_tier="medium" ;; esac
     fi
-    if [ -n "$_proposed_tier" ]; then
-        local _rank_cur2 _rank_new2
-        case "$effort" in low) _rank_cur2=1 ;; high) _rank_cur2=3 ;; *) _rank_cur2=2 ;; esac
-        case "$_proposed_tier" in low) _rank_new2=1 ;; high) _rank_new2=3 ;; medium) _rank_new2=2 ;; *) _rank_new2=0 ;; esac
-        if [ "$_rank_new2" -gt "$_rank_cur2" ]; then
+    # A DECLARED AGENT IS AUTHORITATIVE. CPA MAY PROPOSE, NOT OVERRIDE.
+    #
+    # CPA estimates a story's shape and proposes an effort tier. That is the right input where an
+    # agent has no settled opinion. Where the ARCHETYPE declares its own effort, the operator has
+    # already decided how much room that role gets, and a per-story estimate must not move it —
+    # the estimate knows the story, not the role.
+    #
+    # THE PROTECTED SET IS DERIVED, NEVER LISTED. An archetype that declares `effort` in
+    # invocation-profiles.json is protected; one that declares nothing keeps the previous
+    # behaviour exactly. No agent name appears here, so protecting a new role is a declaration
+    # and never an engine change.
+    local _declared_effort=""
+    if [ -n "${story_role:-}" ]; then
+        _declared_effort=$("${NODE_BIN:-node}" -e '
+          const { resolveSeam } = require(process.argv[1]);
+          try {
+            const reg = process.argv[2];
+            const seam = resolveSeam(process.argv[3], reg);
+            const p = JSON.parse(require("fs").readFileSync(reg, "utf8")).profiles[seam] || {};
+            process.stdout.write(p.effort == null ? "" : String(p.effort));
+          } catch (_) { process.stdout.write(""); }
+        ' "$SCRIPT_DIR/lib/seam-invocation.js" \
+          "${AGENT_PROFILES_REGISTRY:-$(dirname "$SCRIPT_DIR")/agents/invocation-profiles.json}" \
+          "$story_role" 2>/dev/null || printf '')
+    fi
+
+    if [ -n "$_declared_effort" ]; then
+        effort="$_declared_effort"
+        if [ -n "$_proposed_tier" ] && [ "$_proposed_tier" != "$_declared_effort" ]; then
+            log "  EffortTier[CPA] -> NOT overriding '${story_role}': its archetype declares effort=${_declared_effort} (CPA proposed ${_proposed_tier})"
+        fi
+    elif [ -n "$_proposed_tier" ]; then
+        # Same declared ranking as the KB block above — one source, one order.
+        if effort_is_higher "$_proposed_tier" "$effort"; then
             log "  EffortTier[CPA] -> upgrading ${effort} → ${_proposed_tier} (cpaEffortTier=${_cpa_tier:-none} coverageComplete=${_cov_complete})"
             effort="$_proposed_tier"
         fi
@@ -2064,6 +2095,11 @@ build_implementation_prompt() {
     # A REQUIRED kind nobody published is a hard failure: a prompt missing the root-cause analysis
     # looks exactly like one that has it, and costs a whole retry to discover.
     local agent_inputs
+    # NOTE (2026-08-14): the default below names an archetype, which is engine code choosing a
+    # role. Removing it and refusing instead was tried and REVERTED the same day: stories
+    # legitimately omit agentRole, and the refusal failed every one of them at prompt-build.
+    # Making agentRole mandatory is a deliberate PRD change with a migration, not a one-line edit
+    # here — see the sweep notes.
     agent_inputs=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/agent-inputs.js" \
         "$(echo "$story_json" | jq -r '.agentRole // "story-writer"')" "$story_id") || {
         error "  [prompt] declared inputs did not render for $story_id — refusing to build a writer prompt without them"
@@ -2830,6 +2866,70 @@ record_story_outputs() {
 # detective may have hallucinated it, demanding its use would force the agent to
 # import something imaginary. Brownfield only; per-attempt WARNING, so the retry
 # ladder owns the outcome.
+# verify_client_env_boundary <story_id>
+#
+# A CONFIG VALUE READ WHERE THE BUILD NEVER SUBSTITUTES IT IS DEAD CODE THAT TYPE-CHECKS.
+#
+# Live 2026-08-14, AMSD-2041 on next.metrolinx.com:
+#
+#     if (process.env.CONTENTSTACK_LIVE_PREVIEW_ENABLED === "true") { initLivePreview(...) }
+#
+# in a useEffect — the browser. That framework substitutes only prefixed names into the client
+# bundle, the codeline's config exposes no others, so the value is undefined and the branch never
+# runs. tsc passed. eslint passed. The reviewer APPROVED it across two cycles and raised six other
+# issues without this one, because seeing it needs a bundler rule and the project's own config,
+# not the diff.
+#
+# THE ENGINE KNOWS NONE OF THAT. plugins/client-env-boundary-plugin.js holds the framework facts
+# behind adapters selected by what the codeline's own manifest declares, and reads the exposed set
+# from that codeline's config — so gotransit, upexpress and metrolinx are the same call, and a new
+# stack is an adapter, never an engine change.
+#
+# Absent is absent: a codeline whose stack no adapter recognises reports nothing and this returns 0.
+# A check that cannot identify the rule must not invent findings, and must not claim a clean bill
+# of health either — the plugin distinguishes the two and only the first reaches here.
+verify_client_env_boundary() {
+    local story_id="$1"
+    local _plugin="${AUTOMATION_DIR:-$(dirname "$SCRIPT_DIR")}/plugins/client-env-boundary-plugin.js"
+    [ -f "$_plugin" ] || return 0
+    [ -n "${PROJECT_ROOT:-}" ] && [ -d "$PROJECT_ROOT" ] || return 0
+
+    # The files THIS story changed, from the writer's own output manifest — never a tree scan.
+    local _changed
+    _changed=$(git -C "$PROJECT_ROOT" diff --name-only "${PHASE_BASELINE_SHA:-HEAD~1}" HEAD 2>/dev/null; \
+               git -C "$PROJECT_ROOT" status --porcelain 2>/dev/null | sed 's/^...//')
+    [ -n "$_changed" ] || return 0
+
+    local _out
+    _out=$(printf '%s\n' "$_changed" | "${NODE_BIN:-node}" -e '
+      const p = require(process.argv[1]);
+      let raw = ""; process.stdin.on("data", d => raw += d).on("end", () => {
+        const files = [...new Set(raw.split("\n").map(s => s.trim()).filter(Boolean))];
+        const r = p.scanClientEnvBoundary(process.argv[2], files);
+        if (!r.exposureDeclared || !r.findings.length) return;
+        for (const f of r.findings) console.log(f.file + ":" + f.line + "\t" + f.variable + "\t" + f.detail);
+      });
+    ' "$_plugin" "$PROJECT_ROOT" 2>/dev/null || echo "")
+
+    [ -n "$_out" ] || return 0
+
+    local _count _first_var
+    _count=$(printf '%s\n' "$_out" | grep -c .)
+    _first_var=$(printf '%s\n' "$_out" | head -1 | cut -f2)
+
+    # Same rejection-key discipline as the reuse guard: an identical rejection twice advances the
+    # ladder rather than re-asking the same model the same question.
+    STORY_REJECTION_KEY="client-env:${_first_var}"
+    # THE FLAG IS WHAT DELIVERS IT — see verify_prescribed_helper_used. VERIFICATION_FAILURE
+    # without DETERMINISTIC_CHECK_FAILURE is assigned and dropped.
+    DETERMINISTIC_CHECK_FAILURE=1
+    export DETERMINISTIC_CHECK_FAILURE
+    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\n%d configuration value(s) are read where the build does not substitute them, so at runtime each is undefined and the branch it guards silently does nothing:\n\n%s\n\nRead the value where it IS substituted and pass the result through, as this codeline already does elsewhere, or expose it deliberately.\n' \
+        "$_count" "$(printf '%s\n' "$_out" | sed 's/^/  - /')")
+    warning "Story $story_id: ${_count} value(s) read where the build never substitutes them — first: ${_first_var}. The guarded branch cannot execute; tsc and lint cannot see this."
+    return 1
+}
+
 verify_prescribed_helper_used() {
     local story_id="$1"
     [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
@@ -3369,6 +3469,18 @@ verify_story_deliverables() {
     # A prescribed, existing helper that the change never uses means the agent
     # re-implemented it — and guessed. Retryable.
     verify_prescribed_helper_used "$story_id" || return 1
+
+    # A build-time value read where the build never substitutes it. Same class: mechanical,
+    # checkable, and invisible to every other gate. Retryable.
+    #
+    # PRESENCE-GUARDED, like every other optional collaborator here. Fourteen test harnesses
+    # extract this function and run it in isolation; an unguarded call to a sibling they do not
+    # extract fails them all with "command not found", which reads as a production defect and is
+    # not one. In a real run the function is always defined a few lines above, so the guard costs
+    # nothing and never silently skips anything that exists.
+    if command -v verify_client_env_boundary >/dev/null 2>&1; then
+        verify_client_env_boundary "$story_id" || return 1
+    fi
 
     # The story produced real, verified work — tell the phase gates what it was
     # so they can judge this run's output instead of the whole codebase.
@@ -6179,6 +6291,25 @@ max_effort() {
     if [ "$rb" -gt "$ra" ]; then echo "$b"; else echo "$a"; fi
 }
 
+# effort_is_higher <candidate> <current> — true when the PROJECT declares candidate above current.
+#
+# Ranked by effort_rank, which reads the declared effortLadder, so the four hand-written case
+# statements this replaces are gone and a project that declares a fourth level gets it honoured
+# instead of silently ranked mid.
+#
+# UNDECLARED NEVER WINS. effort_rank returns -1 for a level the project does not declare, so a
+# typo, a renamed level or a stale PRD value cannot raise or lower a story's budget by accident.
+# Note -1, not 0: the FIRST declared level ranks 0, and treating 0 as "unknown" would make every
+# upgrade off the lowest level impossible.
+effort_is_higher() {
+    local _new _cur
+    _new=$(effort_rank "${1:-}")
+    _cur=$(effort_rank "${2:-}")
+    [ "$_new" -ge 0 ] 2>/dev/null || return 1
+    [ "$_cur" -ge 0 ] 2>/dev/null || return 1
+    [ "$_new" -gt "$_cur" ]
+}
+
 # next_effort <current> — one notch up, saturating at high.
 next_effort() {
     # One notch up the CONFIGURED ladder, saturating at its top. The level names live in
@@ -7054,6 +7185,16 @@ run_failure_analyst() {
     local output_file="${2:-/dev/null}"
     local retry_num="${3:-0}"
 
+    # WHICH SEAM THIS IS — declared ONCE, and it must match a key in the profiles registry or the
+    # ladder resolves no tier and the agent silently never escalates.
+    #
+    # Live defect, same day it was written: two call sites in this function passed
+    # "failure-analyst", which the registry does not contain. _agent_ladder_tier returned empty,
+    # agent_ladder_model handed back the current model unchanged, and the analyst's ladder — the
+    # whole point of the change — did nothing. The harness that "verified" it passed the real
+    # archetype name, so it never saw what production actually sent.
+    local _ANALYST_SEAM="impl-failure-analyst"
+
     # Only analyze test-suite failures; missing-deliverable failures lack useful output
     [ -z "${VERIFICATION_FAILURE:-}" ] && return 0
 
@@ -7294,13 +7435,13 @@ for i, c in enumerate(text):
                 # a copy of the same non-answer — the reasoning the story ladder already applies,
                 # which gate agents had no way to reach. The analyst now climbs the ladder its own
                 # archetype declares; lib/agent-ladder.sh explains why nothing here names a model.
-                agent_ladder_record_failure "failure-analyst" "$story_id"
+                agent_ladder_record_failure "$_ANALYST_SEAM" "$story_id"
                 local _analyst_next
-                _analyst_next=$(agent_ladder_model "failure-analyst" "$story_id" "${gate_model:-}")
+                _analyst_next=$(agent_ladder_model "$_ANALYST_SEAM" "$story_id" "${gate_model:-}")
                 if [ -n "$_analyst_next" ] && [ "$_analyst_next" != "${gate_model:-}" ]; then
                     warning "  [FailureAnalyst] escalating the ANALYST: ${gate_model:-unknown} → ${_analyst_next} (its answer was unusable, so the next attempt asks a different model)"
                     gate_model="$_analyst_next"
-                elif agent_ladder_exhausted "failure-analyst" "$story_id" "${gate_model:-}"; then
+                elif agent_ladder_exhausted "$_ANALYST_SEAM" "$story_id" "${gate_model:-}"; then
                     warning "  [FailureAnalyst] the analyst is at the top of its declared ladder (${gate_model:-unknown}) — retrying the same model, which is the last one available to it"
                 fi
                 if [ -z "$(printf '%s' "${analyst_raw:-}" | tr -d '[:space:]')" ]; then
@@ -7333,16 +7474,23 @@ for i, c in enumerate(text):
         # The ANALYST's model moves; the writer's does not. The writer is not what failed, and
         # spending the story's escalation budget on a diagnostic problem is the category error
         # that HealingBroken already makes.
+        # THE SHARED HANDLER, ONCE. This block used to re-implement the escalation that
+        # lib/agent-ladder.sh already performs a few lines above — reading the tier itself with the
+        # agent's name and a literal tier as the fallback, both spelled out twice. Two copies of an
+        # escalation is one defect waiting: they drift, and the one that runs is whichever the
+        # control flow reaches first.
+        #
+        # agent_ladder_model resolves the tier from the agent's ARCHETYPE through the seam, so no
+        # agent name and no tier name is needed here at all.
         if [ -z "$analyst_json" ] && [ "$_analyst_attempt" -lt "$_analyst_max_attempts" ]; then
-            local _analyst_tier _next_gate_model
-            _analyst_tier=$(jq -r '.profiles["impl-failure-analyst"].ladder // "high"' \
-                "${AGENT_PROFILES_REGISTRY:-$(dirname "$SCRIPT_DIR")/agents/invocation-profiles.json}" 2>/dev/null || echo "high")
-            _next_gate_model=$(get_model_ladder_step "$gate_model" "$_analyst_tier" 2>/dev/null || echo "")
-            if [ -n "$_next_gate_model" ]; then
-                warning "  [FailureAnalyst] escalating analyst model '${gate_model}' → '${_next_gate_model}' (tier=${_analyst_tier}) — the previous rung produced nothing usable"
+            local _next_gate_model
+            agent_ladder_record_failure "$_ANALYST_SEAM" "$story_id"
+            _next_gate_model=$(agent_ladder_model "$_ANALYST_SEAM" "$story_id" "${gate_model:-}")
+            if [ -n "$_next_gate_model" ] && [ "$_next_gate_model" != "${gate_model:-}" ]; then
+                warning "  [FailureAnalyst] escalating analyst model '${gate_model}' → '${_next_gate_model}' — the previous rung produced nothing usable"
                 gate_model="$_next_gate_model"
             else
-                warning "  [FailureAnalyst] analyst ladder exhausted at '${gate_model}' (tier=${_analyst_tier}) — retrying the same rung"
+                warning "  [FailureAnalyst] analyst ladder exhausted at '${gate_model}' — retrying the same rung"
             fi
         fi
         _analyst_attempt=$((_analyst_attempt + 1))
@@ -10288,6 +10436,22 @@ Apply the above diagnosis AND fix the deterministic check violation — both mus
                         error "  [DeterministicCheck] CRITICAL: same violation repeated for $story_id without resolution — treating as HealingBroken"
                         HEALING_BROKEN=1
                         export HEALING_BROKEN
+
+                        # THE SKIP ABOVE IS CORRECT ONCE, AND ONLY ONCE.
+                        #
+                        # Skipping the analyst is right while the violation is NEW: the check names
+                        # it precisely and a gate-model call to restate it is waste. That premise is
+                        # falsified here. The remedy has been injected and applied and the SAME
+                        # violation came back, so the open question is no longer WHAT is wrong — it
+                        # is why the known remedy keeps failing, which is the analyst's only job.
+                        #
+                        # Live 2026-08-14 (AMSD-2041): the story climbed rung 0 -> 1 -> 2, declared
+                        # HealingBroken three times, aborted at max rung, and the analyst was
+                        # invoked ZERO times. Its ladder was unreachable code on this whole class.
+                        if [ "$retry_count" -lt "$MAX_RETRIES" ]; then
+                            log "  [DeterministicCheck] the remedy was applied and the same violation returned — invoking the failure analyst to diagnose WHY"
+                            run_failure_analyst "$story_id" "$output_file" "$retry_count"
+                        fi
                     fi
                 fi
                 _prev_deterministic_violation="$VERIFICATION_FAILURE"

@@ -136,7 +136,7 @@
       "maxIterations": 15,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "high",
+      "ladder": "HIGHEST",
       "produces": "repro-test",
       "consumes": [
         {
@@ -158,7 +158,7 @@
       "maxIterations": 6,
       "reasoningEffort": "medium",
       "timeoutSecs": 600,
-      "ladder": "high",
+      "ladder": "HIGHEST",
       "produces": "test-criteria",
       "consumes": [
         {
@@ -276,7 +276,7 @@
       "maxOutputTokens": 32768,
       "reasoningEffort": "medium",
       "timeoutSecs": 180,
-      "ladder": "high",
+      "ladder": "HIGHEST",
       "produces": "verification-criteria",
       "consumes": [
         {
@@ -419,6 +419,113 @@
         }
       ],
       "template": "story-writer"
+    },
+    "vc-coverage": {
+      "_what": "Judges whether the written tests cover each verification criterion.",
+      "maxOutputTokens": 16384,
+      "maxIterations": 25,
+      "reasoningEffort": "high",
+      "timeoutSecs": 900,
+      "ladder": "HIGHEST",
+      "produces": "vc-coverage-report",
+      "consumes": [
+        {
+          "kind": "repro-test"
+        },
+        {
+          "kind": "ticket"
+        }
+      ]
+    },
+    "qa-gate:sast": {
+      "_what": "Static application security scan over the change.",
+      "maxOutputTokens": 16384,
+      "maxIterations": 25,
+      "reasoningEffort": "high",
+      "timeoutSecs": 900,
+      "ladder": "HIGHEST",
+      "produces": "qa-verdict",
+      "consumes": [
+        {
+          "kind": "existing-code"
+        }
+      ]
+    },
+    "qa-gate:spec-validator": {
+      "_what": "Checks the change satisfies the story’s acceptance criteria.",
+      "maxOutputTokens": 16384,
+      "maxIterations": 25,
+      "reasoningEffort": "high",
+      "timeoutSecs": 900,
+      "ladder": "HIGHEST",
+      "produces": "qa-verdict",
+      "consumes": [
+        {
+          "kind": "ticket"
+        },
+        {
+          "kind": "existing-code"
+        }
+      ]
+    },
+    "qa-gate:review-ranger": {
+      "_what": "Reviews the change for defects the team-lead review may not reach.",
+      "maxOutputTokens": 16384,
+      "maxIterations": 25,
+      "reasoningEffort": "high",
+      "timeoutSecs": 900,
+      "ladder": "HIGHEST",
+      "produces": "qa-verdict",
+      "consumes": [
+        {
+          "kind": "existing-code"
+        }
+      ]
+    },
+    "qa-gate:mutant-hunter": {
+      "_what": "Assesses whether the tests would fail if the change were broken.",
+      "maxOutputTokens": 16384,
+      "maxIterations": 25,
+      "reasoningEffort": "high",
+      "timeoutSecs": 900,
+      "ladder": "HIGHEST",
+      "produces": "qa-verdict",
+      "consumes": [
+        {
+          "kind": "repro-test"
+        },
+        {
+          "kind": "existing-code"
+        }
+      ]
+    },
+    "qa-gate:fuzz-weaver": {
+      "_what": "Probes the change with adversarial inputs.",
+      "maxOutputTokens": 16384,
+      "maxIterations": 25,
+      "reasoningEffort": "high",
+      "timeoutSecs": 900,
+      "ladder": "HIGHEST",
+      "produces": "qa-verdict",
+      "consumes": [
+        {
+          "kind": "existing-code"
+        }
+      ]
+    },
+    "qa-gate:perf-sentinel": {
+      "_what": "Assesses the change for runtime and startup cost.",
+      "maxOutputTokens": 16384,
+      "maxIterations": 25,
+      "reasoningEffort": "high",
+      "timeoutSecs": 900,
+      "ladder": "HIGHEST",
+      "produces": "qa-verdict",
+      "consumes": [
+        {
+          "kind": "existing-code"
+        }
+      ]
     }
   },
   "_seamResolution": [

@@ -401,7 +401,9 @@ echo "  [tc-writer] Invoking TC writer agent..."
 EPAM_BIN="${EPAM_BIN:-epam}"
 # TC_WRITER_MODEL is set nowhere, so this default was the model the TC writer
 # ACTUALLY ran on — the discontinued k2. Now the pipeline workhorse.
-TC_MODEL="${TC_WRITER_MODEL:-z-ai/glm-5.2}"
+# THE SEAM DECIDES — see seam_ladder_export above, which sets EPAM_MODEL from this seam's
+# declared tier. A literal here made that declaration decorative.
+TC_MODEL="${TC_WRITER_MODEL:-${EPAM_MODEL:-}}"
 TC_PROVIDER="${TC_WRITER_PROVIDER:-qwen}"
 
 set +e

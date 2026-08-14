@@ -48,7 +48,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # model rather than kill a run.
 # shellcheck source=lib/seam-ladder.sh
 . "$SCRIPT_DIR/lib/seam-ladder.sh" 2>/dev/null || true
-command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "agent-failure-analyst"
+# WHICH AGENT THIS IS — declared ONCE, and exported so ai-run.sh keys this agent's ladder rung
+# state to it. Without it every agent shared one counter ("agent__<story>"): one agent escalating
+# advanced the ladder for all of them, and team-lead-review's cross-process resume read a key
+# nothing ever wrote.
+_SEAM_NAME="agent-failure-analyst"
+export EPAM_AGENT_NAME="$_SEAM_NAME"
+command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "$_SEAM_NAME"
 
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
 
@@ -60,8 +66,18 @@ case "$FAILURE_CLASS" in
 esac
 
 _provider="${AGENT_ANALYST_PROVIDER:-${ORCH_GATE_PROVIDER:-${EPAM_ORCHESTRATION_PROVIDER:-qwen}}}"
-# Same escalation model the impl failure-analyst uses (never a plain chat model).
-_model="${AGENT_ANALYST_MODEL:-${ESCALATION_MODEL:-${ORCH_GATE_MODEL:-z-ai/glm-5.2}}}"
+# THE SEAM DECIDES. seam_ladder_export (above) sets EPAM_MODEL to the first rung of the chain this
+# seam's ARCHETYPE declares, which is the whole point of declaring a ladder. The literal that stood
+# last in this chain overrode that silently: the seam asked for its tier and the answer was
+# discarded, so editing the declaration moved no model. Operator overrides still win; what is gone
+# is the hardcoded final fallback, which no configuration could remove.
+_model="${AGENT_ANALYST_MODEL:-${ESCALATION_MODEL:-${ORCH_GATE_MODEL:-${EPAM_MODEL:-}}}}"
+if [ -z "$_model" ]; then
+    # A diagnosis produced by a guessed model is worse than an honest absence: it reads as
+    # authoritative and nothing downstream can tell it was never grounded in a declared tier.
+    warning "no model resolved for this seam — its archetype declares no ladder, or the tier's chain is unset. Not analysing rather than guessing a model."
+    exit 0
+fi
 
 # Reuse the failure-analyst profile (the crown-jewel role instructions) when present.
 _profile=""

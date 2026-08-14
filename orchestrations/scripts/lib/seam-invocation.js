@@ -142,10 +142,24 @@ function seamInvocationEnv(agent, agentsDir, opts) {
     if (rungs) {
       // The ladder this seam climbs, under the generic name every consumer reads.
       env.EPAM_MODEL_LADDER = rungs;
-      // The first rung is where this seam STARTS. Without it the seam begins on the run's
-      // default model and the ladder only governs where it escalates to.
-      const first = String(rungs).split('|')[0].split('=')[0].trim();
-      if (first) env.EPAM_MODEL = first;
+      // WHERE THIS SEAM STARTS — declared, not inferred.
+      //
+      // This used to take the first pair's "from". A modelLadder is a set of HOPS with several
+      // independent roots (MiniMax, zhipuai, z-ai, moonshotai all appear in one map), so that
+      // picked whichever root was listed first in the JSON and made every seam's opening model a
+      // property of text ordering. Reordering the file changed which model every agent began on,
+      // with nothing to indicate it had.
+      const declaredStart = (sourceEnv[key + '_START'] || '').trim();
+      if (declaredStart) {
+        env.EPAM_MODEL = declaredStart;
+      } else {
+        // Absent stays absent: the seam keeps whatever model it would otherwise resolve, and the
+        // gap is stated rather than filled with a root chosen by accident.
+        process.stderr.write(
+          "[seam-invocation] seam '" + seamName + "' climbs ladder '" + profile.ladder +
+          "' which declares no startModel — not inferring one from map order; the seam will start " +
+          "on whatever model it resolves for itself\n");
+      }
     } else {
       // Not fatal: the seam is resolved and its effort/temperature still apply. But a ladder
       // that cannot be reached is not a ladder assignment, so it is never silent.

@@ -1,0 +1,26 @@
+[
+  {
+    "rung": "0",
+    "model": "MiniMax-M3",
+    "files": [
+      ".epam/codeline-facts.json",
+      ".epam/settings.json",
+      ".epam/verification.json"
+    ]
+  },
+  {
+    "rung": "1",
+    "model": "z-ai/glm-5.2",
+    "files": [
+      ".deepeval/.deepeval_telemetry.txt",
+      ".env.local.sample",
+      "orchestrations/logs/agent-activity.jsonl",
+      "src/interface/contentstack.ts",
+      "src/pages/[[...slug]].tsx",
+      "src/pages/api/exit-preview.ts",
+      "src/pages/api/preview.ts",
+      "src/services/__tests__/contentstack.spec.ts",
+      "src/services/contentstack.ts"
+    ]
+  }
+]

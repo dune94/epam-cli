@@ -1,22 +1,10 @@
 {
   "codelines": [
     {
-      "name": "gotransit",
-      "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
-      "reason": "The ticket title and components field both name GO as a product area requiring live preview of CMS draft content, and this repo is the GO Transit front-end site.",
-      "evidence": "ticket component \"GO\" and title \"[GO, UP, MX] Live Preview of Content in CMS\""
-    },
-    {
-      "name": "upexpress",
-      "path": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com",
-      "reason": "The ticket title and components field both name UP as a product area requiring live preview of CMS draft content, and this repo is the UP Express front-end site.",
-      "evidence": "ticket component \"UP\" and title \"[GO, UP, MX] Live Preview of Content in CMS\""
-    },
-    {
       "name": "metrolinx",
       "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com",
-      "reason": "The ticket title and components field both name MX as a product area requiring live preview of CMS draft content, and this repo is the Metrolinx front-end site.",
-      "evidence": "ticket component \"MX\" and title \"[GO, UP, MX] Live Preview of Content in CMS\""
+      "reason": "The ticket's component MX maps to the Metrolinx website, and the front-end-only estimates (FE: 8, BE: 0, DAM: 0) indicate the live preview feature is implemented in the Next.js site that renders Metrolinx content.",
+      "evidence": "ticket component \"MX\""
     }
   ]
 }

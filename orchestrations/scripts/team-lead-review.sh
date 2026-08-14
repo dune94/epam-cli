@@ -58,7 +58,13 @@ AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
 # engine_paths_pathspec — the owned-path set as git exclusions, one definition.
 # shellcheck source=lib/engine-paths.sh
 [ -f "$SCRIPT_DIR/lib/engine-paths.sh" ] && . "$SCRIPT_DIR/lib/engine-paths.sh"
-command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "team-lead-review"
+# WHICH AGENT THIS IS — declared ONCE, and exported so ai-run.sh keys this agent's ladder rung
+# state to it. Without it every agent shared one counter ("agent__<story>"): one agent escalating
+# advanced the ladder for all of them, and team-lead-review's cross-process resume read a key
+# nothing ever wrote.
+_SEAM_NAME="team-lead-review"
+export EPAM_AGENT_NAME="$_SEAM_NAME"
+command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "$_SEAM_NAME"
 
 # THE SAME TEST-OWNERSHIP POLICY THE WRITER IS BOUND BY, from the one place it is declared.
 #
@@ -91,7 +97,11 @@ if [ -z "$(printf '%s' "$TEST_OWNERSHIP_BLOCK" | tr -d '[:space:]')" ]; then
 fi
 source "$SCRIPT_DIR/lib/project-tools.sh"
 source "$SCRIPT_DIR/lib/story-retry-state.sh"
-ORCH_GATE_MODEL="${ORCH_GATE_MODEL:-z-ai/glm-5.2}"
+# THE SEAM DECIDES. seam_ladder_export (above) sets EPAM_MODEL to the first rung of the chain this
+# seam's ARCHETYPE declares. The literal that stood here overrode that silently — the reviewer asked
+# for its tier and then ignored the answer, so the declaration selected nothing. An operator value
+# still wins; what is gone is the default no configuration could remove.
+ORCH_GATE_MODEL="${ORCH_GATE_MODEL:-${EPAM_MODEL:-}}"
 
 # Look up a model's HIGH-ladder successor (EPAM_MODEL_LADDER_HIGH is "from=to|...",
 # e.g. "z-ai/glm-5.1=moonshotai/kimi-k3"). Same laddering the detective + spec

@@ -50,7 +50,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # fixed model silently, and there were sixteen of those.
 # shellcheck source=lib/seam-ladder.sh
 . "$SCRIPT_DIR/lib/seam-ladder.sh" 2>/dev/null || true
-command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "cpa-inference"
+# WHICH AGENT THIS IS — declared ONCE, and exported so ai-run.sh keys this agent's ladder rung
+# state to it. Without it every agent shared one counter ("agent__<story>"): one agent escalating
+# advanced the ladder for all of them, and team-lead-review's cross-process resume read a key
+# nothing ever wrote.
+_SEAM_NAME="cpa-inference"
+export EPAM_AGENT_NAME="$_SEAM_NAME"
+command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "$_SEAM_NAME"
 
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 # Unconditional assignment here (no ${PROJECT_ROOT:-...} fallback) always
@@ -437,7 +443,7 @@ load_calibration
 # Reads escalationRates from calibration.json and pricing from model-pricing.json.
 # Falls back to conservative defaults when calibration data is absent.
 compute_escalation_profile() {
-  local effort="$1" base_cost="$2" mean_tokens="$3" base_model="${4:-MiniMax-M3}"
+  local effort="$1" base_cost="$2" mean_tokens="$3" base_model="${4:-${EPAM_MODEL:-}}"
   python3 - <<PYEOF
 import json, os, sys
 
@@ -458,20 +464,36 @@ p_r3       = r.get("p_rung3",  0.030)
 p_k3       = r.get("p_k3",     0.005)
 self_heal_p= r.get("selfHealP",0.25)
 
-# ── Ladder models from env ────────────────────────────────────────────────────
-rung2_model = os.environ.get("ESCALATION_MODEL",      "z-ai/glm-5.2")
-rung3_model = os.environ.get("ESCALATION_MODEL_HIGH", "z-ai/glm-5.1")
-gate_model  = os.environ.get("ORCH_GATE_MODEL",       "z-ai/glm-5.2")
+# ── Ladder models, read from the DECLARED chain ───────────────────────────────
+# No model name appears here. Every rung is whatever the chain declares, walked in order, and an
+# undeclared chain yields no rungs rather than invented ones.
+#
+# What stood here named four models outright and read the HIGH chain regardless of the tier the
+# story's agent declares. This block PRICES escalation, and its output feeds the cost-variance
+# gate — so a fabricated rung produced a confident forecast for models the run would never use,
+# and the gate then judged real spend against it.
+rung2_model = os.environ.get("ESCALATION_MODEL", "")
+rung3_model = os.environ.get("ESCALATION_MODEL_HIGH", "")
+gate_model  = os.environ.get("ORCH_GATE_MODEL", "")
 
-# kimi-k3 rung: top entry in HIGH ladder (from=rung3_model)
-k3_model = "moonshotai/kimi-k3"
-ladder_high = os.environ.get("EPAM_MODEL_LADDER_HIGH", "")
-for pair in ladder_high.split("|"):
+# The chain for THIS story's tier; falls back to the run's chain, never to a named tier.
+_chain = os.environ.get("EPAM_MODEL_LADDER", "")
+_tier  = (os.environ.get("EPAM_STORY_LADDER_TIER", "") or "").upper()
+if _tier:
+    _chain = os.environ.get("EPAM_MODEL_LADDER_" + _tier, _chain)
+
+_hops = {}
+for pair in _chain.split("|"):
     if "=" in pair:
-        f, t = pair.split("=", 1)
-        if f == rung3_model:
-            k3_model = t
-            break
+        _from, _to = pair.split("=", 1)
+        _hops[_from.strip()] = _to.strip()
+
+# Walk from the rung below to find the one above it. Absent stays absent.
+if not rung2_model:
+    rung2_model = _hops.get(gate_model, "")
+if not rung3_model:
+    rung3_model = _hops.get(rung2_model, "")
+k3_model = _hops.get(rung3_model, "")
 
 # ── Model pricing ─────────────────────────────────────────────────────────────
 try:
@@ -852,7 +874,7 @@ while IFS= read -r sid; do
   cpa_raw=$(echo "$inference_input" | \
     CLAUDE_CMD="${CLAUDE_CMD:-claude}" \
     AI_PROVIDER="${CPA_PROVIDER:-${AI_PROVIDER:-qwen}}" \
-    AI_MODEL="${CPA_MODEL:-${AI_MODEL:-z-ai/glm-5.2}}" \
+    AI_MODEL="${CPA_MODEL:-${AI_MODEL:-${EPAM_MODEL:-}}}" \
     "$NODE_CMD" "$LIB_DIR/cpa-inference.js" 2>/dev/null || echo "")
   t_end=$(date +%s%3N)
   infer_ms=$(( t_end - t_start ))
@@ -915,7 +937,7 @@ while IFS= read -r sid; do
   # ── Escalation profile (probability-weighted model composition) ───────────────
   # Token basis: prefer calibrated mean_tokens; fall back to blended token estimate
   _esc_tok="${cal_tok:-${b_tok:-0}}"
-  _esc_profile=$(compute_escalation_profile "$f_effort" "$b_cost" "$_esc_tok" "${_story_model:-MiniMax-M3}" 2>/dev/null || echo "{}")
+  _esc_profile=$(compute_escalation_profile "$f_effort" "$b_cost" "$_esc_tok" "${_story_model:-${EPAM_MODEL:-}}" 2>/dev/null || echo "{}")
   esc_cost=$(echo "$_esc_profile"    | jq -r '.escalationCost // 0')
   esc_heal_cost=$(echo "$_esc_profile" | jq -r '.selfHealCost // 0')
   esc_retries=$(echo "$_esc_profile"   | jq -r '.expectedRetries // 0')
@@ -1287,12 +1309,12 @@ ${_cpa_after}
 
 Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}" | \
           AI_PROVIDER="${ORCH_GATE_PROVIDER}" \
-          AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
+          AI_MODEL="${ORCH_GATE_MODEL:-${EPAM_MODEL:-}}" \
           EPAM_CLI="${EPAM_CLI:-epam}" \
           EPAM_MAX_OUTPUT_TOKENS="${CPA_GATE_MAX_OUTPUT_TOKENS:-16384}" \
           "$_cpa_ai_runner_cmd" \
               --provider "${ORCH_GATE_PROVIDER}" \
-              --model    "${ORCH_GATE_MODEL:-MiniMax-M3}" \
+              --model    "${ORCH_GATE_MODEL:-${EPAM_MODEL:-}}" \
           2>/dev/null | \
           python3 -c "
 import sys, json, re

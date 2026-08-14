@@ -14268,3 +14268,39 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/AMSD-2041_*.log
 
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-14 10:36:51
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-14 11:52:42
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-14 17:47:49
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-14 18:03:42
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-14 18:31:56
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-14 18:58:51
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+

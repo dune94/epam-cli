@@ -74,8 +74,22 @@ describe.each(SEAM_SCRIPTS)('$file', ({ file, seam }) => {
 
   it(`asks for its ladder as '${seam}'`, () => {
     const s = src(file);
-    expect(s, 'the script never asks — it keeps whatever fixed model it had')
-      .toMatch(new RegExp(`seam_ladder_export\\s+["']${seam.replace(/[-]/g, '[-]')}["']`));
+    // The ask may name the seam literally, or pass the single variable the script declares it in
+    // (`_SEAM_NAME="repro-test-writer"` then `seam_ladder_export "$_SEAM_NAME"`). The second form
+    // is what keeps the ladder export and the rung-state key from drifting apart — one name, one
+    // place — so the requirement is that the script asks AS THIS SEAM, not that it repeats the
+    // string at the call site.
+    const esc = seam.replace(/[-]/g, '[-]');
+    const literal = new RegExp(`seam_ladder_export\\s+["']${esc}["']`);
+    const viaVar = (() => {
+      const m = s.match(/seam_ladder_export\s+["']?\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?["']?/);
+      if (!m) return false;
+      const assign = s.match(new RegExp(`${m[1]}=["']${esc}["']`));
+      return Boolean(assign);
+    })();
+    expect(literal.test(s) || viaVar,
+      'the script never asks as this seam — it keeps whatever fixed model it had')
+      .toBe(true);
   });
 
   it('asks BEFORE it resolves a model, or the export is overwritten', () => {

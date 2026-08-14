@@ -26,6 +26,19 @@
 # rung that outlives its run escalates a fresh attempt for a previous run's failure — the defect
 # already recorded for the story retry counters, and for the rejection key.
 
+# WHERE THIS LIBRARY LIVES — resolved from ITSELF, never from a caller's variable.
+#
+# The seam lookup used to read "${SCRIPT_DIR:-.}/lib/seam-invocation.js", which requires every
+# caller to have set SCRIPT_DIR to the scripts directory. ai-run.sh does not, so the lookup ran
+# against "./lib/seam-invocation.js", found nothing, and _agent_ladder_tier returned EMPTY —
+# which this file treats as "declares no ladder, do not climb". The result was an agent that
+# recorded failures and never moved, silently, for every caller that happened not to set a
+# variable belonging to somebody else.
+#
+# A library that needs a path should find it, not require it.
+_AGENT_LADDER_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_AGENT_LADDER_AGENTS_DIR="${EPAM_AGENTS_DIR:-$(cd "$_AGENT_LADDER_LIB_DIR/../.." && pwd)/agents}"
+
 # _agent_ladder_state_file <agent> <story> — where this agent's rung for this story is kept.
 # Per AGENT and per STORY: an analyst failing on one story must not escalate every other agent.
 _agent_ladder_state_file() {
@@ -63,8 +76,8 @@ _agent_ladder_tier() {
         const p = JSON.parse(require("fs").readFileSync(reg, "utf8")).profiles[seam] || {};
         process.stdout.write(String(p.ladder || "").toLowerCase());
       } catch (_) { process.stdout.write(""); }
-    ' "${SCRIPT_DIR:-.}/lib/seam-invocation.js" \
-      "${AGENT_PROFILES_REGISTRY:-${EPAM_AGENTS_DIR:-.}/invocation-profiles.json}" \
+    ' "$_AGENT_LADDER_LIB_DIR/seam-invocation.js" \
+      "${AGENT_PROFILES_REGISTRY:-$_AGENT_LADDER_AGENTS_DIR/invocation-profiles.json}" \
       "$_agent" 2>/dev/null || printf ''
 }
 
@@ -83,11 +96,24 @@ agent_ladder_model() {
     case "$_failures" in ''|*[!0-9]*) _failures=0 ;; esac
     [ "$_failures" -gt 0 ] || { printf '%s' "$_current"; return 0; }
 
+    # THE CHAIN: the agent's declared tier first, the RUN'S OWN CHAIN second.
+    #
+    # An archetype's tier is the specific answer and wins whenever it exists. But not every caller
+    # is a registered archetype — a run invokes agents by ad-hoc name too, and before this handler
+    # existed those climbed the chain the RUN declares (EPAM_MODEL_LADDER). Resolving the tier and
+    # stopping when there is none took that away silently: an unregistered agent recorded failures
+    # and never moved, which is indistinguishable from a ladder that is working.
+    #
+    # EPAM_MODEL_LADDER is not a guess — it is the run's own declared chain, and falling back to it
+    # is honouring a declaration rather than inventing one. What is still refused is inventing a
+    # chain when NEITHER is declared: absent stays absent, and the caller keeps the model it had.
     local _tier _var _chain
     _tier=$(_agent_ladder_tier "$_agent")
-    [ -n "$_tier" ] || { printf '%s' "$_current"; return 0; }
-    _var="EPAM_MODEL_LADDER_$(printf '%s' "$_tier" | tr '[:lower:]-' '[:upper:]_')"
-    _chain="${!_var:-}"
+    if [ -n "$_tier" ]; then
+        _var="EPAM_MODEL_LADDER_$(printf '%s' "$_tier" | tr '[:lower:]-' '[:upper:]_')"
+        _chain="${!_var:-}"
+    fi
+    [ -n "${_chain:-}" ] || _chain="${EPAM_MODEL_LADDER:-}"
     [ -n "$_chain" ] || { printf '%s' "$_current"; return 0; }
 
     # Walk one rung per recorded failure. Each hop is a from=to pair; no pair for the current

@@ -31,7 +31,11 @@ const ROOT = join(__dirname, '../../../orchestrations/scripts/');
 /** Every site that resolves a ladder successor and acts on it. */
 const LADDER_SITES = [
   { file: 'lib/tc-writer-gate.sh', call: '_tc_ladder_next_model "$_tc_model"' },
-  { file: 'brownfield-repro-test-writer.sh', call: '_ladder_next_model "$_base_model"' },
+  // brownfield-repro-test-writer.sh moved to the shared handler and its private chain walker
+  // was deleted; the "why didn't it escalate" reporting it must still do now comes from
+  // agent_ladder_exhausted. The requirement is unchanged — a ladder that does not escalate says
+  // WHY — only the function providing the answer moved.
+  { file: 'brownfield-repro-test-writer.sh', call: 'agent_ladder_exhausted' },
   { file: 'team-lead-review.sh', call: '_ladder_next_model "$_base_model"' },
 ];
 

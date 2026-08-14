@@ -148,7 +148,11 @@ describe('THE ANALYST IS WIRED TO THE SEAM — THE FIRST CONSUMER', () => {
 
   it('the analyst records a failure and escalates instead of re-asking the same model', () => {
     const src = readFileSync(CLAUDE, 'utf8');
-    const at = src.indexOf('agent_ladder_record_failure "failure-analyst"');
+    // The seam name is declared ONCE (_ANALYST_SEAM) and passed as a variable, so matching a
+    // literal here would break the moment that indirection was introduced — and the literal it
+    // matched, "failure-analyst", is a name the profiles registry does not contain, so the call
+    // it was guarding resolved no tier and never escalated. Match the CALL, not a spelling.
+    const at = src.search(/agent_ladder_record_failure\s+"\$?_?[A-Za-z_]/);
     expect(at, 'the analyst retry does not touch the ladder seam').toBeGreaterThan(0);
     const block = src.slice(at, src.indexOf('if [ -z "$(printf', at));
 
@@ -164,6 +168,11 @@ EPAM_MODEL_LADDER_HIGHEST="m-1=m-2|m-2=m-3"
 export LOG_DIR AGENT_PROFILES_REGISTRY NODE_BIN SCRIPT_DIR EPAM_MODEL_LADDER_TIER_ORDER EPAM_MODEL_LADDER_HIGHEST
 story_id=S-ANALYST
 gate_model=m-1
+# The seam this block escalates. run_failure_analyst declares it once in its own scope, so an
+# extracted snippet has to be given it — and it must be the name the REGISTRY actually contains,
+# since agent_ladder_model resolves the tier through it. A name the registry lacks resolves no
+# tier, returns the model unchanged, and this assertion would fail for the right reason.
+_ANALYST_SEAM=impl-failure-analyst
 warning() { printf 'WARN %s\\n' "$*"; }
 . ${JSON.stringify(LIB)}
 ${block.replace(/^\s*local /gm, '')}

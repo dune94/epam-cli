@@ -1,0 +1,2 @@
+{"event":"topology_decision","phase":"core","topology":"single","reason":"Count heuristic: ≤1 worktree story.","source":"heuristic","timestamp":"2026-08-12T14:40:53Z"}
+{"phase_id":"core","story_id":"AMSD-2041","agent_type":"story_recovery","resolvedModel":"z-ai/glm-5.2","started_at":"2026-08-12T14:41:36+00:00","ended_at":"2026-08-12T14:41:56+00:00","task_cost_usd":0.0118,"task_tokens_in":14688,"task_tokens_out":261,"task_turns":1,"status":"completed","invokeMode":"cli"}

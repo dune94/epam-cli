@@ -177,6 +177,68 @@ if [ "${EPAM_SKIP_BUILD_STALENESS_CHECK:-0}" != "1" ]; then
   info "Pre-flight: built CLI is current with src/"
 fi
 
+  # ── EVERY STORY DECLARES THE ROLE THAT WILL WRITE IT ────────────────────────
+  #
+  # agentRole decides which archetype's brief the writer runs under. A story with none falls
+  # through to the generic writer, which is not bound by the specialist's rules — including the
+  # test-ownership exclusion, "You do not create, edit, or maintain any test files."
+  #
+  # Live 2026-08-14, run 20260814T135343Z: agentRole was null, the writer ran generic, it edited a
+  # pre-existing spec file, and that single test file in the diff silenced the dedicated
+  # repro-test-writer ("a test already accompanies the change — nothing to write"). No reproducing
+  # test was authored, and Step 3.55 blocked the story twice for opposite reasons: the tests failed
+  # WITH the fix, then passed WITHOUT it. The code itself was fine and had already committed with a
+  # clean type check.
+  #
+  # It is null because assignment belongs to the MINT, and every writer-style resume skips the mint
+  # while the canonical PRD is reset each launch. So the role has to be DECLARED in the PRD, and
+  # this check makes its absence visible before the run spends anything.
+  if [ "${EPAM_SKIP_AGENT_ROLE_CHECK:-0}" != "1" ] && [ -f "$PRD_FILE" ]; then
+    _roleless=$(jq -r '[.stories[]? | select((.agentRole // "") == "" and ((.agentRoles // {}) | length) == 0) | .id] | join(", ")' "$PRD_FILE" 2>/dev/null)
+    if [ -n "$_roleless" ]; then
+      error "[preflight] story/stories declare no agentRole: $_roleless"
+      error "[preflight]   The writer would run as the generic archetype, which is not bound by the"
+      error "[preflight]   specialist brief — including the rule that it must not author tests."
+      error "[preflight]   Set agentRole in $PRD_FILE, or run the mint so assignment happens."
+      error "[preflight]   Override (deliberate): EPAM_SKIP_AGENT_ROLE_CHECK=1"
+      exit 1
+    fi
+    _badrole=$(jq -r --slurpfile p "$REPO_ROOT/orchestrations/agents/profiles.json" '[.stories[]? | select((.agentRole // "") != "") | select((.agentRole) as $r | ($p[0] | has($r)) | not) | .id + " -> " + .agentRole] | join("; ")' "$PRD_FILE" 2>/dev/null)
+    if [ -n "$_badrole" ]; then
+      error "[preflight] agentRole names a role the roster does not contain: $_badrole"
+      error "[preflight]   The perimeter refuses these at the writer seam: 'not permitted to author code'."
+      exit 1
+    fi
+    # AND THAT THE PERIMETER WILL PERMIT IT TO WRITE.
+    #
+    # Existing in profiles.json is not the same as being allowed to author code. The write
+    # perimeter reads project-roles.json — and prefers the PER-PROJECT copy under
+    # EPAM_PROJECT_CONFIG_DIR over orchestrations/agents/, deliberately, so a client project does
+    # not inherit the engine's own implementation roles.
+    #
+    # Live 2026-08-14, run 20260814T185607Z: the role was declared on the story and present in
+    # profiles.json, this check passed, and the run was refused three minutes later —
+    # "not permitted to author code" — because the per-project file held roles: []. Verifying the
+    # wrong registry is the same as not verifying.
+    _perim_registry="${EPAM_PROJECT_ROLES_FILE:-}"
+    if [ -z "$_perim_registry" ] && [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] && [ -f "${EPAM_PROJECT_CONFIG_DIR}/project-roles.json" ]; then
+      _perim_registry="${EPAM_PROJECT_CONFIG_DIR}/project-roles.json"
+    fi
+    [ -n "$_perim_registry" ] || _perim_registry="$REPO_ROOT/orchestrations/agents/project-roles.json"
+    if [ -f "$_perim_registry" ]; then
+      _unpermitted=$(jq -r --slurpfile reg "$_perim_registry" '[.stories[]? | select((.agentRole // "") != "") | select((.agentRole) as $r | (($reg[0].roles // []) | index($r)) == null) | .id + " -> " + .agentRole] | join("; ")' "$PRD_FILE" 2>/dev/null)
+      if [ -n "$_unpermitted" ]; then
+        error "[preflight] agentRole is not a registered implementer: $_unpermitted"
+        error "[preflight]   The write perimeter reads: $_perim_registry"
+        error "[preflight]   It will refuse the writer with 'not permitted to author code'."
+        error "[preflight]   Add the role to .roles there, or run the mint so it is registered."
+        exit 1
+      fi
+      info "Pre-flight: every agentRole is a registered implementer in $(basename "$_perim_registry")"
+    fi
+    info "Pre-flight: every story declares an agentRole the roster holds"
+  fi
+
 # Also into $LOG_FILE: the line above goes to stdout, which is the launch log
 # that pre-run-reset deletes. The run report is generated from $LOG_FILE, so a
 # balance recorded only on stdout leaves every report saying "Billed by

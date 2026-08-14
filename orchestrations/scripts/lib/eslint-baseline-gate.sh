@@ -124,6 +124,10 @@ eslint_baseline_gate() {
     helper="$(dirname "${BASH_SOURCE[0]}")/eslint_findings_diff.py"
 
     local baseline_sha=""
+    # WHETHER WE COULD ESTABLISH PROVENANCE AT ALL — not whether the baseline was clean.
+    # Those two were the same value (an empty cache) until 2026-08-14; see the block that
+    # sets this, and the verdict that now honours it.
+    local baseline_unavailable=0
     local baseline_file="$log_dir/phase-baseline-sha.txt"
     if [ -f "$baseline_file" ]; then
         baseline_sha=$(tr -d '[:space:]' < "$baseline_file" 2>/dev/null)
@@ -269,7 +273,22 @@ REBASE_PY
             # live tree is the right root to interpret them against.
             baseline_root="$project_root"
         else
-            warning "  [lint] could not compute baseline findings for ${baseline_sha:0:12} — every finding will be attributed to this run"
+            # THE CACHE IS EMPTY FOR TWO VERY DIFFERENT REASONS, AND THIS IS THE ONE THAT LIES.
+            #
+            # The linter runs inside a throwaway worktree with the project's declared vendor
+            # directory symlinked in, because it is gitignored and `worktree add` will not check it
+            # out. That symlink gives the linter two paths to the same physical plugin directory. A
+            # codeline whose vendor tree carries a nested duplicate of a plugin — ordinary package
+            # manager behaviour, harmless to the codeline's own lint run, which resolves each plugin
+            # by exactly one path — then makes the linter refuse to start, and it writes nothing.
+            #
+            # Live 2026-08-14 (AMSD-2041): eight violations aged between one and nineteen months
+            # were charged to a run that had just been APPROVED at review, two repair attempts could
+            # not remove them because they were never its to remove, and the run was killed at 113
+            # minutes. The sibling codeline passed the same gate the previous day on a flat vendor
+            # tree. Same code, same commit, different topology.
+            baseline_unavailable=1
+            warning "  [lint] could not compute baseline findings for ${baseline_sha:0:12} — provenance is unknown, so findings cannot be attributed to this run"
         fi
     fi
 
@@ -313,6 +332,26 @@ REBASE_PY
     if [ "$new_rc" -eq 0 ]; then
         success "  [lint] eslint: PASS (no findings introduced by this run)"
         printf '%s\n' "$new_out" | grep -E 'pre-existing' | while IFS= read -r _l; do info "  [lint] $_l"; done
+        return 0
+    fi
+
+    # UNATTRIBUTABLE IS NOT UNINVISIBLE, AND IT IS NOT GUILTY EITHER.
+    #
+    # Without a baseline the diff cannot tell a finding this run introduced from one that has been
+    # in the codeline for a year. Failing here charges the run with the latter, and there is no
+    # action it can take: removing them means editing code the story never mentioned, in a client
+    # repository, which is precisely what the write perimeter exists to prevent. The findings are
+    # reported in full so nothing is hidden — they are simply not laid at this run's door.
+    #
+    # This branch is reachable ONLY when the baseline computation itself failed. A computable
+    # baseline with a genuine new finding still fails below, which the guard test holds shut.
+    if [ "${baseline_unavailable:-0}" -eq 1 ]; then
+        warning "  [lint] eslint: PASS WITH WARNING — the baseline could not be computed, so these"
+        warning "  [lint] finding(s) cannot be attributed to this run and are reported, not charged:"
+        printf '%s\n' "$new_out" | while IFS= read -r _l; do
+            [ -n "$_l" ] && warning "  [lint]   $_l"
+        done
+        printf 'UNATTRIBUTABLE (baseline unavailable): %s\n' "$new_out" >> "$lint_log"
         return 0
     fi
 

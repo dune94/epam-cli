@@ -449,6 +449,17 @@ if [ -n "${EPAM_RESUME_RUN:-}" ]; then
     _IS_RESUME=1
     _PROJECT_CFG_DIR=""
     info "  Resuming ${EPAM_RESUME_RUN} — keeping the roster this run already minted and reviewed"
+elif [ "${EPAM_SKIP_AGENT_MINT:-0}" = "1" ]; then
+    # THE SAME PROTECTION, FOR THE SAME REASON. Clearing these is right when the mint is about to
+    # rebuild them: a registry naming agents the new roster never minted points consumers at
+    # briefless names. When the mint is SKIPPED nothing rebuilds them, and the run deletes the
+    # registries it is about to depend on — which on 2026-08-13 left the writer's own role absent
+    # from the roster it was about to run under, and was only unblocked by authoring the files by
+    # hand. They are agent artefacts; the pipeline preserves what an agent produced, and nobody
+    # curates them.
+    _IS_RESUME=1
+    _PROJECT_CFG_DIR=""
+    info "  Mint skipped (EPAM_SKIP_AGENT_MINT=1) — keeping the roster and registries the mint last produced"
 fi
 # BOTH registries. project-investigators.json was added after this list and never joined it,
 # so a previous run's investigators survived every reset. Live 2026-08-08: six investigators

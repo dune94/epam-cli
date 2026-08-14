@@ -220,8 +220,15 @@ PIPELINE_EXIT=0
 
 # ── Restore profiles.json from canonical original ─────────────────────────────
 # Agent mutations (profile-augmentor additions) must not carry forward across runs.
+# NOT WHEN THE MINT IS SKIPPED. Restoring base state is right before a run that will mint afresh —
+# it stops one run's profile mutations carrying into the next. When the mint is skipped there is
+# nothing to rebuild what this overwrites, so the restore destroys the very roster the run intends
+# to reuse. Live 2026-08-13: a writer-only launch found the generic base roster and the story's own
+# agent did not exist in it.
 PROFILES_ORIG="$REPO_ROOT/orchestrations/agents/profiles.json.original"
-if [ -f "$PROFILES_ORIG" ]; then
+if [ "${EPAM_SKIP_AGENT_MINT:-0}" = "1" ]; then
+  info "profiles.json NOT restored — the mint is skipped, so this run reuses the roster it last minted"
+elif [ -f "$PROFILES_ORIG" ]; then
   cp "$PROFILES_ORIG" "$REPO_ROOT/orchestrations/agents/profiles.json"
   info "profiles.json restored from canonical original"
 else

@@ -329,9 +329,20 @@ done < <(find "$LOG_DIR" -type f \( -name '*.log' -o -name 'story-outputs-*.txt'
 # survived. A feedback artefact added tomorrow is covered without anyone remembering this code.
 _RUN_ARTIFACT_DIR="${LOG_DIR:-}"
 if [ -n "$_RUN_ARTIFACT_DIR" ] && [ -d "$_RUN_ARTIFACT_DIR" ]; then
-    _RA_CLEARED=$(find "$_RUN_ARTIFACT_DIR" -maxdepth 1 -type f -name 'review-*.json' 2>/dev/null | wc -l)
-    find "$_RUN_ARTIFACT_DIR" -maxdepth 1 -type f -name 'review-*.json' -delete 2>/dev/null || true
-    _RA_LEFT=$(find "$_RUN_ARTIFACT_DIR" -maxdepth 1 -type f -name 'review-*.json' 2>/dev/null | wc -l)
+    # EVERYWHERE A LANE CAN READ ONE, not just the parent directory.
+    #
+    # This swept `-maxdepth 1` while a lane runs with LOG_DIR=$LOG_DIR/lanes/<codeline> and the
+    # writer reads $LOG_DIR/review-feedback-<story>.json — so every lane's findings survived every
+    # reset. Found 2026-08-13: all three lanes still held files written on 2026-08-05, metrolinx's
+    # carrying NINE issues and FOUR blockers about an implementation discarded a week earlier. A
+    # run would have opened its writer's prompt with "a prior code review requested changes — this
+    # is the highest priority" and demands about code that no longer existed.
+    #
+    # Second time the reset has been caught missing lane-scoped state; the published agent-input
+    # store was the first, earlier the same day. Depth is the bug both times, so depth goes.
+    _RA_CLEARED=$(find "$_RUN_ARTIFACT_DIR" -type f -name 'review-*.json' 2>/dev/null | wc -l)
+    find "$_RUN_ARTIFACT_DIR" -type f -name 'review-*.json' -delete 2>/dev/null || true
+    _RA_LEFT=$(find "$_RUN_ARTIFACT_DIR" -type f -name 'review-*.json' 2>/dev/null | wc -l)
     if [ "$_RA_LEFT" -gt 0 ]; then
         # Starting a run on another run's review findings is the whole defect. Never announce a
         # clean slate this script did not deliver.

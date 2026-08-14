@@ -19,6 +19,7 @@ truncated by whoever reads it next, and a severed entry reads as a complete one.
 | [TF-2](docs/testing-failures/TF-2-lane-scoping-tested-at-the-renderer-not-the-seam.md) | 2026-08-13 | every lane's writer would have received every other lane's plan, with conflicting prescriptions for the same file | reproduce the TOPOLOGY, not just the unit — one of something cannot show a failure that only exists at two | fixed (4228f12) |
 | [TF-3](docs/testing-failures/TF-3-a-named-mode-shipped-half-applied.md) | 2026-08-13 | "writer-only" ran the regression guard anyway — a named intent, silently half-applied | test the SEQUENCE, not only the function; when a rule distinguishes two sources, construct both and show they diverge | fixed |
 | [TF-4](docs/testing-failures/TF-4-a-run-spent-7-dollars-and-recorded-nothing.md) | 2026-08-13 | a run spent $7.47 and every report said $0.00 | assert the OUTPUT of a run, not only the shape of its records; never let absent mean zero | guard fixed, cause open |
+| [TF-5](docs/testing-failures/TF-5-the-reset-swept-one-directory-deep.md) | 2026-08-13 | every lane kept a previous run's review findings for a week — a writer would act on blockers about code that no longer existed | when a consumer's directory is configurable, the fixture must include the configured case; depth is part of the rule | fixed |
 
 ## Adding an entry
 

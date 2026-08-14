@@ -26,6 +26,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync, chmodSync } from 'node:f
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { mintProjectPrompts } from '../../helpers/project-prompts';
 
 const WRITER = join(__dirname, '../../../orchestrations/scripts/brownfield-repro-test-writer.sh');
 const dirs: string[] = [];
@@ -121,7 +122,7 @@ function runWriter(repo: string) {
     out = execFileSync('bash', ['-c', `bash ${JSON.stringify(WRITER)} AMSD-2041 2>&1`], {
       encoding: 'utf8',
       env: {
-        ...process.env,
+        ...process.env, EPAM_PROJECT_CONFIG_DIR: mintProjectPrompts(),
         PROJECT_ROOT: repo,
         JIRA_BASELINE_BRANCH: 'develop',
         EPAM_BROWNFIELD: '1',

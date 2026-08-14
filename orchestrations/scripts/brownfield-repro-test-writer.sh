@@ -213,35 +213,36 @@ _emit_tw() { bash "$SCRIPT_DIR/update-monitor.sh" event "$1" "$2" "$STORY_ID" "m
 _emit_tw "spec_update" "repro-test-writer started for ${STORY_ID} → ${_target_rel}"
 
 # ── Build the dedicated test-writer prompt ──────────────────────────────────
-read -r -d '' _prompt <<PROMPT || true
-You are a TEST ENGINEER. Your ONLY job in this turn is to ${_prompt_role}. Do NOT modify any source file — write ONLY the test file.
-
-## VERIFY IT COMPILES BEFORE YOU FINISH
-Your test must TYPECHECK, not merely run — a spec that passes the test runner but fails tsc blocks the whole pipeline five steps later. Mock objects are the usual cause: they must satisfy the FULL type, with every required property, and no property the type does not declare. After writing the file, run:
-  _run_project_verification "${PROJECT_ROOT}" 2>&1 | grep "${_target_rel}"
-If that prints anything, FIX YOUR FILE and re-check before finishing.
-
-## ${_diff_heading}
-\`\`\`diff
-${_fix_diff}
-\`\`\`
-
-## What the test must confirm (verification criteria — assert the OBSERVABLE outcome, not the mechanism)
-${_vcs:-- The behavior described in the ticket is now correct, and related behavior did not regress.}
-${_example_block}
-## CodeGraph tool — confirm the impl's real signatures/imports (use SPARINGLY, then WRITE)
-The fix diff is shown above. If you need the exact signature or import path of a symbol to write a faithful test, look it up with the Bash tool — at most 1-2 calls, then STOP looking and write:
-  PROJECT_ROOT="${PROJECT_ROOT}" bash "${SCRIPT_DIR}/codegraph-agent-query.sh" query <SymbolName>    # exact definition + signature + import path
-  PROJECT_ROOT="${PROJECT_ROOT}" bash "${SCRIPT_DIR}/codegraph-agent-query.sh" callees <SymbolName>   # what a function calls
-Over-exploring here is the #1 failure mode — do the MINIMUM lookup, then WriteFile immediately.
-
-## HARD REQUIREMENTS
-1. Write the test to EXACTLY this path (nothing else, no other files): ${PROJECT_ROOT}/${_target_rel}
-2. Use the SAME test framework, import style, and mocking approach as the example above (this repo uses .${_ext}). The test MUST be runnable by the repo's existing test runner — match its conventions so it is picked up.
-${_req_proof}
-4. Write REAL arrange/act/assert cases. Do NOT paste source code into the test. Do NOT use a bare filename like 'test'. Do NOT put a newline or space in the path.
-5. Call WriteFile ONCE with the full test content at the path above, then stop.
-PROMPT
+# THE PROMPT IS A DOCUMENT, NOT A SHELL STRING.
+#
+# It lived here as a heredoc — one of the 34 prompts embedded in scripts. Prompt prose in a shell
+# string is live code: a quote ends the string, a backtick executes. It also could not be reviewed
+# or corrected without editing the engine. The template is never run; the project-authority copy is.
+_prompt_values=$(mktemp)
+"${NODE_BIN:-node}" -e '
+  const fs = require("fs");
+  const [out, ...pairs] = process.argv.slice(1);
+  const v = {};
+  for (let i = 0; i < pairs.length; i += 2) v[pairs[i]] = pairs[i + 1] ?? "";
+  fs.writeFileSync(out, JSON.stringify(v));
+' "$_prompt_values" \
+  __PROJECT_ROOT__ "$PROJECT_ROOT" \
+  __SCRIPT_DIR__ "$SCRIPT_DIR" \
+  __DIFF_HEADING__ "$_diff_heading" \
+  __EXAMPLE_BLOCK__ "$_example_block" \
+  __EXT__ "$_ext" \
+  __FIX_DIFF__ "$_fix_diff" \
+  __PROMPT_ROLE__ "$_prompt_role" \
+  __REQ_PROOF__ "$_req_proof" \
+  __TARGET_REL__ "$_target_rel" \
+  __VCS__ "${_vcs:-- The behavior described in the ticket is now correct, and related behavior did not regress.}"
+_prompt=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/prompt-library.js" \
+    render repro-test-writer "${EPAM_PROJECT_CONFIG_DIR:-}" "$_prompt_values") || {
+    rm -f "$_prompt_values"
+    log "FATAL: the repro-test-writer prompt did not render — refusing to invoke a test writer with no instructions"
+    exit 1
+}
+rm -f "$_prompt_values"
 
 # ── HIGH-ladder helpers (glm-5.1 → kimi-k3), same maps the detective/reviewer use ──
 # B31: a ladder that does not escalate must say WHY. Empty previously collapsed

@@ -19,6 +19,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, existsSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { mintProjectPrompts } from '../helpers/project-prompts';
 
 const REPO_ROOT = join(__dirname, '../../');
 const WRITER = join(REPO_ROOT, 'orchestrations/scripts/brownfield-repro-test-writer.sh');
@@ -124,7 +125,7 @@ function runWriter(f: ReturnType<typeof fixture>) {
     encoding: 'utf8',
     timeout: 120000,
     env: {
-      ...process.env,
+      ...process.env, EPAM_PROJECT_CONFIG_DIR: mintProjectPrompts(),
       EPAM_BROWNFIELD: '1',
       PROJECT_ROOT: f.repo,
       PRD_FILE: f.prd,

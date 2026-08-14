@@ -26,6 +26,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync, existsSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { mintProjectPrompts } from '../../helpers/project-prompts';
 
 const SCRIPTS = join(__dirname, '../../../orchestrations/scripts');
 const WRITER = join(SCRIPTS, 'brownfield-repro-test-writer.sh');
@@ -105,7 +106,7 @@ function runInducedFailure() {
     out = execFileSync('bash', [WRITER, STORY], {
       encoding: 'utf8', timeout: 120000,
       env: {
-        ...process.env,
+        ...process.env, EPAM_PROJECT_CONFIG_DIR: mintProjectPrompts(),
         EPAM_BROWNFIELD: '1',
         PROJECT_ROOT: repo,
         PRD_FILE: prd,

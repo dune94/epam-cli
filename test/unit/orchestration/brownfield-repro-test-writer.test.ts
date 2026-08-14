@@ -13,6 +13,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync, chmodSync, existsSync, r
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { mintProjectPrompts } from '../../helpers/project-prompts';
 
 const WRITER = join(__dirname, '../../../orchestrations/scripts/brownfield-repro-test-writer.sh');
 const ORCH = readFileSync(join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
@@ -69,7 +70,7 @@ function runWriter(repo: string, env: Record<string, string>): { code: number; o
     // merge stderr → stdout: the script's log() writes to stderr, and we assert on it
     const out = execFileSync('bash', ['-c', `bash ${JSON.stringify(WRITER)} AMSD-1820 2>&1`], {
       encoding: 'utf8',
-      env: { ...process.env, PROJECT_ROOT: repo, JIRA_BASELINE_BRANCH: 'develop', EPAM_BROWNFIELD: '1', ...env },
+      env: { ...process.env, EPAM_PROJECT_CONFIG_DIR: mintProjectPrompts(), PROJECT_ROOT: repo, JIRA_BASELINE_BRANCH: 'develop', EPAM_BROWNFIELD: '1', ...env },
     });
     return { code: 0, out };
   } catch (e: any) {

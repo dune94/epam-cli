@@ -26,6 +26,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync, readFileSync, readdirSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { mintProjectPrompts } from '../../helpers/project-prompts';
 
 const REPO = join(__dirname, '../../../');
 const WRITER = join(REPO, 'orchestrations/scripts/brownfield-repro-test-writer.sh');
@@ -102,7 +103,7 @@ function run() {
   try {
     execFileSync('bash', [WRITER, STORY], {
       encoding: 'utf8', timeout: 180000,
-      env: { ...process.env, EPAM_BROWNFIELD: '1', PROJECT_ROOT: repo, PRD_FILE: prd,
+      env: { ...process.env, EPAM_PROJECT_CONFIG_DIR: mintProjectPrompts(), EPAM_BROWNFIELD: '1', PROJECT_ROOT: repo, PRD_FILE: prd,
              LOG_DIR: logDir, JIRA_BASELINE_BRANCH: 'develop', KB_ROOT: kbRoot,
              NODE_BIN: NODE20, AI_RUNNER_CMD: makeStub(capture, repo),
              // The verification helper resolves the plugin under AUTOMATION_DIR.

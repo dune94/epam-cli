@@ -64,6 +64,7 @@ source "$SCRIPT_DIR/lib/git-ops.sh"
 # shellcheck source=lib/story-retry-state.sh
 source "$SCRIPT_DIR/lib/story-retry-state.sh"
 . "$SCRIPT_DIR/lib/agent-io.sh"
+. "$SCRIPT_DIR/lib/agent-ladder.sh"
 PROGRESS_LOG="$LOG_DIR/progress.txt"
 AGENTS_FILE="$AUTOMATION_DIR/agents/AGENTS.md"
 CLAUDE_OUTPUT_DIR="$LOG_DIR/claude_outputs"
@@ -7289,6 +7290,19 @@ for i, c in enumerate(text):
             local _analyst_snippet
             _analyst_snippet=$(printf '%s' "${analyst_raw:-}" | tr -d '\r' | tr '\n' ' ')
             if [ "$_analyst_attempt" -lt "$_analyst_max_attempts" ]; then
+                # AN ANSWER THIS UNUSABLE IS EVIDENCE ABOUT THE MODEL. Re-asking the same one buys
+                # a copy of the same non-answer — the reasoning the story ladder already applies,
+                # which gate agents had no way to reach. The analyst now climbs the ladder its own
+                # archetype declares; lib/agent-ladder.sh explains why nothing here names a model.
+                agent_ladder_record_failure "failure-analyst" "$story_id"
+                local _analyst_next
+                _analyst_next=$(agent_ladder_model "failure-analyst" "$story_id" "${gate_model:-}")
+                if [ -n "$_analyst_next" ] && [ "$_analyst_next" != "${gate_model:-}" ]; then
+                    warning "  [FailureAnalyst] escalating the ANALYST: ${gate_model:-unknown} → ${_analyst_next} (its answer was unusable, so the next attempt asks a different model)"
+                    gate_model="$_analyst_next"
+                elif agent_ladder_exhausted "failure-analyst" "$story_id" "${gate_model:-}"; then
+                    warning "  [FailureAnalyst] the analyst is at the top of its declared ladder (${gate_model:-unknown}) — retrying the same model, which is the last one available to it"
+                fi
                 if [ -z "$(printf '%s' "${analyst_raw:-}" | tr -d '[:space:]')" ]; then
                     warning "  [FailureAnalyst] Analyst returned an EMPTY response (0 bytes) from ${gate_model:-unknown} — retrying gate call (attempt $((_analyst_attempt + 1))/${_analyst_max_attempts})"
                 else

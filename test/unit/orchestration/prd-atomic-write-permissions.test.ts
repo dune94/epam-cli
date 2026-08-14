@@ -76,7 +76,13 @@ describe('PRD atomic-write permission regression — REAL execution', () => {
       const prdFile = join(dir, 'prd.json');
       writeFileSync(prdFile, JSON.stringify({ stories: [{ id: 'SKY-999', model: 'old-model', aiProvider: 'qwen' }] }));
       chmodSync(prdFile, 0o644);
-      const fnBody = extractFunctionBodyBraceCounted('hot_swap_story_model_if_unstable');
+      // hot_swap resolves its ladder tier through _resolve_ladder_tier, which reads the
+      // archetype's declared ladder. An extracted function needs what the script provides.
+      const fnBody = [
+        extractFunctionBodyBraceCounted('_story_archetype_ladder'),
+        extractFunctionBodyBraceCounted('_resolve_ladder_tier'),
+        extractFunctionBodyBraceCounted('hot_swap_story_model_if_unstable'),
+      ].join('\n');
       const scriptPath = join(dir, 'run.sh');
       writeFileSync(
         scriptPath,
@@ -89,7 +95,10 @@ describe('PRD atomic-write permission regression — REAL execution', () => {
           // touching the PRD file) -- this is what makes the test genuinely
           // exercise the mktemp/chmod/mv sequence rather than trivially
           // passing on an untouched, already-644 file.
-          `EPAM_MODEL_LADDER_MEDIUM="old-model=new-model" MAIN_PRD_FILE="${prdFile}" PRD_FILE="${prdFile}" hot_swap_story_model_if_unstable SKY-999`,
+          // The tier order is DECLARED data (lib/model-ladders.sh exports it from the settings
+          // file). Without it a tier resolves to nothing and no ladder is found — which is the
+          // point: the engine holds no ordering of its own, so a fixture must declare one.
+          `EPAM_MODEL_LADDER_TIER_ORDER="medium" EPAM_MODEL_LADDER_MEDIUM="old-model=new-model" MAIN_PRD_FILE="${prdFile}" PRD_FILE="${prdFile}" hot_swap_story_model_if_unstable SKY-999`,
         ].join('\n'),
       );
       execFileSync('bash', [scriptPath], { encoding: 'utf8' });

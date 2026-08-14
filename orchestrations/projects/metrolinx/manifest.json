@@ -79,25 +79,27 @@
   },
   "projectRoles": {
    "path": "project-roles.json",
-   "role": "config",
-   "required": true,
+   "role": "generated",
+   "required": false,
    "deployTo": "main-only",
    "consumedBy": [
     "mint-agents-step.js",
     "pre-run-reset.sh"
    ],
-   "purpose": "Role definitions agents are minted against."
+   "purpose": "Role definitions agents are minted against. Written by the agent mint each run and cleared by the pre-run reset — it is not operator config, and declaring it required made a run-produced file look like something a human maintains.",
+   "resetEachRun": true
   },
   "projectInvestigators": {
    "path": "project-investigators.json",
-   "role": "config",
-   "required": true,
+   "role": "generated",
+   "required": false,
    "deployTo": "main-only",
    "consumedBy": [
     "run-agent-orchestration.sh",
     "pre-run-reset.sh"
    ],
-   "purpose": "Investigator definitions for the spec pass."
+   "purpose": "Investigator definitions for the spec pass. Written by the agent mint each run and cleared by the pre-run reset — it is not operator config, and declaring it required made a run-produced file look like something a human maintains.",
+   "resetEachRun": true
   },
   "codelineFacts": {
    "path": "codeline-facts.json",
@@ -181,19 +183,6 @@
     "claude.sh"
    ],
    "purpose": "PROJECT-AUTHORITY PROMPTS. One JSON per prompt, rendered by lib/prompt-library.js. The generic templates in orchestrations/prompts/templates are NEVER executed; this folder is what runs. Today these are straight copies of the templates — under the target design a mint-time prompt-builder agent generates them, guided by the templates, and self-heal is the only thing that may mutate them afterwards."
-  },
-  "agents": {
-   "path": "agents",
-   "type": "directory",
-   "role": "canonical",
-   "required": true,
-   "deployTo": "main-only",
-   "consumedBy": [
-    "tier3-metrolinx-run.sh",
-    "mint-agents-step.js",
-    "run-agent-orchestration.sh"
-   ],
-   "purpose": "This project own minted roster. The SHARED orchestrations/agents roster is base state for every project and must name no client, codeline or ticket; these names are project facts, so they live here and EPAM_AGENTS_DIR points at this directory for a run."
   },
   "manifest": {
    "path": "manifest.json",

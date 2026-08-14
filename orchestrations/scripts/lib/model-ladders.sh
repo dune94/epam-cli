@@ -38,5 +38,16 @@ export_model_ladders() {
             '[.ladders[$t].modelLadder[]? | "\(.from)=\(.to)"] | join("|")' "$_settings" 2>/dev/null)
         [ -n "$_chain" ] && export "$_var=$_chain"
     done
+    # THE ORDER THE TIERS RANK IN, from the file that declares them. A consumer comparing two
+    # tiers (is this story's tier below its archetype's floor?) needs an ordering, and ranking
+    # them in engine code would embed a project's vocabulary in shared code — the same reason the
+    # loop above reads tier NAMES from the file rather than listing them.
+    #
+    # Absent means absent: a project that declares no order gets no ranking, and every consumer
+    # falls back to the behaviour it had before an order existed.
+    local _order
+    _order=$(jq -r '(.ladderTierOrder // []) | join(" ")' "$_settings" 2>/dev/null)
+    [ -n "$_order" ] && [ -z "${EPAM_MODEL_LADDER_TIER_ORDER:-}" ] \
+        && export "EPAM_MODEL_LADDER_TIER_ORDER=$_order"
     return 0
 }

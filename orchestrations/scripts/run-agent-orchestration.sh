@@ -1626,6 +1626,77 @@ stop_control_plane() {
 # claude.sh's bash functions aren't available in this process). No vendor/
 # model names hardcoded — every decision reads from env-configured maps.
 # No-op (silent) when no ladder step is configured for the current model.
+# _story_archetype_ladder <story-id> — the ladder the story's AGENT ARCHETYPE declares.
+#
+# Read through the seam, so a minted agent inherits its archetype's declaration rather than needing
+# one of its own. Empty when the story names no role, or the registry declares no ladder for it.
+_story_archetype_ladder() {
+    local _sid="${1:-}" _role
+    [ -n "$_sid" ] || { printf ''; return 0; }
+    _role=$(jq -r --arg id "$_sid" '.stories[] | select(.id == $id) | .agentRole // ""' \
+        "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "")
+    [ -n "$_role" ] || { printf ''; return 0; }
+    "${NODE_BIN:-node}" -e '
+      const path = require("path");
+      const { resolveSeam } = require(process.argv[1]);
+      try {
+        const reg = process.argv[2];
+        const seam = resolveSeam(process.argv[3], reg);
+        const p = JSON.parse(require("fs").readFileSync(reg, "utf8")).profiles[seam] || {};
+        process.stdout.write(String(p.ladder || ""));
+      } catch (_) { process.stdout.write(""); }
+    ' "$SCRIPT_DIR/lib/seam-invocation.js" \
+      "${AGENT_PROFILES_REGISTRY:-$EPAM_AGENTS_DIR/invocation-profiles.json}" "$_role" 2>/dev/null || printf ''
+}
+
+# _resolve_ladder_tier <story-tier> — the tier this story actually runs on.
+#
+# THE ARCHETYPE'S LADDER IS A FLOOR. The operator asked for the writer on the highest ladder and
+# story-writer declares `ladder: HIGHEST`; nothing read it. The tier came from the story record,
+# which the CPA pre-pass writes, so a deliberate declaration was silently overridden by an
+# automated one on every run — the writer ran `high` on 2026-08-14.
+#
+# The CPA may still RAISE a hard story above its archetype. It may not lower one below.
+_resolve_ladder_tier() {
+    local _story_tier _floor _rank_story _rank_floor
+    _story_tier=$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')
+    _floor=$(printf '%s' "$(_story_archetype_ladder "${story_id:-}")" | tr '[:upper:]' '[:lower:]')
+
+    # ORDER COMES FROM THE DECLARATION, never from a list here. EPAM_MODEL_LADDER_TIER_ORDER is
+    # exported by lib/model-ladders.sh from the settings file's own ordering. Ranking tiers in the
+    # engine would embed a project's vocabulary in shared code — the exact thing the exporter
+    # already refuses to do — and would silently rank an unknown tier lowest.
+    #
+    # NO DECLARED ORDER MEANS NO FLOOR. The story's tier is used unchanged, which is exactly the
+    # behaviour before this function existed: a project that has not declared an order gets no
+    # silent change, and the floor activates only when the operator says what the order is.
+    local _order="${EPAM_MODEL_LADDER_TIER_ORDER:-}"
+    if [ -z "$_order" ] || [ -z "$_floor" ]; then
+        [ -n "$_story_tier" ] && { printf '%s' "$_story_tier"; return 0; }
+        # NOTHING KNOWN: the LOWEST DECLARED tier, which is the first the order names. Defaulting
+        # to a tier named here would be the same vocabulary the ranking refuses to hold, and it
+        # only ever worked because one project happened to declare a tier by that name.
+        printf '%s' "$(printf '%s' "$_order" | awk '{print $1}')"
+        return 0
+    fi
+
+    _rank() {
+        local _t="${1:-}" _i=0 _c
+        [ -n "$_t" ] || { printf '0'; return 0; }
+        for _c in $_order; do
+            _i=$((_i + 1))
+            [ "$_c" = "$_t" ] && { printf '%s' "$_i"; return 0; }
+        done
+        printf '0'
+    }
+    _rank_story=$(_rank "$_story_tier")
+    _rank_floor=$(_rank "$_floor")
+
+    if [ "$_rank_floor" -gt "$_rank_story" ]; then printf '%s' "$_floor"; return 0; fi
+    [ -n "$_story_tier" ] && { printf '%s' "$_story_tier"; return 0; }
+    printf '%s' "$_floor"
+}
+
 hot_swap_story_model_if_unstable() {
     local story_id="$1"
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
@@ -1638,14 +1709,18 @@ hot_swap_story_model_if_unstable() {
     [ -z "$current_model" ] && return 1
 
     local tier
-    tier=$(jq -r --arg id "$story_id" \
-        '.stories[] | select(.id == $id) | .ladderTier // "medium"' "$prd_target" 2>/dev/null || echo "medium")
+    tier=$(_resolve_ladder_tier "$(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .ladderTier // ""' "$prd_target" 2>/dev/null || echo "")")
     local ladder="${EPAM_MODEL_LADDER:-}"
     if [ -z "$ladder" ]; then
-        case "$tier" in
-            high) ladder="${EPAM_MODEL_LADDER_HIGH:-}" ;;
-            *)    ladder="${EPAM_MODEL_LADDER_MEDIUM:-}" ;;
-        esac
+        # DERIVED, NOT BRANCHED. lib/model-ladders.sh exports EPAM_MODEL_LADDER_<TIER> for every
+        # tier the settings file declares, and names the variable this way; reading it the same
+        # way means a project adding a tier never edits the engine. The branch this replaced knew
+        # only `high` and a medium default, so a story on any other tier — `highest` included —
+        # silently received the MEDIUM ladder while still appearing to have one.
+        local _lvar
+        _lvar="EPAM_MODEL_LADDER_$(printf '%s' "$tier" | tr '[:lower:]-' '[:upper:]_')"
+        ladder="${!_lvar:-}"
     fi
     [ -z "$ladder" ] && return 1
 

@@ -23,22 +23,25 @@
         "SKIP_CPA=1",
         "SKIP_SKILL_ASSESSMENT=1",
         "SKIP_REGRESSION_GUARD=true"
-      ]
+      ],
+      "_why_no_mint": "The mint does NOT run. A writer re-run uses the roster that was already minted and reviewed; re-minting proposes against an existing roster and the merge is additive, so it accumulates near-duplicate roles and changes the agents under a story mid-stream."
     },
     "post-spec": {
       "_what": "The spec pass and the roster are done and on disk; everything from the CPA pre-pass onward still runs.",
       "skips": [
         "EPAM_SPEC_MODE=0",
-        "EPAM_SKIP_AGENT_MINT=1",
-        "EPAM_SKIP_JIRA_INGEST=1"
-      ]
+        "EPAM_SKIP_JIRA_INGEST=1",
+        "EPAM_SKIP_AGENT_MINT=1"
+      ],
+      "_why_mint": "Skips the mint because this mode describes a RESUME of a run whose roster is already on disk — pre-run-reset preserves the registries when EPAM_RESUME_RUN is set. A fresh launch has no such protection, which is why writer-only does not skip it."
     },
     "post-roster": {
       "_what": "The roster is minted and assignments are written; the spec pass still runs.",
       "skips": [
-        "EPAM_SKIP_AGENT_MINT=1",
-        "EPAM_SKIP_JIRA_INGEST=1"
-      ]
+        "EPAM_SKIP_JIRA_INGEST=1",
+        "EPAM_SKIP_AGENT_MINT=1"
+      ],
+      "_why_mint": "Skips the mint because this mode describes a RESUME of a run whose roster is already on disk — pre-run-reset preserves the registries when EPAM_RESUME_RUN is set. A fresh launch has no such protection, which is why writer-only does not skip it."
     }
   }
 }

@@ -165,6 +165,8 @@ PRD_FILE=${JSON.stringify(prd)}
 MAIN_PRD_FILE=${JSON.stringify(prd)}
 LOG_DIR=${JSON.stringify(d)}
 warning(){ :; }; log(){ :; }; error(){ :; }
+${fnText('_story_archetype_ladder')}
+${fnText('_resolve_ladder_tier')}
 ${fnText('hot_swap_story_model_if_unstable')}
 hot_swap_story_model_if_unstable S-1
 echo "RC=$?"

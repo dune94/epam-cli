@@ -248,5 +248,11 @@
     "topP": 0.9,
     "reasoningEffort": "max",
     "_note": "Which ladder tiers get an automatic planning turn, and the sampling that turn uses. The tier list was hardcoded to 'high', so adding the highest tier silently removed its planner. Planning wants determinism and structure (vendor guidance across MiniMax M3, GLM-5.2 and Kimi K3 agrees on this even where they disagree on execution): lower temperature, tighter top_p, maximum reasoning effort. Execution sampling stays per-model in modelOverrides."
-  }
+  },
+  "ladderTierOrder": [
+    "medium",
+    "high",
+    "highest"
+  ],
+  "_ladderTierOrder": "Lowest to highest. Consumers compare tiers through this; the engine holds no ordering of its own, so adding a tier is a change here and nowhere else."
 }

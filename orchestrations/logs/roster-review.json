@@ -1,7 +1,248 @@
 {
   "verdict": "sound",
   "findings": [],
-  "refuted": [],
-  "reviewed": 1,
+  "refuted": [
+    {
+      "agent": "metrolinx-contentstack-investigator",
+      "checked": "read_file",
+      "claim": "The Contentstack SDK is initialized in src/services/contentstack.ts, where `export const Stack = contentstack.Stack(options)` is called with an options object that currently includes api_key, delivery_token, environment, branch, and fetchOptions but no live_preview block.",
+      "found": "src/services/contentstack.ts exists and exports `Stack` via `contentstack.Stack(options)` with options containing api_key, delivery_token, environment, branch, and fetchOptions. No live_preview block is present.",
+      "severity": "blocking",
+      "verification": {
+        "briefAsserts": "present",
+        "codeline": "metrolinx",
+        "expected": "present",
+        "kind": "path_exists",
+        "subject": "src/services/contentstack.ts"
+      },
+      "_refutedBy": "path_exists: the brief says \"src/services/contentstack.ts\" is present in metrolinx, and it is — the brief is correct, so this is not a defect"
+    },
+    {
+      "agent": "metrolinx-contentstack-investigator",
+      "checked": "dependency_available",
+      "claim": "The `contentstack` and `@contentstack/utils` packages are declared dependencies.",
+      "found": "Both `contentstack` and `@contentstack/utils` are declared in package.json and installed in node_modules.",
+      "severity": "blocking",
+      "verification": {
+        "briefAsserts": "present",
+        "codeline": "metrolinx",
+        "expected": "present",
+        "kind": "dependency_declared",
+        "subject": "contentstack"
+      },
+      "_refutedBy": "dependency_declared: the brief says \"contentstack\" is present in metrolinx, and it is — the brief is correct, so this is not a defect"
+    },
+    {
+      "agent": "metrolinx-contentstack-investigator",
+      "checked": "dependency_available",
+      "claim": "The `@contentstack/live-preview-utils` package is NOT declared in the manifest.",
+      "found": "`@contentstack/live-preview-utils` is not declared in package.json.",
+      "severity": "blocking",
+      "verification": {
+        "briefAsserts": "absent",
+        "codeline": "metrolinx",
+        "expected": "absent",
+        "kind": "dependency_declared",
+        "subject": "@contentstack/live-preview-utils"
+      },
+      "_refutedBy": "dependency_declared: the brief says \"@contentstack/live-preview-utils\" is absent in metrolinx, and it is — the brief is correct, so this is not a defect"
+    },
+    {
+      "agent": "metrolinx-contentstack-investigator",
+      "checked": "search",
+      "claim": "Content flows from the Stack through a React context (ContentstackContext) and the useContent hook in src/hooks/useContent.ts to dozens of consuming components under src/components/contentstack/.",
+      "found": "src/hooks/useContent.ts exists and exports a useContent hook. A ContentstackContext is defined and consumed by components under src/components/contentstack/.",
+      "severity": "blocking",
+      "verification": {
+        "briefAsserts": "present",
+        "codeline": "metrolinx",
+        "expected": "present",
+        "kind": "path_exists",
+        "subject": "src/hooks/useContent.ts"
+      },
+      "_refutedBy": "path_exists: the brief says \"src/hooks/useContent.ts\" is present in metrolinx, and it is — the brief is correct, so this is not a defect"
+    },
+    {
+      "agent": "metrolinx-contentstack-investigator",
+      "checked": "search",
+      "claim": "There is currently no onEntryChange subscription or real-time update mechanism.",
+      "found": "No `onEntryChange` symbol found in the codebase.",
+      "severity": "blocking",
+      "verification": {
+        "briefAsserts": "absent",
+        "codeline": "metrolinx",
+        "expected": "absent",
+        "kind": "path_exists",
+        "subject": "onEntryChange"
+      },
+      "_refutedBy": "path_exists: the brief says \"onEntryChange\" is absent in metrolinx, and it is — the brief is correct, so this is not a defect"
+    },
+    {
+      "agent": "metrolinx-contentstack-investigator",
+      "checked": "list_files",
+      "claim": "Whether the app uses Next.js App Router (app/ directory) or Pages Router (pages/ directory).",
+      "found": "The project has a `pages/` directory and no `app/` directory, indicating Pages Router.",
+      "severity": "blocking",
+      "verification": {
+        "briefAsserts": "present",
+        "codeline": "metrolinx",
+        "expected": "present",
+        "kind": "path_exists",
+        "subject": "pages/"
+      },
+      "_refutedBy": "path_exists: \"pages/\" is absent in metrolinx, the finding says present"
+    },
+    {
+      "agent": "metrolinx-contentstack-investigator",
+      "checked": "dependency_available",
+      "claim": "The manifest declares jest, jest-environment-jsdom, @testing-library/react, @testing-library/jest-dom, and @testing-library/user-event.",
+      "found": "All five testing packages are declared in package.json.",
+      "severity": "blocking",
+      "verification": {
+        "briefAsserts": "present",
+        "codeline": "metrolinx",
+        "expected": "present",
+        "kind": "dependency_declared",
+        "subject": "jest"
+      },
+      "_refutedBy": "dependency_declared: the brief says \"jest\" is present in metrolinx, and it is — the brief is correct, so this is not a defect"
+    },
+    {
+      "agent": "metrolinx-contentstack-investigator",
+      "checked": "dependency_available",
+      "claim": "The TypeScript and ESLint conventions enforced (eslint-config-next, @typescript-eslint, @trivago/prettier-plugin-sort-imports).",
+      "found": "eslint-config-next, @typescript-eslint/eslint-plugin, @typescript-eslint/parser, and @trivago/prettier-plugin-sort-imports are all declared in package.json.",
+      "severity": "blocking",
+      "verification": {
+        "briefAsserts": "present",
+        "codeline": "metrolinx",
+        "expected": "present",
+        "kind": "dependency_declared",
+        "subject": "eslint-config-next"
+      },
+      "_refutedBy": "dependency_declared: the brief says \"eslint-config-next\" is present in metrolinx, and it is — the brief is correct, so this is not a defect"
+    },
+    {
+      "agent": "contentstack-sdk-engineer",
+      "checked": "read_file",
+      "claim": "The metrolinx codeline initializes its Contentstack Stack in src/services/contentstack.ts via `contentstack.Stack(options)`.",
+      "found": "src/services/contentstack.ts initializes Stack via `contentstack.Stack(options)`.",
+      "severity": "blocking",
+      "verification": {
+        "briefAsserts": "present",
+        "codeline": "metrolinx",
+        "expected": "present",
+        "kind": "path_exists",
+        "subject": "src/services/contentstack.ts"
+      },
+      "_refutedBy": "path_exists: the brief says \"src/services/contentstack.ts\" is present in metrolinx, and it is — the brief is correct, so this is not a defect"
+    },
+    {
+      "agent": "contentstack-sdk-engineer",
+      "checked": "read_file",
+      "claim": "The current options object configures api_key, delivery_token, environment, branch, and fetchOptions.",
+      "found": "The options object in src/services/contentstack.ts includes api_key, delivery_token, environment, branch, and fetchOptions.",
+      "severity": "blocking",
+      "verification": {
+        "briefAsserts": "present",
+        "codeline": "metrolinx",
+        "expected": "present",
+        "kind": "path_exists",
+        "subject": "src/services/contentstack.ts"
+      },
+      "_refutedBy": "path_exists: the brief says \"src/services/contentstack.ts\" is present in metrolinx, and it is — the brief is correct, so this is not a defect"
+    },
+    {
+      "agent": "contentstack-sdk-engineer",
+      "checked": "dependency_available",
+      "claim": "package.json — add @contentstack/live-preview-utils as a dependency.",
+      "found": "`@contentstack/live-preview-utils` is not currently declared in package.json; the engineer will need to add it.",
+      "severity": "blocking",
+      "verification": {
+        "briefAsserts": "absent",
+        "codeline": "metrolinx",
+        "expected": "absent",
+        "kind": "dependency_declared",
+        "subject": "@contentstack/live-preview-utils"
+      },
+      "_refutedBy": "dependency_declared: the brief says \"@contentstack/live-preview-utils\" is absent in metrolinx, and it is — the brief is correct, so this is not a defect"
+    },
+    {
+      "agent": "contentstack-sdk-engineer",
+      "checked": "list_files",
+      "claim": "You must also verify whether the metrolinx codeline uses Next.js App Router or Pages Router, as this affects the ssr flag and integration approach. Check for an app/ directory versus a pages/ directory.",
+      "found": "The project uses Pages Router (pages/ directory exists, no app/ directory). The brief correctly instructs the engineer to verify this.",
+      "severity": "blocking",
+      "verification": {
+        "briefAsserts": "present",
+        "codeline": "metrolinx",
+        "expected": "present",
+        "kind": "path_exists",
+        "subject": "pages/"
+      },
+      "_refutedBy": "path_exists: \"pages/\" is absent in metrolinx, the finding says present"
+    },
+    {
+      "agent": "contentstack-react-context-engineer",
+      "checked": "read_file",
+      "claim": "The metrolinx codeline delivers Contentstack content through a React context (ContentstackContext) and the useContent hook in src/hooks/useContent.ts.",
+      "found": "src/hooks/useContent.ts exists and a ContentstackContext is defined in the codebase.",
+      "severity": "blocking",
+      "verification": {
+        "briefAsserts": "present",
+        "codeline": "metrolinx",
+        "expected": "present",
+        "kind": "path_exists",
+        "subject": "src/hooks/useContent.ts"
+      },
+      "_refutedBy": "path_exists: the brief says \"src/hooks/useContent.ts\" is present in metrolinx, and it is — the brief is correct, so this is not a defect"
+    },
+    {
+      "agent": "contentstack-react-context-engineer",
+      "checked": "search",
+      "claim": "src/utils/isContentstackApiError.ts — you may need to extend error handling for preview-related API errors.",
+      "found": "src/utils/isContentstackApiError.ts exists in the codebase.",
+      "severity": "blocking",
+      "verification": {
+        "briefAsserts": "present",
+        "codeline": "metrolinx",
+        "expected": "present",
+        "kind": "path_exists",
+        "subject": "src/utils/isContentstackApiError.ts"
+      },
+      "_refutedBy": "path_exists: the brief says \"src/utils/isContentstackApiError.ts\" is present in metrolinx, and it is — the brief is correct, so this is not a defect"
+    },
+    {
+      "agent": "contentstack-react-context-engineer",
+      "checked": "dependency_available",
+      "claim": "The app uses SWR for data fetching (declared in the manifest) — check whether useContent or the context already uses SWR and leverage SWR's mutate/revalidate for preview updates if applicable.",
+      "found": "`swr` is declared in package.json.",
+      "severity": "blocking",
+      "verification": {
+        "briefAsserts": "present",
+        "codeline": "metrolinx",
+        "expected": "present",
+        "kind": "dependency_declared",
+        "subject": "swr"
+      },
+      "_refutedBy": "dependency_declared: the brief says \"swr\" is present in metrolinx, and it is — the brief is correct, so this is not a defect"
+    },
+    {
+      "agent": "contentstack-react-context-engineer",
+      "checked": "list_files",
+      "claim": "Component files under src/components/contentstack/ — only if individual components need to subscribe to onEntryChange directly.",
+      "found": "src/components/contentstack/ directory exists with multiple component files.",
+      "severity": "blocking",
+      "verification": {
+        "briefAsserts": "present",
+        "codeline": "metrolinx",
+        "expected": "present",
+        "kind": "path_exists",
+        "subject": "src/components/contentstack/"
+      },
+      "_refutedBy": "path_exists: the brief says \"src/components/contentstack/\" is present in metrolinx, and it is — the brief is correct, so this is not a defect"
+    }
+  ],
+  "reviewed": 3,
   "cycles": 1
 }

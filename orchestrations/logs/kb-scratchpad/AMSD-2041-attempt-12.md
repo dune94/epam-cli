@@ -53,11 +53,50 @@ _(attempt-evidence, from: engine)_
 
 The previous attempt changed these files (diffstat against origin/develop):
 
+ .env.local.sample                                |   4 +
+ jest.config.js                                   |   3 +
+ package-lock.json                                | 395 ++++++++++++++++++-----
+ package.json                                     |   3 +-
+ src/__mocks__/contentstack-live-preview-utils.ts |  21 ++
+ src/pages/_app.tsx                               |  21 +-
+ src/services/contentstack.ts                     |  12 +
+ 7 files changed, 378 insertions(+), 81 deletions(-)
+ src/services/contentstack.ts | 22 ----------------------
+ 1 file changed, 22 deletions(-)
+ .deepeval/.deepeval_telemetry.txt | new file
  .epam/codeline-facts.json | new file
+ .epam/dynamic-tools/install-missing-deps.sh | new file
+ .epam/dynamic-tools/install-missing-deps.sh.reviewed | new file
  .epam/settings.json | new file
  .epam/verification.json | new file
+ orchestrations/logs/agent-activity.jsonl | new file
 
+## Reviewer Feedback — ADDRESS THESE (a prior code review requested changes)
+The team-lead reviewer examined your previous attempt and requested the changes below. This is the highest priority.
 
+A BLOCKER is a required deliverable, not advice. If a blocker says something is MISSING — a test, a file, a case — the only way to resolve it is to CREATE it; leaving it out repeats the rejection. Minimality governs HOW MUCH you write, never WHETHER you write it.
+
+For advisory points: make the smallest edits that resolve each one, and where a point says the change is over-engineered or an existing helper would do, REMOVE the excess rather than adding more.
+
+If you genuinely cannot satisfy a blocker — no seam exists to test against, the behaviour lives entirely in a third-party package — say so explicitly in your final message, naming the blocker and why. An unexplained omission reads as a refusal and will be rejected again.
+### BLOCKERS — this attempt is REJECTED until every one is resolved
+- [blocker] Lockfile/manifest out of sync: the diff adds "lodash-es": "4.18.1" to the root packages[""].dependencies block of package-lock.json, but package.json does not declare lodash-es anywhere in its dependencies (verified by reading package.json — the dependency list contains lodash.isequal/isstring/isundefined/kebabcase/omit but no lodash-es). With the lockfile referencing a root dependency the manifest does not declare, `npm ci` will fail with an out-of-sync error, breaking clean installs and CI. lodash-es is already pulled in transitively by @contentstack/live-preview-utils, so the root entry is unnecessary. (package-lock.json:31)
+  - Suggested fix: Remove the stray root-level "lodash-es": "4.18.1" entry from package-lock.json (regenerate the lockfile with `npm install` from the unmodified package.json so the lock reflects only the @contentstack/live-preview-utils addition).
+### Advisory — apply where it makes the change smaller or clearer
+- [major] Unrelated scope creep: the diff changes the "lodash" override from 4.18.1 to 4.17.21. This story is about Live Preview wiring; an override change forces re-resolution of every lodash consumer in the tree and is not part of the prescribed minimal fix (which touches only contentstack.ts, _app.tsx, contentstackContext.tsx, and .env.local.sample). If this is a deliberate security pin it belongs in its own change with justification. (package.json:146)
+  - Suggested fix: Revert the lodash override to its previous value, or split the override change into a separate commit/PR with a stated reason.
+- [minor] `void ContentstackLivePreview.init({...}).catch(() => {})` combines `void` with a `.catch` (redundant) and swallows init failures silently — if the SDK fails to initialize, preview silently does nothing and there is no log to diagnose it in a preview environment. (src/pages/_app.tsx:44)
+  - Suggested fix: Drop the `void` and log in the catch, e.g. `.catch((err) => console.error('Live Preview init failed', err))`.
+- [minor] isLivePreviewEnabled is only set to true after the first onEntryChange fires; on initial load of a preview session it is undefined even though preview is active. Consumers checking isLivePreviewEnabled before the first edit event will see a false-negative. (src/pages/_app.tsx:50)
+  - Suggested fix: Initialize state with isLivePreviewEnabled: true when NEXT_PUBLIC_CONTENTSTACK_PREVIEW_ENABLED === 'true', e.g. set it in the same effect right after init, or initialize useState accordingly.
+- [minor] The hash-propagation pattern (read livePreviewHash/isLivePreviewEnabled from the outer _app provider via useContext, then re-provide a merged value) was applied only to [[...slug]].tsx and 404.tsx. Any other page that renders its own ContentstackContext.Provider with a static value will shadow the outer provider and its useContent consumers will not re-render on draft updates. Verify all remaining pages that provide ContentstackContext follow the same merge pattern. (src/pages/[[...slug]].tsx:38)
+  - Suggested fix: Audit all pages rendering <ContentstackContext.Provider> and apply the same {...content, livePreviewHash, isLivePreviewEnabled} merge, or centralize the merge in a small wrapper component to avoid per-page duplication.
+- [minor] ADVISORY (SPEC): The RCA prescribed init({ stack: Stack }) but the installed @contentstack/live-preview-utils v4.5.0 default export is the ContentstackLivePreview HOC whose documented CSR init signature is init({ stackSdk, ssr }) — the diff's usage (stackSdk: Stack, ssr: false) matches the SDK's real API, so the deviation from the RCA wording is correct, not a defect. Also note the env var was correctly named NEXT_PUBLIC_CONTENTSTACK_PREVIEW_ENABLED (not CONTENTSTACK_PREVIEW_ENABLED as the RCA suggested) because it is read client-side in _app.tsx. (src/services/contentstack.ts:79)
+  - Suggested fix: No change needed; recorded so the plan-vs-implementation deviation is a documented decision.
+
+## Lessons From Prior Runs (persisted — a previous attempt at this or a similar story already hit these problems)
+[Self-Heal] Review REPEATEDLY rejected AMSD-2041 (ladder exhausted) for:
+- Lockfile/manifest out of sync: the diff adds "lodash-es": "4.18.1" to the root packages[""].dependencies block of package-lock.json, but package.json does not declare lodash-es anywhere in its dependencies (verified by reading package.json — the dependency list contains lodash.isequal/isstring/isundefined/kebabcase/omit but no lodash-es). With the lockfile referencing a root dependency the manifest does not declare, `npm ci` will fail with an out-of-sync error, breaking clean installs and CI. lodash-es is already pulled in transitively by @contentstack/live-preview-utils, so the root entry is unnecessary.
 
 ## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
 These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
@@ -94,6 +133,20 @@ Adding a test here wastes your turn budget and has caused repeated failures.
 ## The helper to reuse is ALREADY identified — do NOT search
 The Root Cause Analysis above names the exact existing helper to reuse (`Stack`). Do NOT run CodeGraph or explore the codebase to re-find it — that wastes your turn budget. Import it, apply the prescribed minimal fix, write your file(s), and stop. Only search if you hit something the prescribed fix genuinely does not cover.
 
+VERIFICATION CRITERIA WITH NO TEST BEHIND THEM
+
+A deterministic check compared this story's verification criteria against the tests it actually produced. The criteria below have none. Each is followed by why nothing covers it.
+
+  - When the Live Preview feature is not active, the page renders all published content — headings, text blocks, images, and layout — completely and without visible errors.
+    The test only verifies three text fields via a hook's getContentByKey method and does not exercise images, layout, or actual page rendering for visible errors, so violations of the requirement involving those content types would not cause any test to fail.
+  - When the preview environment is configured and Live Preview is active, the page renders all content and layout without visible rendering errors, broken elements, or missing sections.
+    The tests only assert on hook return values via renderHook and never mount a page component or inspect rendered DOM output for layout completeness, broken elements, or missing sections.
+  - When the documented preview environment variables are set to valid values, the page loads successfully and displays draft content for entries with unpublished changes.
+    The tests mock the Contentstack context directly rather than setting preview environment variables, and they test a hook in isolation rather than verifying that the page loads successfully when those variables are configured.
+  - For pages that require authentication, draft content preview may not render even when the Live Preview SDK signals a draft entry update.
+    No test introduces authentication or asserts that draft content is withheld when the Live Preview SDK signals a draft update on a page requiring authentication.
+
+These are findings, not accusations: a criterion may be genuinely untestable in this environment — an unreachable third-party service, a behaviour only observable in a real browser. Judge each one. If it is testable, it needs a test. If it is not, say which and why, so the gap is a recorded decision rather than an omission nobody noticed.
 
 
 
@@ -110,7 +163,6 @@ The Root Cause Analysis above names the exact existing helper to reuse (`Stack`)
 ### /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/services/contentstack.ts
 ```
 import * as Utils from "@contentstack/utils";
-import ContentstackLivePreview from "@contentstack/live-preview-utils";
 import contentstack from "contentstack";
 import { HttpStatusCode } from "@metrolinx/cx-shared/build/src/constants/common";
 import { HttpError } from "@metrolinx/cx-shared/build/src/utils/common/HttpError";
@@ -145,9 +197,6 @@ const {
   CONTENTSTACK_FETCH_TIMEOUT = "",
   CONTENTSTACK_DEBUG = "",
   CONTENTSTACK_DEBUG_LEVEL = "error",
-  CONTENTSTACK_MANAGEMENT_TOKEN = "",
-  CONTENTSTACK_PREVIEW_HOST = "",
-  CONTENTSTACK_PREVIEW_ENABLED = "",
 } = process?.env || {};
 
 const filterDebugLevel = (item: string): item is ContentstackDebugLevel =>
@@ -188,15 +237,6 @@ export const options: contentstack.Config = {
   delivery_token: DELIVERY_TOKEN,
   environment: ENVIRONMENT,
   branch: CONTENTSTACK_BRANCH,
-  ...(CONTENTSTACK_PREVIEW_ENABLED === "true"
-    ? (({
-        live_preview: {
-          enable: true,
-          host: CONTENTSTACK_PREVIEW_HOST || undefined,
-          management_token: CONTENTSTACK_MANAGEMENT_TOKEN || undefined,
-        },
-      } as unknown) as contentstack.Config)
-    : {}),
   fetchOptions: {
     debug: CONTENTSTACK_DEBUG === "true",
     logHandler: (level, data) => {
@@ -216,15 +256,6 @@ export const Stack = contentstack.Stack(options);
 
 if (CONTENTSTACK_API_HOST) {
   Stack.setHost(CONTENTSTACK_API_HOST);
-}
-
-if (CONTENTSTACK_PREVIEW_ENABLED === "true" && typeof window !== "undefined") {
-  ContentstackLivePreview.init({
-    stackSdk: Stack,
-    clientUrlParams: {
-      host: CONTENTSTACK_PREVIEW_HOST || undefined,
-    },
-  });
 }
 
 const renderOption = {
@@ -509,8 +540,30 @@ export const getSingletonEntry = async ({
     referenceFieldPath,
     cachePolicy,
     only,
+    except,
+    where,
+    lang,
+  });
+
+  try {
+    const result = await query.findOne();
+
+    if (jsonRtePath) {
+      Utils.jsonToHTML({
+        entry: result,
+        paths: jsonRtePath,
+        renderOption,
+      });
+    }
+
+    return result;
+  } catch (e: any) {
+    logger.error(
+      e.message,
+      `Error retrieving entry of single content type: ${contentTypeUid} for lang: ${lang}`,
+    );
 ```
-(truncated at 400 of 472 lines — ReadFile this path yourself if you need the rest)
+(truncated at 400 of 450 lines — ReadFile this path yourself if you need the rest)
 
 ### /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/context/contentstackContext.tsx
 ```
@@ -531,8 +584,6 @@ export interface IContentstackContext {
   };
   directories?: IDirectoryData;
   languageAlternativePageSlug?: string[];
-  livePreviewHash?: number;
-  isLivePreviewEnabled?: boolean;
 }
 
 export const ContentstackContext = createContext<IContentstackContext>({});
@@ -544,8 +595,7 @@ import "@metrolinx/cx-shared/build/bundle.css";
 import "styles/globals.css";
 import type { AppProps } from "next/app";
 import { useRouter } from "next/router";
-import { useEffect, useState, ComponentType } from "react";
-import ContentstackLivePreview from "@contentstack/live-preview-utils";
+import { useEffect, ComponentType } from "react";
 import { SessionProvider } from "next-auth/react";
 import { appWithTranslation } from "next-i18next";
 import { ErrorBoundary, FallbackProps } from "react-error-boundary";
@@ -570,7 +620,6 @@ const initAppSettings = () => {
 function MyApp({ Component, pageProps }: AppProps) {
   const { asPath } = useRouter();
   const { refetchInterval, isLoading, session } = useAuthRefetchInterval();
-  const [livePreviewHash, setLivePreviewHash] = useState(0);
 
   const isSignedOut = !isLoading && !session;
 
@@ -579,12 +628,6 @@ function MyApp({ Component, pageProps }: AppProps) {
 
     const root = document.getElementById("__next");
     root?.setAttribute("tabindex", "-1");
-
-    if (process.env.NEXT_PUBLIC_CONTENTSTACK_PREVIEW_ENABLED === "true") {
-      ContentstackLivePreview.onEntryChange(() => {
-        setLivePreviewHash((hash) => hash + 1);
-      });
-    }
   }, []);
 
   useClearStoragesOnSignOut(isSignedOut);
@@ -600,7 +643,7 @@ function MyApp({ Component, pageProps }: AppProps) {
               FallbackComponent={ClientSideErrorFallback as ComponentType<FallbackProps>}
             >
               {/* The key is passed to force page update on route change in some specific cases https://github.com/vercel/next.js/discussions/22512 */}
-              <Component {...pageProps} key={`${path}-${livePreviewHash}`} />
+              <Component {...pageProps} key={path} />
               <SuccessfulSignInToast />
               <ToastNotification />
             </ErrorBoundary>
@@ -665,10 +708,6 @@ CONTENTSTACK_BRANCH=nonprod
 CLOUDINARY_CLOUDNAME=uatmetrolinx
 NEXT_PUBLIC_GTM_ID=GTM-
 SEO_INDEXING=false
-
-CONTENTSTACK_MANAGEMENT_TOKEN=
-CONTENTSTACK_PREVIEW_HOST=rest-preview.contentstack.com
-NEXT_PUBLIC_CONTENTSTACK_PREVIEW_ENABLED=false
 
 NEXT_PUBLIC_CHAT_DATA_APP_ID=
 NEXT_PUBLIC_CHAT_DATA_ORG_ID=
@@ -735,12 +774,6 @@ Only call ReadFile yourself if you need to see MORE of a file than what's shown 
 
 After implementation, provide a brief summary of what was created/modified.
 
-## Verification Failure
-
-2 prescribed helper(s) EXIST in this repository and your change does not use them: getContentByKey, useContent
-
-Each was VERIFIED by the spec as owning part of this fix, so re-implementing that logic is how a fix comes to match on the wrong format and silently never work. Import and use every one of them, then make the change again. Using only some of them leaves the story incomplete.
-
 ## Relevant Knowledge Base Entries
 The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
 
@@ -756,47 +789,20 @@ Do NOT read orchestrations/agents/KB.md before writing implementation files. The
 
 ## Execution Plan
 Follow this plan step by step:
-1. Add `CONTENTSTACK_LIVE_PREVIEW_HOST` and `CONTENTSTACK_ENABLE_LIVE_PREVIEW` environment variables to `.env.local` and `.env.local.sample`, setting defaults appropriate for the Contentstack region.
+1. Add `CONTENTSTACK_PREVIEW_TOKEN` and `CONTENTSTACK_LIVE_PREVIEW_ENABLE` variables to `.env.local` and `.env.local.sample` with appropriate placeholder values.
 
-2. In `src/services/contentstack.ts`, import `livePreview` from `@contentstack/live-preview-utils` and configure the Stack initialization with `live_preview: true` and `live_preview_host` from env; export a `getLivePreviewConfig()` function returning `{ live_preview: string | undefined, content_type_uid: string | undefined, entry_uid: string | undefined }` derived from `livePreview.getQueryParams()`.
+2. In `src/services/contentstack.ts`, import `livePreviewUtils` from `@contentstack/live-preview-utils`; initialize it inside the existing Stack configuration with `live_preview: { enable: true, preview_token: process.env.CONTENTSTACK_PREVIEW_TOKEN, host: process.env.CONTENTSTACK_API_HOST }`; export a `getLivePreviewConfig()` function returning `{ isLivePreviewEnabled: boolean, livePreviewHash?: number }` that reads `livePreviewUtils.hash` and `livePreviewUtils.isPreviewing`.
 
-3. In `src/context/contentstackContext.tsx`, extend the context state to include `livePreviewHash: string | null`, `setLivePreviewHash: (hash: string | null) => void`, and `isLivePreviewEnabled: boolean`; update the provider to initialize these values from the Contentstack live preview SDK's `onEntryChange` callback.
+3. In `src/context/contentstackContext.tsx`, extend the context state to include `livePreviewHash: number` and `isLivePreviewEnabled: boolean`; add a `setLivePreviewHash` setter; export an updated `ContentstackProvider` that accepts live preview state and passes it through context value, using field names consistent with the existing `IContentstackContext` interface.
 
-4. In `src/hooks/useContent.ts`, extend the return type to expose `livePreviewHash` and `isLivePreviewEnabled` from the `ContentstackContext`, so consuming components can react to preview state changes.
+4. In `src/pages/_app.tsx`, import `livePreviewUtils` and the updated context; call `livePreviewUtils.onEntryChange(() => setLivePreviewHash(livePreviewUtils.hash))` inside `useEffect` on app mount; wrap the existing app tree with the updated `ContentstackProvider` passing `isLivePreviewEnabled={livePreviewUtils.isPreviewing}`.
 
-5. In `src/pages/_app.tsx`, call `livePreview.init({ stackSdk: contentstackClient, stackDetails: { apiKey: process.env.CONTENTSTACK_API_KEY } })` inside a `useEffect` on app mount; ensure the `ContentstackProvider` wraps the page tree and triggers re-fetches when `livePreviewHash` changes.
+5. In `src/services/pageService.ts`, modify the existing content fetch calls (e.g., `getPage`, `getPages`) to accept an optional `previewHash?: number` parameter and append it as a `live_preview` query parameter or header when present, so previewed content overrides published content.
 
-6. In `src/services/pageService.ts`, modify every query function (e.g., `getPage`, `getPages`, `getHeader`, `getFooter`) to accept an optional `livePreviewConfig` parameter and merge `{ live_preview: livePreviewConfig?.live_preview }` into the Contentstack `.Query()` chain via `.includeParams()` or `.queryParam()` so previewed entry data is returned.
+6. In `src/interface/content/page.ts`, add an optional `live_preview?: string` field to the page interface types to support preview hash propagation through the data layer.
 
-7. In `src/interface/content/page.ts`, add optional fields `live_preview?: string` and `preview_entry_uid?: string` to the page response interface to type the preview metadata returned by Contentstack queries.
+7. In `src/hooks/useContent.ts`, update the hook to read `isLivePreviewEnabled` and `livePreviewHash` from `ContentstackContext`; when `isLivePreviewEnabled` is true, pass the preview hash to the relevant `pageService` fetch call and trigger a re-fetch on `livePreviewHash` change.
 
-8. Verify integration by running the dev server (`npm run dev`), opening the CMS editor, editing an entry, and confirming that the previewed content updates in real time without a full page reload; run existing unit tests with `npm test` to ensure no regressions in `pageService` and `contentstack` modules.
+8. In `src/components/contentstack/ContentStackGallery/ContentStackGallery.tsx`, `src/components/contentstack/ContentStackStaticMaps/ContentStackStaticMaps.tsx`, `src/components/contentstack/ContentStackVideoPlayer/ContentStackVideoPlayer.tsx`, and `src/components/contentstack/ContentstackQuote/ContentstackQuote.tsx`, ensure each component re-renders on live preview data changes by consuming the updated `useContent` hook or context value; verify props flow correctly when preview data replaces published data.
 
-## Coordinator Guidance (retry 1)
-The following targeted instruction was identified from the previous failure:
-
-
-## Work Already Done (previous attempt)
-These files already have real changes from the previous attempt — build on them, do NOT rewrite from scratch unless the review/test feedback specifically says one of them is wrong:
-- src/services/contentstack.ts
-- src/context/contentstackContext.tsx
-- src/pages/_app.tsx
-- src/context/contentstackContext.tsx
-- .env.local.sample
-These declared files still show NO changes since baseline — if the story needs them, you must actually write to them:
-- src/services/pageService.ts
-- src/interface/content/page.ts
-- src/hooks/useContent.ts
-- .env.local
-- src/components/contentstack/ContentStackGallery/ContentStackGallery.tsx
-- src/components/contentstack/ContentStackStaticMaps/ContentStackStaticMaps.tsx
-- src/components/contentstack/ContentStackVideoPlayer/ContentStackVideoPlayer.tsx
-- src/components/contentstack/ContentstackQuote/ContentstackQuote.tsx
-## Deterministic Check Failure
-
-## Verification Failure
-
-2 prescribed helper(s) EXIST in this repository and your change does not use them: getContentByKey, useContent
-
-Each was VERIFIED by the spec as owning part of this fix, so re-implementing that logic is how a fix comes to match on the wrong format and silently never work. Import and use every one of them, then make the change again. Using only some of them leaves the story incomplete.
-This was caught by an automated check before the test suite even ran — fix the exact issue named above.
+9. Verify end-to-end: start the dev server, open the CMS live preview panel, edit a page entry, and confirm that gallery, maps, video, and quote components update in real time without a full page reload; run existing unit tests and add test cases covering `getLivePreviewConfig()` return values and `pageService` fetch calls with and without `previewHash`.

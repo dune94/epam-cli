@@ -3,8 +3,9 @@
     {
       "name": "metrolinx",
       "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com",
-      "reason": "The ticket's component MX maps to the Metrolinx website, and the front-end-only estimates (FE: 8, BE: 0, DAM: 0) indicate the live preview feature is implemented in the Next.js site that renders Metrolinx content.",
-      "evidence": "ticket component \"MX\""
+      "reason": "The ticket component \"MX\" maps to the Metrolinx corporate website, and the FE-only estimate (FE: 8, BE: 0) indicates the live preview of CMS draft content is implemented in this front-end Next.js consumer application.",
+      "evidence": "ticket component \"MX\" and ticket phrase \"see how content will be shown on the website\" with Original FE Estimate: 8, Original BE Estimate: 0",
+      "modelName": "nextmetrolinxcom"
     }
   ]
 }

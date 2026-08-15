@@ -1,44 +1,27 @@
 {
   "canonicalFile": "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/agents/profiles.canonical.json",
   "canonicalRoles": 57,
-  "liveRoles": 64,
+  "liveRoles": 58,
   "generated": [
     {
-      "role": "gotransit-investigator",
-      "briefChars": 1913,
-      "mintedThisRun": false
-    },
-    {
-      "role": "upexpress-investigator",
-      "briefChars": 1932,
-      "mintedThisRun": false
-    },
-    {
-      "role": "metrolinx-investigator",
-      "briefChars": 1932,
-      "mintedThisRun": false
-    },
-    {
-      "role": "contentstack-live-preview-integration-engineer",
-      "briefChars": 5096,
-      "mintedThisRun": false
-    },
-    {
-      "role": "gotransit-contentstack-investigator",
-      "briefChars": 2590,
-      "mintedThisRun": false
-    },
-    {
-      "role": "upexpress-contentstack-investigator",
-      "briefChars": 2026,
-      "mintedThisRun": false
-    },
-    {
       "role": "metrolinx-contentstack-investigator",
-      "briefChars": 2391,
-      "mintedThisRun": false
+      "briefChars": 2127,
+      "mintedThisRun": true
+    },
+    {
+      "role": "contentstack-sdk-engineer",
+      "briefChars": 2711,
+      "mintedThisRun": true
+    },
+    {
+      "role": "contentstack-react-context-engineer",
+      "briefChars": 2635,
+      "mintedThisRun": true
     }
   ],
   "briefChanged": [],
-  "missingFromLive": []
+  "missingFromLive": [
+    "typescript-engineer",
+    "test-engineer"
+  ]
 }

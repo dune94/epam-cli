@@ -53,6 +53,11 @@ _(attempt-evidence, from: engine)_
 
 The previous attempt changed these files (diffstat against origin/develop):
 
+ .env.local.sample                   |  4 ++++
+ src/context/contentstackContext.tsx |  2 ++
+ src/pages/_app.tsx                  | 12 ++++++++++--
+ src/services/contentstack.ts        | 22 ++++++++++++++++++++++
+ 4 files changed, 38 insertions(+), 2 deletions(-)
  .epam/codeline-facts.json | new file
  .epam/settings.json | new file
  .epam/verification.json | new file
@@ -557,9 +562,11 @@ import { ClientSideErrorFallback } from "components/ClientSideErrorFallback";
 import { CommonAnalytics } from "components/CommonAnalytics";
 import { SuccessfulSignInToast } from "components/SuccessfulSignInToast";
 import { OnlineChatContextWrapper } from "context/OnlineChatContext";
+import { ContentstackContext, IContentstackContext } from "context/contentstackContext";
 import { UserProfileProvider } from "context/UserProfileContext";
 import { useAuthRefetchInterval } from "hooks/useAuthRefetchInterval";
 import { useClearStoragesOnSignOut } from "hooks/useClearStoragesOnSignOut";
+import { useContent } from "hooks/useContent";
 import { getPathname } from "utils/url/getPathname";
 import packageJSON from "../../package.json";
 
@@ -570,7 +577,8 @@ const initAppSettings = () => {
 function MyApp({ Component, pageProps }: AppProps) {
   const { asPath } = useRouter();
   const { refetchInterval, isLoading, session } = useAuthRefetchInterval();
-  const [livePreviewHash, setLivePreviewHash] = useState(0);
+  const { getContentByKey, livePreviewHash, isLivePreviewEnabled } = useContent();
+  const [livePreviewValue, setLivePreviewValue] = useState<IContentstackContext>({});
 
   const isSignedOut = !isLoading && !session;
 
@@ -582,7 +590,11 @@ function MyApp({ Component, pageProps }: AppProps) {
 
     if (process.env.NEXT_PUBLIC_CONTENTSTACK_PREVIEW_ENABLED === "true") {
       ContentstackLivePreview.onEntryChange(() => {
-        setLivePreviewHash((hash) => hash + 1);
+        setLivePreviewValue((value) => ({
+          ...value,
+          livePreviewHash: (value.livePreviewHash ?? 0) + 1,
+          isLivePreviewEnabled: true,
+        }));
       });
     }
   }, []);
@@ -591,20 +603,23 @@ function MyApp({ Component, pageProps }: AppProps) {
 
   const path = getPathname(asPath);
 
+  const componentKey = path + "-" + (isLivePreviewEnabled ? String(livePreviewHash ?? 0) : "");
+
   return (
     <AppEnvironmentProvider linkAs={AppLink} imageAs={AppImage}>
       <UserProfileProvider>
         <SessionProvider refetchInterval={refetchInterval} refetchOnWindowFocus>
           <OnlineChatContextWrapper>
-            <ErrorBoundary
-              FallbackComponent={ClientSideErrorFallback as ComponentType<FallbackProps>}
-            >
-              {/* The key is passed to force page update on route change in some specific cases https://github.com/vercel/next.js/discussions/22512 */}
-              <Component {...pageProps} key={`${path}-${livePreviewHash}`} />
-              <SuccessfulSignInToast />
-              <ToastNotification />
-            </ErrorBoundary>
-            <CommonAnalytics contentTypeUid={pageProps.contentTypeUid} />
+            <ContentstackContext.Provider value={livePreviewValue}>
+              <ErrorBoundary
+                FallbackComponent={ClientSideErrorFallback as ComponentType<FallbackProps>}
+              >
+                <Component {...pageProps} key={componentKey} />
+                <SuccessfulSignInToast />
+                <ToastNotification />
+              </ErrorBoundary>
+              <CommonAnalytics contentTypeUid={pageProps.contentTypeUid} />
+            </ContentstackContext.Provider>
           </OnlineChatContextWrapper>
         </SessionProvider>
       </UserProfileProvider>
@@ -622,15 +637,17 @@ import { ContentstackContext } from "context/contentstackContext";
 import { getValue } from "utils/getValue";
 
 export const useContent = () => {
-  const content = useContext(ContentstackContext);
+  const { livePreviewHash, isLivePreviewEnabled, ...content } = useContext(ContentstackContext);
 
   const getContentByKey = useCallback(
     <T>(path: string, defaultValue: T) => getValue<T>(content, path, defaultValue),
-    [content],
+    [content, livePreviewHash],
   );
 
   return {
     getContentByKey,
+    livePreviewHash,
+    isLivePreviewEnabled,
   };
 };
 ```
@@ -705,7 +722,7 @@ None
 
 ## Module resolution in this codeline
 A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
-  __tests__, docs, migration-scripts, public, src
+  __tests__, docs, migration-scripts, orchestrations, public, src
 Source extensions here: .ts, .tsx, .js, .jsx, .mjs, .cjs
 Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
 
@@ -737,9 +754,30 @@ After implementation, provide a brief summary of what was created/modified.
 
 ## Verification Failure
 
-2 prescribed helper(s) EXIST in this repository and your change does not use them: getContentByKey, useContent
+The repository's own lint rejects file(s) THIS story changed. This is not advisory: the pre-commit hook runs these checks, refuses the commit, and lint-staged then REVERTS your work — the story cannot be delivered until every one is fixed. Fix these before anything else:
 
-Each was VERIFIED by the spec as owning part of this fix, so re-implementing that logic is how a fix comes to match on the wrong format and silently never work. Import and use every one of them, then make the change again. Using only some of them leaves the story incomplete.
+[0m[0m
+[0m[4m/home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/context/contentstackContext.tsx[24m[0m
+[0m  [2m10:13[22m  [33mwarning[39m  Unexpected any. Specify a different type  [2m@typescript-eslint/no-explicit-any[22m[0m
+[0m[0m
+[0m[4m/home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/hooks/useContent.ts[24m[0m
+[0m  [2m10:5[22m  [33mwarning[39m  React Hook useCallback has an unnecessary dependency: 'livePreviewHash'. Either exclude it or remove the dependency array  [2mreact-hooks/exhaustive-deps[22m[0m
+[0m[0m
+[0m[4m/home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/pages/_app.tsx[24m[0m
+[0m  [2m33:11[22m  [31merror[39m  'getContentByKey' is assigned a value but never used  [2m@typescript-eslint/no-unused-vars[22m[0m
+[0m[0m
+[0m[4m/home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/services/contentstack.ts[24m[0m
+[0m  [2m120:28[22m  [33mwarning[39m  Unexpected any. Specify a different type  [2m@typescript-eslint/no-explicit-any[22m[0m
+[0m  [2m120:48[22m  [33mwarning[39m  Unexpected any. Specify a different type  [2m@typescript-eslint/no-explicit-any[22m[0m
+[0m  [2m120:56[22m  [33mwarning[39m  Unexpected any. Specify a different type  [2m@typescript-eslint/no-explicit-any[22m[0m
+[0m  [2m228:17[22m  [33mwarning[39m  Unexpected any. Specify a different type  [2m@typescript-eslint/no-explicit-any[22m[0m
+[0m  [2m258:25[22m  [33mwarning[39m  Unexpected any. Specify a different type  [2m@typescript-eslint/no-explicit-any[22m[0m
+[0m  [2m272:15[22m  [33mwarning[39m  Unexpected any. Specify a different type  [2m@typescript-eslint/no-explicit-any[22m[0m
+[0m  [2m315:15[22m  [33mwarning[39m  Unexpected any. Specify a different type  [2m@typescript-eslint/no-explicit-any[22m[0m
+[0m  [2m418:15[22m  [33mwarning[39m  Unexpected any. Specify a different type  [2m@typescript-eslint/no-explicit-any[22m[0m
+[0m[0m
+[0m[31m[1m✖ 11 problems (1 error, 10 warnings)[22m[39m[0m
+[0m[31m[1m[22m[39m[0m
 
 ## Relevant Knowledge Base Entries
 The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
@@ -772,7 +810,7 @@ Follow this plan step by step:
 
 8. Verify integration by running the dev server (`npm run dev`), opening the CMS editor, editing an entry, and confirming that the previewed content updates in real time without a full page reload; run existing unit tests with `npm test` to ensure no regressions in `pageService` and `contentstack` modules.
 
-## Coordinator Guidance (retry 1)
+## Coordinator Guidance (retry 2)
 The following targeted instruction was identified from the previous failure:
 
 
@@ -800,3 +838,23 @@ These declared files still show NO changes since baseline — if the story needs
 
 Each was VERIFIED by the spec as owning part of this fix, so re-implementing that logic is how a fix comes to match on the wrong format and silently never work. Import and use every one of them, then make the change again. Using only some of them leaves the story incomplete.
 This was caught by an automated check before the test suite even ran — fix the exact issue named above.
+
+## Work Already Done (previous attempt)
+These files already have real changes from the previous attempt — build on them, do NOT rewrite from scratch unless the review/test feedback specifically says one of them is wrong:
+- src/services/contentstack.ts
+- src/context/contentstackContext.tsx
+- src/pages/_app.tsx
+- src/hooks/useContent.ts
+- src/context/contentstackContext.tsx
+- .env.local.sample
+These declared files still show NO changes since baseline — if the story needs them, you must actually write to them:
+- src/services/pageService.ts
+- src/interface/content/page.ts
+- .env.local
+- src/components/contentstack/ContentStackGallery/ContentStackGallery.tsx
+- src/components/contentstack/ContentStackStaticMaps/ContentStackStaticMaps.tsx
+- src/components/contentstack/ContentStackVideoPlayer/ContentStackVideoPlayer.tsx
+- src/components/contentstack/ContentstackQuote/ContentstackQuote.tsx
+## Self-Heal: Failure Analyst Summary
+Root cause: getContentByKey destructured from useContent in _app.tsx but never referenced, triggering no-unused-vars error.
+Fix: Never destructure a property you do not use. In src/pages/_app.tsx, remove getContentByKey from the useContent() destructuring — only livePreviewHash and isLivePreviewEnabled are referenced. The lint rule @typescript-eslint/no-explicit-any is set to warn (not error) and no --max-warnings flag is set, so the any-type warnings do not block the commit; only the unused-vars error does.

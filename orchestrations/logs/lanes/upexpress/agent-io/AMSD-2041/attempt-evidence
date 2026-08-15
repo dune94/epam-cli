@@ -1,5 +1,0 @@
-The previous attempt changed these files (diffstat against origin/develop):
-
- .epam/codeline-facts.json | new file
- .epam/settings.json | new file
- .epam/verification.json | new file

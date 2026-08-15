@@ -4,22 +4,49 @@
       "name": "metrolinx-contentstack-investigator",
       "kind": "investigator",
       "codeline": "metrolinx",
-      "rationale": "This codeline has a mature Contentstack integration whose SDK init, data hooks, and component consumption patterns must be understood before any Live Preview wiring is attempted.",
+      "rationale": "The metrolinx codeline has a deep Contentstack content delivery architecture (Stack → Context → useContent → 60+ components) that must be understood before live preview can be wired in, and only an investigator scoped to this one repository can report its actual layout, conventions, and test structure accurately.",
       "surfaces": [
         "profiles.json",
         "kb",
         "project-investigators",
         "project-profiles"
       ]
+    },
+    {
+      "name": "contentstack-sdk-engineer",
+      "kind": "implementer",
+      "codeline": "",
+      "rationale": "The live preview feature requires modifying the Contentstack Stack initialization to add a live_preview config block and installing and initializing the @contentstack/live-preview-utils package, which is core SDK plumbing that no other role covers.",
+      "surfaces": [
+        "profiles.json",
+        "kb",
+        "project-roles",
+        "project-profiles"
+      ]
+    },
+    {
+      "name": "contentstack-react-context-engineer",
+      "kind": "implementer",
+      "codeline": "",
+      "rationale": "The live preview feature requires wiring onEntryChange callbacks into the existing React context and useContent hook so that 60+ consuming components receive real-time draft updates, which is a distinct concern from SDK initialization.",
+      "surfaces": [
+        "profiles.json",
+        "kb",
+        "project-roles",
+        "project-profiles"
+      ]
     }
   ],
   "rejected": [],
   "unchanged": [],
-  "projectRoles": [],
+  "projectRoles": [
+    "contentstack-sdk-engineer",
+    "contentstack-react-context-engineer"
+  ],
   "projectInvestigators": [
     "metrolinx-contentstack-investigator"
   ],
-  "proposed": 1,
+  "proposed": 3,
   "rejectedAcrossAttempts": [],
   "attempts": 1,
   "protectedRoles": 21

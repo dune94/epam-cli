@@ -1,8 +1,8 @@
 {
-  "id": "jira-sourced-1786281580419",
+  "id": "jira-sourced-1786736971407",
   "title": "Metrolinx Brownfield — Jira-sourced",
   "version": "1.0.0",
-  "lastUpdated": "2026-08-09",
+  "lastUpdated": "2026-08-14",
   "project": {
     "name": "metrolinx",
     "description": "Brownfield changes against the Metrolinx codelines, sourced from Jira — defects AND new features.",
@@ -14,16 +14,8 @@
       "cms": "Contentstack",
       "devEnvironment": "Ubuntu WSL2"
     },
-    "outputDir": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
+    "outputDir": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com",
     "outputDirs": [
-      {
-        "codeline": "gotransit",
-        "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
-      },
-      {
-        "codeline": "upexpress",
-        "path": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
-      },
       {
         "codeline": "metrolinx",
         "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
@@ -67,7 +59,7 @@
       "title": "[GO, UP, MX] Live Preview of Content in CMS",
       "description": "AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website. This requires integrating Contentstack's Live Preview SDK for a Next.js CSR (Pages Router) application: adding a live_preview config block (enable, host) to the Stack initialization in src/services/contentstack.ts, installing and initializing @contentstack/live-preview-utils on the client side in src/pages/_app.tsx, wiring the onEntryChange callback to trigger a re-render through the existing ContentstackContext/useContent pipeline (note: per Contentstack documentation, onEntryChange takes no arguments — the re-render relies on the SDK's internal state update, not a callback parameter), and documenting the live_preview.enable and live_preview.host environment variables in .env.local.sample. Custom preview URL patterns are configured in the Contentstack dashboard (Settings > Stack > Live Preview), not via application environment variables. Limitation: Protected pages may not be previewable because the authentication gate cannot be bypassed by preview parameters.",
       "acceptanceCriteria": [],
-      "codeline": "gotransit",
+      "codeline": "metrolinx",
       "status": "in-progress",
       "completed": false,
       "agentRole": "contentstack-live-preview-integration-engineer",
@@ -927,9 +919,9 @@
       "reasoningEffort": "medium",
       "perCodeline": {
         "gotransit": {
-          "status": "completed",
-          "completed": true,
-          "completedAt": "2026-08-13T20:25:13+00:00",
+          "status": "pending",
+          "completed": false,
+          "completedAt": null,
           "reviewStatus": null
         },
         "upexpress": {
@@ -939,10 +931,10 @@
           "reviewStatus": null
         },
         "metrolinx": {
-          "status": "pending",
+          "status": "failed",
           "completed": false,
-          "completedAt": null,
-          "reviewStatus": null
+          "completedAt": "2026-08-15T00:02:06+00:00",
+          "reviewStatus": "escalated"
         }
       },
       "verificationCriteriaPerCodeline": {
@@ -1190,8 +1182,9 @@
           "setup": "The live-preview-utils client is mocked to emit an onEntryChange event; the page is loaded with standard published content"
         }
       ],
-      "lastAttempt": "2026-08-13T17:57:50+00:00",
-      "actualCost": 9.323
+      "lastAttempt": "2026-08-15T00:18:00+00:00",
+      "actualCost": 11.342699999999999,
+      "reviewStatus": "escalated"
     }
   ],
   "currentIteration": 8,

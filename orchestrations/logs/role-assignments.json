@@ -1,0 +1,8 @@
+[
+  {
+    "storyId": "AMSD-2041",
+    "codeline": "metrolinx",
+    "agentRole": "contentstack-sdk-engineer",
+    "reason": "AMSD-2041 (part 1) is about enabling Live Preview of draft CMS entries. The contentstack-sdk-engineer's brief explicitly owns 'the live preview utils SDK setup' and the Contentstack delivery SDK initialization in src/services/contentstack.ts via contentstack.Stack(options) — the exact surface this story's first part requires. Live preview begins at the SDK level: enabling live_preview in the Stack options, configuring the host, and wiring the Live Preview Utils SDK. These are code edits to the files named in this role's brief. The react-context role's brief is downstream (integrating real-time preview updates into the component chain via ContentstackContext/useContent), which is part 2 work after the SDK is configured. Since the owner must author the code and the story touches the SDK initialization files named in the contentstack-sdk-engineer's brief, this role is the correct assignee."
+  }
+]

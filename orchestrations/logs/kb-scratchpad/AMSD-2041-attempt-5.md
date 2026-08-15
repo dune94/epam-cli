@@ -53,9 +53,17 @@ _(attempt-evidence, from: engine)_
 
 The previous attempt changed these files (diffstat against origin/develop):
 
+ .env.local.sample                   |  4 ++++
+ src/context/contentstackContext.tsx |  2 ++
+ src/hooks/useContent.ts             |  6 ++++--
+ src/pages/_app.tsx                  | 38 +++++++++++++++++++++++++++----------
+ src/services/contentstack.ts        | 22 +++++++++++++++++++++
+ 5 files changed, 60 insertions(+), 12 deletions(-)
+ .deepeval/.deepeval_telemetry.txt | new file
  .epam/codeline-facts.json | new file
  .epam/settings.json | new file
  .epam/verification.json | new file
+ orchestrations/logs/agent-activity.jsonl | new file
 
 
 
@@ -109,8 +117,8 @@ The Root Cause Analysis above names the exact existing helper to reuse (`Stack`)
 
 ### /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/services/contentstack.ts
 ```
-import * as Utils from "@contentstack/utils";
 import ContentstackLivePreview from "@contentstack/live-preview-utils";
+import * as Utils from "@contentstack/utils";
 import contentstack from "contentstack";
 import { HttpStatusCode } from "@metrolinx/cx-shared/build/src/constants/common";
 import { HttpError } from "@metrolinx/cx-shared/build/src/utils/common/HttpError";
@@ -147,7 +155,7 @@ const {
   CONTENTSTACK_DEBUG_LEVEL = "error",
   CONTENTSTACK_MANAGEMENT_TOKEN = "",
   CONTENTSTACK_PREVIEW_HOST = "",
-  CONTENTSTACK_PREVIEW_ENABLED = "",
+  NEXT_PUBLIC_CONTENTSTACK_PREVIEW_ENABLED = "",
 } = process?.env || {};
 
 const filterDebugLevel = (item: string): item is ContentstackDebugLevel =>
@@ -188,14 +196,14 @@ export const options: contentstack.Config = {
   delivery_token: DELIVERY_TOKEN,
   environment: ENVIRONMENT,
   branch: CONTENTSTACK_BRANCH,
-  ...(CONTENTSTACK_PREVIEW_ENABLED === "true"
-    ? (({
+  ...(NEXT_PUBLIC_CONTENTSTACK_PREVIEW_ENABLED === "true"
+    ? ({
         live_preview: {
           enable: true,
           host: CONTENTSTACK_PREVIEW_HOST || undefined,
           management_token: CONTENTSTACK_MANAGEMENT_TOKEN || undefined,
         },
-      } as unknown) as contentstack.Config)
+      } as unknown as contentstack.Config)
     : {}),
   fetchOptions: {
     debug: CONTENTSTACK_DEBUG === "true",
@@ -218,7 +226,7 @@ if (CONTENTSTACK_API_HOST) {
   Stack.setHost(CONTENTSTACK_API_HOST);
 }
 
-if (CONTENTSTACK_PREVIEW_ENABLED === "true" && typeof window !== "undefined") {
+if (NEXT_PUBLIC_CONTENTSTACK_PREVIEW_ENABLED === "true" && typeof window !== "undefined") {
   ContentstackLivePreview.init({
     stackSdk: Stack,
     clientUrlParams: {
@@ -558,8 +566,10 @@ import { CommonAnalytics } from "components/CommonAnalytics";
 import { SuccessfulSignInToast } from "components/SuccessfulSignInToast";
 import { OnlineChatContextWrapper } from "context/OnlineChatContext";
 import { UserProfileProvider } from "context/UserProfileContext";
+import { ContentstackContext, IContentstackContext } from "context/contentstackContext";
 import { useAuthRefetchInterval } from "hooks/useAuthRefetchInterval";
 import { useClearStoragesOnSignOut } from "hooks/useClearStoragesOnSignOut";
+import { useContent } from "hooks/useContent";
 import { getPathname } from "utils/url/getPathname";
 import packageJSON from "../../package.json";
 
@@ -570,7 +580,8 @@ const initAppSettings = () => {
 function MyApp({ Component, pageProps }: AppProps) {
   const { asPath } = useRouter();
   const { refetchInterval, isLoading, session } = useAuthRefetchInterval();
-  const [livePreviewHash, setLivePreviewHash] = useState(0);
+  const { livePreviewHash, isLivePreviewEnabled } = useContent();
+  const [livePreviewValue, setLivePreviewValue] = useState<IContentstackContext>({});
 
   const isSignedOut = !isLoading && !session;
 
@@ -582,7 +593,11 @@ function MyApp({ Component, pageProps }: AppProps) {
 
     if (process.env.NEXT_PUBLIC_CONTENTSTACK_PREVIEW_ENABLED === "true") {
       ContentstackLivePreview.onEntryChange(() => {
-        setLivePreviewHash((hash) => hash + 1);
+        setLivePreviewValue((value) => ({
+          ...value,
+          livePreviewHash: (value.livePreviewHash ?? 0) + 1,
+          isLivePreviewEnabled: true,
+        }));
       });
     }
   }, []);
@@ -591,20 +606,23 @@ function MyApp({ Component, pageProps }: AppProps) {
 
   const path = getPathname(asPath);
 
+  const componentKey = path + "-" + (isLivePreviewEnabled ? String(livePreviewHash ?? 0) : "");
+
   return (
     <AppEnvironmentProvider linkAs={AppLink} imageAs={AppImage}>
       <UserProfileProvider>
         <SessionProvider refetchInterval={refetchInterval} refetchOnWindowFocus>
           <OnlineChatContextWrapper>
-            <ErrorBoundary
-              FallbackComponent={ClientSideErrorFallback as ComponentType<FallbackProps>}
-            >
-              {/* The key is passed to force page update on route change in some specific cases https://github.com/vercel/next.js/discussions/22512 */}
-              <Component {...pageProps} key={`${path}-${livePreviewHash}`} />
-              <SuccessfulSignInToast />
-              <ToastNotification />
-            </ErrorBoundary>
-            <CommonAnalytics contentTypeUid={pageProps.contentTypeUid} />
+            <ContentstackContext.Provider value={livePreviewValue}>
+              <ErrorBoundary
+                FallbackComponent={ClientSideErrorFallback as ComponentType<FallbackProps>}
+              >
+                <Component {...pageProps} key={componentKey} />
+                <SuccessfulSignInToast />
+                <ToastNotification />
+              </ErrorBoundary>
+              <CommonAnalytics contentTypeUid={pageProps.contentTypeUid} />
+            </ContentstackContext.Provider>
           </OnlineChatContextWrapper>
         </SessionProvider>
       </UserProfileProvider>
@@ -622,7 +640,7 @@ import { ContentstackContext } from "context/contentstackContext";
 import { getValue } from "utils/getValue";
 
 export const useContent = () => {
-  const content = useContext(ContentstackContext);
+  const { livePreviewHash, isLivePreviewEnabled, ...content } = useContext(ContentstackContext);
 
   const getContentByKey = useCallback(
     <T>(path: string, defaultValue: T) => getValue<T>(content, path, defaultValue),
@@ -631,6 +649,8 @@ export const useContent = () => {
 
   return {
     getContentByKey,
+    livePreviewHash,
+    isLivePreviewEnabled,
   };
 };
 ```
@@ -705,7 +725,7 @@ None
 
 ## Module resolution in this codeline
 A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
-  __tests__, docs, migration-scripts, public, src
+  __tests__, docs, migration-scripts, orchestrations, public, src
 Source extensions here: .ts, .tsx, .js, .jsx, .mjs, .cjs
 Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
 
@@ -737,9 +757,37 @@ After implementation, provide a brief summary of what was created/modified.
 
 ## Verification Failure
 
-2 prescribed helper(s) EXIST in this repository and your change does not use them: getContentByKey, useContent
+The orchestrator ran `npm run test` after your files were written and it failed (exit code 1). The failures below are the ones YOUR CHANGES INTRODUCED — failures the codeline already had have been subtracted and are not your responsibility. Fix these.
 
-Each was VERIFIED by the spec as owning part of this fix, so re-implementing that logic is how a fix comes to match on the wrong format and silently never work. Import and use every one of them, then make the change again. Using only some of them leaves the story incomplete.
+```
+
+> metrolinx-starter@0.1.0 pretest
+> npm run build:config
+
+
+> metrolinx-starter@0.1.0 build:config
+> esbuild next.config.source.ts --bundle --outfile=next.config.js --platform=node --external:./node_modules/* --target=es2020 --minify
+
+
+  next.config.js  20.5kb
+
+⚡ Done in 6ms
+
+> metrolinx-starter@0.1.0 test
+> jest
+
+[31mError: Cannot find package 'lodash-es' imported from /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/node_modules/@contentstack/live-preview-utils/dist/modern/preview/contentstack-live-preview-HOC.js[39m
+[31m    at Object.getPackageJSONURL (node:internal/modules/package_json_reader:301:9)[39m
+[31m    at packageResolve (node:internal/modules/esm/resolve:768:81)[39m
+[31m    at moduleResolve (node:internal/modules/esm/resolve:859:18)[39m
+[31m    at defaultResolve (node:internal/modules/esm/resolve:991:11)[39m
+[31m    at #cachedDefaultResolve (node:internal/modules/esm/loader:719:20)[39m
+[31m    at #resolveAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:736:38)[39m
+[31m    at ModuleLoader.resolveSync (node:internal/modules/esm/loader:765:52)[39m
+[31m    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:618:27)[39m
+[31m    at ModuleJobSync.syncLink (node:internal/modules/esm/module_job:160:33)[39m
+[31m    at ModuleJobSync.link (node:internal/modules/esm/module_job:480:17)[39m
+```
 
 ## Relevant Knowledge Base Entries
 The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
@@ -753,6 +801,12 @@ Persistent, cross-run knowledge for this codeline. Appended by the pipeline as a
 learn, and injected into their prompts on later runs. Never reset between runs: this is
 the one store that is meant to survive.
 Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+
+## Available Dynamic Tools
+This project has the following helper scripts, written by prior self-healing runs. Use them via the bash tool instead of repeating the equivalent steps by hand:
+
+- `bash /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/.epam/dynamic-tools/install-missing-deps.sh <args>` — Installs any bare-import packages found in a dependency's dist files that are missing from node_modules
 
 ## Execution Plan
 Follow this plan step by step:
@@ -772,7 +826,7 @@ Follow this plan step by step:
 
 8. Verify integration by running the dev server (`npm run dev`), opening the CMS editor, editing an entry, and confirming that the previewed content updates in real time without a full page reload; run existing unit tests with `npm test` to ensure no regressions in `pageService` and `contentstack` modules.
 
-## Coordinator Guidance (retry 1)
+## Coordinator Guidance (retry 4)
 The following targeted instruction was identified from the previous failure:
 
 
@@ -800,3 +854,43 @@ These declared files still show NO changes since baseline — if the story needs
 
 Each was VERIFIED by the spec as owning part of this fix, so re-implementing that logic is how a fix comes to match on the wrong format and silently never work. Import and use every one of them, then make the change again. Using only some of them leaves the story incomplete.
 This was caught by an automated check before the test suite even ran — fix the exact issue named above.
+
+## Work Already Done (previous attempt)
+These files already have real changes from the previous attempt — build on them, do NOT rewrite from scratch unless the review/test feedback specifically says one of them is wrong:
+- src/services/contentstack.ts
+- src/context/contentstackContext.tsx
+- src/pages/_app.tsx
+- src/hooks/useContent.ts
+- src/context/contentstackContext.tsx
+- .env.local.sample
+These declared files still show NO changes since baseline — if the story needs them, you must actually write to them:
+- src/services/pageService.ts
+- src/interface/content/page.ts
+- .env.local
+- src/components/contentstack/ContentStackGallery/ContentStackGallery.tsx
+- src/components/contentstack/ContentStackStaticMaps/ContentStackStaticMaps.tsx
+- src/components/contentstack/ContentStackVideoPlayer/ContentStackVideoPlayer.tsx
+- src/components/contentstack/ContentstackQuote/ContentstackQuote.tsx
+## Self-Heal: Failure Analyst Summary
+Root cause: getContentByKey destructured from useContent in _app.tsx but never referenced, triggering no-unused-vars error.
+Fix: Never destructure a property you do not use. In src/pages/_app.tsx, remove getContentByKey from the useContent() destructuring — only livePreviewHash and isLivePreviewEnabled are referenced. The lint rule @typescript-eslint/no-explicit-any is set to warn (not error) and no --max-warnings flag is set, so the any-type warnings do not block the commit; only the unused-vars error does.
+
+## Work Already Done (previous attempt)
+These files already have real changes from the previous attempt — build on them, do NOT rewrite from scratch unless the review/test feedback specifically says one of them is wrong:
+- src/services/contentstack.ts
+- src/context/contentstackContext.tsx
+- src/pages/_app.tsx
+- src/hooks/useContent.ts
+- src/context/contentstackContext.tsx
+- .env.local.sample
+These declared files still show NO changes since baseline — if the story needs them, you must actually write to them:
+- src/services/pageService.ts
+- src/interface/content/page.ts
+- .env.local
+- src/components/contentstack/ContentStackGallery/ContentStackGallery.tsx
+- src/components/contentstack/ContentStackStaticMaps/ContentStackStaticMaps.tsx
+- src/components/contentstack/ContentStackVideoPlayer/ContentStackVideoPlayer.tsx
+- src/components/contentstack/ContentstackQuote/ContentstackQuote.tsx
+## Self-Heal: Failure Analyst Summary
+Root cause: @contentstack/live-preview-utils imports lodash-es but lodash-es is not installed in node_modules or package.json
+Fix: Always run `npm ls` or check the dependency's dist files for bare imports after adding a new package, and install any missing transitive dependencies explicitly.

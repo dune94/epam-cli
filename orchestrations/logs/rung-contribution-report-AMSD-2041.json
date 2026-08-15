@@ -14,13 +14,37 @@
     "files": [
       ".deepeval/.deepeval_telemetry.txt",
       ".env.local.sample",
+      ".epam/dynamic-tools/install-missing-deps.sh",
+      ".epam/dynamic-tools/install-missing-deps.sh.reviewed",
+      "jest.config.js",
       "orchestrations/logs/agent-activity.jsonl",
-      "src/interface/contentstack.ts",
-      "src/pages/[[...slug]].tsx",
-      "src/pages/api/exit-preview.ts",
-      "src/pages/api/preview.ts",
-      "src/services/__tests__/contentstack.spec.ts",
+      "src/__mocks__/contentstack-live-preview-utils.ts"
+    ]
+  },
+  {
+    "rung": "2",
+    "model": "moonshotai/kimi-k3",
+    "files": [
+      "package-lock.json"
+    ]
+  },
+  {
+    "rung": "4",
+    "model": "z-ai/glm-5.2",
+    "files": [
+      "package.json",
       "src/services/contentstack.ts"
+    ]
+  },
+  {
+    "rung": "5",
+    "model": "moonshotai/kimi-k3",
+    "files": [
+      "src/context/contentstackContext.tsx",
+      "src/hooks/useContent.ts",
+      "src/pages/404.tsx",
+      "src/pages/[[...slug]].tsx",
+      "src/pages/_app.tsx"
     ]
   }
 ]

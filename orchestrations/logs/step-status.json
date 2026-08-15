@@ -1,6 +1,6 @@
 {
   "phase": "core",
-  "updatedAt": "2026-08-14T19:02:48+00:00",
+  "updatedAt": "2026-08-15T00:18:01+00:00",
   "steps": [
     {"id":"1","label":"Step 1: Specification pass","status":"skip","detail":"EPAM_SPEC_MODE=0"},
     {"id":"1a","label":"  openspec (elaboration)","status":"skip","detail":"EPAM_SPEC_MODE=0"},
@@ -11,7 +11,7 @@
     {"id":"5","label":"Step 5: Regression guard","status":"pass","detail":""},
     {"id":"6","label":"Step 6: mkdir src/ dirs","status":"pass","detail":""},
     {"id":"7","label":"Step 7: PRD model coordinator","status":"pass","detail":""},
-    {"id":"8","label":"Step 8: Main-branch stories","status":"running","detail":""},
+    {"id":"8","label":"Step 8: Main-branch stories","status":"fail","detail":""},
     {"id":"9","label":"auto-commit","status":"pending","detail":""},
     {"id":"10","label":"tc-writer","status":"pending","detail":""},
     {"id":"11","label":"skills-audit","status":"pending","detail":""},

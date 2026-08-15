@@ -1,5 +1,10 @@
-{"storyId":"AMSD-2041","failureClass":"quality","model":"MiniMax-M3","attempt":0,"exitCode":1,"rawBytes":25182,"outputTokens":34887,"maxIterations":28,"timestamp":"2026-08-14T10:19:39Z"}
-{"storyId":"AMSD-2041","failureClass":"env","model":"MiniMax-M3","attempt":0,"exitCode":1,"rawBytes":0,"outputTokens":34887,"maxIterations":28,"timestamp":"2026-08-14T10:24:54Z"}
-{"storyId":"AMSD-2041","failureClass":"quality","model":"MiniMax-M3","attempt":1,"exitCode":1,"rawBytes":31857,"outputTokens":38742,"maxIterations":28,"timestamp":"2026-08-14T10:34:52Z"}
-{"storyId":"AMSD-2041","failureClass":"env","model":"z-ai/glm-5.2","attempt":6,"exitCode":1,"rawBytes":0,"outputTokens":0,"maxIterations":93,"timestamp":"2026-08-14T11:30:24Z"}
-{"storyId":"AMSD-2041","failureClass":"env","model":"z-ai/glm-5.2","attempt":7,"exitCode":1,"rawBytes":0,"outputTokens":0,"maxIterations":93,"timestamp":"2026-08-14T11:42:03Z"}
+{"storyId":"AMSD-2041","failureClass":"quality","model":"MiniMax-M3","attempt":1,"exitCode":1,"rawBytes":22220,"outputTokens":19174,"maxIterations":28,"timestamp":"2026-08-14T21:39:40Z"}
+{"storyId":"AMSD-2041","failureClass":"quality","model":"MiniMax-M3","attempt":1,"exitCode":1,"rawBytes":16621,"outputTokens":19204,"maxIterations":28,"timestamp":"2026-08-14T21:43:00Z"}
+{"storyId":"AMSD-2041","failureClass":"quality","model":"z-ai/glm-5.2","attempt":2,"exitCode":1,"rawBytes":34311,"outputTokens":180740,"maxIterations":93,"timestamp":"2026-08-14T22:10:36Z"}
+{"storyId":"AMSD-2041","failureClass":"capability","model":"z-ai/glm-5.2","attempt":6,"exitCode":1,"rawBytes":9473,"outputTokens":78056,"maxIterations":93,"timestamp":"2026-08-14T22:50:56Z"}
+{"storyId":"AMSD-2041","failureClass":"capability","model":"z-ai/glm-5.2","attempt":7,"exitCode":1,"rawBytes":6826,"outputTokens":63386,"maxIterations":93,"timestamp":"2026-08-14T23:02:02Z"}
+{"storyId":"AMSD-2041","failureClass":"quality","model":"z-ai/glm-5.2","attempt":8,"exitCode":1,"rawBytes":22520,"outputTokens":91033,"maxIterations":93,"timestamp":"2026-08-14T23:20:03Z"}
+{"storyId":"AMSD-2041","failureClass":"quality","model":"moonshotai/kimi-k3","attempt":8,"exitCode":1,"rawBytes":9778,"outputTokens":10643,"maxIterations":150,"timestamp":"2026-08-14T23:26:20Z"}
+{"storyId":"AMSD-2041","failureClass":"env","model":"z-ai/glm-5.2","attempt":10,"exitCode":1,"rawBytes":0,"outputTokens":0,"maxIterations":93,"timestamp":"2026-08-14T23:47:22Z"}
+{"storyId":"AMSD-2041","failureClass":"quality","model":"z-ai/glm-5.2","attempt":11,"exitCode":1,"rawBytes":16495,"outputTokens":40611,"maxIterations":93,"timestamp":"2026-08-14T23:53:14Z"}
+{"storyId":"AMSD-2041","failureClass":"quality","model":"MiniMax-M3","attempt":11,"exitCode":1,"rawBytes":14721,"outputTokens":14249,"maxIterations":28,"timestamp":"2026-08-15T00:18:00Z"}

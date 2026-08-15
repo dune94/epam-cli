@@ -7873,6 +7873,48 @@ if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/update-invalidated-tes
     #
     # An UNDECLARED parse (no test.failurePattern) returns unknown, the delta declines, and the
     # stamp proceeds — reporting everything rather than guessing. That refusal is deliberate.
+# _clear_suite_state_for_phase <prd_file> <phase>
+# WHATEVER SETS THE FLAG CAN UNSET IT.
+#
+# Step 3.545 stamps suiteState=red when it cannot reconcile a failing test, and Step 3.55
+# blocks on that flag. Nothing ever cleared it, so it was a latch: a run that recovered was
+# still failed by its own history.
+#
+# Live, run 20260815T142007Z (metrolinx, AMSD-2041): pass 1's generated spec mocked a module
+# the SDK does not use, the suite went red, and 3.545 stamped it. The retry fixed the code —
+# tsc passed, external verification passed, the story completed and committed. At 16:03
+# update-invalidated-tests re-checked and reported "suite already green — nothing to do",
+# and seconds later Step 3.55 failed the phase on the stale flag, asserting "Step 3.545
+# could not reconcile it" about a step that had just reported the opposite. The suite was
+# green: 1203/1203 under the project's declared TZ.
+#
+# This ONLY clears. Step 3.55 is untouched, so a suite that never recovered still blocks —
+# that is the behaviour the flag exists to provide.
+_clear_suite_state_for_phase() {
+    local _prd="${1:-}" _phase="${2:-}"
+    [ -f "$_prd" ] || return 0
+    local _ids
+    _ids=$(jq -r --arg phase "$_phase" '(.implementationOrder[$phase] // [])[]?' "$_prd" 2>/dev/null)
+    [ -n "$_ids" ] || return 0
+    local _sid
+    while IFS= read -r _sid; do
+        [ -n "$_sid" ] || continue
+        jq -e --arg id "$_sid" '.stories[] | select(.id == $id) | has("suiteState")' "$_prd" >/dev/null 2>&1 || continue
+        local _tmp
+        _tmp="$(mktemp)"
+        # Staged through a temp file and moved: a truncated PRD is worse than a stale flag.
+        if jq --arg id "$_sid" \
+            '(.stories[] | select(.id == $id)) |= (del(.suiteState) | del(.suiteStateStep))' \
+            "$_prd" > "$_tmp" 2>/dev/null; then
+            mv "$_tmp" "$_prd"
+            info "Step 3.545: suite recovered — cleared suiteState on $_sid"
+        else
+            rm -f "$_tmp"
+        fi
+    done <<< "$_ids"
+    return 0
+}
+
     if [ "$_uit_failed" -ne 0 ] && command -v baseline_new_failures >/dev/null 2>&1; then
         _uit_log="$LOG_DIR/update-invalidated-tests-${PHASE}.log"
         if [ -f "$_uit_log" ]; then
@@ -7882,6 +7924,12 @@ if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/update-invalidated-tes
                 _uit_failed=0
             fi
         fi
+    fi
+
+    if [ "$_uit_failed" -eq 0 ]; then
+        # RECOVERED. Clear anything an earlier pass stamped, or Step 3.55 fails a phase whose
+        # suite is green — which is exactly what happened on 2026-08-15.
+        _clear_suite_state_for_phase "$PRD_FILE" "$PHASE"
     fi
 
     if [ "$_uit_failed" -ne 0 ]; then

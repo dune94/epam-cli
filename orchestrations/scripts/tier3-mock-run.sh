@@ -228,6 +228,7 @@ fi
 # were not among them — see lib/preflight.sh.
 # shellcheck source=lib/preflight.sh
 . "$SCRIPT_DIR/lib/preflight.sh"
+. "$SCRIPT_DIR/lib/phase-exit.sh"
 # Route through fail(), never a bare exit: fail() archives the run artefacts first.
 # A bare `exit 1` here made a pre-flight abort the ONE outcome that recorded nothing —
 # no run folder, no outcome.txt, no log — which is the outcome most worth keeping.
@@ -247,7 +248,7 @@ run_phase() {
     2>&1 | tee -a "$LOG_FILE" || phase_exit=${PIPESTATUS[0]}
   echo ""
 
-  if [ "$phase_exit" -eq 2 ]; then
+  if phase_exit_is_retryable "$phase_exit"; then
     info "  Self-healing: gate remediation applied — resetting and retrying phase '$phase'..."
     phase_exit=0
     SKIP_GATE_REMEDIATION=1 bash "$SCRIPT_DIR/run-agent-orchestration.sh" \

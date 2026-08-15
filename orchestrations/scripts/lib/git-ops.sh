@@ -304,6 +304,37 @@ ensure_story_branch() {
         return 1
     fi
 
+    # NOTHING IS DISCARDED SILENTLY OR UNRECOVERABLY.
+    #
+    # The hard reset below is wanted and stays. What is not acceptable is what it did
+    # on 2026-08-14: a story that had COMPLETED — `npm run test` green, `tsc` green,
+    # 4 files committed — was rejected by the reviewer over one inconsistent
+    # dependency declaration, and the retry moved this branch pointer back to
+    # origin/develop. The commit stopped being reachable from any ref. It survived
+    # only in the reflog, where nothing in this pipeline looks and where gc removes
+    # it. The same shape orphaned three FINISHED gotransit commits the same day
+    # (e780a8b7 / 45c82f2a / 20c2cea4), recovered by hand.
+    #
+    # The log line "freshly based on origin/<baseline>" reads as hygiene. It was
+    # deletion. So: before the pointer moves, anything that would stop being
+    # reachable is pinned under a real ref and named — recovery must never depend on
+    # the reflog. This is a local ref only; it pushes nothing.
+    local _unreachable=0
+    _unreachable=$(git -C "$codeline_root" rev-list --count "origin/${baseline_branch}..HEAD" 2>/dev/null || echo 0)
+    case "$_unreachable" in (''|*[!0-9]*) _unreachable=0 ;; esac
+    if [ "$_unreachable" -gt 0 ]; then
+        local _rescue_ref _head_short
+        _head_short=$(git -C "$codeline_root" rev-parse --short HEAD 2>/dev/null || echo unknown)
+        _rescue_ref="epam-rescue/${story_id}-${_head_short}"
+        if git -C "$codeline_root" branch -f "$_rescue_ref" HEAD --quiet 2>/dev/null; then
+            warning "  [story-branch] $story_id: ${_unreachable} commit(s) would have been discarded by this reset — preserved on branch '${_rescue_ref}'"
+            warning "  [story-branch]   recover with: git -C '${codeline_root}' log ${_rescue_ref}"
+        else
+            error "  [story-branch] $story_id: ${_unreachable} commit(s) are about to become unreachable and the rescue ref could not be created — refusing to reset"
+            return 1
+        fi
+    fi
+
     if git -C "$codeline_root" checkout -B "$_branch" "origin/${baseline_branch}" --quiet 2>/dev/null; then
         # checkout -B only forces tracked files that DIFFER between the old
         # branch tip and the new start-point — a tracked file whose content

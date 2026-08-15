@@ -305,6 +305,7 @@ export AGENT_IO_DIR="${AGENT_IO_DIR:-$LOG_DIR/agent-io}"
 # The mode declares which steps it turns off (config/run-modes.json); an unknown mode is refused
 # rather than silently running everything. A variable the operator set themselves always wins.
 . "$SCRIPT_DIR/lib/run-modes.sh"
+. "$SCRIPT_DIR/lib/phase-exit.sh"
 . "$SCRIPT_DIR/lib/cost-ledger.sh"
 if [ -n "${EPAM_RUN_MODE:-}" ]; then
     apply_run_mode "$EPAM_RUN_MODE" || exit 1
@@ -3462,7 +3463,7 @@ KNOWNFIXES_EOF
       _pex=${PIPESTATUS[0]}
 
       # exit 2 = gate remediation applied — reset stories and retry once (mirrors tier3 launcher)
-      if [ "$_pex" -eq 2 ]; then
+      if phase_exit_is_retryable "$_pex"; then
         log "[orch] Gate remediation applied for '${_phase}' ('${_cl}') — retrying with SKIP_GATE_REMEDIATION=1"
         _pex=0
         JIRA_CODELINE_RUN=1 \
@@ -3667,7 +3668,7 @@ KNOWNFIXES_EOF
       _pex=${PIPESTATUS[0]}
 
       # exit 2 = gate remediation applied — reset stories and retry once (mirrors tier3 launcher)
-      if [ "$_pex" -eq 2 ]; then
+      if phase_exit_is_retryable "$_pex"; then
         log "[orch] Gate remediation applied for '${_phase}' ('${_cl}') — retrying with SKIP_GATE_REMEDIATION=1"
         _pex=0
         JIRA_CODELINE_RUN=1 \
@@ -8393,7 +8394,12 @@ _escalated=$(jq -r --arg phase "$PHASE" \
 if [ "${_review_escalated:-0}" -eq 1 ] || [ "${_escalated:-0}" -gt 0 ]; then
     error "Step 3.6: review changes unresolved after $_review_cycle cycle(s), ladder exhausted (escalated: flag=${_review_escalated:-0} tagged-stories=${_escalated:-0})"
     error "         A change the reviewer never approved must NOT proceed — human review required."
-    exit 2
+    # EXIT 3, NOT 2. This is a HALT, not a remediation. Every caller used to read 2 as
+    # "a fix was applied, retry" and re-ran the phase — which hard-reset the branch,
+    # orphaned the already-green committed work, and burned 12 attempts against a
+    # ladder with nothing left to escalate to (live, 20260814T213253Z). The retryable
+    # /not-retryable distinction is defined once in lib/phase-exit.sh.
+    exit 3
 fi
 
 # ──────────────────────────────────────────────

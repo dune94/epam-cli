@@ -311,7 +311,7 @@ run_phase() {
   echo ""
 
   # exit 2 = gate remediation was applied — reset stories and retry once
-  if [ "$phase_exit" -eq 2 ]; then
+  if phase_exit_is_retryable "$phase_exit"; then
     info "  Self-healing: gate remediation applied — resetting and retrying phase '$phase'..."
     if [ "${EPAM_BROWNFIELD:-0}" != "1" ]; then
       bash "$SCRIPT_DIR/prd-remediate.sh" --prd "$PRD_FILE" --phase "$phase" --mid-phase-retry \

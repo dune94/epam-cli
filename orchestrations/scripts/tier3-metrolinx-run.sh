@@ -94,6 +94,7 @@ fail()    {
 # Before ANY config file is read: what the operator set on the command line. A mode overrides a
 # project default but never this — see lib/run-modes.sh.
 . "$SCRIPT_DIR/lib/run-modes.sh"
+. "$SCRIPT_DIR/lib/phase-exit.sh"
 snapshot_operator_env
 load_env_file_safe "$REPO_ROOT/.env"
 ENV_FILE="$SCRIPT_DIR/../jira/metrolinx.env"
@@ -491,7 +492,7 @@ run_phase() {
     2>&1 | tee -a "$LOG_FILE" || phase_exit=${PIPESTATUS[0]}
   echo ""
 
-  if [ "$phase_exit" -eq 2 ]; then
+  if phase_exit_is_retryable "$phase_exit"; then
     info "  Self-healing: gate remediation applied — resetting and retrying phase '$phase'..."
     phase_exit=0
     SKIP_GATE_REMEDIATION=1 bash "$SCRIPT_DIR/run-agent-orchestration.sh" \

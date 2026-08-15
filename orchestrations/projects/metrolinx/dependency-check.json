@@ -109,5 +109,11 @@
   "autoInstall": false,
   "dependencySensitiveConfigFiles": [
     "jest.config.js"
+  ],
+  "coupledFilePairs": [
+    [
+      "package.json",
+      "package-lock.json"
+    ]
   ]
 }

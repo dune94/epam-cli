@@ -955,6 +955,51 @@ _generate_rung_contribution_report() {
     fi
 }
 
+# _coupled_pair_gate_for_story <story_id> <output_file>
+# ONE AUTHOR PER COUPLED FILE PAIR. Runs the moment the rung-contribution report
+# exists — that report is the only artifact that knows WHICH RUNG wrote which file,
+# and a split pair is invisible to every other gate in the run: the live case
+# (AMSD-2041, run 20260814T213253Z) passed `npm run test` AND `tsc`, because neither
+# installs from the lockfile. It reached the reviewer, which rejected it at an
+# already-exhausted ladder, and the retry hard-reset away work that had passed.
+#
+# Catching it HERE means the writer gets it back as a normal verification failure with
+# rungs still available, instead of the reviewer catching it with none left.
+#
+# The pairs are the project's declaration (.epam/dependency-check.json
+# `coupledFilePairs`), never this engine's knowledge — see lib/coupled-pair-gate.sh.
+_coupled_pair_gate_for_story() {
+    local story_id="$1" output_file="${2:-/dev/null}"
+    [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
+    local _gate_lib="${SCRIPT_DIR}/lib/coupled-pair-gate.sh"
+    [ -f "$_gate_lib" ] || return 0
+    # shellcheck source=lib/coupled-pair-gate.sh
+    . "$_gate_lib"
+    command -v coupled_pair_check >/dev/null 2>&1 || return 0
+
+    local _report_file="${LOG_DIR}/rung-contribution-report-${story_id//[^A-Za-z0-9_-]/_}.json"
+    local _manifest="${PROJECT_ROOT}/.epam/dependency-check.json"
+    [ -f "$_report_file" ] || return 0
+
+    local _gate_out _gate_rc=0
+    _gate_out=$(coupled_pair_check "$_report_file" "$_manifest" 2>&1) || _gate_rc=$?
+    if [ "$_gate_rc" -eq 0 ]; then
+        [ -n "$_gate_out" ] && log "  $_gate_out"
+        return 0
+    fi
+
+    error "  [coupled-pair] $story_id: a coupled file pair had more than one author — feeding into retry loop"
+    while IFS= read -r _line; do [ -n "$_line" ] && log "  $_line"; done <<< "$_gate_out"
+    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nFiles that are only correct RELATIVE TO EACH OTHER were written by different attempts, so they now disagree:\n\n```\n%s\n```\n\nRewrite every member of the pair together, in this one attempt, so they are consistent. Do not change one and leave the other as a previous attempt left it.\n' \
+        "${_gate_out:0:4000}")
+    {
+        echo ""
+        echo "=== a coupled file pair had more than one author ==="
+        echo "$_gate_out"
+    } >> "$output_file"
+    return 1
+}
+
 _brownfield_rung_bump() {
     local story_id="$1"
     if [ "${EPAM_BROWNFIELD:-0}" != "1" ]; then
@@ -10266,6 +10311,18 @@ ${_trimmed_amendment}"
             # since the story just succeeded.
             _rung_attribute_changes "$story_id" "$_rung" "${STORY_MODEL:-}"
             _generate_rung_contribution_report "$story_id"
+            # ONE AUTHOR PER COUPLED FILE PAIR. The retry bookkeeping below is
+            # duplicated into this branch deliberately: a story that fails here has
+            # still BURNED this rung, and dropping out without persisting the count
+            # and model is what makes a ladder restart its climb from rung 0.
+            if ! _coupled_pair_gate_for_story "$story_id" "$output_file"; then
+                write_story_retry_count "$LOG_DIR" "$story_id" "$retry_count"
+                write_story_retry_model "$LOG_DIR" "$story_id" "${STORY_MODEL:-}"
+                write_story_iteration_bump "$LOG_DIR" "$story_id" "${STORY_ITERATION_BUMP_TOTAL:-0}"
+                rm -f "$(_rung_snapshot_path "$story_id")" 2>/dev/null || true
+                update_monitor_status "retry" "$story_id" "Coupled file pair had more than one author"
+                return 1
+            fi
             rm -f "$(_rung_snapshot_path "$story_id")" 2>/dev/null || true
             # Persisted even on success: a technically-successful attempt can
             # still be REJECTED by Step 3.6's review — the next

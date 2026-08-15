@@ -954,6 +954,24 @@ while IFS= read -r sid; do
   # ── Escalation profile (probability-weighted model composition) ───────────────
   # Token basis: prefer calibrated mean_tokens; fall back to blended token estimate
   _esc_tok="${cal_tok:-${b_tok:-0}}"
+  # THE STORY'S TIER REACHES THE PROFILE, OR THE LADDER WALK HAS NO CHAIN.
+  #
+  # compute_escalation_profile resolves the rungs above the ones it is handed by walking
+  # EPAM_MODEL_LADDER_<TIER>, selected by EPAM_STORY_LADDER_TIER. Nothing in this repository
+  # ever set that variable, so `_tier` was always empty, `_chain` fell back to the bare
+  # EPAM_MODEL_LADDER (only ever exported EMPTY, and only by two other launchers), `_hops`
+  # was always {} — and the TOP rung silently priced an attempt on model "".
+  #
+  # Measured on the same inputs, both versions executed:
+  #     before 2f8d980:  k3 = "z-ai/glm-5.2"
+  #     after:           k3 = ""
+  #     with this line:  k3 = "z-ai/glm-5.2"   (byte-identical to the predecessor)
+  #
+  # The tier comes from the STORY's own declaration, read from the story object already in
+  # scope — not from a tier named here, and not from a second PRD query. A project that
+  # declares different tiers is served by its own vocabulary.
+  EPAM_STORY_LADDER_TIER="$(echo "$story_json" | jq -r '.ladderTier // ""' 2>/dev/null || echo "")"
+  export EPAM_STORY_LADDER_TIER
   _esc_profile=$(compute_escalation_profile "$f_effort" "$b_cost" "$_esc_tok" "${_story_model:-${EPAM_MODEL:-}}" 2>/dev/null || echo "{}")
   esc_cost=$(echo "$_esc_profile"    | jq -r '.escalationCost // 0')
   esc_heal_cost=$(echo "$_esc_profile" | jq -r '.selfHealCost // 0')

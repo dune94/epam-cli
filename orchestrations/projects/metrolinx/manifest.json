@@ -80,7 +80,7 @@
   "projectRoles": {
    "path": "project-roles.json",
    "role": "generated",
-   "required": false,
+   "required": true,
    "deployTo": "main-only",
    "consumedBy": [
     "mint-agents-step.js",
@@ -92,7 +92,7 @@
   "projectInvestigators": {
    "path": "project-investigators.json",
    "role": "generated",
-   "required": false,
+   "required": true,
    "deployTo": "main-only",
    "consumedBy": [
     "run-agent-orchestration.sh",

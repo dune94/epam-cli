@@ -61,8 +61,24 @@ function seededRun() {
     implementationOrder: { core: ['AMSD-1'] },
   }));
 
+  // POINT EVERY REPO-TOUCHING PATH AT THE FIXTURE.
+  //
+  // pre-run-reset restores agents/profiles.json from profiles.json.original, and
+  // _AGENTS_DIR defaults to the REAL orchestrations/agents when EPAM_AGENTS_DIR is unset
+  // — the script makes it overridable "so this block is testable in isolation", and the
+  // first version of this test did not use it. Every suite run therefore reset the live
+  // roster from 64 minted roles to the 57-role canonical base, which is launch-critical
+  // state: with the mint skipped, a story whose agentRole was minted then no longer
+  // resolves and the launcher refuses to start. Caught 2026-08-15 by re-checking launch
+  // state after the suite, not by any test.
+  const agentsDir = join(dir, 'agents');
+  mkdirSync(agentsDir, { recursive: true });
+  writeFileSync(join(agentsDir, 'profiles.json.original'), JSON.stringify({ 'a-base-role': {} }));
+  writeFileSync(join(agentsDir, 'profiles.json'), JSON.stringify({ 'a-base-role': {} }));
+
   const res = spawnSync('bash', [RESET, '--prd', prd, '--log-dir', logDir], {
     encoding: 'utf8', timeout: 240000,
+    env: { ...process.env, EPAM_AGENTS_DIR: agentsDir },
   });
 
   const count = (sub: string) =>

@@ -1000,6 +1000,73 @@ _coupled_pair_gate_for_story() {
     return 1
 }
 
+# _committed_change_uses_helpers <story_id>
+# THE COMMIT IS THE ARTIFACT. MEASURE THAT.
+#
+# verify_prescribed_helper_used checks `git diff <baseline>` — the WORKING TREE — and it is
+# right to, because it must reject an attempt before that attempt ends. But a story's
+# attempts share one tree, partial work is deliberately carried across them
+# ("WorktreeReset: skipped — partial work preserved"), and the commit is assembled at the
+# end. So a helper can be present when that guard looks and absent from what ships.
+#
+# Live, run 20260815T142007Z (metrolinx, AMSD-2041): the plan named five files and four
+# verified helpers; the write-time guard did not fire; the story was marked complete; and
+# the commit contained ContentstackContext 0, getContentByKey 0, useContent 0, Stack 7.
+# The previous pass — discarded by a retry and recovered only from
+# epam-rescue/AMSD-2041-8341407b — used all four and made the context reactive. What
+# shipped configures the SDK and subscribes to entry changes, but nothing re-queries, so
+# draft content never reaches the page. Every other gate passed it: tsc is happy, and the
+# tests assert that init was called, never that a consumer re-renders with new data.
+#
+# I could not establish from the logs WHY the working-tree guard stayed silent. This check
+# does not depend on knowing: it reads the committed range, so whatever happened inside the
+# attempt, the thing that ships is the thing that is judged.
+#
+# Same filter as the write-time guard, deliberately — one definition of "required helper".
+# No symbol, path or project vocabulary appears here.
+_committed_change_uses_helpers() {
+    local story_id="$1"
+    local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+    [ -d "${PROJECT_ROOT:-}/.git" ] || return 0
+
+    local _helpers
+    _helpers=$(jq -r --arg id "$story_id" '
+        .stories[] | select(.id == $id) | (.fixSiteAnalysis // [])
+        | map(select((.fixVerified == true) and ((.helper // "") != "")))
+        | map(.helper) | unique | .[]' "$prd_target" 2>/dev/null)
+    [ -n "$_helpers" ] || return 0
+
+    local _ref=""
+    [ -f "${LOG_DIR:-}/phase-baseline-sha.txt" ] && \
+        _ref=$(tr -d '[:space:]' < "$LOG_DIR/phase-baseline-sha.txt" 2>/dev/null)
+    [ -n "$_ref" ] || _ref="origin/${JIRA_BASELINE_BRANCH:-develop}"
+    git -C "$PROJECT_ROOT" rev-parse --verify "$_ref" >/dev/null 2>&1 || return 0
+
+    # baseline..HEAD — committed only. Not the tree.
+    local _diff
+    _diff=$(git -C "$PROJECT_ROOT" diff "$_ref" HEAD 2>/dev/null)
+    [ -n "$_diff" ] || return 0
+
+    local _missing=() _h
+    while IFS= read -r _h; do
+        [ -n "$_h" ] || continue
+        printf '%s' "$_diff" | grep -q -- "$_h" || _missing+=("$_h")
+    done <<< "$_helpers"
+    [ ${#_missing[@]} -eq 0 ] && return 0
+
+    local _missing_list
+    _missing_list=$(printf '%s, ' "${_missing[@]}"); _missing_list="${_missing_list%, }"
+    # EVERY missing one, not the first: reporting one at a time spends the retry ladder on
+    # information this check already has.
+    error "  [committed-change] $story_id: the COMMITTED change does not use ${#_missing[@]} verified helper(s): ${_missing_list}"
+    error "  [committed-change]   The work that ships is missing part of the prescribed fix — an earlier attempt may have had it."
+    DETERMINISTIC_CHECK_FAILURE=1
+    export DETERMINISTIC_CHECK_FAILURE
+    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe change you COMMITTED does not use %d prescribed helper(s) that the spec verified: %s\n\nEach owns part of this fix. Import and use every one of them in the files the plan names, then make the change again. A change that uses only some of them leaves the story incomplete even when the type check and the tests pass.\n' \
+        "${#_missing[@]}" "$_missing_list")
+    return 1
+}
+
 _brownfield_rung_bump() {
     local story_id="$1"
     if [ "${EPAM_BROWNFIELD:-0}" != "1" ]; then
@@ -11541,6 +11608,18 @@ run_implementation() {
             log "  [post-story] Commit step complete for $story_id"
             if [ "$_commit_rc" -ne 0 ]; then
                 error "  [post-story] $story_id: work is UNCOMMITTED (commit step exit ${_commit_rc}) — the story is not delivered; demoting from implemented"
+                update_story_status "$story_id" "failed"
+                failed=$((failed + 1))
+                implemented=$((implemented - 1))
+            elif ! _committed_change_uses_helpers "$story_id"; then
+                # THE ARTIFACT IS JUDGED, NOT THE TREE IT CAME FROM.
+                #
+                # The write-time guard rejects an attempt while it is still running, against
+                # the working tree. This asks the only question that survives the attempt:
+                # does what SHIPPED use every helper the spec verified? On 2026-08-15 a story
+                # committed 1 of 4 and was reported complete — tsc green, tests green, because
+                # the tests assert the SDK was configured, never that content re-renders.
+                error "  [post-story] $story_id: committed work is incomplete against the plan — demoting from implemented"
                 update_story_status "$story_id" "failed"
                 failed=$((failed + 1))
                 implemented=$((implemented - 1))

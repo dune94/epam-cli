@@ -1003,7 +1003,7 @@ _coupled_pair_gate_for_story() {
     error "  [coupled-pair] $story_id: a coupled file pair had more than one author — feeding into retry loop"
     while IFS= read -r _line; do [ -n "$_line" ] && log "  $_line"; done <<< "$_gate_out"
     VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nFiles that are only correct RELATIVE TO EACH OTHER were written by different attempts, so they now disagree:\n\n```\n%s\n```\n\nRewrite every member of the pair together, in this one attempt, so they are consistent. Do not change one and leave the other as a previous attempt left it.\n' \
-        "${_gate_out:0:4000}")
+        "$_gate_out")
     {
         echo ""
         echo "=== a coupled file pair had more than one author ==="
@@ -5368,7 +5368,7 @@ run_external_verification() {
     if [ "$test_exit" -eq 124 ]; then
         warning "External verification TIMED OUT for $story_id after ${_test_timeout}s (test command: $test_cmd)"
         VERIFICATION_FAILURE=$(printf '\n## Verification Failure — TIMEOUT\n\nThe orchestrator ran `%s` after your files were written and it did NOT complete within %ds — it hung. The most common cause for a server story: a test calls app.listen() (or an equivalent server-start call) without closing it (server.close()) in an afterAll/afterEach hook, so the test process never exits. Check every test that starts a server or opens a long-lived resource (timers, sockets, watchers) and ensure it is torn down.\n\n```\n%s\n```\n' \
-            "$test_cmd" "$_test_timeout" "${test_output:0:4000}")
+            "$test_cmd" "$_test_timeout" "$test_output")
         {
             echo ""
             echo "=== External verification TIMED OUT after ${_test_timeout}s ==="
@@ -5425,14 +5425,11 @@ run_external_verification() {
         # The writer is shown the NEW failures, not the whole suite. Handing it every
         # pre-existing failure as if it were its own is how an attempt gets sent chasing
         # breakage it did not cause — and the instruction below now says so explicitly.
-        local _test_head="${_new_test_failures:0:2000}"
+        # WHOLE, never head+tail. The middle of a failure dump is where the first
+        # error usually is; cutting it out and printing "[... output truncated ...]"
+        # told the writer something was missing without telling it what.
+        local _test_head="$_new_test_failures"
         local _test_tail=""
-        if [ "${#_new_test_failures}" -gt 2000 ]; then
-            _test_tail=$(printf '%s' "$_new_test_failures" | tail -c 2000)
-            _test_tail="
-[... output truncated ...]
-$_test_tail"
-        fi
         VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe orchestrator ran `%s` after your files were written and it failed (exit code %d). The failures below are the ones YOUR CHANGES INTRODUCED — failures the codeline already had have been subtracted and are not your responsibility. Fix these.\n\n```\n%s%s\n```\n' \
             "$test_cmd" "$test_exit" "$_test_head" "$_test_tail")
         {
@@ -5851,7 +5848,7 @@ run_tsc_verification() {
 
         warning "  [tsc-verify] $story_id: TypeScript errors — feeding into retry loop"
         VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe orchestrator ran the project type check after your files were written and it failed (exit code %d). Fix the type errors so tsc exits 0.\n\n```\n%s\n```\n' \
-            "$_tsc_exit" "${_new_errors:0:4000}")
+            "$_tsc_exit" "$_new_errors")
         {
             echo ""
             echo "=== the project type check failed (exit $_tsc_exit) — new errors introduced by this story ==="
@@ -6797,11 +6794,11 @@ assess_model_escalation() {
 
     # Read failure evidence (cap at 3000 chars to stay within gate model budget)
     local result_text=""
-    [ -f "$result_json" ] && result_text=$(jq -r '.result // ""' "$result_json" 2>/dev/null | head -c 1500 || echo "")
+    [ -f "$result_json" ] && result_text=$(jq -r '.result // ""' "$result_json" 2>/dev/null || echo "")
     local log_tail=""
-    [ -f "$log_file" ] && log_tail=$(tail -30 "$log_file" 2>/dev/null | head -c 1500 || echo "")
+    [ -f "$log_file" ] && log_tail=$(tail -30 "$log_file" 2>/dev/null || echo "")
     # Include specific test failure output when available (Quality class failures)
-    local test_failure_snippet="${VERIFICATION_FAILURE:0:1000}"
+    local test_failure_snippet="$VERIFICATION_FAILURE"
     # Cross-run memory: include prior failure pattern count for context
     local _failures_file="${LOG_DIR}/story-failures.jsonl"
     local prior_failure_summary=""
@@ -6930,10 +6927,10 @@ STORY: ${story_id}
 CHANGE TYPE: ${change_type}
 
 BEFORE:
-${before_json:0:1000}
+${before_json}
 
 AFTER:
-${after_json:0:1000}
+${after_json}
 
 You have read-only tools available (list/search/read files, run read-only shell commands). Several of your rejection rules (introduces a technology this project does not already use; TC fact cannot be verified by reading source code) require checking a claim against the real manifests/config/source of THIS codeline — do not judge those from the before/after excerpts alone. Verify before rejecting on that basis; a wrong rejection blocks a correct change and is worse than a slower correct one. Your tool budget is small — check the ONE fact your verdict depends on, not the whole codebase.
 
@@ -7054,7 +7051,7 @@ run_prd_change_summarizer() {
 ${issues:-no details}
 
 ORIGINAL SCRIPT:
-${rejected_text:0:2000}
+${rejected_text}
 
 Rewrite the script to fix ONLY the issues listed above — a real bash bug (syntax error, subshell variable scoping, unquoted expansion, etc). Preserve the shebang line, the overall purpose, and every argument (\$1, \$2, ...) exactly as used. The script must remain idempotent (safe to run more than once).
 
@@ -7065,7 +7062,7 @@ Emit ONLY the corrected script — no markdown fences, no commentary, no explana
 ${issues:-no details}
 
 ORIGINAL TEXT:
-${rejected_text:0:1000}
+${rejected_text}
 
 Rewrite the text to fix ONLY the issues listed above, preserving the original actionable rule. Requirements: no reference to any specific story ID; start with an imperative verb (Use, Always, Never, Prefer, Avoid); under 200 characters; end on a complete sentence; no markdown, no headers, no commentary.
 
@@ -7282,7 +7279,7 @@ run_diagnosis_groundedness_check() {
     [ -f "$_dgc_script" ] || return 0
 
     local _dgc_input
-    _dgc_input=$(jq -n --arg diag "$diagnosis" --arg log "${VERIFICATION_FAILURE:0:6000}" \
+    _dgc_input=$(jq -n --arg diag "$diagnosis" --arg log "$VERIFICATION_FAILURE" \
         '{diagnosis: $diag, log_excerpt: $log}' 2>/dev/null)
     [ -z "$_dgc_input" ] && return 0
 
@@ -7385,7 +7382,7 @@ run_failure_analyst() {
     if [ -f "$profiles_file" ]; then
         # profiles.json is flat {role: "prompt string"} — extract [Self-Heal] lines only
         skill_addendum=$(jq -r --arg role "$story_role" '.[$role] // ""' "$profiles_file" 2>/dev/null | \
-            grep '\[Self-Heal\]' | head -c 1500 || echo "")
+            grep '\[Self-Heal\]' || echo "")
     fi
 
     # Load failure-analyst profile from profiles.json (role-level instructions)
@@ -11032,8 +11029,8 @@ get_relevant_kb_entries() {
     local role_kb; role_kb=$(_kb_file_for_story "$story_id" "$kb_dir")
     local shared_kb="${kb_dir}/KB-shared.md"
     local combined=""
-    [ -f "$role_kb"   ] && combined="${combined}$(tail -n 20 "$role_kb" 2>/dev/null)"$'\n'
-    [ -f "$shared_kb" ] && combined="${combined}$(tail -n 10 "$shared_kb" 2>/dev/null)"$'\n'
+    [ -f "$role_kb"   ] && combined="${combined}$(cat "$role_kb" 2>/dev/null)"$'\n'
+    [ -f "$shared_kb" ] && combined="${combined}$(cat "$shared_kb" 2>/dev/null)"$'\n'
 
     # Strip blank lines and return at most 10 bullet entries
     printf '%s' "$combined" | grep -v '^[[:space:]]*$' | tail -n 10

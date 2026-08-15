@@ -1,10 +1,10 @@
 {
-  "_comment": "Writer-prompt size budget, measured at tag v1.0 (359f7fa) — the last state in which the writer was known to work. Every byte here is re-sent on EVERY agent-loop iteration and, with no prompt caching on this pipeline, billed in full each time. Raising a baseline is a deliberate, reviewable act: state why in the commit.",
+  "_comment": "Writer-prompt size budget, measured at tag v1.0 (359f7fa) — the last state in which the writer was known to work. Every byte here is re-sent on EVERY agent-loop iteration and, with no prompt caching on this pipeline, billed in full each time. Raising a baseline is a deliberate, reviewable act: state why in the commit. RAISED 2026-08-15: two deliberate additions. (1) The writer is now told EVERY prescribed helper it is judged on, not just the first — it was previously failed by a guard enforcing four helpers while the prompt named one, which is unwinnable. (2) Agent-input truncation was removed pipeline-wide per operator mandate, so evidence blocks reach full length instead of being cut mid-sentence. Both grow the prompt on purpose; the cost is accepted because the previous size was achieved by withholding the information the agent is graded on.",
   "measuredAtTag": "v1.0",
-  "measuredAtCommit": "359f7fa",
+  "measuredAtCommit": "a14b553",
   "allowancePct": 5,
   "baselineBytes": {
-    "minimal": 2087,
-    "threeCodeline": 2292
+    "minimal": 2437,
+    "threeCodeline": 2642
   }
 }

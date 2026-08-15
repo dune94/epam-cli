@@ -56,7 +56,7 @@ function sembleSearch(query, repoPath, limit, maxLines) {
     return { query, results: [] };
   }
 
-  const safeQuery = query.replace(/"/g, '\\"').slice(0, 300);
+  const safeQuery = query.replace(/"/g, '\\"');
   const cmd = `"${bin}" search "${safeQuery}" "${repoPath}" -k ${limit} --max-snippet-lines ${maxLines} 2>/dev/null`;
 
   try {

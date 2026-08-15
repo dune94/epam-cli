@@ -49,7 +49,7 @@ function constraintSchema() {
 }
 
 function buildPrompt({ agent_role, signature, episodes }) {
-  const evidence = episodes.slice(0, 12)
+  const evidence = episodes
     .map((e, i) => `  ${i + 1}. [${e.signature || 'unkeyed'}] ${e.diagnosis || '(no diagnosis)'}`)
     .join('\n');
 

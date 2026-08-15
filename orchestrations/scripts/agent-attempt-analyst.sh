@@ -102,8 +102,8 @@ _profiles_file="$(dirname "$SCRIPT_DIR")/agents/profiles.json"
 [ -f "$_profiles_file" ] && _profile=$(jq -r '."failure-analyst" // ""' "$_profiles_file" 2>/dev/null || echo "")
 [ -z "$_profile" ] && _profile="You are a self-healing pipeline analyst. Diagnose the exact reason an agent failed and prescribe the minimum corrective directive so its NEXT attempt succeeds."
 
-_failed_output=$(head -c 4000 "$FAILED_OUTPUT_FILE" 2>/dev/null || echo "")
-_context=$(head -c 6000 "$CONTEXT_FILE" 2>/dev/null || echo "")
+_failed_output=$(cat "$FAILED_OUTPUT_FILE" 2>/dev/null || echo "")
+_context=$(cat "$CONTEXT_FILE" 2>/dev/null || echo "")
 
 # Class-specific framing so the analyst targets the right behaviour.
 _class_hint=""

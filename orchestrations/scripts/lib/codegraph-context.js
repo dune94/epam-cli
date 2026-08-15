@@ -142,7 +142,7 @@ function protectIndexFromGitClean(repoPath) {
 function queryCodeGraph(keywords, repoPath, limit = 10) {
   const bin = resolveCodeGraphBin();
   if (!bin) return [];
-  const safeQuery = keywords.replace(/"/g, '\\"').slice(0, 200);
+  const safeQuery = keywords.replace(/"/g, '\\"');
   try {
     const raw = execSync(
       `"${bin}" query "${safeQuery}" --path "${repoPath}" --json -l ${limit}`,
@@ -164,7 +164,7 @@ function queryCodeGraph(keywords, repoPath, limit = 10) {
 function exploreCodeGraph(query, repoPath, { maxFiles = 4, maxChars = 12000 } = {}) {
   const bin = resolveCodeGraphBin();
   if (!bin) return '';
-  const safeQuery = query.replace(/"/g, '\\"').slice(0, 300);
+  const safeQuery = query.replace(/"/g, '\\"');
   try {
     const raw = execSync(
       `"${bin}" explore "${safeQuery}" --path "${repoPath}" --max-files ${maxFiles}`,

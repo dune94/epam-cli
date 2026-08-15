@@ -380,9 +380,9 @@ function publishedContracts(repoPath, story) {
 
   const done = Array.isArray(story && story.codelines) ? story.codelines : [];
   const parts = [];
-  for (const f of files.slice(0, 4)) {
+  for (const f of files) {
     let body = '';
-    try { body = fs.readFileSync(path.join(dir, f), 'utf8').slice(0, 4000); } catch { continue; }
+    try { body = fs.readFileSync(path.join(dir, f), 'utf8'); } catch { continue; }
     if (body.trim()) parts.push(`### ${f.replace(/\.md$/, '')}\n${body}`);
   }
   if (!parts.length) return '';
@@ -6110,7 +6110,7 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, fo
   const priorFlags = story.specification?.coordinatorReview?.flags;
   const priorNotes = story.specification?.coordinatorReview?.reviewNotes;
   const priorGapsBlock = (Array.isArray(priorFlags) && priorFlags.length > 0)
-    ? `\n\nPRIOR COORDINATOR FLAGS (you MUST address each one — do NOT declare the spec complete without resolving these):\n${priorFlags.map((f, i) => `${i + 1}. ${f}`).join('\n')}\n${priorNotes ? `\nAdditional context from prior review: ${priorNotes.slice(0, 500)}` : ''}`
+    ? `\n\nPRIOR COORDINATOR FLAGS (you MUST address each one — do NOT declare the spec complete without resolving these):\n${priorFlags.map((f, i) => `${i + 1}. ${f}`).join('\n')}\n${priorNotes ? `\nAdditional context from prior review: ${priorNotes}` : ''}`
     : '';
 
   // Forced-retry note goes at the VERY TOP — highest-salience position in the

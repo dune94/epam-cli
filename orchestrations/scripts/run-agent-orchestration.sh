@@ -1947,7 +1947,7 @@ run_story_recovery_analyst() {
     [ -z "$_story_json" ] && return 1
 
     local _log_tail
-    _log_tail=$(tail -c 4000 "$log_file" 2>/dev/null || echo "")
+    _log_tail=$(cat "$log_file" 2>/dev/null || echo "")
 
     local _prompt="You are the story-recovery-analyst. Story ${story_id} timed out twice (watchdog) and was marked failed -- it never finished within its time budget. Diagnose whether the story's OWN scope is the root cause (too many acceptance criteria, ambiguous/contradictory requirements, an unbounded/open-ended task) as opposed to a transient model/infra hiccup.
 
@@ -2034,10 +2034,10 @@ STORY: ${story_id}
 CHANGE TYPE: ac_patch
 
 BEFORE:
-${_before_acs:0:1000}
+${_before_acs}
 
 AFTER:
-${_candidate:0:1000}
+${_candidate}
 
 Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}" | \
                     AI_PROVIDER="${ORCH_GATE_PROVIDER}" \
@@ -5385,7 +5385,7 @@ STORY: pre-phase-assessment-${phase_id}
 CHANGE TYPE: profile_creation
 
 BEFORE/AFTER DIFF:
-${_pfa_diff:0:3000}
+${_pfa_diff}
 
 Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}" | \
                         AI_PROVIDER="${ORCH_GATE_PROVIDER}" \

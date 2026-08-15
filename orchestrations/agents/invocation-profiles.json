@@ -643,9 +643,11 @@
     "spec-coordinator-agent": "cpa-inference",
     "openspec-agent": "cpa-inference",
     "speckit-agent": "cpa-inference",
+    "typescript-engineer": "story-writer",
     "agent-systems-engineer": "story-writer",
     "billing-engineer": "story-writer",
     "cli-ux-engineer": "story-writer",
+    "test-engineer": "story-writer",
     "team-lead-agent": "cpa-inference",
     "review-agent": "cpa-inference",
     "test-coordinator-agent": "cpa-inference",
@@ -693,9 +695,8 @@
     "ticket-link-agent": "cpa-inference",
     "discovery-vocabulary-agent": "cpa-inference",
     "roster-reviewer": "code-review-cycle",
-    "metrolinx-contentstack-investigator": "code-graph-detective",
     "contentstack-sdk-engineer": "story-writer",
-    "contentstack-react-context-engineer": "story-writer"
+    "contentstack-preview-react-engineer": "story-writer"
   },
   "defaultSeam": "cpa-inference",
   "engineProduces": [
@@ -713,9 +714,11 @@
     "spec-coordinator-agent": "derived",
     "openspec-agent": "derived",
     "speckit-agent": "derived",
+    "typescript-engineer": "derived",
     "agent-systems-engineer": "derived",
     "billing-engineer": "derived",
     "cli-ux-engineer": "derived",
+    "test-engineer": "derived",
     "team-lead-agent": "derived",
     "review-agent": "derived",
     "test-coordinator-agent": "derived",
@@ -763,8 +766,7 @@
     "ticket-link-agent": "derived",
     "discovery-vocabulary-agent": "derived",
     "roster-reviewer": "derived",
-    "metrolinx-contentstack-investigator": "derived",
     "contentstack-sdk-engineer": "derived",
-    "contentstack-react-context-engineer": "derived"
+    "contentstack-preview-react-engineer": "derived"
   }
 }

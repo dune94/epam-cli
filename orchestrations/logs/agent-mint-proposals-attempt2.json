@@ -1,74 +1,19 @@
 {
   "attempt": 2,
-  "proposed": 6,
+  "proposed": 1,
   "proposals": [
     {
-      "name": "gotransit-contentstack-live-preview-engineer",
-      "kind": "implementer",
-      "codeline": "*",
-      "systemPrompt": "...",
-      "rationale": "..."
-    },
-    {
-      "name": "upexpress-contentstack-live-preview-engineer",
-      "kind": "implementer",
-      "codeline": "*",
-      "systemPrompt": "...",
-      "rationale": "..."
-    },
-    {
-      "name": "metrolinx-contentstack-live-preview-engineer",
-      "kind": "implementer",
-      "codeline": "*",
-      "systemPrompt": "...",
-      "rationale": "..."
-    },
-    {
-      "name": "gotransit-investigator",
-      "kind": "investigator",
-      "codeline": "gotransit",
-      "systemPrompt": "...",
-      "rationale": "..."
-    },
-    {
-      "name": "upexpress-investigator",
-      "kind": "investigator",
-      "codeline": "upexpress",
-      "systemPrompt": "...",
-      "rationale": "..."
-    },
-    {
-      "name": "metrolinx-investigator",
+      "name": "metrolinx-repository-investigator",
       "kind": "investigator",
       "codeline": "metrolinx",
-      "systemPrompt": "...",
-      "rationale": "..."
+      "systemPrompt": "You investigate the metrolinx codeline at the repository root and report what is actually there — never what you assume a Next.js project should contain. Your job is to map the repository layout relevant to Contentstack Live Preview work (AMSD-2041) so other agents can be briefed against real paths.\n\nKey facts you must establish by reading files:\n\n1. Where the Contentstack Delivery SDK is initialized. Search for files importing 'contentstack' or calling Contentstack.Stack. The file is named contentstack.ts but its directory must be confirmed by listing files — do not assume src/lib/ or src/app/ exists. Use list_files and search to find the actual path.\n\n2. Where React context providers that distribute CMS content live. Search for files exporting React Context, useContext hooks, or provider components related to Contentstack data. Report the actual directory.\n\n3. Where utility and helper modules live. The project may use directories like lib/, utils/, helpers/, or services/ — confirm which exist by listing the root and subdirectories. Do not name a directory unless list_files confirms it.\n\n4. Where configuration files live. Search for files related to environment configuration, preview settings, or Contentstack config. Report actual paths only.\n\n5. Test conventions: The project declares jest, jest-environment-jsdom, @testing-library/jest-dom, @testing-library/react, and @testing-library/user-event as devDependencies. Find where test files live (e.g., __tests__ directories, *.test.ts files, *.spec.ts files) and report the naming pattern and runner. Do not write tests yourself.\n\n6. Dependency state: The package.json declares 'contentstack' and '@contentstack/utils' as dependencies. '@contentstack/live-preview-utils' is neither declared in package.json nor installed in node_modules — state this plainly, without hedging. Do not claim it is present in any form.\n\n7. Next.js App Router or Pages Router: Check for the presence of app/ or pages/ directories at the root to determine which routing convention the project uses. Report what you find.\n\nYou report findings only. You do not write code, do not own stories, and do not create or edit test files. When you reference a path, it must be relative to the repository root and confirmed to exist.",
+      "rationale": "A single investigator is required for the sole codeline in scope, and it must report accurate paths and conventions so implementer briefs do not name directories that do not exist."
     }
   ],
   "refused": [
     {
-      "name": "gotransit-contentstack-live-preview-engineer",
-      "reason": "rationale says nothing (0 letters/digits, minimum 24) — it is what the operator reviews at the roster pause and what seeds the agent KB; state why THIS project needs THIS role"
-    },
-    {
-      "name": "upexpress-contentstack-live-preview-engineer",
-      "reason": "rationale says nothing (0 letters/digits, minimum 24) — it is what the operator reviews at the roster pause and what seeds the agent KB; state why THIS project needs THIS role"
-    },
-    {
-      "name": "metrolinx-contentstack-live-preview-engineer",
-      "reason": "rationale says nothing (0 letters/digits, minimum 24) — it is what the operator reviews at the roster pause and what seeds the agent KB; state why THIS project needs THIS role"
-    },
-    {
-      "name": "gotransit-investigator",
-      "reason": "rationale says nothing (0 letters/digits, minimum 24) — it is what the operator reviews at the roster pause and what seeds the agent KB; state why THIS project needs THIS role"
-    },
-    {
-      "name": "upexpress-investigator",
-      "reason": "rationale says nothing (0 letters/digits, minimum 24) — it is what the operator reviews at the roster pause and what seeds the agent KB; state why THIS project needs THIS role"
-    },
-    {
-      "name": "metrolinx-investigator",
-      "reason": "rationale says nothing (0 letters/digits, minimum 24) — it is what the operator reviews at the roster pause and what seeds the agent KB; state why THIS project needs THIS role"
+      "name": "metrolinx-repository-investigator",
+      "reason": "brief names 2 path(s) that do not exist in codeline 'metrolinx': src/lib/, src/app/"
     }
   ]
 }

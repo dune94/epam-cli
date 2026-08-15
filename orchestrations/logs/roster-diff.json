@@ -1,27 +1,19 @@
 {
   "canonicalFile": "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/agents/profiles.canonical.json",
   "canonicalRoles": 57,
-  "liveRoles": 58,
+  "liveRoles": 59,
   "generated": [
     {
-      "role": "metrolinx-contentstack-investigator",
-      "briefChars": 2127,
-      "mintedThisRun": true
-    },
-    {
       "role": "contentstack-sdk-engineer",
-      "briefChars": 2711,
+      "briefChars": 2768,
       "mintedThisRun": true
     },
     {
-      "role": "contentstack-react-context-engineer",
-      "briefChars": 2635,
+      "role": "contentstack-preview-react-engineer",
+      "briefChars": 3288,
       "mintedThisRun": true
     }
   ],
   "briefChanged": [],
-  "missingFromLive": [
-    "typescript-engineer",
-    "test-engineer"
-  ]
+  "missingFromLive": []
 }

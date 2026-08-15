@@ -1,1 +1,0 @@
-[{"covered":true,"case":"returns hello dolly","why":"The assertion expect(getGreeting()).toBe('hello dolly') directly calls getGreeting() and checks that its return value equals 'hello dolly', so it would fail if the function returned anything else.","vc":"Calling getGreeting() returns the string \"hello dolly\""}]

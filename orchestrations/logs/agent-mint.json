@@ -1,10 +1,10 @@
 {
   "minted": [
     {
-      "name": "metrolinx-contentstack-investigator",
+      "name": "contentstack-codeline-investigator",
       "kind": "investigator",
       "codeline": "metrolinx",
-      "rationale": "The metrolinx codeline has a deep Contentstack content delivery architecture (Stack → Context → useContent → 60+ components) that must be understood before live preview can be wired in, and only an investigator scoped to this one repository can report its actual layout, conventions, and test structure accurately.",
+      "rationale": "This codeline is the sole repository in scope and an investigator is needed to map its Contentstack integration, context-based content pipeline, and test conventions before implementers touch it.",
       "surfaces": [
         "profiles.json",
         "kb",
@@ -16,7 +16,7 @@
       "name": "contentstack-sdk-engineer",
       "kind": "implementer",
       "codeline": "",
-      "rationale": "The live preview feature requires modifying the Contentstack Stack initialization to add a live_preview config block and installing and initializing the @contentstack/live-preview-utils package, which is core SDK plumbing that no other role covers.",
+      "rationale": "The Stack initialization in contentstack.ts needs live_preview configuration added and @contentstack/live-preview-utils declared as a dependency, which requires focused SDK-level work distinct from the React context wiring.",
       "surfaces": [
         "profiles.json",
         "kb",
@@ -25,10 +25,10 @@
       ]
     },
     {
-      "name": "contentstack-react-context-engineer",
+      "name": "contentstack-preview-react-engineer",
       "kind": "implementer",
       "codeline": "",
-      "rationale": "The live preview feature requires wiring onEntryChange callbacks into the existing React context and useContent hook so that 60+ consuming components receive real-time draft updates, which is a distinct concern from SDK initialization.",
+      "rationale": "The onEntryChange callback must be wired into the React context that distributes Contentstack content, not individual page components, which requires React-specific integration work separate from SDK configuration.",
       "surfaces": [
         "profiles.json",
         "kb",
@@ -41,10 +41,10 @@
   "unchanged": [],
   "projectRoles": [
     "contentstack-sdk-engineer",
-    "contentstack-react-context-engineer"
+    "contentstack-preview-react-engineer"
   ],
   "projectInvestigators": [
-    "metrolinx-contentstack-investigator"
+    "contentstack-codeline-investigator"
   ],
   "proposed": 3,
   "rejectedAcrossAttempts": [],

@@ -1,1 +1,1 @@
-helper:ContentstackContext
+client-env:CONTENTSTACK_PREVIEW_ENABLED

@@ -12,39 +12,24 @@
     "rung": "1",
     "model": "z-ai/glm-5.2",
     "files": [
-      ".deepeval/.deepeval_telemetry.txt",
-      ".env.local.sample",
-      ".epam/dynamic-tools/install-missing-deps.sh",
-      ".epam/dynamic-tools/install-missing-deps.sh.reviewed",
-      "jest.config.js",
-      "orchestrations/logs/agent-activity.jsonl",
-      "src/__mocks__/contentstack-live-preview-utils.ts"
+      ".deepeval/.deepeval_telemetry.txt"
     ]
   },
   {
     "rung": "2",
-    "model": "moonshotai/kimi-k3",
-    "files": [
-      "package-lock.json"
-    ]
-  },
-  {
-    "rung": "4",
     "model": "z-ai/glm-5.2",
     "files": [
-      "package.json",
-      "src/services/contentstack.ts"
+      "orchestrations/logs/agent-activity.jsonl"
     ]
   },
   {
-    "rung": "5",
-    "model": "moonshotai/kimi-k3",
+    "rung": "3",
+    "model": "z-ai/glm-5.2",
     "files": [
-      "src/context/contentstackContext.tsx",
-      "src/hooks/useContent.ts",
-      "src/pages/404.tsx",
-      "src/pages/[[...slug]].tsx",
-      "src/pages/_app.tsx"
+      ".env.local.sample",
+      "package.json",
+      "src/pages/_app.tsx",
+      "src/services/contentstack.ts"
     ]
   }
 ]

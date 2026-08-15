@@ -3,22 +3,18 @@
     {
       "codeline": "metrolinx",
       "state": "in_scope",
-      "evidence": "Opened src/services/contentstack.ts (lines 1-130) — this is the Contentstack SDK initialization site. Line 91: `export const Stack = contentstack.Stack(options);`. The `options` object (lines 79-90) configures api_key, delivery_token, environment, branch, and fetchOptions, but contains NO `live_preview` block — no preview_token, no enable flag, no preview host. Searched for `live_preview|preview_token|onEntryChange|ContentstackLivePreview|live-preview-utils` across the entire codeline: zero source-file matches (only a log file from prior agent activity matched). This confirms Live Preview is not yet wired. Opened src/hooks/useContent.ts — the client-side content hook reads from ContentstackContext via useContext; there is no onEntryChange subscription or real-time update mechanism. The `@contentstack/live-preview-utils` package is not in the dependency manifest. The existing `contentstack` and `@contentstack/utils` dependencies are present and actively used (12 callers of Stack across services, API utils, and tests). The app uses Next.js, matching the ticket's linked Contentstack docs for NextJS CSR App Router live preview. The work reaches this codeline: it requires adding live_preview config to the Stack initialization, installing and initializing @contentstack/live-preview-utils, and wiring onEntryChange into the content delivery pattern.",
+      "evidence": "The codeline initializes the Contentstack Delivery SDK in src/services/contentstack.ts at line 91: `export const Stack = contentstack.Stack(options)`. The `options` object (lines 71–89) includes api_key, delivery_token, environment, branch, and fetchOptions, but contains NO `live_preview` configuration — no preview_token, no enable flag, no preview host. The `@contentstack/live-preview-utils` package is present in node_modules but NOT declared in package.json (installed_undeclared), meaning it cannot be relied upon in the build. A codebase-wide search for `live_preview`, `live-preview-utils`, `onEntryChange`, `preview_token`, and `ContentstackLivePreview` returned zero source matches (only orchestration log hits). Content is consumed via a `useContent` hook (src/hooks/useContent.ts) backed by `ContentstackContext` (React context), and the `ContentstackFactory` class in contentstack.ts wraps the Stack for all query/entry operations (getEntry, getSingleEntry, etc.). This is a Next.js app with `contentstack` and `@contentstack/utils` in its manifest — exactly the stack the linked Contentstack docs target — but no live preview wiring exists yet.",
       "surfaces": [
         "src/services/contentstack.ts",
         "src/hooks/useContent.ts",
-        "src/components/contentstack/",
-        "context/contentstackContext"
+        "src/context/contentstackContext",
+        "package.json"
       ],
       "filesRead": [
         "src/services/contentstack.ts",
         "src/hooks/useContent.ts",
-        "src/utils/isContentstackApiError.ts",
         "src/components/contentstack/ContentstackQuote/ContentstackQuote.tsx",
-        "src/components/contentstack/ContentStackStaticMaps/ContentStackStaticMaps.tsx",
-        "src/components/contentstack/ContentStackValues/ContentStackValues.tsx",
-        "src/components/contentstack/ContentstackText/ContentstackText.tsx",
-        "src/components/contentstack/ContentstackLink/ContentstackLink.tsx"
+        "src/components/contentstack/ContentstackText/ContentstackText.tsx"
       ],
       "evidenceGap": false
     }
@@ -26,8 +22,8 @@
   "recommendedInvestigators": [
     {
       "codeline": "metrolinx",
-      "focus": "The investigator should focus on src/services/contentstack.ts where the Stack is initialized (line 91) — the `options` object needs a `live_preview` config block with preview_token, enable, and host. It should then trace how content flows from the Stack through ContentstackContext (src/hooks/useContent.ts) to the dozens of components consuming useContent(), because onEntryChange from @contentstack/live-preview-utils must be wired into that flow to enable real-time draft preview updates. The investigator should also check whether the app uses App Router or Pages Router (the ticket docs target App Router CSR), and whether any preview-related environment variables or Next.js preview/draft mode infrastructure already exists.",
-      "why": "I saw the Contentstack SDK initialized without any live_preview config, no @contentstack/live-preview-utils package installed, and no onEntryChange usage anywhere. The content delivery architecture (Stack → ContentstackContext → useContent hook → 60+ component callers) is well-established, so the investigator needs to determine the least invasive way to inject live preview data refresh into that existing chain."
+      "focus": "Wire Contentstack Live Preview into the existing Stack initialization and content delivery pipeline. Specifically: (1) Add `@contentstack/live-preview-utils` to package.json dependencies — it is currently installed but undeclared. (2) Add `live_preview` config (preview_token, enable, host) to the `options` object in src/services/contentstack.ts around line 71–89. (3) Initialize `ContentstackLivePreview.init()` with the Stack SDK, considering the app's SSR vs CSR rendering strategy — the docs describe CSR App Router setup, but this codeline uses React Context (ContentstackContext) for content distribution, so the `onEntryChange` callback must be wired to refresh that context, not individual page components. (4) Determine how preview tokens and environment variables will be managed (the codeline already reads CONTENTSTACK_BRANCH, API_KEY, DELIVERY_TOKEN from process.env). (5) Investigate whether custom preview URLs are needed for this site's routing structure (nested routes, locale-based paths).",
+      "why": "The Stack init, the content service layer, and the context-based content consumption pattern are all present but have zero live preview wiring. The package is on disk but undeclared. The ticket's 8-point estimate suggests a focused implementation, and this codeline is the only one in scope."
     }
   ],
   "violations": [],

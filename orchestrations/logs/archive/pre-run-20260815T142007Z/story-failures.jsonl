@@ -1,0 +1,3 @@
+{"storyId":"AMSD-2041","failureClass":"quality","model":"MiniMax-M3","attempt":0,"exitCode":1,"rawBytes":28817,"outputTokens":50034,"maxIterations":28,"timestamp":"2026-08-15T13:33:36Z"}
+{"storyId":"AMSD-2041","failureClass":"quality","model":"MiniMax-M3","attempt":0,"exitCode":1,"rawBytes":6213,"outputTokens":22884,"maxIterations":28,"timestamp":"2026-08-15T13:43:18Z"}
+{"storyId":"AMSD-2041","failureClass":"env","model":"z-ai/glm-5.2","attempt":2,"exitCode":1,"rawBytes":0,"outputTokens":22884,"maxIterations":93,"timestamp":"2026-08-15T13:55:48Z"}

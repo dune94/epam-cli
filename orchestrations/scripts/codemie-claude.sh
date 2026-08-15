@@ -122,8 +122,12 @@ normalize_provider_json() {
             local result_text
             result_text=$(grep '"type":"text"' "$raw_file" 2>/dev/null \
                 | jq -rs '[.[].part.text // .[].text // ""] | join("")' 2>/dev/null || echo "opencode run completed")
+            # --rawfile: a full model turn can exceed ARG_MAX, and argv would fail with 126
+            # ("Argument list too long") leaving an empty result that reads as "no output".
+            local _rt_file; _rt_file=$(mktemp "${TMPDIR:-/tmp}/rt-XXXXXX")
+            printf '%s' "$result_text" > "$_rt_file"
             jq -n \
-                --arg rt "$result_text" \
+                --rawfile rt "$_rt_file" \
                 --argjson sf "$sf_line" \
                 '{result: $rt,
                   total_cost_usd: ($sf.cost // $sf.part.cost // $sf.total_cost // 0),
@@ -140,8 +144,12 @@ normalize_provider_json() {
             local result_text
             result_text=$(grep '"type":"item.completed"' "$raw_file" 2>/dev/null \
                 | jq -rs '[.[].item.text // ""] | join("")' 2>/dev/null || echo "codex exec completed")
+            # --rawfile: a full model turn can exceed ARG_MAX, and argv would fail with 126
+            # ("Argument list too long") leaving an empty result that reads as "no output".
+            local _rt_file; _rt_file=$(mktemp "${TMPDIR:-/tmp}/rt-XXXXXX")
+            printf '%s' "$result_text" > "$_rt_file"
             jq -n \
-                --arg rt "$result_text" \
+                --rawfile rt "$_rt_file" \
                 --argjson tc "$tc_line" \
                 '{result: $rt,
                   total_cost_usd: 0,

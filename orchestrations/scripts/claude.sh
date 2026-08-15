@@ -1418,8 +1418,12 @@ normalize_provider_json() {
             local result_text
             result_text=$(grep '"type":"text"' "$raw_file" 2>/dev/null \
                 | jq -rs '[.[].part.text // .[].text // ""] | join("")' 2>/dev/null || echo "opencode run completed")
+            # --rawfile: a full model turn can exceed ARG_MAX, and argv would fail with 126
+            # ("Argument list too long") leaving an empty result that reads as "no output".
+            local _rt_file; _rt_file=$(mktemp "${TMPDIR:-/tmp}/rt-XXXXXX")
+            printf '%s' "$result_text" > "$_rt_file"
             jq -n \
-                --arg rt "$result_text" \
+                --rawfile rt "$_rt_file" \
                 --argjson sf "$sf_line" \
                 '{result: $rt,
                   total_cost_usd: ($sf.cost // $sf.part.cost // $sf.total_cost // 0),
@@ -1436,8 +1440,12 @@ normalize_provider_json() {
             local result_text
             result_text=$(grep '"type":"item.completed"' "$raw_file" 2>/dev/null \
                 | jq -rs '[.[].item.text // ""] | join("")' 2>/dev/null || echo "codex exec completed")
+            # --rawfile: a full model turn can exceed ARG_MAX, and argv would fail with 126
+            # ("Argument list too long") leaving an empty result that reads as "no output".
+            local _rt_file; _rt_file=$(mktemp "${TMPDIR:-/tmp}/rt-XXXXXX")
+            printf '%s' "$result_text" > "$_rt_file"
             jq -n \
-                --arg rt "$result_text" \
+                --rawfile rt "$_rt_file" \
                 --argjson tc "$tc_line" \
                 '{result: $rt,
                   total_cost_usd: 0,
@@ -7279,8 +7287,20 @@ run_diagnosis_groundedness_check() {
     [ -f "$_dgc_script" ] || return 0
 
     local _dgc_input
-    _dgc_input=$(jq -n --arg diag "$diagnosis" --arg log "$VERIFICATION_FAILURE" \
-        '{diagnosis: $diag, log_excerpt: $log}' 2>/dev/null)
+    # --rawfile, not --arg: VERIFICATION_FAILURE carries a whole suite dump since the input
+    # caps were removed, and argv tops out at ARG_MAX. With --arg, jq exited 126 and the
+    # empty result was read as "nothing to diagnose" one line below — a gate that fails OPEN
+    # precisely when the evidence is largest.
+    local _dgc_dir; _dgc_dir=$(mktemp -d "${TMPDIR:-/tmp}/dgc-XXXXXX")
+    printf '%s' "${VERIFICATION_FAILURE:-}" > "$_dgc_dir/log"
+    local _dgc_err="$_dgc_dir/err"
+    if ! _dgc_input=$(jq -n --arg diag "$diagnosis" --rawfile log "$_dgc_dir/log" \
+        '{diagnosis: $diag, log_excerpt: $log}' 2>"$_dgc_err"); then
+        warning "  [DiagnosisGate] could not build input (jq failed): $(cat "$_dgc_err" 2>/dev/null)"
+        rm -rf "$_dgc_dir"
+        return 0
+    fi
+    rm -rf "$_dgc_dir"
     [ -z "$_dgc_input" ] && return 0
 
     local _dgc_result
@@ -7468,17 +7488,37 @@ $(cat "$_fa_vendor_contract")
     # or \$1 inside a diff or a log is inserted literally instead of being read as a
     # replacement pattern.
     local _analyst_values _analyst_values_err
-    _analyst_values=$(mktemp /tmp/analyst-values-XXXXXX.json)
+    _analyst_values=$(mktemp "${TMPDIR:-/tmp}/analyst-values-XXXXXX.json")
     _analyst_values_err="${_analyst_values}.err"
-    jq -n \
-        --arg profile "$analyst_profile" \
+
+    # VIA --rawfile, NEVER argv.
+    #
+    # These values used to be passed with `jq --arg`, which puts every byte on the command
+    # line. ARG_MAX is 2 MiB; a real suite failure dump exceeds it, so jq exited 126
+    # ("Argument list too long"), the redirect wrote a 0-byte file, and `2>/dev/null` threw
+    # the reason away. prompt-library then reported only "Unexpected end of JSON input" and
+    # the analyst died — live, run 20260815T195931Z, on every retry of AMSD-2041.
+    #
+    # The caps that used to hide this (VERIFICATION_FAILURE:0:1000 and friends) were removed
+    # deliberately: no agent input is cut mid-meaning. So the transport has to carry the
+    # whole thing. --rawfile reads each value from a file and never touches argv.
+    local _av_dir; _av_dir=$(mktemp -d "${TMPDIR:-/tmp}/analyst-args-XXXXXX")
+    printf '%s' "${analyst_profile:-}"                  > "$_av_dir/profile"
+    printf '%s' "${story_acs:-}"                        > "$_av_dir/acs"
+    printf '%s' "${skill_addendum:-}"                   > "$_av_dir/addendum"
+    printf '%s' "${dependency_contracts:-}"             > "$_av_dir/contracts"
+    printf '%s' "${VERIFICATION_FAILURE:-}"             > "$_av_dir/vf"
+    _attempt_change_summary "$story_id"                 > "$_av_dir/changes" 2>/dev/null || : > "$_av_dir/changes"
+
+    if ! jq -n \
+        --rawfile profile "$_av_dir/profile" \
         --arg story_id "$story_id" \
         --arg story_role "$story_role" \
-        --arg story_acs "$story_acs" \
-        --arg skill_addendum "$skill_addendum" \
-        --arg dependency_contracts "$dependency_contracts" \
-        --arg verification_failure "${VERIFICATION_FAILURE:-}" \
-        --arg attempt_changes "$(_attempt_change_summary "$story_id")" \
+        --rawfile story_acs "$_av_dir/acs" \
+        --rawfile skill_addendum "$_av_dir/addendum" \
+        --rawfile dependency_contracts "$_av_dir/contracts" \
+        --rawfile verification_failure "$_av_dir/vf" \
+        --rawfile attempt_changes "$_av_dir/changes" \
         '{"__ANALYST_PROFILE__":$profile,
           "__STORY_ID__":$story_id,
           "__STORY_ROLE__":$story_role,
@@ -7486,7 +7526,14 @@ $(cat "$_fa_vendor_contract")
           "__SKILL_ADDENDUM__":$skill_addendum,
           "__DEPENDENCY_CONTRACTS__":$dependency_contracts,
           "__VERIFICATION_FAILURE__":$verification_failure,
-          "__ATTEMPT_CHANGES__":$attempt_changes}' > "$_analyst_values" 2>/dev/null
+          "__ATTEMPT_CHANGES__":$attempt_changes}' > "$_analyst_values" 2>"$_analyst_values_err"; then
+        # NOT SILENT. An unbuildable values file is a defect to report, not an empty file to
+        # hand downstream so it can fail with a parse error that names nothing.
+        error "  [FailureAnalyst] cannot BUILD values file (jq failed): $(cat "$_analyst_values_err" 2>/dev/null)"
+        rm -rf "$_av_dir"; rm -f "$_analyst_values" "$_analyst_values_err"
+        return 1
+    fi
+    rm -rf "$_av_dir"
 
     if ! analyst_prompt=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/prompt-library.js" \
             render failure-analyst "${EPAM_PROJECT_CONFIG_DIR:-}" "$_analyst_values" 2>"$_analyst_values_err"); then

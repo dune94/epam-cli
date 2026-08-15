@@ -412,6 +412,29 @@ if [ "${#_AGENT_IO_DIRS[@]}" -gt 0 ]; then
     fi
 fi
 
+# A PREVIOUS RUN'S COVERAGE VERDICT IS NOT THIS RUN'S.
+#
+# vc-coverage-<story>.json records which verification criteria had no test behind them.
+# lib/vc-coverage-findings.js reads it straight out of LOG_DIR and renders it into the
+# reviewer AND the writer, under text asserting it "compared this story's verification
+# criteria against the tests it ACTUALLY PRODUCED". Nothing cleared it, so it was the
+# LAST run's comparison, presented as this one's.
+#
+# Live 2026-08-15: an artifact written 08-14 18:35 reached the 07:17 writer prompt on
+# 08-15 — four criteria reported as untested before that run had written a line, judged
+# against a codeline hard-reset to baseline three times since. The block also carries
+# "if it is testable, it needs a test" into a prompt whose own test-ownership section
+# reads "Do NOT write, edit, or create any test file" — an instruction the writer is
+# forbidden to act on, argued from data that is not about its work.
+_VCC_CLEARED=0
+while IFS= read -r _vcc; do
+    [ -n "$_vcc" ] || continue
+    rm -f "$_vcc" 2>/dev/null && _VCC_CLEARED=$((_VCC_CLEARED+1)) || true
+done < <(find "$LOG_DIR" -maxdepth 1 -type f -name 'vc-coverage-*.json' 2>/dev/null)
+if [ "$_VCC_CLEARED" -gt 0 ]; then
+    info "  Cleared $_VCC_CLEARED VC-coverage verdict(s) — no prior run's coverage findings reach this writer"
+fi
+
 _RETRY_STATE_DIR="$LOG_DIR/story-retry-state"
 if [ -d "$_RETRY_STATE_DIR" ]; then
     _RETRY_CLEARED=$(find "$_RETRY_STATE_DIR" -maxdepth 1 -type f 2>/dev/null | wc -l)

@@ -54,6 +54,23 @@ function seededRun() {
   mkdirSync(join(logDir, 'kb-scratchpad'), { recursive: true });
   writeFileSync(join(logDir, 'kb-scratchpad', 'AMSD-1-attempt-9.md'), '# stale\n');
 
+  // A PREVIOUS RUN'S COVERAGE VERDICT MUST NOT REACH THIS RUN'S WRITER.
+  //
+  // vc-coverage-<story>.json records which verification criteria had no test behind
+  // them. lib/vc-coverage-findings.js reads it straight out of LOG_DIR and renders it
+  // into BOTH the reviewer and the writer prompt, under text asserting it "compared this
+  // story's verification criteria against the tests it ACTUALLY PRODUCED".
+  //
+  // Live, 2026-08-15: the artifact was written 08-14 18:35 and injected into the 07:17
+  // run on 08-15 — four criteria reported as untested before that run had written a
+  // line, measured against a codeline since hard-reset to baseline three times. The
+  // block also tells the writer "if it is testable, it needs a test", in a prompt whose
+  // own test-ownership section says "Do NOT write, edit, or create any test file".
+  writeFileSync(
+    join(logDir, 'vc-coverage-AMSD-1.json'),
+    JSON.stringify([{ covered: false, case: 'from a previous run', why: 'stale' }]),
+  );
+
   const prd = join(dir, 'prd.json');
   writeFileSync(prd, JSON.stringify({
     project: { name: 'x' },
@@ -92,6 +109,7 @@ function seededRun() {
     scratchpad: readdirSync(join(logDir, 'kb-scratchpad')).filter((f) => f.endsWith('.md')).length,
     agentIo: existsSync(join(logDir, 'agent-io'))
       ? readdirSync(join(logDir, 'agent-io')).length : 0,
+    vcCoverage: readdirSync(logDir).filter((f) => f.startsWith('vc-coverage-')).length,
   };
   rmSync(dir, { recursive: true, force: true });
   return result;
@@ -121,6 +139,17 @@ describe('pre-run-reset clears every kind of previous-run state', () => {
     // Sequenced AFTER the abort point, so it is a second witness that the script
     // reached the end rather than stopping at the first thing that happened to work.
     expect(r.scratchpad).toBe(0);
+  });
+
+  it('clears a previous run\'s VC-coverage verdict', () => {
+    // Not scratch: this artifact is rendered into the WRITER prompt as a statement about
+    // the tests this run produced. Carrying it forward reports findings from another run
+    // as current, and carries a "it needs a test" instruction into a prompt that forbids
+    // writing tests.
+    expect(
+      r.vcCoverage,
+      'a previous run\'s coverage verdict survived into this run\'s writer prompt',
+    ).toBe(0);
   });
 
   it('emits the completion sentinel the launcher gate requires', () => {

@@ -22,6 +22,23 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 #
 # Until 2026-08-12 only team-lead-review.sh called this, so sixteen of seventeen seams kept
 # whatever fixed model their script hardcoded while the registry looked authoritative. The
+# EVERY ENTRY POINT READS THE LADDER DECLARATION ITSELF.
+#
+# lib/model-ladders.sh exists so that "what a tier contains" is declared once and read the same
+# way everywhere. Only claude.sh, run-agent-orchestration.sh and detective-rerun.sh ever called
+# it, so this script resolved its model ONLY from environment its parent happened to export. Run
+# standalone — a replay, a retest, a test harness — nothing set EPAM_MODEL_LADDER_<TIER>,
+# seam_ladder_export set no EPAM_MODEL, and this seam skipped its work while exiting 0.
+#
+# export_model_ladders leaves an already-set value alone, so calling it here changes nothing when
+# the orchestrator has already exported the chain, and supplies it when nobody has.
+_ml_lib="${SCRIPT_DIR:-$(dirname "${BASH_SOURCE[0]}")}/lib/model-ladders.sh"
+if [ -f "$_ml_lib" ]; then
+    # shellcheck source=lib/model-ladders.sh
+    . "$_ml_lib" || true
+    command -v export_model_ladders >/dev/null 2>&1 \
+        && export_model_ladders "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json}" || true
+fi
 # ask must come BEFORE any model is resolved below: seam_ladder_export sets EPAM_MODEL, and
 # a later assignment that wins makes the whole thing decorative.
 #

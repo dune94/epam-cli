@@ -75,11 +75,37 @@ describe('contextualize-stories.sh — compute_escalation_profile', () => {
     expect(fnBody).toContain('ORCH_GATE_MODEL');
   });
 
-  it('parses EPAM_MODEL_LADDER_HIGH to find the k3 rung model', () => {
+  it('takes its escalation models from the environment, naming none of its own', () => {
+    // WAS: `expect(fnBody).toContain('EPAM_MODEL_LADDER_HIGH')` and
+    //      `expect(fnBody).toContain('kimi-k3')`.
+    //
+    // Both went stale with 2f8d980 ("every agent can climb, and the engine holds no tier
+    // vocabulary"), which moved ladder parsing out of this function into the shared seam
+    // machinery — the function now receives ESCALATION_MODEL / ESCALATION_MODEL_HIGH. Neither
+    // string has been in this script since, so the assertion could only ever fail; it went
+    // unnoticed because the suite fails to COLLECT wherever logs/calibration.json is absent.
+    //
+    // The second half was worse than stale: a test asserting a specific model name is the
+    // hardcoding the commit existed to remove. A project on other models must pass this.
     const fnStart = CPA_SRC.indexOf('compute_escalation_profile()');
     const fnBody  = CPA_SRC.slice(fnStart, fnStart + 5000);
-    expect(fnBody).toContain('EPAM_MODEL_LADDER_HIGH');
-    expect(fnBody).toContain('kimi-k3');
+
+    // The escalation rungs come from the environment the ladder machinery populates.
+    expect(fnBody).toContain('ESCALATION_MODEL');
+    expect(fnBody).toContain('ESCALATION_MODEL_HIGH');
+
+    // And the function invents no model of its own — the vocabulary lives in llm-settings.json.
+    const declared = new Set<string>();
+    const settings = JSON.parse(readFileSync(
+      join(__dirname, '../../../orchestrations/projects/metrolinx/llm-settings.json'), 'utf8'));
+    for (const tier of Object.values<any>(settings.ladders ?? {})) {
+      for (const hop of tier.modelLadder ?? []) { declared.add(hop.from); declared.add(hop.to); }
+      if (tier.startModel) declared.add(tier.startModel);
+    }
+    expect(declared.size, 'no rungs declared — this assertion would prove nothing').toBeGreaterThan(1);
+    for (const model of declared) {
+      expect(fnBody, `compute_escalation_profile hardcodes the model '${model}'`).not.toContain(model);
+    }
   });
 
   it('outputs modelProfile with rung1/rung2/rung3/k3 keys', () => {

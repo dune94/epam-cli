@@ -37,7 +37,12 @@ const STORY_RETRY_LIB = join(REPO_ROOT, 'orchestrations/scripts/lib/story-retry-
 
 const REVIEW_LOOP_BLOCK = extractBlock(
   '_review_max_retries="${EPAM_MAX_RETRIES:-7}"',
-  'error "         A change the reviewer never approved must NOT proceed — human review required."\n    exit 2\nfi',
+  // END THE BLOCK ON A STABLE ANCHOR, NOT ON AN EXIT CODE.
+// This pinned `exit 2`, so the suite failed to LOAD the moment Step 3.6 changed to
+// exit 3 (a HALT is not a remediation and must not be retried). Stopping at the message
+// instead left the enclosing `if` unclosed, and bash exited 2 on the syntax error.
+// The next section header is outside the block and does not move when a code does.
+  '# Step 3.7: Pre-review build gate',
 );
 
 const cleanupDirs: string[] = [];
@@ -131,7 +136,8 @@ describe('Step 3.6 review loop — clears a stale escalated tag on real approval
 
     const story = finalPrd.stories.find((s: any) => s.id === 'AMSD-2041');
     expect(story.reviewStatus).toBe('escalated');
-    expect(exitCode).toBe(2);
+    // 3, not 2 — see lib/phase-exit.sh: a HALT is not a remediation and must not be retried.
+    expect(exitCode).toBe(3);
   });
 
   it('only clears the tag for stories in the CURRENT phase, not unrelated stories', () => {

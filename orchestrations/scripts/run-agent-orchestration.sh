@@ -6069,10 +6069,43 @@ else: print(0)
             _mc_verdict_stderr=$(mktemp)
             printf '%s' "$_mc_prd_before" > "$_mc_before_file"
             printf '%s' "$_mc_prd_after" > "$_mc_after_file"
-            _mc_verdict=$(python3 - "$_mc_before_file" "$_mc_after_file" 2>"$_mc_verdict_stderr" << 'MC_REVIEW_PY'
+            _mc_verdict=$(python3 - "$_mc_before_file" "$_mc_after_file" \
+                "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json}" \
+                2>"$_mc_verdict_stderr" << 'MC_REVIEW_PY'
 import json, sys
 
 ALLOWED_FIELDS = {'model', 'aiProvider', 'reasoningEffort'}
+
+# A MODEL THAT IS NOT A RUNG CANNOT ESCALATE, AND THIS REVIEWER NEVER ASKED.
+#
+# It checked STRUCTURE only — which fields moved, whether stories appeared or vanished —
+# so any string was an acceptable model. Live, run 20260814T224748Z: `gpt-5-codex` was
+# assigned here, is on no ladder this project declares, and the successor lookup returns
+# EMPTY for it — the same value it returns at the top rung. The story would have burned
+# every attempt on one model while the log read like a legitimate ceiling.
+#
+# The rungs come from the project's own llm-settings.json. No model name lives here, and
+# an unreadable declaration is UNKNOWN — never an approval.
+def _declared_rungs(path):
+    try:
+        with open(path) as f:
+            ladders = (json.load(f) or {}).get('ladders') or {}
+    except Exception:
+        return None
+    rungs = set()
+    for tier in ladders.values():
+        for hop in (tier or {}).get('modelLadder') or []:
+            for end in ('from', 'to'):
+                v = hop.get(end)
+                if isinstance(v, str) and v:
+                    rungs.add(v)
+        start = (tier or {}).get('startModel')
+        if isinstance(start, str) and start:
+            rungs.add(start)
+    return rungs or None
+
+_settings_path = sys.argv[3] if len(sys.argv) > 3 else ''
+RUNGS = _declared_rungs(_settings_path)
 
 before_path, after_path = sys.argv[1], sys.argv[2]
 try:
@@ -6111,6 +6144,18 @@ for sid, before_story in before_by_id.items():
             continue
         if before_story.get(key) != after_story.get(key):
             violations.append(f"{sid}.{key} changed (not an allowed model-assignment field)")
+
+    # Membership, checked on what the agent actually wrote.
+    _assigned = after_story.get('model')
+    if isinstance(_assigned, str) and _assigned:
+        if RUNGS is None:
+            violations.append(
+                f"cannot read ladder declarations from '{_settings_path}' — "
+                f"cannot verify {sid}.model='{_assigned}' can escalate")
+        elif _assigned not in RUNGS:
+            violations.append(
+                f"{sid}.model='{_assigned}' is on no declared ladder — it could never "
+                f"escalate; choose one of: {', '.join(sorted(RUNGS))}")
 
 if violations:
     print('fail')

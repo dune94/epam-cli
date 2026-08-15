@@ -114,7 +114,15 @@ function run() {
 
   const prompts = readdirSync(capture).filter(f => f.startsWith('prompt-')).sort()
     .map(f => readFileSync(join(capture, f), 'utf8'))
-    .filter(p => !/FAILURE CLASS|PREVENT a repeated agent failure/.test(p));
+    .filter(p => !/FAILURE CLASS|PREVENT a repeated agent failure/.test(p))
+    // KEEP ONLY THE AUTHORSHIP PROMPTS, SELECTED BY WHAT THEY ARE — NOT BY POSITION.
+    //
+    // These were read as prompts[0] and prompts[1]. The seam later gained an agent-driven
+    // TARGET ASK ("which of the touched files carries the behaviour?") that runs through the
+    // same runner BEFORE authorship, so index 0 became the ask and both assertions read the
+    // wrong document. Positional indexing into a list of agent calls breaks every time a call
+    // is added; selecting the authorship prompt by its own identity does not.
+    .filter(p => /TEST ENGINEER/i.test(p));
   return { prompts, repo };
 }
 

@@ -383,7 +383,27 @@ if [ "${#_AGENT_IO_DIRS[@]}" -gt 0 ]; then
         _n=$(find "$_aio" -mindepth 1 -type f 2>/dev/null | wc -l)
         _AIO_CLEARED=$(( _AIO_CLEARED + _n ))
         rm -rf "$_aio" 2>/dev/null || true
-        _AIO_LEFT=$(( _AIO_LEFT + $(find "$_aio" -mindepth 1 -type f 2>/dev/null | wc -l) ))
+        # COUNTING WHAT SURVIVED MUST NOT DEPEND ON THE DIRECTORY STILL EXISTING.
+        #
+        # This was `_AIO_LEFT=$(( _AIO_LEFT + $(find "$_aio" ... | wc -l) ))`. When the rm
+        # above SUCCEEDS the path is gone, so `find` exits 1; `pipefail` (set at the top of
+        # this file) propagates that through `| wc -l`; the arithmetic assignment inherits
+        # it; and `set -e` kills the script — right here, at line ~386 of 555.
+        #
+        # So the reset aborted BECAUSE the clearing worked, and everything sequenced after
+        # this point never ran: story-retry-state, the kb-scratchpad sweep, the roster
+        # clear. lib/pre-run-reset-gate.sh saw a plain exit 1, could only tell
+        # CONTAMINATION_EXIT from "environmental", and logged "(dashboard/environment, not
+        # state) — non-fatal, continuing". It was entirely about state.
+        #
+        # Live cost, run 20260814T223413Z: the story inherited 12/12 attempts and "failed
+        # after 12 attempts" in 18 seconds having made zero model calls.
+        #
+        # A directory that no longer exists has nothing left in it — say that directly
+        # rather than asking a tool that treats the absence as an error.
+        _remaining=0
+        [ -d "$_aio" ] && _remaining=$(find "$_aio" -mindepth 1 -type f 2>/dev/null | wc -l)
+        _AIO_LEFT=$(( _AIO_LEFT + _remaining ))
     done
     if [ "$_AIO_LEFT" -gt 0 ]; then
         fail_contamination "$_AIO_LEFT published agent input(s) could NOT be cleared under ${LOG_DIR:-?} — a run started now would hand agents a previous run's outputs"
@@ -542,6 +562,23 @@ info "Resetting agent-status.json..."
 echo '{"startedAt":null,"phase":null,"orchMode":null,"lanes":{},"events":[],"stories":{},"completedAt":null}' \
   > "$LOG_DIR/agent-status.json"
 success "agent-status.json reset"
+
+# ── Completion signal ─────────────────────────────────────────────────────────
+#
+# POSITIVE PROOF THAT THE STATE WORK RAN, because an exit code cannot carry it.
+#
+# This script runs under `set -euo pipefail` and clears state in sequence. Any command
+# that fails part-way kills it, and the caller then sees a bare exit 1 — identical to
+# "the dashboard is down". On 2026-08-14 exactly that happened: a count of an
+# already-removed directory returned 1 (pipefail), the script died at line ~386 of 555,
+# and lib/pre-run-reset-gate.sh reported "(dashboard/environment, not state) —
+# non-fatal, continuing" while story-retry-state, the kb-scratchpad and the roster clear
+# had never run. The next run inherited 12/12 attempts and died in 18 seconds.
+#
+# A sentinel emitted HERE — after every state-clearing step, before the cosmetic summary
+# — is the only thing that distinguishes "finished" from "stopped somewhere". The gate
+# requires it and refuses the launch without it, whatever the exit code says.
+echo "PRE_RUN_RESET_STATE_CLEARED"
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""

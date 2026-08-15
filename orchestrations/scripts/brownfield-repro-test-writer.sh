@@ -51,6 +51,23 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 #
 # Until 2026-08-12 only team-lead-review.sh called this, so sixteen of seventeen seams kept
 # whatever fixed model their script hardcoded while the registry looked authoritative. The
+# EVERY ENTRY POINT READS THE LADDER DECLARATION ITSELF.
+#
+# lib/model-ladders.sh exists so that "what a tier contains" is declared once and read the same
+# way everywhere. Only claude.sh, run-agent-orchestration.sh and detective-rerun.sh ever called
+# it, so this script resolved its model ONLY from environment its parent happened to export. Run
+# standalone — a replay, a retest, a test harness — nothing set EPAM_MODEL_LADDER_<TIER>,
+# seam_ladder_export set no EPAM_MODEL, and this seam skipped its work while exiting 0.
+#
+# export_model_ladders leaves an already-set value alone, so calling it here changes nothing when
+# the orchestrator has already exported the chain, and supplies it when nobody has.
+_ml_lib="${SCRIPT_DIR:-$(dirname "${BASH_SOURCE[0]}")}/lib/model-ladders.sh"
+if [ -f "$_ml_lib" ]; then
+    # shellcheck source=lib/model-ladders.sh
+    . "$_ml_lib" || true
+    command -v export_model_ladders >/dev/null 2>&1 \
+        && export_model_ladders "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json}" || true
+fi
 # ask must come BEFORE any model is resolved below: seam_ladder_export sets EPAM_MODEL, and
 # a later assignment that wins makes the whole thing decorative.
 #
@@ -179,7 +196,32 @@ if [ -n "$PRD_FILE" ] && [ -f "$PRD_FILE" ] && [ "${EPAM_TEST_TARGET_ASK:-1}" = 
     _primary_fix="$(_choose_target || echo "")"
     [ -n "$_primary_fix" ] && log "target chosen by the agent from the plan and the criteria: $_primary_fix"
 fi
-# 2. first genuinely testable changed source file
+# 2. THE DETECTIVE'S FIX SITE — deterministic, and it outranks diff order.
+#
+# This step existed and was lost when the agent ASK above was added: the chain became
+# "ask the model, else take whatever the diff happens to list first". When the ask
+# returns nothing usable — an unparseable reply, a file outside the change, any run
+# where the model declines — selection silently fell back to diff ORDER, discarding the
+# one input that actually identified the causal site. B15 covers exactly this: the
+# detective named src/zzz.ts, the diff listed src/aaa.ts first, and the test was written
+# against aaa.
+#
+# The ask stays; it can read the criteria and the plan together. But a model that
+# answers nothing must fall back to the PLAN, not to alphabetical accident.
+if [ -z "$_primary_fix" ] && [ -n "$PRD_FILE" ] && [ -f "$PRD_FILE" ]; then
+    _det_site=$(jq -r --arg id "$STORY_ID" \
+        '(.stories[]? | select(.id == $id) | .fixSiteAnalysis // [])[0].file // ""' \
+        "$PRD_FILE" 2>/dev/null || echo "")
+    if [ -n "$_det_site" ] && [ "$_det_site" != "null" ] && _is_testable_source "$_det_site"; then
+        for f in "${FIX_FILES[@]}"; do
+            [ "$f" = "$_det_site" ] && { _primary_fix="$_det_site"; break; }
+        done
+        # the detective may name a path the diff touched under a different prefix
+        [ -z "$_primary_fix" ] && [ -f "$PROJECT_ROOT/$_det_site" ] && _primary_fix="$_det_site"
+    fi
+    [ -n "$_primary_fix" ] && log "target from the plan's fix site: $_primary_fix"
+fi
+# 3. first genuinely testable changed source file
 if [ -z "$_primary_fix" ]; then
     for f in "${FIX_FILES[@]}"; do
         if _is_testable_source "$f"; then _primary_fix="$f"; break; fi

@@ -263,6 +263,40 @@ if [[ -z "${RAPIDAPI_KEY:-}" ]]; then
   echo "  ⚠ RAPIDAPI_KEY not set — API contract discovery story may fail"
 fi
 
+# ── 5. Every assigned model is a rung of a declared ladder ───────────────────
+#
+# A model absent from the chain cannot escalate: the successor lookup returns EMPTY,
+# which every call site reads as "already at the top rung". The story then burns all of
+# its attempts on one model and the log is indistinguishable from a legitimate ceiling.
+#
+# Live, run 20260814T224748Z: the prd-model-coordinator assigned `gpt-5-codex`, a model
+# on no ladder this project declares. Its own deterministic reviewer checks STRUCTURE —
+# which fields changed, whether stories were added — and never membership. The run only
+# escaped because ladder position had persisted from an earlier run and it resumed
+# mid-chain, ignoring the PRD's assignment entirely.
+#
+# Here rather than in one launcher: this file is what all eight launchers pre-flight
+# through, and the same coordinator writes the PRD for every one of them.
+echo "[ Model ladders ]"
+_mlm_lib="$SCRIPT_DIR/lib/model-ladder-membership.sh"
+_mlm_settings="${EPAM_LLM_SETTINGS_FILE:-${PROJECT_CONFIG_DIR:-}/llm-settings.json}"
+if [[ ! -f "$_mlm_lib" ]]; then
+  fail "lib/model-ladder-membership.sh missing — cannot verify assigned models can escalate"
+elif [[ -z "${PRD_FILE:-}" || ! -f "${PRD_FILE:-}" ]]; then
+  echo "  ⚠ no PRD to check model assignments against"
+elif [[ ! -f "$_mlm_settings" ]]; then
+  # UNKNOWN, not fine: a project whose ladders cannot be read must not look verified.
+  fail "no llm-settings.json at '$_mlm_settings' — cannot tell whether assigned models can escalate"
+else
+  # shellcheck source=lib/model-ladder-membership.sh
+  . "$_mlm_lib"
+  if stories_with_unladdered_models "$PRD_FILE" "$_mlm_settings"; then
+    ok "every assigned model is a rung of a declared ladder"
+  else
+    fail "a story is assigned a model that is on no declared ladder (see above) — it could never escalate"
+  fi
+fi
+
 # ── Machine-environment checks: on by default ────────────────────────────────
 # Sections 5 and 6 and the service probes in 7 assess THIS MACHINE — is the dashboard up,
 # is the snapshot watcher alive, is Langfuse answering. A real launch must pass them.

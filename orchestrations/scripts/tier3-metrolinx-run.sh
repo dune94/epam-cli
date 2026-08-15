@@ -200,19 +200,22 @@ fi
   # while the canonical PRD is reset each launch. So the role has to be DECLARED in the PRD, and
   # this check makes its absence visible before the run spends anything.
   if [ "${EPAM_SKIP_AGENT_ROLE_CHECK:-0}" != "1" ] && [ -f "$PRD_FILE" ]; then
-    _roleless=$(jq -r '[.stories[]? | select((.agentRole // "") == "" and ((.agentRoles // {}) | length) == 0) | .id] | join(", ")' "$PRD_FILE" 2>/dev/null)
-    if [ -n "$_roleless" ]; then
-      error "[preflight] story/stories declare no agentRole: $_roleless"
-      error "[preflight]   The writer would run as the generic archetype, which is not bound by the"
-      error "[preflight]   specialist brief — including the rule that it must not author tests."
+    # WHETHER THE MINT IS ABOUT TO RUN DECIDES WHAT "MISSING" MEANS.
+    #
+    # This block compared the PRD's agentRole against profiles.json with no notion of the
+    # mint — and it runs BEFORE the mint (here, vs ~line 297). Rosters are ephemeral: a
+    # fresh run restores the canonical base and the mint then produces this run's roles,
+    # so a role a PREVIOUS run minted can never match at this point. On 2026-08-14 that
+    # refused a launch the very next step would have fixed; the following launch minted
+    # the role and the run completed.
+    #
+    # The rule now lives in lib/agent-role-preflight.sh so it is testable and so the
+    # other launchers can adopt it instead of copying it.
+    . "$SCRIPT_DIR/lib/agent-role-preflight.sh"
+    if ! agent_roles_resolve "$PRD_FILE" "$REPO_ROOT/orchestrations/agents/profiles.json" \
+         "$([ "${EPAM_SKIP_AGENT_MINT:-0}" = "1" ] && echo 0 || echo 1)"; then
       error "[preflight]   Set agentRole in $PRD_FILE, or run the mint so assignment happens."
       error "[preflight]   Override (deliberate): EPAM_SKIP_AGENT_ROLE_CHECK=1"
-      exit 1
-    fi
-    _badrole=$(jq -r --slurpfile p "$REPO_ROOT/orchestrations/agents/profiles.json" '[.stories[]? | select((.agentRole // "") != "") | select((.agentRole) as $r | ($p[0] | has($r)) | not) | .id + " -> " + .agentRole] | join("; ")' "$PRD_FILE" 2>/dev/null)
-    if [ -n "$_badrole" ]; then
-      error "[preflight] agentRole names a role the roster does not contain: $_badrole"
-      error "[preflight]   The perimeter refuses these at the writer seam: 'not permitted to author code'."
       exit 1
     fi
     # AND THAT THE PERIMETER WILL PERMIT IT TO WRITE.

@@ -45,7 +45,20 @@ afterAll(() => {
 function gate(resetExit: number): { status: number | null; out: string } {
   const d = mkdtempSync(join(tmpdir(), 'resetgate-')); dirs.push(d);
   const stub = join(d, 'pre-run-reset.sh');
-  writeFileSync(stub, `#!/usr/bin/env bash\nexit ${resetExit}\n`);
+  // THE STUB MUST FINISH ITS STATE WORK, BECAUSE THAT IS WHAT IT IS SIMULATING.
+  //
+  // This wrote a reset that exited with a code and NOTHING else. That is not a reset with a
+  // dead dashboard — it is a reset that did nothing at all, and the two were indistinguishable
+  // to the gate. Live, 2026-08-14: the real reset died at line ~386 of 555 (a count of a
+  // directory its own rm had removed, turned fatal by pipefail), the gate called it
+  // "(dashboard/environment, not state) — non-fatal, continuing", and the next run inherited
+  // 12/12 attempts and died in 18 seconds having called no model.
+  //
+  // The gate now requires the completion sentinel the reset emits after its LAST state step.
+  // A dashboard failure happens with that work already done, so the sentinel is present and
+  // the launch proceeds — which is exactly the rule this suite exists to protect. The
+  // died-early case is covered in the-reset-must-finish-what-it-started.test.ts.
+  writeFileSync(stub, `#!/usr/bin/env bash\necho PRE_RUN_RESET_STATE_CLEARED\nexit ${resetExit}\n`);
   chmodSync(stub, 0o755);
 
   const r = spawnSync('bash', ['-c', [

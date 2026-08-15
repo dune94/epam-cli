@@ -2512,8 +2512,32 @@ Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:"
         # re-sent conversation balloons input to 137-189K tokens so it never reaches
         # WriteFile (live 2026-07-24, AMSD-1820). Give a minimal "apply directly" note.
         # Full exploration block only when NO helper is prescribed (genuine novel work).
-        local _prescribed_helper
-        _prescribed_helper=$(echo "$story_json" | jq -r '[.fixSiteAnalysis[]?.helper] | map(select(. != null and . != "")) | .[0] // ""' 2>/dev/null)
+        # EVERY HELPER THE GUARD ENFORCES, NOT JUST THE FIRST ONE.
+        #
+        # This read `.[0]` while the ReuseGuard (~line 9881) enforces the WHOLE set, with
+        # the same filter the guard uses:
+        #     map(select(.fixVerified == true and .helper != "")) | map(.helper) | unique
+        #
+        # So the writer was told about ONE symbol and rejected for the others — and the
+        # note built from this value also tells it "Do NOT run CodeGraph or explore the
+        # codebase", so it could not discover the rest either.
+        #
+        # Live, run of 2026-08-15 13:24 (metrolinx, AMSD-2041), killed at attempt 5 of 12:
+        #     prompt: reuse `Stack`
+        #     guard:  ReuseGuard: 'ContentstackContext:Stack:getContentByKey:useContent'
+        #     [HealingBroken] CRITICAL: '...without importing or calling the prescribed
+        #     getContentByKey helper...' has recurred 2+ times — self-healing is NOT working.
+        #
+        # The loop could not converge: the corrective symbol never entered the prompt, so
+        # every retry repeated the omission and the ladder escalated to no purpose. One
+        # list, one source — "reuse these" and "you must reuse these" are now the same set.
+        local _prescribed_helper _prescribed_helper_list
+        _prescribed_helper_list=$(echo "$story_json" | jq -r '
+            (.fixSiteAnalysis // [])
+            | map(select((.fixVerified == true) and ((.helper // "") != "")))
+            | map(.helper) | unique | join(", ")' 2>/dev/null)
+        # Kept for the single-helper phrasing below; empty when nothing is prescribed.
+        _prescribed_helper="$_prescribed_helper_list"
         # This suppression must NOT fire blind to fixSiteAnalysisCoverage
         # (checkFixSiteCoverage, spec-mode-runner.js). "A helper is named" only
         # means SOME site is minimal — it says nothing about verification
@@ -2528,10 +2552,10 @@ Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:"
         _uncovered_list=$(echo "$story_json" | jq -r '(.fixSiteAnalysisCoverage.uncoveredVerificationCriteria // []) | map("- " + .) | join("\n")' 2>/dev/null)
         if [ -n "$_prescribed_helper" ] && [ "$_cov_incomplete" != "true" ]; then
             codegraph_tool_block="## The helper to reuse is ALREADY identified — do NOT search
-The Root Cause Analysis above names the exact existing helper to reuse (\`${_prescribed_helper}\`). Do NOT run CodeGraph or explore the codebase to re-find it — that wastes your turn budget. Import it, apply the prescribed minimal fix, write your file(s), and stop. Only search if you hit something the prescribed fix genuinely does not cover."
+The Root Cause Analysis above names the exact existing helper(s) to reuse: \`${_prescribed_helper}\`. EVERY ONE of them must be imported and called — a write that uses some but not all is rejected at write time for the ones it omitted, and the rejection names only what was missed. Do NOT run CodeGraph or explore the codebase to re-find them — that wastes your turn budget. Import them, apply the prescribed minimal fix, write your file(s), and stop. Only search if you hit something the prescribed fix genuinely does not cover."
         elif [ -n "$_prescribed_helper" ] && [ "$_cov_incomplete" = "true" ]; then
             codegraph_tool_block="## The prescribed fix is KNOWN INCOMPLETE — explore for the rest
-The Root Cause Analysis above names an existing helper to reuse (\`${_prescribed_helper}\`) for its own site — apply that part directly, do NOT re-search for it. But the prescribed fix does NOT address every verification criterion. These are UNCOVERED and need your own investigation beyond the prescribed sites:
+The Root Cause Analysis above names existing helper(s) to reuse: \`${_prescribed_helper}\` — apply those parts directly and use EVERY one of them, do NOT re-search for them. But the prescribed fix does NOT address every verification criterion. These are UNCOVERED and need your own investigation beyond the prescribed sites:
 ${_uncovered_list}
 Use the codegraph_query tool (mode=\"helpers\", args=\"<domain nouns>\") to find existing code for THESE before writing new logic — do not assume they are out of scope."
         else

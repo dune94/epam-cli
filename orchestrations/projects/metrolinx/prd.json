@@ -933,7 +933,7 @@
         "metrolinx": {
           "status": "failed",
           "completed": false,
-          "completedAt": "2026-08-15T00:02:06+00:00",
+          "completedAt": null,
           "reviewStatus": "escalated"
         }
       },
@@ -1182,8 +1182,8 @@
           "setup": "The live-preview-utils client is mocked to emit an onEntryChange event; the page is loaded with standard published content"
         }
       ],
-      "lastAttempt": "2026-08-15T00:18:00+00:00",
-      "actualCost": 11.342699999999999,
+      "lastAttempt": "2026-08-15T20:14:01+00:00",
+      "actualCost": 1.2268000000000001,
       "reviewStatus": "escalated"
     }
   ],

@@ -2957,15 +2957,26 @@ function partitionFlaggedVc(vc, flags) {
 // ladder escalation across attempts, retries, provider fallback and self-heal. Nothing
 // about resilience is re-implemented here.
 //
+// THE CODE EVIDENCE BLOCK, whole.
+//
+// This used to read `findings.slice(0, 8)` with each `reason` cut at 300 chars. Both cuts
+// removed ground truth from the only block the prompt calls ground truth — the 9th finding
+// simply did not exist to the model, and a reason naming a literal past char 300 arrived
+// severed. Extracted so it can be EXECUTED by a test; inlined, its only reachable assertion
+// was a source-text grep, which passes on a comment.
+function buildGuardEvidence(findings) {
+  return (Array.isArray(findings) ? findings : [])
+    .map((f) => `- ${f.file || ''}${f.function ? ` :: ${f.function}` : ''}${f.reason ? ` — ${String(f.reason)}` : ''}${f.helper ? ` [existing helper: ${f.helper}]` : ''}`)
+    .join('\n');
+}
+
 // Returns a normalised vocabulary, or null. NULL IS NOT "NOTHING TO FLAG" — callers must
 // treat it as "the guard could not be armed" and say so loudly.
 async function deriveGuardVocabulary({ promptExec, rule, statements, story, findings, manifestFiles, logDir, seam, repoPath, codegraphTool, referencedDocs }) {
   const _statements = (Array.isArray(statements) ? statements : []).filter(Boolean);
   if (!_statements.length) return null;
 
-  const evidence = (Array.isArray(findings) ? findings : []).slice(0, 8)
-    .map((f) => `- ${f.file || ''}${f.function ? ` :: ${f.function}` : ''}${f.reason ? ` — ${String(f.reason).slice(0, 300)}` : ''}${f.helper ? ` [existing helper: ${f.helper}]` : ''}`)
-    .join('\n');
+  const evidence = buildGuardEvidence(findings);
   const manifest = (Array.isArray(manifestFiles) ? manifestFiles : []).map((f) => `- ${f}`).join('\n');
 
   // DOCUMENTATION LINKED ON THIS TICKET — evidence for a judgement no rule can make.
@@ -4274,7 +4285,10 @@ async function reviewRoster({
 function buildAssignmentPrompt(stories, roles) {
   const _stories = Array.isArray(stories) ? stories : [];
   const roleBlock = (Array.isArray(roles) ? roles : [])
-    .map((r) => `- ${r.name}\n    ${String(r.brief || '').replace(/\s+/g, ' ').slice(0, 320)}`)
+    // WHOLE, never a prefix. A brief is the role's definition; cutting it at 320 chars
+    // severed rules mid-sentence — and a severed rule reads as a complete one, so the
+    // model acts on the fragment. Whitespace is still collapsed; only the cut is gone.
+    .map((r) => `- ${r.name}\n    ${String(r.brief || '').replace(/\s+/g, ' ').trim()}`)
     .join('\n');
   const storyBlock = _stories
     .map((s) => {
@@ -8899,6 +8913,7 @@ module.exports = {
   persistReferencedDocs,
   fetchTicketDocuments,
   manifestFileExcerpts,
+  buildGuardEvidence,
   deriveGuardVocabulary,
   mintProjectAgents,
   TOOL_PROJECT_AGENTS,

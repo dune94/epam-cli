@@ -305,7 +305,12 @@ export AGENT_IO_DIR="${AGENT_IO_DIR:-$LOG_DIR/agent-io}"
 # The mode declares which steps it turns off (config/run-modes.json); an unknown mode is refused
 # rather than silently running everything. A variable the operator set themselves always wins.
 . "$SCRIPT_DIR/lib/run-modes.sh"
-. "$SCRIPT_DIR/lib/phase-exit.sh"
+# HARD-FAIL IF THIS DOES NOT LOAD. Sourcing a missing file is non-fatal without
+# set -e, and phase_exit_is_retryable would then be "command not found" -> exit 127
+# -> falsy -> the legitimate gate-remediation retry silently never happens. A
+# capability that disappears without a word is the failure mode this whole change
+# exists to remove.
+. "$SCRIPT_DIR/lib/phase-exit.sh" || { echo "[preflight] lib/phase-exit.sh failed to load — refusing to run" >&2; exit 1; }
 . "$SCRIPT_DIR/lib/cost-ledger.sh"
 if [ -n "${EPAM_RUN_MODE:-}" ]; then
     apply_run_mode "$EPAM_RUN_MODE" || exit 1

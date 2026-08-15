@@ -31,7 +31,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, chmodSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, chmodSync, mkdirSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -141,6 +141,38 @@ describe('the retryable/not-retryable decision is defined once', () => {
   it('names the halt in words, so a failure reads as a decision not a number', () => {
     const r = spawnSync('bash', ['-c', `. "${LIB}"; phase_exit_describe 3`], { encoding: 'utf8' });
     expect((r.stdout || '').toLowerCase()).toMatch(/human review/);
+  });
+});
+
+describe('every caller can actually reach the decision', () => {
+  /**
+   * A caller that uses phase_exit_is_retryable without sourcing the library gets
+   * "command not found" — exit 127, which is FALSY, so the legitimate gate-remediation
+   * retry silently stops happening and nothing says so. This was live for exactly one
+   * commit in orchestrate.sh, which called the function while sourcing nothing.
+   *
+   * Static by necessity: this asserts a property of the FILE SET (every user declares
+   * its dependency), which no single execution can observe.
+   */
+  it('no script calls the function without sourcing the library', () => {
+    const files = readdirSync(SCRIPTS).filter((f) => f.endsWith('.sh'));
+    const offenders = files.filter((f) => {
+      const src = readFileSync(join(SCRIPTS, f), 'utf8');
+      return src.includes('phase_exit_is_retryable "') && !src.includes('lib/phase-exit.sh');
+    });
+    expect(offenders, `these call the function but never source it: ${offenders.join(', ')}`).toEqual([]);
+  });
+
+  it('a failed load is fatal, never silent', () => {
+    // Sourcing a missing file is non-fatal without `set -e`. Every source site must
+    // therefore fail loudly rather than continue with the function undefined.
+    const files = readdirSync(SCRIPTS).filter((f) => f.endsWith('.sh'));
+    const unguarded = files.filter((f) => {
+      const src = readFileSync(join(SCRIPTS, f), 'utf8');
+      const line = src.split('\n').find((l) => l.trim().startsWith('. "$SCRIPT_DIR/lib/phase-exit.sh"'));
+      return line !== undefined && !/\|\|/.test(line);
+    });
+    expect(unguarded, `these source it without failing hard: ${unguarded.join(', ')}`).toEqual([]);
   });
 });
 

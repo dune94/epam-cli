@@ -94,7 +94,12 @@ fail()    {
 # Before ANY config file is read: what the operator set on the command line. A mode overrides a
 # project default but never this — see lib/run-modes.sh.
 . "$SCRIPT_DIR/lib/run-modes.sh"
-. "$SCRIPT_DIR/lib/phase-exit.sh"
+# HARD-FAIL IF THIS DOES NOT LOAD. Sourcing a missing file is non-fatal without
+# set -e, and phase_exit_is_retryable would then be "command not found" -> exit 127
+# -> falsy -> the legitimate gate-remediation retry silently never happens. A
+# capability that disappears without a word is the failure mode this whole change
+# exists to remove.
+. "$SCRIPT_DIR/lib/phase-exit.sh" || { echo "[preflight] lib/phase-exit.sh failed to load — refusing to run" >&2; exit 1; }
 snapshot_operator_env
 load_env_file_safe "$REPO_ROOT/.env"
 ENV_FILE="$SCRIPT_DIR/../jira/metrolinx.env"

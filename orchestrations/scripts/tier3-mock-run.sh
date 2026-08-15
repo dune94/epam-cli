@@ -228,7 +228,12 @@ fi
 # were not among them — see lib/preflight.sh.
 # shellcheck source=lib/preflight.sh
 . "$SCRIPT_DIR/lib/preflight.sh"
-. "$SCRIPT_DIR/lib/phase-exit.sh"
+# HARD-FAIL IF THIS DOES NOT LOAD. Sourcing a missing file is non-fatal without
+# set -e, and phase_exit_is_retryable would then be "command not found" -> exit 127
+# -> falsy -> the legitimate gate-remediation retry silently never happens. A
+# capability that disappears without a word is the failure mode this whole change
+# exists to remove.
+. "$SCRIPT_DIR/lib/phase-exit.sh" || { echo "[preflight] lib/phase-exit.sh failed to load — refusing to run" >&2; exit 1; }
 # Route through fail(), never a bare exit: fail() archives the run artefacts first.
 # A bare `exit 1` here made a pre-flight abort the ONE outcome that recorded nothing —
 # no run folder, no outcome.txt, no log — which is the outcome most worth keeping.

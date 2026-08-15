@@ -100,12 +100,20 @@ describe('Self-healing: orch script three-agent pipeline', () => {
 // ── Tier3 runner: retry on exit 2 ────────────────────────────────────────────
 
 describe('Self-healing: tier3 runner retry loop', () => {
-  it('catches exit code 2 from orch script', () => {
-    expect(tier3Src).toMatch(/phase_exit.*-eq 2|eq 2.*phase_exit/);
+  it('catches the remediation exit code from the orch script', () => {
+    // The literal `-eq 2` moved into lib/phase-exit.sh on 2026-08-14, because exit 2
+    // ("a fix was applied, retry") and exit 3 ("human review required, a retry cannot
+    // help") were the same code and every launcher retried both. The requirement here
+    // is unchanged — this launcher still gates its retry on the remediation outcome —
+    // but it now asks the shared predicate instead of comparing an integer.
+    //
+    // That the predicate maps 2 to retry and 3 to halt is proved by EXECUTION in
+    // a-halt-is-never-retried.test.ts, which counts orchestrator invocations.
+    expect(tier3Src).toMatch(/phase_exit_is_retryable "\$phase_exit"/);
   });
 
   it('runs prd-remediate before the retry', () => {
-    const retryBlock = tier3Src.slice(tier3Src.indexOf('phase_exit" -eq 2'));
+    const retryBlock = tier3Src.slice(tier3Src.indexOf('phase_exit_is_retryable "$phase_exit"'));
     expect(retryBlock).toMatch(/prd-remediate\.sh.*--prd/);
   });
 

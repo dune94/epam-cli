@@ -64,6 +64,27 @@ function invokeFromForeignCwd(launcher: string) {
     }
   }
 
+  // Provide the shared library FUNCTIONS this run_phase depends on. The real launcher
+  // sources its libs at file scope, long before run_phase is ever called, so a body that
+  // calls a library function is correct — but lifting the body out of the file leaves
+  // that function undefined, and "command not found" would be reported as a product
+  // fault. Same category as the sibling-script stubbing above: a harness gap, not a bug.
+  // Only libs whose functions this body actually references are sourced, so the harness
+  // stays honest about what the body needs.
+  const libDir = join(SCRIPTS, 'lib');
+  const libSources: string[] = [];
+  if (existsSync(libDir)) {
+    mkdirSync(join(fakeScripts, 'lib'), { recursive: true });
+    for (const libFile of readdirSync(libDir).filter((f) => f.endsWith('.sh'))) {
+      const libSrc = readFileSync(join(libDir, libFile), 'utf8');
+      const defines = [...libSrc.matchAll(/^([a-z_][a-z0-9_]*)\(\)\s*\{/gm)].map((m) => m[1]);
+      if (defines.some((fnName) => new RegExp(`\\b${fnName}\\b`).test(body))) {
+        writeFileSync(join(fakeScripts, 'lib', libFile), libSrc);
+        libSources.push(`. ${JSON.stringify(join(fakeScripts, 'lib', libFile))}`);
+      }
+    }
+  }
+
   const runner = join(dir, 'run.sh');
   writeFileSync(
     runner,
@@ -83,6 +104,7 @@ function invokeFromForeignCwd(launcher: string) {
       )]
         .filter((v) => !['SCRIPT_DIR', 'REPO_ROOT', 'LOG_FILE', 'PIPESTATUS'].includes(v))
         .map((v) => `${v}=\"\"`),
+      ...libSources,
       body,
       // THE CONDITION THE LANE LOOP CREATES: cwd is the client repo, not the repo root.
       `cd ${JSON.stringify(foreignCwd)}`,

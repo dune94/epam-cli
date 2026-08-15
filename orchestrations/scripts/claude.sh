@@ -978,7 +978,19 @@ _coupled_pair_gate_for_story() {
     command -v coupled_pair_check >/dev/null 2>&1 || return 0
 
     local _report_file="${LOG_DIR}/rung-contribution-report-${story_id//[^A-Za-z0-9_-]/_}.json"
-    local _manifest="${PROJECT_ROOT}/.epam/dependency-check.json"
+    # THE MANIFEST IS RESOLVED THE WAY EVERY OTHER CONSUMER RESOLVES IT.
+    #
+    # This read only ${PROJECT_ROOT}/.epam/dependency-check.json — a path nothing
+    # provisions. A codeline's .epam/ holds codeline-facts.json, settings.json and
+    # verification.json, never that file. So on 2026-08-15 the live run reported
+    # "no manifest at '.../.epam/dependency-check.json' — coupledFilePairs undeclared,
+    # checked nothing", while the declaration sat in EPAM_PROJECT_CONFIG_DIR, which is
+    # where dependency-scan-plugin.js:72-73 and claude.sh:3875/5638 all look FIRST.
+    # The gate had therefore never once run.
+    #
+    # Two candidates, same order as the plugin: project config, then the codeline copy.
+    local _manifest="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+    [ -f "$_manifest" ] || _manifest="${PROJECT_ROOT}/.epam/dependency-check.json"
     [ -f "$_report_file" ] || return 0
 
     local _gate_out _gate_rc=0

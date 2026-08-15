@@ -215,3 +215,38 @@ describe('claude.sh feeds a split pair back to the writer', () => {
     expect(out).not.toContain('VF_SET=yes');
   });
 });
+
+describe('the gate finds the manifest where the project actually declares it', () => {
+  /**
+   * THE GATE HAD NEVER RUN.
+   *
+   * _coupled_pair_gate_for_story resolved the manifest as $PROJECT_ROOT/.epam/
+   * dependency-check.json — a path nothing provisions. The codeline's .epam/ holds
+   * codeline-facts.json, settings.json and verification.json, never that file. So the live
+   * run of 2026-08-15 reported:
+   *
+   *   coupled-pair-gate: no manifest at '.../.epam/dependency-check.json'
+   *                      — coupledFilePairs undeclared, checked nothing
+   *
+   * while the declaration sat in EPAM_PROJECT_CONFIG_DIR/dependency-check.json — where
+   * dependency-scan-plugin.js:72-73 and claude.sh:3875/5638 all look FIRST. A third
+   * resolution path was invented for an input that already had one.
+   */
+  const CLAUDE_SH_PATH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
+
+  function wiringFn(): string {
+    const src = readFileSync(CLAUDE_SH_PATH, 'utf8');
+    const at = src.indexOf('_coupled_pair_gate_for_story() {');
+    expect(at, 'wiring function not found').toBeGreaterThan(-1);
+    return src.slice(at, src.indexOf('\n}\n', at));
+  }
+
+  it('prefers the project config dir, as every other consumer does', () => {
+    expect(wiringFn(), 'the gate must look where the project declares its manifest')
+      .toMatch(/EPAM_PROJECT_CONFIG_DIR/);
+  });
+
+  it('still falls back to the codeline copy — two candidates, not a replacement', () => {
+    expect(wiringFn()).toMatch(/\.epam\/dependency-check\.json/);
+  });
+});

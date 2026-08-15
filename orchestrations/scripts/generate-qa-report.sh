@@ -17,7 +17,13 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEFAULT_LOG_DIR="$(cd "$SCRIPT_DIR/../logs" && pwd)"
-PRD_FILE="$SCRIPT_DIR/../travel-app-prd.json"
+# The PRD comes from the run, never from a project-named default: a built-in path reports
+# on whichever project it names rather than the one that just ran.
+PRD_FILE="${PRD_FILE:-${MAIN_PRD_FILE:-}}"
+if [ -z "$PRD_FILE" ]; then
+  echo "[$(basename "$0")] no PRD: set PRD_FILE or MAIN_PRD_FILE — the engine names no project." >&2
+  exit 2
+fi
 
 # ── Colors ────────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'

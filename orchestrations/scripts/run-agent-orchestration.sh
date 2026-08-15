@@ -3870,9 +3870,15 @@ _run_jira_pipeline() {
   # Overridable so a test (or any concurrent, isolated Jira-pipeline run) can
   # point the synthesized PRD at its own disposable path instead of colliding
   # with whatever real project last used the shared default location.
-  # Follows the run's own PRD_FILE. Defaulting to travel-app-prd.json meant every
-  # Jira-driven project synthesized into the travel-app PRD (2026-07-25 clobber).
-  local _synth_prd="${JIRA_SYNTH_PRD_PATH:-${PRD_FILE:-$AUTOMATION_DIR/travel-app-prd.json}}"
+  # Follows the run's own PRD_FILE. There is NO built-in default: a default that names
+  # one project does not fail when it is wrong, it succeeds against that project's data —
+  # which is exactly how every Jira-driven run once synthesized into one shared PRD
+  # (2026-07-25 clobber). Absent is an error, not a substitution.
+  local _synth_prd="${JIRA_SYNTH_PRD_PATH:-${PRD_FILE:-}}"
+  if [ -z "$_synth_prd" ]; then
+    error "[jira] no PRD path: set JIRA_SYNTH_PRD_PATH or PRD_FILE. Refusing to guess — the engine names no project."
+    return 1
+  fi
   local _ingest_exit=0
   # IMPORTANT: do NOT use `|| _ingest_exit=${PIPESTATUS[0]}` here.
   # Without pipefail, the pipeline exit code is tee's exit code (almost always 0),

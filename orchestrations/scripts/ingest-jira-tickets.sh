@@ -43,8 +43,8 @@ OUT_PRD="${PRD_FILE:-}"
 _out_prd_required() {
   [ -n "$OUT_PRD" ] && return 0
   err "no output PRD path: pass --out-prd, or export PRD_FILE."
-  err "  (this used to default to travel-app-prd.json, so an ingest for ANY Jira"
-  err "   project silently overwrote the travel-app PRD)"
+  err "  (this used to default to a project-named PRD, so an ingest for ANY Jira"
+  err "   project silently overwrote that one project's PRD)"
   exit 2
 }
 DRY_RUN=0

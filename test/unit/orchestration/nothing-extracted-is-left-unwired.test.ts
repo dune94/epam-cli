@@ -39,11 +39,15 @@ function shippedSources(): string[] {
       let st;
       try { st = statSync(p); } catch { continue; }
       if (st.isDirectory()) { walk(p); continue; }
-      if (/\.(sh|js|mjs)$/.test(e)) out.push(p);
+      if (/\.(sh|js|mjs|ts)$/.test(e)) out.push(p);
     }
   };
   walk(join(ORCH, 'scripts'));
   walk(join(ORCH, 'plugins'));
+  // src/ TOO, in TypeScript as well as JS. The CLI renders templates now — the scaffold prompts
+  // and the plan-mode and squad briefs — and a guard that cannot see that directory reported them
+  // as rendered by nothing, which is the same blindness that let them sit in code unnoticed.
+  walk(join(ROOT, 'src'));
   return out;
 }
 

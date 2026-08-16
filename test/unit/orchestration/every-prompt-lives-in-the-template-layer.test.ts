@@ -55,6 +55,11 @@ function sourceFiles(exts: RegExp): string[] {
   };
   walk(join(ORCH, 'scripts'));
   walk(join(ORCH, 'plugins'));
+  // src/ TOO. The sweep and this guard both walked orchestrations/ only, so three prompts sat in
+  // TypeScript — including the one the orchestration mint loads through dist/sdk.js, which made
+  // the FIRST agent of every run take its instructions from compiled code while a template
+  // written for it was rendered by nothing. A guard that cannot see a directory certifies it.
+  walk(join(ROOT, 'src'));
   return out;
 }
 
@@ -86,7 +91,7 @@ const blockKey = (rel: string, body: string) =>
  */
 function jsLiterals(): Hit[] {
   const hits: Hit[] = [];
-  for (const file of sourceFiles(/\.(js|mjs)$/)) {
+  for (const file of sourceFiles(/\.(js|mjs|ts)$/)) {
     const rel = relative(ROOT, file);
     const lines = readFileSync(file, 'utf8').split('\n');
     let i = 0;
@@ -195,6 +200,24 @@ function shellQuotedStrings(): Hit[] {
  * Keyed by "<relative path>:<line>".
  */
 const ALLOW: Record<string, string> = {
+  'src/cli/commands/context.ts#f17a6f828694':
+    'A FILE THIS COMMAND WRITES, not text sent to a model. `epam new` scaffolds a project and this is the content of one of the files it creates; the markdown heading is the file\u2019s own, and the reader is a developer opening it in the repository.',
+  'src/cli/commands/new.ts#32cf3084efaf':
+    'A FILE THIS COMMAND WRITES, not text sent to a model. `epam new` scaffolds a project and this is the content of one of the files it creates; the markdown heading is the file\u2019s own, and the reader is a developer opening it in the repository.',
+  'src/scaffold/ProjectScaffolder.ts#9ce7fd46fbe5':
+    'A FILE THIS COMMAND WRITES, not text sent to a model. `epam new` scaffolds a project and this is the content of one of the files it creates; the markdown heading is the file\u2019s own, and the reader is a developer opening it in the repository.',
+  'src/scaffold/ProjectScaffolder.ts#f4e1ffcc6f5c':
+    'A FILE THIS COMMAND WRITES, not text sent to a model. `epam new` scaffolds a project and this is the content of one of the files it creates; the markdown heading is the file\u2019s own, and the reader is a developer opening it in the repository.',
+  'src/scaffold/ProjectScaffolder.ts#ffd0726d7ba6':
+    'A FILE THIS COMMAND WRITES, not text sent to a model. `epam new` scaffolds a project and this is the content of one of the files it creates; the markdown heading is the file\u2019s own, and the reader is a developer opening it in the repository.',
+  'src/scaffold/ScaffoldRunner.ts#ac7b08a92f3d':
+    'A FILE THIS COMMAND WRITES, not text sent to a model. `epam new` scaffolds a project and this is the content of one of the files it creates; the markdown heading is the file\u2019s own, and the reader is a developer opening it in the repository.',
+  'src/cli/commands/phase.ts#cc60275723df':
+    'An error message printed to the operator when a phase has no valid approval. It names the command that fixes it. No model receives it.',
+  'src/providers/codemie/CodemieSSO.ts#f99398ac4306':
+    'The HTML page the local SSO callback server returns to the browser after a login redirect. Markup, not prose, and its reader is a browser.',
+  'src/providers/copilot/CopilotProvider.ts#218b2338fdd3':
+    'Device-flow sign-in instructions shown in the terminal \u2014 the code to enter and where to enter it. Read by the person at the keyboard, never by a model.',
   'orchestrations/scripts/lib/node-bin.sh#f8c3b22d3909':
     'A sed expression that reads the required node major version out of a package.json engines '
     + 'field. The detector sees the unbalanced quote inside the sed script and swallows the rest '
@@ -287,7 +310,7 @@ const report = (hits: Hit[]) =>
 
 describe('the detector is real', () => {
   it('walks a meaningful corpus in both languages', () => {
-    expect(sourceFiles(/\.(js|mjs)$/).length).toBeGreaterThan(15);
+    expect(sourceFiles(/\.(js|mjs|ts)$/).length).toBeGreaterThan(15);
     expect(sourceFiles(/\.sh$/).length).toBeGreaterThan(20);
   });
 

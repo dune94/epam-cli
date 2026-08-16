@@ -19,6 +19,7 @@
     "__FIXED_ROLE_LIST__"
   ],
   "version": 1,
-  "seams": [],
-  "consumer": "engine"
+  "seams": [
+    "agent-mint"
+  ]
 }

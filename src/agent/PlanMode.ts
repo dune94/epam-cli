@@ -1,4 +1,24 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import * as fs from 'fs/promises';
+
+/**
+ * THE PROMPT IS NOT HERE. It lives in orchestrations/prompts/templates/agent-plan-mode.json.
+ *
+ * It was a template literal with the user request interpolated into its own source. As a
+ * placeholder the substitution is explicit, and an unreplaced one throws — because an unreplaced
+ * placeholder means the request silently never reached the model, which reads as a bad plan
+ * rather than a missing input.
+ */
+function planPrompt(userRequest: string): string {
+  const id = 'agent-plan-mode';
+  const file = join(__dirname, '../..', 'orchestrations', 'prompts', 'templates', `${id}.json`);
+  const doc = JSON.parse(readFileSync(file, 'utf8')) as { body?: string };
+  if (!doc.body) throw new Error('[plan-mode] template agent-plan-mode has no body');
+  const out = doc.body.split('__USER_REQUEST__').join(userRequest);
+  if (out.includes('__USER_REQUEST__')) throw new Error('[plan-mode] the user request was not substituted');
+  return out;
+}
 import * as path from 'path';
 import { spawn } from 'child_process';
 import chalk from 'chalk';
@@ -46,31 +66,7 @@ export class PlanMode {
   ): Promise<Plan | null> {
     console.log(chalk.dim('\n🔍 Generating plan...\n'));
 
-    const planningPrompt = `You are a meticulous planning assistant. The user wants to accomplish the following:
-
-"${userRequest}"
-
-Create a detailed step-by-step plan to accomplish this task. Return ONLY a valid JSON object (no markdown, no explanations) with this exact structure:
-
-{
-  "steps": [
-    {
-      "stepNumber": 1,
-      "description": "Brief description of what this step does",
-      "affectedFiles": ["path/to/file1.ts", "path/to/file2.ts"],
-      "estimatedComplexity": "low"
-    }
-  ]
-}
-
-Rules:
-- Each step should be actionable and specific
-- affectedFiles should list all files that will be read or modified (can be empty array if no files)
-- estimatedComplexity must be one of: "low", "medium", "high"
-- Order steps logically (dependencies first)
-- Be thorough but concise
-
-Return ONLY the JSON object, nothing else.`;
+    const planningPrompt = planPrompt(userRequest);
 
     try {
       const runner = new AgentRunner({

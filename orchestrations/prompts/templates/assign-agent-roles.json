@@ -11,7 +11,7 @@
   "description": "Assigns an implementation role to every (story, codeline) pair.",
   "id": "assign-agent-roles",
   "seams": [
-    "cpa-inference"
+    "role-assigner"
   ],
   "placeholders": [
     "__ROLE_BLOCK__",

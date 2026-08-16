@@ -2393,14 +2393,12 @@ build_implementation_prompt() {
     local string_invariants string_invariants_block=""
     string_invariants=$(printf '%s' "$acceptance_criteria" | grep -oE '"[^"]{3,}"' | sort -u)
     if [ -n "$string_invariants" ]; then
-        string_invariants_block="
-## CRITICAL COMPLIANCE: STRING INVARIANTS
-The Acceptance Criteria above contain exact string matches required by the test suite.
-You are FORBIDDEN from paraphrasing, summarizing, or optimizing these strings — reproduce them character-for-character, including case and spacing, wherever the AC requires them.
-
-LITERAL STRINGS TO USE VERBATIM:
-$(printf '%s\n' "$string_invariants" | sed 's/^/- /')
-"
+        _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-string-invariants-vals-XXXXXX.json")
+        jq -n \
+              --arg string_list "$(printf '%s\n' "$string_invariants" | sed 's/^/- /')" \
+              '{"__STRING_LIST__":$string_list}' > "$_cp_vals"
+        string_invariants_block="$(render_engine_prompt writer-string-invariants "$_cp_vals")"
+        rm -f "$_cp_vals"
     fi
 
     # Build a write-first directive listing each file with its exact absolute path
@@ -2619,20 +2617,26 @@ Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:"
         _cov_incomplete=$(echo "$story_json" | jq -r '(if .fixSiteAnalysisCoverage.complete == null then "false" elif .fixSiteAnalysisCoverage.complete == false then "true" else "false" end)' 2>/dev/null)
         _uncovered_list=$(echo "$story_json" | jq -r '(.fixSiteAnalysisCoverage.uncoveredVerificationCriteria // []) | map("- " + .) | join("\n")' 2>/dev/null)
         if [ -n "$_prescribed_helper" ] && [ "$_cov_incomplete" != "true" ]; then
-            codegraph_tool_block="## The helper to reuse is ALREADY identified — do NOT search
-The Root Cause Analysis above names the exact existing helper(s) to reuse: \`${_prescribed_helper}\`. EVERY ONE of them must be imported and called — a write that uses some but not all is rejected at write time for the ones it omitted, and the rejection names only what was missed. Do NOT run CodeGraph or explore the codebase to re-find them — that wastes your turn budget. Import them, apply the prescribed minimal fix, write your file(s), and stop. Only search if you hit something the prescribed fix genuinely does not cover."
+            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-codegraph-block-vals-XXXXXX.json")
+            jq -n \
+                  --arg prescribed_helper "${_prescribed_helper}" \
+                  '{"__PRESCRIBED_HELPER__":$prescribed_helper}' > "$_cp_vals"
+            codegraph_tool_block="$(render_engine_prompt writer-codegraph-block "$_cp_vals" helper_identified)"
+            rm -f "$_cp_vals"
         elif [ -n "$_prescribed_helper" ] && [ "$_cov_incomplete" = "true" ]; then
-            codegraph_tool_block="## The prescribed fix is KNOWN INCOMPLETE — explore for the rest
-The Root Cause Analysis above names existing helper(s) to reuse: \`${_prescribed_helper}\` — apply those parts directly and use EVERY one of them, do NOT re-search for them. But the prescribed fix does NOT address every verification criterion. These are UNCOVERED and need your own investigation beyond the prescribed sites:
-${_uncovered_list}
-Use the codegraph_query tool (mode=\"helpers\", args=\"<domain nouns>\") to find existing code for THESE before writing new logic — do not assume they are out of scope."
+            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-codegraph-block-vals-XXXXXX.json")
+            jq -n \
+                  --arg prescribed_helper "${_prescribed_helper}" \
+                  --arg uncovered_list "${_uncovered_list}" \
+                  '{"__PRESCRIBED_HELPER__":$prescribed_helper,"__UNCOVERED_LIST__":$uncovered_list}' > "$_cp_vals"
+            codegraph_tool_block="$(render_engine_prompt writer-codegraph-block "$_cp_vals" fix_incomplete)"
+            rm -f "$_cp_vals"
         else
-            codegraph_tool_block="## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
-A codegraph_query tool is available — call it directly (NOT via Bash) to discover reusable functions instead of inventing new ones:
-  codegraph_query(mode=\"helpers\", args=\"<domain nouns>\")   # existing util/parser/formatter to REUSE (symbol + import path)
-  codegraph_query(mode=\"query\", args=\"<SymbolName>\")       # exact definition site of a symbol
-  codegraph_query(mode=\"callees\", args=\"<SymbolName>\")     # what a function already calls
-RULE: Before you add ANY new function, run \`helpers\` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better."
+            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-codegraph-block-vals-XXXXXX.json")
+            jq -n \
+                  '{}' > "$_cp_vals"
+            codegraph_tool_block="$(render_engine_prompt writer-codegraph-block "$_cp_vals" tool_available)"
+            rm -f "$_cp_vals"
         fi
     fi
 
@@ -5974,18 +5978,17 @@ $(cat "$_cf")
 "
     done < <(echo "$_dep_ids_json" | jq -r '.[]?' 2>/dev/null)
 
-    local planning_prompt="You are a planning agent. Produce a concise, numbered execution plan for the coding agent that will implement the following story. Output ONLY a numbered step list — no prose, no code.
-
-Story: ${story_id} — ${title}
-
-## Output paths (EXACT — your plan MUST reference ONLY these paths for output steps, never invent alternatives)
-$(_classify_declared_paths "${declared_files_raw}")
-
-## Acceptance Criteria
-${ac}
-$([ -n "$plan_dep_contracts" ] && printf '\n## Dependency Contracts (ground-truth import paths and signatures — use these verbatim in read/import steps)\n%s\n' "$plan_dep_contracts" || true)
-$([ -n "${CROSS_CODELINE_CONTRACT:-}" ] && [ -f "${CROSS_CODELINE_CONTRACT}" ] && printf '\n## Cross-Codeline API Contract (upstream codeline exports — use these types and endpoints verbatim when integrating)\n%s\n' "$(cat "${CROSS_CODELINE_CONTRACT}")" || true)
-Produce 5-10 numbered implementation steps. Your output steps MUST use the exact paths listed under 'Output paths' above, and must respect which of them already exist: a file listed as ALREADY EXIST is modified, never created. Be specific about function signatures and test requirements."
+    _cp_vals=$(mktemp "${TMPDIR:-/tmp}/plan-producer-vals-XXXXXX.json")
+    jq -n \
+          --arg declared_paths "$(_classify_declared_paths "${declared_files_raw}")" \
+          --arg dependency_contracts "$([ -n "$plan_dep_contracts" ] && printf '\n## Dependency Contracts (ground-truth import paths and signatures — use these verbatim in read/import steps)\n%s\n' "$plan_dep_contracts" || true)" \
+          --arg cross_codeline_contract "$([ -n "${CROSS_CODELINE_CONTRACT:-}" ] && [ -f "${CROSS_CODELINE_CONTRACT}" ] && printf '\n## Cross-Codeline API Contract (upstream codeline exports — use these types and endpoints verbatim when integrating)\n%s\n' "$(cat "${CROSS_CODELINE_CONTRACT}")" || true)" \
+          --arg story_id "${story_id}" \
+          --arg title "${title}" \
+          --arg ac "${ac}" \
+          '{"__DECLARED_PATHS__":$declared_paths,"__DEPENDENCY_CONTRACTS__":$dependency_contracts,"__CROSS_CODELINE_CONTRACT__":$cross_codeline_contract,"__STORY_ID__":$story_id,"__TITLE__":$title,"__AC__":$ac}' > "$_cp_vals"
+    local planning_prompt="$(render_engine_prompt plan-producer "$_cp_vals")"
+    rm -f "$_cp_vals"
 
     local plan_result_file
     plan_result_file=$(mktemp /tmp/plan-${story_id}-XXXXXX.json)
@@ -6086,22 +6089,15 @@ $(cat "$_contract_file")
     local _orch_provider="${EPAM_ORCHESTRATION_PROVIDER:-}"
     [ -z "$_orch_provider" ] && { echo "$plan_text"; return; }
 
-    local review_prompt="You are reviewing an implementation PLAN (not code) for story ${story_id} before any code is written.
-
-Check: (1) does the plan reference any file path, import path, exported class/function/type name that CONTRADICTS the dependency contracts? (2) do the plan's write/create steps use the EXACT declared output paths — not invented alternatives?
-
-You have read-only tools available (list/search/read files, run read-only shell commands). If you are about to flag a mismatch based on something the plan claims about the filesystem or an installed package, VERIFY it with your tools first — do not assume. Your tool budget is small: check the ONE fact your verdict depends on, not the whole codebase.
-
-Respond with ONLY a JSON object, no markdown fences:
-{\"verdict\":\"ok\"} if the plan is consistent with both the contracts and the declared output paths, OR
-{\"verdict\":\"mismatch\",\"corrections\":\"<one paragraph telling the planning agent exactly what to fix, citing the real path from the contract or declared files list>\"}
-$([ -n "$_review_declared_files" ] && printf '\n## Declared Output Files (EXACT paths the plan MUST write to)\n%s\n' "$_review_declared_files" || true)
-
-## Plan
-${plan_text}
-
-## Dependency Contracts (ground truth)
-${dependency_contracts}"
+    _cp_vals=$(mktemp "${TMPDIR:-/tmp}/plan-reviewer-vals-XXXXXX.json")
+    jq -n \
+          --arg declared_output_files "$([ -n "$_review_declared_files" ] && printf '\n## Declared Output Files (EXACT paths the plan MUST write to)\n%s\n' "$_review_declared_files" || true)" \
+          --arg dependency_contracts "${dependency_contracts}" \
+          --arg plan_text "${plan_text}" \
+          --arg story_id "${story_id}" \
+          '{"__DECLARED_OUTPUT_FILES__":$declared_output_files,"__DEPENDENCY_CONTRACTS__":$dependency_contracts,"__PLAN_TEXT__":$plan_text,"__STORY_ID__":$story_id}' > "$_cp_vals"
+    local review_prompt="$(render_engine_prompt plan-reviewer "$_cp_vals")"
+    rm -f "$_cp_vals"
 
     # Tool access (HEAL-BLIND, 2026-07-31): this gate exists specifically to
     # catch a plan that CONTRADICTS reality, but until now had no way to check
@@ -6163,14 +6159,14 @@ print(json.dumps(result) if isinstance(result, dict) and 'verdict' in result els
     corrections=$(echo "$review_json" | jq -r '.corrections // ""' 2>/dev/null || echo "")
     warning "  PlanReview: mismatch detected for $story_id against dependency contracts — one corrective re-plan"
 
-    local corrective_prompt="You previously produced this plan for story ${story_id}:
-
-${plan_text}
-
-A review found it inconsistent with the real dependency contracts. Specific correction needed:
-${corrections}
-
-Produce the CORRECTED numbered execution plan only — no prose, no code, same format as before."
+    _cp_vals=$(mktemp "${TMPDIR:-/tmp}/plan-corrective-vals-XXXXXX.json")
+    jq -n \
+          --arg corrections "${corrections}" \
+          --arg plan_text "${plan_text}" \
+          --arg story_id "${story_id}" \
+          '{"__CORRECTIONS__":$corrections,"__PLAN_TEXT__":$plan_text,"__STORY_ID__":$story_id}' > "$_cp_vals"
+    local corrective_prompt="$(render_engine_prompt plan-corrective "$_cp_vals")"
+    rm -f "$_cp_vals"
 
     local corrected_plan
     corrected_plan=$(echo "$corrective_prompt" | \

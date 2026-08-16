@@ -9264,10 +9264,13 @@ PYEOF
             semgrep_summary="(semgrep oracle skipped — semgrep not in PATH or src/ missing)"
         fi
 
-        sast_prompt="## Semgrep Static Analysis Results (hard evidence — treat as ground truth)
-$semgrep_summary
-
-$sast_prompt"
+        _oe_vals=$(mktemp "${TMPDIR:-/tmp}/qa-oracle-vals-XXXXXX.json")
+        jq -n \
+              --arg semgrep_summary "$semgrep_summary" \
+              --arg sast_prompt "$sast_prompt" \
+              '{"__SEMGREP_SUMMARY__":$semgrep_summary,"__SAST_PROMPT__":$sast_prompt}' > "$_oe_vals"
+        sast_prompt="$(render_engine_prompt qa-oracle-evidence "$_oe_vals" semgrep)"
+        rm -f "$_oe_vals"
 
         # ── npm audit Oracle: inject dependency CVE evidence ──
         local audit_json="$LOG_DIR/npm-audit-oracle-${phase_id}.json"
@@ -9340,10 +9343,13 @@ except Exception as e:
             audit_summary="(npm audit skipped — npm not found or no package.json)"
         fi
 
-        sast_prompt="## npm Audit Results (hard evidence — dependency CVEs)
-$audit_summary
-
-$sast_prompt"
+        _oe_vals=$(mktemp "${TMPDIR:-/tmp}/qa-oracle-vals-XXXXXX.json")
+        jq -n \
+              --arg audit_summary "$audit_summary" \
+              --arg sast_prompt "$sast_prompt" \
+              '{"__AUDIT_SUMMARY__":$audit_summary,"__SAST_PROMPT__":$sast_prompt}' > "$_oe_vals"
+        sast_prompt="$(render_engine_prompt qa-oracle-evidence "$_oe_vals" npm_audit)"
+        rm -f "$_oe_vals"
 
         # ── TypeScript Oracle: run tsc in shell and inject results ──
         local tsc_summary=""
@@ -9444,10 +9450,13 @@ $(echo "$_tsc_out" | head -40)"
             tsc_summary="(tsc oracle skipped — node or tsc binary not found at $PROJECT_ROOT)"
         fi
 
-        sast_prompt="## TypeScript Compiler Results (hard evidence — treat as ground truth)
-$tsc_summary
-
-$sast_prompt"
+        _oe_vals=$(mktemp "${TMPDIR:-/tmp}/qa-oracle-vals-XXXXXX.json")
+        jq -n \
+              --arg tsc_summary "$tsc_summary" \
+              --arg sast_prompt "$sast_prompt" \
+              '{"__TSC_SUMMARY__":$tsc_summary,"__SAST_PROMPT__":$sast_prompt}' > "$_oe_vals"
+        sast_prompt="$(render_engine_prompt qa-oracle-evidence "$_oe_vals" typescript)"
+        rm -f "$_oe_vals"
 
         _run_qa_gate_with_retry "$sast_prompt" "qa-gate:sast" "${PHASE:-unknown}" "$sast_log"
     } &
@@ -9602,10 +9611,13 @@ PYEOF
             oracle_summary="(vitest oracle skipped — node or vitest binary not found)"
         fi
 
-        spec_prompt="## Actual Test Results (hard evidence — use this as ground truth)
-$oracle_summary
-
-$spec_prompt"
+        _oe_vals=$(mktemp "${TMPDIR:-/tmp}/qa-oracle-vals-XXXXXX.json")
+        jq -n \
+              --arg oracle_summary "$oracle_summary" \
+              --arg spec_prompt "$spec_prompt" \
+              '{"__ORACLE_SUMMARY__":$oracle_summary,"__SPEC_PROMPT__":$spec_prompt}' > "$_oe_vals"
+        spec_prompt="$(render_engine_prompt qa-oracle-evidence "$_oe_vals" test_results)"
+        rm -f "$_oe_vals"
 
         # ── Story Oracle: inject the criteria the story is JUDGED against ──
         # Not acceptanceCriteria specifically: brownfield stories carry

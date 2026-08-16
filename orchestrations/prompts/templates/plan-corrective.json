@@ -1,0 +1,15 @@
+{
+  "$why": [
+    "Moved out of claude.sh on 2026-08-16."
+  ],
+  "description": "Asks the planner to correct a plan the reviewer rejected.",
+  "seams": [
+    "cpa-inference"
+  ],
+  "id": "plan-corrective",
+  "version": 1,
+  "body": "       _cp_vals=$(mktemp \"__TMPDIR__/plan-corrective-vals-XXXXXX.json",
+  "placeholders": [
+    "__TMPDIR__"
+  ]
+}

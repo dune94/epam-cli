@@ -64,17 +64,40 @@ agent_ladder_record_failure() {
     return 0
 }
 
-# _agent_ladder_tier <agent> — the ladder this agent's ARCHETYPE declares, lowercased.
-_agent_ladder_tier() {
+# _agent_ladder_position <agent> — the position a profile DECLARES, unresolved. Only the warning above uses it: to tell "this
+# agent declared nothing" apart from "this agent declared something that resolved to nothing",
+# which are the same empty string once resolution has run and mean opposite things.
+_agent_ladder_position() {
     local _agent="${1:-}"
     [ -n "$_agent" ] || { printf ''; return 0; }
     "${NODE_BIN:-node}" -e '
       const { resolveSeam } = require(process.argv[1]);
       try {
         const reg = process.argv[2];
+        const p = JSON.parse(require("fs").readFileSync(reg, "utf8")).profiles[resolveSeam(process.argv[3], reg)] || {};
+        process.stdout.write(String(p.ladder || "").trim().toLowerCase());
+      } catch (_) { process.stdout.write(""); }
+    ' "$_AGENT_LADDER_LIB_DIR/seam-invocation.js" \
+      "${AGENT_PROFILES_REGISTRY:-$_AGENT_LADDER_AGENTS_DIR/invocation-profiles.json}" \
+      "$_agent" 2>/dev/null || printf ''
+}
+
+# _agent_ladder_tier <agent> — the PROJECT TIER that agent's declared position resolves to.
+_agent_ladder_tier() {
+    local _agent="${1:-}"
+    [ -n "$_agent" ] || { printf ''; return 0; }
+    "${NODE_BIN:-node}" -e '
+      const { resolveSeam, resolveTierPosition } = require(process.argv[1]);
+      try {
+        const reg = process.argv[2];
         const seam = resolveSeam(process.argv[3], reg);
         const p = JSON.parse(require("fs").readFileSync(reg, "utf8")).profiles[seam] || {};
-        process.stdout.write(String(p.ladder || "").toLowerCase());
+        // A profile declares a POSITION on the ladder — base/mid/top — not a tier name, because
+        // the engine holds no tier vocabulary. Resolving it against the project'"'"'s own tier order is
+        // the whole point: writing the position out as if it were a tier looks up
+        // EPAM_MODEL_LADDER_TOP, which no project exports, so every agent fell through to the
+        // run'"'"'s generic chain and its declaration moved no model at all.
+        process.stdout.write(resolveTierPosition(p.ladder, process.env));
       } catch (_) { process.stdout.write(""); }
     ' "$_AGENT_LADDER_LIB_DIR/seam-invocation.js" \
       "${AGENT_PROFILES_REGISTRY:-$_AGENT_LADDER_AGENTS_DIR/invocation-profiles.json}" \
@@ -112,6 +135,16 @@ agent_ladder_model() {
     if [ -n "$_tier" ]; then
         _var="EPAM_MODEL_LADDER_$(printf '%s' "$_tier" | tr '[:lower:]-' '[:upper:]_')"
         _chain="${!_var:-}"
+    fi
+    # SAY SO when a declared position resolved to nothing.
+    #
+    # Falling back to the run's chain is correct for an agent with no declaration. For one that
+    # HAS a declaration it means the declaration moved no model — the decorative-ladder failure
+    # this handler exists to prevent — and it happens whenever EPAM_MODEL_LADDER_TIER_ORDER is
+    # unset, because a position cannot be translated into a project tier without it. Silent, that
+    # costs a whole run of every agent sitting on its base model.
+    if [ -z "${_tier:-}" ] && [ -n "$(_agent_ladder_position "$_agent")" ]; then
+        echo "[agent-ladder] '$_agent' declares a ladder position but it resolves to no tier (EPAM_MODEL_LADDER_TIER_ORDER unset?) — using the run's own chain, so this agent's declaration moves no model" >&2
     fi
     [ -n "${_chain:-}" ] || _chain="${EPAM_MODEL_LADDER:-}"
     [ -n "$_chain" ] || { printf '%s' "$_current"; return 0; }

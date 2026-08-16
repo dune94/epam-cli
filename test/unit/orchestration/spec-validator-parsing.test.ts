@@ -19,6 +19,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
+import { templateBody } from '../../helpers/prompt-text';
 import { tmpdir } from 'node:os';
 
 const REPO_ROOT = join(__dirname, '../../../');
@@ -27,16 +28,17 @@ const orchSrc = readFileSync(ORCH_SH, 'utf8');
 
 describe('run-agent-orchestration.sh — spec-validator output emission instruction', () => {
   it('prompt instructs agent NOT to write to a file (must emit to stdout)', () => {
-    // In the shell script, the JSON template uses backslash-escaped quotes: \"agent\": \"spec-validator\"
-    const specIdx = orchSrc.indexOf('\\"agent\\": \\"spec-validator\\"');
-    expect(specIdx).toBeGreaterThan(-1);
-    const block   = orchSrc.slice(Math.max(0, specIdx - 500), specIdx + 200);
+    // The prompt itself. This used to window +/- a few hundred characters around the output
+    // shape inside the shell script, which worked only while the rules sat adjacent to it and
+    // needed the shape spelled with backslash-escaped quotes. The template has no escaping and
+    // no adjacency to depend on.
+    const block = templateBody('qa-spec-validator');
+    expect(block).toContain('"agent": "spec-validator"');
     expect(block).toContain('do NOT write to a file');
   });
 
   it('prompt includes no-markdown-fences + no-preamble qualifiers (prevents file-write pattern)', () => {
-    const specIdx = orchSrc.indexOf('\\"agent\\": \\"spec-validator\\"');
-    const block   = orchSrc.slice(Math.max(0, specIdx - 500), specIdx + 200);
+    const block = templateBody('qa-spec-validator');
     expect(block).toContain('no markdown fences');
     expect(block).toContain('no preamble');
   });

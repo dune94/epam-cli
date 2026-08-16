@@ -18,6 +18,9 @@ import { join } from 'node:path';
 
 const ROOT = join(__dirname, '../../..');
 const SYNTH = join(ROOT, 'orchestrations/scripts/synthesize-prd-from-jira.js');
+// The synthesizer has no built-in template: a built-in one lent every run another project's
+// identity. This test is about AC provenance, so the template it supplies is anonymous.
+const TEMPLATE = join(__dirname, '../../fixtures/prd/neutral-synthesis-template.json');
 const ingestSrc = readFileSync(join(ROOT, 'orchestrations/scripts/ingest-jira-tickets.sh'), 'utf8');
 const NODE = process.env.NODE_BIN || 'node';
 
@@ -43,7 +46,7 @@ function synth(env: Record<string, string>): any {
     const cf = join(dir, 'classifications.json');
     const out = join(dir, 'prd.json');
     writeFileSync(cf, JSON.stringify(CLASSIFICATIONS));
-    execFileSync(NODE, [SYNTH, '--classifications', cf, '--out', out], {
+    execFileSync(NODE, [SYNTH, '--classifications', cf, '--out', out, '--template', TEMPLATE], {
       encoding: 'utf8',
       env: { ...process.env, JIRA_DEFAULT_CODELINE: 'cdts', ...env },
     });

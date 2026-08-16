@@ -38,6 +38,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { templateBody } from '../../helpers/prompt-text';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const GUARDS = join(REPO_ROOT, 'orchestrations/scripts/lib/story-guards.sh');
@@ -230,9 +231,10 @@ describe('the gate blocks on the computed fact, not the model\'s flag', () => {
 
 // ── 2. qualityScore must mean something ─────────────────────────────────────────
 describe('qualityScore is defined for the model that has to produce it', () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const SRC = require('node:fs').readFileSync(
-    join(REPO_ROOT, 'orchestrations/scripts/spec-mode-runner.js'), 'utf8');
+  // The reviewer's own prompt. This read spec-mode-runner.js when the rubric was a literal
+  // inside it; the rubric is the coordinator-review template now, and the script that renders
+  // it contains none of the wording.
+  const SRC = templateBody('spec-coordinator-review');
 
   it('the prompt gives NUMERIC ANCHORS, not a bare 0.0-1.0 range', () => {
     expect(

@@ -47,6 +47,17 @@ const PROMPT_PROSE = [
   /\bOutput ONLY\b/,
   /\bEmit ONLY\b/,
   /\bRespond with (ONLY|only|a|the)\b/,
+
+  // IMPERATIVE FORMS, added 2026-08-16 after the second-person set was proven to under-report.
+  // ai-run.sh sends a plan-pass prompt to the model on EVERY invocation — the most-executed
+  // prompt in the pipeline — and the list above reported that file as clean, because the prompt
+  // never says "you". It opens "BEFORE YOU ANSWER: state your PLAN". A pattern set that misses
+  // the most frequently sent prompt in the system is not a floor anyone should quote a number
+  // from, so the forms an instruction actually takes are matched too.
+  /\bDo NOT (produce|emit|call|attempt|write|include|answer)\b/,
+  /\bBEFORE YOU ANSWER\b/,
+  /^\s*printf '(State|Say|Name|List|Describe|Explain|Return|Produce|Answer|Emit|Output) /,
+  /\b(Return|Produce|Emit|Output) (ONLY|only|exactly|a JSON|the JSON)\b/,
 ];
 
 /**

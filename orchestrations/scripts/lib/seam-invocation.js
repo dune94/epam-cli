@@ -215,4 +215,6 @@ function seamInvocationEnv(agent, agentsDir, opts) {
   return env;
 }
 
-module.exports = { seamInvocationEnv, resolveSeam, registryPath };
+// resolveTierPosition is exported because the SHELL side needs the same answer: a profile
+// declares a position, and two places must not each decide what a position means.
+module.exports = { seamInvocationEnv, resolveSeam, registryPath, resolveTierPosition };

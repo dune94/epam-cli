@@ -6476,104 +6476,42 @@ async function runSpeckitReview({ promptExec, story, openspecOutput, phase, runI
   // PROPOSING a split, not yet-created children) and conflating the two
   // would silently change behavior there. Only validateMidExecutionSplits
   // passes this true, for children it already created.
+  // TWO TEMPLATES, NOT ONE WITH A BRANCH. The refine path asks for different work from
+  // different starting material than the collaborative path, and folding them together would
+  // hide which instructions an agent actually received.
   const prompt = refineExistingChildren
-    ? `${forcedRetryBlock}You are the speckit specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.
-
-This story was ALREADY split into the children listed below (openspec's decision, already applied — you are not creating or removing any child). Your job: review and refine EACH CHILD's acceptanceCriteria for testability and completeness, exactly as you would for an unsplit story.
-1. For each child, review its acceptanceCriteria for testability and completeness
-2. Add missing edge-case, error-handling, security, and accessibility criteria per child
-3. Flag any AC that are vague, untestable, or overlapping
-4. Do NOT add, remove, or rename any child — return one entry per child id below, using the SAME ids
-5. Do NOT remove or duplicate the existing work — build on it
-
-━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
-Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
-NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
-mockResolvedValue, import statements, or require() calls, REPLACE it with a
-Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
-
-THE EXISTING CHILDREN (your input to review):
-${JSON.stringify(openspecOutput?.splitStories || [], null, 2)}
-
-ORIGINAL PARENT STORY CONTEXT:
-${JSON.stringify({
-  id: story.id,
-  title: story.title,
-  description: story.description,
-  originalAcceptanceCriteria: story.acceptanceCriteria,
-  technicalNotes: story.technicalNotes,
-  dependencies: story.dependencies || []
-}, null, 2)}
-
-Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble):
-- "splitStories": array of {"id": "<same child id>", "acceptanceCriteria": [...], "notes": "what you changed and why"} — one entry per child id above, same ids, no new/removed ids.
-- "notes": overall summary of what you changed and why.
-
-You may have read-only tools (read_file, list_files, search) available this turn for a
-brownfield story with a real codeline — if so, USE them for real to verify a file's actual
-contents before relying on it; do not invent what a tool would return. For a greenfield
-story with no existing codeline, you have none — answer from what is already in this
-prompt rather than guessing at file contents. Either way, never emit tool-call syntax
-(<tool_call>, <tool_use>, <function_call>) narrating an imagined result — a fabricated
-"tool_result" is worse than an honest "I don't know."
-`
-    : `${forcedRetryBlock}You are the speckit specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.
-
-You are reviewing and building on the openspec agent's output for this story.
-Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
-1. Review openspec's proposed acceptance criteria for testability and completeness
-2. Add missing edge-case, error-handling, security, and accessibility criteria
-3. Flag any AC that are vague, untestable, or overlapping
-4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
-   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
-   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
-   normal; per-child refinement of an already-split story's children happens on a later turn, not
-   here.
-5. Do NOT remove or duplicate openspec's good work — build on it
-
-━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
-Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
-NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
-mockResolvedValue, import statements, or require() calls, REPLACE it with a
-Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
-
-OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
-${JSON.stringify({
-  acceptanceCriteria: openspecOutput?.acceptanceCriteria || [],
-  notes: openspecOutput?.notes || '',
-  splitStories: openspecOutput?.splitStories || undefined,
-}, null, 2)}
-
-ORIGINAL STORY CONTEXT:
-${JSON.stringify({
-  id: story.id,
-  title: story.title,
-  description: story.description,
-  originalAcceptanceCriteria: story.acceptanceCriteria,
-  technicalNotes: story.technicalNotes,
-  dependencies: story.dependencies || []
-}, null, 2)}
-
-Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
-- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
-- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
-- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
-  split children of your own, even if openspec already split this story.
-- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
-- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
-- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
-
-For a brownfield story with a real codeline, you may have read-only tools (read_file,
-list_files, search) available this turn — if so, USE them for real to check a file's
-actual contents before relying on it; do not invent what a tool would return. For a
-greenfield story with no existing codeline, you have none — give your best answer from
-the description, title and paths you were given, and say so in "notes" if the file
-contents would have changed your answer. Either way, never narrate an imagined tool
-result: a real answer with an honest caveat is worth everything; fabricated tool-call
-syntax (<tool_call>, <tool_use>, <function_call>) is worth nothing — it is discarded in
-full and the work is lost (observed live, 2026-07-28: exactly this, on an empty-criteria
-story that got no answer at all).
-`;
+    ? renderEngineTemplate('spec-agent-speckit-refine', {
+      __FORCED_RETRY_BLOCK__: forcedRetryBlock,
+      __PHASE__: phase,
+      __STORY_ID__: story.id,
+      __EXISTING_CHILDREN__: JSON.stringify(openspecOutput?.splitStories || [], null, 2),
+    __STORY_PAYLOAD__: JSON.stringify({
+      id: story.id,
+      title: story.title,
+      description: story.description,
+      originalAcceptanceCriteria: story.acceptanceCriteria,
+      technicalNotes: story.technicalNotes,
+      dependencies: story.dependencies || []
+    }, null, 2),
+    })
+    : renderEngineTemplate('spec-agent-speckit', {
+      __FORCED_RETRY_BLOCK__: forcedRetryBlock,
+      __PHASE__: phase,
+      __STORY_ID__: story.id,
+      __OPENSPEC_OUTPUT__: JSON.stringify({
+        acceptanceCriteria: openspecOutput?.acceptanceCriteria || [],
+        notes: openspecOutput?.notes || '',
+        splitStories: openspecOutput?.splitStories || undefined,
+      }, null, 2),
+    __STORY_PAYLOAD__: JSON.stringify({
+      id: story.id,
+      title: story.title,
+      description: story.description,
+      originalAcceptanceCriteria: story.acceptanceCriteria,
+      technicalNotes: story.technicalNotes,
+      dependencies: story.dependencies || []
+    }, null, 2),
+    });
   try {
     const payload = await runAgentForJson(
       promptExec, prompt, TOOL_SPEC_AGENT, 'SPEC_AGENT',

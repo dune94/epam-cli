@@ -872,6 +872,62 @@ if (require.main !== module) return;
   // decidable here from the data alone, with no model involved and no tokens spent.
   validateWorkflow(PROFILES_PATH, _registryPath);
   process.stderr.write(`[mint-step] ✓ workflow is buildable: every required input has a producer\n`);
+
+  // ── THE ROSTER IS SETTLED, SO NOW BUILD THIS PROJECT'S PROMPTS ─────────────
+  //
+  // The agent that minted the roster also builds the prompts, because this is the only stage
+  // that knows both what the project is and which roles will work on it — the two things a
+  // specialised prompt needs. Nothing generated project prompts before this existed, which is
+  // why the repo held a handful of hand-authored ones and a new project had none at all.
+  //
+  // It runs HERE, after the review/correction loop and after validateWorkflow, for the same
+  // reason assignment does: generating against a proposed roster would specialise prompts for
+  // roles the reviewer is about to replace.
+  //
+  // The generator is invoked through runClaude, the same seam every other agent uses, so it
+  // inherits ladder, retry, timeout and cost capture rather than being a private call.
+  {
+    const promptsLib = require('./lib/prompt-library.js');
+    const { buildProjectPrompts } = require('./lib/project-prompt-builder.js');
+    const engineRoot = path.join(__dirname, '..', '..');
+    const templatesDir = path.join(engineRoot, promptsLib.TEMPLATE_DIR_REL);
+    const bootstrapFile = path.join(engineRoot, 'orchestrations', 'prompts', 'bootstrap.json');
+    const projectConfigDir = process.env.EPAM_PROJECT_CONFIG_DIR || '';
+
+    // No project dir means nowhere to install them, and prompt-library will not fall back to a
+    // template. Guessing a location would provision a project nobody asked for.
+    if (!projectConfigDir) {
+      throw new Error(
+        'cannot build project prompts: EPAM_PROJECT_CONFIG_DIR is unset. The project-authority ' +
+        'prompts are the only ones ever rendered, and the template is never executed.');
+    }
+
+    process.env.EPAM_AGENT_NAME = 'prompt-builder';
+    const _built = await buildProjectPrompts({
+      templatesDir,
+      bootstrapFile,
+      projectConfigDir,
+      projectContext: [
+        `Project config: ${projectConfigDir}`,
+        `Tickets in scope: ${stories.map((t) => `${t.jiraKey || t.id}: ${t.title || ''}`).join(' | ')}`,
+      ].join('\n'),
+      codelineContext: codelines
+        .map((c) => `- ${c.name} (${c.path})${c.dependencies && c.dependencies.length ? ` deps: ${c.dependencies.join(', ')}` : ''}`)
+        .join('\n'),
+      mintedRoles: _mintedDetail.length
+        ? _mintedDetail.map((m) => `- ${m.name} [${m.kind}] — ${m.rationale || ''}`).join('\n')
+        : '(none minted this run)',
+      runText: (prompt, meta) => spec.runClaude(
+        promptExec, prompt,
+        path.join(LOG_DIR, `prompt-build-${(meta && meta.id) || 'unknown'}.log`),
+        {}, { costAgent: 'prompt-builder' }),
+      log: (m) => process.stderr.write(`${m}\n`),
+    });
+    process.stderr.write(
+      `[mint-step] ✓ prompts provisioned: ${_built.copied.length} copied (bootstrap), ` +
+      `${_built.generated.length} generated → ${path.join(projectConfigDir, 'prompts')}\n`);
+  }
+
   process.stderr.write(`[mint-step] ✓ roster and assignments written to ${PRD_PATH}\n`);
 })().catch((err) => {
   process.stderr.write(`[mint-step] FAILED: ${(err && err.message) || err}\n`);

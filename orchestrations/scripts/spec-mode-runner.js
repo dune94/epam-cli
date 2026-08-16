@@ -3267,34 +3267,7 @@ function sanitizeSurvey(payload, codelines) {
  * test could see that while the string was welded inside a 150-line function.
  */
 
-/**
- * Render an ENGINE prompt from the template layer.
- *
- * Templates are the single source for prompt text — no prompt may live in code. This is the
- * engine-side counterpart to prompt-library.js, which renders a PROJECT-AUTHORITY copy for
- * agent-facing seams. Substitution is strict in both directions for the same reason it is
- * there: a placeholder left unreplaced means evidence silently never reached the agent, and a
- * value nobody uses means the caller believes it supplied something that went nowhere.
- */
-function renderEngineTemplate(id, values) {
-  const file = path.join(__dirname, '..', 'prompts', 'templates', id + '.json');
-  let doc;
-  try { doc = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) {
-    throw new Error(`[prompt] cannot load engine template '${id}' from ${file}: ${e && e.message}`);
-  }
-  let out = String(doc.body || '');
-  if (!out.trim()) throw new Error(`[prompt] engine template '${id}' has an empty body`);
-  const declared = [...new Set(out.match(/__[A-Z][A-Z0-9_]*__/g) || [])];
-  const supplied = Object.keys(values || {});
-  const missing = declared.filter((p) => !supplied.includes(p));
-  if (missing.length) throw new Error(`[prompt] '${id}' is missing values for: ${missing.join(', ')}`);
-  const unused = supplied.filter((p) => !declared.includes(p));
-  if (unused.length) throw new Error(`[prompt] '${id}' was given values it does not use: ${unused.join(', ')}`);
-  // Replacer FUNCTION, not a string: a dollar-ampersand or dollar-digit inside a diff, log or
-  // regex would otherwise be read as a replacement pattern and corrupt the evidence silently.
-  for (const key of declared) out = out.replace(new RegExp(key, 'g'), () => String(values[key]));
-  return out;
-}
+const { renderEngineTemplate } = require('./lib/engine-prompt.js');
 function buildSurveyPrompt({ codelines, tickets, referencedDocs, declaredDependencies } = {}) {
   const _cls = (Array.isArray(codelines) ? codelines : []).filter(Boolean);
   const _named = _cls.map((c) => (typeof c === 'string' ? { name: c } : c)).filter((c) => c && c.name);

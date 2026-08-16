@@ -592,28 +592,7 @@ const { deriveCodelineName, deriveCodelineNames } = require('./codeline-name');
 
 // ── LLM discovery call ─────────────────────────────────────────────────────
 
-/**
- * Render an ENGINE prompt from the template layer. Strict in both directions: a placeholder
- * left unreplaced means evidence never reached the agent, and a value nobody uses means the
- * caller believes it supplied something that went nowhere.
- */
-function renderEngineTemplate(id, values) {
-  const file = path.join(__dirname, '..', '..', 'prompts', 'templates', id + '.json');
-  let doc;
-  try { doc = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) {
-    throw new Error(`[prompt] cannot load engine template '${id}' from ${file}: ${e && e.message}`);
-  }
-  let out = String(doc.body || '');
-  if (!out.trim()) throw new Error(`[prompt] engine template '${id}' has an empty body`);
-  const declared = [...new Set(out.match(/__[A-Z][A-Z0-9_]*__/g) || [])];
-  const supplied = Object.keys(values || {});
-  const missing = declared.filter((p) => !supplied.includes(p));
-  if (missing.length) throw new Error(`[prompt] '${id}' is missing values for: ${missing.join(', ')}`);
-  const unused = supplied.filter((p) => !declared.includes(p));
-  if (unused.length) throw new Error(`[prompt] '${id}' was given values it does not use: ${unused.join(', ')}`);
-  for (const key of declared) out = out.replace(new RegExp(key, 'g'), () => String(values[key]));
-  return out;
-}
+const { renderEngineTemplate } = require('./engine-prompt');
 
 function buildDiscoveryPrompt(issues, manifest) {
   const manifestSummary = manifest.map(r =>

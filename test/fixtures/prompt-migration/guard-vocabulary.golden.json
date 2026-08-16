@@ -1,0 +1,50 @@
+{
+  "_what": "Captured from buildGuardVocabularyPrompt BEFORE templating, 2026-08-15. Four conditional sections — persona, documentation, evidence and the CodeGraph verify block — so both branches are captured.",
+  "_how": "Generated mechanically from the shipped builder.",
+  "fixtures": {
+    "FULL": {
+      "persona": "PERSONA_S",
+      "seam": "SEAM_S",
+      "rule": "RULE_S",
+      "_statements": [
+        "STMT_ONE",
+        "STMT_TWO"
+      ],
+      "manifest": "MANIFEST_S",
+      "docBlock": "DOCBLOCK_S",
+      "evidence": "EVIDENCE_S",
+      "story": {
+        "title": "TITLE_S",
+        "description": "DESC_S"
+      },
+      "codegraphTool": "TOOL_S",
+      "repoPath": "REPO_S"
+    },
+    "BARE": {
+      "persona": "",
+      "seam": "SEAM_S",
+      "rule": "RULE_S",
+      "_statements": [
+        "STMT_ONE",
+        "STMT_TWO"
+      ],
+      "manifest": "",
+      "docBlock": "",
+      "evidence": "",
+      "story": {
+        "title": "TITLE_S",
+        "description": "DESC_S"
+      },
+      "codegraphTool": "",
+      "repoPath": ""
+    }
+  },
+  "sha256": {
+    "full": "b4b6beb15f2fd9b13631d151b255361671245cfa3c762531569283c17736cadb",
+    "bare": "1693e940414c3b5e3ad7f51af28db7d6e4b1ef164567c63406d364b2608282e5"
+  },
+  "output": {
+    "full": "PERSONA_S\n\nGUARD SEAM: SEAM_S\n\nTHE RULE THIS GUARD ENFORCES:\nRULE_S\n\nTHE STATEMENTS THE GUARD WILL CHECK:\n1. STMT_ONE\n2. STMT_TWO\n\nDECLARED MANIFEST (the files this story says it will touch):\nMANIFEST_S\n\nDOCUMENTATION LINKED ON THIS TICKET (fetched and quoted verbatim — the vendor's published contract):\nDOCBLOCK_S\n\nA name that appears above is something the VENDOR publishes, not something this team chose.\nDo NOT flag it when a statement uses it to describe OBSERVABLE behaviour — what a user or a\ntest can see happen. DO still flag it when the statement asserts the shape or contents of an\nINTERNAL object, argument or call, even if the name itself is documented: that is an\nimplementation detail wearing a published name.\n\nCODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):\nEVIDENCE_S\n\nSTORY CONTEXT:\nTitle: TITLE_S\nDescription: DESC_S\n\nVERIFY BEFORE YOU ANSWER — you have a real index of this repository.\n\n  PROJECT_ROOT=\"REPO_S\" bash \"TOOL_S\" query <SymbolName>\n  PROJECT_ROOT=\"REPO_S\" bash \"TOOL_S\" explore <terms>\n\nRun it via Bash. A candidate term that resolves to NOTHING in this index is noise and\nbelongs in the blacklist, however unusual the word looks. Do not assert that a term is\nmeaningful — check it.\n\nWHY THIS MATTERS HERE: the list you return feeds a BM25/IDF ranker. That ranker DEMOTES\nterms which are common in the corpus and AMPLIFIES terms which are rare. So a rare,\nmeaningless token — a bracketed brand tag, a ticket label, a person's name — is not\ndiluted, it is promoted to a top discriminator and drags the search away from the real\ncode. Rare-and-meaningless is the failure mode you exist to prevent; do not mistake\nrarity for signal.\n",
+    "bare": "GUARD SEAM: SEAM_S\n\nTHE RULE THIS GUARD ENFORCES:\nRULE_S\n\nTHE STATEMENTS THE GUARD WILL CHECK:\n1. STMT_ONE\n2. STMT_TWO\n\nDECLARED MANIFEST (the files this story says it will touch):\n- (none declared)\n\nCODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):\n- (none available)\n\nSTORY CONTEXT:\nTitle: TITLE_S\nDescription: DESC_S\n"
+  }
+}

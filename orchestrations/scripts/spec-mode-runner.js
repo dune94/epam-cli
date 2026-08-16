@@ -2970,6 +2970,33 @@ function buildGuardEvidence(findings) {
     .join('\n');
 }
 
+/**
+ * The guard-vocabulary prompt. Extracted verbatim from deriveGuardVocabulary so its
+ * migration into the template layer can be proven byte-for-byte.
+ */
+function buildGuardVocabularyPrompt({ persona, seam, rule, _statements, manifest, docBlock, evidence, story, codegraphTool, repoPath }) {
+  // RENDERED FROM THE TEMPLATE LAYER. Four sections are conditional and are assembled here:
+  // present, each points the agent at real evidence; absent, the prompt must not carry an
+  // empty heading implying evidence exists. A template cannot branch.
+  return renderEngineTemplate('guard-vocabulary', {
+    __PERSONA_PREFIX__: persona ? persona + '\n\n' : '',
+    __SEAM__: seam || 'unspecified',
+    __RULE__: rule,
+    __STATEMENT_LIST__: _statements.map((c, i) => `${i + 1}. ${c}`).join('\n'),
+    __MANIFEST__: manifest || '- (none declared)',
+    __DOC_SECTION__: docBlock
+      ? renderEngineTemplate('guard-vocabulary-documentation', { __DOC_BLOCK__: docBlock })
+      : '',
+    __EVIDENCE__: evidence || '- (none available)',
+    __STORY_TITLE__: (story && story.title) || '',
+    __STORY_DESCRIPTION__: String((story && story.description) || ''),
+    __CODEGRAPH_SECTION__: codegraphTool && repoPath
+      ? renderEngineTemplate('guard-vocabulary-codegraph', { __REPO_PATH__: repoPath, __CODEGRAPH_TOOL__: codegraphTool })
+      : '',
+  });
+}
+
+
 // Returns a normalised vocabulary, or null. NULL IS NOT "NOTHING TO FLAG" — callers must
 // treat it as "the guard could not be armed" and say so loudly.
 async function deriveGuardVocabulary({ promptExec, rule, statements, story, findings, manifestFiles, logDir, seam, repoPath, codegraphTool, referencedDocs }) {
@@ -3003,49 +3030,7 @@ async function deriveGuardVocabulary({ promptExec, rule, statements, story, find
   })();
   const persona = profiles['guard-vocabulary-agent'] || '';
 
-  const prompt = `${persona ? persona + '\n\n' : ''}GUARD SEAM: ${seam || 'unspecified'}
-
-THE RULE THIS GUARD ENFORCES:
-${rule}
-
-THE STATEMENTS THE GUARD WILL CHECK:
-${_statements.map((c, i) => `${i + 1}. ${c}`).join('\n')}
-
-DECLARED MANIFEST (the files this story says it will touch):
-${manifest || '- (none declared)'}
-
-${docBlock ? `DOCUMENTATION LINKED ON THIS TICKET (fetched and quoted verbatim — the vendor's published contract):
-${docBlock}
-
-A name that appears above is something the VENDOR publishes, not something this team chose.
-Do NOT flag it when a statement uses it to describe OBSERVABLE behaviour — what a user or a
-test can see happen. DO still flag it when the statement asserts the shape or contents of an
-INTERNAL object, argument or call, even if the name itself is documented: that is an
-implementation detail wearing a published name.
-
-` : ''}CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):
-${evidence || '- (none available)'}
-
-STORY CONTEXT:
-Title: ${(story && story.title) || ''}
-Description: ${String((story && story.description) || '')}
-${codegraphTool && repoPath ? `
-VERIFY BEFORE YOU ANSWER — you have a real index of this repository.
-
-  PROJECT_ROOT="${repoPath}" bash "${codegraphTool}" query <SymbolName>
-  PROJECT_ROOT="${repoPath}" bash "${codegraphTool}" explore <terms>
-
-Run it via Bash. A candidate term that resolves to NOTHING in this index is noise and
-belongs in the blacklist, however unusual the word looks. Do not assert that a term is
-meaningful — check it.
-
-WHY THIS MATTERS HERE: the list you return feeds a BM25/IDF ranker. That ranker DEMOTES
-terms which are common in the corpus and AMPLIFIES terms which are rare. So a rare,
-meaningless token — a bracketed brand tag, a ticket label, a person's name — is not
-diluted, it is promoted to a top discriminator and drags the search away from the real
-code. Rare-and-meaningless is the failure mode you exist to prevent; do not mistake
-rarity for signal.
-` : ''}`;
+  const prompt = buildGuardVocabularyPrompt({ persona, seam, rule, _statements, manifest, docBlock, evidence, story, codegraphTool, repoPath });
 
   // Real tools when there is a repo to check against — the agent must VERIFY a candidate
   // term, not assert it. Inherits ladder/retry/self-heal from runAgentForJson like every
@@ -8837,6 +8822,7 @@ module.exports = {
   persistReferencedDocs,
   fetchTicketDocuments,
   manifestFileExcerpts,
+  buildGuardVocabularyPrompt,
   buildGuardEvidence,
   deriveGuardVocabulary,
   mintProjectAgents,

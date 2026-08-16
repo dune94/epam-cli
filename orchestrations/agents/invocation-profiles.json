@@ -355,7 +355,8 @@
           "kind": "verification-criteria",
           "required": true
         }
-      ]
+      ],
+      "template": "guard-vocabulary"
     },
     "estate-survey": {
       "_what": "Surveys every codeline BEFORE the roster is minted: which ones the work actually reaches, and which need their own investigator. Breadth, never fix sites.",

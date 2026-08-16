@@ -8759,32 +8759,29 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
                     kb_record_episode "${_phase:-${PHASE:-core}}" "lint-gate" "lint gate failed" || true
             fi
             info "  [lint-gate:analyst] Extracting grounded finding from lint log..."
-            _lint_finding_prompt="$(cat <<LINT_FIND_EOF
-You are the gate-finding-analyst. A lint gate (the project's type check + eslint) failed during the '$PHASE' phase of an automated TypeScript project build.
-
-## Lint Gate Log
-$(cat "$_lint_log" 2>/dev/null | head -200)
-
-## Files THIS RUN produced or modified (the writer-output manifest)
-$(if [ -f "$SCRIPT_DIR/lib/story-outputs.sh" ]; then . "$SCRIPT_DIR/lib/story-outputs.sh" 2>/dev/null; story_outputs_files "$PROJECT_ROOT" "$LOG_DIR" 2>/dev/null | head -30; fi)
-
-A finding in ANY file above was produced by this run and is in scope, even if
-that file is not declared in a story's technicalNotes.files. Reproducing tests are written by a separate
-agent AFTER the story declares its files, so a .spec.ts/.test.ts will normally be
-absent from the declared list while still being this run's work — live
-2026-07-26, a real finding in a newly-written test file was dropped for exactly
-that reason. Attribute such a file to the story whose source file it tests.
-
-## PRD Stories (active)
-$(python3 -c "import json,sys; d=json.load(open('${MAIN_PRD_FILE:-$PRD_FILE}')); active=set(s for p in d['implementationOrder'].values() for s in p); [print(json.dumps({'id':s['id'],'title':s.get('title',''),'files':s.get('technicalNotes',{}).get('files',[])})) for s in d['stories'] if s['id'] in active]" 2>/dev/null | head -50)
-
-## Agent Profile
-$(cat "$_profiles_file" | python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('gate-finding-analyst',''))" 2>/dev/null)
-
-Identify: which story owns the file with the lint/type error? Output JSON only:
-{"gate":"lint","story_id":"<id>","file":"<path>","line":<n>,"rule":"<tsc-error-code or eslint-rule>","message":"<description>","suggested_fix":"<one-line fix>"}
-LINT_FIND_EOF
-)"
+            # The evidence, gathered into files. The log used to arrive `head -200` — a truncation of
+            # the very evidence the analyst attributes, cutting mid-file-list, so the findings nobody
+            # looked at were exactly the ones dropped. It goes whole.
+            local _lf_outputs_file _lf_stories_file
+            _lf_outputs_file=$(mktemp "${TMPDIR:-/tmp}/lint-outputs-XXXXXX.txt")
+            _lf_stories_file=$(mktemp "${TMPDIR:-/tmp}/lint-stories-XXXXXX.txt")
+            if [ -f "$SCRIPT_DIR/lib/story-outputs.sh" ]; then
+              . "$SCRIPT_DIR/lib/story-outputs.sh" 2>/dev/null || true
+              story_outputs_files "$PROJECT_ROOT" "$LOG_DIR" > "$_lf_outputs_file" 2>/dev/null || true
+            fi
+            python3 -c "import json,sys; d=json.load(open('${MAIN_PRD_FILE:-$PRD_FILE}')); active=[s for s in d.get('stories',[]) if not s.get('completed')]; print(json.dumps([{k:s.get(k) for k in ('id','title','agentRole')} for s in active], indent=2))" > "$_lf_stories_file" 2>/dev/null || echo "[]" > "$_lf_stories_file"
+            local _lp_vals; _lp_vals=$(mktemp "${TMPDIR:-/tmp}/lint-finding-analyst-vals-XXXXXX.json")
+            local _lp_role_file; _lp_role_file=$(mktemp "${TMPDIR:-/tmp}/lint-finding-analyst-role-XXXXXX.txt")
+            jq -r --arg r "gate-finding-analyst" '.[$r] // ""' "$_profiles_file" > "$_lp_role_file" 2>/dev/null || : > "$_lp_role_file"
+            jq -n --rawfile profile "$_lp_role_file" \
+                  --rawfile lint_log "$_lint_log" \
+                  --rawfile writer_outputs "$_lf_outputs_file" \
+                  --rawfile active_stories "$_lf_stories_file" \
+                  --arg phase "$PHASE" \
+                  '{"__PROFILE__":$profile,"__LINT_LOG__":$lint_log,"__WRITER_OUTPUTS__":$writer_outputs,"__ACTIVE_STORIES__":$active_stories,"__PHASE__":$phase}' > "$_lp_vals"
+            _lint_finding_prompt="$(render_engine_prompt lint-finding-analyst "$_lp_vals")"
+            rm -f "$_lp_vals" "$_lp_role_file"
+            rm -f "$_lf_outputs_file" "$_lf_stories_file"
             _lint_finding_raw=""
             _lga_attempt=0
             while [ "$_lga_attempt" -lt 2 ] && [ -z "$_lint_finding_raw" ]; do
@@ -8834,22 +8831,19 @@ if m:
                 info "  [lint-gate:analyst] Finding mapped to story: $_lint_story_id"
                 # Agent 2: story-ac-remediator — add AC to prevent recurrence
                 info "  [lint-gate:remediator] Augmenting ACs for story $_lint_story_id..."
-                _lint_ac_prompt="$(cat <<LINT_AC_EOF
-You are the story-ac-remediator. A lint gate failure was mapped to story '$_lint_story_id'.
-
-## Finding
-$_lint_finding_raw
-
-## Current story ACs
-$(python3 -c "import json; d=json.load(open('${MAIN_PRD_FILE:-$PRD_FILE}')); [print(json.dumps(s.get('acceptanceCriteria',[]))) for s in d['stories'] if s['id']=='$_lint_story_id']" 2>/dev/null)
-
-## Agent Profile
-$(cat "$_profiles_file" | python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('story-ac-remediator',''))" 2>/dev/null)
-
-Add 1-2 ACs to story '$_lint_story_id' that would prevent this lint failure. Output JSON only:
-{"story_id":"$_lint_story_id","new_acs":["<ac text>"],"rationale":"<why>"}
-LINT_AC_EOF
-)"
+                local _lac_acs_file; _lac_acs_file=$(mktemp "${TMPDIR:-/tmp}/lint-acs-XXXXXX.txt")
+                python3 -c "import json; d=json.load(open('${MAIN_PRD_FILE:-$PRD_FILE}')); [print(json.dumps(s.get('acceptanceCriteria', []), indent=2)) for s in d.get('stories',[]) if s.get('id')=='$_lint_story_id']" > "$_lac_acs_file" 2>/dev/null || echo "[]" > "$_lac_acs_file"
+                local _lp_vals; _lp_vals=$(mktemp "${TMPDIR:-/tmp}/lint-ac-remediator-vals-XXXXXX.json")
+                local _lp_role_file; _lp_role_file=$(mktemp "${TMPDIR:-/tmp}/lint-ac-remediator-role-XXXXXX.txt")
+                jq -r --arg r "story-ac-remediator" '.[$r] // ""' "$_profiles_file" > "$_lp_role_file" 2>/dev/null || : > "$_lp_role_file"
+                jq -n --rawfile profile "$_lp_role_file" \
+                      --rawfile current_acs "$_lac_acs_file" \
+                      --arg story_id "$_lint_story_id" \
+                      --arg finding "$_lint_finding_raw" \
+                      '{"__PROFILE__":$profile,"__CURRENT_ACS__":$current_acs,"__STORY_ID__":$story_id,"__FINDING__":$finding}' > "$_lp_vals"
+                _lint_ac_prompt="$(render_engine_prompt lint-ac-remediator "$_lp_vals")"
+                rm -f "$_lp_vals" "$_lp_role_file"
+                rm -f "$_lac_acs_file"
                 _lint_ac_raw=""
                 _lrem_attempt=0
                 while [ "$_lrem_attempt" -lt 2 ] && [ -z "$_lint_ac_raw" ]; do

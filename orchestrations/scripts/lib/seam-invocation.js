@@ -56,6 +56,30 @@ function readRegistry(file) {
  * @param {string} agent      any agent name, minted or hand-written
  * @param {string} [file]     registry path; defaults to the shipped one
  */
+/**
+ * Resolve a POSITION in the project's declared tier order to that project's own tier name.
+ *
+ * The order is lowest → highest, so:
+ *   base -> the first tier the project declares
+ *   top  -> the last
+ *   mid  -> the middle one, biased low when the count is even, because over-spending is the
+ *           more expensive mistake and a seam asking for "mid" is not asking for the ceiling.
+ *
+ * Returns '' when no order is available; the caller reports that rather than guessing a name.
+ */
+function resolveTierPosition(position, sourceEnv) {
+  const order = String((sourceEnv && sourceEnv.EPAM_MODEL_LADDER_TIER_ORDER) || '')
+    .split(/[\s,]+/).filter(Boolean);
+  if (!order.length) return '';
+  const p = String(position || '').trim().toLowerCase();
+  if (p === 'base') return order[0];
+  if (p === 'top') return order[order.length - 1];
+  if (p === 'mid') return order[Math.floor((order.length - 1) / 2)];
+  // Not a position: a project tier name may still be passed through unchanged, so an older
+  // registry keeps working while it is being migrated.
+  return order.includes(p) ? p : '';
+}
+
 function resolveSeam(agent, file, opts) {
   if (!agent) throw new Error('cannot resolve a seam for an empty agent name');
   // ignoreXref: resolve from the RULES alone, as if this agent had never been mapped. The mint
@@ -137,7 +161,26 @@ function seamInvocationEnv(agent, agentsDir, opts) {
     env.EPAM_TEMPERATURE = String(profile.temperature);
   }
   if (profile.ladder) {
-    const key = 'EPAM_MODEL_LADDER_' + String(profile.ladder).toUpperCase().replace(/[^A-Z0-9]/g, '_');
+    // A SEAM DECLARES A POSITION; THE PROJECT SUPPLIES THE NAME.
+    //
+    // The registry used to name tiers literally ('HIGHEST', 'medium'). llm-settings.json
+    // already said that was wrong in its own words — "the engine holds no ordering of its
+    // own" — and a project naming its tiers anything else left every seam pointing at a tier
+    // it does not have. Live on hello-dolly: twenty seams asked for HIGHEST, the project
+    // declared only high and medium, and all twenty ran with no escalation chain because the
+    // miss below is reported and then continued past.
+    //
+    // ladderTierOrder is declared lowest-to-highest by the project and exported by
+    // model-ladders.sh. Positions are resolved against it, so they hold whatever a project
+    // calls its tiers and however many it declares.
+    const tierName = resolveTierPosition(profile.ladder, sourceEnv);
+    if (!tierName) {
+      process.stderr.write(
+        "[seam-invocation] seam '" + seamName + "' asks for ladder position '" + profile.ladder +
+        "' but EPAM_MODEL_LADDER_TIER_ORDER is unset or empty — the project declares no tier " +
+        "order, so no position can be resolved\n");
+    }
+    const key = 'EPAM_MODEL_LADDER_' + String(tierName || profile.ladder).toUpperCase().replace(/[^A-Z0-9]/g, '_');
     const rungs = sourceEnv[key];
     if (rungs) {
       // The ladder this seam climbs, under the generic name every consumer reads.

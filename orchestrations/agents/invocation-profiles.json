@@ -72,7 +72,7 @@
       "reasoningEffort": "high",
       "allowedTools": "bash,read_file,list_files,search",
       "timeoutSecs": 900,
-      "ladder": "HIGHEST",
+      "ladder": "top",
       "temperature": "0.1",
       "produces": "review-feedback",
       "template": "team-lead-review",
@@ -97,7 +97,7 @@
       "maxOutputTokens": 32768,
       "reasoningEffort": "high",
       "timeoutSecs": 600,
-      "ladder": "HIGHEST",
+      "ladder": "top",
       "allowedTools": "bash,read_file,list_files,search",
       "produces": "review-feedback",
       "consumes": [
@@ -116,7 +116,7 @@
       "maxIterations": 1,
       "reasoningEffort": "high",
       "timeoutSecs": 360,
-      "ladder": "HIGHEST",
+      "ladder": "top",
       "allowedTools": "bash,read_file,list_files,search",
       "produces": "diagnosis",
       "template": "failure-analyst",
@@ -136,7 +136,7 @@
       "maxIterations": 15,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "HIGHEST",
+      "ladder": "top",
       "produces": "repro-test",
       "consumes": [
         {
@@ -158,7 +158,7 @@
       "maxIterations": 6,
       "reasoningEffort": "medium",
       "timeoutSecs": 600,
-      "ladder": "HIGHEST",
+      "ladder": "top",
       "produces": "test-criteria",
       "consumes": [
         {
@@ -175,7 +175,7 @@
       "maxOutputTokens": 16384,
       "reasoningEffort": "low",
       "timeoutSecs": 180,
-      "ladder": "highest",
+      "ladder": "top",
       "produces": "estimate-verdict",
       "consumes": [
         {
@@ -189,7 +189,7 @@
       "maxOutputTokens": 16384,
       "reasoningEffort": "medium",
       "timeoutSecs": 300,
-      "ladder": "medium",
+      "ladder": "base",
       "produces": "estimate",
       "consumes": [
         {
@@ -207,7 +207,7 @@
       "reasoningEffort": "high",
       "temperature": "0.7",
       "timeoutSecs": 360,
-      "ladder": "highest",
+      "ladder": "top",
       "produces": "change-verdict",
       "consumes": [
         {
@@ -222,7 +222,7 @@
       "reasoningEffort": "high",
       "temperature": "0.7",
       "timeoutSecs": 240,
-      "ladder": "medium",
+      "ladder": "base",
       "produces": "change-summary",
       "consumes": [
         {
@@ -237,7 +237,7 @@
       "reasoningEffort": "high",
       "temperature": "0.7",
       "timeoutSecs": 360,
-      "ladder": "HIGHEST",
+      "ladder": "top",
       "allowedTools": "bash,read_file,list_files,search",
       "produces": "diagnosis",
       "template": "failure-analyst",
@@ -262,7 +262,7 @@
       "maxOutputTokens": 16384,
       "reasoningEffort": "low",
       "timeoutSecs": 90,
-      "ladder": "medium",
+      "ladder": "base",
       "produces": "ac-classification",
       "consumes": [
         {
@@ -276,7 +276,7 @@
       "maxOutputTokens": 32768,
       "reasoningEffort": "medium",
       "timeoutSecs": 180,
-      "ladder": "HIGHEST",
+      "ladder": "top",
       "produces": "verification-criteria",
       "consumes": [
         {
@@ -290,7 +290,7 @@
       "maxOutputTokens": 16384,
       "reasoningEffort": "high",
       "timeoutSecs": 300,
-      "ladder": "HIGHEST",
+      "ladder": "top",
       "produces": "codeline-selection",
       "consumes": [
         {
@@ -301,7 +301,7 @@
     },
     "roster-review": {
       "_what": "Falsifies the claims in a generated agent roster before any implementer inherits them.",
-      "ladder": "HIGHEST",
+      "ladder": "top",
       "reasoningEffort": "high",
       "temperature": "0.1",
       "maxOutputTokens": 32768,
@@ -317,7 +317,7 @@
     },
     "code-graph-detective": {
       "_what": "Investigates one codeline and reports where the work actually lands.",
-      "ladder": "HIGHEST",
+      "ladder": "top",
       "reasoningEffort": "high",
       "temperature": "0.7",
       "maxOutputTokens": 32768,
@@ -341,7 +341,7 @@
     },
     "guard-vocabulary": {
       "_what": "Derives the vocabulary the verification-criteria guard enforces. A guard armed with the wrong terms reports clean.",
-      "ladder": "HIGHEST",
+      "ladder": "top",
       "reasoningEffort": "high",
       "temperature": "0.1",
       "maxOutputTokens": 32768,
@@ -357,7 +357,7 @@
     },
     "estate-survey": {
       "_what": "Surveys every codeline BEFORE the roster is minted: which ones the work actually reaches, and which need their own investigator. Breadth, never fix sites.",
-      "ladder": "HIGHEST",
+      "ladder": "top",
       "reasoningEffort": "high",
       "temperature": "0.7",
       "maxOutputTokens": 32768,
@@ -373,7 +373,7 @@
     },
     "story-writer": {
       "_what": "Implements a story: writes the code that satisfies its criteria. The archetype every minted -engineer is an instance of.",
-      "ladder": "HIGHEST",
+      "ladder": "top",
       "reasoningEffort": "high",
       "temperature": "0.2",
       "maxOutputTokens": 32768,
@@ -426,7 +426,7 @@
       "maxIterations": 25,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "HIGHEST",
+      "ladder": "top",
       "produces": "vc-coverage-report",
       "consumes": [
         {
@@ -443,7 +443,7 @@
       "maxIterations": 25,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "HIGHEST",
+      "ladder": "top",
       "produces": "qa-verdict",
       "consumes": [
         {
@@ -457,7 +457,7 @@
       "maxIterations": 25,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "HIGHEST",
+      "ladder": "top",
       "produces": "qa-verdict",
       "consumes": [
         {
@@ -474,7 +474,7 @@
       "maxIterations": 25,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "HIGHEST",
+      "ladder": "top",
       "produces": "qa-verdict",
       "consumes": [
         {
@@ -488,7 +488,7 @@
       "maxIterations": 25,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "HIGHEST",
+      "ladder": "top",
       "produces": "qa-verdict",
       "consumes": [
         {
@@ -505,7 +505,7 @@
       "maxIterations": 25,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "HIGHEST",
+      "ladder": "top",
       "produces": "qa-verdict",
       "consumes": [
         {
@@ -519,7 +519,7 @@
       "maxIterations": 25,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "HIGHEST",
+      "ladder": "top",
       "produces": "qa-verdict",
       "consumes": [
         {
@@ -768,5 +768,6 @@
     "roster-reviewer": "derived",
     "contentstack-sdk-engineer": "derived",
     "contentstack-preview-react-engineer": "derived"
-  }
+  },
+  "_ladderPositions": "A seam declares a POSITION in the project’s ladderTierOrder (base|mid|top), never a tier NAME. The project owns its tier vocabulary; the engine owns none. Converted 2026-08-15 after twenty seams asking for a literal HIGHEST ran unladdered on a project that declared only high and medium."
 }

@@ -206,5 +206,11 @@
     "maxToolCallsPerStory": 120,
     "storyBudgetWarningUsd": 0.5,
     "storyBudgetHardLimitUsd": 2
-  }
+  },
+  "ladderTierOrder": [
+    "medium",
+    "high",
+    "highest"
+  ],
+  "_ladderTierOrder": "Lowest to highest. Consumers compare tiers through this; the engine holds no ordering of its own, so adding a tier is a change here and nowhere else."
 }

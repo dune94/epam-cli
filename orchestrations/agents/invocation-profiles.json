@@ -297,7 +297,8 @@
           "kind": "ticket",
           "required": true
         }
-      ]
+      ],
+      "template": "codeline-discovery"
     },
     "roster-review": {
       "_what": "Falsifies the claims in a generated agent roster before any implementer inherits them.",

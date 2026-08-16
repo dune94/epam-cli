@@ -60,7 +60,11 @@ const ISSUES_PATH = getArg('--issues');
 const ROOT_DIR    = getArg('--root', process.env.JIRA_CODELINE_ROOT || '');
 const OUT_PATH    = getArg('--out', '');
 
-if (!ISSUES_PATH || !ROOT_DIR || !OUT_PATH) {
+// Scoped to DIRECT invocation. Unscoped, requiring this module for any reason exits the
+// requiring process — which is what happened the moment a test tried to call the prompt
+// builder to prove its migration changed no bytes. The check itself is unchanged: a run
+// invoked without its paths still refuses to start.
+if (require.main === module && (!ISSUES_PATH || !ROOT_DIR || !OUT_PATH)) {
   process.stderr.write('Usage: node codeline-discovery.js --issues <path> --root <dir> --out <path>\n');
   process.exit(1);
 }
@@ -588,6 +592,29 @@ const { deriveCodelineName, deriveCodelineNames } = require('./codeline-name');
 
 // ── LLM discovery call ─────────────────────────────────────────────────────
 
+/**
+ * Render an ENGINE prompt from the template layer. Strict in both directions: a placeholder
+ * left unreplaced means evidence never reached the agent, and a value nobody uses means the
+ * caller believes it supplied something that went nowhere.
+ */
+function renderEngineTemplate(id, values) {
+  const file = path.join(__dirname, '..', '..', 'prompts', 'templates', id + '.json');
+  let doc;
+  try { doc = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) {
+    throw new Error(`[prompt] cannot load engine template '${id}' from ${file}: ${e && e.message}`);
+  }
+  let out = String(doc.body || '');
+  if (!out.trim()) throw new Error(`[prompt] engine template '${id}' has an empty body`);
+  const declared = [...new Set(out.match(/__[A-Z][A-Z0-9_]*__/g) || [])];
+  const supplied = Object.keys(values || {});
+  const missing = declared.filter((p) => !supplied.includes(p));
+  if (missing.length) throw new Error(`[prompt] '${id}' is missing values for: ${missing.join(', ')}`);
+  const unused = supplied.filter((p) => !declared.includes(p));
+  if (unused.length) throw new Error(`[prompt] '${id}' was given values it does not use: ${unused.join(', ')}`);
+  for (const key of declared) out = out.replace(new RegExp(key, 'g'), () => String(values[key]));
+  return out;
+}
+
 function buildDiscoveryPrompt(issues, manifest) {
   const manifestSummary = manifest.map(r =>
     `- dir: ${r.name}\n  path: ${r.path}\n  stack: ${r.stack}\n  package: ${r.packageName}` +
@@ -609,96 +636,12 @@ function buildDiscoveryPrompt(issues, manifest) {
       `\n  description: ${i.description || ''}`;
   }).join('\n\n');
 
-  return `You are the codeline-discovery agent for a brownfield engineering pipeline.
-
-Your task: given a set of Jira tickets and a manifest of local code repositories,
-identify which repository (or repositories) each ticket's changes belong to.
-
-JIRA TICKETS:
-${issuesSummary}
-
-REPOSITORY MANIFEST (git repos only):
-${manifestSummary}
-
-The repository manifest above is PRE-SCORED and pre-filtered before reaching you —
-each one is already a plausible candidate, not a random sample of all repos. It is
-listed in descending order of match confidence: the FIRST entry is the strongest
-candidate found by keyword and code-symbol matching against the ticket text.
-
-Rules:
-1. Match each ticket to the repository whose name, packageName, or description
-   best fits the ticket's domain. Use context clues: service names, domain terms,
-   technology references, component names, file path mentions.
-2. You MUST return at least one repository for every ticket — an empty result is
-   NEVER acceptable and will abort the entire pipeline run before any work can
-   happen. If you are not fully confident, select your best guess from the list
-   (the first-listed entry is usually a good choice, since the list is already
-   ranked by match confidence) rather than returning nothing.
-
-2a. ONE TICKET MAY SPAN SEVERAL REPOSITORIES, and you MUST return one entry for
-   each. This estate is maintained as many separate codelines, so a single
-   ticket routinely covers work in more than one of them — a change with both
-   front-end and back-end parts, or one applied across several product areas.
-   Returning a single repository for such a ticket silently drops the rest of
-   the work: those repositories are never touched, and the run reports success
-   having done a fraction of the job.
-
-   The strongest evidence is the ticket's own "components" field, which is the
-   tracker's record of which product areas it touches. When a ticket names
-   several distinct product areas, return the repository that owns each one.
-   Do not collapse them because one candidate scored highest — the ranking
-   measures textual similarity to a single repository, not how much of the
-   ticket that repository covers.
-
-   Decide the count from the ticket. Do not aim for any particular number.
-3. SELECT ON EVIDENCE, NOT ON A HUNCH. Every selected repository must be grounded
-   in something concrete you can point at:
-     - a ticket component, label or phrase that names that product area, or
-     - something in the repository itself (its name, its manifest, its code)
-       that matches what the ticket asks for.
-   Its RANK IS NOT EVIDENCE. The scores are the thing you are adjudicating, so
-   "it was the second-ranked candidate" justifies nothing. Neither does "it is
-   probably the backend for X" — if you have to say likely, probably, or may be,
-   you do not have evidence.
-   If a part of the ticket clearly belongs SOMEWHERE but you cannot ground it in
-   one of these repositories, DO NOT SELECT ONE ANYWAY. Put it in "unsure" with
-   what you could not resolve. An unresolved component is real information and a
-   human can settle it; a guess promoted to a selection cannot be spotted later.
-   Do not omit a candidate you CAN ground merely because another also fits — a
-   ticket spanning several product areas needs all of them (rule 2a).
-4. Assign each selected repo a short codeline identifier: 2-20 chars, lowercase,
-   alphanumeric only, no dots or dashes. Derive it from the directory name by
-   removing only decoration - a domain suffix, or an organisation or platform
-   prefix - and keeping the part that actually names the product. Keep every
-   remaining word: for a directory "alpha-beta-gamma" the identifier is
-   "alphabetagamma", NOT "gamma". Dropping words produces an identifier that no
-   longer identifies the repository.
-5. Return exactly one entry only when the ticket genuinely belongs to exactly one
-   repository. "One entry" is the right answer for a self-contained change, and
-   the wrong answer for a ticket spanning several product areas — see rule 2a.
-6. "reason" must be one sentence explaining why THIS repository was selected, and
-   what part of the ticket it covers. Every selected repository needs its own
-   reason — a single justification covering the whole set makes a wrong
-   selection impossible to spot afterwards.
-7. "evidence" must quote the CONCRETE thing that grounds the selection: the
-   ticket component/label/phrase verbatim, or the file, directory or manifest
-   entry in that repository. It is not a second reason and not a restatement —
-   if you cannot fill it without hedging, the repository belongs in "unsure",
-   not in "codelines".
-
-Output format (strict JSON, no markdown fences, no preamble, no trailing text):
-{
-  "codelines": [
-    { "name": "<short-identifier-derived-from-the-directory-name>",
-      "path": "/absolute/path/to/repo",
-      "reason": "what part of the ticket this repo covers",
-      "evidence": "ticket component \\"<the-component-verbatim>\\"" }
-  ],
-  "unsure": [
-    { "part": "the part of the ticket you could not place",
-      "why": "what you would need in order to place it" }
-  ]
-}`;
+  // RENDERED FROM THE TEMPLATE LAYER. The two summaries are assembled above, because
+  // assembling them is logic and a template that branches cannot be reviewed as prose.
+  return renderEngineTemplate('codeline-discovery', {
+    __ISSUES_SUMMARY__: issuesSummary,
+    __MANIFEST_SUMMARY__: manifestSummary,
+  });
 }
 
 /**
@@ -835,6 +778,13 @@ function callLlm(prompt, opts = {}) {
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────
+
+// Requirable without running. The prompt below is migrating into the template layer, and a
+// migration has to be provable byte-for-byte — which means a test must be able to call the
+// builder. An unguarded IIFE runs a whole discovery pass the moment anything requires this.
+module.exports = { buildDiscoveryPrompt };
+
+if (require.main !== module) return;
 
 (async () => {
   const issues = JSON.parse(fs.readFileSync(ISSUES_PATH, 'utf8'));

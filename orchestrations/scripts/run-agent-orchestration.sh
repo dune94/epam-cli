@@ -4015,6 +4015,25 @@ if is_parent; then
     # Jira flow: ingest → synthesize → route codelines
     _run_jira_pipeline; exit $?
   else
+    # RESOLVE THE SCOPE BEFORE COUNTING IT.
+    #
+    # The count below is the whole dispatch decision, and it reads project.outputDirs — which
+    # only the Jira synthesizer ever wrote. A project whose PRD is authored therefore counted 0
+    # however many codelines it really had, fell through to single-lane execution, and the mint
+    # reported success against one unnamed codeline.
+    #
+    # Discovery is not a Jira capability; it is the answer to "which repositories does this work
+    # touch", which every brownfield project needs. The resolver is a no-op when the scope is
+    # already declared, and a no-op when no codeline root is configured — so a single-repo
+    # project and a project that declares its own codelines both reach the count unchanged.
+    #
+    # HALTS on failure. A run that proceeds with an unresolved scope writes to whichever single
+    # repository it happens to land on.
+    if ! bash "$SCRIPT_DIR/resolve-codeline-scope.sh" --prd "$PRD_FILE"; then
+      error "[orch] codeline scope could not be resolved — refusing to run against an unknown scope"
+      exit 1
+    fi
+
     # Canonical PRD flow: if the PRD defines multiple codelines, route them.
     # Single-codeline PRDs fall through to the normal phase execution below.
     _cl_count=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/cl-count.js" "$PRD_FILE" 2>/dev/null || echo 0)

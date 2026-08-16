@@ -1,0 +1,30 @@
+{
+  "$why": [
+    "Moved out of brownfield-repro-test-writer.sh on 2026-08-16.",
+    "",
+    "What the repro-writer is told when its previous attempt failed, in the two ways it can: the test did not COMPILE, or it compiled and its assertions failed against a fix that is already committed. The second is the harder message to get right -- a failing assertion there means the TEST is wrong, not the code, and a writer told otherwise will 'fix' working code.",
+    "",
+    "The compiler errors arrived through a grep | head -8 pipeline inside the prompt -- a truncation of the very errors the writer is told to eliminate, so error nine onward were invisible and the rewrite could never be complete. The caller supplies them.",
+    "",
+    "And the failure JSON arrived head -c 1200 -- cut at a byte offset, mid-structure, so what the writer was shown of its own failure was not valid JSON at all."
+  ],
+  "description": "Feedback to the repro-writer when its previous test failed to compile or failed its assertions.",
+  "seams": [
+    "repro-test-writer"
+  ],
+  "id": "repro-feedback",
+  "version": 1,
+  "bodies": {
+    "typecheck": "\n\n## COMPILER ERRORS FROM YOUR PREVIOUS ATTEMPT — FIX THESE\nYour last test ran but did NOT compile. tsc reported, for this exact file:\n```\n__COMPILER_ERRORS__\n```\nRewrite the file so these are gone. Mock objects must satisfy the full type.",
+    "assertions": "\n\n## YOUR TEST FAILED AGAINST THE FIX THAT IS ALREADY COMMITTED\nThe change for this story is ALREADY in the working tree. Your test ran but __FAILED__ of __TOTAL__ assertion(s) FAILED, which means your test contradicts the implemented change.\nRead the diff above again and assert the behaviour it ACTUALLY produces.\n```\n__FAILURE_JSON__\n```"
+  },
+  "placeholders": [
+    "__REL__",
+    "__OUT__",
+    "__FAILED__",
+    "__TOTAL__",
+    "__JSON__",
+    "__COMPILER_ERRORS__",
+    "__FAILURE_JSON__"
+  ]
+}

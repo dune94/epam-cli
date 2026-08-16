@@ -274,13 +274,21 @@ _vcs=$("$NODE_BIN" -e '
 _story_kind=$(jq -r --arg id "$STORY_ID" \
     '.stories[]? | select(.id == $id) | .storyKind // ""' "$PRD_FILE" 2>/dev/null || echo "")
 if [ "$_story_kind" = "novel" ]; then
-    _prompt_role="write ONE test that proves a change which has ALREADY been implemented and committed"
+    _cp_vals=$(mktemp "${TMPDIR:-/tmp}/repro-role-vals-XXXXXX.json")
+    jq -n \
+          '{}' > "$_cp_vals"
+    _prompt_role="$(render_engine_prompt repro-role "$_cp_vals" proves_committed_change)"
+    rm -f "$_cp_vals"
     _diff_heading="The change that was just made (diff vs baseline)"
     _req_proof="3. The test MUST prove the verification criteria above against the committed change. Assert the observable outcome the change now produces — not the mechanism, and not that some prior behaviour was broken. This is a NEW capability: there is no pre-fix failure to reproduce, and a test written as though there were will be rejected. It MUST PASS with the change in place."
     _log_noun="test"
     _commit_noun="test"
 else
-    _prompt_role="write ONE bug-reproducing test for a fix that has ALREADY been implemented and committed"
+    _cp_vals=$(mktemp "${TMPDIR:-/tmp}/repro-role-vals-XXXXXX.json")
+    jq -n \
+          '{}' > "$_cp_vals"
+    _prompt_role="$(render_engine_prompt repro-role "$_cp_vals" reproduces_fixed_bug)"
+    rm -f "$_cp_vals"
     _diff_heading="The fix that was just made (diff vs baseline)"
     _req_proof="3. The test MUST genuinely REPRODUCE the bug: it must FAIL against the pre-fix code and PASS with the fix. Assert the corrected observable value — a test that passes regardless of the fix is worthless and will be rejected."
     _log_noun="reproducing test"
@@ -401,14 +409,12 @@ _typecheck_written_test() {
     local _out
     _out=$(_run_project_verification "$PROJECT_ROOT" 2>&1) || true
     if printf '%s\n' "$_out" | grep -qF "${rel}("; then
-        _typecheck_feedback="
-
-## COMPILER ERRORS FROM YOUR PREVIOUS ATTEMPT — FIX THESE
-Your last test ran but did NOT compile. tsc reported, for this exact file:
-\`\`\`
-$(printf '%s\n' "$_out" | grep -F "${rel}(" | head -8)
-\`\`\`
-Rewrite the file so these are gone. Mock objects must satisfy the full type."
+        _cp_vals=$(mktemp "${TMPDIR:-/tmp}/repro-feedback-vals-XXXXXX.json")
+        jq -n \
+              --arg compiler_errors "$(printf '%s\n' "$_out" | grep -F "${rel}(" | head -8)" \
+              '{"__COMPILER_ERRORS__":$compiler_errors}' > "$_cp_vals"
+        _typecheck_feedback="$(render_engine_prompt repro-feedback "$_cp_vals" typecheck)"
+        rm -f "$_cp_vals"
         log "written test FAILS TYPECHECK — rejecting so the writer can retry:"
         printf '%s\n' "$_out" | grep -F "${rel}(" | head -5 | sed 's/^/    /'
         printf '%s\n' "$_out" | grep -F "${rel}(" >> "$_writer_log" 2>/dev/null || true
@@ -477,14 +483,14 @@ _validate_written_test() {
             out="$json"          # no usable JSON — fall through to the text heuristic
         elif [ "${total:-0}" -gt 0 ] && [ "${_failed:-0}" -gt 0 ]; then
             log "written test FAILS against the committed fix (${_failed}/${total}) — rejecting so the writer can retry"
-            _assertion_feedback="
-
-## YOUR TEST FAILED AGAINST THE FIX THAT IS ALREADY COMMITTED
-The change for this story is ALREADY in the working tree. Your test ran but ${_failed} of ${total} assertion(s) FAILED, which means your test contradicts the implemented change.
-Read the diff above again and assert the behaviour it ACTUALLY produces.
-\`\`\`
-$(printf '%s' "$json" | head -c 1200)
-\`\`\`"
+            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/repro-feedback-vals-XXXXXX.json")
+            jq -n \
+                  --arg failure_json "$(printf '%s' "$json" | head -c 1200)" \
+                  --arg failed "${_failed}" \
+                  --arg total "${total}" \
+                  '{"__FAILURE_JSON__":$failure_json,"__FAILED__":$failed,"__TOTAL__":$total}' > "$_cp_vals"
+            _assertion_feedback="$(render_engine_prompt repro-feedback "$_cp_vals" assertions)"
+            rm -f "$_cp_vals"
             return 1
         elif [ "${total:-0}" -gt 0 ]; then
             # Executed is necessary but NOT sufficient — it must also compile.

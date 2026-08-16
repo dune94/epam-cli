@@ -1,0 +1,18 @@
+{
+  "$why": [
+    "Moved out of brownfield-repro-test-writer.sh on 2026-08-16.",
+    "",
+    "Two roles, one per story kind: a test that proves an ALREADY-committed change, or a test that reproduces a bug a fix has already addressed. One body each -- the two say different things about whether the code under test is expected to pass, and conflating them produces a test written against the wrong expectation."
+  ],
+  "description": "What kind of test the repro-writer is being asked for, by story kind.",
+  "seams": [
+    "repro-test-writer"
+  ],
+  "id": "repro-role",
+  "version": 1,
+  "bodies": {
+    "proves_committed_change": "write ONE test that proves a change which has ALREADY been implemented and committed",
+    "reproduces_fixed_bug": "write ONE bug-reproducing test for a fix that has ALREADY been implemented and committed"
+  },
+  "placeholders": []
+}

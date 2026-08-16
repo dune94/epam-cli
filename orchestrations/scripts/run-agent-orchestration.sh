@@ -778,12 +778,7 @@ resolve_codeline_node() {
     local required=""
 
     if [ -f "$pkg" ]; then
-        required=$(node -e '
-          try {
-            const p = require(process.argv[1]);
-            process.stdout.write((p.engines && p.engines.node) || "");
-          } catch { process.stdout.write(""); }
-        ' "$pkg" 2>/dev/null || true)
+        required=$(node "$SCRIPT_DIR/lib/handlers/package-engines-node.js" "$pkg" 2>/dev/null || true)
     fi
 
     if [ -z "$required" ] || ! command -v fnm &>/dev/null; then
@@ -1671,16 +1666,7 @@ _story_archetype_ladder() {
     _role=$(jq -r --arg id "$_sid" '.stories[] | select(.id == $id) | .agentRole // ""' \
         "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "")
     [ -n "$_role" ] || { printf ''; return 0; }
-    "${NODE_BIN:-node}" -e '
-      const path = require("path");
-      const { resolveSeam } = require(process.argv[1]);
-      try {
-        const reg = process.argv[2];
-        const seam = resolveSeam(process.argv[3], reg);
-        const p = JSON.parse(require("fs").readFileSync(reg, "utf8")).profiles[seam] || {};
-        process.stdout.write(String(p.ladder || ""));
-      } catch (_) { process.stdout.write(""); }
-    ' "$SCRIPT_DIR/lib/seam-invocation.js" \
+    "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/seam-ladder-position.js" "$SCRIPT_DIR/lib/seam-invocation.js" \
       "${AGENT_PROFILES_REGISTRY:-$EPAM_AGENTS_DIR/invocation-profiles.json}" "$_role" 2>/dev/null || printf ''
 }
 
@@ -3813,12 +3799,7 @@ _run_jira_pipeline() {
   if [ "${EPAM_SKIP_AGENT_MINT:-0}" = "1" ]; then
     _roster_file="${EPAM_AGENTS_DIR:-}/profiles.json"
     _roster_n=0
-    [ -s "$_roster_file" ] && _roster_n=$("$NODE_BIN" -e '
-      try {
-        const r = require(process.argv[1]);
-        process.stdout.write(String(Object.keys(r.profiles || r || {}).length));
-      } catch (_) { process.stdout.write("0"); }
-    ' "$_roster_file" 2>/dev/null || echo 0)
+    [ -s "$_roster_file" ] && _roster_n=$("$NODE_BIN" "$SCRIPT_DIR/lib/handlers/roster-size.js" "$_roster_file" 2>/dev/null || echo 0)
     if [ "${_roster_n:-0}" -lt 1 ]; then
       error "[jira] EPAM_SKIP_AGENT_MINT=1 but no minted roster exists at ${_roster_file}."
       error "[jira] Skipping the mint now would hand every story to an agent that was never"

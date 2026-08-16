@@ -1219,25 +1219,7 @@ run_orch_prompt() {
         if [ "${cost:-0}" = "0" ] && { [ "${tokens_in:-0}" -gt 0 ] || [ "${tokens_out:-0}" -gt 0 ]; }; then
             local _pricing_file="$SCRIPT_DIR/model-pricing.json"
             if [ -f "$_pricing_file" ]; then
-                cost=$(python3 - "$_pricing_file" "${gate_model:-}" "${tokens_in:-0}" "${tokens_out:-0}" <<'PYEOF'
-import sys, json
-pricing_file, model, tin, tout = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
-try:
-    with open(pricing_file) as f:
-        table = json.load(f)
-    prices = table.get(model)
-    if not prices:
-        for k, v in table.items():
-            if model.startswith(k) or k.startswith(model):
-                prices = v
-                break
-    if prices:
-        print("{:.6f}".format((tin * prices["input"] + tout * prices["output"]) / 1_000_000))
-    else:
-        print("0")
-except Exception:
-    print("0")
-PYEOF
+                cost=$(python3 "$SCRIPT_DIR/lib/handlers/model-call-cost.py" "$_pricing_file" "${gate_model:-}" "${tokens_in:-0}" "${tokens_out:-0}"
 2>/dev/null || echo "0")
             fi
         fi
@@ -5292,20 +5274,7 @@ run_pre_phase_assessment() {
             _pfa_before_tmp=$(mktemp)
             printf '%s' "$_pfa_profiles_before" > "$_pfa_before_tmp"
             local _pfa_diff
-            _pfa_diff=$(python3 - "$_pfa_before_tmp" "$profiles_file" <<'PFA_DIFF_PY'
-import json, sys
-with open(sys.argv[1]) as f:
-    before = json.load(f)
-with open(sys.argv[2]) as f:
-    after = json.load(f)
-new_keys = [k for k in after if k not in before]
-changed_keys = [k for k in after if k in before and after[k] != before[k]]
-out = {
-    "new_profiles": {k: after[k][:1500] for k in new_keys},
-    "changed_profiles": {k: {"before": before[k][-800:], "after": after[k][-800:]} for k in changed_keys}
-}
-print(json.dumps(out))
-PFA_DIFF_PY
+            _pfa_diff=$(python3 "$SCRIPT_DIR/lib/handlers/pfa-diff.py" "$_pfa_before_tmp" "$profiles_file"
 )
             rm -f "$_pfa_before_tmp"
             local _pfa_has_changes
@@ -5355,54 +5324,7 @@ print(m.group(1) if m else 'pass')
         local _pfa_prd_stderr_file
         _pfa_prd_stderr_file=$(mktemp)
         local _pfa_prd_verdict
-        _pfa_prd_verdict=$(python3 - "$_pfa_prd_before_file" "$PRD_FILE" "$phase_id" 2>"$_pfa_prd_stderr_file" <<'PFA_PRD_DIFF_PY'
-import json, sys
-
-ALLOWED_FIELDS = {'agentRole', 'model', 'aiProvider', 'reasoningEffort'}
-
-before_path, after_path, phase_id = sys.argv[1], sys.argv[2], sys.argv[3]
-try:
-    with open(before_path) as f:
-        before = json.load(f)
-    with open(after_path) as f:
-        after = json.load(f)
-except Exception as e:
-    print('fail')
-    print(f"VIOLATION: PRD is not valid JSON after write: {e}", file=sys.stderr)
-    sys.exit(0)
-
-phase_ids = set(before.get('implementationOrder', {}).get(phase_id, []))
-before_by_id = {s['id']: s for s in before.get('stories', []) if 'id' in s}
-after_by_id = {s['id']: s for s in after.get('stories', []) if 'id' in s}
-
-violations = []
-if set(before_by_id) != set(after_by_id):
-    added = set(after_by_id) - set(before_by_id)
-    removed = set(before_by_id) - set(after_by_id)
-    if added:
-        violations.append(f"stories added: {sorted(added)}")
-    if removed:
-        violations.append(f"stories removed: {sorted(removed)}")
-
-for sid in phase_ids:
-    b = before_by_id.get(sid)
-    a = after_by_id.get(sid)
-    if b is None or a is None:
-        continue  # already reported above as added/removed
-    all_keys = set(b.keys()) | set(a.keys())
-    for key in all_keys:
-        if key in ALLOWED_FIELDS:
-            continue
-        if b.get(key) != a.get(key):
-            violations.append(f"{sid}.{key} changed (not an allowed field for pre-phase assessment)")
-
-if violations:
-    print('fail')
-    for v in violations[:20]:
-        print(f"VIOLATION: {v}", file=sys.stderr)
-else:
-    print('pass')
-PFA_PRD_DIFF_PY
+        _pfa_prd_verdict=$(python3 "$SCRIPT_DIR/lib/handlers/pfa-prd-diff.py" "$_pfa_prd_before_file" "$PRD_FILE" "$phase_id" 2>"$_pfa_prd_stderr_file"
 )
         if [ "$_pfa_prd_verdict" = "fail" ]; then
             _pfa_violated=1
@@ -5746,58 +5668,7 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
             fi
             if [ -n "$_rg_pattern" ]; then
                 _rg_baseline_file="$LOG_DIR/regression-guard-baseline-${PHASE}.json"
-                _rg_intersect=$(python3 - "$_rg_pattern" "$_rg_max" "$_rg_log" << 'RG_INTERSECT_PY'
-import re, sys, json
-
-pattern, max_attempts, log_base = sys.argv[1], int(sys.argv[2]), sys.argv[3]
-try:
-    rx = re.compile(pattern, re.MULTILINE)
-except re.error:
-    print(json.dumps({"stable": False, "failures": []}))
-    sys.exit(0)
-
-def attempt_log(i):
-    if i == 1:
-        return log_base
-    if log_base.endswith('.log'):
-        return log_base[:-4] + f"-attempt-{i}.log"
-    return f"{log_base}-attempt-{i}"
-
-sets = []
-for i in range(1, max_attempts + 1):
-    try:
-        with open(attempt_log(i)) as f:
-            text = f.read()
-    except OSError:
-        sets.append(None)
-        continue
-    ids = set()
-    for m in rx.finditer(text):
-        g = next((x for x in m.groups() if x), None)
-        if g:
-            ids.add(g)
-    sets.append(ids)
-
-# A missing log, or an attempt that parsed NO failing identity despite the
-# command's own nonzero exit, means the pattern is not matching this run's
-# real output — never silently treat "found nothing" as "an empty stable
-# set", which would look identical to a genuinely green baseline.
-if any(s is None or len(s) == 0 for s in sets):
-    print(json.dumps({"stable": False, "failures": []}))
-else:
-    # Live AMSD-2041, 2026-07-31 (gotransit): a test surviving every attempt
-    # (schedules.spec.tsx) is reproducible per the backlog's own bar — but
-    # attempt 3 ALSO had two unrelated tests flake in under parallel-suite
-    # interference. Requiring the WHOLE union to match across every attempt
-    # (the original version here) let that one-off noise poison an
-    # otherwise-clean, genuinely reproducible baseline and blocked a real
-    # launch outright. The intersection ALONE is what's trustworthy —
-    # tolerate exactly that, and simply drop the one-off extras as the
-    # flakiness the 3-attempt retry exists to filter, never adding them to
-    # the tolerated set (which would risk masking a real regression there).
-    stable = set.intersection(*sets)
-    print(json.dumps({"stable": len(stable) > 0, "failures": sorted(stable)}))
-RG_INTERSECT_PY
+                _rg_intersect=$(python3 "$SCRIPT_DIR/lib/handlers/rg-intersect.py" "$_rg_pattern" "$_rg_max" "$_rg_log"
 )
                 if echo "$_rg_intersect" | python3 -c "import json,sys; sys.exit(0 if json.load(sys.stdin).get('stable') else 1)" 2>/dev/null; then
                     echo "$_rg_intersect" > "$_rg_baseline_file"
@@ -5998,101 +5869,9 @@ else: print(0)
             _mc_verdict_stderr=$(mktemp)
             printf '%s' "$_mc_prd_before" > "$_mc_before_file"
             printf '%s' "$_mc_prd_after" > "$_mc_after_file"
-            _mc_verdict=$(python3 - "$_mc_before_file" "$_mc_after_file" \
+            _mc_verdict=$(python3 "$SCRIPT_DIR/lib/handlers/mc-review.py" "$_mc_before_file" "$_mc_after_file" \
                 "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json}" \
-                2>"$_mc_verdict_stderr" << 'MC_REVIEW_PY'
-import json, sys
-
-ALLOWED_FIELDS = {'model', 'aiProvider', 'reasoningEffort'}
-
-# A MODEL THAT IS NOT A RUNG CANNOT ESCALATE, AND THIS REVIEWER NEVER ASKED.
-#
-# It checked STRUCTURE only — which fields moved, whether stories appeared or vanished —
-# so any string was an acceptable model. Live, run 20260814T224748Z: `gpt-5-codex` was
-# assigned here, is on no ladder this project declares, and the successor lookup returns
-# EMPTY for it — the same value it returns at the top rung. The story would have burned
-# every attempt on one model while the log read like a legitimate ceiling.
-#
-# The rungs come from the project's own llm-settings.json. No model name lives here, and
-# an unreadable declaration is UNKNOWN — never an approval.
-def _declared_rungs(path):
-    try:
-        with open(path) as f:
-            ladders = (json.load(f) or {}).get('ladders') or {}
-    except Exception:
-        return None
-    rungs = set()
-    for tier in ladders.values():
-        for hop in (tier or {}).get('modelLadder') or []:
-            for end in ('from', 'to'):
-                v = hop.get(end)
-                if isinstance(v, str) and v:
-                    rungs.add(v)
-        start = (tier or {}).get('startModel')
-        if isinstance(start, str) and start:
-            rungs.add(start)
-    return rungs or None
-
-_settings_path = sys.argv[3] if len(sys.argv) > 3 else ''
-RUNGS = _declared_rungs(_settings_path)
-
-before_path, after_path = sys.argv[1], sys.argv[2]
-try:
-    with open(before_path) as f:
-        before = json.load(f)
-    with open(after_path) as f:
-        after = json.load(f)
-except Exception as e:
-    print('fail')
-    print(f"  [prd-model-coordinator][reviewer] VIOLATION: PRD is not valid JSON after write: {e}", file=sys.stderr)
-    sys.exit(0)
-
-before_by_id = {s['id']: s for s in before.get('stories', []) if 'id' in s}
-after_by_id = {s['id']: s for s in after.get('stories', []) if 'id' in s}
-
-violations = []
-
-if before_by_id.keys() != after_by_id.keys():
-    added = after_by_id.keys() - before_by_id.keys()
-    removed = before_by_id.keys() - after_by_id.keys()
-    if added:
-        violations.append(f"stories added: {sorted(added)}")
-    if removed:
-        violations.append(f"stories removed: {sorted(removed)}")
-
-if before.get('implementationOrder') != after.get('implementationOrder'):
-    violations.append("implementationOrder was modified")
-
-for sid, before_story in before_by_id.items():
-    after_story = after_by_id.get(sid)
-    if after_story is None:
-        continue
-    all_keys = set(before_story.keys()) | set(after_story.keys())
-    for key in all_keys:
-        if key in ALLOWED_FIELDS:
-            continue
-        if before_story.get(key) != after_story.get(key):
-            violations.append(f"{sid}.{key} changed (not an allowed model-assignment field)")
-
-    # Membership, checked on what the agent actually wrote.
-    _assigned = after_story.get('model')
-    if isinstance(_assigned, str) and _assigned:
-        if RUNGS is None:
-            violations.append(
-                f"cannot read ladder declarations from '{_settings_path}' — "
-                f"cannot verify {sid}.model='{_assigned}' can escalate")
-        elif _assigned not in RUNGS:
-            violations.append(
-                f"{sid}.model='{_assigned}' is on no declared ladder — it could never "
-                f"escalate; choose one of: {', '.join(sorted(RUNGS))}")
-
-if violations:
-    print('fail')
-    for v in violations[:20]:
-        print(f"  [prd-model-coordinator][reviewer] VIOLATION: {v}", file=sys.stderr)
-else:
-    print('pass')
-MC_REVIEW_PY
+                2>"$_mc_verdict_stderr"
 )
             rm -f "$_mc_before_file" "$_mc_after_file"
             if [ "$_mc_verdict" = "fail" ]; then
@@ -6151,33 +5930,7 @@ print(json.dumps(types))
     # back to a fixed default so the pipeline never silently relies on a
     # provider's own hardcoded default model.
     ( flock -w 10 200 || { error "  [prd-model-coordinator] Could not acquire lock on $_mc_prd_target"; exit 1; }
-    python3 - "$_mc_prd_target" "$_mc_phase" <<'MC_FALLBACK_PY'
-import json, sys, os
-prd_path, phase = sys.argv[1], sys.argv[2]
-with open(prd_path) as f:
-    prd = json.load(f)
-changed = False
-for s in prd.get('stories', []):
-    if s.get('status') != 'pending':
-        continue
-    if s.get('phase', phase) != phase:
-        continue
-    if not s.get('model'):
-        s['model'] = 'MiniMax-M3'
-        changed = True
-    if not s.get('aiProvider'):
-        s['aiProvider'] = 'minimax'
-        changed = True
-    if not s.get('reasoningEffort'):
-        eff = s.get('effort', 'medium')
-        s['reasoningEffort'] = eff if eff in ('low', 'high') else 'medium'
-        changed = True
-if changed:
-    _tmp_prd_path = prd_path + '.tmp'
-    with open(_tmp_prd_path, 'w') as f:
-        json.dump(prd, f, indent=2)
-    os.replace(_tmp_prd_path, prd_path)
-MC_FALLBACK_PY
+    python3 "$SCRIPT_DIR/lib/handlers/mc-fallback.py" "$_mc_prd_target" "$_mc_phase"
     ) 200>"${_mc_prd_target}.lock"
 fi
 _emit_agent complete "prd-model-coordinator" "PRD model assignments done"
@@ -7008,58 +6761,7 @@ run_skills_audit_scan() {
     # processing only (no LLM call inside), so holding the lock this long
     # never risks stalling a parallel worktree story on model latency.
     ( flock -w 10 200 || { error "  [SkillsAudit] Could not acquire lock on $profiles_file"; return 1; }
-    python3 - "$profiles_file" << 'PYEOF'
-import json, re, sys, os
-
-path = sys.argv[1]
-with open(path) as f:
-    profiles = json.load(f)
-
-duplicates_removed = 0
-contradictions = []
-
-for role, text in profiles.items():
-    if not isinstance(text, str) or '[Self-Heal]' not in text:
-        continue
-    paragraphs = text.split('\n\n')
-    seen = set()
-    deduped = []
-    for para in paragraphs:
-        key = para.strip()
-        if key.startswith('[Self-Heal]'):
-            if key in seen:
-                duplicates_removed += 1
-                continue
-            seen.add(key)
-        deduped.append(para)
-    new_text = '\n\n'.join(deduped)
-    if new_text != text:
-        profiles[role] = new_text
-        text = new_text
-
-    for para in text.split('\n\n'):
-        if not para.strip().startswith('[Self-Heal]'):
-            continue
-        m = re.search(r"(?:do not|never|avoid)\s+use\s+'([^']+)'", para, re.IGNORECASE)
-        if not m:
-            continue
-        token = re.escape(m.group(1))
-        # Does the note ALSO recommend using the same token elsewhere (past
-        # the "do not use" clause itself)? The token may reappear as its own
-        # quoted string ('as') or embedded as a whole word inside a longer
-        # quoted phrase ('value as Type') -- both are the same contradiction.
-        rest = para[m.end():]
-        if re.search(r"\buse\b[^.]*'[^']*\b" + token + r"\b[^']*'", rest, re.IGNORECASE):
-            contradictions.append({'role': role, 'note': para.strip()})
-
-if duplicates_removed > 0:
-    _tmp_path = path + '.tmp'
-    with open(_tmp_path, 'w') as f:
-        json.dump(profiles, f, indent=2)
-    os.replace(_tmp_path, path)
-
-print(json.dumps({'duplicates_removed': duplicates_removed, 'contradictions': contradictions}))
-PYEOF
+    python3 "$SCRIPT_DIR/lib/handlers/skill-note-duplicates.py" "$profiles_file"
     ) 200>"${profiles_file}.lock"
 }
 
@@ -7151,61 +6853,7 @@ fi
 run_tools_audit_scan() {
     local tools_dir="$1"
     local log_dir="$2"
-    python3 - "$tools_dir" "$log_dir" << 'PYEOF'
-import glob, json, os, re, sys
-
-tools_dir, log_dir = sys.argv[1], sys.argv[2]
-result = {"broken": [], "duplicates": []}
-
-if not os.path.isdir(tools_dir):
-    print(json.dumps(result))
-    sys.exit(0)
-
-tool_files = sorted(glob.glob(os.path.join(tools_dir, "*.sh")))
-reviewed = [t for t in tool_files if os.path.exists(t + ".reviewed")]
-
-# Combined text of this phase's per-story logs, for the failure-count check.
-log_text = ""
-for log_file in glob.glob(os.path.join(log_dir, "main-*.log")):
-    try:
-        with open(log_file, errors="ignore") as f:
-            log_text += f.read()
-    except Exception:
-        pass
-
-purposes = {}
-for tool_path in reviewed:
-    name = os.path.basename(tool_path)[:-3]
-    with open(tool_path) as f:
-        content = f.read()
-
-    syntax_rc = os.system(f"bash -n {tool_path!r} >/dev/null 2>&1")
-    if syntax_rc != 0:
-        result["broken"].append({"tool": name, "reason": "syntax"})
-        continue
-
-    fail_count = len(re.findall(re.escape(name) + r"\.sh exited non-zero", log_text))
-    if fail_count >= 2:
-        result["broken"].append({"tool": name, "reason": f"runtime ({fail_count} non-zero exits this phase)"})
-
-    # Purpose is the second line: "# <purpose>" (first line is the shebang).
-    lines = content.split("\n")
-    purpose = lines[1][2:].strip() if len(lines) > 1 and lines[1].startswith("#") else ""
-    purposes[name] = purpose
-
-names = list(purposes.keys())
-for i in range(len(names)):
-    for j in range(i + 1, len(names)):
-        a, b = names[i], names[j]
-        pa, pb = purposes[a].lower().split(), purposes[b].lower().split()
-        if not pa or not pb:
-            continue
-        overlap = len(set(pa) & set(pb)) / max(len(set(pa) | set(pb)), 1)
-        if overlap >= 0.6:
-            result["duplicates"].append({"tool_a": a, "tool_b": b})
-
-print(json.dumps(result))
-PYEOF
+    python3 "$SCRIPT_DIR/lib/handlers/tool-scripts-health.py" "$tools_dir" "$log_dir"
 }
 
 if is_truthy "${SKIP_TOOLS_AUDIT:-}"; then
@@ -7372,139 +7020,7 @@ run_phase_assessment() {
     # deterministic-apply pattern.
     local _pa_summary_file
     _pa_summary_file=$(mktemp)
-    python3 - "$cost_file" "$PRD_FILE" "$phase_id" "$_pa_summary_file" << 'ASSESS_PRECOMPUTE_PY'
-import json, os, sys
-from datetime import datetime
-
-cost_file, prd_file, phase_id, out_file = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
-
-def parse_ts(s):
-    if not s:
-        return None
-    try:
-        return datetime.fromisoformat(s)
-    except Exception:
-        return None
-
-# Dedupe: for each story_id, keep only the record with the highest started_at
-# (the log accumulates records across multiple runs of the same phase).
-latest = {}
-with open(cost_file) as f:
-    for line in f:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            rec = json.loads(line)
-        except Exception:
-            continue
-        if rec.get('phase_id') != phase_id:
-            continue
-        sid = rec.get('story_id')
-        if not sid:
-            continue
-        prev = latest.get(sid)
-        if prev is None or (rec.get('started_at') or '') > (prev.get('started_at') or ''):
-            latest[sid] = rec
-
-with open(prd_file) as f:
-    prd = json.load(f)
-
-stories_by_id = {s['id']: s for s in prd.get('stories', []) if s.get('id')}
-
-# implementationOrder is the authoritative phase->story-ids mapping (a
-# story's own optional .phase field is not reliably populated) — build a
-# reverse lookup and use ordering position to find phases AFTER this one,
-# for the corrective-action scope.
-impl_order = prd.get('implementationOrder', {}) or {}
-phase_names = list(impl_order.keys())
-story_to_phase = {}
-for pname, ids in impl_order.items():
-    for sid in (ids or []):
-        story_to_phase[sid] = pname
-try:
-    future_phases = set(phase_names[phase_names.index(phase_id) + 1:])
-except ValueError:
-    future_phases = set()
-
-# Only records whose story_id matches a REAL PRD story are per-story
-# variance data — other story_ids (e.g. "core", "pipeline") are gate/
-# pipeline-level cost records, not story work, and are excluded here.
-per_story = []
-actual_minutes_total = 0.0
-forecast_minutes_total = 0.0
-actual_cost_total = 0.0
-forecast_cost_total = 0.0
-
-for sid, rec in latest.items():
-    story = stories_by_id.get(sid)
-    if not story:
-        continue
-    completed = bool(story.get('completed'))
-    status = 'succeeded' if completed else rec.get('status', 'unknown')
-    started = parse_ts(rec.get('started_at'))
-    ended = parse_ts(rec.get('ended_at'))
-    elapsed_minutes = 0.0
-    if started and ended:
-        elapsed_minutes = max(0.0, (ended - started).total_seconds() / 60.0)
-    forecast_minutes = story.get('estimatedAiMinutes')
-    if forecast_minutes is None:
-        forecast_minutes = (story.get('estimatedHours') or 0) * 60
-    forecast_cost = story.get('estimatedCost') or 0
-    actual_cost = rec.get('task_cost_usd') or 0
-
-    actual_minutes_total += elapsed_minutes
-    forecast_minutes_total += forecast_minutes
-    actual_cost_total += actual_cost
-    forecast_cost_total += forecast_cost
-
-    per_story.append({
-        'story_id': sid,
-        'status': status,
-        'elapsed_minutes': round(elapsed_minutes, 3),
-        'forecast_minutes': round(forecast_minutes, 3),
-        'actual_cost_usd': round(actual_cost, 4),
-        'forecast_cost_usd': round(forecast_cost, 4),
-        'description': story.get('description', ''),
-        'agentRole': story.get('agentRole', ''),
-    })
-
-variance_minutes = actual_minutes_total - forecast_minutes_total
-variance_cost_usd = actual_cost_total - forecast_cost_total
-threshold_pct = float(os.environ.get('PHASE_ASSESSMENT_OVER_THRESHOLD_PCT', '20'))
-over_threshold = (
-    forecast_minutes_total > 0
-    and actual_minutes_total > forecast_minutes_total * (1 + threshold_pct / 100.0)
-)
-
-future_pending_stories = []
-for s in prd.get('stories', []):
-    sid = s.get('id')
-    if story_to_phase.get(sid) in future_phases and s.get('status') == 'pending' and not s.get('completed'):
-        future_pending_stories.append({
-            'story_id': sid,
-            'description': s.get('description', ''),
-            'agentRole': s.get('agentRole', ''),
-            'phase': story_to_phase.get(sid),
-        })
-
-summary = {
-    'phase_id': phase_id,
-    'actual_minutes': round(actual_minutes_total, 3),
-    'forecast_minutes': round(forecast_minutes_total, 3),
-    'actual_cost_usd': round(actual_cost_total, 4),
-    'forecast_cost_usd': round(forecast_cost_total, 4),
-    'variance_minutes': round(variance_minutes, 3),
-    'variance_cost_usd': round(variance_cost_usd, 4),
-    'over_threshold': over_threshold,
-    'over_threshold_pct': threshold_pct,
-    'per_story': per_story,
-    'future_pending_stories': future_pending_stories,
-    }
-
-with open(out_file, 'w') as f:
-    json.dump(summary, f, indent=2)
-ASSESS_PRECOMPUTE_PY
+    python3 "$SCRIPT_DIR/lib/handlers/assess-precompute.py" "$cost_file" "$PRD_FILE" "$phase_id" "$_pa_summary_file"
 
     local _pa_summary
     _pa_summary=$(cat "$_pa_summary_file" 2>/dev/null || echo '{}')
@@ -7583,108 +7099,7 @@ sys.exit(0 if m and isinstance(json.loads(m.group(0)), dict) else 1)" 2>/dev/nul
     _pa_raw_tmp=$(mktemp); echo "$_pa_raw" > "$_pa_raw_tmp"
     _pa_summary_tmp=$(mktemp); echo "$_pa_summary" > "$_pa_summary_tmp"
     ( flock -w 10 200 || { error "  [phase-assessment] Could not acquire lock on $assessment_file"; rm -f "$_pa_raw_tmp" "$_pa_summary_tmp"; return 1; }
-    python3 - "$_pa_summary_tmp" "$_pa_raw_tmp" "$assessment_file" "$improvement_report_file" "${MAIN_PRD_FILE:-$PRD_FILE}" <<'ASSESS_APPLY_PY'
-import json, re, sys, os
-from datetime import datetime, timezone
-
-summary_file, raw_file, assessment_file, report_file, prd_file = sys.argv[1:6]
-
-with open(summary_file) as f:
-    summary = json.load(f)
-raw = open(raw_file).read()
-
-decoder = json.JSONDecoder()
-payload = {}
-idx = 0
-while True:
-    start = raw.find('{', idx)
-    if start == -1:
-        break
-    try:
-        obj, end = decoder.raw_decode(raw, start)
-        if isinstance(obj, dict) and ('notes' in obj or 'agent_recommendations' in obj or 'role_reassignments' in obj):
-            payload = obj
-            break
-        idx = end
-    except json.JSONDecodeError:
-        idx = start + 1
-
-notes = payload.get('notes') or ('No improvements needed.' if not summary['over_threshold'] and not summary['future_pending_stories'] else '')
-recommendations = payload.get('agent_recommendations') or []
-reassignments = payload.get('role_reassignments') or []
-
-record = {
-    'phase_id': summary['phase_id'],
-    'phase_name': summary['phase_id'],
-    'actual_minutes': summary['actual_minutes'],
-    'forecast_minutes': summary['forecast_minutes'],
-    'actual_cost_usd': summary['actual_cost_usd'],
-    'forecast_cost_usd': summary['forecast_cost_usd'],
-    'variance_minutes': summary['variance_minutes'],
-    'variance_cost_usd': summary['variance_cost_usd'],
-    'over_threshold': summary['over_threshold'],
-    'agent_recommendations': recommendations,
-    'notes': notes,
-    }
-with open(assessment_file, 'a') as f:
-    f.write(json.dumps(record) + '\n')
-
-# Re-validate reassignments against the SAME future_pending_stories set the
-# LLM was given — never trust a story_id/role pair from the model's own
-# text without re-checking it against real, deterministically-computed
-# eligibility (pending, not completed, phase strictly after this one).
-eligible = {s['story_id']: s for s in summary['future_pending_stories']}
-applied = []
-if reassignments:
-    with open(prd_file) as f:
-        prd = json.load(f)
-    stories_by_id = {s['id']: s for s in prd.get('stories', []) if s.get('id')}
-    changed = False
-    for r in reassignments:
-        sid = r.get('story_id')
-        new_role = r.get('newAgentRole')
-        if not sid or not new_role or sid not in eligible:
-            continue
-        story = stories_by_id.get(sid)
-        if not story or story.get('status') != 'pending' or story.get('completed'):
-            continue
-        if story.get('agentRole') == new_role:
-            continue
-        if 'originalAgentRole' not in story:
-            story['originalAgentRole'] = story.get('agentRole')
-        story['agentRole'] = new_role
-        applied.append({'story_id': sid, 'newAgentRole': new_role, 'reason': r.get('reason', '')})
-        changed = True
-    if changed:
-        tmp_path = prd_file + '.tmp'
-        with open(tmp_path, 'w') as f:
-            json.dump(prd, f, indent=2)
-        os.replace(tmp_path, prd_file)
-
-ts = datetime.now(timezone.utc).isoformat()
-lines = [
-    f"# Phase Improvement Report: {summary['phase_id']}",
-    f"_Generated: {ts}_",
-    "",
-    f"- Actual: {summary['actual_minutes']} min / ${summary['actual_cost_usd']}",
-    f"- Forecast: {summary['forecast_minutes']} min / ${summary['forecast_cost_usd']}",
-    f"- Variance: {summary['variance_minutes']} min / ${summary['variance_cost_usd']}",
-    f"- Over threshold ({summary['over_threshold_pct']}%): {summary['over_threshold']}",
-    "",
-    "## Notes",
-    notes,
-]
-if recommendations:
-    lines += ["", "## Recommendations"] + [f"- {r}" for r in recommendations]
-if applied:
-    lines += ["", "## Role reassignments applied"] + [
-        f"- {a['story_id']}: -> {a['newAgentRole']} ({a['reason']})" for a in applied
-    ]
-with open(report_file, 'w') as f:
-    f.write("\n".join(lines) + "\n")
-
-print(f"assessment record written; {len(applied)} role reassignment(s) applied")
-ASSESS_APPLY_PY
+    python3 "$SCRIPT_DIR/lib/handlers/assess-apply.py" "$_pa_summary_tmp" "$_pa_raw_tmp" "$assessment_file" "$improvement_report_file" "${MAIN_PRD_FILE:-$PRD_FILE}"
     ) 200>"${assessment_file}.lock"
     rm -f "$_pa_raw_tmp" "$_pa_summary_tmp"
 
@@ -8045,57 +7460,7 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
             [ "$_rgd_try" -gt 1 ] && _rgd_try_log="${_rgd_log%.log}-attempt-${_rgd_try}.log"
             (cd "$_rg_root" && PATH="$(dirname "$_rg_node"):$PATH" "$_rg_pm" test) > "$_rgd_try_log" 2>&1 || true
         done
-        _rgd_result=$(python3 - "$_rgd_pattern" "$_rgd_max" "$_rgd_log" "$_rgd_baseline_file" << 'RGD_DIFF_PY'
-import re, sys, json
-
-pattern, max_attempts, log_base, baseline_file = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4]
-try:
-    rx = re.compile(pattern, re.MULTILINE)
-except re.error:
-    print(json.dumps({"verdict": "unknown", "new_failures": []}))
-    sys.exit(0)
-
-def attempt_log(i):
-    if i == 1:
-        return log_base
-    if log_base.endswith('.log'):
-        return log_base[:-4] + f"-attempt-{i}.log"
-    return f"{log_base}-attempt-{i}"
-
-sets = []
-for i in range(1, max_attempts + 1):
-    try:
-        with open(attempt_log(i)) as f:
-            text = f.read()
-    except OSError:
-        sets.append(set())
-        continue
-    ids = set()
-    for m in rx.finditer(text):
-        g = next((x for x in m.groups() if x), None)
-        if g:
-            ids.add(g)
-    sets.append(ids)
-
-# Same correction as Step 5's baseline capture (live AMSD-2041, 2026-07-31):
-# the intersection ALONE is the reproducible signal. A test failing in every
-# after-attempt is a real, confirmed new failure; a one-off flake in a single
-# attempt (present in the union but not the intersection) is exactly the
-# noise the 3-attempt retry exists to filter, on EITHER side of this
-# comparison — it must not block a clean phase, and it must not be silently
-# folded into "new failures" either.
-stable_after = set.intersection(*sets) if sets else set()
-
-baseline = set()
-try:
-    with open(baseline_file) as f:
-        baseline = set(json.load(f).get('failures', []))
-except OSError:
-    pass
-
-new_failures = sorted(stable_after - baseline)
-print(json.dumps({"verdict": "fail" if new_failures else "pass", "new_failures": new_failures}))
-RGD_DIFF_PY
+        _rgd_result=$(python3 "$SCRIPT_DIR/lib/handlers/rgd-diff.py" "$_rgd_pattern" "$_rgd_max" "$_rgd_log" "$_rgd_baseline_file"
 )
         _rgd_verdict=$(echo "$_rgd_result" | python3 -c "import json,sys; print(json.load(sys.stdin)['verdict'])" 2>/dev/null || echo unknown)
         if [ "$_rgd_verdict" = "pass" ]; then
@@ -8791,47 +8156,7 @@ if m:
                 _lint_ac_tmp="$(mktemp)"
                 echo "$_lint_ac_raw" > "$_lint_ac_tmp"
                 _lint_acs_added="$( ( flock -w 10 200 || { error "  [lint-gate:remediator] Could not acquire lock on ${MAIN_PRD_FILE:-$PRD_FILE}"; return 1; }
-                python3 - "${MAIN_PRD_FILE:-$PRD_FILE}" "$_lint_story_id" "$_lint_ac_tmp" <<'LINT_AC_PY'
-import sys,json,os
-prd_path=sys.argv[1]; story_id=sys.argv[2]; raw_file=sys.argv[3]
-raw=open(raw_file).read()
-# Robust JSON-object scan, not a brace-depth-free regex -- see the sibling
-# fix in the Step 4.2 story-ac-remediator above for why: a suggested AC's
-# own verification snippet (e.g. `node -e "...{...}..."`) can contain
-# literal braces inside a JSON string value, which a regex requiring ZERO
-# braces in the whole match can never find. json.JSONDecoder.raw_decode
-# respects real JSON nesting/escaping regardless of string contents.
-decoder=json.JSONDecoder()
-payload=None
-idx=0
-while True:
-    start=raw.find('{', idx)
-    if start==-1: break
-    try:
-        obj,end=decoder.raw_decode(raw, start)
-        if isinstance(obj, dict) and 'new_acs' in obj:
-            payload=obj
-            break
-        idx=end
-    except json.JSONDecodeError:
-        idx=start+1
-if not payload: sys.exit(0)
-new_acs=payload.get('new_acs',[])
-if not new_acs: sys.exit(0)
-with open(prd_path) as f: d=json.load(f)
-added=0
-for s in d['stories']:
-    if s['id']==story_id:
-        existing=[a.get('text','') if isinstance(a,dict) else str(a) for a in s.get('acceptanceCriteria',[])]
-        for ac in new_acs:
-            if ac and ac not in existing and len(existing)<24:
-                s.setdefault('acceptanceCriteria',[]).append({'text':ac,'status':'pending'})
-                added+=1
-_tmp_prd_path=prd_path+'.tmp'
-with open(_tmp_prd_path,'w') as f: json.dump(d,f,indent=2)
-os.replace(_tmp_prd_path, prd_path)
-print(added)
-LINT_AC_PY
+                python3 "$SCRIPT_DIR/lib/handlers/lint-ac.py" "${MAIN_PRD_FILE:-$PRD_FILE}" "$_lint_story_id" "$_lint_ac_tmp"
                 2>/dev/null || echo "0"
                 ) 200>"${MAIN_PRD_FILE:-$PRD_FILE}.lock" )"
                 rm -f "$_lint_ac_tmp"
@@ -9216,35 +8541,7 @@ $sast_prompt"
             local _semgrep_rc=$?
             set -e
             if [ -f "$semgrep_json" ] && [ -s "$semgrep_json" ]; then
-                semgrep_summary=$(python3 - "$semgrep_json" <<'PYEOF'
-import sys, json
-try:
-    with open(sys.argv[1]) as f:
-        data = json.load(f)
-    results = data.get("results", [])
-    errors_count = len(data.get("errors", []))
-    by_sev = {}
-    for r in results:
-        sev = r.get("extra", {}).get("severity", "INFO").upper()
-        by_sev.setdefault(sev, []).append(r)
-    lines = [f"totalFindings={len(results)}  scanErrors={errors_count}"]
-    for sev in ("ERROR", "WARNING", "INFO"):
-        items = by_sev.get(sev, [])
-        if not items:
-            continue
-        lines.append(f"\n{sev} ({len(items)}):")
-        for r in items[:10]:
-            path = r.get("path", "?")
-            line = r.get("start", {}).get("line", 0)
-            rule = r.get("check_id", "?").split(".")[-1]
-            msg  = r.get("extra", {}).get("message", "")[:120]
-            lines.append(f"  [{rule}] {path}:{line} — {msg}")
-        if len(items) > 10:
-            lines.append(f"  ... and {len(items)-10} more {sev} findings")
-    print("\n".join(lines))
-except Exception as e:
-    print(f"(semgrep parse error: {e})")
-PYEOF
+                semgrep_summary=$(python3 "$SCRIPT_DIR/lib/handlers/semgrep-summary.py" "$semgrep_json"
 2>/dev/null || echo "(semgrep unavailable)")
             else
                 semgrep_summary="(semgrep produced no output — exit code $_semgrep_rc)"
@@ -9365,47 +8662,7 @@ except Exception as e:
             # hardcoded file names, no assumption beyond "this is a tsconfig.json".
             if [ $_tsc_rc -ne 0 ] && echo "$_tsc_out" | grep -q "error TS18003"; then
                 local _placeholder_created=""
-                _placeholder_created=$(python3 - "$PROJECT_ROOT" << 'PYEOF'
-import json, os, re, glob, sys
-
-project_root = sys.argv[1] if len(sys.argv) > 1 else "."
-tsconfig_path = os.path.join(project_root, "tsconfig.json")
-try:
-    with open(tsconfig_path) as f:
-        raw = f.read()
-    raw_nocomments = re.sub(r'^\s*//.*$', '', raw, flags=re.MULTILINE)
-    cfg = json.loads(raw_nocomments)
-except Exception:
-    print("")
-    sys.exit(0)
-
-includes = cfg.get("include") or []
-if not includes:
-    print("")
-    sys.exit(0)
-
-# Already has real inputs somewhere? Nothing to heal.
-for pattern in includes:
-    matches = [m for m in glob.glob(os.path.join(project_root, pattern), recursive=True) if os.path.isfile(m)]
-    if matches:
-        print("")
-        sys.exit(0)
-
-# Derive a placeholder path from the first include pattern's static (non-glob) prefix.
-first_pattern = includes[0]
-m = re.match(r'^([^*?{}\[\]]*)', first_pattern)
-base = m.group(1) if m else ""
-base_dir = os.path.dirname(os.path.join(project_root, base)) or project_root
-if not base_dir.startswith(project_root):
-    base_dir = project_root
-
-os.makedirs(base_dir, exist_ok=True)
-placeholder_path = os.path.join(base_dir, "index.ts")
-if not os.path.exists(placeholder_path):
-    with open(placeholder_path, "w") as f:
-        f.write("export {};\n")
-print(os.path.relpath(placeholder_path, project_root))
-PYEOF
+                _placeholder_created=$(python3 "$SCRIPT_DIR/lib/handlers/tsconfig-strictness.py" "$PROJECT_ROOT"
 2>/dev/null || echo "")
 
                 if [ -n "$_placeholder_created" ]; then
@@ -9478,39 +8735,7 @@ $(echo "$_tsc_out" | head -40)"
             set -e
             # Also inject content of expected files listed in technicalNotes.files
             local _spec_file_excerpts=""
-            _spec_file_excerpts=$(python3 - "$PRD_FILE" "$phase_id" "$PROJECT_ROOT" <<'PYEOF'
-import sys, json, os
-prd_path, phase_id, proj = sys.argv[1], sys.argv[2], sys.argv[3]
-try:
-    with open(prd_path) as f:
-        prd = json.load(f)
-    phase_ids = set(prd.get('implementationOrder', {}).get(phase_id, []))
-    story_map = {s['id']: s for s in prd.get('stories', [])}
-    out, total_lines = [], 0
-    for sid in prd.get('implementationOrder', {}).get(phase_id, []):
-        s = story_map.get(sid, {})
-        tn = s.get('technicalNotes')
-        files = tn.get('files', []) if isinstance(tn, dict) else []
-        for rel in files[:3]:
-            full = os.path.join(proj, rel)
-            if not os.path.isfile(full):
-                continue
-            try:
-                lines = open(full).readlines()
-                excerpt = ''.join(lines[:80])
-                out.append(f'\n### {rel} (first {min(80,len(lines))} lines)\n{excerpt}')
-                total_lines += min(80, len(lines))
-                if total_lines > 600:
-                    out.append('\n(file evidence truncated — limit reached)')
-                    break
-            except Exception:
-                pass
-        if total_lines > 600:
-            break
-    print(''.join(out) if out else '(no expected files found in technicalNotes)')
-except Exception as e:
-    print(f'(file oracle error: {e})')
-PYEOF
+            _spec_file_excerpts=$(python3 "$SCRIPT_DIR/lib/handlers/phase-story-summary.py" "$PRD_FILE" "$phase_id" "$PROJECT_ROOT"
 2>/dev/null || echo "(file oracle unavailable)")
             _spec_impl_evidence="## Implementation Evidence (pre-computed — do NOT call any tools)
 
@@ -9565,33 +8790,7 @@ $spec_prompt"
             local _oracle_rc=$?
             set -e
             if [ -f "$oracle_json" ]; then
-                oracle_summary=$(python3 - "$oracle_json" <<'PYEOF'
-import sys, json
-try:
-    with open(sys.argv[1]) as f:
-        data = json.load(f)
-    num_passed   = data.get("numPassedTests", 0)
-    num_failed   = data.get("numFailedTests", 0)
-    num_total    = data.get("numTotalTests", 0)
-    num_skipped  = data.get("numPendingTests", 0)
-    failed_names = []
-    for suite in data.get("testResults", []):
-        for t in suite.get("testResults", []):
-            if t.get("status") == "failed":
-                failed_names.append(t.get("fullName", t.get("title", "?")))
-    lines = [
-        f"numTotal={num_total}  numPassed={num_passed}  numFailed={num_failed}  numSkipped={num_skipped}"
-    ]
-    if failed_names:
-        lines.append("Failed tests:")
-        for n in failed_names[:20]:
-            lines.append(f"  - {n}")
-        if len(failed_names) > 20:
-            lines.append(f"  ... and {len(failed_names)-20} more")
-    print("\n".join(lines))
-except Exception as e:
-    print(f"(oracle parse error: {e})")
-PYEOF
+                oracle_summary=$(python3 "$SCRIPT_DIR/lib/handlers/vitest-oracle-summary.py" "$oracle_json"
 2>/dev/null || echo "(oracle unavailable)")
             else
                 oracle_summary="(vitest ran but produced no JSON output — exit code $_oracle_rc)"
@@ -9731,59 +8930,7 @@ except Exception:
         # spec-validator "fail" verdict (e.g. SKY-004 missing /search, /cheapest,
         # dashboard) was silently downgraded to a non-blocking warning on every
         # run, never once actually parsed. Fixed: double-quote so bash expands it.
-        _spec_failing=$(python3 - "$spec_log" <<'SPEC_EXTRACTOR_PY'
-import sys, re
-
-# The spec-validator agent often emits JSON with unescaped newlines inside string
-# values, making the output unparseable by json.loads regardless of extraction strategy.
-# Use targeted line-level pattern matching instead — robust against malformed JSON.
-try:
-    text = open(sys.argv[1]).read()
-
-    # Check the agent ran at all (must contain storyId references)
-    if '"storyId"' not in text and '"stories"' not in text:
-        print('no-json')
-        sys.exit(0)
-
-    if not re.search(r'"verdict"\s*:', text):
-        print('no-data')
-        sys.exit(0)
-
-    # Grounding check (same principle already applied to fuzz-weaver/perf-sentinel):
-    # a story's "fail" verdict is only trustworthy if the agent actually verified
-    # SOMETHING about it. When every one of a story's criteria is self-reported
-    # as "untestable" (the agent had no real evidence — e.g. it never actually
-    # used its Read tool despite having access), that "fail" is a hallucinated
-    # conclusion with nothing behind it, not a real finding. Slice the text by
-    # story boundary (storyId occurrence) so each story's own verdict/criteria
-    # are only matched against its OWN slice, not the whole document.
-    story_starts = [m.start() for m in re.finditer(r'"storyId"\s*:\s*"[^"]*"', text)]
-    grounded_failing = 0
-    for i, start in enumerate(story_starts):
-        end = story_starts[i + 1] if i + 1 < len(story_starts) else len(text)
-        story_slice = text[start:end]
-        if not re.search(r'"verdict"\s*:\s*"fail"', story_slice):
-            continue
-        statuses = re.findall(r'"status"\s*:\s*"(met|partial|unmet|untestable)"', story_slice)
-        has_grounded_criterion = any(s != 'untestable' for s in statuses)
-        if has_grounded_criterion:
-            grounded_failing += 1
-        # else: every criterion is untestable — ungrounded fail, don't count it
-
-    # The overallVerdict line is a top-level field — distinct from per-story verdict
-    overall_m = re.search(r'"overallVerdict"\s*:\s*"(\w+)"', text)
-    overall = overall_m.group(1) if overall_m else None
-
-    if grounded_failing > 0:
-        print(grounded_failing)
-    elif overall == 'warn':
-        # Non-blocking partial — treat as 0 failures (warn path handled separately)
-        print(0)
-    else:
-        print(0)
-except Exception:
-    print('error')
-SPEC_EXTRACTOR_PY
+        _spec_failing=$(python3 "$SCRIPT_DIR/lib/handlers/spec-extractor.py" "$spec_log"
 2>/dev/null || echo "error")
         if [ "$_spec_failing" = "no-data" ] || [ "$_spec_failing" = "no-json" ] || [ "$_spec_failing" = "error" ]; then
             step_emit "22b" "warn" "Step 22b: Spec validator" "no story data"
@@ -10037,41 +9184,7 @@ $mutant_prompt"
                 # pipeline. Same "quote it, then verify the quote" pattern now
                 # applied here: require at least one blocker finding whose
                 # codeSnippet is a literal substring of the real file on disk.
-                _review_grounded=$(python3 - "$review_log" "$PROJECT_ROOT" << 'REVIEW_PYEOF'
-import json, sys, re, os
-
-log_file, project_root = sys.argv[1], sys.argv[2]
-content = open(log_file).read()
-json_match = re.search(r'\{.*"agent".*"review-ranger".*\}', content, re.DOTALL)
-if not json_match:
-    print("0"); sys.exit(0)
-
-try:
-    data = json.loads(json_match.group(0))
-except Exception:
-    print("0"); sys.exit(0)
-
-findings = data.get("findings", [])
-grounded = 0
-for f in findings:
-    if str(f.get("severity", "")).lower() != "blocker":
-        continue
-    file_rel = f.get("file", "")
-    snippet = (f.get("codeSnippet") or "").strip()
-    if not file_rel or not snippet:
-        continue
-    file_path = file_rel if os.path.isabs(file_rel) else os.path.join(project_root, file_rel)
-    try:
-        with open(file_path) as fh:
-            real_content = fh.read()
-    except Exception:
-        continue
-    if snippet in real_content:
-        grounded = 1
-        break
-
-print(str(grounded))
-REVIEW_PYEOF
+                _review_grounded=$(python3 "$SCRIPT_DIR/lib/handlers/review.py" "$review_log" "$PROJECT_ROOT"
 2>/dev/null || echo "0")
                 if [ "${_review_grounded:-0}" -gt 0 ]; then
                     step_emit "22c" "fail" "Step 22c: Review ranger"
@@ -10111,46 +9224,7 @@ REVIEW_PYEOF
                 # originalCode is a literal substring of the real file on disk
                 # (catches a fabricated file/line/code claim, same "quote it,
                 # verify it" pattern as review-ranger/perf-sentinel).
-                _mutant_grounded=$(python3 - "$mutant_log" "$PROJECT_ROOT" << 'MUTANT_PYEOF'
-import json, sys, re, os
-
-log_file, project_root = sys.argv[1], sys.argv[2]
-content = open(log_file).read()
-json_match = re.search(r'\{.*"agent".*"mutant-hunter".*\}', content, re.DOTALL)
-if not json_match:
-    print("0"); sys.exit(0)
-
-try:
-    data = json.loads(json_match.group(0))
-except Exception:
-    print("0"); sys.exit(0)
-
-summary = data.get("summary") or {}
-mutations = data.get("mutations", [])
-survived = [m for m in mutations if str(m.get("status", "")).lower() == "survived"]
-
-# Self-consistency: the aggregate score must agree with the model's own detail.
-if summary.get("survived", -1) != len(survived):
-    print("0"); sys.exit(0)
-
-grounded = 0
-for m in survived:
-    file_rel = m.get("file", "")
-    snippet = (m.get("originalCode") or "").strip()
-    if not file_rel or not snippet:
-        continue
-    file_path = file_rel if os.path.isabs(file_rel) else os.path.join(project_root, file_rel)
-    try:
-        with open(file_path) as fh:
-            real_content = fh.read()
-    except Exception:
-        continue
-    if snippet in real_content:
-        grounded = 1
-        break
-
-print(str(grounded))
-MUTANT_PYEOF
+                _mutant_grounded=$(python3 "$SCRIPT_DIR/lib/handlers/mutant.py" "$mutant_log" "$PROJECT_ROOT"
 2>/dev/null || echo "0")
                 if [ "${_mutant_grounded:-0}" -gt 0 ]; then
                     step_emit "22d" "fail" "Step 22d: Mutant hunter"
@@ -10288,79 +9362,7 @@ $perf_prompt"
                 #     were actually demonstrated against the real source, not merely asserted.
                 local _node_bin
                 _node_bin=$(detect_node 2>/dev/null || true)
-                _fuzz_grounded=$(python3 - "$fuzz_log" "$PROJECT_ROOT" "${_node_bin:-}" << 'PYEOF'
-import json, sys, os, re, subprocess, shutil
-
-log_file, project_root, node_bin = sys.argv[1], sys.argv[2], sys.argv[3]
-
-# Extract JSON from the log (agent may emit preamble text)
-content = open(log_file).read()
-json_match = re.search(r'\{.*"agent".*"fuzz-weaver".*\}', content, re.DOTALL)
-if not json_match:
-    print("0")
-    sys.exit(0)
-
-try:
-    data = json.loads(json_match.group(0))
-except Exception:
-    print("0")
-    sys.exit(0)
-
-verify_dir = os.path.join(project_root, ".fuzz-verify")
-os.makedirs(verify_dir, exist_ok=True)
-vitest_bin = os.path.join(project_root, "node_modules", ".bin", "vitest")
-can_run = bool(node_bin) and os.path.exists(vitest_bin)
-
-confirmed = 0
-for i, case in enumerate(data.get("cases", [])):
-    if case.get("status") != "vulnerability":
-        continue
-    f = case.get("file", "")
-    candidates = [
-        f,
-        os.path.join(project_root, f),
-        os.path.join(project_root, "src", os.path.basename(f)),
-    ]
-    if not any(os.path.exists(p) for p in candidates):
-        continue  # unverifiable file reference — likely hallucinated, skip
-
-    test_src = case.get("executableTest", "")
-    if not test_src or not can_run:
-        continue  # no executable evidence supplied — do not block on an unverified claim
-
-    # One file at a time in verify_dir: vitest's path argument is a filter,
-    # not a hard restriction, so a leftover file from a PREVIOUS case would
-    # get swept into THIS case's run and could contaminate the result.
-    test_path = os.path.join(verify_dir, f"case-{i}.test.ts")
-    try:
-        with open(test_path, "w") as tf:
-            tf.write(test_src)
-        result = subprocess.run(
-            [node_bin, vitest_bin, "run", test_path, "--reporter=json"],
-            cwd=project_root, capture_output=True, text=True, timeout=60,
-        )
-        # A nonzero exit code alone doesn't distinguish "assertion genuinely
-        # failed" from "syntax/transform error, zero tests ever ran" — both
-        # exit nonzero. Only a REAL assertion failure (numFailedTests > 0,
-        # meaning at least one test actually executed and failed) counts as
-        # confirmation; a test that never ran proves nothing about the code.
-        try:
-            report = json.loads(result.stdout)
-            if report.get("numFailedTests", 0) > 0:
-                confirmed += 1
-        except Exception:
-            pass  # no parseable report — unverified, don't block
-    except Exception:
-        continue  # test didn't even run (timeout, etc.) — unverified, don't block
-    finally:
-        try:
-            os.remove(test_path)
-        except OSError:
-            pass
-
-shutil.rmtree(verify_dir, ignore_errors=True)
-print(str(confirmed))
-PYEOF
+                _fuzz_grounded=$(python3 "$SCRIPT_DIR/lib/handlers/fuzz-verify.py" "$fuzz_log" "$PROJECT_ROOT" "${_node_bin:-}"
 2>/dev/null || echo "0")
                 if [ "${_fuzz_grounded:-0}" -gt 0 ]; then
                     step_emit "22e" "fail" "Step 22e: Fuzz-weaver"
@@ -10408,41 +9410,7 @@ PYEOF
                 # content — same "quote it, then we verify the quote"
                 # pattern already used for the code-graph-detective's
                 # brokenLine field.
-                _perf_grounded=$(python3 - "$perf_log" "$PROJECT_ROOT" << 'PERF_PYEOF'
-import json, sys, re, os
-
-log_file, project_root = sys.argv[1], sys.argv[2]
-content = open(log_file).read()
-json_match = re.search(r'\{.*"agent".*"perf-sentinel".*\}', content, re.DOTALL)
-if not json_match:
-    print("0"); sys.exit(0)
-
-try:
-    data = json.loads(json_match.group(0))
-except Exception:
-    print("0"); sys.exit(0)
-
-findings = data.get("findings", [])
-grounded = 0
-for f in findings:
-    if str(f.get("severity", "")).lower() != "blocker":
-        continue
-    file_rel = f.get("file", "")
-    snippet = (f.get("codeSnippet") or "").strip()
-    if not file_rel or not snippet:
-        continue
-    file_path = file_rel if os.path.isabs(file_rel) else os.path.join(project_root, file_rel)
-    try:
-        with open(file_path) as fh:
-            real_content = fh.read()
-    except Exception:
-        continue
-    if snippet in real_content:
-        grounded = 1
-        break
-
-print(str(grounded))
-PERF_PYEOF
+                _perf_grounded=$(python3 "$SCRIPT_DIR/lib/handlers/perf.py" "$perf_log" "$PROJECT_ROOT"
 2>/dev/null || echo "0")
                 if [ "${_perf_grounded:-0}" -gt 0 ]; then
                     step_emit "22f" "fail" "Step 22f: Perf sentinel"
@@ -10711,66 +9679,7 @@ for m in re.finditer(r'\{[^{}]*\"story_id\"[^{}]*\}', txt, re.DOTALL):
                 echo "$_ac_result" > "$_ac_result_tmp"
                 local _acs_added
                 _acs_added=$( ( flock -w 10 200 || { error "  [story-ac-remediator] Could not acquire lock on ${MAIN_PRD_FILE:-$PRD_FILE}"; return 1; }
-                python3 - "${MAIN_PRD_FILE:-$PRD_FILE}" "$_story_id" "$_ac_result_tmp" <<'AC_APPLY_PY'
-import sys, json, os
-
-prd_path, story_id, raw_file = sys.argv[1], sys.argv[2], sys.argv[3]
-txt = open(raw_file).read()
-
-# Robust JSON-object scan (NOT a brace-depth-free regex): the agent's own
-# suggested ACs frequently embed verification snippets like
-# `node -e "...{...}..."`, whose literal { } characters inside a JSON
-# string value broke the old regex (`\{[^{}]*"acs_added"[^{}]*\}` requires
-# ZERO braces anywhere in the match, including inside string content).
-# json.JSONDecoder.raw_decode respects real JSON string escaping/nesting,
-# so it finds the object regardless of what's inside its string values.
-decoder = json.JSONDecoder()
-payload = None
-idx = 0
-while True:
-    start = txt.find('{', idx)
-    if start == -1:
-        break
-    try:
-        obj, end = decoder.raw_decode(txt, start)
-        if isinstance(obj, dict) and 'acs' in obj:
-            payload = obj
-            break
-        idx = end
-    except json.JSONDecodeError:
-        idx = start + 1
-
-if not payload:
-    print(0)
-    sys.exit(0)
-
-new_acs = payload.get('acs', [])
-if not new_acs:
-    print(0)
-    sys.exit(0)
-
-with open(prd_path) as f:
-    prd = json.load(f)
-
-added = 0
-for s in prd.get('stories', []):
-    if s.get('id') != story_id:
-        continue
-    existing = [a.get('text', '') if isinstance(a, dict) else str(a) for a in s.get('acceptanceCriteria', [])]
-    for ac in new_acs:
-        if ac and ac not in existing and len(existing) < 24:
-            s.setdefault('acceptanceCriteria', []).append({'text': ac, 'status': 'pending'})
-            existing.append(ac)
-            added += 1
-
-if added > 0:
-    _tmp_prd_path = prd_path + '.tmp'
-    with open(_tmp_prd_path, 'w') as f:
-        json.dump(prd, f, indent=2)
-    os.replace(_tmp_prd_path, prd_path)
-
-print(added)
-AC_APPLY_PY
+                python3 "$SCRIPT_DIR/lib/handlers/ac-apply.py" "${MAIN_PRD_FILE:-$PRD_FILE}" "$_story_id" "$_ac_result_tmp"
                 2>/dev/null || echo 0
                 ) 200>"${MAIN_PRD_FILE:-$PRD_FILE}.lock" )
                 rm -f "$_ac_result_tmp"

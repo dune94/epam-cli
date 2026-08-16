@@ -148,22 +148,7 @@ if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -z "${JIRA_CODELINES:-}" ]; then
   fi
   # Export discovered codelines into the current shell so synthesize-prd-from-jira.js
   # inherits JIRA_CODELINES and JIRA_WORKTREE_<NAME> without any hardcoded env vars.
-  _discovery_exports=$("$NODE_BIN" - "$DISCOVERY_JSON" <<'NODE_EXPORT_EOF'
-const fs   = require('fs');
-const disc = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-const names = (disc.codelines || []).map(c => c.name).join(',');
-let out = `JIRA_CODELINES="${names}"\n`;
-for (const cl of (disc.codelines || [])) {
-  out += `JIRA_WORKTREE_${cl.name.toUpperCase().replace(/[^A-Z0-9]/g,'_')}="${cl.path}"\n`;
-}
-// Also export JIRA_DEFAULT_CODELINE when there is exactly one codeline so the
-// orch script's codeline-setup function can pair it with project.outputDir.
-if (disc.codelines && disc.codelines.length === 1) {
-  out += `JIRA_DEFAULT_CODELINE="${disc.codelines[0].name}"\n`;
-}
-process.stdout.write(out);
-NODE_EXPORT_EOF
-  )
+  _discovery_exports=$("$NODE_BIN" "${SCRIPT_DIR}/lib/handlers/codeline-discovery-exports.js" "$DISCOVERY_JSON")
   while IFS='=' read -r _key _val; do
     [ -z "$_key" ] && continue
     export "${_key}=${_val//\"/}"
@@ -188,18 +173,9 @@ if [ "$GATE_EXIT" != "0" ] && [ "$GATE_EXIT" != "2" ]; then
 fi
 
 # Show per-story verdicts
-"$NODE_BIN" -e "
-  const r = JSON.parse(require('fs').readFileSync('$GATE_JSON','utf8'));
-  r.forEach(s => {
-    const icon = s.verdict === 'sufficient' ? '✅' : s.verdict === 'enrichable' ? '🔶' : '🛑';
-    console.log('  ' + icon + ' ' + s.jiraKey + ' — ' + s.verdict + ': ' + s.reason);
-  });
-" 2>/dev/null || true
+"$NODE_BIN" "${SCRIPT_DIR}/lib/handlers/ac-gate-verdicts.js" "$GATE_JSON" 2>/dev/null || true
 
-INSUFFICIENT_COUNT=$("$NODE_BIN" -e "
-  const r = JSON.parse(require('fs').readFileSync('$GATE_JSON','utf8'));
-  console.log(r.filter(x=>x.verdict==='insufficient').length);
-" 2>/dev/null || echo "0")
+INSUFFICIENT_COUNT=$("$NODE_BIN" "${SCRIPT_DIR}/lib/handlers/ac-gate-insufficient-count.js" "$GATE_JSON" 2>/dev/null || echo "0")
 
 # Brownfield (AC/VC/TC design, 2026-07-24): a ticket with no/sparse ACs is NOT a
 # human-halt condition — the acceptanceCriteria stay as the ticket's immutable

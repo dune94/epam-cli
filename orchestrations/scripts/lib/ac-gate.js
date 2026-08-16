@@ -31,6 +31,7 @@
 'use strict';
 
 const fs           = require('fs');
+const { renderEngineTemplate } = require('./engine-prompt');
 const path         = require('path');
 const { execSync } = require('child_process');
 
@@ -53,7 +54,9 @@ const MODEL   = getArg('--model', process.env.ORCH_GATE_MODEL || process.env.EPA
 const ISSUES_PATH = getArg('--issues');
 const OUT_PATH    = getArg('--out', '');   // write JSON results to file instead of stdout
 
-if (!ISSUES_PATH && !argv.includes('--help')) {
+// Scoped to DIRECT invocation: unscoped, requiring this module to call a prompt builder
+// exits the requiring process. The check itself is unchanged.
+if (require.main === module && (!ISSUES_PATH && !argv.includes('--help'))) {
   process.stderr.write('Usage: node ac-gate.js --issues <path> [--out <path>]\n');
   process.exit(1);
 }
@@ -139,52 +142,20 @@ function buildClassificationPrompt(issue, knownCodelines) {
     .map(cl => `"${cl}Acs"`)
     .join(' and ');
 
-  return `You are an AC sufficiency gate for an autonomous software development pipeline.
-
-Assess whether the acceptance criteria for this Jira story are sufficient for an AI agent
-to implement it without human clarification.
-
-STORY: ${issue.jiraKey} — ${issue.title}
-
-DESCRIPTION:
-${(issue.description || '(none)')}
-
-ACCEPTANCE CRITERIA:
-${acsText}
-
-CLASSIFICATION RULES:
-- "sufficient": ACs are present, specific, testable, and cover the primary success path
-  AND at least one error/edge case. Agent can implement without asking questions.
-- "enrichable": ACs exist but are vague, incomplete, or missing error paths. Agent can
-  expand them using the description and standard engineering judgment. Low risk of drift.
-- "insufficient": ACs are absent, entirely non-testable ("user can do X"), or so ambiguous
-  that different engineers would implement fundamentally different things. Human must clarify.
-
-CODELINE CLASSIFICATION:
-Also determine which codeline(s) this story touches:
-${clBullets}
-${splitLine}
-
-When codeline is "${SPLIT_VALUE}", split the ACs per codeline:
-${splitAcLines}
-Use your understanding of the story domain — do NOT use keyword matching.
-If an AC straddles two codelines, place it in the one where the primary implementation work lives.
-
-RESPOND WITH JSON ONLY — no explanation, no markdown fences:
-{
-  "verdict": "sufficient" | "enrichable" | "insufficient",
-  "reason": "<one sentence explaining the verdict>",
-  "codeline": ${clList} | "${SPLIT_VALUE}",
-  "gaps": ["<gap 1>", ...],
-  "enrichedAcs": ["<expanded AC 1>", ...],
-${schemaAcFields}
-}
-
-"enrichedAcs" is required when verdict is "enrichable". "enrichedAcs" should be [] otherwise.
-${splitNote} are required when codeline is "${SPLIT_VALUE}". All should be [] otherwise.
-"gaps" should be [] when verdict is "sufficient".
-
-ENRICHMENT RULE (critical): enrichedAcs must describe OBSERVABLE BEHAVIOR to VERIFY — never HOW to implement it. Do NOT prescribe an internal mechanism or algorithm. Forbidden: "calculate independently", "split", "halve"/"×0.5", "per segment", "for each line item", adding new fields/flags, or any phrasing that presumes a particular code approach. A bug ticket describes a SYMPTOM ("the amount is not displayed for the return leg"); keep the enriched ACs at that symptom/behavior level (what a tester observes), and enrich ONLY for clarity, testability, and genuinely-missing edge/error cases. Inventing an implementation approach in an AC misdirects the downstream code investigation toward the wrong fix.`;
+  // RENDERED FROM THE TEMPLATE LAYER. Every codeline-shaped block is assembled here from the
+  // run's own registered codelines — the template names no codeline, and could not stay
+  // correct for another project if it did.
+  return renderEngineTemplate('ac-classification', {
+    __STORY_KEY__: issue.jiraKey,
+    __STORY_TITLE__: issue.title,
+    __STORY_DESCRIPTION__: issue.description || '(none)',
+    __AC_LIST__: acsText,
+    __CODELINE_LIST__: clList,
+    __CODELINE_BULLETS__: clBullets,
+    __SPLIT_AC_LINES__: splitAcLines,
+    __SCHEMA_AC_FIELDS__: schemaAcFields,
+    __SPLIT_NOTE__: splitNote,
+  });
 }
 
 // ── LLM call via epam run ──────────────────────────────────────────────────
@@ -303,31 +274,24 @@ Choose exactly one. Answer:
 // the description and title so the pipeline can continue without Jira intervention.
 // Result is stored in prd.json as enrichedAcs — never written to Jira.
 
+/**
+ * The AC-elaboration prompt. Extracted verbatim so a test can call it.
+ */
+function buildElaborationPrompt(issue) {
+  // RENDERED FROM THE TEMPLATE LAYER.
+  return renderEngineTemplate('ac-elaboration', {
+    __STORY_KEY__: issue.jiraKey,
+    __STORY_TITLE__: issue.title,
+    __STORY_DESCRIPTION__: issue.description || '(none)',
+  });
+}
+
 function elaborateAcs(issue) {
   if (DRY_RUN) {
     return [`Given "${issue.title}", verify the feature behaves as described.`];
   }
 
-  const prompt = `You are an acceptance-criteria writer for a brownfield software pipeline.
-
-A Jira story has NO formal acceptance criteria. Generate a complete, testable set of ACs
-so that an AI agent can implement the change without human clarification.
-
-STORY: ${issue.jiraKey} — ${issue.title}
-
-DESCRIPTION:
-${(issue.description || '(none)')}
-
-Rules:
-1. Each AC must be specific and testable (observable in UI, API response, or logs).
-2. Infer "expected" behaviour from the description, domain knowledge, and the word "NOT".
-3. Include: primary success path, at least one edge case, and one error/boundary case.
-4. Do NOT invent requirements not implied by the description.
-5. Use plain English, present tense, third-person ("The system...", "The UI shows...").
-6. Describe WHAT to verify (observable behavior), never HOW to implement it. Do NOT prescribe a mechanism/algorithm — no "calculate independently", "split", "halve", "per segment", "for each line item", new fields, or internal approach. Keep a bug's ACs at the symptom/behavior level; prescribing an implementation misdirects the downstream code investigation.
-
-Respond with JSON only — no markdown, no preamble:
-{ "enrichedAcs": ["<AC 1>", "<AC 2>", ...] }`;
+  const prompt = buildElaborationPrompt(issue);
 
   const tmpPrompt = `/tmp/ac-gate-elaborate-${issue.jiraKey}.txt`;
   fs.writeFileSync(tmpPrompt, prompt);
@@ -358,6 +322,10 @@ Respond with JSON only — no markdown, no preamble:
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────
+
+module.exports = { buildClassificationPrompt, buildElaborationPrompt };
+
+if (require.main !== module) return;
 
 (async () => {
   const issues = JSON.parse(fs.readFileSync(ISSUES_PATH, 'utf8'));

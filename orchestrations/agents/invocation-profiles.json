@@ -269,7 +269,8 @@
           "kind": "ticket",
           "required": true
         }
-      ]
+      ],
+      "template": "ac-classification"
     },
     "ac-elaboration": {
       "_what": "Elaborates an acceptance criterion into verification criteria.",
@@ -283,7 +284,8 @@
           "kind": "ticket",
           "required": true
         }
-      ]
+      ],
+      "template": "ac-elaboration"
     },
     "codeline-discovery": {
       "_what": "Picks which local codeline a Jira ticket belongs to.",

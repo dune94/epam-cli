@@ -28,6 +28,7 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
+import { templateBody } from '../../helpers/prompt-text';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -125,9 +126,11 @@ describe('the per-codeline filter includes a spanning story in every lane', () =
     // The filter PARTITIONS stories across codelines. A story that spans them
     // matches no partition, appears in zero filtered PRDs, and is silently
     // dropped from the run.
-    const i = ORCH.indexOf('Build filtered PRD containing only stories for codeline');
-    expect(i, 'the per-codeline filter was not found').toBeGreaterThan(-1);
-    const block = ORCH.slice(i, i + 1200);
+    // THE HANDLER, which is the filter now. This sliced 1200 characters after a comment in
+    // the shell script — a window that held the logic only while the logic was inline.
+    // Reading the handler is also stronger: it is the exact file the pipeline executes.
+    const block = readFileSync(
+      join(__dirname, '../../../orchestrations/scripts/lib/handlers/filtered-prd.js'), 'utf8');
     expect(block,
       'a story spanning codelines is filtered out of every lane and never runs')
       .toMatch(/codelines/);
@@ -228,7 +231,10 @@ describe('MC-2: the detective can see the neighbouring codeline', () => {
   it('tells the detective the cause may be outside this repository', () => {
     // Without this it will always find A cause here, because there is always
     // some line here that consumes the wrong value.
-    expect(SPEC,
+    // The warning lives in the published-contracts fragment now, which is the block that
+    // actually reaches the detective. Asserting it against spec-mode-runner.js could only
+    // ever confirm that the render call exists.
+    expect(templateBody('spec-context-fragments', 'published_contracts'),
       'nothing warns that a symptom in this repo can have its cause in another, ' +
       'so a defensive fix at the boundary looks like a correct diagnosis')
       .toMatch(/another codeline|other codeline|outside this repo|upstream codeline/i);

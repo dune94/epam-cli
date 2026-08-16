@@ -2042,19 +2042,7 @@ run_story_recovery_analyst() {
                         --provider "${ORCH_GATE_PROVIDER}" \
                         --model    "${_rev_model}" \
                     2>/dev/null | \
-                    python3 -c "
-import sys, json, re
-text = sys.stdin.read()
-try:
-    obj = json.loads(text.strip())
-    v = obj.get('verdict','')
-    if v in ('pass','fail'):
-        print(v); sys.exit(0)
-except Exception:
-    pass
-m = re.search(r'\"verdict\"\s*:\s*\"(pass|fail)\"', text)
-if m: print(m.group(1)); sys.exit(0)
-" 2>/dev/null || true)
+                    python3 "$SCRIPT_DIR/lib/handlers/run-story-recovery-analyst.py" 2>/dev/null || true)
                 _rev_attempt=$(( _rev_attempt + 1 ))
             done
             if [ "$_rev_raw" = "pass" ] || [ "$_rev_raw" = "fail" ]; then
@@ -2152,10 +2140,7 @@ run_story_with_watchdog() {
         esac
         local role_multiplier
         role_multiplier=$(resolve_role_timeout_multiplier "$story_id")
-        timeout_secs=$(python3 -c "
-import math
-print(math.ceil(${timeout_secs} * ${role_multiplier}))
-" 2>/dev/null || echo "$timeout_secs")
+        timeout_secs=$(python3 "$SCRIPT_DIR/lib/handlers/timeout-secs.py" "${role_multiplier}" "${timeout_secs}" 2>/dev/null || echo "$timeout_secs")
     fi
 
     # THE WALL MUST HONOUR THE ITERATION BUDGET IT IS POLICING.
@@ -2260,10 +2245,7 @@ print(math.ceil(${timeout_secs} * ${role_multiplier}))
         # configurable (EPAM_WATCHDOG_RETRY_MULTIPLIER, default 1.5x); set to 1
         # to restore the old flat-timeout behavior.
         local retry_timeout_secs
-        retry_timeout_secs=$(python3 -c "
-import math
-print(math.ceil(${timeout_secs} * ${EPAM_WATCHDOG_RETRY_MULTIPLIER:-1.5}))
-" 2>/dev/null || echo "$timeout_secs")
+        retry_timeout_secs=$(python3 "$SCRIPT_DIR/lib/handlers/retry-timeout-secs.py" "${EPAM_WATCHDOG_RETRY_MULTIPLIER:-1.5}" "${timeout_secs}" 2>/dev/null || echo "$timeout_secs")
         # ── Climb the ladder, do not merely swap once ─────────────────────
         # This was a single retry, so at most ONE escalation could ever happen.
         # The HIGH ladder is four rungs (MiniMax-M2.5 -> MiniMax-M3 ->
@@ -2836,11 +2818,7 @@ _run_codeline_bridge() {
   # Load the codeline-bridge-agent profile
   local _bridge_profile=""
   if [ -f "$_profiles_file" ]; then
-    _bridge_profile=$(python3 -c "
-import sys, json
-p = json.load(open('$_profiles_file'))
-print(p.get('codeline-bridge-agent', ''))
-" 2>/dev/null || true)
+    _bridge_profile=$(python3 "$SCRIPT_DIR/lib/handlers/bridge-profile.py" "$_profiles_file" 2>/dev/null || true)
   fi
   if [ -z "$_bridge_profile" ]; then
     warning "[bridge] codeline-bridge-agent profile not found in profiles.json — skipping"
@@ -2983,17 +2961,7 @@ _run_codeline_loop() {
   # Extract codeline:path entries from project.outputDirs.
   # Falls back to project.outputDir + JIRA_DEFAULT_CODELINE for single-codeline PRDs.
   local _cl_entries=()
-  mapfile -t _cl_entries < <("$NODE_BIN" -e "
-    const p = JSON.parse(require('fs').readFileSync('${_prd_path}','utf8'));
-    const dirs = p.project && p.project.outputDirs ? p.project.outputDirs : [];
-    if (dirs.length > 0) {
-      dirs.forEach(d => console.log(d.codeline + ':' + d.path));
-    } else {
-      const cl  = process.env.JIRA_DEFAULT_CODELINE || '';
-      const dir = p.project && p.project.outputDir ? p.project.outputDir : '';
-      if (cl && dir) console.log(cl + ':' + dir);
-    }
-  " 2>/dev/null)
+  mapfile -t _cl_entries < <("$NODE_BIN" "$SCRIPT_DIR/lib/handlers/cl-entries.js" "${_prd_path}" 2>/dev/null)
 
   # CODELINE SELECTION — run a subset of the story's codelines, one launch at a time.
   #
@@ -3268,14 +3236,7 @@ KNOWNFIXES_EOF
   _rebuild_cross() {
     [ -z "$_completed_list" ] && { unset CROSS_CODELINE_PRD; return; }
     COMPLETED_LIST="$_completed_list" \
-    "$NODE_BIN" -e "
-      const fs = require('fs');
-      const paths = (process.env.COMPLETED_LIST||'').split(':').filter(Boolean);
-      const stories = paths.flatMap(p => {
-        try { return JSON.parse(fs.readFileSync(p,'utf8')).stories||[]; } catch { return []; }
-      });
-      fs.writeFileSync('${_cross_prd}', JSON.stringify({stories},null,2));
-    " 2>/dev/null
+    "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/rebuild-cross-contract.js" "${_cross_prd}" 2>/dev/null
     export CROSS_CODELINE_PRD="$_cross_prd"
   }
 
@@ -3284,86 +3245,11 @@ KNOWNFIXES_EOF
   _filtered_prd() {
     local _fcl="$1" _fout="$2" _fsrc="$3"
     JIRA_DEFAULT_CODELINE="${JIRA_DEFAULT_CODELINE:-}" \
-    "$NODE_BIN" -e "
-      const fs  = require('fs');
-      const prd = JSON.parse(fs.readFileSync('${_fsrc}','utf8'));
-      const cl  = '${_fcl}', dcl = process.env.JIRA_DEFAULT_CODELINE||'';
-      // A story may SPAN codelines. codelines[] is authoritative when present:
-      // the story stays whole and participates in each lane's execution, rather
-      // than being partitioned into exactly one. Without this it matches no
-      // partition, appears in zero filtered PRDs, and is silently dropped from
-      // the run — which is how a [GO, UP, MX] ticket reached ingest and died.
-      const stories = prd.stories.filter(s =>
-        (Array.isArray(s.codelines) && s.codelines.length
-          ? s.codelines.includes(cl)
-          : (s.codeline === cl || (!s.codeline && cl === dcl)))
-      // THIS LANE'S PRD SAYS WHICH LANE IT IS.
-      //
-      // Stories were copied through unchanged, so a story spanning three codelines carried
-      // its PRIMARY codeline into all three lane PRDs. Every consumer reading the singular
-      // field then got the same answer everywhere: the detective resolved the first lane's
-      // investigator in all three lanes and investigated two repositories with a brief written
-      // for a different one. agentRole had the identical defect, and project.outputDir vs
-      // outputDirs a third instance.
-      //
-      // Fixed HERE rather than in each reader. A lane's PRD describing a different lane is the
-      // lie; once it tells the truth, every consumer — the detective, the guards, the manifest,
-      // whatever is added next — is correct without knowing lanes exist. codelines[] is left
-      // intact, so nothing loses the knowledge that the story spans more than this one.
-      // THIS LANE'S CRITERIA, NOT THE UNION.
-      //
-      // verificationCriteria / fixSiteAnalysis on canonical are the UNION across every lane —
-      // that is what canonical is for. Copying them through means a lane is handed other
-      // codelines' criteria, describing files that do not exist in its checkout.
-      //
-      // On a first run the spec pass overwrote them before anything read them, so it never
-      // showed. On a RESUME the spec pass is skipped — the whole point of resuming — so the
-      // lane keeps the union, its writer and gates verify against it, and
-      // mergeLaneIntoCanonical then faithfully records the union as THIS LANE'S OWN criteria.
-      // Live 2026-08-09: four killed runs turned gotransit's 4 criteria into all 14, and 13 fix
-      // sites into 22, compounding on every kill.
-      //
-      // Same rule as `codeline` above, and for the same reason: a lane's PRD states that lane's
-      // truth. Falls back to the flat list when there is no entry for this codeline (a first
-      // run, or a lane added later) — never to nothing, which would hand a writer an empty
-      // plan. An explicitly EMPTY entry is honoured, because 'this lane found nothing to
-      // verify' is a real state and differs from 'this lane has not run'.
-      //
-      // No double quotes anywhere in this block, comments included: the node script is passed
-      // inside a double-quoted shell string, so one would end it and bash would execute the
-      // JavaScript that follows.
-      ).map(s => {
-        const _scoped = (flat, perCl) =>
-          (perCl && Object.prototype.hasOwnProperty.call(perCl, cl)) ? perCl[cl] : flat;
-        return {
-          ...s,
-          codeline: cl,
-          verificationCriteria: _scoped(s.verificationCriteria, s.verificationCriteriaPerCodeline),
-          fixSiteAnalysis: _scoped(s.fixSiteAnalysis, s.fixSiteAnalysisPerCodeline),
-        };
-      });
-      const ids = new Set(stories.map(s => s.id));
-      const order = {};
-      for (const [phase, list] of Object.entries(prd.implementationOrder||{})) {
-        const f = (list||[]).filter(id => ids.has(id));
-        if (f.length > 0) order[phase] = f;
-      }
-      if (Object.keys(order).length === 0) order.core = stories.map(s => s.id);
-      const out = {...prd, stories, implementationOrder: order};
-      if (prd.project && prd.project.outputDirs) {
-        const d = prd.project.outputDirs.find(d => d.codeline === cl);
-        if (d) out.project = {...prd.project, outputDir: d.path};
-      }
-      fs.writeFileSync('${_fout}', JSON.stringify(out, null, 2));
-      console.log(stories.length);
-    " 2>/dev/null
+    "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/filtered-prd.js" "${_fsrc}" "${_fout}" "${_fcl}" 2>/dev/null
   }
 
   _prd_phases() {
-    "$NODE_BIN" -e "
-      const p = JSON.parse(require('fs').readFileSync('$1','utf8'));
-      console.log(Object.keys(p.implementationOrder||{}).join('\n'));
-    " 2>/dev/null
+    "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/prd-phases.js" 2>/dev/null
   }
 
   # ── Lane execution: parallel by default ────────────────────────────────────
@@ -3609,14 +3495,8 @@ KNOWNFIXES_EOF
     # sequential and the parallel path, it decides what survives a multi-lane run,
     # and inline in a heredoc it could not be tested. See that module for why a
     # spanning story cannot be merged wholesale.
-    if "$NODE_BIN" -e "
-      const fs = require('fs');
-      const { mergeLaneIntoCanonical } = require('${SCRIPT_DIR}/lib/story-merge.js');
-      const canonical = JSON.parse(fs.readFileSync('${_prd_path}', 'utf8'));
-      const updated = JSON.parse(fs.readFileSync('${_cl_prd}', 'utf8'));
-      mergeLaneIntoCanonical({ canonical, updated, codeline: '${_cl}' });
-      fs.writeFileSync('${_prd_path}', JSON.stringify(canonical, null, 2));
-    "; then
+    if "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/merge-lane-into-canonical.js" \
+         "$SCRIPT_DIR" "${_prd_path}" "${_cl_prd}" "${_cl}"; then
       log "[orch] Merged codeline '${_cl}' story state back into canonical PRD"
     else
       # Previously 2>/dev/null: a failed merge was indistinguishable from a
@@ -3723,14 +3603,8 @@ KNOWNFIXES_EOF
     # sequential and the parallel path, it decides what survives a multi-lane run,
     # and inline in a heredoc it could not be tested. See that module for why a
     # spanning story cannot be merged wholesale.
-    if "$NODE_BIN" -e "
-      const fs = require('fs');
-      const { mergeLaneIntoCanonical } = require('${SCRIPT_DIR}/lib/story-merge.js');
-      const canonical = JSON.parse(fs.readFileSync('${_prd_path}', 'utf8'));
-      const updated = JSON.parse(fs.readFileSync('${_cl_prd}', 'utf8'));
-      mergeLaneIntoCanonical({ canonical, updated, codeline: '${_cl}' });
-      fs.writeFileSync('${_prd_path}', JSON.stringify(canonical, null, 2));
-    "; then
+    if "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/merge-lane-into-canonical.js" \
+         "$SCRIPT_DIR" "${_prd_path}" "${_cl_prd}" "${_cl}"; then
       log "[orch] Merged codeline '${_cl}' story state back into canonical PRD"
     else
       # Previously 2>/dev/null: a failed merge was indistinguishable from a
@@ -3914,15 +3788,7 @@ _run_jira_pipeline() {
   # profile before any core implementation begins. Agent SKILLS are assessed per project
   # here; agent IDENTITIES are minted per project immediately below — they used to be kept
   # wholesale from the canonical, which is how a client codeline ran epam-cli's own roster.
-  "$NODE_BIN" -e "
-    const fs = require('fs');
-    const prd = JSON.parse(fs.readFileSync('${_synth_prd}', 'utf8'));
-    if (!prd.implementationOrder) prd.implementationOrder = {};
-    if (!prd.implementationOrder.scaffold) {
-      prd.implementationOrder = { scaffold: [], ...prd.implementationOrder };
-    }
-    fs.writeFileSync('${_synth_prd}', JSON.stringify(prd, null, 2));
-  " 2>/dev/null && log "[jira] Injected empty scaffold phase for pre-phase skill assessment"
+  "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/run-jira-pipeline.js" "${_synth_prd}" 2>/dev/null && log "[jira] Injected empty scaffold phase for pre-phase skill assessment"
 
   # ── Mint this project's agents, then assign every story one ────────────────
   #
@@ -4103,18 +3969,7 @@ unset _ep_i _ep_j
 resume_spec_output_present() {
     local _prd="${1:-}"
     [ -n "$_prd" ] && [ -f "$_prd" ] || return 1
-    "${NODE_BIN:-node}" -e "
-      try {
-        const p = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
-        const stories = Array.isArray(p.stories) ? p.stories : [];
-        const has = (v) => Array.isArray(v) ? v.length > 0
-          : (v && typeof v === 'object') ? Object.keys(v).length > 0 : false;
-        const survived = stories.some((s) => s && (
-          has(s.fixSiteAnalysis) || has(s.verificationCriteria) ||
-          has(s.specification) || has((s.technicalNotes || {}).files)));
-        process.exit(survived ? 0 : 1);
-      } catch { process.exit(1); }
-    " "$_prd" 2>/dev/null
+    "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/resume-spec-output-present.js" "$_prd" 2>/dev/null
 }
 
 if is_parent && [ -n "${EPAM_RESUME_RUN:-}" ]; then
@@ -4162,10 +4017,7 @@ if is_parent; then
   else
     # Canonical PRD flow: if the PRD defines multiple codelines, route them.
     # Single-codeline PRDs fall through to the normal phase execution below.
-    _cl_count=$("${NODE_BIN:-node}" -e "
-      const p = JSON.parse(require('fs').readFileSync('$PRD_FILE','utf8'));
-      console.log((p.project && p.project.outputDirs ? p.project.outputDirs : []).length);
-    " 2>/dev/null || echo 0)
+    _cl_count=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/cl-count.js" "$PRD_FILE" 2>/dev/null || echo 0)
     if [ "${_cl_count:-0}" -gt 1 ]; then
       # Pass _ep_caller_phase as third arg so the loop runs only the requested phase.
       # Empty string = run all PRD phases (Jira path, or direct invocation without --phase).
@@ -5295,18 +5147,7 @@ run_pre_phase_assessment() {
                             --provider "${ORCH_GATE_PROVIDER}" \
                             --model    "${ORCH_GATE_MODEL:-MiniMax-M3}" \
                         2>/dev/null | \
-                        python3 -c "
-import sys, json, re
-text = sys.stdin.read()
-try:
-    obj = json.loads(text.strip())
-    print(obj.get('verdict','pass'))
-    sys.exit(0)
-except Exception:
-    pass
-m = re.search(r'\"verdict\"\s*:\s*\"(pass|fail)\"', text)
-print(m.group(1) if m else 'pass')
-" 2>/dev/null || echo "pass")
+                        python3 "$SCRIPT_DIR/lib/handlers/run-pre-phase-assessment.py" 2>/dev/null || echo "pass")
                     if [ "$_pfa_verdict" = "fail" ]; then
                         _pfa_violated=1
                         _pfa_violation_reason="${_pfa_violation_reason}profiles.json content was rejected by the reviewer (bad/vague skill rule content); "
@@ -5352,24 +5193,7 @@ print(m.group(1) if m else 'pass')
 
     local _pfa_violation_types="[]"
     if [ -n "$_pfa_corrective_note" ]; then
-        _pfa_violation_types=$(printf '%s' "$_pfa_corrective_note" | python3 -c "
-import json, sys
-reason = sys.stdin.read()
-types = []
-if 'tool call itself failed' in reason:
-    types.append('tool_call_failed')
-if 'profiles.json content was rejected' in reason:
-    types.append('profiles_content_rejected')
-if 'not valid JSON' in reason:
-    types.append('invalid_json')
-if 'stories added' in reason:
-    types.append('story_added')
-if 'stories removed' in reason:
-    types.append('story_removed')
-if 'changed (not an allowed field' in reason:
-    types.append('field_out_of_scope')
-print(json.dumps(types))
-" 2>/dev/null || echo "[]")
+        _pfa_violation_types=$(printf '%s' "$_pfa_corrective_note" | python3 "$SCRIPT_DIR/lib/handlers/pfa-violation-types.py" 2>/dev/null || echo "[]")
     fi
 
     _log_guarded_step_retry "$(jq -n -c \
@@ -5823,17 +5647,7 @@ else
                 --model    "${ORCH_GATE_MODEL:-MiniMax-M3}" \
             2>&1 | tee -a "$LOG_DIR/prd-model-coordinator-${_mc_phase}.log")
 
-        _mc_assigned_count=$(echo "$_mc_result" | python3 -c "
-import sys, re, json
-txt = sys.stdin.read()
-for m in re.finditer(r'\{[^{}]*\"assigned_count\"[^{}]*\}', txt, re.DOTALL):
-    try:
-        obj = json.loads(m.group(0))
-        print(obj.get('assigned_count', 0))
-        break
-    except: pass
-else: print(0)
-" 2>/dev/null || echo 0)
+        _mc_assigned_count=$(echo "$_mc_result" | python3 "$SCRIPT_DIR/lib/handlers/mc-assigned-count.py" 2>/dev/null || echo 0)
 
         _mc_prd_after=$(cat "$_mc_prd_target" 2>/dev/null || echo "{}")
         # Gate on whether the PRD FILE actually changed, not the agent's own
@@ -5896,22 +5710,7 @@ else: print(0)
 
         _mc_violation_types="[]"
         if [ -n "$_mc_corrective_note" ]; then
-            _mc_violation_types=$(printf '%s' "$_mc_corrective_note" | python3 -c "
-import json, sys
-reason = sys.stdin.read()
-types = []
-if 'not valid JSON' in reason:
-    types.append('invalid_json')
-if 'stories added' in reason:
-    types.append('story_added')
-if 'stories removed' in reason:
-    types.append('story_removed')
-if 'implementationOrder was modified' in reason:
-    types.append('implementation_order_modified')
-if 'changed (not an allowed model-assignment field)' in reason:
-    types.append('field_out_of_scope')
-print(json.dumps(types))
-" 2>/dev/null || echo "[]")
+            _mc_violation_types=$(printf '%s' "$_mc_corrective_note" | python3 "$SCRIPT_DIR/lib/handlers/mc-violation-types.py" 2>/dev/null || echo "[]")
         fi
 
         _log_guarded_step_retry "$(jq -n -c \
@@ -7070,10 +6869,7 @@ run_phase_assessment() {
             continue
         fi
 
-        if echo "$_pa_raw" | python3 -c "import sys,json,re
-t=sys.stdin.read()
-m=re.search(r'\{.*\}', t, re.DOTALL)
-sys.exit(0 if m and isinstance(json.loads(m.group(0)), dict) else 1)" 2>/dev/null; then
+        if echo "$_pa_raw" | python3 "$SCRIPT_DIR/lib/handlers/run-phase-assessment.py" 2>/dev/null; then
             _pa_success=1
         else
             warning "Phase assessment attempt $(( _pa_attempt + 1 )) for '$phase_id' produced no valid JSON$([ "$_pa_attempt" -lt 1 ] && echo " — retrying with escalated model" || echo "")"
@@ -8845,44 +8641,7 @@ $spec_prompt"
         # Trust blockerCount from the oracle-injected evidence, not the LLM's self-reported verdict
         # field — the LLM defaults to "fail" when it can't run tools, even with 0 blockers.
         local _sast_blockers
-        _sast_blockers=$(python3 -c "
-import sys, json, re
-try:
-    text = open('$sast_log').read()
-    parsed = None
-    # Try full JSON parse
-    m = re.search(r'\{.*\}', text, re.DOTALL)
-    if m:
-        try:
-            parsed = json.loads(m.group(0))
-        except Exception:
-            pass
-    if parsed is not None:
-        # Prefer summary.blockerCount
-        summary_count = parsed.get('summary', {}).get('blockerCount', None)
-        if summary_count is not None:
-            print(summary_count)
-        else:
-            findings = parsed.get('findings', [])
-            print(sum(1 for f in findings if str(f.get('severity','')).lower() == 'blocker'))
-    else:
-        # Malformed JSON — extract summary block directly (it appears before findings)
-        sm = re.search(r'\"summary\"\s*:\s*\{([^}]*)\}', text, re.DOTALL)
-        if sm:
-            try:
-                summary = json.loads('{' + sm.group(1) + '}')
-                bc = summary.get('blockerCount', None)
-                if bc is not None:
-                    print(bc)
-                    sys.exit(0)
-            except Exception:
-                pass
-        # Last resort: count severity:blocker occurrences in raw text
-        hits = len(re.findall(r'\"severity\"\s*:\s*\"blocker\"', text, re.IGNORECASE))
-        print(hits)
-except Exception:
-    print(-1)
-" 2>/dev/null || echo "-1")
+        _sast_blockers=$(python3 "$SCRIPT_DIR/lib/handlers/sast-blockers.py" "$sast_log" 2>/dev/null || echo "-1")
         if [ "$_sast_blockers" = "-1" ]; then
             # Fallback: no parseable JSON — check raw verdict string
             if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$sast_log" 2>/dev/null; then
@@ -9558,18 +9317,7 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
 
                 # Check analyst returned a grounded finding (has story_id and rule)
                 local _story_id
-                _story_id=$(echo "$_finding_json" | python3 -c "
-import sys, re, json
-txt = sys.stdin.read()
-for m in re.finditer(r'\{[^{}]*\"story_id\"[^{}]*\}', txt, re.DOTALL):
-    try:
-        obj = json.loads(m.group(0))
-        sid = obj.get('story_id')
-        if sid and sid != 'null':
-            print(sid)
-            break
-    except: pass
-" 2>/dev/null || true)
+                _story_id=$(echo "$_finding_json" | python3 "$SCRIPT_DIR/lib/handlers/story-id.py" 2>/dev/null || true)
 
                 if [ -z "$_story_id" ] || [ "$_story_id" = "null" ]; then
                     # Deterministic fallback (found live 2026-07-08): the analyst
@@ -9843,19 +9591,7 @@ $_prof_prompt"
                                     --provider "${ORCH_GATE_PROVIDER:-minimax}" \
                                     --model    "${_pa_model}" \
                                 2>/dev/null | \
-                                python3 -c "
-import sys, json, re
-text = sys.stdin.read()
-try:
-    obj = json.loads(text.strip())
-    v = obj.get('verdict','')
-    if v in ('pass','fail'):
-        print(v); sys.exit(0)
-except Exception:
-    pass
-m = re.search(r'\"verdict\"\s*:\s*\"(pass|fail)\"', text)
-if m: print(m.group(1)); sys.exit(0)
-" 2>/dev/null || true)
+                                python3 "$SCRIPT_DIR/lib/handlers/run-testing-gates.py" 2>/dev/null || true)
                             _pa_rev_attempt=$(( _pa_rev_attempt + 1 ))
                         done
                         if [ "$_pa_rev_raw" = "pass" ] || [ "$_pa_rev_raw" = "fail" ]; then
@@ -10415,20 +10151,7 @@ _handoff_file="$LOG_DIR/phase-handoff-${PHASE}.md"
     echo ""
     echo "## Cost Summary"
     if [ -s "$LOG_DIR/phase-cost.jsonl" ]; then
-        python3 -c "
-import sys, json
-total = 0.0
-entries = []
-for line in open('$LOG_DIR/phase-cost.jsonl'):
-    try:
-        e = json.loads(line)
-        total += float(e.get('actual_cost_usd', 0) or 0)
-        entries.append(e)
-    except Exception:
-        pass
-print(f'Total cost: \${total:.4f}')
-print(f'Entries: {len(entries)}')
-" 2>/dev/null || echo "(cost data unavailable)"
+        python3 "$SCRIPT_DIR/lib/handlers/phase-cost-total.py" "$LOG_DIR/phase-cost.jsonl" 2>/dev/null || echo "(cost data unavailable)"
     else
         echo "(no cost data)"
     fi
@@ -10436,18 +10159,7 @@ print(f'Entries: {len(entries)}')
     echo "## Review Results"
     if [ -s "$AUTOMATION_DIR/logs/code-reviews.jsonl" ]; then
         grep "\"phase_id\":\"${PHASE}\"" "$AUTOMATION_DIR/logs/code-reviews.jsonl" 2>/dev/null | \
-            python3 -c "
-import sys, json
-for line in sys.stdin:
-    try:
-        e = json.loads(line)
-        status = e.get('review_status','?')
-        issues = e.get('issues_found', 0)
-        ts = e.get('timestamp','?')
-        print(f'- {ts}: {status} ({issues} issues)')
-    except Exception:
-        pass
-" 2>/dev/null || echo "(review data unavailable)"
+            python3 "$SCRIPT_DIR/lib/handlers/run-interstitial-e2e-phase-2.py" 2>/dev/null || echo "(review data unavailable)"
     else
         echo "(no review data)"
     fi
@@ -10516,30 +10228,7 @@ if [ "${AUTO_PROMOTE_PHASE:-false}" = "true" ]; then
         warning "Step 8: Phase promotion skipped — $_incomplete_count stories still incomplete in '$PHASE'"
     else
         # Find next phase in insertion order, skipping excluded phases
-        _next_phase=$(python3 -c "
-import sys, json
-prd = json.load(open('$PRD_FILE'))
-phases = list(prd.get('implementationOrder', {}).keys())
-phases_config = prd.get('phasesConfig', {})
-current = '$PHASE'
-try:
-    idx = phases.index(current)
-except ValueError:
-    sys.exit(1)
-for candidate in phases[idx+1:]:
-    cfg = phases_config.get(candidate, {})
-    desc = (cfg.get('description') or '').lower()
-    if 'excluded from normal execution paths' in desc:
-        continue
-    # Skip if all stories already complete
-    ids = prd['implementationOrder'].get(candidate, [])
-    pending = [s for s in prd.get('stories', []) if s['id'] in ids and not s.get('completed')]
-    if not ids or not pending:
-        continue
-    print(candidate)
-    sys.exit(0)
-sys.exit(1)
-" 2>/dev/null || true)
+        _next_phase=$(python3 "$SCRIPT_DIR/lib/handlers/next-phase.py" "$PRD_FILE" "$PHASE" 2>/dev/null || true)
 
         if [ -n "$_next_phase" ]; then
             success "Step 8: Promoting to next phase: '$_next_phase'"

@@ -3,7 +3,7 @@
   "_why": "These two names used to live inside the engine, in codeline-write-perimeter.sh's _PERIMETER_DEFAULT_WRITE_ROLES, alongside 'writer', 'repro-test-writer' and 'lint-fix'. Those three are authoring SEAMS (pipeline stages) and remain in the engine, correctly. These two are ROLES, and they are epam-cli's own — which is why a role minted for any other project could not write a byte. Moving them here changes no behaviour and stops the engine naming one project's roles.",
   "roles": [
     "typescript-engineer",
-    "test-engineer",
-    "contentstack-live-preview-integration-engineer"
-  ]
+    "test-engineer"
+  ],
+  "_leak": "2026-08-16: contentstack-live-preview-integration-engineer was appended here by a metrolinx run. This file is epam-cli own roles and is the FALLBACK the write perimeter uses when a project has no project-roles.json of its own — so one client’s role was a role every other project would have accepted. metrolinx keeps it in projects/metrolinx/project-roles.json, where it belongs."
 }

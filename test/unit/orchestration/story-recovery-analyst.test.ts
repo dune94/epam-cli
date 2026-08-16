@@ -55,7 +55,17 @@ describe('Step 1 loop — recovery wiring (static)', () => {
     // gate (e.g. pre-phase-assessment's profile-change gate) instead of
     // referencing an undefined cross-script function.
     const idx = orchSrc.indexOf('run_story_recovery_analyst() {');
-    const block = orchSrc.slice(idx, idx + 6000);
+    // THE WHOLE FUNCTION, brace-matched. A fixed 6000-character window had been sized to just
+    // reach the runner call; moving the retry prefix into the template layer added lines above
+    // it and pushed it past the edge, so the test failed for a reason unrelated to the wiring.
+    const block = (() => {
+      let depth = 0;
+      for (let i = orchSrc.indexOf('{', idx); i < orchSrc.length; i += 1) {
+        if (orchSrc[i] === '{') depth += 1;
+        else if (orchSrc[i] === '}') { depth -= 1; if (depth === 0) return orchSrc.slice(idx, i + 1); }
+      }
+      return orchSrc.slice(idx);
+    })();
     // The comment explaining the fix legitimately mentions the old function
     // name in prose -- what must never reappear is an actual INVOCATION of it.
     expect(block).not.toMatch(/[^#\n]*run_change_with_reviewer_retry "\$story_id"/);

@@ -1,0 +1,47 @@
+{
+  "$why": [
+    "Moved out of run-agent-orchestration.sh on 2026-08-16.",
+    "",
+    "Nine retry prefixes, one per seam, each prepended to a prompt whose first answer was unusable.",
+    "They were written out again at every seam that needed one, and they had already diverged: some",
+    "say the response was empty, some that it was unparseable, some that the previous attempt",
+    "changed nothing.",
+    "",
+    "ONE BODY PER SEAM, not one shared body — because what a retry must say genuinely differs by",
+    "what went wrong, and flattening them would tell an agent its output was malformed when in fact",
+    "it had written nothing. Together in one document, the nine are now diffable against each other."
+  ],
+  "description": "What an agent is told when its first answer could not be used, by seam.",
+  "seams": [
+    "impl-failure-analyst"
+  ],
+  "id": "agent-retry-prefix",
+  "version": 1,
+  "bodies": {
+    "story_recovery_analyst": "RETRY (attempt 2): Your previous response was empty or unparseable. Respond with ONLY the JSON: {\"restructure\": true/false, \"reason\": \"...\", \"new_acs\": [...]}.\n\n__PROMPT__",
+    "hybrid_prephase_coordinator": "RETRY (attempt 2): The previous invocation produced no output. Use your tools to read the PRD, write coordination messages to agent-messages.jsonl, and write the summary log now.\n\n__COORD_PROMPT__",
+    "skills_coordinator": "RETRY (attempt 2): Previous attempt did not update profiles.json. Read __AGENT_PROFILES_FILE__, find the exact flagged note, and rewrite it now.\n\n__SC_PROMPT__",
+    "tools_coordinator": "RETRY (attempt 2): Previous fix left __TC_TOOL__.sh syntactically broken. bash -n reports: __TC_BN_ERR__. Fix the syntax error and write the corrected script back now.\n\n__TC_PROMPT__",
+    "phase_assessment": "RETRY (attempt 2): Your previous response was not valid JSON in the required shape. Emit ONLY the JSON object now.\n\n__ASSESSMENT_PROMPT__",
+    "lint_gate_analyst": "RETRY (attempt 2): Your previous response was empty. Read the lint log at __LINT_LOG__, identify the failing file and story, and emit ONLY the JSON output.\n\n__LINT_FINDING_PROMPT__",
+    "lint_remediator": "RETRY (attempt 2): Your previous response was empty or missing the 'new_acs' field. Emit ONLY the JSON: {\"story_id\":\"...\",\"new_acs\":[\"...\"]}.\n\n__LINT_AC_PROMPT__",
+    "gate_finding_analyst": "RETRY (attempt 2): Your previous response was empty. Use ReadFile to read the gate log at __GLOG__, extract the finding, and emit ONLY the JSON output.\n\n__FINDING_PROMPT__",
+    "ac_remediator": "RETRY (attempt 2): Your previous response was empty or missing the 'acs' field. Emit ONLY the JSON: {\"acs_added\": N, \"acs\": [\"...\"]}.\n\n__AC_PROMPT__"
+  },
+  "placeholders": [
+    "__PROMPT__",
+    "__COORD_PROMPT__",
+    "__AGENT_PROFILES_FILE__",
+    "__SC_PROMPT__",
+    "__TC_BN_ERR__",
+    "__TC_TOOL__",
+    "__TC_PROMPT__",
+    "__ASSESSMENT_PROMPT__",
+    "__LINT_FINDING_PROMPT__",
+    "__LINT_LOG__",
+    "__LINT_AC_PROMPT__",
+    "__FINDING_PROMPT__",
+    "__GLOG__",
+    "__AC_PROMPT__"
+  ]
+}

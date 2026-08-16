@@ -1993,9 +1993,14 @@ Respond with ONLY the JSON object, nothing else."
     local _analyst_response="" _sra_attempt=0
     while [ "$_sra_attempt" -lt 2 ]; do
         local _sra_prompt="$_prompt"
-        [ "$_sra_attempt" -ge 1 ] && _sra_prompt="RETRY (attempt 2): Your previous response was empty or unparseable. Respond with ONLY the JSON: {\"restructure\": true/false, \"reason\": \"...\", \"new_acs\": [...]}.
-
-$_prompt"
+        if [ "$_sra_attempt" -ge 1 ]; then
+          _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
+          jq -n \
+                --arg prompt "$_prompt" \
+                '{"__PROMPT__":$prompt}' > "$_rp_vals"
+          _sra_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" story_recovery_analyst)"
+          rm -f "$_rp_vals"
+        fi
         local _sra_raw
         _sra_raw=$(run_orch_prompt_with_tools "$_sra_prompt" "story_recovery" "$story_id" 2>/dev/null)
         if [ -n "$_sra_raw" ] && echo "$_sra_raw" | python3 -c "import sys,json; json.load(sys.stdin)" 2>/dev/null; then
@@ -5552,9 +5557,14 @@ run_hybrid_precoordination() {
     local _hpc_attempt=0 _hpc_ok=0
     while [ "$_hpc_attempt" -lt 2 ] && [ "$_hpc_ok" = "0" ]; do
         local _hpc_prompt="$coord_prompt"
-        [ "$_hpc_attempt" -ge 1 ] && _hpc_prompt="RETRY (attempt 2): The previous invocation produced no output. Use your tools to read the PRD, write coordination messages to agent-messages.jsonl, and write the summary log now.
-
-$coord_prompt"
+        if [ "$_hpc_attempt" -ge 1 ]; then
+          _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
+          jq -n \
+                --arg coord_prompt "$coord_prompt" \
+                '{"__COORD_PROMPT__":$coord_prompt}' > "$_rp_vals"
+          _hpc_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" hybrid_prephase_coordinator)"
+          rm -f "$_rp_vals"
+        fi
         # No story_id — phase-level coordination call, not tied to a single story.
         # PIPESTATUS, not `[ -s "$coord_log" ]` alone. This is a PIPELINE and its exit status is
         # tee's — always 0 — so `set -e` cannot help either (no `set -o pipefail`). Judging
@@ -7094,9 +7104,15 @@ ${_sc_note}"
             _sc_attempt=0
             while [ "$_sc_attempt" -lt 2 ]; do
                 _sc_run_prompt="$_sc_prompt"
-                [ "$_sc_attempt" -ge 1 ] && _sc_run_prompt="RETRY (attempt 2): Previous attempt did not update profiles.json. Read ${AGENT_PROFILES_FILE}, find the exact flagged note, and rewrite it now.
-
-$_sc_prompt"
+                if [ "$_sc_attempt" -ge 1 ]; then
+                  _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
+                  jq -n \
+                        --arg agent_profiles_file "${AGENT_PROFILES_FILE}" \
+                        --arg sc_prompt "$_sc_prompt" \
+                        '{"__AGENT_PROFILES_FILE__":$agent_profiles_file,"__SC_PROMPT__":$sc_prompt}' > "$_rp_vals"
+                  _sc_run_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" skills_coordinator)"
+                  rm -f "$_rp_vals"
+                fi
                 # No story_id — phase-level audit, not tied to a single story.
                 if run_orch_prompt_with_tools "$_sc_run_prompt" "skills_audit" > "$LOG_DIR/skills-coordinator-${PHASE}.log" 2>&1; then
                     if jq empty "$AGENT_PROFILES_FILE" 2>/dev/null; then
@@ -7226,9 +7242,14 @@ else
                 if [ "$_tc_attempt" -ge 1 ]; then
                     _tc_bn_err=""
                     _tc_bn_err=$(bash -n "$_tc_path" 2>&1 || true)
-                    _tc_run_prompt="RETRY (attempt 2): Previous fix left ${_tc_tool}.sh syntactically broken. bash -n reports: ${_tc_bn_err}. Fix the syntax error and write the corrected script back now.
-
-$_tc_prompt"
+                    _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
+                    jq -n \
+                          --arg tc_bn_err "${_tc_bn_err}" \
+                          --arg tc_tool "${_tc_tool}" \
+                          --arg tc_prompt "$_tc_prompt" \
+                          '{"__TC_BN_ERR__":$tc_bn_err,"__TC_TOOL__":$tc_tool,"__TC_PROMPT__":$tc_prompt}' > "$_rp_vals"
+                    _tc_run_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" tools_coordinator)"
+                    rm -f "$_rp_vals"
                 fi
                 # No story_id — phase-level audit, not tied to a single story.
                 if run_orch_prompt_with_tools "$_tc_run_prompt" "tools_audit" > "$LOG_DIR/tools-coordinator-${PHASE}.log" 2>&1; then
@@ -7521,9 +7542,12 @@ ASSESS_PRECOMPUTE_PY
         local _pa_prompt="$assessment_prompt"
         if [ "$_pa_attempt" -ge 1 ]; then
             [ -n "${ESCALATION_MODEL_HIGH:-}" ] && ORCH_GATE_MODEL="${ESCALATION_MODEL_HIGH}"
-            _pa_prompt="RETRY (attempt 2): Your previous response was not valid JSON in the required shape. Emit ONLY the JSON object now.
-
-$assessment_prompt"
+            _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
+            jq -n \
+                  --arg assessment_prompt "$assessment_prompt" \
+                  '{"__ASSESSMENT_PROMPT__":$assessment_prompt}' > "$_rp_vals"
+            _pa_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" phase_assessment)"
+            rm -f "$_rp_vals"
         fi
         local _assessment_rc=0
         run_orch_prompt "$_pa_prompt" "team-lead-agent" > "$assessment_log" 2>&1 || _assessment_rc=$?
@@ -8685,9 +8709,13 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
                 _lga_model="${ORCH_GATE_MODEL:-z-ai/glm-5.2}"
                 if [ "$_lga_attempt" -ge 1 ]; then
                     [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _lga_model="${ESCALATION_MODEL_HIGH}"
-                    _lga_prompt="RETRY (attempt 2): Your previous response was empty. Read the lint log at ${_lint_log}, identify the failing file and story, and emit ONLY the JSON output.
-
-$_lint_finding_prompt"
+                    _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
+                    jq -n \
+                          --arg lint_finding_prompt "$_lint_finding_prompt" \
+                          --arg lint_log "${_lint_log}" \
+                          '{"__LINT_FINDING_PROMPT__":$lint_finding_prompt,"__LINT_LOG__":$lint_log}' > "$_rp_vals"
+                    _lga_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" lint_gate_analyst)"
+                    rm -f "$_rp_vals"
                 fi
                 # Full agent audit, 2026-07-31: gate-finding-analyst gets tool
                 # access via TWO DIFFERENT mechanisms at its two call sites —
@@ -8747,9 +8775,12 @@ if m:
                     _lrem_model="${ORCH_GATE_MODEL:-z-ai/glm-5.2}"
                     if [ "$_lrem_attempt" -ge 1 ]; then
                         [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _lrem_model="${ESCALATION_MODEL_HIGH}"
-                        _lrem_prompt="RETRY (attempt 2): Your previous response was empty or missing the 'new_acs' field. Emit ONLY the JSON: {\"story_id\":\"...\",\"new_acs\":[\"...\"]}.
-
-$_lint_ac_prompt"
+                        _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
+                        jq -n \
+                              --arg lint_ac_prompt "$_lint_ac_prompt" \
+                              '{"__LINT_AC_PROMPT__":$lint_ac_prompt}' > "$_rp_vals"
+                        _lrem_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" lint_remediator)"
+                        rm -f "$_rp_vals"
                     fi
                     _lrem_raw="$(echo "$_lrem_prompt" | \
                         timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-qwen}" \
@@ -10512,9 +10543,13 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                     local _gfa_model="${ORCH_GATE_MODEL:-MiniMax-M3}"
                     if [ "$_gfa_attempt" -ge 1 ]; then
                         [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _gfa_model="${ESCALATION_MODEL_HIGH}"
-                        _gfa_prompt="RETRY (attempt 2): Your previous response was empty. Use ReadFile to read the gate log at ${_glog}, extract the finding, and emit ONLY the JSON output.
-
-$_finding_prompt"
+                        _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
+                        jq -n \
+                              --arg finding_prompt "$_finding_prompt" \
+                              --arg glog "${_glog}" \
+                              '{"__FINDING_PROMPT__":$finding_prompt,"__GLOG__":$glog}' > "$_rp_vals"
+                        _gfa_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" gate_finding_analyst)"
+                        rm -f "$_rp_vals"
                     fi
                     local _gfa_raw
                     _gfa_raw=$(echo "$_gfa_prompt" | \
@@ -10634,9 +10669,12 @@ for m in re.finditer(r'\{[^{}]*\"story_id\"[^{}]*\}', txt, re.DOTALL):
                     local _acr_model="${ORCH_GATE_MODEL:-MiniMax-M3}"
                     if [ "$_acr_attempt" -ge 1 ]; then
                         [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _acr_model="${ESCALATION_MODEL_HIGH}"
-                        _acr_prompt="RETRY (attempt 2): Your previous response was empty or missing the 'acs' field. Emit ONLY the JSON: {\"acs_added\": N, \"acs\": [\"...\"]}.
-
-$_ac_prompt"
+                        _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
+                        jq -n \
+                              --arg ac_prompt "$_ac_prompt" \
+                              '{"__AC_PROMPT__":$ac_prompt}' > "$_rp_vals"
+                        _acr_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" ac_remediator)"
+                        rm -f "$_rp_vals"
                     fi
                     local _acr_raw
                     _acr_raw=$(echo "$_acr_prompt" | \

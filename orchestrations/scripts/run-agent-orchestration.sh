@@ -69,6 +69,8 @@ _run_project_verification() {
 
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/seam-ladder.sh
+source "$SCRIPT_DIR/lib/seam-ladder.sh"
 # shellcheck source=lib/render-engine-prompt.sh
 source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
@@ -1164,7 +1166,21 @@ run_orch_prompt() {
         return 1
     fi
 
-    local gate_model="${ORCH_GATE_MODEL:-MiniMax-M3}"
+    # THE SEAM DECIDES, IF THE REGISTRY KNOWS THIS AGENT.
+    #
+    # Two invocation paths ran side by side and the registry governed only one of them: the
+    # spec pass resolved a seam and climbed a ladder, while everything invoked here took a
+    # single fixed gate model. So the six QA sentinels declared 'ladder: top' and never used
+    # it — the registry was describing a pipeline the runtime did not run, and the ladder
+    # tests all passed because they check the DECLARATION is coherent, never that anything
+    # reads it.
+    #
+    # seam_ladder_export is the shell counterpart of seam-invocation.js and reads the SAME
+    # registry, so a seam means the same thing whichever language invokes it. An agent the
+    # registry does not know is left exactly as it was: this widens what the registry governs,
+    # it does not force every caller through it.
+    seam_ladder_export "$agent_type" 2>/dev/null || true
+    local gate_model="${EPAM_MODEL:-${ORCH_GATE_MODEL:-MiniMax-M3}}"
     local model_args=()
     [ -n "$gate_model" ] && model_args=(--model "$gate_model")
 

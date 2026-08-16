@@ -176,7 +176,7 @@ function seamInvocationEnv(agent, agentsDir, opts) {
     const tierName = resolveTierPosition(profile.ladder, sourceEnv);
     if (!tierName) {
       process.stderr.write(
-        "[seam-invocation] seam '" + seamName + "' asks for ladder position '" + profile.ladder +
+        "[seam-invocation] seam '" + seam + "' asks for ladder position '" + profile.ladder +
         "' but EPAM_MODEL_LADDER_TIER_ORDER is unset or empty — the project declares no tier " +
         "order, so no position can be resolved\n");
     }
@@ -199,7 +199,7 @@ function seamInvocationEnv(agent, agentsDir, opts) {
         // Absent stays absent: the seam keeps whatever model it would otherwise resolve, and the
         // gap is stated rather than filled with a root chosen by accident.
         process.stderr.write(
-          "[seam-invocation] seam '" + seamName + "' climbs ladder '" + profile.ladder +
+          "[seam-invocation] seam '" + seam + "' climbs ladder '" + profile.ladder +
           "' which declares no startModel — not inferring one from map order; the seam will start " +
           "on whatever model it resolves for itself\n");
       }

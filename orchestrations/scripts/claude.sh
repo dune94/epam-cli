@@ -1763,38 +1763,17 @@ run_plan_mode() {
         '.stories[] | select(.id == $id) | .agentRole // "unknown"' "$prd_target" 2>/dev/null || echo "unknown")
 
     local plan_prompt
-    plan_prompt=$(cat << PLAN_PROMPT_EOF
-You are a planning agent. Produce an execution-ready plan for story ${story_id} BEFORE implementation begins.
-
-## Required Outputs
-1. Implementation steps with target file paths
-2. Dependency validation (each dep: satisfied yes/no, reason)
-3. Risk register (top 3 risks + mitigations)
-4. Test plan (new tests required + regression scope)
-5. Acceptance criteria mapping (each criterion -> implementation step)
-6. Cost/effort forecast (confirm or adjust estimatedHours)
-
-## On Completion
-Append a single-line JSON record to ${messages_jsonl}:
-{
-  "id":"plan_${story_id}_\$(date +%s)",
-  "timestamp":"\$(date -Iseconds)",
-  "from_agent":"plan-agent",
-  "to_agent":"${agent_role}",
-  "story_id":"${story_id}",
-  "phase_id":"${CURRENT_PHASE:-unknown}",
-  "message_type":"plan_summary",
-  "priority":"normal",
-  "subject":"Plan ready for ${story_id}",
-  "body":"<one-sentence summary of key risks/steps>",
-  "status":"new"
-}
-Write it atomically: (flock -w 10 9 >> ${messages_jsonl}; printf '%s\n' '<json>' >&9) 9>>${messages_jsonl}
-
-## Story to Plan
-Read orchestrations/prd.json for story ${story_id} full details, then produce the plan above.
-PLAN_PROMPT_EOF
-    )
+    # RENDERED FROM THE TEMPLATE LAYER. Both provider scripts render the same document —
+    # they carried separate copies that had already drifted, and the copy here had the
+    # messages path written into the prompt text rather than passed as data.
+    _pp_vals=$(mktemp "${TMPDIR:-/tmp}/story-plan-agent-vals-XXXXXX.json")
+    jq -n --arg story_id "$story_id" \
+          --arg messages_jsonl "$messages_jsonl" \
+          --arg agent_role "$agent_role" \
+          --arg current_phase "${CURRENT_PHASE:-unknown}" \
+          '{"__STORY_ID__":$story_id,"__MESSAGES_JSONL__":$messages_jsonl,"__AGENT_ROLE__":$agent_role,"__CURRENT_PHASE__":$current_phase}' > "$_pp_vals"
+    plan_prompt="$(render_engine_prompt story-plan-agent "$_pp_vals")"
+    rm -f "$_pp_vals"
 
     log "Plan mode: generating execution plan for $story_id..."
     touch "$messages_jsonl"

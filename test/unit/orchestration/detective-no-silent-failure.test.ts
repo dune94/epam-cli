@@ -58,7 +58,16 @@ describe('detective invocation — loud retry instead of silent []', () => {
 
   it('retries with a corrective note when the output had no JSON array', () => {
     expect(specSrc).toMatch(/for \(let attempt = 1; attempt <= maxAttempts; attempt\+\+\)/);
-    expect(specSrc).toMatch(/RETRY — your previous reply contained NO JSON array/);
+    // The retry NOTE lives in the template layer since 2026-08-16; the retry LOOP and its
+    // attempt budget stay in code. Both halves are still asserted — the loop here, the text
+    // where the text now is — because a retry that repeats the original instruction gets the
+    // original answer, and the note is the only new information the second attempt has.
+    const note = JSON.parse(readFileSync(
+      join(__dirname, '../../../orchestrations/prompts/templates/detective-retry-note.json'),
+      'utf8')).body as string;
+    expect(note).toMatch(/RETRY — your previous reply contained NO JSON array/);
+    expect(specSrc, 'the retry note is no longer reached from the detective loop')
+      .toMatch(/detective-retry-note/);
     expect(specSrc).toMatch(/CODEGRAPH_DETECTIVE_MAX_ATTEMPTS/);
   });
 

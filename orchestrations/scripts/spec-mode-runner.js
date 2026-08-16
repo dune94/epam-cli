@@ -5245,9 +5245,13 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
     : '';
 
   const _kindHint = inferStoryKindHint(story);
+  // BOTH HINTS ARE TEMPLATES. The tracker's issue type is a hint in both directions, and the
+  // wrong-way error is asymmetric — see the fragments' own notes.
   const _kindHintBlock = _kindHint === 'defect'
-    ? `\nJIRA CLASSIFIES THIS AS A DEFECT (issue type: Bug). This is a HINT, not a certainty — if the ticket's own text below clearly describes a capability that does not exist yet rather than broken existing behavior, trust the ticket over this hint. Assuming defect: there IS an existing bug and an existing symptom. Your job is the CAUSE, not the symptom (see CORE PRINCIPLE below).\n`
-    : `\nJIRA DOES NOT CLASSIFY THIS AS A BUG (issue type: ${story.issueType || story.issuetype || 'unset'}). This is a HINT, not a certainty — if the ticket's own text below clearly describes existing behavior that is wrong, trust the ticket over this hint. Assuming novel: there is likely NO existing bug and no wrong value to trace. Inventing a "cause" for a capability that does not exist yet produces a confident wrong answer. Your job is the ATTACHMENT POINT — the existing file/function/provider/hook/route/component this new capability must plug into, and anything already present the implementation should REUSE — not a fix site.\n`;
+    ? renderEngineTemplate('story-kind-hint-defect', {})
+    : renderEngineTemplate('story-kind-hint-other', {
+      __ISSUE_TYPE__: story.issueType || story.issuetype || 'unset',
+    });
 
   // CORRECTIVE CONTEXT — set only on a Step 4 re-invocation after SPEC_REVIEW flagged
   // planAlignment: "unexplained_mismatch" for this story's FIRST answer. Mirrors the
@@ -5327,8 +5331,8 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
     if (escalated) {
       console.warn(`spec-mode: code-graph-detective ladder escalation for ${story.id} (attempt ${attempt}/${maxAttempts}) — model ${baseModel} → ${attemptModel}`);
     }
-    const correctiveNote = attempt === 1 ? '' :
-      `\n\nRETRY — your previous reply contained NO JSON array (you may have called a write tool). Emit ONLY the JSON array as text in THIS reply now. Do NOT call WriteFile or write to any file.`;
+    const correctiveNote = attempt === 1 ? ''
+      : renderEngineTemplate('detective-retry-note', {});
     const _roundStarted = Date.now();
     try {
       // PHASE 1 — EXPLORE (tools). A reasoning model reliably EXPLORES but does
@@ -8224,20 +8228,14 @@ async function reviewPrdChange({ aiRunnerCmd, profiles, storyId, changeType, bef
   // 2026-07-23 on AMSD-1820. Fix: cap acceptanceCriteria (the only field whose
   // length is unbounded) independently, and always include technicalNotes/
   // description/title in full so structural fields can never be truncated away.
-  const prompt = `${reviewerProfile}
-
-STORY: ${storyId}
-CHANGE TYPE: ${changeType}
-${splitNote}
-BEFORE:
-${JSON.stringify(capReviewSnapshot(before))}
-
-AFTER:
-${JSON.stringify(capReviewSnapshot(after))}
-
-You have read-only tools available (list/search/read files, run read-only shell commands). Several of your rejection rules ("introduces a technology this project does not already use," "TC fact cannot be verified by reading source code") require checking a claim against the real manifests/config/source of THIS codeline — do not judge those from the before/after snapshots alone. Verify before rejecting on that basis. Your tool budget is small — check the ONE fact your verdict depends on, not the whole codebase.
-
-Emit ONLY: {"verdict":"pass|fail","issues":["<issue1>"],"reason":"<15 words max>"}`;
+  const prompt = renderEngineTemplate('prd-change-reviewer-spec', {
+    __REVIEWER_PROFILE__: reviewerProfile,
+    __STORY_ID__: storyId,
+    __CHANGE_TYPE__: changeType,
+    __SPLIT_NOTE__: splitNote,
+    __BEFORE__: JSON.stringify(capReviewSnapshot(before)),
+    __AFTER__: JSON.stringify(capReviewSnapshot(after)),
+  });
 
   try {
     const gateExec = buildGateExec(aiRunnerCmd);

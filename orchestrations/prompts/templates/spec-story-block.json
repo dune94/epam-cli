@@ -12,7 +12,7 @@
   "description": "The labelled story block handed to a spec agent, and its retrieved-documents notice.",
   "id": "spec-story-block",
   "seams": [
-    "ac-elaboration"
+    "ticket-links"
   ],
   "placeholders": [
     "__PERSONA__",

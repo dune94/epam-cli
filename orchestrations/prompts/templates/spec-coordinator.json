@@ -20,6 +20,6 @@
   ],
   "version": 1,
   "seams": [
-    "cpa-gate"
+    "spec-coordinator"
   ]
 }

@@ -637,6 +637,51 @@
         }
       ],
       "template": "assign-agent-roles"
+    },
+    "spec-coordinator": {
+      "_what": "Assigns the spec work for a phase, then reviews the specs and the model choices it produced.",
+      "maxOutputTokens": 32768,
+      "reasoningEffort": "high",
+      "timeoutSecs": 900,
+      "ladder": "top",
+      "produces": "spec-assignments",
+      "consumes": [
+        {
+          "kind": "ticket",
+          "required": true
+        }
+      ],
+      "template": "spec-coordinator"
+    },
+    "spec-agent": {
+      "_what": "Writes one story's specification — the openspec or speckit author.",
+      "maxOutputTokens": 32768,
+      "reasoningEffort": "high",
+      "timeoutSecs": 900,
+      "ladder": "top",
+      "produces": "story-specification",
+      "consumes": [
+        {
+          "kind": "ticket",
+          "required": true
+        }
+      ],
+      "template": "spec-agent-openspec"
+    },
+    "ticket-links": {
+      "_what": "Reads the documents linked on a ticket and extracts what they say verbatim.",
+      "maxOutputTokens": 16384,
+      "reasoningEffort": "medium",
+      "timeoutSecs": 600,
+      "ladder": "mid",
+      "produces": "ticket-link-evidence",
+      "consumes": [
+        {
+          "kind": "ticket",
+          "required": true
+        }
+      ],
+      "template": "spec-story-block"
     }
   },
   "_seamResolution": [

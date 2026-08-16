@@ -1467,7 +1467,11 @@ async function run() {
       'SPEC_ASSIGNMENTS',
       path.join(logDir, `spec-coordinator-${opts.phase}.log`),
       'assignments',
-      `phase:${opts.phase}`   // phase-level agent — no single story owns it
+      `phase:${opts.phase}`, // phase-level agent — no single story owns it
+      // THE SEAM, asked for. This call passed no env, so it ran with no ladder, no budget
+      // and no tool grant — the settings sat in the registry reaching nothing.
+      '',
+      { ...seamInvocationEnv('spec-coordinator', logDir), EPAM_AGENT_NAME: 'spec-coordinator' },
     );
   } catch (error) {
     console.warn('spec-mode: coordinator failed, falling back to default agent pair:', error.message);
@@ -2123,7 +2127,11 @@ async function run() {
         'SPEC_REVIEW',
         path.join(logDir, `spec-coordinator-review-${opts.phase}.log`),
         'items',
-        `phase:${opts.phase}`   // phase-level agent — no single story owns it
+        `phase:${opts.phase}`, // phase-level agent — no single story owns it
+        // THE SEAM, asked for. This call passed no env, so it ran with no ladder, no budget
+        // and no tool grant — the settings sat in the registry reaching nothing.
+        '',
+        { ...seamInvocationEnv('spec-coordinator', logDir), EPAM_AGENT_NAME: 'spec-coordinator' },
       );
     } catch (error) {
       console.warn('spec-mode: coordinator review failed:', error.message);
@@ -2289,7 +2297,11 @@ async function run() {
         'MODEL_REVIEW',
         path.join(logDir, `spec-model-review-${opts.phase}.log`),
         'items',
-        `phase:${opts.phase}`   // phase-level agent — no single story owns it
+        `phase:${opts.phase}`, // phase-level agent — no single story owns it
+        // THE SEAM, asked for. This call passed no env, so it ran with no ladder, no budget
+        // and no tool grant — the settings sat in the registry reaching nothing.
+        '',
+        { ...seamInvocationEnv('spec-coordinator', logDir), EPAM_AGENT_NAME: 'spec-coordinator' },
       );
     } catch (err) { llmDecisions = null; }
     if (Array.isArray(llmDecisions)) {
@@ -5768,7 +5780,11 @@ async function reviewTicketLinks({ promptExec, story, logDir, docPaths = [] }) {
     const payload = await runAgentForJson(
       promptExec, prompt, TOOL_TICKET_LINKS, 'TICKET_LINKS',
       logDir ? path.join(logDir, `${(story && story.id) || 'phase'}-ticket-links.log`) : null,
-      'links', (story && story.id) || '', resolveCodelinePath(story), _linkTools,
+      'links', (story && story.id) || '', resolveCodelinePath(story),
+      // THE SEAM, UNDER this call's own grant. _linkTools is already the envOverride, so a further
+      // argument was simply ignored. The seam supplies ladder, effort and budget; the explicit
+      // grant supplies the fetch_url this agent needs and must still win.
+      { ...seamInvocationEnv('ticket-links', logDir), EPAM_AGENT_NAME: 'ticket-links', ..._linkTools },
     );
     return normaliseTicketLinks(payload);
   } catch (err) {
@@ -5991,7 +6007,10 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, fo
   try {
     const payload = await runAgentForJson(
       promptExec, prompt, TOOL_SPEC_AGENT, 'SPEC_AGENT',
-      path.join(logDir, `${story.id}-${agent}-spec.log`), null, story.id, repoPath
+      path.join(logDir, `${story.id}-${agent}-spec.log`), null, story.id, repoPath,
+      // THE SEAM, asked for. This call passed no env, so it ran with no ladder, no budget
+      // and no tool grant — the settings sat in the registry reaching nothing.
+      { ...seamInvocationEnv('spec-agent', logDir), EPAM_AGENT_NAME: 'spec-agent' },
     );
     // Merge fix-site candidates into locationHint. PRIMARY: the code-graph-
     // detective — a tool-using agent (GLM-5.1) that iterates CodeGraph queries

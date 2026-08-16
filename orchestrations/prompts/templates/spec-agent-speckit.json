@@ -17,6 +17,6 @@
   ],
   "version": 1,
   "seams": [
-    "ac-elaboration"
+    "spec-agent"
   ]
 }

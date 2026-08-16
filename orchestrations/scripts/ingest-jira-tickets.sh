@@ -203,7 +203,8 @@ log "Synthesizing PRD from classified tickets..."
 # project. JIRA_PRD_TEMPLATE lets a project supply its own; unset keeps the previous
 # default exactly, so existing projects are unaffected.
 # Resolution order: the operator's explicit choice, then the PROJECT'S OWN canonical, then
-# nothing (synthesize-prd-from-jira.js applies its built-in default).
+# nothing — and nothing is now an ERROR: synthesize-prd-from-jira.js requires --template and
+# has no built-in default, precisely so a run cannot inherit another project's identity.
 #
 # The middle step was missing, and no project set JIRA_PRD_TEMPLATE, so EVERY Jira-sourced
 # run fell through to a built-in canonical belonging to one project and inherited its
@@ -219,21 +220,35 @@ if [ -n "${JIRA_PRD_TEMPLATE:-}" ]; then
   else
     # Deliberately NOT falling through to the derived template: that would hide the typo
     # behind a run that looks fine until its project block is read.
-    log "WARN: JIRA_PRD_TEMPLATE set but not found: ${JIRA_PRD_TEMPLATE} — using default canonical"
+    log "WARN: JIRA_PRD_TEMPLATE set but not found: ${JIRA_PRD_TEMPLATE} — synthesis will fail; there is no built-in default"
   fi
 elif [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] && [ -f "${EPAM_PROJECT_CONFIG_DIR}/prd.canonical.json" ]; then
   _synth_template_args=(--template "${EPAM_PROJECT_CONFIG_DIR}/prd.canonical.json")
   log "Using PRD template: ${EPAM_PROJECT_CONFIG_DIR}/prd.canonical.json (this project's own canonical)"
 elif [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ]; then
-  log "WARN: no prd.canonical.json in ${EPAM_PROJECT_CONFIG_DIR} — this run will inherit ANOTHER project's identity from the built-in canonical"
+  log "WARN: no prd.canonical.json in ${EPAM_PROJECT_CONFIG_DIR} — synthesis requires a template and will fail"
 fi
 
 _out_prd_required
+# PIPESTATUS[0], not the pipeline status. Without pipefail the status here is sed's —
+# always 0 — so synthesize exiting 2 for a missing template was swallowed and the next line
+# logged "PRD ready" for a file that was never written. Same trap this file guards against
+# 70 lines above for the ingest call itself.
+_synth_exit=0
 "$NODE_BIN" "${SCRIPT_DIR}/synthesize-prd-from-jira.js" \
   --classifications "$GATE_JSON" \
   --out "$OUT_PRD" \
   "${_synth_template_args[@]}" \
-  2>&1 | grep '^\[synthesize-prd\]' | sed 's/\[synthesize-prd\]/[ingest]/' >&2
+  2>&1 | grep -E '^\[synthesize-prd\]|Error|error:' | sed 's/\[synthesize-prd\]/[ingest]/' >&2
+_synth_exit="${PIPESTATUS[0]}"
+# Exit 1, never synthesize's 2: this script already uses 2 for "insufficient ACs, human
+# approval required", and a missing template reported as a ticket-quality problem sends the
+# operator to fix the wrong thing.
+if [ "$_synth_exit" != "0" ]; then
+  err "PRD synthesis failed (exit ${_synth_exit}) — no PRD was written to ${OUT_PRD}"
+  exit 1
+fi
+[ -s "$OUT_PRD" ] || { err "PRD synthesis reported success but wrote nothing to ${OUT_PRD}"; exit 1; }
 
 log "PRD ready: ${OUT_PRD}"
 echo "$OUT_PRD"

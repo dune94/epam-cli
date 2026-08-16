@@ -2140,7 +2140,7 @@ run_story_with_watchdog() {
         esac
         local role_multiplier
         role_multiplier=$(resolve_role_timeout_multiplier "$story_id")
-        timeout_secs=$(python3 "$SCRIPT_DIR/lib/handlers/timeout-secs.py" "${role_multiplier}" "${timeout_secs}" 2>/dev/null || echo "$timeout_secs")
+        timeout_secs=$(python3 "$SCRIPT_DIR/lib/handlers/scaled-timeout-secs.py" "${role_multiplier}" "${timeout_secs}" 2>/dev/null || echo "$timeout_secs")
     fi
 
     # THE WALL MUST HONOUR THE ITERATION BUDGET IT IS POLICING.
@@ -2245,7 +2245,7 @@ run_story_with_watchdog() {
         # configurable (EPAM_WATCHDOG_RETRY_MULTIPLIER, default 1.5x); set to 1
         # to restore the old flat-timeout behavior.
         local retry_timeout_secs
-        retry_timeout_secs=$(python3 "$SCRIPT_DIR/lib/handlers/retry-timeout-secs.py" "${EPAM_WATCHDOG_RETRY_MULTIPLIER:-1.5}" "${timeout_secs}" 2>/dev/null || echo "$timeout_secs")
+        retry_timeout_secs=$(python3 "$SCRIPT_DIR/lib/handlers/scaled-timeout-secs.py" "${EPAM_WATCHDOG_RETRY_MULTIPLIER:-1.5}" "${timeout_secs}" 2>/dev/null || echo "$timeout_secs")
         # ── Climb the ladder, do not merely swap once ─────────────────────
         # This was a single retry, so at most ONE escalation could ever happen.
         # The HIGH ladder is four rungs (MiniMax-M2.5 -> MiniMax-M3 ->

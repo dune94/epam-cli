@@ -26,22 +26,7 @@ import json
 import re
 import sys
 
-# Test-file conventions vary per project (.spec.ts here, .test.ts elsewhere,
-# __tests__/, test_*.py). Hardcoding one made this check a silent no-op on any
-# codebase using another. NO REGEX: this heredoc is unquoted, so backslash
-# escapes would be eaten by the shell before Python ever sees them.
-def _is_test_file(f):
-    f = f or ''
-    base = f.split('/')[-1]
-    if '__tests__/' in f or f.startswith('__tests__/'):
-        return True
-    if base.startswith('test_'):
-        return True
-    for marker in ('.spec.', '.test.', '_spec.', '_test.'):
-        if marker in base:
-            return True
-    return False
-
+from _testfile import is_test_file as _is_test_file
 PRD_FILE = sys.argv[2]
 # Optional: scope the per-story "is this story in a clean/correct state right
 # now" checks (#9, #10, #17) to a single phase's own implementationOrder,

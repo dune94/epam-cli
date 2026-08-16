@@ -109,7 +109,21 @@ describe('every extracted handler is invoked', () => {
     try { handlers = readdirSync(dir).filter((f) => /\.(js|py)$/.test(f)); } catch { return; }
     if (!handlers.length) return;
     const text = shippedText();
-    const orphans = handlers.filter((h) => !text.includes(h));
+    // A handler reached two ways. Most are INVOKED by a script, which names the file. A few are
+    // shared modules IMPORTED by other handlers — the one copy of a rule several of them need —
+    // and those are named by module, without the extension. Both count as wired; neither leaves an
+    // inline copy running.
+    const importedByHandler = new Set<string>();
+    for (const h of handlers) {
+      const src = readFileSync(join(dir, h), 'utf8');
+      for (const m of src.matchAll(/^\s*(?:from\s+([A-Za-z_][\w]*)\s+import|import\s+([A-Za-z_][\w]*))/gm)) {
+        importedByHandler.add(`${m[1] || m[2]}.py`);
+      }
+      for (const m of src.matchAll(/require\(['"]\.\/([\w.-]+?)(?:\.js)?['"]\)/g)) {
+        importedByHandler.add(`${m[1]}.js`);
+      }
+    }
+    const orphans = handlers.filter((h) => !text.includes(h) && !importedByHandler.has(h));
     expect(orphans,
       `${orphans.length} handler(s) are never invoked, so the inline code they replaced is still `
       + `what runs:\n  ${orphans.join('\n  ')}`,

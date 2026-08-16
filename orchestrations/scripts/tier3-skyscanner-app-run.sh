@@ -374,27 +374,7 @@ echo ""
 # Checks: no accumulated split children (stories whose parent is also in the PRD),
 # all stories pending. If either fails, the canonical file itself is corrupt and
 # must be manually repaired before running.
-python3 - "$PRD_FILE" <<'PYEOF'
-import json, sys
-path = sys.argv[1]
-with open(path) as f:
-    d = json.load(f)
-# After restoring from canonical, the PRD has only the 4 base user stories.
-# Any mid-execution splits from a prior run must not be present.
-mid_exec = [s['id'] for s in d['stories']
-            if s.get('specification', {}).get('splitOrigin') == 'mid-execution']
-dirty = [s['id'] for s in d['stories']
-         if s.get('status') not in ('pending', 'deprecated') and s.get('deprecated') is not True]
-errors = []
-if mid_exec:
-    errors.append(f"ABORT: PRD has {len(mid_exec)} mid-execution splits from a prior run — canonical restore failed: {mid_exec}")
-if dirty:
-    errors.append(f"ABORT: PRD has {len(dirty)} stories with non-pending status: {dirty}")
-if errors:
-    for e in errors: print(e, file=sys.stderr)
-    sys.exit(1)
-print(f"  PRD integrity OK: {len(d['stories'])} stories, all pending, zero mid-execution splits")
-PYEOF
+python3 "$SCRIPT_DIR/lib/handlers/prd-restore-integrity.py" "$PRD_FILE"
 if [ $? -ne 0 ]; then
   fail "PRD integrity check failed — canonical file is corrupt. Repair travel-app-prd.canonical.json before running."
   exit 1
@@ -406,11 +386,7 @@ echo ""
 # also tear down and re-initialise every secondary worktree so each run starts
 # from a clean state — not just the primary OUTPUT_DIR (already done above).
 # For single-codeline PRDs this section is a no-op.
-_sec_wts=$("${NODE_BIN:-node}" -e "
-  const p = JSON.parse(require('fs').readFileSync('$PRD_FILE','utf8'));
-  const dirs = p.project && p.project.outputDirs ? p.project.outputDirs : [];
-  dirs.filter(d => d.path !== '$OUTPUT_DIR').forEach(d => process.stdout.write(d.path+'\n'));
-" 2>/dev/null || true)
+_sec_wts=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/secondary-codeline-dirs.js" "$PRD_FILE" "$OUTPUT_DIR" 2>/dev/null || true)
 
 if [ -n "$_sec_wts" ]; then
   info "Multi-codeline canonical PRD — tearing down secondary worktrees..."
@@ -548,17 +524,7 @@ info "Validating story completion..."
 PASS=0; FAIL_LIST=""
 while IFS= read -r story; do
   [ -z "$story" ] && continue
-  status=$(python3 -c "
-import json
-with open('$PRD_FILE') as f:
-  d = json.load(f)
-for s in d['stories']:
-  if s['id'] == '$story':
-    print(s.get('status','unknown'))
-    break
-else:
-  print('not_found')
-" 2>/dev/null)
+  status=$(python3 "$SCRIPT_DIR/lib/handlers/story-status.py" "$PRD_FILE" "$story" 2>/dev/null)
   if [ "$status" = "completed" ]; then
     success "$story: completed"
     PASS=$((PASS+1))
@@ -566,17 +532,7 @@ else:
     echo -e "${RED}[tier3-travel] ✗${NC} $story: $status"
     FAIL_LIST="$FAIL_LIST $story"
   fi
-done < <(python3 -c "
-import json
-with open('$PRD_FILE') as f:
-  d = json.load(f)
-seen = set()
-for ids in d.get('implementationOrder', {}).values():
-  for i in ids:
-    if i not in seen:
-      print(i)
-      seen.add(i)
-" 2>/dev/null)
+done < <(python3 "$SCRIPT_DIR/lib/handlers/story-implementation-order.py" "$PRD_FILE" 2>/dev/null)
 
 echo ""
 if [ -n "$FAIL_LIST" ] || [ "$PIPELINE_EXIT" -ne 0 ]; then

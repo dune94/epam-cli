@@ -1,0 +1,22 @@
+{
+  "$why": [
+    "Moved out of claude.sh on 2026-08-16.",
+    "",
+    "Decides whether a story that has used its retries should be given more. It is shown the retry count against the maximum, and answers with a bounded extension -- the one prompt whose output directly buys more spending."
+  ],
+  "description": "Decides whether a story exhausting its retries should be granted more, and how many.",
+  "seams": [
+    "cpa-inference"
+  ],
+  "id": "retry-extension-coordinator",
+  "version": 1,
+  "body": "__COORDINATOR_PROFILE__\n\nSTORY: __STORY_ID__\nCurrent retry_count: __RETRY_COUNT__ / MAX_RETRIES: __MAX_RETRIES__\nAcceptance criteria count (scope proxy): __AC_COUNT__\n\nEVIDENCE (pre-computed, treat as ground truth -- do not re-derive):\n__EVIDENCE__\n\nEvery self-heal attempt so far produced a DISTINCT diagnosis (no repeats), and no HEALING_BROKEN sentinel has fired -- this story is showing real, converging progress, not a stuck loop. Decide if extending its retry budget is pragmatic.\n\nOutput ONLY: {\"extend\":true|false,\"extraRetries\":<1-3>,\"reason\":\"<one sentence>\"}",
+  "placeholders": [
+    "__RETRY_COUNT__",
+    "__MAX_RETRIES__",
+    "__COORDINATOR_PROFILE__",
+    "__STORY_ID__",
+    "__AC_COUNT__",
+    "__EVIDENCE__"
+  ]
+}

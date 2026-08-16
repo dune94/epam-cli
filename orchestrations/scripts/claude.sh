@@ -6280,9 +6280,17 @@ classify_failure_class() {
         # silently contradicting and undoing the "READ BEFORE YOU WRITE"
         # directive already shown earlier in the SAME prompt.
         if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
-            COORDINATOR_PROMPT_AMENDMENT="CRITICAL: The previous attempt exhausted all available turns without creating the required deliverable. These files already exist — their real content is injected in ## Existing File Contents; do not spend turns re-reading them. Use Edit for a targeted, minimal change and act on it immediately — do not re-explore the codebase beyond what's already injected."
+            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/coordinator-amendment-vals-XXXXXX.json")
+            jq -n \
+                  '{}' > "$_cp_vals"
+            COORDINATOR_PROMPT_AMENDMENT="$(render_engine_prompt coordinator-amendment "$_cp_vals" turns_exhausted_files_exist)"
+            rm -f "$_cp_vals"
         else
-            COORDINATOR_PROMPT_AMENDMENT="CRITICAL: The previous attempt exhausted all available turns without creating the required deliverable. Your FIRST action MUST be to call WriteFile to the exact absolute path listed under 'Files to Create/Modify' — do NOT read files, do NOT plan, do NOT investigate. Write the required file IMMEDIATELY as your very first action."
+            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/coordinator-amendment-vals-XXXXXX.json")
+            jq -n \
+                  '{}' > "$_cp_vals"
+            COORDINATOR_PROMPT_AMENDMENT="$(render_engine_prompt coordinator-amendment "$_cp_vals" turns_exhausted_nothing_written)"
+            rm -f "$_cp_vals"
         fi
         log "  Coordinator[L1]: capability failure (max iterations) — escalation approved, write-first amendment injected"
         if [ -n "$story_id" ] && [ -n "${LOG_DIR:-}" ]; then
@@ -8409,11 +8417,15 @@ resolve_escalation() {
 
     local _saved_amendment="${COORDINATOR_PROMPT_AMENDMENT:-}"
     local _saved_max_retries="$MAX_RETRIES"
-    COORDINATOR_PROMPT_AMENDMENT="
-## URGENT: Escalated defect from sibling story ${escalating_story_id}
-${diagnosis}
-Required fix: ${required_fix}
-Apply ONLY this fix to ${target_file}. Do not make any other changes to this file or any other file — this is a narrow, targeted patch, not a full re-implementation."
+    _cp_vals=$(mktemp "${TMPDIR:-/tmp}/coordinator-amendment-vals-XXXXXX.json")
+    jq -n \
+          --arg escalating_story_id "${escalating_story_id}" \
+          --arg required_fix "${required_fix}" \
+          --arg target_file "${target_file}" \
+          --arg diagnosis "${diagnosis}" \
+          '{"__ESCALATING_STORY_ID__":$escalating_story_id,"__REQUIRED_FIX__":$required_fix,"__TARGET_FILE__":$target_file,"__DIAGNOSIS__":$diagnosis}' > "$_cp_vals"
+    COORDINATOR_PROMPT_AMENDMENT="$(render_engine_prompt coordinator-amendment "$_cp_vals" sibling_escalation)"
+    rm -f "$_cp_vals"
     export COORDINATOR_PROMPT_AMENDMENT
     MAX_RETRIES="${ESCALATION_FIX_MAX_RETRIES:-1}"
 
@@ -8919,18 +8931,17 @@ run_retry_extension_coordinator() {
     ac_count=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | ((.acceptanceCriteria // []) | length)' "$prd_target" 2>/dev/null || echo 0)
 
     local coord_prompt
-    coord_prompt="${coordinator_profile}
-
-STORY: ${story_id}
-Current retry_count: ${retry_count:-unknown} / MAX_RETRIES: ${MAX_RETRIES:-unknown}
-Acceptance criteria count (scope proxy): ${ac_count}
-
-EVIDENCE (pre-computed, treat as ground truth -- do not re-derive):
-${evidence}
-
-Every self-heal attempt so far produced a DISTINCT diagnosis (no repeats), and no HEALING_BROKEN sentinel has fired -- this story is showing real, converging progress, not a stuck loop. Decide if extending its retry budget is pragmatic.
-
-Output ONLY: {\"extend\":true|false,\"extraRetries\":<1-3>,\"reason\":\"<one sentence>\"}"
+    _cp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-extension-coordinator-vals-XXXXXX.json")
+    jq -n \
+          --arg retry_count "${retry_count:-unknown}" \
+          --arg max_retries "${MAX_RETRIES:-unknown}" \
+          --arg coordinator_profile "${coordinator_profile}" \
+          --arg story_id "${story_id}" \
+          --arg ac_count "${ac_count}" \
+          --arg evidence "${evidence}" \
+          '{"__RETRY_COUNT__":$retry_count,"__MAX_RETRIES__":$max_retries,"__COORDINATOR_PROFILE__":$coordinator_profile,"__STORY_ID__":$story_id,"__AC_COUNT__":$ac_count,"__EVIDENCE__":$evidence}' > "$_cp_vals"
+    coord_prompt="$(render_engine_prompt retry-extension-coordinator "$_cp_vals")"
+    rm -f "$_cp_vals"
 
     local coord_raw=""
     coord_raw=$(echo "$coord_prompt" | \
@@ -9679,11 +9690,13 @@ $_kb_section"
         fi
         # Inject execution plan when planner/executor split is active
         if [ -n "${story_plan:-}" ]; then
-            prompt="$prompt
-
-## Execution Plan
-Follow this plan step by step:
-$story_plan"
+            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-plan-section-vals-XXXXXX.json")
+            jq -n \
+                  --arg story_plan "$story_plan" \
+                  --arg prompt "$prompt" \
+                  '{"__STORY_PLAN__":$story_plan,"__PROMPT__":$prompt}' > "$_cp_vals"
+            prompt="$(render_engine_prompt writer-plan-section "$_cp_vals" execution_plan)"
+            rm -f "$_cp_vals"
         fi
 
         # Inject coordinator prompt amendment when available (retry attempts only).
@@ -9724,11 +9737,14 @@ $story_plan"
         fi
 
         if [ "$_total_attempts" -gt 1 ] && [ -n "${COORDINATOR_PROMPT_AMENDMENT:-}" ]; then
-            prompt="$prompt
-
-## Coordinator Guidance (retry ${retry_count})
-The following targeted instruction was identified from the previous failure:
-${COORDINATOR_PROMPT_AMENDMENT}"
+            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-plan-section-vals-XXXXXX.json")
+            jq -n \
+                  --arg coordinator_prompt_amendment "${COORDINATOR_PROMPT_AMENDMENT}" \
+                  --arg retry_count "${retry_count}" \
+                  --arg prompt "$prompt" \
+                  '{"__COORDINATOR_PROMPT_AMENDMENT__":$coordinator_prompt_amendment,"__RETRY_COUNT__":$retry_count,"__PROMPT__":$prompt}' > "$_cp_vals"
+            prompt="$(render_engine_prompt writer-plan-section "$_cp_vals" coordinator_guidance_full)"
+            rm -f "$_cp_vals"
         fi
 
         # Prompt-size scratchpad summarization (found live, 2026-07-07): each retry
@@ -9820,16 +9836,23 @@ $_kb_section"
 $_kb_section"
                 fi
                 if [ -n "${story_plan:-}" ]; then
-                    prompt="$prompt
-
-## Execution Plan
-Follow this plan step by step:
-$story_plan"
+                    _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-plan-section-vals-XXXXXX.json")
+                    jq -n \
+                          --arg story_plan "$story_plan" \
+                          --arg prompt "$prompt" \
+                          '{"__STORY_PLAN__":$story_plan,"__PROMPT__":$prompt}' > "$_cp_vals"
+                    prompt="$(render_engine_prompt writer-plan-section "$_cp_vals" execution_plan)"
+                    rm -f "$_cp_vals"
                 fi
-                prompt="$prompt
-
-## Coordinator Guidance (retry ${retry_count}, showing most recent up to 3 — full retry history: ${_scratchpad_file})
-${_trimmed_amendment}"
+                _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-plan-section-vals-XXXXXX.json")
+                jq -n \
+                      --arg trimmed_amendment "${_trimmed_amendment}" \
+                      --arg scratchpad_file "${_scratchpad_file}" \
+                      --arg retry_count "${retry_count}" \
+                      --arg prompt "$prompt" \
+                      '{"__TRIMMED_AMENDMENT__":$trimmed_amendment,"__SCRATCHPAD_FILE__":$scratchpad_file,"__RETRY_COUNT__":$retry_count,"__PROMPT__":$prompt}' > "$_cp_vals"
+                prompt="$(render_engine_prompt writer-plan-section "$_cp_vals" coordinator_guidance_trimmed)"
+                rm -f "$_cp_vals"
             fi
         fi
 
@@ -10593,14 +10616,18 @@ except Exception:
 print(last)
 " 2>/dev/null || echo "")
                 fi
-                COORDINATOR_PROMPT_AMENDMENT="${_existing_amendment}
-## Deterministic Check Failure
-${VERIFICATION_FAILURE}
-This was caught by an automated check before the test suite even ran — fix the exact issue named above.${_last_fa_diagnosis:+
+                _cp_vals=$(mktemp "${TMPDIR:-/tmp}/coordinator-amendment-vals-XXXXXX.json")
+                jq -n \
+                      --arg prior_diagnosis_section "${_last_fa_diagnosis:+
 
 ## Prior failure-analyst diagnosis (re-injected for context)
 $_last_fa_diagnosis
-Apply the above diagnosis AND fix the deterministic check violation — both must be resolved.}"
+Apply the above diagnosis AND fix the deterministic check violation — both must be resolved.}" \
+                      --arg verification_failure "${VERIFICATION_FAILURE}" \
+                      --arg existing_amendment "${_existing_amendment}" \
+                      '{"__PRIOR_DIAGNOSIS_SECTION__":$prior_diagnosis_section,"__VERIFICATION_FAILURE__":$verification_failure,"__EXISTING_AMENDMENT__":$existing_amendment}' > "$_cp_vals"
+                COORDINATOR_PROMPT_AMENDMENT="$(render_engine_prompt coordinator-amendment "$_cp_vals" deterministic_check)"
+                rm -f "$_cp_vals"
 
                 # A deterministic-check violation repeating IDENTICALLY across attempts
                 # is just as strong an escalation signal as an LLM-diagnosed repeat, but

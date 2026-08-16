@@ -1,0 +1,32 @@
+{
+  "$why": [
+    "Moved out of claude.sh on 2026-08-16.",
+    "",
+    "The COORDINATOR_PROMPT_AMENDMENT chain: text prepended to a writer's next attempt saying what went wrong last time. Four distinct situations, four bodies -- turns exhausted with the files already present, turns exhausted with nothing written, a defect escalated from a sibling story, and a deterministic check that failed.",
+    "",
+    "The first two differ in one consequential way: whether the deliverable already exists. Told the wrong one, a writer either rewrites files it should read, or reads for files that were never created.",
+    "",
+    "One body carried a whole conditional SECTION inside a ${VAR:+...} expansion -- the prior failure-analyst diagnosis, re-injected for context. Whether the writer saw it was decided by a parameter expansion, which is not a place anyone reads prompt text."
+  ],
+  "description": "What a writer is told about the previous attempt when its next one is prepared.",
+  "seams": [
+    "story-writer"
+  ],
+  "id": "coordinator-amendment",
+  "version": 1,
+  "bodies": {
+    "turns_exhausted_files_exist": "CRITICAL: The previous attempt exhausted all available turns without creating the required deliverable. These files already exist — their real content is injected in ## Existing File Contents; do not spend turns re-reading them. Use Edit for a targeted, minimal change and act on it immediately — do not re-explore the codebase beyond what's already injected.",
+    "turns_exhausted_nothing_written": "CRITICAL: The previous attempt exhausted all available turns without creating the required deliverable. Your FIRST action MUST be to call WriteFile to the exact absolute path listed under 'Files to Create/Modify' — do NOT read files, do NOT plan, do NOT investigate. Write the required file IMMEDIATELY as your very first action.",
+    "sibling_escalation": "\n## URGENT: Escalated defect from sibling story __ESCALATING_STORY_ID__\n__DIAGNOSIS__\nRequired fix: __REQUIRED_FIX__\nApply ONLY this fix to __TARGET_FILE__. Do not make any other changes to this file or any other file — this is a narrow, targeted patch, not a full re-implementation.",
+    "deterministic_check": "__EXISTING_AMENDMENT__\n## Deterministic Check Failure\n__VERIFICATION_FAILURE__\nThis was caught by an automated check before the test suite even ran — fix the exact issue named above.__PRIOR_DIAGNOSIS_SECTION__"
+  },
+  "placeholders": [
+    "__ESCALATING_STORY_ID__",
+    "__REQUIRED_FIX__",
+    "__TARGET_FILE__",
+    "__DIAGNOSIS__",
+    "__PRIOR_DIAGNOSIS_SECTION__",
+    "__VERIFICATION_FAILURE__",
+    "__EXISTING_AMENDMENT__"
+  ]
+}

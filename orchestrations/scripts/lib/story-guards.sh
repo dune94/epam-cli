@@ -514,25 +514,7 @@ _persist_skill_note_simple() {
     fi
 
     ( flock -w 10 200 || { error "  [skill-note] Could not acquire lock on $_profiles_file"; return 1; }
-    python3 - "$_raw_text" << PYEOF 2>&1 | while IFS= read -r line; do log "  [skill-note] $line"; done
-import json, sys, os
-profiles_path = '$_profiles_file'
-role = '$_role'
-note = '[Self-Heal] ' + sys.argv[1]
-with open(profiles_path) as f:
-    profiles = json.load(f)
-if role in profiles:
-    existing = profiles[role]
-    sep = '\n\n' if existing else ''
-    profiles[role] = existing + sep + note
-    _tmp_profiles_path = profiles_path + '.tmp'
-    with open(_tmp_profiles_path, 'w') as f:
-        json.dump(profiles, f, indent=2)
-    os.replace(_tmp_profiles_path, profiles_path)
-    print(f'Skill note appended to [{role}] profile — persisted for future runs')
-else:
-    print(f'Profile role [{role}] not found in profiles.json — skill note NOT persisted', file=sys.stderr)
-PYEOF
+    python3 "$SCRIPT_DIR/lib/handlers/skill-note-append.py" "$_raw_text" "$_profiles_file" "$_role" 2>&1 | while IFS= read -r line; do log "  [skill-note] $line"; done
     ) 200>"${_profiles_file}.lock"
     return 0
 }

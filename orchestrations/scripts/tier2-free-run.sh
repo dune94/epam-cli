@@ -46,7 +46,10 @@ fi
 PRD_FILE="$REPO_ROOT/orchestrations/hello-world-prd.json"
 
 # Free Qwen coder model — same provider as production, zero credits
-FREE_MODEL="qwen/qwen3-coder:free"
+FREE_MODEL="${FREE_MODEL:-qwen/qwen3-coder:free}"
+# WHICH provider gets moved onto the free model. It was written into the patch program itself, so
+# this launcher could only ever patch one; it is a setting now.
+FREE_PROVIDER="${FREE_PROVIDER:-qwen}"
 
 info "Tier 2 free-model run"
 info "  Model: $FREE_MODEL (zero credits)"
@@ -76,19 +79,7 @@ restore_prd() {
 }
 trap restore_prd EXIT
 
-python3 - <<PYEOF
-import json, os
-with open('$PRD_FILE') as f:
-    d = json.load(f)
-for s in d['stories']:
-    if s.get('aiProvider') == 'qwen':
-        s['model'] = '$FREE_MODEL'
-_tmp_prd_path = '$PRD_FILE' + '.tmp'
-with open(_tmp_prd_path, 'w') as f:
-    json.dump(d, f, indent=2)
-os.replace(_tmp_prd_path, '$PRD_FILE')
-print('[tier2] PRD patched: all qwen stories → $FREE_MODEL')
-PYEOF
+python3 "$SCRIPT_DIR/lib/handlers/prd-set-model-for-provider.py" "$PRD_FILE" "$FREE_PROVIDER" "$FREE_MODEL"
 
 OPENROUTER_API_KEY="$OPENROUTER_API_KEY" \
 EPAM_API_KEY_OPENROUTER="$OPENROUTER_API_KEY" \

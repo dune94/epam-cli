@@ -27,6 +27,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const SYNTH = join(__dirname, '../../../orchestrations/scripts/synthesize-prd-from-jira.js');
+// The synthesizer has no built-in template: a built-in one lent every run another
+// project's identity. These tests are about the synthesizer's own logic, so the template
+// they supply is deliberately anonymous.
+const TEMPLATE = join(__dirname, '../../fixtures/prd/neutral-synthesis-template.json');
+
 // DERIVED: the interpreter already running this test. Never a machine-specific path.
 const NODE = process.execPath;
 
@@ -42,7 +47,7 @@ function synthesize(env: Record<string, string>, classifications = CLASSIFICATIO
   const cls = join(dir, 'classifications.json');
   const out = join(dir, 'prd.json');
   writeFileSync(cls, JSON.stringify(classifications, null, 2));
-  const r = spawnSync(NODE, [SYNTH, '--classifications', cls, '--out', out], {
+  const r = spawnSync(NODE, [SYNTH, '--classifications', cls, '--out', out, '--template', TEMPLATE], {
     encoding: 'utf8',
     timeout: 30000,
     env: {

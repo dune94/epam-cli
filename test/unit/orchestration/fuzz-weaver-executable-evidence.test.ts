@@ -335,15 +335,15 @@ describe('fuzz-weaver prompt — structural checks', () => {
   // immediately precedes the profile-prepend if-block.
   // Use "no markdown fences, no preamble" — unique to the fuzz prompt's
   // output format line and not shared with any other gate prompt.
+  // THE TEMPLATE, not a slice of the script.
+  //
+  // This used to anchor on two phrases inside run-agent-orchestration.sh and slice between
+  // them — a technique that needed the second phrase to be unique to this prompt, and broke
+  // the moment the prompt moved into the template layer (2026-08-15). The template IS the
+  // block, so there is nothing to delimit.
   function extractFuzzPromptBlock(): string {
-    const start = orchSrc.indexOf('You are acting as the fuzz-weaver agent.');
-    expect(start).toBeGreaterThan(-1);
-    // "no markdown fences, no preamble" appears only in the fuzz prompt output format
-    const outputFormatIdx = orchSrc.indexOf('no markdown fences, no preamble', start);
-    expect(outputFormatIdx).toBeGreaterThan(start);
-    // Extend to the end of that output format line
-    const lineEnd = orchSrc.indexOf('\n', outputFormatIdx);
-    return orchSrc.slice(start, lineEnd);
+    return JSON.parse(readFileSync(
+      join(REPO_ROOT, 'orchestrations/prompts/templates/qa-fuzz-weaver.json'), 'utf8')).body as string;
   }
 
   it('the fuzz prompt includes an executableTest field in the output schema', () => {

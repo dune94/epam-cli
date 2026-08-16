@@ -45,11 +45,20 @@ export function provisionAnalystPrompt(dir: string): void {
   // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
   const { mkdirSync, copyFileSync, writeFileSync, readFileSync: rf } = require('node:fs');
 
+  // THE WHOLE lib DIRECTORY, not prompt-library.js alone.
+  //
+  // Copying the one file worked only while that file had no siblings to require. When the
+  // placeholder rule was unified into engine-prompt.js (2026-08-16), the lone copy could no
+  // longer resolve its own require: the render failed, run_failure_analyst was handed an
+  // EMPTY prompt, and every assertion about what the analyst was told compared against ''.
+  // Nothing in the engine was broken — only this fixture's idea of what a module needs.
   mkdirSync(join(dir, 'lib'), { recursive: true });
-  copyFileSync(
-    join(__dirname, '../../orchestrations/scripts/lib/prompt-library.js'),
-    join(dir, 'lib/prompt-library.js'),
-  );
+  const libSrc = join(__dirname, '../../orchestrations/scripts/lib');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+  for (const entry of require('node:fs').readdirSync(libSrc)) {
+    if (!entry.endsWith('.js')) continue;
+    copyFileSync(join(libSrc, entry), join(dir, 'lib', entry));
+  }
 
   mkdirSync(join(dir, 'prompts'), { recursive: true });
   const tpl = JSON.parse(rf(TEMPLATE, 'utf8'));

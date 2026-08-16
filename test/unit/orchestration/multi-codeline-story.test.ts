@@ -34,6 +34,11 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const SYNTH = join(__dirname, '../../../orchestrations/scripts/synthesize-prd-from-jira.js');
+// The synthesizer has no built-in template: a built-in one lent every run another
+// project's identity. These tests are about the synthesizer's own logic, so the template
+// they supply is deliberately anonymous.
+const TEMPLATE = join(__dirname, '../../fixtures/prd/neutral-synthesis-template.json');
+
 
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
@@ -58,7 +63,7 @@ function synthesize(classifications: unknown[], env: Record<string, string> = {}
   const cls = join(dir, 'ac-gate.json');
   const out = join(dir, 'prd.json');
   writeFileSync(cls, JSON.stringify(classifications, null, 2));
-  const r = execFileSync('node', [SYNTH, '--classifications', cls, '--out', out], {
+  const r = execFileSync(process.execPath, [SYNTH, '--classifications', cls, '--out', out, '--template', TEMPLATE], {
     encoding: 'utf8', timeout: 30000,
     env: { ...process.env, JIRA_CODELINES: 'gotransit,upexpress,metrolinx', ...env },
   });

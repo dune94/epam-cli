@@ -459,7 +459,8 @@
         {
           "kind": "existing-code"
         }
-      ]
+      ],
+      "template": "qa-sast-sentinel"
     },
     "qa-gate:spec-validator": {
       "_what": "Checks the change satisfies the story’s acceptance criteria.",
@@ -476,7 +477,8 @@
         {
           "kind": "existing-code"
         }
-      ]
+      ],
+      "template": "qa-spec-validator"
     },
     "qa-gate:review-ranger": {
       "_what": "Reviews the change for defects the team-lead review may not reach.",
@@ -490,7 +492,8 @@
         {
           "kind": "existing-code"
         }
-      ]
+      ],
+      "template": "qa-review-ranger"
     },
     "qa-gate:mutant-hunter": {
       "_what": "Assesses whether the tests would fail if the change were broken.",
@@ -507,7 +510,8 @@
         {
           "kind": "existing-code"
         }
-      ]
+      ],
+      "template": "qa-mutant-hunter"
     },
     "qa-gate:fuzz-weaver": {
       "_what": "Probes the change with adversarial inputs.",
@@ -521,7 +525,8 @@
         {
           "kind": "existing-code"
         }
-      ]
+      ],
+      "template": "qa-fuzz-weaver"
     },
     "qa-gate:perf-sentinel": {
       "_what": "Assesses the change for runtime and startup cost.",
@@ -535,7 +540,8 @@
         {
           "kind": "existing-code"
         }
-      ]
+      ],
+      "template": "qa-perf-sentinel"
     }
   },
   "_seamResolution": [

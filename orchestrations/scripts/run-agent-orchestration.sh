@@ -47,6 +47,8 @@ _run_project_verification() {
 
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/render-engine-prompt.sh
+source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 
 # ── WHICH ROLE IS THIS PROCESS? ──────────────────────────────────────────────
@@ -9250,39 +9252,18 @@ Return strict JSON only:
     step_emit "22a" "running" "Step 22a: SAST sentinel"
     log "  Step 4.2a: Running SAST sentinel..."
     {
-        local sast_prompt="You are acting as the sast-sentinel agent.
-
-Phase: $phase_id
-Project root: $PROJECT_ROOT
-
-IMPORTANT: All evidence has been pre-computed and is injected above. Do NOT attempt to call any shell commands, bash, or tools. Analyze ONLY the injected Semgrep, npm audit, and TypeScript compiler data.
-$(_brownfield_gate_scope sast-sentinel)
-
-Analyze the pre-computed evidence above and produce a structured JSON report covering:
-
-1. TypeScript compiler diagnostics: Results are pre-injected as '## TypeScript Compiler Results'. Each 'error TS' line is a finding with severity 'major'.
-
-2. Security pattern scan: Based on the Semgrep results injected above, classify findings:
-   - ERROR/WARNING severity Semgrep findings → severity 'major' or 'blocker'
-   - INFO severity findings → severity 'minor'
-   - Patterns to flag if Semgrep missed them (text scan only, no tool calls):
-     command injection, path traversal, hardcoded secrets, unsafe eval
-
-3. Dependency CVE classification (npm audit results):
-   - CVEs in RUNTIME dependencies (listed under "dependencies" in package.json) → severity 'blocker' if critical, 'major' if high
-   - CVEs in DEV-ONLY dependencies (listed under "devDependencies" in package.json, e.g. vitest, esbuild, vite, typescript, tsup, eslint) → severity 'minor' regardless of CVSS score. Dev tools never run in production and their CVEs do not affect application security.
-   - NEVER classify a dev-dependency CVE as 'blocker' or 'major'.
-
-If the injected evidence is insufficient to determine a verdict with confidence, output \"verdict\": \"pass\" with 0 findings rather than fabricating a failure.
-
-Output format (strict JSON, no markdown fences, no preamble):
-{
-  \"agent\": \"sast-sentinel\",
-  \"phase\": \"$phase_id\",
-  \"summary\": { \"filesScanned\": N, \"findingsCount\": N, \"blockerCount\": N },
-  \"findings\": [{ \"severity\": \"blocker|major|minor\", \"rule\": \"...\", \"file\": \"...\", \"line\": N, \"description\": \"...\", \"suggestedFix\": \"...\" }],
-  \"verdict\": \"pass|fail\"
-}"
+        # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
+        local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-sast-sentinel-vals-XXXXXX.json")
+        jq -n --arg gate_scope "$(_brownfield_gate_scope)" \
+              --arg phase_id "$phase_id" \
+              --arg project_root "$PROJECT_ROOT" \
+              '{"__GATE_SCOPE__":$gate_scope,"__PHASE_ID__":$phase_id,"__PROJECT_ROOT__":$project_root}' > "$_qa_vals" 2>/dev/null
+        local sast_prompt
+        if ! sast_prompt=$(render_engine_prompt qa-sast-sentinel "$_qa_vals"); then
+            error "  [sast-sentinel] cannot render its prompt — refusing to gate with no instructions" >&2
+            rm -f "$_qa_vals"; return 1
+        fi
+        rm -f "$_qa_vals"
 
         if [ -n "$sast_profile" ]; then
             sast_prompt="$sast_profile
@@ -9608,37 +9589,21 @@ $_spec_file_excerpts"
 (git oracle skipped — git not found or no .git directory; use untestable for ACs that cannot be verified from the story oracle alone)"
         fi
 
-        local spec_prompt="You are acting as the spec-validator agent.
-$(_brownfield_gate_scope spec-validator)
-
-Phase: $phase_id
-Project root: $PROJECT_ROOT
-E2E routing override context:
-- FORCE_LIGHTPANDA=$force_lightpanda
-- FORCE_PLAYWRIGHT=$force_playwright
-- routingDecision=$routing_decision
-
-IMPORTANT: All evidence has been pre-injected below. Do NOT call any tools, ReadFile, or Bash commands. Classify each AC using ONLY the injected story oracle, test oracle, and implementation evidence.
-
-For each story in the phase:
-1. Use the pre-injected criteria from the Story Oracle section — it states which\n   kind the story is judged against. If it records none, you cannot report\n   compliance against an empty set: say so, do not pass.
-2. Use the pre-injected git diff and file excerpts as implementation evidence
-3. Classify each criterion as: met, partial, unmet, or untestable
-   - untestable: evidence is insufficient to determine status — do NOT call tools to investigate further
-
-Output format (strict JSON, no markdown fences, no preamble — emit directly as your final message, do NOT write to a file):
-{
-  \"agent\": \"spec-validator\",
-  \"phase\": \"$phase_id\",
-  \"stories\": [{
-    \"storyId\": \"...\",
-    \"title\": \"...\",
-    \"criteria\": [{ \"text\": \"...\", \"status\": \"met|partial|unmet|untestable\", \"evidence\": \"...\", \"gaps\": \"...\" }],
-    \"overallCompliance\": 85,
-    \"verdict\": \"pass|warn|fail\"
-  }],
-  \"overallVerdict\": \"pass|warn|fail\"
-}"
+        # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
+        local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-spec-validator-vals-XXXXXX.json")
+        jq -n --arg force_lightpanda "$force_lightpanda" \
+              --arg force_playwright "$force_playwright" \
+              --arg gate_scope "$(_brownfield_gate_scope)" \
+              --arg phase_id "$phase_id" \
+              --arg project_root "$PROJECT_ROOT" \
+              --arg routing_decision "$routing_decision" \
+              '{"__FORCE_LIGHTPANDA__":$force_lightpanda,"__FORCE_PLAYWRIGHT__":$force_playwright,"__GATE_SCOPE__":$gate_scope,"__PHASE_ID__":$phase_id,"__PROJECT_ROOT__":$project_root,"__ROUTING_DECISION__":$routing_decision}' > "$_qa_vals" 2>/dev/null
+        local spec_prompt
+        if ! spec_prompt=$(render_engine_prompt qa-spec-validator "$_qa_vals"); then
+            error "  [spec-validator] cannot render its prompt — refusing to gate with no instructions" >&2
+            rm -f "$_qa_vals"; return 1
+        fi
+        rm -f "$_qa_vals"
 
         if [ -n "$spec_profile" ]; then
             spec_prompt="$spec_profile
@@ -9960,35 +9925,19 @@ $_diff_patch"
                 review_diff_summary="(git diff oracle skipped — git not found or no .git directory)"
             fi
 
-            local review_prompt="You are acting as the review-ranger agent.
-
-Phase: $phase_id
-Project root: $PROJECT_ROOT
-
-IMPORTANT: All evidence has been pre-computed and is injected below. Do NOT attempt to call any shell commands, bash, or tools. Analyze ONLY the injected git diff data.
-$(_brownfield_gate_scope review-ranger)
-
-## Git Diff Evidence (hard evidence — treat as ground truth)
-$review_diff_summary
-
-Analyze the pre-computed diff above and produce a structured JSON report covering:
-1. Complexity hotspots (cyclomatic complexity > 10, nesting > 4)
-2. Code duplication (near-identical blocks > 5 lines)
-3. API contract drift (exported signature changes without test updates)
-4. Error handling completeness (swallowed errors in critical paths)
-5. Test coverage gaps (new public functions without tests)
-6. Naming consistency (camelCase vars, PascalCase types, UPPER_SNAKE constants)
-
-If the injected evidence is insufficient to determine a verdict with confidence, output \"verdict\": \"pass\" with 0 findings rather than fabricating a failure.
-
-Output format (strict JSON, no markdown fences, no preamble):
-{
-  \"agent\": \"review-ranger\",
-  \"phase\": \"$phase_id\",
-  \"summary\": { \"filesReviewed\": N, \"findingsCount\": N, \"blockerCount\": N, \"majorCount\": N, \"minorCount\": N },
-  \"findings\": [{ \"severity\": \"blocker|major|minor\", \"category\": \"...\", \"file\": \"...\", \"line\": N, \"codeSnippet\": \"<the EXACT line(s) from the file that show the problem, copied verbatim — required for any blocker-severity finding, or it will be treated as unverified>\", \"description\": \"...\", \"suggestedFix\": \"...\" }],
-  \"verdict\": \"pass|fail\"
-}"
+            # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
+            local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-review-ranger-vals-XXXXXX.json")
+            jq -n --arg gate_scope "$(_brownfield_gate_scope)" \
+                  --arg phase_id "$phase_id" \
+                  --arg project_root "$PROJECT_ROOT" \
+                  --arg review_diff_summary "$review_diff_summary" \
+                  '{"__GATE_SCOPE__":$gate_scope,"__PHASE_ID__":$phase_id,"__PROJECT_ROOT__":$project_root,"__REVIEW_DIFF_SUMMARY__":$review_diff_summary}' > "$_qa_vals" 2>/dev/null
+            local review_prompt
+            if ! review_prompt=$(render_engine_prompt qa-review-ranger "$_qa_vals"); then
+                error "  [review-ranger] cannot render its prompt — refusing to gate with no instructions" >&2
+                rm -f "$_qa_vals"; return 1
+            fi
+            rm -f "$_qa_vals"
 
             if [ -n "$review_profile" ]; then
                 review_prompt="$review_profile
@@ -10088,34 +10037,19 @@ ${_test_content:-  (no test files found)}"
                 mutant_oracle_summary="(mutation oracle skipped — git not found or no .git directory)"
             fi
 
-            local mutant_prompt="You are acting as the mutant-hunter agent.
-
-Phase: $phase_id
-Project root: $PROJECT_ROOT
-
-IMPORTANT: All evidence has been pre-computed and is injected below. Do NOT attempt to call any shell commands, bash, or tools. Analyze ONLY the injected source and test file data.
-$(_brownfield_gate_scope mutant-hunter)
-
-## Source and Test Evidence (hard evidence — treat as ground truth)
-$mutant_oracle_summary
-
-Analyze the pre-computed source and test code above. For each changed source file:
-1. Propose mutations: operator swaps, comparison inversions, boolean negations,
-   early returns, boundary shifts, removed null checks, swapped arguments
-2. For each mutation, determine if the existing tests shown above would catch it
-3. Focus on critical paths: provider failover, tool safety, auth, billing, agent state
-
-If no source changes are detected or evidence is insufficient, output \"verdict\": \"warn\" with mutationScore of 100 and 0 mutations (non-blocking — nothing to test).
-
-Output format (strict JSON, no markdown fences, no preamble):
-{
-  \"agent\": \"mutant-hunter\",
-  \"phase\": \"$phase_id\",
-  \"summary\": { \"mutationsProposed\": N, \"killed\": N, \"survived\": N, \"noCoverage\": N, \"mutationScore\": 75 },
-  \"mutations\": [{ \"file\": \"...\", \"line\": N, \"originalCode\": \"<the EXACT line(s) from the file being mutated, copied verbatim — required for any status:survived mutation, or it will be treated as unverified>\", \"mutatedCode\": \"...\", \"status\": \"killed|survived|no-coverage\", \"relatedTest\": \"...\", \"recommendation\": \"...\" }],
-  \"verdict\": \"pass|warn|fail\"
-}
-The summary.survived count MUST equal the number of status:survived entries in the mutations array — they describe the same thing and must agree."
+            # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
+            local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-mutant-hunter-vals-XXXXXX.json")
+            jq -n --arg gate_scope "$(_brownfield_gate_scope)" \
+                  --arg mutant_oracle_summary "$mutant_oracle_summary" \
+                  --arg phase_id "$phase_id" \
+                  --arg project_root "$PROJECT_ROOT" \
+                  '{"__GATE_SCOPE__":$gate_scope,"__MUTANT_ORACLE_SUMMARY__":$mutant_oracle_summary,"__PHASE_ID__":$phase_id,"__PROJECT_ROOT__":$project_root}' > "$_qa_vals" 2>/dev/null
+            local mutant_prompt
+            if ! mutant_prompt=$(render_engine_prompt qa-mutant-hunter "$_qa_vals"); then
+                error "  [mutant-hunter] cannot render its prompt — refusing to gate with no instructions" >&2
+                rm -f "$_qa_vals"; return 1
+            fi
+            rm -f "$_qa_vals"
 
             if [ -n "$mutant_profile" ]; then
                 mutant_prompt="$mutant_profile
@@ -10309,42 +10243,21 @@ MUTANT_PYEOF
         step_emit "22e" "running" "Step 22e: Fuzz-weaver"
         log "  Step 4.4a: Running fuzz-weaver..."
         {
-            local fuzz_prompt="You are acting as the fuzz-weaver agent.
-$(_brownfield_gate_scope fuzz-weaver)
-
-Phase: $phase_id
-Project root: $PROJECT_ROOT
-E2E routing override context:
-- FORCE_LIGHTPANDA=$force_lightpanda
-- FORCE_PLAYWRIGHT=$force_playwright
-- routingDecision=$routing_decision
-
-Perform property-based / fuzz testing analysis on changed files in this phase.
-Use git diff to identify changed source files, then for each public function:
-1. Derive input domains from TypeScript parameter types
-2. Propose fuzz test cases with fast-check style property definitions
-3. Assess whether existing tests cover each edge case
-
-Focus on: config parsing, provider request construction, billing calculations,
-tool input validation (path traversal, shell metacharacters), auth token parsing.
-
-For any case with status=\"vulnerability\", you MAY include an optional
-\"executableTest\" field: a vitest test skeleton (as a single string) showing
-the import path and the assertion that SHOULD pass if the code is correct —
-e.g. \`import { parseAdults } from '../src/server'; expect(parseAdults('0')).toBeNull()\`.
-IMPORTANT: Do NOT run or execute any tests. Do NOT use Bash to run vitest or
-any test runner. Write the test structure only — it will be reviewed by a
-human. A vulnerability claim is valid without an executableTest; do not spend
-time executing code to verify findings.
-
-Output format (strict JSON, no markdown fences, no preamble — emit directly as your final message, do NOT write to a file):
-{
-  \"agent\": \"fuzz-weaver\",
-  \"phase\": \"$phase_id\",
-  \"summary\": { \"functionsAnalysed\": N, \"fuzzCasesProposed\": N, \"covered\": N, \"gaps\": N, \"vulnerabilities\": N },
-  \"cases\": [{ \"function\": \"...\", \"file\": \"...\", \"line\": N, \"property\": \"...\", \"generator\": \"...\", \"invariant\": \"...\", \"status\": \"covered|gap|vulnerability\", \"recommendation\": \"...\", \"executableTest\": \"...(only when status=vulnerability)...\" }],
-  \"verdict\": \"pass|warn|fail\"
-}"
+            # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
+            local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-fuzz-weaver-vals-XXXXXX.json")
+            jq -n --arg force_lightpanda "$force_lightpanda" \
+                  --arg force_playwright "$force_playwright" \
+                  --arg gate_scope "$(_brownfield_gate_scope)" \
+                  --arg phase_id "$phase_id" \
+                  --arg project_root "$PROJECT_ROOT" \
+                  --arg routing_decision "$routing_decision" \
+                  '{"__FORCE_LIGHTPANDA__":$force_lightpanda,"__FORCE_PLAYWRIGHT__":$force_playwright,"__GATE_SCOPE__":$gate_scope,"__PHASE_ID__":$phase_id,"__PROJECT_ROOT__":$project_root,"__ROUTING_DECISION__":$routing_decision}' > "$_qa_vals" 2>/dev/null
+            local fuzz_prompt
+            if ! fuzz_prompt=$(render_engine_prompt qa-fuzz-weaver "$_qa_vals"); then
+                error "  [fuzz-weaver] cannot render its prompt — refusing to gate with no instructions" >&2
+                rm -f "$_qa_vals"; return 1
+            fi
+            rm -f "$_qa_vals"
 
             if [ -n "$fuzz_profile" ]; then
                 fuzz_prompt="$fuzz_profile
@@ -10361,32 +10274,21 @@ $fuzz_prompt"
         step_emit "22f" "running" "Step 22f: Perf sentinel"
         log "  Step 4.4b: Running perf-sentinel..."
         {
-            local perf_prompt="You are acting as the perf-sentinel agent.
-$(_brownfield_gate_scope perf-sentinel)
-
-Phase: $phase_id
-Project root: $PROJECT_ROOT
-E2E routing override context:
-- FORCE_LIGHTPANDA=$force_lightpanda
-- FORCE_PLAYWRIGHT=$force_playwright
-- routingDecision=$routing_decision
-
-Perform performance analysis on files changed in this phase.
-Use git diff to identify changed source files, then analyse:
-1. Algorithmic complexity (flag O(n²)+ on unbounded inputs)
-2. Memory allocation hotspots (object creation in loops, unbounded caches)
-3. Async performance (sequential awaits → Promise.all, missing timeouts, stream backpressure)
-4. Startup time impact (heavy imports, sync I/O at module load)
-5. Provider-specific (unnecessary Message[] copies, redundant token counting)
-
-Output format (strict JSON, no markdown fences, no preamble — emit directly as your final message, do NOT write to a file):
-{
-  \"agent\": \"perf-sentinel\",
-  \"phase\": \"$phase_id\",
-  \"summary\": { \"filesAnalysed\": N, \"findingsCount\": N, \"blockerCount\": N, \"estimatedStartupImpactMs\": N },
-  \"findings\": [{ \"severity\": \"blocker|major|minor\", \"category\": \"complexity|memory|async|startup|provider\", \"file\": \"...\", \"line\": N, \"codeSnippet\": \"<the EXACT line(s) from the file that show the problem, copied verbatim — required for any blocker-severity finding, or it will be treated as unverified>\", \"description\": \"...\", \"estimatedImpact\": \"high|medium|low\", \"suggestedFix\": \"...\" }],
-  \"verdict\": \"pass|warn|fail\"
-}"
+            # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
+            local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-perf-sentinel-vals-XXXXXX.json")
+            jq -n --arg force_lightpanda "$force_lightpanda" \
+                  --arg force_playwright "$force_playwright" \
+                  --arg gate_scope "$(_brownfield_gate_scope)" \
+                  --arg phase_id "$phase_id" \
+                  --arg project_root "$PROJECT_ROOT" \
+                  --arg routing_decision "$routing_decision" \
+                  '{"__FORCE_LIGHTPANDA__":$force_lightpanda,"__FORCE_PLAYWRIGHT__":$force_playwright,"__GATE_SCOPE__":$gate_scope,"__PHASE_ID__":$phase_id,"__PROJECT_ROOT__":$project_root,"__ROUTING_DECISION__":$routing_decision}' > "$_qa_vals" 2>/dev/null
+            local perf_prompt
+            if ! perf_prompt=$(render_engine_prompt qa-perf-sentinel "$_qa_vals"); then
+                error "  [perf-sentinel] cannot render its prompt — refusing to gate with no instructions" >&2
+                rm -f "$_qa_vals"; return 1
+            fi
+            rm -f "$_qa_vals"
 
             if [ -n "$perf_profile" ]; then
                 perf_prompt="$perf_profile

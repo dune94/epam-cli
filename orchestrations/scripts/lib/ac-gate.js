@@ -51,6 +51,14 @@ const { renderEngineTemplate } = require('./engine-prompt');
  * Cost travels with it: ai-run.sh writes the normalized result JSON when ORCH_JSON_RESULT is set,
  * and this gate runs once per ticket — the more expensive of the two invisible stages.
  */
+/** The tail of a failed call's stderr, as a phrase to append to an error. */
+function _why(errFile) {
+  try {
+    const t = fs.readFileSync(errFile, 'utf8').trim();
+    return t ? ` — stderr: ${t.slice(-400)}` : ' (no stderr captured)';
+  } catch { return ' (no stderr captured)'; }
+}
+
 function seamEnv(seam, costFile) {
   let granted = {};
   try {
@@ -109,7 +117,12 @@ if (require.main === module && (!ISSUES_PATH && !argv.includes('--help'))) {
 }
 
 const SCRIPT_DIR  = path.join(__dirname, '..');
-const AI_RUN_SH   = path.join(SCRIPT_DIR, 'ai-run.sh');
+// OVERRIDABLE, so this gate can be exercised without reaching a provider. lib/cpa-inference.js
+// and lib/kb-synthesizer.js already read AI_RUNNER_CMD, and codeline-discovery.js has its own
+// override for the same reason: a model caller that can only be tested by calling a model is
+// one whose failure handling never gets tested, which is how three swallowed stderr redirects
+// survived here. Empty by default; no behaviour change unless set.
+const AI_RUN_SH   = process.env.AI_RUNNER_CMD || path.join(SCRIPT_DIR, 'ai-run.sh');
 // process.execPath IS a node that satisfies this repo's requirement — it is the one
 // currently executing this file. The path that was here was valid on one machine, for one
 // nvm install, until that version was upgraded.
@@ -227,22 +240,27 @@ function classifyWithLLM(issue, knownCodelines) {
   // Declared outside the try: a call that threw spent money too, and dropping its record
   // is how the expensive failures become the invisible ones.
   const _costFile = `${tmpPrompt}.cost.json`;
+  // STDERR IS CAPTURED, NEVER DISCARDED. `2>/dev/null` turned a timeout, a missing key and a
+  // provider refusal into the same bare "Empty response", and the reason a call failed is
+  // the only thing that makes the fallback judgeable. Discovery already learned this: there
+  // it produced a tidy fallback to the highest-scored repo, against the wrong codeline.
+  const _errFile = `${tmpPrompt}.err`;
   fs.writeFileSync(tmpPrompt, prompt);
 
   try {
     // Use ai-run.sh for provider-agnostic LLM call with proper env/key routing
-    const cmd = `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>/dev/null`;
+    const cmd = `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>${_errFile}`;
     const raw = execSync(cmd, {
       encoding: 'utf8',
       timeout: Number(process.env.AC_GATE_TIMEOUT_MS || 360000),
       env: seamEnv('ac-classification', _costFile),
     }).trim();
 
-    if (!raw) throw new Error('Empty response from ai-run.sh');
+    if (!raw) throw new Error(`Empty response from ai-run.sh${_why(_errFile)}`);
 
     return parseLooseJson(raw, 'classification');
   } catch (e) {
-    process.stderr.write(`[ac-gate] LLM call failed for ${issue.jiraKey}: ${e.message}\n`);
+    process.stderr.write(`[ac-gate] LLM call failed for ${issue.jiraKey}: ${e.message}${_why(_errFile)}\n`);
     // A FAILED CALL IS NOT A VERDICT. This used to return 'enrichable', which
     // is a claim about the STORY, invented from a failure to reach or parse the
     // model. Live metrolinx 2026-07-29: the model actually answered
@@ -256,12 +274,13 @@ function classifyWithLLM(issue, knownCodelines) {
     // pass — see the caller's handling.
     return {
       verdict: 'unknown',
-      reason: `AC gate could not reach a verdict — the call or its parse failed: ${e.message.slice(0, 150)}`,
+      reason: `AC gate could not reach a verdict — the call or its parse failed: ${e.message.slice(0, 150)}${_why(_errFile)}`,
       gaps: [],
       enrichedAcs: [],
     };
   } finally {
     emitSpend(_costFile, 'ac-classification');
+    try { fs.unlinkSync(_errFile); } catch { /* ignore */ }
     try { fs.unlinkSync(tmpPrompt); } catch { /* ignore */ }
   }
 }
@@ -295,25 +314,31 @@ function classifyCodelineOnly(issue, knownCodelines) {
   // Declared outside the try: a call that threw spent money too, and dropping its record
   // is how the expensive failures become the invisible ones.
   const _costFile = `${tmpPrompt}.cost.json`;
+  // STDERR IS CAPTURED, NEVER DISCARDED. `2>/dev/null` turned a timeout, a missing key and a
+  // provider refusal into the same bare "Empty response", and the reason a call failed is
+  // the only thing that makes the fallback judgeable. Discovery already learned this: there
+  // it produced a tidy fallback to the highest-scored repo, against the wrong codeline.
+  const _errFile = `${tmpPrompt}.err`;
   fs.writeFileSync(tmpPrompt, prompt);
   try {
-    const cmd = `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>/dev/null`;
+    const cmd = `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>${_errFile}`;
     const raw = execSync(cmd, {
       encoding: 'utf8',
       timeout: Number(process.env.AC_GATE_TIMEOUT_MS || 360000),
       env: seamEnv('ac-classification', _costFile),
     }).trim();
-    if (!raw) throw new Error('Empty response from ai-run.sh');
+    if (!raw) throw new Error(`Empty response from ai-run.sh${_why(_errFile)}`);
     const parsed = parseLooseJson(raw, 'codeline classification');
     return { verdict, reason, gaps: [], enrichedAcs: [], codeline: parsed.codeline || SPLIT_VALUE };
   } catch (e) {
     // A failed call is not a routing decision. SPLIT_VALUE is the inclusive fallback —
     // the story spans every codeline rather than silently reaching none, which is the
     // failure this whole change caused once already.
-    process.stderr.write(`[ac-gate] codeline classification failed for ${issue.jiraKey}: ${e.message}\n`);
+    process.stderr.write(`[ac-gate] codeline classification failed for ${issue.jiraKey}: ${e.message}${_why(_errFile)}\n`);
     return { verdict, reason, gaps: [], enrichedAcs: [], codeline: SPLIT_VALUE };
   } finally {
     emitSpend(_costFile, 'ac-classification');
+    try { fs.unlinkSync(_errFile); } catch { /* ignore */ }
     try { fs.unlinkSync(tmpPrompt); } catch { /* best effort */ }
   }
 }
@@ -346,11 +371,16 @@ function elaborateAcs(issue) {
   // Declared outside the try: a call that threw spent money too, and dropping its record
   // is how the expensive failures become the invisible ones.
   const _costFile = `${tmpPrompt}.cost.json`;
+  // STDERR IS CAPTURED, NEVER DISCARDED. `2>/dev/null` turned a timeout, a missing key and a
+  // provider refusal into the same bare "Empty response", and the reason a call failed is
+  // the only thing that makes the fallback judgeable. Discovery already learned this: there
+  // it produced a tidy fallback to the highest-scored repo, against the wrong codeline.
+  const _errFile = `${tmpPrompt}.err`;
   fs.writeFileSync(tmpPrompt, prompt);
   try {
-    const cmd = `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>/dev/null`;
+    const cmd = `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>${_errFile}`;
     const raw = execSync(cmd, { encoding: 'utf8', timeout: Number(process.env.AC_GATE_TIMEOUT_MS || 360000), env: seamEnv('ac-elaboration', _costFile) }).trim();
-    if (!raw) throw new Error('Empty elaboration response');
+    if (!raw) throw new Error(`Empty elaboration response${_why(_errFile)}`);
     const parsed = parseLooseJson(raw, 'elaboration');
     return Array.isArray(parsed.enrichedAcs) && parsed.enrichedAcs.length > 0
       ? parsed.enrichedAcs
@@ -365,11 +395,12 @@ function elaborateAcs(issue) {
     // Elaboration failing means the pipeline does not know what the story
     // requires. Proceeding on an invented criterion is worse than stopping,
     // and the caller treats a throw here as 'unknown', which halts.
-    process.stderr.write(`[ac-gate]     elaboration failed: ${e.message}\n`);
+    process.stderr.write(`[ac-gate]     elaboration failed: ${e.message}${_why(_errFile)}\n`);
     process.stderr.write('[ac-gate]     NOT substituting a title-based criterion — that is a fabricated answer.\n');
     throw e;
   } finally {
     emitSpend(_costFile, 'ac-elaboration');
+    try { fs.unlinkSync(_errFile); } catch { /* ignore */ }
     try { fs.unlinkSync(tmpPrompt); } catch { /* ignore */ }
   }
 }

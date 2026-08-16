@@ -182,9 +182,13 @@ elif [ "$GATE_EXIT" = "2" ] || [ "$INSUFFICIENT_COUNT" -gt "0" ]; then
   warn "  AC Gate: ${INSUFFICIENT_COUNT} story/stories have INSUFFICIENT ACs."
   warn "  Pipeline halted. Human approval required."
   warn ""
-  warn "  Permission-request comments have been posted to Jira."
-  warn "  Once a human approves (replies /approve-elaboration),"
-  warn "  re-trigger this run."
+  # NOTHING WAS POSTED. This said permission-request comments had been posted to Jira and
+  # to wait for a /approve-elaboration reply. ac-gate.js has no jira-client require and no
+  # comment-posting path at all — deliberately, since this pipeline never writes to a client
+  # system. So the message sent an operator to look for comments that do not exist, and to
+  # wait for an approval nothing was ever going to receive.
+  warn "  Nothing has been posted to Jira — this pipeline only reads client systems."
+  warn "  Add the missing acceptance criteria to the ticket(s) above, then re-run."
   warn "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   exit 2
 fi

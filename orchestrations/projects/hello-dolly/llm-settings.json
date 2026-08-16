@@ -103,6 +103,40 @@
           "to": "z-ai/glm-5.2"
         }
       ]
+    },
+    "highest": {
+      "_why": "Declared 2026-08-15. Twenty seams in invocation-profiles.json ask for ladder HIGHEST and this project declared only high and medium, so every one of them ran with no escalation chain — seam-invocation reported \"EPAM_MODEL_LADDER_HIGHEST is unset\" and continued. Built from this project's own models: start at the strongest rather than climbing to it, and let the top hop reach the ceiling directly.",
+      "startModel": "z-ai/glm-5.2",
+      "modelLadder": [
+        {
+          "from": "MiniMax-M2.5",
+          "to": "MiniMax-M3"
+        },
+        {
+          "from": "MiniMax-M3",
+          "to": "z-ai/glm-5.2"
+        },
+        {
+          "from": "zhipuai/glm-z1-9b",
+          "to": "zhipuai/glm-z1-32b"
+        },
+        {
+          "from": "zhipuai/glm-z1-32b",
+          "to": "z-ai/glm-5.2"
+        },
+        {
+          "from": "z-ai/glm-5.1",
+          "to": "z-ai/glm-5.2"
+        },
+        {
+          "from": "z-ai/glm-5.2",
+          "to": "moonshotai/kimi-k3"
+        },
+        {
+          "from": "moonshotai/kimi-k2.5",
+          "to": "moonshotai/kimi-k3"
+        }
+      ]
     }
   },
   "modelOverrides": {
@@ -171,6 +205,6 @@
   "costControls": {
     "maxToolCallsPerStory": 120,
     "storyBudgetWarningUsd": 0.5,
-    "storyBudgetHardLimitUsd": 2.0
+    "storyBudgetHardLimitUsd": 2
   }
 }

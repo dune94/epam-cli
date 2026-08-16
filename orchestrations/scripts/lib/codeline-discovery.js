@@ -855,6 +855,37 @@ if (require.main !== module) return;
   const output = { codelines: ordered };
   fs.writeFileSync(OUT_PATH, JSON.stringify(output, null, 2));
 
+  // ── THE CODELINE FACTS THIS RUN OBSERVED ─────────────────────────────────
+  //
+  // codeline-facts.json had no producer: every one in the repo was typed by hand, so a new
+  // project had none and whatever a run learned died with it. This agent is the single
+  // producer, because it is the only stage that opens every candidate repository and sees the
+  // estate at once. Written here, where the answer is, rather than exported and lost across the
+  // process boundary — the mistake that cost this file its codelines on 2026-08-07.
+  //
+  // Rewritten every run, never merged: a fact that outlives the run that observed it is a fact
+  // nobody re-checks.
+  if (process.env.EPAM_PROJECT_CONFIG_DIR) {
+    try {
+      const { writeCodelineFacts } = require('./codeline-facts.js');
+      const res = writeCodelineFacts({
+        projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR,
+        codelines: ordered,
+        warn: (m) => log(m),
+      });
+      log(`Codeline facts written → ${res.path} (${res.codelines.length} codeline(s)` +
+          `${res.withoutFacts.length ? `, ${res.withoutFacts.length} with none` : ''})`);
+    } catch (e) {
+      // Loud, and non-fatal: the codelines themselves are valid and the run can proceed on
+      // them. What must never happen is proceeding while BELIEVING facts were provisioned.
+      log(`WARN: could not write codeline facts: ${(e && e.message) || e} — ` +
+          'agents will work from the source alone');
+    }
+  } else {
+    log('WARN: EPAM_PROJECT_CONFIG_DIR is unset, so this run\'s codeline facts have nowhere to '
+        + 'go — agents will work from the source alone');
+  }
+
   for (const cl of ordered) {
     log(`  → codeline '${cl.name}' = ${cl.path} (${cl.reason})`);
   }

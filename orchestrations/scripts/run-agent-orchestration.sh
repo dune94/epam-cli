@@ -3260,6 +3260,13 @@ KNOWNFIXES_EOF
           mkdir -p "$_wt/.epam"
           echo "$_cl_facts" > "$_wt/.epam/codeline-facts.json"
           log "[orch] Provisioned .epam/codeline-facts.json for '${_cl}' from ${_facts_cfg}"
+        else
+          # SAY SO. This skipped in silence, so a file in the wrong SHAPE was indistinguishable
+          # from no file and from an agent that observed nothing — three different problems with
+          # one symptom, which is none. The file is keyed by codeline name at the top level;
+          # a hand-written one nesting them under another key parses fine and yields nothing for
+          # every codeline, which is exactly what happened to mock3's before discovery produced it.
+          warning "[orch] '${_facts_cfg}' exists but has no entry for codeline '${_cl}' — agents there will work from the source alone. Codeline names must be TOP-LEVEL keys; the engine reads one with jq '.[\$cl]'."
         fi
       fi
 

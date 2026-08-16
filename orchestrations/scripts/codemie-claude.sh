@@ -636,41 +636,18 @@ build_implementation_prompt() {
     local files=$(echo "$story_json" | jq -r '.technicalNotes.files // [] | join(", ")')
     local dependencies=$(echo "$story_json" | jq -r '.dependencies | join(", ")')
 
-    cat << EOF
-Implement user story $story_id: $title
-
-## Story Description
-$description
-
-## Acceptance Criteria
-- $acceptance_criteria
-
-## Technical Notes
-$([ -n "$technical_notes" ] && echo "$technical_notes" | jq -r 'to_entries | map("- \(.key): \(.value)") | join("\n")' 2>/dev/null || echo "None specified")
-
-## Files to Create/Modify (EXACT ABSOLUTE PATHS — start here; this list is not exhaustive)
-These are the files the analysis identified. Use these exact paths for them. The list is a
-STARTING POINT, not a fence: it is derived from the ticket and may be incomplete or may name
-a path this repository spells differently. If your change genuinely requires another file in
-this repository, write it — the only files closed to you are ones another story OWNS, and
-attempting one of those returns a specific refusal saying so. Do NOT work around a refusal by
-repeatedly rewriting a file you can already write; that is never the fix. When you write a
-file that is not listed here, say which file and why in your final message, so the reviewer
-sees the whole change.
-$files
-
-## Dependencies
-${dependencies:-None}
-
-## Instructions
-1. Implement all acceptance criteria for this story
-2. Follow the project's existing code patterns and conventions
-3. Create any necessary files in the locations specified
-4. Ensure code compiles/runs without errors
-5. Do NOT create tests unless explicitly required in acceptance criteria
-
-After implementation, provide a brief summary of what was created/modified.
-EOF
+    _hd_vals=$(mktemp "${TMPDIR:-/tmp}/story-implementation-vals-XXXXXX.json")
+    jq -n \
+          --arg technical_notes "$([ -n "$technical_notes" ] && echo "$technical_notes" | jq -r 'to_entries | map("- \(.key): \(.value)") | join("\n")' 2>/dev/null || echo "None specified")" \
+          --arg dependencies "${dependencies:-None}" \
+          --arg acceptance_criteria "$acceptance_criteria" \
+          --arg description "$description" \
+          --arg story_id "$story_id" \
+          --arg title "$title" \
+          --arg files "$files" \
+          '{"__TECHNICAL_NOTES__":$technical_notes,"__DEPENDENCIES__":$dependencies,"__ACCEPTANCE_CRITERIA__":$acceptance_criteria,"__DESCRIPTION__":$description,"__STORY_ID__":$story_id,"__TITLE__":$title,"__FILES__":$files}' > "$_hd_vals"
+    render_engine_prompt story-implementation "$_hd_vals"
+    rm -f "$_hd_vals"
 }
 
 # Update monitor lane/story status via update-monitor.sh

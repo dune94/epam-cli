@@ -2821,76 +2821,52 @@ PYEOF
 )
     fi
 
-    cat << EOF
-$([ -n "$spec_reality_warning" ] && printf '%s\n\n' "$spec_reality_warning" || true)$write_first_directive
-
-$(printf '%b' "$write_first_lines")
----
-
-Implement user story $story_id: $title
-
-## Story Description
-$description
-
-## Acceptance Criteria
-- $acceptance_criteria
-$([ -n "$string_invariants_block" ] && printf '%s\n' "$string_invariants_block" || true)
-$agent_inputs
-$([ -n "$review_feedback" ] && printf '\n## Reviewer Feedback — ADDRESS THESE (a prior code review requested changes)\nThe team-lead reviewer examined your previous attempt and requested the changes below. This is the highest priority.\n\nA BLOCKER is a required deliverable, not advice. If a blocker says something is MISSING — a test, a file, a case — the only way to resolve it is to CREATE it; leaving it out repeats the rejection. Minimality governs HOW MUCH you write, never WHETHER you write it.\n\nFor advisory points: make the smallest edits that resolve each one, and where a point says the change is over-engineered or an existing helper would do, REMOVE the excess rather than adding more.\n\nIf you genuinely cannot satisfy a blocker — no seam exists to test against, the behaviour lives entirely in a third-party package — say so explicitly in your final message, naming the blocker and why. An unexplained omission reads as a refusal and will be rejected again.\n%s\n' "$review_feedback" || true)
-$([ -n "$skill_note_block" ] && printf '%s\n' "$skill_note_block" || true)
-$([ -n "$verification_criteria" ] && printf '\n## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)\nThese are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:\n%s\n' "$verification_criteria" || true)
-$([ -n "$codeline_facts_block" ] && printf '%s\n' "$codeline_facts_block" || true)
-$([ -n "$project_tools_block" ] && printf '%s\n' "$project_tools_block" || true)
-$([ -n "$test_ownership_block" ] && printf '%s\n' "$test_ownership_block" || true)
-$([ -n "$codegraph_tool_block" ] && printf '\n%s\n' "$codegraph_tool_block" || true)
-$([ -n "$_uncovered_vc_block" ] && printf '\n%s\n' "$_uncovered_vc_block" || true)
-$([ -n "$brownfield_test_policy" ] && printf '\n%s\n' "$brownfield_test_policy" || true)
-$([ -n "$new_dependency_directive" ] && printf '\n%s\n' "$new_dependency_directive" || true)
-$([ -n "$tc_facts" ] && printf '\n## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)\n%s\n' "$tc_facts" || true)
-$([ -n "$tc_mock_strategy" ] && printf '\n## Mock Strategy\n%s\n' "$tc_mock_strategy" || true)
-$([ -n "$tc_banned" ] && printf '\n## Banned Patterns (must NOT appear in your file)\n%s\n' "$tc_banned" || true)
-
-## Technical Notes
-$(_render_technical_notes "$technical_notes" "$_lane")
-$([ -n "$existing_file_contents" ] && printf '\n## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)\n%s\n' "$existing_file_contents" || true)
-
-## Files to Create/Modify (EXACT ABSOLUTE PATHS — start here; this list is not exhaustive)
-These are the files the analysis identified. Use these exact paths for them. The list is a
-STARTING POINT, not a fence: it is derived from the ticket and may be incomplete or may name
-a path this repository spells differently. If your change genuinely requires another file in
-this repository, write it — the only files closed to you are ones another story OWNS, and
-attempting one of those returns a specific refusal saying so. Do NOT work around a refusal by
-repeatedly rewriting a file you can already write; that is never the fix. When you write a
-file that is not listed here, say which file and why in your final message, so the reviewer
-sees the whole change.
-$files
-
-## Dependencies
-${dependencies:-None}
-$([ -n "$dependency_contracts" ] && printf '\n## Dependency Contracts (EXACT import paths and signatures — use these verbatim, do NOT guess a different path)\n%s\n' "$dependency_contracts" || true)
-$(_module_resolution_context "$PROJECT_ROOT" 2>/dev/null || true)
-$([ -n "${CROSS_CODELINE_CONTRACT:-}" ] && [ -f "${CROSS_CODELINE_CONTRACT}" ] && printf '\n## Cross-Codeline API Contract (upstream codeline exports — use these types and endpoints verbatim when integrating)\n%s\n' "$(cat "${CROSS_CODELINE_CONTRACT}")" || true)
-
-## Instructions
-$write_first_directive
-$(printf '%b' "$write_first_lines")
-$(if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
+    _sw_vals=$(mktemp "${TMPDIR:-/tmp}/story-writer-main-vals-XXXXXX.json")
+    jq -n \
+          --arg spec_reality_warning "$([ -n "$spec_reality_warning" ] && printf '%s\n\n' "$spec_reality_warning" || true)" \
+          --arg write_first_lines "$(printf '%b' "$write_first_lines")" \
+          --arg string_invariants_block "$([ -n "$string_invariants_block" ] && printf '%s\n' "$string_invariants_block" || true)" \
+          --arg review_feedback "$([ -n "$review_feedback" ] && printf '\n## Reviewer Feedback — ADDRESS THESE (a prior code review requested changes)\nThe team-lead reviewer examined your previous attempt and requested the changes below. This is the highest priority.\n\nA BLOCKER is a required deliverable, not advice. If a blocker says something is MISSING — a test, a file, a case — the only way to resolve it is to CREATE it; leaving it out repeats the rejection. Minimality governs HOW MUCH you write, never WHETHER you write it.\n\nFor advisory points: make the smallest edits that resolve each one, and where a point says the change is over-engineered or an existing helper would do, REMOVE the excess rather than adding more.\n\nIf you genuinely cannot satisfy a blocker — no seam exists to test against, the behaviour lives entirely in a third-party package — say so explicitly in your final message, naming the blocker and why. An unexplained omission reads as a refusal and will be rejected again.\n%s\n' "$review_feedback" || true)" \
+          --arg skill_note_block "$([ -n "$skill_note_block" ] && printf '%s\n' "$skill_note_block" || true)" \
+          --arg verification_criteria "$([ -n "$verification_criteria" ] && printf '\n## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)\nThese are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:\n%s\n' "$verification_criteria" || true)" \
+          --arg codeline_facts_block "$([ -n "$codeline_facts_block" ] && printf '%s\n' "$codeline_facts_block" || true)" \
+          --arg project_tools_block "$([ -n "$project_tools_block" ] && printf '%s\n' "$project_tools_block" || true)" \
+          --arg test_ownership_block "$([ -n "$test_ownership_block" ] && printf '%s\n' "$test_ownership_block" || true)" \
+          --arg codegraph_tool_block "$([ -n "$codegraph_tool_block" ] && printf '\n%s\n' "$codegraph_tool_block" || true)" \
+          --arg uncovered_vc_block "$([ -n "$_uncovered_vc_block" ] && printf '\n%s\n' "$_uncovered_vc_block" || true)" \
+          --arg brownfield_test_policy "$([ -n "$brownfield_test_policy" ] && printf '\n%s\n' "$brownfield_test_policy" || true)" \
+          --arg new_dependency_directive "$([ -n "$new_dependency_directive" ] && printf '\n%s\n' "$new_dependency_directive" || true)" \
+          --arg tc_facts "$([ -n "$tc_facts" ] && printf '\n## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)\n%s\n' "$tc_facts" || true)" \
+          --arg tc_mock_strategy "$([ -n "$tc_mock_strategy" ] && printf '\n## Mock Strategy\n%s\n' "$tc_mock_strategy" || true)" \
+          --arg tc_banned "$([ -n "$tc_banned" ] && printf '\n## Banned Patterns (must NOT appear in your file)\n%s\n' "$tc_banned" || true)" \
+          --arg technical_notes "$(_render_technical_notes "$technical_notes" "$_lane")" \
+          --arg existing_file_contents "$([ -n "$existing_file_contents" ] && printf '\n## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)\n%s\n' "$existing_file_contents" || true)" \
+          --arg dependency_contracts "$([ -n "$dependency_contracts" ] && printf '\n## Dependency Contracts (EXACT import paths and signatures — use these verbatim, do NOT guess a different path)\n%s\n' "$dependency_contracts" || true)" \
+          --arg module_resolution "$(_module_resolution_context "$PROJECT_ROOT" 2>/dev/null || true)" \
+          --arg cross_codeline_contract "$([ -n "${CROSS_CODELINE_CONTRACT:-}" ] && [ -f "${CROSS_CODELINE_CONTRACT}" ] && printf '\n## Cross-Codeline API Contract (upstream codeline exports — use these types and endpoints verbatim when integrating)\n%s\n' "$(cat "${CROSS_CODELINE_CONTRACT}")" || true)" \
+          --arg write_first_lines_2 "$(printf '%b' "$write_first_lines")" \
+          --arg conditional_section "$(if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
   echo "**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**"
 else
   echo "**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**"
-fi)
-
-$(if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
+fi)" \
+          --arg conditional_section_2 "$(if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
   echo "1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full"
 else
   echo "1. Write each required file to its exact absolute path listed above — do this FIRST before anything else"
-fi)
-2. Implement all acceptance criteria for this story
-$([ -n "$tc_facts" ] && echo "3. Test Criteria facts above are ground truth — your test assertions MUST match them exactly" || echo "3. Follow the project's existing code patterns and conventions")
-4. Do NOT create tests unless explicitly required in acceptance criteria
-
-After implementation, provide a brief summary of what was created/modified.
-EOF
+fi)" \
+          --arg tc_facts_2 "$([ -n "$tc_facts" ] && echo "3. Test Criteria facts above are ground truth — your test assertions MUST match them exactly" || echo "3. Follow the project's existing code patterns and conventions")" \
+          --arg write_first_directive "$write_first_directive" \
+          --arg dependencies "${dependencies:-None}" \
+          --arg acceptance_criteria "$acceptance_criteria" \
+          --arg agent_inputs "$agent_inputs" \
+          --arg description "$description" \
+          --arg story_id "$story_id" \
+          --arg title "$title" \
+          --arg files "$files" \
+          '{"__SPEC_REALITY_WARNING__":$spec_reality_warning,"__WRITE_FIRST_LINES__":$write_first_lines,"__STRING_INVARIANTS_BLOCK__":$string_invariants_block,"__REVIEW_FEEDBACK__":$review_feedback,"__SKILL_NOTE_BLOCK__":$skill_note_block,"__VERIFICATION_CRITERIA__":$verification_criteria,"__CODELINE_FACTS_BLOCK__":$codeline_facts_block,"__PROJECT_TOOLS_BLOCK__":$project_tools_block,"__TEST_OWNERSHIP_BLOCK__":$test_ownership_block,"__CODEGRAPH_TOOL_BLOCK__":$codegraph_tool_block,"__UNCOVERED_VC_BLOCK__":$uncovered_vc_block,"__BROWNFIELD_TEST_POLICY__":$brownfield_test_policy,"__NEW_DEPENDENCY_DIRECTIVE__":$new_dependency_directive,"__TC_FACTS__":$tc_facts,"__TC_MOCK_STRATEGY__":$tc_mock_strategy,"__TC_BANNED__":$tc_banned,"__TECHNICAL_NOTES__":$technical_notes,"__EXISTING_FILE_CONTENTS__":$existing_file_contents,"__DEPENDENCY_CONTRACTS__":$dependency_contracts,"__MODULE_RESOLUTION__":$module_resolution,"__CROSS_CODELINE_CONTRACT__":$cross_codeline_contract,"__WRITE_FIRST_LINES_2__":$write_first_lines_2,"__CONDITIONAL_SECTION__":$conditional_section,"__CONDITIONAL_SECTION_2__":$conditional_section_2,"__TC_FACTS_2__":$tc_facts_2,"__WRITE_FIRST_DIRECTIVE__":$write_first_directive,"__DEPENDENCIES__":$dependencies,"__ACCEPTANCE_CRITERIA__":$acceptance_criteria,"__AGENT_INPUTS__":$agent_inputs,"__DESCRIPTION__":$description,"__STORY_ID__":$story_id,"__TITLE__":$title,"__FILES__":$files}' > "$_sw_vals"
+    render_engine_prompt story-writer-main "$_sw_vals"
+    rm -f "$_sw_vals"
 }
 
 build_generator_prompt() {
@@ -2914,38 +2890,18 @@ build_generator_prompt() {
         description="${description//${MAIN_PROJECT_ROOT}/${PROJECT_ROOT}}"
     fi
 
-    cat << EOF
-Generate file for story $story_id: $title
-
-## Story Description
-$description
-
-## Acceptance Criteria
-- $acceptance_criteria
-
-## Technical Notes
-$(_render_technical_notes "$technical_notes" "$_lane")
-
-## Files to Create
-$files
-
-## Dependencies (already implemented — do NOT read them)
-${dependencies:-None}
-
-## GENERATOR CONTRACT — READ THIS FIRST
-You are a FILE GENERATOR. Your ONLY job is to write the file listed under "Files to Create".
-
-**MANDATORY FIRST ACTION: Call WriteFile immediately. Do NOT call any other tool first.**
-
-Rules:
-1. Your FIRST tool call MUST be WriteFile to the target path above.
-2. Do NOT call ReadFile, ListFiles, Bash, Search, or any other tool before WriteFile.
-3. Write the COMPLETE file content in a single WriteFile call.
-4. After WriteFile succeeds, you are done. No verification reads, no follow-up patches.
-5. All information you need is in this prompt. The spec is authoritative — do NOT read existing files for context.
-
-Generation approach: read every acceptance criterion once, hold them all in mind, then write a file that satisfies all of them in one shot.
-EOF
+    _hd_vals=$(mktemp "${TMPDIR:-/tmp}/story-file-generation-vals-XXXXXX.json")
+    jq -n \
+          --arg technical_notes "$(_render_technical_notes "$technical_notes" "$_lane")" \
+          --arg dependencies "${dependencies:-None}" \
+          --arg acceptance_criteria "$acceptance_criteria" \
+          --arg description "$description" \
+          --arg story_id "$story_id" \
+          --arg title "$title" \
+          --arg files "$files" \
+          '{"__TECHNICAL_NOTES__":$technical_notes,"__DEPENDENCIES__":$dependencies,"__ACCEPTANCE_CRITERIA__":$acceptance_criteria,"__DESCRIPTION__":$description,"__STORY_ID__":$story_id,"__TITLE__":$title,"__FILES__":$files}' > "$_hd_vals"
+    render_engine_prompt story-file-generation "$_hd_vals"
+    rm -f "$_hd_vals"
 }
 
 # Verify every file declared by the story exists in the execution root.

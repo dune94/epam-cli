@@ -26,6 +26,28 @@ trap '_release_write_perimeter' EXIT
 
 set -e
 
+# ONE REVIEWER PROMPT, THREE CALLERS.
+#
+# This prompt existed as three near-identical copies (ac_patch, profile_creation,
+# profile_addendum) that differed only in the evidence they showed. A wording fix was a
+# three-place edit, and they had already drifted: two showed a diff, one showed BEFORE and
+# AFTER separately. The evidence SECTION is the caller's, heading included; everything else
+# is one template.
+_render_change_reviewer() {
+    local _story="$1" _change_type="$2" _evidence="$3"
+    local _cr_vals; _cr_vals=$(mktemp "${TMPDIR:-/tmp}/change-reviewer-vals-XXXXXX.json")
+    jq -n --arg story "$_story" --arg ct "$_change_type" \
+          --rawfile ev <(printf '%s' "$_evidence") \
+          '{"__STORY__":$story,"__CHANGE_TYPE__":$ct,"__EVIDENCE__":$ev}' > "$_cr_vals" 2>/dev/null
+    local _out
+    if ! _out=$(render_engine_prompt change-reviewer "$_cr_vals"); then
+        echo "[change-reviewer] cannot render its prompt — refusing to review with no instructions" >&2
+        rm -f "$_cr_vals"; return 1
+    fi
+    rm -f "$_cr_vals"
+    printf '%s' "$_out"
+}
+
 # _run_project_verification <project_root>
 # Runs the project's declared check (.epam/verification.json) via the verification plugin.
 # The engine names no tool, extension, directory or runtime path. Undeclared -> non-zero with a
@@ -2032,16 +2054,7 @@ $_prompt"
                 [ "$_rev_attempt" -ge 1 ] && [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _rev_model="${ESCALATION_MODEL_HIGH}"
                 _rev_raw=$(echo "${_corrective_rev}${_src_reviewer_profile}
 
-STORY: ${story_id}
-CHANGE TYPE: ac_patch
-
-BEFORE:
-${_before_acs}
-
-AFTER:
-${_candidate}
-
-Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}" | \
+                $(_render_change_reviewer "$story_id" "ac_patch" "BEFORE:\n${_before_acs}\n\nAFTER:\n${_candidate}")" | \
                     AI_PROVIDER="${ORCH_GATE_PROVIDER}" \
                     AI_MODEL="${_rev_model}" \
                     EPAM_CLI="${EPAM_CLI:-epam}" \
@@ -5389,13 +5402,7 @@ PFA_DIFF_PY
                     local _pfa_verdict
                     _pfa_verdict=$(echo "${_pfa_reviewer_profile}
 
-STORY: pre-phase-assessment-${phase_id}
-CHANGE TYPE: profile_creation
-
-BEFORE/AFTER DIFF:
-${_pfa_diff}
-
-Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}" | \
+        $(_render_change_reviewer "pre-phase-assessment-${phase_id}" "profile_creation" "BEFORE/AFTER DIFF:\n${_pfa_diff}")" | \
                         AI_PROVIDER="${ORCH_GATE_PROVIDER}" \
                         AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
                         EPAM_CLI="${EPAM_CLI:-epam}" \
@@ -10967,13 +10974,7 @@ $_prof_prompt"
                             [ "$_pa_rev_attempt" -ge 1 ] && [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _pa_model="${ESCALATION_MODEL_HIGH}"
                             _pa_rev_raw=$(echo "${_pa_corrective}${_reviewer_profile}
 
-STORY: gate-remediation
-CHANGE TYPE: profile_addendum
-
-THE CHANGE ITSELF (unified diff of the roster before and after):
-${_profiles_change}
-
-Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}" | \
+                            $(_render_change_reviewer "gate-remediation" "profile_addendum" "THE CHANGE ITSELF (unified diff of the roster before and after):\n${_profiles_change}")" | \
                                 AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
                                 AI_MODEL="${_pa_model}" \
                                 EPAM_CLI="${EPAM_CLI:-epam}" \

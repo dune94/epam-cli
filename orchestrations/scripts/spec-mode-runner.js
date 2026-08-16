@@ -3175,7 +3175,7 @@ async function surveyEstate({
   // and EPAM_SEAM is written here and read NOWHERE — resolution goes through EPAM_AGENT_NAME
   // alone. So the seam looked declared while the agent resolved to nothing and ran with no
   // ladder and no budget, against a profile that had been written for it all along.
-  const _env = { EPAM_AGENT_NAME: 'estate-survey' };
+  const _env = { ...seamInvocationEnv('estate-survey', logDir), EPAM_AGENT_NAME: 'estate-survey' };
   if (toolGrant) {
     _env.AI_GATE_ALLOW_TOOLS = '1';
     _env.EPAM_ALLOWED_TOOLS = toolGrant;
@@ -3634,7 +3634,11 @@ Do not propose a role that duplicates one of the canonical roles already listed 
   // SDK, taken on the vendor documentation's word because nothing could check it.
   //
   // Read-only by construction: no bash, no write_file. This stage has no story scope.
-  const _mintEnv = { EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_PROJECT_AGENTS) };
+  const _mintEnv = {
+    ...seamInvocationEnv('agent-mint', logDir),
+    EPAM_AGENT_NAME: 'agent-mint',
+    EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_PROJECT_AGENTS),
+  };
   if (toolGrant) {
     _mintEnv.AI_GATE_ALLOW_TOOLS = '1';
     _mintEnv.EPAM_ALLOWED_TOOLS = toolGrant;
@@ -3976,9 +3980,14 @@ async function reviewRoster({
 
   const prompt = buildRosterReviewPrompt({ persona, briefBlock, clBlock, ticketBlock, docBlock, toolLine });
 
+  // THE IDENTITY TRAVELS WITH THE SEAM. This relied on the caller having set
+  // process.env.EPAM_AGENT_NAME in another file, so the two could drift apart without either
+  // looking wrong — and they had: the caller announced 'roster-reviewer', which resolved to the
+  // code reviewer's seam. Declared together here, they cannot.
   const env = {
-    EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_ROSTER_REVIEW),
     ...seamInvocationEnv('roster-review', logDir),
+    EPAM_AGENT_NAME: 'roster-review',
+    EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_ROSTER_REVIEW),
   };
   if (toolGrant) { env.AI_GATE_ALLOW_TOOLS = '1'; env.EPAM_ALLOWED_TOOLS = toolGrant; }
 
@@ -4126,7 +4135,11 @@ async function assignAgentRoles({ promptExec, stories, profilesPath, logDir, rep
       promptExec, prompt, TOOL_ROLE_ASSIGNMENTS, 'ROLE_ASSIGNMENTS',
       logDir ? path.join(logDir, 'role-assignments.log') : null,
       null, '', repoPath || '',
-      { EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_ROLE_ASSIGNMENTS) },
+      {
+        ...seamInvocationEnv('role-assigner', logDir),
+        EPAM_AGENT_NAME: 'role-assigner',
+        EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_ROLE_ASSIGNMENTS),
+      },
     );
     rows = (payload && Array.isArray(payload.assignments)) ? payload.assignments : [];
   }

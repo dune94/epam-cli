@@ -946,6 +946,9 @@ if (require.main !== module) return;
       runText: (prompt, meta) => {
         const seamEnv = seamInvocationEnv('prompt-builder', path.join(engineRoot, 'orchestrations', 'agents'));
         if (seamEnv.EPAM_ALLOWED_TOOLS) seamEnv.AI_GATE_ALLOW_TOOLS = '1';
+        // The identity travels WITH the seam. It was set on process.env far above, so the two could
+        // drift apart without either looking wrong — and elsewhere in this stage they already had.
+        seamEnv.EPAM_AGENT_NAME = 'prompt-builder';
         return spec.runClaude(
           promptExec, prompt,
           path.join(LOG_DIR, `prompt-build-${(meta && meta.id) || 'unknown'}.log`),

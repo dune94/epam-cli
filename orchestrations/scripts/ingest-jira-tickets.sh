@@ -84,18 +84,10 @@ fi
 log "Pulling tickets from ${JIRA_URL} — project: ${PROJECT_KEY}, status: '${JIRA_STATUS}'"
 
 # ── Step 1: Pull issues from Jira via jira-client.js ─────────────────────
-"$NODE_BIN" - <<EOF > "$ISSUES_JSON"
-const jira = require('${SCRIPT_DIR}/lib/jira-client');
-jira.getProjectIssues('${PROJECT_KEY}', '${JIRA_STATUS}').then(issues => {
-  process.stdout.write(JSON.stringify(issues, null, 2));
-}).catch(e => {
-  process.stderr.write('[ingest] Failed to fetch issues: ' + e.message + '\n');
-  process.stdout.write('[]');
-  process.exit(1);
-});
-EOF
+"$NODE_BIN" "${SCRIPT_DIR}/lib/handlers/fetch-tracker-issues.js" \
+  "${SCRIPT_DIR}" "${PROJECT_KEY}" "${JIRA_STATUS}" > "$ISSUES_JSON"
 
-ISSUE_COUNT=$("$NODE_BIN" -e "console.log(JSON.parse(require('fs').readFileSync('$ISSUES_JSON','utf8')).length)")
+ISSUE_COUNT=$("$NODE_BIN" "${SCRIPT_DIR}/lib/handlers/json-array-length.js" "$ISSUES_JSON")
 log "Found ${ISSUE_COUNT} issues."
 
 if [ "$ISSUE_COUNT" = "0" ]; then

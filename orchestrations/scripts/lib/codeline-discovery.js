@@ -31,6 +31,26 @@ const path         = require('path');
 const { execSync } = require('child_process');
 const { crossRepoTermScores, applyRecency, repoRecency, orderCodelines, rankingConfidence } = require('./codeline-score');
 const { rankByStructure } = require('./codeline-structure');
+// THE ONE ECOSYSTEM TABLE. This file used to carry a three-branch stack ladder of its own.
+const { allManifests } = require('./ecosystems.js');
+
+/**
+ * The directory-name patterns the scan skips. Read once per scan so a test can change the
+ * environment between scans, and so a malformed pattern fails loudly rather than silently
+ * excluding nothing — a scan that quietly stops excluding grows the candidate list and shifts
+ * the ranking that chooses a client repository.
+ */
+function _scanExclusions() {
+  const env = (process.env.EPAM_CODELINE_EXCLUDE || '').trim();
+  let patterns;
+  if (env) {
+    patterns = env.split(',').map((p) => p.trim()).filter(Boolean);
+  } else {
+    const cfg = path.join(__dirname, '..', '..', 'config', 'codeline-scan.json');
+    patterns = JSON.parse(fs.readFileSync(cfg, 'utf8')).exclude || [];
+  }
+  return patterns.map((p) => new RegExp(p, 'i'));
+}
 
 // Semble removed from codeline scoring — all repos are CodeGraph-indexed,
 // making Tier 3 probabilistic scoring redundant and a source of re-ranking noise.
@@ -102,30 +122,36 @@ function buildRepoManifest(rootDir) {
     const isGit = fs.existsSync(path.join(full, '.git'));
     if (!isGit) continue;
 
-    // Exclude docs.* repos — documentation projects are never in scope for
-    // brownfield code changes and add Semble noise (they match ticket keywords
-    // via documentation content rather than implementation code).
-    if (/^docs\./i.test(name)) {
-      log(`Skipping docs repo (not in maintenance scope): ${name}`);
+    // EXCLUSIONS ARE DATA. This was a /^docs\./i literal, which made one naming convention an
+    // engine fact: a project whose documentation repos are named anything else got no exclusion,
+    // and a project with an in-scope repo matching the pattern could not opt out without editing
+    // the engine. config/codeline-scan.json holds the patterns; EPAM_CODELINE_EXCLUDE overrides.
+    const _skip = _scanExclusions().find((re) => re.test(name));
+    if (_skip) {
+      log(`Skipping ${name} — excluded by ${_skip} (config/codeline-scan.json)`);
       continue;
     }
 
-    // Stack detection from manifest files
+    // ECOSYSTEM FROM THE ONE REGISTRY. This was a three-branch ladder written here, while
+    // codeline-structure.js knew six manifest files — so a Rust or Ruby repository reached the
+    // discovery agent labelled 'unknown', on the single input it uses to choose which client
+    // repository gets written to. First match wins, in registry order.
     let stack = 'unknown';
     let packageName = name;
     let description = '';
 
-    if (fs.existsSync(path.join(full, 'package.json'))) {
-      try {
-        const pkg = JSON.parse(fs.readFileSync(path.join(full, 'package.json'), 'utf8'));
-        stack       = 'typescript';
-        packageName = pkg.name || name;
-        description = pkg.description || '';
-      } catch { /* use defaults */ }
-    } else if (fs.existsSync(path.join(full, 'pyproject.toml'))) {
-      stack = 'python';
-    } else if (fs.existsSync(path.join(full, 'go.mod'))) {
-      stack = 'go';
+    for (const eco of allManifests()) {
+      const mf = path.join(full, eco.file);
+      if (!fs.existsSync(mf)) continue;
+      stack = eco.stack;
+      if (typeof eco.describe === 'function') {
+        try {
+          const d = eco.describe(fs.readFileSync(mf, 'utf8'));
+          packageName = d.packageName || name;
+          description = d.description || '';
+        } catch { /* an unparseable manifest still identifies the ecosystem */ }
+      }
+      break;
     }
 
     // README PROSE — what the repository says it is.
@@ -740,7 +766,7 @@ function callLlm(prompt, opts = {}) {
 // Requirable without running. The prompt below is migrating into the template layer, and a
 // migration has to be provable byte-for-byte — which means a test must be able to call the
 // builder. An unguarded IIFE runs a whole discovery pass the moment anything requires this.
-module.exports = { buildDiscoveryPrompt };
+module.exports = { buildDiscoveryPrompt, buildRepoManifest };
 
 if (require.main !== module) return;
 

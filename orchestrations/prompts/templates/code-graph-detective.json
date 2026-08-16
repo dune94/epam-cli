@@ -1,5 +1,6 @@
 {
   "id": "code-graph-detective",
+  "layer": "project",
   "version": 2,
   "description": "The brownfield investigator: locates where a ticket lands in a real repository and prescribes the minimal change, grounded in tools rather than inference.",
   "$why": [

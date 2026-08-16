@@ -12,6 +12,8 @@
     "nobody could see it."
   ],
   "description": "The commit message written when an agent leaves its output uncommitted.",
+  "seams": [],
+  "consumer": "engine",
   "id": "worktree-autocommit-message",
   "version": 1,
   "body": "chore(wt-__LANE__): auto-commit agent output for phase __PHASE__\n\nAutomated commit of __CHANGED_COUNT__ file(s) produced by the __LANE__ agent.\nPhase: __PHASE__\nLane: __LANE__\nTimestamp: __TIMESTAMP__\n\nWARNING: this was auto-committed by worktree-health-check.sh because the agent\ndid not commit its own changes. Review these files.\n\nCo-Authored-By: __AUTHOR__\n",

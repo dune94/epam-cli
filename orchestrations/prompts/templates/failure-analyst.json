@@ -1,5 +1,6 @@
 {
   "id": "failure-analyst",
+  "layer": "project",
   "version": 1,
   "description": "Diagnoses a verification failure and routes a correction. Emits a single JSON object.",
   "extractedFrom": "orchestrations/scripts/claude.sh heredoc ANALYST_PROMPT_END (lines 7003-7047), verbatim",

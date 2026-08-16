@@ -39,6 +39,11 @@ function makeZone() {
   const tpl = (id: string, body: string) =>
     writeFileSync(join(templates, `${id}.json`), JSON.stringify({
       id, body, description: `${id} desc`,
+      // A PROJECT-LAYER template. The builder provisions only these now: a project copy of an
+      // engine-layer prompt can never be executed, because engine-prompt.js reads the template.
+      // A fixture that omits the field models a template the builder is right to skip, which
+      // would make every assertion below vacuous.
+      layer: 'project',
       placeholders: [...new Set(body.match(/__[A-Z][A-Z0-9_]*__/g) || [])].sort(),
       version: 1,
     }, null, 2));

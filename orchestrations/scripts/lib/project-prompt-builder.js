@@ -82,6 +82,42 @@ async function buildProjectPrompts({
   let copyVerbatim = Array.isArray(boot.copyVerbatim) ? boot.copyVerbatim : [];
   let generated = Array.isArray(boot.generated) ? boot.generated : [];
 
+  // ONLY WHAT A PROJECT-LAYER RENDERER READS.
+  //
+  // There are two renderers and the split is deliberate: prompt-library.js reads the PROJECT
+  // copy, engine-prompt.js reads the TEMPLATE. A project copy of an engine-layer prompt can
+  // therefore never be executed — codeline discovery, for one, runs before the mint that would
+  // have written its copy.
+  //
+  // Provisioning them anyway cost three things: model spend under 'generate' mode; a file that
+  // reads as live to anyone who opens it; and a place for self-heal corrections to land and do
+  // nothing. One had already gone stale against its template and silently dropped the rule that
+  // makes discovery emit codeline facts — a capability lost in a file nothing runs.
+  //
+  // The template declares its own layer, because inference does not hold: a project prompt can be
+  // addressed dynamically (agent-inputs.js resolves an id through the seam registry), so no scan
+  // of call sites is complete. Absent means engine — the safe default writes nothing.
+  // EXISTENCE FIRST. Reading the layer of a template that is not there cannot answer the
+  // question, and answering 'engine' would silently drop it — turning a bootstrap that names a
+  // missing template into a quiet no-op instead of the loud refusal it must be.
+  for (const id of [...copyVerbatim, ...generated]) {
+    const p = path.join(templatesDir, `${id}.json`);
+    if (!fs.existsSync(p)) {
+      throw new Error(`[prompt-builder] bootstrap declares '${id}' but no template exists at ${p}`);
+    }
+  }
+
+  const _layerOf = (id) => readJson(path.join(templatesDir, `${id}.json`)).layer || 'engine';
+  const _dropped = [...copyVerbatim, ...generated].filter((id) => _layerOf(id) !== 'project');
+  if (_dropped.length) {
+    // Said out loud. A silently shorter list is indistinguishable from a bootstrap that never
+    // declared them.
+    log(`[prompt-builder] ${_dropped.length} template(s) are engine-layer and are not provisioned `
+      + `— nothing would ever read a project copy: ${_dropped.join(', ')}`);
+  }
+  copyVerbatim = copyVerbatim.filter((id) => _layerOf(id) === 'project');
+  generated = generated.filter((id) => _layerOf(id) === 'project');
+
   // TWO PROVISIONING MODES, one per project, by operator design:
   //
   //   'copy'      the template layer is installed AS IS. What the project runs is exactly the

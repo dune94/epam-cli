@@ -564,17 +564,7 @@ if [ -f "$PRD_FILE" ]; then
   PASS=0; FAIL_LIST=""
   while IFS= read -r story; do
     [ -z "$story" ] && continue
-    status=$(python3 -c "
-import json
-with open('$PRD_FILE') as f:
-  d = json.load(f)
-for s in d['stories']:
-  if s['id'] == '$story':
-    print(s.get('status','unknown'))
-    break
-else:
-  print('not_found')
-" 2>/dev/null)
+    status=$(python3 "$SCRIPT_DIR/lib/handlers/story-status.py" "$PRD_FILE" "$story" 2>/dev/null)
     if [ "$status" = "completed" ]; then
       success "$story: completed"
       PASS=$((PASS+1))
@@ -582,17 +572,7 @@ else:
       echo -e "${RED}[tier3-metrolinx] ✗${NC} $story: $status"
       FAIL_LIST="$FAIL_LIST $story"
     fi
-  done < <(python3 -c "
-import json
-with open('$PRD_FILE') as f:
-  d = json.load(f)
-seen = set()
-for ids in d.get('implementationOrder', {}).values():
-  for i in ids:
-    if i not in seen:
-      print(i)
-      seen.add(i)
-" 2>/dev/null)
+  done < <(python3 "$SCRIPT_DIR/lib/handlers/story-implementation-order.py" "$PRD_FILE" 2>/dev/null)
   echo ""
 fi
 

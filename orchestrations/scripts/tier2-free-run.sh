@@ -105,16 +105,7 @@ echo ""
 info "Validating story completion..."
 PASS=0; FAIL_LIST=""
 for story in HW-001 HW-002 HW-003 HW-004 HW-005 HW-006; do
-  status=$(python3 -c "
-import json, sys
-with open('$PRD_FILE') as f:
-  d = json.load(f)
-for s in d['stories']:
-  if s['id'] == '$story':
-    print(s.get('status','unknown'))
-    sys.exit(0)
-print('not_found')
-" 2>/dev/null)
+  status=$(python3 "$SCRIPT_DIR/lib/handlers/story-status.py" "$PRD_FILE" "$story" 2>/dev/null)
   if [ "$status" = "completed" ]; then
     success "$story: completed"
     PASS=$((PASS+1))

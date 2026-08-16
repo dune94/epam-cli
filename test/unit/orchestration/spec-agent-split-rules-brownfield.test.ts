@@ -66,8 +66,16 @@ describe('runSpecAgent() prompt — brownfield drops split rules/schema (cycle-t
   });
 
   it('the prompt interpolates the trimmed schema line and the (possibly empty) split fields', () => {
-    expect(body).toMatch(/\$\{locationHintSchemaLineTrimmed\}\$\{splitSchemaField\}/);
-    expect(body).toMatch(/Use existing text when no change is needed\.\$\{splitRulesBlock\}/);
+    // ASSERTED AGAINST THE TEMPLATE, which is where the prompt lives since 2026-08-16.
+    //
+    // The two schema fields sit ADJACENT with no separator, and the split rules follow the
+    // "Use existing text" line directly. Both are load-bearing: a separator between the schema
+    // fields would put a stray character into the JSON the agent is asked to emit.
+    const tpl = JSON.parse(readFileSync(
+      join(__dirname, '../../../orchestrations/prompts/templates/spec-agent-openspec.json'),
+      'utf8')).body as string;
+    expect(tpl).toContain('__LOCATION_HINT_SCHEMA_LINE____SPLIT_SCHEMA_FIELD__');
+    expect(tpl).toContain('Use existing text when no change is needed.__SPLIT_RULES_BLOCK__');
   });
 
   it('greenfield (EPAM_BROWNFIELD unset) keeps every original split instruction verbatim', () => {

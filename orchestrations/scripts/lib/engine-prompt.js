@@ -29,7 +29,14 @@
 const fs = require('fs');
 const path = require('path');
 
-const PLACEHOLDER_RE = /__[A-Z][A-Z0-9_]*__/g;
+// NON-GREEDY, because placeholders sit ADJACENT.
+//
+// A prompt that ends one block and begins the next with no separator — ${a}${b} in the
+// original — becomes __A____B__ here. Greedy matching swallowed the whole run as a single
+// token, so a template with seven adjacent blocks declared ONE placeholder nobody supplies
+// and threw at render time. Lazy matching stops at the first closing pair, which is what the
+// author meant, and substitution by key was always adjacency-safe.
+const PLACEHOLDER_RE = /__[A-Z][A-Z0-9_]*?__/g;
 
 /** The template zone, resolved from this file's own location — never from an env guess. */
 function templatesDir() {

@@ -6171,21 +6171,25 @@ These rules apply only when splitDepth === 0. Never split a story that is alread
     ? locationHintSchemaLine.replace(/,(\s*)$/, '$1')
     : locationHintSchemaLine;
 
-  const prompt = `${forcedRetryBlock}You are the ${agent} specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.${splitWarning}${priorGapsBlock}${sembleContext}${referencedDocsEvidence}${fixSiteBlock}${declaredFileBlock}${brownfieldArchaeologyBlock}
-${generateInstruction}
-{
-  "storyId":"${story.id}",
-  "agent":"${agent}",
-  "notes":"context",
-  "acceptanceCriteria":["..."],
-  "description":"...",
-  "title":"...",${locationHintSchemaLineTrimmed}${splitSchemaField}
-}
-Use existing text when no change is needed.${splitRulesBlock}
-
-Story context:
-${storyPayload}${publishedContracts(repoPath, story)}
-`;
+  const prompt = renderEngineTemplate('spec-agent-openspec', {
+    __FORCED_RETRY_BLOCK__: forcedRetryBlock,
+    __AGENT__: agent,
+    __PHASE__: phase,
+    __STORY_ID__: story.id,
+    __SPLIT_WARNING__: splitWarning,
+    __PRIOR_GAPS_BLOCK__: priorGapsBlock,
+    __SEMBLE_CONTEXT__: sembleContext,
+    __REFERENCED_DOCS_EVIDENCE__: referencedDocsEvidence,
+    __FIX_SITE_BLOCK__: fixSiteBlock,
+    __DECLARED_FILE_BLOCK__: declaredFileBlock,
+    __BROWNFIELD_ARCHAEOLOGY_BLOCK__: brownfieldArchaeologyBlock,
+    __GENERATE_INSTRUCTION__: generateInstruction,
+    __LOCATION_HINT_SCHEMA_LINE__: locationHintSchemaLineTrimmed,
+    __SPLIT_SCHEMA_FIELD__: splitSchemaField,
+    __SPLIT_RULES_BLOCK__: splitRulesBlock,
+    __STORY_PAYLOAD__: storyPayload,
+    __PUBLISHED_CONTRACTS__: publishedContracts(repoPath, story),
+  });
   try {
     const payload = await runAgentForJson(
       promptExec, prompt, TOOL_SPEC_AGENT, 'SPEC_AGENT',

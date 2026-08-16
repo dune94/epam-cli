@@ -6,12 +6,12 @@
  * migrated prompt and a run where evidence silently never reached the agent.
  */
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const LIB = join(__dirname, '../../../orchestrations/scripts/lib/engine-prompt.js');
-const { renderEngineTemplate } = require(LIB);
+const { renderEngineTemplate, placeholdersIn } = require(LIB);
 
 describe('it renders a real template', () => {
   it('substitutes every placeholder', () => {
@@ -55,5 +55,45 @@ describe('values are inserted literally', () => {
     });
     expect(out).toContain('literal $& and $1 and $`');
     expect(out).not.toContain('__TICKET_BLOCK__');
+  });
+});
+
+/**
+ * ADJACENT PLACEHOLDERS.
+ *
+ * A prompt that ends one block and begins the next with no separator — ${a}${b} in the
+ * original source — becomes __A____B__ in the template. Greedy matching swallowed the whole
+ * run as ONE token, so spec-agent-openspec, whose opening line carries SEVEN adjacent blocks,
+ * declared a placeholder nobody supplies and threw on every render.
+ *
+ * Substitution by key was always adjacency-safe; only the DERIVATION of the placeholder list
+ * was wrong. That is a good reminder that a template's declared list and its body are two
+ * things that can disagree.
+ */
+describe('placeholders that touch are still separate placeholders', () => {
+  it('reads two adjacent placeholders as two', () => {
+    expect(placeholdersIn('__ALPHA____BETA__')).toEqual(['__ALPHA__', '__BETA__']);
+  });
+
+  it('does not split a single placeholder containing underscores', () => {
+    expect(placeholdersIn('__STORY_ID__')).toEqual(['__STORY_ID__']);
+  });
+
+  it('handles a run of many, as the real template does', () => {
+    expect(placeholdersIn('__A____B____C____D__')).toEqual(['__A__', '__B__', '__C__', '__D__']);
+  });
+
+  it('every shipped template declares exactly what its body uses', () => {
+    // The check that would have caught this at authoring time rather than at render time.
+    const dir = join(__dirname, '../../../orchestrations/prompts/templates');
+    const bad: string[] = [];
+    for (const f of readdirSync(dir)) {
+      if (!f.endsWith('.json')) continue;
+      const doc = JSON.parse(readFileSync(join(dir, f), 'utf8'));
+      const used = [...new Set(placeholdersIn(doc.body || ''))].sort();
+      const dec = [...(doc.placeholders || [])].sort();
+      if (JSON.stringify(used) !== JSON.stringify(dec)) bad.push(f);
+    }
+    expect(bad, `templates whose declaration disagrees with their body: ${bad.join(', ')}`).toEqual([]);
   });
 });

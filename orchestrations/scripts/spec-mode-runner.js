@@ -4507,6 +4507,36 @@ async function _vcLlmCall(prompt, cycle, logPath, storyId = '', role = 'openspec
     ...toolEnv,
   }, { costAgent: 'vc-agent', costStoryId: storyId, salvageOutputOnFailure: true, timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '450000') });
 }
+/**
+ * Extracted verbatim so its migration can be proven byte-for-byte.
+ */
+function buildVcReviewPrompt({ story, vc }) {
+  return renderEngineTemplate('vc-review', {
+    __AC_LIST__: (story.acceptanceCriteria || []).map((a) => '- ' + a).join('\n') || '- (none)',
+    __STORY_DESCRIPTION__: String(story.description || ''),
+    __VC_LIST__: vc.map((v, i) => `${i + 1}. ${v}`).join('\n'),
+    __OBSERVABILITY_RULES__: VC_OBSERVABILITY_RULES,
+  });
+}
+
+/**
+ * Extracted verbatim so its migration can be proven byte-for-byte.
+ */
+function buildVcRegeneratePrompt({ story, flags, siteBlock, env }) {
+  // The rules constant and the form samples are VALUES, not template text: the guard reads
+  // the same rules, and the samples are a project's own worked examples. Baking either in
+  // would fork it — and the first version of this migration did exactly that with the
+  // samples, silently, because the capture ran with none configured.
+  return renderEngineTemplate('vc-regenerate', {
+    __FLAG_LIST__: flags.map((x) => '- ' + x).join('\n'),
+    __SITE_BLOCK__: siteBlock,
+    __AC_LIST__: (story.acceptanceCriteria || []).map((a) => '- ' + a).join('\n') || '- (none)',
+    __STORY_DESCRIPTION__: String(story.description || ''),
+    __OBSERVABILITY_RULES__: VC_OBSERVABILITY_RULES,
+    __FORM_SAMPLES__: vcFormSamples(env) ? `\n${vcFormSamples(env)}\n` : '',
+  });
+}
+
 function _firstJsonArray(out) {
   const m = out && out.match(/\[[\s\S]*?\]/);
   if (!m) return null;
@@ -4517,24 +4547,7 @@ function _firstJsonArray(out) {
 // that prescribes HOW (mechanism), isn't observable/testable, or fails to cover
 // an AC's intent. Returns an array of flag strings ([] = all clean).
 async function reviewVcViaSpeckit({ story, vc, cycle, logDir }) {
-  const prompt = `You are a STRICT verification-criteria reviewer for a brownfield fix. REVIEW ONLY — do NOT rewrite anything.
-
-Acceptance criteria (IMMUTABLE ticket intent):
-${(story.acceptanceCriteria || []).map((a) => '- ' + a).join('\n') || '- (none)'}
-Description: ${String(story.description || '')}
-
-Proposed verification criteria:
-${vc.map((v, i) => `${i + 1}. ${v}`).join('\n')}
-
-Apply these rules EXACTLY (the producer is held to the same text — do not invent stricter or looser criteria):
-${VC_OBSERVABILITY_RULES}
-
-A criterion may declare a PRECONDITION the test establishes (for example a mocked client
-signalling a change). A declared precondition is NOT implementation prescription — do not flag
-it. Flag what the criterion ASSERTS, not what it sets up.
-
-FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
-Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes <an approach> — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.`;
+  const prompt = buildVcReviewPrompt({ story, vc });
   const out = await _vcLlmCall(prompt, cycle, logDir ? path.join(logDir, `${story.id}-vc-review.log`) : null, story.id, 'speckit', resolveCodelinePath(story));
   const arr = _firstJsonArray(out);
   return Array.isArray(arr) ? arr.filter((x) => typeof x === 'string') : [];
@@ -4550,22 +4563,15 @@ async function regenerateVcViaOpenspec({ story, flags, cycle, logDir, findings =
   // unanchored.
   const siteBlock = Array.isArray(findings) && findings.length
     ? `\nTHE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):\n`
-      + findings.slice(0, 5).map((f) => `- ${f.file}${f.function ? ` :: ${f.function}` : ''}${f.reason ? ` — ${f.reason}` : ''}`).join('\n')
+      // WHOLE, not the first five. These are the detective's findings — the files and
+      // functions the fix must touch — and they are the only reason regenerated criteria are
+      // concrete rather than vague. Capping them silently withheld evidence from the agent
+      // whose vagueness the cap was meant to be fixing.
+      + findings.map((f) => `- ${f.file}${f.function ? ` :: ${f.function}` : ''}${f.reason ? ` — ${f.reason}` : ''}`).join('\n')
       + `\nDo NOT write criteria about areas unrelated to this code.\n`
     : '';
 
-  const prompt = `Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
-${flags.map((f) => '- ' + f).join('\n')}
-${siteBlock}
-
-Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
-${(story.acceptanceCriteria || []).map((a) => '- ' + a).join('\n') || '- (none)'}
-Description: ${String(story.description || '')}
-
-${VC_OBSERVABILITY_RULES}
-${vcFormSamples() ? `\n${vcFormSamples()}\n` : ''}
-Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
-Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.`;
+  const prompt = buildVcRegeneratePrompt({ story, flags, siteBlock });
   const out = await _vcLlmCall(prompt, cycle, logDir ? path.join(logDir, `${story.id}-vc-regen.log`) : null, story.id, 'openspec', resolveCodelinePath(story));
   const arr = _firstJsonArray(out);
   if (!arr) return null;
@@ -8823,6 +8829,8 @@ module.exports = {
   fetchTicketDocuments,
   manifestFileExcerpts,
   buildGuardVocabularyPrompt,
+  buildVcReviewPrompt,
+  buildVcRegeneratePrompt,
   buildGuardEvidence,
   deriveGuardVocabulary,
   mintProjectAgents,

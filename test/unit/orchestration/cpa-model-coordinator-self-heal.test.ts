@@ -19,6 +19,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { templateBody } from '../../helpers/prompt-text';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -68,9 +69,16 @@ describe('contextualize-stories.sh — CPA apply-mode reviewer gate', () => {
   });
 
   it('uses the gate model (ORCH_GATE_MODEL, default MiniMax-M3), not a story-agent model', () => {
+    // contextualize-stories.sh still assembles its OWN copy of the reviewer prompt inline, as a
+    // multi-line echo rather than a heredoc — which is why the migration has not reached it and
+    // why the heredoc detector could not see it. Anchored on that copy until it moves.
     const reviewIdx = cpaSrc.indexOf('CHANGE TYPE: cpa_estimate');
-    const block = cpaSrc.slice(reviewIdx, reviewIdx + 700);
-    expect(block).toMatch(/ORCH_GATE_MODEL:-MiniMax-M3/);
+    expect(reviewIdx, 'the CPA reviewer prompt is gone').toBeGreaterThan(-1);
+    const block = cpaSrc.slice(reviewIdx, reviewIdx + 900);
+    // The gate model, whatever the project sets it to. The assertion named MiniMax-M3 because
+    // that was the default when it was written; the fallback is EPAM_MODEL now, and pinning a
+    // model name here makes an engine test fail on a project that chose a different one.
+    expect(block).toMatch(/ORCH_GATE_MODEL:-/);
   });
 });
 
@@ -123,7 +131,9 @@ describe('run-agent-orchestration.sh — Step 0.5 profile-mutation reviewer gate
     const fnIdx = orchSrc.indexOf("_pfa_profiles_before=");
     expect(fnIdx, 'anchor not found').toBeGreaterThan(-1);
     const syntaxIdx = orchSrc.indexOf('jq empty "$profiles_file"', fnIdx);
-    const reviewerIdx = orchSrc.indexOf('CHANGE TYPE: profile_creation', fnIdx);
+    // The call site declares the change type; the prompt carries a placeholder for it.
+    // Asserting the wording against the SCRIPT can only ever confirm the render call exists.
+    const reviewerIdx = orchSrc.indexOf('_render_change_reviewer', fnIdx);
     expect(syntaxIdx, 'the jq-empty syntax check is gone').toBeGreaterThan(-1);
     expect(reviewerIdx, 'the reviewer gate is gone').toBeGreaterThan(-1);
     expect(reviewerIdx, 'the reviewer gate no longer follows the syntax check')
@@ -163,7 +173,10 @@ describe('run-agent-orchestration.sh — Step 0.5 profile-mutation reviewer gate
   });
 
   it('calls the reviewer with change type profile_creation', () => {
-    expect(orchSrc).toMatch(/CHANGE TYPE: profile_creation/);
+    expect(orchSrc, 'no call site declares its change as a profile_creation')
+      .toMatch(/_render_change_reviewer\s+"[^"]*"\s+"profile_creation"/);
+    expect(templateBody('change-reviewer'), 'the reviewer is not told which kind of change it judges')
+      .toMatch(/CHANGE TYPE: __CHANGE_TYPE__/);
   });
 
   it('reverts profiles.json wholesale to the pre-call snapshot on reject', () => {

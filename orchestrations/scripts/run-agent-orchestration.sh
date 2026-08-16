@@ -5537,25 +5537,13 @@ run_hybrid_precoordination() {
     local coord_prompt
     touch "$MESSAGES_JSONL"
 
-    coord_prompt=$(cat << COORD_EOF
-You are the coordination agent running in HYBRID PRE-PHASE mode for phase: ${phase_id}.
-
-## Task
-1. Read ${PRD_REL} and locate all stories in implementationOrder["${phase_id}"].
-2. Identify cross-lane dependencies between main, primary, and independent agent groups.
-3. Flag any stories where estimatedHours >= 6 or dependencies count >= 2 — these require plan mode.
-4. For each cross-lane dependency or plan-mode story, append a JSON message to orchestrations/logs/agent-messages.jsonl.
-   Use this schema (one compact JSON line per message):
-   {"id":"coord_<storyid>_<epoch>","timestamp":"<ISO8601>","from_agent":"coordination-agent","to_agent":"<agentRole>","story_id":"<id>","phase_id":"${phase_id}","message_type":"<handoff|plan_required|risk>","priority":"normal","subject":"<subject>","body":"<body>","status":"new"}
-5. Post a final {"message_type":"phase_ready","to_agent":"orchestrator","phase_id":"${phase_id}",...} message when complete.
-6. Use: (flock -w 10 9 >> orchestrations/logs/agent-messages.jsonl; printf '%s\n' '<json>' >&9) 9>>orchestrations/logs/agent-messages.jsonl for atomic writes.
-7. Write a summary of actions to orchestrations/logs/hybrid-coord-${phase_id}.log.
-
-## Constraints
-- Do NOT modify source code or prd.json stories.
-- Only write to orchestrations/logs/agent-messages.jsonl and orchestrations/logs/hybrid-coord-${phase_id}.log.
-COORD_EOF
-    )
+    _cp_vals=$(mktemp "${TMPDIR:-/tmp}/hybrid-prephase-coordinator-vals-XXXXXX.json")
+    jq -n \
+          --arg phase_id "$phase_id" \
+          --arg prd_rel "$prd_rel" \
+          '{"__PHASE_ID__":$phase_id,"__PRD_REL__":$prd_rel}' > "$_cp_vals"
+    coord_prompt="$(render_engine_prompt hybrid-prephase-coordinator "$_cp_vals")"
+    rm -f "$_cp_vals"
 
     cd "$PROJECT_ROOT"
     # run_orch_prompt_with_tools (not plain run_orch_prompt): the prompt above
@@ -5939,15 +5927,17 @@ else
         # wrong and let it try again. Same "detect, explain, retry" shape as
         # checkSplitMandateViolation's existing precedent in spec-mode-runner.js.
         for _mc_attempt in 1 2 3; do
-        _mc_prompt=$(cat << ENDPROMPT_MC
-$(cat "$_mc_profiles_file" | python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('prd-model-coordinator',''))" 2>/dev/null)
-
-PRD file: ${_mc_prd_target}
-Phase: ${_mc_phase}
-
-Assign model, aiProvider, and reasoningEffort to every pending story in this phase that is missing one or more of these fields. Write the updated PRD back to the file, then emit the JSON summary.
-ENDPROMPT_MC
-)
+        local _mc_role_file; _mc_role_file=$(mktemp "${TMPDIR:-/tmp}/mc-role-XXXXXX.txt")
+        jq -r '.["prd-model-coordinator"] // ""' "$_mc_profiles_file" > "$_mc_role_file" 2>/dev/null || : > "$_mc_role_file"
+        _cp_vals=$(mktemp "${TMPDIR:-/tmp}/prd-model-coordinator-vals-XXXXXX.json")
+        jq -n \
+              --rawfile profile "$_mc_role_file" \
+              --arg mc_prd_target "$_mc_prd_target" \
+              --arg mc_phase "$_mc_phase" \
+              '{"__PROFILE__":$profile,"__MC_PRD_TARGET__":$mc_prd_target,"__MC_PHASE__":$mc_phase}' > "$_cp_vals"
+        _mc_prompt="$(render_engine_prompt prd-model-coordinator "$_cp_vals")"
+        rm -f "$_cp_vals"
+        rm -f "$_mc_role_file"
         if [ -n "$_mc_corrective_note" ]; then
             _mc_prompt="${_mc_prompt}
 
@@ -7505,27 +7495,16 @@ ASSESS_PRECOMPUTE_PY
     rm -f "$_pa_summary_file"
 
     local assessment_prompt
-    assessment_prompt=$(cat << PROMPT_EOF
-You are the skill assessment agent. All cost/variance data below is PRE-COMPUTED, real, and already deduplicated (latest record per story) and cross-referenced against the PRD's completion state — do not re-derive it, do not ask to see any file, just judge it.
-
-## Phase: $phase_id
-
-## Pre-computed assessment data
-${_pa_summary}
-
-## Your job (judgment only — you have no tools and do not need any)
-1. Write "notes": a short human-readable summary of the variance (or "No improvements needed." if over_threshold is false and future_pending_stories is empty).
-2. Write "agent_recommendations": an array of short strings (empty array if none).
-3. CORRECTIVE ACTION: for each entry in future_pending_stories, decide whether its "description" clearly requires a
-   different skill domain than its current "agentRole". Skill domain indicators: $_skill_domain_guidance
-   Only propose a reassignment when the mismatch is unambiguous — conservative judgment, not a guess.
-   Return "role_reassignments" as an array of {"story_id":"...","newAgentRole":"...","reason":"..."} (empty array if none).
-   You do NOT write to any file yourself — the orchestrator applies your reassignments deterministically.
-
-Output ONLY this JSON object, no markdown fences, no preamble:
-{"notes":"...","agent_recommendations":["..."],"role_reassignments":[{"story_id":"...","newAgentRole":"...","reason":"..."}]}
-PROMPT_EOF
-    )
+    local _sap_guidance_file; _sap_guidance_file=$(mktemp "${TMPDIR:-/tmp}/sap-guidance-XXXXXX.txt")
+    printf '%s' "${_skill_domain_guidance:-}" > "$_sap_guidance_file"
+    _cp_vals=$(mktemp "${TMPDIR:-/tmp}/skill-assessment-postphase-vals-XXXXXX.json")
+    jq -n \
+          --rawfile skill_domain_guidance "$_sap_guidance_file" \
+          --arg phase_id "$phase_id" \
+          '{"__SKILL_DOMAIN_GUIDANCE__":$skill_domain_guidance,"__PHASE_ID__":$phase_id}' > "$_cp_vals"
+    assessment_prompt="$(render_engine_prompt skill-assessment-postphase "$_cp_vals")"
+    rm -f "$_cp_vals"
+    rm -f "$_sap_guidance_file"
 
     log "Running assessment agent for phase '$phase_id'..."
     local assessment_log="$LOG_DIR/assessment-${phase_id}.log"

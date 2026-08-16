@@ -6804,40 +6804,32 @@ assess_model_escalation() {
     local current_model="${STORY_MODEL:-unknown}"
 
     local coordinator_prompt
-    coordinator_prompt=$(cat << COORD_PROMPT
-You are the inference ladder coordinator. A story implementation just failed. You must decide whether to escalate to a stronger model for the retry, and whether a targeted prompt amendment would help.
-
-## Story
-- ID: ${story_id}
-- Title: ${story_title}
-- Current model: ${current_model}
-- Proposed escalation model: ${target_model}
-- Failure class (preliminary): ${COORDINATOR_FAILURE_CLASS}
-
-## Failure Evidence (last attempt result)
-${result_text:-"(empty — agent produced no result)"}
-
-## Log Tail
-${log_tail:-"(no log available)"}
-
-## Test Failure Output (if tests ran)
-${test_failure_snippet:-"(no test failure output)"}
-
-## Cross-Run History
-${prior_failure_summary:-"(no prior failures recorded for this story)"}
-
-## Your Assessment
-Answer ONLY with a single-line JSON object (no markdown, no prose):
-{"escalate":"yes|no","failure_class":"env|capability|quality|unknown","prompt_amendment":"<targeted instruction to add to retry prompt, or empty string>","rationale":"<one sentence>"}
-
-Rules:
-- escalate "yes" ONLY when the failure is due to model capability limits (max iterations, context window, weak reasoning, missing knowledge)
-- escalate "no" when the failure is environmental (missing API key, binary crash, file permission) — a stronger model won't fix it
-- escalate "no" when the failure is a prompt misunderstanding — suggest a prompt_amendment instead
-- prompt_amendment should be a concrete instruction (e.g., "Do not import from node-fetch — use native global fetch only") not a vague suggestion
-- Keep rationale under 15 words
-COORD_PROMPT
-    )
+    # The four evidence blocks, through files: an agent result and a log tail are unbounded and
+    # argv is capped at ARG_MAX. Each carries the fallback the prompt used to hold inline.
+    local _ilc_result_file _ilc_log_file _ilc_tf_file _ilc_prior_file
+    _ilc_result_file=$(mktemp "${TMPDIR:-/tmp}/ilc-result-XXXXXX.txt")
+    _ilc_log_file=$(mktemp "${TMPDIR:-/tmp}/ilc-log-XXXXXX.txt")
+    _ilc_tf_file=$(mktemp "${TMPDIR:-/tmp}/ilc-tf-XXXXXX.txt")
+    _ilc_prior_file=$(mktemp "${TMPDIR:-/tmp}/ilc-prior-XXXXXX.txt")
+    printf '%s' "${result_text:-"(empty — agent produced no result)"}" > "$_ilc_result_file"
+    printf '%s' "${log_tail:-"(no log available)"}" > "$_ilc_log_file"
+    printf '%s' "${test_failure_snippet:-"(no test failure output)"}" > "$_ilc_tf_file"
+    printf '%s' "${prior_failure_summary:-"(no prior failures recorded for this story)"}" > "$_ilc_prior_file"
+    _cp_vals=$(mktemp "${TMPDIR:-/tmp}/inference-ladder-coordinator-vals-XXXXXX.json")
+    jq -n \
+          --rawfile result_text "$_ilc_result_file" \
+          --rawfile log_tail "$_ilc_log_file" \
+          --rawfile test_failure_snippet "$_ilc_tf_file" \
+          --rawfile prior_failure_summary "$_ilc_prior_file" \
+      --arg story_id "$story_id" \
+      --arg story_title "$story_title" \
+      --arg current_model "$current_model" \
+      --arg target_model "$target_model" \
+      --arg coordinator_failure_class "$coordinator_failure_class" \
+          '{"__RESULT_TEXT__":$result_text,"__LOG_TAIL__":$log_tail,"__TEST_FAILURE_SNIPPET__":$test_failure_snippet,"__PRIOR_FAILURE_SUMMARY__":$prior_failure_summary,"__STORY_ID__":$story_id,"__STORY_TITLE__":$story_title,"__CURRENT_MODEL__":$current_model,"__TARGET_MODEL__":$target_model,"__COORDINATOR_FAILURE_CLASS__":$coordinator_failure_class}' > "$_cp_vals"
+    coordinator_prompt="$(render_engine_prompt inference-ladder-coordinator "$_cp_vals")"
+    rm -f "$_cp_vals"
+    rm -f "$_ilc_result_file" "$_ilc_log_file" "$_ilc_tf_file" "$_ilc_prior_file"
 
     local coord_result_file
     coord_result_file=$(mktemp /tmp/coord-${story_id}-XXXXXX.json)

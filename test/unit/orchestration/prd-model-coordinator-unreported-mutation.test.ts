@@ -43,7 +43,13 @@ describe('Step 0.9 — PRD mutation is gated on actual file diff, not self-repor
 
   it('reaches the (now-deterministic) reviewer gate even when assigned_count is 0, as long as the file changed', () => {
     const gateIdx = orchSrc.indexOf('if [ "${_mc_assigned_count:-0}" -gt 0 ]');
-    const block = orchSrc.slice(gateIdx, gateIdx + 4000);
+    // THE WHOLE GATE, delimited by where it ends rather than by a character count. A fixed
+    // window had already been chosen to just reach the revert message; moving the prompt above
+    // it into the template layer pushed that message past the edge, and the test failed for a
+    // reason unrelated to the gate.
+    const endIdx = orchSrc.indexOf('REJECTED by reviewer — reverting PRD', gateIdx);
+    expect(endIdx, 'the reviewer gate no longer reverts a rejected PRD').toBeGreaterThan(gateIdx);
+    const block = orchSrc.slice(gateIdx, endIdx + 200);
     // The reviewer gate was replaced (2026-07-09) with a deterministic
     // Python diff — see prd-model-coordinator-deterministic-reviewer.test.ts
     // — because the old LLM call fed only the last 1000 characters of the

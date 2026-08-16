@@ -149,10 +149,118 @@ function shellHeredocs(): Hit[] {
 }
 
 /**
+ * Multi-line DOUBLE-QUOTED strings in shell.
+ *
+ * A heredoc is not the only way to build a prompt in bash. contextualize-stories.sh assembles its
+ * reviewer prompt with echo "..." spanning twenty lines, and the heredoc detector could not see it
+ * — so "four prompts remain" was, once again, a floor produced by looking for one shape.
+ *
+ * That is the third time this exercise has under-reported for the same reason: a detector finds
+ * what it was told to look for. Both shapes are covered now, and any third one will show up the
+ * same way this did — as a prompt found by accident while chasing something else.
+ */
+function shellQuotedStrings(): Hit[] {
+  const hits: Hit[] = [];
+  for (const file of sourceFiles(/\.sh$/)) {
+    const rel = relative(ROOT, file);
+    const lines = readFileSync(file, 'utf8').split('\n');
+    let i = 0;
+    while (i < lines.length) {
+      if (/^\s*#/.test(lines[i])) { i += 1; continue; }
+      // An opening quote that does not close on its own line.
+      const quotes = (lines[i].match(/(?<!\\)"/g) || []).length;
+      if (quotes % 2 === 1) {
+        let j = i;
+        let total = quotes;
+        const LIMIT = 200;
+        while (total % 2 === 1 && j < lines.length - 1 && j - i < LIMIT) {
+          j += 1;
+          total += (lines[j].match(/(?<!\\)"/g) || []).length;
+        }
+        if (j - i < LIMIT) {
+          const body = lines.slice(i, j + 1).join('\n');
+          if (j - i >= 3 && wordCount(body) >= 25) {
+            hits.push({ key: blockKey(rel, body), head: `${rel}:${i + 1}  ${lines[i].trim().slice(0, 60)}`, lines: j - i + 1 });
+          }
+        }
+        i = j + 1;
+      } else i += 1;
+    }
+  }
+  return hits;
+}
+
+/**
  * Blocks that have a prompt's SHAPE but are not sent to a model. Each states why.
  * Keyed by "<relative path>:<line>".
  */
 const ALLOW: Record<string, string> = {
+  'orchestrations/scripts/claude.sh#0a2c9e31405e':
+    'A multi-line quoted shell value with no prose addressed to a model — matched on shape '
+    + 'alone, because a long quoted argument looks like a prompt to the detector.',
+  'orchestrations/scripts/claude.sh#34fe195ac853':
+    'A multi-line shell command whose quoted argument is a program or expression, not '
+    + 'prose. Executed, never sent to a model.',
+  'orchestrations/scripts/claude.sh#7c7f65b08a5f':
+    'A multi-line shell command whose quoted argument is a program or expression, not '
+    + 'prose. Executed, never sent to a model.',
+  'orchestrations/scripts/claude.sh#c288a5b3c095':
+    'A multi-line shell command whose quoted argument is a program or expression, not '
+    + 'prose. Executed, never sent to a model.',
+  'orchestrations/scripts/claude.sh#e4e213489e51':
+    'A multi-line shell command whose quoted argument is a program or expression, not '
+    + 'prose. Executed, never sent to a model.',
+  'orchestrations/scripts/claude.sh#f6a71c91befd':
+    'A multi-line shell command whose quoted argument is a program or expression, not '
+    + 'prose. Executed, never sent to a model.',
+  'orchestrations/scripts/contextualize-stories.sh#61e5acd91b7f':
+    'A multi-line shell command whose quoted argument is a program or expression, not '
+    + 'prose. Executed, never sent to a model.',
+  'orchestrations/scripts/generate-qa-report.sh#42ec7906d98a':
+    'A multi-line quoted shell value with no prose addressed to a model — matched on shape '
+    + 'alone, because a long quoted argument looks like a prompt to the detector.',
+  'orchestrations/scripts/generate-qa-report.sh#6f30a3a8b3d0':
+    'A multi-line quoted shell value with no prose addressed to a model — matched on shape '
+    + 'alone, because a long quoted argument looks like a prompt to the detector.',
+  'orchestrations/scripts/generate-qa-report.sh#77b3a35a2ab8':
+    'A multi-line quoted shell value with no prose addressed to a model — matched on shape '
+    + 'alone, because a long quoted argument looks like a prompt to the detector.',
+  'orchestrations/scripts/lib/tc-writer-gate.sh#410d0d7b286e':
+    'A multi-line shell command whose quoted argument is a program or expression, not '
+    + 'prose. Executed, never sent to a model.',
+  'orchestrations/scripts/run-agent-orchestration.sh#0a7253b53380':
+    'A multi-line shell command whose quoted argument is a program or expression, not '
+    + 'prose. Executed, never sent to a model.',
+  'orchestrations/scripts/run-agent-orchestration.sh#5c629c3c7c0a':
+    'A multi-line shell command whose quoted argument is a program or expression, not '
+    + 'prose. Executed, never sent to a model.',
+  'orchestrations/scripts/run-agent-orchestration.sh#70b09ed905af':
+    'A multi-line shell command whose quoted argument is a program or expression, not '
+    + 'prose. Executed, never sent to a model.',
+  'orchestrations/scripts/run-agent-orchestration.sh#72602c0142ae':
+    'A multi-line shell command whose quoted argument is a program or expression, not '
+    + 'prose. Executed, never sent to a model.',
+  'orchestrations/scripts/run-agent-orchestration.sh#7ddbad1fcf1c':
+    'A multi-line shell command whose quoted argument is a program or expression, not '
+    + 'prose. Executed, never sent to a model.',
+  'orchestrations/scripts/run-agent-orchestration.sh#7e21c6a4bc79':
+    'A multi-line shell command whose quoted argument is a program or expression, not '
+    + 'prose. Executed, never sent to a model.',
+  'orchestrations/scripts/run-agent-orchestration.sh#832a8dedc276':
+    'A multi-line shell command whose quoted argument is a program or expression, not '
+    + 'prose. Executed, never sent to a model.',
+  'orchestrations/scripts/run-agent-orchestration.sh#8dd40f601e38':
+    'A multi-line shell command whose quoted argument is a program or expression, not '
+    + 'prose. Executed, never sent to a model.',
+  'orchestrations/scripts/run-agent-orchestration.sh#dde3e81bca22':
+    'A multi-line shell command whose quoted argument is a program or expression, not '
+    + 'prose. Executed, never sent to a model.',
+  'orchestrations/scripts/run-agent-orchestration.sh#f3ebc788afe1':
+    'A multi-line shell command whose quoted argument is a program or expression, not '
+    + 'prose. Executed, never sent to a model.',
+  'orchestrations/scripts/run-agent-orchestration.sh#fdec67f3d494':
+    'A multi-line shell command whose quoted argument is a program or expression, not '
+    + 'prose. Executed, never sent to a model.',
   'orchestrations/scripts/claude.sh#032d3e8b03eb':
     'Usage text printed to a human operator on a bad invocation. It reaches a terminal, '
     + 'never a model.',
@@ -354,7 +462,7 @@ describe('the detector is real', () => {
     // Non-vacuity. If either detector stopped finding anything, "zero prompts outside the layer"
     // would pass while proving the opposite. Counted BEFORE the allowlist, so it stays true once
     // the migration is finished and every remaining block is explained.
-    expect(jsLiterals().length + shellHeredocs().length,
+    expect(jsLiterals().length + shellHeredocs().length + shellQuotedStrings().length,
       'neither detector finds any multi-line block at all — they have stopped working',
     ).toBeGreaterThan(0);
   });
@@ -367,7 +475,7 @@ describe('the detector is real', () => {
 
   it('no allowlist entry points at a block that no longer exists', () => {
     // A stale entry silently covers whatever moves onto that line next.
-    const live = new Set([...jsLiterals(), ...shellHeredocs()].map((h) => h.key));
+    const live = new Set([...jsLiterals(), ...shellHeredocs(), ...shellQuotedStrings()].map((h) => h.key));
     const stale = Object.keys(ALLOW).filter((k) => !live.has(k));
     expect(stale, `allowlist entries for blocks that are gone:\n  ${stale.join('\n  ')}`).toEqual([]);
   });
@@ -379,6 +487,16 @@ describe('no prompt is assembled in code', () => {
     expect(hits.map((h) => h.key),
       `${hits.length} multi-line literal(s) in JS are unexplained. Each is a prompt to migrate, `
       + `or a non-prompt to allowlist WITH ITS REASON:\n${report(hits)}`,
+    ).toEqual([]);
+  });
+
+  it('shell holds no multi-line quoted prompt either', () => {
+    // The shape the heredoc detector could not see. A prompt built with echo "..." over twenty
+    // lines is a prompt; the syntax used to assemble it is not the point.
+    const hits = unexplained(shellQuotedStrings());
+    expect(hits.map((h) => h.key),
+      `${hits.length} multi-line quoted string(s) in shell are unexplained. Each is a prompt to `
+      + `migrate, or a non-prompt to allowlist WITH ITS REASON:\n${report(hits)}`,
     ).toEqual([]);
   });
 

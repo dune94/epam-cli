@@ -9869,11 +9869,13 @@ SPEC_EXTRACTOR_PY
                 local _diff_patch
                 _diff_patch=$(cd "$PROJECT_ROOT" && "$_git_bin" diff -U3 "$_diff_ref" -- '*.ts' 2>/dev/null | head -300 || echo "")
                 set -e
-                review_diff_summary="Files changed:
-$_diff_stat
-
-TypeScript diff (first 300 lines):
-$_diff_patch"
+                _cp_vals=$(mktemp "${TMPDIR:-/tmp}/qa-evidence-labels-vals-XXXXXX.json")
+                jq -n \
+                      --arg diff_patch "$_diff_patch" \
+                      --arg diff_stat "$_diff_stat" \
+                      '{"__DIFF_PATCH__":$diff_patch,"__DIFF_STAT__":$diff_stat}' > "$_cp_vals"
+                review_diff_summary="$(render_engine_prompt qa-evidence-labels "$_cp_vals" review_diff)"
+                rm -f "$_cp_vals"
             else
                 review_diff_summary="(git diff oracle skipped — git not found or no .git directory)"
             fi
@@ -9947,8 +9949,12 @@ $review_prompt"
                         # was cut — the agent could confidently judge mutations
                         # against a partial file and never know it.
                         if [ "${_mut_src_total_lines:-0}" -gt 100 ]; then
-                            _mut_src_marker="
-[TRUNCATED — ${_mut_src_total_lines} total lines, showing first 100. Do not assume the omitted tail is unmutated.]"
+                            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/qa-evidence-labels-vals-XXXXXX.json")
+                            jq -n \
+                                  --arg mut_src_total_lines "${_mut_src_total_lines}" \
+                                  '{"__MUT_SRC_TOTAL_LINES__":$mut_src_total_lines}' > "$_cp_vals"
+                            _mut_src_marker="$(render_engine_prompt qa-evidence-labels "$_cp_vals" truncation_notice_source)"
+                            rm -f "$_cp_vals"
                         fi
                         _src_content="$_src_content
 --- $_f ---
@@ -9974,18 +9980,24 @@ $(head -100 "$PROJECT_ROOT/$_f" 2>/dev/null || echo '(unreadable)')${_mut_src_ma
                     local _mut_test_total_lines _mut_test_marker=""
                     _mut_test_total_lines=$(wc -l < "$_tf" 2>/dev/null || echo 0)
                     if [ "${_mut_test_total_lines:-0}" -gt 60 ]; then
-                        _mut_test_marker="
-[TRUNCATED — ${_mut_test_total_lines} total lines, showing first 60. Do not assume the omitted tail has no assertions.]"
+                        _cp_vals=$(mktemp "${TMPDIR:-/tmp}/qa-evidence-labels-vals-XXXXXX.json")
+                        jq -n \
+                              --arg mut_test_total_lines "${_mut_test_total_lines}" \
+                              '{"__MUT_TEST_TOTAL_LINES__":$mut_test_total_lines}' > "$_cp_vals"
+                        _mut_test_marker="$(render_engine_prompt qa-evidence-labels "$_cp_vals" truncation_notice_test)"
+                        rm -f "$_cp_vals"
                     fi
                     _test_content="$_test_content
 --- $_tf ---
 $(head -60 "$_tf" 2>/dev/null || echo '(unreadable)')${_mut_test_marker}"
                 done <<< "$_test_files"
-                mutant_oracle_summary="Changed source files:
-${_src_content:-  (none — no TypeScript source changes in this phase)}
-
-Existing test files (first 60 lines each):
-${_test_content:-  (no test files found)}"
+                _cp_vals=$(mktemp "${TMPDIR:-/tmp}/qa-evidence-labels-vals-XXXXXX.json")
+                jq -n \
+                      --arg src_content "${_src_content:-  (none — no TypeScript source changes in this phase)}" \
+                      --arg test_content "${_test_content:-  (no test files found)}" \
+                      '{"__SRC_CONTENT__":$src_content,"__TEST_CONTENT__":$test_content}' > "$_cp_vals"
+                mutant_oracle_summary="$(render_engine_prompt qa-evidence-labels "$_cp_vals" mutant_oracle)"
+                rm -f "$_cp_vals"
             else
                 mutant_oracle_summary="(mutation oracle skipped — git not found or no .git directory)"
             fi

@@ -195,6 +195,45 @@ function shellQuotedStrings(): Hit[] {
  * Keyed by "<relative path>:<line>".
  */
 const ALLOW: Record<string, string> = {
+  'orchestrations/scripts/claude.sh#15f48a1c6038':
+    'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
+    + 'prompt text; it is not prompt text, and no model receives it.',
+  'orchestrations/scripts/claude.sh#225a59b88db5':
+    'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
+    + 'prompt text; it is not prompt text, and no model receives it.',
+  'orchestrations/scripts/claude.sh#29cd61ddd376':
+    'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
+    + 'prompt text; it is not prompt text, and no model receives it.',
+  'orchestrations/scripts/claude.sh#3a5231f4dfc5':
+    'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
+    + 'prompt text; it is not prompt text, and no model receives it.',
+  'orchestrations/scripts/claude.sh#3be1c81f8bcc':
+    'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
+    + 'prompt text; it is not prompt text, and no model receives it.',
+  'orchestrations/scripts/claude.sh#7b61e48c1307':
+    'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
+    + 'prompt text; it is not prompt text, and no model receives it.',
+  'orchestrations/scripts/claude.sh#8d7ccb65294e':
+    'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
+    + 'prompt text; it is not prompt text, and no model receives it.',
+  'orchestrations/scripts/claude.sh#ad595f194a94':
+    'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
+    + 'prompt text; it is not prompt text, and no model receives it.',
+  'orchestrations/scripts/claude.sh#c351928d7295':
+    'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
+    + 'prompt text; it is not prompt text, and no model receives it.',
+  'orchestrations/scripts/claude.sh#c91cd6dcad12':
+    'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
+    + 'prompt text; it is not prompt text, and no model receives it.',
+  'orchestrations/scripts/claude.sh#e253eb0dbdcb':
+    'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
+    + 'prompt text; it is not prompt text, and no model receives it.',
+  'orchestrations/scripts/claude.sh#f4819179c01f':
+    'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
+    + 'prompt text; it is not prompt text, and no model receives it.',
+  'orchestrations/scripts/claude.sh#fc832a3fd9c2':
+    'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
+    + 'prompt text; it is not prompt text, and no model receives it.',
   'orchestrations/scripts/claude.sh#0a2c9e31405e':
     'A multi-line quoted shell value with no prose addressed to a model — matched on shape '
     + 'alone, because a long quoted argument looks like a prompt to the detector.',

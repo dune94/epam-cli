@@ -571,6 +571,42 @@
         }
       ],
       "template": "project-prompt-generation"
+    },
+    "codeline-bridge-agent": {
+      "_what": "Extracts the exported surface of a completed codeline so a later lane's detective can read it. Producers run before consumers precisely so this exists when it is needed.",
+      "ladder": "top",
+      "reasoningEffort": "high",
+      "temperature": "0.1",
+      "maxOutputTokens": 32768,
+      "maxIterations": 25,
+      "timeoutSecs": 900,
+      "allowedTools": "read_file,list_files,search",
+      "_toolNote": "READ ONLY. It reports what a codeline exports; it has no reason to change one, and a bridge that can write could rewrite the lane it is describing.",
+      "produces": "dependency-contracts",
+      "consumes": [
+        {
+          "kind": "existing-code",
+          "required": true
+        }
+      ],
+      "template": "codeline-bridge"
+    },
+    "qa-gate:e2e": {
+      "_what": "Browser end-to-end routing check for one route.",
+      "ladder": "top",
+      "reasoningEffort": "high",
+      "temperature": "0.1",
+      "maxOutputTokens": 32768,
+      "maxIterations": 25,
+      "timeoutSecs": 900,
+      "produces": "gate-verdict",
+      "consumes": [
+        {
+          "kind": "implementation",
+          "required": true
+        }
+      ],
+      "template": "e2e-route-check"
     }
   },
   "_seamResolution": [
@@ -739,7 +775,7 @@
     "failure-analyst": "impl-failure-analyst",
     "kb-change-reviewer": "code-review-cycle",
     "prd-model-coordinator": "cpa-inference",
-    "codeline-bridge-agent": "cpa-inference",
+    "codeline-bridge-agent": "codeline-bridge-agent",
     "retry-extension-coordinator": "cpa-inference",
     "guard-vocabulary-agent": "cpa-inference",
     "ticket-link-agent": "cpa-inference",
@@ -820,5 +856,6 @@
   },
   "_ladderPositions": "A seam declares a POSITION in the project’s ladderTierOrder (base|mid|top), never a tier NAME. The project owns its tier vocabulary; the engine owns none. Converted 2026-08-15 after twenty seams asking for a literal HIGHEST ran unladdered on a project that declared only high and medium.",
   "_defaultSeam": "REMOVED 2026-08-16. A project may declare EPAM_DEFAULT_SEAM in its config if it wants unmatched agents absorbed; the engine declares none, so an unmatched agent fails the mint loudly and is fixed with one line rather than discovered mid-run.",
-  "_seamPatternForm": "Each rule matches a role word as a whole name OR as a suffix: (^|-)word$. They were all -word$, so a minted agent named for its role alone -- \"generator\", \"reviewer\", \"analyst\" -- matched nothing. While the engine carried a defaultSeam that was invisible: the agent silently became a planning agent. Minting models produce bare role names routinely, so the suffix-only form made the pattern set depend on a naming habit nothing enforces."
+  "_seamPatternForm": "Each rule matches a role word as a whole name OR as a suffix: (^|-)word$. They were all -word$, so a minted agent named for its role alone -- \"generator\", \"reviewer\", \"analyst\" -- matched nothing. While the engine carried a defaultSeam that was invisible: the agent silently became a planning agent. Minting models produce bare role names routinely, so the suffix-only form made the pattern set depend on a naming habit nothing enforces.",
+  "_addedSeams": "codeline-bridge-agent and qa-gate:e2e added 2026-08-16. Both were invoked BY NAME by run-agent-orchestration.sh and had no profile at all, so each ran with no ladder, no effort and no tool grant -- the same gap lint-fixer had. Found by the prompt-chain test, which asks that every seam a template names actually exists."
 }

@@ -1,0 +1,28 @@
+{
+  "$why": [
+    "Moved out of run-agent-orchestration.sh on 2026-08-16.",
+    "",
+    "The headings that label precomputed evidence for the review-ranger and mutant-hunter gates, and the truncation notice that goes with a source file longer than the window. That notice is prompt text of the most consequential kind: it is the only thing telling an agent that what it is judging is incomplete."
+  ],
+  "description": "Headings that label precomputed evidence for the QA gates, and the notice shown when a file is truncated.",
+  "seams": [
+    "qa-gate:review-ranger",
+    "qa-gate:mutant-hunter"
+  ],
+  "id": "qa-evidence-labels",
+  "version": 1,
+  "bodies": {
+    "review_diff": "Files changed:\n__DIFF_STAT__\n\nTypeScript diff (first 300 lines):\n__DIFF_PATCH__",
+    "mutant_oracle": "Changed source files:\n__SRC_CONTENT__\n\nExisting test files (first 60 lines each):\n__TEST_CONTENT__",
+    "truncation_notice_source": "\n[TRUNCATED — __MUT_SRC_TOTAL_LINES__ total lines, showing first 100. Do not assume the omitted tail is unmutated.]",
+    "truncation_notice_test": "\n[TRUNCATED — __MUT_TEST_TOTAL_LINES__ total lines, showing first 60. Do not assume the omitted tail has no assertions.]"
+  },
+  "placeholders": [
+    "__DIFF_PATCH__",
+    "__DIFF_STAT__",
+    "__SRC_CONTENT__",
+    "__TEST_CONTENT__",
+    "__MUT_SRC_TOTAL_LINES__",
+    "__MUT_TEST_TOTAL_LINES__"
+  ]
+}

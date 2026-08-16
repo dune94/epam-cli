@@ -5704,23 +5704,21 @@ async function reviewTicketLinks({ promptExec, story, logDir, docPaths = [] }) {
   const commentBlock = (Array.isArray(story.ticketComments) ? story.ticketComments : [])
     .map((c) => `- ${c.author || 'unknown'}: ${String(c.text || '')}`).join('\n');
 
-  const prompt = `${persona ? persona + '\n\n' : ''}STORY
-Title: ${story.title || ''}
-Description: ${String(story.description || '')}
-Components: ${(Array.isArray(story.components) ? story.components : []).join(', ') || '(none)'}
-Declared files: ${((story.technicalNotes && story.technicalNotes.files) || []).join(', ') || '(none yet)'}
-
-LINKS FOUND IN THIS TICKET:
-${linkBlock}
-
-COMMENT THREAD (context for judging relevance — a link's surrounding discussion often says why it was posted):
-${commentBlock || '(none)'}
-${Array.isArray(docPaths) && docPaths.length ? `
-ALREADY RETRIEVED — these documents have been fetched for you and written to disk. Read them
-with read_file rather than fetching them again; the text is the same and it costs you nothing:
-${docPaths.map((p) => `- ${p}`).join('\n')}
-A document listed here that you did not read is a document you cannot quote.
-` : ''}`;
+  const prompt = renderEngineTemplate('spec-story-block', {
+    __PERSONA__: persona ? persona + '\n\n' : '',
+    __TITLE__: story.title || '',
+    __DESCRIPTION__: String(story.description || ''),
+    __COMPONENTS__: (Array.isArray(story.components) ? story.components : []).join(', ') || '(none)',
+    __DECLARED_FILES__: ((story.technicalNotes && story.technicalNotes.files) || []).join(', ') || '(none yet)',
+    __LINK_BLOCK__: linkBlock,
+    __COMMENT_BLOCK__: commentBlock || '(none)',
+    // The notice is its own body; whether it appears is still decided here, which is control flow.
+    __RETRIEVED_DOCS__: Array.isArray(docPaths) && docPaths.length
+      ? renderEngineTemplate('spec-story-block', {
+        __DOC_PATHS__: docPaths.map((p) => `- ${p}`).join('\n'),
+      }, 'retrieved_docs')
+      : '',
+  }, 'block');
 
   // THE AGENT MUST BE ABLE TO OPEN THE LINK.
   //

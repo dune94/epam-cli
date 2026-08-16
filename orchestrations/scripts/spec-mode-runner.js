@@ -1474,28 +1474,11 @@ async function run() {
     2
   );
 
-  const coordinatorPrompt = `${specCoordinatorProfile ? specCoordinatorProfile + '\n\n' : ''}You are the EPAM CLI specification coordinator agent for phase ${opts.phase}.
-
-Decide which specification agents should run for each story below.
-Available agents and their roles:
-  - openspec: Elaborates requirements — refines AC, proposes story splits, adds technical depth
-  - speckit: Reviews & hardens — adds testability criteria, security checks, edge cases, flags gaps
-
-Agent collaboration model:
-  - If both are assigned, openspec runs FIRST, then speckit reviews openspec's output
-  - Assign both for complex/critical stories
-  - Assign only openspec for simple elaboration
-  - Assign only speckit for stories that just need test/security hardening
-
-Respond with raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
-[
-  {"storyId":"EPAM-123","agents":["openspec","speckit"],"notes":"reason","priority":"high"}
-]
-If a story does not need spec work, provide an empty agents array.
-
-Stories JSON:
-${storiesPayload}
-`;
+  const coordinatorPrompt = renderEngineTemplate('spec-coordinator', {
+    __PROFILE_PREFIX__: specCoordinatorProfile ? specCoordinatorProfile + '\n\n' : '',
+    __PHASE__: opts.phase,
+    __STORIES_PAYLOAD__: storiesPayload,
+  });
 
   let assignments = null;
   try {
@@ -2173,42 +2156,15 @@ acceptanceCriteria array on a brownfield story is correct by policy.)`
 3. Are story splits logical and properly scoped?
 4. Flag any story needing human review.`;
 
-    const reviewPrompt = `${specCoordinatorProfile ? specCoordinatorProfile + '\n\n' : ''}You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase ${opts.phase}.
-
-Each story was processed by a sequential agent pipeline:
-  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
-  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
-
-${reviewCriteria}
-
-MANIFEST EVIDENCE (checked against the repository, not asserted):
-${manifestEvidence(specifiedStories, prd)}
-${codelineScopeBlock(prd, specifiedStories)}
-
-${MANIFEST_GROUNDING_BLOCK}
-
-QUALITY SCORE — what the number has to mean. It is enforced: below 0.7 halts the run
-before implementation, so an unanchored guess stops real work.
-  0.9-1.0  the spec is ready to implement; criteria are observable and the file set fits.
-  0.7-0.89 ready to implement, with ordinary open questions a competent writer resolves.
-  0.5-0.69 NOT ready: something concrete is wrong or missing — criteria that cannot be
-           observed, a file set that cannot deliver what is described, contradictions.
-  below 0.5 the spec would send a writer somewhere useless.
-Score what IS in front of you. Do NOT lower the score because an agent could not read the
-source files, or because a human "might want to check" — that is true of every ticket and
-is not a defect in this spec. If your notes cannot name something concretely wrong, the
-score belongs at 0.7 or above.
-
-Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
-[
-  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[{"flag":"short-slug","severity":"blocking|advisory","why":"what you checked and what you found"}],"planAlignment":"aligned|justified_deviation|unexplained_mismatch|not_applicable"}
-]
-
-Stories to review:
-${reviewPayload}
-
-<SPEC_REVIEW>
-</SPEC_REVIEW>`;
+    const reviewPrompt = renderEngineTemplate('spec-coordinator-review', {
+      __PROFILE_PREFIX__: specCoordinatorProfile ? specCoordinatorProfile + '\n\n' : '',
+      __PHASE__: opts.phase,
+      __REVIEW_CRITERIA__: reviewCriteria,
+      __MANIFEST_EVIDENCE__: manifestEvidence(specifiedStories, prd),
+      __CODELINE_SCOPE__: codelineScopeBlock(prd, specifiedStories),
+      __MANIFEST_GROUNDING__: MANIFEST_GROUNDING_BLOCK,
+      __REVIEW_PAYLOAD__: reviewPayload,
+    });
 
     let reviews = null;
     try {
@@ -2368,51 +2324,13 @@ ${reviewPayload}
         };
       });
 
-    const modelReviewPrompt = `${specCoordinatorProfile ? specCoordinatorProfile + '\n\n' : ''}You are the EPAM CLI model assignment coordinator for phase ${opts.phase}.
-
-A rule-based pass has already assessed every story's model assignment. Your job is to make the FINAL decision on each story's model — confirming rule recommendations, overriding them when wrong, and catching any false negatives the rules missed.
-
-## Available model tiers
-- **mini-tier** (fast, lower cost): ${miniModel}
-  Best for: simple tasks, small outputs, <8 ACs, modifying existing code, writing single focused functions
-  Risk: will timeout or fail on large generation tasks (>1500 output tokens in one turn)
-
-- **standard-tier** (higher capability): ${upgradeModel}
-  Best for: large single-file generation, 10+ ACs, HTML/UI files, self-contained complete modules
-  Use when: story needs to generate >1000 tokens reliably in one turn
-
-## Your decision criteria
-UPGRADE to standard-tier when:
-- Story must generate a large, complete artifact (full HTML page, large TypeScript module) in one agent turn
-- Story has >12 ACs targeting a single file output — generation load exceeds mini-tier reliability
-- Description uses "self-contained", "complete", "no build step" — indicates large monolithic output
-- Story involves HTML/CSS/JS UI generation — models smaller than standard-tier produce inconsistent results
-
-KEEP mini-tier when:
-- Story modifies existing code or adds small targeted functions
-- Output is small (<500 tokens estimated), well-scoped, and narrowly defined
-- Story primarily writes tests against already-specified contracts
-- AC count is high but spread across multiple small files, not one large generation
-
-IMPORTANT: A false negative (keeping mini when standard is needed) wastes 5+ minutes per attempt and burns 2 retries. A false positive (upgrading when mini would work) costs ~$0.01 extra. Err toward upgrading for borderline cases.
-
-## Stories to assess
-${JSON.stringify(storyContextForReview, null, 2)}
-
-Respond with JSON between <MODEL_REVIEW> and </MODEL_REVIEW>:
-[
-  {
-    "storyId": "...",
-    "finalModel": "keep-current | <model-string>",
-    "override": true/false,
-    "confidence": "high|medium|low",
-    "reason": "one sentence"
-  }
-]
-Use "keep-current" to accept the current (possibly rule-upgraded) model. Only provide a model string when changing it.
-
-<MODEL_REVIEW>
-</MODEL_REVIEW>`;
+    const modelReviewPrompt = renderEngineTemplate('spec-model-review', {
+      __PROFILE_PREFIX__: specCoordinatorProfile ? specCoordinatorProfile + '\n\n' : '',
+      __PHASE__: opts.phase,
+      __MINI_MODEL__: miniModel,
+      __UPGRADE_MODEL__: upgradeModel,
+      __STORY_CONTEXT__: JSON.stringify(storyContextForReview, null, 2),
+    });
 
     let llmDecisions = null;
     try {

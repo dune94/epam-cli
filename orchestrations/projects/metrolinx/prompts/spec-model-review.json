@@ -15,5 +15,7 @@
     "__STORY_CONTEXT__",
     "__UPGRADE_MODEL__"
   ],
-  "version": 1
+  "version": 1,
+  "derivedFromSha256": "65cfe5df49542bea93e4282f697c957fd09ce6f459294852303c7efa0cc211f9",
+  "authority": "project"
 }

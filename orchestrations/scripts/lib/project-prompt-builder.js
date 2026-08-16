@@ -28,6 +28,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const { checkGeneratedPrompt, buildGeneratedDoc } = require('./project-prompt-contract.js');
 
@@ -114,9 +115,30 @@ async function buildProjectPrompts({
   const copied = [];
   for (const id of copyVerbatim) {
     const src = path.join(templatesDir, `${id}.json`);
-    fs.writeFileSync(path.join(outDir, `${id}.json`), fs.readFileSync(src));
+    const doc = readJson(src);
+
+    // THE TEXT IS COPIED VERBATIM; THE PROVENANCE IS ADDED.
+    //
+    // A project copy must record which template it came from, or a later template edit is
+    // invisible: the project keeps running the older prompt while the template claims
+    // otherwise. Writing the file byte-for-byte lost that — and worse, ERASED the provenance
+    // the hand-minted copies already carried.
+    //
+    // The digest covers the prompt TEXT only, matching the convention the existing copies
+    // used: bodies for a multi-part prompt, body for a single one.
+    // TWO CONVENTIONS ALREADY EXIST, and both are load-bearing because separate tests assert
+    // each: a MULTI-PART prompt hashes JSON.stringify(bodies), a single-body prompt hashes the
+    // RAW body string. Picking one would have silently invalidated every copy of the other
+    // shape. Matched rather than unified — unifying them is a change to what "unchanged"
+    // means for prompts already in the field.
+    doc.derivedFromSha256 = doc.bodies !== undefined
+      ? crypto.createHash('sha256').update(JSON.stringify(doc.bodies, null, 0)).digest('hex')
+      : crypto.createHash('sha256').update(String(doc.body)).digest('hex');
+    doc.authority = 'project';
+
+    fs.writeFileSync(path.join(outDir, `${id}.json`), JSON.stringify(doc, null, 2) + '\n');
     copied.push(id);
-    log(`[prompt-builder] copied ${id} (bootstrap — cannot be generated)`);
+    log(`[prompt-builder] copied ${id}`);
   }
 
   // The generator's own prompt comes from the project copy just installed, not from an

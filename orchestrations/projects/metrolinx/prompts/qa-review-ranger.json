@@ -17,5 +17,7 @@
     "__PROJECT_ROOT__",
     "__REVIEW_DIFF_SUMMARY__"
   ],
-  "version": 1
+  "version": 1,
+  "derivedFromSha256": "f066f0ddb7fef465622684be0489af812e27a7927c7f6a57339f1945fbffe597",
+  "authority": "project"
 }

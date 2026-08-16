@@ -20,5 +20,7 @@
     "__DOC_SECTION__",
     "__TICKET_BLOCK__"
   ],
-  "version": 1
+  "version": 1,
+  "derivedFromSha256": "d537a8149e44f17b0af5fb46344a1ff6fcacd3027e8adf78cacf9933cdb0bd41",
+  "authority": "project"
 }

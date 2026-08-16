@@ -13,5 +13,7 @@
     "__TEST_SOURCE__",
     "__VERIFICATION_CRITERION__"
   ],
-  "version": 1
+  "version": 1,
+  "derivedFromSha256": "0fafc6c338e518bf0e7ff734ef2f484ce696c7cbfc8ae424cdb8b4e4598545ff",
+  "authority": "project"
 }

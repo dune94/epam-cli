@@ -23,5 +23,7 @@
     "__EVIDENCE__",
     "__STORY__"
   ],
-  "version": 1
+  "version": 1,
+  "derivedFromSha256": "fd6be466ee835a15e96649d1e067cae569c2e5e37ab83d1fdeccd958b8aff217",
+  "authority": "project"
 }

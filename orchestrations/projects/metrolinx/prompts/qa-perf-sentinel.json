@@ -19,5 +19,7 @@
     "__PROJECT_ROOT__",
     "__ROUTING_DECISION__"
   ],
-  "version": 1
+  "version": 1,
+  "derivedFromSha256": "0a0fe2b4083fd4e90aa94a264afce1fc88b1d7f48a7a9c524c89d4c937329818",
+  "authority": "project"
 }

@@ -118,9 +118,16 @@ describe('the mint step builds prompts as part of minting', () => {
       runStep(s);
       const boot = JSON.parse(readFileSync(join(ROOT, 'orchestrations/prompts/bootstrap.json'), 'utf8'));
       for (const id of boot.copyVerbatim) {
-        const tpl = readFileSync(join(ROOT, 'orchestrations/prompts/templates', `${id}.json`), 'utf8');
-        expect(readFileSync(join(s.projectDir, 'prompts', `${id}.json`), 'utf8'),
-          `${id} was not copied verbatim`).toBe(tpl);
+        // The PROMPT TEXT is verbatim; the file is not, because a project copy also records
+        // which template it came from. Without that provenance a later template edit is
+        // invisible — the project keeps running the older prompt while the template claims
+        // otherwise — so the copy carries metadata the template does not.
+        const tpl = JSON.parse(readFileSync(join(ROOT, 'orchestrations/prompts/templates', `${id}.json`), 'utf8'));
+        const cp = JSON.parse(readFileSync(join(s.projectDir, 'prompts', `${id}.json`), 'utf8'));
+        expect(cp.body ?? cp.bodies, `${id}: the prompt text was altered by copying`)
+          .toEqual(tpl.body ?? tpl.bodies);
+        expect(cp.derivedFromSha256, `${id} records no origin`).toBeTruthy();
+        expect(cp.authority, `${id} is not marked project authority`).toBe('project');
       }
       for (const id of boot.generated) {
         const p = JSON.parse(readFileSync(join(s.projectDir, 'prompts', `${id}.json`), 'utf8'));

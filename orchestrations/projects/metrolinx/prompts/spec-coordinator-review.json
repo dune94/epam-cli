@@ -18,5 +18,7 @@
     "__REVIEW_CRITERIA__",
     "__REVIEW_PAYLOAD__"
   ],
-  "version": 1
+  "version": 1,
+  "derivedFromSha256": "5de1df81ff184d393f39b1b8395e8664c718867f7c93ec1aa143bfd05891d09c",
+  "authority": "project"
 }

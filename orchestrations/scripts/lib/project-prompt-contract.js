@@ -21,11 +21,18 @@
 
 const crypto = require('crypto');
 
-const PLACEHOLDER_RE = /__[A-Z][A-Z0-9_]*__/g;
+// ONE DEFINITION, IMPORTED — not a second copy of the rule.
+//
+// This file carried its own placeholder regex, and it was the GREEDY version. engine-prompt.js
+// was fixed to match lazily so that adjacent placeholders (__A____B__, which is what ${a}${b}
+// becomes) read as two, and this copy was not — so the contract saw seven adjacent blocks as
+// one token and refused every generated spec-agent-openspec as "dropping placeholders" the
+// template required. Two copies of a rule is two rules.
+const { placeholdersIn: _placeholdersIn } = require('./engine-prompt.js');
 
-/** Placeholders actually present in a body, deduped and sorted — same rule as prompt-library. */
+/** Placeholders present in a body, deduped and sorted. */
 function placeholdersIn(body) {
-  return [...new Set(String(body == null ? '' : body).match(PLACEHOLDER_RE) || [])].sort();
+  return [..._placeholdersIn(body)].sort();
 }
 
 const sorted = (a) => [...(Array.isArray(a) ? a : [])].sort();

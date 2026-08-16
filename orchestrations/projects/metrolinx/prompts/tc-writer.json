@@ -13,5 +13,7 @@
     "__TC_OUT_FILE__",
     "__TC_WRITER_PROFILE__"
   ],
-  "version": 1
+  "version": 1,
+  "derivedFromSha256": "50d07a7c1b7cc5ef50acf1038498e3c40f319ba674ee90b9bd5d6f3841b3564a",
+  "authority": "project"
 }

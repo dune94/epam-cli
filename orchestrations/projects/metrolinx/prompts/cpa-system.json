@@ -13,5 +13,7 @@
   "description": "The estimator's standing instructions: refine a formula estimate conservatively and surface risk.",
   "id": "cpa-system",
   "placeholders": [],
-  "version": 1
+  "version": 1,
+  "derivedFromSha256": "43b0cb58459cd7c24e5759454276c98c4339dc352e8946d457dbf667047b31c9",
+  "authority": "project"
 }

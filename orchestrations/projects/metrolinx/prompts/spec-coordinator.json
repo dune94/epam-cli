@@ -18,5 +18,7 @@
     "__PROFILE_PREFIX__",
     "__STORIES_PAYLOAD__"
   ],
-  "version": 1
+  "version": 1,
+  "derivedFromSha256": "9a75a0e7028ce1008af5ec35812924d6d2d09fd6978d356127b411cfb30b5538",
+  "authority": "project"
 }

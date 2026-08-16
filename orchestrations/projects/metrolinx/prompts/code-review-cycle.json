@@ -21,5 +21,7 @@
     "__STORY_ID__",
     "__STORY_TITLE__"
   ],
-  "version": 1
+  "version": 1,
+  "derivedFromSha256": "60fde78b349849a7c1f1a0d164c66e96fb04bebe8da14a528d107c99c96e254d",
+  "authority": "project"
 }

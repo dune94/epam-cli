@@ -35,7 +35,15 @@ const path = require('path');
 
 const TEMPLATE_DIR_REL = 'orchestrations/prompts/templates';
 const PROJECT_PROMPT_SUBDIR = 'prompts';
-const PLACEHOLDER_RE = /__[A-Z][A-Z0-9_]*__/g;
+// THE PLACEHOLDER RULE LIVES IN ONE PLACE.
+//
+// This regex existed in THREE files — here, engine-prompt.js and project-prompt-contract.js —
+// and only one of them was fixed when adjacent placeholders turned out to merge. ${a}${b}
+// becomes __A____B__ in a template, and a greedy match reads that as a single token. The two
+// unfixed copies then disagreed with the fixed one about what a template declares, so a valid
+// generated prompt was refused as "dropping placeholders" and a valid template was refused as
+// "using undeclared placeholders". Three copies of a rule is three rules.
+const { placeholdersIn: _placeholdersIn } = require('./engine-prompt.js');
 
 /** Repo root, derived from this file's location — never an env guess. */
 function repoRoot() {
@@ -123,7 +131,7 @@ function loadProjectPrompt(id, projectConfigDir, opts) {
 
 /** Placeholders actually present in a body, deduped and sorted. */
 function placeholdersIn(body) {
-  return [...new Set(String(body).match(PLACEHOLDER_RE) || [])].sort();
+  return [..._placeholdersIn(body)].sort();
 }
 
 /**

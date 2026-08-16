@@ -17,5 +17,7 @@
     "__PHASE_ID__",
     "__PROJECT_ROOT__"
   ],
-  "version": 1
+  "version": 1,
+  "derivedFromSha256": "b729bd820bed85ee526c4fd58683413f3d7f8ff2b02503d5eebb54dc5e12d5dd",
+  "authority": "project"
 }

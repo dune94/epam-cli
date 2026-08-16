@@ -131,8 +131,12 @@ describe('NO LOW OR MEDIUM INFERENCE ON THESE SEAMS', () => {
     });
 
     it(`${role} climbs the highest ladder`, () => {
-      expect(String(profiles()[role].ladder || '').toUpperCase(),
-        `${role} is on the '${profiles()[role].ladder}' ladder`).toBe('HIGHEST');
+      // A POSITION, not a tier name, since 2026-08-16. The engine holds no tier vocabulary —
+      // the project declares ladderTierOrder and 'top' resolves to whatever it calls its
+      // strongest tier. The intent is unchanged and is what matters: these seams decide
+      // whether work is accepted or a model is escalated, so none of them may run cheap.
+      expect(String(profiles()[role].ladder || '').toLowerCase(),
+        `${role} is on the '${profiles()[role].ladder}' ladder`).toBe('top');
     });
   }
 });

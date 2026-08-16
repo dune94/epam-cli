@@ -22,5 +22,7 @@
     "__SPLIT_NOTE__",
     "__STORY_ID__"
   ],
-  "version": 1
+  "version": 1,
+  "derivedFromSha256": "85b516d772968150ca5cd0e6190d7d903e2bd392653d63a9c3dbec8f0acee602",
+  "authority": "project"
 }

@@ -13,5 +13,7 @@
   "placeholders": [
     "__ISSUE_TYPE__"
   ],
-  "version": 1
+  "version": 1,
+  "derivedFromSha256": "a526a5e115185f6599ed7bca5a105a7d1d7971dafc7528b5ef974d3eb0717eea",
+  "authority": "project"
 }

@@ -13,5 +13,7 @@
   "description": "Prepended to the detective prompt when its previous reply contained no JSON array.",
   "id": "detective-retry-note",
   "placeholders": [],
-  "version": 1
+  "version": 1,
+  "derivedFromSha256": "aea7f08be6a48e8605e6d4061959c8c7674a9adfaf385c84d5e846da7ddb86c9",
+  "authority": "project"
 }

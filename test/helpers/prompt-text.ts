@@ -50,5 +50,10 @@ export function templateBody(id: string, bodyKey?: string): string {
 
 /** Code plus the prompts that code sends: the whole surface an assertion may be about. */
 export function region(code: string, ...templateIds: string[]): string {
-  return [code, ...templateIds.map(templateBody)].join('\n');
+  // ARITY. `.map(templateBody)` hands map's SECOND argument — the index — to bodyKey, so the
+  // first template is asked for body '0' and a multi-body template silently returns the wrong
+  // variant. It threw here only because these templates have a single body; on a multi-body one
+  // it would have returned real text from the wrong variant and every assertion would have
+  // measured that instead.
+  return [code, ...templateIds.map((id) => templateBody(id))].join('\n');
 }

@@ -2095,41 +2095,11 @@ async function run() {
     const isBrownfieldReview = process.env.EPAM_BROWNFIELD === '1';
     const reviewPayload = buildReviewPayload(specifiedStories, isBrownfieldReview, prd.stories || [], logDir, opts.phase);
 
-    const reviewCriteria = isBrownfieldReview
-      ? `For each story, evaluate the quality of the collaborative spec work:
-1. Did both agents add meaningful, non-overlapping value?
-2. Flag any story needing human review.
-3. PLAN ALIGNMENT — where planAlignmentEvidence is present, it tells you what the
-   code-graph-detective SAID it would investigate (detectivePlan) and a deterministic,
-   cheap signal (aligned: true/false) for whether the final fixSiteAnalysis shares any
-   named symbol/file with that plan. This signal is NOT your verdict — it is evidence, the
-   same as MANIFEST EVIDENCE below. A plan can legitimately turn out wrong once real
-   exploration starts. Read detectivePlan and fixSiteAnalysis yourself and judge: did the
-   detective explain WHY it moved from its plan to its final answer (a stated pivot,
-   reasoning that connects the two), or did the answer just change with no explanation?
-   The latter is a real defect (a fix has shipped that shared no term with the detective's
-   own stated plan, with no explanation, more than once on the same ticket) — set
-   planAlignment to justified_deviation when the detective justifies its pivot, or
-   unexplained_mismatch when it does not, and say why in reviewNotes. aligned:true needs
-   no action.
-
-(Brownfield tickets never split and their acceptance criteria are immutable —
-do not evaluate split quality or AC completeness; there is nothing there for
-either agent to have changed.
-
-EXPECTED, NOT A DEFECT: an agent's notes may describe acceptance criteria it
-authored while the story's acceptanceCriteria array is empty, and report
-acceptanceChanged=false. That is this pipeline REDACTING them on purpose: on a
-brownfield ticket the ACs are the ticket's own, and a thin ticket legitimately
-has none. The observable checks live in verificationCriteria — judge THOSE.
-Do not report the mismatch as a hallucination, a persistence failure or a
-metadata inconsistency, and do not lower qualityScore for it. An empty
-acceptanceCriteria array on a brownfield story is correct by policy.)`
-      : `For each story, evaluate the quality of the collaborative spec work:
-1. Did both agents add meaningful, non-overlapping value?
-2. Are the acceptance criteria complete, testable, and non-overlapping?
-3. Are story splits logical and properly scoped?
-4. Flag any story needing human review.`;
+    // RENDERED FROM THE TEMPLATE LAYER. Brownfield drops the acceptance-criteria and split
+    // checks deliberately: both are moot when the AC array is empty by policy, and asked anyway
+    // the reviewer reported the empty array as a defect and lowered qualityScore for it.
+    const reviewCriteria = renderEngineTemplate(
+      'spec-review-criteria', {}, isBrownfieldReview ? 'brownfield' : 'greenfield');
 
     const reviewPrompt = renderEngineTemplate('spec-coordinator-review', {
       __PROFILE_PREFIX__: specCoordinatorProfile ? specCoordinatorProfile + '\n\n' : '',
@@ -4831,37 +4801,10 @@ function advanceAgentLadderEscalation(logDir, agentName, storyId) {
  * expensive error, and the one the reality anchor exists to prevent.
  */
 function detectivePrescription(kind) {
-  if (kind === 'defect') {
-    return `CONVERGE FAST — HARD LIMIT: 6 tool calls total. This is not a suggestion.
-By your 6th tool call you MUST stop querying and emit the JSON answer with your BEST current hypothesis. Exploring past 6 calls WITHOUT emitting the JSON means you FAIL and every bit of your investigation is thrown away — a best-guess fix site is infinitely better than no answer. If you are unsure, pick the single most likely file/function from what you have seen and emit it now; do NOT keep exploring to be "sure".
-1. First call: \`explore\` with the DOMAIN NOUNS only (drop symptom/presentation words like displayed/shown/email/confirmation/expected).
-2. Look at the top-ranked symbols. If the top hit's file only READS the wrong field (a mapper/sanitizer/display file), do ONE \`callers\` or \`callees\` (or one more \`explore\` toward the mechanism) to reach the code that COMPUTES/ASSIGNS it.
-3. As SOON as you identify a file whose function body actually computes/assigns the wrong value, STOP tracing and switch to prescribing the fix (step 4). Aim to finish tracing in 2-4 tool calls, never more than 6.
-4. PRESCRIBE THE MINIMAL FIX. This is the most important output. For the causal site:
-   - Name the EXACT broken line/expression (e.g. \`lineItem.id === discount.lineItemId\`) and why it is wrong.
-   - State the SMALLEST change that corrects it. Do NOT describe a re-architecture, a new abstraction, or a "split/recalculate/add-a-field" scheme unless the code genuinely has no simpler fix. Prefer a one-line/one-expression change.
-   - LOCATE AN EXISTING HELPER instead of inventing new logic. Before proposing any new function, use \`explore\` (and \`callers\`/\`callees\`) to search for an already-present util/helper/parser in this repo that does the needed transform (e.g. a key parser, id normalizer, formatter). If one exists, your fix MUST name it (exact symbol + its import path) and reuse it. Writing novel code when a helper already exists is a defect.
-
-
-SHOW THE BROKEN CODE — "brokenLine" is REQUIRED and is machine-verified. Quote the EXACT source expression, copied verbatim from the file you name, that is wrong today. It is checked against that file's real contents: if what you quote is not in the file, your answer is rejected as ungrounded and you will be asked again. This is the difference between a diagnosis and a guess — a confident story about code that is not there reads exactly like a correct one until this check runs. If you cannot point at a real line that is wrong, you have not found the cause yet: go back to the tool and trace further.
-
-`;
-  }
-  return `CONVERGE FAST — HARD LIMIT: 6 tool calls total. This is not a suggestion.
-By your 6th tool call you MUST stop querying and emit the JSON answer. A partial map of the attachment points is infinitely better than no answer.
-1. First call: \`explore\` with the DOMAIN NOUNS only (drop symptom/presentation words).
-2. NOTHING IS BROKEN HERE. This story asks for a capability that does not exist yet, so there is no wrong value to trace and no line to quote. Do not hunt for a cause — you will invent one.
-3. FIND EVERY PLACE THIS WORK MUST TOUCH. This is the most important output, and returning only ONE is the known failure of this step. A new capability almost never lands in a single file. Trace the SHAPE of it through this repository, in whatever terms this repository uses:
-   - WHERE IT IS SET UP — the place the thing being enabled is created, configured or registered. Start here.
-   - WHAT CARRIES IT — anything between that setup and the code that uses it: a shared module, a wrapper, an app-wide registration, a passed-down value. There may be none; there may be several.
-   - EVERYWHERE IT IS USED — every place that reads the affected data or must react when it changes. There is usually MORE THAN ONE. Name them all.
-   Do not force this repository into a shape it does not have, and do not skip a place because it has no obvious name. Describe each site in the vocabulary the codebase itself uses, which you have seen in the tool output — not in the vocabulary of some other project's architecture.
-4. COVER THE ACCEPTANCE CRITERIA. Read them again and check your site list against them: every criterion describing observable behaviour needs a site where that behaviour becomes possible. A criterion with no corresponding site means your map is incomplete — go back and find it.
-5. NAME WHAT TO REUSE at each site — whatever already exists there that the implementation should build on rather than duplicating. Use \`explore\`/\`callers\`/\`callees\` to find it; you cannot reuse what you have not found.
-6. \`brokenLine\` is NOT required for this story and must be left "" — there is no broken expression to quote.
-7. DO NOT INVENT A PATH OR A SYMBOL. Your grounding here is provenance, not a quoted line: every file and symbol you name must have been returned to you by a tool. If you believe something exists and the tools did not show it, PROVE it with ripgrep-search.sh before naming it, or report it absent.
-
-`;
+  // RENDERED FROM THE TEMPLATE LAYER. Two bodies, not one prompt with a branch: the two arms say
+  // OPPOSITE things about the most consequential field — brokenLine is required for a defect and
+  // must be empty for novel work — and a branching prompt hides which set an agent received.
+  return renderEngineTemplate('detective-prescription', {}, kind === 'defect' ? 'defect' : 'novel');
 }
 
 /**

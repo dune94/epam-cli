@@ -21,11 +21,27 @@ import { join } from 'node:path';
 
 const TEMPLATES = join(__dirname, '../../orchestrations/prompts/templates');
 
-/** One template's prompt text. Multi-body templates are joined, so no variant is invisible. */
-export function templateBody(id: string): string {
+/**
+ * One template's prompt text.
+ *
+ * A multi-body document joins all its bodies when no key is given -- so a check for wording
+ * ANYWHERE in the document still works -- and returns exactly one when a key is. Asking for a
+ * body that is not there throws rather than falling back to the join, because silently widening
+ * the search is how an assertion about one variant passes on another variant's text.
+ */
+export function templateBody(id: string, bodyKey?: string): string {
   const doc = JSON.parse(readFileSync(join(TEMPLATES, `${id}.json`), 'utf8'));
   if (doc.bodies && typeof doc.bodies === 'object') {
+    if (bodyKey !== undefined) {
+      if (!(bodyKey in doc.bodies)) {
+        throw new Error(`[prompt-text] template '${id}' has no body '${bodyKey}' — it declares: ${Object.keys(doc.bodies).join(', ')}`);
+      }
+      return String(doc.bodies[bodyKey]);
+    }
     return Object.values(doc.bodies).map(String).join('\n');
+  }
+  if (bodyKey !== undefined) {
+    throw new Error(`[prompt-text] template '${id}' has a single body, but body '${bodyKey}' was asked for`);
   }
   const body = String(doc.body ?? '');
   if (!body.trim()) throw new Error(`[prompt-text] template '${id}' has no body — an empty one makes every assertion vacuous`);

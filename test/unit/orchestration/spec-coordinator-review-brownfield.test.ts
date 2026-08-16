@@ -19,6 +19,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { templateBody } from '../../helpers/prompt-text';
 
 const SRC = readFileSync(
   join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'),
@@ -41,9 +42,10 @@ describe('spec coordinator-review — brownfield-aware criteria (cycle-time fix)
   });
 
   it('the brownfield criteria list drops split-quality and AC-completeness, keeps value-add and human-review flag', () => {
-    const idx = block.indexOf('const reviewCriteria = isBrownfieldReview');
-    expect(idx).toBeGreaterThan(-1);
-    const brownfieldBranch = block.slice(idx, block.indexOf(': `For each story', idx));
+    // THE BODY, by name. These sliced the two arms of a ternary out of the source, which only
+    // worked while the criteria were written inline. They are two bodies of one template now,
+    // so the arm is addressable instead of being delimited by the punctuation of the next arm.
+    const brownfieldBranch = templateBody('spec-review-criteria', 'brownfield');
     expect(brownfieldBranch).toMatch(/Did both agents add meaningful, non-overlapping value/);
     expect(brownfieldBranch).toMatch(/Flag any story needing human review/);
     expect(brownfieldBranch).not.toMatch(/acceptance criteria are complete/);
@@ -55,9 +57,7 @@ describe('spec coordinator-review — brownfield-aware criteria (cycle-time fix)
   });
 
   it('the greenfield criteria list is unchanged — still all 4 original criteria', () => {
-    const elseIdx = block.indexOf(': `For each story');
-    expect(elseIdx).toBeGreaterThan(-1);
-    const greenfieldBranch = block.slice(elseIdx, elseIdx + 500);
+    const greenfieldBranch = templateBody('spec-review-criteria', 'greenfield');
     expect(greenfieldBranch).toMatch(/Did both agents add meaningful, non-overlapping value/);
     expect(greenfieldBranch).toMatch(/Are the acceptance criteria complete, testable, and non-overlapping/);
     expect(greenfieldBranch).toMatch(/Are story splits logical and properly scoped/);
@@ -88,14 +88,18 @@ describe('spec coordinator-review — brownfield-aware criteria (cycle-time fix)
   });
 
   it('the prompt still interpolates whichever criteria list was selected', () => {
-    expect(block).toMatch(/\$\{reviewCriteria\}/);
+    // The selected list still reaches the prompt. It is no longer an interpolation in a
+    // literal, so the pair to assert is: the template declares the placeholder, and the code
+    // passes the chosen criteria into it.
+    expect(templateBody('spec-coordinator-review')).toMatch(/__REVIEW_CRITERIA__/);
+    expect(block).toMatch(/__REVIEW_CRITERIA__:\s*reviewCriteria/);
   });
 
   it('the output JSON schema is unchanged regardless of mode (storyId/verdict/reviewNotes/qualityScore/flags/planAlignment)', () => {
     // planAlignment added 2026-08-05 (the reviewer's own judgment on detective plan/answer
     // consistency) — the invariant under test is that ONE schema serves both modes, which
     // still holds; only its content grew.
-    expect(block).toMatch(
+    expect(templateBody('spec-coordinator-review')).toMatch(
       // flags grew from bare slugs to objects carrying severity and the evidence behind the
       // call (2026-08-07) — severity is advisory metadata, not what the gate blocks on.
       // The invariant under test is unchanged: ONE schema serves both modes.

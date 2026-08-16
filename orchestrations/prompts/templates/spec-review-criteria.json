@@ -1,0 +1,23 @@
+{
+  "$why": [
+    "Moved out of spec-mode-runner.js on 2026-08-16. The criteria the spec-review coordinator",
+    "judges against, in two variants.",
+    "",
+    "BROWNFIELD DROPS TWO CRITERIA ON PURPOSE. An acceptance-criteria completeness check and a",
+    "split check are both moot on a brownfield ticket, whose AC array is empty by policy -- the",
+    "observable checks live in verificationCriteria. Asked anyway, the reviewer reported the",
+    "empty array as a hallucination or a persistence failure and lowered qualityScore for it,",
+    "which is a gate blocking on a policy it was not told about."
+  ],
+  "description": "The criteria a spec-review coordinator judges a story's collaborative spec work against.",
+  "id": "spec-review-criteria",
+  "seams": [
+    "cpa-gate"
+  ],
+  "placeholders": [],
+  "version": 1,
+  "bodies": {
+    "brownfield": "For each story, evaluate the quality of the collaborative spec work:\n1. Did both agents add meaningful, non-overlapping value?\n2. Flag any story needing human review.\n3. PLAN ALIGNMENT — where planAlignmentEvidence is present, it tells you what the\n   code-graph-detective SAID it would investigate (detectivePlan) and a deterministic,\n   cheap signal (aligned: true/false) for whether the final fixSiteAnalysis shares any\n   named symbol/file with that plan. This signal is NOT your verdict — it is evidence, the\n   same as MANIFEST EVIDENCE below. A plan can legitimately turn out wrong once real\n   exploration starts. Read detectivePlan and fixSiteAnalysis yourself and judge: did the\n   detective explain WHY it moved from its plan to its final answer (a stated pivot,\n   reasoning that connects the two), or did the answer just change with no explanation?\n   The latter is a real defect (a fix has shipped that shared no term with the detective's\n   own stated plan, with no explanation, more than once on the same ticket) — set\n   planAlignment to justified_deviation when the detective justifies its pivot, or\n   unexplained_mismatch when it does not, and say why in reviewNotes. aligned:true needs\n   no action.\n\n(Brownfield tickets never split and their acceptance criteria are immutable —\ndo not evaluate split quality or AC completeness; there is nothing there for\neither agent to have changed.\n\nEXPECTED, NOT A DEFECT: an agent's notes may describe acceptance criteria it\nauthored while the story's acceptanceCriteria array is empty, and report\nacceptanceChanged=false. That is this pipeline REDACTING them on purpose: on a\nbrownfield ticket the ACs are the ticket's own, and a thin ticket legitimately\nhas none. The observable checks live in verificationCriteria — judge THOSE.\nDo not report the mismatch as a hallucination, a persistence failure or a\nmetadata inconsistency, and do not lower qualityScore for it. An empty\nacceptanceCriteria array on a brownfield story is correct by policy.)",
+    "greenfield": "For each story, evaluate the quality of the collaborative spec work:\n1. Did both agents add meaningful, non-overlapping value?\n2. Are the acceptance criteria complete, testable, and non-overlapping?\n3. Are story splits logical and properly scoped?\n4. Flag any story needing human review."
+  }
+}

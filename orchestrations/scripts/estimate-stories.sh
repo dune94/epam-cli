@@ -183,30 +183,7 @@ lookup_model_pricing() {
     local model="$1"
     [ -z "$model" ] && { printf ''; return; }
     [ -f "$MODEL_PRICING_FILE" ] || { printf ''; return; }
-    python3 - "$MODEL_PRICING_FILE" "$model" <<'PYEOF'
-import sys, json
-pricing_file, model = sys.argv[1], sys.argv[2]
-try:
-    with open(pricing_file) as f:
-        table = json.load(f)
-    prices = table.get(model)
-    if not prices:
-        ml = model.lower()
-        for k, v in table.items():
-            kl = k.lower()
-            if kl == ml or ml.startswith(kl) or kl.startswith(ml):
-                prices = v
-                break
-    if prices:
-        inp = float(prices.get("input", 0))
-        out = float(prices.get("output", 0))
-        cached = round(inp * 0.10, 6)
-        print(f"{inp}|{cached}|{out}")
-    else:
-        print("")
-except Exception:
-    print("")
-PYEOF
+    python3 "$SCRIPT_DIR/lib/handlers/model-price-lookup.py" "$MODEL_PRICING_FILE" "$model"
 }
 
 # ────────────────────────────────────────────

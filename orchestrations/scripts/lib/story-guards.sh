@@ -467,26 +467,7 @@ _text_violates_anti_pattern() {
     local _rules_file="${EPAM_PROJECT_CONFIG_DIR:-}/anti-patterns.json"
     [ -f "$_rules_file" ] || return 0
 
-    python3 - "$_rules_file" "$_text" << 'PYEOF'
-import json, re, sys
-rules_file, text = sys.argv[1], sys.argv[2]
-try:
-    with open(rules_file, encoding='utf-8') as f:
-        rules = json.load(f)
-except Exception:
-    sys.exit(0)
-for rule in rules:
-    pattern = rule.get('textMatchPattern')
-    if not pattern:
-        continue
-    try:
-        if re.search(pattern, text):
-            print(rule.get('message', rule.get('id', 'anti-pattern match')))
-            sys.exit(1)
-    except re.error:
-        continue
-sys.exit(0)
-PYEOF
+    python3 "$SCRIPT_DIR/lib/handlers/story-text-rule-check.py" "$_rules_file" "$_text"
 }
 
 

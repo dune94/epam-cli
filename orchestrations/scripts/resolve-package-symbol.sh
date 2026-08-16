@@ -43,12 +43,4 @@ PACKAGE_NAME="$1"
 SYMBOL="$2"
 
 RPS_REPO="$REPO" RPS_PLUGIN="$PLUGIN" RPS_PACKAGE="$PACKAGE_NAME" RPS_SYMBOL="$SYMBOL" \
-"$NODE_BIN" -e "
-process.chdir(process.env.RPS_REPO);
-const { tools } = require(process.env.RPS_PLUGIN);
-const tool = tools.find((t) => t.name === 'resolve_package_symbol');
-tool.execute({ packageName: process.env.RPS_PACKAGE, symbol: process.env.RPS_SYMBOL }).then((result) => {
-  console.log(result.content);
-  process.exit(result.isError ? 1 : 0);
-});
-"
+"$NODE_BIN" "$SCRIPT_DIR/lib/handlers/package-symbol-resolve.js"

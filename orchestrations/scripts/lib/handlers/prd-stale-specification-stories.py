@@ -7,6 +7,10 @@ run. It matters because the spec-mode coordinator reads that field to decide whe
 story — stale "completed" data makes it skip re-elaboration, and the split-mandate check inside
 that loop with it. This has happened (2026-07-06).
 
+A DEPRECATED story is excluded too: it is not going to be elaborated, so a specification block on
+it is not contamination waiting to skip anything. One of the two copies of this rule knew that and
+the other did not.
+
 Only PENDING stories count. A story already completed in THIS run legitimately carries the
 specification data this run's own spec pass produced.
 
@@ -34,5 +38,5 @@ except (OSError, ValueError) as e:
 
 print(','.join(
     s['id'] for s in prd.get('stories', [])
-    if s.get('specification') and not s.get('completed')
+    if s.get('specification') and not s.get('completed') and s.get('status') != 'deprecated'
 ))

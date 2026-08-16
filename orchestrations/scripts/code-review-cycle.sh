@@ -270,29 +270,7 @@ cp "$_REVIEW_OUTPUT_FILE" "$AUTOMATION_DIR/logs/review-agent-${STORY_ID}.log"
 # flat, non-nested JSON object — real review responses' "issues" array
 # contains nested {...} objects, which neither pattern can span, silently
 # falling through to the "approved" default regardless of the actual verdict.
-_REVIEW_JSON=$(echo "$_REVIEW_OUTPUT" | python3 -c "
-import re, sys, json
-text = sys.stdin.read()
-start = text.find('{')
-result = None
-if start != -1:
-    decoder = json.JSONDecoder()
-    try:
-        result, _ = decoder.raw_decode(text, start)
-    except (ValueError, json.JSONDecodeError):
-        # Same fix as team-lead-review.sh (live AMSD-2041, 2026-07-31): strip
-        # a stray quote directly after a number before a delimiter — a token
-        # shape that can never appear in valid JSON — then retry once.
-        repaired = re.sub(r'(?<=\d)\"(?=\s*[,}])', '', text)
-        try:
-            result, _ = decoder.raw_decode(repaired, start)
-        except (ValueError, json.JSONDecodeError):
-            result = None
-if not isinstance(result, dict) or 'verdict' not in result:
-    # SAFE default = BLOCK, never silently approve an unreviewed change (2026-07-23).
-    result = {'verdict': 'changes_requested', 'issues': [{'severity': 'blocker', 'description': 'review output had no parseable verdict — the change was NOT reviewed; blocking rather than auto-approving.'}], 'summary': 'review output unparseable'}
-print(json.dumps(result))
-" 2>/dev/null || echo '{"verdict":"changes_requested","issues":[{"severity":"blocker","description":"review verdict unparseable — not auto-approving"}],"summary":"review parse failure"}')
+_REVIEW_JSON=$(echo "$_REVIEW_OUTPUT" | python3 "$SCRIPT_DIR/lib/handlers/code-review-json.py" 2>/dev/null || echo '{"verdict":"changes_requested","issues":[{"severity":"blocker","description":"review verdict unparseable — not auto-approving"}],"summary":"review parse failure"}')
 
 ISSUES=()
 _RAW_VERDICT=$(echo "$_REVIEW_JSON" | jq -r '.verdict // "approved"' 2>/dev/null || echo "approved")

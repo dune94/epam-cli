@@ -12,6 +12,7 @@ PRD path interpolated into its own source.
 Generic: the PRD path is an argument, and the rule holds for any project and any stack.
 
     argv[1]  the PRD
+    argv[2]  a phase to scope the question to, or absent for the whole PRD
     stdout   "true" when canonical, "false" when elaborated
 
 An unreadable PRD exits non-zero. The inline copy fell back to "false", which turns ON the strict
@@ -31,5 +32,15 @@ except (OSError, ValueError) as e:
     sys.stderr.write(f"[prd-is-canonical] cannot read {sys.argv[1]}: {e}\n")
     sys.exit(2)
 
-has_splits = any(s.get('specification', {}).get('createdFrom') for s in prd.get('stories', []))
+# THE PHASE SCOPE is optional. prd-remediate asks the question about ONE phase — whether the
+# stories that phase is about to run have been elaborated — while preflight asks it about the
+# whole PRD. Two scripts had written two copies of this rule with two different answers; the
+# scope is an argument now, and the rule is one.
+phase = sys.argv[2] if len(sys.argv) > 2 else ''
+stories = prd.get('stories', [])
+if phase:
+    scoped = set(prd.get('implementationOrder', {}).get(phase, []))
+    stories = [s for s in stories if s.get('id') in scoped]
+
+has_splits = any(s.get('specification', {}).get('createdFrom') for s in stories)
 print('false' if has_splits else 'true')

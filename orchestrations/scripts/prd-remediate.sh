@@ -66,14 +66,7 @@ python3 "$SCRIPT_DIR/_prd_remediate_impl.py" "$PRD_FILE" ${PHASE:+"$PHASE"}
 # strict checks against its own genuinely-pre-spec-pass stories and failed
 # immediately, blocking the phase from ever starting. Scope the check to only
 # the phase actually being validated.
-_is_canonical=$(python3 -c "
-import json, sys
-d = json.load(open('$PRD_FILE'))
-phase_ids = set(d.get('implementationOrder', {}).get('$PHASE', []))
-by_id = {s['id']: s for s in d['stories']}
-has_splits = any(by_id.get(sid, {}).get('specification', {}).get('createdFrom') for sid in phase_ids)
-print('false' if has_splits else 'true')
-" 2>/dev/null || echo "false")
+_is_canonical=$(python3 "$SCRIPT_DIR/lib/handlers/prd-is-canonical.py" "$PRD_FILE" "$PHASE" 2>/dev/null || echo "false")
 
 info "Verifying PRD integrity post-remediation..."
 if [ "$_is_canonical" = "true" ]; then
@@ -112,11 +105,7 @@ if [ "$_is_canonical" = "true" ]; then
     # just dead archive rows. Only a PENDING, non-deprecated story carrying a
     # pre-baked specification block is a genuine sign of prior-run
     # contamination baked into canonical.
-    _stale_spec=$(python3 -c "
-import json
-d = json.load(open('$PRD_FILE'))
-print(','.join(s['id'] for s in d.get('stories', []) if s.get('specification') and not s.get('completed') and s.get('status') != 'deprecated'))
-" 2>/dev/null || echo "")
+    _stale_spec=$(python3 "$SCRIPT_DIR/lib/handlers/prd-stale-specification-stories.py" "$PRD_FILE" 2>/dev/null || echo "")
     if [ -n "$_stale_spec" ]; then
         fail "Canonical PRD has pre-baked 'specification' blocks on base stories (must be lean/unelaborated): $_stale_spec"
     fi

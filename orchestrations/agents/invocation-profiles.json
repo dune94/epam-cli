@@ -564,99 +564,104 @@
   ],
   "seamPatterns": [
     {
-      "match": "-investigator$",
+      "match": "(^|-)investigator$",
       "seam": "code-graph-detective",
       "_why": "investigates one codeline and reports where the work lands"
     },
     {
-      "match": "-detective$",
+      "match": "(^|-)detective$",
       "seam": "code-graph-detective",
       "_why": "same investigation seam under its other minted suffix"
     },
     {
-      "match": "-analyst$",
+      "match": "(^|-)analyst$",
       "seam": "impl-failure-analyst",
       "_why": "diagnoses why something failed"
     },
     {
-      "match": "-reviewer$",
+      "match": "(^|-)reviewer$",
       "seam": "code-review-cycle",
       "_why": "reviews produced work"
     },
     {
-      "match": "-ranger$",
+      "match": "(^|-)ranger$",
       "seam": "code-review-cycle",
       "_why": "review sweep"
     },
     {
-      "match": "-sentinel$",
+      "match": "(^|-)sentinel$",
       "seam": "code-review-cycle",
       "_why": "standing review check (SAST, perf)"
     },
     {
-      "match": "-validator$",
+      "match": "(^|-)validator$",
       "seam": "prd-change-reviewer",
       "_why": "validates a proposed artefact before it is applied"
     },
     {
-      "match": "-checker$",
+      "match": "(^|-)checker$",
       "seam": "prd-change-reviewer",
       "_why": "checks an artefact against a standard"
     },
     {
-      "match": "-detector$",
+      "match": "(^|-)detector$",
       "seam": "prd-change-reviewer",
       "_why": "detects a defect class in an artefact"
     },
     {
-      "match": "-hunter$",
+      "match": "(^|-)hunter$",
       "seam": "repro-test-writer",
       "_why": "authors adversarial tests"
     },
     {
-      "match": "-weaver$",
+      "match": "(^|-)weaver$",
       "seam": "repro-test-writer",
       "_why": "authors generated tests"
     },
     {
-      "match": "-remediator$",
+      "match": "(^|-)remediator$",
       "seam": "ac-elaboration",
       "_why": "rewrites acceptance criteria"
     },
     {
-      "match": "-augmentor$",
+      "match": "(^|-)augmentor$",
       "seam": "ac-elaboration",
       "_why": "elaborates an existing artefact"
     },
     {
-      "match": "-author$",
+      "match": "(^|-)author$",
       "seam": "tc-writer",
       "_why": "authors written deliverables"
     },
     {
-      "match": "-generator$",
+      "match": "(^|-)generator$",
       "seam": "tc-writer",
       "_why": "generates written deliverables"
     },
     {
-      "match": "-builder$",
+      "match": "(^|-)builder$",
       "seam": "tc-writer",
       "_why": "assembles written deliverables"
     },
     {
-      "match": "-coordinator$",
+      "match": "(^|-)coordinator$",
       "seam": "cpa-inference",
       "_why": "plans and estimates rather than producing code"
     },
     {
-      "match": "-engineer$",
+      "match": "(^|-)engineer$",
       "seam": "story-writer",
       "_why": "implements the story — the archetype it is an instance of, not merely a profile whose ladder matches"
     },
     {
-      "match": "-agent$",
+      "match": "(^|-)agent$",
       "seam": "cpa-inference",
       "_why": "generic minted worker; medium ladder until given a specific seam"
+    },
+    {
+      "match": "(^|-)fixer$",
+      "seam": "story-writer",
+      "_why": "edits code in place to a minimal, idiomatic change — the writer archetype, not a reviewer"
     }
   ],
   "agentSeams": {
@@ -700,7 +705,7 @@
     "ui-engineer": "story-writer",
     "frontend-engineer": "story-writer",
     "dashboard-update-agent": "cpa-inference",
-    "generator": "cpa-inference",
+    "generator": "tc-writer",
     "spike-agent": "cpa-inference",
     "tc-writer-agent": "cpa-inference",
     "gate-finding-analyst": "impl-failure-analyst",
@@ -718,7 +723,6 @@
     "contentstack-sdk-engineer": "story-writer",
     "contentstack-preview-react-engineer": "story-writer"
   },
-  "defaultSeam": "cpa-inference",
   "engineProduces": [
     "ticket",
     "codeline-facts",
@@ -789,5 +793,7 @@
     "contentstack-sdk-engineer": "derived",
     "contentstack-preview-react-engineer": "derived"
   },
-  "_ladderPositions": "A seam declares a POSITION in the project’s ladderTierOrder (base|mid|top), never a tier NAME. The project owns its tier vocabulary; the engine owns none. Converted 2026-08-15 after twenty seams asking for a literal HIGHEST ran unladdered on a project that declared only high and medium."
+  "_ladderPositions": "A seam declares a POSITION in the project’s ladderTierOrder (base|mid|top), never a tier NAME. The project owns its tier vocabulary; the engine owns none. Converted 2026-08-15 after twenty seams asking for a literal HIGHEST ran unladdered on a project that declared only high and medium.",
+  "_defaultSeam": "REMOVED 2026-08-16. A project may declare EPAM_DEFAULT_SEAM in its config if it wants unmatched agents absorbed; the engine declares none, so an unmatched agent fails the mint loudly and is fixed with one line rather than discovered mid-run.",
+  "_seamPatternForm": "Each rule matches a role word as a whole name OR as a suffix: (^|-)word$. They were all -word$, so a minted agent named for its role alone -- \"generator\", \"reviewer\", \"analyst\" -- matched nothing. While the engine carried a defaultSeam that was invisible: the agent silently became a planning agent. Minting models produce bare role names routinely, so the suffix-only form made the pattern set depend on a naming habit nothing enforces."
 }

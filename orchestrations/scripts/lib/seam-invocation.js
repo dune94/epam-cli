@@ -123,19 +123,35 @@ function resolveSeam(agent, file, opts) {
     return rule.seam;
   }
 
-  // 3. A declared default, which must itself be real.
-  if (reg.defaultSeam) {
-    if (!profiles[reg.defaultSeam]) {
-      throw new Error(`registry defaultSeam '${reg.defaultSeam}' names a profile that does not exist`);
+  // 3. A default the PROJECT declares — never one the engine holds.
+  //
+  // The registry used to carry defaultSeam: cpa-inference, so resolution could not fail. Every
+  // unmatched agent silently became a planning agent and inherited its ladder, effort and tool
+  // grants, and the mint's "fails if any agent resolves to nothing" guard could essentially
+  // never fire. Seven gate-path agents were found running the wrong ladder for exactly this
+  // reason, and nothing had reported anything. A safety net that catches everything catches
+  // nothing.
+  //
+  // A project that genuinely wants unmatched agents absorbed says so in its own config. The
+  // engine declares no default, so for everyone else an unmatched agent is a loud failure at
+  // mint time — one line to fix, before any story runs — instead of a silent misconfiguration
+  // discovered hours into a run.
+  const declaredDefault = (opts && opts.defaultSeam)
+    || ((opts && opts.env) || process.env).EPAM_DEFAULT_SEAM
+    || '';
+  if (declaredDefault) {
+    if (!profiles[declaredDefault]) {
+      throw new Error(`EPAM_DEFAULT_SEAM names '${declaredDefault}', which the registry does not define`);
     }
-    return reg.defaultSeam;
+    return declaredDefault;
   }
 
-  // 4. Never {}.
+  // 4. Never {}, and never a guess.
   throw new Error(
-    `agent '${agent}' resolves to no seam: it is not a named profile, no seamPattern matches it, ` +
-    'and the registry declares no defaultSeam. A minted agent must be able to enter the ' +
-    'pipeline — add a pattern or a default rather than leaving it unconfigured.');
+    `agent '${agent}' resolves to no seam: it is not a named profile and no seamPattern matches ` +
+    'it. Add a seamPattern for its family, or an agentSeams entry for this one agent, or set ' +
+    'EPAM_DEFAULT_SEAM in the project config if unmatched agents should share one seam. Leaving ' +
+    'it unconfigured would run it with no ladder, no effort and no tool grants.');
 }
 
 /**

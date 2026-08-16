@@ -195,6 +195,14 @@ function shellQuotedStrings(): Hit[] {
  * Keyed by "<relative path>:<line>".
  */
 const ALLOW: Record<string, string> = {
+  'orchestrations/scripts/lib/node-bin.sh#f8c3b22d3909':
+    'A sed expression that reads the required node major version out of a package.json engines '
+    + 'field. The detector sees the unbalanced quote inside the sed script and swallows the rest '
+    + 'of the file with it. No model receives any of it.',
+  'orchestrations/scripts/reset-cost-test.sh#d82c0c4d204a':
+    'A grep -v pattern that strips this run\u2019s cost-test records out of a JSONL log. The same '
+    + 'detector artefact as node-bin.sh: an unbalanced quote inside the pattern swallows the lines '
+    + 'after it. It is a filter, not text sent anywhere.',
   'orchestrations/scripts/claude.sh#15f48a1c6038':
     'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
     + 'prompt text; it is not prompt text, and no model receives it.',
@@ -210,91 +218,16 @@ const ALLOW: Record<string, string> = {
   'orchestrations/scripts/claude.sh#3be1c81f8bcc':
     'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
     + 'prompt text; it is not prompt text, and no model receives it.',
-  'orchestrations/scripts/claude.sh#7b61e48c1307':
-    'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
-    + 'prompt text; it is not prompt text, and no model receives it.',
-  'orchestrations/scripts/claude.sh#8d7ccb65294e':
-    'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
-    + 'prompt text; it is not prompt text, and no model receives it.',
-  'orchestrations/scripts/claude.sh#ad595f194a94':
-    'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
-    + 'prompt text; it is not prompt text, and no model receives it.',
-  'orchestrations/scripts/claude.sh#c351928d7295':
-    'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
-    + 'prompt text; it is not prompt text, and no model receives it.',
-  'orchestrations/scripts/claude.sh#c91cd6dcad12':
-    'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
-    + 'prompt text; it is not prompt text, and no model receives it.',
   'orchestrations/scripts/claude.sh#e253eb0dbdcb':
     'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
     + 'prompt text; it is not prompt text, and no model receives it.',
-  'orchestrations/scripts/claude.sh#f4819179c01f':
-    'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
-    + 'prompt text; it is not prompt text, and no model receives it.',
-  'orchestrations/scripts/claude.sh#fc832a3fd9c2':
-    'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
-    + 'prompt text; it is not prompt text, and no model receives it.',
-  'orchestrations/scripts/claude.sh#0a2c9e31405e':
-    'A multi-line quoted shell value with no prose addressed to a model — matched on shape '
-    + 'alone, because a long quoted argument looks like a prompt to the detector.',
-  'orchestrations/scripts/claude.sh#34fe195ac853':
-    'A multi-line shell command whose quoted argument is a program or expression, not '
-    + 'prose. Executed, never sent to a model.',
-  'orchestrations/scripts/claude.sh#7c7f65b08a5f':
-    'A multi-line shell command whose quoted argument is a program or expression, not '
-    + 'prose. Executed, never sent to a model.',
-  'orchestrations/scripts/claude.sh#c288a5b3c095':
-    'A multi-line shell command whose quoted argument is a program or expression, not '
-    + 'prose. Executed, never sent to a model.',
-  'orchestrations/scripts/claude.sh#e4e213489e51':
-    'A multi-line shell command whose quoted argument is a program or expression, not '
-    + 'prose. Executed, never sent to a model.',
-  'orchestrations/scripts/claude.sh#f6a71c91befd':
-    'A multi-line shell command whose quoted argument is a program or expression, not '
-    + 'prose. Executed, never sent to a model.',
-  'orchestrations/scripts/contextualize-stories.sh#61e5acd91b7f':
-    'A multi-line shell command whose quoted argument is a program or expression, not '
-    + 'prose. Executed, never sent to a model.',
-  'orchestrations/scripts/generate-qa-report.sh#42ec7906d98a':
-    'A multi-line quoted shell value with no prose addressed to a model — matched on shape '
-    + 'alone, because a long quoted argument looks like a prompt to the detector.',
-  'orchestrations/scripts/generate-qa-report.sh#6f30a3a8b3d0':
-    'A multi-line quoted shell value with no prose addressed to a model — matched on shape '
-    + 'alone, because a long quoted argument looks like a prompt to the detector.',
-  'orchestrations/scripts/generate-qa-report.sh#77b3a35a2ab8':
-    'A multi-line quoted shell value with no prose addressed to a model — matched on shape '
-    + 'alone, because a long quoted argument looks like a prompt to the detector.',
   'orchestrations/scripts/lib/tc-writer-gate.sh#410d0d7b286e':
     'A multi-line shell command whose quoted argument is a program or expression, not '
     + 'prose. Executed, never sent to a model.',
   'orchestrations/scripts/run-agent-orchestration.sh#0a7253b53380':
     'A multi-line shell command whose quoted argument is a program or expression, not '
     + 'prose. Executed, never sent to a model.',
-  'orchestrations/scripts/run-agent-orchestration.sh#5c629c3c7c0a':
-    'A multi-line shell command whose quoted argument is a program or expression, not '
-    + 'prose. Executed, never sent to a model.',
   'orchestrations/scripts/run-agent-orchestration.sh#70b09ed905af':
-    'A multi-line shell command whose quoted argument is a program or expression, not '
-    + 'prose. Executed, never sent to a model.',
-  'orchestrations/scripts/run-agent-orchestration.sh#72602c0142ae':
-    'A multi-line shell command whose quoted argument is a program or expression, not '
-    + 'prose. Executed, never sent to a model.',
-  'orchestrations/scripts/run-agent-orchestration.sh#7ddbad1fcf1c':
-    'A multi-line shell command whose quoted argument is a program or expression, not '
-    + 'prose. Executed, never sent to a model.',
-  'orchestrations/scripts/run-agent-orchestration.sh#7e21c6a4bc79':
-    'A multi-line shell command whose quoted argument is a program or expression, not '
-    + 'prose. Executed, never sent to a model.',
-  'orchestrations/scripts/run-agent-orchestration.sh#832a8dedc276':
-    'A multi-line shell command whose quoted argument is a program or expression, not '
-    + 'prose. Executed, never sent to a model.',
-  'orchestrations/scripts/run-agent-orchestration.sh#8dd40f601e38':
-    'A multi-line shell command whose quoted argument is a program or expression, not '
-    + 'prose. Executed, never sent to a model.',
-  'orchestrations/scripts/run-agent-orchestration.sh#dde3e81bca22':
-    'A multi-line shell command whose quoted argument is a program or expression, not '
-    + 'prose. Executed, never sent to a model.',
-  'orchestrations/scripts/run-agent-orchestration.sh#f3ebc788afe1':
     'A multi-line shell command whose quoted argument is a program or expression, not '
     + 'prose. Executed, never sent to a model.',
   'orchestrations/scripts/run-agent-orchestration.sh#fdec67f3d494':
@@ -303,158 +236,27 @@ const ALLOW: Record<string, string> = {
   'orchestrations/scripts/claude.sh#032d3e8b03eb':
     'Usage text printed to a human operator on a bad invocation. It reaches a terminal, '
     + 'never a model.',
-  'orchestrations/scripts/claude.sh#045ce4375ff1':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/claude.sh#1a6701d7e34c':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/claude.sh#2999febe7aaf':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/claude.sh#5604880bfe04':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/claude.sh#665cfbf09c8e':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/claude.sh#7113bd53b032':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/claude.sh#90bddacbe111':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/claude.sh#c056c8856b1e':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/claude.sh#c335d92aae36':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/claude.sh#ca74187e9b77':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
   'orchestrations/scripts/codemie-claude.sh#032d3e8b03eb':
     'Usage text printed to a human operator on a bad invocation. It reaches a terminal, '
     + 'never a model.',
-  'orchestrations/scripts/contextualize-stories.sh#5b73d94ec306':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
   'orchestrations/scripts/contextualize-stories.sh#bc0d5db2a428':
     'Usage text printed to a human operator on a bad invocation. It reaches a terminal, '
     + 'never a model.',
-  'orchestrations/scripts/estimate-stories.sh#3fdf8ffba707':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
   'orchestrations/scripts/estimate-stories.sh#64d80753eeac':
     'Usage text printed to a human operator on a bad invocation. It reaches a terminal, '
     + 'never a model.',
-  'orchestrations/scripts/generate-qa-report.sh#a9101c97dc22':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/generate-run-narrative.sh#a868caff46a9':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/generate-run-narrative.sh#fe6d9d6d0d7d':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/ingest-jira-tickets.sh#0df65ada1dd4':
-    'Embedded JavaScript, executed by node on stdin. Not prompt text.',
-  'orchestrations/scripts/lib/story-guards.sh#0c4a211875c9':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/post-impl-tc-writer.sh#7068b3760f78':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/post-impl-tc-writer.sh#7beb0c878752':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/post-impl-tc-writer.sh#8fa6f15b80ba':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/preflight-check.sh#bcfc5747e3e5':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/preflight-prd-integrity.sh#5777b7737934':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
   'orchestrations/scripts/provider-cutover.sh#9cbb0bf8546b':
     'Usage text printed to a human operator on a bad invocation. It reaches a terminal, '
     + 'never a model.',
   'orchestrations/scripts/run-agent-orchestration.sh#0df4a51b79cf':
     'Usage text printed to a human operator on a bad invocation. It reaches a terminal, '
     + 'never a model.',
-  'orchestrations/scripts/run-agent-orchestration.sh#11463283f576':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/run-agent-orchestration.sh#18fe7d114b29':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/run-agent-orchestration.sh#1999552db136':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/run-agent-orchestration.sh#2d462fd4065a':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/run-agent-orchestration.sh#33ec8493b35f':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
   'orchestrations/scripts/run-agent-orchestration.sh#3604cccfdc29':
     'A JSON config file written to disk for a codeline. Data the engine reads back, not '
     + 'instructions given to an agent.',
-  'orchestrations/scripts/run-agent-orchestration.sh#485f54ef9a34':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
   'orchestrations/scripts/run-agent-orchestration.sh#531a929bc126':
     'A JSON config file written to disk for a codeline. Data the engine reads back, not '
     + 'instructions given to an agent.',
-  'orchestrations/scripts/run-agent-orchestration.sh#612bbe96fbe7':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/run-agent-orchestration.sh#650d590ccbcb':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/run-agent-orchestration.sh#69ee71512309':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/run-agent-orchestration.sh#6e4db5bb00cb':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/run-agent-orchestration.sh#6eebc247ef34':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/run-agent-orchestration.sh#859506c7cb63':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/run-agent-orchestration.sh#885d42965b82':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/run-agent-orchestration.sh#91465dfc7f40':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/run-agent-orchestration.sh#9e18082c1927':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/run-agent-orchestration.sh#b2ae9d463a9d':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/run-agent-orchestration.sh#bf0b0a2984d8':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/run-agent-orchestration.sh#ca4bbd9eeaa7':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/run-agent-orchestration.sh#ccf1e1f29443':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/run-agent-orchestration.sh#dc076c667a32':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/run-agent-orchestration.sh#e3b86bcd081c':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
-  'orchestrations/scripts/run-agent-orchestration.sh#ef3db1124306':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
   'orchestrations/scripts/test/test-epam-providers.sh#5304c244046b':
     'A test fixture: a stub script written to disk so a test runs without the real binary. '
     + 'Executed, never sent to a model.',
@@ -467,23 +269,15 @@ const ALLOW: Record<string, string> = {
   'orchestrations/scripts/tier3-skyscanner-app-run.sh#531a929bc126':
     'A JSON config file written to disk for a codeline. Data the engine reads back, not '
     + 'instructions given to an agent.',
-  'orchestrations/scripts/tier3-skyscanner-app-run.sh#565afadec65b':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
   'orchestrations/scripts/tier3-travel-app-run.sh#531a929bc126':
     'A JSON config file written to disk for a codeline. Data the engine reads back, not '
     + 'instructions given to an agent.',
-  'orchestrations/scripts/tier3-travel-app-run.sh#565afadec65b':
-    'Embedded Python, EXECUTED by python3. A heredoc is how a shell script hands a program '
-    + 'to an interpreter on stdin; no model receives it.',
   'orchestrations/scripts/tier3-travel-app-run.sh#ff1b10a652fb':
     'A JSON config file written to disk for a codeline. Data the engine reads back, not '
     + 'instructions given to an agent.',
   'orchestrations/scripts/update-cost-forecasts.sh#a1a0b8b48d07':
     'Usage text printed to a human operator on a bad invocation. It reaches a terminal, '
     + 'never a model.',
-  'orchestrations/scripts/worktree-health-check.sh#7c891358e8d9':
-    'A git commit message, written to repository history. No model is asked to act on it.',
 };
 
 const unexplained = (hits: Hit[]) => hits.filter((h) => !ALLOW[h.key]);

@@ -21,6 +21,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # weaker copy of the engine-artefact exclusions.
 # shellcheck source=lib/git-ops.sh
 source "$SCRIPT_DIR/lib/git-ops.sh"
+source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
 PROJECT_ROOT="${GIT_WORK_ROOT:-${PROJECT_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}}"
 PROJECT_ROOT="$(cd "$PROJECT_ROOT" && pwd)"
 
@@ -156,21 +157,23 @@ _auto_commit_worktree() {
         return 0
     fi
 
-    local commit_msg
-    commit_msg="$(cat <<EOF
-chore(wt-$lane): auto-commit agent output for phase $PHASE
-
-Automated commit of $changed_count file(s) produced by $lane agent.
-Phase: $PHASE
-Lane: $lane
-Timestamp: $timestamp
-
-WARNING: This was auto-committed by worktree-health-check.sh because
-the agent did not commit its own changes. Review these files.
-
-Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
-EOF
-)"
+    # RENDERED FROM THE TEMPLATE LAYER. A commit message is prose a human reads in git log
+    # months later; as a heredoc it could not be reviewed or diffed against anything else the
+    # engine says, and its attribution line had gone stale where nobody would see it.
+    local commit_msg _wt_vals
+    _wt_vals=$(mktemp "${TMPDIR:-/tmp}/wt-autocommit-vals-XXXXXX.json")
+    jq -n --arg lane "$lane" \
+          --arg phase "$PHASE" \
+          --arg changed_count "$changed_count" \
+          --arg timestamp "$timestamp" \
+          --arg author "${EPAM_AUTOCOMMIT_AUTHOR:-Claude <noreply@anthropic.com>}" \
+          '{"__LANE__":$lane,"__PHASE__":$phase,"__CHANGED_COUNT__":$changed_count,"__TIMESTAMP__":$timestamp,"__AUTHOR__":$author}' > "$_wt_vals"
+    if ! commit_msg=$(render_engine_prompt worktree-autocommit-message "$_wt_vals"); then
+        rm -f "$_wt_vals"
+        error "cannot render the auto-commit message — refusing to write a commit nobody can explain"
+        return 1
+    fi
+    rm -f "$_wt_vals"
 
     if git -C "$wt_path" commit -m "$commit_msg"; then
         success "Auto-committed $changed_count file(s) in worktree '$lane'"

@@ -18,7 +18,7 @@
         "The existing fare behaviour for children, pass holders and adults is unchanged."
       ],
       "codelines": [
-        "mock-a"
+        "mocka"
       ],
       "status": "pending",
       "completed": false,
@@ -36,7 +36,7 @@
         "An empty line still renders without error."
       ],
       "codelines": [
-        "mock-b"
+        "mockb"
       ],
       "status": "pending",
       "completed": false,

@@ -3687,6 +3687,39 @@ log "[orch] ✅ Pipeline complete." \
   return $_overall
 }
 
+# ── The agent mint ────────────────────────────────────────────────────────────
+# EVERY PROJECT MINTS ITS OWN AGENTS, however its PRD arrived.
+#
+# This lived inside _run_jira_pipeline, so a project whose PRD is authored never reached it and ran
+# on the canonical base roster — epam-cli's own first-commit agents, which is the exact failure the
+# mint was built to end. It also meant no role assignment, no project prompt library and no
+# prompt-agent-link, so a project declaring EPAM_PROMPT_PROVISION_MODE=generate exercised none of
+# that path.
+#
+# Same shape as codeline discovery, which was also reachable only from the Jira branch: a
+# capability every project needs cannot live behind the branch only some projects take.
+#
+#   $1 — the PRD to mint against
+#   $2 — the log file to tee into
+_run_agent_mint() {
+  local _prd="$1" _log="${2:-/dev/null}"
+  [ "${EPAM_SKIP_AGENT_MINT:-0}" = "1" ] || {
+    log "[mint] Minting project agents and assigning roles..."
+    "$NODE_BIN" "$SCRIPT_DIR/mint-agents-step.js" \
+        --prd "$_prd" \
+        --agents-dir "$EPAM_AGENTS_DIR" \
+        --log-dir "$LOG_DIR" \
+        --codeline-root "${PROJECT_ROOT:-}" 2>&1 | tee -a "$_log"
+    # PIPESTATUS[0], not the pipeline status: without pipefail the status here is tee's, so a
+    # failed mint would read as a success and every story would run with no assigned agent.
+    if [ "${PIPESTATUS[0]}" != "0" ]; then
+      error "[mint] Agent mint/assignment failed — refusing to run stories with no assigned agent."
+      return 1
+    fi
+  }
+  return 0
+}
+
 # ── Jira ingest flow ───────────────────────────────────────────────────────────
 # JIRA_PIPELINE=1: pull tickets, run AC gate, synthesize PRD, then route codelines.
 _run_jira_pipeline() {
@@ -3826,21 +3859,7 @@ _run_jira_pipeline() {
     fi
     log "[jira] Agent mint skipped (EPAM_SKIP_AGENT_MINT=1) — using the roster on disk (${_roster_n} agent(s))"
   fi
-  if [ "${EPAM_SKIP_AGENT_MINT:-0}" != "1" ]; then
-    log "[jira] Minting project agents and assigning roles..."
-    if ! "$NODE_BIN" "$SCRIPT_DIR/mint-agents-step.js" \
-        --prd "$_synth_prd" \
-        --agents-dir "$EPAM_AGENTS_DIR" \
-        --log-dir "$LOG_DIR" \
-        --codeline-root "${PROJECT_ROOT:-}" 2>&1 | tee -a "$_log_file"; then
-      error "[jira] Agent mint/assignment failed — refusing to run stories with no assigned agent."
-      return 1
-    fi
-    if [ "${PIPESTATUS[0]}" != "0" ]; then
-      error "[jira] Agent mint/assignment failed — refusing to run stories with no assigned agent."
-      return 1
-    fi
-  fi
+  _run_agent_mint "$_synth_prd" "$_log_file" || return 1
 
   # PAUSE 1 of 2 — the roster is minted and every story assigned, and nothing has been
   # specified or written yet. Which roles exist, how they are briefed, and which story each
@@ -4031,6 +4050,11 @@ if is_parent; then
       error "[orch] codeline scope could not be resolved — refusing to run against an unknown scope"
       exit 1
     fi
+
+    # THE MINT, on this path too. Scope is resolved above, so the codelines it needs exist.
+
+    # THE MINT, on this path too. Scope is resolved above, so the codelines it needs exist.
+    _run_agent_mint "$PRD_FILE" "${LOG_DIR:-}/orchestration.log" || exit 1
 
     # Canonical PRD flow: if the PRD defines multiple codelines, route them.
     # Single-codeline PRDs fall through to the normal phase execution below.

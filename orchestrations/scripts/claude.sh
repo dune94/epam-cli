@@ -7559,6 +7559,9 @@ $(cat "$_fa_vendor_contract")
     rm -f "$_analyst_values" "$_analyst_values_err"
 
     local analyst_raw="" analyst_json="" _analyst_call_ok="false"
+    # Which attempt the unusable-answer branch already recorded a rung for, so the call-failure
+    # branch below does not record a second one for the same failure.
+    local _analyst_stepped_attempt=""
     local _analyst_max_attempts=3 _analyst_attempt=1
     local _analyst_json_result
     _analyst_json_result=$(mktemp /tmp/analyst-result-XXXXXX.json)
@@ -7643,6 +7646,14 @@ for i, c in enumerate(text):
                 # which gate agents had no way to reach. The analyst now climbs the ladder its own
                 # archetype declares; lib/agent-ladder.sh explains why nothing here names a model.
                 agent_ladder_record_failure "$_ANALYST_SEAM" "$story_id"
+                # ONE RUNG PER FAILED ATTEMPT. The call-failure block further down escalates on
+                # exactly the condition this branch guarantees -- analyst_json is set to "" three
+                # lines above -- so both fired on every unusable answer and the analyst climbed
+                # two rungs for one failure, exhausting its ladder in half the attempts it was
+                # given. Saying which attempt already stepped is what keeps them exclusive; the
+                # other block is still needed on its own path, where the CALL failed and this
+                # branch never runs.
+                _analyst_stepped_attempt="$_analyst_attempt"
                 local _analyst_next
                 _analyst_next=$(agent_ladder_model "$_ANALYST_SEAM" "$story_id" "${gate_model:-}")
                 if [ -n "$_analyst_next" ] && [ "$_analyst_next" != "${gate_model:-}" ]; then
@@ -7689,7 +7700,8 @@ for i, c in enumerate(text):
         #
         # agent_ladder_model resolves the tier from the agent's ARCHETYPE through the seam, so no
         # agent name and no tier name is needed here at all.
-        if [ -z "$analyst_json" ] && [ "$_analyst_attempt" -lt "$_analyst_max_attempts" ]; then
+        if [ -z "$analyst_json" ] && [ "$_analyst_attempt" -lt "$_analyst_max_attempts" ] \
+           && [ "${_analyst_stepped_attempt:-}" != "$_analyst_attempt" ]; then
             local _next_gate_model
             agent_ladder_record_failure "$_ANALYST_SEAM" "$story_id"
             _next_gate_model=$(agent_ladder_model "$_ANALYST_SEAM" "$story_id" "${gate_model:-}")

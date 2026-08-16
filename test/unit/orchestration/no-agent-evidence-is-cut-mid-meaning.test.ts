@@ -13,7 +13,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -161,5 +161,39 @@ describe('spec-pass inputs arrive whole', () => {
 
   it('prior coordinator notes are not sliced into the prompt', () => {
     expect(SRC).not.toMatch(/priorNotes\.slice\(0,\s*\d+\)/);
+  });
+});
+
+/**
+ * THE NEGATIVE-OFFSET FORM, WHICH THE FIRST SWEEP MISSED ENTIRELY.
+ *
+ * The 2026-08-15 truncation sweep matched `${VAR:0:N}` and never matched `${VAR: -N}`. Two
+ * sites used it, both feeding the change-reviewer that approves profile addenda: it was shown
+ * the LAST 500 CHARACTERS of each version of a 148 KB roster. JSON key order means the
+ * addendum it was asked to approve was almost never inside that window, so the reviewer was
+ * judging a change it could not see — and an arbitrary tail reads as evidence.
+ *
+ * Replaced with a diff: the whole change, dropping only what did not change. That is the
+ * difference between summarising and cutting.
+ */
+describe('no negative-offset truncation reaches an agent', () => {
+  const SCRIPTS = join(ROOT, 'orchestrations/scripts');
+
+  it('no shell file uses the ${VAR: -N} form', () => {
+    const hits: string[] = [];
+    for (const f of readdirSync(SCRIPTS)) {
+      if (!f.endsWith('.sh')) continue;
+      readFileSync(join(SCRIPTS, f), 'utf8').split('\n').forEach((l, i) => {
+        if (l.trim().startsWith('#')) return;
+        if (/\$\{[A-Za-z_][A-Za-z0-9_]*: +-[0-9]+\}/.test(l)) hits.push(`${f}:${i + 1}  ${l.trim().slice(0, 80)}`);
+      });
+    }
+    expect(hits, `negative-offset truncation of agent input:\n${hits.join('\n')}`).toEqual([]);
+  });
+
+  it('the profile reviewer is given the change, not a tail of the file', () => {
+    const src = readFileSync(join(SCRIPTS, 'run-agent-orchestration.sh'), 'utf8');
+    expect(src).toMatch(/THE CHANGE ITSELF \(unified diff/);
+    expect(src, 'the tail excerpt is back').not.toMatch(/excerpt, last 500 chars/);
   });
 });

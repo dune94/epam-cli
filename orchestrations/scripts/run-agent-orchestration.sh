@@ -10844,6 +10844,18 @@ AC_APPLY_PY
                 local _profiles_before
                 _profiles_before=$(cat "$_profiles_file" 2>/dev/null || echo "{}")
                 local _prof_prompt
+                # THE CHANGE, NOT A TAIL.
+                #
+                # This showed the reviewer the LAST 500 CHARACTERS of each version of a 148 KB
+                # roster. JSON key order means the addendum it was asked to approve was almost
+                # never in that window — the reviewer was judging a change it could not see,
+                # and a truncation this arbitrary reads as evidence.
+                #
+                # A diff is the whole change and drops only what did not change, which is the
+                # difference between summarising and cutting.
+                local _profiles_change
+                _profiles_change=$(diff <(printf '%s' "$_profiles_before") <(printf '%s' "$_profiles_after") 2>/dev/null || true)
+                [ -z "$_profiles_change" ] && _profiles_change="(no textual difference between before and after)"
                 _prof_prompt=$(cat << ENDPROMPT3
 $(cat "$_profiles_file" | python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('profile-augmentor',''))")
 
@@ -10958,11 +10970,8 @@ $_prof_prompt"
 STORY: gate-remediation
 CHANGE TYPE: profile_addendum
 
-BEFORE (excerpt, last 500 chars):
-${_profiles_before: -500}
-
-AFTER (excerpt, last 500 chars):
-${_profiles_after: -500}
+THE CHANGE ITSELF (unified diff of the roster before and after):
+${_profiles_change}
 
 Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}" | \
                                 AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \

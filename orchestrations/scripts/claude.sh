@@ -26,6 +26,8 @@ LOG_DIR="$AUTOMATION_DIR/logs"
 
 # shellcheck source=lib/tc-writer-gate.sh
 source "$SCRIPT_DIR/lib/tc-writer-gate.sh"
+# shellcheck source=lib/render-engine-prompt.sh
+source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
 # shellcheck source=lib/story-guards.sh
 source "$SCRIPT_DIR/lib/story-guards.sh"
 source "$SCRIPT_DIR/lib/flags.sh"
@@ -6929,20 +6931,21 @@ run_prd_change_reviewer() {
     [ -z "$reviewer_profile" ] && reviewer_profile="You are a change reviewer. Validate the proposed change and emit {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}."
 
     local review_prompt
-    review_prompt="${reviewer_profile}
-
-STORY: ${story_id}
-CHANGE TYPE: ${change_type}
-
-BEFORE:
-${before_json}
-
-AFTER:
-${after_json}
-
-You have read-only tools available (list/search/read files, run read-only shell commands). Several of your rejection rules (introduces a technology this project does not already use; TC fact cannot be verified by reading source code) require checking a claim against the real manifests/config/source of THIS codeline — do not judge those from the before/after excerpts alone. Verify before rejecting on that basis; a wrong rejection blocks a correct change and is worse than a slower correct one. Your tool budget is small — check the ONE fact your verdict depends on, not the whole codebase.
-
-Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[\"<issue1>\"],\"reason\":\"<15 words max>\"}"
+    # RENDERED FROM THE TEMPLATE LAYER. Values go via a FILE, never argv: before/after carry
+    # whole PRD fragments, and a value past ARG_MAX exits 126 with an empty result — which is
+    # how the FailureAnalyst died silently earlier today.
+    local _rv_vals; _rv_vals=$(mktemp "${TMPDIR:-/tmp}/prd-review-vals-XXXXXX.json")
+    jq -n --arg profile "$reviewer_profile" --arg story "$story_id" --arg ct "$change_type" \
+          --rawfile before <(printf '%s' "$before_json") --rawfile after <(printf '%s' "$after_json") \
+          '{"__REVIEWER_PROFILE__":$profile,"__STORY_ID__":$story,"__CHANGE_TYPE__":$ct,"__BEFORE__":$before,"__AFTER__":$after}' \
+          > "$_rv_vals" 2>/dev/null
+    if ! review_prompt=$(render_engine_prompt prd-change-reviewer "$_rv_vals"); then
+        # >&2 REQUIRED: this function returns its verdict on STDOUT, so any log written to
+        # stdout is read as part of the verdict. There is a test for exactly this.
+        error "  [PRD-Reviewer] cannot render its prompt — refusing to review with no instructions" >&2
+        rm -f "$_rv_vals"; return 1
+    fi
+    rm -f "$_rv_vals"
 
     local review_raw=""
     # Full agent audit, 2026-07-31 (same class as HEAL-BLIND): several of this
@@ -7053,30 +7056,42 @@ run_prd_change_summarizer() {
     # kb_entry/skill_note constraints (single line, under 200 chars, imperative
     # verb) would corrupt working code. Branch the prompt AND the post-processing
     # (no `tr -d '\n'` — a script needs its newlines) by change type.
-    local summarize_prompt output_cap
+    local summarize_prompt output_cap _sum_template
     if [ "$change_type" = "tool_creation" ]; then
-        summarize_prompt="You are a bash script reviewer-summarizer. A dynamic tool script for story ${story_id} was REJECTED by the change reviewer for these reasons:
-${issues:-no details}
-
-ORIGINAL SCRIPT:
-${rejected_text}
-
-Rewrite the script to fix ONLY the issues listed above — a real bash bug (syntax error, subshell variable scoping, unquoted expansion, etc). Preserve the shebang line, the overall purpose, and every argument (\$1, \$2, ...) exactly as used. The script must remain idempotent (safe to run more than once).
-
-Emit ONLY the corrected script — no markdown fences, no commentary, no explanation."
+        _sum_template="prd-change-summarizer-tool"
         output_cap=4000
     else
-        summarize_prompt="You are a PRD change summarizer. A ${change_type} for story ${story_id} was REJECTED by the change reviewer for these reasons:
-${issues:-no details}
-
-ORIGINAL TEXT:
-${rejected_text}
-
-Rewrite the text to fix ONLY the issues listed above, preserving the original actionable rule. Requirements: no reference to any specific story ID; start with an imperative verb (Use, Always, Never, Prefer, Avoid); under 200 characters; end on a complete sentence; no markdown, no headers, no commentary.
-
-Emit ONLY the corrected text — nothing else."
+        _sum_template="prd-change-summarizer-text"
         output_cap=400
     fi
+
+    # One renderer for both variants; the branch above chose WHICH prompt, not its text.
+    local _sum_vals; _sum_vals=$(mktemp "${TMPDIR:-/tmp}/prd-sum-vals-XXXXXX.json")
+    # Each variant gets exactly the values ITS template uses. The renderer rejects a value
+    # nobody uses, deliberately: an extra value means the caller believes it supplied something
+    # the prompt never mentions, which is the same defect as a missing one seen from the other
+    # side. The tool variant carries no change type — a bash script is a bash script.
+    if [ "$_sum_template" = "prd-change-summarizer-tool" ]; then
+        jq -n --arg story "$story_id" \
+              --rawfile issues <(printf '%s' "${issues:-no details}") \
+              --rawfile rejected <(printf '%s' "$rejected_text") \
+              '{"__STORY_ID__":$story,"__ISSUES__":$issues,"__REJECTED_TEXT__":$rejected}' \
+              > "$_sum_vals" 2>/dev/null
+    else
+        jq -n --arg story "$story_id" --arg ct "$change_type" \
+              --rawfile issues <(printf '%s' "${issues:-no details}") \
+              --rawfile rejected <(printf '%s' "$rejected_text") \
+              '{"__STORY_ID__":$story,"__CHANGE_TYPE__":$ct,"__ISSUES__":$issues,"__REJECTED_TEXT__":$rejected}' \
+              > "$_sum_vals" 2>/dev/null
+    fi
+    if ! summarize_prompt=$(render_engine_prompt "$_sum_template" "$_sum_vals"); then
+        # >&2 REQUIRED: the caller captures this function with command substitution
+        # (current=$(run_prd_change_summarizer ...)), so a log on stdout becomes the rewritten
+        # text. Same hazard as the reviewer above.
+        error "  [PRD-Summarizer] cannot render '$_sum_template' — refusing to rewrite with no instructions" >&2
+        rm -f "$_sum_vals"; return 1
+    fi
+    rm -f "$_sum_vals"
 
     local summarized=""
     summarized=$(echo "$summarize_prompt" | \

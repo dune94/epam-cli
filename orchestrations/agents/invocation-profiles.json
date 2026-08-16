@@ -216,7 +216,8 @@
           "kind": "proposed-change",
           "required": true
         }
-      ]
+      ],
+      "template": "prd-change-reviewer"
     },
     "prd-change-summarizer": {
       "_what": "Summarizes a rewrite for the change log.",
@@ -231,7 +232,8 @@
           "kind": "proposed-change",
           "required": true
         }
-      ]
+      ],
+      "template": "prd-change-summarizer-text"
     },
     "impl-failure-analyst": {
       "_what": "Diagnoses why an implementation attempt failed.",

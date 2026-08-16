@@ -13,5 +13,8 @@
     "__TEST_SOURCE__",
     "__VERIFICATION_CRITERION__"
   ],
-  "version": 1
+  "version": 1,
+  "seams": [
+    "vc-coverage"
+  ]
 }

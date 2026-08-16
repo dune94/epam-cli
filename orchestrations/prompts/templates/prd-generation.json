@@ -10,5 +10,7 @@
     "__AGENT_ROLES__",
     "__STORY_ID_PREFIX__"
   ],
-  "version": 1
+  "version": 1,
+  "seams": [],
+  "consumer": "engine"
 }

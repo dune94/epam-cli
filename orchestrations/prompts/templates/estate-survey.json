@@ -20,5 +20,8 @@
     "__DOC_SECTION__",
     "__TICKET_BLOCK__"
   ],
-  "version": 1
+  "version": 1,
+  "seams": [
+    "estate-survey"
+  ]
 }

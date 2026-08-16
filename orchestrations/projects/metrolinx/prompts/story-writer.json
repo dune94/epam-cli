@@ -21,6 +21,9 @@
     "fix-plan": "## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)\nA code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.\n\nThe Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.\n\nHARD RULES:\n- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.\n- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.",
     "attempt-evidence": "## What Your Last Attempt Did\nThis is a diffstat, not a judgement — it is what is on disk, unedited. It is EVIDENCE, not an instruction: it does not tell you the work was right, and it does not tell you to undo it. Read it to see what you already changed, so you extend that work rather than rediscovering it or repeating it."
   },
+  "seams": [
+    "story-writer"
+  ],
   "derivedFromSha256": "617d10962cb8eff3992ef53742caccd5ab6462b51c0254cbe488e767bc0b1b56",
   "authority": "project"
 }

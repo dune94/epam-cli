@@ -22,6 +22,9 @@
     "__MANIFEST_SUMMARY__"
   ],
   "version": 1,
+  "seams": [
+    "codeline-discovery"
+  ],
   "derivedFromSha256": "1975f6f2d206650c613937d45d2e414a47bd68f50e65a5074d4a73d57439abeb",
   "authority": "project"
 }

@@ -18,6 +18,9 @@
     "__STORY_PAYLOAD__"
   ],
   "version": 1,
+  "seams": [
+    "ac-elaboration"
+  ],
   "derivedFromSha256": "b231ff99534d1b7754fe298270d551574c9eba0e242f32994d0287ddceed2a5d",
   "authority": "project"
 }

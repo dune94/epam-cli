@@ -29,5 +29,7 @@
     "__TEMPLATE_ID__",
     "__TEMPLATE_PLACEHOLDERS__"
   ],
-  "version": 2
+  "version": 2,
+  "seams": [],
+  "consumer": "engine"
 }

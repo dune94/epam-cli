@@ -23,7 +23,7 @@
 _REP_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 render_engine_prompt() {
-    local _id="$1" _values_file="$2"
+    local _id="$1" _values_file="$2" _body_key="${3:-}"
 
     if [ -z "$_id" ] || [ -z "$_values_file" ]; then
         echo "[render-engine-prompt] usage: render_engine_prompt <template-id> <values-json-file>" >&2
@@ -42,8 +42,8 @@ render_engine_prompt() {
         const fs = require("fs");
         const { renderEngineTemplate } = require(process.argv[1]);
         const values = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
-        process.stdout.write(renderEngineTemplate(process.argv[2], values));
-    ' "$_REP_LIB_DIR/engine-prompt.js" "$_id" "$_values_file" 2>"$_err")
+        process.stdout.write(renderEngineTemplate(process.argv[2], values, process.argv[4] || undefined));
+    ' "$_REP_LIB_DIR/engine-prompt.js" "$_id" "$_values_file" "$_body_key" 2>"$_err")
     local _rc=$?
 
     if [ "$_rc" -ne 0 ] || [ -z "$_out" ]; then

@@ -17,6 +17,9 @@
     "__PROJECT_ROOT__"
   ],
   "version": 1,
+  "seams": [
+    "qa-gate:sast"
+  ],
   "derivedFromSha256": "bce8c2ffc8850c2e7808d00a14d27a714e449a32cce440d302ba16d49927e5a6",
   "authority": "project"
 }

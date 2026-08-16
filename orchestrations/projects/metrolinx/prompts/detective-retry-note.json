@@ -14,6 +14,9 @@
   "id": "detective-retry-note",
   "placeholders": [],
   "version": 1,
+  "seams": [
+    "code-graph-detective"
+  ],
   "derivedFromSha256": "aea7f08be6a48e8605e6d4061959c8c7674a9adfaf385c84d5e846da7ddb86c9",
   "authority": "project"
 }

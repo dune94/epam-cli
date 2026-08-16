@@ -19,6 +19,8 @@
     "__FIXED_ROLE_LIST__"
   ],
   "version": 1,
+  "seams": [],
+  "consumer": "engine",
   "derivedFromSha256": "60c4284593236a8ceac9983e2085b987a9d1ff3ff79b150670c5138407ad0b23",
   "authority": "project"
 }

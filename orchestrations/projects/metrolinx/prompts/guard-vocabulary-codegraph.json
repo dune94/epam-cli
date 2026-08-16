@@ -20,6 +20,9 @@
     "__REPO_PATH__"
   ],
   "version": 1,
+  "seams": [
+    "guard-vocabulary"
+  ],
   "derivedFromSha256": "cef208946d25e2992c51a661a00ff37317799c90cd03a57a765371b4bb2478df",
   "authority": "project"
 }

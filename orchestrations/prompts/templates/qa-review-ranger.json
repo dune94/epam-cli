@@ -17,5 +17,8 @@
     "__PROJECT_ROOT__",
     "__REVIEW_DIFF_SUMMARY__"
   ],
-  "version": 1
+  "version": 1,
+  "seams": [
+    "qa-gate:review-ranger"
+  ]
 }

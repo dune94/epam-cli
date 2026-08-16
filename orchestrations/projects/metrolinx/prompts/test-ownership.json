@@ -23,6 +23,9 @@
     "writer": "## Tests are NOT your job this turn\nA dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix.\n\nThis is not a suggestion you can trade against a review comment: the reviewer has been given the same rule and will not reject you for absent tests. If a prior review comment appears to demand a test, it is stale — resolve it by making the fix correct, and say in your final message that test authorship belongs to the test-writer.\n\nAdding a test here wastes your turn budget and has caused repeated failures.",
     "reviewer": "## Test authorship is NOT this agent's responsibility\nThe implementer you are reviewing was explicitly forbidden to write, edit or create any test file (*.test.*, *.spec.*, __tests__/). A dedicated test-writer agent runs after the fix commits and owns that work, and its output is reviewed separately.\n\nTherefore: NEVER raise a blocker, or any finding, for absent or insufficient tests on the implementer's change. It could not have satisfied it, so the story cannot progress — that is an unwinnable gate, and it has cost whole runs.\n\nJudge the FIX: does it address the prescribed root cause, is it the smallest change that does so, does it preserve what the existing code guaranteed. Test coverage is checked elsewhere, by the coverage gate and by the test-writer's own review."
   },
+  "seams": [
+    "team-lead-review"
+  ],
   "derivedFromSha256": "b6716867d034b94ad12e903e064a9959b778b91e7297b4a099ad820ae6b06400",
   "authority": "project"
 }

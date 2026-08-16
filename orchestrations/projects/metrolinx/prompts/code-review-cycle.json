@@ -22,6 +22,9 @@
     "__STORY_TITLE__"
   ],
   "version": 1,
+  "seams": [
+    "code-review-cycle"
+  ],
   "derivedFromSha256": "60fde78b349849a7c1f1a0d164c66e96fb04bebe8da14a528d107c99c96e254d",
   "authority": "project"
 }

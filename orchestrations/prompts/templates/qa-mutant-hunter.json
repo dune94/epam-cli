@@ -17,5 +17,8 @@
     "__PHASE_ID__",
     "__PROJECT_ROOT__"
   ],
-  "version": 1
+  "version": 1,
+  "seams": [
+    "qa-gate:mutant-hunter"
+  ]
 }

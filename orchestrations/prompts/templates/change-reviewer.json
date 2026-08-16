@@ -23,5 +23,8 @@
     "__EVIDENCE__",
     "__STORY__"
   ],
-  "version": 1
+  "version": 1,
+  "seams": [
+    "prd-change-reviewer"
+  ]
 }

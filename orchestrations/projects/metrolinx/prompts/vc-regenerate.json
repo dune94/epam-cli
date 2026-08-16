@@ -23,6 +23,9 @@
     "__STORY_DESCRIPTION__"
   ],
   "version": 1,
+  "seams": [
+    "vc-coverage"
+  ],
   "derivedFromSha256": "dce965d440332712b78627d05beeaac1e3e5b5e4b6e7dfa13725d72dc1ae6817",
   "authority": "project"
 }

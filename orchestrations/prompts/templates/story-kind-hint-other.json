@@ -13,5 +13,8 @@
   "placeholders": [
     "__ISSUE_TYPE__"
   ],
-  "version": 1
+  "version": 1,
+  "seams": [
+    "story-writer"
+  ]
 }

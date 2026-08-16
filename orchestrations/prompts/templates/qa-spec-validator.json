@@ -19,5 +19,8 @@
     "__PROJECT_ROOT__",
     "__ROUTING_DECISION__"
   ],
-  "version": 1
+  "version": 1,
+  "seams": [
+    "qa-gate:spec-validator"
+  ]
 }

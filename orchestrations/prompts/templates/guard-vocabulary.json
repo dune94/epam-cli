@@ -22,5 +22,8 @@
     "__STORY_DESCRIPTION__",
     "__STORY_TITLE__"
   ],
-  "version": 1
+  "version": 1,
+  "seams": [
+    "guard-vocabulary"
+  ]
 }

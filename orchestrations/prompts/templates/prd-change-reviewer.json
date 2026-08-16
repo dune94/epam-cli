@@ -16,5 +16,8 @@
     "__REVIEWER_PROFILE__",
     "__STORY_ID__"
   ],
-  "version": 1
+  "version": 1,
+  "seams": [
+    "prd-change-reviewer"
+  ]
 }

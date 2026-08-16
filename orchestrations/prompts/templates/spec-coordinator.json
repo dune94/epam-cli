@@ -18,5 +18,8 @@
     "__PROFILE_PREFIX__",
     "__STORIES_PAYLOAD__"
   ],
-  "version": 1
+  "version": 1,
+  "seams": [
+    "cpa-gate"
+  ]
 }

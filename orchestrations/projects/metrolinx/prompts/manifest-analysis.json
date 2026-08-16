@@ -8,6 +8,8 @@
   "id": "manifest-analysis",
   "placeholders": [],
   "version": 1,
+  "seams": [],
+  "consumer": "engine",
   "derivedFromSha256": "201f512c2f1e732c8b8a37667b0033cb4417c72720631499ec67ef3277aeec8f",
   "authority": "project"
 }

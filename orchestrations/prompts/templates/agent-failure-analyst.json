@@ -1,0 +1,37 @@
+{
+  "$why": [
+    "Moved out of agent-attempt-analyst.sh on 2026-08-16, found by the prompt-chain test: the",
+    "agent-failure-analyst seam had a ladder, an effort and tool grants but no prompt in the",
+    "template layer, so whatever instructed it was still embedded. That is the orphan the chain",
+    "is meant to make impossible to keep.",
+    "",
+    "The five class hints are prompt text, not configuration -- each is a sentence addressed to",
+    "the analyst -- so they live here as bodies rather than as a case statement in the script.",
+    "The engine chooses WHICH by failure class; it no longer holds the wording of any of them.",
+    "",
+    "The role instructions still come from the project's profiles.json when it has them: this",
+    "body is the fallback for a project whose roster carries no failure-analyst role."
+  ],
+  "description": "Diagnoses why an agent attempt failed and prescribes the minimum corrective directive for its retry.",
+  "id": "agent-failure-analyst",
+  "seams": [
+    "agent-failure-analyst"
+  ],
+  "placeholders": [
+    "__PROFILE__",
+    "__CLASS_HINT__",
+    "__FAILURE_CLASS__",
+    "__FAILED_OUTPUT__",
+    "__CONTEXT__"
+  ],
+  "version": 1,
+  "bodies": {
+    "prompt": "__PROFILE__\n\nAn AI agent failed its task and must retry. Diagnose the SPECIFIC reason it failed from its output below, then prescribe a SHORT, CONCRETE corrective directive (1-3 sentences) to prepend to its next attempt so it SUCCEEDS this time. __CLASS_HINT__\n\nGround the directive in what the agent ACTUALLY did (below) and the REAL task — do not give generic advice. Output ONLY the corrective directive text, nothing else.\n\n=== FAILURE CLASS ===\n__FAILURE_CLASS__\n\n=== WHAT THE AGENT PRODUCED (its output/log) ===\n__FAILED_OUTPUT__\n\n=== THE TASK IT WAS GIVEN (ground truth) ===\n__CONTEXT__",
+    "role_fallback": "You are a self-healing pipeline analyst. Diagnose the exact reason an agent failed and prescribe the minimum corrective directive so its NEXT attempt succeeds.",
+    "hint_max_iterations": "The agent EXHAUSTED its iteration budget exploring and NEVER produced its output. The corrective directive must make it commit output EARLY — e.g. 'you have N calls; do the minimum lookup then WRITE your file/answer as your very next action; do NOT keep exploring.'",
+    "hint_no_file": "The agent finished WITHOUT writing the required file. The directive must make writing the file its FIRST action, at the exact required path.",
+    "hint_no_json": "The agent produced no parseable structured output (prose, or a tool-call wrapper). The directive must make it emit ONLY the required output inline, no tool calls, no prose.",
+    "hint_invalid_test": "The agent DID write the file, but it is not valid, runnable code — it failed to parse/compile, so the test never executed (the runner's exact error is in the output below). This is a SYNTAX/structure problem, not a logic problem: the directive must tell it to emit a complete, syntactically valid file — balanced braces/brackets, correct object-literal and array syntax, every import present — and to re-read its own output end-to-end before finishing. Do NOT tell it to change the assertion or the scenario; the previous attempt's intent was fine, only the code was malformed.",
+    "hint_default": "The agent failed to produce usable output."
+  }
+}

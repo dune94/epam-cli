@@ -13,6 +13,9 @@
     "__STORY_ID__"
   ],
   "version": 1,
+  "seams": [
+    "prd-change-summarizer"
+  ],
   "derivedFromSha256": "a4f3e073dedb864b4437d37657827042822cb7fcc10c3946e118510762689ed7",
   "authority": "project"
 }

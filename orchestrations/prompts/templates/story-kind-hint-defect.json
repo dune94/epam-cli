@@ -11,5 +11,8 @@
   "description": "Told to the detective when the tracker classifies the story as a defect.",
   "id": "story-kind-hint-defect",
   "placeholders": [],
-  "version": 1
+  "version": 1,
+  "seams": [
+    "story-writer"
+  ]
 }

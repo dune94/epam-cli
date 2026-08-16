@@ -30,6 +30,8 @@
     "__TEMPLATE_PLACEHOLDERS__"
   ],
   "version": 2,
+  "seams": [],
+  "consumer": "engine",
   "derivedFromSha256": "16401ba88e3430e6cc6072fde7469274f8b64e677c20b237591ba94a63936024",
   "authority": "project"
 }

@@ -13,5 +13,8 @@
   "description": "The estimator's standing instructions: refine a formula estimate conservatively and surface risk.",
   "id": "cpa-system",
   "placeholders": [],
-  "version": 1
+  "version": 1,
+  "seams": [
+    "cpa-inference"
+  ]
 }

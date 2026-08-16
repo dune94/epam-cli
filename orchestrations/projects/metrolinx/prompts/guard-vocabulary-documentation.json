@@ -15,6 +15,9 @@
     "__DOC_BLOCK__"
   ],
   "version": 1,
+  "seams": [
+    "guard-vocabulary"
+  ],
   "derivedFromSha256": "15e2f0de529c44bbe1ea3107fa0978000f55b4fd907f7bb9749412330f51596d",
   "authority": "project"
 }

@@ -19,5 +19,8 @@
     "__CODEGRAPH_TOOL__",
     "__REPO_PATH__"
   ],
-  "version": 1
+  "version": 1,
+  "seams": [
+    "guard-vocabulary"
+  ]
 }

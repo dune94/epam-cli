@@ -7,5 +7,7 @@
   "description": "Phase A of scaffolding: summarise a project manifest and raise clarifying questions.",
   "id": "manifest-analysis",
   "placeholders": [],
-  "version": 1
+  "version": 1,
+  "seams": [],
+  "consumer": "engine"
 }

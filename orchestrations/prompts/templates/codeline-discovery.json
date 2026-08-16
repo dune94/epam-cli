@@ -21,5 +21,8 @@
     "__ISSUES_SUMMARY__",
     "__MANIFEST_SUMMARY__"
   ],
-  "version": 1
+  "version": 1,
+  "seams": [
+    "codeline-discovery"
+  ]
 }

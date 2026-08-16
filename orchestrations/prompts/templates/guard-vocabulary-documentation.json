@@ -14,5 +14,8 @@
   "placeholders": [
     "__DOC_BLOCK__"
   ],
-  "version": 1
+  "version": 1,
+  "seams": [
+    "guard-vocabulary"
+  ]
 }

@@ -19,6 +19,9 @@
     "__SYSTEM_PROMPT__"
   ],
   "version": 1,
+  "seams": [
+    "cpa-inference"
+  ],
   "derivedFromSha256": "dc93df7ee7f6934c34857cd941e20063088809bfde885a6747e75548fba9e85b",
   "authority": "project"
 }

@@ -22,5 +22,8 @@
     "__SITE_BLOCK__",
     "__STORY_DESCRIPTION__"
   ],
-  "version": 1
+  "version": 1,
+  "seams": [
+    "vc-coverage"
+  ]
 }

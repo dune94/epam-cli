@@ -14,6 +14,9 @@
   "id": "cpa-system",
   "placeholders": [],
   "version": 1,
+  "seams": [
+    "cpa-inference"
+  ],
   "derivedFromSha256": "43b0cb58459cd7c24e5759454276c98c4339dc352e8946d457dbf667047b31c9",
   "authority": "project"
 }

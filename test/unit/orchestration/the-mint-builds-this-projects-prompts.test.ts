@@ -99,14 +99,27 @@ const readPrompt = (zone: ReturnType<typeof makeZone>, id: string) =>
   JSON.parse(readFileSync(join(zone.projectDir, 'prompts', `${id}.json`), 'utf8'));
 
 describe('the builder provisions every declared prompt', () => {
-  it('installs the bootstrap prompt VERBATIM — byte-identical to its template', async () => {
+  it('installs the bootstrap prompt VERBATIM — the TEXT, with its origin recorded', async () => {
     // Copied, not generated: it is the prompt the generating agent itself needs.
+    //
+    // The prompt TEXT is byte-identical; the FILE is not, and asserting byte-identity made this
+    // test contradict the-mint-step-provisions-prompts.test.ts, which asserts the opposite. Two
+    // tests answering one question differently is how a rule gets decided by whichever ran last.
+    // A project copy records which template it came from, because without that a later template
+    // edit is invisible: the project keeps running the older prompt while the template claims
+    // otherwise. Identity is also carried forward — id and seams — so the chain from template to
+    // project prompt to seam survives provisioning.
     const zone = makeZone();
     try {
       await build(zone, okStub);
-      const tpl = readFileSync(join(zone.templates, 'boot-one.json'), 'utf8');
-      const installed = readFileSync(join(zone.projectDir, 'prompts', 'boot-one.json'), 'utf8');
-      expect(installed).toBe(tpl);
+      const tpl = JSON.parse(readFileSync(join(zone.templates, 'boot-one.json'), 'utf8'));
+      const installed = JSON.parse(readFileSync(join(zone.projectDir, 'prompts', 'boot-one.json'), 'utf8'));
+      expect(installed.body ?? installed.bodies, 'the prompt text was altered by copying')
+        .toEqual(tpl.body ?? tpl.bodies);
+      expect(installed.id, 'the copy lost the id that maps it back to its template').toBe(tpl.id);
+      expect(installed.seams, 'the copy lost the seams it serves').toEqual(tpl.seams);
+      expect(installed.derivedFromSha256, 'the copy records no origin').toBeTruthy();
+      expect(installed.authority, 'the copy is not marked project authority').toBe('project');
     } finally { rmSync(zone.dir, { recursive: true, force: true }); }
   });
 

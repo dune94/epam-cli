@@ -17,6 +17,9 @@
   "$why": [
     "__ATTEMPT_CHANGES__ added 2026-08-12: this analyst was asked why an implementation failed while being shown no implementation. It answered 'Target=none — Transient import slip', a fair reading of the text it had and useless as guidance, and its answer escalates the model — so a blind diagnosis spends the writer's ladder."
   ],
+  "seams": [
+    "impl-failure-analyst"
+  ],
   "derivedFromSha256": "8fe99ae803dfd36839bba5be16924d61f9eb4fcb5211aa85faf5dca43b34c623",
   "authority": "project"
 }

@@ -34,5 +34,8 @@
     "__STORY_ID__",
     "__STORY_PAYLOAD__"
   ],
-  "version": 1
+  "version": 1,
+  "seams": [
+    "ac-elaboration"
+  ]
 }

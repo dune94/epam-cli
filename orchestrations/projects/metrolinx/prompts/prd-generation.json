@@ -11,6 +11,8 @@
     "__STORY_ID_PREFIX__"
   ],
   "version": 1,
+  "seams": [],
+  "consumer": "engine",
   "derivedFromSha256": "f065bf4d4726c4ed251549298eec88a371ae32a72a8295a862fff6c49943b187",
   "authority": "project"
 }

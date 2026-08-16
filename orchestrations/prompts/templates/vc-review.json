@@ -20,5 +20,8 @@
     "__STORY_DESCRIPTION__",
     "__VC_LIST__"
   ],
-  "version": 1
+  "version": 1,
+  "seams": [
+    "vc-coverage"
+  ]
 }

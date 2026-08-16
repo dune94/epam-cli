@@ -21,5 +21,8 @@
     "__TICKET_BLOCK__",
     "__TOOL_LINE__"
   ],
-  "version": 1
+  "version": 1,
+  "seams": [
+    "roster-review"
+  ]
 }

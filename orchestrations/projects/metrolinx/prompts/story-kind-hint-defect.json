@@ -12,6 +12,9 @@
   "id": "story-kind-hint-defect",
   "placeholders": [],
   "version": 1,
+  "seams": [
+    "story-writer"
+  ],
   "derivedFromSha256": "f896b6833798e4b9da77e41455d0a4d277f9ac702911f8eb0ed4d46603fc23d9",
   "authority": "project"
 }

@@ -100,37 +100,50 @@ fi
 _profile=""
 _profiles_file="$(dirname "$SCRIPT_DIR")/agents/profiles.json"
 [ -f "$_profiles_file" ] && _profile=$(jq -r '."failure-analyst" // ""' "$_profiles_file" 2>/dev/null || echo "")
-[ -z "$_profile" ] && _profile="You are a self-healing pipeline analyst. Diagnose the exact reason an agent failed and prescribe the minimum corrective directive so its NEXT attempt succeeds."
+# THE PROMPT, AND THE FIVE CLASS HINTS, FROM THE TEMPLATE LAYER.
+#
+# All of it used to sit here: the fallback role line, a five-arm case statement whose every arm
+# was a sentence addressed to the analyst, and the prompt heredoc. The engine still chooses
+# WHICH hint by failure class -- that is a decision, not wording -- but it no longer holds the
+# wording of any of them.
+. "$SCRIPT_DIR/lib/render-engine-prompt.sh"
+
+_tpl="$(dirname "$SCRIPT_DIR")/prompts/templates/agent-failure-analyst.json"
+_body() { "${NODE_BIN:-node}" -e '
+  const d = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+  process.stdout.write(String((d.bodies || {})[process.argv[2]] || ""));
+' "$_tpl" "$1"; }
+
+[ -z "$_profile" ] && _profile="$(_body role_fallback)"
 
 _failed_output=$(cat "$FAILED_OUTPUT_FILE" 2>/dev/null || echo "")
 _context=$(cat "$CONTEXT_FILE" 2>/dev/null || echo "")
 
 # Class-specific framing so the analyst targets the right behaviour.
-_class_hint=""
 case "$FAILURE_CLASS" in
-    max_iterations) _class_hint="The agent EXHAUSTED its iteration budget exploring and NEVER produced its output. The corrective directive must make it commit output EARLY — e.g. 'you have N calls; do the minimum lookup then WRITE your file/answer as your very next action; do NOT keep exploring.'" ;;
-    no_file)        _class_hint="The agent finished WITHOUT writing the required file. The directive must make writing the file its FIRST action, at the exact required path." ;;
-    no_json|malformed) _class_hint="The agent produced no parseable structured output (prose, or a tool-call wrapper). The directive must make it emit ONLY the required output inline, no tool calls, no prose." ;;
-    invalid_test)   _class_hint="The agent DID write the file, but it is not valid, runnable code — it failed to parse/compile, so the test never executed (the runner's exact error is in the output below). This is a SYNTAX/structure problem, not a logic problem: the directive must tell it to emit a complete, syntactically valid file — balanced braces/brackets, correct object-literal and array syntax, every import present — and to re-read its own output end-to-end before finishing. Do NOT tell it to change the assertion or the scenario; the previous attempt's intent was fine, only the code was malformed." ;;
-    *)              _class_hint="The agent failed to produce usable output." ;;
+    max_iterations)    _class_hint="$(_body hint_max_iterations)" ;;
+    no_file)           _class_hint="$(_body hint_no_file)" ;;
+    no_json|malformed) _class_hint="$(_body hint_no_json)" ;;
+    invalid_test)      _class_hint="$(_body hint_invalid_test)" ;;
+    *)                 _class_hint="$(_body hint_default)" ;;
 esac
 
-read -r -d '' _prompt <<PROMPT || true
-${_profile}
-
-An AI agent failed its task and must retry. Diagnose the SPECIFIC reason it failed from its output below, then prescribe a SHORT, CONCRETE corrective directive (1-3 sentences) to prepend to its next attempt so it SUCCEEDS this time. ${_class_hint}
-
-Ground the directive in what the agent ACTUALLY did (below) and the REAL task — do not give generic advice. Output ONLY the corrective directive text, nothing else.
-
-=== FAILURE CLASS ===
-${FAILURE_CLASS}
-
-=== WHAT THE AGENT PRODUCED (its output/log) ===
-${_failed_output:-(empty — it produced nothing)}
-
-=== THE TASK IT WAS GIVEN (ground truth) ===
-${_context:-(not provided)}
-PROMPT
+# Values via a FILE, never argv: a failed agent's output is routinely megabytes and argv is
+# capped at ARG_MAX. This is the same crash that took out the failure analyst on 2026-08-15.
+_aa_vals=$(mktemp "${TMPDIR:-/tmp}/agent-failure-analyst-vals-XXXXXX.json")
+jq -n --arg profile "$_profile" \
+      --arg class_hint "$_class_hint" \
+      --arg failure_class "$FAILURE_CLASS" \
+      --arg failed_output "${_failed_output:-(empty — it produced nothing)}" \
+      --arg context "${_context:-(not provided)}" \
+      '{"__PROFILE__":$profile,"__CLASS_HINT__":$class_hint,"__FAILURE_CLASS__":$failure_class,"__FAILED_OUTPUT__":$failed_output,"__CONTEXT__":$context}' \
+      > "$_aa_vals"
+if ! _prompt=$(render_engine_prompt agent-failure-analyst "$_aa_vals" prompt); then
+    rm -f "$_aa_vals"
+    warning "cannot render the analyst prompt — not analysing rather than asking with no instructions"
+    exit 0
+fi
+rm -f "$_aa_vals"
 
 # Activity emit — the failure-agent is a first-class agent and MUST be visible in
 # agent-activity.html like every other agent (2026-07-24). storyId comes from the caller.

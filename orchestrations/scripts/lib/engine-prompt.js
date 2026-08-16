@@ -59,7 +59,7 @@ function placeholdersIn(body) {
  * @param {Object} values  every placeholder the body uses, exactly — no more, no fewer
  * @returns {string}
  */
-function renderEngineTemplate(id, values) {
+function renderEngineTemplate(id, values, bodyKey) {
   const file = templatePath(id);
   let doc;
   try {
@@ -71,7 +71,22 @@ function renderEngineTemplate(id, values) {
     throw new Error(`[engine-prompt] cannot load template '${id}' from ${file}: ${e && e.message}`);
   }
 
-  let out = String(doc.body || '');
+  // ONE TEMPLATE MAY HOLD SEVERAL BODIES. The format already existed — prompt-library and the
+  // project builder both handle `bodies` — but this renderer only ever read `body`, so an engine
+  // prompt whose variants belong together had to be split across files or left in the script.
+  // The caller names the body it wants; asking for one that is not there is an error, never a
+  // silent fall back to some other variant.
+  let out;
+  if (doc.bodies && typeof doc.bodies === 'object') {
+    const key = bodyKey || 'prompt';
+    if (!(key in doc.bodies)) {
+      throw new Error(`[engine-prompt] template '${id}' has no body '${key}' — it declares: ${Object.keys(doc.bodies).join(', ')}`);
+    }
+    out = String(doc.bodies[key]);
+  } else {
+    if (bodyKey) throw new Error(`[engine-prompt] template '${id}' has a single body, but body '${bodyKey}' was asked for`);
+    out = String(doc.body || '');
+  }
   if (!out.trim()) throw new Error(`[engine-prompt] template '${id}' has an empty body`);
 
   const declared = placeholdersIn(out);

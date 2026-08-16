@@ -14,6 +14,9 @@
     "__TC_WRITER_PROFILE__"
   ],
   "version": 1,
+  "seams": [
+    "tc-writer"
+  ],
   "derivedFromSha256": "50d07a7c1b7cc5ef50acf1038498e3c40f319ba674ee90b9bd5d6f3841b3564a",
   "authority": "project"
 }

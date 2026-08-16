@@ -18,5 +18,8 @@
     "__REVIEW_CRITERIA__",
     "__REVIEW_PAYLOAD__"
   ],
-  "version": 1
+  "version": 1,
+  "seams": [
+    "cpa-gate"
+  ]
 }

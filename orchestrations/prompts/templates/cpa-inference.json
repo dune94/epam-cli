@@ -18,5 +18,8 @@
     "__SECTIONS__",
     "__SYSTEM_PROMPT__"
   ],
-  "version": 1
+  "version": 1,
+  "seams": [
+    "cpa-inference"
+  ]
 }

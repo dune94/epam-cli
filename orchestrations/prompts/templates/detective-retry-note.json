@@ -13,5 +13,8 @@
   "description": "Prepended to the detective prompt when its previous reply contained no JSON array.",
   "id": "detective-retry-note",
   "placeholders": [],
-  "version": 1
+  "version": 1,
+  "seams": [
+    "code-graph-detective"
+  ]
 }

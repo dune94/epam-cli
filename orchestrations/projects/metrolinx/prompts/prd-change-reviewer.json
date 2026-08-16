@@ -17,6 +17,9 @@
     "__STORY_ID__"
   ],
   "version": 1,
+  "seams": [
+    "prd-change-reviewer"
+  ],
   "derivedFromSha256": "1a550d29cd0c39181ddab3caf6658c2a828842de1dfab9b86608b25547ea9113",
   "authority": "project"
 }

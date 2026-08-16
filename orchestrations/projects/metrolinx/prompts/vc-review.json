@@ -21,6 +21,9 @@
     "__VC_LIST__"
   ],
   "version": 1,
+  "seams": [
+    "vc-coverage"
+  ],
   "derivedFromSha256": "2ee44eafc832b9457b758ad2005dad4c26bc695ef66ea3344b6e6cbfe28de5cf",
   "authority": "project"
 }

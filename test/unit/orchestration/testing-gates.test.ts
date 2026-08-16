@@ -11,6 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { templateBody } from '../../helpers/prompt-text';
 import { execSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 
@@ -220,7 +221,7 @@ describe('sast-sentinel profile — verdict rules', () => {
     const orchSrc = readFileSync(ORCH_SCRIPT, 'utf8');
     const hasCombined =
       profile.match(/NEVER classify a dev.dependency CVE as .blocker/i) ||
-      orchSrc.match(/NEVER classify a dev-dependency CVE as .blocker/i);
+      templateBody('qa-sast-sentinel').match(/NEVER classify a dev-dependency CVE as .blocker/i);
     expect(hasCombined).toBeTruthy();
   });
 });

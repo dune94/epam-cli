@@ -9277,7 +9277,7 @@ Return strict JSON only:
     {
         # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
         local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-sast-sentinel-vals-XXXXXX.json")
-        jq -n --arg gate_scope "$(_brownfield_gate_scope)" \
+        jq -n --arg gate_scope "$(_brownfield_gate_scope sast-sentinel)" \
               --arg phase_id "$phase_id" \
               --arg project_root "$PROJECT_ROOT" \
               '{"__GATE_SCOPE__":$gate_scope,"__PHASE_ID__":$phase_id,"__PROJECT_ROOT__":$project_root}' > "$_qa_vals" 2>/dev/null
@@ -9616,7 +9616,7 @@ $_spec_file_excerpts"
         local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-spec-validator-vals-XXXXXX.json")
         jq -n --arg force_lightpanda "$force_lightpanda" \
               --arg force_playwright "$force_playwright" \
-              --arg gate_scope "$(_brownfield_gate_scope)" \
+              --arg gate_scope "$(_brownfield_gate_scope spec-validator)" \
               --arg phase_id "$phase_id" \
               --arg project_root "$PROJECT_ROOT" \
               --arg routing_decision "$routing_decision" \
@@ -9950,7 +9950,7 @@ $_diff_patch"
 
             # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
             local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-review-ranger-vals-XXXXXX.json")
-            jq -n --arg gate_scope "$(_brownfield_gate_scope)" \
+            jq -n --arg gate_scope "$(_brownfield_gate_scope review-ranger)" \
                   --arg phase_id "$phase_id" \
                   --arg project_root "$PROJECT_ROOT" \
                   --arg review_diff_summary "$review_diff_summary" \
@@ -10062,7 +10062,7 @@ ${_test_content:-  (no test files found)}"
 
             # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
             local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-mutant-hunter-vals-XXXXXX.json")
-            jq -n --arg gate_scope "$(_brownfield_gate_scope)" \
+            jq -n --arg gate_scope "$(_brownfield_gate_scope mutant-hunter)" \
                   --arg mutant_oracle_summary "$mutant_oracle_summary" \
                   --arg phase_id "$phase_id" \
                   --arg project_root "$PROJECT_ROOT" \
@@ -10270,7 +10270,7 @@ MUTANT_PYEOF
             local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-fuzz-weaver-vals-XXXXXX.json")
             jq -n --arg force_lightpanda "$force_lightpanda" \
                   --arg force_playwright "$force_playwright" \
-                  --arg gate_scope "$(_brownfield_gate_scope)" \
+                  --arg gate_scope "$(_brownfield_gate_scope fuzz-weaver)" \
                   --arg phase_id "$phase_id" \
                   --arg project_root "$PROJECT_ROOT" \
                   --arg routing_decision "$routing_decision" \

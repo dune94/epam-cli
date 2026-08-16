@@ -21,6 +21,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, chmodSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
+import { templateBody } from '../../helpers/prompt-text';
 import { tmpdir } from 'node:os';
 
 const REPO_ROOT = join(__dirname, '../../../');
@@ -75,8 +76,11 @@ describe('claude.sh — reviewer-retry wired into tool_creation self-heal', () =
   it('run_prd_change_summarizer branches on change_type — tool_creation gets bash-appropriate rewrite instructions', () => {
     const body = extractFunctionBody('run_prd_change_summarizer');
     expect(body).toMatch(/if \[ "\$change_type" = "tool_creation" \]/);
-    expect(body).toMatch(/bash script reviewer-summarizer/);
-    expect(body).toMatch(/idempotent/);
+    // The branch is in the function; the WORDING it selects is in the template that branch
+    // renders. Asserting both keeps the pair honest: a branch that renders the wrong template,
+    // or a template that stopped saying what the branch exists to say, each fails on its own.
+    expect(templateBody('prd-change-summarizer-tool')).toMatch(/bash script reviewer-summarizer/);
+    expect(templateBody('prd-change-summarizer-tool')).toMatch(/idempotent/);
   });
 
   it('tool_creation post-processing does NOT strip newlines (a bash script needs them; kb_entry\\/skill_note collapse to one line)', () => {
@@ -147,6 +151,12 @@ ORCH_GATE_MODEL="fake-model"
 profiles_file=""
 warning() { :; }
 log() { :; }
+# render_engine_prompt, which the extracted functions call now that their prompts live in the
+# template layer. Without it every prompt build failed with "command not found", the reviewer
+# returned nothing usable, and the rewrite this test is about never happened -- so it read as a
+# broken retry rather than a harness missing a helper.
+source "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/lib/render-engine-prompt.sh"
+NODE_BIN="/home/bradleyjerome/.local/share/fnm/node-versions/v20.20.2/installation/bin/node"
 source "${dir}/fn_reviewer.sh"
 source "${dir}/fn_summarizer.sh"
 source "${dir}/fn_retry.sh"

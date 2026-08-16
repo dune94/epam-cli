@@ -31,6 +31,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
+import { templateBody } from '../../helpers/prompt-text';
 
 const ROOT = join(__dirname, '../../../');
 
@@ -141,7 +142,10 @@ describe('agent profiles are prompts too', () => {
 
 describe('worked examples use placeholders, never real values', () => {
   it('the discovery output example is generic', () => {
-    const src = readFileSync(join(ROOT, 'orchestrations/scripts/lib/codeline-discovery.js'), 'utf8');
+    // The prompt, not the module that renders it. Slicing 700 characters out of the .js found
+    // the render call and none of the example, so this reported the example as "moved" -- which
+    // it had, into the template layer, exactly as intended.
+    const src = templateBody('codeline-discovery');
     const i = src.indexOf('Output format (strict JSON');
     expect(i, 'the output-format example moved').toBeGreaterThan(-1);
     const example = src.slice(i, i + 700);

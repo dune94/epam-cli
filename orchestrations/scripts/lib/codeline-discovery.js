@@ -35,6 +35,28 @@ const { rankByStructure } = require('./codeline-structure');
 const { allManifests } = require('./ecosystems.js');
 
 /**
+ * Append this call's spend to the activity log. Best-effort by design: a cost record that fails
+ * to write must never take down the call it was measuring, and every failure here is silent for
+ * that reason. What is NOT silent is the absence of the plumbing — that is what the test guards.
+ */
+function _emitDiscoveryCost(costFile, agent) {
+  try {
+    const { emitCostSnapshot } = require('./cost-emitter.js');
+    emitCostSnapshot({
+      resultFile: costFile,
+      activityFile: process.env.ACTIVITY_FILE
+        || path.join(process.env.LOG_DIR || path.join(__dirname, '..', '..', 'logs'), 'agent-activity.jsonl'),
+      agent,
+      storyId: '',
+      phase: process.env.PHASE || '',
+      model: MODEL,
+      provider: PROVIDER,
+    });
+  } catch { /* cost emission must never break the agent call */ }
+  try { fs.unlinkSync(costFile); } catch { /* ignore */ }
+}
+
+/**
  * The directory-name patterns the scan skips. Read once per scan so a test can change the
  * environment between scans, and so a malformed pattern fails loudly rather than silently
  * excluding nothing — a scan that quietly stops excluding grows the candidate list and shifts
@@ -688,6 +710,18 @@ function callLlm(prompt, opts = {}) {
   const tmpPrompt = `/tmp/codeline-discovery-prompt-${process.pid}.txt`;
   fs.writeFileSync(tmpPrompt, prompt);
   const debug = process.env.DEBUG_CODELINE_DISCOVERY === '1';
+  // COST IS RECORDED, NOT ASSUMED. Discovery makes two model calls per run — the vocabulary
+  // agent and the matcher, one of them at effort:high with a 16k output budget — and neither
+  // appeared in any cost ledger, under any name. It spawns ai-run.sh directly rather than through
+  // a path that emits a cost_snapshot, which is exactly the invisibility lib/cost-emitter.js was
+  // written to close for spec-mode-runner.
+  //
+  // ai-run.sh already writes the normalized result JSON whenever ORCH_JSON_RESULT is set; it was
+  // never asked to. Per CALL, so both calls are recorded rather than only the last.
+  //
+  // Declared OUTSIDE the try so the finally can still see it: a call that threw spent money too,
+  // and dropping its record is how the expensive failures become the invisible ones.
+  const _costFile = `${tmpPrompt}.cost.json`;
   try {
     // stderr is captured (not discarded) when DEBUG_CODELINE_DISCOVERY=1, so
     // provider-side warnings/errors that still produce SOME stdout output
@@ -697,6 +731,7 @@ function callLlm(prompt, opts = {}) {
     // highest-scored repo and proceeded against the wrong codeline. The reason a
     // call failed is the only thing that makes the fallback judgeable.
     const _errFile = `${tmpPrompt}.err`;
+
     const cmd = debug
       ? `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt}`
       : `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>${_errFile}`;
@@ -725,6 +760,7 @@ function callLlm(prompt, opts = {}) {
       env:        {
         ...process.env,
         EPAM_AGENT_NAME: 'codeline-discovery',
+        ORCH_JSON_RESULT: _costFile,
         ...(() => { try { return require('./seam-invocation.js').seamInvocationEnv('codeline-discovery'); }
                     catch { return {}; } })(),
       },
@@ -757,6 +793,7 @@ function callLlm(prompt, opts = {}) {
     }
     return dropUngroundedCodelines(named);
   } finally {
+    _emitDiscoveryCost(_costFile, opts.costAgent || 'codeline-discovery');
     try { fs.unlinkSync(tmpPrompt); } catch { /* ignore */ }
   }
 }

@@ -10602,17 +10602,20 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                 # ── Agent 1: gate-finding-analyst ──────────────────────────────────
                 # Reads gate log + PRD, emits JSON { gate, story_id, file, line, rule, message, suggested_fix }
                 local _finding_prompt
-                _finding_prompt=$(cat << ENDPROMPT1
-$(cat "$_profiles_file" | python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('gate-finding-analyst',''))")
-
-Gate: ${_glabel}
-Gate log file: ${_glog}
-PRD file: ${PRD_FILE}
-Current phase: ${phase_id}
-
-Run your analysis now. Paste the verbatim log line proving the finding, then emit the JSON output.
-ENDPROMPT1
-)
+                # RENDERED FROM THE TEMPLATE LAYER. The role instructions come from the project's own
+                # profiles, supplied as a VALUE — they used to be a command substitution piping
+                # profiles.json through python inside the heredoc, which fails to an empty string in
+                # silence, so the agent could be given no role at all and nothing would say so.
+                local _fp_vals; _fp_vals=$(mktemp "${TMPDIR:-/tmp}/gate-finding-analyst-vals-XXXXXX.json")
+                local _fp_role; _fp_role=$(jq -r --arg r "gate-finding-analyst" '.[$r] // ""' "$_profiles_file" 2>/dev/null || echo "")
+                jq -n --arg profile "$_fp_role" \
+                      --arg gate_label "$_glabel" \
+                      --arg gate_log "$_glog" \
+                      --arg prd_file "$PRD_FILE" \
+                      --arg phase_id "$phase_id" \
+                      '{"__PROFILE__":$profile,"__GATE_LABEL__":$gate_label,"__GATE_LOG__":$gate_log,"__PRD_FILE__":$prd_file,"__PHASE_ID__":$phase_id}' > "$_fp_vals"
+                _finding_prompt="$(render_engine_prompt gate-finding-analyst "$_fp_vals")"
+                rm -f "$_fp_vals"
                 local _finding_json="" _gfa_attempt=0
                 while [ "$_gfa_attempt" -lt 2 ] && [ -z "$_finding_json" ]; do
                     local _gfa_prompt="$_finding_prompt"
@@ -10722,22 +10725,19 @@ for m in re.finditer(r'\{[^{}]*\"story_id\"[^{}]*\}', txt, re.DOTALL):
                 # deterministically in Python rather than trusting the agent to.
                 info "  [story-ac-remediator] Augmenting ACs for story ${_story_id}..."
                 local _ac_prompt
-                _ac_prompt=$(cat << ENDPROMPT2
-$(cat "$_profiles_file" | python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('story-ac-remediator',''))")
-
-## Finding to remediate
-\`\`\`json
-${_finding_json}
-\`\`\`
-
-Story to update: ${_story_id}
-
-## Story's existing acceptanceCriteria
-$(jq -c --arg id "$_story_id" '.stories[] | select(.id == $id) | (.acceptanceCriteria // []) | map(if type == "object" then .text else . end)' "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "[]")
-
-Draft the new ACs now and emit ONLY the JSON summary — do not write any files yourself; the orchestrator applies your proposed ACs to the PRD deterministically.
-ENDPROMPT2
-)
+                # RENDERED FROM THE TEMPLATE LAYER. The role instructions come from the project's own
+                # profiles, supplied as a VALUE — they used to be a command substitution piping
+                # profiles.json through python inside the heredoc, which fails to an empty string in
+                # silence, so the agent could be given no role at all and nothing would say so.
+                local _fp_vals; _fp_vals=$(mktemp "${TMPDIR:-/tmp}/story-ac-remediator-vals-XXXXXX.json")
+                local _fp_role; _fp_role=$(jq -r --arg r "story-ac-remediator" '.[$r] // ""' "$_profiles_file" 2>/dev/null || echo "")
+                jq -n --arg profile "$_fp_role" \
+                      --arg finding_json "$_finding_json" \
+                      --arg story_id "$_story_id" \
+                      --arg existing_acs "$(jq -c --arg id "$_story_id" '.stories[] | select(.id == $id) | (.acceptanceCriteria // []) | map(.)' "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "[]")" \
+                      '{"__PROFILE__":$profile,"__FINDING_JSON__":$finding_json,"__STORY_ID__":$story_id,"__EXISTING_ACS__":$existing_acs}' > "$_fp_vals"
+                _ac_prompt="$(render_engine_prompt story-ac-remediator "$_fp_vals")"
+                rm -f "$_fp_vals"
                 local _ac_result="" _acr_attempt=0
                 while [ "$_acr_attempt" -lt 2 ] && [ -z "$_ac_result" ]; do
                     local _acr_prompt="$_ac_prompt"
@@ -10875,21 +10875,20 @@ AC_APPLY_PY
                 local _profiles_change
                 _profiles_change=$(diff <(printf '%s' "$_profiles_before") <(printf '%s' "$_profiles_after") 2>/dev/null || true)
                 [ -z "$_profiles_change" ] && _profiles_change="(no textual difference between before and after)"
-                _prof_prompt=$(cat << ENDPROMPT3
-$(cat "$_profiles_file" | python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('profile-augmentor',''))")
-
-## Finding to evaluate
-\`\`\`json
-${_finding_json}
-\`\`\`
-
-Profiles file: ${_profiles_file}
-Story that wrote the offending code: ${_story_id}
-That story's agentRole (target THIS profile, not a guess from the gate name): ${_story_agent_role}
-
-Check if the pattern is novel and append a rule if needed. Write the updated profiles.json back, then emit the JSON summary.
-ENDPROMPT3
-)
+                # RENDERED FROM THE TEMPLATE LAYER. The role instructions come from the project's own
+                # profiles, supplied as a VALUE — they used to be a command substitution piping
+                # profiles.json through python inside the heredoc, which fails to an empty string in
+                # silence, so the agent could be given no role at all and nothing would say so.
+                local _fp_vals; _fp_vals=$(mktemp "${TMPDIR:-/tmp}/profile-augmentor-vals-XXXXXX.json")
+                local _fp_role; _fp_role=$(jq -r --arg r "profile-augmentor" '.[$r] // ""' "$_profiles_file" 2>/dev/null || echo "")
+                jq -n --arg profile "$_fp_role" \
+                      --arg finding_json "$_finding_json" \
+                      --arg profiles_file "$_profiles_file" \
+                      --arg story_id "$_story_id" \
+                      --arg story_agent_role "$_story_agent_role" \
+                      '{"__PROFILE__":$profile,"__FINDING_JSON__":$finding_json,"__PROFILES_FILE__":$profiles_file,"__STORY_ID__":$story_id,"__STORY_AGENT_ROLE__":$story_agent_role}' > "$_fp_vals"
+                _prof_prompt="$(render_engine_prompt profile-augmentor "$_fp_vals")"
+                rm -f "$_fp_vals"
                 local _prof_result="" _pfa3_attempt=0 _pfa3_disk_changed=0
                 local _profiles_after=""
                 while [ "$_pfa3_attempt" -lt 2 ] && [ "$_pfa3_disk_changed" = "0" ]; do

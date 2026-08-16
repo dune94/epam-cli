@@ -1,0 +1,24 @@
+{
+  "$why": [
+    "Moved out of run-agent-orchestration.sh on 2026-08-16.",
+    "",
+    "Proposes an acceptance-criteria patch that remediates a confirmed gate finding. Two things",
+    "reached it as command substitutions inside the heredoc: the role instructions, piped out of",
+    "profiles.json through python, and the story's existing ACs, pulled with jq. Both are inputs,",
+    "and both were being assembled by shell pipelines that fail to an empty string in silence --",
+    "so a remediator could be asked to revise criteria it had not been shown."
+  ],
+  "description": "Drafts replacement acceptance criteria that remediate a confirmed gate finding.",
+  "id": "story-ac-remediator",
+  "seams": [
+    "ac-elaboration"
+  ],
+  "placeholders": [
+    "__PROFILE__",
+    "__FINDING_JSON__",
+    "__STORY_ID__",
+    "__EXISTING_ACS__"
+  ],
+  "version": 1,
+  "body": "__PROFILE__\n\n## Finding to remediate\n```json\n__FINDING_JSON__\n```\n\nStory to update: __STORY_ID__\n\n## Story's existing acceptanceCriteria\n__EXISTING_ACS__\n\nDraft the new ACs now and emit ONLY the JSON summary — do not write any files yourself; the orchestrator applies your proposed ACs to the PRD deterministically."
+}

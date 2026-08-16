@@ -1,0 +1,24 @@
+{
+  "$why": [
+    "Moved out of run-agent-orchestration.sh on 2026-08-16.",
+    "",
+    "Decides whether a confirmed finding warrants an addendum to an agent profile. The role to",
+    "target is supplied explicitly -- \"target THIS profile, not a guess from the gate name\" --",
+    "because the gate that reported a finding is not the agent that caused it, and augmenting",
+    "the wrong profile teaches the wrong agent."
+  ],
+  "description": "Judges whether a confirmed finding is a novel pattern worth appending to an agent profile.",
+  "id": "profile-augmentor",
+  "seams": [
+    "prd-change-reviewer"
+  ],
+  "placeholders": [
+    "__PROFILE__",
+    "__FINDING_JSON__",
+    "__PROFILES_FILE__",
+    "__STORY_ID__",
+    "__STORY_AGENT_ROLE__"
+  ],
+  "version": 1,
+  "body": "__PROFILE__\n\n## Finding to evaluate\n```json\n__FINDING_JSON__\n```\n\nProfiles file: __PROFILES_FILE__\nStory that wrote the offending code: __STORY_ID__\nThat story's agentRole (target THIS profile, not a guess from the gate name): __STORY_AGENT_ROLE__\n\nCheck if the pattern is novel and append a rule if needed. Write the updated profiles.json back, then emit the JSON summary."
+}

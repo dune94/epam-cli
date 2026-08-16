@@ -122,7 +122,204 @@ function shellHeredocs(): Hit[] {
  * Blocks that have a prompt's SHAPE but are not sent to a model. Each states why.
  * Keyed by "<relative path>:<line>".
  */
-const ALLOW: Record<string, string> = {};
+const ALLOW: Record<string, string> = {
+  'orchestrations/scripts/claude.sh:11366':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/claude.sh:11748':
+    'Usage text printed to a human operator when the script is invoked wrongly. It reaches a '
+    + 'terminal, never a model.',
+  'orchestrations/scripts/claude.sh:1215':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/claude.sh:2781':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/claude.sh:3968':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/claude.sh:4028':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/claude.sh:4074':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/claude.sh:4266':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/claude.sh:4509':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/claude.sh:4603':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/claude.sh:4902':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/codemie-claude.sh:1275':
+    'Usage text printed to a human operator when the script is invoked wrongly. It reaches a '
+    + 'terminal, never a model.',
+  'orchestrations/scripts/contextualize-stories.sh:146':
+    'Usage text printed to a human operator when the script is invoked wrongly. It reaches a '
+    + 'terminal, never a model.',
+  'orchestrations/scripts/contextualize-stories.sh:444':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/estimate-stories.sh:186':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/estimate-stories.sh:82':
+    'Usage text printed to a human operator when the script is invoked wrongly. It reaches a '
+    + 'terminal, never a model.',
+  'orchestrations/scripts/generate-qa-report.sh:61':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/generate-run-narrative.sh:101':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/generate-run-narrative.sh:59':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/ingest-jira-tickets.sh:151':
+    'Embedded JavaScript, executed by node on stdin. Not prompt text: no model ever receives '
+    + 'it.',
+  'orchestrations/scripts/lib/codeline-discovery.js:154':
+    'A markdown-stripping loop that normalises README text before it is scored. Regex and '
+    + 'control flow, not prose — it matches the detector because a multi-line chain has a '
+    + 'prompt\'s shape.',
+  'orchestrations/scripts/lib/story-guards.sh:470':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/lib/tfidf.js:55':
+    'A chain of .replace() calls that strips code fences, links and punctuation before '
+    + 'tokenising. Pure text normalisation; nothing here is sent anywhere.',
+  'orchestrations/scripts/post-impl-tc-writer.sh:112':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/post-impl-tc-writer.sh:234':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/post-impl-tc-writer.sh:399':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/preflight-check.sh:209':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/preflight-prd-integrity.sh:34':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/provider-cutover.sh:36':
+    'Usage text printed to a human operator when the script is invoked wrongly. It reaches a '
+    + 'terminal, never a model.',
+  'orchestrations/scripts/run-agent-orchestration.sh:10117':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/run-agent-orchestration.sh:10191':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/run-agent-orchestration.sh:10368':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/run-agent-orchestration.sh:10488':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/run-agent-orchestration.sh:10784':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/run-agent-orchestration.sh:1222':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/run-agent-orchestration.sh:3173':
+    'A JSON configuration file written to disk for a codeline. Data the engine reads back, '
+    + 'not instructions an agent is given.',
+  'orchestrations/scripts/run-agent-orchestration.sh:3185':
+    'A JSON configuration file written to disk for a codeline. Data the engine reads back, '
+    + 'not instructions an agent is given.',
+  'orchestrations/scripts/run-agent-orchestration.sh:4314':
+    'Usage text printed to a human operator when the script is invoked wrongly. It reaches a '
+    + 'terminal, never a model.',
+  'orchestrations/scripts/run-agent-orchestration.sh:5402':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/run-agent-orchestration.sh:5465':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/run-agent-orchestration.sh:5863':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/run-agent-orchestration.sh:6112':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/run-agent-orchestration.sh:6263':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/run-agent-orchestration.sh:7120':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/run-agent-orchestration.sh:7253':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/run-agent-orchestration.sh:7463':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/run-agent-orchestration.sh:7682':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/run-agent-orchestration.sh:8144':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/run-agent-orchestration.sh:8889':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/run-agent-orchestration.sh:9320':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/run-agent-orchestration.sh:9463':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/run-agent-orchestration.sh:9573':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/run-agent-orchestration.sh:9660':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/run-agent-orchestration.sh:9823':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/spec-mode-runner.js:2569':
+    'Embedded JavaScript, executed by node on stdin. Not prompt text: no model ever receives '
+    + 'it.',
+  'orchestrations/scripts/test/test-epam-providers.sh:353':
+    'A test fixture: a stub script written to disk so a test can run without the real binary. '
+    + 'Executed, never sent to a model.',
+  'orchestrations/scripts/test/test-epam-providers.sh:423':
+    'A test fixture: a stub script written to disk so a test can run without the real binary. '
+    + 'Executed, never sent to a model.',
+  'orchestrations/scripts/tier3-skyscanner-app-run.sh:144':
+    'A JSON configuration file written to disk for a codeline. Data the engine reads back, '
+    + 'not instructions an agent is given.',
+  'orchestrations/scripts/tier3-skyscanner-app-run.sh:163':
+    'A JSON configuration file written to disk for a codeline. Data the engine reads back, '
+    + 'not instructions an agent is given.',
+  'orchestrations/scripts/tier3-skyscanner-app-run.sh:377':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/tier3-travel-app-run.sh:141':
+    'A JSON configuration file written to disk for a codeline. Data the engine reads back, '
+    + 'not instructions an agent is given.',
+  'orchestrations/scripts/tier3-travel-app-run.sh:161':
+    'A JSON configuration file written to disk for a codeline. Data the engine reads back, '
+    + 'not instructions an agent is given.',
+  'orchestrations/scripts/tier3-travel-app-run.sh:366':
+    'Embedded Python. It is EXECUTED by python3, not sent to a model — the heredoc is how a '
+    + 'script passes a program to an interpreter on stdin.',
+  'orchestrations/scripts/update-cost-forecasts.sh:44':
+    'Usage text printed to a human operator when the script is invoked wrongly. It reaches a '
+    + 'terminal, never a model.',
+  'orchestrations/scripts/worktree-health-check.sh:160':
+    'A git commit message. It is written to the repository history, and no model is asked to '
+    + 'act on it.',
+};
 
 const unexplained = (hits: Hit[]) => hits.filter((h) => !ALLOW[h.key]);
 

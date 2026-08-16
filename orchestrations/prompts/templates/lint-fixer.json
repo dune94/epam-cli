@@ -1,0 +1,19 @@
+{
+  "$why": [
+    "Moved out of run-agent-orchestration.sh on 2026-08-16.",
+    "",
+    "The lint-fixer edits files in place to a minimal, idiomatic change. Its wording is what keeps a style fix from turning into a refactor -- extracting a repeated literal into a constant is fine, changing what is asserted is not."
+  ],
+  "description": "Fixes code-style findings a linter reported, minimally and in place.",
+  "seams": [
+    "story-writer"
+  ],
+  "id": "lint-fixer",
+  "version": 1,
+  "body": "You are fixing code-style findings a linter reported on files THIS RUN just wrote.\n\n## Findings to fix (and nothing else)\n__LF_FINDINGS__\n\n## Rules\n1. Fix ONLY these findings, ONLY in these files. Do not refactor anything else.\n2. Do NOT weaken any test. Assertions, expected values and the scenario under\n   test must be preserved EXACTLY — a test here is the only executable proof the\n   bug is fixed, and a test that no longer proves it is far worse than a lint\n   warning. Extracting a repeated literal into a constant is fine; changing what\n   is asserted is not.\n3. Keep the change minimal and idiomatic for this repository.\n4. Edit the files in place with your write tool. Do not create new files.\n\nFiles: __LF_FILES__\nProject root: __PROJECT_ROOT__",
+  "placeholders": [
+    "__LF_FINDINGS__",
+    "__PROJECT_ROOT__",
+    "__LF_FILES__"
+  ]
+}

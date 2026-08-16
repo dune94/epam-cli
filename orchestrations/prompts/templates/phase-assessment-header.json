@@ -1,0 +1,19 @@
+{
+  "$why": [
+    "Moved out of run-agent-orchestration.sh on 2026-08-16.",
+    "",
+    "The phase header prepended to the skill assessment: which phase is being assessed and what Step 0.5 is permitted to change. That permission boundary is the whole gate -- an assessment allowed to rewrite anything is not an assessment."
+  ],
+  "description": "Frames a skill assessment with its phase and the changes it is permitted to make.",
+  "seams": [
+    "prd-change-reviewer"
+  ],
+  "id": "phase-assessment-header",
+  "version": 1,
+  "body": "__ASSESSMENT_PROMPT__\n\n## Phase: __PHASE_ID__\n\nRead __PRD_REL__ implementationOrder[\"__PHASE_ID__\"] for the story list, then proceed with the analysis above.",
+  "placeholders": [
+    "__ASSESSMENT_PROMPT__",
+    "__PHASE_ID__",
+    "__PRD_REL__"
+  ]
+}

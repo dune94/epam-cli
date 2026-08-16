@@ -1,0 +1,19 @@
+{
+  "$why": [
+    "Moved out of run-agent-orchestration.sh on 2026-08-16.",
+    "",
+    "Decides whether a story that failed repeatedly should have its acceptance criteria restructured, and proposes the restructuring."
+  ],
+  "description": "Judges whether a repeatedly-failing story needs its acceptance criteria restructured.",
+  "seams": [
+    "ac-elaboration"
+  ],
+  "id": "story-recovery-analyst",
+  "version": 1,
+  "body": "You are the story-recovery-analyst. Story __STORY_ID__ timed out twice (watchdog) and was marked failed -- it never finished within its time budget. Diagnose whether the story's OWN scope is the root cause (too many acceptance criteria, ambiguous/contradictory requirements, an unbounded/open-ended task) as opposed to a transient model/infra hiccup.\n\nStory (full PRD entry):\n__STORY_JSON__\n\nTail of its execution log (what it was doing when it timed out):\n__LOG_TAIL__\n\nIf the story's scope is genuinely too large or ambiguous: respond with JSON {\"restructure\": true, \"new_acs\": [\"...\", \"...\"], \"reason\": \"...\"} -- new_acs must be a TRIMMED, CONCRETE, non-overlapping replacement for the story's current acceptanceCriteria array (same intent, narrower/clearer scope, each one independently verifiable).\nIf this looks like a transient issue (model hiccup, infra flake) rather than a scope problem: respond with JSON {\"restructure\": false, \"reason\": \"...\"}.\nRespond with ONLY the JSON object, nothing else.",
+  "placeholders": [
+    "__STORY_JSON__",
+    "__LOG_TAIL__",
+    "__STORY_ID__"
+  ]
+}

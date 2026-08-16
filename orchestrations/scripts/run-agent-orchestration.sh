@@ -1406,23 +1406,14 @@ _lint_fix_findings_directly() {
         _lf_attempt=$(( _lf_attempt + 1 ))
         info "  [lint-fix] repairing ${_lf_findings_count:-$(printf '%s\n' "$_lf_findings" | wc -l | tr -d ' ')} finding(s) in place (attempt ${_lf_attempt}/${_lf_max})"
 
-        local _lf_prompt="You are fixing code-style findings a linter reported on files THIS RUN just wrote.
-
-## Findings to fix (and nothing else)
-${_lf_findings}
-
-## Rules
-1. Fix ONLY these findings, ONLY in these files. Do not refactor anything else.
-2. Do NOT weaken any test. Assertions, expected values and the scenario under
-   test must be preserved EXACTLY — a test here is the only executable proof the
-   bug is fixed, and a test that no longer proves it is far worse than a lint
-   warning. Extracting a repeated literal into a constant is fine; changing what
-   is asserted is not.
-3. Keep the change minimal and idiomatic for this repository.
-4. Edit the files in place with your write tool. Do not create new files.
-
-Files: ${_lf_files}
-Project root: ${PROJECT_ROOT}"
+        _cp_vals=$(mktemp "${TMPDIR:-/tmp}/lint-fixer-vals-XXXXXX.json")
+        jq -n \
+              --arg lf_findings "${_lf_findings}" \
+              --arg project_root "${PROJECT_ROOT}" \
+              --arg lf_files "${_lf_files}" \
+              '{"__LF_FINDINGS__":$lf_findings,"__PROJECT_ROOT__":$project_root,"__LF_FILES__":$lf_files}' > "$_cp_vals"
+        local _lf_prompt="$(render_engine_prompt lint-fixer "$_cp_vals")"
+        rm -f "$_cp_vals"
 
         AI_GATE_ALLOW_TOOLS=1 \
         EPAM_ALLOWED_TOOLS="${LINT_FIX_ALLOWED_TOOLS:-bash,read_file,write_file,list_files,search}" \
@@ -1978,17 +1969,14 @@ run_story_recovery_analyst() {
     local _log_tail
     _log_tail=$(cat "$log_file" 2>/dev/null || echo "")
 
-    local _prompt="You are the story-recovery-analyst. Story ${story_id} timed out twice (watchdog) and was marked failed -- it never finished within its time budget. Diagnose whether the story's OWN scope is the root cause (too many acceptance criteria, ambiguous/contradictory requirements, an unbounded/open-ended task) as opposed to a transient model/infra hiccup.
-
-Story (full PRD entry):
-${_story_json}
-
-Tail of its execution log (what it was doing when it timed out):
-${_log_tail}
-
-If the story's scope is genuinely too large or ambiguous: respond with JSON {\"restructure\": true, \"new_acs\": [\"...\", \"...\"], \"reason\": \"...\"} -- new_acs must be a TRIMMED, CONCRETE, non-overlapping replacement for the story's current acceptanceCriteria array (same intent, narrower/clearer scope, each one independently verifiable).
-If this looks like a transient issue (model hiccup, infra flake) rather than a scope problem: respond with JSON {\"restructure\": false, \"reason\": \"...\"}.
-Respond with ONLY the JSON object, nothing else."
+    _cp_vals=$(mktemp "${TMPDIR:-/tmp}/story-recovery-analyst-vals-XXXXXX.json")
+    jq -n \
+          --arg story_json "${_story_json}" \
+          --arg log_tail "${_log_tail}" \
+          --arg story_id "${story_id}" \
+          '{"__STORY_JSON__":$story_json,"__LOG_TAIL__":$log_tail,"__STORY_ID__":$story_id}' > "$_cp_vals"
+    local _prompt="$(render_engine_prompt story-recovery-analyst "$_cp_vals")"
+    rm -f "$_cp_vals"
 
     local _analyst_response="" _sra_attempt=0
     while [ "$_sra_attempt" -lt 2 ]; do
@@ -2877,16 +2865,16 @@ print(p.get('codeline-bridge-agent', ''))
     return 0
   fi
 
-  local _base_prompt="${_bridge_profile}
-
-## Variables for this run
-
-- BRIDGE_SRC_CODELINE: ${_bcl}
-- BRIDGE_SRC_DIR: ${_bwt}
-- BRIDGE_OUT_FILE: ${_bridge_out}
-- BRIDGE_PRD_FILE: ${_bprd}
-
-Extract the exported API surface from the '${_bcl}' codeline files and write the cross-codeline contract to ${_bridge_out}."
+  _cp_vals=$(mktemp "${TMPDIR:-/tmp}/codeline-bridge-vals-XXXXXX.json")
+  jq -n \
+        --arg bridge_profile "${_bridge_profile}" \
+        --arg bridge_out "${_bridge_out}" \
+        --arg bprd "${_bprd}" \
+        --arg bcl "${_bcl}" \
+        --arg bwt "${_bwt}" \
+        '{"__BRIDGE_PROFILE__":$bridge_profile,"__BRIDGE_OUT__":$bridge_out,"__BPRD__":$bprd,"__BCL__":$bcl,"__BWT__":$bwt}' > "$_cp_vals"
+  local _base_prompt="$(render_engine_prompt codeline-bridge "$_cp_vals")"
+  rm -f "$_cp_vals"
 
   local _bridge_attempt=0 _bridge_ok=0 _corrective_note=""
   while [ "$_bridge_attempt" -le "$_bridge_max_retries" ]; do
@@ -5166,11 +5154,14 @@ run_pre_phase_assessment() {
     rm -f "$_pfa_facts_file"
 
     # Append the phase-specific context
-    assessment_prompt="${assessment_prompt}
-
-## Phase: ${phase_id}
-
-Read ${PRD_REL} implementationOrder[\"${phase_id}\"] for the story list, then proceed with the analysis above."
+    _cp_vals=$(mktemp "${TMPDIR:-/tmp}/phase-assessment-header-vals-XXXXXX.json")
+    jq -n \
+          --arg assessment_prompt "${assessment_prompt}" \
+          --arg phase_id "${phase_id}" \
+          --arg prd_rel "${PRD_REL}" \
+          '{"__ASSESSMENT_PROMPT__":$assessment_prompt,"__PHASE_ID__":$phase_id,"__PRD_REL__":$prd_rel}' > "$_cp_vals"
+    assessment_prompt="$(render_engine_prompt phase-assessment-header "$_cp_vals")"
+    rm -f "$_cp_vals"
 
     # Fresh pre-call snapshot for reviewer diffing (profiles_backup is the
     # canonical original floor, not necessarily the immediately-prior state).
@@ -5205,10 +5196,13 @@ Read ${PRD_REL} implementationOrder[\"${phase_id}\"] for the story list, then pr
     for _pfa_attempt in 1 2 3; do
         local _pfa_prompt_this_attempt="$assessment_prompt"
         if [ -n "$_pfa_corrective_note" ]; then
-            _pfa_prompt_this_attempt="${_pfa_prompt_this_attempt}
-
-CRITICAL — YOUR PREVIOUS ATTEMPT VIOLATED YOUR OWN INSTRUCTIONS: ${_pfa_corrective_note}
-Fix this and retry. Do not repeat the same mistake."
+            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/corrective-note-vals-XXXXXX.json")
+            jq -n \
+                  --arg pfa_prompt_this_attempt "${_pfa_prompt_this_attempt}" \
+                  --arg pfa_corrective_note "${_pfa_corrective_note}" \
+                  '{"__PFA_PROMPT_THIS_ATTEMPT__":$pfa_prompt_this_attempt,"__PFA_CORRECTIVE_NOTE__":$pfa_corrective_note}' > "$_cp_vals"
+            _pfa_prompt_this_attempt="$(render_engine_prompt corrective-note "$_cp_vals" phase_assessment)"
+            rm -f "$_cp_vals"
         fi
 
         local _pfa_call_ok=1
@@ -5949,10 +5943,13 @@ else
         rm -f "$_cp_vals"
         rm -f "$_mc_role_file"
         if [ -n "$_mc_corrective_note" ]; then
-            _mc_prompt="${_mc_prompt}
-
-CRITICAL — YOUR PREVIOUS ATTEMPT VIOLATED YOUR OWN INSTRUCTIONS: ${_mc_corrective_note}
-Fix this and retry. Do not repeat the same mistake."
+            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/corrective-note-vals-XXXXXX.json")
+            jq -n \
+                  --arg mc_corrective_note "${_mc_corrective_note}" \
+                  --arg mc_prompt "${_mc_prompt}" \
+                  '{"__MC_CORRECTIVE_NOTE__":$mc_corrective_note,"__MC_PROMPT__":$mc_prompt}' > "$_cp_vals"
+            _mc_prompt="$(render_engine_prompt corrective-note "$_cp_vals" model_coordinator)"
+            rm -f "$_cp_vals"
         fi
         _mc_result=$(echo "$_mc_prompt" | \
             AI_GATE_ALLOW_TOOLS=1 \
@@ -7097,10 +7094,14 @@ else
             [ -z "$_sc_row" ] && continue
             _sc_role=$(echo "$_sc_row" | jq -r '.role')
             _sc_note=$(echo "$_sc_row" | jq -r '.note')
-            _sc_prompt="You are the skills-coordinator agent. A persisted self-heal skill note in profiles.json for the '${_sc_role}' role is suspected to be internally self-contradictory (it says not to use something, then recommends using that same thing). Read ${AGENT_PROFILES_FILE}, find the EXACT paragraph below inside the '${_sc_role}' profile string, and rewrite ONLY that paragraph so it states one clear, non-contradictory rule — keep the '[Self-Heal]' prefix and stay under 200 characters. Do not touch any other part of the profile.
-
-Flagged note:
-${_sc_note}"
+            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/skills-coordinator-vals-XXXXXX.json")
+            jq -n \
+                  --arg agent_profiles_file "${AGENT_PROFILES_FILE}" \
+                  --arg sc_role "${_sc_role}" \
+                  --arg sc_note "${_sc_note}" \
+                  '{"__AGENT_PROFILES_FILE__":$agent_profiles_file,"__SC_ROLE__":$sc_role,"__SC_NOTE__":$sc_note}' > "$_cp_vals"
+            _sc_prompt="$(render_engine_prompt skills-coordinator "$_cp_vals")"
+            rm -f "$_cp_vals"
             _sc_attempt=0
             while [ "$_sc_attempt" -lt 2 ]; do
                 _sc_run_prompt="$_sc_prompt"
@@ -7235,7 +7236,13 @@ else
             _tc_reason=$(echo "$_tc_row" | jq -r '.reason')
             _tc_path="$PROJECT_ROOT/.epam/dynamic-tools/${_tc_tool}.sh"
             _tc_before=$(cat "$_tc_path" 2>/dev/null || echo "")
-            _tc_prompt="You are the tools-coordinator agent. A dynamic tool at ${_tc_path} is broken (${_tc_reason}). Read the file, fix it so it runs successfully and stays idempotent (safe to run multiple times), and write the corrected script back to the SAME path. Keep the '#!/usr/bin/env bash' shebang and the purpose comment on line 2. Do not touch any other file."
+            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/tools-coordinator-vals-XXXXXX.json")
+            jq -n \
+                  --arg tc_reason "${_tc_reason}" \
+                  --arg tc_path "${_tc_path}" \
+                  '{"__TC_REASON__":$tc_reason,"__TC_PATH__":$tc_path}' > "$_cp_vals"
+            _tc_prompt="$(render_engine_prompt tools-coordinator "$_cp_vals")"
+            rm -f "$_cp_vals"
             _tc_attempt=0
             while [ "$_tc_attempt" -lt 2 ]; do
                 _tc_run_prompt="$_tc_prompt"
@@ -9115,24 +9122,18 @@ step_emit "23"  "skip" "Step 23: Browser E2E" "SKIP_TESTING_GATES=true"
             fi
 
             story_log="$LOG_DIR/${route}-${phase_id}-${story_id}.log"
-            prompt="$agent_profile
-
-You are running as $route inside Step 4.6 Browser E2E routing checks.
-Phase: $phase_id
-Story: $story_id
-Story title: $story_title
-Route reason: $route_reason
-Complexity score: $route_score
-
-Return strict JSON only:
-{
-  \"agent\": \"$route\",
-  \"storyId\": \"$story_id\",
-  \"phase\": \"$phase_id\",
-  \"verdict\": \"pass|warn|fail\",
-  \"findings\": [{\"severity\": \"blocker|major|minor\", \"message\": \"...\", \"file\": \"...\", \"line\": 0}],
-  \"summary\": \"...\"
-}"
+            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/e2e-route-check-vals-XXXXXX.json")
+            jq -n \
+                  --arg agent_profile "$agent_profile" \
+                  --arg route_reason "$route_reason" \
+                  --arg story_title "$story_title" \
+                  --arg route_score "$route_score" \
+                  --arg phase_id "$phase_id" \
+                  --arg story_id "$story_id" \
+                  --arg route "$route" \
+                  '{"__AGENT_PROFILE__":$agent_profile,"__ROUTE_REASON__":$route_reason,"__STORY_TITLE__":$story_title,"__ROUTE_SCORE__":$route_score,"__PHASE_ID__":$phase_id,"__STORY_ID__":$story_id,"__ROUTE__":$route}' > "$_cp_vals"
+            prompt="$(render_engine_prompt e2e-route-check "$_cp_vals")"
+            rm -f "$_cp_vals"
 
             echo "[$(date -Iseconds)] story=$story_id route=$route score=$route_score reason=$route_reason" >> "$e2e_route_log"
             set +e

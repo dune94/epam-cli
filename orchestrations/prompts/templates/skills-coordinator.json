@@ -1,0 +1,19 @@
+{
+  "$why": [
+    "Moved out of run-agent-orchestration.sh on 2026-08-16.",
+    "",
+    "Rewrites a persisted skill note that a reviewer flagged. It edits profiles.json directly, which is why the retry for this seam says 'the previous attempt did not update profiles.json' rather than 'your response was unparseable'."
+  ],
+  "description": "Rewrites a flagged skill note in the project's agent profiles.",
+  "seams": [
+    "prd-change-reviewer"
+  ],
+  "id": "skills-coordinator",
+  "version": 1,
+  "body": "You are the skills-coordinator agent. A persisted self-heal skill note in profiles.json for the '__SC_ROLE__' role is suspected to be internally self-contradictory (it says not to use something, then recommends using that same thing). Read __AGENT_PROFILES_FILE__, find the EXACT paragraph below inside the '__SC_ROLE__' profile string, and rewrite ONLY that paragraph so it states one clear, non-contradictory rule — keep the '[Self-Heal]' prefix and stay under 200 characters. Do not touch any other part of the profile.\n\nFlagged note:\n__SC_NOTE__",
+  "placeholders": [
+    "__AGENT_PROFILES_FILE__",
+    "__SC_ROLE__",
+    "__SC_NOTE__"
+  ]
+}

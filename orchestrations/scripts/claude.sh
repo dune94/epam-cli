@@ -12053,44 +12053,13 @@ run_pre_phase_assessment() {
     prd_rel=$(realpath --relative-to="$PROJECT_ROOT" "$PRD_FILE" 2>/dev/null || echo "orchestrations/prd.json")
 
     local assessment_prompt
-    assessment_prompt=$(cat << PROMPT_HEADER
-You are the skill assessment agent running in PRE-PHASE mode. Your job is to detect skill gaps in agent profiles BEFORE the phase runs, augment profiles with missing knowledge, and ensure test stories have the correct agent role.
-
-## PRD STRUCTURE (read this carefully before issuing any jq commands)
-The PRD file uses a FLAT structure — not nested phases. Key paths:
-- Story list: .stories[]
-- Phase story order: .implementationOrder["${phase_id}"] — returns an array of story IDs
-- Story lookup: .stories[] | select(.id == "<id>")
-- Agent role: .stories[] | select(.id == "<id>") | .agentRole
-- Files: .stories[] | select(.id == "<id>") | .technicalNotes.files[]
-
-DO NOT use .phases[0] — that path does not exist in this PRD.
-
-## Task
-1. Run: jq -r '.implementationOrder["${phase_id}"][]' ${prd_rel}
-   This gives you the list of story IDs for this phase.
-
-2. For each story ID, run: jq -c '.stories[] | select(.id == "<id>") | {id, agentRole, unitTests, technicalNotes}' ${prd_rel}
-
-3. ROLE VERIFICATION: For any story where all files in technicalNotes.files match *.test.ts or *.spec.ts:
-   - If agentRole is not "test-engineer", update it: jq --arg id "<id>" '(.stories[] | select(.id == \$id)).agentRole = "test-engineer"' ${prd_rel} > /tmp/prd_tmp.json && mv /tmp/prd_tmp.json ${prd_rel}
-   - Ensure the test-engineer profile exists in orchestrations/agents/profiles.json
-
-4. PROFILE CREATION: If "test-engineer" key is missing from profiles.json, add it based on the project's techStack in the PRD (read .project.techStack).
-
-5. SKILL GAP FILL: For each story, compare agentRole profile text against technicalNotes.requiredSkills. Add missing skills as sentences. Keep profiles.json valid JSON.
-
-6. Append JSONL audit records to orchestrations/logs/profiles-audit.jsonl using flock.
-
-7. Write summary to orchestrations/logs/phase-improvements/pre-${phase_id}.md
-
-Known skill categories: deployment_platform, language, framework, testing, database, infrastructure, api, cloud_service
-
-CRITICAL: Keep profiles.json valid JSON. Only ADD content, never remove. Use the exact jq paths above.
-
-## Phase: ${phase_id}
-PROMPT_HEADER
-    )
+    _ap_vals=$(mktemp "${TMPDIR:-/tmp}/skill-assessment-prephase-vals-XXXXXX.json")
+    jq -n \
+          --arg phase_id "$phase_id" \
+          --arg prd_rel "$prd_rel" \
+          '{"__PHASE_ID__":$phase_id,"__PRD_REL__":$prd_rel}' > "$_ap_vals"
+    assessment_prompt="$(render_engine_prompt skill-assessment-prephase "$_ap_vals" with_prd_structure)"
+    rm -f "$_ap_vals"
 
     cd "$PROJECT_ROOT"
     local _orch_provider="${EPAM_ORCHESTRATION_PROVIDER:-}"

@@ -5146,102 +5146,19 @@ run_pre_phase_assessment() {
     # Build assessment prompt
     local assessment_prompt
     # shellcheck disable=SC2287
-    assessment_prompt=$(cat << PROMPT_HEADER
-CONVERGE FAST — HARD LIMIT: ${_pfa_tool_budget} tool calls total. This is not a suggestion.
-By your ${_pfa_tool_budget}th tool call you MUST stop investigating and return your BEST current
-answer. Exploring past the budget WITHOUT answering means you return nothing at all and every
-bit of your investigation is discarded — a partially-informed augmentation is worth far more
-than none. If you are unsure, decide from what you have already seen and answer now.
-
-You are the skill assessment agent running in PRE-PHASE mode. Your job is to deeply reason about what each assigned agent will need to succeed — not just check a list of requiredSkills, but actively anticipate pitfalls given the tech stack, file types, and implementation patterns the stories demand. You augment agent profiles with the specific knowledge needed to avoid failures before they happen.
-
-## PRD STRUCTURE (read this carefully before issuing any jq commands)
-The PRD file uses a FLAT structure — not nested phases. Key paths:
-- Story list: .stories[]
-- Phase story order: .implementationOrder["${phase_id}"] — returns an array of story IDs
-- Story lookup: .stories[] | select(.id == "<id>")
-- Agent role field: .agentRole on each story object
-- Files field: .technicalNotes.files[] on each story object
-
-DO NOT use .phases[0] — that path does not exist in this PRD.
-
-${_pfa_facts}
-
-## Task
-1. Run: jq -r '.implementationOrder["${phase_id}"][]' ${PRD_REL}
-   This gives you the ordered list of story IDs for this phase.
-
-2. For each story ID, run: jq -c --arg id "<id>" '.stories[] | select(.id == \$id) | {id, agentRole, unitTests, technicalNotes}' ${PRD_REL}
-
-3. ROLE ASSIGNMENT — For any story where agentRole is null or empty:
-   a. Examine the story's technicalNotes.files list
-   b. If ALL files in the list are test files (matching *.test.ts or *.spec.ts), assign agentRole "test-engineer"
-   c. If the story has unitTests:true AND its files include test files mixed with implementation files, this story MUST be split:
-      - Implementation child: files without *.test.ts, agentRole "typescript-engineer"
-      - Test child: only the *.test.ts files, agentRole "test-engineer"
-      - Report the agentRole for each child in storyRoleAssignments
-   d. Otherwise assign the most appropriate role from ${PROFILES_REL} based on the story's tech stack
-   e. Report it in storyRoleAssignments. Do NOT edit ${PRD_REL} yourself.
-
-4. PROFILE CREATION — For any agentRole assigned in step 3 that does NOT exist as a key in ${PROFILES_REL}:
-   a. Read the project context from ${PRD_REL} (projectName, techStack, constraints)
-   b. Read the story's technicalNotes to understand the testing conventions for this project
-   c. Generate a new profile string for that role, derived from THIS project: its name, its test framework and version, its module system, its mocking convention, its forbidden packages, its test config path and include pattern — every one of these read from the project's own manifest and existing tests, never assumed. Include the instruction that a test-only role writes test files and never implementation files.
-   d. Report it in newProfiles. Do NOT edit ${PROFILES_REL} yourself.
-
-5. PROACTIVE SKILL INFERENCE — For each story's agentRole, reason beyond the requiredSkills list. Read the story's full technicalNotes, acceptanceCriteria, and files. Then ask: given this tech stack and these implementation patterns, what are the specific pitfalls an agent is likely to walk into that are NOT already covered in the profile?
-
-   Infer gaps by reasoning about the code the agent will write, not the labels in requiredSkills. The SHAPE of the reasoning is:
-     "<something concrete this story's code will do, read from THIS repository>
-      → the specific mistake an agent tends to make there
-      → the exact rule that prevents it"
-
-   EVERY rule you report must come from THIS project's code. Name a real file, a
-   real dependency, a real convention you have actually seen in this repository.
-   You are given no worked examples on purpose: any example would be from some
-   other project, and reproducing it here would hand this project's agents
-   another codebase's rules. If you cannot ground a rule in something you have
-   read, do not report it — an empty profileAdditions is a correct answer.
-
-   Be specific and actionable — state the exact rule, not a general category. Do NOT edit ${PROFILES_REL} yourself.
-
-6. EXPLICIT SKILL GAP FILL — After proactive inference, also do the traditional check:
-   a. Compare each story's technicalNotes.requiredSkills against the agent's profile text
-   b. For any skills explicitly listed but not covered in the profile, report them in profileAdditions
-
-## YOUR OUTPUT — A DECISION, NOT AN EDIT
-
-You do NOT write any file. You have no write tool, and hand-rolling scripts to
-edit a 136,000-character JSON file is what made every previous attempt at this
-task run out of iterations without ever finishing — one of them appended the same
-rule four times and then spent its remaining turns undoing that.
-
-Return ONE JSON object and nothing else. The pipeline applies it deterministically:
-
-  {
-    "storyRoleAssignments": [{"storyId": "<id>", "agentRole": "<role>"}],
-    "profileAdditions":     [{"role": "<role>", "rules": ["<exact rule>", "..."]}],
-    "newProfiles":          [{"role": "<role>", "profile": "<full profile text>"}]
-  }
-
-All three keys are required; use an empty array when there is nothing for one.
-Rules already present in a profile are ignored, so do not try to de-duplicate.
-A role that already has a profile is never replaced — use profileAdditions for it.
-A story that already has an agentRole is never reassigned.
-
-Known skill categories: deployment_platform, language, framework, testing, database, infrastructure, api, cloud_service
-
-CRITICAL RULES:
-- Keep ${PROFILES_REL} valid JSON at all times. Only ADD to existing profile strings, never remove content.
-- A test-engineer profile must instruct the agent to ONLY write test files — never touch implementation files.
-- The same agentRole must NEVER appear on both an implementation story and its paired test story in the same phase.
-- Inferred skill additions must be specific and actionable (a concrete rule the agent can follow), not vague capability claims.
-- NEVER write example API keys, tokens, or secrets into any source file — not even as placeholders. If example values are needed in documentation, read the credential from the environment (whatever variable THIS project already uses for it) or write the literal string \`YOUR_API_KEY_HERE\`. Any string matching \`/sk-[a-z]+-[a-zA-Z0-9]+/\` or resembling a credential will trigger a SAST blocker.
-- NEVER modify package.json, tsconfig.json, vitest.config.ts, or any other scaffold-phase infrastructure file. These are owned by the scaffold phase and are immutable to all subsequent phases. If a story appears to require changing these files, flag it as a blocker in skills-gap-report.jsonl instead.
-- NEVER rewrite the PRD file (${PRD_REL}) with a different story structure. You may only update agentRole fields and append to ${PROFILES_REL}. Any other structural change to the PRD is forbidden.
-- NEVER modify .env, .env.*, *credentials*, or any file containing API keys or secrets. These files are immutable to all agents — modification would break the entire pipeline for all subsequent runs.
-PROMPT_HEADER
-    )
+    local _pfa_facts_file; _pfa_facts_file=$(mktemp "${TMPDIR:-/tmp}/pfa-facts-XXXXXX.txt")
+    printf '%s' "${_pfa_facts:-}" > "$_pfa_facts_file"
+    _ap_vals=$(mktemp "${TMPDIR:-/tmp}/post-failure-analyst-vals-XXXXXX.json")
+    jq -n \
+          --rawfile pfa_facts "$_pfa_facts_file" \
+          --arg pfa_tool_budget "$_pfa_tool_budget" \
+          --arg phase_id "$phase_id" \
+          --arg prd_rel "$prd_rel" \
+          --arg profiles_rel "$profiles_rel" \
+          '{"__PFA_FACTS__":$pfa_facts,"__PFA_TOOL_BUDGET__":$pfa_tool_budget,"__PHASE_ID__":$phase_id,"__PRD_REL__":$prd_rel,"__PROFILES_REL__":$profiles_rel}' > "$_ap_vals"
+    assessment_prompt="$(render_engine_prompt post-failure-analyst "$_ap_vals")"
+    rm -f "$_ap_vals"
+    rm -f "$_pfa_facts_file"
 
     # Append the phase-specific context
     assessment_prompt="${assessment_prompt}

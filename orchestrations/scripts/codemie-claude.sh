@@ -1575,30 +1575,13 @@ run_pre_phase_assessment() {
     prd_rel=$(realpath --relative-to="$PROJECT_ROOT" "$PRD_FILE" 2>/dev/null || echo "orchestrations/prd.json")
 
     local assessment_prompt
-    assessment_prompt=$(cat << PROMPT_HEADER
-You are the skill assessment agent running in PRE-PHASE mode. Your job is to detect skill gaps in agent profiles BEFORE the phase runs, and augment profiles with missing knowledge.
-
-## Task
-1. Read ${prd_rel} and find the stories in the current phase's implementationOrder
-2. For each story, extract required skills from description + technicalNotes (especially technicalNotes.requiredSkills)
-3. Read orchestrations/agents/profiles.json and find the profile for each story's agentRole
-4. Compare: does the agent's profile text mention each required skill?
-5. For any GAPS found:
-   a. Append a sentence to the agent's profile in profiles.json mentioning the missing skill
-   b. Append a JSONL record to orchestrations/logs/profiles-audit.jsonl:
-      {"timestamp":"<ISO8601>","phase_id":"<phase>","agent_role":"<role>","event":"skill_added","skill":"<skill>","skill_category":"<category>","context":"Story <id> requires <skill>","added_by":"pre-phase-assessment"}
-   c. Use flock when writing to JSONL files
-6. Write a summary to orchestrations/logs/phase-improvements/pre-${phase_id}.md
-
-Known skill categories: deployment_platform, language, framework, testing, database, infrastructure, api, cloud_service
-
-IMPORTANT: Keep profiles.json valid JSON at all times. Only ADD to existing profile strings, never remove content.
-
-## Phase: ${phase_id}
-
-Read ${prd_rel} implementationOrder["${phase_id}"] for the story list, then proceed with the analysis above.
-PROMPT_HEADER
-    )
+    _ap_vals=$(mktemp "${TMPDIR:-/tmp}/skill-assessment-prephase-vals-XXXXXX.json")
+    jq -n \
+          --arg prd_rel "$prd_rel" \
+          --arg phase_id "$phase_id" \
+          '{"__PRD_REL__":$prd_rel,"__PHASE_ID__":$phase_id}' > "$_ap_vals"
+    assessment_prompt="$(render_engine_prompt skill-assessment-prephase "$_ap_vals" basic)"
+    rm -f "$_ap_vals"
 
     cd "$PROJECT_ROOT"
     if echo "$assessment_prompt" | "$CLAUDE_CMD" --print --output-format text --dangerously-skip-permissions 2>&1 | tee "$assessment_log"; then

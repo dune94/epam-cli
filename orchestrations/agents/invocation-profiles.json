@@ -369,7 +369,8 @@
           "kind": "ticket",
           "required": true
         }
-      ]
+      ],
+      "template": "estate-survey"
     },
     "story-writer": {
       "_what": "Implements a story: writes the code that satisfies its criteria. The archetype every minted -engineer is an instance of.",

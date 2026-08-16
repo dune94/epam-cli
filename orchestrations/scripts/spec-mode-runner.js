@@ -3266,6 +3266,35 @@ function sanitizeSurvey(payload, codelines) {
  * wording — it forbade naming a file at all, conflating evidence with prescription — and no
  * test could see that while the string was welded inside a 150-line function.
  */
+
+/**
+ * Render an ENGINE prompt from the template layer.
+ *
+ * Templates are the single source for prompt text — no prompt may live in code. This is the
+ * engine-side counterpart to prompt-library.js, which renders a PROJECT-AUTHORITY copy for
+ * agent-facing seams. Substitution is strict in both directions for the same reason it is
+ * there: a placeholder left unreplaced means evidence silently never reached the agent, and a
+ * value nobody uses means the caller believes it supplied something that went nowhere.
+ */
+function renderEngineTemplate(id, values) {
+  const file = path.join(__dirname, '..', 'prompts', 'templates', id + '.json');
+  let doc;
+  try { doc = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) {
+    throw new Error(`[prompt] cannot load engine template '${id}' from ${file}: ${e && e.message}`);
+  }
+  let out = String(doc.body || '');
+  if (!out.trim()) throw new Error(`[prompt] engine template '${id}' has an empty body`);
+  const declared = [...new Set(out.match(/__[A-Z][A-Z0-9_]*__/g) || [])];
+  const supplied = Object.keys(values || {});
+  const missing = declared.filter((p) => !supplied.includes(p));
+  if (missing.length) throw new Error(`[prompt] '${id}' is missing values for: ${missing.join(', ')}`);
+  const unused = supplied.filter((p) => !declared.includes(p));
+  if (unused.length) throw new Error(`[prompt] '${id}' was given values it does not use: ${unused.join(', ')}`);
+  // Replacer FUNCTION, not a string: a dollar-ampersand or dollar-digit inside a diff, log or
+  // regex would otherwise be read as a replacement pattern and corrupt the evidence silently.
+  for (const key of declared) out = out.replace(new RegExp(key, 'g'), () => String(values[key]));
+  return out;
+}
 function buildSurveyPrompt({ codelines, tickets, referencedDocs, declaredDependencies } = {}) {
   const _cls = (Array.isArray(codelines) ? codelines : []).filter(Boolean);
   const _named = _cls.map((c) => (typeof c === 'string' ? { name: c } : c)).filter((c) => c && c.name);
@@ -3304,91 +3333,17 @@ function buildSurveyPrompt({ codelines, tickets, referencedDocs, declaredDepende
   const depBlock = (Array.isArray(declaredDependencies) ? declaredDependencies : [])
     .map((d) => `- ${d}`).join('\n');
 
-  return `You are surveying an estate of repositories BEFORE its agent team is assembled.
-
-THE WORK (real tickets from the tracker):
-${ticketBlock || '- (no tickets available)'}
-
-${docBlock ? `DOCUMENTS LINKED ON THOSE TICKETS:\n${docBlock}\n` : ''}
-${depBlock ? `WHAT EACH CODELINE DECLARES IT DEPENDS ON (its own manifest — ground truth about\nthe stack, not inference from ticket text):\n${depBlock}\n` : ''}
-THE CODELINES IN SCOPE, and where each is checked out:
-${_named.map((c) => `- ${c.name}: ${c.path || '(path unknown)'}`).join('\n')}
-
-HOW TO LOOK — USE THE SYMBOL INDEX, NOT TEXT SEARCH.
-
-Every codeline above is already indexed in CodeGraph. Use codegraph_query as your PRIMARY
-instrument, and call it iteratively — 5-10 calls is normal:
-  - codegraph_query explore "<domain nouns from the ticket>"  — START HERE, per codeline
-  - codegraph_query query|callers|callees "<symbol>"          — trace what explore surfaced
-  - codegraph_query show "<file> [start] [end]"               — read the real lines before
-                                                                quoting anything as evidence
-It returns real symbols, their definition sites, who calls them, and which have tests. That is
-the question you are actually asking: where does this codeline wire the thing the ticket is
-about. Text search cannot answer it and ranks a vendored copy of a package alongside the one
-line that initialises it.
-
-Reserve 'search' for what a symbol index cannot hold — a config key, an environment variable
-name, a literal string. Then treat its result with suspicion:
-
-  A SEARCH THAT RETURNS NOTHING IS NOT EVIDENCE THAT NOTHING IS THERE.
-
-On 2026-08-08 this survey reported "searched for seven patterns, all returned zero matches, no
-existing infrastructure was found, meaning this is greenfield work" about three codelines
-holding 243, 102 and 158 matching source files. The search tool was silently broken and every
-call returned "(no matches found)". The reasoning was sound and the premise was false. If a
-search comes back empty, confirm with codegraph_query before concluding absence — and if the
-two disagree, say so in your evidence rather than picking one.
-
-YOUR JOB, and its limits:
-
-1. For EVERY codeline above, OPEN IT and decide whether this work reaches it. The ticket's
-   labels and components are a claim, not evidence — they are frequently wrong about which
-   repositories are involved, which is why you exist. Report what you actually looked at.
-
-2. "I looked and this work does not reach this codeline" is a VALUABLE answer. Report it as
-   no_work_found, with the evidence. It is not the same as not having looked, and reporting
-   the two as one is how an unexamined repository comes to read as a clean bill of health.
-
-3. Recommend which codelines need their own investigator agent, and what each should focus on.
-   Keep that recommendation OUT of your findings: findings are what you saw, recommendations
-   are about the team.
-
-REPORT THE EXACT FILES YOU OPENED, in "filesRead". If you report a codeline as in_scope you
-must name AT LEAST ONE FILE you opened in it: saying the work reaches a repository you did not
-read is an assertion, and an assertion of exactly that kind produced "no existing
-infrastructure, this is greenfield work" about an estate with 243 matching source files.
-Looking and finding nothing is different, and is a valuable answer — report that as
-no_work_found with what you read. A directory tells a later reader almost
-nothing — src/context/ exists in most codelines — and a claim about it cannot be checked. A
-file path can be verified, and a brief built on one is grounded. Report what you read even
-where you conclude the work does not reach that codeline.
-
-WHAT YOU MUST NOT DO. You are not fixing anything and you are not choosing files to change.
-Do not say which file to edit, which function to patch, or what the change should be. Naming a
-file as something you READ is evidence and is wanted; naming one as the place to fix is a
-decision that is not yours. Each codeline gets its own investigator working inside that
-repository, and it decides. A fix site you supply for a repository you swept from the outside
-is how one codeline's file ends up in another's work — so report what you saw, state where to
-look, and let the investigator look.
-
-Respond with ONLY valid JSON (no markdown fences, no report, no commentary before or after):
-{
-  "codelines": [
-    {
-      "codeline": "<exactly as named in scope above>",
-      "state": "in_scope | no_work_found | not_investigated | failed",
-      "evidence": "<what you opened and what you saw>",
-      "surfaces": ["<directory or module>"],
-      "filesRead": ["<exact path of a file you opened>"]
-    }
-  ],
-  "recommendedInvestigators": [
-    { "codeline": "<name>", "focus": "<what it should concentrate on>", "why": "<what you saw>" }
-  ]
-}
-
-One entry in "codelines" for EVERY codeline listed in scope. Everything you want to say goes
-inside these fields — a prose report outside this JSON is discarded unread, however good it is.`;
+  // RENDERED FROM THE TEMPLATE LAYER, never from a string in this file. The conditional
+  // sections are computed here — whole, heading included, or empty — because a template that
+  // branches is a program and cannot be reviewed as prose.
+  return renderEngineTemplate('estate-survey', {
+    __TICKET_BLOCK__: ticketBlock || '- (no tickets available)',
+    __DOC_SECTION__: docBlock ? `DOCUMENTS LINKED ON THOSE TICKETS:\n${docBlock}\n` : '',
+    __DEP_SECTION__: depBlock
+      ? `WHAT EACH CODELINE DECLARES IT DEPENDS ON (its own manifest — ground truth about\nthe stack, not inference from ticket text):\n${depBlock}\n`
+      : '',
+    __CODELINE_BLOCK__: _named.map((c) => `- ${c.name}: ${c.path || '(path unknown)'}`).join('\n'),
+  });
 }
 
 async function surveyEstate({

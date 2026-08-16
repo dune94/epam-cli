@@ -182,7 +182,8 @@
           "kind": "estimate",
           "required": true
         }
-      ]
+      ],
+      "template": "cpa-system"
     },
     "cpa-inference": {
       "_what": "Produces the cost/effort estimate for a story.",
@@ -199,7 +200,8 @@
         {
           "kind": "fix-plan"
         }
-      ]
+      ],
+      "template": "cpa-inference"
     },
     "prd-change-reviewer": {
       "_what": "Reviews a proposed PRD mutation before it is applied.",

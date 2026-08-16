@@ -22,6 +22,7 @@
 'use strict';
 
 const { spawnSync } = require('child_process');
+const { renderEngineTemplate } = require('./engine-prompt');
 const path          = require('path');
 
 // ── Configuration ──────────────────────────────────────────────────────────
@@ -116,7 +117,10 @@ function buildPrompt(input) {
         : '')
     : '';
 
-  const userMessage = [
+  // Sections are assembled here: filter(Boolean) means an absent section removes its
+  // separator too, which a template cannot express without becoming a program. The envelope
+  // and the closing instruction are the prompt, and they live in the template layer.
+  const sections = [
     `## Story Under Review\n\`\`\`json\n${storyJson}\n\`\`\``,
     `## Formula Baseline Estimate\n\`\`\`json\n${JSON.stringify(formulaEstimate, null, 2)}\n\`\`\``,
     kbSection,
@@ -124,12 +128,12 @@ function buildPrompt(input) {
     adjSection,
     manifestSection,
     rcaSection,
-    '---',
-    'Respond with ONLY the JSON object as specified in your instructions. No prose, no markdown fences.',
   ].filter(Boolean).join('\n\n');
 
-  // Combine system prompt + user message into a single prompt for --print mode
-  return [systemPrompt, '', '---', '', userMessage].join('\n');
+  return renderEngineTemplate('cpa-inference', {
+    __SYSTEM_PROMPT__: systemPrompt,
+    __SECTIONS__: sections,
+  });
 }
 
 // ── Input validation ───────────────────────────────────────────────────────

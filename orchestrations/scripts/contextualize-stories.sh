@@ -90,7 +90,6 @@ LIB_DIR="$SCRIPT_DIR/lib"
 PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
 COST_LOG="${COST_LOG:-$AUTOMATION_DIR/logs/phase-cost.jsonl}"
 CPA_LOG="${CPA_LOG:-$AUTOMATION_DIR/logs/cpa-review.jsonl}"
-SYSTEM_PROMPT_FILE="$AUTOMATION_DIR/prompts/cpa-system.md"
 KB_DIR="$AUTOMATION_DIR/agents"   # KB.md and AGENTS.md live here
 
 # Extra docs fed into TF-IDF beyond the KB dir
@@ -210,38 +209,19 @@ if [ ! -f "$LIB_DIR/cpa-inference.js" ]; then
   error "cpa-inference.js not found: $LIB_DIR/cpa-inference.js"; exit 1
 fi
 
-if [ ! -f "$SYSTEM_PROMPT_FILE" ]; then
-  warning "CPA system prompt not found: $SYSTEM_PROMPT_FILE"
-  warning "Using built-in fallback prompt (non-blocking)."
-  SYSTEM_PROMPT="$(cat <<'EOF'
-You are the Contextual Purveyor Agent (CPA).
-Goal: refine formula-based implementation estimates for a software story using provided context.
-
-Rules:
-- Return strict JSON only.
-- Be conservative when confidence is low.
-- Surface concrete risk flags and missing knowledge areas.
-- Prefer practical effort realism over optimism.
-
-Output schema:
-{
-  "confidence": 0.0,
-  "complexityAdjustment": 1.0,
-  "adjustedEstimate": {
-    "aiMinutes": 0,
-    "cost": 0,
-    "tokens": 0,
-    "turns": 1
-  },
-  "riskFlags": [],
-  "missingKbCoverage": [],
-  "citedSources": [],
-  "reasoning": "short rationale"
-}
-EOF
-)"
-else
-  SYSTEM_PROMPT="$(cat "$SYSTEM_PROMPT_FILE")"
+# ONE SOURCE, NO FALLBACK.
+#
+# This used to prefer $AUTOMATION_DIR/prompts/cpa-system.md and fall back to a copy embedded
+# in this script. That file has never existed, so every CPA run warned "prompt not found —
+# using built-in fallback (non-blocking)" and quietly ran the embedded copy. Two sources, one
+# of them dead, and the live one invisible to review.
+#
+# The template layer is now the only source, and an empty render is fatal: an estimator with
+# no instructions produces an estimate that looks like every other estimate.
+SYSTEM_PROMPT="$("${NODE_BIN:-node}" -e 'process.stdout.write(require(process.argv[1]).renderEngineTemplate("cpa-system", {}))' "$SCRIPT_DIR/lib/engine-prompt.js")"
+if [ -z "$SYSTEM_PROMPT" ]; then
+  error "cpa: the cpa-system prompt rendered empty — refusing to run the estimator with no instructions"
+  exit 1
 fi
 
 # ── Reconcile mode ───────────────────────────────────────────────────────────

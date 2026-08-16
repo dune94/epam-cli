@@ -3072,9 +3072,16 @@ _run_codeline_loop() {
       # project's main branch — not the full commit history.
       local _baseline_branch="${JIRA_BASELINE_BRANCH:-main}"
       local _baseline_sha=""
-      _baseline_sha=$(git -C "$_wt" rev-parse "origin/${_baseline_branch}" 2>/dev/null || \
-                      git -C "$_wt" rev-parse "${_baseline_branch}" 2>/dev/null || \
-                      git -C "$_wt" rev-parse HEAD 2>/dev/null || echo "")
+      # --verify --quiet: fail cleanly for a ref that does not exist. Without it,
+      # `git rev-parse origin/develop` ECHOES the literal "origin/develop" to stdout and exits
+      # 128, so the || chain runs the next command and the substitution captures BOTH — a
+      # two-line value whose first line is not a SHA. Every gate diff oracle reads this file
+      # (review-ranger, mutant-hunter, fuzz-weaver, sast-sentinel), which is the known
+      # "reviewers saw 0 files" failure. brownfield-preflight-reset.sh already guards this
+      # exact shape; this call site did not. A repo with no remote hits it on every lane.
+      _baseline_sha=$(git -C "$_wt" rev-parse --verify --quiet "origin/${_baseline_branch}" 2>/dev/null || \
+                      git -C "$_wt" rev-parse --verify --quiet "${_baseline_branch}" 2>/dev/null || \
+                      git -C "$_wt" rev-parse --verify --quiet HEAD 2>/dev/null || echo "")
       if [ -n "$_baseline_sha" ]; then
         echo "$_baseline_sha" > "$LOG_DIR/phase-baseline-sha.txt"
         log "[orch] Brownfield baseline: ${_baseline_branch} @ ${_baseline_sha:0:8}"

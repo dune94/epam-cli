@@ -108,7 +108,8 @@
         {
           "kind": "fix-plan"
         }
-      ]
+      ],
+      "template": "code-review-cycle"
     },
     "agent-failure-analyst": {
       "_what": "Diagnoses a no-output/failed agent attempt, prescribes a corrective directive.",
@@ -150,7 +151,8 @@
         {
           "kind": "existing-code"
         }
-      ]
+      ],
+      "template": "repro-test-writer"
     },
     "tc-writer": {
       "_what": "Writes post-implementation test criteria into the PRD.",
@@ -168,7 +170,8 @@
         {
           "kind": "ticket"
         }
-      ]
+      ],
+      "template": "tc-writer"
     },
     "cpa-gate": {
       "_what": "Judges a CPA estimate rewrite: pass/fail.",
@@ -445,7 +448,8 @@
         {
           "kind": "ticket"
         }
-      ]
+      ],
+      "template": "vc-coverage"
     },
     "qa-gate:sast": {
       "_what": "Static application security scan over the change.",

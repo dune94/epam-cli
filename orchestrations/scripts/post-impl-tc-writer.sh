@@ -17,6 +17,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/render-engine-prompt.sh
+source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
 
 # THIS SEAM ASKS FOR ITS LADDER.
 #
@@ -349,64 +351,17 @@ print('\n'.join(lines))
 PYEOF
 )
 
-read -r -d '' TC_PROMPT << PROMPT_EOF || true
-${TC_WRITER_PROFILE}
-
-## Your ONLY output is a valid JSON object — nothing else
-
-Output format (one object, all story IDs as keys):
-{
-  "<story-id>": {
-    "verifiedAt": "<ISO8601 timestamp>",
-    "sourceFiles": ["src/server.ts"],
-    "facts": [
-      "<concrete verifiable fact from source, e.g.: GET /search only — no /cheapest route exists>",
-      "<exact query param names used: 'from' and 'to' not 'origin'/'destination'>",
-      "<exact error shape: { error: string } with 400 status for missing params>"
-    ],
-    "mockStrategy": "<exact mock setup: e.g. vi.mock('<real module path from the diff>') with vi.hoisted constructor>",
-    "bannedPatterns": ["<string that must NOT appear in test file>"]
-  }
-}
-
-## Stories to process
-
-${STORY_CONTEXT}
-
-## Instructions
-
-For each story above:
-
-1. READ every IMPL_SOURCE_FILES path listed using your file reading tool. Read the COMPLETE file.
-
-2. Extract FACTS — only things you can verify by reading the source:
-   - Exact function/method signatures and parameter names
-   - Exact HTTP route paths and query parameter names
-   - Exact error message strings (copy verbatim from throw/send statements)
-   - Exact return shapes (copy from return statements)
-   - Alignment direction (left/right-pad) per column if it's a table story
-   - Which validations exist and which do not (e.g. "adults=0 is valid — no lower-bound check")
-   - The correct import path for the module under test
-
-3. Write MOCK_STRATEGY as a single sentence describing exactly how to mock dependencies:
-   - Include the exact vi.mock() path (the real path as it appears in the code under test, not a shortened form)
-   - State whether to use vi.stubGlobal, vi.hoisted, or constructor mock
-   - State whether beforeEach uses clearAllMocks or resetAllMocks
-
-4. Write BANNED_PATTERNS as strings that must not appear in the test file:
-   - Wrong endpoint paths that don't exist
-   - Wrong parameter names
-   - Wrong framework imports (@jest/globals)
-   - Wrong mock paths
-
-5. The testCriteria.facts OVERRIDE any conflicting AC. Write them as ground truth.
-
-6. Write your JSON to: ${TC_OUT_FILE}
-   Use WriteFile to write the complete JSON object to that path.
-
-CRITICAL: Output ONLY the JSON object in the file. No markdown, no explanation, no code fences.
-After writing the file, output a single line: TC_WRITER_DONE
-PROMPT_EOF
+# RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
+_tpl_vals=$(mktemp "${TMPDIR:-/tmp}/tc-writer-vals-XXXXXX.json")
+jq -n --arg story_context "$STORY_CONTEXT" \
+      --arg tc_out_file "$TC_OUT_FILE" \
+      --arg tc_writer_profile "$TC_WRITER_PROFILE" \
+      '{"__STORY_CONTEXT__":$story_context,"__TC_OUT_FILE__":$tc_out_file,"__TC_WRITER_PROFILE__":$tc_writer_profile}' > "$_tpl_vals" 2>/dev/null
+if ! TC_PROMPT=$(render_engine_prompt tc-writer "$_tpl_vals"); then
+    echo "[tc-writer] cannot render its prompt — refusing to run with no instructions" >&2
+    rm -f "$_tpl_vals"; exit 1
+fi
+rm -f "$_tpl_vals"
 
 # ── Run the TC writer agent ────────────────────────────────────────────────────
 LOG_FILE="${SCRIPT_DIR}/../logs/tc-writer-${PHASE}.log"

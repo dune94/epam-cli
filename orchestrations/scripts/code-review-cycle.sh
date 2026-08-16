@@ -57,6 +57,8 @@ done
 MAX_ITERATIONS=3
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/render-engine-prompt.sh
+source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
 
 # THIS SEAM ASKS FOR ITS LADDER.
 #
@@ -239,34 +241,25 @@ $_PRIOR_ISSUES"
     fi
 fi
 
-_REVIEW_PROMPT="${_REVIEW_PROFILE}
-
----
-REVIEW TASK (Iteration $ITERATION): Story $STORY_ID — $STORY_TITLE
-AGENT: $STORY_AGENT
-
-DESCRIPTION: $_STORY_DESC
-
-ACCEPTANCE CRITERIA:
-$_STORY_ACS
-
-RELEVANT FILES: $_STORY_FILES
-
-GIT DIFF:
-\`\`\`diff
-$_STORY_DIFF
-\`\`\`
-$_PRIOR_CONTEXT
-PROJECT ROOT: $PROJECT_ROOT
-
-Review the implementation against each acceptance criterion.
-Check: TypeScript strict compliance, test coverage, error handling, security.
-
-Respond with ONLY a JSON object:
-{\"verdict\":\"approved\",\"issues\":[],\"summary\":\"...\"}
-  OR
-{\"verdict\":\"changes_requested\",\"issues\":[{\"severity\":\"blocker|major|minor\",\"file\":\"...\",\"line\":0,\"description\":\"...\",\"suggestedFix\":\"...\"}],\"summary\":\"...\"}"
-
+# RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
+_tpl_vals=$(mktemp "${TMPDIR:-/tmp}/code-review-cycle-vals-XXXXXX.json")
+jq -n --arg iteration "$ITERATION" \
+      --arg prior_context "$_PRIOR_CONTEXT" \
+      --arg project_root "$PROJECT_ROOT" \
+      --arg review_profile "$_REVIEW_PROFILE" \
+      --arg story_acs "$_STORY_ACS" \
+      --arg story_agent "$STORY_AGENT" \
+      --arg story_description "$_STORY_DESC" \
+      --arg story_diff "$_STORY_DIFF" \
+      --arg story_files "$_STORY_FILES" \
+      --arg story_id "$STORY_ID" \
+      --arg story_title "$STORY_TITLE" \
+      '{"__ITERATION__":$iteration,"__PRIOR_CONTEXT__":$prior_context,"__PROJECT_ROOT__":$project_root,"__REVIEW_PROFILE__":$review_profile,"__STORY_ACS__":$story_acs,"__STORY_AGENT__":$story_agent,"__STORY_DESCRIPTION__":$story_description,"__STORY_DIFF__":$story_diff,"__STORY_FILES__":$story_files,"__STORY_ID__":$story_id,"__STORY_TITLE__":$story_title}' > "$_tpl_vals" 2>/dev/null
+if ! _REVIEW_PROMPT=$(render_engine_prompt code-review-cycle "$_tpl_vals"); then
+    echo "[code-review-cycle] cannot render its prompt — refusing to run with no instructions" >&2
+    rm -f "$_tpl_vals"; exit 1
+fi
+rm -f "$_tpl_vals"
 _REVIEW_OUTPUT_FILE="$AUTOMATION_DIR/logs/review-agent-${STORY_ID}-iter${ITERATION}.log"
 _REVIEW_OUTPUT=$(run_review_prompt "$_REVIEW_PROMPT" 2>&1 | tee "$_REVIEW_OUTPUT_FILE")
 # Also write to canonical log (latest) for subsequent iterations to reference

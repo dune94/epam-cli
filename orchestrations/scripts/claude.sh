@@ -5504,19 +5504,7 @@ $(cat "$_contract_file")
     # naive '{.*"verdict".*}' grep). raw_decode correctly parses regardless of
     # formatting/whitespace.
     local review_json
-    review_json=$(echo "$review_output" | python3 -c "
-import sys, json
-text = sys.stdin.read()
-start = text.find('{')
-result = None
-if start != -1:
-    decoder = json.JSONDecoder()
-    try:
-        result, _ = decoder.raw_decode(text, start)
-    except (ValueError, json.JSONDecodeError):
-        result = None
-print(json.dumps(result) if isinstance(result, dict) and 'verdict' in result else '')
-" 2>/dev/null || echo "")
+    review_json=$(echo "$review_output" | python3 "$SCRIPT_DIR/lib/handlers/plan-review-json.py" 2>/dev/null || echo "")
     [ -z "$review_json" ] && { echo "$plan_text"; return; }
 
     local verdict corrections
@@ -6326,30 +6314,10 @@ run_prd_change_reviewer() {
     # disabled and returns pass, because it was never asked. That is a different state from
     # asking and getting nothing back.
     local verdict=""
-    verdict=$(echo "$review_raw" | python3 -c "
-import sys, json, re
-text = sys.stdin.read()
-try:
-    obj = json.loads(text.strip())
-    print(obj.get('verdict','fail'))
-    sys.exit(0)
-except Exception:
-    pass
-m = re.search(r'\"verdict\"\s*:\s*\"(pass|fail)\"', text)
-print(m.group(1) if m else 'fail')
-" 2>/dev/null || echo "fail")
+    verdict=$(echo "$review_raw" | python3 "$SCRIPT_DIR/lib/handlers/prd-change-verdict.py" 2>/dev/null || echo "fail")
 
     local issues=""
-    issues=$(echo "$review_raw" | python3 -c "
-import sys, json
-text = sys.stdin.read()
-try:
-    obj = json.loads(text.strip())
-    issues = obj.get('issues', [])
-    if issues: print('; '.join(str(i) for i in issues))
-except Exception:
-    pass
-" 2>/dev/null || echo "")
+    issues=$(echo "$review_raw" | python3 "$SCRIPT_DIR/lib/handlers/prd-change-issues.py" 2>/dev/null || echo "")
 
     # CRITICAL: this function's return value is captured via command substitution
     # ($(run_prd_change_reviewer ...)). warning()/log() write to stdout as well as
@@ -6945,30 +6913,7 @@ $(cat "$_fa_vendor_contract")
             _analyst_call_ok="true"
 
             # Extract first valid JSON object (handles nested structures via Python)
-            analyst_json=$(echo "$analyst_raw" | python3 -c "
-import sys, json
-text = sys.stdin.read()
-try:
-    obj = json.loads(text.strip())
-    print(json.dumps(obj))
-    sys.exit(0)
-except Exception:
-    pass
-depth = 0; start = -1
-for i, c in enumerate(text):
-    if c == '{':
-        if depth == 0: start = i
-        depth += 1
-    elif c == '}':
-        depth -= 1
-        if depth == 0 and start >= 0:
-            try:
-                obj = json.loads(text[start:i+1])
-                print(json.dumps(obj))
-                sys.exit(0)
-            except Exception:
-                pass
-" 2>/dev/null || echo "")
+            analyst_json=$(echo "$analyst_raw" | python3 "$SCRIPT_DIR/lib/handlers/failure-analyst-json.py" 2>/dev/null || echo "")
 
             if [ -n "$analyst_json" ] && echo "$analyst_json" | jq empty 2>/dev/null; then
                 break
@@ -8185,11 +8130,7 @@ compute_retry_extension_evidence() {
         groundedness_sample_count=$(jq -r --arg s "$story_id" 'select(.storyId == $s and .skipped == false)' "$grounded_log" 2>/dev/null | jq -s 'length' 2>/dev/null || echo 0)
         if [ "${groundedness_sample_count:-0}" -gt 0 ] 2>/dev/null; then
             avg_groundedness=$(jq -r --arg s "$story_id" 'select(.storyId == $s and .skipped == false) | .score' "$grounded_log" 2>/dev/null | \
-                python3 -c "
-import sys
-scores = [float(l) for l in sys.stdin if l.strip()]
-print(sum(scores)/len(scores) if scores else 0)
-" 2>/dev/null || echo 0)
+                python3 "$SCRIPT_DIR/lib/handlers/compute-retry-extension-evidence.py" 2>/dev/null || echo 0)
         fi
     fi
 
@@ -8324,24 +8265,7 @@ run_retry_extension_coordinator() {
 
     local extend="false" extra_retries=0 reason=""
     local parsed
-    parsed=$(echo "$coord_raw" | python3 -c "
-import sys, json, re
-text = sys.stdin.read()
-try:
-    obj = json.loads(text.strip())
-    print(json.dumps(obj))
-    sys.exit(0)
-except Exception:
-    pass
-m = re.search(r'\{[^{}]*\"extend\"[^{}]*\}', text, re.DOTALL)
-if m:
-    try:
-        print(json.dumps(json.loads(m.group(0))))
-        sys.exit(0)
-    except Exception:
-        pass
-print(json.dumps({\"extend\": False, \"extraRetries\": 0, \"reason\": \"unparseable\"}))
-" 2>/dev/null || echo '{"extend":false,"extraRetries":0,"reason":"unparseable"}')
+    parsed=$(echo "$coord_raw" | python3 "$SCRIPT_DIR/lib/handlers/retry-extension-parsed.py" 2>/dev/null || echo '{"extend":false,"extraRetries":0,"reason":"unparseable"}')
 
     extend=$(echo "$parsed" | jq -r '.extend // false' 2>/dev/null || echo "false")
     extra_retries=$(echo "$parsed" | jq -r '.extraRetries // 0' 2>/dev/null || echo 0)
@@ -8804,21 +8728,7 @@ implement_story() {
                             # against upward escalation under confirmed healing failure.
                             local _healed_count=0
                             if [ -f "${LOG_DIR}/healing-events.jsonl" ]; then
-                                _healed_count=$(python3 -c "
-import json
-count = 0
-try:
-    for line in open('${LOG_DIR}/healing-events.jsonl'):
-        try:
-            e = json.loads(line)
-            if e.get('story_id') == '$story_id':
-                count += 1
-        except Exception:
-            pass
-except Exception:
-    pass
-print(count)
-" 2>/dev/null || echo 0)
+                                _healed_count=$(python3 "$SCRIPT_DIR/lib/handlers/healing-event-count.py" "${LOG_DIR}/healing-events.jsonl" "$story_id" 2>/dev/null || echo 0)
                             fi
                             local _high_step=""
                             if [ "${_healed_count:-0}" -ge 1 ] && [ "$_skip_ladder" = "true" ]; then
@@ -8910,21 +8820,7 @@ print(count)
                                 # at ceiling and self-healing is confirmed broken, force HIGH tier.
                                 local _healed_count_r3=0
                                 if [ -f "${LOG_DIR}/healing-events.jsonl" ]; then
-                                    _healed_count_r3=$(python3 -c "
-import json
-count = 0
-try:
-    for line in open('${LOG_DIR}/healing-events.jsonl'):
-        try:
-            e = json.loads(line)
-            if e.get('story_id') == '$story_id':
-                count += 1
-        except Exception:
-            pass
-except Exception:
-    pass
-print(count)
-" 2>/dev/null || echo 0)
+                                    _healed_count_r3=$(python3 "$SCRIPT_DIR/lib/handlers/healing-event-count.py" "${LOG_DIR}/healing-events.jsonl" "$story_id" 2>/dev/null || echo 0)
                                 fi
                                 local _high_step_r3=""
                                 if [ "${_healed_count_r3:-0}" -ge 1 ] && [ "$_skip_ladder" = "true" ] && [ "$_ladder_tier_r3" != "high" ]; then
@@ -9159,16 +9055,7 @@ $_kb_section"
             # the last 3 distinct headings instead of 1 still bounds prompt growth
             # (the original purpose of this trim) while giving recent-but-not-
             # newest guidance a real chance to stay visible for a few more retries.
-            _trimmed_amendment=$(printf '%s' "$COORDINATOR_PROMPT_AMENDMENT" | EPAM_PROMPT_TRIM_KEEP="$_keep_sections" python3 -c "
-import os, sys
-text = sys.stdin.read()
-lines = text.split(chr(10))
-# How many recent guidance sections survive: config, not a literal. See lib/prompt-budget.sh.
-KEEP = int(os.environ['EPAM_PROMPT_TRIM_KEEP'])
-heading_idxs = [i for i, l in enumerate(lines) if l.startswith('## ')]
-keep_from = heading_idxs[-KEEP] if len(heading_idxs) >= KEEP else (heading_idxs[0] if heading_idxs else 0)
-print(chr(10).join(lines[keep_from:]) if heading_idxs else text)
-" 2>/dev/null || echo "$COORDINATOR_PROMPT_AMENDMENT")
+            _trimmed_amendment=$(printf '%s' "$COORDINATOR_PROMPT_AMENDMENT" | EPAM_PROMPT_TRIM_KEEP="$_keep_sections" python3 "$SCRIPT_DIR/lib/handlers/trim-coordinator-amendment.py" 2>/dev/null || echo "$COORDINATOR_PROMPT_AMENDMENT")
 
             if [ -n "$_trimmed_amendment" ] && [ "${#_trimmed_amendment}" -lt "${#COORDINATOR_PROMPT_AMENDMENT}" ]; then
                 warning "  [PromptScratchpad] Prompt exceeded ${_scratchpad_threshold} chars ($(( ${#prompt} )) actual) — full history written to $_scratchpad_file, trimming to most recent guidance (up to 3)"
@@ -9969,22 +9856,7 @@ $(echo "$LAST_VERIFIED_UNCHANGED_FILES" | sed 's/^/- /')"
                 local _last_fa_diagnosis=""
                 local _heal_log="${LOG_DIR}/healing-events.jsonl"
                 if [ -f "$_heal_log" ]; then
-                    _last_fa_diagnosis=$(python3 -c "
-import json, sys
-story = '$story_id'
-last = ''
-try:
-    for line in open('$_heal_log'):
-        try:
-            e = json.loads(line)
-            if e.get('story_id') == story and e.get('diagnosis') and e.get('target') not in ('none', ''):
-                last = e['diagnosis']
-        except Exception:
-            pass
-except Exception:
-    pass
-print(last)
-" 2>/dev/null || echo "")
+                    _last_fa_diagnosis=$(python3 "$SCRIPT_DIR/lib/handlers/last-fa-diagnosis.py" "$_heal_log" "$story_id" 2>/dev/null || echo "")
                 fi
                 _cp_vals=$(mktemp "${TMPDIR:-/tmp}/coordinator-amendment-vals-XXXXXX.json")
                 jq -n \
@@ -10406,13 +10278,7 @@ emit_story_artifact() {
         result_text=$(jq -r '.result // ""' "$json_result_file" 2>/dev/null || echo "")
         # Extract first JSON object/array from result text
         local extracted
-        extracted=$(echo "$result_text" | node -e "
-const chunks = []; process.stdin.on('data', c => chunks.push(c)); process.stdin.on('end', () => {
-    const text = chunks.join('');
-    const m = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
-    if (m) { try { JSON.parse(m[0]); process.stdout.write(m[0]); } catch { process.stdout.write('null'); } }
-    else process.stdout.write('null');
-});" 2>/dev/null || echo "null")
+        extracted=$(echo "$result_text" | node "$SCRIPT_DIR/lib/handlers/story-artifact-extract.js" 2>/dev/null || echo "null")
         [ -n "$extracted" ] && structured_output="$extracted"
     fi
 

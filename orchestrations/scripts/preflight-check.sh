@@ -115,12 +115,7 @@ elif [[ ! -f "$PRD_FILE" ]]; then
 else
   # Detect canonical (pre-spec-pass) PRD: no story has specification.createdFrom set.
   # Strict phase/field checks only apply to elaborated PRDs — skip them for canonical.
-  _prd_is_canonical=$(python3 -c "
-import json
-d = json.load(open('$PRD_FILE'))
-has_splits = any(s.get('specification', {}).get('createdFrom') for s in d.get('stories', []))
-print('false' if has_splits else 'true')
-" 2>/dev/null || echo "false")
+  _prd_is_canonical=$(python3 "$SCRIPT_DIR/lib/handlers/prd-is-canonical.py" "$PRD_FILE" 2>/dev/null || echo "false")
 
   if [[ "$_prd_is_canonical" == "true" ]]; then
     # Even on a canonical (pre-spec-pass) PRD, no base story should carry a
@@ -135,18 +130,14 @@ print('false' if has_splits else 'true')
     # its own real specification data from this run's own spec pass — only
     # PENDING stories carrying specification data indicate prior-run
     # contamination baked into canonical.
-    _stale_spec=$(python3 -c "
-import json
-d = json.load(open('$PRD_FILE'))
-print(','.join(s['id'] for s in d.get('stories', []) if s.get('specification') and not s.get('completed')))
-" 2>/dev/null || echo "")
+    _stale_spec=$(python3 "$SCRIPT_DIR/lib/handlers/prd-stale-specification-stories.py" "$PRD_FILE" 2>/dev/null || echo "")
     if [[ -n "$_stale_spec" ]] && [[ "$_prd_pending_ingest" != "1" ]]; then
       fail "Canonical PRD has pre-baked 'specification' blocks on base stories (must be lean/unelaborated): $_stale_spec"
     elif [[ -n "$_stale_spec" ]]; then
       ok "PRD carries stale specification data from a prior run, but Jira ingest overwrites this exact file before anything reads it — deferred"
       PASS=$((PASS+1))
     else
-      _base_count=$(python3 -c "import json; print(len(json.load(open('$PRD_FILE'))['stories']))" 2>/dev/null || echo "?")
+      _base_count=$(python3 "$SCRIPT_DIR/lib/handlers/prd-story-count.py" "$PRD_FILE" 2>/dev/null || echo "?")
       ok "PRD integrity OK — $_base_count base user stories (canonical/pre-spec-pass — strict phase checks deferred until after spec pass elaboration)"
       PASS=$((PASS+1))
     fi
@@ -206,40 +197,7 @@ else
     ok "Story field checks deferred — canonical PRD has no implementation stories yet"
     PASS=$((PASS+1))
   else
-    python3 << PYEOF
-import json, sys
-with open('$PRD_FILE') as f:
-    d = json.load(f)
-stories = d.get('stories', [])
-errors = []
-warns  = []
-valid_providers = {'qwen','openai','anthropic','claude','gemini','codex','cursor','opencode','minimax'}
-for s in stories:
-    sid = s.get('id','?')
-    provider = s.get('aiProvider','')
-    model    = s.get('model','')
-    effort   = s.get('effort','medium')
-    status   = s.get('status','pending')
-
-    if not provider:
-        errors.append(f"{sid}: aiProvider is MISSING")
-    elif provider not in valid_providers:
-        errors.append(f"{sid}: aiProvider='{provider}' is not a known provider")
-
-    if effort == 'low' and provider in ('qwen','openai','anthropic','claude','gemini'):
-        warns.append(f"{sid}: effort=low maps to HAIKU badge in viewer — consider 'medium'")
-
-    if status not in ('pending','completed','failed','deprecated'):
-        errors.append(f"{sid}: status='{status}' is unexpected")
-
-for e in errors:
-    print(f"  ✗ {e}")
-for w in warns:
-    print(f"  ⚠ {w}")
-if not errors:
-    print(f"  ✓ All {len(stories)} stories have valid aiProvider/model/status")
-sys.exit(1 if errors else 0)
-PYEOF
+    python3 "$SCRIPT_DIR/lib/handlers/prd-story-assignment-check.py" "$PRD_FILE" "$SCRIPT_DIR/../config/providers.json"
     story_exit=$?
     [[ $story_exit -eq 0 ]] && ((PASS++)) || ((FAIL++))
   fi
@@ -400,17 +358,9 @@ fi
 # 6f. build-info.json was generated recently (within 120s) — proves the watcher
 # is actively refreshing, not just present-but-stalled.
 _generated_at=$(curl -sf "${_DASH}/build-info.json" 2>/dev/null \
-  | python3 -c "import json,sys; print(json.load(sys.stdin).get('generatedAt',''))" 2>/dev/null || echo '')
+  | python3 "$SCRIPT_DIR/lib/handlers/json-field.py" generatedAt 2>/dev/null || echo '')
 if [[ -n "$_generated_at" ]]; then
-  _age_s=$(python3 -c "
-import datetime, sys
-try:
-    ts = datetime.datetime.fromisoformat('$_generated_at'.replace('Z','+00:00'))
-    now = datetime.datetime.now(datetime.timezone.utc)
-    print(int((now-ts).total_seconds()))
-except Exception as e:
-    print(9999)
-" 2>/dev/null || echo 9999)
+  _age_s=$(python3 "$SCRIPT_DIR/lib/handlers/iso-timestamp-age-seconds.py" "$_generated_at" 2>/dev/null || echo 9999)
   if [[ "$_age_s" -lt 120 ]]; then
     ok "build-info.json is ${_age_s}s old — snapshot watcher is actively refreshing"
   else

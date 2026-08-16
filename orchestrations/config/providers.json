@@ -1,0 +1,32 @@
+{
+  "$comment": "THE PROVIDERS THIS ENGINE KNOWS. Data, not code: preflight validates a PRD's aiProvider against `known`, and nothing in the pipeline carries a vendor name as a literal. Adding a provider is an edit here and nowhere else. Extracted from preflight-check.sh on 2026-08-16, where the same set lived as a Python set literal inside an embedded program — a place no other check could read and no one would think to update.",
+
+  "known": [
+    "qwen",
+    "openai",
+    "anthropic",
+    "claude",
+    "gemini",
+    "codex",
+    "cursor",
+    "opencode",
+    "minimax"
+  ],
+
+  "$effortBadgeComment": "Providers whose viewer badge is driven by the effort tier, so effort=low renders as the cheapest badge. Preflight warns when a story on one of these is assigned effort=low, because the badge then misreports the model actually doing the work.",
+  "effortBadged": [
+    "qwen",
+    "openai",
+    "anthropic",
+    "claude",
+    "gemini"
+  ],
+
+  "$statusComment": "The story statuses a PRD may carry. Preflight rejects anything else — an unexpected status is read as not-completed by every gate, so a typo silently fails a story that succeeded.",
+  "storyStatuses": [
+    "pending",
+    "completed",
+    "failed",
+    "deprecated"
+  ]
+}

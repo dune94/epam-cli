@@ -1338,25 +1338,14 @@ _brownfield_gate_scope() {
         . "$SCRIPT_DIR/lib/story-outputs.sh" 2>/dev/null || true
         _files=$(story_outputs_files "$PROJECT_ROOT" "$LOG_DIR" 2>/dev/null | head -20)
     fi
-    cat <<BROWNFIELD_SCOPE
-
-## BROWNFIELD — judge THIS CHANGE, not the codebase
-This is an existing production repository. It contains problems that predate this
-run and are none of this run's business. You are reviewing one small change to it.
-
-Files this run produced or modified:
-${_files:-  (none recorded — fall back to the injected diff)}
-
-RULES:
-1. Findings MUST be about the lines this run changed. A pre-existing issue in an
-   untouched file, or on an untouched line of a touched file, is NOT a finding
-   here — reporting it blocks a correct change over somebody else's problem.
-2. If ${_gate} has nothing meaningful to say about a change of this kind, return
-   verdict "not_applicable" with a one-line reason. That is a valid, useful
-   answer. Do NOT invent a finding to look thorough, and do NOT return "pass" to
-   mean "I could not evaluate this".
-3. Prefer fewer, real findings over broad coverage.
-BROWNFIELD_SCOPE
+    # RENDERED FROM THE TEMPLATE LAYER. Values through a FILE, never argv: the file list is
+    # unbounded and argv is capped at ARG_MAX.
+    local _bs_vals; _bs_vals=$(mktemp "${TMPDIR:-/tmp}/qa-brownfield-scope-XXXXXX.json")
+    jq -n --arg gate "$_gate" \
+          --arg files "${_files:-  (none recorded — fall back to the injected diff)}" \
+          '{"__GATE__":$gate,"__FILES__":$files}' > "$_bs_vals"
+    render_engine_prompt qa-brownfield-scope "$_bs_vals" || true
+    rm -f "$_bs_vals"
 }
 
 run_orch_prompt_with_tools() {
@@ -10308,7 +10297,7 @@ $fuzz_prompt"
             local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-perf-sentinel-vals-XXXXXX.json")
             jq -n --arg force_lightpanda "$force_lightpanda" \
                   --arg force_playwright "$force_playwright" \
-                  --arg gate_scope "$(_brownfield_gate_scope)" \
+                  --arg gate_scope "$(_brownfield_gate_scope perf-sentinel)" \
                   --arg phase_id "$phase_id" \
                   --arg project_root "$PROJECT_ROOT" \
                   --arg routing_decision "$routing_decision" \

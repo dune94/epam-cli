@@ -1,0 +1,36 @@
+{
+  "$why": [
+    "Moved out of run-agent-orchestration.sh on 2026-08-16. The brownfield addendum every QA",
+    "gate prompt receives.",
+    "",
+    "These gates were designed for a freshly-scaffolded application. Pointed at 850+ existing",
+    "files and a three-line change, only TWO of six mentioned the code the run had changed",
+    "(2026-07-26): sast spent its budget on 70 pre-existing dependency CVEs, review-ranger",
+    "returned a 211-byte pass without naming the diff, perf-sentinel was handed browser E2E",
+    "context for a backend string comparison, and fuzz-weaver returned nothing at all.",
+    "",
+    "Two corrections: judge THIS CHANGE, and be allowed to say the change is not your business.",
+    "Silence is indistinguishable from failure and a fabricated pass is worse than both, so",
+    "not_applicable is a first-class verdict with a required reason.",
+    "",
+    "The file list arrived as a shell default-expansion whose fallback sentence was itself",
+    "prompt text. The caller supplies the whole value now, fallback included: prompt wording",
+    "hidden inside ${VAR:-...} is wording nobody reviews."
+  ],
+  "description": "The brownfield scope addendum appended to every QA gate prompt.",
+  "id": "qa-brownfield-scope",
+  "seams": [
+    "qa-gate:sast",
+    "qa-gate:spec-validator",
+    "qa-gate:review-ranger",
+    "qa-gate:mutant-hunter",
+    "qa-gate:fuzz-weaver",
+    "qa-gate:perf-sentinel"
+  ],
+  "placeholders": [
+    "__GATE__",
+    "__FILES__"
+  ],
+  "version": 1,
+  "body": "\n## BROWNFIELD — judge THIS CHANGE, not the codebase\nThis is an existing production repository. It contains problems that predate this\nrun and are none of this run's business. You are reviewing one small change to it.\n\nFiles this run produced or modified:\n__FILES__\n\nRULES:\n1. Findings MUST be about the lines this run changed. A pre-existing issue in an\n   untouched file, or on an untouched line of a touched file, is NOT a finding\n   here — reporting it blocks a correct change over somebody else's problem.\n2. If __GATE__ has nothing meaningful to say about a change of this kind, return\n   verdict \"not_applicable\" with a one-line reason. That is a valid, useful\n   answer. Do NOT invent a finding to look thorough, and do NOT return \"pass\" to\n   mean \"I could not evaluate this\".\n3. Prefer fewer, real findings over broad coverage."
+}

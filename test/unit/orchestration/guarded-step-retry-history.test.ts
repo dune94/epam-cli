@@ -13,7 +13,7 @@
  *   - logGuardedStepRetry() in spec-mode-runner.js (ac-review JS site)
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -209,6 +209,15 @@ describe('logGuardedStepRetry() — spec-mode-runner.js, real execution against 
     const logsDir = join(fakeRepo, 'orchestrations', 'logs');
     mkdirSync(scriptsDir, { recursive: true });
     writeFileSync(join(scriptsDir, 'spec-mode-runner.js'), readFileSync(SPEC_RUNNER, 'utf8'));
+    // AND THE lib IT REQUIRES. Copying the one file worked while spec-mode-runner.js required
+    // nothing beside it; it requires lib/engine-prompt.js now, and the lone copy cannot resolve
+    // it, so the isolated run died before reaching the behaviour under test.
+    const libDst = join(scriptsDir, 'lib');
+    mkdirSync(libDst, { recursive: true });
+    const libSrc = join(SPEC_RUNNER, '..', 'lib');
+    for (const entry of readdirSync(libSrc)) {
+      if (entry.endsWith('.js')) writeFileSync(join(libDst, entry), readFileSync(join(libSrc, entry)));
+    }
     execFileSync('git', ['init', '-q'], { cwd: fakeRepo });
     execFileSync('git', ['config', 'user.email', 'test@test.com'], { cwd: fakeRepo });
     execFileSync('git', ['config', 'user.name', 'test'], { cwd: fakeRepo });
@@ -227,7 +236,7 @@ describe('logGuardedStepRetry() — spec-mode-runner.js, real execution against 
         `logGuardedStepRetry(${JSON.stringify(logDir)}, ${JSON.stringify({ runId, ...record })});`,
       ].join('\n'),
     );
-    execFileSync('node', [scriptPath], { encoding: 'utf8' });
+    execFileSync(process.execPath, [scriptPath], { encoding: 'utf8' });
     rmSync(scriptPath, { force: true });
   }
 

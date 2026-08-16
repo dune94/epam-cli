@@ -140,12 +140,22 @@ describe('brownfield-repro-test-writer — retry + ladder + self-heal', () => {
     // from the same file the pipeline reads — so a ladder change updates the test with it.
     const hop = out.match(/ladder escalation \(attempt 2\/3\) — (\S+) → (\S+)/);
     expect(hop, `no ladder escalation line in:\n${out}`).toBeTruthy();
-    const tier = JSON.parse(
+    // The seam declares a POSITION ('top'), not a tier name — the engine holds no tier
+    // vocabulary, so the project's own order is what turns one into the other. Indexing
+    // .ladders by the raw position reads undefined and the assertion dies before it runs.
+    const position = JSON.parse(
       readFileSync(join(__dirname, '../../../orchestrations/agents/invocation-profiles.json'), 'utf8'),
-    ).profiles['repro-test-writer'].ladder.toLowerCase();
-    const chain = JSON.parse(
+    ).profiles['repro-test-writer'].ladder;
+    const settings = JSON.parse(
       readFileSync(join(__dirname, '../../../orchestrations/projects/metrolinx/llm-settings.json'), 'utf8'),
-    ).ladders[tier].modelLadder as Array<{ from: string; to: string }>;
+    );
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+    const { resolveTierPosition } = require(join(__dirname, '../../../orchestrations/scripts/lib/seam-invocation.js'));
+    const tier = resolveTierPosition(position, {
+      EPAM_MODEL_LADDER_TIER_ORDER: (settings.ladderTierOrder || []).join(' '),
+    });
+    expect(tier, `position '${position}' resolves to no tier this project declares`).toBeTruthy();
+    const chain = settings.ladders[tier].modelLadder as Array<{ from: string; to: string }>;
     expect(
       chain.some((r) => r.from === hop![1] && r.to === hop![2]),
       `${hop![1]} → ${hop![2]} is not a rung of the '${tier}' ladder this seam declares`,

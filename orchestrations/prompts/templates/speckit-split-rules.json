@@ -1,0 +1,13 @@
+{
+  "$why": [
+    "Moved out of spec-mode-runner.js on 2026-08-16. A ternary arm appended to the speckit prompt only when splitting is permitted -- which is why it outlasted every sweep: an arm of a conditional reads as control flow in a diff, and it opens with a heading rather than with \"You are\"."
+  ],
+  "description": "The mandatory split rules speckit enforces before refining acceptance criteria.",
+  "id": "speckit-split-rules",
+  "seams": [
+    "ac-elaboration"
+  ],
+  "placeholders": [],
+  "version": 1,
+  "body": "\n\nSPLIT RULES (mandatory, not optional — enforce these before refining AC):\n1. AC count > 12 → you MUST propose a split. Target ≤8 ACs per split child. Never leave a story with >12 ACs unsplit.\n2. Both implementation files AND test files in technicalNotes.files → split into one impl child (non-test files) and one test child (*.test.ts files). Assign agentRole \"typescript-engineer\" to impl, \"test-engineer\" to test.\n3. 3+ independent deliverable modules with no shared exports (e.g. client.ts, server.ts, cli.ts all in same story) → split per concern. Each split gets the files it owns.\n4. External API discovery + implementation in same story → split: first child discovers/documents the API contract, second child implements against that contract.\n5. technicalNotes.files contains BOTH frontend/template files (*.html, *.css, *.scss, *.jsx, *.tsx, *.vue, *.svelte) AND build/tooling files (vite.config.*, webpack.config.*, rollup.config.*, package.json, Makefile, Dockerfile, *.sh) → split: one child owns the frontend/template files, one child owns the build/tooling files. These have different runtime roles and different owners — bundling them causes token bloat and diffuse responsibility.\n6. Story covers multiple independent runtime roles in the same deliverable (e.g. HTTP server AND CLI binary AND HTML dashboard) → split by runtime role, one child per runtime target. Each child's agentRole should match what it produces (typescript-engineer for application code, test-engineer for test-only files).\nThese rules apply only when splitDepth === 0. Never split a story that is already a split child."
+}

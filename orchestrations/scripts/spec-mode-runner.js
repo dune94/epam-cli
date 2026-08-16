@@ -3566,12 +3566,7 @@ ${docBlock ? `DOCUMENTATION LINKED ON THESE TICKETS (fetched, quoted verbatim �
 ${docBlock}
 
 ` : ''}${codelineBlock}
-${toolGrant ? `You have READ-ONLY tools (${toolGrant}). Use them: open the manifests, find the modules
-this work touches, and VERIFY any API or package you are about to name in a brief actually
-exists in these repositories. A vendor's documentation describes its current product; these
-codelines pin the versions they pin, and where the two disagree the repository wins. A brief
-that names a symbol the installed package does not export sends an implementer to write code
-against something that is not there.` : `You have NO tools on this call — you cannot open these
+${toolGrant ? renderEngineTemplate('roster-tool-grant', { __TOOL_GRANT__: toolGrant }) : `You have NO tools on this call — you cannot open these
 repositories. Reason only from what is written above, and say in the rationale when a claim
 rests on documentation rather than on this codebase.`}
 
@@ -4458,35 +4453,14 @@ Instead, PRODUCE`
     : `STEP 3 — VERIFICATION CRITERIA.
 PRODUCE`;
   const archaeologyBlock = isBrownfield
-    ? `\n\nBROWNFIELD MODE — answer as JSON.
-You MAY use read_file on any path named in this prompt (declared files, located fix sites, and any
-document persisted under the run's docs/ directory) when you need more than the excerpt shown.
-Looking is allowed; inventing is not — a file you have neither been shown nor read is a fabrication.
-
-STEP 1 — CLASSIFY THIS STORY. Set "storyKind":
-- "defect" if it reports that EXISTING behavior is wrong, broken, or produces an incorrect/missing result (a bug).
-- "novel" if it asks for a NEW capability that does not exist in the codebase yet. A brownfield story is not always a bug — genuinely new work is "novel".
-
-STEP 2 — LOCATE (always, for both kinds — but the question differs).
-Use ONLY the EXISTING CODE block already present in this prompt (injected above via CodeGraph or Semble).
-
-- If storyKind is "defect": find the FIX SITE — the file/function that COMPUTES the wrong value, not the one that displays it.
-- If storyKind is "novel": there is no fix site, and inventing one produces a confident wrong answer. Find the ATTACHMENT POINT instead — the existing file/function this new capability plugs INTO (the provider, hook, route, config or component it must integrate with), plus anything already present that the implementation should REUSE rather than rewrite. This is what keeps the change as small as possible: you cannot reuse what you have not found.
-
-Set "locationHint" to [{"file":"<repo-relative path>","function":"<function name>","reason":"<why this location — the fix site for a defect, the attachment point for a novel story>"}].
-If no relevant code appears above, set locationHint to []. Do NOT invent a plausible file: a named file whose contents you cannot see in this prompt is a fabrication, and an empty locationHint is a usable answer while a fabricated one is not.
-
-For EACH criterion also declare WHO observes it (end user, tester, api client, operator) and
-WHAT SURFACE they look at — the rendered page, the API response, the CLI output, a generated
-file. If no person or client can see it, it is not a verification criterion. A precondition
-the test establishes (for example a mocked client signalling a change) goes in "setup": that
-is allowed and is not implementation prescription.
-
-${_acPreamble} a "verificationCriteriaDetail" array — concrete, OBSERVABLE checks that confirm the change is correct — derived from ${_sources.join(' AND ')}. Apply these rules to EVERY verification criterion (a strict reviewer holds you to this SAME text, so a VC that breaks any rule will be flagged and rejected):
-${VC_OBSERVABILITY_RULES}${vcFormSamples(env) ? `\n\n${vcFormSamples(env)}\n` : ''}
-- If the ticket describes a SYMPTOM, the VCs verify that symptom is resolved AND that related existing behavior does not regress.
-Set "vcSource" to one of ${_vcSourceValues.split('|').map((v) => `"${v}"`).join(', ')} — where you actually derived the VCs from.${unreachableExternalsConstraint()}
-`
+    ? renderEngineTemplate('spec-brownfield-mode', {
+        __AC_PREAMBLE__: _acPreamble,
+        __SOURCES__: _sources.join(' AND '),
+        __VC_RULES__: VC_OBSERVABILITY_RULES,
+        __VC_FORM_SAMPLES__: vcFormSamples(env) ? `\n\n${vcFormSamples(env)}\n` : '',
+        __VC_SOURCE_VALUES_QUOTED__: _vcSourceValues.split('|').map((v) => `"${v}"`).join(', '),
+        __UNREACHABLE_EXTERNALS__: unreachableExternalsConstraint(),
+      })
     : '';
   const schemaLine = isBrownfield
     ? `\n  "storyKind":"defect|novel",\n  "verificationCriteriaDetail":[{"criterion":"<observable check>","observer":"end user|tester|api client|operator","surface":"<what they look at>","setup":"<optional precondition, e.g. a mocked client signalling a change>"}],\n  "vcSource":"${_vcSourceValues}",\n  "locationHint":[{"file":"path/relative/to/repo","function":"functionName","reason":"why this location — the fix site for a defect, the attachment point it integrates with for a novel story"}],`
@@ -5894,14 +5868,7 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, fo
     : `\n  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."],"agentRole":"...","technicalNotes":{"files":[]}}]`;
   const splitRulesBlock = isBrownfieldSpec
     ? ''
-    : `\n\nSPLIT RULES (mandatory, not optional — enforce these before refining AC):
-1. AC count > 12 → you MUST propose a split. Target ≤8 ACs per split child. Never leave a story with >12 ACs unsplit.
-2. Both implementation files AND test files in technicalNotes.files → split into one impl child (non-test files) and one test child (*.test.ts files). Assign agentRole "typescript-engineer" to impl, "test-engineer" to test.
-3. 3+ independent deliverable modules with no shared exports (e.g. client.ts, server.ts, cli.ts all in same story) → split per concern. Each split gets the files it owns.
-4. External API discovery + implementation in same story → split: first child discovers/documents the API contract, second child implements against that contract.
-5. technicalNotes.files contains BOTH frontend/template files (*.html, *.css, *.scss, *.jsx, *.tsx, *.vue, *.svelte) AND build/tooling files (vite.config.*, webpack.config.*, rollup.config.*, package.json, Makefile, Dockerfile, *.sh) → split: one child owns the frontend/template files, one child owns the build/tooling files. These have different runtime roles and different owners — bundling them causes token bloat and diffuse responsibility.
-6. Story covers multiple independent runtime roles in the same deliverable (e.g. HTTP server AND CLI binary AND HTML dashboard) → split by runtime role, one child per runtime target. Each child's agentRole should match what it produces (typescript-engineer for application code, test-engineer for test-only files).
-These rules apply only when splitDepth === 0. Never split a story that is already a split child.`;
+    : renderEngineTemplate('speckit-split-rules', {});
   const generateInstruction = isBrownfieldSpec
     ? 'Generate refined acceptance criteria and optionally updated title/description. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:'
     : 'Generate refined acceptance criteria, optionally updated title/description, and split stories where required. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:';

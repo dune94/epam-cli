@@ -20,6 +20,7 @@
  *     RESTATE task, and high effort is exactly what reasons its way into a mechanism.
  */
 import { describe, it, expect } from 'vitest';
+import { templateBody } from '../../helpers/prompt-text';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -44,9 +45,16 @@ describe('VC_OBSERVABILITY_RULES — the shared source of truth', () => {
 
 describe('single source of truth — producer and reviewer share the exact same text', () => {
   it('the shared constant is interpolated in ALL THREE prompt sites (not re-worded per site)', () => {
-    // archaeology STEP 3 (primary producer), regenerate (openspec), review (speckit)
-    const uses = src.match(/\$\{VC_OBSERVABILITY_RULES\}/g) || [];
-    expect(uses.length).toBeGreaterThanOrEqual(3);
+    // archaeology STEP 3 (primary producer), regenerate (openspec), review (speckit).
+    //
+    // The invariant is ONE text reaching all three sites, not the syntax that carries it. The
+    // rules moved into the template layer, so the constant is PASSED as a value rather than
+    // interpolated — counting ${...} would report zero while the sharing is entirely intact.
+    const uses = src.match(/VC_OBSERVABILITY_RULES,/g) || [];
+    expect(uses.length, 'the rules are no longer shared across the three prompt sites')
+      .toBeGreaterThanOrEqual(3);
+    // And what they share is one template body, not a per-site re-wording.
+    expect(templateBody('spec-authoring-rules', 'vc_observability').length).toBeGreaterThan(200);
   });
 
   it('the producer prompt no longer lists a bare "API response field" as an observable target', () => {

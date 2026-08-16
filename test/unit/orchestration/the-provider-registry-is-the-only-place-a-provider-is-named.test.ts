@@ -96,3 +96,58 @@ describe('the provider registry is the only place a provider is named', () => {
     }
   });
 });
+
+/**
+ * The PRD integrity gate checked providers against a SECOND list of its own, and the two had
+ * already drifted: it did not know about 'openai' while preflight-check.sh did, so one PRD passed
+ * one gate and would have failed the other. Both now read the registry.
+ */
+const AUDIT = join(ROOT, 'orchestrations/scripts/lib/handlers/prd-integrity-audit.py');
+
+describe('the PRD integrity gate reads the same registry', () => {
+  const audit = (prd: string, registry: string) =>
+    spawnSync('python3', [AUDIT, '', prd, registry], { encoding: 'utf8' });
+
+  const cleanPrd = (aiProvider: string, model: string) => writeJson(`audit-${aiProvider}-${model.replace(/\W/g, '_')}.json`, {
+    project: { outputDirs: [] },
+    phases: [{ name: 'scaffold' }, { name: 'core' }],
+    implementationOrder: { scaffold: ['S-1'] },
+    stories: [{ id: 'S-1', status: 'pending', aiProvider, model, acceptanceCriteria: ['a'] }],
+  });
+
+  it('names no provider and no model in its own code', () => {
+    const src = readFileSync(AUDIT, 'utf8');
+    const body = src.split('"""').slice(2).join('"""');
+    const registry = JSON.parse(readFileSync(REGISTRY, 'utf8'));
+    const names = [
+      ...(registry.known as string[]),
+      ...Object.values(registry.modelRules as Record<string, { knownModels?: string[] }>)
+        .flatMap((r) => r.knownModels || []),
+    ];
+    for (const n of names) {
+      expect(body, `the gate names ${n} in its own code`).not.toMatch(new RegExp(`['"]${n}['"]`));
+    }
+  });
+
+  it('refuses to run against a registry that declares no providers', () => {
+    const registry = writeJson('audit-registry-empty.json', { known: [] });
+    const r = audit(cleanPrd('openai', 'gpt-x'), registry);
+    expect(r.status, 'an empty registry did not stop the gate').toBe(1);
+    expect(r.stderr + r.stdout).toMatch(/declares no providers/);
+  });
+
+  it('applies the slug rule from the registry, not from a literal', () => {
+    // MUTATION: the rule is moved onto a provider that never had it. A gate carrying
+    // `prov == 'qwen'` in its own code cannot follow.
+    const registry = writeJson('audit-registry-slug.json', {
+      known: ['openai'],
+      modelRules: { openai: { requiresSlug: true } },
+    });
+    const withSlug = audit(cleanPrd('openai', 'vendor/model-1'), registry);
+    const noSlug = audit(cleanPrd('openai', 'model-1'), registry);
+    expect(noSlug.stdout + noSlug.stderr, 'a slugless model passed a requiresSlug provider')
+      .toMatch(/expected a routed slug/);
+    expect(withSlug.stdout + withSlug.stderr, 'a slugged model was reported as misaligned')
+      .not.toMatch(/expected a routed slug/);
+  });
+});

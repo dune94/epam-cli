@@ -1,0 +1,16 @@
+{
+  "$why": [
+    "Moved out of claude.sh on 2026-08-15 (10 of 20). The PRD-text variant — see the tool",
+    "variant for why these stayed two prompts."
+  ],
+  "body": "You are a PRD change summarizer. A __CHANGE_TYPE__ for story __STORY_ID__ was REJECTED by the change reviewer for these reasons:\n__ISSUES__\n\nORIGINAL TEXT:\n__REJECTED_TEXT__\n\nRewrite the text to fix ONLY the issues listed above, preserving the original actionable rule. Requirements: no reference to any specific story ID; start with an imperative verb (Use, Always, Never, Prefer, Avoid); under 200 characters; end on a complete sentence; no markdown, no headers, no commentary.\n\nEmit ONLY the corrected text — nothing else.",
+  "description": "Rewrite rejected PRD text to fix only the issues the reviewer raised, preserving the rule.",
+  "id": "prd-change-summarizer-text",
+  "placeholders": [
+    "__CHANGE_TYPE__",
+    "__ISSUES__",
+    "__REJECTED_TEXT__",
+    "__STORY_ID__"
+  ],
+  "version": 1
+}

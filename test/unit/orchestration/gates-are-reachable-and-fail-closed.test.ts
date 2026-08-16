@@ -30,6 +30,9 @@ import { tmpdir } from 'node:os';
 import { readdirSync } from 'node:fs';
 
 const ROOT = join(__dirname, '../../..');
+// The template-layer renderer. Extracted claude.sh functions render their prompts through
+// it, so a harness must source it just as it stubs log() and error().
+const RENDER_LIB = join(__dirname, '../../../orchestrations/scripts/lib/render-engine-prompt.sh');
 const ORCH = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
 const CTX = join(ROOT, 'orchestrations/scripts/contextualize-stories.sh');
 const dirs: string[] = [];
@@ -151,6 +154,7 @@ describe('DEFECT 3: coordination success is not "the log is non-empty"', () => {
        MESSAGES_JSONL=${JSON.stringify(join(dir, 'logs', 'agent-messages.jsonl'))}
        PRD_REL="prd.json"
        log() { :; }; info() { :; }; success() { echo "OK:$*"; }
+       source ${JSON.stringify(RENDER_LIB)}
        warning() { echo "WARN:$*"; }; error() { echo "ERR:$*"; }
        run_orch_prompt_with_tools() { ${opts.writes ? 'echo "some output"' : 'true'}; return ${opts.exit}; }
 ${fn}
@@ -233,6 +237,7 @@ describe('DEFECT 6: an unreviewed PRD change is not approved', () => {
        ORCH_GATE_MODEL="stub-model"
        ORCH_GATE_ALLOWED_TOOLS=""
        log() { :; }; warning() { :; }; info() { :; }; success() { :; }; error() { :; }
+       source ${JSON.stringify(RENDER_LIB)}
 ${fn}
        run_prd_change_reviewer S1 ac_patch '{"a":1}' '{"a":2}' 2>/dev/null`,
     ], { encoding: 'utf8' });

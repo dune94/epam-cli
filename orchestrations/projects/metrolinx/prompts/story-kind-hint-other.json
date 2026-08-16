@@ -1,0 +1,17 @@
+{
+  "$why": [
+    "A FRAGMENT of the detective prompt, 2026-08-16.",
+    "",
+    "The tracker's issue type is a HINT and the prompt says so in both directions. Both texts",
+    "exist because the wrong-way error is asymmetric: told it is a defect when it is not, the",
+    "agent hunts for a bug that was never there; told it is not when it is, it designs a feature",
+    "over a broken behaviour. Two fragments, so neither can be lost by editing the other."
+  ],
+  "body": "\\nJIRA DOES NOT CLASSIFY THIS AS A BUG (issue type: __ISSUE_TYPE__). This is a HINT, not a certainty — if the ticket's own text below clearly describes existing behavior that is wrong, trust the ticket over this hint. Assuming novel: there is likely NO existing bug and no wrong value to trace. Inventing a \"cause\" for a capability that does not exist yet produces a confident wrong answer. Your job is the ATTACHMENT POINT — the existing file/function/provider/hook/route/component this new capability must plug into, and anything already present the implementation should REUSE — not a fix site.\\n",
+  "description": "Told to the detective when the tracker does NOT classify the story as a defect.",
+  "id": "story-kind-hint-other",
+  "placeholders": [
+    "__ISSUE_TYPE__"
+  ],
+  "version": 1
+}

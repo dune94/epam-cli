@@ -1,12 +1,8 @@
 {
   "id": "failure-analyst",
   "version": 1,
-  "project": "metrolinx",
-  "authority": "project",
-  "derivedFrom": "orchestrations/prompts/templates/failure-analyst.json",
-  "derivedFromSha256": "8fe99ae803dfd36839bba5be16924d61f9eb4fcb5211aa85faf5dca43b34c623",
-  "mutableBy": "self-heal only",
   "description": "Diagnoses a verification failure and routes a correction. Emits a single JSON object.",
+  "extractedFrom": "orchestrations/scripts/claude.sh heredoc ANALYST_PROMPT_END (lines 7003-7047), verbatim",
   "placeholders": [
     "__ANALYST_PROFILE__",
     "__ATTEMPT_CHANGES__",

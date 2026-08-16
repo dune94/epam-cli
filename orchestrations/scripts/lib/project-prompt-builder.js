@@ -75,11 +75,28 @@ function renderGeneratorPrompt({ generatorBody, template, projectContext, codeli
  */
 async function buildProjectPrompts({
   templatesDir, bootstrapFile, projectConfigDir, runText,
-  projectContext, codelineContext, mintedRoles, attempts = 3, log = () => {},
+  projectContext, codelineContext, mintedRoles, attempts = 3, mode = 'generate', log = () => {},
 }) {
   const boot = readJson(bootstrapFile);
-  const copyVerbatim = Array.isArray(boot.copyVerbatim) ? boot.copyVerbatim : [];
-  const generated = Array.isArray(boot.generated) ? boot.generated : [];
+  let copyVerbatim = Array.isArray(boot.copyVerbatim) ? boot.copyVerbatim : [];
+  let generated = Array.isArray(boot.generated) ? boot.generated : [];
+
+  // TWO PROVISIONING MODES, one per project, by operator design:
+  //
+  //   'copy'      the template layer is installed AS IS. What the project runs is exactly the
+  //               generic text — no model involved, nothing to draw differently twice.
+  //   'generate'  everything outside the bootstrap set is specialised by the agent that minted
+  //               the roster.
+  //
+  // The mode belongs to the PROJECT, not to this file: a project is data. Copy mode is not a
+  // degraded generate — it is the deliberate choice for a project whose prompts should stay
+  // identical to the generic ones until someone decides otherwise.
+  if (mode === 'copy') {
+    copyVerbatim = [...copyVerbatim, ...generated];
+    generated = [];
+  } else if (mode !== 'generate') {
+    throw new Error(`[prompt-builder] unknown mode '${mode}' — expected 'copy' or 'generate'`);
+  }
 
   // EVERY DECLARED TEMPLATE MUST EXIST BEFORE ANYTHING IS WRITTEN. Discovering a missing one
   // halfway through leaves the project partially provisioned, which starts and then dies.

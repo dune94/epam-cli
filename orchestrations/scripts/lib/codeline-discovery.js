@@ -352,9 +352,21 @@ function scoreRepos(issues, manifest, topN = 8, vocabulary = null) {
   // PERSISTED, because it is generated and because it is the only evidence of what the
   // filter actually did. The count in a log line says a vocabulary was DERIVED; this file
   // says which terms were APPLIED, which is the part that changes the repository chosen.
-  // Written beside the discovery output so it survives whatever cleared the logs.
+  //
+  // INTO THE RUN'S EVIDENCE, not beside the discovery output. It went beside the output, and
+  // every caller points that output at a temp directory it deletes on exit — the ingest at
+  // $TMPDIR_INGEST, the scope resolver at an mktemp -d under a trap. So this file had never
+  // survived a single run and nothing had ever read it. spec-mode-runner.js names the mistake
+  // by this filename in its own comment while taking care to avoid it.
+  //
+  // Falls back to the output directory when there is no run directory, which is the standalone
+  // case a test or a manual invocation takes; that is the only situation where beside-the-output
+  // is the best available answer.
   try {
-    const _vocabPath = path.join(path.dirname(OUT_PATH), 'discovery-vocabulary.json');
+    const _vocabDir = (process.env.LOG_DIR && fs.existsSync(process.env.LOG_DIR))
+      ? process.env.LOG_DIR
+      : path.dirname(OUT_PATH);
+    const _vocabPath = path.join(_vocabDir, 'discovery-vocabulary.json');
     fs.writeFileSync(_vocabPath, JSON.stringify({
       derived: !!vocabulary,
       vocabulary: vocabulary || null,

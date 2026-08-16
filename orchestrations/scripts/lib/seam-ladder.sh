@@ -15,11 +15,24 @@ seam_ladder_export() {
     command -v "$_node" >/dev/null 2>&1 || return 0
 
     local _exports
+    # EXACT MATCH ONLY.
+    #
+    # resolveSeam never fails: unmatched agents fall through seamPatterns to defaultSeam,
+    # which is a real seam with real settings. Applied blindly that is worse than applying
+    # nothing — on 2026-08-15 it silently gave lint-fixer, story_recovery, team-lead-agent and
+    # four others the cpa-inference ladder and effort, and gave sast-sentinel
+    # code-review-cycle's. Wrong configuration presented as resolved configuration.
+    #
+    # The patterns exist for MINTED agent names (-investigator, -analyst, -reviewer). An
+    # engine-side caller passing its own label is not one of those, so it must name a seam the
+    # registry actually declares, or get nothing at all.
     _exports=$("$_node" -e '
       const { seamInvocationEnv } = require(process.argv[1]);
+      const reg = JSON.parse(require("fs").readFileSync(process.argv[3], "utf8"));
+      if (!(reg.profiles || {})[process.argv[2]]) process.exit(0);
       const env = seamInvocationEnv(process.argv[2]);
       for (const [k, v] of Object.entries(env)) process.stdout.write(`export ${k}=${JSON.stringify(v)}\n`);
-    ' "${_dir}/seam-invocation.js" "$_seam" 2>/dev/null) || return 0
+    ' "${_dir}/seam-invocation.js" "$_seam" "$_reg" 2>/dev/null) || return 0
     [ -n "$_exports" ] && eval "$_exports"
     return 0
 }

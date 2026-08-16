@@ -3781,7 +3781,17 @@ _run_jira_pipeline() {
   # profile before any core implementation begins. Agent SKILLS are assessed per project
   # here; agent IDENTITIES are minted per project immediately below — they used to be kept
   # wholesale from the canonical, which is how a client codeline ran epam-cli's own roster.
-  "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/run-jira-pipeline.js" "${_synth_prd}" 2>/dev/null && log "[jira] Injected empty scaffold phase for pre-phase skill assessment"
+  # NOT SILENT. This ran under 2>/dev/null with the log on the && side, so a failure printed
+  # nothing at all and the run continued without a scaffold phase — which is the phase whose
+  # only job is to fire the pre-phase skill assessment over every story. Losing it costs every
+  # agent its project-specific skills, and nothing said so.
+  if "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/run-jira-pipeline.js" "${_synth_prd}"; then
+    log "[jira] Injected empty scaffold phase for pre-phase skill assessment"
+  else
+    error "[jira] could not inject the scaffold phase into ${_synth_prd} — the pre-phase skill"
+    error "[jira] assessment would not run, so every agent would work without this project's skills."
+    return 1
+  fi
 
   # ── Mint this project's agents, then assign every story one ────────────────
   #

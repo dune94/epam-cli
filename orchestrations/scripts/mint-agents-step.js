@@ -599,7 +599,7 @@ if (require.main !== module) return;
     // The survey is cheap by construction: it decides where to look, not what to change. Its
     // failure is not fatal — an estate that cannot be surveyed is the state the roster was
     // minted in until today.
-    process.env.EPAM_AGENT_NAME = 'estate-surveyor';
+    process.env.EPAM_AGENT_NAME = 'estate-survey';
     const survey = await spec.surveyEstate({
       promptExec,
       tickets: stories,
@@ -689,7 +689,7 @@ if (require.main !== module) return;
   // agents a blocking finding NAMES are replaced.
   const runRosterReview = async () => {
     if (!_mintedDetail.length) return { verdict: 'sound', findings: [], reviewed: 0 };
-    process.env.EPAM_AGENT_NAME = 'roster-reviewer';
+    process.env.EPAM_AGENT_NAME = 'roster-review';
     try {
       const liveProfiles = JSON.parse(fs.readFileSync(PROFILES_PATH, 'utf8'));
       return await spec.reviewRoster({

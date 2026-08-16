@@ -607,6 +607,36 @@
         }
       ],
       "template": "e2e-route-check"
+    },
+    "agent-mint": {
+      "_what": "Proposes the roster of agents this project needs, from its tickets and its codelines.",
+      "maxOutputTokens": 32768,
+      "reasoningEffort": "high",
+      "timeoutSecs": 900,
+      "ladder": "top",
+      "produces": "agent-roster",
+      "consumes": [
+        {
+          "kind": "ticket",
+          "required": true
+        }
+      ],
+      "template": "agent-proposal"
+    },
+    "role-assigner": {
+      "_what": "Assigns every story one of the minted roles.",
+      "maxOutputTokens": 32768,
+      "reasoningEffort": "high",
+      "timeoutSecs": 900,
+      "ladder": "top",
+      "produces": "role-assignments",
+      "consumes": [
+        {
+          "kind": "ticket",
+          "required": true
+        }
+      ],
+      "template": "assign-agent-roles"
     }
   },
   "_seamResolution": [

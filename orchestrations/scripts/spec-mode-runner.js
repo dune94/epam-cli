@@ -3171,7 +3171,11 @@ async function surveyEstate({
 
   const prompt = buildSurveyPrompt({ codelines: _named, tickets, referencedDocs, declaredDependencies });
 
-  const _env = { EPAM_AGENT_NAME: 'estate-surveyor', EPAM_SEAM: 'estate-survey' };
+  // THE IDENTITY IS THE SEAM. This paired 'estate-surveyor' with EPAM_SEAM 'estate-survey',
+  // and EPAM_SEAM is written here and read NOWHERE — resolution goes through EPAM_AGENT_NAME
+  // alone. So the seam looked declared while the agent resolved to nothing and ran with no
+  // ladder and no budget, against a profile that had been written for it all along.
+  const _env = { EPAM_AGENT_NAME: 'estate-survey' };
   if (toolGrant) {
     _env.AI_GATE_ALLOW_TOOLS = '1';
     _env.EPAM_ALLOWED_TOOLS = toolGrant;

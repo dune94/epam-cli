@@ -31,7 +31,7 @@ function declaredIdentities(): string[] {
     // QUOTED VALUES ONLY. An unquoted one is a VARIABLE — `EPAM_AGENT_NAME: seam` resolves at
     // runtime to whatever that holds, and reading the identifier as an identity reported a seam
     // literally named 'seam'. A scan that cannot see the value must not invent one.
-    `grep -rhoE "EPAM_AGENT_NAME[:=] *['\\"][a-z0-9:._-]+" ${JSON.stringify(SCRIPTS)} 2>/dev/null || true`,
+    `grep -rhoE "EPAM_AGENT_NAME *[:=] *['\\"][a-z0-9:._-]+" ${JSON.stringify(SCRIPTS)} 2>/dev/null || true`,
     { encoding: 'utf8' },
   );
   return [...new Set(
@@ -52,9 +52,6 @@ const resolveSeam = () => require(join(SCRIPTS, 'lib/seam-invocation.js')).resol
  * Empty is the goal. Adding one is a decision; leaving one undocumented is the state this ends.
  */
 const NO_SEAM_YET: Record<string, string> = {
-  'estate-surveyor':
-    'Runs in the spec pass (step 3.01), which has not been assessed yet. Its seam and ladder are '
-    + 'settled when that step is, rather than guessed at from here.',
   'kb-synthesizer':
     'Synthesises knowledge-base entries after a story completes. Not reached in steps 0.1-1.4 and '
     + 'its seam is decided with the step that invokes it.',

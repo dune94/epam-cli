@@ -387,20 +387,11 @@ function publishedContracts(repoPath, story) {
   }
   if (!parts.length) return '';
 
-  return `
-
-## Published contracts from codelines that already ran
-${done.length ? `This story spans ${done.length} codelines (${done.join(', ')}). ` : ''}\
-The following is the exported surface of work already completed elsewhere for this story.
-
-${parts.join('\n\n')}
-
-THE CAUSE MAY NOT BE IN THIS REPOSITORY. When a value arrives here already wrong,
-the defect is upstream and the fix belongs there — a defensive check at this
-boundary hides it and will pass every test you can write here. If what you see
-contradicts a contract above, say so and name the other codeline rather than
-prescribing a local workaround. There is always SOME line in this repository that
-consumes the wrong value; naming it is not the same as finding the cause.`;
+  // RENDERED FROM THE TEMPLATE LAYER.
+  return renderEngineTemplate('spec-context-fragments', {
+    __SPANS_SENTENCE__: done.length ? `This story spans ${done.length} codelines (${done.join(', ')}). ` : '',
+    __CONTRACTS__: parts.join('\n\n'),
+  }, 'published_contracts')
 }
 
 /**
@@ -451,26 +442,10 @@ function unreachableExternalsConstraint(env = process.env) {
   const hosts = String(env.EPAM_MOCK_EXTERNAL_CMS_HOSTS || '')
     .split(',').map((h) => h.trim()).filter(Boolean);
   if (!hosts.length) return '';
-  return `
-
-UNREACHABLE EXTERNAL SERVICE — write criteria to the boundary, not past it.
-This project cannot reach the following hosts at test time: ${hosts.join(', ')}.
-There are no credentials for them and no local substitute, so any criterion that
-asserts their real behaviour is unprovable and will fail verification no matter
-how correct the code is.
-
-Write criteria that stop at OUR side of that boundary and are therefore provable:
-what request our code makes, with what parameters, under what conditions; how it
-handles the responses and failures those services can return; what it renders or
-returns given a known response. State the assumption explicitly, e.g. "given the
-<service> client is mocked, ...", so a reader knows the claim's limits.
-
-SCOPE — this applies ONLY to the hosts listed above. Every other integration
-keeps its real coverage: internal APIs, this codeline's own services, databases,
-and anything else reachable are exercised for real exactly as normal. Do NOT mock
-a dependency merely because mocking it would be more convenient. Removing
-coverage from something we CAN test trades a real defect for a green tick, which
-is the opposite of why this constraint exists.`;
+  // RENDERED FROM THE TEMPLATE LAYER.
+  return renderEngineTemplate('spec-context-fragments', {
+    __HOSTS__: hosts.join(', '),
+  }, 'unreachable_externals')
 }
 
 function fetchExistingCodeContext(story) {
@@ -7249,24 +7224,12 @@ function codelineScopeBlock(prd, stories) {
     .filter((cl) => cl && cl !== thisLane);
   if (!others.length) return '';
 
-  return `
-CODELINE SCOPE — you are reviewing ONE lane.
-
-This spec pass ran against '${thisLane}' only, using that codeline's own checkout. The story
-also spans: ${others.join(', ')}. Each of those is specified by its own pass, against its own
-checkout, and the results are recorded per codeline and merged afterwards. You are not seeing
-their work and it is not missing.
-
-So: judge whether this specification is correct, observable and implementable IN '${thisLane}'.
-Do not penalise it because a file, function or criterion it names does not exist in
-${others.join(' or ')} — those codelines wire the same behaviour at their own sites, which
-their own lane locates.
-
-A cross-codeline concern IS in scope, and you should raise it, when '${thisLane}'s own change
-depends on one: a shared contract it consumes, a payload shape another codeline produces, or
-work that cannot function unless another lane changes too. The distinction is dependency, not
-absence.
-`;
+  // RENDERED FROM THE TEMPLATE LAYER.
+  return renderEngineTemplate('spec-context-fragments', {
+    __THIS_LANE__: thisLane,
+    __OTHER_LANES__: others.join(', '),
+    __OTHER_LANES_OR__: others.join(' or '),
+  }, 'codeline_scope')
 }
 
 // laneCodeline(prd) → the codeline this process is running as, or null.

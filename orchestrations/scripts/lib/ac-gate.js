@@ -231,20 +231,14 @@ function classifyCodelineOnly(issue, knownCodelines) {
   }
 
   const codelineList = knownCodelines.map((cl) => `- "${cl}" — ${codelineDesc(cl)}`).join('\n');
-  const prompt = `Assign this Jira story to a codeline. Answer with JSON only — no prose, no markdown fences.
-
-STORY: ${issue.jiraKey} — ${issue.title || ''}
-
-DESCRIPTION:
-${(issue.description || '')}
-
-CODELINES:
-${codelineList}
-- "${SPLIT_VALUE}" — the work spans multiple codelines
-
-Choose exactly one. Answer:
-{"codeline": "<one of the values above>"}
-`;
+  // RENDERED FROM THE TEMPLATE LAYER.
+  const prompt = renderEngineTemplate('ac-gate-codeline-assignment', {
+    __JIRA_KEY__: issue.jiraKey,
+    __TITLE__: issue.title || '',
+    __DESCRIPTION__: issue.description || '',
+    __CODELINE_LIST__: codelineList,
+    __SPLIT_VALUE__: SPLIT_VALUE,
+  });
 
   const tmpPrompt = `/tmp/ac-gate-codeline-${issue.jiraKey}.txt`;
   fs.writeFileSync(tmpPrompt, prompt);

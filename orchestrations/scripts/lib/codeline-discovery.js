@@ -234,34 +234,13 @@ function deriveDiscoveryVocabulary(issues, manifest) {
     r.readmeExcerpt ? `  readme: ${r.readmeExcerpt}` : '',
   ].filter(Boolean).join('\n')).join('\n');
 
-  const prompt = `${persona ? persona + '\n\n' : ''}TICKETS UNDER DISCOVERY
-${ticketBlock}
-
-CANDIDATE REPOSITORIES IN THE CODELINE ROOT
-${candidateBlock}
-
-TASK
-The ticket text above is about to be broken into terms and searched against the code of every
-candidate repository, to decide which one gets modified. Some of those terms cannot separate
-one candidate from another: grammatical filler, process and workflow words, and words that
-describe the request rather than the software.
-
-Return the vocabulary as JSON inside <DISCOVERY_VOCABULARY></DISCOVERY_VOCABULARY>:
-
-<DISCOVERY_VOCABULARY>
-{"blacklist":[{"term":"<a lowercase term from the ticket text that cannot discriminate between these candidates>","reason":"<why it carries no selection signal here>"}],
- "whitelist":[{"term":"<a term that must survive filtering because it names something in the software>","reason":"<why>"}]}
-</DISCOVERY_VOCABULARY>
-
-RULES
-- Every term must appear in the ticket text above. Do not invent vocabulary.
-- Judge against THESE candidates. A word that is filler on another project may be the product
-  name here; a word that names a component of one of the candidates above is never filler.
-- An identifier, symbol, filename, endpoint, product or component name is NEVER blacklisted,
-  even when it is rare or looks like an abbreviation. Whitelist it if in doubt.
-- The blacklist may not be empty: if the ticket really contains no filler at all, say so by
-  returning the single least informative term with that reason.
-- No prose outside the tags.`;
+  // RENDERED FROM THE TEMPLATE LAYER. This prompt was missed by the prose guard for the same
+  // reason every earlier sweep under-reported: it opens with a heading rather than "You are".
+  const prompt = renderEngineTemplate('discovery-vocabulary', {
+    __PERSONA__: persona ? persona + '\n\n' : '',
+    __TICKET_BLOCK__: ticketBlock,
+    __CANDIDATE_BLOCK__: candidateBlock,
+  });
 
   const raw = callLlm(prompt, { rawText: true });
   const m = String(raw || '').match(/<DISCOVERY_VOCABULARY>([\s\S]*?)<\/DISCOVERY_VOCABULARY>/);

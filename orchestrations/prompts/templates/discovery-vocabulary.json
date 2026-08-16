@@ -1,0 +1,23 @@
+{
+  "$why": [
+    "Moved out of lib/codeline-discovery.js on 2026-08-16. It was missed by the prose guard for",
+    "the same reason every earlier sweep under-reported: the guard matches second-person and",
+    "imperative openers, and this prompt opens with a heading. The count it reports is a floor.",
+    "",
+    "This agent decides which ticket words carry selection signal before the codelines are",
+    "scored, and it ABORTS the run when it fails -- so its wording is load-bearing for step 1",
+    "and had no reviewable home."
+  ],
+  "description": "Derives, per ticket, which terms discriminate between candidate repositories and which are filler.",
+  "id": "discovery-vocabulary",
+  "seams": [
+    "codeline-discovery"
+  ],
+  "placeholders": [
+    "__PERSONA__",
+    "__TICKET_BLOCK__",
+    "__CANDIDATE_BLOCK__"
+  ],
+  "version": 1,
+  "body": "__PERSONA__TICKETS UNDER DISCOVERY\n__TICKET_BLOCK__\n\nCANDIDATE REPOSITORIES IN THE CODELINE ROOT\n__CANDIDATE_BLOCK__\n\nTASK\nThe ticket text above is about to be broken into terms and searched against the code of every\ncandidate repository, to decide which one gets modified. Some of those terms cannot separate\none candidate from another: grammatical filler, process and workflow words, and words that\ndescribe the request rather than the software.\n\nReturn the vocabulary as JSON inside <DISCOVERY_VOCABULARY></DISCOVERY_VOCABULARY>:\n\n<DISCOVERY_VOCABULARY>\n{\"blacklist\":[{\"term\":\"<a lowercase term from the ticket text that cannot discriminate between these candidates>\",\"reason\":\"<why it carries no selection signal here>\"}],\n \"whitelist\":[{\"term\":\"<a term that must survive filtering because it names something in the software>\",\"reason\":\"<why>\"}]}\n</DISCOVERY_VOCABULARY>\n\nRULES\n- Every term must appear in the ticket text above. Do not invent vocabulary.\n- Judge against THESE candidates. A word that is filler on another project may be the product\n  name here; a word that names a component of one of the candidates above is never filler.\n- An identifier, symbol, filename, endpoint, product or component name is NEVER blacklisted,\n  even when it is rare or looks like an abbreviation. Whitelist it if in doubt.\n- The blacklist may not be empty: if the ticket really contains no filler at all, say so by\n  returning the single least informative term with that reason.\n- No prose outside the tags."
+}

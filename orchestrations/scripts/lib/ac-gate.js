@@ -32,6 +32,53 @@
 
 const fs           = require('fs');
 const { renderEngineTemplate } = require('./engine-prompt');
+
+/**
+ * THE ENVIRONMENT A SEAM GRANTS: ladder position, effort, output budget, timeout, tool grant.
+ *
+ * This gate announced itself as 'ac-gate' and 'ac-gate-codeline'. Neither is a seam the registry
+ * knows, so resolveSeam found nothing and every call ran with no ladder and no budget — on a
+ * hardcoded fallback model, which is the shape the ladder work removed everywhere else under the
+ * rule that a seam with no resolvable model must decline rather than guess.
+ *
+ * Meanwhile the registry declared 'ac-classification' (ladder=base, effort=low) and
+ * 'ac-elaboration' (ladder=top, effort=medium) for exactly this stage: profiles written for a
+ * step, addressed by no caller.
+ *
+ * The identity IS the seam, which is how discovery already does it and what makes the two
+ * impossible to drift apart. Each template declares the seam it serves, and these match.
+ *
+ * Cost travels with it: ai-run.sh writes the normalized result JSON when ORCH_JSON_RESULT is set,
+ * and this gate runs once per ticket — the more expensive of the two invisible stages.
+ */
+function seamEnv(seam, costFile) {
+  let granted = {};
+  try {
+    granted = require('./seam-invocation.js').seamInvocationEnv(seam);
+  } catch (e) {
+    // Loud. Running anyway on ambient settings is what this replaced.
+    process.stderr.write(`[ac-gate] seam '${seam}' did not resolve: ${(e && e.message) || e}\n`);
+  }
+  if (granted.EPAM_ALLOWED_TOOLS) granted.AI_GATE_ALLOW_TOOLS = '1';
+  return { ...process.env, ...granted, EPAM_AGENT_NAME: seam, ORCH_JSON_RESULT: costFile };
+}
+
+/** Append this call's spend to the activity log. Best-effort; never breaks the call it measured. */
+function emitSpend(costFile, seam) {
+  try {
+    require('./cost-emitter.js').emitCostSnapshot({
+      resultFile: costFile,
+      activityFile: process.env.ACTIVITY_FILE
+        || path.join(process.env.LOG_DIR || path.join(__dirname, '..', '..', 'logs'), 'agent-activity.jsonl'),
+      agent: seam,
+      storyId: '',
+      phase: process.env.PHASE || '',
+      model: MODEL,
+      provider: PROVIDER,
+    });
+  } catch { /* cost emission must never break the agent call */ }
+  try { fs.unlinkSync(costFile); } catch { /* ignore */ }
+}
 const path         = require('path');
 const { execSync } = require('child_process');
 
@@ -177,6 +224,9 @@ function classifyWithLLM(issue, knownCodelines) {
   const prompt = buildClassificationPrompt(issue, knownCodelines);
 
   const tmpPrompt = `/tmp/ac-gate-prompt-${issue.jiraKey}.txt`;
+  // Declared outside the try: a call that threw spent money too, and dropping its record
+  // is how the expensive failures become the invisible ones.
+  const _costFile = `${tmpPrompt}.cost.json`;
   fs.writeFileSync(tmpPrompt, prompt);
 
   try {
@@ -185,7 +235,7 @@ function classifyWithLLM(issue, knownCodelines) {
     const raw = execSync(cmd, {
       encoding: 'utf8',
       timeout: Number(process.env.AC_GATE_TIMEOUT_MS || 360000),
-      env: { ...process.env, EPAM_AGENT_NAME: 'ac-gate' },
+      env: seamEnv('ac-classification', _costFile),
     }).trim();
 
     if (!raw) throw new Error('Empty response from ai-run.sh');
@@ -211,6 +261,7 @@ function classifyWithLLM(issue, knownCodelines) {
       enrichedAcs: [],
     };
   } finally {
+    emitSpend(_costFile, 'ac-classification');
     try { fs.unlinkSync(tmpPrompt); } catch { /* ignore */ }
   }
 }
@@ -241,13 +292,16 @@ function classifyCodelineOnly(issue, knownCodelines) {
   });
 
   const tmpPrompt = `/tmp/ac-gate-codeline-${issue.jiraKey}.txt`;
+  // Declared outside the try: a call that threw spent money too, and dropping its record
+  // is how the expensive failures become the invisible ones.
+  const _costFile = `${tmpPrompt}.cost.json`;
   fs.writeFileSync(tmpPrompt, prompt);
   try {
     const cmd = `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>/dev/null`;
     const raw = execSync(cmd, {
       encoding: 'utf8',
       timeout: Number(process.env.AC_GATE_TIMEOUT_MS || 360000),
-      env: { ...process.env, EPAM_AGENT_NAME: 'ac-gate-codeline' },
+      env: seamEnv('ac-classification', _costFile),
     }).trim();
     if (!raw) throw new Error('Empty response from ai-run.sh');
     const parsed = parseLooseJson(raw, 'codeline classification');
@@ -259,6 +313,7 @@ function classifyCodelineOnly(issue, knownCodelines) {
     process.stderr.write(`[ac-gate] codeline classification failed for ${issue.jiraKey}: ${e.message}\n`);
     return { verdict, reason, gaps: [], enrichedAcs: [], codeline: SPLIT_VALUE };
   } finally {
+    emitSpend(_costFile, 'ac-classification');
     try { fs.unlinkSync(tmpPrompt); } catch { /* best effort */ }
   }
 }
@@ -288,10 +343,13 @@ function elaborateAcs(issue) {
   const prompt = buildElaborationPrompt(issue);
 
   const tmpPrompt = `/tmp/ac-gate-elaborate-${issue.jiraKey}.txt`;
+  // Declared outside the try: a call that threw spent money too, and dropping its record
+  // is how the expensive failures become the invisible ones.
+  const _costFile = `${tmpPrompt}.cost.json`;
   fs.writeFileSync(tmpPrompt, prompt);
   try {
     const cmd = `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>/dev/null`;
-    const raw = execSync(cmd, { encoding: 'utf8', timeout: Number(process.env.AC_GATE_TIMEOUT_MS || 360000), env: { ...process.env, EPAM_AGENT_NAME: 'ac-gate' } }).trim();
+    const raw = execSync(cmd, { encoding: 'utf8', timeout: Number(process.env.AC_GATE_TIMEOUT_MS || 360000), env: seamEnv('ac-elaboration', _costFile) }).trim();
     if (!raw) throw new Error('Empty elaboration response');
     const parsed = parseLooseJson(raw, 'elaboration');
     return Array.isArray(parsed.enrichedAcs) && parsed.enrichedAcs.length > 0
@@ -311,6 +369,7 @@ function elaborateAcs(issue) {
     process.stderr.write('[ac-gate]     NOT substituting a title-based criterion — that is a fabricated answer.\n');
     throw e;
   } finally {
+    emitSpend(_costFile, 'ac-elaboration');
     try { fs.unlinkSync(tmpPrompt); } catch { /* ignore */ }
   }
 }

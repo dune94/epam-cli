@@ -1,0 +1,15 @@
+{
+  "_what": "Stack-detected dependency expectations for mock3's codelines.",
+  "codelines": {
+    "mock-a": {
+      "packageManager": "npm",
+      "manifest": "package.json",
+      "lockfile": null
+    },
+    "mock-b": {
+      "packageManager": "npm",
+      "manifest": "package.json",
+      "lockfile": null
+    }
+  }
+}

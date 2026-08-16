@@ -888,6 +888,7 @@ if (require.main !== module) return;
   // inherits ladder, retry, timeout and cost capture rather than being a private call.
   {
     const promptsLib = require('./lib/prompt-library.js');
+    const { seamInvocationEnv } = require('./lib/seam-invocation.js');
     const { buildProjectPrompts } = require('./lib/project-prompt-builder.js');
     const engineRoot = path.join(__dirname, '..', '..');
     const templatesDir = path.join(engineRoot, promptsLib.TEMPLATE_DIR_REL);
@@ -902,11 +903,25 @@ if (require.main !== module) return;
         'prompts are the only ones ever rendered, and the template is never executed.');
     }
 
+    // THE PROVISIONING MODE IS THE PROJECT'S DECISION, and no mode was being passed at all —
+    // so every project silently got 'generate', including the ones whose prompts are meant to
+    // stay identical to the generic text. metrolinx is a copy-mode project that the next mint
+    // would have regenerated. A project is data; this is one of its facts.
+    const promptMode = process.env.EPAM_PROMPT_PROVISION_MODE || '';
+    if (!promptMode) {
+      throw new Error(
+        'cannot build project prompts: EPAM_PROMPT_PROVISION_MODE is unset. Declare it in the '
+        + "project's config.env as 'copy' (install the generic templates as they are) or "
+        + "'generate' (specialise each one for this project). There is no engine default: "
+        + 'picking one silently is how a project ends up running prompts nobody chose.');
+    }
+
     process.env.EPAM_AGENT_NAME = 'prompt-builder';
     const _built = await buildProjectPrompts({
       templatesDir,
       bootstrapFile,
       projectConfigDir,
+      mode: promptMode,
       projectContext: [
         `Project config: ${projectConfigDir}`,
         `Tickets in scope: ${stories.map((t) => `${t.jiraKey || t.id}: ${t.title || ''}`).join(' | ')}`,
@@ -917,15 +932,52 @@ if (require.main !== module) return;
       mintedRoles: _mintedDetail.length
         ? _mintedDetail.map((m) => `- ${m.name} [${m.kind}] — ${m.rationale || ''}`).join('\n')
         : '(none minted this run)',
-      runText: (prompt, meta) => spec.runClaude(
-        promptExec, prompt,
-        path.join(LOG_DIR, `prompt-build-${(meta && meta.id) || 'unknown'}.log`),
-        {}, { costAgent: 'prompt-builder' }),
+      // THE BUILDER RUNS AT ITS OWN SEAM, with the grants that seam declares.
+      //
+      // It passed {} as the environment, so it inherited whatever the mint process happened to
+      // have: no tool grant, no iteration budget, and the ladder of whichever agent ran last.
+      // The operator's design is that this agent READS the templates and decorates them, which
+      // it cannot do without read_file and list_files -- and a declaration that never reaches
+      // the invocation is the same defect as a ladder that resolves to nothing.
+      //
+      // AI_GATE_ALLOW_TOOLS is what actually opens the tool channel; the seam decides WHICH
+      // tools. Granting the channel without the list, or the list without the channel, both
+      // produce an agent that quietly has nothing.
+      runText: (prompt, meta) => {
+        const seamEnv = seamInvocationEnv('prompt-builder', path.join(engineRoot, 'orchestrations', 'agents'));
+        if (seamEnv.EPAM_ALLOWED_TOOLS) seamEnv.AI_GATE_ALLOW_TOOLS = '1';
+        return spec.runClaude(
+          promptExec, prompt,
+          path.join(LOG_DIR, `prompt-build-${(meta && meta.id) || 'unknown'}.log`),
+          seamEnv, { costAgent: 'prompt-builder' });
+      },
       log: (m) => process.stderr.write(`${m}\n`),
     });
     process.stderr.write(
-      `[mint-step] ✓ prompts provisioned: ${_built.copied.length} copied (bootstrap), ` +
+      `[mint-step] ✓ prompts provisioned (${promptMode}): ${_built.copied.length} copied (bootstrap), ` +
       `${_built.generated.length} generated → ${path.join(projectConfigDir, 'prompts')}\n`);
+
+    // ── LINK THE PROMPTS TO THE AGENTS JUST MINTED ────────────────────────────
+    //
+    // Provisioning and minting ran in the same stage and knew nothing about each other: the
+    // builder walked a static list, the mint separately resolved agents to seams, and nobody
+    // asked whether the seam a minted agent enters at has a prompt in THIS project. The answer
+    // arrived at that agent's first invocation instead, hours in, with the run already spending.
+    //
+    // Decidable from data — roster, registry, installed library — so it costs nothing and lands
+    // here, where a gap is one line to fix.
+    const { linkPromptsToRoster } = require('./lib/prompt-agent-link.js');
+    const _link = linkPromptsToRoster({
+      projectConfigDir,
+      registryFile: _registryPath,
+      // rosterAgents returns agent -> brief; the link step wants the NAMES. Passing the object
+      // made the roster look empty, which the step correctly refused rather than linking nothing
+      // and reporting success.
+      agents: Object.keys(rosterAgents(PROFILES_PATH)),
+    });
+    process.stderr.write(
+      `[mint-step] ✓ prompts linked: ${Object.keys(_link.agents).length} agent(s) across ` +
+      `${_link.seamsInUse.length} seam(s) → ${path.join(projectConfigDir, 'prompt-agent-link.json')}\n`);
   }
 
   process.stderr.write(`[mint-step] ✓ roster and assignments written to ${PRD_PATH}\n`);

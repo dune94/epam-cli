@@ -39,6 +39,20 @@ if [ -n "${EPAM_STUB_LOG:-}" ]; then
   printf '%s\t%s\n' "${TOOL:-<no-schema>}" "${EPAM_AGENT_NAME:-?}" >> "$EPAM_STUB_LOG" 2>/dev/null || true
 fi
 
+# RECORD THE INVOCATION ENVIRONMENT for the settings a seam is supposed to supply. A grant that
+# is declared in the registry and never reaches the call is indistinguishable, from the registry,
+# from one that works -- so the only place to prove it is here, at the receiving end.
+if [ -n "${LOG_DIR:-}" ]; then
+  {
+    printf 'AGENT=%s\n'                       "${EPAM_AGENT_NAME:-}"
+    printf 'EPAM_ALLOWED_TOOLS=%s\n'          "${EPAM_ALLOWED_TOOLS:-}"
+    printf 'AI_GATE_ALLOW_TOOLS=%s\n'         "${AI_GATE_ALLOW_TOOLS:-}"
+    printf 'EPAM_PROMPT_TEMPLATES_DIR=%s\n'   "${EPAM_PROMPT_TEMPLATES_DIR:-}"
+    printf 'EPAM_REASONING_EFFORT=%s\n'       "${EPAM_REASONING_EFFORT:-}"
+    printf 'EPAM_MAX_ITERATIONS=%s\n'         "${EPAM_MAX_ITERATIONS:-}"
+  } >> "${LOG_DIR}/stub-env.txt" 2>/dev/null || true
+fi
+
 if [ -n "${EPAM_STUB_FAIL_FOR:-}" ] && [ -n "$TOOL" ] && [ "${TOOL#*${EPAM_STUB_FAIL_FOR}}" != "$TOOL" ]; then
   echo "[stub] deliberate failure for tool: $TOOL" >&2
   exit 1

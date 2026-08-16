@@ -176,6 +176,30 @@ function seamInvocationEnv(agent, agentsDir, opts) {
   if (profile.temperature !== undefined && profile.temperature !== '') {
     env.EPAM_TEMPERATURE = String(profile.temperature);
   }
+
+  // WHAT THE SEAM IS ALLOWED TO DO, AND HOW LONG IT HAS.
+  //
+  // The registry has let a seam declare these for weeks and none of them were exported, so every
+  // one was inert: story-writer declared bash,read_file,list_files,search and the writer received
+  // no grant at all through this path. Same shape as a ladder that resolves to nothing — a
+  // declaration nothing reads is documentation, and it reads as configuration.
+  //
+  // ABSENT STAYS ABSENT. An empty grant and a missing one differ downstream: "these zero tools"
+  // would override a caller's own explicit grant, while "nothing configured here" lets it stand.
+  if (profile.allowedTools !== undefined && profile.allowedTools !== '') {
+    env.EPAM_ALLOWED_TOOLS = String(profile.allowedTools);
+  }
+  if (profile.maxIterations !== undefined) env.EPAM_MAX_ITERATIONS = String(profile.maxIterations);
+  if (profile.maxOutputTokens !== undefined) env.EPAM_MAX_OUTPUT_TOKENS = String(profile.maxOutputTokens);
+  if (profile.timeoutSecs !== undefined) env.EPAM_TIMEOUT_SECS = String(profile.timeoutSecs);
+
+  // WHERE THE TEMPLATE ZONE IS, for a seam granted the tools to read it. A read grant with no
+  // path is useless, and the alternative — a directory named inside a prompt — is exactly the
+  // project fact in prompt text that this layer exists to remove. Resolved from the engine's own
+  // location, never from a caller's guess.
+  if (env.EPAM_ALLOWED_TOOLS && /read_file|list_files/.test(env.EPAM_ALLOWED_TOOLS)) {
+    env.EPAM_PROMPT_TEMPLATES_DIR = path.join(__dirname, '..', '..', 'prompts', 'templates');
+  }
   if (profile.ladder) {
     // A SEAM DECLARES A POSITION; THE PROJECT SUPPLIES THE NAME.
     //

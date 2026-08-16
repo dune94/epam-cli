@@ -546,6 +546,31 @@
         }
       ],
       "template": "qa-perf-sentinel"
+    },
+    "prompt-builder": {
+      "_what": "Provisions this project's prompt library: reads the generic templates and decorates each one for the project and the roster just minted. Runs at mint time, as part of the same stage that creates the agents the prompts are for — the only stage that knows both what the project is and who will work on it.",
+      "ladder": "top",
+      "reasoningEffort": "high",
+      "temperature": "0.2",
+      "maxOutputTokens": 32768,
+      "maxIterations": 25,
+      "timeoutSecs": 900,
+      "allowedTools": "read_file,list_files,search",
+      "_toolNote": "READ ONLY, deliberately. The job is to read a template and decorate it; the template zone is the one immutable thing in this design, and an agent granted bash could rewrite the very files it is reading from. The engine performs the write, after the contract check — so a prompt that fails its contract is never installed.",
+      "produces": "project-prompts",
+      "consumes": [
+        {
+          "kind": "roster",
+          "required": true,
+          "authority": "the roles these prompts are being written for"
+        },
+        {
+          "kind": "template",
+          "required": true,
+          "authority": "the generic prompt to decorate — its placeholders are a contract, not a suggestion"
+        }
+      ],
+      "template": "project-prompt-generation"
     }
   },
   "_seamResolution": [

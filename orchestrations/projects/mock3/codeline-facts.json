@@ -1,0 +1,19 @@
+{
+  "_what": "What each mock3 codeline IS, so no agent has to infer it from directory names.",
+  "codelines": {
+    "mock-a": {
+      "description": "Fare rules for a transit line: fare calculation by rider age and pass status.",
+      "stack": "typescript",
+      "testCommand": "npx vitest run",
+      "sourceDir": "src",
+      "testDir": "test"
+    },
+    "mock-b": {
+      "description": "Departure-board rendering: stop sequences and journey timings.",
+      "stack": "typescript",
+      "testCommand": "npx vitest run",
+      "sourceDir": "src",
+      "testDir": "test"
+    }
+  }
+}

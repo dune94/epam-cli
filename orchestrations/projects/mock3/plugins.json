@@ -1,0 +1,4 @@
+{
+  "_what": "mock3 grants no project-specific tools: the rehearsal should exercise the engine's own tool set, so a difference in outcome is never a difference in tooling.",
+  "tools": []
+}

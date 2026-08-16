@@ -113,6 +113,12 @@ function buildGeneratedDoc(template, generatedBody) {
       .digest('hex'),
     derivedFromVersion: template.version == null ? null : template.version,
     id: template.id,
+    // THE SEAMS COME WITH IT. Generating a prompt specialises its TEXT; it does not change what
+    // the prompt is for. Dropping them here meant a generated library had no seam links at all,
+    // so the step that joins prompts to minted agents found nothing to join and every agent
+    // looked unprovisioned — while the copy path, which clones the whole document, kept them.
+    // One provisioning mode silently produced a different shape from the other.
+    seams: Array.isArray(template.seams) ? [...template.seams] : [],
     placeholders: placeholdersIn(body),
   };
 }

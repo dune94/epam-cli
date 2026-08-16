@@ -88,6 +88,11 @@ function runStep(s: ReturnType<typeof sandbox>, env: Record<string, string> = {}
       JIRA_CODELINES: 'mock-one',
       JIRA_WORKTREE_MOCK_ONE: s.codeline,
       EPAM_ORCHESTRATION_PROVIDER: 'qwen',
+      // HOW THIS PROJECT PROVISIONS ITS PROMPTS. A project fact with no engine default: the
+      // engine used to pick 'generate' for everyone silently, which meant a copy-mode project
+      // was regenerated on every mint. The sandbox exercises generate, because that is the path
+      // where the builder agent has to read a template and specialise it.
+      EPAM_PROMPT_PROVISION_MODE: 'generate',
       PROJECT_ROOT: s.codeline,
       LOG_DIR: s.logDir,
       TZ: 'UTC',
@@ -154,6 +159,60 @@ describe('the mint step builds prompts as part of minting', () => {
         const res = spawnSync(NODE, [lib, 'render', id, s.projectDir, vf], { encoding: 'utf8' });
         expect(res.status, `${id} does not render: ${res.stderr}`).toBe(0);
         expect((res.stdout || '').trim().length, `${id} rendered empty`).toBeGreaterThan(0);
+      }
+    } finally { rmSync(s.dir, { recursive: true, force: true }); }
+  });
+
+  it('FAILS the step when the project does not say HOW to provision', () => {
+    // No default. Choosing for the project silently is how metrolinx -- whose prompts are meant
+    // to stay the generic text -- would have had its library regenerated on its next mint,
+    // with nothing in the log to say the prompts had changed.
+    const s = sandbox();
+    try {
+      const r = runStep(s, { EPAM_PROMPT_PROVISION_MODE: '' });
+      expect(r.status).not.toBe(0);
+      expect(r.out).toMatch(/EPAM_PROMPT_PROVISION_MODE/);
+    } finally { rmSync(s.dir, { recursive: true, force: true }); }
+  });
+
+  it('the builder is invoked WITH its tool grant, not merely granted one in the registry', () => {
+    // The registry could declare read_file and the invocation still pass {}, which is what it
+    // did: the builder inherited whatever the mint process happened to have. A grant that never
+    // reaches the call is the same defect as a ladder that resolves to nothing -- it reads as
+    // configuration and does nothing. The stub records the environment it was called with.
+    const s = sandbox();
+    try {
+      runStep(s);
+      // THE BUILDER'S OWN INVOCATION, not any line in a shared log. Every agent in the run
+      // writes to this file and the mint itself is granted read_file, so a whole-file match
+      // passed even with the wiring removed — it was reading somebody else's grant. Verified by
+      // mutation: this assertion goes red when the invocation drops back to {}.
+      const blocks = readFileSync(join(s.logDir, 'stub-env.txt'), 'utf8')
+        .split(/(?=AGENT=)/)
+        .filter((b) => /^AGENT=prompt-builder\b/.test(b.trim()));
+      expect(blocks.length, 'the prompt-builder never ran, so its grant is untested').toBeGreaterThan(0);
+      const own = blocks.join('\n');
+      expect(own, 'the prompt-builder was invoked with no tool grant').toMatch(/EPAM_ALLOWED_TOOLS=[^\n]*read_file/);
+      expect(own, 'the tool channel was never opened, so the grant is inert').toMatch(/AI_GATE_ALLOW_TOOLS=1/);
+      expect(own, 'the builder has a read grant but was never told where the templates are')
+        .toMatch(/EPAM_PROMPT_TEMPLATES_DIR=\S/);
+    } finally { rmSync(s.dir, { recursive: true, force: true }); }
+  });
+
+  it('links every minted agent to the prompt it will run on', () => {
+    // The step the operator asked for: provisioning and minting used to know nothing about each
+    // other, so whether a minted agent's seam had a prompt in THIS project was discovered at
+    // that agent's first invocation, hours into the run.
+    const s = sandbox();
+    try {
+      const r = runStep(s);
+      expect(r.out, `prompts were never linked:\n${r.out.slice(-2000)}`).toMatch(/prompts linked/);
+      const link = JSON.parse(readFileSync(join(s.projectDir, 'prompt-agent-link.json'), 'utf8'));
+      const agents = Object.keys(link.agents);
+      expect(agents.length, 'nothing was linked').toBeGreaterThan(0);
+      for (const a of agents) {
+        expect(link.agents[a].seam, `${a} linked to no seam`).toBeTruthy();
+        expect(link.agents[a].prompts.length, `${a} enters at a seam with no prompt`).toBeGreaterThan(0);
       }
     } finally { rmSync(s.dir, { recursive: true, force: true }); }
   });

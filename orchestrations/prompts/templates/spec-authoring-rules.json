@@ -1,0 +1,25 @@
+{
+  "$why": [
+    "Moved out of spec-mode-runner.js on 2026-08-16. Three module-level constants, each composed",
+    "into SEVERAL prompts rather than sent alone -- which is why they outlasted every sweep: a",
+    "shared constant reads as configuration in a diff, and none of them opens with \"You are\".",
+    "",
+    "They are the standards the spec pass holds authors to: what an acceptance criterion may not",
+    "prescribe, what makes a search term able to find anything, and what makes a verification",
+    "criterion observable. Kept as three bodies of one document because they are composed",
+    "together and a change to the set should be one edit."
+  ],
+  "description": "The authoring standards the spec pass applies to acceptance criteria, search terms and verification criteria.",
+  "id": "spec-authoring-rules",
+  "seams": [
+    "ac-elaboration",
+    "ac-classification"
+  ],
+  "placeholders": [],
+  "version": 1,
+  "bodies": {
+    "ac_prescriptiveness": "An acceptance criterion states WHAT MUST BE TRUE for the story to be done, observed from outside the implementation. It NEVER dictates the code that produces it.\nAn acceptance criterion is FORBIDDEN if it names a specific library, framework, test double, API call, import, or code construct the implementation must use. Naming a required OUTCOME is correct; naming the machinery that achieves it is not.",
+    "search_term": "A search term is USEFUL when it names something that exists in the repository being searched — a symbol, function, file, module, or a domain noun the code itself uses. It is NOISE when it names the ticket's packaging rather than its subject: routing tags, brand or product labels, ticket prefixes, status words, people, or generic prose.\nReturn as BLACKLIST every candidate that names packaging rather than subject, or that resolves to nothing in the index. Return as WHITELIST the terms that name the capability or code under discussion.",
+    "vc_observability": "A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.\nA verification criterion is FORBIDDEN if it:\n- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;\n- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;\n- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value \"must equal\" / \"matches\" / \"is the same as\" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.\nEvery verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent."
+  }
+}

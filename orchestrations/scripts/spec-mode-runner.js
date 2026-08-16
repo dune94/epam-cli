@@ -15,6 +15,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 const fs = require('node:fs');
 const path = require('node:path');
+// The prompt renderer. Required HERE, with the other top-level imports, because module-level
+// prompt constants below render at load time -- placed lower it is a temporal-dead-zone error.
+const { renderEngineTemplate } = require('./lib/engine-prompt.js');
 const os = require('node:os');
 const { spawn, execSync } = require('node:child_process');
 // Lazily loaded: this file is executed from an ISOLATED COPY by some callers
@@ -2600,11 +2603,9 @@ function preserveDefectAcceptanceCriteria(payload, story, env = process.env) {
 // about what counts as "observable" — the disagreement that made AMSD-1820 loop
 // forever (producer emitted an internal "confirmation data" response field as a VC;
 // reviewer flagged that same field as a mechanism; regen re-emitted it; → fallback).
-const AC_PRESCRIPTIVENESS_RULE = `An acceptance criterion states WHAT MUST BE TRUE for the story to be done, observed from outside the implementation. It NEVER dictates the code that produces it.
-An acceptance criterion is FORBIDDEN if it names a specific library, framework, test double, API call, import, or code construct the implementation must use. Naming a required OUTCOME is correct; naming the machinery that achieves it is not.`;
+const AC_PRESCRIPTIVENESS_RULE = renderEngineTemplate('spec-authoring-rules', {}, 'ac_prescriptiveness');
 
-const SEARCH_TERM_RULE = `A search term is USEFUL when it names something that exists in the repository being searched — a symbol, function, file, module, or a domain noun the code itself uses. It is NOISE when it names the ticket's packaging rather than its subject: routing tags, brand or product labels, ticket prefixes, status words, people, or generic prose.
-Return as BLACKLIST every candidate that names packaging rather than subject, or that resolves to nothing in the index. Return as WHITELIST the terms that name the capability or code under discussion.`;
+const SEARCH_TERM_RULE = renderEngineTemplate('spec-authoring-rules', {}, 'search_term');
 
 /**
  * vcFormSamples(env) — worked examples of FORM for the VC producer, supplied PER PROJECT.
@@ -2642,12 +2643,7 @@ function vcFormSamples(env = process.env) {
   }
 }
 
-const VC_OBSERVABILITY_RULES = `A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
-A verification criterion is FORBIDDEN if it:
-- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
-- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
-- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
-Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.`;
+const VC_OBSERVABILITY_RULES = renderEngineTemplate('spec-authoring-rules', {}, 'vc_observability');
 
 // Validate + normalize the verification criteria openspec produced: an array of
 // non-empty strings. Kept separate so a malformed payload never corrupts the story.
@@ -3115,7 +3111,6 @@ function sanitizeSurvey(payload, codelines) {
  * test could see that while the string was welded inside a 150-line function.
  */
 
-const { renderEngineTemplate } = require('./lib/engine-prompt.js');
 function buildSurveyPrompt({ codelines, tickets, referencedDocs, declaredDependencies } = {}) {
   const _cls = (Array.isArray(codelines) ? codelines : []).filter(Boolean);
   const _named = _cls.map((c) => (typeof c === 'string' ? { name: c } : c)).filter((c) => c && c.name);
@@ -4079,30 +4074,11 @@ function buildAssignmentPrompt(stories, roles) {
   // story; the run aborted with two lanes unowned after spending its entire retry and ladder
   // budget re-answering a question that had no consistent answer. The old wording is NOT
   // quoted in the prompt below: restating a rejected instruction to the model reintroduces it.
-  return `Assign an implementation agent role to every story below.
-
-AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
-nothing else; the name you return must match one of them verbatim:
-${roleBlock}
-
-STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
-${storyBlock}
-
-Pick the role whose stated expertise actually covers the work the story describes. If two
-roles could plausibly own a story, prefer the one whose brief names the surface the story
-touches.
-
-THE UNIT OF ASSIGNMENT IS A (STORY, CODELINE) PAIR, NOT A STORY. A story listing three
-codelines needs THREE assignments — the repositories differ, so the right owner can differ.
-Count the codelines listed against each story and return exactly that many assignments for it,
-naming the codeline on every one. A story is not assigned until every codeline it lists is.
-
-THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
-the one whose brief names those files or directories. A role whose brief is about settings in
-a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
-a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
-no source files, and all such a role can produce is a configuration note. Where the story needs
-both console configuration and code, the code owner is the assignee.`;
+  // RENDERED FROM THE TEMPLATE LAYER.
+  return renderEngineTemplate('assign-agent-roles', {
+    __ROLE_BLOCK__: roleBlock,
+    __STORY_BLOCK__: storyBlock,
+  });
 }
 
 async function assignAgentRoles({ promptExec, stories, profilesPath, logDir, repoPath, validateOnly }) {

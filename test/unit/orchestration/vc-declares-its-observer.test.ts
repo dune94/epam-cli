@@ -32,6 +32,7 @@
  * it to satisfy this would be a rewrite of the contract rather than an addition to it.
  */
 import { describe, it, expect } from 'vitest';
+import { templateBody } from '../../helpers/prompt-text';
 
 const spec = require('../../../orchestrations/scripts/spec-mode-runner.js');
 const { normalizeVerificationCriteria, TOOL_DEFINITIONS } = spec;
@@ -146,9 +147,12 @@ describe('the standard reaches the prompts, and the reviewer stops fighting it',
     // The producer's samples teach "given <the client> is mocked ..."; the reviewer flagged
     // exactly that as "prescribes mocking setup" on run 20260807T013407Z. Both were following
     // their instructions. Now the reviewer is told the difference.
-    const i = SRC.indexOf('A criterion may declare a PRECONDITION');
+    // The rule lives in the vc-review prompt -- the reviewer's own instructions, which is where
+    // a rule about what the REVIEWER may flag belongs.
+    // Reading the SOURCE now finds the render call and none of the wording.
+    const i = templateBody('vc-review').indexOf('A criterion may declare a PRECONDITION');
     expect(i, 'the reviewer is still free to flag a precondition as prescription').toBeGreaterThan(-1);
-    const block = SRC.slice(i, i + 400);
+    const block = templateBody('vc-review').slice(i, i + 400);
     expect(block).toMatch(/NOT implementation prescription/);
     expect(block).toMatch(/Flag what the criterion ASSERTS/);
   });

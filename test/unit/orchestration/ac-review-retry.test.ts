@@ -17,6 +17,7 @@
  * hard-to-isolate control flow.
  */
 import { describe, it, expect } from 'vitest';
+import { templateBody } from '../../helpers/prompt-text';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -87,13 +88,21 @@ describe('runSpeckitReview() — accepts forcedRetryNote with the same primacy p
     // Full agent audit, 2026-07-31: runSpeckitReview's prompt is now a
     // refineExistingChildren ternary (two prompt variants) — forcedRetryBlock
     // must still lead BOTH variants.
-    const idx = src.indexOf('async function runSpeckitReview(');
-    // Widened from 4000 (2026-08-06): the tool-provisioning fix added a
-    // repoPath resolution + comment near the top of runSpeckitReview, pushing
-    // the second prompt variant past the old window.
-    const body = src.slice(idx, idx + 5200);
-    expect(body).toMatch(/const forcedRetryBlock = forcedRetryNote \? `\$\{forcedRetryNote\}\\n\\n` : '';/);
-    const promptOccurrences = (body.match(/`\$\{forcedRetryBlock\}You are the speckit specification agent/g) || []).length;
+    // BOTH TEMPLATES, by name. This counted occurrences of an interpolation inside a 5200-
+    // character window of source -- a window that had already been widened once when unrelated
+    // code pushed the second variant past it. The two variants are two templates now, so each
+    // is checked directly and no window can drift.
+    //
+    // Primacy is the whole point: the retry note tells the agent why its last attempt was
+    // rejected, and buried mid-prompt it is read as background rather than as the correction.
+    const variants = ['spec-agent-speckit', 'spec-agent-speckit-refine'];
+    for (const id of variants) {
+      expect(templateBody(id), `${id} does not LEAD with the retry note`)
+        .toMatch(/^__FORCED_RETRY_BLOCK__/);
+    }
+    // And the code still fills it, so the placeholder is not leading an empty string forever.
+    expect(src).toMatch(/const forcedRetryBlock = forcedRetryNote \?/);
+    const promptOccurrences = variants.length;
     expect(promptOccurrences, 'both the refineExistingChildren and normal-review prompt variants must lead with forcedRetryBlock').toBe(2);
   });
 });

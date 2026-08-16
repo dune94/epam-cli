@@ -1,0 +1,25 @@
+{
+  "$why": [
+    "Moved out of spec-mode-runner.js reviewRoster on 2026-08-15 (3 of 20).",
+    "",
+    "The roster reviewer is the only adversary the roster has: it is what stops a defective",
+    "brief reaching an implementer. Extracted verbatim into a builder first, then pinned byte",
+    "for byte on BOTH branches — the documentation section is entirely different prose when",
+    "nothing was fetched, and pinning only the populated case would let that branch rot.",
+    "",
+    "The documentation section is one value, assembled by the caller. A template that branches",
+    "is a program, and a program cannot be reviewed as prose."
+  ],
+  "body": "__PERSONA__\n\nTHE ROSTER JUST MINTED FOR THIS PROJECT — review every brief below:\n\n__BRIEF_BLOCK__\n\nTHE CODELINES THESE BRIEFS DESCRIBE, and what each one declares:\n__CODELINE_BLOCK__\n\nTHE WORK THE PROJECT WAS ASKED TO DO:\n__TICKET_BLOCK__\n\n__DOC_SECTION__\n\n__TOOL_LINE__\n\nReturn every defect you can evidence, and nothing you cannot.\n\nWhere a finding turns on whether a named dependency or path is present in a codeline, fill in\nthe verification field as well as writing the prose. The pipeline re-runs that exact check\nagainst the repository and DISCARDS any finding the check refutes — so a careless reading\ncosts nothing, and a correct one is confirmed independently of how convincingly you argued it.",
+  "description": "Review every brief in a freshly minted roster and report evidenced defects.",
+  "id": "roster-review",
+  "placeholders": [
+    "__BRIEF_BLOCK__",
+    "__CODELINE_BLOCK__",
+    "__DOC_SECTION__",
+    "__PERSONA__",
+    "__TICKET_BLOCK__",
+    "__TOOL_LINE__"
+  ],
+  "version": 1
+}

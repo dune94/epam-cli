@@ -4037,6 +4037,33 @@ const TOOL_ROSTER_REVIEW = {
 };
 
 /**
+ * The roster reviewer's prompt. Extracted verbatim from reviewRoster so its migration into
+ * the template layer can be proven byte-for-byte — a prompt built inline cannot be called by
+ * a test, and an unprovable migration is how a reworded prompt ships unnoticed.
+ */
+function buildRosterReviewPrompt({ persona, briefBlock, clBlock, ticketBlock, docBlock, toolLine }) {
+  // RENDERED FROM THE TEMPLATE LAYER. The documentation section is assembled here because it
+  // is conditional prose — present, it points the reviewer at the vendor's own text; absent,
+  // it tells the reviewer that any vendor claim is unverifiable. A template cannot branch.
+  return renderEngineTemplate('roster-review', {
+    __PERSONA__: persona,
+    __BRIEF_BLOCK__: briefBlock,
+    __CODELINE_BLOCK__: clBlock || '- (none resolved)',
+    __TICKET_BLOCK__: ticketBlock || '- (no tickets available)',
+    __DOC_SECTION__: docBlock
+      ? 'THE DOCUMENTATION THESE BRIEFS WERE DERIVED FROM (fetched from the ticket\'s own links):\n'
+        + docBlock
+        + '\n\nWhere a brief follows this documentation into something the pinned version does not '
+        + 'have, the documentation is right about the product and wrong about these repositories. '
+        + 'Say which, so the remedy is the version-correct instruction rather than a deletion.'
+      : 'No documentation was fetched for this ticket — briefs resting on vendor knowledge have '
+        + 'nothing here to be checked against, and any such claim must be verified against the '
+        + 'repositories or reported as unverifiable.',
+    __TOOL_LINE__: toolLine,
+  });
+}
+
+/**
  * reviewRoster — the only adversary the roster has.
  *
  * Every other stage of this pipeline has one: the spec pass has a reviewer and a guard, the
@@ -4105,38 +4132,7 @@ async function reviewRoster({
       + 'briefs name. Confirm the files and directories they claim to own exist.'
     : 'You have NO tools on this call. Report only what the text above lets you establish, and say so.';
 
-  const prompt = [
-    persona,
-    '',
-    'THE ROSTER JUST MINTED FOR THIS PROJECT — review every brief below:',
-    '',
-    briefBlock,
-    '',
-    'THE CODELINES THESE BRIEFS DESCRIBE, and what each one declares:',
-    clBlock || '- (none resolved)',
-    '',
-    'THE WORK THE PROJECT WAS ASKED TO DO:',
-    ticketBlock || '- (no tickets available)',
-    '',
-    docBlock
-      ? 'THE DOCUMENTATION THESE BRIEFS WERE DERIVED FROM (fetched from the ticket\'s own links):\n'
-        + docBlock
-        + '\n\nWhere a brief follows this documentation into something the pinned version does not '
-        + 'have, the documentation is right about the product and wrong about these repositories. '
-        + 'Say which, so the remedy is the version-correct instruction rather than a deletion.'
-      : 'No documentation was fetched for this ticket — briefs resting on vendor knowledge have '
-        + 'nothing here to be checked against, and any such claim must be verified against the '
-        + 'repositories or reported as unverifiable.',
-    '',
-    toolLine,
-    '',
-    'Return every defect you can evidence, and nothing you cannot.',
-    '',
-    'Where a finding turns on whether a named dependency or path is present in a codeline, fill in',
-    'the verification field as well as writing the prose. The pipeline re-runs that exact check',
-    'against the repository and DISCARDS any finding the check refutes — so a careless reading',
-    'costs nothing, and a correct one is confirmed independently of how convincingly you argued it.',
-  ].join('\n');
+  const prompt = buildRosterReviewPrompt({ persona, briefBlock, clBlock, ticketBlock, docBlock, toolLine });
 
   const env = {
     EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_ROSTER_REVIEW),
@@ -8853,6 +8849,7 @@ module.exports = {
   detectivePrescription,
   surveyEstate,
   sanitizeSurvey,
+  buildRosterReviewPrompt,
   buildSurveyPrompt,
   surveyLineFor,
   reconcileMintTally,

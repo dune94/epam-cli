@@ -314,7 +314,8 @@
           "kind": "roster",
           "required": true
         }
-      ]
+      ],
+      "template": "roster-review"
     },
     "code-graph-detective": {
       "_what": "Investigates one codeline and reports where the work actually lands.",

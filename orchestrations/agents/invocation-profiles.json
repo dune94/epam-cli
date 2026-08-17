@@ -682,6 +682,22 @@
         }
       ],
       "template": "spec-story-block"
+    },
+    "phase-assessment": {
+      "_what": "Augments every agent profile with this project's skills before a phase runs. Writes profiles.json.",
+      "allowedTools": "bash,read_file,list_files,search,write_file",
+      "maxOutputTokens": 32768,
+      "reasoningEffort": "high",
+      "timeoutSecs": 900,
+      "ladder": "top",
+      "produces": "agent-skill-augmentation",
+      "consumes": [
+        {
+          "kind": "ticket",
+          "required": false
+        }
+      ],
+      "template": "skill-assessment-prephase"
     }
   },
   "_seamResolution": [

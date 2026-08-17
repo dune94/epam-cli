@@ -6,7 +6,7 @@
   ],
   "description": "Frames a skill assessment with its phase and the changes it is permitted to make.",
   "seams": [
-    "prd-change-reviewer"
+    "phase-assessment"
   ],
   "id": "phase-assessment-header",
   "version": 1,

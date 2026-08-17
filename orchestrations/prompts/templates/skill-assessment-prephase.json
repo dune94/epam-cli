@@ -14,7 +14,7 @@
   "description": "Detects skill gaps in agent profiles before a phase runs, and augments them.",
   "id": "skill-assessment-prephase",
   "seams": [
-    "prd-change-reviewer"
+    "phase-assessment"
   ],
   "placeholders": [
     "__PRD_REL__",

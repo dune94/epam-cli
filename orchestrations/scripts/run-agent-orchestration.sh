@@ -6737,7 +6737,12 @@ else
 
     if [ "${_skills_contradiction_count:-0}" -gt 0 ]; then
         warning "  [SkillsAudit] ${_skills_contradiction_count} suspected self-contradictory skill note(s) found — invoking skills-coordinator to rewrite"
-        _skills_before=$(cat "$AGENT_PROFILES_FILE" 2>/dev/null || echo "{}")
+        # A SNAPSHOT THAT FAILED IS NOT A SNAPSHOT. This fell back to "{}" — and the only use of
+        # this variable is to be WRITTEN BACK over profiles.json when the coordinator corrupts it.
+        # So an unreadable profiles.json produced a snapshot of "{}", and the "restore" destroyed
+        # every agent profile in the project while logging that it had restored them.
+        _skills_before=""
+        _skills_before=$(cat "$AGENT_PROFILES_FILE" 2>/dev/null || true)
         while IFS= read -r _sc_row; do
             [ -z "$_sc_row" ] && continue
             _sc_role=$(echo "$_sc_row" | jq -r '.role')
@@ -6783,8 +6788,12 @@ else
                         success "  [SkillsAudit] Rewrote contradictory note for [${_sc_role}]"
                         break
                     else
-                        error "  [SkillsAudit] skills-coordinator corrupted profiles.json! Restoring pre-audit snapshot."
-                        echo "$_skills_before" > "$AGENT_PROFILES_FILE"
+                        if [ -n "$_skills_before" ]; then
+                            error "  [SkillsAudit] skills-coordinator corrupted profiles.json! Restoring pre-audit snapshot."
+                            printf '%s\n' "$_skills_before" > "$AGENT_PROFILES_FILE"
+                        else
+                            error "  [SkillsAudit] skills-coordinator corrupted profiles.json AND no pre-audit snapshot was captured — leaving the file as-is rather than overwriting it with nothing. Restore it before the next phase."
+                        fi
                         break
                     fi
                 fi
@@ -6840,7 +6849,16 @@ if is_truthy "${SKIP_TOOLS_AUDIT:-}"; then
     step_emit "12" "skip" "Step 12: Tools coordinator audit" "SKIP_TOOLS_AUDIT=1"
 else
     step_emit "12" "running" "Step 12: Tools coordinator audit"
-    _tools_audit_result=$(run_tools_audit_scan "$PROJECT_ROOT/.epam/dynamic-tools" "$LOG_DIR" 2>/dev/null || echo '{"broken":[],"duplicates":[]}')
+    # A FAILED SCAN IS NOT A CLEAN SCAN — same substitution as Step 11 carried. A crashed handler
+    # or an unreadable tools directory read as "no broken tools", and the step reported pass. The
+    # broken tool then runs on every retry for the rest of the run, which is the exact cost this
+    # step exists to stop.
+    _tools_audit_ok=1
+    if ! _tools_audit_result=$(run_tools_audit_scan "$PROJECT_ROOT/.epam/dynamic-tools" "$LOG_DIR" 2>&1); then
+        _tools_audit_ok=0
+        warning "  [ToolsAudit] scan failed — dynamic tools were NOT audited this phase: ${_tools_audit_result}"
+        _tools_audit_result='{"broken":[],"duplicates":[]}'
+    fi
     _tools_broken_count=$(echo "$_tools_audit_result" | jq -r '.broken | length' 2>/dev/null || echo 0)
     _tools_dup_count=$(echo "$_tools_audit_result" | jq -r '.duplicates | length' 2>/dev/null || echo 0)
 
@@ -6851,13 +6869,23 @@ else
             _tc_tool=$(echo "$_tc_row" | jq -r '.tool')
             _tc_reason=$(echo "$_tc_row" | jq -r '.reason')
             _tc_path="$PROJECT_ROOT/.epam/dynamic-tools/${_tc_tool}.sh"
-            _tc_before=$(cat "$_tc_path" 2>/dev/null || echo "")
+            # Same failure as Step 11's snapshot, and worse here: an empty script passes `bash -n`,
+            # so writing the failed snapshot back would neuter the tool AND report it as fixed.
+            _tc_before=""
+            _tc_before=$(cat "$_tc_path" 2>/dev/null || true)
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/tools-coordinator-vals-XXXXXX.json")
             jq -n \
                   --arg tc_reason "${_tc_reason}" \
                   --arg tc_path "${_tc_path}" \
                   '{"__TC_REASON__":$tc_reason,"__TC_PATH__":$tc_path}' > "$_cp_vals"
-            _tc_prompt="$(render_engine_prompt tools-coordinator "$_cp_vals")"
+            # EXIT STATUS IS THE CONTRACT. A failed render handed an EMPTY prompt to an agent
+            # holding Bash and WriteFile, pointed at a script the pipeline then executes on every
+            # subsequent retry.
+            if ! _tc_prompt="$(render_engine_prompt tools-coordinator "$_cp_vals")" || [ -z "$_tc_prompt" ]; then
+                rm -f "$_cp_vals"
+                error "  [ToolsAudit] could not render the tools-coordinator prompt for [${_tc_tool}] — leaving the tool as-is rather than invoking an agent with nothing to read"
+                continue
+            fi
             rm -f "$_cp_vals"
             _tc_attempt=0
             while [ "$_tc_attempt" -lt 2 ]; do
@@ -6871,7 +6899,11 @@ else
                           --arg tc_tool "${_tc_tool}" \
                           --arg tc_prompt "$_tc_prompt" \
                           '{"__TC_BN_ERR__":$tc_bn_err,"__TC_TOOL__":$tc_tool,"__TC_PROMPT__":$tc_prompt}' > "$_rp_vals"
-                    _tc_run_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" tools_coordinator)"
+                    if ! _tc_run_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" tools_coordinator)" \
+                       || [ -z "$_tc_run_prompt" ]; then
+                        warning "  [ToolsAudit] could not render the retry prefix — retrying with the original prompt"
+                        _tc_run_prompt="$_tc_prompt"
+                    fi
                     rm -f "$_rp_vals"
                 fi
                 # No story_id — phase-level audit, not tied to a single story.
@@ -6881,14 +6913,29 @@ else
                         break
                     else
                         if [ "$_tc_attempt" -ge 1 ]; then
-                            error "  [ToolsAudit] tools-coordinator left ${_tc_tool}.sh syntactically broken after 2 attempt(s)! Restoring pre-audit snapshot."
-                            echo "$_tc_before" > "$_tc_path"
+                            if [ -n "$_tc_before" ]; then
+                                error "  [ToolsAudit] tools-coordinator left ${_tc_tool}.sh syntactically broken after 2 attempt(s)! Restoring pre-audit snapshot."
+                                printf '%s\n' "$_tc_before" > "$_tc_path"
+                            else
+                                error "  [ToolsAudit] ${_tc_tool}.sh is broken and no pre-audit snapshot was captured — leaving it as-is. An empty script passes bash -n, so overwriting it would hide the breakage rather than fix it."
+                            fi
                             break
                         fi
                         warning "  [ToolsAudit] tools-coordinator left ${_tc_tool}.sh broken on attempt 1 — retrying with corrective note"
                     fi
                 else
-                    [ "$_tc_attempt" -ge 1 ] && warning "  [ToolsAudit] tools-coordinator failed to fix [${_tc_tool}] — leaving as-is"
+                    # "LEAVING AS-IS" HAD TO BE MADE TRUE. If attempt 1 succeeded but left the
+                    # script broken, and attempt 2 then errored, the loop ended with the agent's
+                    # half-rewritten file on disk — reported as "leaving as-is", and executed on
+                    # every later retry. Restore what was actually there.
+                    if [ "$_tc_attempt" -ge 1 ]; then
+                        if [ -n "$_tc_before" ] && ! bash -n "$_tc_path" 2>/dev/null; then
+                            warning "  [ToolsAudit] tools-coordinator failed to fix [${_tc_tool}] and left it broken — restoring the pre-audit script"
+                            printf '%s\n' "$_tc_before" > "$_tc_path"
+                        else
+                            warning "  [ToolsAudit] tools-coordinator failed to fix [${_tc_tool}] — leaving as-is"
+                        fi
+                    fi
                 fi
                 _tc_attempt=$(( _tc_attempt + 1 ))
             done
@@ -6909,7 +6956,12 @@ else
                 >> "$LOG_DIR/tools-coordinator-audit.jsonl" 2>/dev/null || true
         done < <(echo "$_tools_audit_result" | jq -c '.duplicates[]' 2>/dev/null)
     fi
-    step_emit "12" "pass" "Step 12: Tools coordinator audit"
+    # THE STATUS IS WHAT HAPPENED, not what was attempted.
+    if [ "${_tools_audit_ok:-1}" -eq 1 ]; then
+        step_emit "12" "pass" "Step 12: Tools coordinator audit"
+    else
+        step_emit "12" "warn" "Step 12: Tools coordinator audit" "scan failed — dynamic tools not audited"
+    fi
 fi
 
 # ──────────────────────────────────────────────

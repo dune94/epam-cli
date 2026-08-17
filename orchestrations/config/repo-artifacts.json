@@ -1,0 +1,23 @@
+{
+  "$comment": "Directories and files that are never agent output, and are not facts of any ecosystem. Ecosystem artefacts (node_modules, target, __pycache__, .venv …) live in scripts/lib/ecosystems.js beside the ecosystem that produces them; these are editor and operating-system droppings, and engine state that must never reach a client repository. Extracted 2026-08-16 from two hand-written lists — one in worktree-health-check.sh and one in lib/git-ops.sh — that had drifted apart and between them named only node_modules, build and .next.",
+
+  "$biasComment": "The bias here is deliberate and one-directional. A directory wrongly EXCLUDED loses real agent work silently; one wrongly INCLUDED appears in a diff where a human sees it. So this list stays short and holds only what can never be source. Anything ambiguous belongs in the repository's own .gitignore, which is the customer's decision to make, not the engine's.",
+
+  "dirs": [
+    ".idea",
+    ".vscode",
+    ".dart_tool"
+  ],
+
+  "files": [
+    ".DS_Store",
+    "Thumbs.db"
+  ],
+
+  "$engineComment": "Engine state, matched as path prefixes. The write perimeter in lib/engine-paths.sh is the authority and is applied separately; these are the belt-and-braces entries the untracked report also needs, so an engine file never shows up as the agent's uncommitted work.",
+  "enginePaths": [
+    "orchestrations/logs/*",
+    "orchestrations/prd.json.lock",
+    "orchestrations/prd.json.backup"
+  ]
+}

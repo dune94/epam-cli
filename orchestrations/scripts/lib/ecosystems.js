@@ -23,6 +23,16 @@
 const MANIFESTS = [
   {
     file: 'package.json',
+    // WHAT THIS ECOSYSTEM LEAVES BEHIND. Never staged into a client repository and never reported
+    // as uncommitted agent work. Was three hand-written lists in two shell files, naming
+    // node_modules, build and .next between them — one ecosystem — so a Rust codeline staged
+    // target/ into the customer's repo when it was not gitignored, and the health check reported
+    // the same tree as thousands of files of agent output and failed the phase.
+    //
+    // THE BIAS IS ONE-DIRECTIONAL: a directory wrongly excluded loses real agent work SILENTLY;
+    // one wrongly included shows up in a diff a human reads. So Go's vendor/ and bin/ are absent
+    // deliberately — vendor/ is committed by convention and bin/ is tracked in plenty of repos.
+    artifactDirs: ['node_modules', 'build', 'dist', '.next', '.nuxt', '.turbo', 'coverage', '.parcel-cache'],
     stack: 'node',
     installDir: 'node_modules',
     // Which tool installs it, decided by the lockfile the repository carries. First match wins.
@@ -47,6 +57,16 @@ const MANIFESTS = [
   },
   {
     file: 'pyproject.toml',
+    // WHAT THIS ECOSYSTEM LEAVES BEHIND. Never staged into a client repository and never reported
+    // as uncommitted agent work. Was three hand-written lists in two shell files, naming
+    // node_modules, build and .next between them — one ecosystem — so a Rust codeline staged
+    // target/ into the customer's repo when it was not gitignored, and the health check reported
+    // the same tree as thousands of files of agent output and failed the phase.
+    //
+    // THE BIAS IS ONE-DIRECTIONAL: a directory wrongly excluded loses real agent work SILENTLY;
+    // one wrongly included shows up in a diff a human reads. So Go's vendor/ and bin/ are absent
+    // deliberately — vendor/ is committed by convention and bin/ is tracked in plenty of repos.
+    artifactDirs: ['__pycache__', '.venv', 'venv', '.tox', '.pytest_cache', '.mypy_cache', 'build', 'dist', '.eggs'],
     stack: 'python',
     installDir: null, // a virtualenv commonly lives outside the repo
     lockfiles: { 'poetry.lock': 'poetry', 'uv.lock': 'uv', 'pdm.lock': 'pdm' },
@@ -75,6 +95,16 @@ const MANIFESTS = [
   },
   {
     file: 'requirements.txt',
+    // WHAT THIS ECOSYSTEM LEAVES BEHIND. Never staged into a client repository and never reported
+    // as uncommitted agent work. Was three hand-written lists in two shell files, naming
+    // node_modules, build and .next between them — one ecosystem — so a Rust codeline staged
+    // target/ into the customer's repo when it was not gitignored, and the health check reported
+    // the same tree as thousands of files of agent output and failed the phase.
+    //
+    // THE BIAS IS ONE-DIRECTIONAL: a directory wrongly excluded loses real agent work SILENTLY;
+    // one wrongly included shows up in a diff a human reads. So Go's vendor/ and bin/ are absent
+    // deliberately — vendor/ is committed by convention and bin/ is tracked in plenty of repos.
+    artifactDirs: ['__pycache__', '.venv', 'venv', '.tox', '.pytest_cache', '.mypy_cache'],
     stack: 'python',
     installDir: null,
     deps: (text) => text.split('\n')
@@ -85,6 +115,16 @@ const MANIFESTS = [
   },
   {
     file: 'go.mod',
+    // WHAT THIS ECOSYSTEM LEAVES BEHIND. Never staged into a client repository and never reported
+    // as uncommitted agent work. Was three hand-written lists in two shell files, naming
+    // node_modules, build and .next between them — one ecosystem — so a Rust codeline staged
+    // target/ into the customer's repo when it was not gitignored, and the health check reported
+    // the same tree as thousands of files of agent output and failed the phase.
+    //
+    // THE BIAS IS ONE-DIRECTIONAL: a directory wrongly excluded loses real agent work SILENTLY;
+    // one wrongly included shows up in a diff a human reads. So Go's vendor/ and bin/ are absent
+    // deliberately — vendor/ is committed by convention and bin/ is tracked in plenty of repos.
+    artifactDirs: [],
     stack: 'go',
     installDir: null, // module cache is global, not in-repo
     lockfiles: { 'go.sum': 'go' },
@@ -94,6 +134,16 @@ const MANIFESTS = [
   },
   {
     file: 'Cargo.toml',
+    // WHAT THIS ECOSYSTEM LEAVES BEHIND. Never staged into a client repository and never reported
+    // as uncommitted agent work. Was three hand-written lists in two shell files, naming
+    // node_modules, build and .next between them — one ecosystem — so a Rust codeline staged
+    // target/ into the customer's repo when it was not gitignored, and the health check reported
+    // the same tree as thousands of files of agent output and failed the phase.
+    //
+    // THE BIAS IS ONE-DIRECTIONAL: a directory wrongly excluded loses real agent work SILENTLY;
+    // one wrongly included shows up in a diff a human reads. So Go's vendor/ and bin/ are absent
+    // deliberately — vendor/ is committed by convention and bin/ is tracked in plenty of repos.
+    artifactDirs: ['target'],
     stack: 'rust',
     installDir: null,
     lockfiles: { 'Cargo.lock': 'cargo' },
@@ -106,6 +156,16 @@ const MANIFESTS = [
   },
   {
     file: 'Gemfile',
+    // WHAT THIS ECOSYSTEM LEAVES BEHIND. Never staged into a client repository and never reported
+    // as uncommitted agent work. Was three hand-written lists in two shell files, naming
+    // node_modules, build and .next between them — one ecosystem — so a Rust codeline staged
+    // target/ into the customer's repo when it was not gitignored, and the health check reported
+    // the same tree as thousands of files of agent output and failed the phase.
+    //
+    // THE BIAS IS ONE-DIRECTIONAL: a directory wrongly excluded loses real agent work SILENTLY;
+    // one wrongly included shows up in a diff a human reads. So Go's vendor/ and bin/ are absent
+    // deliberately — vendor/ is committed by convention and bin/ is tracked in plenty of repos.
+    artifactDirs: ['.bundle'],
     stack: 'ruby',
     installDir: null,
     lockfiles: { 'Gemfile.lock': 'bundle' },
@@ -122,7 +182,7 @@ function extraManifests(env) {
     // No `stack` is declared for a runtime addition, so the scan reports the manifest filename
     // itself. Saying which file was found beats saying `unknown`, which is what an
     // engine-unknown ecosystem used to become.
-    return { file, stack: file, installDir: installDir || null, deps: () => [] };
+    return { file, stack: file, installDir: installDir || null, artifactDirs: installDir ? [installDir] : [], deps: () => [] };
   });
 }
 
@@ -130,4 +190,17 @@ function allManifests(env = process.env) {
   return [...MANIFESTS, ...extraManifests(env)];
 }
 
-module.exports = { MANIFESTS, allManifests, extraManifests };
+/**
+ * EVERY DIRECTORY ANY KNOWN ECOSYSTEM LEAVES BEHIND, deduped.
+ *
+ * The union, not the detected ecosystem's — a monorepo mixes stacks, and excluding a directory a
+ * repository does not have costs nothing. Editor and OS droppings are not ecosystem facts and are
+ * not here; they come from config/repo-artifacts.json.
+ */
+function allArtifactDirs() {
+  const seen = new Set();
+  for (const eco of allManifests()) for (const d of eco.artifactDirs || []) seen.add(d);
+  return [...seen];
+}
+
+module.exports = { MANIFESTS, allManifests, extraManifests, allArtifactDirs };

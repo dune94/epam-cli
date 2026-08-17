@@ -36,18 +36,25 @@ AUTO_COMMIT="${AUTO_COMMIT:-false}"
 PHASE="${PHASE:-unknown-phase}"
 LANE="${LANE:-}"
 
-# Files/patterns to exclude from the untracked check
-# (build artifacts, IDE dirs, OS files that agents shouldn't commit)
-EXCLUDE_PATTERNS=(
-    "*.dart_tool*"
-    "*/build/*"
-    "*/node_modules/*"
-    "*.DS_Store"
-    "*.idea/*"
-    "orchestrations/logs/*"
-    "orchestrations/prd.json.lock"
-    "orchestrations/prd.json.backup"
-)
+# WHAT IS NOT THE AGENT'S UNCOMMITTED WORK — from the one place that knows.
+#
+# This was a hand-written list naming .dart_tool, build and node_modules, and lib/git-ops.sh
+# carried a different one. It decides what counts as an uncommitted file, which sets issues=1,
+# which makes Step 3.1 exit 1 — so on a Rust or Python codeline whose target/ or .venv/ was not
+# gitignored, the build tree was reported as thousands of files of agent output and killed the
+# phase.
+#
+# NO SILENT FALLBACK: an empty list here reports every artefact as agent work and fails the run,
+# so a handler that cannot answer stops the check with a diagnosis instead.
+EXCLUDE_PATTERNS=()
+_wthc_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib"
+if ! _wthc_ex=$("${NODE_BIN:-node}" "$_wthc_lib/handlers/repo-exclude-patterns.js" glob); then
+    error "could not resolve the exclusion list — every build artefact would be reported as agent output"
+    exit 1
+fi
+while IFS= read -r _wthc_pat; do
+    [ -n "$_wthc_pat" ] && EXCLUDE_PATTERNS+=( "$_wthc_pat" )
+done <<< "$_wthc_ex"
 
 # ─────────────────────────────────────────────
 # Build gitignore-style exclude args for git status

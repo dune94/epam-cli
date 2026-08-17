@@ -189,13 +189,23 @@ git_add_client_outputs() {
         _excludes+=( ":!${_d}/*" ":!*/${_d}/*" )
         _resets+=( "$_d" )
     done
-    # Build artefacts are not engine state, but staging them is never right either.
-    # BOTH forms are required: `:!*/node_modules/*` matches only a NESTED node_modules —
-    # a top-level one (the usual case) needs `:!node_modules/*`. The original list carried
-    # only the nested form, so a repo without node_modules in .gitignore staged the lot.
-    for _d in 'node_modules' 'build' '.next'; do
-        _excludes+=( ":!${_d}/*" ":!*/${_d}/*" )
-    done
+    # Build artefacts are not engine state, but staging them is never right either. This named
+    # node_modules, build and .next — one ecosystem — so a Rust codeline whose target/ was not
+    # gitignored had its whole build tree staged into the CUSTOMER'S repository. The list now
+    # comes from lib/ecosystems.js (ecosystem artefacts) and config/repo-artifacts.json (editor
+    # and OS droppings), which is also where worktree-health-check.sh reads it — they were two
+    # hand-written lists that had drifted apart.
+    #
+    # NO SILENT FALLBACK. An empty exclusion list stages a client's build tree, so a handler that
+    # cannot answer stops the staging rather than widening it.
+    local _ex_out
+    if ! _ex_out=$("${NODE_BIN:-node}" "$(dirname "${BASH_SOURCE[0]}")/handlers/repo-exclude-patterns.js" pathspec); then
+        echo "[git-add] could not resolve the exclusion list — refusing to stage without it" >&2
+        return 1
+    fi
+    while IFS= read -r _ex; do
+        [ -n "$_ex" ] && _excludes+=( "$_ex" )
+    done <<< "$_ex_out"
 
     # CAPTURE THE REASON. This was `2>/dev/null`, and live 2026-08-09 a run halted on
     # "git add failed (exit 1)" with no diagnosis at all: the deliverable gate had passed, tsc
@@ -260,15 +270,19 @@ git_add_client_outputs() {
     # undelivered, the phase aborted, and the codeline HALTed over a repo that had nothing to
     # commit.
     #
-    # engine_paths_filter is the same single definition the staging exclusions come from. The
-    # build dirs are dropped here too, for the same reason they are excluded above: a pending
-    # node_modules is not work.
+    # engine_paths_filter is the same single definition the staging exclusions come from, and the
+    # artefact dirs now are too — this was a THIRD copy of the list, naming node_modules, build and
+    # .next. A pending target/ or .venv/ counted as work, so a Rust or Python repo with nothing to
+    # commit produced 'nothing reached the index although N path(s) are pending' and HALTed the
+    # codeline. Reusing $_ex_re, already resolved above; if it is empty the filter is skipped
+    # rather than degenerating into a regex that matches everything.
+    local _ex_re
+    _ex_re=$("${NODE_BIN:-node}" "$(dirname "${BASH_SOURCE[0]}")/handlers/repo-exclude-patterns.js" regex 2>/dev/null || echo "")
     _pending=$(timeout "$_timeout" git -C "$_repo" status --porcelain 2>/dev/null \
         | sed 's/^...//' \
         | sed 's/^.* -> //' \
         | engine_paths_filter \
-        | grep -vE '^(node_modules|build|\.next)/' \
-        | grep -vE '(^|/)(node_modules|build|\.next)/' \
+        | { if [ -n "$_ex_re" ]; then grep -vE "$_ex_re"; else cat; fi; } \
         | wc -l | tr -d ' ')
     if [ "$_rc" -ne 0 ] && [ "${_pending:-0}" -eq 0 ]; then
         # git could not even report status: the repository is genuinely unusable.

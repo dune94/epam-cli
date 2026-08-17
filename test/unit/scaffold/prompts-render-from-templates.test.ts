@@ -11,8 +11,9 @@
  * orchestrations/ only. src/ was never in either sweep.
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 import { getManifestAnalysisPrompt, getAgentProposalPrompt, getPrdGenerationPrompt } from '../../../src/scaffold/prompts.js';
 import { FIXED_AGENT_ROLES } from '../../../src/scaffold/prdTypes.js';
@@ -57,5 +58,45 @@ describe('the scaffold prompts render from the template layer', () => {
       expect(() => body(id), `the module renders '${id}', which is not in the template layer`)
         .not.toThrow();
     }
+  });
+});
+
+/**
+ * THE MINT LOADS THIS FROM dist/sdk.js, NOT FROM src/.
+ *
+ * templatesDir() resolves the template directory relative to __dirname, and the loop asserted that
+ * "dist/ and src/scaffold/ are both two levels below the repository root". They are not:
+ * src/scaffold/ is two levels down, dist/ is ONE. Every candidate therefore resolved above the
+ * repository when running from the compiled bundle, getAgentProposalPrompt threw, and the FIRST
+ * agent of every run would have failed — spec-mode-runner.js raises "[mint] cannot load the agent
+ * proposal prompt from dist/sdk.js" on exactly that.
+ *
+ * The existing tests never caught it because they exercise the source tree, where the old guess is
+ * correct. The mint does not use the source tree. This one requires the same artefact the mint
+ * requires, which is the only way this class of defect is visible.
+ */
+describe('the compiled bundle can find the template layer', () => {
+  const DIST = join(__dirname, '../../../dist/sdk.js');
+
+  it('dist/sdk.js exists — the mint refuses to run without it', () => {
+    expect(existsSync(DIST),
+      'dist/sdk.js is missing; run tsup. The mint loads getAgentProposalPrompt from it.',
+    ).toBe(true);
+  });
+
+  it('getAgentProposalPrompt renders when called from the compiled bundle', () => {
+    const r = spawnSync(process.execPath, ['-e',
+      'process.stdout.write(String(require(process.argv[1]).getAgentProposalPrompt()))', DIST,
+    ], { encoding: 'utf8' });
+    expect(r.status, `the mint would fail here: ${r.stderr.slice(0, 300)}`).toBe(0);
+    expect(r.stdout.length, 'the compiled bundle rendered an empty prompt').toBeGreaterThan(200);
+  });
+
+  it('the resolver tries the depth the compiled layout actually sits at', () => {
+    // dist/ is one level below the root. A loop that starts at '../..' can never reach it.
+    const src = readFileSync(join(__dirname, '../../../src/scaffold/prompts.ts'), 'utf8');
+    const loop = /for \(const up of \[([^\]]*)\]/.exec(src);
+    expect(loop, 'the candidate list is gone').toBeTruthy();
+    expect(loop![1], "the one-level-up candidate dist/ needs is missing").toMatch(/'\.\.'/);
   });
 });

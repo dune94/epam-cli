@@ -98,6 +98,14 @@ fi
 # the PREVIOUS run, about to be discarded by ingest before the writer ever runs. The earlier
 # version of this guard only recognised a genuinely EMPTY placeholder (mock1's shape) and
 # missed this — a non-empty stale file about to be overwritten is the same situation.
+# The project's declared codeline root, read the same way the launcher reads it. Its presence is
+# what tells this gate that scope — and therefore outputDir — is resolved during the run.
+_codeline_root="${JIRA_CODELINE_ROOT:-}"
+if [[ -z "$_codeline_root" ]] && [[ -n "${PROJECT_CONFIG_DIR:-}" ]] && [[ -f "${PROJECT_CONFIG_DIR}/config.env" ]]; then
+  _codeline_root=$(sed -n 's/^[[:space:]]*JIRA_CODELINE_ROOT=//p' "${PROJECT_CONFIG_DIR}/config.env" \
+                   | tail -1 | tr -d '"'"'"'"' )
+fi
+
 _prd_pending_ingest=0
 if [[ -n "${JIRA_URL:-}" ]] && [[ -n "$PRD_FILE" ]]; then
   _synth_target="${JIRA_SYNTH_PRD_PATH:-$PRD_FILE}"
@@ -172,8 +180,21 @@ else
     ok "PRD project.outputDir = $OUTPUT_DIR_VAL"
   elif [[ "$_prd_pending_ingest" == "1" ]]; then
     ok "PRD content is pending Jira ingest for this run — outputDir check deferred"
+  elif [[ -n "$_codeline_root" ]]; then
+    # DEFERRED FOR THE SAME REASON, ARRIVED AT DIFFERENTLY.
+    #
+    # project.outputDir is WRITTEN BY THE RUN: resolve-codeline-scope.sh calls
+    # apply-codeline-scope.js, which sets outputDirs and outputDir from the codelines it
+    # discovers. So this gate demanded a field the pipeline had not created yet, and no
+    # PRD-authored project could ever pass it.
+    #
+    # The deferral above already exists for the Jira path — the same reasoning, keyed to
+    # ingest. That is the Step 0.3 shape again: a mechanism written only for the branch it was
+    # first needed on. A project that declares a codeline root resolves its scope the same way,
+    # whether its PRD arrived from Jira or was authored by hand.
+    ok "codeline scope is resolved during the run (root: $_codeline_root) — outputDir check deferred"
   else
-    fail "PRD project.outputDir is NOT set — deliverables check will use wrong path"
+    fail "PRD project.outputDir is NOT set, and no codeline root is declared to resolve it from"
   fi
 
   # The RESOLVED OUTPUT_DIR must agree with the PRD's. This used to scrape `OUTPUT_DIR=`

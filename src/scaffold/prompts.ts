@@ -25,8 +25,16 @@ import { FIXED_AGENT_ROLES } from './prdTypes.js';
 function templatesDir(): string {
   // __dirname: this package compiles to CommonJS, so import.meta is not available here.
   const here = __dirname;
-  // dist/ and src/scaffold/ are both two levels below the repository root.
-  for (const up of ['../..', '../../..']) {
+  // THE COMPILED AND SOURCE LAYOUTS SIT AT DIFFERENT DEPTHS, and this loop used to claim they did
+  // not ("dist/ and src/scaffold/ are both two levels below the repository root"). They are not:
+  // src/scaffold/ is two levels down, dist/ is ONE. So every candidate resolved above the
+  // repository from the compiled bundle, and getAgentProposalPrompt threw — the mint loads it from
+  // dist/sdk.js, so the FIRST agent of every run would have failed.
+  //
+  // It survived because the tests exercise the source tree, where '../..' is correct. Walking a
+  // range of depths removes the assumption entirely rather than swapping one fixed guess for
+  // another.
+  for (const up of ['..', '../..', '../../..', '../../../..']) {
     const candidate = join(here, up, 'orchestrations', 'prompts', 'templates');
     try { readFileSync(join(candidate, 'agent-proposal.json'), 'utf8'); return candidate; } catch { /* next */ }
   }

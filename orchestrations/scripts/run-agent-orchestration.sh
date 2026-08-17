@@ -1201,8 +1201,15 @@ run_orch_prompt() {
     #
     # No substitution. An unresolvable model is a configuration fault in the registry or in the
     # project's llm-settings.json, and running the wrong model is worse than not running.
+    #
+    # ONE EXCEPTION, AND IT IS STILL THE LADDER: a caller retrying this agent sets
+    # ORCH_AGENT_MODEL_CLIMB to the next rung of THIS agent's own chain (seam_next_model). That is
+    # not a second source — it is the same ladder, one step along. It is read after the seam
+    # resolves, because seam_ladder_export overwrites EPAM_MODEL and would clobber it.
     local gate_model
-    if ! gate_model=$(seam_model_or_fail "$agent_type"); then
+    if [ -n "${ORCH_AGENT_MODEL_CLIMB:-}" ]; then
+        gate_model="$ORCH_AGENT_MODEL_CLIMB"
+    elif ! gate_model=$(seam_model_or_fail "$agent_type"); then
         error "run_orch_prompt: refusing to invoke '${agent_type}' with no model resolved from the ladder"
         return 1
     fi
@@ -1476,7 +1483,12 @@ _run_qa_gate_with_retry() {
         rm -f "$_qg_log"
         local _qg_eff_prompt="$_qg_prompt"
         if [ "$_qg_attempt" -ge 1 ]; then
-            [ -n "${ESCALATION_MODEL_HIGH:-}" ] && ORCH_GATE_MODEL="${ESCALATION_MODEL_HIGH}"
+            # CLIMB THIS GATE'S OWN CHAIN. This assigned ORCH_GATE_MODEL, which run_orch_prompt
+            # stopped reading when the ladder became the only source — so the retry silently
+            # re-ran the SAME model and the escalation was gone. It was also one run-wide "high"
+            # model every gate jumped to regardless of where it started, which is a pin.
+            ORCH_AGENT_MODEL_CLIMB=$(seam_next_model "$_qg_agent" "$(seam_model_or_fail "$_qg_agent" 2>/dev/null)")
+            export ORCH_AGENT_MODEL_CLIMB
             local _qg_retry_prefix
             if echo "$_qg_prompt" | grep -q "Do NOT attempt to call any shell commands"; then
                 _qg_retry_prefix="RETRY (attempt $(( _qg_attempt + 1 ))): The previous invocation produced no structured output. Re-analyze the pre-injected evidence already present in this prompt and emit your JSON verdict now. Do NOT call any tools. Do NOT use WriteFile — output your JSON as plain text in this message."
@@ -1555,6 +1567,7 @@ $_qg_prompt"
         if [ -z "$_qg_schema_reason" ] \
            && grep -qE '"(verdict|findings|agent|summary)"' "$_qg_log" 2>/dev/null; then
             ORCH_GATE_MODEL="$_saved_gate_model"
+            unset ORCH_AGENT_MODEL_CLIMB
             return 0
         fi
         [ -n "$_qg_schema_reason" ] && \
@@ -1582,6 +1595,7 @@ $_qg_prompt"
             cat "$_qg_recovered" >> "$_qg_log"
             if grep -qE '"(verdict|findings|agent|summary)"' "$_qg_log" 2>/dev/null; then
                 ORCH_GATE_MODEL="$_saved_gate_model"
+                unset ORCH_AGENT_MODEL_CLIMB
                 return 0
             fi
         fi
@@ -1593,6 +1607,7 @@ $_qg_prompt"
         _qg_attempt=$(( _qg_attempt + 1 ))
     done
     ORCH_GATE_MODEL="$_saved_gate_model"
+    unset ORCH_AGENT_MODEL_CLIMB
     return 1
 }
 
@@ -7075,11 +7090,24 @@ run_phase_assessment() {
     # deterministic-apply pattern.
     local _pa_summary_file
     _pa_summary_file=$(mktemp)
-    python3 "$SCRIPT_DIR/lib/handlers/assess-precompute.py" "$cost_file" "$PRD_FILE" "$phase_id" "$_pa_summary_file"
+    # THE PRECOMPUTE IS THE EVIDENCE. Its whole purpose is that the agent no longer explores for
+    # the numbers — so if it fails, the agent is handed '{}' and asked to judge a phase it can see
+    # nothing of. It will still answer, fluently, about nothing. Neither the exit status nor the
+    # empty result was checked.
+    if ! python3 "$SCRIPT_DIR/lib/handlers/assess-precompute.py" \
+            "$cost_file" "$PRD_FILE" "$phase_id" "$_pa_summary_file"; then
+        rm -f "$_pa_summary_file"
+        error "Step 18: could not compute the phase summary — refusing to ask for an assessment of evidence that was never gathered"
+        return 1
+    fi
 
     local _pa_summary
-    _pa_summary=$(cat "$_pa_summary_file" 2>/dev/null || echo '{}')
+    _pa_summary=$(cat "$_pa_summary_file" 2>/dev/null || printf '')
     rm -f "$_pa_summary_file"
+    if [ -z "$_pa_summary" ] || [ "$_pa_summary" = "{}" ]; then
+        error "Step 18: the phase summary is empty — there is nothing for the assessor to read"
+        return 1
+    fi
 
     local assessment_prompt
     local _sap_guidance_file; _sap_guidance_file=$(mktemp "${TMPDIR:-/tmp}/sap-guidance-XXXXXX.txt")
@@ -7089,7 +7117,14 @@ run_phase_assessment() {
           --rawfile skill_domain_guidance "$_sap_guidance_file" \
           --arg phase_id "$phase_id" \
           '{"__SKILL_DOMAIN_GUIDANCE__":$skill_domain_guidance,"__PHASE_ID__":$phase_id}' > "$_cp_vals"
-    assessment_prompt="$(render_engine_prompt skill-assessment-postphase "$_cp_vals")"
+    # EXIT STATUS IS THE CONTRACT — a failed render sends the assessor an empty prompt, and its
+    # output feeds a PRD mutation.
+    if ! assessment_prompt="$(render_engine_prompt skill-assessment-postphase "$_cp_vals")" \
+       || [ -z "$assessment_prompt" ]; then
+        rm -f "$_cp_vals"
+        error "Step 18: could not render the phase-assessment prompt — not invoking the assessor with nothing to read"
+        return 1
+    fi
     rm -f "$_cp_vals"
     rm -f "$_sap_guidance_file"
 
@@ -7107,12 +7142,19 @@ run_phase_assessment() {
     while [ "$_pa_attempt" -lt 2 ] && [ "$_pa_success" = "0" ]; do
         local _pa_prompt="$assessment_prompt"
         if [ "$_pa_attempt" -ge 1 ]; then
-            [ -n "${ESCALATION_MODEL_HIGH:-}" ] && ORCH_GATE_MODEL="${ESCALATION_MODEL_HIGH}"
+            # Climb the assessor's own chain — see the QA-gate retry for why assigning
+            # ORCH_GATE_MODEL no longer does anything.
+            ORCH_AGENT_MODEL_CLIMB=$(seam_next_model "team-lead-agent" "$(seam_model_or_fail "team-lead-agent" 2>/dev/null)")
+            export ORCH_AGENT_MODEL_CLIMB
             _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
             jq -n \
                   --arg assessment_prompt "$assessment_prompt" \
                   '{"__ASSESSMENT_PROMPT__":$assessment_prompt}' > "$_rp_vals"
-            _pa_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" phase_assessment)"
+            if ! _pa_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" phase_assessment)" \
+               || [ -z "$_pa_prompt" ]; then
+                warning "Step 18: could not render the retry prefix — retrying with the original prompt"
+                _pa_prompt="$assessment_prompt"
+            fi
             rm -f "$_rp_vals"
         fi
         local _assessment_rc=0
@@ -7133,6 +7175,7 @@ run_phase_assessment() {
         _pa_attempt=$(( _pa_attempt + 1 ))
     done
     ORCH_GATE_MODEL="$_saved_pa_model"
+    unset ORCH_AGENT_MODEL_CLIMB
     EPAM_GATE_TIMEOUT_SECS="$_saved_gate_timeout"
 
     if [ "$_pa_success" = "0" ]; then

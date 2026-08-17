@@ -3426,6 +3426,7 @@ async function mintProjectAgents({
   declaredDependencies, codelines, toolGrant, correctiveFindings, retainedAgents, estateSurvey,
 }) {
   const { mergeProjectAgents } = require('./lib/agent-roster.js');
+  const { retryUntilParsedAsync } = require('./lib/content-retry.js');
 
   let basePrompt = '';
   let fixedRoles = [];
@@ -3741,14 +3742,44 @@ Do not propose a role that duplicates one of the canonical roles already listed 
     _mintEnv.AI_GATE_ALLOW_TOOLS = '1';
     _mintEnv.EPAM_ALLOWED_TOOLS = toolGrant;
   }
-  const payload = await runAgentForJson(
-    promptExec, prompt, TOOL_PROJECT_AGENTS, 'PROJECT_AGENTS',
-    logDir ? path.join(logDir, 'project-agents-mint.log') : null,
-    null, '', repoPath || '',
-    _mintEnv,
-  );
-
-  const proposals = (payload && Array.isArray(payload.proposedAgents)) ? payload.proposedAgents : [];
+  // AN UNPARSEABLE ANSWER IS NOT A DEAD RUN — AND THE RETRY BELOW CANNOT SEE ONE.
+  //
+  // The correction loop further down fires on `result.rejected.length`: proposals that PARSED and
+  // then failed the contract. A response that does not parse yields zero proposals AND zero
+  // rejections, so the loop never runs and the mint returns an empty roster.
+  //
+  // Live 2026-08-17, run 20260817T180859Z. The model answered correctly — three well-formed
+  // agents including the implementer this stage exists to produce — and 19 characters were
+  // dropped mid-stream: 'mocka-fares-investigator","rationale' arrived as 'mocka-fares-inale'.
+  // Unparseable JSON, proposed=0, and the run died with a perfect answer in the log.
+  //
+  // Same class as the discovery vocabulary agent: the call SUCCEEDS and the content is unusable,
+  // which neither ai-run.sh's transport retry nor the contract loop below covers. Corruption is
+  // transient by nature, so asking again is the entire remedy.
+  let _mintAttempt = 0;
+  const proposals = await retryUntilParsedAsync({
+    what: 'agent-mint proposals',
+    attempts: Number(process.env.EPAM_CONTENT_RETRY_ATTEMPTS || 3),
+    log: (m) => process.stderr.write(`${m}\n`),
+    call: async () => {
+      _mintAttempt += 1;
+      return runAgentForJson(
+        promptExec, prompt, TOOL_PROJECT_AGENTS, 'PROJECT_AGENTS',
+        logDir ? path.join(logDir, `project-agents-mint${_mintAttempt > 1 ? `-parse${_mintAttempt}` : ''}.log`) : null,
+        null, '', repoPath || '',
+        _mintEnv,
+      );
+    },
+    parse: (payload) => {
+      if (!payload) return { ok: false, reason: 'the response could not be parsed as JSON at all' };
+      if (!Array.isArray(payload.proposedAgents)) {
+        return { ok: false, reason: 'the response had no "proposedAgents" array' };
+      }
+      // An EMPTY array is a valid answer only if there is genuinely nothing to propose; the
+      // caller decides that. Parsing succeeded, so this is not a content-retry concern.
+      return { ok: true, value: payload.proposedAgents };
+    },
+  });
 
   // PERSIST WHAT WAS PROPOSED, NOT A COUNT OF IT.
   //

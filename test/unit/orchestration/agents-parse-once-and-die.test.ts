@@ -132,3 +132,54 @@ describe('agents parse once and die', () => {
     expect(src, 'the vocabulary agent still parses once and dies').toMatch(/retryUntilParsed/);
   });
 });
+
+/**
+ * THE ASYNC CALLERS. Every spec-mode agent call is a promise; a synchronous retry would hand the
+ * parser a Promise object, which "parses" as an unusable non-null value and would have shipped a
+ * retry loop that never retried and a mint that accepted garbage.
+ */
+describe('async agents get the same self-heal', () => {
+  const wants = (raw: any) => (String(raw).includes('good')
+    ? { ok: true, value: 'parsed' }
+    : { ok: false, reason: 'not good' });
+
+  it('the async mechanism exists', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { retryUntilParsedAsync } = require(join(ROOT, 'orchestrations/scripts/lib/content-retry.js'));
+    expect(typeof retryUntilParsedAsync, 'async callers have no self-heal').toBe('function');
+  });
+
+  it('AWAITS the call — the parser never sees a Promise', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { retryUntilParsedAsync } = require(join(ROOT, 'orchestrations/scripts/lib/content-retry.js'));
+    let sawPromise = false;
+    const out = await retryUntilParsedAsync({
+      call: async () => 'good',
+      parse: (raw: any) => { if (raw && typeof raw.then === 'function') sawPromise = true; return wants(raw); },
+      attempts: 2,
+      what: 'x',
+    });
+    expect(sawPromise, 'the parser was handed a Promise instead of the answer').toBe(false);
+    expect(out).toBe('parsed');
+  });
+
+  it('retries an async malformed answer and recovers', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { retryUntilParsedAsync } = require(join(ROOT, 'orchestrations/scripts/lib/content-retry.js'));
+    let n = 0;
+    const out = await retryUntilParsedAsync({
+      call: async () => { n += 1; return n === 1 ? 'bad' : 'good'; },
+      parse: wants, attempts: 3, what: 'x',
+    });
+    expect(out).toBe('parsed');
+    expect(n).toBe(2);
+  });
+
+  it('THE MINT USES THE ASYNC ONE — the site that lost a perfect answer', () => {
+    const src = readFileSync(join(ROOT, 'orchestrations/scripts/spec-mode-runner.js'), 'utf8');
+    const i = src.indexOf("what: 'agent-mint proposals'");
+    expect(i, 'the mint proposal parse has no self-heal').toBeGreaterThan(-1);
+    expect(src.slice(Math.max(0, i - 400), i), 'the mint uses the SYNC retry on an async call')
+      .toMatch(/retryUntilParsedAsync/);
+  });
+});

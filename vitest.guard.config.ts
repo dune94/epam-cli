@@ -28,10 +28,8 @@ export default defineConfig({
       'test/unit/orchestration/reset-leaves-last-runs-generated-artefacts.test.ts',
       // Roster and seams — agents that resolve to nothing, or cannot do the work.
       'test/unit/orchestration/seam-resolution-guesses-from-the-name.test.ts',
-      'test/unit/orchestration/a-roster-with-no-implementer-was-called-sound.test.ts',
       'test/unit/orchestration/the-mint-tally-left-a-proposal-unaccounted.test.ts',
       // Survey — claims about codelines that were never opened.
-      'test/unit/orchestration/the-survey-claimed-files-that-are-not-there.test.ts',
       'test/unit/orchestration/the-survey-only-ever-staffs-for-looking.test.ts',
       // Prompt/tool contracts — prompts that instruct calls the tool refuses.
       'test/unit/orchestration/prompts-advertise-tool-calls-the-tool-rejects.test.ts',

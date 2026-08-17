@@ -5605,11 +5605,22 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
                 _rg_baseline_file="$LOG_DIR/regression-guard-baseline-${PHASE}.json"
                 _rg_intersect=$(python3 "$SCRIPT_DIR/lib/handlers/rg-intersect.py" "$_rg_pattern" "$_rg_max" "$_rg_log"
 )
-                if echo "$_rg_intersect" | python3 -c "import json,sys; sys.exit(0 if json.load(sys.stdin).get('stable') else 1)" 2>/dev/null; then
-                    echo "$_rg_intersect" > "$_rg_baseline_file"
-                    _rg_tolerated_count=$(echo "$_rg_intersect" | python3 -c "import json,sys; print(len(json.load(sys.stdin)['failures']))" 2>/dev/null || echo 0)
-                    _rg_tolerated=1
-                    _rg_rc=0
+                if printf '%s' "$_rg_intersect" | python3 "$SCRIPT_DIR/lib/handlers/json-bool.py" stable; then
+                    # THE BASELINE MUST REACH DISK BEFORE THE GUARD IS TURNED GREEN.
+                    #
+                    # This wrote the file unchecked and then set _rg_rc=0 regardless. A failed
+                    # write left Step 5 PASSING with pre-existing failures "tolerated" and no
+                    # record of what was tolerated — and Step 3.58 compares against exactly that
+                    # file. Without it, either every inherited failure is reported as newly
+                    # introduced by the phase, or the delta gate cannot verify at all.
+                    if printf '%s\n' "$_rg_intersect" > "$_rg_baseline_file"; then
+                        _rg_tolerated_count=$(printf '%s' "$_rg_intersect" \
+                            | jq -r '(.failures // []) | length' 2>/dev/null || echo 0)
+                        _rg_tolerated=1
+                        _rg_rc=0
+                    else
+                        error "Step 5: could not write the tolerated baseline to ${_rg_baseline_file} — refusing to pass the guard on a record that does not exist."
+                    fi
                 fi
             fi
         fi
@@ -5617,8 +5628,22 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
             step_emit "5" "fail" "Step 5: Regression guard"
             error "Step 5: Regression guard FAILED — tests red in all ${_rg_max} attempt(s) before phase '$PHASE' starts"
             error "  The failure survived every attempt, so it is reproducible, not a flake."
-            error "  Fix failing tests from the previous phase before continuing."
             error "  See: $_rg_log"
+            # NAME THE MECHANISM THAT WOULD HAVE TOLERATED THIS.
+            #
+            # Operator policy is that brownfield INHERITS pre-existing failures and is not expected
+            # to fix them — and this step implements exactly that, by recording a stable failure
+            # set as a tolerated baseline. It only does so when the project declares
+            # testFailurePattern. Without it, a codeline carrying inherited failures hard-fails
+            # here on EVERY run, and the operator was told to "fix failing tests from the previous
+            # phase" — the one thing the policy says they should not have to do — with no hint
+            # that the mechanism exists.
+            if [ -z "${_rg_pattern:-}" ]; then
+                error "  This project declares no testFailurePattern, so pre-existing failures cannot be told apart from new ones and none can be tolerated."
+                error "  If these failures are INHERITED, declare testFailurePattern in ${EPAM_PROJECT_CONFIG_DIR:-<project config dir>}/dependency-check.json and they will be recorded as a tolerated baseline instead."
+            else
+                error "  Fix failing tests from the previous phase before continuing."
+            fi
             error "  Bypass with: SKIP_REGRESSION_GUARD=true"
             exit 1
         fi

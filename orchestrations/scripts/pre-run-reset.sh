@@ -570,6 +570,31 @@ else
   info "  KB scratchpad already empty (all lanes)"
 fi
 
+# ── Step 3a2: Clear persisted MODEL-LADDER position ─────────────────────────
+#
+# agent-ladder/ records which rung each agent climbed to, so a retry within a run resumes rather
+# than restarting at the base model. Nothing cleared it between RUNS, so the position survived —
+# and the state directory carried entries from other projects entirely.
+#
+# Live 2026-08-17: three failed mock3 launches left codeline-discovery.global pinned to the top
+# rung, so the FIRST call of the next run announced "resuming ladder on 'moonshotai/kimi-k3'
+# (persisted from an earlier invocation)" and started at the ceiling — no cheaper rung was ever
+# tried, and when that model returned empty the run had nowhere left to climb. Alongside it sat
+# impl-failure-analyst.AMSD-2041, two days old, from a different project.
+#
+# A run must start on the rung its seam declares. Same reasoning as the KB reset above: state that
+# outlives its run is contamination, not memory.
+_LADDER_DIR="$LOG_DIR/agent-ladder"
+if [ -d "$_LADDER_DIR" ]; then
+  _LADDER_N=$(find "$_LADDER_DIR" -type f 2>/dev/null | wc -l)
+  if [ "${_LADDER_N:-0}" -gt 0 ]; then
+    find "$_LADDER_DIR" -type f -delete 2>/dev/null || true
+    success "Cleared $_LADDER_N persisted ladder position(s) — every agent starts on the rung its seam declares"
+  else
+    info "  No persisted ladder positions"
+  fi
+fi
+
 # ── Step 3b: Restore the KB to its canonical state ──────────────────────────
 # The scratchpad above is per-run attempt notes. This is the KB ITSELF, which had no
 # canonical to restore from and therefore accumulated across every run — and it is

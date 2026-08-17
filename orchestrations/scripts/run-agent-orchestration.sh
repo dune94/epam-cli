@@ -3083,8 +3083,9 @@ _run_codeline_loop() {
                       git -C "$_wt" rev-parse --verify --quiet "${_baseline_branch}" 2>/dev/null || \
                       git -C "$_wt" rev-parse --verify --quiet HEAD 2>/dev/null || echo "")
       if [ -n "$_baseline_sha" ]; then
-        echo "$_baseline_sha" > "$LOG_DIR/phase-baseline-sha.txt"
-        log "[orch] Brownfield baseline: ${_baseline_branch} @ ${_baseline_sha:0:8}"
+        # NOT WRITTEN HERE. See above: nothing reads this path, and the value means something
+        # different from the one Step 8 writes into the lane's own directory.
+        log "[orch] Brownfield baseline branch: ${_baseline_branch} @ ${_baseline_sha:0:8}"
       else
         warning "[orch] Could not resolve baseline branch '${_baseline_branch}' — gate diffs will use HEAD"
       fi
@@ -5960,8 +5961,23 @@ if [ -n "$main_stories" ]; then
     log "Step 8: Running main-branch stories..."
         # Capture baseline SHA before any story commits so the testing-gates
         # git diff oracle can diff the full run's changes (not just HEAD~1).
+        # THE ONE WRITER, and the value every diff-based gate reads: review-ranger,
+        # mutant-hunter, fuzz-weaver, sast-sentinel and the committed-change helper check.
+        #
+        # --verify --quiet, for the same reason the branch resolution above uses it: a bare
+        # rev-parse ECHOES an unresolvable ref to stdout and exits 128, so the file would hold a
+        # ref name rather than a commit and every gate would diff against nothing.
+        #
+        # An unwritable baseline is LOUD. It used to end in `|| true`, so a repository the run
+        # could not read produced no file and every gate silently compared against nothing —
+        # which reads as "this story changed no files", the shape of a false pass.
         if [ -d "$PROJECT_ROOT/.git" ]; then
-            git -C "$PROJECT_ROOT" rev-parse HEAD 2>/dev/null > "$LOG_DIR/phase-baseline-sha.txt" || true
+            _phase_baseline="$(git -C "$PROJECT_ROOT" rev-parse --verify --quiet HEAD 2>/dev/null || echo "")"
+            if [ -n "$_phase_baseline" ]; then
+                echo "$_phase_baseline" > "$LOG_DIR/phase-baseline-sha.txt"
+            else
+                warning "[orch] could not resolve a baseline commit in $PROJECT_ROOT — every diff-based gate will compare against nothing"
+            fi
         fi
         # _run_one_main_story: single-story execution body shared between the
         # main loop (fixed snapshot) and the tail-sweep pass (split children).
@@ -6043,9 +6059,13 @@ if [ -n "$main_stories" ]; then
 
             log "  Running: $story"
             local _story_monitor_role _story_model_hint _story_provider_hint
+            # NO ROLE NAME AS A FALLBACK. This defaulted to typescript-engineer — one of
+            # epam-cli's OWN roles, from its project-roles.json — so a client story with no
+            # agentRole was displayed under a role that project never minted. The monitor showing
+            # 'unassigned' is the true answer, and it is the one worth seeing.
             _story_monitor_role=$(jq -r --arg id "$story" \
-                '.stories[] | select(.id == $id) | .agentRole // "typescript-engineer"' \
-                "$PRD_FILE" 2>/dev/null || echo "typescript-engineer")
+                '.stories[] | select(.id == $id) | .agentRole // "unassigned"' \
+                "$PRD_FILE" 2>/dev/null || echo "unassigned")
             _story_model_hint=$(jq -r --arg id "$story" \
                 '.stories[] | select(.id == $id) | .model // ""' \
                 "$PRD_FILE" 2>/dev/null || echo "")
@@ -9448,8 +9468,8 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                 # who touches this story will ever read).
                 local _story_agent_role
                 _story_agent_role=$(jq -r --arg id "$_story_id" \
-                    '.stories[] | select(.id == $id) | .agentRole // "typescript-engineer"' \
-                    "$PRD_FILE" 2>/dev/null || echo "typescript-engineer")
+                    '.stories[] | select(.id == $id) | .agentRole // ""' \
+                    "$PRD_FILE" 2>/dev/null || echo "")
 
                 # ── Agent 2: story-ac-remediator ───────────────────────────────────
                 # Reads the finding JSON + PRD, proposes ACs for the owning story.
@@ -9808,6 +9828,41 @@ _create_bug_fix_phase() {
         fi
 
         local owner_notes
+        # THE OWNER'S ROLE, inherited like its model and provider. A bug fix belongs to whoever
+        # owns the code it is fixing; naming a role here assigns work to an agent this project may
+        # never have minted.
+        owner_role=$(jq -r --arg id "$owner_story" \
+            '.stories[] | select(.id == $id) | .agentRole // ""' "$PRD_FILE" 2>/dev/null || echo "")
+        [ -n "$owner_role" ] || owner_role="unassigned"
+
+        # THE BUG-FIX STORY'S TITLE AND INSTRUCTIONS COME FROM THE TEMPLATE LAYER. They were shell
+        # literals, and the writer that picks this story up reads the description AS ITS PROMPT — so
+        # a prompt was living in this script where no prompt review reaches. The test runner is a
+        # fact of the codeline, not of the engine: the literal here named vitest, which told a Rust
+        # or Python writer to fix tests for a runner that codeline has never run.
+        _bug_test_cmd=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/codeline-ecosystem.js" "$PROJECT_ROOT" 2>/dev/null \
+            | jq -r '.testCommand // ""' 2>/dev/null || echo "")
+        [ -n "$_bug_test_cmd" ] || _bug_test_cmd="<this codeline declares no test command>"
+
+        # ONE VALUES FILE PER BODY. The renderer rejects a value the body does not use — a value
+        # nobody reads means the caller believes it supplied something that had no effect — and the
+        # title uses only the filename.
+        _bug_vals=$(mktemp "${TMPDIR:-/tmp}/bug-story-vals-XXXXXX.json")
+        _bug_vals_t=$(mktemp "${TMPDIR:-/tmp}/bug-story-title-XXXXXX.json")
+        jq -n --arg f "$failing_file" --arg tc "$_bug_test_cmd" --arg ex "$failure_excerpt" \
+            '{__FAILING_FILE__: $f, __TEST_COMMAND__: $tc, __FAILING_TESTS__: $ex}' > "$_bug_vals"
+        jq -n --arg f "$failing_file" '{__FAILING_FILE__: $f}' > "$_bug_vals_t"
+
+        # Exit status is the contract: an unrendered story would be appended to the PRD with an
+        # empty description, and the writer would answer from nothing.
+        if ! bug_title=$(render_engine_prompt "bug-fix-story" "$_bug_vals_t" "title") \
+           || ! bug_desc=$(render_engine_prompt "bug-fix-story" "$_bug_vals" "prompt"); then
+            rm -f "$_bug_vals" "$_bug_vals_t"
+            error "[orch] could not render the bug-fix story for $failing_file — not appending an empty story to the PRD"
+            return 1
+        fi
+        rm -f "$_bug_vals" "$_bug_vals_t"
+
         owner_notes=$(jq -c --arg id "$owner_story" \
             '.stories[] | select(.id == $id) | .technicalNotes' \
             "$PRD_FILE" 2>/dev/null || echo '{}')
@@ -9819,8 +9874,9 @@ _create_bug_fix_phase() {
             --arg bid "$bug_id" \
             --arg model "$story_model" \
             --arg provider "$story_provider" \
-            --arg title "Bug fix: failing tests in ${failing_file}" \
-            --arg desc "Fix the failing vitest tests in ${failing_file}. Do not rewrite the whole file — make the minimum change to fix the failures below. The technicalNotes carry the original story CRITICAL constraints — they still apply.\n\nFAILING TESTS:\n${failure_excerpt}" \
+            --arg ownerRole "$owner_role" \
+            --arg title "$bug_title" \
+            --arg desc "$bug_desc" \
             --arg phase "$bug_phase" \
             --arg ffile "${PROJECT_ROOT}/${failing_file}" \
             --argjson onotes "$owner_notes" \
@@ -9833,7 +9889,7 @@ _create_bug_fix_phase() {
                 completed: false,
                 aiProvider: $provider,
                 model: $model,
-                agentRole: "typescript-engineer",
+                agentRole: $ownerRole,
                 unitTests: false,
                 technicalNotes: ($onotes + {
                     files: [$ffile],

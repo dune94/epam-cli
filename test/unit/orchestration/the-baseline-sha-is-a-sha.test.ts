@@ -82,3 +82,39 @@ describe('the baseline sha is a sha', () => {
     expect(captured, 'a non-repo produced a non-empty baseline').toBe('');
   });
 });
+
+/**
+ * ONE WRITER, ONE MEANING.
+ *
+ * phase-baseline-sha.txt had two writers carrying two different intents. The codeline setup loop
+ * wrote origin/<branch> — "the project's main branch" — to the PARENT log directory. Step 8 wrote
+ * HEAD at phase start — "what this run changed" — to the LANE's.
+ *
+ * Every reader runs in Step 4.2 or later, by which point LOG_DIR is the lane's directory, so the
+ * setup write was never read at all. And the two values differ on a multi-phase run: the
+ * project-branch reading would report a previous phase's work as this phase's changes.
+ */
+describe('the baseline has exactly one writer', () => {
+  const ORCH_SRC = readFileSync(ORCH, 'utf8');
+
+  it('only one place writes the file', () => {
+    const writers = ORCH_SRC.split('\n')
+      .filter((l) => /> *"\$LOG_DIR\/phase-baseline-sha\.txt"/.test(l) && !/^\s*#/.test(l));
+    expect(writers.length,
+      `${writers.length} writers of phase-baseline-sha.txt:\n  ${writers.map((l) => l.trim()).join('\n  ')}`,
+    ).toBe(1);
+  });
+
+  it('that writer resolves the ref rather than echoing it', () => {
+    const writerBlock = ORCH_SRC.slice(ORCH_SRC.indexOf('_phase_baseline='), ORCH_SRC.indexOf('_phase_baseline=') + 400);
+    expect(writerBlock, 'a bare rev-parse echoes an unresolvable ref and exits 128')
+      .toMatch(/rev-parse --verify --quiet/);
+  });
+
+  it('says so when it cannot resolve one, instead of leaving no file', () => {
+    // It ended in `|| true`: a repository the run could not read produced no file, every gate
+    // compared against nothing, and that reads as "this story changed no files" — a false pass.
+    const writerBlock = ORCH_SRC.slice(ORCH_SRC.indexOf('_phase_baseline='), ORCH_SRC.indexOf('_phase_baseline=') + 700);
+    expect(writerBlock, 'an unresolvable baseline is silent').toMatch(/warning .*baseline/);
+  });
+});

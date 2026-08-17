@@ -1,0 +1,33 @@
+{
+  "$why": [
+    "Moved out of run-agent-orchestration.sh Step 3.08 on 2026-08-16.",
+    "",
+    "When a story's tests fail, the pipeline SYNTHESISES A NEW STORY to fix them and appends it to",
+    "the PRD. The title and description of that story were shell string literals, and the writer",
+    "agent that picks the story up reads the description as its instructions. So this was a prompt,",
+    "living in a 10,000-line shell script, where no prompt review would ever find it.",
+    "",
+    "It also named vitest. A bug-fix story on a Rust, Python or Ruby codeline told the writer to fix",
+    "'the failing vitest tests' in a repository that has never run vitest — the pipeline instructing",
+    "an agent to look for something that is not there. The runner is a fact of the codeline and",
+    "arrives as a value.",
+    "",
+    "The constraint about minimum change is the point of the whole story: a writer handed a failing",
+    "file and no bound rewrites it, loses the original story's work, and passes its tests by",
+    "deleting them."
+  ],
+  "description": "The title and instructions of the story the pipeline synthesises to fix a failing test run.",
+  "seams": [],
+  "consumer": "engine",
+  "id": "bug-fix-story",
+  "version": 1,
+  "bodies": {
+    "title": "Bug fix: failing tests in __FAILING_FILE__",
+    "prompt": "Fix the failing tests in __FAILING_FILE__.\n\nThe test command for this codeline is: __TEST_COMMAND__\n\nDo not rewrite the whole file. Make the minimum change that fixes the failures below, and change nothing the failures do not require. The technicalNotes carry the original story's CRITICAL constraints — they still apply, in full.\n\nDo not make a test pass by weakening, skipping or deleting it. If a test is wrong, say so in your output rather than removing it.\n\nFAILING TESTS:\n__FAILING_TESTS__\n"
+  },
+  "placeholders": [
+    "__FAILING_FILE__",
+    "__TEST_COMMAND__",
+    "__FAILING_TESTS__"
+  ]
+}

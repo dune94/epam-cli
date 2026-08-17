@@ -1,0 +1,24 @@
+{
+  "$why": [
+    "Created 2026-08-17, when lib/content-retry.js was written.",
+    "",
+    "The correction a retry carries is TEXT SENT TO A MODEL, and it was composed in engine code.",
+    "Every other instruction an agent receives lives in this layer, reviewable as prose; this one",
+    "was a template literal inside a shared library, so nobody auditing the prompts would ever",
+    "see the words that actually reach the model on a retry.",
+    "",
+    "It is deliberately generic: it names no project, no agent, no artefact and no format. The",
+    "REASON and the previous answer are supplied by whichever call site rejected the answer, so",
+    "the same wording serves the vocabulary agent, the mint, and every parse site added later."
+  ],
+  "id": "content-retry-correction",
+  "version": 1,
+  "layer": "engine",
+  "description": "Tells an agent its previous answer was rejected, why, and what it sent.",
+  "seams": [],
+  "body": "YOUR PREVIOUS ANSWER WAS REJECTED: __REASON__\n\nThis is what you sent, and it could not be used:\n---\n__PREVIOUS_ANSWER__\n---\nAnswer again in exactly the format requested. Change nothing else.\n\n",
+  "placeholders": [
+    "__REASON__",
+    "__PREVIOUS_ANSWER__"
+  ]
+}

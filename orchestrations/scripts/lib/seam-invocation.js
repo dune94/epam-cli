@@ -123,7 +123,35 @@ function resolveSeam(agent, file, opts) {
     return rule.seam;
   }
 
-  // 3. A default the PROJECT declares — never one the engine holds.
+  // 3. WHAT THE AGENT SAYS IT IS, when its name matched nothing.
+  //
+  // The steps above key entirely off the NAME. The roster is model-authored, so the name is never
+  // ours: run 20260817T181432Z minted exactly the right roster and died on
+  // "'typescript-vitest-implementer' resolves to no seam" — a correctly declared implementer,
+  // refused because the suffix rules know '-engineer' and '-fixer'.
+  //
+  // Proposals declare kind outright, so the archetype is stated rather than inferred. Read from
+  // the SAME rules above, which already name a seam and now say which kind they serve; a separate
+  // kind->seam table would be a second place to keep correct.
+  //
+  // Best-effort: many callers run in processes that never load a roster, and a kind lookup must
+  // never turn a working resolution into a crash.
+  const _kind = (() => {
+    try {
+      const pf = (opts && opts.profilesFile) || path.join(path.dirname(file || registryPath()), 'profiles.json');
+      const entry = JSON.parse(fs.readFileSync(pf, 'utf8'))[agent];
+      return (entry && typeof entry.kind === 'string') ? entry.kind.trim() : '';
+    } catch { return ''; }
+  })();
+  if (_kind) {
+    for (const rule of Array.isArray(reg.seamPatterns) ? reg.seamPatterns : []) {
+      if (!rule || rule.kind !== _kind || !rule.seam) continue;
+      if (!profiles[rule.seam]) continue;
+      return rule.seam;
+    }
+  }
+
+  // 4. A default the PROJECT declares — never one the engine holds.
   //
   // The registry used to carry defaultSeam: cpa-inference, so resolution could not fail. Every
   // unmatched agent silently became a planning agent and inherited its ladder, effort and tool

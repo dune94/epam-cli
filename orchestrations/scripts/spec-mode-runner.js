@@ -2957,7 +2957,20 @@ async function deriveGuardVocabulary({ promptExec, rule, statements, story, find
 // work over a file that is a phantom there. The schema therefore has no such fields, and
 // sanitizeSurvey() strips them if a model volunteers them anyway. Its remedy is always
 // "investigate this codeline", never "here is the answer for it".
-const SURVEY_STATES = ['in_scope', 'no_work_found', 'not_investigated', 'failed'];
+// THE SURVEY'S VOCABULARY, DEFINED ONCE AND NAMED BY MEANING.
+//
+// The four states were a bare array, so every consumer that needed one restated the string —
+// validateSurveyFilesRead carried 'in_scope' and 'not_investigated' of its own, and a rename in
+// the schema would have left it silently checking states that no longer exist. Naming them by
+// what they MEAN also stops a reader having to remember that "no_work_found" and
+// "not_investigated" are different claims: one looked, the other did not.
+const SURVEY_STATE = {
+  examined: 'in_scope',
+  lookedAndFoundNothing: 'no_work_found',
+  didNotLook: 'not_investigated',
+  triedAndFailed: 'failed',
+};
+const SURVEY_STATES = Object.values(SURVEY_STATE);
 
 // Fix-site vocabulary. Present so the sanitizer can PROVE the parent never emitted one —
 // three states are not enough if a fourth arrives smuggled inside a survey entry.
@@ -3097,7 +3110,7 @@ function sanitizeSurvey(payload, codelines) {
         `survey entry for "${raw.codeline}" carried fix-site field(s) ${stripped.join(', ')} — ` +
         'the estate survey reports WHERE TO LOOK, never what to change; dropped');
     }
-    const _state = SURVEY_STATES.includes(raw.state) ? raw.state : 'not_investigated';
+    const _state = SURVEY_STATES.includes(raw.state) ? raw.state : SURVEY_STATE.didNotLook;
     const _read = Array.isArray(raw.filesRead)
       ? raw.filesRead.filter((f) => typeof f === 'string' && f.trim())
       : [];
@@ -8793,7 +8806,7 @@ function validateSurveyFilesRead(survey, codelines) {
   }
 
   const checked = survey.codelines.map((entry) => {
-    if (!entry || entry.state !== 'in_scope') return entry;
+    if (!entry || entry.state !== SURVEY_STATE.examined) return entry;
 
     const root = rootOf.get(String(entry.codeline || ''));
     const claimed = Array.isArray(entry.filesRead) ? entry.filesRead : [];
@@ -8817,7 +8830,7 @@ function validateSurveyFilesRead(survey, codelines) {
     }
     return {
       ...entry,
-      state: 'not_investigated',
+      state: SURVEY_STATE.didNotLook,
       filesRead: [],
       evidence: `${entry.evidence || ''} [downgraded from in_scope] ${why} `
         + 'No file it named could be opened, so this codeline was not actually examined.'.trim(),
@@ -8848,31 +8861,79 @@ function validateSurveyFilesRead(survey, codelines) {
  * An empty backlog is NOT a gap. The guard exists to catch work with nobody to do it, not to demand
  * an implementer from a run that has nothing to implement.
  */
-function rosterImplementationGap(mint, stories) {
+function rosterImplementationGap(mint, stories, registryFile) {
   const m = mint || {};
   const all = Array.isArray(stories) ? stories : [];
 
-  // Work still to do. A completed story needs no implementer, and treating it as if it did would
-  // block a run whose remaining backlog is legitimately empty.
+  // Work still to do. A completed story needs no one, and demanding a roster for an empty backlog
+  // would block a legitimate run.
   const outstanding = all.filter((s) => s && s.completed !== true && s.status !== 'completed');
   if (!outstanding.length) return '';
 
+  // WHAT THE ROSTER MUST BE ABLE TO PRODUCE, DERIVED — never a kind named here.
+  //
+  // This used to compare an agent's kind against one of the schema's kind values written out in
+  // engine code, inferring policy from that literal. Add a kind tomorrow and it is silently wrong.
+  //
+  // The registry already states all of it. A seam declares what it `produces` and what it
+  // `consumes`, each input marked required or not; engineProduces lists what the PIPELINE
+  // supplies rather than an agent; and the seamPatterns say which kind each rule serves. So the
+  // requirement is: every artefact some seam REQUIRES, that the engine does not supply, and that
+  // only a minted agent can produce, must have someone in this roster able to produce it.
+  let reg;
+  try {
+    const si = require('./lib/seam-invocation.js');
+    reg = JSON.parse(fs.readFileSync(registryFile || si.registryPath(), 'utf8'));
+  } catch { return ''; }
+  const profiles = (reg && reg.profiles) || {};
+  const patterns = Array.isArray(reg && reg.seamPatterns) ? reg.seamPatterns : [];
+  const fromEngine = new Set((reg && reg.engineProduces) || []);
+
+  const required = new Set();
+  for (const p of Object.values(profiles)) {
+    for (const c of (p && p.consumes) || []) if (c && c.required && c.kind) required.add(c.kind);
+  }
+
+  // Artefacts a MINTED agent is the one to produce: those whose producing seam is reachable by a
+  // kind rule. Everything else is produced by a canonical agent that is always present, so its
+  // absence from a minted roster says nothing.
+  const producibleByKind = new Map();
+  for (const rule of patterns) {
+    if (!rule || !rule.kind || !rule.seam) continue;
+    const made = profiles[rule.seam] && profiles[rule.seam].produces;
+    if (!made) continue;
+    if (!producibleByKind.has(made)) producibleByKind.set(made, new Set());
+    producibleByKind.get(made).add(rule.kind);
+  }
+
+  const mustStaff = [...required].filter((k) => !fromEngine.has(k) && producibleByKind.has(k));
+  if (!mustStaff.length) return '';
+
+  // What this roster can produce, by the kind each member declares.
   const minted = Array.isArray(m.minted) ? m.minted : [];
   const roles = Array.isArray(m.projectRoles) ? m.projectRoles : [];
-  // Either record proves an implementer exists; they are written by different paths, so requiring
-  // both would fail a roster that is actually fine.
-  const implementers = minted.filter((a) => a && a.kind && a.kind !== 'investigator');
-  if (implementers.length || roles.length) return '';
+  const covered = new Set();
+  for (const a of minted) {
+    const kind = a && typeof a.kind === 'string' ? a.kind.trim() : '';
+    if (!kind) continue;
+    for (const [made, kinds] of producibleByKind) if (kinds.has(kind)) covered.add(made);
+  }
+  // A registered project role is an assignable implementer by definition of the registry that
+  // records it; the two records are written by different paths and either one proves the cover.
+  if (roles.length) for (const made of producibleByKind.keys()) covered.add(made);
+
+  const missing = mustStaff.filter((k) => !covered.has(k));
+  if (!missing.length) return '';
 
   const present = minted.length
     ? minted.map((a) => `${a.name} [${a.kind}${a.codeline ? `:${a.codeline}` : ''}]`).join(', ')
     : '(nothing was minted at all)';
+  const needs = missing.map((k) => `'${k}' (produced by: ${[...producibleByKind.get(k)].join(', ')})`).join('; ');
 
-  return 'the roster has NO implementer, and no story can be assigned to an agent that does not '
-    + `exist. ${outstanding.length} story/stories still need implementing, and the roster holds: `
-    + `${present}. A roster of investigators can describe the work but cannot do it, and a review `
-    + 'of what is present cannot see what is absent — which is why this reports "sound" and then '
-    + 'fails at assignment.';
+  return `this roster cannot produce ${missing.length} artefact(s) the pipeline requires: ${needs}. `
+    + `${outstanding.length} story/stories still need doing, and the roster holds: ${present}. `
+    + 'A review of what is present cannot see what is absent — which is why the roster reports '
+    + '"sound" and the run then fails at the step that first tries to USE it.';
 }
 
 module.exports = {

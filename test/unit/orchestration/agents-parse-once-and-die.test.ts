@@ -86,6 +86,15 @@ describe('agents parse once and die', () => {
     expect(seen[1], 'the retry did not say what was wrong').toMatch(/no <TAG> block/);
     // The model must also see what IT sent, or it cannot tell which part was rejected.
     expect(seen[1]).toMatch(/junk/);
+
+    // AND THE WORDS COME FROM THE TEMPLATE LAYER, not from engine code. Asserting only on the
+    // reason and the echoed answer passed while the sync path still composed its own prose
+    // inline — the exact drift this is meant to prevent, invisible to a weaker assertion.
+    const tpl = JSON.parse(readFileSync(
+      join(ROOT, 'orchestrations/prompts/templates/content-retry-correction.json'), 'utf8'));
+    const firstLine = String(tpl.body).split('\n')[0].replace('__REASON__', '').trim();
+    expect(seen[1], 'the correction was not rendered from content-retry-correction.json')
+      .toContain(firstLine);
   });
 
   it('KEEPS THE EVIDENCE when it finally gives up', () => {

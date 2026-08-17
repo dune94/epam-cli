@@ -23,6 +23,7 @@
  * the deterministic-over-persuasion rule: do not ask the mint more nicely, verify what it produced.
  */
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ROOT = join(__dirname, '../../..');
@@ -38,6 +39,22 @@ describe('a roster with no implementer was called sound', () => {
   it('the check is reachable', () => {
     expect(typeof spec.rosterImplementationGap,
       'nothing verifies the roster can implement the work it was minted for').toBe('function');
+  });
+
+  it('NAMES NO KIND — the requirement is derived from the registry', () => {
+    // It used to read `a.kind !== 'investigator'`: engine code naming one of the schema's kinds
+    // and inferring policy from it. Which artefacts are REQUIRED, and which seam produces each,
+    // is already declared in invocation-profiles.json; add a kind tomorrow and this must still
+    // be right without an edit here.
+    const src = readFileSync(
+      join(ROOT, 'orchestrations/scripts/spec-mode-runner.js'), 'utf8');
+    const i = src.indexOf('function rosterImplementationGap');
+    const body = src.slice(i, src.indexOf('\nfunction ', i + 10));
+    expect(body, "the check still names the kind 'investigator' in engine code")
+      .not.toMatch(/['"]investigator['"]/);
+    expect(body, "the check still names the kind 'implementer' in engine code")
+      .not.toMatch(/['"]implementer['"]/);
+    expect(body, 'the requirement is not derived from the registry').toMatch(/consumes|produces|required/);
   });
 
   it('THE LIVE CASE IS A GAP — two investigators, no implementer, two stories to fix', () => {

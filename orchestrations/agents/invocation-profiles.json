@@ -789,12 +789,14 @@
     {
       "match": "(^|-)investigator$",
       "seam": "code-graph-detective",
-      "_why": "investigates one codeline and reports where the work lands"
+      "_why": "investigates one codeline and reports where the work lands",
+      "kind": "investigator"
     },
     {
       "match": "(^|-)detective$",
       "seam": "code-graph-detective",
-      "_why": "same investigation seam under its other minted suffix"
+      "_why": "same investigation seam under its other minted suffix",
+      "kind": "investigator"
     },
     {
       "match": "(^|-)analyst$",
@@ -874,7 +876,8 @@
     {
       "match": "(^|-)engineer$",
       "seam": "story-writer",
-      "_why": "implements the story — the archetype it is an instance of, not merely a profile whose ladder matches"
+      "_why": "implements the story — the archetype it is an instance of, not merely a profile whose ladder matches",
+      "kind": "implementer"
     },
     {
       "match": "(^|-)agent$",
@@ -884,7 +887,8 @@
     {
       "match": "(^|-)fixer$",
       "seam": "story-writer",
-      "_why": "edits code in place to a minimal, idiomatic change — the writer archetype, not a reviewer"
+      "_why": "edits code in place to a minimal, idiomatic change — the writer archetype, not a reviewer",
+      "kind": "implementer"
     }
   ],
   "agentSeams": {
@@ -941,10 +945,9 @@
     "ticket-link-agent": "cpa-inference",
     "discovery-vocabulary-agent": "cpa-inference",
     "roster-reviewer": "code-review-cycle",
-    "transit-fare-engineer": "story-writer",
-    "transit-schedule-engineer": "story-writer",
-    "mocka-investigator": "code-graph-detective",
-    "mockb-investigator": "code-graph-detective"
+    "fare-logic-engineer": "story-writer",
+    "departure-board-engineer": "story-writer",
+    "mocka-codebase-investigator": "code-graph-detective"
   },
   "engineProduces": [
     "ticket",
@@ -1012,10 +1015,9 @@
     "ticket-link-agent": "derived",
     "discovery-vocabulary-agent": "derived",
     "roster-reviewer": "derived",
-    "transit-fare-engineer": "derived",
-    "transit-schedule-engineer": "derived",
-    "mocka-investigator": "derived",
-    "mockb-investigator": "derived"
+    "fare-logic-engineer": "derived",
+    "departure-board-engineer": "derived",
+    "mocka-codebase-investigator": "derived"
   },
   "_ladderPositions": "A seam declares a POSITION in the project’s ladderTierOrder (base|mid|top), never a tier NAME. The project owns its tier vocabulary; the engine owns none. Converted 2026-08-15 after twenty seams asking for a literal HIGHEST ran unladdered on a project that declared only high and medium.",
   "_defaultSeam": "REMOVED 2026-08-16. A project may declare EPAM_DEFAULT_SEAM in its config if it wants unmatched agents absorbed; the engine declares none, so an unmatched agent fails the mint loudly and is fixed with one line rather than discovered mid-run.",
@@ -1034,5 +1036,15 @@
     "Every kind here was READ OFF the grant that seam already receives, by",
     "lib/handlers/seam-tool-grant.py, which prints the evidence per seam. Re-run it to re-derive.",
     "Nothing was chosen: a seam whose grant could not be found is reported `unknown` and left unset."
+  ],
+  "_whyKindOnPatterns": [
+    "2026-08-17: seam resolution keyed off the NAME only — agentSeams, then these suffix patterns.",
+    "Proposals now DECLARE kind (implementer|investigator), and resolution ignored the declaration",
+    "in favour of guessing at the name shape. Run 20260817T181432Z minted exactly the right roster",
+    "and died: 'typescript-vitest-implementer resolves to no seam' — a correctly declared",
+    "implementer refused because the heuristics know '-engineer' and '-fixer'. The roster is",
+    "model-authored, so the NAME is never ours to rely on; the kind is stated outright.",
+    "These rules already named the seam, so labelling them with the kind they represent adds no new",
+    "mapping. A separate kind->seam table would be a second place to keep correct."
   ]
 }

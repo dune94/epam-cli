@@ -37,19 +37,28 @@
  */
 'use strict';
 
-/** The correction a retry carries. Empty on the first attempt — there is nothing to correct yet. */
+/**
+ * The correction a retry carries. Empty on the first attempt — nothing to correct yet.
+ *
+ * THE WORDS ARE IN THE TEMPLATE LAYER, not here. This is text sent to a model, and every other
+ * instruction an agent receives is reviewable as prose in orchestrations/prompts/templates. A
+ * template literal in a shared library is prompt text nobody auditing the prompts would ever see.
+ *
+ * Falls back to nothing rather than to an engine-authored sentence: if the template cannot be
+ * rendered, the retry still happens and simply carries no correction, which is the old behaviour
+ * and not a silent substitution of words from the wrong layer.
+ */
 function _correctionNote(attempt, reason, raw) {
   if (attempt === 1) return '';
-  return [
-    `YOUR PREVIOUS ANSWER WAS REJECTED: ${reason}`,
-    '',
-    'This is what you sent, and it could not be used:',
-    '---',
-    _text(raw).slice(0, 2000),
-    '---',
-    'Answer again in exactly the format requested. Change nothing else.',
-    '',
-  ].join('\n');
+  try {
+    const { renderEngineTemplate } = require('./engine-prompt.js');
+    return renderEngineTemplate('content-retry-correction', {
+      __REASON__: reason,
+      __PREVIOUS_ANSWER__: _text(raw).slice(0, 2000),
+    });
+  } catch {
+    return '';
+  }
 }
 
 /** Whatever the caller returned, as text — a parsed object is still evidence worth showing. */
@@ -79,21 +88,7 @@ function retryUntilParsed({ call, parse, attempts = 3, what = 'response', log = 
   let reason = '';
 
   for (let attempt = 1; attempt <= budget; attempt += 1) {
-    // THE RETRY MUST BE TOLD WHY, AND WHAT IT SENT. Re-sending an identical instruction gets an
-    // identical answer; the refusal is the only new information the next attempt has, and quoting
-    // the previous answer back is what lets the model see WHICH part was rejected.
-    const note = attempt === 1 ? '' : [
-      `YOUR PREVIOUS ANSWER WAS REJECTED: ${reason}`,
-      '',
-      'This is what you sent, and it could not be used:',
-      '---',
-      String(raw).slice(0, 2000),
-      '---',
-      'Answer again in exactly the format requested. Change nothing else.',
-      '',
-    ].join('\n');
-
-    raw = call(note);
+    raw = call(_correctionNote(attempt, reason, raw));
     const verdict = parse(raw) || { ok: false, reason: 'the parser returned nothing' };
     if (verdict.ok) {
       if (attempt > 1) log(`[content-retry] ${what}: recovered on attempt ${attempt}`);

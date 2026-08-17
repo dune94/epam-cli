@@ -17,7 +17,14 @@ if len(sys.argv) < 2:
     sys.exit(2)
 
 try:
-    print(json.load(sys.stdin).get(sys.argv[1], ''))
+    _v = json.load(sys.stdin).get(sys.argv[1], '')
+    # A LIST IS PRINTED SPACE-SEPARATED. Python's repr of a list is "['a', 'b']", which a shell
+    # for-loop reads as ONE token carrying brackets and quotes — the values arrive unusable and the
+    # loop silently does nothing.
+    if isinstance(_v, list):
+        print(' '.join(str(x) for x in _v))
+    else:
+        print(_v)
 except ValueError as e:
     sys.stderr.write(f"[json-field] unparseable JSON on stdin: {e}\n")
     sys.exit(1)

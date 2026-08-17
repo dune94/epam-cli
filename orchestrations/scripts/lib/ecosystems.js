@@ -25,6 +25,11 @@ const MANIFESTS = [
     file: 'package.json',
     stack: 'node',
     installDir: 'node_modules',
+    // Which tool installs it, decided by the lockfile the repository carries. First match wins.
+    lockfiles: { 'pnpm-lock.yaml': 'pnpm', 'yarn.lock': 'yarn', 'package-lock.json': 'npm', 'npm-shrinkwrap.json': 'npm' },
+    // The name a manifest gives itself, used to resolve one repository's dependency to another
+    // repository in the same estate.
+    selfName: (text) => JSON.parse(text).name || '',
     deps: (text) => {
       const pkg = JSON.parse(text);
       return Object.keys({ ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) });
@@ -40,6 +45,8 @@ const MANIFESTS = [
     file: 'pyproject.toml',
     stack: 'python',
     installDir: null, // a virtualenv commonly lives outside the repo
+    lockfiles: { 'poetry.lock': 'poetry', 'uv.lock': 'uv', 'pdm.lock': 'pdm' },
+    selfName: (text) => ((text.match(/^\s*name\s*=\s*["']([^"']+)/m) || [])[1] || ''),
     deps: (text) => {
       const out = [];
       // [project] dependencies = ["a", "b>=1"]  and poetry's [tool.poetry.dependencies]
@@ -75,12 +82,16 @@ const MANIFESTS = [
     file: 'go.mod',
     stack: 'go',
     installDir: null, // module cache is global, not in-repo
+    lockfiles: { 'go.sum': 'go' },
+    selfName: (text) => ((text.match(/^module\s+(\S+)/m) || [])[1] || ''),
     deps: (text) => [...text.matchAll(/^\s+([\w.\-/]+)\s+v[\d.]/gm)].map((m) => m[1]),
   },
   {
     file: 'Cargo.toml',
     stack: 'rust',
     installDir: null,
+    lockfiles: { 'Cargo.lock': 'cargo' },
+    selfName: (text) => ((text.match(/^\s*name\s*=\s*["']([^"']+)/m) || [])[1] || ''),
     deps: (text) => {
       const sec = text.match(/\[dependencies\]([\s\S]*?)(\n\[|$)/);
       return sec ? [...sec[1].matchAll(/^\s*([A-Za-z0-9_-]+)\s*=/gm)].map((m) => m[1]) : [];
@@ -90,6 +101,7 @@ const MANIFESTS = [
     file: 'Gemfile',
     stack: 'ruby',
     installDir: null,
+    lockfiles: { 'Gemfile.lock': 'bundle' },
     deps: (text) => [...text.matchAll(/^\s*gem\s+['"]([^'"]+)/gm)].map((m) => m[1]),
   },
 ];

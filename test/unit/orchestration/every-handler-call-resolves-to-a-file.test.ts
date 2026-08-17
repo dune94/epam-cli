@@ -54,12 +54,24 @@ function handlerRefs(): Ref[] {
     const lines = readFileSync(file, 'utf8').split('\n');
     lines.forEach((line, i) => {
       if (/^\s*#/.test(line)) return;
-      for (const m of line.matchAll(/\$\{?SCRIPT_DIR\}?\/((?:\.\.\/)*lib\/handlers\/[\w.-]+\.(?:py|js))/g)) {
+      // TWO SHAPES. A script that is SOURCED resolves handlers from its caller's $SCRIPT_DIR; one
+      // that is EXECUTED resolves them from its own BASH_SOURCE, because $SCRIPT_DIR may not be set
+      // at all. lib/codeline-health.sh is executed, and reporting its handler as unreached was the
+      // guard not knowing the second shape.
+      const matches = [
+        ...line.matchAll(/\$\{?SCRIPT_DIR\}?\/((?:\.\.\/)*lib\/handlers\/[\w.-]+\.(?:py|js))/g),
+        ...line.matchAll(/dirname "\$\{BASH_SOURCE\[0\]\}"\)\/(handlers\/[\w.-]+\.(?:py|js))/g),
+      ];
+      for (const m of matches) {
         refs.push({
           file: relative(ROOT, file),
           line: i + 1,
           raw: m[0],
-          resolved: resolve(base, m[1]),
+          // A BASH_SOURCE reference is relative to the file itself; a SCRIPT_DIR one to the
+          // directory that script treats as its root.
+          resolved: m[1].startsWith('handlers/')
+            ? resolve(dirname(file), m[1])
+            : resolve(base, m[1]),
         });
       }
     });

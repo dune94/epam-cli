@@ -54,19 +54,18 @@ fi
 [ "$#" -gt 0 ] || { _ch_warn "no codelines given"; exit 0; }
 [ -n "$_ch_root_dir" ] || _ch_root_dir="$(dirname "$1")"
 
-# Package name -> directory, for every manifest in the estate. Built once.
-# Nothing here knows a vendor, scope or repository name: it reads the `name`
-# field each project declares about itself.
+# Package name -> directory, for every manifest in the estate. Built once, by the ecosystem
+# registry: this file names no manifest. Each repository is read through whichever ecosystem it
+# declares, and the name it gives ITSELF is the key.
 _ch_provider_map=""
 if [ -d "$_ch_root_dir" ]; then
-  for _ch_cand in "$_ch_root_dir"/*/; do
-    [ -f "${_ch_cand}package.json" ] || continue
-    _ch_pkg="$("${NODE_BIN:-node}" -e '
-      try { process.stdout.write(String(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).name || "")); }
-      catch (e) { /* unreadable manifest */ }
-    ' "${_ch_cand}package.json" 2>/dev/null)"
-    [ -n "$_ch_pkg" ] && _ch_provider_map="${_ch_provider_map}${_ch_pkg}|${_ch_cand%/}"$'\n'
-  done
+  _ch_provider_map="$("${NODE_BIN:-node}" "$(dirname "${BASH_SOURCE[0]}")/handlers/codeline-ecosystem.js" \
+    "$_ch_root_dir" "$_ch_root_dir" 2>/dev/null \
+    | "${NODE_BIN:-node}" -e '
+      let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+        try { const p=JSON.parse(s).providers||{};
+          process.stdout.write(Object.entries(p).map(([k,v])=>k+"|"+v).join("\n")); } catch {}
+      });' 2>/dev/null)"
 fi
 
 _ch_provider_for() {
@@ -85,7 +84,10 @@ _ch_provider_for() {
 # is never touched — the declared dependency is unchanged, only its resolution.
 _ch_link_local() {
   local root="$1" pkg="$2" provider="$3"
-  local dest="$root/node_modules/$pkg"
+  local _dest_dir; _dest_dir="$(_ch_facts "$root" installDir)"
+  # An ecosystem that vendors nothing in-repo has nowhere to link INTO, so there is nothing to do.
+  [ -n "$_dest_dir" ] && [ "$_dest_dir" != "null" ] || return 1
+  local dest="$root/$_dest_dir/$pkg"
 
   # Never substitute a working copy for a genuinely installed package.
   if [ -d "$dest" ] && [ ! -L "$dest" ]; then return 1; fi
@@ -98,36 +100,32 @@ _ch_link_local() {
   return 0
 }
 
-# Which package manager does THIS codeline use? Answered by its own lockfile,
-# never assumed. Unknown lockfile => we do not know how to install, so we do not
-# pretend to.
+# Which package manager does THIS codeline use? Answered by its own lockfile through the
+# ecosystem registry — this file lists none. Unknown means we do not know how to install, so we do
+# not pretend to.
 _ch_package_manager() {
-  local root="$1"
-  [ -f "$root/pnpm-lock.yaml" ] && { echo "pnpm"; return; }
-  [ -f "$root/yarn.lock" ]      && { echo "yarn"; return; }
-  [ -f "$root/package-lock.json" ] && { echo "npm"; return; }
-  [ -f "$root/npm-shrinkwrap.json" ] && { echo "npm"; return; }
-  echo ""
+  _ch_facts "$1" packageManager
 }
 
-# The executables this codeline's own manifest says it needs. Read from its
-# dependency lists — no tool names appear here.
+# The executables this codeline's own manifest says it needs, and which of them are absent.
+# Both come from the ecosystem registry: a repository that declares no manifest this engine knows
+# reports nothing, which the caller reads as "nothing to install".
+#
+# ONE CALL, CACHED. The facts are read once per codeline rather than once per question.
+_ch_facts_cache=""
+_ch_facts_root=""
+_ch_facts() {
+  local root="$1" key="$2"
+  if [ "$root" != "$_ch_facts_root" ]; then
+    _ch_facts_cache="$("${NODE_BIN:-node}" "$(dirname "${BASH_SOURCE[0]}")/handlers/codeline-ecosystem.js" \
+      "$root" "$_ch_root_dir" 2>/dev/null)"
+    _ch_facts_root="$root"
+  fi
+  printf '%s' "$_ch_facts_cache" | python3 "$(dirname "${BASH_SOURCE[0]}")/handlers/json-field.py" "$key" 2>/dev/null
+}
+
 _ch_declared_bins() {
-  local root="$1"
-  [ -f "$root/package.json" ] || return 0
-  "${NODE_BIN:-node}" -e '
-    const fs = require("fs");
-    try {
-      const p = JSON.parse(fs.readFileSync(process.argv[1] + "/package.json", "utf8"));
-      const deps = Object.assign({}, p.dependencies || {}, p.devDependencies || {});
-      // Only the tooling the project actually invokes: whatever its own scripts
-      // call that is also a declared dependency. That is the set whose absence
-      // means the project cannot run its own commands.
-      const scripts = Object.values(p.scripts || {}).join(" ");
-      const needed = Object.keys(deps).filter(d => new RegExp("(^|[^\\\\w/@-])" + d.replace(/[.*+?^${}()|[\]\\\\]/g, "\\\\$&") + "([^\\\\w-]|$)").test(scripts));
-      process.stdout.write(needed.join("\n"));
-    } catch (e) { /* unreadable manifest: nothing declared */ }
-  ' "$root" 2>/dev/null
+  _ch_facts "$1" declaredBins
 }
 
 _ch_sync() {
@@ -193,10 +191,9 @@ for _ch_root in "$@"; do
   # differently from the package (@11ty/eleventy installs `eleventy`), so a
   # .bin-name check reports a perfectly healthy codeline as broken — and a check
   # that cries wolf gets bypassed, which is worse than no check.
-  _ch_missing=""
-  for _ch_bin in $_ch_needed; do
-    [ -d "$_ch_root/node_modules/$_ch_bin" ] || _ch_missing="$_ch_missing $_ch_bin"
-  done
+  # WHICH ARE ABSENT is answered by the registry too: it knows where each ecosystem vendors, and
+  # answers nothing for one that vendors nowhere in-repo.
+  _ch_missing="$(_ch_facts "$_ch_root" missingBins | tr -d '[]"' | tr ',' ' ')"
 
   if [ -n "$_ch_missing" ]; then
     _ch_log "  declared but not resolvable:$_ch_missing"
@@ -214,10 +211,11 @@ for _ch_root in "$@"; do
     _ch_missing="$_ch_still"
 
     if [ -n "$_ch_missing" ] && _ch_install "$_ch_root" "$(_ch_package_manager "$_ch_root")"; then
-      _ch_missing=""
-      for _ch_bin in $_ch_needed; do
-        [ -d "$_ch_root/node_modules/$_ch_bin" ] || _ch_missing="$_ch_missing $_ch_bin"
-      done
+      # RE-READ after installing. The cache is keyed on the codeline, so it is cleared first —
+      # otherwise this would report the state from before the install and call a repaired codeline
+      # unhealthy.
+      _ch_facts_root=""
+      _ch_missing="$(_ch_facts "$_ch_root" missingBins | tr -d '[]"' | tr ',' ' ')"
     fi
   fi
 

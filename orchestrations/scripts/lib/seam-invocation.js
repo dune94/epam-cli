@@ -188,6 +188,31 @@ function seamInvocationEnv(agent, agentsDir, opts) {
   // would override a caller's own explicit grant, while "nothing configured here" lets it stand.
   if (profile.allowedTools !== undefined && profile.allowedTools !== '') {
     env.EPAM_ALLOWED_TOOLS = String(profile.allowedTools);
+  } else if (profile.toolGrant) {
+    // A GRANT KIND RESOLVES TO A LIST PER PROJECT, because part of the list belongs to the
+    // project: a codeline that provisions the codegraph plugin grants codegraph_query, and a
+    // project without it must not be handed a tool that does not exist. A literal list in the
+    // registry freezes one project's answer into the engine — which is what allowedTools above
+    // still does for the seams that carry one, and why nothing new should.
+    //
+    // Codeline paths come from the run, never from here: EPAM_CODELINE_PATHS is set by the
+    // codeline loop, and PROJECT_ROOT is the single-codeline case.
+    const src = (opts && opts.env) || process.env;
+    const paths = String(src.EPAM_CODELINE_PATHS || src.PROJECT_ROOT || '')
+      .split(/[,:]/).map((x) => x.trim()).filter(Boolean);
+    try {
+      const grant = require('./agent-tools.js').toolGrantFor(profile.toolGrant, paths);
+      if (grant) {
+        env.EPAM_ALLOWED_TOOLS = grant;
+        // The channel and the list are separate switches: granting one without the other
+        // produces an agent that quietly has nothing.
+        env.AI_GATE_ALLOW_TOOLS = '1';
+      }
+    } catch (e) {
+      // A seam asking for a grant this engine does not define is mis-declared. Say so rather
+      // than silently running it with no tools, which looks identical to a seam that needs none.
+      throw new Error(`[seam-invocation] '${agent}' -> seam '${seam}': ${e.message}`);
+    }
   }
   if (profile.maxIterations !== undefined) env.EPAM_MAX_ITERATIONS = String(profile.maxIterations);
   if (profile.maxOutputTokens !== undefined) env.EPAM_MAX_OUTPUT_TOKENS = String(profile.maxOutputTokens);

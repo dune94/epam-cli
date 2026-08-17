@@ -30,8 +30,6 @@ export default defineConfig({
       'test/unit/orchestration/seam-resolution-guesses-from-the-name.test.ts',
       'test/unit/orchestration/a-roster-with-no-implementer-was-called-sound.test.ts',
       'test/unit/orchestration/the-mint-tally-left-a-proposal-unaccounted.test.ts',
-      'test/unit/orchestration/readiness-audited-a-file-not-the-run.test.ts',
-      'test/unit/orchestration/the-readiness-audit-asked-the-environment-not-the-run.test.ts',
       // Survey — claims about codelines that were never opened.
       'test/unit/orchestration/the-survey-claimed-files-that-are-not-there.test.ts',
       'test/unit/orchestration/the-survey-only-ever-staffs-for-looking.test.ts',

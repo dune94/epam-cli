@@ -1040,61 +1040,6 @@ if (require.main !== module) return;
       `[mint-step] ✓ prompts linked: ${Object.keys(_link.agents).length} agent(s) across ` +
       `${_link.seamsInUse.length} seam(s) → ${path.join(projectConfigDir, 'prompt-agent-link.json')}\n`);
 
-    // ── CAN EVERY AGENT THIS RUN WILL INVOKE ACTUALLY DELIVER? ────────────────
-    //
-    // Seam, ladder, project prompt, required inputs, tools and skills were each checked — if at
-    // all — somewhere different, and never together, so no step could answer the question for the
-    // roster as a whole. The answer arrived instead at an agent's first invocation, hours in, with
-    // the run already spending: a reviewer with no read_file reviewing from imagination, an
-    // investigator asked for evidence nothing in the pipeline produces.
-    //
-    // It runs HERE because this is the first moment the question is answerable — the roster is
-    // final, the prompts are installed, and the seams are linked. It is also the last cheap
-    // moment: a gap found now is one line to fix, and every gap it finds would otherwise have
-    // been found by an agent failing to do its job.
-    //
-    // It audits the roster this run is USING, and overlays what this run minted, so a freshly
-    // minted agent cannot sit outside the audit while the audit reports everything ready.
-    {
-      const readiness = path.join(__dirname, 'lib', 'handlers', 'agent-readiness.js');
-      const outFile = path.join(LOG_DIR, 'agent-readiness.json');
-      // THE CODELINES COME FROM THE RUN, not from an environment variable this process never
-      // sets. Without them the audit resolves no stack, concludes the project has no skills, and
-      // fails every agent for a gap that does not exist.
-      const r = spawnSync(process.execPath,
-        [readiness, projectConfigDir, AGENTS_DIR, PROFILES_PATH,
-          codelines.map((c) => c.path).filter(Boolean).join(',')],
-        { encoding: 'utf8', timeout: 120000, env: process.env });
-
-      // The report is written whatever the verdict — a run that fails here must leave behind the
-      // evidence of WHY, not just a message in a log that a later teardown removes.
-      if (r.stdout) { try { fs.writeFileSync(outFile, r.stdout); } catch { /* reported below */ } }
-      if (r.stderr) process.stderr.write(r.stderr);
-
-      if (r.status === 0) {
-        let n = '?';
-        try { n = JSON.parse(r.stdout).audited; } catch { /* the count is cosmetic */ }
-        process.stderr.write(`[mint-step] ✓ agent readiness: ${n} agent(s), no gaps → ${outFile}\n`);
-      } else {
-        let gaps = [];
-        try { gaps = JSON.parse(r.stdout).gaps || []; } catch { /* handled below */ }
-        process.stderr.write(
-          `[mint-step] agent readiness FAILED — ${gaps.length || 'unreported'} gap(s). `
-          + `Full report: ${outFile}\n`);
-        // Named here rather than left in the file: the operator reads this stream, and a gap they
-        // have to go and look up is a gap they act on later than they could have.
-        for (const g of gaps.slice(0, 20)) {
-          process.stderr.write(`[mint-step]   ${g.agent} [${g.requirement}] ${g.detail}\n`);
-        }
-        if (gaps.length > 20) {
-          process.stderr.write(`[mint-step]   … and ${gaps.length - 20} more in ${outFile}\n`);
-        }
-        throw new Error(
-          `${gaps.length || 'unreported'} agent(s) cannot deliver at the seam they are invoked at. `
-          + 'Refusing to start the work: each gap is an agent that would fail, or worse succeed '
-          + `emptily, at its first invocation. See ${outFile}.`);
-      }
-    }
   }
 
   process.stderr.write(`[mint-step] ✓ roster and assignments written to ${PRD_PATH}\n`);

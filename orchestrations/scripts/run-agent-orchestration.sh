@@ -10209,9 +10209,31 @@ run_unit_tests_gate() {
         return 0
     fi
 
-    if [ ! -f "$PROJECT_ROOT/package.json" ]; then
-        info "Step 4.5: No package.json at PROJECT_ROOT — skipping vitest/tsc"
-        return 0
+    # THE ECOSYSTEM DECIDES, AND "CANNOT RUN" IS NOT A PASS.
+    #
+    # This checked for package.json and returned 0 — so on any codeline that is not Node, the unit
+    # test gate reported SUCCESS for stories that explicitly declare unitTests:true, having run
+    # nothing. Below it hardcoded `npm install` and then REQUIRED node_modules/.bin/vitest, so a
+    # Node project using any other runner hard-failed instead.
+    # TWO CAUSES, TWO MESSAGES. An empty test command can mean the PROJECT declares none, or that
+    # the ENGINE could not ask — an unresolvable handler path, a missing node. Those are fixed by
+    # different people in different files, and collapsing them into one message blames the
+    # customer's repository for the engine's own failure.
+    local _ut_facts _ut_facts_rc=0 _ut_test_cmd _ut_install_cmd _ut_install_dir
+    _ut_facts=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/codeline-ecosystem.js" "$PROJECT_ROOT" 2>/dev/null) || _ut_facts_rc=$?
+    if [ "$_ut_facts_rc" -ne 0 ] || [ -z "$_ut_facts" ]; then
+        error "Step 4.5: could not read the ecosystem of ${PROJECT_ROOT} (codeline-ecosystem.js exited ${_ut_facts_rc})."
+        error "  This is an engine fault, not a fact about the project — refusing to certify unit tests that were never run."
+        return 1
+    fi
+    _ut_test_cmd=$(printf '%s' "$_ut_facts" | python3 "$SCRIPT_DIR/lib/handlers/json-field.py" testCommand 2>/dev/null || echo "")
+    _ut_install_cmd=$(printf '%s' "$_ut_facts" | python3 "$SCRIPT_DIR/lib/handlers/json-field.py" installCommand 2>/dev/null || echo "")
+    _ut_install_dir=$(printf '%s' "$_ut_facts" | python3 "$SCRIPT_DIR/lib/handlers/json-field.py" installDir 2>/dev/null || echo "")
+
+    if [ -z "$_ut_test_cmd" ]; then
+        error "Step 4.5: ${phase_id} has stories declaring unitTests:true, but ${PROJECT_ROOT} declares no way to run its tests."
+        error "  The gate cannot verify them and will not report that as a pass. Declare a test command for this codeline, or set unitTests:false on those stories."
+        return 1
     fi
 
     local _node_bin
@@ -10224,33 +10246,32 @@ run_unit_tests_gate() {
     echo "=== Unit Test Gate: $phase_id @ $(date -Iseconds) ===" > "$gate_log"
     log "Step 4.5: Running unit test gate for '$phase_id'..."
 
-    # ── Ensure node_modules exist before running vitest ────────────────────────
-    if [ ! -d "$PROJECT_ROOT/node_modules" ]; then
-        log "  node_modules missing — running npm install..."
+    # ── Ensure this ecosystem's dependencies are present before running its tests ─────────────
+    if [ -n "$_ut_install_dir" ] && [ -n "$_ut_install_cmd" ] && [ ! -d "$PROJECT_ROOT/$_ut_install_dir" ]; then
+        log "  ${_ut_install_dir} missing — running: ${_ut_install_cmd}"
         local install_output install_exit=0
-        install_output=$(cd "$PROJECT_ROOT" && timeout "${EPAM_INSTALL_TIMEOUT_SECS:-180}" npm install 2>&1) || install_exit=$?
+        install_output=$(cd "$PROJECT_ROOT" && timeout "${EPAM_INSTALL_TIMEOUT_SECS:-180}" sh -c "$_ut_install_cmd" 2>&1) || install_exit=$?
         echo "$install_output" >> "$gate_log"
         if [ "$install_exit" -eq 124 ]; then
-            error "  npm install TIMED OUT after ${EPAM_INSTALL_TIMEOUT_SECS:-180}s — cannot run vitest"
+            error "  '${_ut_install_cmd}' TIMED OUT after ${EPAM_INSTALL_TIMEOUT_SECS:-180}s — cannot run the tests"
             echo "$install_output" | tail -20 >&2
             return 1
         fi
         if [ "$install_exit" -ne 0 ]; then
-            error "  npm install failed — cannot run vitest"
+            error "  '${_ut_install_cmd}' failed — cannot run the tests"
             echo "$install_output" | tail -20 >&2
             return 1
         fi
-        log "  npm install completed"
+        log "  '${_ut_install_cmd}' completed"
     fi
 
-    if [ ! -f "$PROJECT_ROOT/node_modules/.bin/vitest" ]; then
-        error "  node_modules/.bin/vitest not found after npm install — vitest may not be in package.json"
-        return 1
-    fi
-
-    # ── Initial vitest run ─────────────────────────────────────────────────────
+    # ── The project's own test command ────────────────────────────────────────
+    # Was: require node_modules/.bin/vitest, then exec it directly. A Node project using jest,
+    # mocha, node --test or anything else hard-failed here with "vitest may not be in
+    # package.json" — a message about the engine's expectation, not about the project.
+    log "  Running: ${_ut_test_cmd}"
     local vitest_output vitest_exit=0
-    vitest_output=$(cd "$PROJECT_ROOT" && timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" "$_node_bin" ./node_modules/.bin/vitest run 2>&1) || vitest_exit=$?
+    vitest_output=$(cd "$PROJECT_ROOT" && timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" sh -c "$_ut_test_cmd" 2>&1) || vitest_exit=$?
     echo "$vitest_output" >> "$gate_log"
 
     if [ "$vitest_exit" -eq 0 ]; then
@@ -10331,10 +10352,12 @@ run_unit_tests_gate() {
             --phase "$bug_phase" --reset \
             2>&1 | tee -a "$gate_log" || true
 
-        # Re-run vitest after bug fix phase completes
+        # Re-run THE SAME COMMAND after the bug-fix phase completes. This still exec'd vitest
+        # directly, so on a project using any other runner the verification of the fix ran a
+        # different thing from the check that found the failure — or nothing at all.
         vitest_exit=0
-        vitest_output=$(cd "$PROJECT_ROOT" && timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" "$_node_bin" ./node_modules/.bin/vitest run 2>&1) || vitest_exit=$?
-        echo "=== Post-bug-fix vitest (round $bug_round) ===" >> "$gate_log"
+        vitest_output=$(cd "$PROJECT_ROOT" && timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" sh -c "$_ut_test_cmd" 2>&1) || vitest_exit=$?
+        echo "=== Post-bug-fix test run (round $bug_round): ${_ut_test_cmd} ===" >> "$gate_log"
         echo "$vitest_output" >> "$gate_log"
 
         if [ "$vitest_exit" -eq 0 ]; then

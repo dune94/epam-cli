@@ -20,6 +20,7 @@
  *     installDir      where this ecosystem vendors dependencies, or null if it vendors none
  *     packageManager  decided by the lockfile present, or "" when none says
  *     testCommand     what runs this project's own tests, or "" when it declares none
+ *     installCommand  what installs its dependencies, or "" when it vendors nothing in-repo
  *     testFileCommand what runs JUST the files given in argv[4], or "" when this ecosystem cannot
  *     declaredBins    the declared dependencies the repo's own scripts actually invoke
  *     missingBins     of those, the ones not present in installDir
@@ -56,6 +57,7 @@ function ecosystemOf(root) {
 const eco = ecosystemOf(repo);
 const out = {
   stack: '', manifest: '', installDir: null, packageManager: '', testCommand: '', testFileCommand: '',
+  installCommand: '',
   declaredBins: [], missingBins: [], providers: {},
 };
 
@@ -100,6 +102,11 @@ if (eco) {
         try { out.testFileCommand = eco.testFileCommand(out.testCommand, wanted) || ''; }
         catch { out.testFileCommand = ''; }
       }
+    }
+
+    if (typeof eco.installCommand === 'function') {
+      try { out.installCommand = eco.installCommand(out.packageManager) || ''; }
+      catch { out.installCommand = ''; }
     }
 
     if (out.installDir) {

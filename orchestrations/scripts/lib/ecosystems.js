@@ -56,6 +56,12 @@ const MANIFESTS = [
     // Receives the resolved run command and the file list; returns '' when this ecosystem has no
     // way to target individual files, which the caller must read as "cannot prove", never as "passed".
     testFileCommand: (run, files) => (run ? `${run}${/ test$/.test(run) ? ' --' : ''} ${files.join(' ')}` : ''),
+    // HOW THIS ECOSYSTEM INSTALLS ITS DEPENDENCIES.
+    //
+    // The unit-test gate ran `npm install` unconditionally and then required
+    // node_modules/.bin/vitest to exist. Returns '' when this ecosystem vendors nothing in-repo
+    // and therefore has nothing to install before its tests can run.
+    installCommand: (manager) => `${manager || 'npm'} install`,
     deps: (text) => {
       const pkg = JSON.parse(text);
       return Object.keys({ ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) });
@@ -69,6 +75,12 @@ const MANIFESTS = [
   },
   {
     file: 'pyproject.toml',
+    // HOW THIS ECOSYSTEM INSTALLS ITS DEPENDENCIES.
+    //
+    // The unit-test gate ran `npm install` unconditionally and then required
+    // node_modules/.bin/vitest to exist. Returns '' when this ecosystem vendors nothing in-repo
+    // and therefore has nothing to install before its tests can run.
+    installCommand: () => 'pip install -e .',
     // WHAT THIS ECOSYSTEM LEAVES BEHIND. Never staged into a client repository and never reported
     // as uncommitted agent work. Was three hand-written lists in two shell files, naming
     // node_modules, build and .next between them — one ecosystem — so a Rust codeline staged
@@ -119,6 +131,12 @@ const MANIFESTS = [
   },
   {
     file: 'requirements.txt',
+    // HOW THIS ECOSYSTEM INSTALLS ITS DEPENDENCIES.
+    //
+    // The unit-test gate ran `npm install` unconditionally and then required
+    // node_modules/.bin/vitest to exist. Returns '' when this ecosystem vendors nothing in-repo
+    // and therefore has nothing to install before its tests can run.
+    installCommand: () => 'pip install -r requirements.txt',
     // A requirements.txt project declares no test command of its own, so it declares no way to
     // run one file either. '' means "cannot prove", which the bug-reproduction gate must report
     // rather than treat as a pass.
@@ -143,6 +161,12 @@ const MANIFESTS = [
   },
   {
     file: 'go.mod',
+    // HOW THIS ECOSYSTEM INSTALLS ITS DEPENDENCIES.
+    //
+    // The unit-test gate ran `npm install` unconditionally and then required
+    // node_modules/.bin/vitest to exist. Returns '' when this ecosystem vendors nothing in-repo
+    // and therefore has nothing to install before its tests can run.
+    installCommand: () => 'go mod download',
     // WHAT THIS ECOSYSTEM LEAVES BEHIND. Never staged into a client repository and never reported
     // as uncommitted agent work. Was three hand-written lists in two shell files, naming
     // node_modules, build and .next between them — one ecosystem — so a Rust codeline staged
@@ -174,6 +198,12 @@ const MANIFESTS = [
   },
   {
     file: 'Cargo.toml',
+    // HOW THIS ECOSYSTEM INSTALLS ITS DEPENDENCIES.
+    //
+    // The unit-test gate ran `npm install` unconditionally and then required
+    // node_modules/.bin/vitest to exist. Returns '' when this ecosystem vendors nothing in-repo
+    // and therefore has nothing to install before its tests can run.
+    installCommand: () => 'cargo fetch',
     // WHAT THIS ECOSYSTEM LEAVES BEHIND. Never staged into a client repository and never reported
     // as uncommitted agent work. Was three hand-written lists in two shell files, naming
     // node_modules, build and .next between them — one ecosystem — so a Rust codeline staged
@@ -208,6 +238,12 @@ const MANIFESTS = [
   },
   {
     file: 'Gemfile',
+    // HOW THIS ECOSYSTEM INSTALLS ITS DEPENDENCIES.
+    //
+    // The unit-test gate ran `npm install` unconditionally and then required
+    // node_modules/.bin/vitest to exist. Returns '' when this ecosystem vendors nothing in-repo
+    // and therefore has nothing to install before its tests can run.
+    installCommand: () => 'bundle install',
     // WHAT THIS ECOSYSTEM LEAVES BEHIND. Never staged into a client repository and never reported
     // as uncommitted agent work. Was three hand-written lists in two shell files, naming
     // node_modules, build and .next between them — one ecosystem — so a Rust codeline staged

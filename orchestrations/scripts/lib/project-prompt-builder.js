@@ -306,8 +306,21 @@ async function buildProjectPrompts({
 
   // ── Generated: specialise, check, then install ──────────────────────────
   const built = [];
+  // WHERE THE TEMPLATES ARE BEING READ FROM, said once.
+  //
+  // Run 20260817T211517Z installed a copy whose seams did not match its template and whose
+  // provenance digest was empty — a value buildGeneratedDoc cannot produce. The same code
+  // reproduces correctly offline, so what differs is which FILE was read, and nothing recorded
+  // that. One line here answers it instead of another run spent guessing.
+  log(`[prompt-builder] templates read from ${templatesDir}`);
+
   for (const id of generated) {
     const template = readJson(path.join(templatesDir, `${id}.json`));
+    // Per-template, only when it could matter: a template whose seam name differs from its id is
+    // the one case where losing `seams` is visible at all. 36 of 37 hide the same rewrite.
+    if (Array.isArray(template.seams) && template.seams.some((sm) => sm !== template.id)) {
+      log(`[prompt-builder] ${id}: template declares seams ${JSON.stringify(template.seams)}`);
+    }
     let refusal = '';
     let callFailure = '';
     let installed = false;

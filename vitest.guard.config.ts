@@ -34,6 +34,8 @@ export default defineConfig({
       'test/unit/orchestration/an-empty-roster-was-called-sound.test.ts',
       // Survey — claims about codelines that were never opened.
       'test/unit/orchestration/the-survey-only-ever-staffs-for-looking.test.ts',
+      // Prompt provenance — a generated copy must serve the seam its template declares.
+      'test/unit/orchestration/a-generated-prompt-must-keep-its-seams.test.ts',
       // Prompt/tool contracts — prompts that instruct calls the tool refuses.
       'test/unit/orchestration/prompts-advertise-tool-calls-the-tool-rejects.test.ts',
       'test/unit/orchestration/prompts-name-tools-that-do-not-exist.test.ts',

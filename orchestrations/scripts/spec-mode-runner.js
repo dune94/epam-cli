@@ -3281,10 +3281,11 @@ async function surveyEstate({
   }
 
   const clean = sanitizeSurvey(payload, _named);
-  // CHECKED BEFORE IT IS PERSISTED, not after something downstream trips over it. A codeline
-  // reported in_scope on files it does not have was never examined, and the file written below is
-  // what every later consumer treats as evidence.
-  const result = validateSurveyFilesRead({ ...clean, ran: true }, _named);
+  // The survey is persisted AS THE AGENT REPORTED IT. A validator used to rewrite it here,
+  // downgrading claims whose files did not exist — silently editing an agent's output, which is
+  // worse than reporting on it. Falsifying its claims is survey-review's job now, and that
+  // reviewer reports findings rather than changing what it reviewed.
+  const result = { ...clean, ran: true };
 
   // Persisted at generation time. What the roster was grounded in has to outlive the process
   // that produced it, or the pause has nothing to show and a later run cannot tell whether a

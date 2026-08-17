@@ -290,12 +290,34 @@ function deriveDiscoveryVocabulary(issues, manifest) {
     __CANDIDATE_BLOCK__: candidateBlock,
   });
 
-  const raw = callLlm(prompt, { rawText: true });
-  const m = String(raw || '').match(/<DISCOVERY_VOCABULARY>([\s\S]*?)<\/DISCOVERY_VOCABULARY>/);
-  if (!m) throw new Error('discovery-vocabulary-agent returned no tagged JSON');
-  const vocab = normaliseVocabulary(JSON.parse(m[1].trim().replace(/^```(?:json)?/i, '').replace(/```$/, '')));
-  if (!isVocabularyUsable(vocab)) throw new Error('discovery-vocabulary-agent returned an empty blacklist');
-  return vocab;
+  // SELF-HEAL, NOT A SINGLE SHOT. The call succeeds and the CONTENT is wrong: ai-run.sh's retry
+  // only covers a failed call, so one malformed answer used to end the run before any work began
+  // — live 2026-08-17, two runs in three, each after a four-minute call. Both checks below are
+  // contract violations the model can correct once it is told which one it broke, exactly as the
+  // mint's refused proposals are re-proposed. See lib/content-retry.js.
+  const { retryUntilParsed } = require('./content-retry.js');
+  return retryUntilParsed({
+    what: 'discovery-vocabulary-agent',
+    attempts: Number(process.env.EPAM_CONTENT_RETRY_ATTEMPTS || 3),
+    log,
+    call: (note) => callLlm(note ? `${note}${prompt}` : prompt, { rawText: true }),
+    parse: (raw) => {
+      const m = String(raw || '').match(/<DISCOVERY_VOCABULARY>([\s\S]*?)<\/DISCOVERY_VOCABULARY>/);
+      if (!m) {
+        return { ok: false, reason: 'the JSON was not inside <DISCOVERY_VOCABULARY></DISCOVERY_VOCABULARY> tags' };
+      }
+      let vocab;
+      try {
+        vocab = normaliseVocabulary(JSON.parse(m[1].trim().replace(/^```(?:json)?/i, '').replace(/```$/, '')));
+      } catch (e) {
+        return { ok: false, reason: `the text inside the tags was not valid JSON (${e.message})` };
+      }
+      if (!isVocabularyUsable(vocab)) {
+        return { ok: false, reason: 'the blacklist was empty — every ticket has some term that cannot discriminate between candidates' };
+      }
+      return { ok: true, value: vocab };
+    },
+  });
 }
 
 /**

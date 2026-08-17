@@ -747,7 +747,9 @@ const MINIMAX_TOOL_TIMEOUT_MS = parseInt(process.env.MINIMAX_TOOL_TIMEOUT_MS || 
 async function callMiniMaxWithTool(prompt, toolDef, logPath, itemsKey) {
   const apiKey = process.env.MINIMAX_API_KEY || process.env.EPAM_API_KEY_MINIMAX;
   if (!apiKey) throw new Error('callMiniMaxWithTool: no API key (MINIMAX_API_KEY / EPAM_API_KEY_MINIMAX)');
-  const model = process.env.AI_MODEL || process.env.ORCH_GATE_MODEL || 'MiniMax-M3';
+  // The caller's explicit AI_MODEL, else this seam's ladder position. No vendor name here.
+  const model = process.env.AI_MODEL || seamStartModel('spec-coordinator');
+  if (!model) throw new Error('callMiniMaxWithTool: no model resolved from the spec-coordinator seam ladder');
   const baseURL = process.env.MINIMAX_BASE_URL || MINIMAX_BASE_URL;
 
   const body = {
@@ -1261,15 +1263,15 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
     const logName = (logPath || '').toLowerCase();
     let specModel;
     if (logName.includes('speckit')) {
-      specModel = process.env.SPEC_MODE_SPECKIT_MODEL || 'z-ai/glm-5.2';
+      specModel = process.env.SPEC_MODE_SPECKIT_MODEL || seamStartModel('spec-agent');
     } else if (logName.includes('openspec') || logName.includes('-openspec-') || logName.includes('-spec.log')) {
       // Brownfield investigation requires tracing call chains through unfamiliar code —
       // use the HIGH model as the base so archaeology doesn't fall back to generation.
       specModel = (process.env.EPAM_BROWNFIELD === '1' && process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH)
         ? process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH
-        : process.env.SPEC_MODE_OPENSPEC_MODEL || 'z-ai/glm-5.2';
+        : process.env.SPEC_MODE_OPENSPEC_MODEL || seamStartModel('spec-agent');
     } else {
-      specModel = process.env.SPEC_MODE_MODEL || process.env.SPEC_MODE_OPENSPEC_MODEL || 'z-ai/glm-5.2';
+      specModel = process.env.SPEC_MODE_MODEL || process.env.SPEC_MODE_OPENSPEC_MODEL || seamStartModel('spec-agent');
     }
     console.log(`spec-mode: fast-path ${specModeProvider}/${specModel} (skipping MiniMax)`);
     const directExec = { cmd: execSpec.cmd, args: ['--provider', specModeProvider, '--model', specModel] };
@@ -2224,8 +2226,10 @@ async function run() {
   // isValidModelString() accepted it as "known valid" by construction, so no
   // validation ever caught it (found live 2026-07-13: SKY-001 assigned
   // anthropic/claude-sonnet-4-6, failed 8/8 attempts, aborted the phase).
-  const upgradeModel = process.env.ORCH_UPGRADE_MODEL || 'MiniMax-M3';
-  const miniModel    = process.env.ORCH_MINI_MODEL    || 'MiniMax-M2.5';
+  // The ladder's own rungs: mid is the upgrade target, base is the cheap one. Naming models
+  // here made the engine decide what "upgrade" means for a project it knows nothing about.
+  const upgradeModel = process.env.ORCH_UPGRADE_MODEL || seamStartModel('impl-failure-analyst');
+  const miniModel    = process.env.ORCH_MINI_MODEL    || seamStartModel('ac-classification');
   // Ceiling model for veryHighComplexity stories — "the most appropriate
   // high model," reusing the SAME strongest-configured-model concept the
   // Rung3+ watchdog fallback already uses (EPAM_FINAL_FALLBACK_MODEL), so
@@ -4344,8 +4348,8 @@ async function enforceVerificationCriteria(story, initialVc, opts = {}) {
 // speckit runs (see the escalation ladder at line ~968).
 async function _vcLlmCall(prompt, cycle, logPath, storyId = '', role = 'openspec', repoPath = '') {
   const baseModel = role === 'speckit'
-    ? (process.env.SPEC_MODE_SPECKIT_MODEL_HIGH || process.env.SPEC_MODE_SPECKIT_MODEL || process.env.ESCALATION_MODEL_HIGH || 'z-ai/glm-5.1')
-    : (process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH || process.env.ESCALATION_MODEL_HIGH || 'z-ai/glm-5.1');
+    ? (process.env.SPEC_MODE_SPECKIT_MODEL_HIGH || process.env.SPEC_MODE_SPECKIT_MODEL || seamStartModel('spec-coordinator'))
+    : (process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH || seamStartModel('spec-coordinator'));
   const escalated = ladderNextModel(baseModel, process.env);
   const useEsc = cycle >= 2 && escalated;
   const model = useEsc ? escalated : baseModel;
@@ -5195,7 +5199,7 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
   // possibly-different infra). A single hard-pinned model was the non-cohesive
   // gap vs the rest of the pipeline.
   const runnerCmd = process.env.AI_RUNNER_CMD || path.join(scriptDir, 'ai-run.sh');
-  const baseModel = process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH || process.env.ESCALATION_MODEL_HIGH || 'z-ai/glm-5.1';
+  const baseModel = process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH || seamStartModel('spec-coordinator');
   const baseProvider = resolvePromptProvider(process.env);
   const escalatedModel = ladderNextModel(baseModel, process.env);
   const escalatedProvider = escalatedModel
@@ -8007,12 +8011,50 @@ function resolvePromptExec(aiRunnerCmd, env = process.env) {
 // validation is directly unit-testable, not just greppable — the whole
 // point is to catch this bug CLASS (any future unvalidated LLM-written
 // PRD field), not just this one instance.
+
+/**
+ * THE MODEL A SEAM STARTS ON — the project's ladder, and nothing else.
+ *
+ * Every model default in this file was `process.env.X || '<a vendor model name>'`. The literal
+ * always answered, so the ladder never had to: two of its three positions declared no startModel
+ * for months and no run noticed. And the env var is a second source of truth that silently
+ * outranks the seam an agent was declared to occupy.
+ *
+ * Returns '' when the ladder cannot answer, so a caller can refuse rather than invent one.
+ */
+function seamStartModel(agent) {
+  try {
+    return (seamInvocationEnv(agent) || {}).EPAM_MODEL || '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * WHICH MODELS ARE REAL — asked of the PROJECT, never of a list in here.
+ *
+ * This was nine vendor model names hardcoded in the engine. A project running anything else had
+ * its own perfectly valid models rejected as unknown, and the list went stale the moment a vendor
+ * shipped a version. The project already declares every model it uses, as the rungs of its
+ * ladders in llm-settings.json — that IS the set of models this run can legitimately name.
+ */
 function buildKnownValidModels(upgradeModel, miniModel) {
-  return new Set([
-    'MiniMax-M3', 'MiniMax-M2.5', 'MiniMax-M2.7', 'MiniMax-M2.1', 'MiniMax-M2',
-    'moonshotai/kimi-k3', 'z-ai/glm-5.2', 'z-ai/glm-5.1', 'z-ai/glm-4.7',
-    upgradeModel, miniModel,
-  ]);
+  const known = new Set();
+  for (const [key, value] of Object.entries(process.env)) {
+    if (!/^EPAM_MODEL_LADDER(_[A-Z0-9_]+)?$/.test(key) || !value) continue;
+    if (key.endsWith('_TIER_ORDER')) continue;
+    if (key.endsWith('_START')) { known.add(value.trim()); continue; }
+    // Chains are "from=to|from=to": both sides are models this project declares.
+    for (const pair of value.split('|')) {
+      const [from, to] = pair.split('=');
+      if (from && from.trim()) known.add(from.trim());
+      if (to && to.trim()) known.add(to.trim());
+    }
+  }
+  for (const extra of [upgradeModel, miniModel, process.env.EPAM_FINAL_FALLBACK_MODEL]) {
+    if (extra && extra.trim()) known.add(extra.trim());
+  }
+  return known;
 }
 
 // Anthropic/Claude models are never permitted as a story-agent assignment in
@@ -8045,7 +8087,11 @@ function buildGateExec(aiRunnerCmd, env = process.env) {
   // spec-pass call site silently ran a cheaper model tier than the
   // claude.sh call site for the identical review job, despite both claiming
   // "highest-quality model" intent.
-  const model = env.ESCALATION_MODEL_HIGH || env.ORCH_GATE_MODEL || 'MiniMax-M3';
+  // BOTH CALL SITES NOW ASK THE SAME SEAM, which is what "identical review job, identical
+  // model" actually requires. Matching claude.sh's precedence string was never the same thing as
+  // matching its model, and both strings ended in a vendor literal that always answered.
+  const model = seamStartModel('prd-change-reviewer');
+  if (!model) throw new Error('prd-change-reviewer: no model resolved from its seam ladder');
   return { cmd: aiRunnerCmd, args: ['--provider', provider, '--model', model] };
 }
 

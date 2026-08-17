@@ -52,16 +52,26 @@ describe('the gate path consults the registry', () => {
     expect(src).toMatch(/AGENT_PROFILES_REGISTRY|invocation-profiles\.json/);
   });
 
-  it('a seam-resolved model WINS over the fixed gate default', () => {
-    // Otherwise the registry is decoration: the ladder resolves, and the fixed model is used
-    // anyway. The seam's answer has to be the one that reaches the runner.
+  it('there is no fixed gate default left for a seam to have to win over', () => {
+    // WAS: asserted the seam resolved BEFORE `local gate_model=${EPAM_MODEL:-${ORCH_GATE_MODEL:-
+    // <a vendor model>}}`, so its answer would win the substitution. Ordering was the best that
+    // shape allowed, but it still left two other sources that answered whenever the seam did not
+    // — and because the literal always answered, two of the ladder's three positions resolved no
+    // model for months and nothing noticed.
+    //
+    // The ladder is now the only source, so there is nothing to out-rank: the model either comes
+    // from the seam or the gate refuses to run.
     const body = modelResolution();
-    const seamAt = body.indexOf('seam_ladder_export');
-    const modelAt = body.indexOf('local gate_model=');
-    expect(seamAt, 'seam not resolved at all').toBeGreaterThan(-1);
-    expect(modelAt, 'gate_model assignment not found').toBeGreaterThan(-1);
-    expect(seamAt, 'the seam is resolved AFTER the model is chosen, so it cannot affect it')
-      .toBeLessThan(modelAt);
+    // Comments record WHAT WAS REMOVED and quote the old shape verbatim, so they must not be
+    // scanned — otherwise the explanation of the fix reads as the defect.
+    const code = body.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
+    expect(code, 'the seam is no longer consulted at all').toMatch(/seam_ladder_export|seam_model_or_fail/);
+    expect(code, 'a run-wide model pin is back in the gate path')
+      .not.toMatch(/\$\{ORCH_GATE_MODEL:-|\$\{EPAM_MODEL:-\$\{/);
+    expect(code, 'a vendor model name is back in the gate path')
+      .not.toMatch(/MiniMax-M|z-ai\/glm|moonshotai\/kimi/);
+    expect(code, 'an unresolvable model is substituted rather than refused')
+      .toMatch(/refusing to invoke|return 1/);
   });
 });
 

@@ -78,7 +78,8 @@
           "from": "moonshotai/kimi-k2.5",
           "to": "moonshotai/kimi-k3"
         }
-      ]
+      ],
+      "startModel": "MiniMax-M3"
     },
     "medium": {
       "modelLadder": [
@@ -102,7 +103,8 @@
           "from": "z-ai/glm-5.1",
           "to": "z-ai/glm-5.2"
         }
-      ]
+      ],
+      "startModel": "MiniMax-M2.5"
     },
     "highest": {
       "_why": "Declared 2026-08-15. Twenty seams in invocation-profiles.json ask for ladder HIGHEST and this project declared only high and medium, so every one of them ran with no escalation chain — seam-invocation reported \"EPAM_MODEL_LADDER_HIGHEST is unset\" and continued. Built from this project's own models: start at the strongest rather than climbing to it, and let the top hop reach the ceiling directly.",

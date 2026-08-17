@@ -265,6 +265,11 @@ load_llm_settings_json() {
     # ${SCRIPT_DIR:-} and a guarded source: this function runs under `set -e` AND is exercised
     # under `set -u`, where a bare $SCRIPT_DIR aborts the WHOLE loader and every budget below it
     # silently goes unset — which is exactly what happened when this was first written.
+    # seam-ladder.sh alongside it: the ladders give the CHAINS, the seams say which position an
+    # agent occupies. Reading one without the other is how a model literal stayed necessary here.
+    local _sl_lib="${SCRIPT_DIR:-$(dirname "${BASH_SOURCE[0]}")}/lib/seam-ladder.sh"
+    # shellcheck source=lib/seam-ladder.sh
+    [ -f "$_sl_lib" ] && . "$_sl_lib"
     local _ml_lib="${SCRIPT_DIR:-$(dirname "${BASH_SOURCE[0]}")}/lib/model-ladders.sh"
     if [ -f "$_ml_lib" ]; then
         # shellcheck source=lib/model-ladders.sh
@@ -6252,7 +6257,11 @@ run_prd_change_reviewer() {
     # KB/PRD/profile writes are persistent and must be reviewed by the highest-quality
     # model available, not the cheap gate model. Use ESCALATION_MODEL_HIGH with high
     # reasoning so every persisted write is agentic-quality-reviewed.
-    local gate_model="${ESCALATION_MODEL_HIGH:-${ORCH_GATE_MODEL:-MiniMax-M3}}"
+    # THE REVIEWER'S OWN SEAM. This was a run-wide "high" model behind a run-wide pin behind a
+    # vendor literal — three sources, none of them the ladder, and the literal always answered so
+    # the ladder never had to.
+    local gate_model
+    gate_model=$(seam_model_or_fail "prd-change-reviewer" 2>/dev/null || printf '')
 
     # Select profile based on change type — KB entries use the stricter kb-change-reviewer
     local _profile_key="prd-change-reviewer"
@@ -6363,7 +6372,11 @@ run_prd_change_summarizer() {
     fi
     # Summarizer rewrites rejected KB/PRD/profile writes — must use the same
     # high-quality model as the reviewer so the rewrite is meaningfully better.
-    local gate_model="${ESCALATION_MODEL_HIGH:-${ORCH_GATE_MODEL:-MiniMax-M3}}"
+    # THE REVIEWER'S OWN SEAM. This was a run-wide "high" model behind a run-wide pin behind a
+    # vendor literal — three sources, none of them the ladder, and the literal always answered so
+    # the ladder never had to.
+    local gate_model
+    gate_model=$(seam_model_or_fail "prd-change-reviewer" 2>/dev/null || printf '')
 
     # tool_creation rewrites a bash script, not a short prose rule — the
     # kb_entry/skill_note constraints (single line, under 200 chars, imperative

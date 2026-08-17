@@ -640,8 +640,8 @@ print_step_checklist() {
         echo -e "  ${CYAN}RUN MODE: ${RESOLVED_RUN_MODE}${NC} — the SKIP rows below are what it turns off"
     fi
     _checklist_row "1"    "Specification pass"       "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "EPAM_SPEC_MODE=0"
-    _checklist_row "1a"   "  openspec (elaboration)" "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "${SPEC_MODE_OPENSPEC_MODEL:-z-ai/glm-5.2}"
-    _checklist_row "1b"   "  speckit (verification)" "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "${SPEC_MODE_SPECKIT_MODEL:-z-ai/glm-5.2}"
+    _checklist_row "1a"   "  openspec (elaboration)" "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "$(seam_model_or_fail "spec-agent" 2>/dev/null || printf '<unresolved>')"
+    _checklist_row "1b"   "  speckit (verification)" "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "$(seam_model_or_fail "spec-agent" 2>/dev/null || printf '<unresolved>')"
     _checklist_row "2"  "CPA pre-pass"             "$(is_truthy "${SKIP_CPA:-}" && echo SKIP || echo ACTIVE)"           "SKIP_CPA=1"
     _checklist_row "3"  "Pre-phase skill assess"   "$(is_truthy "${SKIP_SKILL_ASSESSMENT:-}" && echo SKIP || echo ACTIVE)" "$(is_truthy "${SKIP_SKILL_ASSESSMENT:-}" && echo SKIP_SKILL_ASSESSMENT=1 || true)"
     _checklist_row "4"  "Hybrid pre-coord"         "$([ "${RESOLVED_ORCH_MODE:-bash}" = "hybrid" ] && echo ACTIVE || echo SKIP)" "ORCH_MODE≠hybrid"
@@ -1122,7 +1122,11 @@ append_pipeline_cost_record() {
 # bound to a specific story) so the agent badge and story badge don't repeat.
 _emit_agent() {
     local _action="$1" _role="$2" _msg="${3:-}"
-    local _gate_model="${ORCH_GATE_MODEL:-MiniMax-M3}"
+    # THE MODEL THE AGENT ACTUALLY RUNS ON, which is its seam's — not a run-wide pin and not a
+    # vendor name written here. This is a display value, so an unresolvable model is left blank
+    # rather than failing: the monitor showing nothing is honest, showing the wrong model is not.
+    local _gate_model
+    _gate_model=$(seam_model_or_fail "$_role" 2>/dev/null || printf '')
     local _gate_provider="${ORCH_GATE_PROVIDER:-}"
     case "$_action" in
         # story_start: <story_id> <lane> <role> [title] [provider] [model]
@@ -1188,9 +1192,21 @@ run_orch_prompt() {
         [ -s "$_seam_err" ] && sed 's/^/  [seam] /' "$_seam_err" >&2
     fi
     rm -f "$_seam_err"
-    local gate_model="${EPAM_MODEL:-${ORCH_GATE_MODEL:-MiniMax-M3}}"
-    local model_args=()
-    [ -n "$gate_model" ] && model_args=(--model "$gate_model")
+    # THE LADDER IS THE ONLY SOURCE. seam_ladder_export just set EPAM_MODEL from this agent's
+    # ladder position. What stood here was `${EPAM_MODEL:-${ORCH_GATE_MODEL:-<a vendor model>}}` —
+    # a run-wide pin that silently outranked the seam, behind a literal that always answered. So
+    # an agent declared at the base of the ladder ran on whatever the run had pinned, and the
+    # ladder never had to work: two of its three positions resolved no model for months and
+    # nothing noticed, because the literal covered it.
+    #
+    # No substitution. An unresolvable model is a configuration fault in the registry or in the
+    # project's llm-settings.json, and running the wrong model is worse than not running.
+    local gate_model
+    if ! gate_model=$(seam_model_or_fail "$agent_type"); then
+        error "run_orch_prompt: refusing to invoke '${agent_type}' with no model resolved from the ladder"
+        return 1
+    fi
+    local model_args=(--model "$gate_model")
 
     local started_at
     started_at=$(date -Iseconds)
@@ -2029,8 +2045,12 @@ run_story_recovery_analyst() {
                 [ "$_rev_attempt" -gt 0 ] && _corrective_rev="CORRECTION: Your previous response did not contain parseable JSON with a verdict field. Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}
 
 "
-                local _rev_model="${ORCH_GATE_MODEL:-MiniMax-M3}"
-                [ "$_rev_attempt" -ge 1 ] && [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _rev_model="${ESCALATION_MODEL_HIGH}"
+                # Its seam's model, then one rung up ITS OWN chain on retry. This read a run-wide
+                # pin behind a vendor literal, and escalated to a single run-wide "high" model that
+                # every agent shared regardless of where it started. That is a pin, not a ladder.
+                local _rev_model
+                _rev_model=$(seam_model_or_fail "prd-change-reviewer") || _rev_model=""
+                [ "$_rev_attempt" -ge 1 ] && _rev_model=$(seam_next_model "prd-change-reviewer" "$_rev_model")
                 _rev_raw=$(echo "${_corrective_rev}${_src_reviewer_profile}
 
                 $(_render_change_reviewer "$story_id" "ac_patch" "BEFORE:\n${_before_acs}\n\nAFTER:\n${_candidate}")" | \
@@ -4400,7 +4420,6 @@ run_specification_pass() {
     set +e
     PRD_FILE="$PRD_FILE" OUTPUT_DIR="$LOG_DIR" CLAUDE_CMD="${CLAUDE_CMD}" \
         AI_RUNNER_CMD="$AI_RUNNER_CMD" EPAM_ORCHESTRATION_PROVIDER="${ORCH_GATE_PROVIDER:-${EPAM_ORCHESTRATION_PROVIDER:-}}" \
-        AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
         "$node_cmd" "$spec_runner" --phase "$phase_id" 2>&1 | tee "$LOG_DIR/spec-${phase_id}.log"
     local spec_rc=${PIPESTATUS[0]}
     set -e
@@ -4412,7 +4431,7 @@ run_specification_pass() {
     _spec_usage=$(_spec_pass_usage "$phase_id")
     read -r _spec_cost _spec_tin _spec_tout _spec_turns <<< "${_spec_usage:-0 0 0 0}"
     append_pipeline_cost_record "spec-pass" "$phase_id" \
-        "${ORCH_GATE_MODEL:-z-ai/glm-5.2}" "$_spec_started" \
+        "$(seam_model_or_fail "spec-agent")" "$_spec_started" \
         "${_spec_cost:-0}" "${_spec_tin:-0}" "${_spec_tout:-0}" "${_spec_turns:-0}" 2>/dev/null || true
     # Surface openspec/speckit as visible checklist sub-steps instead of only
     # showing as "spec-mode: fast-path ..." log lines buried inside Step 0's
@@ -4421,8 +4440,8 @@ run_specification_pass() {
     # count per agent; model comes from the same env vars the runner itself
     # uses (SPEC_MODE_OPENSPEC_MODEL/SPEC_MODE_SPECKIT_MODEL).
     local _spec_summary="$LOG_DIR/spec-summary.json"
-    local _openspec_model="${SPEC_MODE_OPENSPEC_MODEL:-z-ai/glm-5.2}"
-    local _speckit_model="${SPEC_MODE_SPECKIT_MODEL:-z-ai/glm-5.2}"
+    local _openspec_model="$(seam_model_or_fail "spec-agent")"
+    local _speckit_model="$(seam_model_or_fail "spec-agent")"
     local _openspec_count=0 _speckit_count=0
     if [ -f "$_spec_summary" ]; then
         _openspec_count=$(jq -r '.stats.agents.openspec // 0' "$_spec_summary" 2>/dev/null || echo 0)
@@ -4745,7 +4764,11 @@ if [ -f "$_router_js" ] && command -v node &>/dev/null; then
         _topology_source=$(echo "$_router_out"   | jq -r '.source   // "heuristic"' 2>/dev/null || echo "heuristic")
         # GAP-P22: track topology router cost when LLM was invoked
         if [ "$_topology_source" = "llm" ]; then
-            _router_model=$(echo "$_router_out" | jq -r '.model // "z-ai/glm-5.2"' 2>/dev/null || echo "z-ai/glm-5.2")
+            # WHAT ACTUALLY RAN, or nothing. This is a COST record: a vendor literal here
+            # attributes real spend to a model that was never invoked, which is worse than an
+            # unattributed record because it looks correct in the cost report.
+            _router_model=$(echo "$_router_out" | jq -r '.model // empty' 2>/dev/null || echo "")
+            [ -n "$_router_model" ] || _router_model=$(seam_model_or_fail "prd-model-coordinator" 2>/dev/null || printf 'unrecorded')
             append_pipeline_cost_record "topology-router" "pipeline" "$_router_model" "$_router_started" \
                 "0.001" "800" "50" "1" 2>/dev/null || true
         fi
@@ -5203,11 +5226,11 @@ run_pre_phase_assessment() {
 
         $(_render_change_reviewer "pre-phase-assessment-${phase_id}" "profile_creation" "BEFORE/AFTER DIFF:\n${_pfa_diff}")" | \
                         AI_PROVIDER="${ORCH_GATE_PROVIDER}" \
-                        AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
+                        AI_MODEL="$(seam_model_or_fail "prd-change-reviewer")" \
                         EPAM_CLI="${EPAM_CLI:-epam}" \
                         "$AI_RUNNER_CMD" \
                             --provider "${ORCH_GATE_PROVIDER}" \
-                            --model    "${ORCH_GATE_MODEL:-MiniMax-M3}" \
+                            --model    "$(seam_model_or_fail "prd-change-reviewer")" \
                         2>/dev/null | \
                         python3 "$SCRIPT_DIR/lib/handlers/run-pre-phase-assessment.py" 2>/dev/null || echo "pass")
                     if [ "$_pfa_verdict" = "fail" ]; then
@@ -8097,7 +8120,7 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
             _lga_attempt=0
             while [ "$_lga_attempt" -lt 2 ] && [ -z "$_lint_finding_raw" ]; do
                 _lga_prompt="$_lint_finding_prompt"
-                _lga_model="${ORCH_GATE_MODEL:-z-ai/glm-5.2}"
+                _lga_model="$(seam_model_or_fail "gate-finding-analyst")"
                 if [ "$_lga_attempt" -ge 1 ]; then
                     [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _lga_model="${ESCALATION_MODEL_HIGH}"
                     _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
@@ -8163,7 +8186,7 @@ if m:
                 _lrem_attempt=0
                 while [ "$_lrem_attempt" -lt 2 ] && [ -z "$_lint_ac_raw" ]; do
                     _lrem_prompt="$_lint_ac_prompt"
-                    _lrem_model="${ORCH_GATE_MODEL:-z-ai/glm-5.2}"
+                    _lrem_model="$(seam_model_or_fail "story-ac-remediator")"
                     if [ "$_lrem_attempt" -ge 1 ]; then
                         [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _lrem_model="${ESCALATION_MODEL_HIGH}"
                         _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
@@ -8200,13 +8223,13 @@ if m:
                 info "  [lint-gate:augmentor] Recording lint anti-pattern in profile..."
                 _laug_raw="$(echo "$_lint_finding_raw" | \
                     timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-qwen}" \
-                        --model "${ORCH_GATE_MODEL:-z-ai/glm-5.2}" \
+                        --model "$(seam_model_or_fail "gate-finding-analyst")" \
                         --json - 2>>"$_lint_rem_log" || echo "")"
                 if [ -z "$_laug_raw" ]; then
                     warning "  [lint-gate:augmentor] attempt 1 returned no output — retrying"
                     echo "$_lint_finding_raw" | \
                         timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-qwen}" \
-                            --model "${ORCH_GATE_MODEL:-z-ai/glm-5.2}" \
+                            --model "$(seam_model_or_fail "story-ac-remediator")" \
                             --json - 2>>"$_lint_rem_log" || true
                 fi
             else
@@ -9515,7 +9538,7 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                 local _finding_json="" _gfa_attempt=0
                 while [ "$_gfa_attempt" -lt 2 ] && [ -z "$_finding_json" ]; do
                     local _gfa_prompt="$_finding_prompt"
-                    local _gfa_model="${ORCH_GATE_MODEL:-MiniMax-M3}"
+                    local _gfa_model="$(seam_model_or_fail "gate-finding-analyst")"
                     if [ "$_gfa_attempt" -ge 1 ]; then
                         [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _gfa_model="${ESCALATION_MODEL_HIGH}"
                         _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
@@ -9630,7 +9653,7 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                 local _ac_result="" _acr_attempt=0
                 while [ "$_acr_attempt" -lt 2 ] && [ -z "$_ac_result" ]; do
                     local _acr_prompt="$_ac_prompt"
-                    local _acr_model="${ORCH_GATE_MODEL:-MiniMax-M3}"
+                    local _acr_model="$(seam_model_or_fail "story-ac-remediator")"
                     if [ "$_acr_attempt" -ge 1 ]; then
                         [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _acr_model="${ESCALATION_MODEL_HIGH}"
                         _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
@@ -9731,15 +9754,15 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
 $_prof_prompt"
                     _prof_result=$(echo "$_pfa3_prompt" | \
                         AI_GATE_ALLOW_TOOLS=1 \
-                        AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
-                        AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
+                        AI_PROVIDER="${ORCH_GATE_PROVIDER:-}" \
+                        AI_MODEL="$(seam_model_or_fail "profile-augmentor")" \
                         EPAM_DANGEROUS_SKIP_APPROVAL=1 \
                         EPAM_MAX_TOOL_CALLS="${PROFILE_AUGMENTOR_MAX_TOOL_CALLS:-10}" \
                         CLAUDE_CMD="$CLAUDE_CMD" \
                         EPAM_CLI="${EPAM_CLI:-epam}" \
                         "$AI_RUNNER_CMD" \
                             --provider "${ORCH_GATE_PROVIDER:-minimax}" \
-                            --model    "${ORCH_GATE_MODEL:-MiniMax-M3}" \
+                            --model    "$(seam_model_or_fail "profile-augmentor")" \
                         2>&1 | tee -a "$_rem_log")
                     if echo "$_prof_result" | grep -q '"profile_updated"[[:space:]]*:[[:space:]]*true'; then
                         _profiles_after=$(cat "$_profiles_file" 2>/dev/null || echo "{}")
@@ -9814,8 +9837,9 @@ $_prof_prompt"
                             [ "$_pa_rev_attempt" -gt 0 ] && _pa_corrective="CORRECTION: Your previous response did not contain parseable JSON with a verdict field. Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}
 
 "
-                            local _pa_model="${ORCH_GATE_MODEL:-MiniMax-M3}"
-                            [ "$_pa_rev_attempt" -ge 1 ] && [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _pa_model="${ESCALATION_MODEL_HIGH}"
+                            local _pa_model
+                            _pa_model=$(seam_model_or_fail "prd-change-reviewer") || _pa_model=""
+                            [ "$_pa_rev_attempt" -ge 1 ] && _pa_model=$(seam_next_model "prd-change-reviewer" "$_pa_model")
                             _pa_rev_raw=$(echo "${_pa_corrective}${_reviewer_profile}
 
                             $(_render_change_reviewer "gate-remediation" "profile_addendum" "THE CHANGE ITSELF (unified diff of the roster before and after):\n${_profiles_change}")" | \
@@ -9944,11 +9968,16 @@ _create_bug_fix_phase() {
             story_model="$model_override"
             story_provider="$provider_override"
         else
+            # THE OWNER'S OWN MODEL, then the WRITER'S LADDER — never a vendor name written
+            # here. The literals meant a story that declared no model was silently written by
+            # whatever the engine happened to name, on whatever provider the engine happened to
+            # name, regardless of what the project configured.
             story_model=$(jq -r --arg id "$owner_story" \
-                '.stories[] | select(.id == $id) | .model // "MiniMax-M3"' \
+                '.stories[] | select(.id == $id) | .model // empty' \
                 "$PRD_FILE" 2>/dev/null)
+            [ -n "$story_model" ] || story_model=$(seam_model_or_fail "story-writer") || story_model=""
             story_provider=$(jq -r --arg id "$owner_story" \
-                '.stories[] | select(.id == $id) | .aiProvider // "qwen"' \
+                '.stories[] | select(.id == $id) | .aiProvider // empty' \
                 "$PRD_FILE" 2>/dev/null)
         fi
 
@@ -10186,8 +10215,11 @@ run_unit_tests_gate() {
             provider_override=""
             log "Step 4.5: Creating bug fix stories (round $bug_round — original model)..."
         else
-            model_override="${ESCALATION_MODEL:-z-ai/glm-5.2}"
-            provider_override="qwen"
+            # Round 2 climbs the WRITER'S OWN ladder rather than jumping to one run-wide
+            # escalation model, and names no provider: the provider follows the model through
+            # EPAM_MODEL_PROVIDER_MAP, which is where the project already declares it.
+            model_override=$(seam_next_model "story-writer" "$(seam_model_or_fail "story-writer")")
+            provider_override=""
             log "Step 4.5: Creating bug fix stories (round $bug_round — escalated model: ${model_override})..."
         fi
 

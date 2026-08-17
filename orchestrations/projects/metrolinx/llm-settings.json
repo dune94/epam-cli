@@ -78,7 +78,8 @@
           "from": "moonshotai/kimi-k2.5",
           "to": "moonshotai/kimi-k3"
         }
-      ]
+      ],
+      "startModel": "MiniMax-M3"
     },
     "medium": {
       "modelLadder": [
@@ -102,7 +103,8 @@
           "from": "z-ai/glm-5.1",
           "to": "z-ai/glm-5.2"
         }
-      ]
+      ],
+      "startModel": "MiniMax-M2.5"
     },
     "highest": {
       "modelLadder": [

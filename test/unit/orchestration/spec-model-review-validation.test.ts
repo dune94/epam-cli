@@ -37,14 +37,48 @@ const src = readFileSync(SPEC_RUNNER, 'utf8');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { buildKnownValidModels, isValidModelString } = require(SPEC_RUNNER);
 
+/**
+ * A PROJECT'S DECLARED LADDER, as export_model_ladders puts it in the environment.
+ *
+ * buildKnownValidModels used to carry nine vendor model names in the engine, so any project
+ * running something else had its own valid models rejected as hallucinations, and the list went
+ * stale the moment a vendor shipped a version. The set is now the project's own rungs — which
+ * means a test wanting a populated set must declare a ladder, exactly as a run does.
+ */
+function withLadder<T>(fn: () => T): T {
+  const saved = { ...process.env };
+  process.env.EPAM_MODEL_LADDER_MEDIUM = 'MiniMax-M2.5=MiniMax-M3';
+  process.env.EPAM_MODEL_LADDER_HIGH = 'MiniMax-M3=z-ai/glm-5.2';
+  process.env.EPAM_MODEL_LADDER_HIGHEST = 'z-ai/glm-5.2=moonshotai/kimi-k3';
+  try { return fn(); } finally {
+    for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
+    Object.assign(process.env, saved);
+  }
+}
+
 describe('buildKnownValidModels — the allow-list', () => {
-  it('includes the current production model roster', () => {
-    const set = buildKnownValidModels('MiniMax-M3', 'MiniMax-M2.5');
-    expect(set.has('MiniMax-M3')).toBe(true);
-    expect(set.has('MiniMax-M2.5')).toBe(true);
-    // k2 removed from the roster 2026-07-25 (EOL upstream); k3 is the ladder's top rung.
-    expect(set.has('moonshotai/kimi-k3')).toBe(true);
-    expect(set.has('z-ai/glm-5.2')).toBe(true);
+  it('includes every model the PROJECT declares on its ladders', () => {
+    // WAS: asserted a roster hardcoded in the engine. That test's only effect was to keep four
+    // vendor model names pinned there. The requirement is that a model the project actually uses
+    // is recognised — so declare a ladder and check its rungs, both sides of every hop.
+    const set = withLadder(() => buildKnownValidModels('', ''));
+    for (const m of ['MiniMax-M2.5', 'MiniMax-M3', 'z-ai/glm-5.2', 'moonshotai/kimi-k3']) {
+      expect(set.has(m), `the project declares ${m} on its ladder but it is not recognised`).toBe(true);
+    }
+  });
+
+  it('recognises a model no engine list could have anticipated', () => {
+    // The point of the change: a project on a different vendor entirely still works.
+    const saved = process.env.EPAM_MODEL_LADDER_MEDIUM;
+    process.env.EPAM_MODEL_LADDER_MEDIUM = 'some-vendor/model-a=some-vendor/model-b';
+    try {
+      const set = buildKnownValidModels('', '');
+      expect(set.has('some-vendor/model-a')).toBe(true);
+      expect(set.has('some-vendor/model-b')).toBe(true);
+    } finally {
+      if (saved === undefined) delete process.env.EPAM_MODEL_LADDER_MEDIUM;
+      else process.env.EPAM_MODEL_LADDER_MEDIUM = saved;
+    }
   });
 
   it('includes the dynamically-configured upgradeModel and miniModel', () => {
@@ -60,7 +94,7 @@ describe('buildKnownValidModels — the allow-list', () => {
 });
 
 describe('isValidModelString — real execution against the exact hallucinated defect', () => {
-  const knownValidModels = buildKnownValidModels('MiniMax-M3', 'MiniMax-M2.5');
+  const knownValidModels = withLadder(() => buildKnownValidModels('MiniMax-M3', 'MiniMax-M2.5'));
 
   it('REPRODUCES the exact live-run defect: rejects "moonshotai/MiniMax-M3"', () => {
     expect(isValidModelString('moonshotai/MiniMax-M3', 'moonshotai/kimi-k3', knownValidModels)).toBe(false);

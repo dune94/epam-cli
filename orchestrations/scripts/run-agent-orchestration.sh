@@ -3304,8 +3304,28 @@ KNOWNFIXES_EOF
     "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/filtered-prd.js" "${_fsrc}" "${_fout}" "${_fcl}" 2>/dev/null
   }
 
+  # THE PATH THE CALLER PASSED, ACTUALLY FORWARDED.
+  #
+  # This took "$1" and never used it, so the handler read no PRD; and `2>/dev/null` hid the error
+  # it raised about that. The phase list came back EMPTY, every lane's phase loop ran zero times,
+  # and each lane reported "✓ completed" in five seconds having invoked nothing. Live 2026-08-17,
+  # mock3: two lanes, two pending stories, no writer, no commit, "Pipeline complete".
+  #
+  # An empty phase list is a real answer ("this PRD declares no phases") and indistinguishable
+  # from a failure to read one — so the failure must be loud, and is.
   _prd_phases() {
-    "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/prd-phases.js" 2>/dev/null
+    local _pp_prd="${1:-${PRD_FILE:-}}"
+    local _pp_err _pp_out _pp_rc=0
+    _pp_err=$(mktemp "${TMPDIR:-/tmp}/prd-phases-err-XXXXXX")
+    _pp_out=$("$NODE_BIN" "$SCRIPT_DIR/lib/handlers/prd-phases.js" "$_pp_prd" 2>"$_pp_err") || _pp_rc=$?
+    if [ "$_pp_rc" -ne 0 ]; then
+        error "[orch] could not read the phases of ${_pp_prd}: $(cat "$_pp_err" 2>/dev/null)"
+        error "[orch]   Refusing to treat that as 'no phases' — a lane with no phases does nothing and reports success."
+        rm -f "$_pp_err"
+        return 1
+    fi
+    rm -f "$_pp_err"
+    printf '%s' "$_pp_out"
   }
 
   # ── Lane execution: parallel by default ────────────────────────────────────

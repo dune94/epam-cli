@@ -8694,7 +8694,11 @@ $sast_prompt"
         # ── Semgrep Oracle: inject static analysis evidence before LLM invocation ──
         local semgrep_json="$LOG_DIR/semgrep-oracle-${phase_id}.json"
         local semgrep_summary=""
-        if command -v semgrep > /dev/null 2>&1 && [ -d "$PROJECT_ROOT/src" ]; then
+        # NO LAYOUT ASSUMPTION. This required $PROJECT_ROOT/src to exist, so a repository laying
+        # its code out any other way — lib/, app/, pkg/, cmd/, or a flat root — got NO static
+        # analysis evidence at all, silently, and the SAST agent judged the change without it.
+        # semgrep scans a directory; the repository root is the honest one to give it.
+        if command -v semgrep > /dev/null 2>&1 && [ -d "$PROJECT_ROOT" ]; then
             set +e
             semgrep scan \
                 --config=auto \
@@ -8702,7 +8706,7 @@ $sast_prompt"
                 --quiet \
                 --timeout=60 \
                 --max-target-bytes=500000 \
-                "$PROJECT_ROOT/src" \
+                "$PROJECT_ROOT" \
                 > "$semgrep_json" 2>/dev/null
             local _semgrep_rc=$?
             set -e
@@ -8736,57 +8740,11 @@ $sast_prompt"
             local _audit_rc=$?
             set -e
             if [ -f "$audit_json" ] && [ -s "$audit_json" ]; then
-                local _audit_py='
-import sys, json
-# Each package is tagged runtime / dev / transitive. The SAST prompt REQUIRES
-# that classification (runtime high = major, dev-only = minor regardless of
-# CVSS) but the evidence never carried it, so the agent could not comply. Live
-# 2026-07-26 it said so and left 70 CVEs unclassified. This is a dictionary
-# lookup, not a judgement — the pipeline should answer it, not delegate it.
-runtime_deps, dev_deps = set(), set()
-if len(sys.argv) > 2:
-    try:
-        with open(sys.argv[2]) as f:
-            pkg = json.load(f)
-        runtime_deps = set((pkg.get("dependencies") or {}).keys()) | set((pkg.get("optionalDependencies") or {}).keys())
-        dev_deps = set((pkg.get("devDependencies") or {}).keys())
-    except Exception:
-        pass
-
-def classify(name):
-    if name in runtime_deps: return "runtime"
-    if name in dev_deps: return "dev"
-    if not runtime_deps and not dev_deps: return "unclassified"
-    return "transitive"
-
-try:
-    with open(sys.argv[1]) as f:
-        data = json.load(f)
-    vulns = data.get("vulnerabilities", {})
-    meta  = data.get("metadata", {}).get("vulnerabilities", {})
-    total      = sum(meta.values()) if meta else len(vulns)
-    critical   = meta.get("critical", 0)
-    high       = meta.get("high", 0)
-    moderate   = meta.get("moderate", 0)
-    low        = meta.get("low", 0)
-    lines = [f"total={total}  critical={critical}  high={high}  moderate={moderate}  low={low}"]
-    if runtime_deps or dev_deps:
-        lines.append("  (each package tagged runtime|dev|transitive from package.json — apply the major/minor rule directly)")
-    shown = 0
-    for name, v in vulns.items():
-        if shown >= 15:
-            lines.append(f"  ... and {len(vulns)-shown} more packages")
-            break
-        sev  = v.get("severity", "?")
-        via  = ", ".join(str(x.get("title", x) if isinstance(x, dict) else x)
-                         for x in (v.get("via") or [])[:2])
-        lines.append(f"  [{sev}] ({classify(name)}) {name}: {via[:100]}")
-        shown += 1
-    print("\n".join(lines))
-except Exception as e:
-    print(f"(audit parse error: {e})")
-'
-                audit_summary=$(echo "$_audit_py" | python3 - "$audit_json" "$PROJECT_ROOT/package.json" 2>/dev/null \
+                # MOVED TO A HANDLER. This was a 48-line Python program held in a shell
+                # single-quoted string and piped to `python3 -`, inside a 1590-line function:
+                # unrunnable on its own, untestable, and invisible to every Python tool here.
+                audit_summary=$(python3 "$SCRIPT_DIR/lib/handlers/dependency-audit-summary.py" \
+                    "$audit_json" "$PROJECT_ROOT/package.json" 2>/dev/null \
                     || echo "(audit parse error)")
             else
                 audit_summary="(npm audit produced no output — exit code $_audit_rc)"
@@ -9940,7 +9898,7 @@ $_prof_prompt"
                     # Reviewer gate — validate the change before accepting it
                     local _reviewer_profile
                     _reviewer_profile=$(echo "$_profiles_after" | \
-                        python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('prd-change-reviewer',''))" 2>/dev/null || echo "")
+                        python3 "$SCRIPT_DIR/lib/handlers/json-field.py" 'prd-change-reviewer' 2>/dev/null || echo "")
                     local _review_verdict="pass"  # fail-safe only when reviewer not configured
                     if [ -n "${ORCH_GATE_PROVIDER:-}" ] && [ -n "$_reviewer_profile" ]; then
                         local _pa_rev_raw="" _pa_rev_attempt=0

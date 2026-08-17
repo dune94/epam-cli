@@ -769,6 +769,36 @@
         }
       ],
       "template": "prompt-review"
+    },
+    "survey-review": {
+      "_what": "Falsifies what the estate survey claims about the codelines, before a roster is minted from it.",
+      "_why": "The survey decided scope and seeded every investigator brief, and NOTHING consumed it for review — no seam declared it as an input, so its claims reached the roster unchallenged. A codeline was reported in_scope on a file it does not contain and an implementer was briefed accordingly. A generated prompt already gets this treatment; the survey had none.",
+      "ladder": "top",
+      "reasoningEffort": "high",
+      "temperature": "0.1",
+      "maxOutputTokens": 32768,
+      "maxIterations": 25,
+      "timeoutSecs": 900,
+      "toolGrant": "read-only",
+      "produces": "survey-verdict",
+      "consumes": [
+        {
+          "kind": "estate-survey",
+          "required": true,
+          "authority": "the artefact under review"
+        },
+        {
+          "kind": "ticket",
+          "required": true,
+          "authority": "the work the survey was scoping"
+        },
+        {
+          "kind": "codeline-facts",
+          "required": true,
+          "authority": "the ground truth its claims are checked against"
+        }
+      ],
+      "template": "survey-review"
     }
   },
   "_seamResolution": [
@@ -945,9 +975,9 @@
     "ticket-link-agent": "cpa-inference",
     "discovery-vocabulary-agent": "cpa-inference",
     "roster-reviewer": "code-review-cycle",
-    "fare-logic-engineer": "story-writer",
-    "departure-board-engineer": "story-writer",
-    "mocka-codebase-investigator": "code-graph-detective"
+    "typescript-bugfix-engineer": "story-writer",
+    "mocka-investigator": "code-graph-detective",
+    "mockb-investigator": "code-graph-detective"
   },
   "engineProduces": [
     "ticket",
@@ -1015,9 +1045,9 @@
     "ticket-link-agent": "derived",
     "discovery-vocabulary-agent": "derived",
     "roster-reviewer": "derived",
-    "fare-logic-engineer": "derived",
-    "departure-board-engineer": "derived",
-    "mocka-codebase-investigator": "derived"
+    "typescript-bugfix-engineer": "derived",
+    "mocka-investigator": "derived",
+    "mockb-investigator": "derived"
   },
   "_ladderPositions": "A seam declares a POSITION in the project’s ladderTierOrder (base|mid|top), never a tier NAME. The project owns its tier vocabulary; the engine owns none. Converted 2026-08-15 after twenty seams asking for a literal HIGHEST ran unladdered on a project that declared only high and medium.",
   "_defaultSeam": "REMOVED 2026-08-16. A project may declare EPAM_DEFAULT_SEAM in its config if it wants unmatched agents absorbed; the engine declares none, so an unmatched agent fails the mint loudly and is fixed with one line rather than discovered mid-run.",

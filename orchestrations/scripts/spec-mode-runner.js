@@ -4034,13 +4034,70 @@ const TOOL_ROSTER_REVIEW = {
  * the template layer can be proven byte-for-byte — a prompt built inline cannot be called by
  * a test, and an unprovable migration is how a reworded prompt ships unnoticed.
  */
-function buildRosterReviewPrompt({ persona, briefBlock, clBlock, ticketBlock, docBlock, toolLine }) {
+/**
+ * WHAT THIS RUN NEEDS THE TEAM TO PRODUCE, AND WHO CAN PRODUCE IT.
+ *
+ * Handed to the roster reviewer so it can see the one defect a member-by-member review never
+ * can: an absence. A roster of well-formed agents that cannot do the work reads as sound, because
+ * every agent it was shown was fine — live 2026-08-17, two investigators and no implementer,
+ * "sound - 0 finding(s), 0 blocking", dead at assignment.
+ *
+ * ENTIRELY DERIVED. The registry declares which artefacts a seam REQUIRES, which seam PRODUCES
+ * each, which kind each name-shape rule serves, and engineProduces lists what the pipeline
+ * supplies rather than an agent. No role, kind or artefact is named here — add a seam tomorrow and
+ * the block covers it without an edit. That is the difference between informing a reviewer and
+ * hardcoding a rule it must obey.
+ */
+/** The invocation registry, read where coverage needs it. */
+function readRegistryForCoverage() {
+  const si = require('./lib/seam-invocation.js');
+  return JSON.parse(fs.readFileSync(si.registryPath(), 'utf8'));
+}
+
+function rosterCoverageBlock(minted, registry) {
+  const P = (registry && registry.profiles) || {};
+  const fromEngine = new Set((registry && registry.engineProduces) || []);
+  const patterns = Array.isArray(registry && registry.seamPatterns) ? registry.seamPatterns : [];
+
+  const required = new Set();
+  for (const p of Object.values(P)) {
+    for (const c of (p && p.consumes) || []) if (c && c.required && c.kind) required.add(c.kind);
+  }
+
+  // Artefacts a MINTED agent is the one to produce: those whose producing seam is reachable by a
+  // kind rule. Everything else comes from a canonical agent that is always present.
+  const kindsFor = new Map();
+  for (const rule of patterns) {
+    if (!rule || !rule.kind || !rule.seam) continue;
+    const made = P[rule.seam] && P[rule.seam].produces;
+    if (!made) continue;
+    if (!kindsFor.has(made)) kindsFor.set(made, new Set());
+    kindsFor.get(made).add(rule.kind);
+  }
+
+  const roster = Array.isArray(minted) ? minted : [];
+  const haveKinds = new Set(roster.map((a) => a && a.kind).filter(Boolean));
+
+  const lines = [];
+  for (const kind of [...required].filter((k) => !fromEngine.has(k) && kindsFor.has(k))) {
+    const canMake = [...kindsFor.get(kind)];
+    const who = roster.filter((a) => canMake.includes(a && a.kind))
+      .map((a) => `${a.name} [${a.kind}]`);
+    lines.push(`- ${kind}: produced by ${canMake.join(' or ')} — this roster has `
+      + (who.length ? who.join(', ') : 'NOBODY'));
+  }
+  if (!lines.length) return '- (this run requires nothing a minted agent must produce)';
+  return lines.join('\n');
+}
+
+function buildRosterReviewPrompt({ persona, briefBlock, clBlock, ticketBlock, docBlock, toolLine, coverageBlock }) {
   // RENDERED FROM THE TEMPLATE LAYER. The documentation section is assembled here because it
   // is conditional prose — present, it points the reviewer at the vendor's own text; absent,
   // it tells the reviewer that any vendor claim is unverifiable. A template cannot branch.
   return renderEngineTemplate('roster-review', {
     __PERSONA__: persona,
     __BRIEF_BLOCK__: briefBlock,
+    __COVERAGE_BLOCK__: coverageBlock || '- (coverage could not be derived)',
     __CODELINE_BLOCK__: clBlock || '- (none resolved)',
     __TICKET_BLOCK__: ticketBlock || '- (no tickets available)',
     __DOC_SECTION__: docBlock
@@ -4125,7 +4182,17 @@ async function reviewRoster({
       + 'briefs name. Confirm the files and directories they claim to own exist.'
     : 'You have NO tools on this call. Report only what the text above lets you establish, and say so.';
 
-  const prompt = buildRosterReviewPrompt({ persona, briefBlock, clBlock, ticketBlock, docBlock, toolLine });
+  // WHAT THE TEAM MUST BE ABLE TO PRODUCE, derived from the registry and handed to the reviewer.
+  // Without it the reviewer sees only briefs and cannot report the one defect that has no brief:
+  // a role nobody minted. See rosterCoverageBlock.
+  let coverageBlock = '';
+  try {
+    coverageBlock = rosterCoverageBlock(_minted, readRegistryForCoverage());
+  } catch { coverageBlock = ''; }
+
+  const prompt = buildRosterReviewPrompt({
+    persona, briefBlock, clBlock, ticketBlock, docBlock, toolLine, coverageBlock,
+  });
 
   // THE IDENTITY TRAVELS WITH THE SEAM. This relied on the caller having set
   // process.env.EPAM_AGENT_NAME in another file, so the two could drift apart without either
@@ -8804,6 +8871,7 @@ function costLabelFor(tag, env) {
 }
 
 module.exports = {
+  rosterCoverageBlock,
   runClaudeTimeoutMs,
   TOOL_ESTATE_SURVEY,
   costLabelFor,

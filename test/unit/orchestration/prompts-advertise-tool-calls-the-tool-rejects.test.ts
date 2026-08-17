@@ -67,12 +67,21 @@ describe('prompts advertise tool calls the tool rejects', () => {
     let checked = 0;
 
     for (const { file, body } of prompts) {
-      // codegraph_query(mode="X", field="...")  — the named form the contract requires.
-      for (const m of body.matchAll(/codegraph_query\(mode=\\?"(\w+)\\?",\s*(\w+)=/g)) {
+      // codegraph_query(mode="X", a="…", b="…") — take EVERY named field in the call, not just
+      // the first. `codeline` is orthogonal to mode (it says which repository to answer from), so
+      // a form that leads with it is still valid and the mode's own field appears after it.
+      // Asserting on the first field alone read `codeline` as the mode's field and rejected a
+      // correct call — the guard caught that within seconds of the prompt changing.
+      for (const m of body.matchAll(/codegraph_query\((mode=\\?"\w+\\?"[^)]*)\)/g)) {
+        const call = m[1];
+        const mode = (call.match(/mode=\\?"(\w+)\\?"/) || [])[1];
+        if (!mode) continue;
+        const fields = [...call.matchAll(/(\w+)=/g)].map((f) => f[1]).filter((f) => f !== 'mode');
         checked++;
-        const [, mode, field] = m;
-        const r = buildArgv({ mode, [field]: 'X' });
-        if (!r.ok) rejected.push(`${file}: mode="${mode}" ${field}=… → ${r.error}`);
+        const input: Record<string, string> = { mode };
+        for (const f of fields) input[f] = 'X';
+        const r = buildArgv(input);
+        if (!r.ok) rejected.push(`${file}: mode="${mode}" ${fields.join(',')} → ${r.error}`);
       }
     }
 

@@ -76,7 +76,7 @@ function runReset(extraEnv: Record<string, string> = {}) {
       ...process.env,
       LOG_DIR: logDir,
       EPAM_PROJECT_CONFIG_DIR: projectDir,
-      EPAM_SKIP_DASHBOARD: '1',
+      EPAM_SKIP_CONTAINER_RESTART: '1',
       ...extraEnv,
     },
   });

@@ -179,7 +179,18 @@ sed -i "s|alias /prd-dir/[^;]*;|alias /prd-dir/${PRD_BASENAME};|" \
 # with, silently ignoring this run's PRD-basename patch (found live
 # 2026-07-13 verifying this exact fix — even the fix's own docs file wasn't
 # safe from the bug it documents).
-if docker compose \
+# THE DASHBOARD RESTART IS THE ONLY SLOW STEP, AND A TEST DOES NOT NEED IT.
+#
+# `docker compose up --force-recreate` costs ~3 seconds. Everything else this script does — the
+# roster restore, the PRD restore, clearing generated artefacts and prompts — is file work that
+# takes milliseconds. A test that exercises the RESET therefore paid three seconds per case for a
+# container it never looks at: two test files spent 23 of the 24 seconds my tests take, purely
+# here, and that is the difference between a suite that gets run and one that does not.
+#
+# Skipped only when asked. A run never sets this, so the live path is unchanged.
+if [ "${EPAM_SKIP_CONTAINER_RESTART:-0}" = "1" ]; then
+  info "  Container restart skipped (EPAM_SKIP_CONTAINER_RESTART=1)"
+elif docker compose \
      -f "$COMPOSE_BASE" \
      -f "$COMPOSE_OVERRIDE" \
      up -d --force-recreate agent-monitor 2>/dev/null; then

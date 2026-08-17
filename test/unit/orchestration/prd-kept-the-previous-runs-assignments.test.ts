@@ -63,7 +63,7 @@ function runReset(extraEnv: Record<string, string> = {}) {
       LOG_DIR: logDir,
       EPAM_PROJECT_CONFIG_DIR: projectDir,
       // Keep the destructive, docker-touching parts of the reset out of a unit test.
-      EPAM_SKIP_DASHBOARD: '1',
+      EPAM_SKIP_CONTAINER_RESTART: '1',
       ...extraEnv,
     },
   });

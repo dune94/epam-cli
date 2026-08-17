@@ -8415,6 +8415,17 @@ fi
 # Blocks phase gate if any agent returns a blocker-severity finding.
 # Skippable with SKIP_TESTING_GATES=true.
 # ──────────────────────────────────────────────
+# _gate_diff_excludes — the pathspecs that keep artefacts out of a gate's diff.
+#
+# THE GATES USED TO FILTER BY EXTENSION INSTEAD: `-- '*.ts'`. That is the wrong axis. It answers
+# "is this TypeScript", when the question is "is this the change under review" — so on a Python,
+# Rust, Go, Ruby or plain-JS codeline the reviewer was handed an EMPTY patch and reviewed nothing,
+# while its verdict still counted. Excluding known artefacts keeps lockfiles and build output out
+# without deciding what language the customer writes.
+_gate_diff_excludes() {
+    "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/repo-exclude-patterns.js" diff 2>/dev/null || true
+}
+
 run_testing_gates() {
     local phase_id="$1"
     local gate_log="$LOG_DIR/testing-gates-${phase_id}.log"
@@ -8855,7 +8866,8 @@ $(echo "$_tsc_out" | head -40)"
             local _spec_diff_stat
             _spec_diff_stat=$(cd "$PROJECT_ROOT" && "$_spec_git_bin" diff --stat "$_spec_diff_ref" 2>/dev/null || echo "(no diff)")
             local _spec_diff_patch
-            _spec_diff_patch=$(cd "$PROJECT_ROOT" && "$_spec_git_bin" diff -U2 "$_spec_diff_ref" -- '*.ts' '*.json' 2>/dev/null | head -400 || echo "")
+            local _spec_ex; mapfile -t _spec_ex < <(_gate_diff_excludes)
+            _spec_diff_patch=$(cd "$PROJECT_ROOT" && "$_spec_git_bin" diff -U2 "$_spec_diff_ref" -- . ${_spec_ex[0]+"${_spec_ex[@]}"} 2>/dev/null | head -400 || echo "")
             set -e
             # Also inject content of expected files listed in technicalNotes.files
             local _spec_file_excerpts=""
@@ -9089,7 +9101,8 @@ $spec_prompt"
                 local _diff_stat
                 _diff_stat=$(cd "$PROJECT_ROOT" && "$_git_bin" diff --stat "$_diff_ref" 2>/dev/null || echo "(no diff available)")
                 local _diff_patch
-                _diff_patch=$(cd "$PROJECT_ROOT" && "$_git_bin" diff -U3 "$_diff_ref" -- '*.ts' 2>/dev/null | head -300 || echo "")
+                local _rr_ex; mapfile -t _rr_ex < <(_gate_diff_excludes)
+                _diff_patch=$(cd "$PROJECT_ROOT" && "$_git_bin" diff -U3 "$_diff_ref" -- . ${_rr_ex[0]+"${_rr_ex[@]}"} 2>/dev/null | head -300 || echo "")
                 set -e
                 _cp_vals=$(mktemp "${TMPDIR:-/tmp}/qa-evidence-labels-vals-XXXXXX.json")
                 jq -n \
@@ -9151,11 +9164,15 @@ $review_prompt"
                 # shellcheck disable=SC1090
                 [ -f "$SCRIPT_DIR/lib/story-outputs.sh" ] && . "$SCRIPT_DIR/lib/story-outputs.sh"
                 local _changed_src
-                _changed_src=$(story_outputs_sources "$PROJECT_ROOT" "$LOG_DIR" 2>/dev/null | \
-                               grep -E '\.ts$' | head -10 || echo "")
+                # story_outputs_sources ALREADY excludes test files, using the broad convention
+                # regex that knows .spec., _test, test_* and __tests__/. Re-filtering to `.ts`
+                # threw away every source file on any other stack — and the fallback re-derived a
+                # narrower test rule (`.test.ts`) that the same library had already generalised.
+                local _mh_ex; mapfile -t _mh_ex < <(_gate_diff_excludes)
+                _changed_src=$(story_outputs_sources "$PROJECT_ROOT" "$LOG_DIR" 2>/dev/null | head -10 || echo "")
                 [ -z "$_changed_src" ] && \
-                    _changed_src=$(cd "$PROJECT_ROOT" && "$_git_bin2" diff --name-only "$_mut_diff_ref" -- '*.ts' 2>/dev/null | \
-                                   grep -v '\.test\.ts$' | head -10 || echo "")
+                    _changed_src=$(cd "$PROJECT_ROOT" && "$_git_bin2" diff --name-only "$_mut_diff_ref" -- . ${_mh_ex[0]+"${_mh_ex[@]}"} 2>/dev/null | \
+                                   grep -vE "$_STORY_OUTPUTS_TEST_RE" | head -10 || echo "")
                 set -e
                 local _src_content=""
                 if [ -n "$_changed_src" ]; then

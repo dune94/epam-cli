@@ -19,6 +19,13 @@
  *              pathspec  git exclude pathspecs, one per line — for `git add -A -- ...`
  *              glob      shell case-patterns, one per line — for a status-line filter
  *              regex     one ERE matching any excluded path — for a `grep -vE` filter
+ *              diff      pathspec PLUS lockfiles — for the patch a REVIEW agent is shown
+ *
+ * `diff` is deliberately wider than `pathspec`. A lockfile must still be STAGED: a real dependency
+ * change belongs in the commit. But it must not be REVIEWED — it is machine-generated, frequently
+ * thousands of lines, and it would consume the reviewer's whole budget before it reached the code
+ * the change is actually about. Staging and reviewing are different questions, so they get
+ * different answers rather than one list bent to serve both.
  *
  * Every directory is emitted in BOTH the top-level and the nested form. `:!*​/node_modules/*`
  * matches only a NESTED one; a top-level node_modules — the usual case — needs `:!node_modules/*`.
@@ -33,10 +40,10 @@
 const fs = require('fs');
 const path = require('path');
 
-const { allArtifactDirs } = require('../ecosystems.js');
+const { allArtifactDirs, allManifests } = require('../ecosystems.js');
 
 const form = process.argv[2] || 'pathspec';
-if (form !== 'pathspec' && form !== 'glob' && form !== 'regex') {
+if (!['pathspec', 'glob', 'regex', 'diff'].includes(form)) {
   process.stderr.write(`[repo-exclude-patterns] unknown form: ${form}\n`);
   process.exit(2);
 }
@@ -55,14 +62,20 @@ const dirs = [...new Set([...allArtifactDirs(), ...(config.dirs || [])])];
 const files = config.files || [];
 const enginePaths = config.enginePaths || [];
 
+// Lockfile names come from the ecosystem registry, beside the ecosystem that produces them.
+const lockfiles = [...new Set(allManifests().flatMap((e) => Object.keys(e.lockfiles || {})))];
+
 const out = [];
-if (form === 'pathspec') {
+if (form === 'pathspec' || form === 'diff') {
   // THE LONG FORM, ALWAYS. git parses `:!` as the start of a magic signature and keeps reading
   // magic characters, so `:!__pycache__/*` dies with "Unimplemented pathspec magic '_'" — which
   // fails the whole `git add` and stages NOTHING. `:(exclude)` is unambiguous whatever follows.
   for (const d of dirs) out.push(`:(exclude)${d}/*`, `:(exclude)*/${d}/*`);
   for (const f of files) out.push(`:(exclude)${f}`, `:(exclude)*/${f}`);
   for (const p of enginePaths) out.push(`:(exclude)${p}`);
+  if (form === 'diff') {
+    for (const f of lockfiles) out.push(`:(exclude)${f}`, `:(exclude)*/${f}`);
+  }
 } else if (form === 'regex') {
   // Anchored at the start OR after a slash, so it matches a top-level and a nested one alike.
   const alt = [...dirs, ...files].map((d) => d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');

@@ -1,0 +1,33 @@
+{
+  "$why": [
+    "Moved out of update-invalidated-tests.sh on 2026-08-16.",
+    "",
+    "This is the prompt for the ONLY agent in the pipeline that is granted write access to",
+    "PRE-EXISTING tests. Those tests are the codeline's accumulated oracle: if this agent edits one",
+    "wrongly, the signal that a fix is broken is destroyed permanently and silently, and every gate",
+    "downstream sees green.",
+    "",
+    "It lived as a heredoc in a shell script, so the most consequential prompt in the run was the",
+    "one no prompt review could reach and no diff could show. The instruction that carries the",
+    "whole safety property — 'Case (b) matters more than case (a) ... When in doubt, choose (b)' —",
+    "could be weakened by anyone editing the script for an unrelated reason, and nothing would",
+    "flag it.",
+    "",
+    "__VERIFICATION_CRITERIA__ is the authority the agent judges against, and it has no default.",
+    "The script rendered '(not supplied)' when the story carried none, which asked the agent to",
+    "decide whether a failure was 'explained by the intended change' with no statement of what the",
+    "intended change was — while holding write access to the tests. The caller now refuses instead."
+  ],
+  "description": "Decide, per failing test, whether a committed fix legitimately invalidated it or broke something.",
+  "seams": ["repro-test-writer"],
+  "consumer": "engine",
+  "id": "update-invalidated-tests",
+  "version": 1,
+  "body": "You are updating tests that a COMMITTED bug fix has legitimately invalidated.\n\nThe fix is already committed and is CORRECT — do not change any non-test file.\nThe test suite is now RED. Your ONLY job is to decide, per failure, which case it is:\n\n (a) the test asserted the OLD, BUGGY behaviour that this fix deliberately changes\n     -> update JUST that assertion to the new expected behaviour.\n (b) the failure is NOT explained by the intended change — the fix broke something\n     -> this is a REGRESSION. Do NOT edit anything. Reply with the single line:\n        REGRESSION: <one sentence saying what broke>\n\nCase (b) matters more than case (a): silently rewriting a test so a broken fix goes\ngreen destroys the only signal that the fix is wrong. When in doubt, choose (b).\n\nOnly these PRE-EXISTING test files may be edited (a test authored during this run is\nthe new bug-reproducing test and must NEVER be rewritten here):\n__PREEXISTING_TESTS__\n\n=== INTENDED BEHAVIOUR CHANGE (Verification Criteria — the authority on what SHOULD change) ===\n__VERIFICATION_CRITERIA__\n\n=== THE COMMITTED FIX (diff) ===\n__FIX_DIFF__\n\n=== FAILING TEST OUTPUT ===\n__FAILING_OUTPUT__\n",
+  "placeholders": [
+    "__PREEXISTING_TESTS__",
+    "__VERIFICATION_CRITERIA__",
+    "__FIX_DIFF__",
+    "__FAILING_OUTPUT__"
+  ]
+}

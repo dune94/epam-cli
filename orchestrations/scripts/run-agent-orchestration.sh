@@ -7293,14 +7293,31 @@ fi
 # rewrite its own oracle to go green.
 # ──────────────────────────────────────────────
 if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/update-invalidated-tests.sh" ]; then
+    # Same resolution as Step 3.54: the project declares it, else the repository's own branch.
+    # The literal "develop" is a fact of some projects and not of others, and every diff this step
+    # takes is against this ref.
+    _uit_baseline="${JIRA_BASELINE_BRANCH:-}"
+    if [ -z "$_uit_baseline" ]; then
+        _uit_baseline=$(git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+        [ "$_uit_baseline" = "HEAD" ] && _uit_baseline=""
+    fi
     _uit_failed=0
     while IFS= read -r _uit_story; do
         [ -z "$_uit_story" ] && continue
         _uit_vcs=$(jq -r --arg id "$_uit_story" \
             '(.stories[] | select(.id == $id) | .verificationCriteria // []) | join("\n- ")' \
             "$PRD_FILE" 2>/dev/null || echo "")
+        # THE ORACLE IS NOT OPTIONAL. The agent below is the only one granted write access to
+        # PRE-EXISTING tests, and it decides what to edit by asking whether a failure is explained
+        # by these criteria. With none, it was handed "(not supplied)" and asked to judge against
+        # nothing while holding that grant — the path by which a wrong fix rewrites its own oracle.
+        if [ -z "$_uit_vcs" ]; then
+            warning "Step 3.545: $_uit_story declares no verification criteria — skipping it rather than letting a write-enabled agent judge against nothing"
+            continue
+        fi
+        # NO GUESSED BRANCH — see Step 3.54. Resolved once above, from the project or the repo.
         PROJECT_ROOT="$PROJECT_ROOT" PRD_FILE="$PRD_FILE" LOG_DIR="$LOG_DIR" \
-        JIRA_BASELINE_BRANCH="${JIRA_BASELINE_BRANCH:-develop}" \
+        JIRA_BASELINE_BRANCH="$_uit_baseline" \
         STORY_VERIFICATION_CRITERIA="$_uit_vcs" \
             bash "$SCRIPT_DIR/update-invalidated-tests.sh" "$_uit_story" 2>&1 \
             | tee -a "$LOG_DIR/update-invalidated-tests-${PHASE}.log"

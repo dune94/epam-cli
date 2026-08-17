@@ -60,6 +60,10 @@ fi
 # model rather than kill a run.
 # shellcheck source=lib/seam-ladder.sh
 . "$SCRIPT_DIR/lib/seam-ladder.sh" 2>/dev/null || true
+# The prompt lives in the template layer, so the renderer is a hard requirement, not a nicety:
+# without it there is no prompt at all and this agent must not run.
+# shellcheck source=lib/render-engine-prompt.sh
+. "$SCRIPT_DIR/lib/render-engine-prompt.sh"
 # WHICH AGENT THIS IS — declared ONCE, and exported so ai-run.sh keys this agent's ladder rung
 # state to it. Without it every agent shared one counter ("agent__<story>"): one agent escalating
 # advanced the ladder for all of them, and team-lead-review's cross-process resume read a key
@@ -112,39 +116,58 @@ fi
 _fix_diff="$(git -C "$PROJECT_ROOT" diff "${_baseline_sha:-HEAD~1}" HEAD -- . 2>/dev/null \
              | grep -viE '^\+\+\+|^---' || true)"
 
-read -r -d '' _prompt <<PROMPT || true
-You are updating tests that a COMMITTED bug fix has legitimately invalidated.
+# THE ORACLE IS NOT OPTIONAL.
+#
+# This agent is the ONLY one in the pipeline granted write access to PRE-EXISTING tests, and its
+# entire safety property is that it edits one only when the failure is explained by the story's
+# Verification Criteria. The prompt rendered "(not supplied)" when the story carried none — asking
+# it to judge whether a failure was explained by the intended change without stating what the
+# intended change was, while holding the write grant. A wrong fix could then have its own oracle
+# rewritten to go green, which is precisely what this step's design says must never happen.
+if [ -z "${STORY_VERIFICATION_CRITERIA:-}" ]; then
+    log "no verification criteria for ${STORY_ID} — refusing to edit pre-existing tests with no statement of what SHOULD have changed"
+    exit 1
+fi
 
-The fix is already committed and is CORRECT — do not change any non-test file.
-The test suite is now RED. Your ONLY job is to decide, per failure, which case it is:
-
- (a) the test asserted the OLD, BUGGY behaviour that this fix deliberately changes
-     -> update JUST that assertion to the new expected behaviour.
- (b) the failure is NOT explained by the intended change — the fix broke something
-     -> this is a REGRESSION. Do NOT edit anything. Reply with the single line:
-        REGRESSION: <one sentence saying what broke>
-
-Case (b) matters more than case (a): silently rewriting a test so a broken fix goes
-green destroys the only signal that the fix is wrong. When in doubt, choose (b).
-
-Only these PRE-EXISTING test files may be edited (a test authored during this run is
-the new bug-reproducing test and must NEVER be rewritten here):
-${_preexisting:-(none)}
-
-=== INTENDED BEHAVIOUR CHANGE (Verification Criteria — the authority on what SHOULD change) ===
-${STORY_VERIFICATION_CRITERIA:-(not supplied)}
-
-=== THE COMMITTED FIX (diff) ===
-${_fix_diff:-(unavailable)}
-
-=== FAILING TEST OUTPUT ===
-$(printf '%s' "$_out")
-PROMPT
+# RENDERED FROM THE TEMPLATE LAYER. This was a heredoc: the most consequential prompt in the run,
+# in the one place no prompt review reaches. Values through a FILE, never argv — the diff and the
+# suite output are both unbounded and argv is capped at ARG_MAX.
+_uit_vals=$(mktemp "${TMPDIR:-/tmp}/uit-vals-XXXXXX.json")
+jq -n --arg pre "${_preexisting:-(none)}" \
+      --arg vcs "$STORY_VERIFICATION_CRITERIA" \
+      --arg diff "${_fix_diff:-(unavailable)}" \
+      --arg out "$(printf '%s' "$_out")" \
+      '{"__PREEXISTING_TESTS__":$pre,"__VERIFICATION_CRITERIA__":$vcs,"__FIX_DIFF__":$diff,"__FAILING_OUTPUT__":$out}' \
+      > "$_uit_vals"
+if ! _prompt="$(render_engine_prompt update-invalidated-tests "$_uit_vals")" || [ -z "$_prompt" ]; then
+    rm -f "$_uit_vals"
+    log "ERROR: could not render the update-invalidated-tests prompt — not giving a write-enabled agent an empty prompt"
+    exit 1
+fi
+rm -f "$_uit_vals"
 
 _agent_log="${LOG_DIR:-$(dirname "$SCRIPT_DIR")/logs}/update-invalidated-tests-${STORY_ID}.log"
+# COST IS CAPTURED. This call spent real money and recorded none of it: without ORCH_JSON_RESULT
+# ai-run.sh writes no normalized result, so nothing reaches the cost log and this agent was
+# invisible in every spend report.
+#
+# AND THE FAILURE IS NOT SWALLOWED. `|| echo ""` turned a failed agent into an empty reply, which
+# reads downstream exactly like "the agent examined the suite and had nothing to say".
+_uit_result=$(mktemp "${TMPDIR:-/tmp}/uit-result-XXXXXX.json")
+_uit_rc=0
 _reply="$(printf '%s' "$_prompt" | \
     EPAM_ALLOWED_WRITE_PATHS="$(printf '%s' "$_preexisting" | tr '\n' ',')" \
-    bash "$AI_RUNNER_CMD" 2>"$_agent_log" || echo "")"
+    ORCH_JSON_RESULT="$_uit_result" \
+    bash "$AI_RUNNER_CMD" 2>"$_agent_log")" || _uit_rc=$?
+if [ -s "$_uit_result" ] && [ -f "$SCRIPT_DIR/lib/handlers/emit-cost.js" ]; then
+    "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/emit-cost.js" \
+        "$_uit_result" "$_SEAM_NAME" 2>/dev/null || true
+fi
+rm -f "$_uit_result"
+if [ "$_uit_rc" -ne 0 ]; then
+    log "ERROR: the invalidated-test agent failed (exit ${_uit_rc}) for ${STORY_ID} — treating as unreconciled rather than as 'nothing to change'"
+    exit 1
+fi
 printf '%s\n' "$_reply" >> "$_agent_log" 2>/dev/null || true
 
 # The agent judged it a real regression — believe it and BLOCK.

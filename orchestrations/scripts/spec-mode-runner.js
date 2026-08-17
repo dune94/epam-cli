@@ -2971,7 +2971,7 @@ const TOOL_ESTATE_SURVEY = {
     'to look, not what to change. Do not answer in prose.',
   parameters: {
     type: 'object',
-    required: ['codelines', 'recommendedInvestigators'],
+    required: ['codelines', 'recommendedInvestigators', 'recommendedWriters'],
     properties: {
       codelines: {
         type: 'array',
@@ -3028,6 +3028,37 @@ const TOOL_ESTATE_SURVEY = {
           properties: {
             codeline: { type: 'string' },
             focus: { type: 'string', description: 'What this investigator should concentrate on.' },
+            why: { type: 'string', description: 'What you saw that makes this codeline need one.' },
+          },
+        },
+      },
+      // THE SURVEY COULD ONLY EVER STAFF FOR LOOKING.
+      //
+      // recommendedInvestigators was the only team output, and it is iterated straight into the
+      // mint's context — so the mint saw N recommendations to investigate and none to build.
+      // Live 2026-08-17, run 20260817T171347Z: two stories to fix, two investigators minted,
+      // projectRoles [], and the run died at assignment with nobody to write a line of code.
+      //
+      // The coupling was perverse, which is why it surfaced only once the survey started working:
+      // a WEAK survey gave a weak investigator signal and the mint guessed 'implementer' for some
+      // roles; a CORRECT, richly investigator-focused survey made it label everything
+      // 'investigator'. Improving the survey made the roster worse.
+      //
+      // This still may never name a fix site — that constraint is what keeps one codeline's
+      // evidence out of another's writer manifest, and sanitizeSurvey strips those keys here
+      // exactly as it does above. "Someone who can write X" names no file and leaks nothing.
+      recommendedWriters: {
+        type: 'array',
+        description:
+          'Which codelines need an agent that WRITES the change, and what each should be able to '
+          + 'build. A recommendation about the TEAM, like the investigators above — and like them, '
+          + 'never a fix site: say what kind of work this codeline needs, never which file to edit.',
+        items: {
+          type: 'object',
+          required: ['codeline', 'focus', 'why'],
+          properties: {
+            codeline: { type: 'string' },
+            focus: { type: 'string', description: 'The kind of work this codeline needs written.' },
             why: { type: 'string', description: 'What you saw that makes this codeline need one.' },
           },
         },
@@ -3095,8 +3126,12 @@ function sanitizeSurvey(payload, codelines) {
     }
   }
 
-  const recommendedInvestigators =
-    (payload && Array.isArray(payload.recommendedInvestigators) ? payload.recommendedInvestigators : [])
+  // BOTH TEAM RECOMMENDATIONS ARE SANITISED THE SAME WAY. Rebuilt field by field rather than
+  // passed through, so a fix site volunteered on either one cannot survive: only codeline, focus
+  // and why are copied, and everything else — file, function, fix, locationHint — is dropped by
+  // construction. A new team field must never become a fourth contamination route.
+  const _teamRecs = (list) =>
+    (Array.isArray(list) ? list : [])
       .filter((r) => r && typeof r.codeline === 'string'
         && (!offered.length || offered.includes(r.codeline)))
       .map((r) => ({
@@ -3105,7 +3140,12 @@ function sanitizeSurvey(payload, codelines) {
         why: typeof r.why === 'string' ? r.why : '',
       }));
 
-  return { codelines: [...byName.values()], recommendedInvestigators, violations };
+  const recommendedInvestigators = _teamRecs(payload && payload.recommendedInvestigators);
+  const recommendedWriters = _teamRecs(payload && payload.recommendedWriters);
+
+  return {
+    codelines: [...byName.values()], recommendedInvestigators, recommendedWriters, violations,
+  };
 }
 
 /**
@@ -3187,7 +3227,7 @@ async function surveyEstate({
 }) {
   const _cls = (Array.isArray(codelines) ? codelines : []).filter(Boolean);
   const _named = _cls.map((c) => (typeof c === 'string' ? { name: c } : c)).filter((c) => c && c.name);
-  if (!_named.length) return { codelines: [], recommendedInvestigators: [], violations: [], ran: false };
+  if (!_named.length) return { codelines: [], recommendedInvestigators: [], recommendedWriters: [], violations: [], ran: false };
 
   const prompt = buildSurveyPrompt({ codelines: _named, tickets, referencedDocs, declaredDependencies });
 
@@ -3218,7 +3258,7 @@ async function surveyEstate({
     process.stderr && process.stderr.write(`[survey] ${reason}\n`);
     return {
       codelines: _named.map((c) => ({ codeline: c.name, state: 'failed', evidence: reason, surfaces: [] })),
-      recommendedInvestigators: [], violations: [], ran: false, error: String(err && err.message),
+      recommendedInvestigators: [], recommendedWriters: [], violations: [], ran: false, error: String(err && err.message),
     };
   }
 
@@ -3533,6 +3573,26 @@ async function mintProjectAgents({
             '',
             ..._sv.recommendedInvestigators.map((r) =>
               `- ${r.codeline}: focus on ${String(r.focus || '').replace(/\s+/g, ' ')}` +
+              `${r.why ? ` (because ${String(r.why).replace(/\s+/g, ' ')})` : ''}`),
+            '']
+         : []),
+       // THE OTHER HALF OF THE TEAM, WHICH THIS PROMPT NEVER MENTIONED.
+       //
+       // The block above tells the model "Propose one per codeline named here" for investigators
+       // and said nothing whatever about the roles that write the change. That is the strongest
+       // form of the bias: an explicit instruction to staff for looking, with no counterpart.
+       //
+       // Live 2026-08-17, run 20260817T171347Z: every proposed role came back kind
+       // 'investigator', projectRoles was empty, and the run died at assignment with nobody to
+       // write a line of code. The better the survey got, the worse the roster got — a weak
+       // survey gave a weak investigator signal and the mint guessed 'implementer' for some.
+       ...(_sv.recommendedWriters && _sv.recommendedWriters.length
+         ? ['AND — also a recommendation about the TEAM — the survey reports these codelines need',
+            'work WRITTEN, not merely read. An investigator cannot change code; every story is',
+            'assigned to an implementer, so propose at least one implementer that can build this:',
+            '',
+            ..._sv.recommendedWriters.map((r) =>
+              `- ${r.codeline}: must be able to write ${String(r.focus || '').replace(/\s+/g, ' ')}` +
               `${r.why ? ` (because ${String(r.why).replace(/\s+/g, ' ')})` : ''}`),
             '']
          : [])].join('\n')
@@ -8736,7 +8796,57 @@ function validateSurveyFilesRead(survey, codelines) {
   return { ...survey, codelines: checked };
 }
 
+/**
+ * CAN THIS ROSTER ACTUALLY IMPLEMENT THE WORK IT WAS MINTED FOR?
+ *
+ * Returns a human-readable gap, or '' when there is none.
+ *
+ * Live 2026-08-17, run 20260817T171347Z: the mint drew two investigators and no implementer, the
+ * roster review returned "sound — 0 finding(s), 0 blocking", and the run died at assignment with
+ * "no project implementation roles are registered". Two stories to fix, two agents to look at
+ * them, nobody to write a line of code.
+ *
+ * No per-agent review can catch this. The reviewer examines the agents it is GIVEN, and every one
+ * of them was well-formed — the defect is an absence, and absence is invisible to a check that
+ * iterates over what is present. That is the same shape as a gate reporting success because it had
+ * nothing to examine.
+ *
+ * Decidable the instant the mint returns, from the roster and the stories, with no model asked to
+ * adjudicate: verify what the mint produced rather than asking it more nicely next time.
+ *
+ * An empty backlog is NOT a gap. The guard exists to catch work with nobody to do it, not to demand
+ * an implementer from a run that has nothing to implement.
+ */
+function rosterImplementationGap(mint, stories) {
+  const m = mint || {};
+  const all = Array.isArray(stories) ? stories : [];
+
+  // Work still to do. A completed story needs no implementer, and treating it as if it did would
+  // block a run whose remaining backlog is legitimately empty.
+  const outstanding = all.filter((s) => s && s.completed !== true && s.status !== 'completed');
+  if (!outstanding.length) return '';
+
+  const minted = Array.isArray(m.minted) ? m.minted : [];
+  const roles = Array.isArray(m.projectRoles) ? m.projectRoles : [];
+  // Either record proves an implementer exists; they are written by different paths, so requiring
+  // both would fail a roster that is actually fine.
+  const implementers = minted.filter((a) => a && a.kind && a.kind !== 'investigator');
+  if (implementers.length || roles.length) return '';
+
+  const present = minted.length
+    ? minted.map((a) => `${a.name} [${a.kind}${a.codeline ? `:${a.codeline}` : ''}]`).join(', ')
+    : '(nothing was minted at all)';
+
+  return 'the roster has NO implementer, and no story can be assigned to an agent that does not '
+    + `exist. ${outstanding.length} story/stories still need implementing, and the roster holds: `
+    + `${present}. A roster of investigators can describe the work but cannot do it, and a review `
+    + 'of what is present cannot see what is absent — which is why this reports "sound" and then '
+    + 'fails at assignment.';
+}
+
 module.exports = {
+  TOOL_ESTATE_SURVEY,
+  rosterImplementationGap,
   validateSurveyFilesRead,
   costLabelFor,
   // The tool definitions ARE the contract. Exported so lib/agent-output-schema.js can

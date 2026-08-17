@@ -659,6 +659,23 @@ if (require.main !== module) return;
       `[mint-step] proposed=${_tally.proposed} minted=${_tally.minted} ` +
       `unchanged=${_tally.unchanged} rejected=${_tally.rejected} superseded=${_tally.superseded}` +
       `${_tally.unaccounted ? ` UNACCOUNTED=${_tally.unaccounted}` : ''}\n`);
+    // A ROSTER THAT CANNOT IMPLEMENT ANYTHING IS NOT A ROSTER.
+    //
+    // The reviewer examines the agents it is GIVEN and every one of them can be well-formed while
+    // the SET is unusable. Live 2026-08-17, run 20260817T171347Z: two investigators, zero
+    // implementers, "roster review (cycle 1): sound — 0 finding(s), 0 blocking", then death at
+    // assignment with "no project implementation roles are registered". Absence is invisible to a
+    // check that iterates over what is present.
+    //
+    // The real fix is upstream — the survey now recommends writers as well as investigators, and
+    // the proposal prompt states that at least one implementer is required. This is the backstop
+    // for when those fail anyway, and it reports where the cause is visible rather than three
+    // stages later at the step that merely tried to USE the roster.
+    const _implGap = spec.rosterImplementationGap(mint, stories);
+    if (_implGap) {
+      process.stderr.write(`[mint-step] FAILED: ${_implGap}\n`);
+      process.exit(1);
+    }
     for (const m of mint.minted) {
       const tag = m.kind === 'investigator' ? `investigator:${m.codeline || '(no codeline!)'}` : 'implementer';
       process.stderr.write(`[mint-step]   + [${tag}] ${m.name} (${m.surfaces.join(', ')}) — ${m.rationale}\n`);

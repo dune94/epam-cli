@@ -42,6 +42,8 @@ export default defineConfig({
       'test/unit/orchestration/agents-parse-once-and-die.test.ts',
       // Tool scoping — a query answered from whichever repo the process was standing in.
       'test/unit/orchestration/codegraph-answers-from-whatever-repo-it-is-standing-in.test.ts',
+      // Timeouts — 36 seams declared one and nothing read it.
+      'test/unit/orchestration/every-seam-declares-a-timeout-nothing-reads.test.ts',
       // Cost — the measurement the operator calls priority #1.
       'test/unit/orchestration/the-run-recorded-no-cost.test.ts',
       'test/unit/orchestration/cost-rows-cannot-be-joined-to-the-roster.test.ts',

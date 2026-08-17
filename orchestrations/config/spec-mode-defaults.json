@@ -88,5 +88,10 @@
     "readDedupeEnv": "EPAM_READ_DEDUPE",
     "bashExplorationRedirectEnv": "EPAM_BASH_EXPLORATION_REDIRECT",
     "$readDedupeNote": "RE-ENABLED 2026-08-10. Disabled 2026-08-09 after a live failure: the notice told the model 'call again with force: true', and the writer spent its whole attempt emitting <read_file force=\"true\" /> as TEXT rather than as tool calls, wrote nothing, and died. 13 green tests missed it because every fixture exercised a compliant caller. The stated precondition for re-enabling was a fixture reproducing a model that MISHANDLES the notice: test/unit/tools/read-dedupe-survives-a-noncompliant-model.test.ts, 11 tests, both behaviours mutation-verified. The DESIGN changed with it — recovery no longer requires the model to emit anything. A second request for the same unchanged file returns the body automatically, because asking again is itself evidence that compaction evicted it. `force` is still honoured, including as the string models actually send. Measured on the attempt that motivated this: 126 read_file calls, 44 distinct paths, 65.1% duplicates, one already-injected file read 34 times."
+  },
+  "timeouts": {
+    "$comment": "How long a model call may take, in SECONDS. Every seam in invocation-profiles.json declares its own timeoutSecs and seamInvocationEnv exports it as EPAM_TIMEOUT_SECS — but until 2026-08-17 no call site read it, so all 36 declarations were inert and every call was bounded by a literal in code instead. prompt-builder declared 900s, was cut off at 360s, and took a survey, a roster, an assignment and 12 generated prompts with it 30 minutes into a run. The writer, the reviewer and the repro-test writer all declare 900s and all got 360s, which is a plausible source of writer timeouts nobody could explain.",
+    "$precedence": "RUNCLAUDE_TIMEOUT_MS (an operator forcing a number while debugging) beats the seam's own timeoutSecs, which beats this default. This default applies only to calls made at no seam.",
+    "defaultSecs": 360
   }
 }

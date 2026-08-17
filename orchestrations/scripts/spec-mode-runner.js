@@ -1174,7 +1174,12 @@ function specModeDefaults() {
     return v;
   };
   const perSeam = tc.perSeam && typeof tc.perSeam === 'object' ? tc.perSeam : {};
-  return { perAgent: need('perAgent'), perCodelineSurvey: need('perCodelineSurvey'), perSeam };
+  // Passed through, not validated with need(): a call made at no seam is the only consumer, and
+  // runClaudeTimeoutMs reports a missing declaration itself with the precedence spelled out.
+  const timeouts = (cfg && cfg.timeouts && typeof cfg.timeouts === 'object') ? cfg.timeouts : {};
+  return {
+    perAgent: need('perAgent'), perCodelineSurvey: need('perCodelineSurvey'), perSeam, timeouts,
+  };
 }
 
 function surveyToolBudget(codelines, env = process.env) {
@@ -7987,9 +7992,30 @@ function extractTaggedJson(text, tag) {
 // silently ignored. When the guard-vocabulary agent timed out at 360s on 2026-08-06 and took
 // the specification pass with it, there was no lever to pull — the number had been baked in
 // at import.
-function runClaudeTimeoutMs() {
-  const v = parseInt(process.env.RUNCLAUDE_TIMEOUT_MS || '', 10);
-  return Number.isFinite(v) && v > 0 ? v : 360000;
+function runClaudeTimeoutMs(env) {
+  // 1. AN OPERATOR FORCING A NUMBER always wins. Someone debugging a hang must have a lever, and
+  //    that lever must not be silently overridden by a declaration.
+  const forced = parseInt(process.env.RUNCLAUDE_TIMEOUT_MS || '', 10);
+  if (Number.isFinite(forced) && forced > 0) return forced;
+
+  // 2. WHAT THE SEAM DECLARED. Every seam in invocation-profiles.json carries timeoutSecs and
+  //    seamInvocationEnv exports it — and until today nothing read it, so all 36 declarations were
+  //    inert and every call was bounded by a literal here instead. prompt-builder declared 900s,
+  //    was cut off at 360s, and took a survey, a roster, an assignment and 12 generated prompts
+  //    with it. Same class as the ladder and the tool grant: a declaration nothing consumes reads
+  //    as configuration and is documentation.
+  const declared = parseInt((env && env.EPAM_TIMEOUT_SECS) || '', 10);
+  if (Number.isFinite(declared) && declared > 0) return declared * 1000;
+
+  // 3. THE DEFAULT IS DECLARED, NOT BAKED IN — for calls made at no seam. A literal here is the
+  //    thing this function exists to remove; config/spec-mode-defaults.json owns the number.
+  const cfg = Number(((specModeDefaults() || {}).timeouts || {}).defaultSecs);
+  if (Number.isFinite(cfg) && cfg > 0) return cfg * 1000;
+
+  throw new Error(
+    'no timeout is available for this call: RUNCLAUDE_TIMEOUT_MS is unset, the seam declared no '
+    + 'timeoutSecs, and config/spec-mode-defaults.json declares no timeouts.defaultSecs. Declare '
+    + 'one rather than letting a call run unbounded or be cut off by a number nobody chose.');
 }
 
 function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
@@ -8077,7 +8103,7 @@ function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
     // other callers keep their strict reject-on-failure semantics.
     const finishOutput = () => `${stdout}\n${stderr}`.trim();
 
-    const timeoutMs = Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : runClaudeTimeoutMs();
+    const timeoutMs = Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : runClaudeTimeoutMs(env);
     const killTimer = setTimeout(() => {
       if (settled) return;
       settled = true;
@@ -8937,6 +8963,7 @@ function rosterImplementationGap(mint, stories, registryFile) {
 }
 
 module.exports = {
+  runClaudeTimeoutMs,
   TOOL_ESTATE_SURVEY,
   rosterImplementationGap,
   validateSurveyFilesRead,

@@ -186,7 +186,7 @@
           "required": true
         }
       ],
-      "template": "cpa-system"
+      "_orphaned": "2026-08-16: no caller names this seam, and its template (cpa-system) belongs to cpa-inference, which declares it. Left in place rather than deleted because removing a seam is a decision, not a tidy-up — but nothing reaches it, and three templates had been pointing here as a dumping ground."
     },
     "cpa-inference": {
       "_what": "Produces the cost/effort estimate for a story.",

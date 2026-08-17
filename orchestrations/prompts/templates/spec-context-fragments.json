@@ -14,8 +14,7 @@
   "description": "Context blocks appended to spec-pass prompts: published cross-codeline contracts, unreachable external services, and single-lane review scope.",
   "id": "spec-context-fragments",
   "seams": [
-    "ac-elaboration",
-    "cpa-gate"
+    "spec-agent"
   ],
   "placeholders": [
     "__SPANS_SENTENCE__",

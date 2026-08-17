@@ -755,17 +755,23 @@ while IFS= read -r sid; do
       formulaEstimate: $formulaEstimate, adjacentStories: $adjacentStories,
       manifest: $manifest, systemPrompt: $systemPrompt}')
 
+  # STDERR CAPTURED, NEVER DISCARDED. This ran under 2>/dev/null with '|| echo ""' after it, so a
+  # crash, a missing key and a timeout all became an empty result and the caller quietly fell back
+  # to the formula with a 20% markup — an estimate that looks like every other estimate.
+  _cpa_err="$(mktemp "${TMPDIR:-/tmp}/cpa-err-XXXXXX")"
   t_start=$(date +%s%3N)
   cpa_raw=$(echo "$inference_input" | \
     CLAUDE_CMD="${CLAUDE_CMD:-claude}" \
     AI_PROVIDER="${CPA_PROVIDER:-${AI_PROVIDER:-qwen}}" \
     AI_MODEL="${CPA_MODEL:-${AI_MODEL:-${EPAM_MODEL:-}}}" \
-    "$NODE_CMD" "$LIB_DIR/cpa-inference.js" 2>/dev/null || echo "")
+    "$NODE_CMD" "$LIB_DIR/cpa-inference.js" 2>"$_cpa_err" || echo "")
   t_end=$(date +%s%3N)
   infer_ms=$(( t_end - t_start ))
 
   if [ -z "$cpa_raw" ]; then
     warning "  $sid: inference returned empty — using formula with 20% markup"
+    [ -s "$_cpa_err" ] && warning "  $sid: reason: $(tail -c 300 "$_cpa_err" | tr '\n' ' ')"
+    rm -f "$_cpa_err"
     cpa_raw=$(jq -n \
       --argjson fe "$formula_est_json" \
       '{confidence: 0.30, complexityAdjustment: 1.0,

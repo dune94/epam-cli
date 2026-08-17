@@ -24,6 +24,7 @@
 const { spawnSync } = require('child_process');
 const { renderEngineTemplate } = require('./engine-prompt');
 const path          = require('path');
+const fs            = require('fs');
 
 // ── Configuration ──────────────────────────────────────────────────────────
 const CLAUDE_CMD = process.env.CLAUDE_CMD || 'claude';
@@ -231,15 +232,45 @@ async function main() {
   delete env.CLAUDECODE;
   delete env.CLAUDE_CODE_ENTRYPOINT;
 
+  // THE SEAM, asked for. This call passed none, so it ran with no ladder, no effort, no output
+  // budget and no tool grant — the cpa-inference profile sat in the registry reaching nothing.
+  //
+  // IDENTITY AFTER THE SPREAD. It was `{ EPAM_AGENT_NAME: 'cpa-inference', ...env }`, and env is
+  // process.env — so a parent stage that had set EPAM_AGENT_NAME overrode it, and this agent ran,
+  // was costed, and had its self-heal episodes filed under whatever ran before it.
+  let seam = {};
+  try { seam = require('./seam-invocation.js').seamInvocationEnv('cpa-inference'); }
+  catch (e) { process.stderr.write(`WARN: seam 'cpa-inference' did not resolve: ${(e && e.message) || e}\n`); }
+
+  // ai-run.sh writes the normalized result JSON when this is set; it was never asked to, so a call
+  // made once per story recorded no spend at all.
+  const _costFile = `${require('os').tmpdir()}/cpa-cost-${process.pid}-${Date.now()}.json`;
+
   const t0 = Date.now();
   const cliArgs = ['--provider', AI_PROVIDER];
   const result = spawnSync(
     AI_RUNNER_CMD,
     cliArgs,
     { input: fullPrompt, encoding: 'utf8', timeout: TIMEOUT_MS,
-      env: { EPAM_AGENT_NAME: 'cpa-inference', ...env } }
+      env: { ...env, ...seam, EPAM_AGENT_NAME: 'cpa-inference', ORCH_JSON_RESULT: _costFile } }
   );
   const latencyMs = Date.now() - t0;
+
+  // Recorded whether the call returned or failed: a failed call spent too, and dropping its record
+  // is how the expensive failures become the invisible ones.
+  try {
+    require('./cost-emitter.js').emitCostSnapshot({
+      resultFile: _costFile,
+      activityFile: process.env.ACTIVITY_FILE
+        || path.join(process.env.LOG_DIR || path.join(__dirname, '..', '..', 'logs'), 'agent-activity.jsonl'),
+      agent: 'cpa-inference',
+      storyId: (input && input.storyId) || '',
+      phase: process.env.PHASE || '',
+      model: process.env.AI_MODEL || '',
+      provider: AI_PROVIDER,
+    });
+  } catch { /* cost emission must never break the agent call */ }
+  try { fs.unlinkSync(_costFile); } catch { /* ignore */ }
 
   // ── Handle CLI failure ────────────────────────────────────────────────────
   if (result.error || result.status !== 0) {

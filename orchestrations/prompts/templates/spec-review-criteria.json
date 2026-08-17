@@ -12,7 +12,7 @@
   "description": "The criteria a spec-review coordinator judges a story's collaborative spec work against.",
   "id": "spec-review-criteria",
   "seams": [
-    "cpa-gate"
+    "spec-coordinator"
   ],
   "placeholders": [],
   "version": 1,

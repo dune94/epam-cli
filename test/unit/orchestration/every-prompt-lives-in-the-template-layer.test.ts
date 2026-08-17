@@ -200,6 +200,13 @@ function shellQuotedStrings(): Hit[] {
  * Keyed by "<relative path>:<line>".
  */
 const ALLOW: Record<string, string> = {
+  'orchestrations/scripts/lib/codeline-health.sh#a55f261c1bee':
+    'A command substitution that asks the ecosystem handler which sibling repositories the estate '
+    + 'provides, then reshapes its JSON into name|path lines. Shell plumbing across several lines, '
+    + 'not text — no model receives it.',
+  'orchestrations/scripts/lib/codeline-health.sh#37b15b4170c5':
+    'A command substitution reading the missing-dependency list out of the same handler and '
+    + 'stripping the JSON punctuation so a shell for-loop can iterate it. Plumbing, not prose.',
   'src/cli/commands/context.ts#f17a6f828694':
     'A FILE THIS COMMAND WRITES, not text sent to a model. `epam new` scaffolds a project and this is the content of one of the files it creates; the markdown heading is the file\u2019s own, and the reader is a developer opening it in the repository.',
   'src/cli/commands/new.ts#32cf3084efaf':

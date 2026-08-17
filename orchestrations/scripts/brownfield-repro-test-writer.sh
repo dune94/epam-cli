@@ -277,10 +277,13 @@ if [ "$_story_kind" = "novel" ]; then
     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/repro-role-vals-XXXXXX.json")
     jq -n \
           '{}' > "$_cp_vals"
+    # EVERY PIECE OF PROSE FROM THE SAME FILE. The role sentence was rendered from the template
+    # while the sentence that actually decides whether the test is acceptable sat here as a shell
+    # literal — unreviewable, and impossible to diff against the role it pairs with.
     _prompt_role="$(render_engine_prompt repro-role "$_cp_vals" proves_committed_change)"
+    _diff_heading="$(render_engine_prompt repro-role "$_cp_vals" heading_proves_committed_change)"
+    _req_proof="$(render_engine_prompt repro-role "$_cp_vals" proof_proves_committed_change)"
     rm -f "$_cp_vals"
-    _diff_heading="The change that was just made (diff vs baseline)"
-    _req_proof="3. The test MUST prove the verification criteria above against the committed change. Assert the observable outcome the change now produces — not the mechanism, and not that some prior behaviour was broken. This is a NEW capability: there is no pre-fix failure to reproduce, and a test written as though there were will be rejected. It MUST PASS with the change in place."
     _log_noun="test"
     _commit_noun="test"
 else
@@ -288,9 +291,9 @@ else
     jq -n \
           '{}' > "$_cp_vals"
     _prompt_role="$(render_engine_prompt repro-role "$_cp_vals" reproduces_fixed_bug)"
+    _diff_heading="$(render_engine_prompt repro-role "$_cp_vals" heading_reproduces_fixed_bug)"
+    _req_proof="$(render_engine_prompt repro-role "$_cp_vals" proof_reproduces_fixed_bug)"
     rm -f "$_cp_vals"
-    _diff_heading="The fix that was just made (diff vs baseline)"
-    _req_proof="3. The test MUST genuinely REPRODUCE the bug: it must FAIL against the pre-fix code and PASS with the fix. Assert the corrected observable value — a test that passes regardless of the fix is worthless and will be rejected."
     _log_noun="reproducing test"
     _commit_noun="bug-reproducing test"
 fi
@@ -685,8 +688,16 @@ if [ -f "$PROJECT_ROOT/$_target_rel" ] && [ "${_test_validated:-0}" = "1" ]; the
         . "$_so_lib"
         story_outputs_record "$PROJECT_ROOT" "${LOG_DIR:-$(dirname "$SCRIPT_DIR")/logs}" || true
     fi
+    _tw_exit=0
 else
     log "no test file produced at $_target_rel — the repro-gate will BLOCK (as designed)"
     _emit_tw "error" "repro-test-writer produced NO test for ${STORY_ID} — repro-gate will BLOCK"
+    _tw_exit=1
 fi
-exit 0
+
+# EXIT STATUS IS THE CONTRACT. This was an unconditional `exit 0`, so producing no test at all
+# reported success — and the caller piped into `tee`, which discards the status anyway. The
+# failure was invisible twice over, and Step 3.55 then blocked the story for shipping no
+# reproducing test, sending the investigation at the story instead of at the writer that never
+# produced one.
+exit "$_tw_exit"

@@ -7243,17 +7243,41 @@ assert_no_story_ids_gained "post-parallel" "Step 18: Post-parallel assessment"
 # validates fail-on-baseline/pass-with-fix; this only ensures a test EXISTS to check.
 # ──────────────────────────────────────────────
 if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/brownfield-repro-test-writer.sh" ]; then
+    # NO GUESSED BRANCH. This fell back to the literal "develop" — a branch name that is a fact of
+    # some projects and not of others. Every diff the writer takes is against this ref, so on a
+    # project whose trunk is named anything else it resolved nothing and the writer compared
+    # against an empty baseline. The project declares it; otherwise take the repository's own
+    # current branch, which is at least true.
+    _tw_baseline="${JIRA_BASELINE_BRANCH:-}"
+    if [ -z "$_tw_baseline" ]; then
+        _tw_baseline=$(git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+        [ "$_tw_baseline" = "HEAD" ] && _tw_baseline=""
+        [ -n "$_tw_baseline" ] && warning "Step 3.54: no JIRA_BASELINE_BRANCH declared — diffing against the checked-out branch '$_tw_baseline'"
+    fi
+    if [ -z "$_tw_baseline" ]; then
+        error "Step 3.54: no baseline branch declared and none resolvable — skipping the reproducing-test writer rather than diffing against nothing. Step 3.55 will block these stories."
+    else
     while IFS= read -r _tw_story; do
         [ -z "$_tw_story" ] && continue
+        # THE WRITER'S EXIT STATUS SURVIVES THE PIPE. `cmd | tee` returns tee's status, which is
+        # always 0, so a writer that produced no test at all reported success — and Step 3.55 then
+        # blocked the story, pointing the investigation at the story rather than at the writer.
         PROJECT_ROOT="$PROJECT_ROOT" PRD_FILE="$PRD_FILE" LOG_DIR="$LOG_DIR" \
-        JIRA_BASELINE_BRANCH="${JIRA_BASELINE_BRANCH:-develop}" \
+        JIRA_BASELINE_BRANCH="$_tw_baseline" \
             bash "$SCRIPT_DIR/brownfield-repro-test-writer.sh" "$_tw_story" 2>&1 | tee -a "$LOG_DIR/repro-test-writer-${PHASE}.log"
+        _tw_rc=${PIPESTATUS[0]}
+        # An explicit `if`, not `[ ... ] && warning`: that form returns non-zero when the test is
+        # false, and as the last statement in a loop body it becomes the body's exit status.
+        if [ "${_tw_rc:-0}" -ne 0 ]; then
+            warning "Step 3.54: the reproducing-test writer produced no test for $_tw_story (exit ${_tw_rc}) — Step 3.55 will block it"
+        fi
     # EVERY story in the phase, novel included. This selector was narrowed to
     # exclude novel by fe5d6cb, which was fixing the GATE below — the writer was
     # collateral. It does not need a bug: it reads the committed fix diff and the
     # story's verificationCriteria, and validates that its test PASSES against the
     # fix. See lib/story-guards.sh for the full history.
     done < <(phase_stories_brownfield_scope "$PRD_FILE" "$PHASE")
+    fi
 fi
 
 # ──────────────────────────────────────────────

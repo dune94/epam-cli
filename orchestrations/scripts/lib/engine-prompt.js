@@ -40,6 +40,11 @@ const path = require('path');
 const STACK_FACT_KEYS = [
   '__STACK__', '__MANIFEST_FILE__', '__TEST_COMMAND__',
   '__TEST_FILE_CONVENTIONS__', '__PROTECTED_FILES__', '__IMPL_ROLE__', '__TEST_ROLE__',
+  // The full skill picture, for a prompt that needs more than one fact: every codeline's stack,
+  // manifest, test command and declared dependencies, plus the KB the pipeline wrote for it.
+  // Auto-injected for the same reason the others are — wiring it at one call site is how the
+  // next call site gets forgotten.
+  '__PROJECT_SKILLS__',
 ];
 
 let _stackFacts;
@@ -54,6 +59,33 @@ function stackFacts() {
       path.join(__dirname, 'handlers', 'stack-facts.js'), repo, roles,
     ], { encoding: 'utf8', timeout: 15000 });
     _stackFacts = JSON.parse(out);
+
+    // THE SKILL PICTURE, rendered for a reader. Same derivation as agent-skills.js — the ecosystem
+    // registry plus the KB written for these codelines — flattened to text a prompt can carry.
+    try {
+      const skills = JSON.parse(execFileSync(process.execPath, [
+        path.join(__dirname, 'handlers', 'agent-skills.js'),
+        process.env.EPAM_CODELINE_PATH || '',
+        path.join(__dirname, '..', '..', 'agents'),
+        process.env.EPAM_CODELINE_PATHS || process.env.PROJECT_ROOT || '',
+      ], { encoding: 'utf8', timeout: 20000 }));
+
+      const lines = [];
+      for (const s of skills.stacks || []) {
+        lines.push(`- ${s.codeline} (${s.path})`);
+        lines.push(`    stack: ${s.stack} · manifest: ${s.manifest} · tests run with: ${s.testCommand || '(declares none)'}`);
+        if ((s.declaredDeps || []).length) lines.push(`    declares: ${s.declaredDeps.join(', ')}`);
+      }
+      for (const l of skills.learned || []) {
+        lines.push(`- from the ${l.source} — what this pipeline has already learned here:`);
+        lines.push(l.text.split('\n').map((x) => `    ${x}`).join('\n'));
+      }
+      // EMPTY IS AN ANSWER. A first run has learned nothing and a project may declare no stack;
+      // saying so is correct, and inventing knowledge an agent has not earned is not.
+      _stackFacts.__PROJECT_SKILLS__ = lines.length
+        ? lines.join('\n')
+        : '(this project declares no resolvable codeline stack, and the pipeline has learned nothing here yet)';
+    } catch { /* the placeholder simply stays unsupplied, and the render fails loudly by name */ }
   } catch {
     _stackFacts = {};
   }

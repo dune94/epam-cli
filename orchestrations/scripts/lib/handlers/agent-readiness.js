@@ -32,6 +32,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { execFileSync } = require('child_process');
 
 const projectConfigDir = process.argv[2];
 if (!projectConfigDir) {
@@ -70,6 +71,17 @@ const producers = new Set(
 // with a pipeline producer is satisfied, and treating it as a gap would report the engine's own
 // deliberate design as a defect.
 for (const kind of registry.engineProduces || []) producers.add(kind);
+
+// Resolved ONCE for the project: the skill picture is per-codeline, not per-agent, so asking for
+// every agent would run the same resolution sixty times.
+let skillsAvailable = false;
+try {
+  const s = JSON.parse(execFileSync(process.execPath, [
+    path.join(__dirname, 'agent-skills.js'), '',
+    agentsDir, process.env.EPAM_CODELINE_PATHS || process.env.PROJECT_ROOT || '',
+  ], { encoding: 'utf8', timeout: 20000 }));
+  skillsAvailable = !s.empty;
+} catch { skillsAvailable = false; }
 
 const report = [];
 const gaps = [];
@@ -131,15 +143,26 @@ for (const agent of agents) {
   }
 
   // ── tools ───────────────────────────────────────────────────────────────
-  row.tools = seam.allowedTools || null;
+  // The KIND is declared on the seam; the LIST resolves per project, so a literal list here would
+  // freeze one project's answer. Absent BOTH is the gap.
+  row.tools = seam.allowedTools || seam.toolGrant || null;
   if (!row.tools) {
-    gaps.push({ agent, requirement: 'tools', detail: `seam '${seamName}' grants no tools — if this agent must read the repository to do its job, it cannot` });
+    gaps.push({ agent, requirement: 'tools', detail: `seam '${seamName}' declares neither allowedTools nor a toolGrant kind — if this agent must read the repository to do its job, it cannot` });
   }
 
   // ── skills ──────────────────────────────────────────────────────────────
-  row.skills = seam.skills || null;
-  if (!row.skills) {
-    gaps.push({ agent, requirement: 'skills', detail: `seam '${seamName}' declares no skills — nothing states what project knowledge this agent is expected to hold` });
+  //
+  // NOT a per-seam declaration. A skill is not a property of the archetype: an -investigator on a
+  // Rust service and one on a Node front end are the same seam and need different knowledge. It is
+  // resolved at invocation from the ecosystem registry and the KB written for that codeline, and
+  // handed to the phase-assessment agent as __PROJECT_SKILLS__ so an AGENT decides what each
+  // profile should therefore know.
+  //
+  // So the gap is not "this seam declares no skills" — it is "nothing could be resolved for this
+  // project", which would mean every agent works blind.
+  row.skills = skillsAvailable ? 'resolved at invocation' : null;
+  if (!skillsAvailable) {
+    gaps.push({ agent, requirement: 'skills', detail: 'no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project' });
   }
 
   report.push(row);

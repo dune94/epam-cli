@@ -214,6 +214,35 @@ function seamInvocationEnv(agent, agentsDir, opts) {
       throw new Error(`[seam-invocation] '${agent}' -> seam '${seam}': ${e.message}`);
     }
   }
+  // ── SKILLS: what this agent knows about THIS project, resolved at invocation ──────────────
+  //
+  // Not declared per seam, because a skill is not a property of the archetype: an -investigator on
+  // a Rust service and one on a Node front end are the same seam and need different knowledge. It
+  // is derived from what the project already has — the ecosystem registry (stack, manifest, test
+  // command, declared dependencies) and the KB the pipeline itself wrote for THAT codeline, plus
+  // the shared KB.
+  //
+  // Passed as a PATH, not as text. Skills grow with the KB, and an unbounded string in the
+  // environment hits ARG_MAX exactly the way prompt values did — the failure being a command that
+  // exits 126 with no output, three steps from the cause.
+  //
+  // Best-effort by design: a project on its first run has no KB and a codeline may not resolve.
+  // An agent with no skills file behaves as it did before this existed; one that refuses to start
+  // because the KB is empty would refuse every first run.
+  try {
+    const src = (opts && opts.env) || process.env;
+    const cl = String(src.EPAM_CODELINE_PATH || src.PROJECT_ROOT || '');
+    const all = String(src.EPAM_CODELINE_PATHS || '');
+    const outDir = src.LOG_DIR || require('os').tmpdir();
+    const skillsFile = path.join(outDir, `agent-skills-${String(agent).replace(/[^\w.-]/g, '_')}.json`);
+    const out = require('child_process').execFileSync(process.execPath, [
+      path.join(__dirname, 'handlers', 'agent-skills.js'), cl,
+      path.join(__dirname, '..', '..', 'agents'), all,
+    ], { encoding: 'utf8', timeout: 20000 });
+    require('fs').writeFileSync(skillsFile, out);
+    env.EPAM_AGENT_SKILLS_FILE = skillsFile;
+  } catch { /* no skills resolved — the agent runs as it did before this existed */ }
+
   if (profile.maxIterations !== undefined) env.EPAM_MAX_ITERATIONS = String(profile.maxIterations);
   if (profile.maxOutputTokens !== undefined) env.EPAM_MAX_OUTPUT_TOKENS = String(profile.maxOutputTokens);
   if (profile.timeoutSecs !== undefined) env.EPAM_TIMEOUT_SECS = String(profile.timeoutSecs);

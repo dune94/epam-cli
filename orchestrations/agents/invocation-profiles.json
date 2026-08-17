@@ -70,7 +70,6 @@
       "maxOutputTokens": 32768,
       "maxIterations": 25,
       "reasoningEffort": "high",
-      "allowedTools": "bash,read_file,list_files,search",
       "timeoutSecs": 900,
       "ladder": "top",
       "temperature": "0.1",
@@ -90,7 +89,8 @@
         {
           "kind": "test-criteria"
         }
-      ]
+      ],
+      "toolGrant": "execute"
     },
     "code-review-cycle": {
       "_what": "Per-iteration code review pass.",
@@ -98,7 +98,6 @@
       "reasoningEffort": "high",
       "timeoutSecs": 600,
       "ladder": "top",
-      "allowedTools": "bash,read_file,list_files,search",
       "produces": "review-feedback",
       "consumes": [
         {
@@ -109,7 +108,8 @@
           "kind": "fix-plan"
         }
       ],
-      "template": "code-review-cycle"
+      "template": "code-review-cycle",
+      "toolGrant": "execute"
     },
     "agent-failure-analyst": {
       "_what": "Diagnoses a no-output/failed agent attempt, prescribes a corrective directive.",
@@ -118,7 +118,6 @@
       "reasoningEffort": "high",
       "timeoutSecs": 360,
       "ladder": "top",
-      "allowedTools": "bash,read_file,list_files,search",
       "produces": "diagnosis",
       "template": "failure-analyst",
       "consumes": [
@@ -129,7 +128,8 @@
         {
           "kind": "attempt-evidence"
         }
-      ]
+      ],
+      "toolGrant": "execute"
     },
     "repro-test-writer": {
       "_what": "Writes the bug-reproducing test for a brownfield fix.",
@@ -152,7 +152,8 @@
           "kind": "existing-code"
         }
       ],
-      "template": "repro-test-writer"
+      "template": "repro-test-writer",
+      "toolGrant": "write"
     },
     "tc-writer": {
       "_what": "Writes post-implementation test criteria into the PRD.",
@@ -171,7 +172,8 @@
           "kind": "ticket"
         }
       ],
-      "template": "tc-writer"
+      "template": "tc-writer",
+      "toolGrant": "read-only"
     },
     "cpa-gate": {
       "_what": "Judges a CPA estimate rewrite: pass/fail.",
@@ -186,7 +188,8 @@
           "required": true
         }
       ],
-      "_orphaned": "2026-08-16: no caller names this seam, and its template (cpa-system) belongs to cpa-inference, which declares it. Left in place rather than deleted because removing a seam is a decision, not a tidy-up — but nothing reaches it, and three templates had been pointing here as a dumping ground."
+      "_orphaned": "2026-08-16: no caller names this seam, and its template (cpa-system) belongs to cpa-inference, which declares it. Left in place rather than deleted because removing a seam is a decision, not a tidy-up — but nothing reaches it, and three templates had been pointing here as a dumping ground.",
+      "toolGrant": "read-only"
     },
     "cpa-inference": {
       "_what": "Produces the cost/effort estimate for a story.",
@@ -204,7 +207,8 @@
           "kind": "fix-plan"
         }
       ],
-      "template": "cpa-inference"
+      "template": "cpa-inference",
+      "toolGrant": "read-only"
     },
     "prd-change-reviewer": {
       "_what": "Reviews a proposed PRD mutation before it is applied.",
@@ -220,7 +224,8 @@
           "required": true
         }
       ],
-      "template": "prd-change-reviewer"
+      "template": "prd-change-reviewer",
+      "toolGrant": "read-only"
     },
     "prd-change-summarizer": {
       "_what": "Summarizes a rewrite for the change log.",
@@ -236,7 +241,8 @@
           "required": true
         }
       ],
-      "template": "prd-change-summarizer-text"
+      "template": "prd-change-summarizer-text",
+      "toolGrant": "read-only"
     },
     "impl-failure-analyst": {
       "_what": "Diagnoses why an implementation attempt failed.",
@@ -245,7 +251,6 @@
       "temperature": "0.7",
       "timeoutSecs": 360,
       "ladder": "top",
-      "allowedTools": "bash,read_file,list_files,search",
       "produces": "diagnosis",
       "template": "failure-analyst",
       "consumes": [
@@ -262,7 +267,8 @@
         {
           "kind": "dependency-contracts"
         }
-      ]
+      ],
+      "toolGrant": "execute"
     },
     "ac-classification": {
       "_what": "Classifies acceptance criteria.",
@@ -277,7 +283,8 @@
           "required": true
         }
       ],
-      "template": "ac-classification"
+      "template": "ac-classification",
+      "toolGrant": "read-only"
     },
     "ac-elaboration": {
       "_what": "Elaborates an acceptance criterion into verification criteria.",
@@ -292,7 +299,8 @@
           "required": true
         }
       ],
-      "template": "ac-elaboration"
+      "template": "ac-elaboration",
+      "toolGrant": "read-only"
     },
     "codeline-discovery": {
       "_what": "Picks which local codeline a Jira ticket belongs to.",
@@ -307,7 +315,8 @@
           "required": true
         }
       ],
-      "template": "codeline-discovery"
+      "template": "codeline-discovery",
+      "toolGrant": "read-only"
     },
     "roster-review": {
       "_what": "Falsifies the claims in a generated agent roster before any implementer inherits them.",
@@ -324,7 +333,8 @@
           "required": true
         }
       ],
-      "template": "roster-review"
+      "template": "roster-review",
+      "toolGrant": "read-only"
     },
     "code-graph-detective": {
       "_what": "Investigates one codeline and reports where the work actually lands.",
@@ -348,7 +358,8 @@
           "kind": "existing-code"
         }
       ],
-      "publishesVia": "agent-io"
+      "publishesVia": "agent-io",
+      "toolGrant": "execute"
     },
     "guard-vocabulary": {
       "_what": "Derives the vocabulary the verification-criteria guard enforces. A guard armed with the wrong terms reports clean.",
@@ -365,7 +376,8 @@
           "required": true
         }
       ],
-      "template": "guard-vocabulary"
+      "template": "guard-vocabulary",
+      "toolGrant": "read-only"
     },
     "estate-survey": {
       "_what": "Surveys every codeline BEFORE the roster is minted: which ones the work actually reaches, and which need their own investigator. Breadth, never fix sites.",
@@ -382,7 +394,8 @@
           "required": true
         }
       ],
-      "template": "estate-survey"
+      "template": "estate-survey",
+      "toolGrant": "read-only"
     },
     "story-writer": {
       "_what": "Implements a story: writes the code that satisfies its criteria. The archetype every minted -engineer is an instance of.",
@@ -392,7 +405,6 @@
       "maxOutputTokens": 32768,
       "maxIterations": 120,
       "timeoutSecs": 900,
-      "allowedTools": "bash,read_file,list_files,search",
       "_note": "The writer is invoked today through claude.sh own rung ladder, not through this seam, so these settings are not yet the live invocation path. The record exists because an instance must inherit from the archetype it IS: -engineer resolved to impl-failure-analyst purely because that ladder matched the tier wanted, which makes an implementer an instance of a diagnostician.",
       "produces": "implementation",
       "consumes": [
@@ -431,7 +443,8 @@
           "kind": "existing-code"
         }
       ],
-      "template": "story-writer"
+      "template": "story-writer",
+      "toolGrant": "execute"
     },
     "vc-coverage": {
       "_what": "Judges whether the written tests cover each verification criterion.",
@@ -449,7 +462,8 @@
           "kind": "ticket"
         }
       ],
-      "template": "vc-coverage"
+      "template": "vc-coverage",
+      "toolGrant": "read-only"
     },
     "qa-gate:sast": {
       "_what": "Static application security scan over the change.",
@@ -464,7 +478,8 @@
           "kind": "existing-code"
         }
       ],
-      "template": "qa-sast-sentinel"
+      "template": "qa-sast-sentinel",
+      "toolGrant": "execute"
     },
     "qa-gate:spec-validator": {
       "_what": "Checks the change satisfies the story’s acceptance criteria.",
@@ -482,7 +497,8 @@
           "kind": "existing-code"
         }
       ],
-      "template": "qa-spec-validator"
+      "template": "qa-spec-validator",
+      "toolGrant": "execute"
     },
     "qa-gate:review-ranger": {
       "_what": "Reviews the change for defects the team-lead review may not reach.",
@@ -497,7 +513,8 @@
           "kind": "existing-code"
         }
       ],
-      "template": "qa-review-ranger"
+      "template": "qa-review-ranger",
+      "toolGrant": "execute"
     },
     "qa-gate:mutant-hunter": {
       "_what": "Assesses whether the tests would fail if the change were broken.",
@@ -515,7 +532,8 @@
           "kind": "existing-code"
         }
       ],
-      "template": "qa-mutant-hunter"
+      "template": "qa-mutant-hunter",
+      "toolGrant": "execute"
     },
     "qa-gate:fuzz-weaver": {
       "_what": "Probes the change with adversarial inputs.",
@@ -530,7 +548,8 @@
           "kind": "existing-code"
         }
       ],
-      "template": "qa-fuzz-weaver"
+      "template": "qa-fuzz-weaver",
+      "toolGrant": "execute"
     },
     "qa-gate:perf-sentinel": {
       "_what": "Assesses the change for runtime and startup cost.",
@@ -545,7 +564,8 @@
           "kind": "existing-code"
         }
       ],
-      "template": "qa-perf-sentinel"
+      "template": "qa-perf-sentinel",
+      "toolGrant": "execute"
     },
     "prompt-builder": {
       "_what": "Provisions this project's prompt library: reads the generic templates and decorates each one for the project and the roster just minted. Runs at mint time, as part of the same stage that creates the agents the prompts are for — the only stage that knows both what the project is and who will work on it.",
@@ -555,7 +575,6 @@
       "maxOutputTokens": 32768,
       "maxIterations": 25,
       "timeoutSecs": 900,
-      "allowedTools": "read_file,list_files,search",
       "_toolNote": "READ ONLY, deliberately. The job is to read a template and decorate it; the template zone is the one immutable thing in this design, and an agent granted bash could rewrite the very files it is reading from. The engine performs the write, after the contract check — so a prompt that fails its contract is never installed.",
       "produces": "project-prompts",
       "consumes": [
@@ -570,7 +589,8 @@
           "authority": "the generic prompt to decorate — its placeholders are a contract, not a suggestion"
         }
       ],
-      "template": "project-prompt-generation"
+      "template": "project-prompt-generation",
+      "toolGrant": "read-only"
     },
     "codeline-bridge-agent": {
       "_what": "Extracts the exported surface of a completed codeline so a later lane's detective can read it. Producers run before consumers precisely so this exists when it is needed.",
@@ -580,7 +600,6 @@
       "maxOutputTokens": 32768,
       "maxIterations": 25,
       "timeoutSecs": 900,
-      "allowedTools": "read_file,list_files,search",
       "_toolNote": "READ ONLY. It reports what a codeline exports; it has no reason to change one, and a bridge that can write could rewrite the lane it is describing.",
       "produces": "dependency-contracts",
       "consumes": [
@@ -589,7 +608,8 @@
           "required": true
         }
       ],
-      "template": "codeline-bridge"
+      "template": "codeline-bridge",
+      "toolGrant": "read-only"
     },
     "qa-gate:e2e": {
       "_what": "Browser end-to-end routing check for one route.",
@@ -606,7 +626,8 @@
           "required": true
         }
       ],
-      "template": "e2e-route-check"
+      "template": "e2e-route-check",
+      "toolGrant": "execute"
     },
     "agent-mint": {
       "_what": "Proposes the roster of agents this project needs, from its tickets and its codelines.",
@@ -621,7 +642,8 @@
           "required": true
         }
       ],
-      "template": "agent-proposal"
+      "template": "agent-proposal",
+      "toolGrant": "read-only"
     },
     "role-assigner": {
       "_what": "Assigns every story one of the minted roles.",
@@ -636,7 +658,8 @@
           "required": true
         }
       ],
-      "template": "assign-agent-roles"
+      "template": "assign-agent-roles",
+      "toolGrant": "read-only"
     },
     "spec-coordinator": {
       "_what": "Assigns the spec work for a phase, then reviews the specs and the model choices it produced.",
@@ -651,7 +674,8 @@
           "required": true
         }
       ],
-      "template": "spec-coordinator"
+      "template": "spec-coordinator",
+      "toolGrant": "read-only"
     },
     "spec-agent": {
       "_what": "Writes one story's specification — the openspec or speckit author.",
@@ -666,7 +690,8 @@
           "required": true
         }
       ],
-      "template": "spec-agent-openspec"
+      "template": "spec-agent-openspec",
+      "toolGrant": "read-only"
     },
     "ticket-links": {
       "_what": "Reads the documents linked on a ticket and extracts what they say verbatim.",
@@ -681,11 +706,11 @@
           "required": true
         }
       ],
-      "template": "spec-story-block"
+      "template": "spec-story-block",
+      "toolGrant": "read-network"
     },
     "phase-assessment": {
       "_what": "Augments every agent profile with this project's skills before a phase runs. Writes profiles.json.",
-      "allowedTools": "bash,read_file,list_files,search,write_file",
       "maxOutputTokens": 32768,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
@@ -697,11 +722,11 @@
           "required": false
         }
       ],
-      "template": "skill-assessment-prephase"
+      "template": "skill-assessment-prephase",
+      "toolGrant": "write"
     },
     "prd-model-coordinator": {
       "_what": "Assigns every pending story its model, provider and reasoning effort, and writes them into the PRD.",
-      "allowedTools": "bash,read_file,list_files,search,write_file",
       "maxOutputTokens": 16384,
       "reasoningEffort": "medium",
       "timeoutSecs": 600,
@@ -713,7 +738,8 @@
           "required": true
         }
       ],
-      "template": "prd-model-coordinator"
+      "template": "prd-model-coordinator",
+      "toolGrant": "write"
     },
     "prompt-review": {
       "_what": "Falsifies what a generated project prompt claims about this project, before any agent inherits it.",
@@ -994,5 +1020,19 @@
   "_ladderPositions": "A seam declares a POSITION in the project’s ladderTierOrder (base|mid|top), never a tier NAME. The project owns its tier vocabulary; the engine owns none. Converted 2026-08-15 after twenty seams asking for a literal HIGHEST ran unladdered on a project that declared only high and medium.",
   "_defaultSeam": "REMOVED 2026-08-16. A project may declare EPAM_DEFAULT_SEAM in its config if it wants unmatched agents absorbed; the engine declares none, so an unmatched agent fails the mint loudly and is fixed with one line rather than discovered mid-run.",
   "_seamPatternForm": "Each rule matches a role word as a whole name OR as a suffix: (^|-)word$. They were all -word$, so a minted agent named for its role alone -- \"generator\", \"reviewer\", \"analyst\" -- matched nothing. While the engine carried a defaultSeam that was invisible: the agent silently became a planning agent. Minting models produce bare role names routinely, so the suffix-only form made the pattern set depend on a naming habit nothing enforces.",
-  "_addedSeams": "codeline-bridge-agent and qa-gate:e2e added 2026-08-16. Both were invoked BY NAME by run-agent-orchestration.sh and had no profile at all, so each ran with no ladder, no effort and no tool grant -- the same gap lint-fixer had. Found by the prompt-chain test, which asks that every seam a template names actually exists."
+  "_addedSeams": "codeline-bridge-agent and qa-gate:e2e added 2026-08-16. Both were invoked BY NAME by run-agent-orchestration.sh and had no profile at all, so each ran with no ladder, no effort and no tool grant -- the same gap lint-fixer had. Found by the prompt-chain test, which asks that every seam a template names actually exists.",
+  "$toolGrantWhy": [
+    "Every seam declares WHICH KIND of tool access its work needs. The list resolves per project at",
+    "invocation (lib/agent-tools.js), because part of it belongs to the project: mock3 resolves",
+    "read-only to read_file,list_files,search,codegraph_query, the last from the plugin its codelines",
+    "provision. A project without that plugin must never be handed a tool that does not exist.",
+    "",
+    "Before this, nine seams carried a literal 'bash,read_file,list_files,search' — one project's",
+    "answer frozen into the engine — while twenty-seven declared nothing at all and their CALL SITES",
+    "resolved a grant dynamically anyway. The registry both hardcoded and under-declared the same fact.",
+    "",
+    "Every kind here was READ OFF the grant that seam already receives, by",
+    "lib/handlers/seam-tool-grant.py, which prints the evidence per seam. Re-run it to re-derive.",
+    "Nothing was chosen: a seam whose grant could not be found is reported `unknown` and left unset."
+  ]
 }

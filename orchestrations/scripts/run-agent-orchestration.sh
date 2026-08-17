@@ -5700,7 +5700,15 @@ else
         # NO VENDOR LITERALS. The provider and model fell back to minimax / MiniMax-M3 written
         # here, which is the shape the ladder work removed everywhere else under the rule that a
         # seam with no resolvable model must decline rather than guess.
-        _mc_seam="$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/seam-env-args.js" prd-model-coordinator "$AUTOMATION_DIR/agents" 2>/dev/null || echo "")"
+        # NOT SWALLOWED. I wrote this as 2>/dev/null || echo "" while fixing the defects above,
+        # which is the same silence: a seam that fails to resolve would leave the call running on
+        # ambient settings and looking as though it had asked. The handler says WHY on stderr.
+        _mc_seam_err="$(mktemp "${TMPDIR:-/tmp}/mc-seam-err-XXXXXX")"
+        _mc_seam="$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/seam-env-args.js" prd-model-coordinator "$AUTOMATION_DIR/agents" 2>"$_mc_seam_err")" || {
+            warning "  [prd-model-coordinator] seam did not resolve — running on ambient settings: $(tail -c 200 "$_mc_seam_err" | tr '\n' ' ')"
+            _mc_seam=""
+        }
+        rm -f "$_mc_seam_err"
         _mc_cost="${TMPDIR:-/tmp}/prd-model-coordinator-cost-$.json"
         _mc_result=$(echo "$_mc_prompt" | \
             env $_mc_seam \

@@ -28,6 +28,10 @@
 
 const fs = require('fs');
 const path = require('path');
+
+// The one template this builder reads a PROJECT copy of, in order to generate the rest. Named once
+// so the provisioning guard above and the read below cannot disagree about it.
+const PROJECT_PROMPT_GENERATOR_ID = 'project-prompt-generation';
 const crypto = require('crypto');
 
 const { checkGeneratedPrompt, buildGeneratedDoc } = require('./project-prompt-contract.js');
@@ -108,6 +112,27 @@ async function buildProjectPrompts({
   }
 
   const _layerOf = (id) => readJson(path.join(templatesDir, `${id}.json`)).layer || 'engine';
+
+  // A TEMPLATE THIS BUILDER ITSELF READS CANNOT BE FILTERED OUT OF ITS OWN INSTALL.
+  //
+  // The layer heuristic decides whether a project copy is worth writing. But this builder reads
+  // the PROJECT copy of the generator prompt to produce every other prompt (see genId below), so
+  // dropping it is self-contradictory: bootstrap declares it, the filter removes it, and the
+  // failure surfaces eighty lines later as "'project-prompt-generation' is not installed. It must
+  // be declared in bootstrap.copyVerbatim" — which it already was.
+  //
+  // Derived from the code that reads them, not a list anyone maintains: whatever this builder
+  // requires from outDir is required, whatever its template metadata happens to say.
+  const _requiredFromProjectCopy = [PROJECT_PROMPT_GENERATOR_ID];
+  for (const id of _requiredFromProjectCopy) {
+    if ([...copyVerbatim, ...generated].includes(id) && _layerOf(id) !== 'project') {
+      throw new Error(
+        `[prompt-builder] '${id}' is declared in bootstrap but its template is layer='${_layerOf(id)}', `
+        + 'so provisioning would drop it — and this builder reads the project copy of it to generate '
+        + 'every other prompt. Set "layer": "project" on the template, or remove it from bootstrap.');
+    }
+  }
+
   const _dropped = [...copyVerbatim, ...generated].filter((id) => _layerOf(id) !== 'project');
   if (_dropped.length) {
     // Said out loud. A silently shorter list is indistinguishable from a bootstrap that never
@@ -179,7 +204,7 @@ async function buildProjectPrompts({
 
   // The generator's own prompt comes from the project copy just installed, not from an
   // engine-side string.
-  const genId = 'project-prompt-generation';
+  const genId = PROJECT_PROMPT_GENERATOR_ID;
   const genPath = path.join(outDir, `${genId}.json`);
   const generatorBody = fs.existsSync(genPath) ? readJson(genPath).body : null;
   if (generated.length && !generatorBody) {

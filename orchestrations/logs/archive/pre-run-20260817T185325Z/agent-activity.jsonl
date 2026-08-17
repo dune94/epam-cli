@@ -1,0 +1,4 @@
+{"event_id":"evt-1786992804866-5ea38d02","timestamp":"2026-08-17T18:53:24.866Z","agent":"ac-classification","story_id":null,"phase":null,"type":"tool_run","detail":{"tool":"list_files","args":{"pattern":"test/fixtures/mock-pipeline/mock-jira-server.js"}}}
+{"event_id":"evt-1786992804868-01a20235","timestamp":"2026-08-17T18:53:24.868Z","agent":"ac-classification","story_id":null,"phase":null,"type":"tool_result","detail":{"tool":"list_files","ok":true,"ms":2,"bytes":47}}
+{"event_id":"evt-1786992805370-d0220d1a","timestamp":"2026-08-17T18:53:25.370Z","agent":"ac-classification","story_id":null,"phase":null,"type":"tool_run","detail":{"tool":"read_file","args":{"path":"test/fixtures/mock-pipeline/mock-jira-server.js"}}}
+{"event_id":"evt-1786992805374-e048d905","timestamp":"2026-08-17T18:53:25.374Z","agent":"ac-classification","story_id":null,"phase":null,"type":"tool_result","detail":{"tool":"read_file","ok":true,"ms":4,"bytes":4220}}

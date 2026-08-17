@@ -1,0 +1,28 @@
+{
+  "$why": [
+    "Generated from the code-review-cycle template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "__REVIEW_PROFILE__\n\n---\nREVIEW TASK (Iteration __ITERATION__): Story __STORY_ID__ — __STORY_TITLE__\nAGENT: __STORY_AGENT__\n\nDESCRIPTION: __STORY_DESCRIPTION__\n\nACCEPTANCE CRITERIA:\n__STORY_ACS__\n\nRELEVANT FILES: __STORY_FILES__\n\nGIT DIFF:\n```diff\n__STORY_DIFF__\n```\n__PRIOR_CONTEXT__\nPROJECT ROOT: __PROJECT_ROOT__\n\n## Project-specific guidance\n\nThis project has two codelines, each a separate TypeScript repository with vitest:\n- mocka at /home/bradleyjerome/projects/mock3/mock-a — contains `fareFor` and `totalFor` (fare calculation).\n- mockb at /home/bradleyjerome/projects/mock3/mock-b — contains `formatStops` (departure-board stop rendering).\n\nThe `__PROJECT_ROOT__` value above tells you which codeline this story belongs to.\n\n### Commands to verify during review\n- **Run tests:** `npx vitest run` (from the codeline root)\n- **Type-check:** `npx tsc --noEmit` (from the codeline root)\n\n### Review focus for this project\nBoth tickets in scope are **boundary / off-by-one fixes**:\n- **MOCK3-1** (mocka): Riders aged *exactly* 65 must be charged the adult fare. Verify the boundary condition in `fareFor` (e.g. `>= 65` vs `> 65`) and confirm `totalFor` inherits the corrected behaviour. Check that a test explicitly asserts the fare for age 65.\n- **MOCK3-2** (mockb): `formatStops` must include the final stop. Verify the loop bound (e.g. `< length` vs `<= length` or an off-by-one slice). Check that tests cover single-stop, two-stop, and multi-stop inputs.\n\nFor either fix, confirm no existing caller compensates for the old incorrect boundary — a change that fixes the function but breaks a caller is a regression.\n\n---\n\nReview the implementation against each acceptance criterion.\nCheck: TypeScript strict compliance, test coverage, error handling, security.\n\nRespond with ONLY a JSON object:\n{\"verdict\":\"approved\",\"issues\":[],\"summary\":\"...\"}\n  OR\n{\"verdict\":\"changes_requested\",\"issues\":[{\"severity\":\"blocker|major|minor\",\"file\":\"...\",\"line\":0,\"description\":\"...\",\"suggestedFix\":\"...\"}],\"summary\":\"...\"}",
+  "derivedFromSha256": "9cd704ca8afeeccf2744f6cb563b00a7b36112fcf803228036da0e0bf57a26cd",
+  "derivedFromVersion": 1,
+  "id": "code-review-cycle",
+  "seams": [
+    "code-review-cycle"
+  ],
+  "placeholders": [
+    "__ITERATION__",
+    "__PRIOR_CONTEXT__",
+    "__PROJECT_ROOT__",
+    "__REVIEW_PROFILE__",
+    "__STORY_ACS__",
+    "__STORY_AGENT__",
+    "__STORY_DESCRIPTION__",
+    "__STORY_DIFF__",
+    "__STORY_FILES__",
+    "__STORY_ID__",
+    "__STORY_TITLE__"
+  ]
+}

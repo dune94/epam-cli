@@ -727,7 +727,9 @@ function hasProjectRoster(agentsDir) {
 function rosterReviewIsRequired({ verdict, mintSkipped, pauseConfigured } = {}) {
   if (mintSkipped) return false;          // resumed: reviewed in the run being resumed
   if (pauseConfigured) return false;      // a human is about to see it
-  return verdict === 'not_run' || verdict === 'review_failed';
+  // 'nothing_to_review' joins them: an empty roster owes a review the moment it gains an agent.
+  // Treating it as settled is how a vacuous pass returns by the back door.
+  return verdict === 'not_run' || verdict === 'review_failed' || verdict === 'nothing_to_review';
 }
 
 /**

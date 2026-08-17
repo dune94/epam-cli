@@ -1,0 +1,22 @@
+{
+  "_what": "What each codeline IS and what an agent working inside it needs to know that the source does not say. Produced by the codeline-discovery agent during THIS run and rewritten every run — never accumulated, so nothing here is older than the run that wrote it. The engine splits this per codeline into each worktree's .epam/.",
+  "_shape": "Codeline names are TOP-LEVEL keys, because the engine extracts one with jq '.[$cl]'. Nesting them under another key parses fine and yields nothing for every codeline.",
+  "mocka": {
+    "path": "/home/bradleyjerome/projects/mock3/mock-a",
+    "facts": [
+      {
+        "text": "Tests are run with `vitest run` (the npm test script) and the build check is `tsc --noEmit`; both must pass before a change is accepted. The bug is on line 9 of src/fares.ts: `if (rider.age > 65)` should be `>= 65` to include riders aged exactly 65 in the concession fare.",
+        "source": "package.json scripts: \"test\": \"vitest run\", \"build\": \"tsc --noEmit\"; src/fares.ts line 9"
+      }
+    ]
+  },
+  "mockb": {
+    "path": "/home/bradleyjerome/projects/mock3/mock-b",
+    "facts": [
+      {
+        "text": "Tests are run with `vitest run` (the npm test script) and the build check is `tsc --noEmit`; both must pass before a change is accepted. The bug is on line 6 of src/schedule.ts: the loop condition `i < stops.length - 1` skips the last stop; it should iterate through all stops.",
+        "source": "package.json scripts: \"test\": \"vitest run\", \"build\": \"tsc --noEmit\"; src/schedule.ts line 6"
+      }
+    ]
+  }
+}

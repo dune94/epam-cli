@@ -1,29 +1,56 @@
 {
   "codelines": [
     {
-      "codeline": "metrolinx",
+      "codeline": "mocka",
       "state": "in_scope",
-      "evidence": "The codeline initializes the Contentstack Delivery SDK in src/services/contentstack.ts at line 91: `export const Stack = contentstack.Stack(options)`. The `options` object (lines 71–89) includes api_key, delivery_token, environment, branch, and fetchOptions, but contains NO `live_preview` configuration — no preview_token, no enable flag, no preview host. The `@contentstack/live-preview-utils` package is present in node_modules but NOT declared in package.json (installed_undeclared), meaning it cannot be relied upon in the build. A codebase-wide search for `live_preview`, `live-preview-utils`, `onEntryChange`, `preview_token`, and `ContentstackLivePreview` returned zero source matches (only orchestration log hits). Content is consumed via a `useContent` hook (src/hooks/useContent.ts) backed by `ContentstackContext` (React context), and the `ContentstackFactory` class in contentstack.ts wraps the Stack for all query/entry operations (getEntry, getSingleEntry, etc.). This is a Next.js app with `contentstack` and `@contentstack/utils` in its manifest — exactly the stack the linked Contentstack docs target — but no live preview wiring exists yet.",
+      "evidence": "Opened src/fares.ts and test/fares.test.ts. MOCK3-1 is confirmed here: fareFor (src/fares.ts:10) uses `if (rider.age > 65)` to gate the concession fare, so a rider aged exactly 65 falls through to the adult fare of 350 cents (line 12) instead of the concession fare of 175. The JSDoc comment on line 7 states 'Riders aged 65 AND OVER pay the concession fare,' confirming the boundary is wrong. The test file (test/fares.test.ts) only covers age 70 (well past the boundary) and never tests age 65 exactly, which is why the bug went unnoticed. fareFor is called by totalFor (src/fares.ts:15) and by the tests.",
       "surfaces": [
-        "src/services/contentstack.ts",
-        "src/hooks/useContent.ts",
-        "src/context/contentstackContext",
-        "package.json"
+        "src/fares.ts",
+        "test/fares.test.ts"
       ],
       "filesRead": [
-        "src/services/contentstack.ts",
-        "src/hooks/useContent.ts",
-        "src/components/contentstack/ContentstackQuote/ContentstackQuote.tsx",
-        "src/components/contentstack/ContentstackText/ContentstackText.tsx"
+        "/home/bradleyjerome/projects/mock3/mock-a/src/fares.ts",
+        "/home/bradleyjerome/projects/mock3/mock-a/test/fares.test.ts"
+      ],
+      "evidenceGap": false
+    },
+    {
+      "codeline": "mockb",
+      "state": "in_scope",
+      "evidence": "Opened src/schedule.ts and test/schedule.test.ts. MOCK3-2 is confirmed here: formatStops (src/schedule.ts:4) iterates `for (let i = 0; i < stops.length - 1; i++)`, which skips the final stop. A three-stop line renders only two stops. totalMinutes (src/schedule.ts:12) reads `stops[stops.length - 1].minutes` directly, so it reports the correct journey length — explaining why the omission went unnoticed. The test file (test/schedule.test.ts) only checks that the output contains '->' and contains 'Union' (the first stop); it never asserts the last stop appears, so the bug is not caught.",
+      "surfaces": [
+        "src/schedule.ts",
+        "test/schedule.test.ts"
+      ],
+      "filesRead": [
+        "/home/bradleyjerome/projects/mock3/mock-b/src/schedule.ts",
+        "/home/bradleyjerome/projects/mock3/mock-b/test/schedule.test.ts"
       ],
       "evidenceGap": false
     }
   ],
   "recommendedInvestigators": [
     {
-      "codeline": "metrolinx",
-      "focus": "Wire Contentstack Live Preview into the existing Stack initialization and content delivery pipeline. Specifically: (1) Add `@contentstack/live-preview-utils` to package.json dependencies — it is currently installed but undeclared. (2) Add `live_preview` config (preview_token, enable, host) to the `options` object in src/services/contentstack.ts around line 71–89. (3) Initialize `ContentstackLivePreview.init()` with the Stack SDK, considering the app's SSR vs CSR rendering strategy — the docs describe CSR App Router setup, but this codeline uses React Context (ContentstackContext) for content distribution, so the `onEntryChange` callback must be wired to refresh that context, not individual page components. (4) Determine how preview tokens and environment variables will be managed (the codeline already reads CONTENTSTACK_BRANCH, API_KEY, DELIVERY_TOKEN from process.env). (5) Investigate whether custom preview URLs are needed for this site's routing structure (nested routes, locale-based paths).",
-      "why": "The Stack init, the content service layer, and the context-based content consumption pattern are all present but have zero live preview wiring. The package is on disk but undeclared. The ticket's 8-point estimate suggests a focused implementation, and this codeline is the only one in scope."
+      "codeline": "mocka",
+      "focus": "Confirm the fare boundary logic in src/fares.ts and verify whether any other code paths or callers of fareFor/totalFor depend on the current (incorrect) boundary behavior. Check whether the test suite has other age-boundary cases that need updating.",
+      "why": "The bug is a single-operator boundary error (`>` instead of `>=`) in fareFor, but the investigator should confirm no downstream logic assumes the current behavior and identify what test coverage for age 65 should look like."
+    },
+    {
+      "codeline": "mockb",
+      "focus": "Confirm the loop bound in formatStops and check whether any caller of formatStops or totalMinutes compensates for the missing last stop. Review the test suite for assertions that should include the final stop.",
+      "why": "The bug is an off-by-one loop bound (`< stops.length - 1`), but the investigator should verify no caller works around the omission and determine what test coverage for the last stop is needed."
+    }
+  ],
+  "recommendedWriters": [
+    {
+      "codeline": "mocka",
+      "focus": "Write a one-line boundary fix in src/fares.ts and add a test case for age exactly 65 in test/fares.test.ts. Must be able to run vitest to verify.",
+      "why": "The fix is a single operator change in fareFor, and the test suite needs a new boundary case to prevent regression. The codeline uses vitest and typescript."
+    },
+    {
+      "codeline": "mockb",
+      "focus": "Write a loop-bound fix in src/schedule.ts so formatStops includes the last stop, and add a test asserting the final stop appears in the output. Must be able to run vitest to verify.",
+      "why": "The fix is a loop bound change in formatStops, and the test suite needs an assertion covering the last stop. The codeline uses vitest and typescript."
     }
   ],
   "violations": [],

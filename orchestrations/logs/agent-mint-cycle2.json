@@ -1,36 +1,53 @@
 {
-  "minted": [],
-  "rejected": [
+  "minted": [
     {
-      "name": "metrolinx-repository-investigator",
-      "reason": "brief names 2 path(s) that do not exist in codeline 'metrolinx': src/lib/, src/app/"
+      "name": "fare-schedule-engineer",
+      "kind": "implementer",
+      "codeline": "",
+      "rationale": "Both codelines share the same vitest+typescript stack and both tickets are small boundary/off-by-one fixes in TypeScript modules, so one implementer spanning both avoids redundant roles.",
+      "surfaces": [
+        "profiles.json",
+        "kb",
+        "project-roles",
+        "project-profiles"
+      ]
+    },
+    {
+      "name": "mocka-investigator",
+      "kind": "investigator",
+      "codeline": "mocka",
+      "rationale": "A dedicated investigator for the mocka codeline ensures the fare logic and its surrounding conventions are understood before changes are made.",
+      "surfaces": [
+        "profiles.json",
+        "kb",
+        "project-investigators",
+        "project-profiles"
+      ]
+    },
+    {
+      "name": "mockb-investigator",
+      "kind": "investigator",
+      "codeline": "mockb",
+      "rationale": "A dedicated investigator for the mockb codeline ensures the schedule rendering logic and its surrounding conventions are understood before changes are made.",
+      "surfaces": [
+        "profiles.json",
+        "kb",
+        "project-investigators",
+        "project-profiles"
+      ]
     }
   ],
+  "rejected": [],
   "unchanged": [],
   "projectRoles": [
-    "contentstack-sdk-engineer",
-    "contentstack-preview-react-engineer"
+    "fare-schedule-engineer"
   ],
-  "projectInvestigators": [],
-  "rejectedAcrossAttempts": [
-    {
-      "name": "contentstack-live-edit-tags-engineer",
-      "reason": "brief names 1 path(s) that do not exist in any codeline: src/lib/"
-    },
-    {
-      "name": "contentstack-preview-config-engineer",
-      "reason": "brief names 2 path(s) that do not exist in any codeline: src/config/, src/lib/config/"
-    },
-    {
-      "name": "metrolinx-codeline-investigator",
-      "reason": "brief names 2 path(s) that do not exist in codeline 'metrolinx': src/lib/, src/app/"
-    },
-    {
-      "name": "metrolinx-repository-investigator",
-      "reason": "brief names 2 path(s) that do not exist in codeline 'metrolinx': src/lib/, src/app/"
-    }
+  "projectInvestigators": [
+    "mocka-investigator",
+    "mockb-investigator"
   ],
-  "proposed": 4,
-  "attempts": 2,
+  "proposed": 3,
+  "rejectedAcrossAttempts": [],
+  "attempts": 1,
   "protectedRoles": 21
 }

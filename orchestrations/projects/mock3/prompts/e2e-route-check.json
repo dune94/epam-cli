@@ -1,0 +1,24 @@
+{
+  "$why": [
+    "Generated from the e2e-route-check template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "__AGENT_PROFILE__\n\nYou are running as __ROUTE__ inside Step 4.6 Browser E2E routing checks.\nPhase: __PHASE_ID__\nStory: __STORY_ID__\nStory title: __STORY_TITLE__\nRoute reason: __ROUTE_REASON__\nComplexity score: __ROUTE_SCORE__\n\n## Project context\n\nThis project has two codelines, both pure TypeScript libraries with no browser or UI layer:\n\n- **mocka** at `/home/bradleyjerome/projects/mock3/mock-a` — transit fare rules. Source in `src/fares.ts`, tests in `test/fares.test.ts`. Key exports: `fareFor(rider)`, `totalFor(riders)`, `Rider`, `BASE_FARE_CENTS`, `CONCESSION_FARE_CENTS`.\n- **mockb** at `/home/bradleyjerome/projects/mock3/mock-b` — departure-board stop rendering. Source in `src/schedule.ts`, tests in `test/schedule.test.ts`. Key exports: `formatStops(stops)`, `totalMinutes(stops)`, `Stop`.\n\nThere is no browser, no DOM, and no E2E framework in either codeline. \"Route renders and behaves in a browser\" maps here to **the vitest suite for the relevant codeline passing and covering the boundary under fix**. Treat a \"route\" as the vitest test file that exercises the changed code path.\n\n### Commands (run from the codeline root)\n\n| Action | Command |\n|--------|---------|\n| Run tests | `npm test` (executes `vitest run`) |\n| Type-check | `npm run build` (executes `tsc --noEmit`) |\n\nBoth codelines use the same scripts. There is no lint configuration (`npm run lint` is a no-op echo).\n\n### Tickets in scope\n\n- **MOCK3-1** (mocka): Riders aged exactly 65 are charged the adult fare. The bug is in `fareFor`: the condition `rider.age > 65` should be `rider.age >= 65`. The existing test suite does not assert the age-65 boundary.\n- **MOCK3-2** (mockb): The departure board omits the final stop. The bug is in `formatStops`: the loop `i < stops.length - 1` skips the last element. The existing tests only check that the output contains `'->'` and the first stop name; they do not assert the last stop appears.\n\n### What to check per route\n\nWhen __ROUTE__ corresponds to mocka, verify:\n1. `npm test` passes in `/home/bradleyjerome/projects/mock3/mock-a`.\n2. `npm run build` (tsc --noEmit) passes with no type errors.\n3. A test exists that asserts `fareFor({ age: 65, hasPass: false })` returns `CONCESSION_FARE_CENTS` (the boundary the fix targets).\n4. No caller of `fareFor` or `totalFor` relies on the old `> 65` boundary.\n\nWhen __ROUTE__ corresponds to mockb, verify:\n1. `npm test` passes in `/home/bradleyjerome/projects/mock3/mock-b`.\n2. `npm run build` (tsc --noEmit) passes with no type errors.\n3. A test exists that asserts `formatStops` output includes the last stop's name (the boundary the fix targets).\n4. No caller of `formatStops` compensates for the missing last stop.\n\n### Conventions\n\n- Tests use `describe` / `it` / `expect` from `vitest`, imported as `import { describe, it, expect } from 'vitest'`.\n- Source files are plain `.ts` modules under `src/`; tests mirror them under `test/` with a `../src/` relative import.\n- Both projects are `\"type\": \"module\"` — use ESM import syntax throughout.\n\nReturn strict JSON only:\n{\n  \"agent\": \"__ROUTE__\",\n  \"storyId\": \"__STORY_ID__\",\n  \"phase\": \"__PHASE_ID__\",\n  \"verdict\": \"pass|warn|fail\",\n  \"findings\": [{\"severity\": \"blocker|major|minor\", \"message\": \"...\", \"file\": \"...\", \"line\": 0}],\n  \"summary\": \"...\"\n}",
+  "derivedFromSha256": "69cd2424bed0ddfa69a88c55cd5fe74e635161ab9ee9671cdfc2b3ecfb5a9fa4",
+  "derivedFromVersion": 1,
+  "id": "e2e-route-check",
+  "seams": [
+    "qa-gate:e2e"
+  ],
+  "placeholders": [
+    "__AGENT_PROFILE__",
+    "__PHASE_ID__",
+    "__ROUTE_REASON__",
+    "__ROUTE_SCORE__",
+    "__ROUTE__",
+    "__STORY_ID__",
+    "__STORY_TITLE__"
+  ]
+}

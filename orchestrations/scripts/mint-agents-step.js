@@ -630,6 +630,30 @@ if (require.main !== module) return;
     } else {
       process.stderr.write('[mint-step]   survey did not run — the roster is minted from the ticket alone\n');
     }
+    // FALSIFY THE SURVEY BEFORE ANYTHING IS MINTED FROM IT.
+    //
+    // The survey seeds every investigator brief and scoped the whole run, and nothing reviewed it
+    // — a codeline was reported in_scope on a file it does not contain and an implementer was
+    // briefed accordingly. Runs HERE, before mintProjectAgents, because reviewing afterwards
+    // reports on claims the roster has already absorbed.
+    //
+    // Never fatal and never edits the survey: it reports, and the findings travel with it.
+    try {
+      const _sr = await spec.reviewSurvey({
+        promptExec, survey, codelines, tickets: stories, logDir: LOG_DIR,
+        repoPath: REPO_PATH, toolGrant,
+      });
+      if (_sr.ran) {
+        process.stderr.write(`[mint-step] survey review: ${_sr.findings.length} finding(s) across `
+          + `${_sr.reviewed} codeline(s)\n`);
+        for (const f of _sr.findings) {
+          process.stderr.write(`[mint-step]   ! survey claim refuted (${f.codeline}): ${f.claim} `
+            + `— checked ${f.checked}, found ${f.found}\n`);
+        }
+        survey.reviewFindings = _sr.findings;
+      }
+    } catch { /* the survey stands unreviewed; its own reviewer failing is not a finding */ }
+
     // A boundary crossed is reported, never swallowed: the surveyor is structurally barred
     // from naming fix sites, and an attempt to name one says something about the prompt.
     for (const v of survey.violations || []) {
@@ -697,7 +721,8 @@ if (require.main !== module) return;
   // same, and the reviewer's own capped budget went on re-checking settled work. Only the
   // agents a blocking finding NAMES are replaced.
   const runRosterReview = async () => {
-    if (!_mintedDetail.length) return { verdict: 'sound', findings: [], reviewed: 0 };
+    // Same reason as reviewRoster: nothing was examined, so nothing may be certified.
+    if (!_mintedDetail.length) return { verdict: 'nothing_to_review', findings: [], reviewed: 0 };
     process.env.EPAM_AGENT_NAME = 'roster-review';
     try {
       const liveProfiles = JSON.parse(fs.readFileSync(PROFILES_PATH, 'utf8'));

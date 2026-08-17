@@ -1,16 +1,21 @@
 {
   "canonicalFile": "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/agents/profiles.canonical.json",
   "canonicalRoles": 57,
-  "liveRoles": 59,
+  "liveRoles": 60,
   "generated": [
     {
-      "role": "contentstack-sdk-engineer",
-      "briefChars": 2768,
+      "role": "typescript-bugfix-engineer",
+      "briefChars": 2016,
       "mintedThisRun": true
     },
     {
-      "role": "contentstack-preview-react-engineer",
-      "briefChars": 3288,
+      "role": "mocka-investigator",
+      "briefChars": 1497,
+      "mintedThisRun": true
+    },
+    {
+      "role": "mockb-investigator",
+      "briefChars": 1651,
       "mintedThisRun": true
     }
   ],

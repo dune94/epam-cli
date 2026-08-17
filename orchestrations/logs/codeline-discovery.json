@@ -1,10 +1,28 @@
 {
   "codelines": [
     {
-      "name": "metrolinx",
-      "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com",
-      "reason": "The ticket's component \"MX\" and title prefix \"[MX]\" identify the Metrolinx product area, and the front-end-only work (FE estimate 8, BE/DAM 0) to preview draft CMS content on the website maps to this Next.js site that renders Metrolinx content.",
-      "evidence": "ticket component \"MX\" and title \"[MX] Live Preview of Content in CMS (part 1)\""
+      "name": "mocka",
+      "path": "/home/bradleyjerome/projects/mock3/mock-a",
+      "reason": "Ticket MOCK3-1 is about fare rules for riders aged 65, and the ticket component names mocka, which is this repository's product area; the fare logic lives in src/fares.ts.",
+      "evidence": "ticket component \"mocka\"",
+      "facts": [
+        {
+          "text": "Tests are run with `vitest run` (the npm test script) and the build check is `tsc --noEmit`; both must pass before a change is accepted. The bug is on line 9 of src/fares.ts: `if (rider.age > 65)` should be `>= 65` to include riders aged exactly 65 in the concession fare.",
+          "source": "package.json scripts: \"test\": \"vitest run\", \"build\": \"tsc --noEmit\"; src/fares.ts line 9"
+        }
+      ]
+    },
+    {
+      "name": "mockb",
+      "path": "/home/bradleyjerome/projects/mock3/mock-b",
+      "reason": "Ticket MOCK3-2 is about formatStops omitting the final stop on the departure board, and the ticket component names mockb, which is this repository's product area; the schedule rendering logic lives in src/schedule.ts.",
+      "evidence": "ticket component \"mockb\"",
+      "facts": [
+        {
+          "text": "Tests are run with `vitest run` (the npm test script) and the build check is `tsc --noEmit`; both must pass before a change is accepted. The bug is on line 6 of src/schedule.ts: the loop condition `i < stops.length - 1` skips the last stop; it should iterate through all stops.",
+          "source": "package.json scripts: \"test\": \"vitest run\", \"build\": \"tsc --noEmit\"; src/schedule.ts line 6"
+        }
+      ]
     }
   ]
 }

@@ -1,0 +1,22 @@
+{
+  "$why": [
+    "Generated from the codeline-bridge template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "__BRIDGE_PROFILE__\n\n## Variables for this run\n\n- BRIDGE_SRC_CODELINE: __BCL__\n- BRIDGE_SRC_DIR: __BWT__\n- BRIDGE_OUT_FILE: __BRIDGE_OUT__\n- BRIDGE_PRD_FILE: __BPRD__\n\nExtract the exported API surface from the '__BCL__' codeline files and write the cross-codeline contract to __BRIDGE_OUT__.\n\n## Project context\n\nThis project has two codelines, both TypeScript + vitest, both configured identically:\n\n- **mocka** (`src/fares.ts`) — transit fare rules. Exports:\n  - `type Rider = { age: number; hasPass: boolean }`\n  - `const BASE_FARE_CENTS = 350`\n  - `const CONCESSION_FARE_CENTS = 175`\n  - `function fareFor(rider: Rider): number`\n  - `function totalFor(riders: Rider[]): number`\n- **mockb** (`src/schedule.ts`) — departure board rendering. Exports:\n  - `type Stop = { name: string; minutes: number }`\n  - `function formatStops(stops: Stop[]): string`\n  - `function totalMinutes(stops: Stop[]): number`\n\n### Conventions\n\n- Source lives in `src/`, tests in `test/`. Each codeline has a single source module.\n- TypeScript is strict (`\"strict\": true`), targets ES2022, uses ES2022 modules with `\"moduleResolution\": \"bundler\"`, and `\"noEmit\": true`.\n- Both codelines are ESM (`\"type\": \"module\"` in `package.json`).\n- Test commands: `npm test` (runs `vitest run`), `npm run build` (runs `tsc --noEmit` for type-checking). No lint is configured.\n- Exports are named exports only — no default exports, no barrel/index files.\n\n### What the contract must capture\n\nWhen extracting the exported surface, include for each symbol: its name, its TypeScript signature (including parameter and return types), and any JSDoc comment above it. The exported types (`Rider`, `Stop`) and exported constants (`BASE_FARE_CENTS`, `CONCESSION_FARE_CENTS`) are part of the contract — downstream lanes may depend on their exact shapes and values.\n\n### Traps\n\n- `fareFor` currently uses `rider.age > 65` for the senior concession boundary. Ticket MOCK3-1 fixes this to `>= 65`. The contract should reflect the **corrected** boundary if the fix has been applied, or note the current (buggy) boundary if it has not.\n- `formatStops` currently loops `i < stops.length - 1`, omitting the final stop. Ticket MOCK3-2 fixes this to `i < stops.length`. Same rule: reflect the post-fix surface if the fix is in, otherwise note the current behaviour.\n- Do not infer exports that are not present in the source file. Neither codeline has an index barrel; only the symbols explicitly exported from the single source module constitute the API surface.",
+  "derivedFromSha256": "ac6209cc602f168e39ad8e6459ba79e96693037da4798d4b4719e1d64a772eed",
+  "derivedFromVersion": 1,
+  "id": "codeline-bridge",
+  "seams": [
+    "codeline-bridge-agent"
+  ],
+  "placeholders": [
+    "__BCL__",
+    "__BPRD__",
+    "__BRIDGE_OUT__",
+    "__BRIDGE_PROFILE__",
+    "__BWT__"
+  ]
+}

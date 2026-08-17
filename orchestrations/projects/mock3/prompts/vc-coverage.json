@@ -1,0 +1,19 @@
+{
+  "$why": [
+    "Generated from the vc-coverage template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "You are checking whether a test suite covers ONE specific requirement.\n\n## The requirement\n__VERIFICATION_CRITERION__\n\n## The test file (complete)\n```\n__TEST_SOURCE__\n```\n\nAnswer ONE question: does this test file contain a case that would FAIL if this\nrequirement were violated?\n\nJudge the ASSERTIONS, not the titles. A test whose name mentions the same words\nis irrelevant if it does not actually exercise the requirement — in particular a\nrequirement stating something must NOT happen is not covered by a test asserting\nthat it DOES happen, however similar the wording.\n\n### Project-specific context\n\nThis project has two TypeScript codelines, both tested with **vitest** using the\nstandard `describe` / `it` / `expect` pattern. Test files live in a `test/`\ndirectory and are named `*.test.ts`. Assertions you will see include\n`expect(...).toBe(...)`, `expect(...).toEqual(...)`, and\n`expect(...).toContain(...)`.\n\nThe two tickets in scope are **boundary / off-by-one fixes**:\n\n- **MOCK3-1 (mocka):** Riders aged *exactly* 65 must be charged the adult fare.\n  The source uses `rider.age > 65` (strict greater-than), so age 65 currently\n  falls through to the base fare. A test that asserts the fare for age 70 or\n  age 30 does **not** cover the boundary at 65 — only an assertion on\n  `fareFor({ age: 65, ... })` covers this criterion. Note also that expected\n  values may be expressed via exported constants (`BASE_FARE_CENTS`,\n  `CONCESSION_FARE_CENTS`) rather than literal numbers.\n\n- **MOCK3-2 (mockb):** The departure board must include the final stop. The\n  source loop condition `i < stops.length - 1` skips the last element, so the\n  final stop name is omitted from the output string. A test that asserts the\n  output contains an arrow (`->`) or the *first* stop name does **not** cover\n  this criterion — only an assertion that the output contains the *last* stop\n  name (e.g. `'Eglinton'`) would fail if the requirement were violated.\n\nWhen the verification criterion concerns an exact boundary value, check that the\nassertion uses that exact value, not a nearby one. When it concerns something\nthat must be present, check that the assertion checks for that specific thing,\nnot a different property of the same output.\n\nOutput ONLY this JSON, nothing else:\n{\"covered\": true|false, \"case\": \"<the test case name that covers it, or empty>\", \"why\": \"<one sentence>\"}",
+  "derivedFromSha256": "79377c166256044a0c88d4179fdbfbc9d800d74e6cdd9ee4ecc0db817527f795",
+  "derivedFromVersion": 1,
+  "id": "vc-coverage",
+  "seams": [
+    "vc-coverage"
+  ],
+  "placeholders": [
+    "__TEST_SOURCE__",
+    "__VERIFICATION_CRITERION__"
+  ]
+}

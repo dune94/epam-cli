@@ -1,0 +1,466 @@
+{
+  "_what": "Which prompt each agent this run minted will actually run on, and the seam that joins them. Derived at mint time from the roster, the registry and the installed library; written down because a link held only in memory cannot answer \"why did this agent get that prompt\" after the run is over.",
+  "agents": {
+    "spec-coordinator-agent": {
+      "seam": "cpa-inference",
+      "prompts": [
+        "cpa-inference"
+      ]
+    },
+    "openspec-agent": {
+      "seam": "cpa-inference",
+      "prompts": [
+        "cpa-inference"
+      ]
+    },
+    "speckit-agent": {
+      "seam": "cpa-inference",
+      "prompts": [
+        "cpa-inference"
+      ]
+    },
+    "typescript-engineer": {
+      "seam": "story-writer",
+      "prompts": [
+        "story-writer"
+      ]
+    },
+    "agent-systems-engineer": {
+      "seam": "story-writer",
+      "prompts": [
+        "story-writer"
+      ]
+    },
+    "billing-engineer": {
+      "seam": "story-writer",
+      "prompts": [
+        "story-writer"
+      ]
+    },
+    "cli-ux-engineer": {
+      "seam": "story-writer",
+      "prompts": [
+        "story-writer"
+      ]
+    },
+    "test-engineer": {
+      "seam": "story-writer",
+      "prompts": [
+        "story-writer"
+      ]
+    },
+    "team-lead-agent": {
+      "seam": "cpa-inference",
+      "prompts": [
+        "cpa-inference"
+      ]
+    },
+    "review-agent": {
+      "seam": "cpa-inference",
+      "prompts": [
+        "cpa-inference"
+      ]
+    },
+    "test-coordinator-agent": {
+      "seam": "cpa-inference",
+      "prompts": [
+        "cpa-inference"
+      ]
+    },
+    "lightpanda-agent": {
+      "seam": "cpa-inference",
+      "prompts": [
+        "cpa-inference"
+      ]
+    },
+    "playwright-agent": {
+      "seam": "cpa-inference",
+      "prompts": [
+        "cpa-inference"
+      ]
+    },
+    "sast-sentinel": {
+      "seam": "code-review-cycle",
+      "prompts": [
+        "code-review-cycle"
+      ]
+    },
+    "review-ranger": {
+      "seam": "code-review-cycle",
+      "prompts": [
+        "code-review-cycle"
+      ]
+    },
+    "mutant-hunter": {
+      "seam": "repro-test-writer",
+      "prompts": [
+        "repro-test-writer"
+      ]
+    },
+    "fuzz-weaver": {
+      "seam": "repro-test-writer",
+      "prompts": [
+        "repro-test-writer"
+      ]
+    },
+    "perf-sentinel": {
+      "seam": "code-review-cycle",
+      "prompts": [
+        "code-review-cycle"
+      ]
+    },
+    "spec-validator": {
+      "seam": "prd-change-reviewer",
+      "prompts": [
+        "prd-change-reviewer"
+      ]
+    },
+    "doc-coordinator": {
+      "seam": "cpa-inference",
+      "prompts": [
+        "cpa-inference"
+      ]
+    },
+    "docstring-agent": {
+      "seam": "cpa-inference",
+      "prompts": [
+        "cpa-inference"
+      ]
+    },
+    "api-doc-generator": {
+      "seam": "tc-writer",
+      "prompts": [
+        "tc-writer"
+      ]
+    },
+    "guide-author": {
+      "seam": "tc-writer",
+      "prompts": [
+        "tc-writer"
+      ]
+    },
+    "architecture-doc-agent": {
+      "seam": "cpa-inference",
+      "prompts": [
+        "cpa-inference"
+      ]
+    },
+    "changelog-agent": {
+      "seam": "cpa-inference",
+      "prompts": [
+        "cpa-inference"
+      ]
+    },
+    "doc-reviewer": {
+      "seam": "code-review-cycle",
+      "prompts": [
+        "code-review-cycle"
+      ]
+    },
+    "doc-index-builder": {
+      "seam": "tc-writer",
+      "prompts": [
+        "tc-writer"
+      ]
+    },
+    "doc-search-agent": {
+      "seam": "cpa-inference",
+      "prompts": [
+        "cpa-inference"
+      ]
+    },
+    "doc-site-builder": {
+      "seam": "tc-writer",
+      "prompts": [
+        "tc-writer"
+      ]
+    },
+    "grooming-coordinator": {
+      "seam": "cpa-inference",
+      "prompts": [
+        "cpa-inference"
+      ]
+    },
+    "readiness-checker": {
+      "seam": "prd-change-reviewer",
+      "prompts": [
+        "prd-change-reviewer"
+      ]
+    },
+    "dedup-detector": {
+      "seam": "prd-change-reviewer",
+      "prompts": [
+        "prd-change-reviewer"
+      ]
+    },
+    "project-initiator-agent": {
+      "seam": "cpa-inference",
+      "prompts": [
+        "cpa-inference"
+      ]
+    },
+    "prd-project-manager-agent": {
+      "seam": "cpa-inference",
+      "prompts": [
+        "cpa-inference"
+      ]
+    },
+    "agent-skills-agent": {
+      "seam": "cpa-inference",
+      "prompts": [
+        "cpa-inference"
+      ]
+    },
+    "dashboard-orchestrator-agent": {
+      "seam": "cpa-inference",
+      "prompts": [
+        "cpa-inference"
+      ]
+    },
+    "dashboard-test-agent": {
+      "seam": "cpa-inference",
+      "prompts": [
+        "cpa-inference"
+      ]
+    },
+    "ui-engineer": {
+      "seam": "story-writer",
+      "prompts": [
+        "story-writer"
+      ]
+    },
+    "frontend-engineer": {
+      "seam": "story-writer",
+      "prompts": [
+        "story-writer"
+      ]
+    },
+    "dashboard-update-agent": {
+      "seam": "cpa-inference",
+      "prompts": [
+        "cpa-inference"
+      ]
+    },
+    "generator": {
+      "seam": "tc-writer",
+      "prompts": [
+        "tc-writer"
+      ]
+    },
+    "spike-agent": {
+      "seam": "cpa-inference",
+      "prompts": [
+        "cpa-inference"
+      ]
+    },
+    "tc-writer-agent": {
+      "seam": "cpa-inference",
+      "prompts": [
+        "cpa-inference"
+      ]
+    },
+    "gate-finding-analyst": {
+      "seam": "impl-failure-analyst",
+      "prompts": [
+        "failure-analyst"
+      ]
+    },
+    "story-ac-remediator": {
+      "seam": "ac-elaboration",
+      "prompts": [
+        "ac-elaboration"
+      ]
+    },
+    "profile-augmentor": {
+      "seam": "ac-elaboration",
+      "prompts": [
+        "ac-elaboration"
+      ]
+    },
+    "failure-analyst": {
+      "seam": "impl-failure-analyst",
+      "prompts": [
+        "failure-analyst"
+      ]
+    },
+    "kb-change-reviewer": {
+      "seam": "code-review-cycle",
+      "prompts": [
+        "code-review-cycle"
+      ]
+    },
+    "prd-change-reviewer": {
+      "seam": "prd-change-reviewer",
+      "prompts": [
+        "prd-change-reviewer"
+      ]
+    },
+    "prd-model-coordinator": {
+      "seam": "prd-model-coordinator",
+      "prompts": [
+        "prd-model-coordinator"
+      ]
+    },
+    "codeline-bridge-agent": {
+      "seam": "codeline-bridge-agent",
+      "prompts": [
+        "codeline-bridge"
+      ]
+    },
+    "retry-extension-coordinator": {
+      "seam": "cpa-inference",
+      "prompts": [
+        "cpa-inference"
+      ]
+    },
+    "code-graph-detective": {
+      "seam": "code-graph-detective",
+      "prompts": [
+        "code-graph-detective"
+      ]
+    },
+    "guard-vocabulary-agent": {
+      "seam": "cpa-inference",
+      "prompts": [
+        "cpa-inference"
+      ]
+    },
+    "ticket-link-agent": {
+      "seam": "cpa-inference",
+      "prompts": [
+        "cpa-inference"
+      ]
+    },
+    "discovery-vocabulary-agent": {
+      "seam": "cpa-inference",
+      "prompts": [
+        "cpa-inference"
+      ]
+    },
+    "roster-reviewer": {
+      "seam": "code-review-cycle",
+      "prompts": [
+        "code-review-cycle"
+      ]
+    }
+  },
+  "seamsInUse": [
+    "ac-elaboration",
+    "code-graph-detective",
+    "code-review-cycle",
+    "codeline-bridge-agent",
+    "cpa-inference",
+    "impl-failure-analyst",
+    "prd-change-reviewer",
+    "prd-model-coordinator",
+    "repro-test-writer",
+    "story-writer",
+    "tc-writer"
+  ],
+  "promptsBySeam": {
+    "ac-classification": [
+      "ac-classification"
+    ],
+    "ac-elaboration": [
+      "ac-elaboration"
+    ],
+    "agent-mint": [
+      "agent-proposal"
+    ],
+    "role-assigner": [
+      "assign-agent-roles"
+    ],
+    "team-lead-review": [
+      "blocker-discipline",
+      "team-lead-review",
+      "test-ownership"
+    ],
+    "code-graph-detective": [
+      "code-graph-detective"
+    ],
+    "code-review-cycle": [
+      "code-review-cycle"
+    ],
+    "codeline-bridge-agent": [
+      "codeline-bridge"
+    ],
+    "codeline-discovery": [
+      "codeline-discovery"
+    ],
+    "cpa-inference": [
+      "cpa-inference"
+    ],
+    "qa-gate:e2e": [
+      "e2e-route-check"
+    ],
+    "estate-survey": [
+      "estate-survey"
+    ],
+    "impl-failure-analyst": [
+      "failure-analyst"
+    ],
+    "guard-vocabulary": [
+      "guard-vocabulary"
+    ],
+    "prd-change-reviewer": [
+      "prd-change-reviewer"
+    ],
+    "prd-change-summarizer": [
+      "prd-change-summarizer-text"
+    ],
+    "prd-model-coordinator": [
+      "prd-model-coordinator"
+    ],
+    "prompt-builder": [
+      "project-prompt-generation"
+    ],
+    "prompt-review": [
+      "prompt-review"
+    ],
+    "qa-gate:fuzz-weaver": [
+      "qa-fuzz-weaver"
+    ],
+    "qa-gate:mutant-hunter": [
+      "qa-mutant-hunter"
+    ],
+    "qa-gate:perf-sentinel": [
+      "qa-perf-sentinel"
+    ],
+    "qa-gate:review-ranger": [
+      "qa-review-ranger"
+    ],
+    "qa-gate:sast": [
+      "qa-sast-sentinel"
+    ],
+    "qa-gate:spec-validator": [
+      "qa-spec-validator"
+    ],
+    "repro-test-writer": [
+      "repro-test-writer"
+    ],
+    "roster-review": [
+      "roster-review"
+    ],
+    "phase-assessment": [
+      "skill-assessment-prephase"
+    ],
+    "spec-agent": [
+      "spec-agent-openspec"
+    ],
+    "spec-coordinator": [
+      "spec-coordinator"
+    ],
+    "ticket-links": [
+      "spec-story-block"
+    ],
+    "story-writer": [
+      "story-writer"
+    ],
+    "tc-writer": [
+      "tc-writer"
+    ],
+    "vc-coverage": [
+      "vc-coverage"
+    ]
+  }
+}

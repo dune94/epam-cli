@@ -3959,7 +3959,7 @@ const TOOL_ROSTER_REVIEW = {
     properties: {
       verdict: {
         type: 'string',
-        enum: ['sound', 'defects_found'],
+        enum: ['sound', 'defects_found', 'nothing_to_review'],
         description: 'sound = every checkable claim held. defects_found = at least one did not.',
       },
       findings: {
@@ -4130,11 +4130,110 @@ function buildRosterReviewPrompt({ persona, briefBlock, clBlock, ticketBlock, do
  * Read-only tools, the same grant as the mint. It exists to falsify claims, so it must be able to
  * check them; it must never be able to change what it reviews.
  */
+/**
+ * FALSIFY THE SURVEY BEFORE A ROSTER IS MINTED FROM IT.
+ *
+ * The survey decides which codelines the work reaches and seeds every investigator brief, and
+ * nothing consumed it for review — no seam declared it as an input, so its claims reached the
+ * roster unchallenged. Live 2026-08-17: a codeline was reported in_scope on a file it does not
+ * contain, and an implementer was briefed to fix that codeline's defect in a repository with no
+ * such code.
+ *
+ * A generated prompt already gets exactly this before any agent inherits it. This is that
+ * reviewer, pointed at the survey, and it runs BEFORE the mint — reviewing afterwards would report
+ * on claims the roster has already absorbed.
+ *
+ * Never fatal, and it never edits the survey. It returns findings; what the mint does with them is
+ * the mint's decision. A reviewer that rewrites what it reviews is worse than one that reports.
+ */
+async function reviewSurvey({
+  promptExec, survey, codelines, tickets, logDir, repoPath, toolGrant,
+}) {
+  // A survey that did not run has nothing to falsify; findings about a failure are findings about
+  // nothing.
+  if (!survey || survey.ran !== true || !Array.isArray(survey.codelines) || !survey.codelines.length) {
+    return { findings: [], reviewed: 0, ran: false };
+  }
+
+  const _named = (Array.isArray(codelines) ? codelines : []).filter((c) => c && c.name && c.path);
+  const surveyBlock = survey.codelines.map((c) => [
+    `- ${c.codeline}: ${c.state}`,
+    c.evidence ? `  evidence: ${String(c.evidence).replace(/\s+/g, ' ')}` : '',
+    (c.filesRead || []).length ? `  filesRead: ${(c.filesRead || []).join(', ')}` : '',
+  ].filter(Boolean).join('\n')).join('\n');
+
+  const prompt = renderEngineTemplate('survey-review', {
+    __PERSONA__: 'You are reviewing an estate survey before a team is assembled from it.',
+    __SURVEY_BLOCK__: surveyBlock,
+    __CODELINE_BLOCK__: _named.map((c) => `- ${c.name} (${c.path})`).join('\n') || '- (none)',
+    __TICKET_BLOCK__: (Array.isArray(tickets) ? tickets : [])
+      .map((t) => `- ${t.jiraKey || t.id}: ${t.title || ''}`).join('\n') || '- (none)',
+    __TOOL_LINE__: toolGrant
+      ? 'You may open any file in the codelines above to check a claim.'
+      : 'You have no tools; report only what the text itself contradicts.',
+  });
+
+  const env = {
+    ...seamInvocationEnv('survey-review', logDir),
+    EPAM_AGENT_NAME: 'survey-review',
+  };
+  if (toolGrant) { env.AI_GATE_ALLOW_TOOLS = '1'; env.EPAM_ALLOWED_TOOLS = toolGrant; }
+
+  try {
+    const payload = await runAgentForJson(
+      promptExec, prompt, TOOL_SURVEY_REVIEW, 'SURVEY_REVIEW',
+      logDir ? path.join(logDir, 'survey-review.log') : null,
+      null, '', repoPath || '', env,
+    );
+    const findings = (payload && Array.isArray(payload.findings)) ? payload.findings : [];
+    if (logDir) {
+      try {
+        fs.writeFileSync(path.join(logDir, 'survey-review.json'),
+          JSON.stringify({ findings, reviewed: survey.codelines.length, ran: true }, null, 2));
+      } catch { /* the run must not die for want of an audit file */ }
+    }
+    return { findings, reviewed: survey.codelines.length, ran: true };
+  } catch (err) {
+    // The survey stands unreviewed rather than the run ending: this reviewer exists to catch a
+    // wrong claim, and its own failure is not evidence that a claim was wrong.
+    return { findings: [], reviewed: 0, ran: false, error: String((err && err.message) || err) };
+  }
+}
+
+const TOOL_SURVEY_REVIEW = {
+  name: 'submit_survey_review',
+  description: 'Report claims the estate survey makes that are false about these repositories.',
+  parameters: {
+    type: 'object',
+    required: ['findings'],
+    properties: {
+      findings: {
+        type: 'array',
+        description: 'One entry per FALSE claim. Empty when every claim checks out.',
+        items: {
+          type: 'object',
+          required: ['codeline', 'claim', 'checked', 'found'],
+          properties: {
+            codeline: { type: 'string', description: 'The codeline the claim is about.' },
+            claim: { type: 'string', description: 'What the survey asserted.' },
+            checked: { type: 'string', description: 'What you opened to check it.' },
+            found: { type: 'string', description: 'What was actually there.' },
+          },
+        },
+      },
+    },
+  },
+};
+
 async function reviewRoster({
   promptExec, minted, profiles, codelines, tickets, referencedDocs, logDir, repoPath, toolGrant,
 }) {
   const _minted = Array.isArray(minted) ? minted : [];
-  if (!_minted.length) return { verdict: 'sound', findings: [], reviewed: 0 };
+  // AN EMPTY SET IS NOT SOUND — IT IS UNREVIEWED. Returning 'sound' here reported a clean bill of
+  // health for something nothing examined: zero findings because there was nothing to find. Live
+  // 2026-08-17 a correction cycle cleared both implementers, minted no replacement, and the next
+  // review said "sound" — true of the empty set, and the run died at assignment.
+  if (!_minted.length) return { verdict: 'nothing_to_review', findings: [], reviewed: 0 };
 
   const briefBlock = _minted.map((m) => {
     const brief = (profiles && profiles[m.name]) || '';
@@ -8871,6 +8970,7 @@ function costLabelFor(tag, env) {
 }
 
 module.exports = {
+  reviewSurvey,
   rosterCoverageBlock,
   runClaudeTimeoutMs,
   TOOL_ESTATE_SURVEY,

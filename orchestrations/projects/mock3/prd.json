@@ -3,7 +3,18 @@
   "title": "mock3 rehearsal",
   "project": {
     "name": "mock3",
-    "description": "A two-codeline transit-fares and departure-board workspace used to exercise the orchestration pipeline end to end."
+    "description": "A two-codeline transit-fares and departure-board workspace used to exercise the orchestration pipeline end to end.",
+    "outputDirs": [
+      {
+        "codeline": "mocka",
+        "path": "/home/bradleyjerome/projects/mock3/mock-a"
+      },
+      {
+        "codeline": "mockb",
+        "path": "/home/bradleyjerome/projects/mock3/mock-b"
+      }
+    ],
+    "outputDir": "/home/bradleyjerome/projects/mock3/mock-a"
   },
   "currentIteration": 0,
   "stories": [
@@ -23,7 +34,11 @@
       "status": "pending",
       "completed": false,
       "effort": "low",
-      "kind": "defect"
+      "kind": "defect",
+      "agentRoles": {
+        "mocka": "typescript-bugfix-engineer"
+      },
+      "agentRole": "typescript-bugfix-engineer"
     },
     {
       "id": "MOCK3-2",
@@ -41,10 +56,15 @@
       "status": "pending",
       "completed": false,
       "effort": "low",
-      "kind": "defect"
+      "kind": "defect",
+      "agentRoles": {
+        "mockb": "typescript-bugfix-engineer"
+      },
+      "agentRole": "typescript-bugfix-engineer"
     }
   ],
   "implementationOrder": {
+    "scaffold": [],
     "core": [
       "MOCK3-1",
       "MOCK3-2"

@@ -1,0 +1,248 @@
+{
+  "derived": true,
+  "vocabulary": {
+    "blacklist": [
+      {
+        "term": "exactly",
+        "reason": "Grammatical modifier with no presence in either candidate's code; cannot discriminate"
+      },
+      {
+        "term": "instead",
+        "reason": "Grammatical filler describing the bug symptom, not a software term"
+      },
+      {
+        "term": "wrong",
+        "reason": "Describes the defect, not anything in the software"
+      },
+      {
+        "term": "correctly",
+        "reason": "Describes expected behaviour, not a software term"
+      },
+      {
+        "term": "rather",
+        "reason": "Grammatical filler connecting clauses"
+      },
+      {
+        "term": "above",
+        "reason": "Directional filler; appears in neither repo"
+      },
+      {
+        "term": "boundary",
+        "reason": "Describes the bug concept; not an identifier or component in either repo"
+      },
+      {
+        "term": "omits",
+        "reason": "Describes the defect behaviour, not a software term"
+      },
+      {
+        "term": "omission",
+        "reason": "Describes the defect, not a software term"
+      },
+      {
+        "term": "renders",
+        "reason": "Generic verb; not an identifier in either repo"
+      },
+      {
+        "term": "every",
+        "reason": "Quantifier filler with no code presence"
+      },
+      {
+        "term": "except",
+        "reason": "Grammatical filler; not a software term"
+      },
+      {
+        "term": "noticed",
+        "reason": "Process word about discovery of the bug"
+      },
+      {
+        "term": "unnoticed",
+        "reason": "Process word about discovery of the bug"
+      },
+      {
+        "term": "shows",
+        "reason": "Generic verb; not an identifier"
+      },
+      {
+        "term": "final",
+        "reason": "Describes the bug; not in either repo's code"
+      },
+      {
+        "term": "reported",
+        "reason": "Generic verb; not an identifier in either repo"
+      }
+    ],
+    "whitelist": [
+      {
+        "term": "fare",
+        "reason": "Appears throughout mock-a: fares.ts, fareFor, BASE_FARE_CENTS"
+      },
+      {
+        "term": "fares",
+        "reason": "Names the module and domain in mock-a (fares.ts)"
+      },
+      {
+        "term": "concession",
+        "reason": "Names CONCESSION_FARE_CENTS in mock-a"
+      },
+      {
+        "term": "adult",
+        "reason": "Appears in mock-a test ('charges the base fare for an adult')"
+      },
+      {
+        "term": "rider",
+        "reason": "Names the Rider type in mock-a"
+      },
+      {
+        "term": "riders",
+        "reason": "Names the Rider type and totalFor parameter in mock-a"
+      },
+      {
+        "term": "charged",
+        "reason": "Appears as 'charges' in mock-a test descriptions"
+      },
+      {
+        "term": "350",
+        "reason": "Value of BASE_FARE_CENTS in mock-a"
+      },
+      {
+        "term": "175",
+        "reason": "Value of CONCESSION_FARE_CENTS in mock-a"
+      },
+      {
+        "term": "65",
+        "reason": "Boundary literal in mock-a fareFor (> 65)"
+      },
+      {
+        "term": "cents",
+        "reason": "Part of identifier names BASE_FARE_CENTS and CONCESSION_FARE_CENTS in mock-a"
+      },
+      {
+        "term": "rules",
+        "reason": "Appears in mock-a source comment ('Fare rules for a transit line')"
+      },
+      {
+        "term": "formatstops",
+        "reason": "Identifier in mock-b schedule.ts; must never be blacklisted"
+      },
+      {
+        "term": "totalminutes",
+        "reason": "Identifier in mock-b schedule.ts; must never be blacklisted"
+      },
+      {
+        "term": "stop",
+        "reason": "Names the Stop type in mock-b"
+      },
+      {
+        "term": "stops",
+        "reason": "Names the stops parameter and formatStops in mock-b"
+      },
+      {
+        "term": "departure",
+        "reason": "Appears in mock-b source comment ('departure board')"
+      },
+      {
+        "term": "board",
+        "reason": "Appears in mock-b source comment ('departure board')"
+      },
+      {
+        "term": "journey",
+        "reason": "Appears in mock-b test ('reports the journey length')"
+      }
+    ]
+  },
+  "termsDropped": [
+    {
+      "term": "exactly",
+      "reason": "Grammatical modifier with no presence in either candidate's code; cannot discriminate"
+    },
+    {
+      "term": "instead",
+      "reason": "Grammatical filler describing the bug symptom, not a software term"
+    },
+    {
+      "term": "above",
+      "reason": "Directional filler; appears in neither repo"
+    },
+    {
+      "term": "correctly",
+      "reason": "Describes expected behaviour, not a software term"
+    },
+    {
+      "term": "boundary",
+      "reason": "Describes the bug concept; not an identifier or component in either repo"
+    },
+    {
+      "term": "wrong",
+      "reason": "Describes the defect, not anything in the software"
+    },
+    {
+      "term": "rather",
+      "reason": "Grammatical filler connecting clauses"
+    },
+    {
+      "term": "omits",
+      "reason": "Describes the defect behaviour, not a software term"
+    },
+    {
+      "term": "final",
+      "reason": "Describes the bug; not in either repo's code"
+    },
+    {
+      "term": "renders",
+      "reason": "Generic verb; not an identifier in either repo"
+    },
+    {
+      "term": "every",
+      "reason": "Quantifier filler with no code presence"
+    },
+    {
+      "term": "except",
+      "reason": "Grammatical filler; not a software term"
+    },
+    {
+      "term": "shows",
+      "reason": "Generic verb; not an identifier"
+    },
+    {
+      "term": "reported",
+      "reason": "Generic verb; not an identifier in either repo"
+    },
+    {
+      "term": "omission",
+      "reason": "Describes the defect, not a software term"
+    },
+    {
+      "term": "unnoticed",
+      "reason": "Process word about discovery of the bug"
+    }
+  ],
+  "termsUsed": [
+    "riders",
+    "aged",
+    "charged",
+    "adult",
+    "fare",
+    "rules",
+    "over",
+    "concession",
+    "rider",
+    "full",
+    "cents",
+    "itself",
+    "than",
+    "rule",
+    "departure",
+    "board",
+    "stop",
+    "formatstops",
+    "last",
+    "three",
+    "line",
+    "journey",
+    "length",
+    "totalminutes",
+    "correct",
+    "which",
+    "gone"
+  ]
+}

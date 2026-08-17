@@ -1,0 +1,1 @@
+{"event_id":"evt-cost-20260817131730887-954965","timestamp":"2026-08-17T13:17:30.887Z","agent":"prompt-builder","story_id":null,"phase":null,"type":"cost_snapshot","model":null,"provider":"qwen","detail":{"costUsd":0.0548,"tokensIn":0,"tokensOut":0,"costUnknown":false,"turns":1,"source":"spec-mode-runner"}}

@@ -1,10 +1,22 @@
 {
   "minted": [
     {
-      "name": "contentstack-codeline-investigator",
+      "name": "typescript-bugfix-engineer",
+      "kind": "implementer",
+      "codeline": "",
+      "rationale": "Both tickets are small boundary/off-by-one fixes in TypeScript source files exercised by vitest, so a single implementer spanning both codelines is the correct scope rather than two near-duplicate roles.",
+      "surfaces": [
+        "profiles.json",
+        "kb",
+        "project-roles",
+        "project-profiles"
+      ]
+    },
+    {
+      "name": "mocka-investigator",
       "kind": "investigator",
-      "codeline": "metrolinx",
-      "rationale": "This codeline is the sole repository in scope and an investigator is needed to map its Contentstack integration, context-based content pipeline, and test conventions before implementers touch it.",
+      "codeline": "mocka",
+      "rationale": "The fare-boundary fix is a one-line change, but the investigator must confirm no caller of fareFor or totalFor relies on the current incorrect boundary and characterise what test coverage for age 65 should look like — work that requires reading mocka specifically.",
       "surfaces": [
         "profiles.json",
         "kb",
@@ -13,26 +25,14 @@
       ]
     },
     {
-      "name": "contentstack-sdk-engineer",
-      "kind": "implementer",
-      "codeline": "",
-      "rationale": "The Stack initialization in contentstack.ts needs live_preview configuration added and @contentstack/live-preview-utils declared as a dependency, which requires focused SDK-level work distinct from the React context wiring.",
+      "name": "mockb-investigator",
+      "kind": "investigator",
+      "codeline": "mockb",
+      "rationale": "The loop-bound fix in formatStops is small, but the investigator must verify no caller compensates for the missing last stop and describe what the test suite currently asserts about stop rendering — work that requires reading mockb specifically.",
       "surfaces": [
         "profiles.json",
         "kb",
-        "project-roles",
-        "project-profiles"
-      ]
-    },
-    {
-      "name": "contentstack-preview-react-engineer",
-      "kind": "implementer",
-      "codeline": "",
-      "rationale": "The onEntryChange callback must be wired into the React context that distributes Contentstack content, not individual page components, which requires React-specific integration work separate from SDK configuration.",
-      "surfaces": [
-        "profiles.json",
-        "kb",
-        "project-roles",
+        "project-investigators",
         "project-profiles"
       ]
     }
@@ -40,11 +40,11 @@
   "rejected": [],
   "unchanged": [],
   "projectRoles": [
-    "contentstack-sdk-engineer",
-    "contentstack-preview-react-engineer"
+    "typescript-bugfix-engineer"
   ],
   "projectInvestigators": [
-    "contentstack-codeline-investigator"
+    "mocka-investigator",
+    "mockb-investigator"
   ],
   "proposed": 3,
   "rejectedAcrossAttempts": [],

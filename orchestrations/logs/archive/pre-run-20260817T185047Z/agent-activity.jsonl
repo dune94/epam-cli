@@ -1,0 +1,2 @@
+{"event_id":"evt-1786992647682-af3064ab","timestamp":"2026-08-17T18:50:47.682Z","agent":"ac-classification","story_id":null,"phase":null,"type":"tool_run","detail":{"tool":"read_file","args":{"path":"test/integration/jira-ingest-project-identity.test.ts"}}}
+{"event_id":"evt-1786992647684-85ae264b","timestamp":"2026-08-17T18:50:47.684Z","agent":"ac-classification","story_id":null,"phase":null,"type":"tool_result","detail":{"tool":"read_file","ok":true,"ms":2,"bytes":7264}}

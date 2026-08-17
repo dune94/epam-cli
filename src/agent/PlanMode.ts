@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { templatePath } from '../prompts/templatesDir';
 import { join } from 'node:path';
 import * as fs from 'fs/promises';
 
@@ -12,7 +13,7 @@ import * as fs from 'fs/promises';
  */
 function planPrompt(userRequest: string): string {
   const id = 'agent-plan-mode';
-  const file = join(__dirname, '../..', 'orchestrations', 'prompts', 'templates', `${id}.json`);
+  const file = templatePath(id);
   const doc = JSON.parse(readFileSync(file, 'utf8')) as { body?: string };
   if (!doc.body) throw new Error('[plan-mode] template agent-plan-mode has no body');
   const out = doc.body.split('__USER_REQUEST__').join(userRequest);

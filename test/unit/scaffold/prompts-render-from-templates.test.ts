@@ -92,11 +92,16 @@ describe('the compiled bundle can find the template layer', () => {
     expect(r.stdout.length, 'the compiled bundle rendered an empty prompt').toBeGreaterThan(200);
   });
 
-  it('the resolver tries the depth the compiled layout actually sits at', () => {
-    // dist/ is one level below the root. A loop that starts at '../..' can never reach it.
-    const src = readFileSync(join(__dirname, '../../../src/scaffold/prompts.ts'), 'utf8');
-    const loop = /for \(const up of \[([^\]]*)\]/.exec(src);
-    expect(loop, 'the candidate list is gone').toBeTruthy();
-    expect(loop![1], "the one-level-up candidate dist/ needs is missing").toMatch(/'\.\.'/);
+  it('the template location comes from config, not from engine code', () => {
+    // WAS: asserted the candidate list contained a '..' entry — i.e. that the walk guessed the
+    // right number of levels. That mechanism is gone: guessing levels is what produced three
+    // different wrong answers in three files. The location is declared in
+    // orchestrations/config/engine-layout.json, so the requirement is that no engine file spells
+    // it out at all.
+    const resolver = readFileSync(join(__dirname, '../../../src/prompts/templatesDir.ts'), 'utf8')
+      .split('\n').filter((l) => !/^\s*(\*|\/\/)/.test(l)).join('\n');
+    expect(resolver, 'the resolver names the template directory in code')
+      .not.toMatch(/'prompts'\s*,\s*'templates'|orchestrations\/prompts\/templates/);
+    expect(resolver, 'the location is no longer read from config').toMatch(/engine-layout\.json/);
   });
 });

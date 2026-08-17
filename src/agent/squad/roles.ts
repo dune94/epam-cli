@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { templatePath } from '../../prompts/templatesDir';
 import { join } from 'node:path';
 
 import type { Tool } from '../../tools/types.js';
@@ -12,7 +13,7 @@ import type { Tool } from '../../tools/types.js';
  * working and follow no instructions at all.
  */
 function squadPrompt(id: string): string {
-  const file = join(__dirname, '../../..', 'orchestrations', 'prompts', 'templates', `${id}.json`);
+  const file = templatePath(id);
   const doc = JSON.parse(readFileSync(file, 'utf8')) as { body?: string };
   if (!doc.body) throw new Error(`[squad] template '${id}' has no body (${file})`);
   return doc.body;

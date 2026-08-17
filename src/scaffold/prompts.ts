@@ -14,6 +14,7 @@
 // the point: two paths rendering one prompt cannot drift.
 
 import { readFileSync } from 'node:fs';
+import { templatesDir } from '../prompts/templatesDir';
 import { join } from 'node:path';
 
 import { FIXED_AGENT_ROLES } from './prdTypes.js';
@@ -22,24 +23,6 @@ import { FIXED_AGENT_ROLES } from './prdTypes.js';
  * The template layer, found from this module rather than from the working directory: `epam new`
  * runs wherever the user happens to be, and the orchestration mint loads this through dist/sdk.js.
  */
-function templatesDir(): string {
-  // __dirname: this package compiles to CommonJS, so import.meta is not available here.
-  const here = __dirname;
-  // THE COMPILED AND SOURCE LAYOUTS SIT AT DIFFERENT DEPTHS, and this loop used to claim they did
-  // not ("dist/ and src/scaffold/ are both two levels below the repository root"). They are not:
-  // src/scaffold/ is two levels down, dist/ is ONE. So every candidate resolved above the
-  // repository from the compiled bundle, and getAgentProposalPrompt threw — the mint loads it from
-  // dist/sdk.js, so the FIRST agent of every run would have failed.
-  //
-  // It survived because the tests exercise the source tree, where '../..' is correct. Walking a
-  // range of depths removes the assumption entirely rather than swapping one fixed guess for
-  // another.
-  for (const up of ['..', '../..', '../../..', '../../../..']) {
-    const candidate = join(here, up, 'orchestrations', 'prompts', 'templates');
-    try { readFileSync(join(candidate, 'agent-proposal.json'), 'utf8'); return candidate; } catch { /* next */ }
-  }
-  throw new Error('[prompts] cannot locate orchestrations/prompts/templates from ' + here);
-}
 
 /**
  * Render one template. STRICT IN BOTH DIRECTIONS, like the pipeline's own renderers: a placeholder

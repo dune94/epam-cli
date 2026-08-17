@@ -1,0 +1,11 @@
+{
+  "$comment": "WHERE THE ENGINE KEEPS ITS OWN THINGS, declared once. Repository-relative paths, resolved against the engine root. Extracted 2026-08-17: three TypeScript files each spelled the template directory as a hardcoded relative walk from __dirname, with three DIFFERENT level counts — every one correct from src/ and wrong from the compiled bundle, which is one level down. Each resolved above the repository at runtime and threw ENOENT; it cost three consecutive launches. A path written into engine code is a fact the engine cannot be told, and this is the file it is told in.",
+
+  "$overrideComment": "Every entry may be overridden by the matching environment variable, for a packaged install that lays the engine out differently. An override is taken as absolute if it is, otherwise resolved against the engine root.",
+
+  "promptTemplates": {
+    "path": "orchestrations/prompts/templates",
+    "env": "EPAM_PROMPT_TEMPLATES_DIR",
+    "$what": "The immutable prompt template layer. Every agent prompt in the pipeline is rendered from a JSON file here."
+  }
+}

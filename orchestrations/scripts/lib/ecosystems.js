@@ -23,6 +23,10 @@
 const MANIFESTS = [
   {
     file: 'package.json',
+    // FILES A WRITER MUST NEVER EDIT — the scaffold/infrastructure this ecosystem is configured
+    // by. Prompts used to name these directly ("NEVER modify package.json, tsconfig.json,
+    // vitest.config.ts"), which told every agent on every project that the world is Node.
+    protectedFiles: ['package.json', 'tsconfig.json', 'package-lock.json', 'pnpm-lock.yaml', 'yarn.lock'],
     // WHAT THIS ECOSYSTEM LEAVES BEHIND. Never staged into a client repository and never reported
     // as uncommitted agent work. Was three hand-written lists in two shell files, naming
     // node_modules, build and .next between them — one ecosystem — so a Rust codeline staged
@@ -75,6 +79,10 @@ const MANIFESTS = [
   },
   {
     file: 'pyproject.toml',
+    // FILES A WRITER MUST NEVER EDIT — the scaffold/infrastructure this ecosystem is configured
+    // by. Prompts used to name these directly ("NEVER modify package.json, tsconfig.json,
+    // vitest.config.ts"), which told every agent on every project that the world is Node.
+    protectedFiles: ['pyproject.toml', 'setup.cfg', 'tox.ini'],
     // HOW THIS ECOSYSTEM INSTALLS ITS DEPENDENCIES.
     //
     // The unit-test gate ran `npm install` unconditionally and then required
@@ -131,6 +139,10 @@ const MANIFESTS = [
   },
   {
     file: 'requirements.txt',
+    // FILES A WRITER MUST NEVER EDIT — the scaffold/infrastructure this ecosystem is configured
+    // by. Prompts used to name these directly ("NEVER modify package.json, tsconfig.json,
+    // vitest.config.ts"), which told every agent on every project that the world is Node.
+    protectedFiles: ['requirements.txt', 'setup.cfg'],
     // HOW THIS ECOSYSTEM INSTALLS ITS DEPENDENCIES.
     //
     // The unit-test gate ran `npm install` unconditionally and then required
@@ -161,6 +173,10 @@ const MANIFESTS = [
   },
   {
     file: 'go.mod',
+    // FILES A WRITER MUST NEVER EDIT — the scaffold/infrastructure this ecosystem is configured
+    // by. Prompts used to name these directly ("NEVER modify package.json, tsconfig.json,
+    // vitest.config.ts"), which told every agent on every project that the world is Node.
+    protectedFiles: ['go.mod', 'go.sum'],
     // HOW THIS ECOSYSTEM INSTALLS ITS DEPENDENCIES.
     //
     // The unit-test gate ran `npm install` unconditionally and then required
@@ -198,6 +214,10 @@ const MANIFESTS = [
   },
   {
     file: 'Cargo.toml',
+    // FILES A WRITER MUST NEVER EDIT — the scaffold/infrastructure this ecosystem is configured
+    // by. Prompts used to name these directly ("NEVER modify package.json, tsconfig.json,
+    // vitest.config.ts"), which told every agent on every project that the world is Node.
+    protectedFiles: ['Cargo.toml', 'Cargo.lock'],
     // HOW THIS ECOSYSTEM INSTALLS ITS DEPENDENCIES.
     //
     // The unit-test gate ran `npm install` unconditionally and then required
@@ -238,6 +258,10 @@ const MANIFESTS = [
   },
   {
     file: 'Gemfile',
+    // FILES A WRITER MUST NEVER EDIT — the scaffold/infrastructure this ecosystem is configured
+    // by. Prompts used to name these directly ("NEVER modify package.json, tsconfig.json,
+    // vitest.config.ts"), which told every agent on every project that the world is Node.
+    protectedFiles: ['Gemfile', 'Gemfile.lock', '.rubocop.yml'],
     // HOW THIS ECOSYSTEM INSTALLS ITS DEPENDENCIES.
     //
     // The unit-test gate ran `npm install` unconditionally and then required

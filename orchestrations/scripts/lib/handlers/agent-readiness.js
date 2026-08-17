@@ -20,13 +20,27 @@
  *
  *   argv[2]  the project config dir (its prompts/ is the project prompt library)
  *   argv[3]  optional: agents dir (default: <engine>/orchestrations/agents)
+ *   argv[4]  optional: the roster file this run is actually using
  *
  *   stdout   one JSON object: { agents: [...], gaps: [...], ready: bool }
  *   exit 0   every agent is ready
  *   exit 1   at least one gap — the gaps array says which, per agent, per requirement
+ *   exit 2   the audit could not run, or had nothing to audit
  *
  * Reports GAPS, never guesses a remedy: an agent missing a tool grant is a decision for whoever
  * declared the seam, and a handler that invented one would hide the omission.
+ *
+ * IT MUST AUDIT THE RUN, NOT A FILE.
+ *
+ * It read agents/profiles.json unconditionally. That file is the canonical roster, restored to a
+ * base state at the start of every run, and the agents a run MINTS live in the project store until
+ * applyProjectProfiles merges them in. So the audit could pass in full while the four agents this
+ * run had just created were not in the set at all — the same vacuous shape as a gate that reports
+ * success because it had nothing to examine.
+ *
+ * Two changes: the roster file is named by the caller, and the project's minted profiles are
+ * overlaid on top regardless — a minted agent is never silently outside the audit. And an EMPTY
+ * roster is exit 2, never "ready": zero agents, zero gaps is not a pass.
  */
 'use strict';
 
@@ -48,20 +62,40 @@ const templatesDir = path.join(engineRoot, 'orchestrations', 'prompts', 'templat
 const readJson = (p) => JSON.parse(fs.readFileSync(p, 'utf8'));
 const exists = (p) => fs.existsSync(p);
 
+const rosterFile = process.argv[4] || path.join(agentsDir, 'profiles.json');
+
 let registry;
 let profiles;
 try {
   registry = readJson(path.join(agentsDir, 'invocation-profiles.json'));
-  profiles = readJson(path.join(agentsDir, 'profiles.json'));
+  profiles = readJson(rosterFile);
 } catch (err) {
   process.stderr.write(`[agent-readiness] cannot read the roster: ${err.message}\n`);
   process.exit(2);
 }
 
 const { resolveSeam, seamInvocationEnv } = require('../seam-invocation.js');
+const { projectProfilesPath } = require('../agent-roster.js');
 
-/** Every agent with a minted profile — the roster this run will actually invoke. */
+/** Every agent this run will actually invoke: the roster, plus whatever this run minted. */
 const agents = Object.keys(profiles).filter((k) => !k.startsWith('_'));
+const mintedNames = [];
+try {
+  const store = readJson(projectProfilesPath(agentsDir)).profiles || {};
+  for (const name of Object.keys(store)) {
+    mintedNames.push(name);
+    if (!agents.includes(name)) agents.push(name);
+  }
+} catch { /* no project store yet — a first run mints into an empty one */ }
+
+// ZERO AGENTS, ZERO GAPS IS NOT A PASS. It is the audit reporting that it had nothing to look at.
+if (!agents.length) {
+  process.stderr.write(
+    `[agent-readiness] the roster at ${rosterFile} holds no agents, and the project store at `
+    + `${projectProfilesPath(agentsDir)} adds none. There is nothing to audit — which is not the `
+    + 'same as everything being ready, so this is a failure rather than a pass.\n');
+  process.exit(2);
+}
 
 /** What produces each input kind, declared by the seams themselves. */
 const producers = new Set(
@@ -87,7 +121,11 @@ const report = [];
 const gaps = [];
 
 for (const agent of agents) {
-  const row = { agent, seam: null, ladder: null, prompt: null, inputs: [], tools: null, skills: null };
+  const row = {
+    agent,
+    minted: mintedNames.includes(agent),
+    seam: null, ladder: null, prompt: null, inputs: [], tools: null, skills: null,
+  };
 
   // ── seam ────────────────────────────────────────────────────────────────
   let seamName;
@@ -168,6 +206,13 @@ for (const agent of agents) {
   report.push(row);
 }
 
-const out = { agents: report, gaps, ready: gaps.length === 0 };
+const out = {
+  roster: rosterFile,
+  audited: report.length,
+  minted: mintedNames,
+  agents: report,
+  gaps,
+  ready: gaps.length === 0,
+};
 process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
 process.exit(gaps.length ? 1 : 0);

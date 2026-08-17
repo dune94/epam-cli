@@ -544,6 +544,49 @@ elif [ -n "$_AGENTS_DIR" ] && [ -f "$_AGENTS_DIR/profiles.json.original" ]; then
         || true
 fi
 
+# ── Restore the runtime PRD from its canonical original ─────────────────────
+#
+# THE PRD IS THE THIRD PLACE AN ASSIGNMENT LIVES, AND THE ONLY ONE NOTHING RESET.
+#
+# The two registries and role-assignments.json are cleared above, for the reason given there: a
+# roster is ephemeral, so an assignment that outlives it names an agent with no brief. Each story
+# in the PRD carries an agentRole too, written during the run — and nothing ever cleared it.
+#
+# Live 2026-08-17, mock3 run 20260817T152632Z. The reset ran, the roster was restored to canonical,
+# the mint drew a FRESH roster (typescript-logic-engineer, mocka-fares-investigator,
+# mockb-schedule-investigator) and the roster review passed. Assignment then read the PRD, found
+# "transit-fare-engineer" left there by the run before, and correctly refused:
+#
+#   [assign] MOCK3-1 was assigned "transit-fare-engineer", which is not in the roster — it has no
+#   profile entry, so the writer would run with an empty system prompt.
+#
+# Minted names are a fresh draw every run, so a persisted assignment is stale BY CONSTRUCTION: it
+# can only be right by coincidence, and the coincidence gets rarer as roles are renamed.
+#
+# The per-project launchers this repo replaced (tier3-travel-app-run.sh, tier3-skyscanner-app-run.sh)
+# each restored the PRD themselves. Generalising them into tier3-run.sh — "25 of that launcher's 588
+# lines name its project" — dropped the restore along with the project names, and no launcher has
+# done it since. It belongs here rather than in any launcher, next to the roster and KB restores, so
+# every launcher inherits it and there is one place to change.
+#
+# Restores the WHOLE file rather than stripping known fields: the canonical is the base state, and a
+# subtractive list would silently miss the next per-run field somebody adds.
+if [ "$_IS_RESUME" = "1" ]; then
+    info "  Resume — keeping the runtime PRD as the run left it; not restoring from canonical"
+elif [ -n "${PRD_FILE:-}" ] && [ -f "$(dirname "$PRD_FILE")/prd.canonical.json" ]; then
+    _PRD_CANON="$(dirname "$PRD_FILE")/prd.canonical.json"
+    # VALIDATED BEFORE IT REPLACES ANYTHING. Copying a corrupt canonical over the runtime PRD
+    # would destroy the only other copy and fail much later, somewhere that reads as a PRD defect.
+    if ! jq -e . "$_PRD_CANON" >/dev/null 2>&1; then
+        fail "$_PRD_CANON is not valid JSON. The runtime PRD is NOT restored and still carries the
+  previous run's assignments, so this run cannot start clean. Repair the canonical before running."
+    fi
+    cp "$_PRD_CANON" "$PRD_FILE" \
+        || fail "could not restore the PRD from $_PRD_CANON — refusing to start a run that would
+  inherit the previous run's agent assignments."
+    info "  PRD restored from canonical — prior run's agent assignments and resolved codelines are gone"
+fi
+
 # Clear stale lock files
 for lf in "$LOG_DIR"/*.lock; do
   [ -f "$lf" ] && > "$lf"

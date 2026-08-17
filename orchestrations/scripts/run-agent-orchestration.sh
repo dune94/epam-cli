@@ -6400,6 +6400,25 @@ if [ "$need_worktrees" = true ]; then
     # against a branch that may not exist.
     _merge_current_branch=$(git -C "$_merge_git_root" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "${JIRA_BASELINE_BRANCH:-}")
 
+    # THE TARGET MUST BE A REAL BRANCH, AND SAYING SO IS THE WHOLE POINT.
+    #
+    # Two ways it is not, and NEITHER ANNOUNCES ITSELF. An unreadable HEAD with no configured
+    # baseline leaves this EMPTY — and an empty side of a git range silently defaults to HEAD, so
+    # `rev-list --count "..wt-primary"` returns a perfectly sensible number and every check below
+    # passes. A detached HEAD makes `--abbrev-ref` return the literal string "HEAD", which is not a
+    # branch either.
+    #
+    # Both then merge onto a detached HEAD: the merge commit is referenced by no branch, so the
+    # lane's work is unreachable at the next checkout and the next phase, which recreates lane
+    # branches from HEAD, inherits nothing. Every step reports success while the work is discarded.
+    # Verified rather than assumed — see the-merge-back-says-what-actually-stopped-it.test.ts.
+    if [ -z "$_merge_current_branch" ] || [ "$_merge_current_branch" = "HEAD" ] \
+       || ! git -C "$_merge_git_root" show-ref --verify --quiet "refs/heads/$_merge_current_branch"; then
+        error "Step 17: cannot resolve a branch to merge into in $_merge_git_root (HEAD resolves to '${_merge_current_branch:-<nothing>}')"
+        error "  The lane branches and their commits are intact — this is the target, not the work. Nothing was merged and nothing was discarded."
+        exit 1
+    fi
+
     MERGE_FAILED=false
 
     _active_wt_branches=()
@@ -6454,11 +6473,20 @@ if [ "$need_worktrees" = true ]; then
             _mt_conflict_files=$(echo "$_mt_output" | tail -n +2 | awk '/^$/{exit} {print}')
             error "  Merge-integrity guard: $_wt_branch conflicts with $_merge_current_branch in: ${_mt_conflict_files:-<unknown file>}"
             error "  Proceeding with '-X ours' would SILENTLY DISCARD $_wt_branch's changes there with no trace — refusing to auto-resolve."
-            mkdir -p "${PROJECT_ROOT}/.epam/merge-conflicts"
-            jq -n --arg branch "$_wt_branch" --arg target "$_merge_current_branch" \
+            # BESIDE THE REPOSITORY THAT ACTUALLY CONFLICTED. This wrote to PROJECT_ROOT while the
+            # merge runs in $_merge_git_root, so whenever the two differ the record landed next to a
+            # repository that had no conflict, and the one that did carried no evidence.
+            #
+            # AND THE WRITE IS NOT SILENCED. It ended in `2>/dev/null`, so a failed jq left no file
+            # and no message — this record is the only durable trace of which files a lane could not
+            # merge, and the error above scrolls away with the run log.
+            _mc_dir="${_merge_git_root}/.epam/merge-conflicts"
+            if ! mkdir -p "$_mc_dir" 2>/dev/null || ! jq -n --arg branch "$_wt_branch" --arg target "$_merge_current_branch" \
                 --arg files "$_mt_conflict_files" --arg phase "$PHASE" \
                 '{phase: $phase, branch: $branch, target: $target, conflictingFiles: ($files | split("\n") | map(select(length > 0))), detectedAt: (now | todate)}' \
-                > "${PROJECT_ROOT}/.epam/merge-conflicts/${PHASE}-${_wt_branch}.json" 2>/dev/null
+                > "${_mc_dir}/${PHASE}-${_wt_branch}.json"; then
+                error "  Could not record the conflict to ${_mc_dir} — the file list above is the only copy."
+            fi
             "$SCRIPT_DIR/update-monitor.sh" event "merge_conflict" \
                 "Merge-integrity guard: $_wt_branch conflicts with $_merge_current_branch in ${_mt_conflict_files:-unknown file} — refusing silent -X ours resolution" "" "main" "orchestrator" 2>/dev/null || true
             MERGE_FAILED=true

@@ -172,6 +172,23 @@ function seamInvocationEnv(agent, agentsDir, opts) {
   if (!profile) return {};
 
   const env = {};
+
+  // THE SEAM THAT WAS RESOLVED, STAMPED ONCE, SO EVERY CONSUMER READS ONE IDENTITY.
+  //
+  // Call sites already name their seam — seamInvocationEnv('agent-mint', …) — and then separately
+  // pass an unrelated literal for the cost label, the log tag and the dashboard row. Two identities
+  // for one invocation, kept in step by hand.
+  //
+  // Live 2026-08-17, run 20260817T162132Z: phase-cost.jsonl recorded ESTATE_SURVEY, PROJECT_AGENTS,
+  // ROSTER_REVIEW and ROLE_ASSIGNMENTS beside codeline-discovery and prompt-builder. Two of those
+  // four name no seam at all (PROJECT_AGENTS is 'agent-mint', ROLE_ASSIGNMENTS is 'role-assigner'),
+  // so per-agent spend could not be joined to the roster, the registry or the activity timeline —
+  // and normalising the case would not have fixed it, because the names genuinely differ.
+  //
+  // Resolved, not declared: this is the seam the invocation ACTUALLY entered, including via a
+  // seamPattern, so it stays correct for a minted agent whose name nobody wrote down anywhere.
+  env.EPAM_SEAM = seam;
+
   if (profile.reasoningEffort) env.EPAM_REASONING_EFFORT = String(profile.reasoningEffort);
   if (profile.temperature !== undefined && profile.temperature !== '') {
     env.EPAM_TEMPERATURE = String(profile.temperature);

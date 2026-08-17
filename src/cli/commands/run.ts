@@ -184,7 +184,26 @@ export function buildRunResultJson(
   // it — see AgentRunner.buildResult) over the local pricing-table estimate. The estimate is
   // fallback-only, and cost_is_estimate says which one this is — silently presenting an estimate
   // as confirmed spend is the bug that field exists to prevent (feedback_real_cost_tracking_critical).
-  const isEstimate = result.usage.costUsd == null;
+  // A PROVIDER ZERO ALONGSIDE REAL TOKENS IS A MISSING COST, NOT A FREE CALL.
+  //
+  // This tested `costUsd == null`, which is true only for null/undefined. A provider that returns
+  // 0 because it does not know — OpenRouter does this for several models — landed in the "real
+  // billed cost" branch, was published as confirmed spend, and the pricing table was never asked.
+  //
+  // Live 2026-08-17, mock3 run 20260817T162132Z: every call ran on z-ai/glm-5.2, which IS priced
+  // at $0.93/M in and $3.00/M out, and 13 of 14 ledger records carried costUsd 0. Recorded
+  // $0.0069 against $0.2592 of actual consumption — a 37x under-report on the measurement the
+  // operator has called priority #1. It degrades exactly where it hurts most: the story budget
+  // guard sums these to enforce storyBudgetHardLimitUsd, so a runaway story on a zero-reporting
+  // provider is invisible to the only mechanism that stops it.
+  //
+  // Zero tokens with zero cost is still a genuinely free call and stays 0 — otherwise every no-op
+  // would acquire a phantom charge.
+  const consumedTokens = result.usage.inputTokens > 0 || result.usage.outputTokens > 0;
+  const providerGaveCost = result.usage.costUsd != null
+    && !(result.usage.costUsd === 0 && consumedTokens);
+
+  const isEstimate = !providerGaveCost;
   const cost = isEstimate
     ? calculateCost(config.model, result.usage.inputTokens, result.usage.outputTokens)
     : result.usage.costUsd!;

@@ -1279,7 +1279,7 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
     // than the implementation default (4096) so speckit never truncates mid-JSON.
     // SPEC_MODE_MAX_OUTPUT_TOKENS is spec-only; it doesn't affect implementation runs.
     const specEnv = Object.assign(specAgentEnv(process.env, repoPath), envOverride || {});
-    const output = await runClaude(directExec, prompt, logPath, specEnv, { costAgent: tag, costStoryId: storyId });
+    const output = await runClaude(directExec, prompt, logPath, specEnv, { costAgent: costLabelFor(tag, specEnv), costStoryId: storyId });
     return _validatedOrNull(extractTaggedJson(output, tag), tag);
   }
 
@@ -1308,7 +1308,7 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
     // which always wins. Without this fix the ladder calls MiniMax again.
     const ladderExec = { cmd: execSpec.cmd, args: ['--provider', ladderProvider] };
     const output = await Promise.race([
-      runClaude(ladderExec, prompt, logPath, envOverride || {}, { costAgent: tag, costStoryId: storyId }),
+      runClaude(ladderExec, prompt, logPath, envOverride || {}, { costAgent: costLabelFor(tag, envOverride), costStoryId: storyId }),
       new Promise((_, reject) => setTimeout(() => reject(new Error(`ladder hard-timeout after ${ladderTimeout}ms`)), ladderTimeout + 5000))
     ]);
     return _validatedOrNull(extractTaggedJson(output, tag), tag);
@@ -1322,7 +1322,7 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
   // and ai-run.sh forces --no-tools without AI_GATE_ALLOW_TOOLS. The agent could then only
   // classify a URL from its address; its `quotes` field could never be populated, which is
   // the whole reason the step exists. Silent, and invisible in the output.
-  const output = await runClaude(execSpec, prompt, logPath, envOverride || {}, { costAgent: tag, costStoryId: storyId });
+  const output = await runClaude(execSpec, prompt, logPath, envOverride || {}, { costAgent: costLabelFor(tag, envOverride), costStoryId: storyId });
   return _validatedOrNull(extractTaggedJson(output, tag), tag);
 }
 
@@ -3223,7 +3223,10 @@ async function surveyEstate({
   }
 
   const clean = sanitizeSurvey(payload, _named);
-  const result = { ...clean, ran: true };
+  // CHECKED BEFORE IT IS PERSISTED, not after something downstream trips over it. A codeline
+  // reported in_scope on files it does not have was never examined, and the file written below is
+  // what every later consumer treats as evidence.
+  const result = validateSurveyFilesRead({ ...clean, ran: true }, _named);
 
   // Persisted at generation time. What the roster was grounded in has to outlive the process
   // that produced it, or the pause has nothing to show and a later run cannot tell whether a
@@ -3359,7 +3362,22 @@ function reconcileMintTally(r) {
   const stillRejected = new Set((res.rejected || []).map((x) => x && x.name));
   const superseded = (res.rejectedAcrossAttempts || [])
     .filter((x) => x && !stillRejected.has(x.name)).length;
-  const unaccounted = Math.max(0, proposed - minted - unchanged - rejected - superseded);
+  // EVERY PROPOSAL EVENT HAS EXACTLY ONE OUTCOME: minted, unchanged, or refused.
+  //
+  // This subtracted `rejected` (UNIQUE names still refused) and `superseded` as if both were
+  // buckets. `proposed` counts proposal EVENTS across attempts, so an agent refused on two
+  // attempts consumed two proposals but was subtracted once — and `superseded` double-counted,
+  // because a superseded proposal's refusal is already in rejectedAcrossAttempts and its later
+  // success is already in `minted`.
+  //
+  // Live 2026-08-17, run 20260817T162132Z: proposed=5 minted=3 rejected=1 superseded=0 left
+  // UNACCOUNTED=1, which was mockb-codebase-investigator's SECOND refusal, not a lost agent.
+  // 3 minted + 0 unchanged + 2 refusal events = 5.
+  //
+  // `rejected` and `superseded` remain in the report as descriptors — which agents are still
+  // refused, and which were corrected on a later attempt — but only refusal EVENTS are subtracted.
+  const refusalEvents = Math.max(len(res.rejectedAcrossAttempts), rejected);
+  const unaccounted = Math.max(0, proposed - minted - unchanged - refusalEvents);
   return { proposed, minted, unchanged, rejected, superseded, unaccounted };
 }
 
@@ -8628,7 +8646,99 @@ if (require.main === module) {
   }
 }
 
+/**
+ * WHICH NAME A COST ROW CARRIES.
+ *
+ * One invocation had two identities: the seam the call site declares, and an unrelated literal
+ * passed alongside it as the cost/log tag. They agreed by luck of spelling on some and differed
+ * outright on others, so per-agent spend could not be joined to the roster or the registry.
+ *
+ * Precedence, most specific first:
+ *   EPAM_AGENT_NAME  the actual agent, when one is named. Many agents share a seam — every
+ *                    -investigator runs at code-graph-detective — and collapsing them onto the
+ *                    archetype is exactly what makes per-agent cost unreadable.
+ *   EPAM_SEAM        the seam the invocation resolved into, stamped by seamInvocationEnv.
+ *   tag              the caller's literal, so a site not yet carrying a seam still records a row.
+ *                    Losing the row entirely would be worse than an unjoinable name.
+ */
+function costLabelFor(tag, env) {
+  const e = env || {};
+  return e.EPAM_AGENT_NAME || e.EPAM_SEAM || tag;
+}
+
+/**
+ * A SURVEY CLAIM ABOUT A FILE IS CHECKABLE. CHECK IT.
+ *
+ * The survey prompt already demands "if you report a codeline as in_scope you must name AT LEAST
+ * ONE FILE you opened in it", because a claim about an unread repository is how an unexamined
+ * codeline comes to read as a clean bill of health. Nothing verified the named file was actually
+ * in that codeline.
+ *
+ * Live 2026-08-17, run 20260817T162132Z:
+ *
+ *     mocka | in_scope | filesRead: ["src/fares.ts", "test/fares.test.ts"]
+ *     mockb | in_scope | filesRead: ["src/fares.ts", "test/fares.test.ts"]
+ *
+ * mockb holds only schedule.ts. The survey read mocka's files and attributed them to both, so
+ * MOCK3-2 — the real mockb defect — was never identified. The roster stage refused the resulting
+ * investigator brief, which saved the run, but estate-survey.json kept the falsehood and every
+ * other consumer of that file inherits it.
+ *
+ * A path resolves under the codeline root or it does not. Decidable in code, at the point the claim
+ * is made, with no model asked to adjudicate — the deterministic check is always preferable to
+ * persuading the next agent harder.
+ *
+ * IT DOWNGRADES, NEVER DELETES. An in_scope claim with no verifiable file becomes
+ * not_investigated, which is the survey's own vocabulary for "this was not really looked at", with
+ * the rejected path named in the evidence. Dropping the entry would lose the single fact a later
+ * reader most needs: that this codeline was never examined.
+ */
+function validateSurveyFilesRead(survey, codelines) {
+  if (!survey || !survey.ran || !Array.isArray(survey.codelines)) return survey;
+
+  const rootOf = new Map();
+  for (const c of codelines || []) {
+    if (c && c.name && c.path) rootOf.set(String(c.name), String(c.path));
+  }
+
+  const checked = survey.codelines.map((entry) => {
+    if (!entry || entry.state !== 'in_scope') return entry;
+
+    const root = rootOf.get(String(entry.codeline || ''));
+    const claimed = Array.isArray(entry.filesRead) ? entry.filesRead : [];
+
+    // A codeline nobody declared cannot be verified at all, so its claim cannot be accepted.
+    const kept = root
+      ? claimed.filter((f) => {
+        try { return fs.existsSync(path.resolve(root, String(f))); } catch { return false; }
+      })
+      : [];
+    const rejected = claimed.filter((f) => !kept.includes(f));
+    if (!rejected.length && kept.length) return entry;
+
+    const why = root
+      ? `${rejected.length} path(s) named here does not exist in this codeline: ${rejected.join(', ')}.`
+      : `codeline '${entry.codeline}' is not one of the codelines in scope, so nothing could be verified.`;
+
+    if (kept.length) {
+      // Partly true: keep what checks out, and say what did not.
+      return { ...entry, filesRead: kept, evidence: `${entry.evidence || ''} [verified] ${why}`.trim() };
+    }
+    return {
+      ...entry,
+      state: 'not_investigated',
+      filesRead: [],
+      evidence: `${entry.evidence || ''} [downgraded from in_scope] ${why} `
+        + 'No file it named could be opened, so this codeline was not actually examined.'.trim(),
+    };
+  });
+
+  return { ...survey, codelines: checked };
+}
+
 module.exports = {
+  validateSurveyFilesRead,
+  costLabelFor,
   // The tool definitions ARE the contract. Exported so lib/agent-output-schema.js can
   // validate answers against them instead of restating the shapes — a restated copy
   // drifted within hours and rejected valid coordinator output on a live run.

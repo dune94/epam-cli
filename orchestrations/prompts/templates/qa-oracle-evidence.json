@@ -7,7 +7,9 @@
     "point of precomputing it. Without it a gate re-derives what it was already given, which is the",
     "max-iteration exhaustion these oracles exist to prevent.",
     "",
-    "One body per oracle, because each names its own source and a gate is handed only its own."
+    "One body per oracle, because each names its own source and a gate is handed only its own.",
+    "",
+    "2026-08-17: the section heading named npm. It is rendered above whatever dependency evidence the codeline produced, which is not always npm audit."
   ],
   "description": "Prepends precomputed oracle evidence to a QA gate prompt and frames it as ground truth.",
   "seams": [
@@ -18,7 +20,7 @@
   "version": 1,
   "bodies": {
     "semgrep": "## Semgrep Static Analysis Results (hard evidence — treat as ground truth)\n__SEMGREP_SUMMARY__\n\n__SAST_PROMPT__",
-    "npm_audit": "## npm Audit Results (hard evidence — dependency CVEs)\n__AUDIT_SUMMARY__\n\n__SAST_PROMPT__",
+    "npm_audit": "## Dependency Audit Results (hard evidence — dependency CVEs)\n__AUDIT_SUMMARY__\n\n__SAST_PROMPT__",
     "typescript": "## TypeScript Compiler Results (hard evidence — treat as ground truth)\n__TSC_SUMMARY__\n\n__SAST_PROMPT__",
     "test_results": "## Actual Test Results (hard evidence — use this as ground truth)\n__ORACLE_SUMMARY__\n\n__SPEC_PROMPT__"
   },

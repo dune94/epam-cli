@@ -29,6 +29,37 @@
 const fs = require('fs');
 const path = require('path');
 
+/**
+ * THE STACK FACTS THIS RENDERER CAN FILL IN, resolved once per process.
+ *
+ * Keyed off the codeline being worked on, which every agent invocation already knows. Failure is
+ * NOT fatal here: a template that declares one of these still fails loudly below with "missing
+ * values for", which names the template and is the diagnosis a reader needs. Throwing from the
+ * loader would blame the wrong thing.
+ */
+const STACK_FACT_KEYS = [
+  '__STACK__', '__MANIFEST_FILE__', '__TEST_COMMAND__',
+  '__TEST_FILE_CONVENTIONS__', '__PROTECTED_FILES__', '__IMPL_ROLE__', '__TEST_ROLE__',
+];
+
+let _stackFacts;
+function stackFacts() {
+  if (_stackFacts) return _stackFacts;
+  _stackFacts = {};
+  try {
+    const { execFileSync } = require('child_process');
+    const repo = process.env.PROJECT_ROOT || process.env.EPAM_CODELINE_PATH || process.cwd();
+    const roles = path.join(__dirname, '..', '..', 'agents', 'project-roles.json');
+    const out = execFileSync(process.execPath, [
+      path.join(__dirname, 'handlers', 'stack-facts.js'), repo, roles,
+    ], { encoding: 'utf8', timeout: 15000 });
+    _stackFacts = JSON.parse(out);
+  } catch {
+    _stackFacts = {};
+  }
+  return _stackFacts;
+}
+
 // NON-GREEDY, because placeholders sit ADJACENT.
 //
 // A prompt that ends one block and begins the next with no separator — ${a}${b} in the
@@ -91,6 +122,27 @@ function renderEngineTemplate(id, values, bodyKey) {
 
   const declared = placeholdersIn(out);
   const supplied = Object.keys(values || {});
+
+  // STACK FACTS ARE INJECTED, NOT WRITTEN INTO THE PROMPT.
+  //
+  // Templates used to state the stack directly — "*.test.ts", "typescript-engineer", "NEVER modify
+  // package.json" — so every agent on every project was told the world is TypeScript, vitest and
+  // npm. They now carry placeholders instead, and the values come from the ecosystem registry and
+  // the project's own minted roster (lib/handlers/stack-facts.js).
+  //
+  // Supplied HERE rather than at ~30 call sites: every caller would otherwise have to know which
+  // stack facts its template happens to use, and would break the moment a template started using
+  // one more. Only the placeholders a template DECLARES are added — this renderer is strict in
+  // both directions, and an unused value is as much an error as a missing one.
+  //
+  // A caller's own value always wins: a site that knows better than the registry keeps saying so.
+  const stackDeclared = declared.filter((p) => STACK_FACT_KEYS.includes(p) && !supplied.includes(p));
+  if (stackDeclared.length) {
+    const facts = stackFacts();
+    for (const key of stackDeclared) {
+      if (facts[key] !== undefined) { values[key] = facts[key]; supplied.push(key); }
+    }
+  }
 
   const missing = declared.filter((p) => !supplied.includes(p));
   if (missing.length) {

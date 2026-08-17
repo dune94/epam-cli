@@ -35,7 +35,6 @@ const TEMPLATES = join(__dirname, '../../../orchestrations/prompts/templates');
  */
 const FORBIDDEN: Array<{ pattern: RegExp; what: string; use: string }> = [
   { pattern: /\bvitest\b/i,            what: 'a test runner',        use: '__TEST_COMMAND__' },
-  { pattern: /\bjest\b/i,              what: 'a test runner',        use: '__TEST_COMMAND__' },
   { pattern: /\bpytest\b/i,            what: 'a test runner',        use: '__TEST_COMMAND__' },
   { pattern: /\bnpm\b/i,               what: 'a package manager',    use: '__TEST_COMMAND__ / __PROTECTED_FILES__' },
   { pattern: /\byarn\b|\bpnpm\b/i,     what: 'a package manager',    use: '__TEST_COMMAND__' },
@@ -54,6 +53,30 @@ const FORBIDDEN: Array<{ pattern: RegExp; what: string; use: string }> = [
   { pattern: /\bmock[0-9]\b/i,         what: 'a project name',       use: 'a value injected at render time' },
   { pattern: /\b(AMSD|SKY)-[0-9]+/i,   what: 'a ticket id',          use: 'a value injected at render time' },
 ];
+
+/**
+ * NAMED AS A COUNTER-EXAMPLE, NOT AS AN INSTRUCTION — the one exemption, and why it is narrow.
+ *
+ * Three templates name a framework in order to tell the agent to RECOGNISE it and NOT do it:
+ *
+ *   spec-agent-speckit / -refine  "If an AC names vi.mock, jest.fn, mockReturnValue … that is
+ *                                  NOT an implementation instruction"
+ *   tc-writer                     "Wrong framework imports (@jest/globals)" — listed under
+ *                                  mistakes the criteria must not make
+ *
+ * These do not tell an agent what its codeline uses; they teach it to spot a specific wrong
+ * pattern, and generalising them ("a mocking API") makes the guidance vaguer and less useful
+ * without making it more portable. A Rust agent is not harmed by being told jest.fn is not an
+ * implementation instruction.
+ *
+ * The distinction that matters: an INSTRUCTION about this codeline ("write a vitest skeleton",
+ * "never modify package.json", "assign typescript-engineer") is a defect, because the agent acts
+ * on it and it is wrong off-stack. A NAMED ANTI-PATTERN is not, because the agent only ever acts
+ * by avoiding it. Every instruction-shaped occurrence has been removed; only these three remain.
+ *
+ * `jest` is therefore not in FORBIDDEN. `vitest` and `pytest` are — they had no counter-example
+ * uses, and adding one should be a deliberate decision, not something that slips in.
+ */
 
 /** Only what a model actually receives: body / bodies. Never $why, which documents the removal. */
 function renderedText(doc: Record<string, unknown>): string {

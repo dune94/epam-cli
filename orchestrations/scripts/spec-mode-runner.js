@@ -4011,11 +4011,38 @@ async function reviewRoster({
   };
   if (toolGrant) { env.AI_GATE_ALLOW_TOOLS = '1'; env.EPAM_ALLOWED_TOOLS = toolGrant; }
 
-  const payload = await runAgentForJson(
-    promptExec, prompt, TOOL_ROSTER_REVIEW, 'ROSTER_REVIEW',
-    logDir ? path.join(logDir, 'roster-review.log') : null,
-    null, '', repoPath || '', env,
-  );
+  // ONE EMPTY RESPONSE MUST NOT COST THE WHOLE RUN.
+  //
+  // runAgentForJson returns null on unparseable or empty output and does NOT retry. The guard
+  // below then refuses — correctly, an unreviewed roster is not a sound one — but that turns a
+  // single flaky response into a dead run, several minutes and several model calls in.
+  //
+  // Live 2026-08-17, mock3: 34KB of prompt in, ZERO bytes out, verdict review_failed, run over.
+  // The same shape killed codeline-discovery an hour earlier ("Empty response from ai-run.sh").
+  // The previous run's reviewer worked on the identical roster, so it is transient, not a defect
+  // in the prompt or the roster.
+  //
+  // A retry here is safe in a way a retry is not everywhere: the reviewer READS and reports, it
+  // writes nothing and mutates nothing, so a second attempt cannot double an effect. What is NOT
+  // retried is a review that ran and returned findings — only one that produced no usable
+  // payload at all. "Found nothing wrong" and "produced nothing" stay different, which is the
+  // whole point of the guard below.
+  const _rrAttempts = Number(process.env.EPAM_ROSTER_REVIEW_ATTEMPTS || 2);
+  let payload = null;
+  for (let _rrTry = 1; _rrTry <= Math.max(1, _rrAttempts); _rrTry += 1) {
+    payload = await runAgentForJson(
+      promptExec, prompt, TOOL_ROSTER_REVIEW, 'ROSTER_REVIEW',
+      logDir ? path.join(logDir, _rrTry === 1 ? 'roster-review.log' : `roster-review-attempt${_rrTry}.log`) : null,
+      null, '', repoPath || '', env,
+    );
+    if (payload && Array.isArray(payload.findings)) break;
+    if (_rrTry < Math.max(1, _rrAttempts)) {
+      process.stderr.write(
+        `[roster-review] attempt ${_rrTry} produced no usable findings — retrying ` +
+        `(${_rrTry + 1}/${Math.max(1, _rrAttempts)}). The reviewer only reads, so a retry cannot ` +
+        'double an effect.\n');
+    }
+  }
 
   // A REVIEW THAT DID NOT RUN IS NOT A CLEAN REVIEW.
   //

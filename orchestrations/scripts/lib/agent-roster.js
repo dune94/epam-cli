@@ -730,7 +730,30 @@ function rosterReviewIsRequired({ verdict, mintSkipped, pauseConfigured } = {}) 
   return verdict === 'not_run' || verdict === 'review_failed';
 }
 
+/**
+ * WHAT KIND AN AGENT IS, from where the pipeline already records it.
+ *
+ * The roster stores each agent's brief as a STRING, so there is no `kind` field to read on a
+ * profile — the kind is expressed by MEMBERSHIP: project-roles.json lists the roles stories are
+ * assigned to, project-investigators.json lists the per-codeline readers. Both registries and
+ * their meaning are owned here, which is why the lookup belongs here and not in the caller.
+ *
+ * Added 2026-08-17 after a seam fix was written against a fixture shaped {kind, brief} and was
+ * therefore inert on the real data: 'typescript-vitest-implementer' still resolved to no seam
+ * because entry.kind on a string is undefined, and a unit test with the wrong fixture said it
+ * worked. Returns '' when the agent is in neither registry — an unknown kind must stay
+ * distinguishable from a declared one.
+ */
+function kindOfAgent(agent, agentsDir) {
+  if (!agent) return '';
+  const inList = (names) => Array.isArray(names) && names.includes(agent);
+  try { if (inList(projectRoles(agentsDir))) return AGENT_KINDS[0]; } catch { /* not registered */ }
+  try { if (inList(projectInvestigators(agentsDir))) return AGENT_KINDS[1]; } catch { /* not registered */ }
+  return '';
+}
+
 module.exports = {
+  kindOfAgent,
   partitionRosterFindings,
   kbFileForCodeline,
   rosterReviewIsRequired,

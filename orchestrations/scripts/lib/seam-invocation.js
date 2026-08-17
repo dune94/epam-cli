@@ -136,11 +136,13 @@ function resolveSeam(agent, file, opts) {
   //
   // Best-effort: many callers run in processes that never load a roster, and a kind lookup must
   // never turn a working resolution into a crash.
+  // Read from the module that OWNS the two registries the kind is recorded in. A roster entry is
+  // the brief STRING, so there is no field to read here; the kind is membership of
+  // project-roles.json or project-investigators.json. Written against a {kind, brief} fixture at
+  // first, which made this inert on real data while a green unit test said otherwise.
   const _kind = (() => {
     try {
-      const pf = (opts && opts.profilesFile) || path.join(path.dirname(file || registryPath()), 'profiles.json');
-      const entry = JSON.parse(fs.readFileSync(pf, 'utf8'))[agent];
-      return (entry && typeof entry.kind === 'string') ? entry.kind.trim() : '';
+      return require('./agent-roster.js').kindOfAgent(agent, (opts && opts.agentsDir) || undefined) || '';
     } catch { return ''; }
   })();
   if (_kind) {

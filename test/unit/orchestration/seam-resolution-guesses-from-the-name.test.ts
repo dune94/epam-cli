@@ -48,11 +48,28 @@ beforeEach(() => {
   profilesFile = join(dir, 'profiles.json');
   writeFileSync(registryFile, JSON.stringify(registry()));
 });
-afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
+afterEach(() => {
+  delete process.env.EPAM_PROJECT_CONFIG_DIR;
+  rmSync(dir, { recursive: true, force: true });
+});
 
-/** A roster holding one model-authored agent that declares its kind. */
+/**
+ * THE REAL SHAPE, NOT A CONVENIENT ONE.
+ *
+ * The first version of this wrote { [name]: { kind, brief } } — an object with a kind field. The
+ * roster stores each brief as a STRING, and the kind is MEMBERSHIP of project-roles.json or
+ * project-investigators.json. So the fix passed eight green tests and was completely inert live:
+ * 'typescript-vitest-implementer' still resolved to no seam because entry.kind on a string is
+ * undefined. A fixture that does not match production tests nothing.
+ */
 function roster(name: string, kind: string) {
-  writeFileSync(profilesFile, JSON.stringify({ [name]: { kind, brief: 'x' } }));
+  writeFileSync(profilesFile, JSON.stringify({ [name]: `brief for ${name}` }));
+  const kinds = registry().seamPatterns.filter((p: any) => p.kind).map((p: any) => p.kind);
+  writeFileSync(join(dir, 'project-roles.json'),
+    JSON.stringify({ roles: kind === kinds.find((k: string) => k !== 'investigator') ? [name] : [] }));
+  writeFileSync(join(dir, 'project-investigators.json'),
+    JSON.stringify({ investigators: kind === 'investigator' ? [name] : [] }));
+  process.env.EPAM_PROJECT_CONFIG_DIR = dir;
 }
 
 describe('seam resolution guesses from the name', () => {

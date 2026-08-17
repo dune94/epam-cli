@@ -39,6 +39,11 @@ function extractFunctionBody(src: string, name: string): string {
 // both must be present in the standalone harness script below.
 const FN_BODY = [
   extractFunctionBody(gitOpsSrc, '_provision_epam_plugin_config'),
+  // Lifted WITH the reset: it now asks _resolved_baseline_ref for the ref it restores from,
+  // instead of spelling `origin/${JIRA_BASELINE_BRANCH:-develop}` inline. Without the helper the
+  // ref is empty and the reset correctly refuses to clean a tree it cannot restore — so this test
+  // would fail for the right reason at the wrong level.
+  extractFunctionBody(claudeSrc, '_resolved_baseline_ref'),
   extractFunctionBody(claudeSrc, '_selective_worktree_reset'),
 ].join('\n');
 

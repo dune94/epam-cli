@@ -82,6 +82,32 @@ AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$AUTOMATION_DIR/agents/profiles.json
 # A codeline is stable, discovered rather than invented, already the investigator key, and the
 # subject of most durable learning — where the SDK is initialised here, how this repository
 # names its tests. Project-wide lessons that belong to no codeline go to the shared file.
+# _resolved_baseline_ref [repo] — the ref every diff in this file compares against.
+#
+# NINE SITES SPELLED THIS `origin/${JIRA_BASELINE_BRANCH:-develop}`. "develop" is a fact of some
+# projects and not of others, so on a codeline whose trunk is named anything else every one of
+# those diffs resolved nothing — and a diff against a ref that does not exist is empty, which
+# reads downstream exactly like "this story changed nothing".
+#
+# The project declares it; otherwise take the repository's OWN checked-out branch, which is at
+# least true. Prefer origin/<branch> when that ref exists, because these are baseline comparisons
+# and the remote is the shared baseline; fall back to the local branch when there is no remote.
+# Prints nothing when nothing resolves, so a caller can refuse rather than diff against a name.
+_resolved_baseline_ref() {
+    local _repo="${1:-${PROJECT_ROOT:-.}}"
+    local _branch="${JIRA_BASELINE_BRANCH:-}"
+    if [ -z "$_branch" ]; then
+        _branch="$(git -C "$_repo" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
+        [ "$_branch" = "HEAD" ] && _branch=""
+    fi
+    [ -n "$_branch" ] || return 0
+    if git -C "$_repo" rev-parse --verify --quiet "origin/${_branch}" >/dev/null 2>&1; then
+        printf 'origin/%s' "$_branch"
+    else
+        printf '%s' "$_branch"
+    fi
+}
+
 _kb_file_for_story() {
     local _story_id="$1" _kb_dir="$2"
     local _prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
@@ -751,7 +777,7 @@ _selective_worktree_reset() {
     local story_id="$1"
     [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
     [ -d "${PROJECT_ROOT:-}/.git" ] || return 0
-    local _baseline_ref="origin/${JIRA_BASELINE_BRANCH:-develop}"
+    local _baseline_ref; _baseline_ref="$(_resolved_baseline_ref)"
     git -C "$PROJECT_ROOT" rev-parse --verify "$_baseline_ref" >/dev/null 2>&1 || return 0
 
     # `unknown` means the evidence this function wants was never computed: an earlier gate
@@ -820,7 +846,24 @@ _selective_worktree_reset() {
     # content, drop untracked/ignored cruft. Same "predictable teardown"
     # primitive brownfield-preflight-reset.sh already applies between RUNS,
     # applied here between RUNGS of one run.
-    git -C "$PROJECT_ROOT" checkout "$_baseline_ref" -- . 2>/dev/null || true
+    # THE CHECKOUT MUST SUCCEED BEFORE THE CLEAN RUNS.
+    #
+    # Both ended in `2>/dev/null || true`, so an unresolvable baseline ref failed silently and the
+    # `git clean -fd` still executed — deleting every untracked file WITHOUT the checkout having
+    # restored the tracked ones. That is the worst possible half of this operation: destructive,
+    # silent, and it leaves the tree in a state neither the attempt nor the baseline produced.
+    #
+    # A ref that resolves to nothing is the reachable case. _resolved_baseline_ref prints nothing
+    # for a detached HEAD with no declared branch, and this is the reset between RUNGS of a live
+    # run — the point at which an agent's partial work is discarded on purpose.
+    if [ -z "$_baseline_ref" ]; then
+        error "  WorktreeReset[$story_id]: no baseline ref resolved — refusing to clean the working tree with nothing to restore it from."
+        return 1
+    fi
+    if ! git -C "$PROJECT_ROOT" checkout "$_baseline_ref" -- . 2>/dev/null; then
+        error "  WorktreeReset[$story_id]: could not restore tracked files from ${_baseline_ref} — NOT running git clean, because that would delete untracked work without restoring anything."
+        return 1
+    fi
     git -C "$PROJECT_ROOT" clean -fd -- . 2>/dev/null || true
     LAST_VERIFIED_TOUCHED_FILES=""
     LAST_VERIFIED_UNCHANGED_FILES=""
@@ -853,7 +896,7 @@ _rung_snapshot_hashes() {
     local story_id="$1"
     [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
     [ -d "${PROJECT_ROOT:-}/.git" ] || return 0
-    local _baseline_ref="origin/${JIRA_BASELINE_BRANCH:-develop}"
+    local _baseline_ref; _baseline_ref="$(_resolved_baseline_ref)"
     git -C "$PROJECT_ROOT" rev-parse --verify "$_baseline_ref" >/dev/null 2>&1 || return 0
     local _snap_file
     _snap_file=$(_rung_snapshot_path "$story_id")
@@ -885,7 +928,7 @@ _rung_attribute_changes() {
     local _snap_file
     _snap_file=$(_rung_snapshot_path "$story_id")
     [ -f "$_snap_file" ] || return 0
-    local _baseline_ref="origin/${JIRA_BASELINE_BRANCH:-develop}"
+    local _baseline_ref; _baseline_ref="$(_resolved_baseline_ref)"
     git -C "$PROJECT_ROOT" rev-parse --verify "$_baseline_ref" >/dev/null 2>&1 || return 0
     local _contribution_file="${LOG_DIR}/rung-contribution.jsonl"
     {
@@ -926,7 +969,7 @@ _generate_rung_contribution_report() {
     [ -d "${PROJECT_ROOT:-}/.git" ] || return 0
     local _contribution_file="${LOG_DIR}/rung-contribution.jsonl"
     [ -f "$_contribution_file" ] || return 0
-    local _baseline_ref="origin/${JIRA_BASELINE_BRANCH:-develop}"
+    local _baseline_ref; _baseline_ref="$(_resolved_baseline_ref)"
     git -C "$PROJECT_ROOT" rev-parse --verify "$_baseline_ref" >/dev/null 2>&1 || return 0
 
     # Same tracked-modified + untracked-new enumeration as
@@ -1058,7 +1101,7 @@ _committed_change_uses_helpers() {
     local _ref=""
     [ -f "${LOG_DIR:-}/phase-baseline-sha.txt" ] && \
         _ref=$(tr -d '[:space:]' < "$LOG_DIR/phase-baseline-sha.txt" 2>/dev/null)
-    [ -n "$_ref" ] || _ref="origin/${JIRA_BASELINE_BRANCH:-develop}"
+    [ -n "$_ref" ] || _ref="$(_resolved_baseline_ref)"
     git -C "$PROJECT_ROOT" rev-parse --verify "$_ref" >/dev/null 2>&1 || return 0
 
     # baseline..HEAD — committed only. Not the tree.
@@ -2984,7 +3027,7 @@ verify_prescribed_helper_used() {
 
     local _ref=""
     [ -f "${LOG_DIR:-}/phase-baseline-sha.txt" ] &&         _ref=$(tr -d '[:space:]' < "$LOG_DIR/phase-baseline-sha.txt" 2>/dev/null)
-    [ -n "$_ref" ] || _ref="origin/${JIRA_BASELINE_BRANCH:-develop}"
+    [ -n "$_ref" ] || _ref="$(_resolved_baseline_ref)"
     git -C "$PROJECT_ROOT" rev-parse --verify "$_ref" >/dev/null 2>&1 || return 0
 
     local _diff
@@ -3274,7 +3317,7 @@ verify_story_deliverables() {
         # exist at baseline) is already fully proven by the exists+non-empty
         # check above — no diff is possible or required for it.
         if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -d "$PROJECT_ROOT/.git" ]; then
-            local _baseline_ref="origin/${JIRA_BASELINE_BRANCH:-develop}"
+            local _baseline_ref; _baseline_ref="$(_resolved_baseline_ref)"
             if git -C "$PROJECT_ROOT" rev-parse --verify "$_baseline_ref" >/dev/null 2>&1; then
                 local _rel_path="$check_path"
                 case "$_rel_path" in
@@ -3458,7 +3501,7 @@ verify_story_deliverables() {
     # still catches "nothing real happened" — the actual failure pattern
     # behind three separate false-completion incidents today.
     if [ "$declared" -eq 0 ] && [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -d "$PROJECT_ROOT/.git" ]; then
-        local _baseline_ref="origin/${JIRA_BASELINE_BRANCH:-develop}"
+        local _baseline_ref; _baseline_ref="$(_resolved_baseline_ref)"
         if git -C "$PROJECT_ROOT" rev-parse --verify "$_baseline_ref" >/dev/null 2>&1; then
             local _real_changes
             _real_changes=$(git -C "$PROJECT_ROOT" diff --name-only "$_baseline_ref" 2>/dev/null | \
@@ -4832,7 +4875,7 @@ run_external_verification() {
 # text. Two pipelines is how they drifted into being fed differently in the first place.
 _attempt_change_summary() {
     local _story_id="${1:-}"
-    local _ref="${2:-origin/${JIRA_BASELINE_BRANCH:-develop}}"
+    local _ref="${2:-$(_resolved_baseline_ref)}"
     local _stat=""
 
     if [ -d "$PROJECT_ROOT/.git" ] && git -C "$PROJECT_ROOT" rev-parse --verify "$_ref" >/dev/null 2>&1; then
@@ -9655,14 +9698,18 @@ $_kb_section"
             # script runs under `set -e`), without adding extra output.
             _story_files_are_tests=$(jq -r --arg id "$story_id" \
                 '.stories[] | select(.id == $id) | .technicalNotes.files[]? // empty' \
-                "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null | { grep -c '\.test\.ts$' || true; })
+                "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null \
+                | { grep -cE '(\.|_)(spec|test)\.[A-Za-z0-9]+$|/__tests__/|(^|/)test_[^/]+$' || true; })
             if [ "${_story_files_are_tests:-0}" -eq 0 ]; then
                 log "  [tc-writer] Generating TCs for phase '${CURRENT_PHASE:-unknown}' (post-impl, pre-test)..."
-                if bash "$SCRIPT_DIR/post-impl-tc-writer.sh" \
+                # `if CMD | tee ...; then` TESTS TEE, which exits 0 essentially always — so this
+                # reported "TC generation complete" whatever the writer did, including refusing to
+                # run at all. No pipefail here; PIPESTATUS[0] is the writer's own code.
+                if { bash "$SCRIPT_DIR/post-impl-tc-writer.sh" \
                     --prd "${MAIN_PRD_FILE:-$PRD_FILE}" \
                     --phase "${CURRENT_PHASE:-unknown}" \
                     --output-dir "$PROJECT_ROOT" \
-                    2>&1 | tee -a "$output_file"; then
+                    2>&1 | tee -a "$output_file"; [ "${PIPESTATUS[0]}" -eq 0 ]; }; then
                     log "  [tc-writer] TC generation complete — test stories have testCriteria"
                 else
                     warning "  [tc-writer] TC generation failed — test stories will run without TCs (non-fatal)"
@@ -11169,7 +11216,14 @@ main() {
 run_pre_phase_assessment() {
     local phase_id=$1
     local profiles_file="$AGENT_PROFILES_FILE"
-    local profiles_backup="${profiles_file}.original"
+    # A SNAPSHOT OF NOW, NOT THE PRE-RUN CANONICAL FILE.
+    #
+    # This pointed at profiles.json.original — which pre-run-reset.sh and orchestrate.sh use as the
+    # canonical BASE state for a whole run. Restoring it after a corrupted assessment threw away
+    # every skill note, augmentation and mint result the run had accumulated up to that point, not
+    # just the corruption, while reporting only "restoring backup".
+    local profiles_backup="${LOG_DIR:-/tmp}/profiles-preassessment-${phase_id}.json"
+    cp "$profiles_file" "$profiles_backup" 2>/dev/null || profiles_backup=""
     local profiles_audit="$LOG_DIR/profiles-audit.jsonl"
     local assessment_log="$LOG_DIR/pre-assessment-${phase_id}.log"
 
@@ -11207,18 +11261,29 @@ run_pre_phase_assessment() {
     # augmentation or role-fix ever happens (found live 2026-07-08 — a run's
     # assessment step logged a fabricated "content" diff for profiles.json that
     # was never actually written to disk).
-    elif echo "$assessment_prompt" | \
+    # SAME DEFECT AS THE TC WRITER: `elif CMD | tee ...; then` tested tee, so "Pre-phase
+    # assessment completed" was printed whether the agent ran, failed or timed out — and the
+    # profiles.json validity check below only runs on that branch, so a failed agent skipped it.
+    # THREE pipeline elements here (echo, ai-run, tee), so the agent's status is PIPESTATUS[1].
+    elif { echo "$assessment_prompt" | \
             AI_GATE_ALLOW_TOOLS=1 \
             AI_PROVIDER="$_orch_provider" \
             AI_MODEL="$_orch_model" \
             EPAM_CLI="$EPAM_CLI" \
             bash "$SCRIPT_DIR/ai-run.sh" --provider "$_orch_provider" \
             ${_orch_model:+--model "$_orch_model"} \
-            2>&1 | tee "$assessment_log"; then
+            2>&1 | tee "$assessment_log"; [ "${PIPESTATUS[1]}" -eq 0 ]; }; then
         success "Pre-phase assessment completed for '$phase_id'"
         if ! jq empty "$profiles_file" 2>/dev/null; then
-            warning "Pre-phase assessment may have corrupted profiles.json! Restoring backup."
-            cp "$profiles_backup" "$profiles_file"
+            # A SNAPSHOT THAT FAILED IS NOT A SNAPSHOT — the same guard Steps 11 and 12 needed.
+            # If the pre-call copy did not happen there is nothing to restore, and overwriting a
+            # corrupted profiles.json with nothing is worse than leaving it for a human.
+            if [ -n "$profiles_backup" ] && [ -s "$profiles_backup" ]; then
+                warning "Pre-phase assessment may have corrupted profiles.json! Restoring the pre-assessment snapshot."
+                cp "$profiles_backup" "$profiles_file"
+            else
+                error "Pre-phase assessment may have corrupted profiles.json AND no pre-assessment snapshot exists — leaving the file as-is. Restore it before the next phase."
+            fi
         fi
     else
         warning "Pre-phase assessment failed for '$phase_id' (non-critical, continuing)"

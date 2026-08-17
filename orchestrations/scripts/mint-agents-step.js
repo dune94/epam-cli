@@ -1058,8 +1058,12 @@ if (require.main !== module) return;
     {
       const readiness = path.join(__dirname, 'lib', 'handlers', 'agent-readiness.js');
       const outFile = path.join(LOG_DIR, 'agent-readiness.json');
+      // THE CODELINES COME FROM THE RUN, not from an environment variable this process never
+      // sets. Without them the audit resolves no stack, concludes the project has no skills, and
+      // fails every agent for a gap that does not exist.
       const r = spawnSync(process.execPath,
-        [readiness, projectConfigDir, AGENTS_DIR, PROFILES_PATH],
+        [readiness, projectConfigDir, AGENTS_DIR, PROFILES_PATH,
+          codelines.map((c) => c.path).filter(Boolean).join(',')],
         { encoding: 'utf8', timeout: 120000, env: process.env });
 
       // The report is written whatever the verdict — a run that fails here must leave behind the

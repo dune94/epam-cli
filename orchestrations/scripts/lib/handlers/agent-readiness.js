@@ -21,6 +21,7 @@
  *   argv[2]  the project config dir (its prompts/ is the project prompt library)
  *   argv[3]  optional: agents dir (default: <engine>/orchestrations/agents)
  *   argv[4]  optional: the roster file this run is actually using
+ *   argv[5]  optional: the codeline paths in scope, comma-separated
  *
  *   stdout   one JSON object: { agents: [...], gaps: [...], ready: bool }
  *   exit 0   every agent is ready
@@ -63,6 +64,8 @@ const readJson = (p) => JSON.parse(fs.readFileSync(p, 'utf8'));
 const exists = (p) => fs.existsSync(p);
 
 const rosterFile = process.argv[4] || path.join(agentsDir, 'profiles.json');
+// Comma- or colon-separated codeline paths this run is working on.
+const codelinePaths = process.argv[5] || '';
 
 let registry;
 let profiles;
@@ -110,9 +113,20 @@ for (const kind of registry.engineProduces || []) producers.add(kind);
 // every agent would run the same resolution sixty times.
 let skillsAvailable = false;
 try {
+  // THE CALLER NAMES THE CODELINES, because only the caller knows them.
+  //
+  // This asked process.env.EPAM_CODELINE_PATHS, which mint-agents-step does not set — it holds the
+  // codelines in memory and prints them at the top of the stage. So the audit resolved no stacks,
+  // decided the project had no skills at all, and failed run 20260817T195746Z with 60 identical
+  // gaps, every one of them false, after discovery, survey, mint, assignment and 36 prompts had
+  // all come out correct.
+  //
+  // Exactly the mistake this audit's first version made one field over: it read profiles.json
+  // instead of the roster the run was using. A guard that fails a healthy run is worse than no
+  // guard — it costs the run and teaches the operator to distrust the gate.
   const s = JSON.parse(execFileSync(process.execPath, [
     path.join(__dirname, 'agent-skills.js'), '',
-    agentsDir, process.env.EPAM_CODELINE_PATHS || process.env.PROJECT_ROOT || '',
+    agentsDir, codelinePaths || process.env.EPAM_CODELINE_PATHS || process.env.PROJECT_ROOT || '',
   ], { encoding: 'utf8', timeout: 20000 }));
   skillsAvailable = !s.empty;
 } catch { skillsAvailable = false; }

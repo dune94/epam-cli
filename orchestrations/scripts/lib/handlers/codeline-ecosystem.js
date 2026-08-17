@@ -22,6 +22,7 @@
  *     testCommand     what runs this project's own tests, or "" when it declares none
  *     installCommand  what installs its dependencies, or "" when it vendors nothing in-repo
  *     testFileCommand what runs JUST the files given in argv[4], or "" when this ecosystem cannot
+ *     declaredDeps    every dependency the manifest declares
  *     declaredBins    the declared dependencies the repo's own scripts actually invoke
  *     missingBins     of those, the ones not present in installDir
  *     providers       { packageName: path } for sibling repositories in the estate
@@ -58,7 +59,7 @@ const eco = ecosystemOf(repo);
 const out = {
   stack: '', manifest: '', installDir: null, packageManager: '', testCommand: '', testFileCommand: '',
   installCommand: '',
-  declaredBins: [], missingBins: [], providers: {},
+  declaredBins: [], declaredDeps: [], missingBins: [], providers: {},
 };
 
 if (eco) {
@@ -82,6 +83,11 @@ if (eco) {
     // commands — the rest may be missing without stopping a gate.
     let scripts = '';
     try { scripts = Object.values(JSON.parse(text).scripts || {}).join(' '); } catch { scripts = ''; }
+    // EVERY DECLARED DEPENDENCY, not only the ones the scripts invoke. The mint needs the full
+    // list as evidence for an agent brief; declaredBins is the narrower "tooling this project
+    // actually runs" set and answers a different question.
+    out.declaredDeps = deps;
+
     out.declaredBins = scripts
       ? deps.filter((d) => new RegExp(`(^|[^\\w/@-])${d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^\\w-]|$)`).test(scripts))
       : [];

@@ -25,6 +25,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { execFileSync } = require('child_process');
 
 const spec = require('./spec-mode-runner.js');
 
@@ -182,28 +183,36 @@ function declaredDependencies(repoPath) {
   for (const c of candidates) {
     try { cfg = JSON.parse(fs.readFileSync(c, 'utf8')); break; } catch { /* next */ }
   }
-  if (!cfg) {
-    process.stderr.write(
-      '[mint-step] no dependency-check.json for this codeline or project — the mint gets no ' +
-      'dependency evidence (the engine will not guess which manifest this project uses)\n');
-    return [];
-  }
-  const manifestFile = typeof cfg.manifestFile === 'string' ? cfg.manifestFile : '';
-  const manifestKeys = Array.isArray(cfg.manifestKeys) ? cfg.manifestKeys : [];
-  if (!manifestFile || !manifestKeys.length) {
-    process.stderr.write('[mint-step] dependency-check.json declares no manifestFile/manifestKeys — no dependency evidence\n');
-    return [];
-  }
+  // THE MANIFEST IS DETECTED, NEVER DECLARED.
+  //
+  // This required the project to write down manifestFile and manifestKeys in dependency-check.json
+  // — so every project had to tell the engine that Node uses package.json and that dependencies
+  // live under "dependencies"/"devDependencies". mock3 declared its manifest under a DIFFERENT
+  // shape (codelines.<name>.manifest), which this never read, so the mint reported "no dependency
+  // evidence" and the agent brief said the codelines "declare no manifest configuration".
+  //
+  // The roster reviewer then read the repositories, found package.json in both with vitest and
+  // typescript, and correctly blocked the roster for describing them wrongly. Two schemas for one
+  // fact, and the run died between them.
+  //
+  // lib/ecosystems.js already answers this for every supported ecosystem: it finds the manifest by
+  // PRESENCE and each entry knows how to read its own dependency sections — which is exactly what
+  // manifestKeys was spelling out by hand, one project at a time. It extends at runtime through
+  // EPAM_CODELINE_MANIFESTS, so a new ecosystem needs no engine change and no project config.
   try {
-    const manifest = JSON.parse(fs.readFileSync(path.join(repoPath, manifestFile), 'utf8'));
-    const names = [];
-    for (const key of manifestKeys) {
-      const section = manifest[key];
-      if (section && typeof section === 'object') names.push(...Object.keys(section));
+    const out = execFileSync(process.execPath, [
+      path.join(__dirname, 'lib', 'handlers', 'codeline-ecosystem.js'), repoPath,
+    ], { encoding: 'utf8', timeout: 20000 });
+    const facts = JSON.parse(out);
+    if (!facts.manifest) {
+      process.stderr.write(
+        `[mint-step] ${repoPath} carries no manifest this engine recognises — no dependency ` +
+        'evidence. Extend EPAM_CODELINE_MANIFESTS if this ecosystem should be supported.\n');
+      return [];
     }
-    return [...new Set(names)];
+    return facts.declaredDeps || [];
   } catch (err) {
-    process.stderr.write(`[mint-step] could not read ${manifestFile}: ${err && err.message}\n`);
+    process.stderr.write(`[mint-step] could not read the ecosystem of ${repoPath}: ${err && err.message}\n`);
     return [];
   }
 }

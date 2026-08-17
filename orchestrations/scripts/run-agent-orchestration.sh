@@ -3703,6 +3703,35 @@ log "[orch] ✅ Pipeline complete." \
 #   $2 — the log file to tee into
 _run_agent_mint() {
   local _prd="$1" _log="${2:-/dev/null}"
+
+  # THE SCAFFOLD PHASE, first. It carries no implementation stories; its only job is to make the
+  # phase loop fire the pre-phase skill assessment over every story, so each agent's profile gains
+  # this project's skills before any implementation begins. Without it that assessment never runs
+  # and every agent works without them.
+  #
+  # It lived inside the Jira branch, so a project with an authored PRD never got one — the same
+  # shape as the mint itself and as codeline discovery. Paired with the mint here because both
+  # prepare the roster's working conditions and both are needed by every project.
+  if "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/run-jira-pipeline.js" "$_prd"; then
+    log "[mint] Scaffold phase present for the pre-phase skill assessment"
+  else
+    error "[mint] could not inject the scaffold phase into ${_prd} — the pre-phase skill"
+    error "[mint] assessment would not run, so every agent would work without this project's skills."
+    return 1
+  fi
+
+  # SKIPPING THE MINT REQUIRES A ROSTER TO SKIP TO. Travels with the mint rather than sitting in
+  # one caller, so the other path cannot skip into nothing.
+  if [ "${EPAM_SKIP_AGENT_MINT:-0}" = "1" ]; then
+    local _roster_file="${EPAM_AGENTS_DIR}/profiles.json" _roster_n=0
+    [ -s "$_roster_file" ] && _roster_n=$("$NODE_BIN" "$SCRIPT_DIR/lib/handlers/roster-size.js" "$_roster_file" 2>/dev/null || echo 0)
+    if [ "${_roster_n:-0}" -lt 1 ]; then
+      error "[mint] EPAM_SKIP_AGENT_MINT=1 but no minted roster exists at ${_roster_file}."
+      error "[mint] Skipping the mint now would hand every story to an agent that was never defined."
+      return 1
+    fi
+    log "[mint] Agent mint skipped (EPAM_SKIP_AGENT_MINT=1) — using the roster on disk (${_roster_n} agent(s))"
+  fi
   [ "${EPAM_SKIP_AGENT_MINT:-0}" = "1" ] || {
     log "[mint] Minting project agents and assigning roles..."
     "$NODE_BIN" "$SCRIPT_DIR/mint-agents-step.js" \
@@ -3814,17 +3843,6 @@ _run_jira_pipeline() {
   # profile before any core implementation begins. Agent SKILLS are assessed per project
   # here; agent IDENTITIES are minted per project immediately below — they used to be kept
   # wholesale from the canonical, which is how a client codeline ran epam-cli's own roster.
-  # NOT SILENT. This ran under 2>/dev/null with the log on the && side, so a failure printed
-  # nothing at all and the run continued without a scaffold phase — which is the phase whose
-  # only job is to fire the pre-phase skill assessment over every story. Losing it costs every
-  # agent its project-specific skills, and nothing said so.
-  if "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/run-jira-pipeline.js" "${_synth_prd}"; then
-    log "[jira] Injected empty scaffold phase for pre-phase skill assessment"
-  else
-    error "[jira] could not inject the scaffold phase into ${_synth_prd} — the pre-phase skill"
-    error "[jira] assessment would not run, so every agent would work without this project's skills."
-    return 1
-  fi
 
   # ── Mint this project's agents, then assign every story one ────────────────
   #
@@ -3846,19 +3864,8 @@ _run_jira_pipeline() {
   # mint when nothing was ever minted would hand stories to agents that do not exist. That is a
   # refusal, not a silent re-mint — the same rule as every other guard here, which is to stop
   # rather than proceed on unknown state.
-  if [ "${EPAM_SKIP_AGENT_MINT:-0}" = "1" ]; then
-    _roster_file="${EPAM_AGENTS_DIR:-}/profiles.json"
-    _roster_n=0
-    [ -s "$_roster_file" ] && _roster_n=$("$NODE_BIN" "$SCRIPT_DIR/lib/handlers/roster-size.js" "$_roster_file" 2>/dev/null || echo 0)
-    if [ "${_roster_n:-0}" -lt 1 ]; then
-      error "[jira] EPAM_SKIP_AGENT_MINT=1 but no minted roster exists at ${_roster_file}."
-      error "[jira] Skipping the mint now would hand every story to an agent that was never"
-      error "[jira] defined. Mint first (unset EPAM_SKIP_AGENT_MINT), or point EPAM_AGENTS_DIR at"
-      error "[jira] the run whose roster you meant to reuse."
-      return 1
-    fi
-    log "[jira] Agent mint skipped (EPAM_SKIP_AGENT_MINT=1) — using the roster on disk (${_roster_n} agent(s))"
-  fi
+  # The skip guard travels with the mint now — see _run_agent_mint — so neither path can skip
+  # into a roster that was never minted.
   _run_agent_mint "$_synth_prd" "$_log_file" || return 1
 
   # PAUSE 1 of 2 — the roster is minted and every story assigned, and nothing has been

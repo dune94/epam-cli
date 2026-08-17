@@ -111,8 +111,11 @@ fi
 # ── Pre-flight, before anything is spent ──────────────────────────────────────
 info "Pre-flight for '$PROJECT_NAME'..."
 bash "$SCRIPT_DIR/preflight-check.sh" || fail "pre-flight failed — not launching"
-bash "$SCRIPT_DIR/preflight-prd-integrity.sh" --prd "$PRD_FILE" \
-  ${PHASE_ARG:+--phase "$PHASE_ARG"} || fail "PRD integrity failed — not launching"
+# NO PRD-INTEGRITY GATE HERE. I added one and it blocked every authored PRD, because it checks
+# fields LATER STEPS populate: project.outputDir comes from scope resolution, aiProvider from the
+# PRD model coordinator, and the scaffold phase from the mint. No working launcher runs this gate
+# at launch — it is invoked with --phase from inside the pipeline, after those steps. Running it
+# here was a deviation that turned a healthy project into a refusal.
 
 # ── Confirm ───────────────────────────────────────────────────────────────────
 # Every launch is approved. A run writes to client repositories and spends money; a launcher that

@@ -8118,8 +8118,15 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
     _probe_file=""
     if [ -n "$_eslint_bin" ]; then
         for _ext in js jsx mjs cjs ts tsx mts cts vue svelte; do
-            _probe_file="$(find "$PROJECT_ROOT/src" -type f -name "*.${_ext}" \
-                            -not -path '*/node_modules/*' -print -quit 2>/dev/null)"
+            # THE PROBE MUST LOOK WHERE THE GATE WILL LINT. eslint_baseline_gate below is given
+            # $PROJECT_ROOT — the whole repository — but this probe searched only src/. So a repo
+            # laying its code out any other way (lib/, app/, packages/, or flat at the root) found
+            # no probe file, took the "nothing to lint" branch, and eslint was SKIPPED on a
+            # codebase it would have linted perfectly well. The probe decided the gate's fate on a
+            # narrower question than the gate itself asks.
+            _probe_file="$(find "$PROJECT_ROOT" -type f -name "*.${_ext}" \
+                            -not -path '*/node_modules/*' -not -path '*/.git/*' \
+                            -print -quit 2>/dev/null)"
             [ -n "$_probe_file" ] && break
         done
     fi
@@ -8134,8 +8141,8 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
         # about. Reporting this as FAIL would push an empty finding into the
         # remediation pipeline, which can only answer "could not map lint
         # failure to a story".
-        info "  [lint] eslint: SKIP (no lintable source files under src/)"
-        echo "eslint: no lintable source files under src/ — nothing examined" >> "$_lint_log"
+        info "  [lint] eslint: SKIP (no lintable source files anywhere in the repository)"
+        echo "eslint: no lintable source files in $PROJECT_ROOT — nothing examined" >> "$_lint_log"
     elif [ -n "$_eslint_bin" ] && [ -n "$_eslint_config" ]; then
         # Delegated to lib/eslint-baseline-gate.sh — see that file's header for
         # why. In short: this used to be `eslint src/ --max-warnings 0`, which

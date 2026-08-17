@@ -217,6 +217,20 @@ if [ -z "${PROJECT_ROOT:-}" ]; then
     PROJECT_ROOT="$_prd_output_dir"
   elif [ -f "$_prd_dir/package.json" ]; then
     PROJECT_ROOT="$_prd_dir"
+  elif [ -n "${JIRA_CODELINE_ROOT:-}" ] && [ -d "${JIRA_CODELINE_ROOT}" ]; then
+    # THE PROJECT'S DECLARED CODELINE ROOT, WHICH IT ALREADY TOLD US ABOUT.
+    #
+    # project.outputDir is written LATER, by resolve-codeline-scope.sh — so at this point a
+    # multi-codeline project whose PRD was authored (not Jira-ingested) has neither outputDir nor
+    # a package.json beside its PRD, and fell through to `dirname $AUTOMATION_DIR`: the epam-cli
+    # REPOSITORY ITSELF. The safety guard immediately below then refused the run, correctly, with
+    # "PROJECT_ROOT resolves to the epam-cli repo root" — telling the operator to set a field the
+    # pipeline populates for them a few steps later.
+    #
+    # The codeline root is the estate those codelines live in and is declared in config.env, which
+    # the launcher has already loaded. Per-lane PROJECT_ROOT is still set by the codeline loop;
+    # this only has to be somewhere outside the engine until then.
+    PROJECT_ROOT="$JIRA_CODELINE_ROOT"
   else
     PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
   fi

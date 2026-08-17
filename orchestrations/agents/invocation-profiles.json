@@ -889,7 +889,11 @@
     "discovery-vocabulary-agent": "cpa-inference",
     "roster-reviewer": "code-review-cycle",
     "contentstack-sdk-engineer": "story-writer",
-    "contentstack-preview-react-engineer": "story-writer"
+    "contentstack-preview-react-engineer": "story-writer",
+    "tools_audit": "story-writer",
+    "story_recovery": "impl-failure-analyst",
+    "lint-fixer": "story-writer",
+    "skills_audit": "ac-elaboration"
   },
   "engineProduces": [
     "ticket",

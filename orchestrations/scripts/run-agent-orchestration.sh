@@ -1174,7 +1174,20 @@ run_orch_prompt() {
     # registry, so a seam means the same thing whichever language invokes it. An agent the
     # registry does not know is left exactly as it was: this widens what the registry governs,
     # it does not force every caller through it.
-    seam_ladder_export "$agent_type" 2>/dev/null || true
+    local _seam_err; _seam_err=$(mktemp "${TMPDIR:-/tmp}/seam-err-XXXXXX")
+    # NOT SILENCED. This was `2>/dev/null || true`, and what it swallowed was resolveSeam's own
+    # error — the registry refusing to guess. skills_audit, tools_audit, story_recovery and
+    # lint-fixer all threw it, and all four ran with no ladder, no reasoning effort and no tool
+    # grant while every log line looked normal. Three of them hold Bash and WriteFile.
+    #
+    # It stays non-fatal: a seam is configuration, and refusing to run a gate because the registry
+    # is incomplete would take down more than it protects. But it says the agent's name, once, so
+    # the next unregistered caller is visible instead of merely unconfigured.
+    if ! seam_ladder_export "$agent_type" 2>"$_seam_err"; then
+        warning "run_orch_prompt: no seam configured for '$agent_type' — running with no ladder, effort or tool grant from the registry"
+        [ -s "$_seam_err" ] && sed 's/^/  [seam] /' "$_seam_err" >&2
+    fi
+    rm -f "$_seam_err"
     local gate_model="${EPAM_MODEL:-${ORCH_GATE_MODEL:-MiniMax-M3}}"
     local model_args=()
     [ -n "$gate_model" ] && model_args=(--model "$gate_model")
@@ -6705,7 +6718,16 @@ if is_truthy "${SKIP_SKILLS_AUDIT:-}"; then
     step_emit "11" "skip" "Step 11: Skills coordinator audit" "SKIP_SKILLS_AUDIT=1"
 else
     step_emit "11" "running" "Step 11: Skills coordinator audit"
-    _skills_audit_result=$(run_skills_audit_scan "$AGENT_PROFILES_FILE" 2>/dev/null || echo '{"duplicates_removed":0,"contradictions":[]}')
+    # A FAILED SCAN IS NOT A CLEAN SCAN. This substituted a zero-findings result for any failure
+    # — a lock it could not take, a crashed handler, an unreadable profiles.json — and the step
+    # then reported "pass" having audited nothing. The duplicate and self-contradictory notes this
+    # step exists to catch went straight into the writer's profile.
+    _skills_audit_ok=1
+    if ! _skills_audit_result=$(run_skills_audit_scan "$AGENT_PROFILES_FILE" 2>&1); then
+        _skills_audit_ok=0
+        warning "  [SkillsAudit] scan failed — profiles.json was NOT audited this phase: ${_skills_audit_result}"
+        _skills_audit_result='{"duplicates_removed":0,"contradictions":[]}'
+    fi
     _skills_dupes_removed=$(echo "$_skills_audit_result" | jq -r '.duplicates_removed // 0' 2>/dev/null || echo 0)
     _skills_contradiction_count=$(echo "$_skills_audit_result" | jq -r '.contradictions | length' 2>/dev/null || echo 0)
 
@@ -6726,7 +6748,16 @@ else
                   --arg sc_role "${_sc_role}" \
                   --arg sc_note "${_sc_note}" \
                   '{"__AGENT_PROFILES_FILE__":$agent_profiles_file,"__SC_ROLE__":$sc_role,"__SC_NOTE__":$sc_note}' > "$_cp_vals"
-            _sc_prompt="$(render_engine_prompt skills-coordinator "$_cp_vals")"
+            # EXIT STATUS IS THE CONTRACT — render-engine-prompt.sh says so in its own header:
+            # non-zero means nothing was rendered and the caller must refuse to invoke an agent
+            # rather than send it an empty prompt. The assignment swallowed it, so a failed render
+            # handed run_orch_prompt_with_tools an EMPTY prompt and an agent with Bash and
+            # WriteFile answered from nothing, against profiles.json.
+            if ! _sc_prompt="$(render_engine_prompt skills-coordinator "$_cp_vals")" || [ -z "$_sc_prompt" ]; then
+                rm -f "$_cp_vals"
+                error "  [SkillsAudit] could not render the skills-coordinator prompt for [${_sc_role}] — leaving the note as-is rather than invoking an agent with nothing to read"
+                continue
+            fi
             rm -f "$_cp_vals"
             _sc_attempt=0
             while [ "$_sc_attempt" -lt 2 ]; do
@@ -6737,7 +6768,13 @@ else
                         --arg agent_profiles_file "${AGENT_PROFILES_FILE}" \
                         --arg sc_prompt "$_sc_prompt" \
                         '{"__AGENT_PROFILES_FILE__":$agent_profiles_file,"__SC_PROMPT__":$sc_prompt}' > "$_rp_vals"
-                  _sc_run_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" skills_coordinator)"
+                  # Same contract. A failed retry render used to blank the prompt that the first
+                  # attempt had rendered correctly, turning a retry into an empty call.
+                  if ! _sc_run_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" skills_coordinator)" \
+                     || [ -z "$_sc_run_prompt" ]; then
+                      warning "  [SkillsAudit] could not render the retry prefix — retrying with the original prompt"
+                      _sc_run_prompt="$_sc_prompt"
+                  fi
                   rm -f "$_rp_vals"
                 fi
                 # No story_id — phase-level audit, not tied to a single story.
@@ -6760,7 +6797,14 @@ else
                 >> "$LOG_DIR/skills-coordinator-audit.jsonl" 2>/dev/null || true
         done < <(echo "$_skills_audit_result" | jq -c '.contradictions[]' 2>/dev/null)
     fi
-    step_emit "11" "pass" "Step 11: Skills coordinator audit"
+    # THE STATUS IS WHAT HAPPENED. This emitted "pass" unconditionally — after a scan that
+    # failed, after a coordinator that gave up on a note ("leaving as-is"), and after one that
+    # corrupted profiles.json and had to be rolled back. All three read as a clean audit.
+    if [ "${_skills_audit_ok:-1}" -eq 1 ]; then
+        step_emit "11" "pass" "Step 11: Skills coordinator audit"
+    else
+        step_emit "11" "warn" "Step 11: Skills coordinator audit" "scan failed — profiles.json not audited"
+    fi
 fi
 
 # ──────────────────────────────────────────────

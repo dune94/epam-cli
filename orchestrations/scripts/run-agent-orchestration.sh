@@ -7536,7 +7536,11 @@ if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/vc-coverage-check.sh" 
     [ -f "$SCRIPT_DIR/lib/story-outputs.sh" ] && . "$SCRIPT_DIR/lib/story-outputs.sh"
     while IFS= read -r _vc_story; do
         [ -z "$_vc_story" ] && continue
-        _vc_test_file=$(story_outputs_tests "$PROJECT_ROOT" "$LOG_DIR" 2>/dev/null | head -1)
+        # THIS STORY'S TEST, not the phase's first. story_outputs_tests reads the PHASE
+        # manifest, which carries no story attribution — so `| head -1` gave every story the
+        # same file and reported one story's coverage against another story's test. The check
+        # ran, produced an artefact, and measured the wrong thing.
+        _vc_test_file=$(story_outputs_tests_for "$PROJECT_ROOT" "$LOG_DIR" "$_vc_story" 2>/dev/null | head -1)
         if [ -n "$_vc_test_file" ]; then
             bash "$SCRIPT_DIR/vc-coverage-check.sh" \
                 --prd "$PRD_FILE" --story "$_vc_story" \
@@ -7553,10 +7557,16 @@ if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/vc-coverage-check.sh" 
             # shape of the coverage gate returning `complete: null` while claude.sh read null
             # as pass, which ran fail-open for its entire life. The survey sanitiser already
             # states the rule: silence is not a state.
-            printf '%s\n' "$(jq -n --arg s "$_vc_story" \
+            # AND THE WRITE ITSELF IS NOT SILENCED. This ended in `2>/dev/null || true` — so the
+            # artefact whose whole purpose is that absence must never have to be interpreted
+            # could fail to appear, silently, restoring exactly the ambiguity the comment above
+            # exists to remove.
+            if ! jq -n --arg s "$_vc_story" \
                 '{state:"not_checked", story:$s, results:[],
-                  reason:"no test file in the writer manifest for this story — nothing to check the verification criteria against"}')" \
-                > "$LOG_DIR/vc-coverage-${_vc_story}.json" 2>/dev/null || true
+                  reason:"this story committed no test file — nothing to check the verification criteria against"}' \
+                > "$LOG_DIR/vc-coverage-${_vc_story}.json"; then
+                warning "  [vc-coverage] could not write the not_checked record for ${_vc_story} — its absence must not be read as covered"
+            fi
         fi
     done < <(phase_stories_brownfield_scope "$PRD_FILE" "$PHASE")
 fi

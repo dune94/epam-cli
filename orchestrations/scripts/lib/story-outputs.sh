@@ -165,6 +165,29 @@ story_outputs_tests() {
     story_outputs_files "$1" "$2" | grep -E "$_STORY_OUTPUTS_TEST_RE" || true
 }
 
+# story_outputs_tests_for <project_root> <log_dir> <story_id> — THIS story's test files.
+#
+# story_outputs_tests reads the PHASE manifest, which carries no story attribution at all. So a
+# caller looping over stories and taking `| head -1` gave every story in the phase the SAME test
+# file — the first one written by anybody. Step 3.56 did exactly that, and reported story B's
+# verification-criteria coverage against story A's test: a check that ran, produced a plausible
+# artefact, and measured the wrong thing.
+#
+# The story's own commit is the attribution that does exist. commit_completed_story writes
+# "<story_id>: story complete (N file(s))" and keeps that marker stable precisely so it can be
+# grepped — reset-to-baseline.sh already keys off it.
+#
+# Prints nothing when the story has no commit. That is a real answer: no commit means no files,
+# which the caller must report as "not checked", never as "covered".
+story_outputs_tests_for() {
+    local project_root="$1" story_id="$3"
+    [ -n "$project_root" ] && [ -d "$project_root/.git" ] || return 0
+    [ -n "$story_id" ] || return 0
+    git -C "$project_root" log --grep="^${story_id}: story complete" \
+        --pretty=format: --name-only 2>/dev/null \
+        | grep -E "$_STORY_OUTPUTS_TEST_RE" 2>/dev/null | sort -u || true
+}
+
 # story_outputs_sources <project_root> <log_dir> — everything that is not a test
 story_outputs_sources() {
     story_outputs_files "$1" "$2" | grep -v -E "$_STORY_OUTPUTS_TEST_RE" || true

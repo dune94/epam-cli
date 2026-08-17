@@ -5693,18 +5693,39 @@ else
             _mc_prompt="$(render_engine_prompt corrective-note "$_cp_vals" model_coordinator)"
             rm -f "$_cp_vals"
         fi
+        # THE SEAM, ASKED FOR. This call resolved to no profile at all — the registry had none —
+        # so a step that EDITS THE PRD every later stage reads ran with no ladder, no budget, and
+        # a tool grant of AI_GATE_ALLOW_TOOLS=1 with no list. The seam declares all of it now.
+        #
+        # NO VENDOR LITERALS. The provider and model fell back to minimax / MiniMax-M3 written
+        # here, which is the shape the ladder work removed everywhere else under the rule that a
+        # seam with no resolvable model must decline rather than guess.
+        _mc_seam="$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/seam-env-args.js" prd-model-coordinator "$AUTOMATION_DIR/agents" 2>/dev/null || echo "")"
+        _mc_cost="${TMPDIR:-/tmp}/prd-model-coordinator-cost-$.json"
         _mc_result=$(echo "$_mc_prompt" | \
+            env $_mc_seam \
+            EPAM_AGENT_NAME=prd-model-coordinator \
+            ORCH_JSON_RESULT="$_mc_cost" \
             AI_GATE_ALLOW_TOOLS=1 \
-            AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
-            AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
+            ${ORCH_GATE_PROVIDER:+AI_PROVIDER="$ORCH_GATE_PROVIDER"} \
+            ${ORCH_GATE_MODEL:+AI_MODEL="$ORCH_GATE_MODEL"} \
             EPAM_DANGEROUS_SKIP_APPROVAL=1 \
             EPAM_MAX_TOOL_CALLS="${PRD_MODEL_COORDINATOR_MAX_TOOL_CALLS:-12}" \
             CLAUDE_CMD="$CLAUDE_CMD" \
             EPAM_CLI="${EPAM_CLI:-epam}" \
             "$AI_RUNNER_CMD" \
-                --provider "${ORCH_GATE_PROVIDER:-minimax}" \
-                --model    "${ORCH_GATE_MODEL:-MiniMax-M3}" \
+                ${ORCH_GATE_PROVIDER:+--provider "$ORCH_GATE_PROVIDER"} \
+                ${ORCH_GATE_MODEL:+--model "$ORCH_GATE_MODEL"} \
             2>&1 | tee -a "$LOG_DIR/prd-model-coordinator-${_mc_phase}.log")
+        # PIPESTATUS[0], not the pipeline status: without pipefail this is tee's, always 0, so a
+        # failed coordinator read as a success and every story kept whatever model it had.
+        _mc_rc="${PIPESTATUS[0]}"
+        ACTIVITY_FILE="${ACTIVITY_FILE:-$LOG_DIR/agent-activity.jsonl}" LOG_DIR="$LOG_DIR" \
+          "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/emit-cost.js" "$_mc_cost" prd-model-coordinator 2>/dev/null || true
+        rm -f "$_mc_cost" 2>/dev/null || true
+        if [ "${_mc_rc:-1}" != "0" ]; then
+            warning "  [prd-model-coordinator] the call failed (exit ${_mc_rc}) — stories keep their existing assignment"
+        fi
 
         _mc_assigned_count=$(echo "$_mc_result" | python3 "$SCRIPT_DIR/lib/handlers/mc-assigned-count.py" 2>/dev/null || echo 0)
 

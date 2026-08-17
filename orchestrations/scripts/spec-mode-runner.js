@@ -2917,8 +2917,12 @@ async function deriveGuardVocabulary({ promptExec, rule, statements, story, find
     promptExec, prompt, TOOL_GUARD_VOCABULARY, 'GUARD_VOCABULARY',
     logDir ? path.join(logDir, `${(story && story.id) || 'phase'}-guard-vocabulary.log`) : null,
     null, (story && story.id) || '', _repo,
-    { EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_GUARD_VOCABULARY),
-      ...seamInvocationEnv('guard-vocabulary', logDir) },
+    // The identity travels with the seam: ai-run.sh keys the ladder and the self-heal KB on
+    // EPAM_AGENT_NAME, so without it this agent's constraints and episodes are filed under
+    // whatever ran before it.
+    { ...seamInvocationEnv('guard-vocabulary', logDir),
+      EPAM_AGENT_NAME: 'guard-vocabulary',
+      EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_GUARD_VOCABULARY) },
   );
   if (!payload) return null;
   const vocab = normaliseVocabulary(payload);
@@ -5306,6 +5310,10 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
         // from the registry by name. An explicit env override above still wins, and a seam
         // with no entry simply runs on the run's defaults.
         ...seamInvocationEnv('code-graph-detective', logDir),
+        // THE IDENTITY TRAVELS WITH THE SEAM. costAgent below names it for the cost row, but
+        // EPAM_AGENT_NAME is what ai-run.sh keys the ladder and the self-heal KB on — so this
+        // agent's constraints and episodes were filed under whatever ran before it.
+        EPAM_AGENT_NAME: 'code-graph-detective',
       }, { costAgent: 'code-graph-detective', costStoryId: story && story.id ? story.id : '',
         // Salvage the detective's JSON even if its process exits non-zero/null
         // (it emits the answer, then a detached grandchild teardown trips the

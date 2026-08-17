@@ -698,6 +698,22 @@
         }
       ],
       "template": "skill-assessment-prephase"
+    },
+    "prd-model-coordinator": {
+      "_what": "Assigns every pending story its model, provider and reasoning effort, and writes them into the PRD.",
+      "allowedTools": "bash,read_file,list_files,search,write_file",
+      "maxOutputTokens": 16384,
+      "reasoningEffort": "medium",
+      "timeoutSecs": 600,
+      "ladder": "mid",
+      "produces": "story-model-assignments",
+      "consumes": [
+        {
+          "kind": "ticket",
+          "required": true
+        }
+      ],
+      "template": "prd-model-coordinator"
     }
   },
   "_seamResolution": [

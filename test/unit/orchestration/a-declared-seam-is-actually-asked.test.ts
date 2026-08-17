@@ -29,6 +29,16 @@ const MINT_AGENTS: Array<{ seam: string; file: string }> = [
   { seam: 'role-assigner', file: 'spec-mode-runner.js' },
   { seam: 'roster-review', file: 'spec-mode-runner.js' },
   { seam: 'prompt-builder', file: 'mint-agents-step.js' },
+
+  // Beyond the mint. Each was found resolving to a seam nothing asked for, or to no seam at all,
+  // and each edits something a later stage depends on — the PRD, the roster, the estimate.
+  { seam: 'spec-coordinator', file: 'spec-mode-runner.js' },
+  { seam: 'spec-agent', file: 'spec-mode-runner.js' },
+  { seam: 'ticket-links', file: 'spec-mode-runner.js' },
+  { seam: 'code-graph-detective', file: 'spec-mode-runner.js' },
+  { seam: 'guard-vocabulary', file: 'spec-mode-runner.js' },
+  { seam: 'cpa-inference', file: 'lib/cpa-inference.js' },
+  { seam: 'prd-model-coordinator', file: 'run-agent-orchestration.sh' },
 ];
 
 const sourceOf = (f: string) => readFileSync(join(SCRIPTS, f), 'utf8');
@@ -41,7 +51,12 @@ describe('a declared seam is actually asked', () => {
         .split('\n')
         .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))     // a comment naming it is not a call
         .join('\n');
-      if (!src.includes(`seamInvocationEnv('${seam}'`)) unasked.push(`${seam} (${file})`);
+      // TWO SHAPES AGAIN. A JS caller calls seamInvocationEnv('<seam>'); a shell caller passes the
+      // seam to lib/handlers/seam-env-args.js, which is the same request through a handler.
+      const asked = src.includes(`seamInvocationEnv('${seam}'`)
+        || src.includes(`seam-env-args.js" ${seam} `)
+        || src.includes(`seam-env-args.js" ${seam}"`);
+      if (!asked) unasked.push(`${seam} (${file})`);
     }
     expect(unasked,
       `${unasked.length} agent(s) resolve to a seam that nothing asks for, so their ladder, effort `
@@ -72,7 +87,11 @@ describe('a declared seam is actually asked', () => {
   });
 
   it('finds the call sites — it is not matching nothing', () => {
-    const total = MINT_AGENTS.filter(({ seam, file }) => sourceOf(file).includes(`seamInvocationEnv('${seam}'`)).length;
+    // Same two shapes as above: a JS caller, or a shell caller through the handler.
+    const total = MINT_AGENTS.filter(({ seam, file }) => {
+      const src = sourceOf(file);
+      return src.includes(`seamInvocationEnv('${seam}'`) || src.includes(`seam-env-args.js" ${seam} `);
+    }).length;
     expect(total, 'no mint agent applies a seam at all — the scan is looking in the wrong place')
       .toBe(MINT_AGENTS.length);
   });

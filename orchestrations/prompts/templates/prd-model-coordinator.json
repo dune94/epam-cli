@@ -9,7 +9,7 @@
   "description": "Assigns models to stories from the PRD, under the project's own coordinator profile.",
   "id": "prd-model-coordinator",
   "seams": [
-    "cpa-inference"
+    "prd-model-coordinator"
   ],
   "placeholders": [
     "__PROFILE__",

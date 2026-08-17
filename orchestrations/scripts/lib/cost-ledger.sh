@@ -37,16 +37,52 @@ _cost_ledger_records() {
     grep -c . "$_f" 2>/dev/null || printf '0'
 }
 
-# _cost_ledger_spend_evidence — what proves this run called a model, without pricing anything.
+# _cost_ledger_run_start — this run's start, as a timestamp `find -newermt` accepts.
+#
+# ORCH_RUN_ID is already a UTC run-start stamp (%Y%m%dT%H%M%SZ), set once at launch, so the run's
+# own identity supplies the boundary and nothing new has to be written to disk to mark it. Fails
+# (non-zero) when it is not a parseable stamp — a resume can carry a custom id — and the caller
+# must then say the evidence is unscoped rather than quietly counting every run ever.
+_cost_ledger_run_start() {
+    local _id="${ORCH_RUN_ID:-}"
+    [[ "$_id" =~ ^([0-9]{4})([0-9]{2})([0-9]{2})T([0-9]{2})([0-9]{2})([0-9]{2})Z$ ]] || return 1
+    printf '%s-%s-%s %s:%s:%s UTC' \
+        "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}" \
+        "${BASH_REMATCH[4]}" "${BASH_REMATCH[5]}" "${BASH_REMATCH[6]}"
+}
+
+# _cost_ledger_spend_evidence — what proves THIS RUN called a model, without pricing anything.
 # Counts artefacts only: a result file exists because a call returned, whatever it cost.
+#
+# IT COUNTED EVERY RUN THAT HAD EVER HAPPENED.
+#
+# claude_outputs/ accumulates across runs and pre-run-reset deliberately does not clear it, while
+# phase-cost.jsonl IS reset every run. So the two sides of the comparison covered different spans
+# of time: on 2026-08-17 it reported "986 model-call result artefact(s)" against a mock3 run whose
+# newest artefact was from 2026-08-15 and which had produced none of its own. The ledger really
+# was empty, but the evidence quoted for it was two days of other runs — and once the count is
+# unscoped it can never fall back to zero, so every future run inherits the same accusation.
+#
+# This is the same defect the story-budget guard in claude.sh already fixed for the other side of
+# the ledger ("summing by story_id alone charged this run for every previous run's attempts").
+# Fixed there, not here.
 _cost_ledger_spend_evidence() {
-    local _n=0 _dir="${LOG_DIR:-}"
+    local _n=0 _dir="${LOG_DIR:-}" _start
     [ -n "$_dir" ] || { printf '0'; return 0; }
+
+    # UNSCOPED IS NOT A NUMBER WE MAY PRINT. Without a boundary the only honest answers are "none"
+    # or "unknown", and "unknown" must not read as spend — the caller treats non-numeric as
+    # no-evidence and stays quiet rather than accusing a run on data that isn't about it.
+    if ! _start="$(_cost_ledger_run_start)"; then
+        printf 'unscoped'
+        return 0
+    fi
+
     # `grep -c` prints 0 AND exits 1 on no match, so `|| echo 0` appends a SECOND zero and the
     # count becomes two lines — which then compares as non-zero and reports a healthy run broken.
-    _n=$(find "$_dir" -maxdepth 2 -name '*_result.json' 2>/dev/null | wc -l | tr -d '[:space:]')
+    _n=$(find "$_dir" -maxdepth 2 -name '*_result.json' -newermt "$_start" 2>/dev/null | wc -l | tr -d '[:space:]')
     if [ "${_n:-0}" -eq 0 ]; then
-        _n=$(find "$_dir" -maxdepth 1 -name 'usage-progress-*.json' -size +2c 2>/dev/null | wc -l | tr -d '[:space:]')
+        _n=$(find "$_dir" -maxdepth 1 -name 'usage-progress-*.json' -size +2c -newermt "$_start" 2>/dev/null | wc -l | tr -d '[:space:]')
     fi
     printf '%s' "${_n:-0}"
 }
@@ -64,6 +100,18 @@ assert_cost_ledger_not_silently_empty() {
     if [ "${_records:-0}" -gt 0 ]; then
         return 0
     fi
+    # Non-numeric means the evidence could not be scoped to this run (see above). Accusing a run
+    # on a count that is not about it is how "986 artefacts" got quoted at a run that made none.
+    case "$_evidence" in
+        ''|*[!0-9]*)
+            if command -v warning >/dev/null 2>&1; then
+                warning "[cost] ${_ledger} holds 0 records, and this run's spend could not be scoped"
+                warning "[cost] (ORCH_RUN_ID='${ORCH_RUN_ID:-}' is not a run-start stamp), so whether"
+                warning "[cost] anything was actually spent is unknown rather than zero."
+            fi
+            return 0
+            ;;
+    esac
     if [ "${_evidence:-0}" -eq 0 ]; then
         # No calls, no records. A dry run, or a phase that skipped everything.
         return 0

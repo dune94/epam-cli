@@ -6552,13 +6552,16 @@ if is_truthy "${SKIP_TC_WRITER:-}"; then
     info "Step 10: TC writer gate skipped (SKIP_TC_WRITER=1)"
     _tc_writer_needed=0
 else
-_tc_writer_needed=$(jq -r --arg phase "$PHASE" \
-    '(.implementationOrder[$phase] // []) as $ids |
-     [.stories[] | select(.id as $id | $ids | index($id)) |
-      select(
-        (.technicalNotes.files // [] | map(endswith(".test.ts")) | any) and
-        ((.testCriteria.facts // []) | length == 0)
-      )] | length' "$PRD_FILE" 2>/dev/null || echo 0)
+# WHICH STORIES NEED TEST CRITERIA — ASKED OF THE ONE PLACE THAT KNOWS.
+#
+# This was an inline jq matching endswith(".test.ts"). post-impl-tc-writer.sh, the script this
+# gate exists to invoke, already asks lib/handlers/_testfile.py, which recognises .spec., .test.,
+# _spec., _test., test_* and __tests__/. So on a project using ANY other convention — .spec.ts,
+# test_*.py, anything not Node — this returned 0, the writer was never invoked, and the step
+# reported "all TCs present". A gate that silently answers "nothing to do" on every project but
+# one is not a gate. Verified against a fixture: the handler finds 2, this jq found 0.
+_tc_writer_needed=$(python3 "$SCRIPT_DIR/lib/handlers/tc-stories-needing-criteria.py" \
+    "$PRD_FILE" "$PHASE" "" 2>/dev/null | awk 'NF{n++} END{print n+0}')
 fi
 
 # TC WRITER IS A GREENFIELD MECHANISM (decision, 2026-07-26).
@@ -6615,13 +6618,11 @@ elif [ "${_tc_writer_needed:-0}" -gt 0 ]; then
             exit 1
         fi
 
-        _tc_batch_still_missing=$(jq -r --arg phase "$PHASE" \
-            '(.implementationOrder[$phase] // []) as $ids |
-             [.stories[] | select(.id as $id | $ids | index($id)) |
-              select(
-                (.technicalNotes.files // [] | map(endswith(".test.ts")) | any) and
-                ((.testCriteria.facts // []) | length == 0)
-              ) | .id] | join(",")' "$PRD_FILE" 2>/dev/null || echo "")
+        # THE SAME QUESTION, SO THE SAME ANSWER. This carried its own copy of the .test.ts
+        # match, so on any other convention it reported nothing still missing and the gate
+        # PASSED — after a writer run that had produced nothing, because it was never needed.
+        _tc_batch_still_missing=$(python3 "$SCRIPT_DIR/lib/handlers/tc-stories-needing-criteria.py" \
+            "$PRD_FILE" "$PHASE" "" 2>/dev/null | awk 'NF{printf "%s%s", (n++ ? "," : ""), $0}')
 
         if [ -z "$_tc_batch_still_missing" ]; then
             step_emit "10" "pass" "Step 10: TC writer gate"

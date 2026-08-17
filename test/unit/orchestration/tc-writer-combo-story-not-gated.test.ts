@@ -59,16 +59,45 @@ describe('TC-writer gating — combo-story scoping (static)', () => {
     expect(block).toMatch(/select\(\.status != "deprecated"\)/);
   });
 
-  it('the Step 1.6 POST-LOOP gate is deliberately left as "any" — combo stories have already completed by this point', () => {
-    const idx = orchSrc.indexOf('_tc_writer_needed=$(jq -r --arg phase "$PHASE"');
-    const block = orchSrc.slice(idx, idx + 500);
-    expect(block).toMatch(/\| map\(endswith\(".test.ts"\)\) \| any\)/);
-    expect(block).not.toMatch(/\| map\(endswith\(".test.ts"\)\) \| all\)/);
+  it('the Step 1.6 POST-LOOP gate still treats a combo story as needing TCs ("any", not "all")', () => {
+    // WAS A SOURCE-TEXT MATCH on the gate's inline jq. That jq is gone: it hardcoded .test.ts,
+    // which made this gate a silent no-op on every project using another convention, so it now
+    // asks lib/handlers/tc-stories-needing-criteria.py like the writer it invokes already did.
+    // The requirement never changed — a combo story owning BOTH impl and test files has completed
+    // by this point, its files genuinely exist, and TC generation legitimately helps downstream
+    // QA gates. So assert THAT, by running it, instead of pinning the mechanism that expressed it.
+    const dir = mkdtempSync(join(tmpdir(), 'combo-postloop-'));
+    try {
+      const prd = join(dir, 'prd.json');
+      writeFileSync(prd, JSON.stringify({
+        implementationOrder: { P1: ['COMBO'] },
+        stories: [{
+          id: 'COMBO',
+          technicalNotes: { files: ['src/client.ts', 'src/client.test.ts'] },
+          testCriteria: { facts: [] },
+        }],
+      }));
+      const out = execFileSync('python3', [
+        join(REPO_ROOT, 'orchestrations/scripts/lib/handlers/tc-stories-needing-criteria.py'),
+        prd, 'P1', '',
+      ], { encoding: 'utf8' });
+      expect(out.split('\n').filter(Boolean),
+        'the post-loop gate stopped offering TCs to a completed combo story ("all" semantics)',
+      ).toContain('COMBO');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
-  it('post-impl-tc-writer.sh is deliberately left as "any" — its own combo-story fix (2026-07-02) depends on it', () => {
-    const matches = [...tcWriterSrc.matchAll(/is_test_story = (.+)/g)];
-    expect(matches.length).toBeGreaterThanOrEqual(2);
+  it('the TC-writer handlers keep "any" semantics and name no test convention', () => {
+    // The classification moved out of post-impl-tc-writer.sh into the handlers it calls, so
+    // scraping the shell for `is_test_story` found nothing and passed on an empty set. Read the
+    // handlers that actually carry it, and require at least the two that do.
+    const handlers = ['tc-stories-needing-criteria.py', 'tc-story-context.py']
+      .map((h) => readFileSync(join(REPO_ROOT, 'orchestrations/scripts/lib/handlers', h), 'utf8'));
+    const matches = handlers.flatMap((src) => [...src.matchAll(/is_test_story = (.+)/g)]);
+    expect(matches.length, 'the is_test_story classification is no longer where this looks')
+      .toBeGreaterThanOrEqual(2);
     for (const m of matches) {
       // The point of this test is any() vs all() — a combo story must not be
       // gated. The test-file predicate itself is no longer a hardcoded

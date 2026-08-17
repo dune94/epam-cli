@@ -44,6 +44,8 @@ export default defineConfig({
       'test/unit/orchestration/codegraph-answers-from-whatever-repo-it-is-standing-in.test.ts',
       // Timeouts — 36 seams declared one and nothing read it.
       'test/unit/orchestration/every-seam-declares-a-timeout-nothing-reads.test.ts',
+      // Provisioning — one slow call must not destroy the whole mint step.
+      'test/unit/orchestration/one-slow-prompt-destroyed-thirty-minutes-of-work.test.ts',
       // Cost — the measurement the operator calls priority #1.
       'test/unit/orchestration/the-run-recorded-no-cost.test.ts',
       'test/unit/orchestration/cost-rows-cannot-be-joined-to-the-roster.test.ts',

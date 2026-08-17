@@ -309,13 +309,39 @@ async function buildProjectPrompts({
   for (const id of generated) {
     const template = readJson(path.join(templatesDir, `${id}.json`));
     let refusal = '';
+    let callFailure = '';
     let installed = false;
 
     for (let attempt = 1; attempt <= Math.max(1, attempts); attempt += 1) {
       const prompt = renderGeneratorPrompt({
         generatorBody, template, projectContext, codelineContext, mintedRoles, refusal,
       });
-      const body = String((await runText(prompt, { id, attempt })) || '');
+      // A CALL THAT NEVER CAME BACK IS THE MOST RETRYABLE FAILURE THERE IS.
+      //
+      // This loop already retries a prompt that came back WRONG — a dropped placeholder is refused,
+      // the reason is fed back, the next attempt corrects it. A call that THREW escaped the loop
+      // entirely, out of buildProjectPrompts and out of the mint step.
+      //
+      // Live 2026-08-17, run 20260817T185759Z: "prompt runner timed out after 360000ms" destroyed
+      // the estate survey, the minted roster, the story assignment and 12 already-generated
+      // prompts — 30 minutes into the first run that had cleared every earlier stage correctly.
+      // One slow call out of 51.
+      //
+      // Nothing is known to be wrong with the request; it simply did not finish. So it costs one
+      // attempt, exactly as a refusal does — but stays DISTINGUISHABLE from one, because a
+      // contract refusal is fixed in the prompt and a failed call is fixed in the budget or the
+      // provider, and collapsing them sends the reader to the wrong file.
+      let body;
+      try {
+        body = String((await runText(prompt, { id, attempt })) || '');
+      } catch (err) {
+        const why = (err && err.message) || String(err);
+        callFailure = why;
+        refusal = `the previous attempt did not come back: ${why}. Nothing was found wrong with `
+          + 'your answer — it never arrived. Produce the same prompt again.';
+        log(`[prompt-builder] ! ${id} attempt ${attempt}/${attempts} CALL FAILED: ${why}`);
+        continue;
+      }
       const doc = buildGeneratedDoc(template, body);
       const verdict = checkGeneratedPrompt(template, doc);
 
@@ -358,7 +384,10 @@ async function buildProjectPrompts({
       // a project missing one prompt must not look provisioned.
       throw new Error(
         `[prompt-builder] could not generate a valid '${id}' in ${attempts} attempt(s). `
-        + `Last refusal: ${refusal}`);
+        + (callFailure
+          ? `The call itself failed: ${callFailure}. That is a budget or provider problem, not a `
+            + 'prompt one — check the seam\'s declared timeoutSecs before changing the template.'
+          : `Last refusal: ${refusal}`));
     }
   }
 

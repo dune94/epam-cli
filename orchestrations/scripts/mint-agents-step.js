@@ -958,6 +958,9 @@ if (require.main !== module) return;
     const _built = await buildProjectPrompts({
       templatesDir,
       bootstrapFile,
+      // The seam registry decides what needs a project copy — a seam that runs a template needs
+      // one, or it executes the generic parent. bootstrap still supplies auxiliary prompts.
+      registryFile: path.join(AGENTS_DIR, 'invocation-profiles.json'),
       projectConfigDir,
       mode: promptMode,
       projectContext: [

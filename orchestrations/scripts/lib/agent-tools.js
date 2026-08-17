@@ -89,4 +89,43 @@ function readOnlyToolGrant(codelinePaths) {
   return [...new Set(names)].join(',');
 }
 
-module.exports = { readOnlyToolGrant, builtinFloor, pluginToolsFor };
+/**
+ * THE TOOL LIST FOR A DECLARED GRANT KIND, RESOLVED PER PROJECT.
+ *
+ * A seam declares WHAT KIND of access its work needs — none, read-only, read-network, execute,
+ * write. The list is resolved here, at invocation, because part of it belongs to the project:
+ * mock3 grants codegraph_query because its codelines provision that plugin, and a project without
+ * it must not be handed a tool that does not exist.
+ *
+ * This replaces two worse arrangements that ran side by side. Nine seams carried a literal
+ * "bash,read_file,list_files,search" in the registry — one project's answer frozen into the
+ * engine. The other twenty-six carried nothing, while their CALL SITES resolved a grant
+ * dynamically anyway (ORCH_GATE_ALLOWED_TOOLS, SPEC_MODE_ALLOWED_TOOLS, TICKET_LINK_ALLOWED_TOOLS,
+ * readOnlyToolGrant). So the registry both hardcoded and under-declared the same fact.
+ *
+ * An UNKNOWN kind throws. A seam that asks for a grant this engine does not define has been
+ * mis-declared, and silently handing it the read-only floor would give it less than its work needs
+ * without saying so.
+ */
+function toolGrantFor(kind, codelinePaths) {
+  if (!kind) return '';
+  const file = process.env.EPAM_SPEC_MODE_DEFAULTS_FILE
+    || path.join(__dirname, '..', '..', 'config', 'spec-mode-defaults.json');
+  let grants;
+  try {
+    grants = (JSON.parse(fs.readFileSync(file, 'utf8')).tools || {}).grants;
+  } catch (e) {
+    throw new Error(`[agent-tools] cannot read tool grants from ${file}: ${e.message}`);
+  }
+  if (!grants || !grants[kind]) {
+    throw new Error(
+      `[agent-tools] unknown tool grant '${kind}' — ${file} declares: ${Object.keys(grants || {}).join(', ')}`);
+  }
+  if (kind === 'none') return '';
+
+  const base = readOnlyToolGrant(codelinePaths).split(',').filter(Boolean);
+  const adds = Array.isArray(grants[kind].adds) ? grants[kind].adds : [];
+  return [...new Set([...base, ...adds])].join(',');
+}
+
+module.exports = { readOnlyToolGrant, builtinFloor, pluginToolsFor, toolGrantFor };

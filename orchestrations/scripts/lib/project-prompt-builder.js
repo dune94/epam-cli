@@ -68,7 +68,8 @@ function renderGeneratorPrompt({ generatorBody, template, projectContext, codeli
  *
  * @param {object}   o
  * @param {string}   o.templatesDir        the immutable generic zone
- * @param {string}   o.bootstrapFile       declares copyVerbatim / generated
+ * @param {string}   o.bootstrapFile       declares copyVerbatim / generated (auxiliary prompts)
+ * @param {string}   [o.registryFile]      invocation-profiles.json — every seam.template needs a copy
  * @param {string}   o.projectConfigDir    prompts are written to <dir>/prompts
  * @param {Function} o.runText             async (prompt) => model's reply text
  * @param {string}   o.projectContext      what this project is
@@ -79,12 +80,39 @@ function renderGeneratorPrompt({ generatorBody, template, projectContext, codeli
  * @returns {Promise<{copied:string[], generated:string[]}>}
  */
 async function buildProjectPrompts({
-  templatesDir, bootstrapFile, projectConfigDir, runText,
+  templatesDir, bootstrapFile, registryFile, projectConfigDir, runText,
   projectContext, codelineContext, mintedRoles, attempts = 3, mode = 'generate', log = () => {},
 }) {
   const boot = readJson(bootstrapFile);
   let copyVerbatim = Array.isArray(boot.copyVerbatim) ? boot.copyVerbatim : [];
   let generated = Array.isArray(boot.generated) ? boot.generated : [];
+
+  // WHAT NEEDS A PROJECT COPY IS DERIVED FROM THE SEAM REGISTRY, NOT MAINTAINED BY HAND.
+  //
+  // A seam names the template it runs. If a seam runs it, that seam needs a PROJECT copy —
+  // otherwise it executes the immutable generic parent, unspecialised for the project it is
+  // working on. That makes the list a fact of the registry, not a list anyone curates.
+  //
+  // Curating it had already drifted: of 33 templates referenced by a seam, six appeared in
+  // bootstrap NOWHERE — codeline-bridge, e2e-route-check, assign-agent-roles, spec-story-block,
+  // skill-assessment-prephase, prd-model-coordinator. Those seams had no project-prompt path at
+  // all, and nothing reported it, because the only list was the one that omitted them.
+  //
+  // bootstrap.generated is still read: it carries AUXILIARY prompts that a seam template
+  // references but no seam names directly (retry prefixes, hint bodies, sub-prompts). Union, not
+  // replacement — deriving alone would silently drop those.
+  if (registryFile && fs.existsSync(registryFile)) {
+    const reg = readJson(registryFile);
+    const seamTemplates = [...new Set(
+      Object.values(reg.profiles || {}).map((p) => p.template).filter(Boolean),
+    )];
+    const before = generated.length;
+    generated = [...new Set([...generated, ...seamTemplates.filter((t) => !copyVerbatim.includes(t))])];
+    if (generated.length !== before) {
+      log(`[prompt-builder] ${generated.length - before} template(s) added from the seam registry `
+        + 'that bootstrap did not list — a seam runs them, so a project copy is required');
+    }
+  }
 
   // ONLY WHAT A PROJECT-LAYER RENDERER READS.
   //
@@ -133,15 +161,31 @@ async function buildProjectPrompts({
     }
   }
 
-  const _dropped = [...copyVerbatim, ...generated].filter((id) => _layerOf(id) !== 'project');
+  // A TEMPLATE A SEAM RUNS IS PROJECT-LAYER BY DEFINITION.
+  //
+  // The layer field was the only gate, and absent defaults to 'engine' — so 37 of 44 templates
+  // were dropped and their seams executed the generic parent on a specific project. That is the
+  // condition this whole layer exists to prevent, decided by a metadata field nobody set.
+  //
+  // Running it is the proof: if a seam names a template, that seam needs a specialised copy. The
+  // layer field still decides for templates NO seam names — auxiliary bodies that only another
+  // prompt references.
+  const _seamRun = new Set();
+  if (registryFile && fs.existsSync(registryFile)) {
+    for (const p of Object.values(readJson(registryFile).profiles || {})) {
+      if (p.template) _seamRun.add(p.template);
+    }
+  }
+  const _needsProjectCopy = (id) => _seamRun.has(id) || _layerOf(id) === 'project';
+  const _dropped = [...copyVerbatim, ...generated].filter((id) => !_needsProjectCopy(id));
   if (_dropped.length) {
     // Said out loud. A silently shorter list is indistinguishable from a bootstrap that never
     // declared them.
     log(`[prompt-builder] ${_dropped.length} template(s) are engine-layer and are not provisioned `
       + `— nothing would ever read a project copy: ${_dropped.join(', ')}`);
   }
-  copyVerbatim = copyVerbatim.filter((id) => _layerOf(id) === 'project');
-  generated = generated.filter((id) => _layerOf(id) === 'project');
+  copyVerbatim = copyVerbatim.filter(_needsProjectCopy);
+  generated = generated.filter(_needsProjectCopy);
 
   // TWO PROVISIONING MODES, one per project, by operator design:
   //

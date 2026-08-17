@@ -19,7 +19,37 @@
       "read_file",
       "list_files",
       "search"
-    ]
+    ],
+    "$grantComment": "GRANT KINDS. A seam declares WHICH KIND of access its work needs; the actual tool list is resolved per project at invocation, because a project's plugins decide part of it — mock3 grants codegraph_query because its codelines provision that plugin, and a project without it must not be handed a tool that does not exist. Naming tools per seam in the registry would freeze one project's answer into the engine, which is the defect this replaces: nine seams carried a literal 'bash,read_file,list_files,search' while twenty-six carried nothing at all, and the call sites resolved the real grant dynamically anyway.",
+    "grants": {
+      "none": {
+        "$what": "Judges text that is injected into its prompt. Reaching for a tool would mean the evidence it was given was incomplete.",
+        "adds": []
+      },
+      "read-only": {
+        "$what": "Must read the repository to answer — the builtin floor plus whatever this project's plugins provide.",
+        "adds": []
+      },
+      "read-network": {
+        "$what": "Read-only, plus fetching documents referenced outside the repository.",
+        "adds": [
+          "fetch_url"
+        ]
+      },
+      "execute": {
+        "$what": "Must RUN something to answer — tests, a build, a type check.",
+        "adds": [
+          "bash"
+        ]
+      },
+      "write": {
+        "$what": "Must produce a file the pipeline then reads. The widest grant; declared, never inferred.",
+        "adds": [
+          "bash",
+          "write_file"
+        ]
+      }
+    }
   },
   "promptTrim": {
     "$comment": "How much accumulated coordinator guidance an agent keeps. Live 2026-08-09 a writer's prompt hit 53366 chars against this threshold and was trimmed to the most recent sections — two thirds of its guidance discarded, with a WARNING the only trace. The section count replaced a 1 on 2026-07-11, after a run repeated an identical mistake five retries after being told not to, because a newer heading had pushed the earlier diagnosis out of a single-heading window.",

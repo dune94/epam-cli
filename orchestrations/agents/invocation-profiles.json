@@ -714,6 +714,35 @@
         }
       ],
       "template": "prd-model-coordinator"
+    },
+    "prompt-review": {
+      "_what": "Falsifies what a generated project prompt claims about this project, before any agent inherits it.",
+      "ladder": "top",
+      "reasoningEffort": "high",
+      "temperature": "0.1",
+      "maxOutputTokens": 32768,
+      "maxIterations": 25,
+      "timeoutSecs": 900,
+      "toolGrant": "read-only",
+      "produces": "prompt-verdict",
+      "consumes": [
+        {
+          "kind": "generated-prompt",
+          "required": true,
+          "authority": "the artefact under review"
+        },
+        {
+          "kind": "template",
+          "required": true,
+          "authority": "what it was derived from"
+        },
+        {
+          "kind": "codeline-facts",
+          "required": true,
+          "authority": "the ground truth its claims are checked against"
+        }
+      ],
+      "template": "prompt-review"
     }
   },
   "_seamResolution": [
@@ -881,19 +910,15 @@
     "profile-augmentor": "ac-elaboration",
     "failure-analyst": "impl-failure-analyst",
     "kb-change-reviewer": "code-review-cycle",
-    "prd-model-coordinator": "cpa-inference",
-    "codeline-bridge-agent": "codeline-bridge-agent",
     "retry-extension-coordinator": "cpa-inference",
     "guard-vocabulary-agent": "cpa-inference",
     "ticket-link-agent": "cpa-inference",
     "discovery-vocabulary-agent": "cpa-inference",
     "roster-reviewer": "code-review-cycle",
-    "contentstack-sdk-engineer": "story-writer",
-    "contentstack-preview-react-engineer": "story-writer",
-    "tools_audit": "story-writer",
-    "story_recovery": "impl-failure-analyst",
-    "lint-fixer": "story-writer",
-    "skills_audit": "ac-elaboration"
+    "transit-fare-engineer": "story-writer",
+    "transit-schedule-engineer": "story-writer",
+    "mocka-investigator": "code-graph-detective",
+    "mockb-investigator": "code-graph-detective"
   },
   "engineProduces": [
     "ticket",
@@ -903,7 +928,8 @@
     "roster",
     "proposed-change",
     "existing-code",
-    "dependency-contracts"
+    "dependency-contracts",
+    "generated-prompt"
   ],
   "_publishesVia": "An archetype carrying publishesVia=\"agent-io\" has been migrated onto the published-inputs framework: it renders its own output and publishes it. Required-input enforcement applies ONLY to kinds whose producer carries this marker — a kind still rendered the old way has nothing in the store, and refusing every prompt over that would stop the pipeline rather than migrate it. Each producer gains the marker as it moves; when every producer has one, the marker and this note go.",
   "agentSeamOrigin": {
@@ -955,15 +981,15 @@
     "profile-augmentor": "derived",
     "failure-analyst": "derived",
     "kb-change-reviewer": "derived",
-    "prd-model-coordinator": "derived",
-    "codeline-bridge-agent": "derived",
     "retry-extension-coordinator": "derived",
     "guard-vocabulary-agent": "derived",
     "ticket-link-agent": "derived",
     "discovery-vocabulary-agent": "derived",
     "roster-reviewer": "derived",
-    "contentstack-sdk-engineer": "derived",
-    "contentstack-preview-react-engineer": "derived"
+    "transit-fare-engineer": "derived",
+    "transit-schedule-engineer": "derived",
+    "mocka-investigator": "derived",
+    "mockb-investigator": "derived"
   },
   "_ladderPositions": "A seam declares a POSITION in the project’s ladderTierOrder (base|mid|top), never a tier NAME. The project owns its tier vocabulary; the engine owns none. Converted 2026-08-15 after twenty seams asking for a literal HIGHEST ran unladdered on a project that declared only high and medium.",
   "_defaultSeam": "REMOVED 2026-08-16. A project may declare EPAM_DEFAULT_SEAM in its config if it wants unmatched agents absorbed; the engine declares none, so an unmatched agent fails the mint loudly and is fixed with one line rather than discovered mid-run.",

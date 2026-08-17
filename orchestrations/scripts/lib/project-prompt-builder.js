@@ -72,6 +72,9 @@ function renderGeneratorPrompt({ generatorBody, template, projectContext, codeli
  * @param {string}   [o.registryFile]      invocation-profiles.json — every seam.template needs a copy
  * @param {string}   o.projectConfigDir    prompts are written to <dir>/prompts
  * @param {Function} o.runText             async (prompt) => model's reply text
+ * @param {Function} [o.reviewPrompt]      async ({id,template,generated}) => {ok, reason}
+ *                                         falsifies the derivative's claims about the project;
+ *                                         omitted means no review, exactly as before
  * @param {string}   o.projectContext      what this project is
  * @param {string}   o.codelineContext     codelines and declared dependencies
  * @param {string}   o.mintedRoles         the roles the mint just produced
@@ -80,7 +83,7 @@ function renderGeneratorPrompt({ generatorBody, template, projectContext, codeli
  * @returns {Promise<{copied:string[], generated:string[]}>}
  */
 async function buildProjectPrompts({
-  templatesDir, bootstrapFile, registryFile, projectConfigDir, runText,
+  templatesDir, bootstrapFile, registryFile, projectConfigDir, runText, reviewPrompt,
   projectContext, codelineContext, mintedRoles, attempts = 3, mode = 'generate', log = () => {},
 }) {
   const boot = readJson(bootstrapFile);
@@ -273,7 +276,29 @@ async function buildProjectPrompts({
       const verdict = checkGeneratedPrompt(template, doc);
 
       if (verdict.ok) {
-        // Written only once the contract passes — never a partial or refused prompt.
+        // THE CONTRACT CHECK PROVES IT IS WIREABLE, NOT THAT IT IS TRUE.
+        //
+        // checkGeneratedPrompt verifies placeholders in and out. A derivative can satisfy that
+        // completely and still tell an agent this codeline's tests live in a directory it does
+        // not have, or that a dependency is present when it is not — and install cleanly, because
+        // every placeholder was in the right place. The agent then inherits the claim as
+        // instruction and nothing later questions it.
+        //
+        // The roster already gets this treatment: roster-review reads the repositories and
+        // falsifies a generated brief before any implementer inherits it. reviewPrompt is that
+        // reviewer pointed at prompts. It is OPTIONAL — a caller that supplies none provisions
+        // exactly as before, so this cannot block a project that has not adopted it.
+        if (typeof reviewPrompt === 'function') {
+          const review = await reviewPrompt({ id, template, generated: doc });
+          if (review && review.ok === false) {
+            refusal = `a review of this prompt found claims about the project that are false: ${review.reason}`;
+            log(`[prompt-builder] ! ${id} attempt ${attempt}/${attempts} REVIEW REJECTED: ${review.reason}`);
+            continue;
+          }
+        }
+
+        // Written only once the contract passes AND the review found nothing false — never a
+        // partial, a refused, or an unreviewed-but-rejected prompt.
         fs.writeFileSync(path.join(outDir, `${id}.json`), JSON.stringify(doc, null, 2) + '\n');
         built.push(id);
         installed = true;

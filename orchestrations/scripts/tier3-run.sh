@@ -110,7 +110,15 @@ fi
 
 # ── Pre-flight, before anything is spent ──────────────────────────────────────
 info "Pre-flight for '$PROJECT_NAME'..."
-bash "$SCRIPT_DIR/preflight-check.sh" || fail "pre-flight failed — not launching"
+# PASS WHAT IT ASKS FOR. Called bare, preflight-check.sh reports failures that are about the
+# INVOCATION rather than the environment — "No --runner specified", "PRD_FILE is unset", "No --prd
+# specified" — so this launcher could never pass its own gate and refused every launch. It knows
+# all three values; withholding them turned a real environment check into a permanent no.
+bash "$SCRIPT_DIR/preflight-check.sh" \
+    --runner "run-agent-orchestration.sh" \
+    --prd "$PRD_FILE" \
+    --project-config "$PROJECT_DIR" \
+    || fail "pre-flight failed — not launching"
 # NO PRD-INTEGRITY GATE HERE. I added one and it blocked every authored PRD, because it checks
 # fields LATER STEPS populate: project.outputDir comes from scope resolution, aiProvider from the
 # PRD model coordinator, and the scaffold phase from the mint. No working launcher runs this gate

@@ -19,6 +19,7 @@
  *     manifest        the manifest file found, or ""
  *     installDir      where this ecosystem vendors dependencies, or null if it vendors none
  *     packageManager  decided by the lockfile present, or "" when none says
+ *     testCommand     what runs this project's own tests, or "" when it declares none
  *     declaredBins    the declared dependencies the repo's own scripts actually invoke
  *     missingBins     of those, the ones not present in installDir
  *     providers       { packageName: path } for sibling repositories in the estate
@@ -52,7 +53,7 @@ function ecosystemOf(root) {
 
 const eco = ecosystemOf(repo);
 const out = {
-  stack: '', manifest: '', installDir: null, packageManager: '',
+  stack: '', manifest: '', installDir: null, packageManager: '', testCommand: '',
   declaredBins: [], missingBins: [], providers: {},
 };
 
@@ -80,6 +81,13 @@ if (eco) {
     out.declaredBins = scripts
       ? deps.filter((d) => new RegExp(`(^|[^\\w/@-])${d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^\\w-]|$)`).test(scripts))
       : [];
+
+    // WHAT COMMAND RUNS ITS TESTS, from the ecosystem rather than from a runner name. Empty
+    // means the project declares none — which the caller must read as "nothing to run", never as
+    // "the tests passed".
+    if (typeof eco.testCommand === 'function') {
+      try { out.testCommand = eco.testCommand(text, out.packageManager) || ''; } catch { out.testCommand = ''; }
+    }
 
     if (out.installDir) {
       out.missingBins = out.declaredBins.filter((b) => !fs.existsSync(path.join(repo, out.installDir, b)));

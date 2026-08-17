@@ -5420,18 +5420,19 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
     # Now: the project's own `scripts.test`, executed through the package manager
     # its lockfile names. No runner name and no runner-specific flag appears
     # here, so a stack neither of us has seen still works.
-    _rg_test_declared=0
-    if [ -f "$_rg_root/package.json" ] &&
-       jq -e '(.scripts.test // "") != ""' "$_rg_root/package.json" >/dev/null 2>&1; then
-        _rg_test_declared=1
-    fi
+    # FROM THE ECOSYSTEM REGISTRY, not from a manifest this file names. It tested package.json and
+    # four npm lockfiles, so a Rust, Python or Ruby codeline had _rg_test_declared=0, the condition
+    # below never fired, and the cross-phase regression check was SILENTLY SKIPPED — the same free
+    # pass codeline-health.sh was giving, and for the same reason. Its own comment two lines up
+    # claims no runner name appears here, which was true of the runner and false of the ecosystem.
+    _rg_facts="$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/codeline-ecosystem.js" "$_rg_root" 2>/dev/null || echo '{}')"
+    _rg_test_cmd="$(printf '%s' "$_rg_facts" | python3 "$SCRIPT_DIR/lib/handlers/json-field.py" testCommand 2>/dev/null || echo "")"
+    _rg_pm="$(printf '%s' "$_rg_facts" | python3 "$SCRIPT_DIR/lib/handlers/json-field.py" packageManager 2>/dev/null || echo "")"
 
-    # The package manager, from the lockfile the project committed.
-    _rg_pm=""
-    [ -f "$_rg_root/pnpm-lock.yaml" ]      && _rg_pm="pnpm"
-    [ -z "$_rg_pm" ] && [ -f "$_rg_root/yarn.lock" ] && _rg_pm="yarn"
-    [ -z "$_rg_pm" ] && { [ -f "$_rg_root/package-lock.json" ] || [ -f "$_rg_root/npm-shrinkwrap.json" ]; } && _rg_pm="npm"
-    [ -z "$_rg_pm" ] && [ "$_rg_test_declared" -eq 1 ] && _rg_pm="npm"
+    # A project that declares no test command has nothing to regress against. That is not a pass —
+    # the caller below runs the guard only when there IS something to run, and says so either way.
+    _rg_test_declared=0
+    [ -n "$_rg_test_cmd" ] && _rg_test_declared=1
 
     # Kept for ensure_node_modules_healthy's smoke test below, which asks "is
     # node_modules usable" — any installed executable answers that.
@@ -5445,7 +5446,9 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
     # hasn't touched before. Smoke-test + repair BEFORE trusting the test
     # runner, so a broken environment reads as a clear repair attempt, not a
     # confusing "tests broken" failure that's actually an environment issue.
-    if [ -n "$_rg_node" ] && [ -f "$_rg_root/package.json" ]; then
+    # The repair below is ecosystem-specific by nature: it repairs a vendored install. Gated on
+    # the registry saying this ecosystem vendors in-repo, rather than on a manifest name.
+    if [ -n "$_rg_node" ] && [ -n "$_rg_vendored" ] && [ "$_rg_vendored" != "null" ]; then
         # CANNOT-VERIFY is a third outcome, and it is never a pass.
         #
         # This was `|| true`. Live metrolinx 2026-07-29: the repair guard reported
@@ -5474,9 +5477,17 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
             _rg_bin="$(find "$_rg_root/node_modules/.bin" -maxdepth 1 -type f -o -maxdepth 1 -type l 2>/dev/null | head -1)"
         fi
     fi
-    if [ -n "$_rg_node" ] && [ "$_rg_test_declared" -eq 1 ] && [ -n "$_rg_pm" ] && [ -n "$_rg_bin" ]; then
+    _rg_vendored="$(printf '%s' "$_rg_facts" | python3 "$SCRIPT_DIR/lib/handlers/json-field.py" installDir 2>/dev/null || echo "")"
+    _rg_ready=1
+    [ "$_rg_test_declared" -eq 1 ] || _rg_ready=0
+    # Only an ecosystem that vendors in-repo needs its interpreter and its install present before
+    # the tests can be trusted. Requiring them of every ecosystem is what skipped the guard.
+    if [ -n "$_rg_vendored" ] && [ "$_rg_vendored" != "null" ]; then
+      { [ -n "$_rg_node" ] && [ -n "$_rg_bin" ]; } || _rg_ready=0
+    fi
+    if [ "$_rg_ready" -eq 1 ]; then
         step_emit "5" "running" "Step 5: Regression guard"
-        log "Step 5: Cross-phase regression guard ($_rg_pm test) in $_rg_root..."
+        log "Step 5: Cross-phase regression guard ($_rg_test_cmd) in $_rg_root..."
         _rg_log="$LOG_DIR/regression-guard-${PHASE}.log"
         # ── Retry before calling it a regression ──────────────────────────────
         # The rule this gate enforces is that coding must not INCREASE the
@@ -5510,7 +5521,7 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
             # The project's OWN command. Its node is put on PATH first so the script
             # resolves the version the codeline declares, without us naming a runner
             # or guessing its arguments.
-            (cd "$_rg_root" && PATH="$(dirname "$_rg_node"):$PATH" "$_rg_pm" test) > "$_rg_try_log" 2>&1
+            (cd "$_rg_root" && PATH="${_rg_node:+$(dirname "$_rg_node"):}$PATH" sh -c "$_rg_test_cmd") > "$_rg_try_log" 2>&1
             _rg_rc=$?
             set -e
             [ "$_rg_rc" -eq 0 ] && break
@@ -5595,7 +5606,7 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
         if [ "$_rg_test_declared" -eq 1 ]; then
             step_emit "5" "fail" "Step 5: Regression guard" "declares a test script but it could not be run"
             error "Step 5: Regression guard COULD NOT RUN — $_rg_root declares a test script but it could not be executed"
-            error "  node: ${_rg_node:-<not found>}   package manager: ${_rg_pm:-<none detected>}   node_modules: $([ -n "$_rg_bin" ] && echo present || echo empty)"
+            error "  test command: ${_rg_test_cmd:-<none declared>}   package manager: ${_rg_pm:-<none detected>}   vendored: ${_rg_vendored:-<none>}"
             error "  The baseline is therefore UNVERIFIED: a break introduced by an earlier phase would not be caught."
             error "  This is an environment failure, not an absence of tests — check the codeline's node_modules install."
             error "  Bypass with: SKIP_REGRESSION_GUARD=true"
@@ -7292,9 +7303,9 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
         fi
     fi
     if [ -n "$_rgd_pattern" ] && [ "$_rgd_high_effort" = "1" ] && \
-       [ -n "${_rg_root:-}" ] && [ -n "${_rg_pm:-}" ] && [ "${_rg_test_declared:-0}" -eq 1 ]; then
+       [ -n "${_rg_root:-}" ] && [ -n "${_rg_test_cmd:-}" ] && [ "${_rg_test_declared:-0}" -eq 1 ]; then
         step_emit "3.58" "running" "Step 3.58: Regression delta gate"
-        log "Step 3.58: Regression delta gate — re-running $_rg_pm test in $_rg_root (effort:high story in phase '$PHASE')..."
+        log "Step 3.58: Regression delta gate — re-running $_rg_test_cmd in $_rg_root (effort:high story in phase '$PHASE')..."
         _rgd_baseline_file="$LOG_DIR/regression-guard-baseline-${PHASE}.json"
         _rgd_max="${EPAM_REGRESSION_GUARD_RETRIES:-2}"
         _rgd_max=$(( _rgd_max + 1 ))
@@ -7302,7 +7313,9 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
         for _rgd_try in $(seq 1 "$_rgd_max"); do
             _rgd_try_log="$_rgd_log"
             [ "$_rgd_try" -gt 1 ] && _rgd_try_log="${_rgd_log%.log}-attempt-${_rgd_try}.log"
-            (cd "$_rg_root" && PATH="$(dirname "$_rg_node"):$PATH" "$_rg_pm" test) > "$_rgd_try_log" 2>&1 || true
+            # The project's OWN command, same as the guard above. Assembling "<pm> test" assumed an
+            # ecosystem whose package manager takes a test subcommand.
+            (cd "$_rg_root" && PATH="${_rg_node:+$(dirname "$_rg_node"):}$PATH" sh -c "$_rg_test_cmd") > "$_rgd_try_log" 2>&1 || true
         done
         _rgd_result=$(python3 "$SCRIPT_DIR/lib/handlers/rgd-diff.py" "$_rgd_pattern" "$_rgd_max" "$_rgd_log" "$_rgd_baseline_file"
 )

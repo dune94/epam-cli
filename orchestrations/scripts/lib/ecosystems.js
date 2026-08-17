@@ -30,6 +30,10 @@ const MANIFESTS = [
     // The name a manifest gives itself, used to resolve one repository's dependency to another
     // repository in the same estate.
     selfName: (text) => JSON.parse(text).name || '',
+    // WHAT COMMAND RUNS THIS PROJECT'S OWN TESTS, taken from what the project declares rather
+    // than from a runner name. Returns '' when it declares none, which the caller reads as
+    // 'nothing to run' — never as 'the tests passed'.
+    testCommand: (text, manager) => ((JSON.parse(text).scripts || {}).test ? ((manager || 'npm') + ' test') : ''),
     deps: (text) => {
       const pkg = JSON.parse(text);
       return Object.keys({ ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) });
@@ -46,6 +50,7 @@ const MANIFESTS = [
     stack: 'python',
     installDir: null, // a virtualenv commonly lives outside the repo
     lockfiles: { 'poetry.lock': 'poetry', 'uv.lock': 'uv', 'pdm.lock': 'pdm' },
+    testCommand: (text) => (/\[tool\.pytest/.test(text) ? 'pytest' : ''),
     selfName: (text) => ((text.match(/^\s*name\s*=\s*["']([^"']+)/m) || [])[1] || ''),
     deps: (text) => {
       const out = [];
@@ -83,6 +88,7 @@ const MANIFESTS = [
     stack: 'go',
     installDir: null, // module cache is global, not in-repo
     lockfiles: { 'go.sum': 'go' },
+    testCommand: () => 'go test ./...',
     selfName: (text) => ((text.match(/^module\s+(\S+)/m) || [])[1] || ''),
     deps: (text) => [...text.matchAll(/^\s+([\w.\-/]+)\s+v[\d.]/gm)].map((m) => m[1]),
   },
@@ -91,6 +97,7 @@ const MANIFESTS = [
     stack: 'rust',
     installDir: null,
     lockfiles: { 'Cargo.lock': 'cargo' },
+    testCommand: () => 'cargo test',
     selfName: (text) => ((text.match(/^\s*name\s*=\s*["']([^"']+)/m) || [])[1] || ''),
     deps: (text) => {
       const sec = text.match(/\[dependencies\]([\s\S]*?)(\n\[|$)/);
@@ -102,6 +109,7 @@ const MANIFESTS = [
     stack: 'ruby',
     installDir: null,
     lockfiles: { 'Gemfile.lock': 'bundle' },
+    testCommand: (text) => (/rspec|minitest/.test(text) ? 'bundle exec rake test' : ''),
     deps: (text) => [...text.matchAll(/^\s*gem\s+['"]([^'"]+)/gm)].map((m) => m[1]),
   },
 ];

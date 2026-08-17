@@ -7630,8 +7630,14 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
             step_emit "3.58" "fail" "Step 3.58: Regression delta gate"
             _rgd_new=$(echo "$_rgd_result" | python3 -c "import json,sys; print(', '.join(json.load(sys.stdin)['new_failures']))" 2>/dev/null || echo "")
             if [ "$_rgd_verdict" = "unknown" ]; then
-                error "Step 3.58: Regression delta gate CANNOT VERIFY — testFailurePattern does not compile as a regex"
-                error "  This is not a confirmed regression, but it cannot be ruled out either — fix the pattern in dependency-check.json."
+                # SAY WHICH "cannot verify" THIS IS. There are three now — an uncompilable
+                # pattern, a suite that produced no output, and a missing tolerated baseline —
+                # and they are fixed in three different places. Naming only the pattern sent
+                # every investigation at dependency-check.json.
+                _rgd_reason=$(printf '%s' "$_rgd_result" \
+                    | python3 "$SCRIPT_DIR/lib/handlers/json-field.py" reason 2>/dev/null || echo "")
+                error "Step 3.58: Regression delta gate CANNOT VERIFY — ${_rgd_reason:-testFailurePattern does not compile as a regex}"
+                error "  This is not a confirmed regression, but it cannot be ruled out either."
             else
                 error "Step 3.58: Regression delta gate FAILED — this phase's changes broke test(s) that were passing at baseline: $_rgd_new"
                 error "  Pre-existing failures are tolerated; these are NEW."

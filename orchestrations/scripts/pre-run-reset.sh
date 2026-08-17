@@ -528,6 +528,53 @@ if [ "$_ROSTER_CLEARED" -gt 0 ]; then
     info "  Cleared $_ROSTER_CLEARED generated-roster file(s) — this run mints from the canonical base"
 fi
 
+# ── The REST of what a run generates into the project config dir ────────────
+#
+# The registries above were cleared because a roster is ephemeral. Everything else a run WRITES
+# into this directory was not, and each survivor is derived state the next run's agents read as
+# though this run had produced it.
+#
+# Found 2026-08-17, mid-run 20260817T154640Z, checking whether it had provisioned its own prompts:
+#
+#   prompts/codeline-bridge.json      10:37   <- from the run whose survey returned state "failed"
+#   prompts/assign-agent-roles.json   10:40   <- roster: transit-fare-engineer, since deleted
+#   prompts/ac-classification.json    11:54
+#   this run started                  12:01
+#
+# A project prompt is specialised against a specific roster and a specific survey. Those were
+# written against a survey that read no files, for agents that no longer exist. Provisioning
+# overwrites most of them alphabetically, so the window is narrow — but anything this run's list
+# does not include is never overwritten and persists indefinitely.
+#
+# Same class as the PRD keeping the previous run's agentRole: derived state in a directory nothing
+# walked. codeline-facts.json comes from discovery, estate-survey.md from the survey,
+# prompt-agent-link.json from the mint — all rewritten every run that reaches those stages.
+#
+# _PROJECT_CFG_DIR is already empty on a resume and on a skipped mint, so this inherits both
+# protections rather than re-deriving them: a resume continues a run that already reset, and
+# nothing rebuilds these when the mint does not run.
+_GEN_CLEARED=0
+for _gf in "${_PROJECT_CFG_DIR:+$_PROJECT_CFG_DIR/codeline-facts.json}" \
+           "${_PROJECT_CFG_DIR:+$_PROJECT_CFG_DIR/estate-survey.md}" \
+           "${_PROJECT_CFG_DIR:+$_PROJECT_CFG_DIR/prompt-agent-link.json}"; do
+    [ -n "$_gf" ] && [ -f "$_gf" ] || continue
+    rm -f "$_gf" 2>/dev/null && _GEN_CLEARED=$((_GEN_CLEARED+1)) || true
+done
+if [ "$_GEN_CLEARED" -gt 0 ]; then
+    info "  Cleared $_GEN_CLEARED generated project artefact(s) — discovery, survey and mint rewrite these"
+fi
+
+# THE PROMPTS DIRECTORY, WHOLE. Named files would miss whatever the next seam adds, and the
+# directory holds nothing a human authored — every file in it is rendered from a template by the
+# prompt builder. Removed and recreated so the builder writes into a clean directory rather than
+# over a mixture of this run's output and some earlier run's.
+if [ -n "${_PROJECT_CFG_DIR:-}" ] && [ -d "$_PROJECT_CFG_DIR/prompts" ]; then
+    _PROMPTS_N=$(find "$_PROJECT_CFG_DIR/prompts" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l | tr -d '[:space:]')
+    rm -rf "$_PROJECT_CFG_DIR/prompts" && mkdir -p "$_PROJECT_CFG_DIR/prompts"
+    [ "${_PROMPTS_N:-0}" -gt 0 ] \
+        && info "  Cleared ${_PROMPTS_N} project prompt(s) — each was specialised for a roster this run has not minted"
+fi
+
 # Restore the live roster from its canonical original, so a run that begins here
 # starts from the base even if its launcher does not restore.
 # Overridable so this block is testable in isolation and so a project that keeps its

@@ -82,6 +82,50 @@ function renderGeneratorPrompt({ generatorBody, template, projectContext, codeli
  * @param {Function} [o.log]               progress sink
  * @returns {Promise<{copied:string[], generated:string[]}>}
  */
+/**
+ * WHAT NEEDS A PROJECT COPY — resolved from the registry, with bootstrap supplying only what the
+ * registry cannot know.
+ *
+ * Pure and exported so the contract is assertable without provisioning anything.
+ *
+ * THE REGISTRY IS THE SOURCE. A seam declaring `template: X` IS the statement that X needs a
+ * project copy. bootstrap.generated used to restate 25 of those by hand, and a hand-kept copy of a
+ * derivable fact only ever drifts: seven seam-run templates had already fallen out of it, the last
+ * being prompt-review — a seam added by the very session that documented the drift at six.
+ *
+ * bootstrap now carries ONLY auxiliary prompts: sub-prompts referenced INSIDE a template body
+ * (retry prefixes, hint bodies) which no seam names and which deriving alone would drop.
+ *
+ * A seam naming a template that exists NOWHERE throws. Under the old union that was rescued into
+ * silence; the registry being the source means a gap in it is an error, not something bootstrap
+ * quietly covers for.
+ *
+ * @param {object} o.bootstrap        parsed bootstrap.json
+ * @param {object} o.registry         parsed invocation-profiles.json
+ * @param {function} [o.templateExists] (id) => bool; defaults to assuming it does
+ * @returns {string[]} template ids needing a generated project copy
+ */
+function provisioningList({ bootstrap = {}, registry = {}, templateExists = () => true }) {
+  const copyVerbatim = Array.isArray(bootstrap.copyVerbatim) ? bootstrap.copyVerbatim : [];
+  const aux = Array.isArray(bootstrap.generated) ? bootstrap.generated : [];
+
+  const seamRun = [...new Set(
+    Object.values(registry.profiles || {}).map((p) => p && p.template).filter(Boolean),
+  )];
+
+  const orphaned = seamRun.filter((t) => !templateExists(t));
+  if (orphaned.length) {
+    throw new Error(
+      `[prompt-builder] seam registry names template(s) that exist nowhere: ${orphaned.join(', ')}. `
+      + 'A seam that runs a template with no file cannot be provisioned, and provisioning around it '
+      + 'would leave that seam executing nothing. Add the template, or correct the seam.');
+  }
+
+  // Union of the two KINDS, not of two copies of one kind: seam-declared, plus the auxiliaries the
+  // registry has no way to see. copyVerbatim is installed unchanged and is never generated.
+  return [...new Set([...seamRun, ...aux])].filter((t) => !copyVerbatim.includes(t));
+}
+
 async function buildProjectPrompts({
   templatesDir, bootstrapFile, registryFile, projectConfigDir, runText, reviewPrompt,
   projectContext, codelineContext, mintedRoles, attempts = 3, mode = 'generate', log = () => {},
@@ -105,16 +149,16 @@ async function buildProjectPrompts({
   // references but no seam names directly (retry prefixes, hint bodies, sub-prompts). Union, not
   // replacement — deriving alone would silently drop those.
   if (registryFile && fs.existsSync(registryFile)) {
-    const reg = readJson(registryFile);
-    const seamTemplates = [...new Set(
-      Object.values(reg.profiles || {}).map((p) => p.template).filter(Boolean),
-    )];
-    const before = generated.length;
-    generated = [...new Set([...generated, ...seamTemplates.filter((t) => !copyVerbatim.includes(t))])];
-    if (generated.length !== before) {
-      log(`[prompt-builder] ${generated.length - before} template(s) added from the seam registry `
-        + 'that bootstrap did not list — a seam runs them, so a project copy is required');
-    }
+    // ONE RESOLUTION, ONE PLACE. provisioningList is the contract, asserted directly by
+    // test/unit/orchestration/bootstrap-duplicates-the-seam-registry.test.ts; computing the list a
+    // second time here is how the two would come to disagree.
+    generated = provisioningList({
+      bootstrap: boot,
+      registry: readJson(registryFile),
+      templateExists: (id) => fs.existsSync(path.join(templatesDir, `${id}.json`)),
+    });
+    log(`[prompt-builder] ${generated.length} template(s) need a project copy `
+      + '(seam-declared, plus bootstrap auxiliaries)');
   }
 
   // ONLY WHAT A PROJECT-LAYER RENDERER READS.
@@ -321,4 +365,4 @@ async function buildProjectPrompts({
   return { copied, generated: built };
 }
 
-module.exports = { buildProjectPrompts, renderGeneratorPrompt };
+module.exports = { buildProjectPrompts, renderGeneratorPrompt, provisioningList };

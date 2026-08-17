@@ -44,6 +44,18 @@ const MANIFESTS = [
     // than from a runner name. Returns '' when it declares none, which the caller reads as
     // 'nothing to run' — never as 'the tests passed'.
     testCommand: (text, manager) => ((JSON.parse(text).scripts || {}).test ? ((manager || 'npm') + ' test') : ''),
+    // HOW THIS ECOSYSTEM RUNS SPECIFIC TEST FILES.
+    //
+    // The bug-reproduction gate must execute ONE test — the story's new reproducing test — against
+    // the pre-fix and post-fix trees. That is genuinely stack-specific, and the gate carried its
+    // own answer: it probed node_modules/.bin/vitest, then jest, then `npm test`, and on anything
+    // else logged "no supported test runner found" and EXITED 0. So the hard gate that blocks a
+    // change shipping no working test passed vacuously on every non-Node codeline — and both Step
+    // 3.54 and Step 3.545 defer their findings to it.
+    //
+    // Receives the resolved run command and the file list; returns '' when this ecosystem has no
+    // way to target individual files, which the caller must read as "cannot prove", never as "passed".
+    testFileCommand: (run, files) => (run ? `${run}${/ test$/.test(run) ? ' --' : ''} ${files.join(' ')}` : ''),
     deps: (text) => {
       const pkg = JSON.parse(text);
       return Object.keys({ ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) });
@@ -71,6 +83,18 @@ const MANIFESTS = [
     installDir: null, // a virtualenv commonly lives outside the repo
     lockfiles: { 'poetry.lock': 'poetry', 'uv.lock': 'uv', 'pdm.lock': 'pdm' },
     testCommand: (text) => (/\[tool\.pytest/.test(text) ? 'pytest' : ''),
+    // HOW THIS ECOSYSTEM RUNS SPECIFIC TEST FILES.
+    //
+    // The bug-reproduction gate must execute ONE test — the story's new reproducing test — against
+    // the pre-fix and post-fix trees. That is genuinely stack-specific, and the gate carried its
+    // own answer: it probed node_modules/.bin/vitest, then jest, then `npm test`, and on anything
+    // else logged "no supported test runner found" and EXITED 0. So the hard gate that blocks a
+    // change shipping no working test passed vacuously on every non-Node codeline — and both Step
+    // 3.54 and Step 3.545 defer their findings to it.
+    //
+    // Receives the resolved run command and the file list; returns '' when this ecosystem has no
+    // way to target individual files, which the caller must read as "cannot prove", never as "passed".
+    testFileCommand: (run, files) => (run ? `${run} ${files.join(' ')}` : ''),
     selfName: (text) => ((text.match(/^\s*name\s*=\s*["']([^"']+)/m) || [])[1] || ''),
     deps: (text) => {
       const out = [];
@@ -95,6 +119,10 @@ const MANIFESTS = [
   },
   {
     file: 'requirements.txt',
+    // A requirements.txt project declares no test command of its own, so it declares no way to
+    // run one file either. '' means "cannot prove", which the bug-reproduction gate must report
+    // rather than treat as a pass.
+    testFileCommand: (run, files) => (run ? `${run} ${files.join(' ')}` : ''),
     // WHAT THIS ECOSYSTEM LEAVES BEHIND. Never staged into a client repository and never reported
     // as uncommitted agent work. Was three hand-written lists in two shell files, naming
     // node_modules, build and .next between them — one ecosystem — so a Rust codeline staged
@@ -129,6 +157,18 @@ const MANIFESTS = [
     installDir: null, // module cache is global, not in-repo
     lockfiles: { 'go.sum': 'go' },
     testCommand: () => 'go test ./...',
+    // HOW THIS ECOSYSTEM RUNS SPECIFIC TEST FILES.
+    //
+    // The bug-reproduction gate must execute ONE test — the story's new reproducing test — against
+    // the pre-fix and post-fix trees. That is genuinely stack-specific, and the gate carried its
+    // own answer: it probed node_modules/.bin/vitest, then jest, then `npm test`, and on anything
+    // else logged "no supported test runner found" and EXITED 0. So the hard gate that blocks a
+    // change shipping no working test passed vacuously on every non-Node codeline — and both Step
+    // 3.54 and Step 3.545 defer their findings to it.
+    //
+    // Receives the resolved run command and the file list; returns '' when this ecosystem has no
+    // way to target individual files, which the caller must read as "cannot prove", never as "passed".
+    testFileCommand: (_run, files) => `go test ${files.map((f) => './' + f.replace(/\/[^/]*$/, '')).join(' ')}`,
     selfName: (text) => ((text.match(/^module\s+(\S+)/m) || [])[1] || ''),
     deps: (text) => [...text.matchAll(/^\s+([\w.\-/]+)\s+v[\d.]/gm)].map((m) => m[1]),
   },
@@ -148,6 +188,18 @@ const MANIFESTS = [
     installDir: null,
     lockfiles: { 'Cargo.lock': 'cargo' },
     testCommand: () => 'cargo test',
+    // HOW THIS ECOSYSTEM RUNS SPECIFIC TEST FILES.
+    //
+    // The bug-reproduction gate must execute ONE test — the story's new reproducing test — against
+    // the pre-fix and post-fix trees. That is genuinely stack-specific, and the gate carried its
+    // own answer: it probed node_modules/.bin/vitest, then jest, then `npm test`, and on anything
+    // else logged "no supported test runner found" and EXITED 0. So the hard gate that blocks a
+    // change shipping no working test passed vacuously on every non-Node codeline — and both Step
+    // 3.54 and Step 3.545 defer their findings to it.
+    //
+    // Receives the resolved run command and the file list; returns '' when this ecosystem has no
+    // way to target individual files, which the caller must read as "cannot prove", never as "passed".
+    testFileCommand: (_run, files) => `cargo test ${files.map((f) => f.split('/').pop().replace(/\.rs$/, '')).join(' ')}`,
     selfName: (text) => ((text.match(/^\s*name\s*=\s*["']([^"']+)/m) || [])[1] || ''),
     deps: (text) => {
       const sec = text.match(/\[dependencies\]([\s\S]*?)(\n\[|$)/);
@@ -170,6 +222,18 @@ const MANIFESTS = [
     installDir: null,
     lockfiles: { 'Gemfile.lock': 'bundle' },
     testCommand: (text) => (/rspec|minitest/.test(text) ? 'bundle exec rake test' : ''),
+    // HOW THIS ECOSYSTEM RUNS SPECIFIC TEST FILES.
+    //
+    // The bug-reproduction gate must execute ONE test — the story's new reproducing test — against
+    // the pre-fix and post-fix trees. That is genuinely stack-specific, and the gate carried its
+    // own answer: it probed node_modules/.bin/vitest, then jest, then `npm test`, and on anything
+    // else logged "no supported test runner found" and EXITED 0. So the hard gate that blocks a
+    // change shipping no working test passed vacuously on every non-Node codeline — and both Step
+    // 3.54 and Step 3.545 defer their findings to it.
+    //
+    // Receives the resolved run command and the file list; returns '' when this ecosystem has no
+    // way to target individual files, which the caller must read as "cannot prove", never as "passed".
+    testFileCommand: (run, files) => (run ? `${run} ${files.join(' ')}` : ''),
     deps: (text) => [...text.matchAll(/^\s*gem\s+['"]([^'"]+)/gm)].map((m) => m[1]),
   },
 ];

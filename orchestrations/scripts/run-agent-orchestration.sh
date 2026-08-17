@@ -7461,15 +7461,27 @@ if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/brownfield-repro-test-
         # tests tee's exit (always 0) — the gate's `exit 1` on BLOCK was swallowed
         # and a testless change PASSED (live AMSD-1820 run #3). Capture the gate's
         # real exit via ${PIPESTATUS[0]}; tee exits 0 so `set -e` is not tripped.
-        PROJECT_ROOT="$PROJECT_ROOT" JIRA_BASELINE_BRANCH="${JIRA_BASELINE_BRANCH:-develop}" \
+        # NO GUESSED BRANCH — see Step 3.54. The gate resolves its own when none is declared.
+        PROJECT_ROOT="$PROJECT_ROOT" JIRA_BASELINE_BRANCH="${JIRA_BASELINE_BRANCH:-}" \
              bash "$SCRIPT_DIR/brownfield-repro-test-gate.sh" "$_rg_story" 2>&1 | tee -a "$LOG_DIR/repro-gate-${PHASE}.log"
         _rg_rc=${PIPESTATUS[0]}
         if [ "${_rg_rc:-1}" -ne 0 ]; then
             warning "Step 3.55: reproduction gate BLOCKED $_rg_story (gate exit ${_rg_rc})"
             _repro_blocked=1
-            _tmp_prd="$(mktemp)"; jq --arg id "$_rg_story" \
+            # THE FINDING HAS TO LAND ON THE STORY. Step 3.545 hard-fails when it cannot record
+            # suiteState, for the same reason: a block that exists only in a log line cannot be
+            # inherited, so the retry does not know which story failed and re-runs it unchanged.
+            # This swallowed the write with `|| rm -f`.
+            _tmp_prd="$(mktemp)"
+            if jq --arg id "$_rg_story" \
                 '(.stories[] | select(.id == $id)) |= (. + {reviewStatus: "escalated", reproGate: "failed"})' \
-                "$PRD_FILE" > "$_tmp_prd" 2>/dev/null && mv "$_tmp_prd" "$PRD_FILE" || rm -f "$_tmp_prd"
+                "$PRD_FILE" > "$_tmp_prd" 2>/dev/null; then
+                mv "$_tmp_prd" "$PRD_FILE"
+            else
+                rm -f "$_tmp_prd"
+                error "Step 3.55: could not record the reproduction-gate block on $_rg_story — the retry would not know it failed."
+                exit 2
+            fi
         fi
     # Only stories with a bug to reproduce. A novel story cannot satisfy
     # fail-on-baseline and is deliberately not gated here (fe5d6cb).

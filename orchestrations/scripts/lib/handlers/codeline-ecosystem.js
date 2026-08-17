@@ -20,6 +20,7 @@
  *     installDir      where this ecosystem vendors dependencies, or null if it vendors none
  *     packageManager  decided by the lockfile present, or "" when none says
  *     testCommand     what runs this project's own tests, or "" when it declares none
+ *     testFileCommand what runs JUST the files given in argv[4], or "" when this ecosystem cannot
  *     declaredBins    the declared dependencies the repo's own scripts actually invoke
  *     missingBins     of those, the ones not present in installDir
  *     providers       { packageName: path } for sibling repositories in the estate
@@ -40,6 +41,7 @@ if (!repo) {
   process.exit(1);
 }
 const estate = process.argv[3] || '';
+// argv[4]: optional comma-separated test files, to be turned into a runnable command.
 
 const read = (p) => { try { return fs.readFileSync(p, 'utf8'); } catch { return null; } };
 
@@ -53,7 +55,7 @@ function ecosystemOf(root) {
 
 const eco = ecosystemOf(repo);
 const out = {
-  stack: '', manifest: '', installDir: null, packageManager: '', testCommand: '',
+  stack: '', manifest: '', installDir: null, packageManager: '', testCommand: '', testFileCommand: '',
   declaredBins: [], missingBins: [], providers: {},
 };
 
@@ -87,6 +89,17 @@ if (eco) {
     // "the tests passed".
     if (typeof eco.testCommand === 'function') {
       try { out.testCommand = eco.testCommand(text, out.packageManager) || ''; } catch { out.testCommand = ''; }
+    }
+
+    // HOW TO RUN SPECIFIC TEST FILES, from the same registry. The bug-reproduction gate needs to
+    // execute one story's test, not the whole suite, and it used to probe for Node binaries by
+    // name and skip itself entirely on anything else.
+    if (typeof eco.testFileCommand === 'function') {
+      const wanted = (process.argv[4] || '').split(',').map((f) => f.trim()).filter(Boolean);
+      if (wanted.length) {
+        try { out.testFileCommand = eco.testFileCommand(out.testCommand, wanted) || ''; }
+        catch { out.testFileCommand = ''; }
+      }
     }
 
     if (out.installDir) {

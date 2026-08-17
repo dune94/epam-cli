@@ -40,17 +40,22 @@ describe('repro-gate — parse failure vs assertion failure', () => {
   });
 
   it('reports a malformed test as a TEST defect, never as an incomplete fix', () => {
-    // The message for a non-running test must not blame the fix.
-    const idx = GATE.search(/Transform failed|Failed to parse/);
-    expect(idx).toBeGreaterThan(-1);
-    const near = GATE.slice(Math.max(0, idx - 400), idx + 900);
-    expect(near).toMatch(/did not run|never ran|could not (be )?(parsed|run|compile)|does not parse|malformed/i);
+    // ANCHORED ON THE BRANCH, not on a byte window. This sliced idx-400..idx+900 around the
+    // "Transform failed" pattern, which put the detector and its message in range only while
+    // nothing was inserted between them — so adding a comment to an unrelated branch broke it
+    // while the behaviour was untouched. The branch that decides this is `if _test_never_ran`.
+    const idx = GATE.lastIndexOf('_test_never_ran;');
+    expect(idx, 'the never-ran branch is gone').toBeGreaterThan(-1);
+    const branch = GATE.slice(idx, GATE.indexOf('\n    fi', idx));
+    expect(branch, 'a test that never ran is no longer reported as a test defect')
+      .toMatch(/did not run|never ran|could not (be )?(parsed|run|compile)|does not parse|malformed/i);
+    expect(branch, 'a test that never ran now blames the fix').not.toMatch(/fix is incomplete/);
   });
 
   it('still blocks on a malformed test — a test that cannot run must not pass the gate', () => {
-    const idx = GATE.search(/Transform failed|Failed to parse/);
-    const near = GATE.slice(Math.max(0, idx - 400), idx + 900);
-    expect(near).toMatch(/block\b/i);
+    const idx = GATE.lastIndexOf('_test_never_ran;');
+    const branch = GATE.slice(idx, GATE.indexOf('\n    fi', idx));
+    expect(branch, 'a malformed test no longer blocks').toMatch(/block\b/i);
   });
 
   it('keeps the fix-is-suspect wording only for a test that actually executed', () => {

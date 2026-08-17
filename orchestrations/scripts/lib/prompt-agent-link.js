@@ -62,19 +62,29 @@ function installedPrompts(projectConfigDir) {
 }
 
 /**
- * Which installed prompts serve which seam.
+ * Which installed prompts serve which seam — DERIVED FROM THE REGISTRY.
  *
- * Read from the prompts themselves — each declares the seams it serves — rather than by
- * matching a prompt id against a seam name. Name-matching is what lost the link between
- * `qa-gate:sast` and `qa-sast-sentinel`, and it would silently drop every prompt whose name
- * differs from its seam's, which is most of the interesting ones.
+ * The registry already declares this: a seam names the template it runs. Every prompt document
+ * ALSO carried a `seams` array, and this function used to read that instead — a hand-maintained
+ * inverse index of something already derivable, and the two drifted.
+ *
+ * Live 2026-08-17, run 20260817T211517Z: 37 prompts provisioned successfully, then the link failed
+ * because the installed copy of failure-analyst said seams ["failure-analyst"] where its template
+ * says ["impl-failure-analyst"]. Worse, `failure-analyst` is the template for BOTH
+ * agent-failure-analyst and impl-failure-analyst, and one array cannot name two seams — so even a
+ * byte-perfect copy left one of them unlinked. The relationship was unrepresentable, not merely
+ * mis-copied. And 36 of 37 prompts hid it, because for them the seam name equals the template id.
+ *
+ * Reading the source instead removes all of it at once: no drift, N:1 works, and a prompt document
+ * no longer restates something the registry owns.
  */
-function promptsBySeam(installed) {
+function promptsBySeam(installed, registry) {
   const bySeam = {};
-  for (const [id, doc] of Object.entries(installed)) {
-    for (const seam of doc.seams || []) {
-      (bySeam[seam] = bySeam[seam] || []).push(id);
-    }
+  for (const [seam, profile] of Object.entries((registry && registry.profiles) || {})) {
+    const tpl = profile && profile.template;
+    if (!tpl) continue;                       // a seam with no template has no prompt to link
+    if (!Object.prototype.hasOwnProperty.call(installed, tpl)) continue;
+    (bySeam[seam] = bySeam[seam] || []).push(tpl);
   }
   for (const list of Object.values(bySeam)) list.sort();
   return bySeam;
@@ -94,10 +104,10 @@ function promptsBySeam(installed) {
 function linkPromptsToRoster({ projectConfigDir, registryFile, agents, env, write = true }) {
   if (!projectConfigDir) throw new Error('[prompt-link] projectConfigDir is required');
   const roster = Array.isArray(agents) ? agents.filter(Boolean) : [];
-  if (!roster.length) throw new Error('[prompt-link] the roster is empty — nothing to link');
 
   const installed = installedPrompts(projectConfigDir);
-  const bySeam = promptsBySeam(installed);
+  const registry = JSON.parse(fs.readFileSync(registryFile, 'utf8'));
+  const bySeam = promptsBySeam(installed, registry);
 
   const out = {};
   const seamsInUse = new Set();
@@ -120,13 +130,17 @@ function linkPromptsToRoster({ projectConfigDir, registryFile, agents, env, writ
     // work out which of the registry's seams it entered at and which prompt that seam wanted.
     // This step already knows both, and knowing them is the whole reason it exists.
     const detail = unserved
-      .map(({ agent, seam }) => `  ${agent}  ->  seam '${seam}'  ->  no installed prompt declares it`)
+      .map(({ agent, seam }) => {
+        const want = ((registry.profiles || {})[seam] || {}).template;
+        return `  ${agent}  ->  seam '${seam}'  ->  needs template `
+          + `'${want || '(the seam declares none)'}', which is not installed`;
+      })
       .join('\n');
     throw new Error(
       `[prompt-link] ${unserved.length} minted agent(s) enter at a seam this project has no prompt `
       + `for, so they would fail at their first invocation rather than here:\n${detail}\n`
-      + 'Either the builder did not provision that seam\'s template, or the template does not '
-      + 'declare the seam it serves.');
+      + 'The builder did not provision that template. The seam->template link is the registry\'s '
+      + 'to state and this step reads it directly, so a prompt no longer has to declare anything.');
   }
 
   const artefact = {

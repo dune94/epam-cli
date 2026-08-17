@@ -4365,10 +4365,19 @@ if [ "${RESET_STORIES:-false}" = "true" ]; then
     # Clean up review artifacts for review stories being reset so AC pre-existing-file guard doesn't block re-runs
     while IFS= read -r _review_id; do
         [ -z "$_review_id" ] && continue
-        _review_artifact="$PROJECT_ROOT/review/${_review_id}-review.md"
+        # INSIDE THE ENGINE PERIMETER. This wrote to $PROJECT_ROOT/review/, which is NOT in
+        # _ENGINE_OWNED_DIRS — so git_add_client_outputs staged it and the engine's own review
+        # markdown was COMMITTED into the customer's repository. Verified by execution: with
+        # .epam/ and orchestrations/ correctly excluded, review/ came through.
+        #
+        # The fix is NOT to add "review" to _ENGINE_OWNED_DIRS: that name is generic enough that a
+        # client repo may legitimately have one, and excluding it would silently drop their work
+        # from every commit. .epam/ is already engine-owned and claims no new name.
+        _review_artifact="$PROJECT_ROOT/.epam/review/${_review_id}-review.md"
+        mkdir -p "$(dirname "$_review_artifact")" 2>/dev/null || true
         if [ -f "$_review_artifact" ]; then
             rm -f "$_review_artifact"
-            info "  Removed stale review artifact: review/${_review_id}-review.md"
+            info "  Removed stale review artifact: .epam/review/${_review_id}-review.md"
         fi
     done < <(jq -r '.stories[]? | select(.agentRole == "review-agent") | .id' "$PRD_FILE" 2>/dev/null)
     # Immediately push reset state to dashboard so viewer shows clean slate
@@ -5703,9 +5712,16 @@ fi
 # without relying on the model creating the directory first.
 # ──────────────────────────────────────────────
 step_emit "6" "running" "Step 6: mkdir src/ dirs"
-# Only generic scaffolding dirs. A client-named subdirectory here was created in
-    # EVERY project the engine ran, regardless of what that project is.
-    mkdir -p "$PROJECT_ROOT/src" "$PROJECT_ROOT/public" "$PROJECT_ROOT/review" 2>/dev/null || true
+# Only generic scaffolding dirs. A client-named subdirectory here was created in EVERY project
+# the engine ran, regardless of what that project is — and `public/` was the same mistake one
+# level of generality up: a web-frontend convention, meaningless to a library, a service or a
+# Rust crate, and read by nothing in this pipeline. `review/` was engine output being created in
+# the customer's tree; it lives under .epam/ now.
+#
+# src/ stays. WriteFile calls ensureDir on the parent, so an agent using it does not need this —
+# but a story whose writer shells out does, and an empty directory git will not even track is a
+# cheap way to keep that working.
+mkdir -p "$PROJECT_ROOT/src" 2>/dev/null || true
 step_emit "6" "pass" "Step 6: mkdir src/ dirs"
 
 # ──────────────────────────────────────────────
@@ -8418,10 +8434,10 @@ if [ -n "$review_stories" ]; then
         apply_redirect_if_any "$story"
         "$SCRIPT_DIR/update-monitor.sh" event "code_review" "Team Lead code review completed" "" "main" "team-lead-agent" 2>/dev/null || true
         # Remove stale review artifact before each run so the pre-existing-file AC never blocks a retry
-        _stale_review="$PROJECT_ROOT/review/${story}-review.md"
+        _stale_review="$PROJECT_ROOT/.epam/review/${story}-review.md"
         if [ -f "$_stale_review" ]; then
             rm -f "$_stale_review"
-            info "  Removed stale review artifact before retry: review/${story}-review.md"
+            info "  Removed stale review artifact before retry: .epam/review/${story}-review.md"
         fi
         log "  Running review: $story"
         run_story_with_watchdog "$story" "$LOG_DIR/review-${story}.log"
@@ -10537,7 +10553,11 @@ Phase gate passed ✓
 esac
 
 # ──────────────────────────────────────────────
-# Step 6: Final Post-Phase Assessment
+# Step 24: Final Post-Phase Assessment
+#
+# Labelled "Step 6" here while emitting and logging 24, which is what the checklist registers
+# ("6:mkdir" is a different step entirely). A header that disagrees with the step id sends anyone
+# reading the monitor to the wrong block.
 # ──────────────────────────────────────────────
 log "Step 24: Running final post-phase assessment..."
 if [ -s "$LOG_DIR/phase-cost.jsonl" ]; then

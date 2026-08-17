@@ -92,7 +92,11 @@ describe('an engine agent runs with its declared seam', () => {
   it('an agent the registry does not know is still refused, not guessed at', () => {
     // The guard this must not weaken: seamPatterns/defaultSeam would happily supply SOMETHING.
     // Wrong configuration presented as resolved configuration is worse than none.
-    const got = exportFor('definitely-not-a-real-agent');
+    // THE NAME MUST MATCH NO PATTERN. This used 'definitely-not-a-real-agent', which ENDS IN
+    // "-agent" — a real seamPattern ("generic minted worker; medium ladder until given a specific
+    // seam"). Once apply started honouring patterns, the fixture resolved legitimately and the
+    // test read that as the guard failing. The guard is fine; the name was accidentally valid.
+    const got = exportFor('zzz-matches-no-pattern');
     expect(got.rc, 'an unknown agent was silently given a seam').toBe(3);
     expect(got.effort).toBe('NONE');
   });

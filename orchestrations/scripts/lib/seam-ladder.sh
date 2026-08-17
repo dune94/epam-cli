@@ -35,13 +35,27 @@ seam_ladder_export() {
     # per-agent declaration — it is not the seamPattern/defaultSeam fallback this guard exists to
     # keep out, and that distinction is the whole reason the two live in separate keys.
     _exports=$("$_node" -e '
-      const { seamInvocationEnv } = require(process.argv[1]);
-      const reg = JSON.parse(require("fs").readFileSync(process.argv[3], "utf8"));
-      const declared = (reg.profiles || {})[process.argv[2]] || (reg.agentSeams || {})[process.argv[2]];
-      // EXIT 3 = "the registry has no declaration for this agent", which is distinguishable from
-      // "there was nothing to do". Every other outcome here is 0, so the caller could not tell an
-      // unconfigured agent from a configured one and reported neither.
-      if (!declared) process.exit(3);
+      const { seamInvocationEnv, resolveSeam } = require(process.argv[1]);
+      // APPLY USES THE SAME RESOLUTION AS RESOLVE.
+      //
+      // This accepted only an exact `profiles` or `agentSeams` key. resolveSeam ALSO matches
+      // seamPatterns — which exist precisely for MINTED names (-investigator, -engineer, -fixer),
+      // the agents that do the actual work. So a minted agent resolved a seam on paper and got
+      // NOTHING at runtime: no ladder, no reasoning effort, no output-token budget.
+      //
+      // That gap is why the registry carries 61 hand-written agentSeams entries: patterns did not
+      // work at the apply seam, so every agent had to be enumerated to function at all. The
+      // enumeration was a SYMPTOM of this defect, not a design choice. With this, a new agent type
+      // is onboarded by NAMING it, and those entries become redundant wherever a pattern covers.
+      //
+      // EXIT 3 = "the registry has no declaration for this agent", distinguishable from "there was
+      // nothing to do" — every other outcome is 0, so the caller could not otherwise tell an
+      // unconfigured agent from a configured one.
+      //
+      // THE GUARD THAT MATTERS IS UNCHANGED: resolveSeam THROWS for a name that matches no pattern
+      // and has no declared default, so an unknown agent still gets nothing rather than a guess.
+      // That is the 2026-08-15 defect — seven agents silently given the wrong configuration.
+      try { resolveSeam(process.argv[2]); } catch { process.exit(3); }
       const env = seamInvocationEnv(process.argv[2]);
       for (const [k, v] of Object.entries(env)) process.stdout.write(`export ${k}=${JSON.stringify(v)}\n`);
     ' "${_dir}/seam-invocation.js" "$_seam" "$_reg" 2>&1) || {

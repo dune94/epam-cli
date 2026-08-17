@@ -199,6 +199,7 @@ function appendLedgerRecord({ ledgerFile, agent, storyId, phase, model, cost, tu
  */
 function emitCostSnapshot({
   resultFile, activityFile, ledgerFile, agent, storyId, phase, model, provider, turns, startedAt,
+  logDir,
 }) {
   try {
     if (!resultFile || !activityFile) return null;
@@ -209,6 +210,34 @@ function emitCostSnapshot({
     // Nothing happened at all — don't clutter the timeline with empty records. Cached tokens
     // count as something happening: a fully-cached call still consumed input and still bills.
     if (!cost.costUsd && !cost.tokensIn && !cost.tokensOut && !cost.tokensCached) return null;
+    // AN UNEXPLAINED $0 KEEPS ITS EVIDENCE.
+    //
+    // costUnknown flags a zero cost alongside real tokens — a provider that did not price the
+    // call, or a producer whose fields we are misreading. Either way the result file is unlinked
+    // the moment it is read, so on 2026-08-17 ten records totalling 158,515 input tokens showed
+    // $0.0000 and three separate attempts to explain it were blind: the record that caused it no
+    // longer existed. Same evidence-destroying shape as an agent throwing away the answer it
+    // could not parse.
+    //
+    // Written once per (agent, run) so a systematic failure leaves one file rather than hundreds.
+    if (cost.costUnknown && logDir) {
+      try {
+        const stamp = `${process.env.ORCH_RUN_ID || 'norun'}-${agent || 'unknown'}`;
+        const dump = path.join(logDir, `cost-anomaly-${stamp}.json`);
+        if (!fs.existsSync(dump)) {
+          fs.writeFileSync(dump, JSON.stringify({
+            _what: 'A model call reported $0 while consuming tokens. This is the record it '
+              + 'reported, kept because the source file is deleted immediately after it is read.',
+            agent: agent || null,
+            model: model || null,
+            provider: provider || null,
+            parsed: cost,
+            raw: JSON.parse(raw),
+          }, null, 2));
+        }
+      } catch { /* diagnostics must never break a call */ }
+    }
+
     const evt = buildCostSnapshot({ agent, storyId, phase, model, provider, cost, turns });
     fs.appendFileSync(activityFile, JSON.stringify(evt) + '\n');
 

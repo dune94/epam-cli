@@ -8043,10 +8043,17 @@ function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
       env.ORCH_JSON_RESULT = _costFile;
     } catch { _costFile = null; }
 
+    // WHEN THIS CALL STARTED. The ledger has always accepted startedAt and no caller passed it,
+    // so every JS-side agent recorded elapsed_minutes 0 while the bash-side writers recorded real
+    // spreads. A seam's timeoutSecs can only be set from measured duration, and prompt-builder was
+    // cut off at 360s with nobody able to say what it actually needed.
+    const _callStartedAt = new Date().toISOString();
     const _emitCost = () => {
       if (!_costFile) return;
       try {
         emitCostSnapshot({
+          startedAt: _callStartedAt,
+          logDir: process.env.LOG_DIR || process.env.EPAM_PROJECT_OUTPUT_DIR || '',
           resultFile: _costFile,
           activityFile: process.env.ACTIVITY_FILE ||
             path.join(process.env.LOG_DIR || path.join(__dirname, '..', 'logs'), 'agent-activity.jsonl'),

@@ -1,0 +1,25 @@
+{
+  "$why": [
+    "Moved out of claude.sh on 2026-08-16.",
+    "",
+    "The prompt that asks a writer to generate one file for a story.",
+    "",
+    "The technical-notes section was rendered by a shell function inside the prompt, so what the writer was shown about the files it must touch came from a command substitution rather than from the prompt. The caller renders it and passes it."
+  ],
+  "description": "Asks a writer to generate one file for a story.",
+  "seams": [
+    "story-writer"
+  ],
+  "id": "story-file-generation",
+  "version": 1,
+  "body": "Generate file for story __STORY_ID__: __TITLE__\n\n## Story Description\n__DESCRIPTION__\n\n## Acceptance Criteria\n- __ACCEPTANCE_CRITERIA__\n\n## Technical Notes\n__TECHNICAL_NOTES__\n\n## Files to Create\n__FILES__\n\n## Dependencies (already implemented — do NOT read them)\n__DEPENDENCIES__\n\n## GENERATOR CONTRACT — READ THIS FIRST\nYou are a FILE GENERATOR. Your ONLY job is to write the file listed under \"Files to Create\".\n\n**MANDATORY FIRST ACTION: Call WriteFile immediately. Do NOT call any other tool first.**\n\nRules:\n1. Your FIRST tool call MUST be WriteFile to the target path above.\n2. Do NOT call ReadFile, ListFiles, Bash, Search, or any other tool before WriteFile.\n3. Write the COMPLETE file content in a single WriteFile call.\n4. After WriteFile succeeds, you are done. No verification reads, no follow-up patches.\n5. All information you need is in this prompt. The spec is authoritative — do NOT read existing files for context.\n\nGeneration approach: read every acceptance criterion once, hold them all in mind, then write a file that satisfies all of them in one shot.",
+  "placeholders": [
+    "__TECHNICAL_NOTES__",
+    "__DEPENDENCIES__",
+    "__ACCEPTANCE_CRITERIA__",
+    "__DESCRIPTION__",
+    "__STORY_ID__",
+    "__TITLE__",
+    "__FILES__"
+  ]
+}

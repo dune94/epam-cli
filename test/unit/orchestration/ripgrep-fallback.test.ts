@@ -109,21 +109,40 @@ describe('it cannot be turned into a different question', () => {
   });
 });
 
+
+// THE PROMPT MOVED OUT OF THE ENGINE (2026-08-12) into
+// orchestrations/prompts/templates/code-graph-detective.json. Asserting its text against the
+// SOURCE of spec-mode-runner.js now proves nothing — and asserting prompt text against source
+// never proved much: it passes on a comment or a dead branch. This renders the real prompt and
+// asserts what the model is actually sent.
+const DETECTIVE_PROMPT = (() => {
+  const lib = require('node:path').join(__dirname, '../../../orchestrations/scripts/lib/prompt-library.js');
+  return require(lib).buildPrompt(
+    'code-graph-detective',
+    require('node:path').join(__dirname, '../../../orchestrations/projects/metrolinx'),
+    {
+      __DETECTIVE_PROFILE__: '', __REPO_PATH__: '/REPO', __TOOL_PATH__: '/TOOL',
+      __STORY_TITLE__: 'T', __STORY_DESCRIPTION__: '', __STORY_ACS__: '- AC',
+      __KIND_AND_CORRECTIVE_CONTEXT__: '', __PRESEED_BLOCK__: '', __PRESCRIPTION_RULES__: '',
+    },
+  );
+})();
+
 describe('the detective is told the rule', () => {
   const SPEC = require('node:fs').readFileSync(
     join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'), 'utf8');
 
   it('carries the reality anchor', () => {
-    expect(SPEC, 'nothing tells the model that a tool miss means non-existence')
+    expect(DETECTIVE_PROMPT, 'nothing tells the model that a tool miss means non-existence')
       .toMatch(/REALITY ANCHOR|does NOT exist in this codebase/);
   });
 
   it('names the fallback so the model can actually reach it', () => {
-    expect(SPEC, 'the rule demands proof via a tool the prompt never mentions')
+    expect(DETECTIVE_PROMPT, 'the rule demands proof via a tool the prompt never mentions')
       .toMatch(/ripgrep-search\.sh/);
   });
 
   it('forbids extrapolating names from naming patterns', () => {
-    expect(SPEC).toMatch(/do not infer|extrapolat/i);
+    expect(DETECTIVE_PROMPT).toMatch(/do not infer|extrapolat/i);
   });
 });

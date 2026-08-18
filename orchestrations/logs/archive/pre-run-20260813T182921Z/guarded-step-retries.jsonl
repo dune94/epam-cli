@@ -1,0 +1,1 @@
+{"timestamp":"2026-08-13T18:14:40Z","step":"0.5","phaseId":"core","attempts":3,"outcome":"pass","reason":"the tool call itself failed (non-zero exit) — check /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/pre-assessment-core.log","violationTypes":["tool_call_failed"],"runId":"20260813T181117Z","promptVersion":"3253e2d"}

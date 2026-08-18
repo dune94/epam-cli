@@ -1,0 +1,75 @@
+{
+  "_what": "A model call reported $0 while consuming tokens. This is the record it reported, kept because the source file is deleted immediately after it is read.",
+  "agent": "SPEC_AGENT",
+  "model": "z-ai/glm-5.2",
+  "provider": "qwen",
+  "parsed": {
+    "costUsd": 0,
+    "tokensIn": 11782,
+    "tokensOut": 2768,
+    "tokensCached": 8704,
+    "costUnknown": true,
+    "costIsEstimate": false
+  },
+  "raw": {
+    "result": "I don't have a WriteFile tool available in my current tool set. My available tools are: `read_file`, `list_files`, `search`, and `codegraph_query` — all read-only. I cannot write files with this configuration.",
+    "model": "z-ai/glm-5.1",
+    "provider": "qwen",
+    "usage": {
+      "inputTokens": 11782,
+      "outputTokens": 2768,
+      "totalTokens": 14550,
+      "cached_input_tokens": 8704
+    },
+    "cost_usd": 0.0129,
+    "cost_is_estimate": false,
+    "toolCallCount": 3,
+    "iterations": 4,
+    "timings": [
+      {
+        "iteration": 1,
+        "modelLatencyMs": 3150,
+        "toolExecMs": 2,
+        "toolCalls": [
+          {
+            "name": "read_file",
+            "resultBytes": 451,
+            "isError": false
+          },
+          {
+            "name": "read_file",
+            "resultBytes": 658,
+            "isError": false
+          }
+        ]
+      },
+      {
+        "iteration": 2,
+        "modelLatencyMs": 24056,
+        "toolExecMs": 1,
+        "toolCalls": [
+          {
+            "name": "codegraph_query",
+            "resultBytes": 151,
+            "isError": true
+          }
+        ]
+      },
+      {
+        "iteration": 3,
+        "modelLatencyMs": 40408,
+        "toolExecMs": 0,
+        "toolCalls": []
+      },
+      {
+        "iteration": 4,
+        "modelLatencyMs": 5760,
+        "toolExecMs": 0,
+        "toolCalls": []
+      }
+    ],
+    "total_cost_usd": 0,
+    "tokens": 0,
+    "planCostUsd": 0
+  }
+}

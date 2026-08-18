@@ -1,0 +1,19 @@
+{
+  "$why": [
+    "Generated from the codeline-bridge template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "__BRIDGE_PROFILE__\n\n## Variables for this run\n\n- BRIDGE_SRC_CODELINE: __BCL__\n- BRIDGE_SRC_DIR: __BWT__\n- BRIDGE_OUT_FILE: __BRIDGE_OUT__\n- BRIDGE_PRD_FILE: __BPRD__\n\nExtract the exported API surface from the '__BCL__' codeline files and write the cross-codeline contract to __BRIDGE_OUT__.\n\n## Project-specific context\n\nThis workspace has two independent TypeScript codelines that share no imports between them:\n\n- **mocka** (`/home/bradleyjerome/projects/mock3/mock-a`) — transit fare rules. Source: `src/fares.ts`. Exports: `Rider` (type), `BASE_FARE_CENTS` and `CONCESSION_FARE_CENTS` (const numbers), `fareFor(rider: Rider): number`, `totalFor(riders: Rider[]): number`.\n- **mockb** (`/home/bradleyjerome/projects/mock3/mock-b`) — departure board rendering. Source: `src/schedule.ts`. Exports: `Stop` (type), `formatStops(stops: Stop[]): string`, `totalMinutes(stops: Stop[]): number`.\n\n### Conventions to respect when extracting the contract\n\n- **ESM only.** Both codelines set `\"type\": \"module\"` in `package.json`. All exports are named exports — there are no default exports anywhere in this workspace. The contract must list each exported symbol by name.\n- **Directory layout is fixed:** source lives in `src/`, tests in `test/`. Tests import source via relative path (`../src/<module>`). The contract should reference the source file path relative to the codeline root (e.g. `src/fares.ts`).\n- **TypeScript strict mode** is enabled (`\"strict\": true`, target `ES2022`, `moduleResolution: \"bundler\"`). Preserve exact type signatures in the contract — parameter names, union types, and return types matter because downstream lanes will type-check against them with `tsc --noEmit`.\n- **Type-check command:** `npx tsc --noEmit` (aliased as `npm run build`). **Test command:** `npx vitest run` (aliased as `npm test`). The contract is only useful if these still pass after the source codeline is modified.\n- **No barrel files or re-exports.** Each codeline has exactly one source module. The exported surface is whatever `export` declarations appear in that single `src/*.ts` file — nothing else.\n- **Constants are part of the API.** `BASE_FARE_CENTS` and `CONCESSION_FARE_CENTS` are exported and consumed by tests and potentially by downstream codelines. Include exported constants with their current values in the contract, not just functions and types.",
+  "derivedFromSha256": "ac6209cc602f168e39ad8e6459ba79e96693037da4798d4b4719e1d64a772eed",
+  "derivedFromVersion": 1,
+  "id": "codeline-bridge",
+  "placeholders": [
+    "__BCL__",
+    "__BPRD__",
+    "__BRIDGE_OUT__",
+    "__BRIDGE_PROFILE__",
+    "__BWT__"
+  ]
+}

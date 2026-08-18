@@ -1,0 +1,5 @@
+{"timestamp":"2026-08-18T00:13:24.801Z","step":"ac-review","storyId":"MOCK3-1","runId":"20260817T231306Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"1084093"}
+{"timestamp":"2026-08-18T00:17:42Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260817T231306Z","promptVersion":"1084093"}
+{"timestamp":"2026-08-18T11:20:24.241Z","step":"ac-review","storyId":"MOCK3-1","runId":"20260818T101809Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"c8bb392"}
+{"timestamp":"2026-08-18T11:24:17Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260818T101809Z","promptVersion":"c8bb392"}
+{"timestamp":"2026-08-18T11:24:18Z","step":"0.9","phaseId":"core","attempts":1,"outcome":"noop","reason":"","violationTypes":[],"runId":"20260818T101809Z","promptVersion":"c8bb392"}

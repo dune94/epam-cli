@@ -1,0 +1,24 @@
+{
+  "$why": [
+    "Moved out of run-agent-orchestration.sh on 2026-08-16.",
+    "",
+    "What an agent is told when its previous attempt broke its OWN instructions -- distinct from a retry after an unusable answer, because here the output was usable and wrong. Two seams used near-identical wording written out twice; they share it now."
+  ],
+  "description": "Tells an agent its previous attempt violated the instructions it was given, and what to do instead.",
+  "seams": [
+    "prd-change-reviewer",
+    "cpa-inference"
+  ],
+  "id": "corrective-note",
+  "version": 1,
+  "bodies": {
+    "phase_assessment": "__PFA_PROMPT_THIS_ATTEMPT__\n\nCRITICAL — YOUR PREVIOUS ATTEMPT VIOLATED YOUR OWN INSTRUCTIONS: __PFA_CORRECTIVE_NOTE__\nFix this and retry. Do not repeat the same mistake.",
+    "model_coordinator": "__MC_PROMPT__\n\nCRITICAL — YOUR PREVIOUS ATTEMPT VIOLATED YOUR OWN INSTRUCTIONS: __MC_CORRECTIVE_NOTE__\nFix this and retry. Do not repeat the same mistake."
+  },
+  "placeholders": [
+    "__PFA_PROMPT_THIS_ATTEMPT__",
+    "__PFA_CORRECTIVE_NOTE__",
+    "__MC_CORRECTIVE_NOTE__",
+    "__MC_PROMPT__"
+  ]
+}

@@ -363,27 +363,7 @@ echo ""
 # Checks: no accumulated split children (stories whose parent is also in the PRD),
 # all stories pending. If either fails, the canonical file itself is corrupt and
 # must be manually repaired before running.
-python3 - "$PRD_FILE" <<'PYEOF'
-import json, sys
-path = sys.argv[1]
-with open(path) as f:
-    d = json.load(f)
-# After restoring from canonical, the PRD has only the 4 base user stories.
-# Any mid-execution splits from a prior run must not be present.
-mid_exec = [s['id'] for s in d['stories']
-            if s.get('specification', {}).get('splitOrigin') == 'mid-execution']
-dirty = [s['id'] for s in d['stories']
-         if s.get('status') not in ('pending', 'deprecated') and s.get('deprecated') is not True]
-errors = []
-if mid_exec:
-    errors.append(f"ABORT: PRD has {len(mid_exec)} mid-execution splits from a prior run — canonical restore failed: {mid_exec}")
-if dirty:
-    errors.append(f"ABORT: PRD has {len(dirty)} stories with non-pending status: {dirty}")
-if errors:
-    for e in errors: print(e, file=sys.stderr)
-    sys.exit(1)
-print(f"  PRD integrity OK: {len(d['stories'])} stories, all pending, zero mid-execution splits")
-PYEOF
+python3 "$SCRIPT_DIR/lib/handlers/prd-restore-integrity.py" "$PRD_FILE"
 if [ $? -ne 0 ]; then
   fail "PRD integrity check failed — canonical file is corrupt. Repair travel-app-prd.canonical.json before running."
   exit 1
@@ -393,6 +373,12 @@ echo ""
 # ── Pre-flight validation ─────────────────────────────────────────────────────
 # shellcheck source=lib/preflight.sh
 . "$SCRIPT_DIR/lib/preflight.sh"
+# HARD-FAIL IF THIS DOES NOT LOAD. Sourcing a missing file is non-fatal without
+# set -e, and phase_exit_is_retryable would then be "command not found" -> exit 127
+# -> falsy -> the legitimate gate-remediation retry silently never happens. A
+# capability that disappears without a word is the failure mode this whole change
+# exists to remove.
+. "$SCRIPT_DIR/lib/phase-exit.sh" || { echo "[preflight] lib/phase-exit.sh failed to load — refusing to run" >&2; exit 1; }
 # Route through fail(), never a bare exit: fail() archives the run artefacts first.
 # A bare `exit 1` here made a pre-flight abort the ONE outcome that recorded nothing —
 # no run folder, no outcome.txt, no log — which is the outcome most worth keeping.
@@ -409,8 +395,11 @@ echo ""
 # OUTPUT_DIR. pre-run-reset.sh defaults to that same path so the docker
 # /logs-dir mount is always correct.
 info "Wiring dashboard to serve this run's live PRD + logs..."
-bash orchestrations/scripts/pre-run-reset.sh --prd "$PRD_FILE" || \
-  info "  pre-run-reset.sh failed or Docker unavailable — dashboard may show stale data (non-fatal, continuing)"
+# Contamination ABORTS the launch; everything else stays non-fatal. One gate,
+# lib/pre-run-reset-gate.sh, for all launchers — this used to be five copies of
+# "|| info", all of which swallowed a contaminated-state exit as a Docker problem.
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/pre-run-reset-gate.sh"
+pre_run_reset_or_abort --prd "$PRD_FILE"
 echo ""
 
 run_phase() {
@@ -434,7 +423,7 @@ run_phase() {
   echo ""
 
   # exit 2 = gate remediation was applied — reset stories and retry once
-  if [ "$phase_exit" -eq 2 ]; then
+  if phase_exit_is_retryable "$phase_exit"; then
     info "  Self-healing: gate remediation applied — resetting and retrying phase '$phase'..."
     if ! bash "$SCRIPT_DIR/prd-remediate.sh" --prd "$PRD_FILE" --phase "$phase" --mid-phase-retry 2>&1 | tee -a "$LOG_FILE"; then
       fail "PRD remediation failed during self-healing retry for phase '$phase'"
@@ -496,17 +485,7 @@ info "Validating story completion..."
 PASS=0; FAIL_LIST=""
 while IFS= read -r story; do
   [ -z "$story" ] && continue
-  status=$(python3 -c "
-import json
-with open('$PRD_FILE') as f:
-  d = json.load(f)
-for s in d['stories']:
-  if s['id'] == '$story':
-    print(s.get('status','unknown'))
-    break
-else:
-  print('not_found')
-" 2>/dev/null)
+  status=$(python3 "$SCRIPT_DIR/lib/handlers/story-status.py" "$PRD_FILE" "$story" 2>/dev/null)
   if [ "$status" = "completed" ]; then
     success "$story: completed"
     PASS=$((PASS+1))
@@ -514,17 +493,7 @@ else:
     echo -e "${RED}[tier3-travel] ✗${NC} $story: $status"
     FAIL_LIST="$FAIL_LIST $story"
   fi
-done < <(python3 -c "
-import json
-with open('$PRD_FILE') as f:
-  d = json.load(f)
-seen = set()
-for ids in d.get('implementationOrder', {}).values():
-  for i in ids:
-    if i not in seen:
-      print(i)
-      seen.add(i)
-" 2>/dev/null)
+done < <(python3 "$SCRIPT_DIR/lib/handlers/story-implementation-order.py" "$PRD_FILE" 2>/dev/null)
 
 echo ""
 if [ -n "$FAIL_LIST" ] || [ "$PIPELINE_EXIT" -ne 0 ]; then

@@ -1,0 +1,25 @@
+{
+  "$why": [
+    "Moved out of codemie-claude.sh on 2026-08-16.",
+    "",
+    "The CodeMie provider path's implementation prompt. It is the counterpart of the writer prompt claude.sh builds, and it had its own separate copy.",
+    "",
+    "The technical-notes section was rendered by a jq pipeline inside the prompt -- the claude.sh copy uses a shell function for the same section, which is the drift two copies of one prompt accumulate. The caller renders it and passes it."
+  ],
+  "description": "Asks a writer to implement one user story.",
+  "seams": [
+    "story-writer"
+  ],
+  "id": "story-implementation",
+  "version": 1,
+  "body": "Implement user story __STORY_ID__: __TITLE__\n\n## Story Description\n__DESCRIPTION__\n\n## Acceptance Criteria\n- __ACCEPTANCE_CRITERIA__\n\n## Technical Notes\n__TECHNICAL_NOTES__\n\n## Files to Create/Modify (EXACT ABSOLUTE PATHS — start here; this list is not exhaustive)\nThese are the files the analysis identified. Use these exact paths for them. The list is a\nSTARTING POINT, not a fence: it is derived from the ticket and may be incomplete or may name\na path this repository spells differently. If your change genuinely requires another file in\nthis repository, write it — the only files closed to you are ones another story OWNS, and\nattempting one of those returns a specific refusal saying so. Do NOT work around a refusal by\nrepeatedly rewriting a file you can already write; that is never the fix. When you write a\nfile that is not listed here, say which file and why in your final message, so the reviewer\nsees the whole change.\n__FILES__\n\n## Dependencies\n__DEPENDENCIES__\n\n## Instructions\n1. Implement all acceptance criteria for this story\n2. Follow the project's existing code patterns and conventions\n3. Create any necessary files in the locations specified\n4. Ensure code compiles/runs without errors\n5. Do NOT create tests unless explicitly required in acceptance criteria\n\nAfter implementation, provide a brief summary of what was created/modified.",
+  "placeholders": [
+    "__TECHNICAL_NOTES__",
+    "__DEPENDENCIES__",
+    "__ACCEPTANCE_CRITERIA__",
+    "__DESCRIPTION__",
+    "__STORY_ID__",
+    "__TITLE__",
+    "__FILES__"
+  ]
+}

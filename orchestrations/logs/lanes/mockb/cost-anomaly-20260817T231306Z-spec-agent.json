@@ -1,0 +1,40 @@
+{
+  "_what": "A model call reported $0 while consuming tokens. This is the record it reported, kept because the source file is deleted immediately after it is read.",
+  "agent": "spec-agent",
+  "model": "z-ai/glm-5.2",
+  "provider": "qwen",
+  "parsed": {
+    "costUsd": 0,
+    "tokensIn": 3297,
+    "tokensOut": 1868,
+    "tokensCached": 192,
+    "costUnknown": true,
+    "costIsEstimate": false
+  },
+  "raw": {
+    "result": "```json\n{\n  \"storyId\": \"MOCK3-2\",\n  \"agent\": \"openspec\",\n  \"notes\": \"Defect: formatStops loop bound skips the final stop. Fix site is the loop in formatStops; totalMinutes is correct and must not regress. VCs observe only the rendered string surface (and totalMinutes return for regression).\",\n  \"acceptanceCriteria\": [\n    \"Every stop on the line appears on the rendered board, including the final one.\",\n    \"Stops remain separated by the existing arrow separator.\",\n    \"An empty line still renders without error.\"\n  ],\n  \"description\": \"formatStops renders every stop except the last one, so a three-stop line shows two. The journey length reported by totalMinutes is correct, which is why the omission has gone unnoticed.\",\n  \"title\": \"The departure board omits the final stop\",\n  \"storyKind\": \"defect\",\n  \"verificationCriteriaDetail\": [\n    {\n      \"criterion\": \"The rendered departure board string contains the final stop name 'Eglinton'\",\n      \"observer\": \"tester\",\n      \"surface\": \"rendered departure board string returned by formatStops\",\n      \"setup\": \"a three-stop line with stops Union (0m), Bloor (12m), Eglinton (25m)\"\n    },\n    {\n      \"criterion\": \"The rendered departure board string contains all stop names: 'Union', 'Bloor', and 'Eglinton'\",\n      \"observer\": \"tester\",\n      \"surface\": \"rendered departure board string returned by formatStops\",\n      \"setup\": \"a three-stop line with stops Union (0m), Bloor (12m), Eglinton (25m)\"\n    },\n    {\n      \"criterion\": \"Consecutive stops in the rendered departure board string are separated by ' -> '\",\n      \"observer\": \"tester\",\n      \"surface\": \"rendered departure board string returned by formatStops\",\n      \"setup\": \"a multi-stop line\"\n    },\n    {\n      \"criterion\": \"Calling formatStops with an empty stop list returns a string without throwing\",\n      \"observer\": \"tester\",\n      \"surface\": \"rendered departure board string returned by formatStops\",\n      \"setup\": \"an empty stop list\"\n    },\n    {\n      \"criterion\": \"totalMinutes returns 25 for the three-stop line\",\n      \"observer\": \"tester\",\n      \"surface\": \"totalMinutes return value\",\n      \"setup\": \"a three-stop line with stops Union (0m), Bloor (12m), Eglinton (25m)\"\n    }\n  ],\n  \"vcSource\": \"both\",\n  \"locationHint\": [\n    {\n      \"file\": \"src/schedule.ts\",\n      \"function\": \"formatStops\",\n      \"reason\": \"Fix site — the loop bound i < stops.length - 1 computes the wrong iteration range, causing the last stop to be omitted from the rendered string\"\n    }\n  ]\n}\n```",
+    "model": "z-ai/glm-5.1",
+    "provider": "qwen",
+    "usage": {
+      "inputTokens": 3297,
+      "outputTokens": 1868,
+      "totalTokens": 5165,
+      "cached_input_tokens": 192
+    },
+    "cost_usd": 0.0087,
+    "cost_is_estimate": false,
+    "toolCallCount": 0,
+    "iterations": 1,
+    "timings": [
+      {
+        "iteration": 1,
+        "modelLatencyMs": 37871,
+        "toolExecMs": 0,
+        "toolCalls": []
+      }
+    ],
+    "total_cost_usd": 0,
+    "tokens": 0,
+    "planCostUsd": 0
+  }
+}

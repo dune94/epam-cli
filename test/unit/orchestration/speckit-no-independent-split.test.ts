@@ -22,6 +22,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { templateBody } from '../../helpers/prompt-text';
 import { join } from 'node:path';
 
 const REPO_ROOT = join(__dirname, '../../../');
@@ -54,7 +55,10 @@ describe('speckit prompt — no independent split authority (static)', () => {
   });
 
   it('explicitly states splitting is openspec\'s decision alone', () => {
-    expect(fnBody).toMatch(/[Ss]plitting is openspec's decision alone/);
+    // The normal-review prompt, by name. It used to be one arm of a ternary inside the
+    // function, which is why the assertions below had to hunt for the LAST occurrence of a
+    // shared heading; the two variants are two templates now, so the branch is addressable.
+    expect(templateBody('spec-agent-speckit')).toMatch(/[Ss]plitting is openspec's decision alone/);
   });
 
   it('instructs speckit to always omit splitStories in its own output schema', () => {
@@ -64,8 +68,10 @@ describe('speckit prompt — no independent split authority (static)', () => {
     // "Produce your refined output" occurrence in the function, not the
     // first (that one is the refineExistingChildren branch, which legitimately
     // DOES return splitStories — for already-existing children only).
-    const schemaIdx = fnBody.lastIndexOf('Produce your refined output');
-    const schemaBlock = fnBody.slice(schemaIdx, schemaIdx + 800);
+    const normal = templateBody('spec-agent-speckit');
+    const schemaIdx = normal.lastIndexOf('Produce your refined output');
+    expect(schemaIdx, 'the output-schema heading is gone, so the slice below proves nothing').toBeGreaterThan(-1);
+    const schemaBlock = normal.slice(schemaIdx, schemaIdx + 800);
     expect(schemaBlock).toMatch(/"splitStories":\s*ALWAYS omit/);
   });
 

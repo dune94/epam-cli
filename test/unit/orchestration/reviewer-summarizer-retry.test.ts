@@ -25,6 +25,9 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const REPO_ROOT = join(__dirname, '../../../');
+// The template-layer renderer. Extracted claude.sh functions render their prompts through
+// it, so a harness must source it just as it stubs log() and error().
+const RENDER_LIB = join(__dirname, '../../../orchestrations/scripts/lib/render-engine-prompt.sh');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
 const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
 
@@ -96,6 +99,8 @@ ORCH_GATE_MODEL="fake-model"
 profiles_file=""
 warning() { :; }
 log() { :; }
+error() { :; }
+source ${JSON.stringify(RENDER_LIB)}
 ${IMPERATIVE_OPENERS_VAR}
 ${formatCheckBody}
 ${reviewerBody}

@@ -13,6 +13,7 @@
 import { describe, it, expect } from 'vitest';
 import { spawnSync, execSync } from 'node:child_process';
 import { writeFileSync, unlinkSync } from 'node:fs';
+import { templateBody } from '../../helpers/prompt-text';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -136,44 +137,39 @@ describe('gate evaluator — verdict grep (mutant-hunter / review-ranger)', () =
   });
 });
 
-describe('gate evaluator — oracle injection presence (run-agent-orchestration.sh)', () => {
-  it('SAST prompt contains TypeScript oracle injection', () => {
-    const result = spawnSync('grep', ['-c', 'TypeScript Compiler Results', 'orchestrations/scripts/run-agent-orchestration.sh'], {
-      encoding: 'utf8',
-      cwd: '/home/bradleyjerome/projects/ai/epam-cli',
+describe('gate evaluator — every sentinel is handed its oracle', () => {
+  // These used to grep run-agent-orchestration.sh for the wording, from a hardcoded absolute
+  // cwd. Since the gate prompts moved into the template layer the script no longer contains
+  // any of it, and the grep counted zero for every gate at once — which reads as "all four
+  // oracles are gone" when nothing about the gates changed.
+  //
+  // Asserting per template is also stricter than the grep ever was: a hit anywhere in a
+  // 6000-line script satisfied "the SAST prompt contains X", including a hit inside a
+  // different gate's prompt. Now each gate is checked against its own text.
+  const cases: Array<[string, string, RegExp]> = [
+    ['sast-sentinel',  'qa-sast-sentinel',  /TypeScript Compiler Results/],
+    ['review-ranger',  'qa-review-ranger',  /Git Diff Evidence/],
+    ['mutant-hunter',  'qa-mutant-hunter',  /Source and Test Evidence/],
+  ];
+
+  for (const [gate, tpl, oracle] of cases) {
+    it(`${gate} is given its evidence, not asked to go find it`, () => {
+      expect(templateBody(tpl), `${gate} judges with no oracle in front of it`).toMatch(oracle);
     });
-    expect(parseInt(result.stdout.trim(), 10)).toBeGreaterThan(0);
+  }
+
+  it('no evidence-fed gate is also told it may call tools', () => {
+    // The oracle and the tool ban are one design: evidence is precomputed BECAUSE the gate
+    // cannot run anything. A gate that kept the oracle and lost the ban burns its turns
+    // trying to shell out, which is the max-iteration exhaustion this pair prevents.
+    for (const [gate, tpl] of cases.map(([g, t]) => [g, t] as const)) {
+      expect(templateBody(tpl), `${gate} is not told to answer from the evidence alone`)
+        .toMatch(/Do NOT attempt to call any shell commands|Do NOT call any tools/);
+    }
   });
 
-  it('SAST prompt says "no tool calls" (no bash command instructions)', () => {
-    const result = spawnSync('grep', ['-c', 'Do NOT attempt to call any shell commands', 'orchestrations/scripts/run-agent-orchestration.sh'], {
-      encoding: 'utf8',
-      cwd: '/home/bradleyjerome/projects/ai/epam-cli',
-    });
-    expect(parseInt(result.stdout.trim(), 10)).toBeGreaterThan(0);
-  });
-
-  it('review-ranger prompt contains git diff oracle injection', () => {
-    const result = spawnSync('grep', ['-c', 'Git Diff Evidence', 'orchestrations/scripts/run-agent-orchestration.sh'], {
-      encoding: 'utf8',
-      cwd: '/home/bradleyjerome/projects/ai/epam-cli',
-    });
-    expect(parseInt(result.stdout.trim(), 10)).toBeGreaterThan(0);
-  });
-
-  it('mutant-hunter prompt contains source+test oracle injection', () => {
-    const result = spawnSync('grep', ['-c', 'Source and Test Evidence', 'orchestrations/scripts/run-agent-orchestration.sh'], {
-      encoding: 'utf8',
-      cwd: '/home/bradleyjerome/projects/ai/epam-cli',
-    });
-    expect(parseInt(result.stdout.trim(), 10)).toBeGreaterThan(0);
-  });
-
-  it('mutant-hunter prompt says warn not fail on insufficient evidence', () => {
-    const result = spawnSync('grep', ['-c', 'verdict.*warn.*non-blocking', 'orchestrations/scripts/run-agent-orchestration.sh'], {
-      encoding: 'utf8',
-      cwd: '/home/bradleyjerome/projects/ai/epam-cli',
-    });
-    expect(parseInt(result.stdout.trim(), 10)).toBeGreaterThan(0);
+  it('mutant-hunter warns rather than blocks on insufficient evidence', () => {
+    expect(templateBody('qa-mutant-hunter')).toMatch(/warn/);
+    expect(templateBody('qa-mutant-hunter')).toMatch(/non-blocking/);
   });
 });

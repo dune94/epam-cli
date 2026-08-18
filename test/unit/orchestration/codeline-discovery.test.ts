@@ -338,9 +338,19 @@ describe('codeline-discovery.js — source invariants', () => {
     expect(src).toMatch(/callLlm|AI_RUN_SH/);
   });
 
-  it('docs.* repos are excluded in buildRepoManifest', () => {
-    expect(src).toMatch(/docs\.\*/);
-    expect(src).toMatch(/not in maintenance scope|docs repo/);
+  it('the scan excludes by DECLARED patterns, not by a literal in this file', () => {
+    // Was `expect(src).toMatch(/docs\.\*/)` — a source-text grep, which passes on a comment and
+    // proves nothing about behaviour. It also pinned the rule to one naming convention: the
+    // patterns are config now (orchestrations/config/codeline-scan.json, overridable with
+    // EPAM_CODELINE_EXCLUDE), and the behaviour is covered by execution at
+    // 'docs.* repos are excluded from the manifest' above and in
+    // one-ecosystem-registry-serves-every-scanner.test.ts.
+    const cfg = JSON.parse(readFileSync(
+      join(__dirname, '../../../orchestrations/config/codeline-scan.json'), 'utf8'));
+    expect(cfg.exclude.length, 'the scan declares no exclusions at all').toBeGreaterThan(0);
+    for (const p of cfg.exclude) {
+      expect(() => new RegExp(p), `${p} is not a valid pattern, so the scan excludes nothing`).not.toThrow();
+    }
   });
 
   it('Semble is not used in scoring (all repos indexed; removed as noise source)', () => {
@@ -741,10 +751,17 @@ STUBEOF
 });
 
 describe('codeline-discovery.js — LLM prompt clarity (live bug, 2026-07-22: model non-deterministically returned empty selection)', () => {
-  const src = readFileSync(DISCOVERY_JS, 'utf8');
-  const promptFnStart = src.indexOf('function buildDiscoveryPrompt');
-  const promptFnEnd = src.indexOf('\n}\n\nfunction callLlm', promptFnStart);
-  const promptFn = src.slice(promptFnStart, promptFnEnd > -1 ? promptFnEnd : promptFnStart + 3000);
+  // THE RENDERED PROMPT, not the source that builds it.
+  //
+  // These used to slice buildDiscoveryPrompt out of the .js file and assert against its text.
+  // That broke the moment the prompt moved into the template layer (2026-08-15) — correctly,
+  // because a source-text assertion passes on a comment and fails on a refactor that changed
+  // nothing an agent sees. Rendering the real thing survives the move and asserts what the
+  // model is actually told.
+  const promptFn = require(DISCOVERY_JS).buildDiscoveryPrompt(
+    [{ jiraKey: 'ZZ-1', title: 'a ticket', description: 'a requirement' }],
+    [{ name: 'r1', path: '/w/r1', stack: 'node', packageName: 'r1' }],
+  );
 
   it('explicitly instructs the model that an empty result is never acceptable', () => {
     expect(promptFn).toMatch(/MUST return at least one/i);

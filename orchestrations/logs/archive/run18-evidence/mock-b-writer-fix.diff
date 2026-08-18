@@ -1,0 +1,30 @@
+diff --git a/src/schedule.ts b/src/schedule.ts
+index ab686a9..7029f44 100644
+--- a/src/schedule.ts
++++ b/src/schedule.ts
+@@ -3,7 +3,7 @@ export type Stop = { name: string; minutes: number };
+ 
+ export function formatStops(stops: Stop[]): string {
+   const parts: string[] = [];
+-  for (let i = 0; i < stops.length - 1; i++) {
++  for (let i = 0; i < stops.length; i++) {
+     parts.push(`${stops[i].name} (${stops[i].minutes}m)`);
+   }
+   return parts.join(' -> ');
+diff --git a/test/schedule.test.ts b/test/schedule.test.ts
+index f495e60..a8f7024 100644
+--- a/test/schedule.test.ts
++++ b/test/schedule.test.ts
+@@ -14,6 +14,12 @@ describe('formatStops', () => {
+   it('names the first stop', () => {
+     expect(formatStops(LINE)).toContain('Union');
+   });
++  it('names the final stop', () => {
++    expect(formatStops(LINE)).toContain('Eglinton');
++  });
++  it('renders an empty line without error', () => {
++    expect(formatStops([])).toBe('');
++  });
+ });
+ 
+ describe('totalMinutes', () => {

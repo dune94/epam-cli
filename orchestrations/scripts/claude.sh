@@ -26,6 +26,8 @@ LOG_DIR="$AUTOMATION_DIR/logs"
 
 # shellcheck source=lib/tc-writer-gate.sh
 source "$SCRIPT_DIR/lib/tc-writer-gate.sh"
+# shellcheck source=lib/render-engine-prompt.sh
+source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
 # shellcheck source=lib/story-guards.sh
 source "$SCRIPT_DIR/lib/story-guards.sh"
 source "$SCRIPT_DIR/lib/flags.sh"
@@ -63,6 +65,8 @@ source "$SCRIPT_DIR/lib/project-tools.sh"
 source "$SCRIPT_DIR/lib/git-ops.sh"
 # shellcheck source=lib/story-retry-state.sh
 source "$SCRIPT_DIR/lib/story-retry-state.sh"
+. "$SCRIPT_DIR/lib/agent-io.sh"
+. "$SCRIPT_DIR/lib/agent-ladder.sh"
 PROGRESS_LOG="$LOG_DIR/progress.txt"
 AGENTS_FILE="$AUTOMATION_DIR/agents/AGENTS.md"
 CLAUDE_OUTPUT_DIR="$LOG_DIR/claude_outputs"
@@ -78,6 +82,32 @@ AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$AUTOMATION_DIR/agents/profiles.json
 # A codeline is stable, discovered rather than invented, already the investigator key, and the
 # subject of most durable learning — where the SDK is initialised here, how this repository
 # names its tests. Project-wide lessons that belong to no codeline go to the shared file.
+# _resolved_baseline_ref [repo] — the ref every diff in this file compares against.
+#
+# NINE SITES SPELLED THIS `origin/${JIRA_BASELINE_BRANCH:-develop}`. "develop" is a fact of some
+# projects and not of others, so on a codeline whose trunk is named anything else every one of
+# those diffs resolved nothing — and a diff against a ref that does not exist is empty, which
+# reads downstream exactly like "this story changed nothing".
+#
+# The project declares it; otherwise take the repository's OWN checked-out branch, which is at
+# least true. Prefer origin/<branch> when that ref exists, because these are baseline comparisons
+# and the remote is the shared baseline; fall back to the local branch when there is no remote.
+# Prints nothing when nothing resolves, so a caller can refuse rather than diff against a name.
+_resolved_baseline_ref() {
+    local _repo="${1:-${PROJECT_ROOT:-.}}"
+    local _branch="${JIRA_BASELINE_BRANCH:-}"
+    if [ -z "$_branch" ]; then
+        _branch="$(git -C "$_repo" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
+        [ "$_branch" = "HEAD" ] && _branch=""
+    fi
+    [ -n "$_branch" ] || return 0
+    if git -C "$_repo" rev-parse --verify --quiet "origin/${_branch}" >/dev/null 2>&1; then
+        printf 'origin/%s' "$_branch"
+    else
+        printf '%s' "$_branch"
+    fi
+}
+
 _kb_file_for_story() {
     local _story_id="$1" _kb_dir="$2"
     local _prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
@@ -255,12 +285,23 @@ load_llm_settings_json() {
     # EPAM_MODEL_LADDER_HIGH/MEDIUM's existing format exactly (the format the
     # ladder-step lookup function further below already parses) — this is a
     # direct serialization, not a new format.
-    _v=$(_get '[.ladders.high.modelLadder[]? | "\(.from)=\(.to)"] | join("|")')
-    [ -z "${EPAM_MODEL_LADDER_HIGH:-}" ] && [ -n "$_v" ] && export EPAM_MODEL_LADDER_HIGH="$_v"
-    _v=$(_get '[.ladders.medium.modelLadder[]? | "\(.from)=\(.to)"] | join("|")')
-    [ -z "${EPAM_MODEL_LADDER_MEDIUM:-}" ] && [ -n "$_v" ] && export EPAM_MODEL_LADDER_MEDIUM="$_v"
-    _v=$(_get '[.ladders.highest.modelLadder[]? | "\(.from)=\(.to)"] | join("|")')
-    [ -z "${EPAM_MODEL_LADDER_HIGHEST:-}" ] && [ -n "$_v" ] && export EPAM_MODEL_LADDER_HIGHEST="$_v"
+    # ONE READER FOR THE LADDERS — lib/model-ladders.sh, shared with every other entry point.
+    # This used to be three hand-written lines here and NOWHERE ELSE, so a process that did not
+    # start from this script (detective-rerun.sh) had no ladders at all.
+    # ${SCRIPT_DIR:-} and a guarded source: this function runs under `set -e` AND is exercised
+    # under `set -u`, where a bare $SCRIPT_DIR aborts the WHOLE loader and every budget below it
+    # silently goes unset — which is exactly what happened when this was first written.
+    # seam-ladder.sh alongside it: the ladders give the CHAINS, the seams say which position an
+    # agent occupies. Reading one without the other is how a model literal stayed necessary here.
+    local _sl_lib="${SCRIPT_DIR:-$(dirname "${BASH_SOURCE[0]}")}/lib/seam-ladder.sh"
+    # shellcheck source=lib/seam-ladder.sh
+    [ -f "$_sl_lib" ] && . "$_sl_lib"
+    local _ml_lib="${SCRIPT_DIR:-$(dirname "${BASH_SOURCE[0]}")}/lib/model-ladders.sh"
+    if [ -f "$_ml_lib" ]; then
+        # shellcheck source=lib/model-ladders.sh
+        . "$_ml_lib" || true
+        command -v export_model_ladders >/dev/null 2>&1 && export_model_ladders "$_settings_file" || true
+    fi
 
     # Model-specific overrides (modelOverrides.*) are NOT flattened into env
     # vars here — there can be any number of entries (e.g. separate MiniMax-M2.5
@@ -360,10 +401,12 @@ resolve_effort_settings() {
     # (EPAM_MAX_ITERATIONS=1 "to prevent iterative retries"): taking room away from
     # an agent that ran out of it. Refused, and said out loud.
     if [ -n "${EPAM_EFFORT_TIER:-}" ]; then
-        local _rank_cur _rank_new
-        case "$effort" in low) _rank_cur=1 ;; high) _rank_cur=3 ;; *) _rank_cur=2 ;; esac
-        case "$EPAM_EFFORT_TIER" in low) _rank_new=1 ;; high) _rank_new=3 ;; medium) _rank_new=2 ;; *) _rank_new=0 ;; esac
-        if [ "$_rank_new" -gt "$_rank_cur" ]; then
+        # RANKED BY THE PROJECT'S DECLARED effortLadder, not by tier names written here. The four
+        # case statements this replaces knew three of the four declared tiers, so "max" ranked
+        # below "high" and the highest effort a project can ask for was silently treated as mid.
+        local _rank_new
+        _rank_new=$(effort_rank "$EPAM_EFFORT_TIER")
+        if effort_is_higher "$EPAM_EFFORT_TIER" "$effort"; then
             log "  EffortTier[KB] -> upgrading ${effort} → ${EPAM_EFFORT_TIER} (self-heal constraint)"
             effort="$EPAM_EFFORT_TIER"
         elif [ "$_rank_new" -gt 0 ]; then
@@ -398,11 +441,40 @@ resolve_effort_settings() {
         # the detective's own coverage must never silently leave a story at "low".
         case "$_proposed_tier" in high) : ;; *) _proposed_tier="medium" ;; esac
     fi
-    if [ -n "$_proposed_tier" ]; then
-        local _rank_cur2 _rank_new2
-        case "$effort" in low) _rank_cur2=1 ;; high) _rank_cur2=3 ;; *) _rank_cur2=2 ;; esac
-        case "$_proposed_tier" in low) _rank_new2=1 ;; high) _rank_new2=3 ;; medium) _rank_new2=2 ;; *) _rank_new2=0 ;; esac
-        if [ "$_rank_new2" -gt "$_rank_cur2" ]; then
+    # A DECLARED AGENT IS AUTHORITATIVE. CPA MAY PROPOSE, NOT OVERRIDE.
+    #
+    # CPA estimates a story's shape and proposes an effort tier. That is the right input where an
+    # agent has no settled opinion. Where the ARCHETYPE declares its own effort, the operator has
+    # already decided how much room that role gets, and a per-story estimate must not move it —
+    # the estimate knows the story, not the role.
+    #
+    # THE PROTECTED SET IS DERIVED, NEVER LISTED. An archetype that declares `effort` in
+    # invocation-profiles.json is protected; one that declares nothing keeps the previous
+    # behaviour exactly. No agent name appears here, so protecting a new role is a declaration
+    # and never an engine change.
+    local _declared_effort=""
+    if [ -n "${story_role:-}" ]; then
+        _declared_effort=$("${NODE_BIN:-node}" -e '
+          const { resolveSeam } = require(process.argv[1]);
+          try {
+            const reg = process.argv[2];
+            const seam = resolveSeam(process.argv[3], reg);
+            const p = JSON.parse(require("fs").readFileSync(reg, "utf8")).profiles[seam] || {};
+            process.stdout.write(p.effort == null ? "" : String(p.effort));
+          } catch (_) { process.stdout.write(""); }
+        ' "$SCRIPT_DIR/lib/seam-invocation.js" \
+          "${AGENT_PROFILES_REGISTRY:-$(dirname "$SCRIPT_DIR")/agents/invocation-profiles.json}" \
+          "$story_role" 2>/dev/null || printf '')
+    fi
+
+    if [ -n "$_declared_effort" ]; then
+        effort="$_declared_effort"
+        if [ -n "$_proposed_tier" ] && [ "$_proposed_tier" != "$_declared_effort" ]; then
+            log "  EffortTier[CPA] -> NOT overriding '${story_role}': its archetype declares effort=${_declared_effort} (CPA proposed ${_proposed_tier})"
+        fi
+    elif [ -n "$_proposed_tier" ]; then
+        # Same declared ranking as the KB block above — one source, one order.
+        if effort_is_higher "$_proposed_tier" "$effort"; then
             log "  EffortTier[CPA] -> upgrading ${effort} → ${_proposed_tier} (cpaEffortTier=${_cpa_tier:-none} coverageComplete=${_cov_complete})"
             effort="$_proposed_tier"
         fi
@@ -705,7 +777,7 @@ _selective_worktree_reset() {
     local story_id="$1"
     [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
     [ -d "${PROJECT_ROOT:-}/.git" ] || return 0
-    local _baseline_ref="origin/${JIRA_BASELINE_BRANCH:-develop}"
+    local _baseline_ref; _baseline_ref="$(_resolved_baseline_ref)"
     git -C "$PROJECT_ROOT" rev-parse --verify "$_baseline_ref" >/dev/null 2>&1 || return 0
 
     # `unknown` means the evidence this function wants was never computed: an earlier gate
@@ -774,7 +846,24 @@ _selective_worktree_reset() {
     # content, drop untracked/ignored cruft. Same "predictable teardown"
     # primitive brownfield-preflight-reset.sh already applies between RUNS,
     # applied here between RUNGS of one run.
-    git -C "$PROJECT_ROOT" checkout "$_baseline_ref" -- . 2>/dev/null || true
+    # THE CHECKOUT MUST SUCCEED BEFORE THE CLEAN RUNS.
+    #
+    # Both ended in `2>/dev/null || true`, so an unresolvable baseline ref failed silently and the
+    # `git clean -fd` still executed — deleting every untracked file WITHOUT the checkout having
+    # restored the tracked ones. That is the worst possible half of this operation: destructive,
+    # silent, and it leaves the tree in a state neither the attempt nor the baseline produced.
+    #
+    # A ref that resolves to nothing is the reachable case. _resolved_baseline_ref prints nothing
+    # for a detached HEAD with no declared branch, and this is the reset between RUNGS of a live
+    # run — the point at which an agent's partial work is discarded on purpose.
+    if [ -z "$_baseline_ref" ]; then
+        error "  WorktreeReset[$story_id]: no baseline ref resolved — refusing to clean the working tree with nothing to restore it from."
+        return 1
+    fi
+    if ! git -C "$PROJECT_ROOT" checkout "$_baseline_ref" -- . 2>/dev/null; then
+        error "  WorktreeReset[$story_id]: could not restore tracked files from ${_baseline_ref} — NOT running git clean, because that would delete untracked work without restoring anything."
+        return 1
+    fi
     git -C "$PROJECT_ROOT" clean -fd -- . 2>/dev/null || true
     LAST_VERIFIED_TOUCHED_FILES=""
     LAST_VERIFIED_UNCHANGED_FILES=""
@@ -807,7 +896,7 @@ _rung_snapshot_hashes() {
     local story_id="$1"
     [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
     [ -d "${PROJECT_ROOT:-}/.git" ] || return 0
-    local _baseline_ref="origin/${JIRA_BASELINE_BRANCH:-develop}"
+    local _baseline_ref; _baseline_ref="$(_resolved_baseline_ref)"
     git -C "$PROJECT_ROOT" rev-parse --verify "$_baseline_ref" >/dev/null 2>&1 || return 0
     local _snap_file
     _snap_file=$(_rung_snapshot_path "$story_id")
@@ -839,7 +928,7 @@ _rung_attribute_changes() {
     local _snap_file
     _snap_file=$(_rung_snapshot_path "$story_id")
     [ -f "$_snap_file" ] || return 0
-    local _baseline_ref="origin/${JIRA_BASELINE_BRANCH:-develop}"
+    local _baseline_ref; _baseline_ref="$(_resolved_baseline_ref)"
     git -C "$PROJECT_ROOT" rev-parse --verify "$_baseline_ref" >/dev/null 2>&1 || return 0
     local _contribution_file="${LOG_DIR}/rung-contribution.jsonl"
     {
@@ -880,7 +969,7 @@ _generate_rung_contribution_report() {
     [ -d "${PROJECT_ROOT:-}/.git" ] || return 0
     local _contribution_file="${LOG_DIR}/rung-contribution.jsonl"
     [ -f "$_contribution_file" ] || return 0
-    local _baseline_ref="origin/${JIRA_BASELINE_BRANCH:-develop}"
+    local _baseline_ref; _baseline_ref="$(_resolved_baseline_ref)"
     git -C "$PROJECT_ROOT" rev-parse --verify "$_baseline_ref" >/dev/null 2>&1 || return 0
 
     # Same tracked-modified + untracked-new enumeration as
@@ -914,6 +1003,130 @@ _generate_rung_contribution_report() {
             log "    $_line"
         done < <(jq -r '.[] | "Rung \(.rung) (\(.model)): \(.files | join(", "))"' "$_report_file" 2>/dev/null)
     fi
+}
+
+# _coupled_pair_gate_for_story <story_id> <output_file>
+# ONE AUTHOR PER COUPLED FILE PAIR. Runs the moment the rung-contribution report
+# exists — that report is the only artifact that knows WHICH RUNG wrote which file,
+# and a split pair is invisible to every other gate in the run: the live case
+# (AMSD-2041, run 20260814T213253Z) passed `npm run test` AND `tsc`, because neither
+# installs from the lockfile. It reached the reviewer, which rejected it at an
+# already-exhausted ladder, and the retry hard-reset away work that had passed.
+#
+# Catching it HERE means the writer gets it back as a normal verification failure with
+# rungs still available, instead of the reviewer catching it with none left.
+#
+# The pairs are the project's declaration (.epam/dependency-check.json
+# `coupledFilePairs`), never this engine's knowledge — see lib/coupled-pair-gate.sh.
+_coupled_pair_gate_for_story() {
+    local story_id="$1" output_file="${2:-/dev/null}"
+    [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
+    local _gate_lib="${SCRIPT_DIR}/lib/coupled-pair-gate.sh"
+    [ -f "$_gate_lib" ] || return 0
+    # shellcheck source=lib/coupled-pair-gate.sh
+    . "$_gate_lib"
+    command -v coupled_pair_check >/dev/null 2>&1 || return 0
+
+    local _report_file="${LOG_DIR}/rung-contribution-report-${story_id//[^A-Za-z0-9_-]/_}.json"
+    # THE MANIFEST IS RESOLVED THE WAY EVERY OTHER CONSUMER RESOLVES IT.
+    #
+    # This read only ${PROJECT_ROOT}/.epam/dependency-check.json — a path nothing
+    # provisions. A codeline's .epam/ holds codeline-facts.json, settings.json and
+    # verification.json, never that file. So on 2026-08-15 the live run reported
+    # "no manifest at '.../.epam/dependency-check.json' — coupledFilePairs undeclared,
+    # checked nothing", while the declaration sat in EPAM_PROJECT_CONFIG_DIR, which is
+    # where dependency-scan-plugin.js:72-73 and claude.sh:3875/5638 all look FIRST.
+    # The gate had therefore never once run.
+    #
+    # Two candidates, same order as the plugin: project config, then the codeline copy.
+    local _manifest="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+    [ -f "$_manifest" ] || _manifest="${PROJECT_ROOT}/.epam/dependency-check.json"
+    [ -f "$_report_file" ] || return 0
+
+    local _gate_out _gate_rc=0
+    _gate_out=$(coupled_pair_check "$_report_file" "$_manifest" 2>&1) || _gate_rc=$?
+    if [ "$_gate_rc" -eq 0 ]; then
+        [ -n "$_gate_out" ] && log "  $_gate_out"
+        return 0
+    fi
+
+    error "  [coupled-pair] $story_id: a coupled file pair had more than one author — feeding into retry loop"
+    while IFS= read -r _line; do [ -n "$_line" ] && log "  $_line"; done <<< "$_gate_out"
+    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nFiles that are only correct RELATIVE TO EACH OTHER were written by different attempts, so they now disagree:\n\n```\n%s\n```\n\nRewrite every member of the pair together, in this one attempt, so they are consistent. Do not change one and leave the other as a previous attempt left it.\n' \
+        "$_gate_out")
+    {
+        echo ""
+        echo "=== a coupled file pair had more than one author ==="
+        echo "$_gate_out"
+    } >> "$output_file"
+    return 1
+}
+
+# _committed_change_uses_helpers <story_id>
+# THE COMMIT IS THE ARTIFACT. MEASURE THAT.
+#
+# verify_prescribed_helper_used checks `git diff <baseline>` — the WORKING TREE — and it is
+# right to, because it must reject an attempt before that attempt ends. But a story's
+# attempts share one tree, partial work is deliberately carried across them
+# ("WorktreeReset: skipped — partial work preserved"), and the commit is assembled at the
+# end. So a helper can be present when that guard looks and absent from what ships.
+#
+# Live, run 20260815T142007Z (metrolinx, AMSD-2041): the plan named five files and four
+# verified helpers; the write-time guard did not fire; the story was marked complete; and
+# the commit contained ContentstackContext 0, getContentByKey 0, useContent 0, Stack 7.
+# The previous pass — discarded by a retry and recovered only from
+# epam-rescue/AMSD-2041-8341407b — used all four and made the context reactive. What
+# shipped configures the SDK and subscribes to entry changes, but nothing re-queries, so
+# draft content never reaches the page. Every other gate passed it: tsc is happy, and the
+# tests assert that init was called, never that a consumer re-renders with new data.
+#
+# I could not establish from the logs WHY the working-tree guard stayed silent. This check
+# does not depend on knowing: it reads the committed range, so whatever happened inside the
+# attempt, the thing that ships is the thing that is judged.
+#
+# Same filter as the write-time guard, deliberately — one definition of "required helper".
+# No symbol, path or project vocabulary appears here.
+_committed_change_uses_helpers() {
+    local story_id="$1"
+    local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+    [ -d "${PROJECT_ROOT:-}/.git" ] || return 0
+
+    local _helpers
+    _helpers=$(jq -r --arg id "$story_id" '
+        .stories[] | select(.id == $id) | (.fixSiteAnalysis // [])
+        | map(select((.fixVerified == true) and ((.helper // "") != "")))
+        | map(.helper) | unique | .[]' "$prd_target" 2>/dev/null)
+    [ -n "$_helpers" ] || return 0
+
+    local _ref=""
+    [ -f "${LOG_DIR:-}/phase-baseline-sha.txt" ] && \
+        _ref=$(tr -d '[:space:]' < "$LOG_DIR/phase-baseline-sha.txt" 2>/dev/null)
+    [ -n "$_ref" ] || _ref="$(_resolved_baseline_ref)"
+    git -C "$PROJECT_ROOT" rev-parse --verify "$_ref" >/dev/null 2>&1 || return 0
+
+    # baseline..HEAD — committed only. Not the tree.
+    local _diff
+    _diff=$(git -C "$PROJECT_ROOT" diff "$_ref" HEAD 2>/dev/null)
+    [ -n "$_diff" ] || return 0
+
+    local _missing=() _h
+    while IFS= read -r _h; do
+        [ -n "$_h" ] || continue
+        printf '%s' "$_diff" | grep -q -- "$_h" || _missing+=("$_h")
+    done <<< "$_helpers"
+    [ ${#_missing[@]} -eq 0 ] && return 0
+
+    local _missing_list
+    _missing_list=$(printf '%s, ' "${_missing[@]}"); _missing_list="${_missing_list%, }"
+    # EVERY missing one, not the first: reporting one at a time spends the retry ladder on
+    # information this check already has.
+    error "  [committed-change] $story_id: the COMMITTED change does not use ${#_missing[@]} verified helper(s): ${_missing_list}"
+    error "  [committed-change]   The work that ships is missing part of the prescribed fix — an earlier attempt may have had it."
+    DETERMINISTIC_CHECK_FAILURE=1
+    export DETERMINISTIC_CHECK_FAILURE
+    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe change you COMMITTED does not use %d prescribed helper(s) that the spec verified: %s\n\nEach owns part of this fix. Import and use every one of them in the files the plan names, then make the change again. A change that uses only some of them leaves the story incomplete even when the type check and the tests pass.\n' \
+        "${#_missing[@]}" "$_missing_list")
+    return 1
 }
 
 _brownfield_rung_bump() {
@@ -1047,27 +1260,7 @@ compute_token_cost() {
         standard-tier|mini-tier|"") model="${STORY_MODEL:-}" ;;
     esac
     [ -z "$model" ] && { echo "0"; return; }
-    python3 - "$pricing_file" "$model" "$tin" "$tout" <<'PYEOF'
-import sys, json
-pricing_file, model, tin, tout = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
-try:
-    with open(pricing_file) as f:
-        table = json.load(f)
-    prices = table.get(model)
-    if not prices:
-        # Try prefix match (e.g. model has date suffix)
-        for k, v in table.items():
-            if model.startswith(k) or k.startswith(model):
-                prices = v
-                break
-    if prices:
-        cost = (tin * prices["input"] + tout * prices["output"]) / 1_000_000
-        print("{:.6f}".format(cost))
-    else:
-        print("0")
-except Exception:
-    print("0")
-PYEOF
+    python3 "$SCRIPT_DIR/lib/handlers/token-cost.py" "$pricing_file" "$model" "$tin" "$tout"
 }
 
 resolve_codex_model_settings() {
@@ -1255,8 +1448,12 @@ normalize_provider_json() {
             local result_text
             result_text=$(grep '"type":"text"' "$raw_file" 2>/dev/null \
                 | jq -rs '[.[].part.text // .[].text // ""] | join("")' 2>/dev/null || echo "opencode run completed")
+            # --rawfile: a full model turn can exceed ARG_MAX, and argv would fail with 126
+            # ("Argument list too long") leaving an empty result that reads as "no output".
+            local _rt_file; _rt_file=$(mktemp "${TMPDIR:-/tmp}/rt-XXXXXX")
+            printf '%s' "$result_text" > "$_rt_file"
             jq -n \
-                --arg rt "$result_text" \
+                --rawfile rt "$_rt_file" \
                 --argjson sf "$sf_line" \
                 '{result: $rt,
                   total_cost_usd: ($sf.cost // $sf.part.cost // $sf.total_cost // 0),
@@ -1273,8 +1470,12 @@ normalize_provider_json() {
             local result_text
             result_text=$(grep '"type":"item.completed"' "$raw_file" 2>/dev/null \
                 | jq -rs '[.[].item.text // ""] | join("")' 2>/dev/null || echo "codex exec completed")
+            # --rawfile: a full model turn can exceed ARG_MAX, and argv would fail with 126
+            # ("Argument list too long") leaving an empty result that reads as "no output".
+            local _rt_file; _rt_file=$(mktemp "${TMPDIR:-/tmp}/rt-XXXXXX")
+            printf '%s' "$result_text" > "$_rt_file"
             jq -n \
-                --arg rt "$result_text" \
+                --rawfile rt "$_rt_file" \
                 --argjson tc "$tc_line" \
                 '{result: $rt,
                   total_cost_usd: 0,
@@ -1590,38 +1791,17 @@ run_plan_mode() {
         '.stories[] | select(.id == $id) | .agentRole // "unknown"' "$prd_target" 2>/dev/null || echo "unknown")
 
     local plan_prompt
-    plan_prompt=$(cat << PLAN_PROMPT_EOF
-You are a planning agent. Produce an execution-ready plan for story ${story_id} BEFORE implementation begins.
-
-## Required Outputs
-1. Implementation steps with target file paths
-2. Dependency validation (each dep: satisfied yes/no, reason)
-3. Risk register (top 3 risks + mitigations)
-4. Test plan (new tests required + regression scope)
-5. Acceptance criteria mapping (each criterion -> implementation step)
-6. Cost/effort forecast (confirm or adjust estimatedHours)
-
-## On Completion
-Append a single-line JSON record to ${messages_jsonl}:
-{
-  "id":"plan_${story_id}_\$(date +%s)",
-  "timestamp":"\$(date -Iseconds)",
-  "from_agent":"plan-agent",
-  "to_agent":"${agent_role}",
-  "story_id":"${story_id}",
-  "phase_id":"${CURRENT_PHASE:-unknown}",
-  "message_type":"plan_summary",
-  "priority":"normal",
-  "subject":"Plan ready for ${story_id}",
-  "body":"<one-sentence summary of key risks/steps>",
-  "status":"new"
-}
-Write it atomically: (flock -w 10 9 >> ${messages_jsonl}; printf '%s\n' '<json>' >&9) 9>>${messages_jsonl}
-
-## Story to Plan
-Read orchestrations/prd.json for story ${story_id} full details, then produce the plan above.
-PLAN_PROMPT_EOF
-    )
+    # RENDERED FROM THE TEMPLATE LAYER. Both provider scripts render the same document —
+    # they carried separate copies that had already drifted, and the copy here had the
+    # messages path written into the prompt text rather than passed as data.
+    _pp_vals=$(mktemp "${TMPDIR:-/tmp}/story-plan-agent-vals-XXXXXX.json")
+    jq -n --arg story_id "$story_id" \
+          --arg messages_jsonl "$messages_jsonl" \
+          --arg agent_role "$agent_role" \
+          --arg current_phase "${CURRENT_PHASE:-unknown}" \
+          '{"__STORY_ID__":$story_id,"__MESSAGES_JSONL__":$messages_jsonl,"__AGENT_ROLE__":$agent_role,"__CURRENT_PHASE__":$current_phase}' > "$_pp_vals"
+    plan_prompt="$(render_engine_prompt story-plan-agent "$_pp_vals")"
+    rm -f "$_pp_vals"
 
     log "Plan mode: generating execution plan for $story_id..."
     touch "$messages_jsonl"
@@ -2036,16 +2216,36 @@ build_implementation_prompt() {
     # to re-discover it — which is exactly what bloats a "bad" retry's token
     # count (found live 2026-07-23: attempt read 143k tokens tracing the bug,
     # wrote nothing). Each entry: the file, the function, and the root cause.
-    local fix_site_analysis
-    fix_site_analysis=$(echo "$story_json" | jq -r '
-      (.fixSiteAnalysis // []) | map(
-        "- **\(.file)**" + (if .function != "" then " (`\(.function)`)" else "" end) + ": \(.reason)"
-        + (if (.fix // "") != "" then "\n  - **Minimal fix:** \(.fix)"
-             + (if .fixVerified == false then " ⚠️ UNVERIFIED: the helper named here (`\(.helper // "?")`) was NOT found in the repo — treat it as a HYPOTHESIS, not fact. Confirm it exists with the CodeGraph tool before importing it; if it does not exist, do not invent it — solve the fix another minimal way." else "" end)
-             + (if .evidenceVerified == false then " ⛔ UNGROUNDED DIAGNOSIS: the detective quoted `\(.brokenLine // "?")` as the broken code, but that expression is NOT in this file. The root cause below is therefore a GUESS about code that does not exist — live 2026-07-26 an answer of exactly this shape prescribed halving a discount that is in fact never applied at all, because the real defect was a key mismatch elsewhere. Do NOT implement it as written: re-derive the cause from the actual file contents first, and if the prescribed change has no basis in the code you read, fix what IS broken instead." else "" end)
-           else "" end)
-      ) | join("\n")
-    ' 2>/dev/null || echo "")
+    # DOES THE STORY HAVE A PLAN? A PRESENCE question, not a rendering one — the two decisions
+    # below turn on whether an investigation produced anything, never on how it reads. Asked of
+    # the published store rather than of the detective's fields, so this stays true for any
+    # producer of the kind.
+    local _has_fix_plan=""
+    if "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/agent-io.js" present "$story_id" fix-plan; then
+        _has_fix_plan="yes"
+    fi
+    # RENDERED BY THE PRODUCER. The detective is the only actor that knows what its own fields
+    # mean, so it is the only one that turns them into words — see lib/producers/fix-plan.js for
+    # what two copies of this rendering had already cost. A failure to render is NOT an empty
+    # plan: a writer prompted without the root-cause analysis re-traces it from scratch, which is
+    # the 143k-token retry this block exists to prevent.
+    # THE WRITER RECEIVES WHAT ITS ARCHETYPE DECLARED IT CONSUMES — see lib/agent-inputs.js.
+    # Not "the engine decides what to show the writer": the archetype lists the kinds, producers
+    # publish them, and each arrives under the authority the writer own prompt document gives it.
+    # A kind nobody published contributes nothing, which is why no conditional guards this.
+    # A REQUIRED kind nobody published is a hard failure: a prompt missing the root-cause analysis
+    # looks exactly like one that has it, and costs a whole retry to discover.
+    local agent_inputs
+    # NOTE (2026-08-14): the default below names an archetype, which is engine code choosing a
+    # role. Removing it and refusing instead was tried and REVERTED the same day: stories
+    # legitimately omit agentRole, and the refusal failed every one of them at prompt-build.
+    # Making agentRole mandatory is a deliberate PRD change with a migration, not a one-line edit
+    # here — see the sweep notes.
+    agent_inputs=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/agent-inputs.js" \
+        "$(echo "$story_json" | jq -r '.agentRole // "story-writer"')" "$story_id") || {
+        error "  [prompt] declared inputs did not render for $story_id — refusing to build a writer prompt without them"
+        return 1
+    }
 
     # Verification Criteria (VC) — the observable checks openspec-brownfield
     # produced (mechanism-free, from AC ∪ description). The impl agent must make
@@ -2118,9 +2318,27 @@ build_implementation_prompt() {
     # Authorship is a brownfield property, not a fix-site property: brownfield-repro-test-writer
     # takes its own turn either way. Enforcement is untouched — the repro-gate still blocks a
     # fix that ships without a reproducing test.
+    # ONE POLICY, RENDERED FROM THE PROMPT LAYER, READ BY BOTH AGENTS.
+    #
+    # This was a heredoc HERE and nowhere else, so team-lead-review.sh had never heard of it and
+    # was told "Check: ... test coverage". It raised a blocker for missing tests; 33ee47b then
+    # hardened this side — "a BLOCKER is a required deliverable ... the only way to resolve it is
+    # to CREATE it" — leaving the writer ORDERED TO CREATE WHAT IT IS FORBIDDEN TO CREATE. Both
+    # halves now come from prompts/test-ownership.json, so the rule cannot be changed for one
+    # agent and not the other.
     local test_ownership_block=""
     if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
-        test_ownership_block=$(printf '\n## Tests are NOT your job this turn\nA dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.\n')
+        local _to_vals; _to_vals=$(mktemp)
+        printf '{}' > "$_to_vals"
+        test_ownership_block=$(printf '\n%s\n' "$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/prompt-library.js" \
+            render test-ownership "${EPAM_PROJECT_CONFIG_DIR:-}" "$_to_vals" writer 2>/dev/null)")
+        rm -f "$_to_vals"
+        # A policy that failed to render is not an empty policy: the writer would silently regain
+        # permission to write tests, which is the failure this whole change removes.
+        if [ -z "$(printf '%s' "$test_ownership_block" | tr -d '[:space:]')" ]; then
+            error "  [prompt] test-ownership policy failed to render — refusing to build a writer prompt without it"
+            return 1
+        fi
     fi
 
     # Reviewer feedback (review→re-implement loop): if a prior team-lead review
@@ -2203,14 +2421,12 @@ build_implementation_prompt() {
     local string_invariants string_invariants_block=""
     string_invariants=$(printf '%s' "$acceptance_criteria" | grep -oE '"[^"]{3,}"' | sort -u)
     if [ -n "$string_invariants" ]; then
-        string_invariants_block="
-## CRITICAL COMPLIANCE: STRING INVARIANTS
-The Acceptance Criteria above contain exact string matches required by the test suite.
-You are FORBIDDEN from paraphrasing, summarizing, or optimizing these strings — reproduce them character-for-character, including case and spacing, wherever the AC requires them.
-
-LITERAL STRINGS TO USE VERBATIM:
-$(printf '%s\n' "$string_invariants" | sed 's/^/- /')
-"
+        _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-string-invariants-vals-XXXXXX.json")
+        jq -n \
+              --arg string_list "$(printf '%s\n' "$string_invariants" | sed 's/^/- /')" \
+              '{"__STRING_LIST__":$string_list}' > "$_cp_vals"
+        string_invariants_block="$(render_engine_prompt writer-string-invariants "$_cp_vals")"
+        rm -f "$_cp_vals"
     fi
 
     # Build a write-first directive listing each file with its exact absolute path
@@ -2326,7 +2542,7 @@ ${_body}
     # cause of the missing test (AMSD-1820, 2026-07-24 — the agent was told the file
     # "ALREADY has covering tests. Do NOT write any new test file", so it shipped
     # none). The coverage policy still applies to non-defect brownfield changes.
-    if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -z "$fix_site_analysis" ]; then
+    if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -z "$_has_fix_plan" ]; then
         local _story_rel_files=()
         while IFS= read -r _sf; do
             [ -z "$_sf" ] && continue
@@ -2390,8 +2606,32 @@ Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:"
         # re-sent conversation balloons input to 137-189K tokens so it never reaches
         # WriteFile (live 2026-07-24, AMSD-1820). Give a minimal "apply directly" note.
         # Full exploration block only when NO helper is prescribed (genuine novel work).
-        local _prescribed_helper
-        _prescribed_helper=$(echo "$story_json" | jq -r '[.fixSiteAnalysis[]?.helper] | map(select(. != null and . != "")) | .[0] // ""' 2>/dev/null)
+        # EVERY HELPER THE GUARD ENFORCES, NOT JUST THE FIRST ONE.
+        #
+        # This read `.[0]` while the ReuseGuard (~line 9881) enforces the WHOLE set, with
+        # the same filter the guard uses:
+        #     map(select(.fixVerified == true and .helper != "")) | map(.helper) | unique
+        #
+        # So the writer was told about ONE symbol and rejected for the others — and the
+        # note built from this value also tells it "Do NOT run CodeGraph or explore the
+        # codebase", so it could not discover the rest either.
+        #
+        # Live, run of 2026-08-15 13:24 (metrolinx, AMSD-2041), killed at attempt 5 of 12:
+        #     prompt: reuse `Stack`
+        #     guard:  ReuseGuard: 'ContentstackContext:Stack:getContentByKey:useContent'
+        #     [HealingBroken] CRITICAL: '...without importing or calling the prescribed
+        #     getContentByKey helper...' has recurred 2+ times — self-healing is NOT working.
+        #
+        # The loop could not converge: the corrective symbol never entered the prompt, so
+        # every retry repeated the omission and the ladder escalated to no purpose. One
+        # list, one source — "reuse these" and "you must reuse these" are now the same set.
+        local _prescribed_helper _prescribed_helper_list
+        _prescribed_helper_list=$(echo "$story_json" | jq -r '
+            (.fixSiteAnalysis // [])
+            | map(select((.fixVerified == true) and ((.helper // "") != "")))
+            | map(.helper) | unique | join(", ")' 2>/dev/null)
+        # Kept for the single-helper phrasing below; empty when nothing is prescribed.
+        _prescribed_helper="$_prescribed_helper_list"
         # This suppression must NOT fire blind to fixSiteAnalysisCoverage
         # (checkFixSiteCoverage, spec-mode-runner.js). "A helper is named" only
         # means SOME site is minimal — it says nothing about verification
@@ -2405,20 +2645,26 @@ Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:"
         _cov_incomplete=$(echo "$story_json" | jq -r '(if .fixSiteAnalysisCoverage.complete == null then "false" elif .fixSiteAnalysisCoverage.complete == false then "true" else "false" end)' 2>/dev/null)
         _uncovered_list=$(echo "$story_json" | jq -r '(.fixSiteAnalysisCoverage.uncoveredVerificationCriteria // []) | map("- " + .) | join("\n")' 2>/dev/null)
         if [ -n "$_prescribed_helper" ] && [ "$_cov_incomplete" != "true" ]; then
-            codegraph_tool_block="## The helper to reuse is ALREADY identified — do NOT search
-The Root Cause Analysis above names the exact existing helper to reuse (\`${_prescribed_helper}\`). Do NOT run CodeGraph or explore the codebase to re-find it — that wastes your turn budget. Import it, apply the prescribed minimal fix, write your file(s), and stop. Only search if you hit something the prescribed fix genuinely does not cover."
+            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-codegraph-block-vals-XXXXXX.json")
+            jq -n \
+                  --arg prescribed_helper "${_prescribed_helper}" \
+                  '{"__PRESCRIBED_HELPER__":$prescribed_helper}' > "$_cp_vals"
+            codegraph_tool_block="$(render_engine_prompt writer-codegraph-block "$_cp_vals" helper_identified)"
+            rm -f "$_cp_vals"
         elif [ -n "$_prescribed_helper" ] && [ "$_cov_incomplete" = "true" ]; then
-            codegraph_tool_block="## The prescribed fix is KNOWN INCOMPLETE — explore for the rest
-The Root Cause Analysis above names an existing helper to reuse (\`${_prescribed_helper}\`) for its own site — apply that part directly, do NOT re-search for it. But the prescribed fix does NOT address every verification criterion. These are UNCOVERED and need your own investigation beyond the prescribed sites:
-${_uncovered_list}
-Use the codegraph_query tool (mode=\"helpers\", args=\"<domain nouns>\") to find existing code for THESE before writing new logic — do not assume they are out of scope."
+            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-codegraph-block-vals-XXXXXX.json")
+            jq -n \
+                  --arg prescribed_helper "${_prescribed_helper}" \
+                  --arg uncovered_list "${_uncovered_list}" \
+                  '{"__PRESCRIBED_HELPER__":$prescribed_helper,"__UNCOVERED_LIST__":$uncovered_list}' > "$_cp_vals"
+            codegraph_tool_block="$(render_engine_prompt writer-codegraph-block "$_cp_vals" fix_incomplete)"
+            rm -f "$_cp_vals"
         else
-            codegraph_tool_block="## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
-A codegraph_query tool is available — call it directly (NOT via Bash) to discover reusable functions instead of inventing new ones:
-  codegraph_query(mode=\"helpers\", args=\"<domain nouns>\")   # existing util/parser/formatter to REUSE (symbol + import path)
-  codegraph_query(mode=\"query\", args=\"<SymbolName>\")       # exact definition site of a symbol
-  codegraph_query(mode=\"callees\", args=\"<SymbolName>\")     # what a function already calls
-RULE: Before you add ANY new function, run \`helpers\` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better."
+            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-codegraph-block-vals-XXXXXX.json")
+            jq -n \
+                  '{}' > "$_cp_vals"
+            codegraph_tool_block="$(render_engine_prompt writer-codegraph-block "$_cp_vals" tool_available)"
+            rm -f "$_cp_vals"
         fi
     fi
 
@@ -2543,136 +2789,56 @@ $(cat "$_vendor_contract")
         _dep_files_json=$(jq -c --argjson ids "$_dep_ids_json" \
             '[.stories[] | select(.id as $sid | $ids | index($sid)) | .technicalNotes.files[]? // empty]' \
             "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "[]")
-        spec_reality_warning=$(python3 - "$description" "$acceptance_criteria" "$_dep_files_json" << 'PYEOF'
-import json, os, re, sys
-
-description, acs, dep_files_json = sys.argv[1], sys.argv[2], sys.argv[3]
-dep_files = json.loads(dep_files_json)
-
-# Same token-overlap heuristic already proven in the relative-import-check's
-# suggestion logic — a basename EQUALITY check is too strict for the actual
-# live bug shape (`skyscanner-client.ts` vs the real `client.ts` under
-# `skyscanner/` — different basenames, same underlying identifier).
-def tokenize(name):
-    return set(re.split(r'[^a-zA-Z0-9]+', name.lower())) - {''}
-
-def is_test_file(path):
-    return bool(re.search(r'\.(test|spec)\.[a-zA-Z0-9]+$', path))
-
-dep_impl_files = [f for f in dep_files if not is_test_file(f)]
-
-# Backtick-quoted, path-like strings only (contains a slash, ends in a
-# common source extension) — plain identifiers/method names in backticks
-# are not file-path claims and shouldn't be checked here.
-PATH_RE = re.compile(r'`([\w./-]+/[\w.-]+\.(?:ts|tsx|js|jsx|mjs|cjs))`')
-
-mismatches = []
-seen = set()
-for text in (description, acs):
-    for m in PATH_RE.finditer(text):
-        claimed = m.group(1)
-        if claimed in seen:
-            continue
-        seen.add(claimed)
-        if any(claimed == f or f.endswith('/' + claimed) for f in dep_files):
-            continue  # exact match against a real dependency file — no mismatch
-        claimed_tokens = tokenize(os.path.splitext(os.path.basename(claimed))[0])
-        if not claimed_tokens:
-            continue
-        best_real, best_overlap = None, 0
-        for real in dep_impl_files:
-            real_tokens = tokenize(os.path.splitext(os.path.basename(real))[0])
-            if not real_tokens:
-                continue
-            overlap = claimed_tokens & real_tokens
-            ratio = len(overlap) / min(len(claimed_tokens), len(real_tokens))
-            if ratio >= 0.5 and len(overlap) > best_overlap:
-                best_real, best_overlap = real, len(overlap)
-        if best_real:
-            mismatches.append((claimed, best_real))
-
-if mismatches:
-    lines = [
-        "## SPEC-REALITY MISMATCH (auto-detected — the description/ACs above contain a WRONG file path)",
-        "The following path(s) in this story's own description/ACs do NOT match the real file a dependency actually built. TRUST THE CONTRACT SECTION BELOW, NOT THE WRONG PATH ABOVE:",
-    ]
-    for claimed, real in mismatches:
-        lines.append(f"- Description/ACs say `{claimed}` — the REAL file is at `{real}`. Use the real path.")
-    print('\n'.join(lines))
-PYEOF
+        spec_reality_warning=$(python3 "$SCRIPT_DIR/lib/handlers/spec-reality-warning.py" "$description" "$acceptance_criteria" "$_dep_files_json"
 )
     fi
 
-    cat << EOF
-$([ -n "$spec_reality_warning" ] && printf '%s\n\n' "$spec_reality_warning" || true)$write_first_directive
-
-$(printf '%b' "$write_first_lines")
----
-
-Implement user story $story_id: $title
-
-## Story Description
-$description
-
-## Acceptance Criteria
-- $acceptance_criteria
-$([ -n "$string_invariants_block" ] && printf '%s\n' "$string_invariants_block" || true)
-$([ -n "$fix_site_analysis" ] && printf '\n## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)\nA code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.\n\nThe Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.\n\nHARD RULES:\n- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.\n- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.\n%s\n' "$fix_site_analysis" || true)
-$([ -n "$review_feedback" ] && printf '\n## Reviewer Feedback — ADDRESS THESE (a prior code review requested changes)\nThe team-lead reviewer examined your previous attempt and requested the changes below. This is the highest priority.\n\nA BLOCKER is a required deliverable, not advice. If a blocker says something is MISSING — a test, a file, a case — the only way to resolve it is to CREATE it; leaving it out repeats the rejection. Minimality governs HOW MUCH you write, never WHETHER you write it.\n\nFor advisory points: make the smallest edits that resolve each one, and where a point says the change is over-engineered or an existing helper would do, REMOVE the excess rather than adding more.\n\nIf you genuinely cannot satisfy a blocker — no seam exists to test against, the behaviour lives entirely in a third-party package — say so explicitly in your final message, naming the blocker and why. An unexplained omission reads as a refusal and will be rejected again.\n%s\n' "$review_feedback" || true)
-$([ -n "$skill_note_block" ] && printf '%s\n' "$skill_note_block" || true)
-$([ -n "$verification_criteria" ] && printf '\n## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)\nThese are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:\n%s\n' "$verification_criteria" || true)
-$([ -n "$codeline_facts_block" ] && printf '%s\n' "$codeline_facts_block" || true)
-$([ -n "$project_tools_block" ] && printf '%s\n' "$project_tools_block" || true)
-$([ -n "$test_ownership_block" ] && printf '%s\n' "$test_ownership_block" || true)
-$([ -n "$codegraph_tool_block" ] && printf '\n%s\n' "$codegraph_tool_block" || true)
-$([ -n "$_uncovered_vc_block" ] && printf '\n%s\n' "$_uncovered_vc_block" || true)
-$([ -n "$brownfield_test_policy" ] && printf '\n%s\n' "$brownfield_test_policy" || true)
-$([ -n "$new_dependency_directive" ] && printf '\n%s\n' "$new_dependency_directive" || true)
-$([ -n "$tc_facts" ] && printf '\n## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)\n%s\n' "$tc_facts" || true)
-$([ -n "$tc_mock_strategy" ] && printf '\n## Mock Strategy\n%s\n' "$tc_mock_strategy" || true)
-$([ -n "$tc_banned" ] && printf '\n## Banned Patterns (must NOT appear in your file)\n%s\n' "$tc_banned" || true)
-
-## Technical Notes
-$(_render_technical_notes "$technical_notes" "$_lane")
-$([ -n "$existing_file_contents" ] && printf '\n## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)\n%s\n' "$existing_file_contents" || true)
-
-## Files to Create/Modify (EXACT ABSOLUTE PATHS — start here; this list is not exhaustive)
-These are the files the analysis identified. Use these exact paths for them. The list is a
-STARTING POINT, not a fence: it is derived from the ticket and may be incomplete or may name
-a path this repository spells differently. If your change genuinely requires another file in
-this repository, write it — the only files closed to you are ones another story OWNS, and
-attempting one of those returns a specific refusal saying so. Do NOT work around a refusal by
-repeatedly rewriting a file you can already write; that is never the fix. When you write a
-file that is not listed here, say which file and why in your final message, so the reviewer
-sees the whole change.
-$files
-
-## Dependencies
-${dependencies:-None}
-$([ -n "$dependency_contracts" ] && printf '\n## Dependency Contracts (EXACT import paths and signatures — use these verbatim, do NOT guess a different path)\n%s\n' "$dependency_contracts" || true)
-$(_module_resolution_context "$PROJECT_ROOT" 2>/dev/null || true)
-$([ -n "${CROSS_CODELINE_CONTRACT:-}" ] && [ -f "${CROSS_CODELINE_CONTRACT}" ] && printf '\n## Cross-Codeline API Contract (upstream codeline exports — use these types and endpoints verbatim when integrating)\n%s\n' "$(cat "${CROSS_CODELINE_CONTRACT}")" || true)
-
-## Instructions
-$write_first_directive
-$(printf '%b' "$write_first_lines")
-$(if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
+    _sw_vals=$(mktemp "${TMPDIR:-/tmp}/story-writer-main-vals-XXXXXX.json")
+    jq -n \
+          --arg spec_reality_warning "$([ -n "$spec_reality_warning" ] && printf '%s\n\n' "$spec_reality_warning" || true)" \
+          --arg write_first_lines "$(printf '%b' "$write_first_lines")" \
+          --arg string_invariants_block "$([ -n "$string_invariants_block" ] && printf '%s\n' "$string_invariants_block" || true)" \
+          --arg review_feedback "$([ -n "$review_feedback" ] && printf '\n## Reviewer Feedback — ADDRESS THESE (a prior code review requested changes)\nThe team-lead reviewer examined your previous attempt and requested the changes below. This is the highest priority.\n\nA BLOCKER is a required deliverable, not advice. If a blocker says something is MISSING — a test, a file, a case — the only way to resolve it is to CREATE it; leaving it out repeats the rejection. Minimality governs HOW MUCH you write, never WHETHER you write it.\n\nFor advisory points: make the smallest edits that resolve each one, and where a point says the change is over-engineered or an existing helper would do, REMOVE the excess rather than adding more.\n\nIf you genuinely cannot satisfy a blocker — no seam exists to test against, the behaviour lives entirely in a third-party package — say so explicitly in your final message, naming the blocker and why. An unexplained omission reads as a refusal and will be rejected again.\n%s\n' "$review_feedback" || true)" \
+          --arg skill_note_block "$([ -n "$skill_note_block" ] && printf '%s\n' "$skill_note_block" || true)" \
+          --arg verification_criteria "$([ -n "$verification_criteria" ] && printf '\n## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)\nThese are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:\n%s\n' "$verification_criteria" || true)" \
+          --arg codeline_facts_block "$([ -n "$codeline_facts_block" ] && printf '%s\n' "$codeline_facts_block" || true)" \
+          --arg project_tools_block "$([ -n "$project_tools_block" ] && printf '%s\n' "$project_tools_block" || true)" \
+          --arg test_ownership_block "$([ -n "$test_ownership_block" ] && printf '%s\n' "$test_ownership_block" || true)" \
+          --arg codegraph_tool_block "$([ -n "$codegraph_tool_block" ] && printf '\n%s\n' "$codegraph_tool_block" || true)" \
+          --arg uncovered_vc_block "$([ -n "$_uncovered_vc_block" ] && printf '\n%s\n' "$_uncovered_vc_block" || true)" \
+          --arg brownfield_test_policy "$([ -n "$brownfield_test_policy" ] && printf '\n%s\n' "$brownfield_test_policy" || true)" \
+          --arg new_dependency_directive "$([ -n "$new_dependency_directive" ] && printf '\n%s\n' "$new_dependency_directive" || true)" \
+          --arg tc_facts "$([ -n "$tc_facts" ] && printf '\n## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)\n%s\n' "$tc_facts" || true)" \
+          --arg tc_mock_strategy "$([ -n "$tc_mock_strategy" ] && printf '\n## Mock Strategy\n%s\n' "$tc_mock_strategy" || true)" \
+          --arg tc_banned "$([ -n "$tc_banned" ] && printf '\n## Banned Patterns (must NOT appear in your file)\n%s\n' "$tc_banned" || true)" \
+          --arg technical_notes "$(_render_technical_notes "$technical_notes" "$_lane")" \
+          --arg existing_file_contents "$([ -n "$existing_file_contents" ] && printf '\n## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)\n%s\n' "$existing_file_contents" || true)" \
+          --arg dependency_contracts "$([ -n "$dependency_contracts" ] && printf '\n## Dependency Contracts (EXACT import paths and signatures — use these verbatim, do NOT guess a different path)\n%s\n' "$dependency_contracts" || true)" \
+          --arg module_resolution "$(_module_resolution_context "$PROJECT_ROOT" 2>/dev/null || true)" \
+          --arg cross_codeline_contract "$([ -n "${CROSS_CODELINE_CONTRACT:-}" ] && [ -f "${CROSS_CODELINE_CONTRACT}" ] && printf '\n## Cross-Codeline API Contract (upstream codeline exports — use these types and endpoints verbatim when integrating)\n%s\n' "$(cat "${CROSS_CODELINE_CONTRACT}")" || true)" \
+          --arg write_first_lines_2 "$(printf '%b' "$write_first_lines")" \
+          --arg conditional_section "$(if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
   echo "**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**"
 else
   echo "**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**"
-fi)
-
-$(if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
+fi)" \
+          --arg conditional_section_2 "$(if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
   echo "1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full"
 else
   echo "1. Write each required file to its exact absolute path listed above — do this FIRST before anything else"
-fi)
-2. Implement all acceptance criteria for this story
-$([ -n "$tc_facts" ] && echo "3. Test Criteria facts above are ground truth — your test assertions MUST match them exactly" || echo "3. Follow the project's existing code patterns and conventions")
-4. Do NOT create tests unless explicitly required in acceptance criteria
-
-After implementation, provide a brief summary of what was created/modified.
-EOF
+fi)" \
+          --arg tc_facts_2 "$([ -n "$tc_facts" ] && echo "3. Test Criteria facts above are ground truth — your test assertions MUST match them exactly" || echo "3. Follow the project's existing code patterns and conventions")" \
+          --arg write_first_directive "$write_first_directive" \
+          --arg dependencies "${dependencies:-None}" \
+          --arg acceptance_criteria "$acceptance_criteria" \
+          --arg agent_inputs "$agent_inputs" \
+          --arg description "$description" \
+          --arg story_id "$story_id" \
+          --arg title "$title" \
+          --arg files "$files" \
+          '{"__SPEC_REALITY_WARNING__":$spec_reality_warning,"__WRITE_FIRST_LINES__":$write_first_lines,"__STRING_INVARIANTS_BLOCK__":$string_invariants_block,"__REVIEW_FEEDBACK__":$review_feedback,"__SKILL_NOTE_BLOCK__":$skill_note_block,"__VERIFICATION_CRITERIA__":$verification_criteria,"__CODELINE_FACTS_BLOCK__":$codeline_facts_block,"__PROJECT_TOOLS_BLOCK__":$project_tools_block,"__TEST_OWNERSHIP_BLOCK__":$test_ownership_block,"__CODEGRAPH_TOOL_BLOCK__":$codegraph_tool_block,"__UNCOVERED_VC_BLOCK__":$uncovered_vc_block,"__BROWNFIELD_TEST_POLICY__":$brownfield_test_policy,"__NEW_DEPENDENCY_DIRECTIVE__":$new_dependency_directive,"__TC_FACTS__":$tc_facts,"__TC_MOCK_STRATEGY__":$tc_mock_strategy,"__TC_BANNED__":$tc_banned,"__TECHNICAL_NOTES__":$technical_notes,"__EXISTING_FILE_CONTENTS__":$existing_file_contents,"__DEPENDENCY_CONTRACTS__":$dependency_contracts,"__MODULE_RESOLUTION__":$module_resolution,"__CROSS_CODELINE_CONTRACT__":$cross_codeline_contract,"__WRITE_FIRST_LINES_2__":$write_first_lines_2,"__CONDITIONAL_SECTION__":$conditional_section,"__CONDITIONAL_SECTION_2__":$conditional_section_2,"__TC_FACTS_2__":$tc_facts_2,"__WRITE_FIRST_DIRECTIVE__":$write_first_directive,"__DEPENDENCIES__":$dependencies,"__ACCEPTANCE_CRITERIA__":$acceptance_criteria,"__AGENT_INPUTS__":$agent_inputs,"__DESCRIPTION__":$description,"__STORY_ID__":$story_id,"__TITLE__":$title,"__FILES__":$files}' > "$_sw_vals"
+    render_engine_prompt story-writer-main "$_sw_vals"
+    rm -f "$_sw_vals"
 }
 
 build_generator_prompt() {
@@ -2696,38 +2862,18 @@ build_generator_prompt() {
         description="${description//${MAIN_PROJECT_ROOT}/${PROJECT_ROOT}}"
     fi
 
-    cat << EOF
-Generate file for story $story_id: $title
-
-## Story Description
-$description
-
-## Acceptance Criteria
-- $acceptance_criteria
-
-## Technical Notes
-$(_render_technical_notes "$technical_notes" "$_lane")
-
-## Files to Create
-$files
-
-## Dependencies (already implemented — do NOT read them)
-${dependencies:-None}
-
-## GENERATOR CONTRACT — READ THIS FIRST
-You are a FILE GENERATOR. Your ONLY job is to write the file listed under "Files to Create".
-
-**MANDATORY FIRST ACTION: Call WriteFile immediately. Do NOT call any other tool first.**
-
-Rules:
-1. Your FIRST tool call MUST be WriteFile to the target path above.
-2. Do NOT call ReadFile, ListFiles, Bash, Search, or any other tool before WriteFile.
-3. Write the COMPLETE file content in a single WriteFile call.
-4. After WriteFile succeeds, you are done. No verification reads, no follow-up patches.
-5. All information you need is in this prompt. The spec is authoritative — do NOT read existing files for context.
-
-Generation approach: read every acceptance criterion once, hold them all in mind, then write a file that satisfies all of them in one shot.
-EOF
+    _hd_vals=$(mktemp "${TMPDIR:-/tmp}/story-file-generation-vals-XXXXXX.json")
+    jq -n \
+          --arg technical_notes "$(_render_technical_notes "$technical_notes" "$_lane")" \
+          --arg dependencies "${dependencies:-None}" \
+          --arg acceptance_criteria "$acceptance_criteria" \
+          --arg description "$description" \
+          --arg story_id "$story_id" \
+          --arg title "$title" \
+          --arg files "$files" \
+          '{"__TECHNICAL_NOTES__":$technical_notes,"__DEPENDENCIES__":$dependencies,"__ACCEPTANCE_CRITERIA__":$acceptance_criteria,"__DESCRIPTION__":$description,"__STORY_ID__":$story_id,"__TITLE__":$title,"__FILES__":$files}' > "$_hd_vals"
+    render_engine_prompt story-file-generation "$_hd_vals"
+    rm -f "$_hd_vals"
 }
 
 # Verify every file declared by the story exists in the execution root.
@@ -2789,6 +2935,70 @@ record_story_outputs() {
 # detective may have hallucinated it, demanding its use would force the agent to
 # import something imaginary. Brownfield only; per-attempt WARNING, so the retry
 # ladder owns the outcome.
+# verify_client_env_boundary <story_id>
+#
+# A CONFIG VALUE READ WHERE THE BUILD NEVER SUBSTITUTES IT IS DEAD CODE THAT TYPE-CHECKS.
+#
+# Live 2026-08-14, AMSD-2041 on next.metrolinx.com:
+#
+#     if (process.env.CONTENTSTACK_LIVE_PREVIEW_ENABLED === "true") { initLivePreview(...) }
+#
+# in a useEffect — the browser. That framework substitutes only prefixed names into the client
+# bundle, the codeline's config exposes no others, so the value is undefined and the branch never
+# runs. tsc passed. eslint passed. The reviewer APPROVED it across two cycles and raised six other
+# issues without this one, because seeing it needs a bundler rule and the project's own config,
+# not the diff.
+#
+# THE ENGINE KNOWS NONE OF THAT. plugins/client-env-boundary-plugin.js holds the framework facts
+# behind adapters selected by what the codeline's own manifest declares, and reads the exposed set
+# from that codeline's config — so gotransit, upexpress and metrolinx are the same call, and a new
+# stack is an adapter, never an engine change.
+#
+# Absent is absent: a codeline whose stack no adapter recognises reports nothing and this returns 0.
+# A check that cannot identify the rule must not invent findings, and must not claim a clean bill
+# of health either — the plugin distinguishes the two and only the first reaches here.
+verify_client_env_boundary() {
+    local story_id="$1"
+    local _plugin="${AUTOMATION_DIR:-$(dirname "$SCRIPT_DIR")}/plugins/client-env-boundary-plugin.js"
+    [ -f "$_plugin" ] || return 0
+    [ -n "${PROJECT_ROOT:-}" ] && [ -d "$PROJECT_ROOT" ] || return 0
+
+    # The files THIS story changed, from the writer's own output manifest — never a tree scan.
+    local _changed
+    _changed=$(git -C "$PROJECT_ROOT" diff --name-only "${PHASE_BASELINE_SHA:-HEAD~1}" HEAD 2>/dev/null; \
+               git -C "$PROJECT_ROOT" status --porcelain 2>/dev/null | sed 's/^...//')
+    [ -n "$_changed" ] || return 0
+
+    local _out
+    _out=$(printf '%s\n' "$_changed" | "${NODE_BIN:-node}" -e '
+      const p = require(process.argv[1]);
+      let raw = ""; process.stdin.on("data", d => raw += d).on("end", () => {
+        const files = [...new Set(raw.split("\n").map(s => s.trim()).filter(Boolean))];
+        const r = p.scanClientEnvBoundary(process.argv[2], files);
+        if (!r.exposureDeclared || !r.findings.length) return;
+        for (const f of r.findings) console.log(f.file + ":" + f.line + "\t" + f.variable + "\t" + f.detail);
+      });
+    ' "$_plugin" "$PROJECT_ROOT" 2>/dev/null || echo "")
+
+    [ -n "$_out" ] || return 0
+
+    local _count _first_var
+    _count=$(printf '%s\n' "$_out" | grep -c .)
+    _first_var=$(printf '%s\n' "$_out" | head -1 | cut -f2)
+
+    # Same rejection-key discipline as the reuse guard: an identical rejection twice advances the
+    # ladder rather than re-asking the same model the same question.
+    STORY_REJECTION_KEY="client-env:${_first_var}"
+    # THE FLAG IS WHAT DELIVERS IT — see verify_prescribed_helper_used. VERIFICATION_FAILURE
+    # without DETERMINISTIC_CHECK_FAILURE is assigned and dropped.
+    DETERMINISTIC_CHECK_FAILURE=1
+    export DETERMINISTIC_CHECK_FAILURE
+    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\n%d configuration value(s) are read where the build does not substitute them, so at runtime each is undefined and the branch it guards silently does nothing:\n\n%s\n\nRead the value where it IS substituted and pass the result through, as this codeline already does elsewhere, or expose it deliberately.\n' \
+        "$_count" "$(printf '%s\n' "$_out" | sed 's/^/  - /')")
+    warning "Story $story_id: ${_count} value(s) read where the build never substitutes them — first: ${_first_var}. The guarded branch cannot execute; tsc and lint cannot see this."
+    return 1
+}
+
 verify_prescribed_helper_used() {
     local story_id="$1"
     [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
@@ -2817,7 +3027,7 @@ verify_prescribed_helper_used() {
 
     local _ref=""
     [ -f "${LOG_DIR:-}/phase-baseline-sha.txt" ] &&         _ref=$(tr -d '[:space:]' < "$LOG_DIR/phase-baseline-sha.txt" 2>/dev/null)
-    [ -n "$_ref" ] || _ref="origin/${JIRA_BASELINE_BRANCH:-develop}"
+    [ -n "$_ref" ] || _ref="$(_resolved_baseline_ref)"
     git -C "$PROJECT_ROOT" rev-parse --verify "$_ref" >/dev/null 2>&1 || return 0
 
     local _diff
@@ -3052,17 +3262,6 @@ verify_story_deliverables() {
     # is the exact failure it was added to prevent (four sites verified, one changed, story
     # reported complete). Only an explicit boolean false exempts a site; null, "false", 0 and ""
     # are all absent.
-    local _verified_sites=() _vs
-    while IFS= read -r _vs; do
-        [ -n "$_vs" ] && _verified_sites+=("$_vs")
-    done < <(jq -r --arg id "$story_id" \
-        '.stories[] | select(.id == $id) | (.fixSiteAnalysis // [])
-         | map(select(.fixVerified == true))
-         | map(select((.changeRequired | type == "boolean" and . == false) | not))
-         | .[].file // empty' \
-        "$prd_target" 2>/dev/null)
-    # END VERIFIED-SITE SELECTION
-    local _unchanged_verified=()
     local _declared_files=()
     while IFS= read -r file; do
         [ -n "$file" ] || continue
@@ -3118,7 +3317,7 @@ verify_story_deliverables() {
         # exist at baseline) is already fully proven by the exists+non-empty
         # check above — no diff is possible or required for it.
         if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -d "$PROJECT_ROOT/.git" ]; then
-            local _baseline_ref="origin/${JIRA_BASELINE_BRANCH:-develop}"
+            local _baseline_ref; _baseline_ref="$(_resolved_baseline_ref)"
             if git -C "$PROJECT_ROOT" rev-parse --verify "$_baseline_ref" >/dev/null 2>&1; then
                 local _rel_path="$check_path"
                 case "$_rel_path" in
@@ -3159,10 +3358,6 @@ verify_story_deliverables() {
                         # exist at baseline) has no such ambiguity — that one
                         # stays a hard requirement via missing[] above.
                         unchanged+=("$file")
-                        local _vsite
-                        for _vsite in "${_verified_sites[@]}"; do
-                            [ "$_vsite" = "$file" ] && _unchanged_verified+=("$file") && break
-                        done
                     fi
                 fi
             fi
@@ -3257,27 +3452,31 @@ verify_story_deliverables() {
             warning "  $file"
         done
         return 1
-    elif [ ${#_unchanged_verified[@]} -gt 0 ]; then
-        # A VERIFIED FIX SITE IS NOT A CANDIDATE. The branch below — one real change is
-        # sufficient, not a majority — exists for AMSD-1820, where the spec named 3 CANDIDATE
-        # paths and the agent correctly edited 2; requiring all would false-fail a correct
-        # story. fixVerified:true is a different claim: the spec CONFIRMED the site and named
-        # the helper that owns it. Live 2026-08-09 four sites were verified, the writer changed
-        # ONE (12 lines), and the story was committed and reported complete — unable to satisfy
-        # its own criterion because the fetch path and context it also verified were never
-        # touched. The signal was in the data and no gate read it.
-        error "Story $story_id: ${#_unchanged_verified[@]} VERIFIED fix site(s) left unchanged — the spec confirmed each and named the helper that owns it, so the story is incomplete:"
-        # Deduped: a file appearing in more than one verified fix site was listed once per
-        # site, so the rejection told the writer the same path twice and the count
-        # disagreed with the list it printed.
-        while IFS= read -r file; do
-            error "  $file"
-        done < <(printf '%s\n' "${_unchanged_verified[@]}" | sort -u)
-        DETERMINISTIC_CHECK_FAILURE=1
-        export DETERMINISTIC_CHECK_FAILURE
-        VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\n%d fix site(s) the spec VERIFIED for this story are unchanged: %s\n\nThese are not candidate paths — each was confirmed as owning part of this fix. Change every one of them, or the story cannot satisfy its verification criteria.\n' "${#_unchanged_verified[@]}" "$(printf '%s, ' "${_unchanged_verified[@]}" | sed 's/, $//')")
-        STORY_REJECTION_KEY="unchanged-verified:$(printf '%s,' "${_unchanged_verified[@]}")"
-        return 1
+    # THE VERIFIED-FIX-SITE GATE WAS DELETED HERE (2026-08-12, operator decision).
+    #
+    # It demanded a real diff in EVERY site the spec marked fixVerified. That is conformance to
+    # the plan — and the plan is GUIDANCE. The detective points the writer at the right region
+    # of a real codebase; the writer READS THE CODE and fills the gaps. Gating on "did every
+    # prescribed file change" makes a story unwinnable the moment the plan is imperfect, which
+    # by design it is expected to be.
+    #
+    # Record: ONE true catch (2026-08-09, four verified sites, one changed, story reported
+    # complete) against at least three false failures. Its own comment recorded "three runs and
+    # roughly nine attempts died on it", and on 2026-08-12 it blocked AMSD-2041 by demanding a
+    # diff in a file whose own prescription reads "No code change required in useContent
+    # itself".
+    #
+    # No weaker setting works either: relaxed to "at least one verified site changed", the very
+    # incident it was built for PASSES, because the writer did change one. It substituted a
+    # structural proxy (file diffs) for a question about behaviour (can this satisfy its
+    # criterion), and a structural proxy over a guidance artefact gives exactly what was seen:
+    # false rejections of correct work, silence on incorrect work.
+    #
+    # What holds instead: the tests and the verification criteria — what a user observes, which
+    # cannot be satisfied by over-reach or under-delivery. The VC coverage check is weak today
+    # (word overlap; it scored a working and a broken prescription alike as "complete"), and
+    # strengthening it is the replacement for this gate rather than another proxy.
+
     elif [ ${#unchanged[@]} -gt 0 ]; then
         warning "Story $story_id: ${#unchanged[@]}/$declared declared candidate file(s) were unchanged (real work landed in the others) — informational, not a failure:"
         for file in "${unchanged[@]}"; do
@@ -3302,7 +3501,7 @@ verify_story_deliverables() {
     # still catches "nothing real happened" — the actual failure pattern
     # behind three separate false-completion incidents today.
     if [ "$declared" -eq 0 ] && [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -d "$PROJECT_ROOT/.git" ]; then
-        local _baseline_ref="origin/${JIRA_BASELINE_BRANCH:-develop}"
+        local _baseline_ref; _baseline_ref="$(_resolved_baseline_ref)"
         if git -C "$PROJECT_ROOT" rev-parse --verify "$_baseline_ref" >/dev/null 2>&1; then
             local _real_changes
             _real_changes=$(git -C "$PROJECT_ROOT" diff --name-only "$_baseline_ref" 2>/dev/null | \
@@ -3339,6 +3538,18 @@ verify_story_deliverables() {
     # A prescribed, existing helper that the change never uses means the agent
     # re-implemented it — and guessed. Retryable.
     verify_prescribed_helper_used "$story_id" || return 1
+
+    # A build-time value read where the build never substitutes it. Same class: mechanical,
+    # checkable, and invisible to every other gate. Retryable.
+    #
+    # PRESENCE-GUARDED, like every other optional collaborator here. Fourteen test harnesses
+    # extract this function and run it in isolation; an unguarded call to a sibling they do not
+    # extract fails them all with "command not found", which reads as a production defect and is
+    # not one. In a real run the function is always defined a few lines above, so the guard costs
+    # nothing and never silently skips anything that exists.
+    if command -v verify_client_env_boundary >/dev/null 2>&1; then
+        verify_client_env_boundary "$story_id" || return 1
+    fi
 
     # The story produced real, verified work — tell the phase gates what it was
     # so they can judge this run's output instead of the whole codebase.
@@ -3665,34 +3876,7 @@ _module_resolution_context() {
     [ -f "$_cfg" ] || _cfg="$_repo/.epam/dependency-check.json"
     [ -f "$_cfg" ] || return 0
 
-    "${PYTHON_BIN:-python3}" - "$_repo" "$_cfg" <<'MODRES_EOF'
-import json, os, sys
-repo, cfg_path = sys.argv[1], sys.argv[2]
-try:
-    cfg = json.load(open(cfg_path))
-except Exception:
-    sys.exit(0)
-vendor = set(cfg.get('vendorDirs', []) or [])
-exts = cfg.get('scanFileExtensions', []) or []
-roots = []
-try:
-    for e in sorted(os.listdir(repo)):
-        if e.startswith('.') or e in vendor:
-            continue
-        if os.path.isdir(os.path.join(repo, e)):
-            roots.append(e)
-except OSError:
-    sys.exit(0)
-if not roots:
-    sys.exit(0)
-print("## Module resolution in this codeline")
-print("A bare import that names a file under any of these directories is INTERNAL "
-      "source, not a dependency — never add it to the dependency manifest:")
-print("  " + ", ".join(roots))
-print("Source extensions here: " + ", ".join(exts) if exts else "")
-print("Write imports the way the existing files in this codeline write them; "
-      "read a neighbouring file before inventing a path.")
-MODRES_EOF
+    "${PYTHON_BIN:-python3}" "$SCRIPT_DIR/lib/handlers/module-resolution-context.py" "$_repo" "$_cfg"
 }
 
 # _discover_vendor_packages <resolved_abs_file>
@@ -3725,21 +3909,7 @@ _discover_vendor_packages() {
     _vendor_dirs_json=$(jq -c '.vendorDirs // []' "$_config" 2>/dev/null)
     _ignore_json=$(jq -c '.ignorePackages // []' "$_config" 2>/dev/null)
 
-    python3 - "$_file" "$_import_pattern" "$_ignore_json" << 'PYEOF'
-import re, sys, json
-file_path, pattern, ignore_json = sys.argv[1:4]
-ignore = set(json.loads(ignore_json))
-with open(file_path) as f:
-    text = f.read()
-seen = []
-for m in re.finditer(pattern, text):
-    pkg = next((g for g in m.groups() if g), None)
-    if not pkg or pkg in ignore or pkg in seen:
-        continue
-    seen.append(pkg)
-for p in seen:
-    print(p)
-PYEOF
+    python3 "$SCRIPT_DIR/lib/handlers/vendor-packages.py" "$_file" "$_import_pattern" "$_ignore_json"
 }
 
 # _generate_vendor_contract <project_root> <package_name>
@@ -3771,24 +3941,7 @@ _generate_vendor_contract() {
     local _exts_json
     _exts_json=$(jq -c '.sourceExtensions // []' "$_config" 2>/dev/null)
     local _files_json
-    _files_json=$(python3 - "$_package_dir" "$_exts_json" << 'PYEOF'
-import json, os, sys
-package_dir, exts_json = sys.argv[1:3]
-exts = tuple(json.loads(exts_json))
-out = []
-# Bounded walk: a vendored package can be large, and this is grounding, not a
-# full audit — cap what a single contract pass will read.
-MAX_FILES = 200
-for root, _, files in os.walk(package_dir):
-    for f in files:
-        if f.endswith(exts):
-            out.append(os.path.join(root, f))
-        if len(out) >= MAX_FILES:
-            break
-    if len(out) >= MAX_FILES:
-        break
-print(json.dumps(out))
-PYEOF
+    _files_json=$(python3 "$SCRIPT_DIR/lib/handlers/vendor-contract.py" "$_package_dir" "$_exts_json"
 )
     [ "$_files_json" = "[]" ] && return 0
 
@@ -3963,153 +4116,7 @@ run_mock_completeness_check() {
     [ -f "$config_file" ] || return 0
 
     local result
-    result=$(python3 - "$project_root" "$config_file" << 'PYEOF'
-import json, os, re, sys
-
-project_root, config_file = sys.argv[1], sys.argv[2]
-with open(config_file) as f:
-    cfg = json.load(f)
-TEST_FILE_EXTS = tuple(cfg['testFileExtensions'])
-
-def is_test_file(path):
-    return bool(re.search(cfg['testFilePattern'], path))
-
-def resolve_import(base_dir, spec):
-    candidate = os.path.normpath(os.path.join(base_dir, spec))
-    if os.path.isfile(candidate):
-        return candidate
-    for ext in TEST_FILE_EXTS:
-        if os.path.isfile(candidate + ext):
-            return candidate + ext
-        if os.path.isfile(os.path.join(candidate, 'index' + ext)):
-            return os.path.join(candidate, 'index' + ext)
-    return None
-
-def find_matching_brace(text, open_idx):
-    depth = 0
-    for i in range(open_idx, len(text)):
-        if text[i] == '{':
-            depth += 1
-        elif text[i] == '}':
-            depth -= 1
-            if depth == 0:
-                return i
-    return -1
-
-def top_level_matches(text, pattern):
-    # Live bug (2026-07-06, found via SKY-003's repeated false rejections):
-    # a plain regex scan over the WHOLE class body has no notion of brace
-    # depth, so control-flow statements nested inside a real method's body
-    # (e.g. `if (!key) {`) also match `\w+\s*\(...\)\s*{` and get
-    # misidentified as class methods (a phantom method literally named
-    # "if"). This falsely rejected a CORRECT, COMPLETE mock for "missing"
-    # a method that doesn't exist — burning the entire retry/escalation
-    # ladder on a check bug, not a real defect. Same fix already applied
-    # to generate_story_contract()'s identical parsing: only count a match
-    # as a real method when it's a DIRECT child of the class body (depth 1
-    # relative to the body's own opening brace), not nested inside another
-    # block.
-    depth_at = [0] * (len(text) + 1)
-    depth = 0
-    for i, c in enumerate(text):
-        if c == '{':
-            depth += 1
-        elif c == '}':
-            depth -= 1
-        depth_at[i + 1] = depth
-    return [m for m in pattern.finditer(text) if depth_at[m.start()] == 1]
-
-def real_class_methods(source_text, class_name):
-    # Config-driven (2026-07-06): find ALL classes via cfg['classPattern'] and
-    # match by captured name, instead of substituting class_name into a
-    # hand-rolled pattern — this way the class-matching regex itself is
-    # entirely config-supplied, same as generate_story_contract() already
-    # does, with zero stack-specific syntax hardcoded in this function.
-    class_re = re.compile(cfg['classPattern'])
-    m = None
-    for candidate in class_re.finditer(source_text):
-        if candidate.group(1) == class_name:
-            m = candidate
-            break
-    if not m:
-        return None
-    body_start = m.end() - 1
-    body_end = find_matching_brace(source_text, body_start)
-    if body_end == -1:
-        return None
-    body = source_text[body_start:body_end + 1]
-    method_re = re.compile(cfg['methodPattern'], re.M)
-    methods = set()
-    for mm in top_level_matches(body, method_re):
-        # cfg['methodPattern']'s group shape is fixed by contract-generation.json:
-        # (asyncKeyword, methodName, params, returnType) — same groups()
-        # ordering generate_story_contract() already relies on.
-        name = mm.group(2)
-        if name != 'constructor':
-            methods.add(name)
-    return methods
-
-MOCK_START_RE = re.compile(cfg['mockFactoryStartPattern'])
-CLASS_MOCK_RE = re.compile(cfg['mockClassPattern'])
-MOCKED_METHOD_RE = re.compile(cfg['mockedMethodPattern'], re.M)
-
-problems = []
-for root, dirs, files in os.walk(project_root):
-    dirs[:] = [d for d in dirs if d not in ('node_modules', 'dist', '.git', '__pycache__', '.venv', '.contracts')]
-    for fname in files:
-        if not fname.endswith(TEST_FILE_EXTS) or not is_test_file(fname):
-            continue
-        fpath = os.path.join(root, fname)
-        try:
-            with open(fpath, encoding='utf-8', errors='ignore') as f:
-                content = f.read()
-        except OSError:
-            continue
-
-        for mock_m in MOCK_START_RE.finditer(content):
-            import_path = mock_m.group(1)
-            outer_start = mock_m.end() - 1
-            outer_end = find_matching_brace(content, outer_start)
-            if outer_end == -1:
-                continue
-            outer_body = content[outer_start:outer_end + 1]
-
-            for class_m in CLASS_MOCK_RE.finditer(outer_body):
-                class_name = class_m.group(1)
-                inner_start = class_m.end() - 1
-                inner_end = find_matching_brace(outer_body, inner_start)
-                if inner_end == -1:
-                    continue
-                inner_body = outer_body[inner_start:inner_end + 1]
-                mocked_methods = set(MOCKED_METHOD_RE.findall(inner_body))
-
-                real_path = resolve_import(root, import_path)
-                if not real_path:
-                    continue  # relative-import-check already flags unresolvable paths
-                try:
-                    with open(real_path, encoding='utf-8', errors='ignore') as f:
-                        source_text = f.read()
-                except OSError:
-                    continue
-                real_methods = real_class_methods(source_text, class_name)
-                if real_methods is None:
-                    continue  # class not found at that path — not this check's concern
-                missing = sorted(real_methods - mocked_methods)
-                if missing:
-                    rel_test = os.path.relpath(fpath, project_root)
-                    rel_real = os.path.relpath(real_path, project_root)
-                    problems.append(
-                        f"{rel_test}: vi.mock() factory for '{class_name}' (from '{import_path}' -> {rel_real}) "
-                        f"is missing method(s): {', '.join(missing)}"
-                    )
-
-if problems:
-    print("INCOMPLETE")
-    for line in problems:
-        print(line)
-else:
-    print("OK")
-PYEOF
+    result=$(python3 "$SCRIPT_DIR/lib/handlers/mock-completeness-check.py" "$project_root" "$config_file"
 )
 
     if [ "$(echo "$result" | head -1)" = "OK" ]; then
@@ -4206,45 +4213,7 @@ run_anti_pattern_check() {
     fi
 
     local result
-    result=$(python3 - "$project_root" "$rules_file" "$owned_files_json" << 'PYEOF'
-import os, re, sys, json
-
-project_root, rules_file, owned_files_raw = sys.argv[1], sys.argv[2], sys.argv[3]
-owned_files = [os.path.normpath(os.path.join(project_root, f) if not os.path.isabs(f) else f)
-               for f in json.loads(owned_files_raw)]
-
-try:
-    with open(rules_file, encoding='utf-8') as f:
-        rules = json.load(f)
-except Exception as e:
-    print("OK")  # a malformed config must never block a real story
-    sys.exit(0)
-
-violations = []
-for rel in owned_files:
-    fpath = os.path.normpath(os.path.join(project_root, rel) if not os.path.isabs(rel) else rel)
-    if not os.path.isfile(fpath):
-        continue
-    try:
-        with open(fpath, encoding='utf-8', errors='ignore') as f:
-            content = f.read()
-    except OSError:
-        continue
-    rel_fpath = os.path.relpath(fpath, project_root)
-    for rule in rules:
-        pattern = rule.get('matchPattern')
-        if not pattern:
-            continue
-        if re.search(pattern, content):
-            violations.append(f"{rel_fpath}: {rule.get('message', rule.get('id', 'anti-pattern match'))}")
-
-if violations:
-    print("VIOLATION")
-    for line in violations:
-        print(line)
-else:
-    print("OK")
-PYEOF
+    result=$(python3 "$SCRIPT_DIR/lib/handlers/anti-pattern-check.py" "$project_root" "$rules_file" "$owned_files_json"
 )
 
     if [ "$(echo "$result" | head -1)" = "OK" ]; then
@@ -4300,143 +4269,7 @@ run_relative_import_check() {
     fi
 
     local result
-    result=$(python3 - "$project_root" "$auto_fix" "$owned_files_json" "$has_story_context" << 'PYEOF'
-import os, re, sys, json
-
-project_root = sys.argv[1]
-auto_fix = sys.argv[2] == 'true'
-owned_files = set(os.path.normpath(os.path.join(project_root, f) if not os.path.isabs(f) else f)
-                   for f in json.loads(sys.argv[3]))
-has_story_context = sys.argv[4] == 'true'
-SOURCE_EXTS = ('.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs')
-IMPORT_RE = re.compile(r"from\s+['\"](\.[^'\"]*)['\"]|require\(\s*['\"](\.[^'\"]*)['\"]\s*\)")
-
-def resolves(base_dir, spec):
-    candidate = os.path.normpath(os.path.join(base_dir, spec))
-    if os.path.isfile(candidate):
-        return True
-    for ext in SOURCE_EXTS:
-        if os.path.isfile(candidate + ext):
-            return True
-        if os.path.isfile(os.path.join(candidate, 'index' + ext)):
-            return True
-    # TypeScript ESM: `import './foo.js'` is valid TS and resolves to `foo.ts`
-    if spec.endswith('.js'):
-        ts_base = os.path.normpath(os.path.join(base_dir, spec[:-3]))
-        for ts_ext in ('.ts', '.tsx'):
-            if os.path.isfile(ts_base + ts_ext):
-                return True
-    return False
-
-def tokenize(path):
-    return set(re.split(r'[^a-zA-Z0-9]+', path.lower())) - {''}
-
-def is_test_file(path):
-    return bool(re.search(r'\.(test|spec)\.[a-zA-Z0-9]+$', path))
-
-# Candidate pool for suggestions EXCLUDES test files. Root cause of a live-run
-# defect: an implementation file and its test sibling (client.ts / client.test.ts)
-# always tie on token overlap ({"skyscanner","client"} matches both equally) —
-# without this exclusion, the suggestion algorithm can non-deterministically
-# recommend the TEST file as "the module to import", which is never correct
-# for application code and actively misleads the retry.
-all_source_files = []
-for root, dirs, files in os.walk(project_root):
-    dirs[:] = [d for d in dirs if d not in ('node_modules', 'dist', '.git', '__pycache__', '.venv', '.contracts')]
-    for fname in files:
-        if fname.endswith(SOURCE_EXTS) and not is_test_file(fname):
-            all_source_files.append(os.path.relpath(os.path.join(root, fname), project_root))
-
-broken = []
-out_of_scope = []
-auto_fixed = []
-for root, dirs, files in os.walk(project_root):
-    dirs[:] = [d for d in dirs if d not in ('node_modules', 'dist', '.git', '__pycache__', '.venv', '.contracts')]
-    for fname in files:
-        if not fname.endswith(SOURCE_EXTS):
-            continue
-        fpath = os.path.join(root, fname)
-        try:
-            with open(fpath, encoding='utf-8', errors='ignore') as f:
-                content = f.read()
-        except OSError:
-            continue
-        fixed_content = content
-        file_changed = False
-        for m in IMPORT_RE.finditer(content):
-            spec = next((g for g in m.groups() if g), None)
-            if not spec:
-                continue
-            if resolves(root, spec):
-                continue
-            spec_tokens = tokenize(spec)
-            best = None
-            best_score = 0
-            for cand in all_source_files:
-                cand_tokens = tokenize(cand)
-                score = len(spec_tokens & cand_tokens)
-                if score > best_score:
-                    best_score = score
-                    best = cand
-            rel_fpath = os.path.relpath(fpath, project_root)
-            if best and best_score > 0:
-                best_abs = os.path.join(project_root, best)
-                rel_from_importer = os.path.relpath(best_abs, root)
-                if not rel_from_importer.startswith('.'):
-                    rel_from_importer = './' + rel_from_importer
-                # Strip the source extension — TS/JS import specifiers omit it
-                for ext in SOURCE_EXTS:
-                    if rel_from_importer.endswith(ext):
-                        rel_from_importer = rel_from_importer[: -len(ext)]
-                        break
-                suggestion = f" Did you mean '{rel_from_importer}'? (found at {best})"
-            else:
-                suggestion = ""
-                rel_from_importer = None
-
-            can_auto_fix = (
-                auto_fix
-                and rel_from_importer
-                and best_score >= 2
-                and os.path.normpath(fpath) in owned_files
-            )
-            if can_auto_fix:
-                for quote in ("'", '"'):
-                    old_spec_quoted = f"{quote}{spec}{quote}"
-                    if old_spec_quoted in fixed_content:
-                        fixed_content = fixed_content.replace(
-                            old_spec_quoted, f"{quote}{rel_from_importer}{quote}"
-                        )
-                        file_changed = True
-                        auto_fixed.append(f"{rel_fpath}: '{spec}' -> '{rel_from_importer}'")
-                        break
-            if not can_auto_fix:
-                line = f"{rel_fpath}: imports '{spec}' which does not exist.{suggestion}"
-                # Same scoping fix as run_named_import_check: a broken import
-                # in a file this story doesn't own can never be this story's
-                # to fix (scope-guard prevents it from ever touching that
-                # file) — report it as non-blocking visibility instead of
-                # burning the entire retry ladder on an impossible fix.
-                if has_story_context and os.path.normpath(fpath) not in owned_files:
-                    out_of_scope.append(line)
-                else:
-                    broken.append(line)
-
-        if file_changed:
-            with open(fpath, 'w', encoding='utf-8') as f:
-                f.write(fixed_content)
-
-for line in out_of_scope:
-    print("OUT_OF_SCOPE:" + line)
-if broken:
-    print("BROKEN")
-    for line in broken:
-        print(line)
-else:
-    print("OK")
-for line in auto_fixed:
-    print("AUTOFIXED:" + line)
-PYEOF
+    result=$(python3 "$SCRIPT_DIR/lib/handlers/relative-import-check.py" "$project_root" "$auto_fix" "$owned_files_json" "$has_story_context"
 )
 
     local autofixed_lines
@@ -4599,139 +4432,7 @@ run_named_import_check() {
     fi
 
     local result
-    result=$(python3 - "$project_root" "$auto_fix" "$owned_files_json" "$has_story_context" << 'PYEOF'
-import os, re, sys, json
-
-project_root = sys.argv[1]
-auto_fix = sys.argv[2] == 'true'
-owned_files = set(os.path.normpath(os.path.join(project_root, f) if not os.path.isabs(f) else f)
-                   for f in json.loads(sys.argv[3]))
-has_story_context = sys.argv[4] == 'true'
-SOURCE_EXTS = ('.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs')
-
-IMPORT_RE = re.compile(r"import\s+(?:type\s+)?\{([^}]*)\}\s+from\s+['\"](\.[^'\"]*)['\"]")
-EXPORT_DECL_RE = re.compile(
-    r"export\s+(?:default\s+)?(?:async\s+)?(?:abstract\s+)?(?:class|function|const|let|var|interface|type|enum)\s+([A-Za-z_$][\w$]*)"
-)
-EXPORT_LIST_RE = re.compile(r"export\s*\{([^}]*)\}(?!\s*from)")
-
-def resolves(base_dir, spec):
-    candidate = os.path.normpath(os.path.join(base_dir, spec))
-    if os.path.isfile(candidate):
-        return candidate
-    for ext in SOURCE_EXTS:
-        if os.path.isfile(candidate + ext):
-            return candidate + ext
-        if os.path.isfile(os.path.join(candidate, 'index' + ext)):
-            return os.path.join(candidate, 'index' + ext)
-    return None
-
-_export_cache = {}
-def get_exports(fpath):
-    if fpath in _export_cache:
-        return _export_cache[fpath]
-    try:
-        with open(fpath, encoding='utf-8', errors='ignore') as f:
-            content = f.read()
-    except OSError:
-        _export_cache[fpath] = set()
-        return set()
-    names = set(EXPORT_DECL_RE.findall(content))
-    for group in EXPORT_LIST_RE.findall(content):
-        for item in group.split(','):
-            item = item.strip()
-            if not item:
-                continue
-            # `export { A as B }` — B is the externally-visible name
-            parts = re.split(r'\s+as\s+', item)
-            names.add(parts[-1].strip())
-    _export_cache[fpath] = names
-    return names
-
-broken = []
-out_of_scope = []
-auto_fixed = []
-for root, dirs, files in os.walk(project_root):
-    dirs[:] = [d for d in dirs if d not in ('node_modules', 'dist', '.git', '__pycache__', '.venv', '.contracts')]
-    for fname in files:
-        if not fname.endswith(SOURCE_EXTS):
-            continue
-        fpath = os.path.join(root, fname)
-        try:
-            with open(fpath, encoding='utf-8', errors='ignore') as f:
-                content = f.read()
-        except OSError:
-            continue
-        fixed_content = content
-        file_changed = False
-        for m in IMPORT_RE.finditer(content):
-            names_raw, spec = m.group(1), m.group(2)
-            target = resolves(root, spec)
-            if not target:
-                continue  # a broken PATH is run_relative_import_check's job, not this one
-            exports = get_exports(target)
-            rel_fpath = os.path.relpath(fpath, project_root)
-            for raw_name in names_raw.split(','):
-                raw_name = raw_name.strip()
-                if not raw_name:
-                    continue
-                # `import { A as B }` — A is the identifier that must exist in the target
-                imported_name = re.split(r'\s+as\s+', raw_name)[0].strip()
-                if imported_name in exports:
-                    continue
-                case_matches = [e for e in exports if e.lower() == imported_name.lower() and e != imported_name]
-                if len(case_matches) == 1:
-                    suggestion = f" Did you mean '{case_matches[0]}'? (exported from {os.path.relpath(target, project_root)})"
-                else:
-                    suggestion = ""
-
-                can_auto_fix = auto_fix and len(case_matches) == 1 and os.path.normpath(fpath) in owned_files
-                if can_auto_fix:
-                    # Whole-file word-boundary replace — the wrong identifier is
-                    # typically used both in the import AND at call sites (the
-                    # exact live bug: `import { SkyScannerClient }` AND
-                    # `new SkyScannerClient()` both had the typo). Patching only
-                    # the import line would leave usage sites referencing a now-
-                    # undefined name — a different but equally broken result.
-                    correct_name = case_matches[0]
-                    pattern = re.compile(r'\b' + re.escape(imported_name) + r'\b')
-                    new_content = pattern.sub(correct_name, fixed_content)
-                    if new_content != fixed_content:
-                        fixed_content = new_content
-                        file_changed = True
-                        auto_fixed.append(f"{rel_fpath}: '{imported_name}' -> '{correct_name}'")
-                if not can_auto_fix:
-                    line = f"{rel_fpath}: imports '{imported_name}' from '{spec}' which is not exported there.{suggestion}"
-                    # Root cause this scopes (found live, 2026-07-09/10): a
-                    # pre-existing broken import in a file the CURRENT story
-                    # doesn't own (has_story_context=true and fpath not in
-                    # owned_files) permanently blocked an UNRELATED story that
-                    # is structurally incapable of fixing it (scope-guard
-                    # prevents it from ever touching that file) — exhausting
-                    # all retries on a bug that was never this story's to fix.
-                    # Only block the CURRENT story on findings in files it
-                    # actually owns; report everything else as non-blocking
-                    # visibility so the information isn't silently lost.
-                    if has_story_context and os.path.normpath(fpath) not in owned_files:
-                        out_of_scope.append(line)
-                    else:
-                        broken.append(line)
-
-        if file_changed:
-            with open(fpath, 'w', encoding='utf-8') as f:
-                f.write(fixed_content)
-
-for line in out_of_scope:
-    print("OUT_OF_SCOPE:" + line)
-if broken:
-    print("BROKEN")
-    for line in broken:
-        print(line)
-else:
-    print("OK")
-for line in auto_fixed:
-    print("AUTOFIXED:" + line)
-PYEOF
+    result=$(python3 "$SCRIPT_DIR/lib/handlers/named-import-check.py" "$project_root" "$auto_fix" "$owned_files_json" "$has_story_context"
 )
 
     local autofixed_lines
@@ -5078,7 +4779,7 @@ run_external_verification() {
     if [ "$test_exit" -eq 124 ]; then
         warning "External verification TIMED OUT for $story_id after ${_test_timeout}s (test command: $test_cmd)"
         VERIFICATION_FAILURE=$(printf '\n## Verification Failure — TIMEOUT\n\nThe orchestrator ran `%s` after your files were written and it did NOT complete within %ds — it hung. The most common cause for a server story: a test calls app.listen() (or an equivalent server-start call) without closing it (server.close()) in an afterAll/afterEach hook, so the test process never exits. Check every test that starts a server or opens a long-lived resource (timers, sockets, watchers) and ensure it is torn down.\n\n```\n%s\n```\n' \
-            "$test_cmd" "$_test_timeout" "${test_output:0:4000}")
+            "$test_cmd" "$_test_timeout" "$test_output")
         {
             echo ""
             echo "=== External verification TIMED OUT after ${_test_timeout}s ==="
@@ -5135,14 +4836,11 @@ run_external_verification() {
         # The writer is shown the NEW failures, not the whole suite. Handing it every
         # pre-existing failure as if it were its own is how an attempt gets sent chasing
         # breakage it did not cause — and the instruction below now says so explicitly.
-        local _test_head="${_new_test_failures:0:2000}"
+        # WHOLE, never head+tail. The middle of a failure dump is where the first
+        # error usually is; cutting it out and printing "[... output truncated ...]"
+        # told the writer something was missing without telling it what.
+        local _test_head="$_new_test_failures"
         local _test_tail=""
-        if [ "${#_new_test_failures}" -gt 2000 ]; then
-            _test_tail=$(printf '%s' "$_new_test_failures" | tail -c 2000)
-            _test_tail="
-[... output truncated ...]
-$_test_tail"
-        fi
         VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe orchestrator ran `%s` after your files were written and it failed (exit code %d). The failures below are the ones YOUR CHANGES INTRODUCED — failures the codeline already had have been subtracted and are not your responsibility. Fix these.\n\n```\n%s%s\n```\n' \
             "$test_cmd" "$test_exit" "$_test_head" "$_test_tail")
         {
@@ -5154,6 +4852,57 @@ $_test_tail"
     fi
 
     success "External verification passed for $story_id"
+    return 0
+}
+
+# _attempt_change_summary <story_id> [baseline_ref]
+#
+# WHAT THE LAST ATTEMPT ACTUALLY DID — the one piece of evidence neither the writer nor the
+# failure analyst has ever been given.
+#
+# The writer is told what is WRONG (reviewer blockers, verification failures, prior-run lessons)
+# and never what it DID, so it cannot tell "I tried this and it was rejected" from "I have not
+# tried anything", and re-derives an approach it has already been told is wrong. The analyst is
+# asked why an implementation failed while being shown no implementation — live 2026-08-12 it
+# answered "Target=none — Transient import slip", a fair reading of the text it had and useless
+# as guidance, and its answer escalates the model.
+#
+# COMPUTED, NOT ASKED FOR. Plain git against the story's own baseline. No agent, no judgement,
+# no summarisation: a model between a machine fact and the agent acting on it destroys
+# provenance, and this reviewer has already approved a change while misstating the diff.
+#
+# ONE SOURCE, TWO CONSUMERS — the writer's retry prompt and the analyst's evidence read the same
+# text. Two pipelines is how they drifted into being fed differently in the first place.
+_attempt_change_summary() {
+    local _story_id="${1:-}"
+    local _ref="${2:-$(_resolved_baseline_ref)}"
+    local _stat=""
+
+    if [ -d "$PROJECT_ROOT/.git" ] && git -C "$PROJECT_ROOT" rev-parse --verify "$_ref" >/dev/null 2>&1; then
+        # Committed work on the branch plus anything still in the tree: an attempt that
+        # committed and an attempt that did not are both "what it did".
+        # Untracked files are NOT in `diff --stat`, and a brand-new file is the most common
+        # shape of "what the attempt did" — omitting them reports a real attempt as empty.
+        local _untracked
+        _untracked=$(git -C "$PROJECT_ROOT" ls-files --others --exclude-standard 2>/dev/null | head -40)
+        _stat=$( { git -C "$PROJECT_ROOT" diff --stat "$_ref" 2>/dev/null
+                   git -C "$PROJECT_ROOT" diff --stat --cached 2>/dev/null
+                   if [ -n "$_untracked" ]; then
+                       printf '%s\n' "$_untracked" | while IFS= read -r _u; do
+                           [ -n "$_u" ] || continue
+                           printf ' %s | new file\n' "$_u"
+                       done
+                   fi; } | grep -vE '^[[:space:]]*$' | head -60 )
+    fi
+
+    if [ -z "$(printf '%s' "$_stat" | tr -d '[:space:]')" ]; then
+        # THE MOST IMPORTANT CASE. An empty summary reads as "no information", and the next
+        # attempt then behaves as though it were the first. Say it plainly instead.
+        printf 'The previous attempt changed NO files — nothing was written. Treat this as an attempt that produced nothing, not as a fresh start.\n'
+        return 0
+    fi
+
+    printf 'The previous attempt changed these files (diffstat against %s):\n\n%s\n' "$_ref" "$_stat"
     return 0
 }
 
@@ -5195,13 +4944,23 @@ run_repo_lint_verification() {
         "$PROJECT_ROOT/.git/hooks/pre-commit"; do
         [ -f "$_candidate" ] && { _hook="$_candidate"; break; }
     done
-    [ -n "$_hook" ] || return 0
+    # AN ABSENT CHECK IS NOT A PASS. These three exits used to be silent `return 0`s, so
+    # "lint could not run" was indistinguishable from "lint found nothing" — the same fail-open
+    # shape as every other defect in this pipeline. The story is not failed for them (the writer
+    # cannot install a hook or a linter), but the run says so out loud.
+    if [ -z "$_hook" ]; then
+        warning "  [repo-lint] $story_id: no pre-commit hook in $PROJECT_ROOT — lint was NOT run; nothing here proves the change is clean"
+        return 0
+    fi
 
     local _eslint_bin=""
     for _candidate in "$PROJECT_ROOT/node_modules/.bin/eslint" "$(command -v eslint 2>/dev/null)"; do
         [ -x "$_candidate" ] && { _eslint_bin="$_candidate"; break; }
     done
-    [ -n "$_eslint_bin" ] || return 0
+    if [ -z "$_eslint_bin" ]; then
+        warning "  [repo-lint] $story_id: no eslint binary in $PROJECT_ROOT or on PATH — lint was NOT run; nothing here proves the change is clean"
+        return 0
+    fi
 
     # Changed = modified/added tracked files plus untracked ones, which is the set that will be
     # staged — minus anything the ENGINE owns. Live next.gotransit.com carries untracked
@@ -5216,7 +4975,12 @@ run_repo_lint_verification() {
                   git -C "$PROJECT_ROOT" diff --cached --name-only --diff-filter=d 2>/dev/null
                   git -C "$PROJECT_ROOT" ls-files --others --exclude-standard 2>/dev/null; } \
                 | sort -u | engine_paths_filter)
-    [ -n "$_changed" ] || return 0
+    if [ -z "$_changed" ]; then
+        # Genuinely nothing to lint. Distinct from the two above: the check RAN and had no
+        # subject, rather than being unable to run.
+        log "  [repo-lint] $story_id: no changed files to lint"
+        return 0
+    fi
 
     # WHICH of the changed files does the hook actually send to this linter?
     #
@@ -5450,6 +5214,23 @@ run_tsc_verification() {
     # than the project's own, on every repo, for the life of this pipeline.
     _tsc_output=$(_run_project_verification "$PROJECT_ROOT" 2>&1) || _tsc_exit=$?
 
+    # NOT DECLARED IS NOT FAILED. _run_project_verification exits 2 when the project declares no
+    # typecheck command, and every non-zero exit used to become "TypeScript errors — fix them so
+    # tsc exits 0". There are none to fix: live 2026-08-18, mock-a's `npx tsc --noEmit` exited 0
+    # while the plugin's own verdict was "verification manifest declares no typecheck command".
+    # The writer spent its attempts hunting errors that did not exist, HealingBroken fired on the
+    # repeated diagnosis, and the analyst eventually said so outright. The sibling lane proves the
+    # remedy: mock-b's writer added the block and its verification returns pass.
+    #
+    # Refusing an undeclared check stays — an undeclared repo must never silently pass. Only what
+    # the writer is TOLD changes: declare the command, do not chase type errors.
+    if [ "$_tsc_exit" -eq 2 ]; then
+        warning "  [tsc-verify] $story_id: the project declares no typecheck command — the check could not run"
+        VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe orchestrator could not run this project'"'"'s type check because the verification manifest does not declare one. This is NOT a type error in your code — nothing was checked.\n\nDeclare the command in `.epam/verification.json` alongside the existing `test` entry, taking it from the project'"'"'s own manifest — read it and use whatever this project already declares — in this shape:\n\n```json\n"typecheck": { "command": "<the project'"'"'s own type-check command>" }\n```\n\nThe orchestrator reported:\n\n```\n%s\n```\n' \
+            "$_tsc_output")
+        return 1
+    fi
+
     if [ "$_tsc_exit" -ne 0 ]; then
         # Brownfield: a large existing repo can have pre-existing tsc errors in
         # files no story ever touches (live, 2026-07-22 — Redis/Stripe/OTel type
@@ -5495,7 +5276,7 @@ run_tsc_verification() {
 
         warning "  [tsc-verify] $story_id: TypeScript errors — feeding into retry loop"
         VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe orchestrator ran the project type check after your files were written and it failed (exit code %d). Fix the type errors so tsc exits 0.\n\n```\n%s\n```\n' \
-            "$_tsc_exit" "${_new_errors:0:4000}")
+            "$_tsc_exit" "$_new_errors")
         {
             echo ""
             echo "=== the project type check failed (exit $_tsc_exit) — new errors introduced by this story ==="
@@ -5632,18 +5413,17 @@ $(cat "$_cf")
 "
     done < <(echo "$_dep_ids_json" | jq -r '.[]?' 2>/dev/null)
 
-    local planning_prompt="You are a planning agent. Produce a concise, numbered execution plan for the coding agent that will implement the following story. Output ONLY a numbered step list — no prose, no code.
-
-Story: ${story_id} — ${title}
-
-## Output paths (EXACT — your plan MUST reference ONLY these paths for output steps, never invent alternatives)
-$(_classify_declared_paths "${declared_files_raw}")
-
-## Acceptance Criteria
-${ac}
-$([ -n "$plan_dep_contracts" ] && printf '\n## Dependency Contracts (ground-truth import paths and signatures — use these verbatim in read/import steps)\n%s\n' "$plan_dep_contracts" || true)
-$([ -n "${CROSS_CODELINE_CONTRACT:-}" ] && [ -f "${CROSS_CODELINE_CONTRACT}" ] && printf '\n## Cross-Codeline API Contract (upstream codeline exports — use these types and endpoints verbatim when integrating)\n%s\n' "$(cat "${CROSS_CODELINE_CONTRACT}")" || true)
-Produce 5-10 numbered implementation steps. Your output steps MUST use the exact paths listed under 'Output paths' above, and must respect which of them already exist: a file listed as ALREADY EXIST is modified, never created. Be specific about function signatures and test requirements."
+    _cp_vals=$(mktemp "${TMPDIR:-/tmp}/plan-producer-vals-XXXXXX.json")
+    jq -n \
+          --arg declared_paths "$(_classify_declared_paths "${declared_files_raw}")" \
+          --arg dependency_contracts "$([ -n "$plan_dep_contracts" ] && printf '\n## Dependency Contracts (ground-truth import paths and signatures — use these verbatim in read/import steps)\n%s\n' "$plan_dep_contracts" || true)" \
+          --arg cross_codeline_contract "$([ -n "${CROSS_CODELINE_CONTRACT:-}" ] && [ -f "${CROSS_CODELINE_CONTRACT}" ] && printf '\n## Cross-Codeline API Contract (upstream codeline exports — use these types and endpoints verbatim when integrating)\n%s\n' "$(cat "${CROSS_CODELINE_CONTRACT}")" || true)" \
+          --arg story_id "${story_id}" \
+          --arg title "${title}" \
+          --arg ac "${ac}" \
+          '{"__DECLARED_PATHS__":$declared_paths,"__DEPENDENCY_CONTRACTS__":$dependency_contracts,"__CROSS_CODELINE_CONTRACT__":$cross_codeline_contract,"__STORY_ID__":$story_id,"__TITLE__":$title,"__AC__":$ac}' > "$_cp_vals"
+    local planning_prompt="$(render_engine_prompt plan-producer "$_cp_vals")"
+    rm -f "$_cp_vals"
 
     local plan_result_file
     plan_result_file=$(mktemp /tmp/plan-${story_id}-XXXXXX.json)
@@ -5744,22 +5524,15 @@ $(cat "$_contract_file")
     local _orch_provider="${EPAM_ORCHESTRATION_PROVIDER:-}"
     [ -z "$_orch_provider" ] && { echo "$plan_text"; return; }
 
-    local review_prompt="You are reviewing an implementation PLAN (not code) for story ${story_id} before any code is written.
-
-Check: (1) does the plan reference any file path, import path, exported class/function/type name that CONTRADICTS the dependency contracts? (2) do the plan's write/create steps use the EXACT declared output paths — not invented alternatives?
-
-You have read-only tools available (list/search/read files, run read-only shell commands). If you are about to flag a mismatch based on something the plan claims about the filesystem or an installed package, VERIFY it with your tools first — do not assume. Your tool budget is small: check the ONE fact your verdict depends on, not the whole codebase.
-
-Respond with ONLY a JSON object, no markdown fences:
-{\"verdict\":\"ok\"} if the plan is consistent with both the contracts and the declared output paths, OR
-{\"verdict\":\"mismatch\",\"corrections\":\"<one paragraph telling the planning agent exactly what to fix, citing the real path from the contract or declared files list>\"}
-$([ -n "$_review_declared_files" ] && printf '\n## Declared Output Files (EXACT paths the plan MUST write to)\n%s\n' "$_review_declared_files" || true)
-
-## Plan
-${plan_text}
-
-## Dependency Contracts (ground truth)
-${dependency_contracts}"
+    _cp_vals=$(mktemp "${TMPDIR:-/tmp}/plan-reviewer-vals-XXXXXX.json")
+    jq -n \
+          --arg declared_output_files "$([ -n "$_review_declared_files" ] && printf '\n## Declared Output Files (EXACT paths the plan MUST write to)\n%s\n' "$_review_declared_files" || true)" \
+          --arg dependency_contracts "${dependency_contracts}" \
+          --arg plan_text "${plan_text}" \
+          --arg story_id "${story_id}" \
+          '{"__DECLARED_OUTPUT_FILES__":$declared_output_files,"__DEPENDENCY_CONTRACTS__":$dependency_contracts,"__PLAN_TEXT__":$plan_text,"__STORY_ID__":$story_id}' > "$_cp_vals"
+    local review_prompt="$(render_engine_prompt plan-reviewer "$_cp_vals")"
+    rm -f "$_cp_vals"
 
     # Tool access (HEAL-BLIND, 2026-07-31): this gate exists specifically to
     # catch a plan that CONTRADICTS reality, but until now had no way to check
@@ -5796,19 +5569,7 @@ ${dependency_contracts}"
     # naive '{.*"verdict".*}' grep). raw_decode correctly parses regardless of
     # formatting/whitespace.
     local review_json
-    review_json=$(echo "$review_output" | python3 -c "
-import sys, json
-text = sys.stdin.read()
-start = text.find('{')
-result = None
-if start != -1:
-    decoder = json.JSONDecoder()
-    try:
-        result, _ = decoder.raw_decode(text, start)
-    except (ValueError, json.JSONDecodeError):
-        result = None
-print(json.dumps(result) if isinstance(result, dict) and 'verdict' in result else '')
-" 2>/dev/null || echo "")
+    review_json=$(echo "$review_output" | python3 "$SCRIPT_DIR/lib/handlers/plan-review-json.py" 2>/dev/null || echo "")
     [ -z "$review_json" ] && { echo "$plan_text"; return; }
 
     local verdict corrections
@@ -5821,14 +5582,14 @@ print(json.dumps(result) if isinstance(result, dict) and 'verdict' in result els
     corrections=$(echo "$review_json" | jq -r '.corrections // ""' 2>/dev/null || echo "")
     warning "  PlanReview: mismatch detected for $story_id against dependency contracts — one corrective re-plan"
 
-    local corrective_prompt="You previously produced this plan for story ${story_id}:
-
-${plan_text}
-
-A review found it inconsistent with the real dependency contracts. Specific correction needed:
-${corrections}
-
-Produce the CORRECTED numbered execution plan only — no prose, no code, same format as before."
+    _cp_vals=$(mktemp "${TMPDIR:-/tmp}/plan-corrective-vals-XXXXXX.json")
+    jq -n \
+          --arg corrections "${corrections}" \
+          --arg plan_text "${plan_text}" \
+          --arg story_id "${story_id}" \
+          '{"__CORRECTIONS__":$corrections,"__PLAN_TEXT__":$plan_text,"__STORY_ID__":$story_id}' > "$_cp_vals"
+    local corrective_prompt="$(render_engine_prompt plan-corrective "$_cp_vals")"
+    rm -f "$_cp_vals"
 
     local corrected_plan
     corrected_plan=$(echo "$corrective_prompt" | \
@@ -5886,7 +5647,22 @@ classify_failure_class() {
     COORDINATOR_FAILURE_CLASS="unknown"
     COORDINATOR_ESCALATE="yes"
 
-    # Class A: environment crash — raw output is empty and exit code != 0
+    # Class A: environment crash — raw output is EMPTY and exit code != 0.
+    #
+    # ABSENT IS NOT EMPTY. This measured emptiness as `raw_size=0` with a default of 0, so a file
+    # that was never written — or an empty path, which is exactly what the caller passes when its
+    # fallbacks miss — scored identically to a file the CLI wrote nothing into. On 2026-08-18 no
+    # _result_raw.json existed for either story, so ten attempts were diagnosed "environment
+    # crash", the coordinator confirmed a healthy binary and key, and the real cause (a provider
+    # that did not follow its escalated model) was never considered. A conclusion drawn from
+    # absent evidence is worse than no conclusion: it sends the next step somewhere confident and
+    # wrong. Missing stays UNKNOWN, and says so.
+    if [ "$exit_code" -ne 0 ] && { [ -z "$raw_file" ] || [ ! -f "$raw_file" ]; }; then
+        COORDINATOR_FAILURE_CLASS="unknown"
+        COORDINATOR_ESCALATE="yes"
+        warning "  Coordinator[L1]: no raw output file to read (${raw_file:-<no path>}) — the attempt's output was never written, so the failure class is UNKNOWN, not diagnosed"
+        return 0
+    fi
     local raw_size=0
     [ -f "$raw_file" ] && raw_size=$(wc -c < "$raw_file" 2>/dev/null || echo 0)
     if [ "$raw_size" -eq 0 ] && [ "$exit_code" -ne 0 ]; then
@@ -5942,9 +5718,17 @@ classify_failure_class() {
         # silently contradicting and undoing the "READ BEFORE YOU WRITE"
         # directive already shown earlier in the SAME prompt.
         if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
-            COORDINATOR_PROMPT_AMENDMENT="CRITICAL: The previous attempt exhausted all available turns without creating the required deliverable. These files already exist — their real content is injected in ## Existing File Contents; do not spend turns re-reading them. Use Edit for a targeted, minimal change and act on it immediately — do not re-explore the codebase beyond what's already injected."
+            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/coordinator-amendment-vals-XXXXXX.json")
+            jq -n \
+                  '{}' > "$_cp_vals"
+            COORDINATOR_PROMPT_AMENDMENT="$(render_engine_prompt coordinator-amendment "$_cp_vals" turns_exhausted_files_exist)"
+            rm -f "$_cp_vals"
         else
-            COORDINATOR_PROMPT_AMENDMENT="CRITICAL: The previous attempt exhausted all available turns without creating the required deliverable. Your FIRST action MUST be to call WriteFile to the exact absolute path listed under 'Files to Create/Modify' — do NOT read files, do NOT plan, do NOT investigate. Write the required file IMMEDIATELY as your very first action."
+            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/coordinator-amendment-vals-XXXXXX.json")
+            jq -n \
+                  '{}' > "$_cp_vals"
+            COORDINATOR_PROMPT_AMENDMENT="$(render_engine_prompt coordinator-amendment "$_cp_vals" turns_exhausted_nothing_written)"
+            rm -f "$_cp_vals"
         fi
         log "  Coordinator[L1]: capability failure (max iterations) — escalation approved, write-first amendment injected"
         if [ -n "$story_id" ] && [ -n "${LOG_DIR:-}" ]; then
@@ -6032,8 +5816,11 @@ classify_failure_class() {
                     printf 'It has %s ACs. Model escalation alone has not resolved this — the story likely needs to be ' "$_ac_count"
                     printf 'decomposed into smaller children (≤8 ACs each) before the next run. '
                     printf 'OpenSpec/SpecKit should split this story at Step 0 in the next pipeline run.\n'
-                } >> "$_kb_file" 2>/dev/null || true
-                log "  Coordinator[L1]: cross-run KB entry written for $story_id (${_prior_cap_count} capability failures)"
+                } > /dev/null
+                # NOT PERSISTED. This wrote a "cross-run" KB entry that nothing ever cleared, so
+                # a conclusion drawn about one run's code was injected as current fact into every
+                # later run. Operator 2026-08-12: no lingering anything may skew a run.
+                log "  Coordinator[L1]: capability pattern noted for $story_id (${_prior_cap_count} failures) — this run only, not persisted"
             fi
             else
                 log "  Coordinator[L1]: cross-run KB synthesis disabled (EPAM_KB_CROSS_RUN_SYNTHESIS=0) — $story_id has ${_prior_cap_count} capability failures, not persisted to the KB"
@@ -6078,6 +5865,25 @@ max_effort() {
     local a="${1:-}" b="${2:-}" ra rb
     ra=$(effort_rank "$a"); rb=$(effort_rank "$b")
     if [ "$rb" -gt "$ra" ]; then echo "$b"; else echo "$a"; fi
+}
+
+# effort_is_higher <candidate> <current> — true when the PROJECT declares candidate above current.
+#
+# Ranked by effort_rank, which reads the declared effortLadder, so the four hand-written case
+# statements this replaces are gone and a project that declares a fourth level gets it honoured
+# instead of silently ranked mid.
+#
+# UNDECLARED NEVER WINS. effort_rank returns -1 for a level the project does not declare, so a
+# typo, a renamed level or a stale PRD value cannot raise or lower a story's budget by accident.
+# Note -1, not 0: the FIRST declared level ranks 0, and treating 0 as "unknown" would make every
+# upgrade off the lowest level impossible.
+effort_is_higher() {
+    local _new _cur
+    _new=$(effort_rank "${1:-}")
+    _cur=$(effort_rank "${2:-}")
+    [ "$_new" -ge 0 ] 2>/dev/null || return 1
+    [ "$_cur" -ge 0 ] 2>/dev/null || return 1
+    [ "$_new" -gt "$_cur" ]
 }
 
 # next_effort <current> — one notch up, saturating at high.
@@ -6400,6 +6206,34 @@ resolve_model_provider() {
     echo ""
 }
 
+# sync_provider_to_model
+#
+# MODEL AND PROVIDER ARE ONE DECISION. Several escalation arms re-resolve the provider after
+# changing the model; the invocation trusted that every arm did. On 2026-08-18 one did not, and
+# ten of twelve writer attempts asked the minimax provider for z-ai/glm-5.2:
+#
+#   minimax + MiniMax-M3    exit=0  413 bytes
+#   qwen    + z-ai/glm-5.2  exit=0  410 bytes
+#   minimax + z-ai/glm-5.2  exit=1  0 bytes   "All providers exhausted"
+#
+# Zero bytes and a non-zero exit read as an environment crash, so the coordinator spent the rest
+# of the story diagnosing a healthy binary and a healthy key. Both writer stories were already
+# correct on disk when the loop gave up.
+#
+# Resolving at the point of USE means no arm can forget, including one written later. It never
+# guesses: a model the map does not know leaves the provider exactly as it was.
+sync_provider_to_model() {
+    [ -n "${STORY_MODEL:-}" ] || return 0
+    local _p
+    _p=$(resolve_model_provider "${STORY_MODEL}")
+    [ -n "$_p" ] || return 0
+    if [ "$_p" != "${STORY_PROVIDER:-}" ]; then
+        log "  Provider[follows-model] -> $_p (was ${STORY_PROVIDER:-unset}; model is ${STORY_MODEL})"
+        STORY_PROVIDER="$_p"
+    fi
+    return 0
+}
+
 # assess_model_escalation <story_id> <raw_file> <result_json> <log_file>
 # Layer 2 (opt-in): LLM coordinator gate for Class B/C failures.
 # Sets COORDINATOR_ESCALATE and COORDINATOR_PROMPT_AMENDMENT.
@@ -6419,11 +6253,11 @@ assess_model_escalation() {
 
     # Read failure evidence (cap at 3000 chars to stay within gate model budget)
     local result_text=""
-    [ -f "$result_json" ] && result_text=$(jq -r '.result // ""' "$result_json" 2>/dev/null | head -c 1500 || echo "")
+    [ -f "$result_json" ] && result_text=$(jq -r '.result // ""' "$result_json" 2>/dev/null || echo "")
     local log_tail=""
-    [ -f "$log_file" ] && log_tail=$(tail -30 "$log_file" 2>/dev/null | head -c 1500 || echo "")
+    [ -f "$log_file" ] && log_tail=$(tail -30 "$log_file" 2>/dev/null || echo "")
     # Include specific test failure output when available (Quality class failures)
-    local test_failure_snippet="${VERIFICATION_FAILURE:0:1000}"
+    local test_failure_snippet="$VERIFICATION_FAILURE"
     # Cross-run memory: include prior failure pattern count for context
     local _failures_file="${LOG_DIR}/story-failures.jsonl"
     local prior_failure_summary=""
@@ -6440,40 +6274,32 @@ assess_model_escalation() {
     local current_model="${STORY_MODEL:-unknown}"
 
     local coordinator_prompt
-    coordinator_prompt=$(cat << COORD_PROMPT
-You are the inference ladder coordinator. A story implementation just failed. You must decide whether to escalate to a stronger model for the retry, and whether a targeted prompt amendment would help.
-
-## Story
-- ID: ${story_id}
-- Title: ${story_title}
-- Current model: ${current_model}
-- Proposed escalation model: ${target_model}
-- Failure class (preliminary): ${COORDINATOR_FAILURE_CLASS}
-
-## Failure Evidence (last attempt result)
-${result_text:-"(empty — agent produced no result)"}
-
-## Log Tail
-${log_tail:-"(no log available)"}
-
-## Test Failure Output (if tests ran)
-${test_failure_snippet:-"(no test failure output)"}
-
-## Cross-Run History
-${prior_failure_summary:-"(no prior failures recorded for this story)"}
-
-## Your Assessment
-Answer ONLY with a single-line JSON object (no markdown, no prose):
-{"escalate":"yes|no","failure_class":"env|capability|quality|unknown","prompt_amendment":"<targeted instruction to add to retry prompt, or empty string>","rationale":"<one sentence>"}
-
-Rules:
-- escalate "yes" ONLY when the failure is due to model capability limits (max iterations, context window, weak reasoning, missing knowledge)
-- escalate "no" when the failure is environmental (missing API key, binary crash, file permission) — a stronger model won't fix it
-- escalate "no" when the failure is a prompt misunderstanding — suggest a prompt_amendment instead
-- prompt_amendment should be a concrete instruction (e.g., "Do not import from node-fetch — use native global fetch only") not a vague suggestion
-- Keep rationale under 15 words
-COORD_PROMPT
-    )
+    # The four evidence blocks, through files: an agent result and a log tail are unbounded and
+    # argv is capped at ARG_MAX. Each carries the fallback the prompt used to hold inline.
+    local _ilc_result_file _ilc_log_file _ilc_tf_file _ilc_prior_file
+    _ilc_result_file=$(mktemp "${TMPDIR:-/tmp}/ilc-result-XXXXXX.txt")
+    _ilc_log_file=$(mktemp "${TMPDIR:-/tmp}/ilc-log-XXXXXX.txt")
+    _ilc_tf_file=$(mktemp "${TMPDIR:-/tmp}/ilc-tf-XXXXXX.txt")
+    _ilc_prior_file=$(mktemp "${TMPDIR:-/tmp}/ilc-prior-XXXXXX.txt")
+    printf '%s' "${result_text:-"(empty — agent produced no result)"}" > "$_ilc_result_file"
+    printf '%s' "${log_tail:-"(no log available)"}" > "$_ilc_log_file"
+    printf '%s' "${test_failure_snippet:-"(no test failure output)"}" > "$_ilc_tf_file"
+    printf '%s' "${prior_failure_summary:-"(no prior failures recorded for this story)"}" > "$_ilc_prior_file"
+    _cp_vals=$(mktemp "${TMPDIR:-/tmp}/inference-ladder-coordinator-vals-XXXXXX.json")
+    jq -n \
+          --rawfile result_text "$_ilc_result_file" \
+          --rawfile log_tail "$_ilc_log_file" \
+          --rawfile test_failure_snippet "$_ilc_tf_file" \
+          --rawfile prior_failure_summary "$_ilc_prior_file" \
+      --arg story_id "$story_id" \
+      --arg story_title "$story_title" \
+      --arg current_model "$current_model" \
+      --arg target_model "$target_model" \
+      --arg coordinator_failure_class "$coordinator_failure_class" \
+          '{"__RESULT_TEXT__":$result_text,"__LOG_TAIL__":$log_tail,"__TEST_FAILURE_SNIPPET__":$test_failure_snippet,"__PRIOR_FAILURE_SUMMARY__":$prior_failure_summary,"__STORY_ID__":$story_id,"__STORY_TITLE__":$story_title,"__CURRENT_MODEL__":$current_model,"__TARGET_MODEL__":$target_model,"__COORDINATOR_FAILURE_CLASS__":$coordinator_failure_class}' > "$_cp_vals"
+    coordinator_prompt="$(render_engine_prompt inference-ladder-coordinator "$_cp_vals")"
+    rm -f "$_cp_vals"
+    rm -f "$_ilc_result_file" "$_ilc_log_file" "$_ilc_tf_file" "$_ilc_prior_file"
 
     local coord_result_file
     coord_result_file=$(mktemp /tmp/coord-${story_id}-XXXXXX.json)
@@ -6534,7 +6360,11 @@ run_prd_change_reviewer() {
     # KB/PRD/profile writes are persistent and must be reviewed by the highest-quality
     # model available, not the cheap gate model. Use ESCALATION_MODEL_HIGH with high
     # reasoning so every persisted write is agentic-quality-reviewed.
-    local gate_model="${ESCALATION_MODEL_HIGH:-${ORCH_GATE_MODEL:-MiniMax-M3}}"
+    # THE REVIEWER'S OWN SEAM. This was a run-wide "high" model behind a run-wide pin behind a
+    # vendor literal — three sources, none of them the ladder, and the literal always answered so
+    # the ladder never had to.
+    local gate_model
+    gate_model=$(seam_model_or_fail "prd-change-reviewer" 2>/dev/null || printf '')
 
     # Select profile based on change type — KB entries use the stricter kb-change-reviewer
     local _profile_key="prd-change-reviewer"
@@ -6546,20 +6376,21 @@ run_prd_change_reviewer() {
     [ -z "$reviewer_profile" ] && reviewer_profile="You are a change reviewer. Validate the proposed change and emit {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}."
 
     local review_prompt
-    review_prompt="${reviewer_profile}
-
-STORY: ${story_id}
-CHANGE TYPE: ${change_type}
-
-BEFORE:
-${before_json:0:1000}
-
-AFTER:
-${after_json:0:1000}
-
-You have read-only tools available (list/search/read files, run read-only shell commands). Several of your rejection rules (introduces a technology this project does not already use; TC fact cannot be verified by reading source code) require checking a claim against the real manifests/config/source of THIS codeline — do not judge those from the before/after excerpts alone. Verify before rejecting on that basis; a wrong rejection blocks a correct change and is worse than a slower correct one. Your tool budget is small — check the ONE fact your verdict depends on, not the whole codebase.
-
-Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[\"<issue1>\"],\"reason\":\"<15 words max>\"}"
+    # RENDERED FROM THE TEMPLATE LAYER. Values go via a FILE, never argv: before/after carry
+    # whole PRD fragments, and a value past ARG_MAX exits 126 with an empty result — which is
+    # how the FailureAnalyst died silently earlier today.
+    local _rv_vals; _rv_vals=$(mktemp "${TMPDIR:-/tmp}/prd-review-vals-XXXXXX.json")
+    jq -n --arg profile "$reviewer_profile" --arg story "$story_id" --arg ct "$change_type" \
+          --rawfile before <(printf '%s' "$before_json") --rawfile after <(printf '%s' "$after_json") \
+          '{"__REVIEWER_PROFILE__":$profile,"__STORY_ID__":$story,"__CHANGE_TYPE__":$ct,"__BEFORE__":$before,"__AFTER__":$after}' \
+          > "$_rv_vals" 2>/dev/null
+    if ! review_prompt=$(render_engine_prompt prd-change-reviewer "$_rv_vals"); then
+        # >&2 REQUIRED: this function returns its verdict on STDOUT, so any log written to
+        # stdout is read as part of the verdict. There is a test for exactly this.
+        error "  [PRD-Reviewer] cannot render its prompt — refusing to review with no instructions" >&2
+        rm -f "$_rv_vals"; return 1
+    fi
+    rm -f "$_rv_vals"
 
     local review_raw=""
     # Full agent audit, 2026-07-31 (same class as HEAL-BLIND): several of this
@@ -6595,30 +6426,10 @@ Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[\"<issue1>\"],\"reason\":\"<15
     # disabled and returns pass, because it was never asked. That is a different state from
     # asking and getting nothing back.
     local verdict=""
-    verdict=$(echo "$review_raw" | python3 -c "
-import sys, json, re
-text = sys.stdin.read()
-try:
-    obj = json.loads(text.strip())
-    print(obj.get('verdict','fail'))
-    sys.exit(0)
-except Exception:
-    pass
-m = re.search(r'\"verdict\"\s*:\s*\"(pass|fail)\"', text)
-print(m.group(1) if m else 'fail')
-" 2>/dev/null || echo "fail")
+    verdict=$(echo "$review_raw" | python3 "$SCRIPT_DIR/lib/handlers/prd-change-verdict.py" 2>/dev/null || echo "fail")
 
     local issues=""
-    issues=$(echo "$review_raw" | python3 -c "
-import sys, json
-text = sys.stdin.read()
-try:
-    obj = json.loads(text.strip())
-    issues = obj.get('issues', [])
-    if issues: print('; '.join(str(i) for i in issues))
-except Exception:
-    pass
-" 2>/dev/null || echo "")
+    issues=$(echo "$review_raw" | python3 "$SCRIPT_DIR/lib/handlers/prd-change-issues.py" 2>/dev/null || echo "")
 
     # CRITICAL: this function's return value is captured via command substitution
     # ($(run_prd_change_reviewer ...)). warning()/log() write to stdout as well as
@@ -6664,36 +6475,52 @@ run_prd_change_summarizer() {
     fi
     # Summarizer rewrites rejected KB/PRD/profile writes — must use the same
     # high-quality model as the reviewer so the rewrite is meaningfully better.
-    local gate_model="${ESCALATION_MODEL_HIGH:-${ORCH_GATE_MODEL:-MiniMax-M3}}"
+    # THE REVIEWER'S OWN SEAM. This was a run-wide "high" model behind a run-wide pin behind a
+    # vendor literal — three sources, none of them the ladder, and the literal always answered so
+    # the ladder never had to.
+    local gate_model
+    gate_model=$(seam_model_or_fail "prd-change-reviewer" 2>/dev/null || printf '')
 
     # tool_creation rewrites a bash script, not a short prose rule — the
     # kb_entry/skill_note constraints (single line, under 200 chars, imperative
     # verb) would corrupt working code. Branch the prompt AND the post-processing
     # (no `tr -d '\n'` — a script needs its newlines) by change type.
-    local summarize_prompt output_cap
+    local summarize_prompt output_cap _sum_template
     if [ "$change_type" = "tool_creation" ]; then
-        summarize_prompt="You are a bash script reviewer-summarizer. A dynamic tool script for story ${story_id} was REJECTED by the change reviewer for these reasons:
-${issues:-no details}
-
-ORIGINAL SCRIPT:
-${rejected_text:0:2000}
-
-Rewrite the script to fix ONLY the issues listed above — a real bash bug (syntax error, subshell variable scoping, unquoted expansion, etc). Preserve the shebang line, the overall purpose, and every argument (\$1, \$2, ...) exactly as used. The script must remain idempotent (safe to run more than once).
-
-Emit ONLY the corrected script — no markdown fences, no commentary, no explanation."
+        _sum_template="prd-change-summarizer-tool"
         output_cap=4000
     else
-        summarize_prompt="You are a PRD change summarizer. A ${change_type} for story ${story_id} was REJECTED by the change reviewer for these reasons:
-${issues:-no details}
-
-ORIGINAL TEXT:
-${rejected_text:0:1000}
-
-Rewrite the text to fix ONLY the issues listed above, preserving the original actionable rule. Requirements: no reference to any specific story ID; start with an imperative verb (Use, Always, Never, Prefer, Avoid); under 200 characters; end on a complete sentence; no markdown, no headers, no commentary.
-
-Emit ONLY the corrected text — nothing else."
+        _sum_template="prd-change-summarizer-text"
         output_cap=400
     fi
+
+    # One renderer for both variants; the branch above chose WHICH prompt, not its text.
+    local _sum_vals; _sum_vals=$(mktemp "${TMPDIR:-/tmp}/prd-sum-vals-XXXXXX.json")
+    # Each variant gets exactly the values ITS template uses. The renderer rejects a value
+    # nobody uses, deliberately: an extra value means the caller believes it supplied something
+    # the prompt never mentions, which is the same defect as a missing one seen from the other
+    # side. The tool variant carries no change type — a bash script is a bash script.
+    if [ "$_sum_template" = "prd-change-summarizer-tool" ]; then
+        jq -n --arg story "$story_id" \
+              --rawfile issues <(printf '%s' "${issues:-no details}") \
+              --rawfile rejected <(printf '%s' "$rejected_text") \
+              '{"__STORY_ID__":$story,"__ISSUES__":$issues,"__REJECTED_TEXT__":$rejected}' \
+              > "$_sum_vals" 2>/dev/null
+    else
+        jq -n --arg story "$story_id" --arg ct "$change_type" \
+              --rawfile issues <(printf '%s' "${issues:-no details}") \
+              --rawfile rejected <(printf '%s' "$rejected_text") \
+              '{"__STORY_ID__":$story,"__CHANGE_TYPE__":$ct,"__ISSUES__":$issues,"__REJECTED_TEXT__":$rejected}' \
+              > "$_sum_vals" 2>/dev/null
+    fi
+    if ! summarize_prompt=$(render_engine_prompt "$_sum_template" "$_sum_vals"); then
+        # >&2 REQUIRED: the caller captures this function with command substitution
+        # (current=$(run_prd_change_summarizer ...)), so a log on stdout becomes the rewritten
+        # text. Same hazard as the reviewer above.
+        error "  [PRD-Summarizer] cannot render '$_sum_template' — refusing to rewrite with no instructions" >&2
+        rm -f "$_sum_vals"; return 1
+    fi
+    rm -f "$_sum_vals"
 
     local summarized=""
     summarized=$(echo "$summarize_prompt" | \
@@ -6733,12 +6560,28 @@ Emit ONLY the corrected text — nothing else."
 # existing rule, is the underlying lesson actually sound) are out of scope
 # here and still need a real reviewer, so this only short-circuits the
 # specific failure mode that was observed wasting cost.
+# The declared skill-note length limit. One source (config/self-heal.json), read by the checker
+# here and handed to the failure analyst so it writes within it in the first place.
+_skill_note_max_chars() {
+    local _cfg="${AUTOMATION_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}/config/self-heal.json"
+    local _v=""
+    [ -f "$_cfg" ] && _v=$(jq -r '.skillNote.maxChars // empty' "$_cfg" 2>/dev/null)
+    case "$_v" in (''|*[!0-9]*) 
+        echo "[skill-note] config/self-heal.json declares no numeric skillNote.maxChars — refusing to guess a limit" >&2
+        return 1 ;;
+    esac
+    printf '%s' "$_v"
+}
+
 _skill_note_format_ok() {
     local note="$1"
     local story_id="$2"
     local existing_profile_text="${3:-}"
     [ -z "$note" ] && return 1
-    [ "${#note}" -le 200 ] || return 1
+    # THE DECLARED LIMIT, NOT A NUMBER WRITTEN HERE. See config/self-heal.json: the producer is
+    # told the same value, so a note no longer has to be rejected and rewritten to discover it.
+    local _max; _max=$(_skill_note_max_chars)
+    [ "${#note}" -le "$_max" ] || return 1
     echo "$note" | grep -Eiq "^(${SKILL_NOTE_IMPERATIVE_OPENERS})\\b" || return 1
     if [ -n "$story_id" ] && echo "$note" | grep -qi "$story_id"; then
         return 1
@@ -6904,8 +6747,20 @@ run_diagnosis_groundedness_check() {
     [ -f "$_dgc_script" ] || return 0
 
     local _dgc_input
-    _dgc_input=$(jq -n --arg diag "$diagnosis" --arg log "${VERIFICATION_FAILURE:0:6000}" \
-        '{diagnosis: $diag, log_excerpt: $log}' 2>/dev/null)
+    # --rawfile, not --arg: VERIFICATION_FAILURE carries a whole suite dump since the input
+    # caps were removed, and argv tops out at ARG_MAX. With --arg, jq exited 126 and the
+    # empty result was read as "nothing to diagnose" one line below — a gate that fails OPEN
+    # precisely when the evidence is largest.
+    local _dgc_dir; _dgc_dir=$(mktemp -d "${TMPDIR:-/tmp}/dgc-XXXXXX")
+    printf '%s' "${VERIFICATION_FAILURE:-}" > "$_dgc_dir/log"
+    local _dgc_err="$_dgc_dir/err"
+    if ! _dgc_input=$(jq -n --arg diag "$diagnosis" --rawfile log "$_dgc_dir/log" \
+        '{diagnosis: $diag, log_excerpt: $log}' 2>"$_dgc_err"); then
+        warning "  [DiagnosisGate] could not build input (jq failed): $(cat "$_dgc_err" 2>/dev/null)"
+        rm -rf "$_dgc_dir"
+        return 0
+    fi
+    rm -rf "$_dgc_dir"
     [ -z "$_dgc_input" ] && return 0
 
     local _dgc_result
@@ -6955,6 +6810,16 @@ run_failure_analyst() {
     local output_file="${2:-/dev/null}"
     local retry_num="${3:-0}"
 
+    # WHICH SEAM THIS IS — declared ONCE, and it must match a key in the profiles registry or the
+    # ladder resolves no tier and the agent silently never escalates.
+    #
+    # Live defect, same day it was written: two call sites in this function passed
+    # "failure-analyst", which the registry does not contain. _agent_ladder_tier returned empty,
+    # agent_ladder_model handed back the current model unchanged, and the analyst's ladder — the
+    # whole point of the change — did nothing. The harness that "verified" it passed the real
+    # archetype name, so it never saw what production actually sent.
+    local _ANALYST_SEAM="impl-failure-analyst"
+
     # Only analyze test-suite failures; missing-deliverable failures lack useful output
     [ -z "${VERIFICATION_FAILURE:-}" ] && return 0
 
@@ -6997,7 +6862,7 @@ run_failure_analyst() {
     if [ -f "$profiles_file" ]; then
         # profiles.json is flat {role: "prompt string"} — extract [Self-Heal] lines only
         skill_addendum=$(jq -r --arg role "$story_role" '.[$role] // ""' "$profiles_file" 2>/dev/null | \
-            grep '\[Self-Heal\]' | head -c 1500 || echo "")
+            grep '\[Self-Heal\]' || echo "")
     fi
 
     # Load failure-analyst profile from profiles.json (role-level instructions)
@@ -7083,23 +6948,73 @@ $(cat "$_fa_vendor_contract")
     # or \$1 inside a diff or a log is inserted literally instead of being read as a
     # replacement pattern.
     local _analyst_values _analyst_values_err
-    _analyst_values=$(mktemp /tmp/analyst-values-XXXXXX.json)
+    _analyst_values=$(mktemp "${TMPDIR:-/tmp}/analyst-values-XXXXXX.json")
     _analyst_values_err="${_analyst_values}.err"
-    jq -n \
-        --arg profile "$analyst_profile" \
+
+    # VIA --rawfile, NEVER argv.
+    #
+    # These values used to be passed with `jq --arg`, which puts every byte on the command
+    # line. ARG_MAX is 2 MiB; a real suite failure dump exceeds it, so jq exited 126
+    # ("Argument list too long"), the redirect wrote a 0-byte file, and `2>/dev/null` threw
+    # the reason away. prompt-library then reported only "Unexpected end of JSON input" and
+    # the analyst died — live, run 20260815T195931Z, on every retry of AMSD-2041.
+    #
+    # The caps that used to hide this (VERIFICATION_FAILURE:0:1000 and friends) were removed
+    # deliberately: no agent input is cut mid-meaning. So the transport has to carry the
+    # whole thing. --rawfile reads each value from a file and never touches argv.
+    local _av_dir; _av_dir=$(mktemp -d "${TMPDIR:-/tmp}/analyst-args-XXXXXX")
+    printf '%s' "${analyst_profile:-}"                  > "$_av_dir/profile"
+    printf '%s' "${story_acs:-}"                        > "$_av_dir/acs"
+    printf '%s' "${skill_addendum:-}"                   > "$_av_dir/addendum"
+    printf '%s' "${dependency_contracts:-}"             > "$_av_dir/contracts"
+    printf '%s' "${VERIFICATION_FAILURE:-}"             > "$_av_dir/vf"
+    _attempt_change_summary "$story_id"                 > "$_av_dir/changes" 2>/dev/null || : > "$_av_dir/changes"
+
+    # THE TEMPLATE DECLARES __MANIFEST_FILE__ AND NOTHING SUPPLIED IT.
+    #
+    # Live 2026-08-18: the analyst could not build its prompt on any of the twelve writer attempts
+    # — "missing values for: __MANIFEST_FILE__" — so the one component whose job is to diagnose a
+    # failing writer was blind for the whole story, on both lanes, in the run where it was needed
+    # most. The value is the codeline's manifest name, read from the project's own dependency
+    # declaration rather than named here, so a project on another stack answers for itself.
+    local _analyst_manifest_file=""
+    if [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] && [ -f "${EPAM_PROJECT_CONFIG_DIR}/dependency-check.json" ]; then
+        _analyst_manifest_file=$(jq -r '.manifestFile // ""' "${EPAM_PROJECT_CONFIG_DIR}/dependency-check.json" 2>/dev/null || echo "")
+    fi
+    [ -n "$_analyst_manifest_file" ] || _analyst_manifest_file="the codeline's dependency manifest"
+
+    # The same declaration the checker enforces (config/self-heal.json), so the analyst writes
+    # within the limit rather than discovering it as a rejection.
+    local _analyst_skill_note_max; _analyst_skill_note_max=$(_skill_note_max_chars) || return 1
+
+    if ! jq -n \
+        --rawfile profile "$_av_dir/profile" \
         --arg story_id "$story_id" \
         --arg story_role "$story_role" \
-        --arg story_acs "$story_acs" \
-        --arg skill_addendum "$skill_addendum" \
-        --arg dependency_contracts "$dependency_contracts" \
-        --arg verification_failure "${VERIFICATION_FAILURE:-}" \
+        --rawfile story_acs "$_av_dir/acs" \
+        --rawfile skill_addendum "$_av_dir/addendum" \
+        --rawfile dependency_contracts "$_av_dir/contracts" \
+        --rawfile verification_failure "$_av_dir/vf" \
+        --rawfile attempt_changes "$_av_dir/changes" \
+        --arg manifest_file "$_analyst_manifest_file" \
+        --arg skill_note_max "$_analyst_skill_note_max" \
         '{"__ANALYST_PROFILE__":$profile,
+          "__MANIFEST_FILE__":$manifest_file,
+          "__SKILL_NOTE_MAX__":$skill_note_max,
           "__STORY_ID__":$story_id,
           "__STORY_ROLE__":$story_role,
           "__STORY_ACS__":$story_acs,
           "__SKILL_ADDENDUM__":$skill_addendum,
           "__DEPENDENCY_CONTRACTS__":$dependency_contracts,
-          "__VERIFICATION_FAILURE__":$verification_failure}' > "$_analyst_values" 2>/dev/null
+          "__VERIFICATION_FAILURE__":$verification_failure,
+          "__ATTEMPT_CHANGES__":$attempt_changes}' > "$_analyst_values" 2>"$_analyst_values_err"; then
+        # NOT SILENT. An unbuildable values file is a defect to report, not an empty file to
+        # hand downstream so it can fail with a parse error that names nothing.
+        error "  [FailureAnalyst] cannot BUILD values file (jq failed): $(cat "$_analyst_values_err" 2>/dev/null)"
+        rm -rf "$_av_dir"; rm -f "$_analyst_values" "$_analyst_values_err"
+        return 1
+    fi
+    rm -rf "$_av_dir"
 
     if ! analyst_prompt=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/prompt-library.js" \
             render failure-analyst "${EPAM_PROJECT_CONFIG_DIR:-}" "$_analyst_values" 2>"$_analyst_values_err"); then
@@ -7110,6 +7025,9 @@ $(cat "$_fa_vendor_contract")
     rm -f "$_analyst_values" "$_analyst_values_err"
 
     local analyst_raw="" analyst_json="" _analyst_call_ok="false"
+    # Which attempt the unusable-answer branch already recorded a rung for, so the call-failure
+    # branch below does not record a second one for the same failure.
+    local _analyst_stepped_attempt=""
     local _analyst_max_attempts=3 _analyst_attempt=1
     local _analyst_json_result
     _analyst_json_result=$(mktemp /tmp/analyst-result-XXXXXX.json)
@@ -7148,30 +7066,7 @@ $(cat "$_fa_vendor_contract")
             _analyst_call_ok="true"
 
             # Extract first valid JSON object (handles nested structures via Python)
-            analyst_json=$(echo "$analyst_raw" | python3 -c "
-import sys, json
-text = sys.stdin.read()
-try:
-    obj = json.loads(text.strip())
-    print(json.dumps(obj))
-    sys.exit(0)
-except Exception:
-    pass
-depth = 0; start = -1
-for i, c in enumerate(text):
-    if c == '{':
-        if depth == 0: start = i
-        depth += 1
-    elif c == '}':
-        depth -= 1
-        if depth == 0 and start >= 0:
-            try:
-                obj = json.loads(text[start:i+1])
-                print(json.dumps(obj))
-                sys.exit(0)
-            except Exception:
-                pass
-" 2>/dev/null || echo "")
+            analyst_json=$(echo "$analyst_raw" | python3 "$SCRIPT_DIR/lib/handlers/failure-analyst-json.py" 2>/dev/null || echo "")
 
             if [ -n "$analyst_json" ] && echo "$analyst_json" | jq empty 2>/dev/null; then
                 break
@@ -7189,6 +7084,27 @@ for i, c in enumerate(text):
             local _analyst_snippet
             _analyst_snippet=$(printf '%s' "${analyst_raw:-}" | tr -d '\r' | tr '\n' ' ')
             if [ "$_analyst_attempt" -lt "$_analyst_max_attempts" ]; then
+                # AN ANSWER THIS UNUSABLE IS EVIDENCE ABOUT THE MODEL. Re-asking the same one buys
+                # a copy of the same non-answer — the reasoning the story ladder already applies,
+                # which gate agents had no way to reach. The analyst now climbs the ladder its own
+                # archetype declares; lib/agent-ladder.sh explains why nothing here names a model.
+                agent_ladder_record_failure "$_ANALYST_SEAM" "$story_id"
+                # ONE RUNG PER FAILED ATTEMPT. The call-failure block further down escalates on
+                # exactly the condition this branch guarantees -- analyst_json is set to "" three
+                # lines above -- so both fired on every unusable answer and the analyst climbed
+                # two rungs for one failure, exhausting its ladder in half the attempts it was
+                # given. Saying which attempt already stepped is what keeps them exclusive; the
+                # other block is still needed on its own path, where the CALL failed and this
+                # branch never runs.
+                _analyst_stepped_attempt="$_analyst_attempt"
+                local _analyst_next
+                _analyst_next=$(agent_ladder_model "$_ANALYST_SEAM" "$story_id" "${gate_model:-}")
+                if [ -n "$_analyst_next" ] && [ "$_analyst_next" != "${gate_model:-}" ]; then
+                    warning "  [FailureAnalyst] escalating the ANALYST: ${gate_model:-unknown} → ${_analyst_next} (its answer was unusable, so the next attempt asks a different model)"
+                    gate_model="$_analyst_next"
+                elif agent_ladder_exhausted "$_ANALYST_SEAM" "$story_id" "${gate_model:-}"; then
+                    warning "  [FailureAnalyst] the analyst is at the top of its declared ladder (${gate_model:-unknown}) — retrying the same model, which is the last one available to it"
+                fi
                 if [ -z "$(printf '%s' "${analyst_raw:-}" | tr -d '[:space:]')" ]; then
                     warning "  [FailureAnalyst] Analyst returned an EMPTY response (0 bytes) from ${gate_model:-unknown} — retrying gate call (attempt $((_analyst_attempt + 1))/${_analyst_max_attempts})"
                 else
@@ -7219,16 +7135,24 @@ for i, c in enumerate(text):
         # The ANALYST's model moves; the writer's does not. The writer is not what failed, and
         # spending the story's escalation budget on a diagnostic problem is the category error
         # that HealingBroken already makes.
-        if [ -z "$analyst_json" ] && [ "$_analyst_attempt" -lt "$_analyst_max_attempts" ]; then
-            local _analyst_tier _next_gate_model
-            _analyst_tier=$(jq -r '.profiles["impl-failure-analyst"].ladder // "high"' \
-                "${AGENT_PROFILES_REGISTRY:-$(dirname "$SCRIPT_DIR")/agents/invocation-profiles.json}" 2>/dev/null || echo "high")
-            _next_gate_model=$(get_model_ladder_step "$gate_model" "$_analyst_tier" 2>/dev/null || echo "")
-            if [ -n "$_next_gate_model" ]; then
-                warning "  [FailureAnalyst] escalating analyst model '${gate_model}' → '${_next_gate_model}' (tier=${_analyst_tier}) — the previous rung produced nothing usable"
+        # THE SHARED HANDLER, ONCE. This block used to re-implement the escalation that
+        # lib/agent-ladder.sh already performs a few lines above — reading the tier itself with the
+        # agent's name and a literal tier as the fallback, both spelled out twice. Two copies of an
+        # escalation is one defect waiting: they drift, and the one that runs is whichever the
+        # control flow reaches first.
+        #
+        # agent_ladder_model resolves the tier from the agent's ARCHETYPE through the seam, so no
+        # agent name and no tier name is needed here at all.
+        if [ -z "$analyst_json" ] && [ "$_analyst_attempt" -lt "$_analyst_max_attempts" ] \
+           && [ "${_analyst_stepped_attempt:-}" != "$_analyst_attempt" ]; then
+            local _next_gate_model
+            agent_ladder_record_failure "$_ANALYST_SEAM" "$story_id"
+            _next_gate_model=$(agent_ladder_model "$_ANALYST_SEAM" "$story_id" "${gate_model:-}")
+            if [ -n "$_next_gate_model" ] && [ "$_next_gate_model" != "${gate_model:-}" ]; then
+                warning "  [FailureAnalyst] escalating analyst model '${gate_model}' → '${_next_gate_model}' — the previous rung produced nothing usable"
                 gate_model="$_next_gate_model"
             else
-                warning "  [FailureAnalyst] analyst ladder exhausted at '${gate_model}' (tier=${_analyst_tier}) — retrying the same rung"
+                warning "  [FailureAnalyst] analyst ladder exhausted at '${gate_model}' — retrying the same rung"
             fi
         fi
         _analyst_attempt=$((_analyst_attempt + 1))
@@ -7508,17 +7432,16 @@ PYEOF
                             # the same store the kb target uses and that every implementation
                             # prompt already reads. Duplicate suppression comes free: the file
                             # is checked before appending.
-                            local _skill_kb_dir _skill_kb_file
-                            _skill_kb_dir="$(dirname "$SCRIPT_DIR")/agents"
-                            _skill_kb_file=$(_kb_file_for_story "$story_id" "$_skill_kb_dir")
-                            if [ -f "$_skill_kb_file" ] && grep -qF -- "$REVIEWER_RETRY_TEXT" "$_skill_kb_file" 2>/dev/null; then
-                                log "  [FailureAnalyst] Skill note already in $(basename "$_skill_kb_file") — not appending again"
-                            else
-                                ( flock -w 10 201 || { error "  [FailureAnalyst] Could not acquire lock on $_skill_kb_file"; return 1; }
-                                  printf '\n- [%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$REVIEWER_RETRY_TEXT" >> "$_skill_kb_file"
-                                ) 201>"${_skill_kb_file}.lock"
-                                log "  [FailureAnalyst] Skill note appended to $(basename "$_skill_kb_file") — survives into later runs"
-                            fi
+                            # NO CROSS-RUN WRITE. A skill note used to be APPENDED to
+                            # agents/KB-<codeline>.md and logged as "survives into later runs".
+                            # Nothing cleared it, so guidance derived from one run's code was
+                            # injected into every later run's prompts as current fact. Operator,
+                            # 2026-08-12: "there can be no lingering anything to skew runs. That
+                            # is strictly forbidden."
+                            #
+                            # The note still reaches THIS run's retry through the in-run
+                            # amendment above; only the persistence is removed.
+                            log "  [FailureAnalyst] Skill note applied to this run only — not persisted across runs"
                             _profile_updated="true"
                             fi
                             fi
@@ -7602,12 +7525,13 @@ ${_kb_target_role_profile}"
                             # outright. A future reviewer/human pass can still
                             # clean up the wording; nothing is lost meanwhile.
                             warning "  [FailureAnalyst] KB entry rejected by reviewer after 3 attempts — persisting raw fallback (unreviewed) instead of discarding"
-                            printf '\n- [%s] [unreviewed-fallback] %s\n' "$kb_ts" "$short_note" >> "$kb_file" 2>/dev/null || true
+                            # Not persisted across runs — see the note on the skill-note path above.
                             _profile_updated="true"
                         else
                             # Compact 2-line format: timestamp + rule only (no verbose headers)
-                            printf '\n- [%s] %s\n' "$kb_ts" "$REVIEWER_RETRY_TEXT" >> "$kb_file" 2>/dev/null || true
-                            log "  [FailureAnalyst] KB entry appended to $(basename "$kb_file") (${#REVIEWER_RETRY_TEXT} chars)"
+                            # Not persisted across runs. The entry still reaches THIS run's retry
+                            # through the in-run amendment; only the cross-run write is removed.
+                            log "  [FailureAnalyst] KB entry applied to this run only (${#REVIEWER_RETRY_TEXT} chars) — not persisted"
                             _profile_updated="true"
                         fi
                         fi
@@ -7961,11 +7885,15 @@ resolve_escalation() {
 
     local _saved_amendment="${COORDINATOR_PROMPT_AMENDMENT:-}"
     local _saved_max_retries="$MAX_RETRIES"
-    COORDINATOR_PROMPT_AMENDMENT="
-## URGENT: Escalated defect from sibling story ${escalating_story_id}
-${diagnosis}
-Required fix: ${required_fix}
-Apply ONLY this fix to ${target_file}. Do not make any other changes to this file or any other file — this is a narrow, targeted patch, not a full re-implementation."
+    _cp_vals=$(mktemp "${TMPDIR:-/tmp}/coordinator-amendment-vals-XXXXXX.json")
+    jq -n \
+          --arg escalating_story_id "${escalating_story_id}" \
+          --arg required_fix "${required_fix}" \
+          --arg target_file "${target_file}" \
+          --arg diagnosis "${diagnosis}" \
+          '{"__ESCALATING_STORY_ID__":$escalating_story_id,"__REQUIRED_FIX__":$required_fix,"__TARGET_FILE__":$target_file,"__DIAGNOSIS__":$diagnosis}' > "$_cp_vals"
+    COORDINATOR_PROMPT_AMENDMENT="$(render_engine_prompt coordinator-amendment "$_cp_vals" sibling_escalation)"
+    rm -f "$_cp_vals"
     export COORDINATOR_PROMPT_AMENDMENT
     MAX_RETRIES="${ESCALATION_FIX_MAX_RETRIES:-1}"
 
@@ -8079,17 +8007,18 @@ check_syntax_class_error() {
                     #
                     # Retired rather than locked: the roster is set after the mint, and this
                     # note belongs where it survives the per-run restore.
-                    local _sx_kb_dir _sx_kb_file
-                    _sx_kb_dir="$(dirname "$SCRIPT_DIR")/agents"
-                    _sx_kb_file=$(_kb_file_for_story "$story_id" "$_sx_kb_dir")
-                    if [ -f "$_sx_kb_file" ] && grep -qF -- "$_syntax_note_final" "$_sx_kb_file" 2>/dev/null; then
-                        log "  [SyntaxClassEscalation] Skill note already in $(basename "$_sx_kb_file") — not appending again"
-                    else
-                        ( flock -w 10 202 || { warning "  [SyntaxClassEscalation] Could not acquire lock on $_sx_kb_file"; exit 0; }
-                          printf '\n- [%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$_syntax_note_final" >> "$_sx_kb_file"
-                        ) 202>"${_sx_kb_file}.lock"
-                        log "  [SyntaxClassEscalation] Persisted targeted-fix-not-full-rewrite note to $(basename "$_sx_kb_file")"
-                    fi
+                    # CROSS-RUN WRITE REMOVED (2026-08-12). This was the FIFTH and last one,
+                    # and it survived the first sweep because that sweep grepped for the two
+                    # variable names already known ($kb_file, $_skill_kb_file) instead of the
+                    # pattern. Scoped check, general claim — the same mistake the KB itself
+                    # kept teaching agents.
+                    #
+                    # Operator: "agent kb files = remove all after every run - there can be no
+                    # lingering anything to skew runs. That is strictly forbidden."
+                    #
+                    # The note still reaches THIS run's agents through the profile skill notes.
+                    # Nothing carries it into the next one.
+                    log "  [SyntaxClassEscalation] Skill note applied to this run only — not persisted across runs"
                 else
                     log "  [SyntaxClassEscalation] Skill note rejected by reviewer — not persisting"
                 fi
@@ -8354,11 +8283,7 @@ compute_retry_extension_evidence() {
         groundedness_sample_count=$(jq -r --arg s "$story_id" 'select(.storyId == $s and .skipped == false)' "$grounded_log" 2>/dev/null | jq -s 'length' 2>/dev/null || echo 0)
         if [ "${groundedness_sample_count:-0}" -gt 0 ] 2>/dev/null; then
             avg_groundedness=$(jq -r --arg s "$story_id" 'select(.storyId == $s and .skipped == false) | .score' "$grounded_log" 2>/dev/null | \
-                python3 -c "
-import sys
-scores = [float(l) for l in sys.stdin if l.strip()]
-print(sum(scores)/len(scores) if scores else 0)
-" 2>/dev/null || echo 0)
+                python3 "$SCRIPT_DIR/lib/handlers/compute-retry-extension-evidence.py" 2>/dev/null || echo 0)
         fi
     fi
 
@@ -8470,18 +8395,17 @@ run_retry_extension_coordinator() {
     ac_count=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | ((.acceptanceCriteria // []) | length)' "$prd_target" 2>/dev/null || echo 0)
 
     local coord_prompt
-    coord_prompt="${coordinator_profile}
-
-STORY: ${story_id}
-Current retry_count: ${retry_count:-unknown} / MAX_RETRIES: ${MAX_RETRIES:-unknown}
-Acceptance criteria count (scope proxy): ${ac_count}
-
-EVIDENCE (pre-computed, treat as ground truth -- do not re-derive):
-${evidence}
-
-Every self-heal attempt so far produced a DISTINCT diagnosis (no repeats), and no HEALING_BROKEN sentinel has fired -- this story is showing real, converging progress, not a stuck loop. Decide if extending its retry budget is pragmatic.
-
-Output ONLY: {\"extend\":true|false,\"extraRetries\":<1-3>,\"reason\":\"<one sentence>\"}"
+    _cp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-extension-coordinator-vals-XXXXXX.json")
+    jq -n \
+          --arg retry_count "${retry_count:-unknown}" \
+          --arg max_retries "${MAX_RETRIES:-unknown}" \
+          --arg coordinator_profile "${coordinator_profile}" \
+          --arg story_id "${story_id}" \
+          --arg ac_count "${ac_count}" \
+          --arg evidence "${evidence}" \
+          '{"__RETRY_COUNT__":$retry_count,"__MAX_RETRIES__":$max_retries,"__COORDINATOR_PROFILE__":$coordinator_profile,"__STORY_ID__":$story_id,"__AC_COUNT__":$ac_count,"__EVIDENCE__":$evidence}' > "$_cp_vals"
+    coord_prompt="$(render_engine_prompt retry-extension-coordinator "$_cp_vals")"
+    rm -f "$_cp_vals"
 
     local coord_raw=""
     coord_raw=$(echo "$coord_prompt" | \
@@ -8494,24 +8418,7 @@ Output ONLY: {\"extend\":true|false,\"extraRetries\":<1-3>,\"reason\":\"<one sen
 
     local extend="false" extra_retries=0 reason=""
     local parsed
-    parsed=$(echo "$coord_raw" | python3 -c "
-import sys, json, re
-text = sys.stdin.read()
-try:
-    obj = json.loads(text.strip())
-    print(json.dumps(obj))
-    sys.exit(0)
-except Exception:
-    pass
-m = re.search(r'\{[^{}]*\"extend\"[^{}]*\}', text, re.DOTALL)
-if m:
-    try:
-        print(json.dumps(json.loads(m.group(0))))
-        sys.exit(0)
-    except Exception:
-        pass
-print(json.dumps({\"extend\": False, \"extraRetries\": 0, \"reason\": \"unparseable\"}))
-" 2>/dev/null || echo '{"extend":false,"extraRetries":0,"reason":"unparseable"}')
+    parsed=$(echo "$coord_raw" | python3 "$SCRIPT_DIR/lib/handlers/retry-extension-parsed.py" 2>/dev/null || echo '{"extend":false,"extraRetries":0,"reason":"unparseable"}')
 
     extend=$(echo "$parsed" | jq -r '.extend // false' 2>/dev/null || echo "false")
     extra_retries=$(echo "$parsed" | jq -r '.extraRetries // 0' 2>/dev/null || echo 0)
@@ -8974,21 +8881,7 @@ implement_story() {
                             # against upward escalation under confirmed healing failure.
                             local _healed_count=0
                             if [ -f "${LOG_DIR}/healing-events.jsonl" ]; then
-                                _healed_count=$(python3 -c "
-import json
-count = 0
-try:
-    for line in open('${LOG_DIR}/healing-events.jsonl'):
-        try:
-            e = json.loads(line)
-            if e.get('story_id') == '$story_id':
-                count += 1
-        except Exception:
-            pass
-except Exception:
-    pass
-print(count)
-" 2>/dev/null || echo 0)
+                                _healed_count=$(python3 "$SCRIPT_DIR/lib/handlers/healing-event-count.py" "${LOG_DIR}/healing-events.jsonl" "$story_id" 2>/dev/null || echo 0)
                             fi
                             local _high_step=""
                             if [ "${_healed_count:-0}" -ge 1 ] && [ "$_skip_ladder" = "true" ]; then
@@ -9080,21 +8973,7 @@ print(count)
                                 # at ceiling and self-healing is confirmed broken, force HIGH tier.
                                 local _healed_count_r3=0
                                 if [ -f "${LOG_DIR}/healing-events.jsonl" ]; then
-                                    _healed_count_r3=$(python3 -c "
-import json
-count = 0
-try:
-    for line in open('${LOG_DIR}/healing-events.jsonl'):
-        try:
-            e = json.loads(line)
-            if e.get('story_id') == '$story_id':
-                count += 1
-        except Exception:
-            pass
-except Exception:
-    pass
-print(count)
-" 2>/dev/null || echo 0)
+                                    _healed_count_r3=$(python3 "$SCRIPT_DIR/lib/handlers/healing-event-count.py" "${LOG_DIR}/healing-events.jsonl" "$story_id" 2>/dev/null || echo 0)
                                 fi
                                 local _high_step_r3=""
                                 if [ "${_healed_count_r3:-0}" -ge 1 ] && [ "$_skip_ladder" = "true" ] && [ "$_ladder_tier_r3" != "high" ]; then
@@ -9196,31 +9075,95 @@ print(count)
         next_kb_id=$(get_next_kb_id)
         local prompt
         if [ "${STORY_GENERATOR_MODE:-}" = "true" ]; then
-            prompt="$(build_generator_prompt "$story_id")
-$(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")"
+            _impl_section="$(build_generator_prompt "$story_id")" || {
+                error "  [prompt] build_generator_prompt REFUSED for $story_id — not invoking the writer"
+                return 1
+            }
+            _kb_section="$(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")" || {
+                error "  [prompt] build_kb_prompt_section REFUSED for $story_id — not invoking the writer"
+                return 1
+            }
+            # Same shape, same reason as the implementation branch below: a joined assignment takes
+            # its status from the LAST substitution, so a refusal in the first is lost. This branch
+            # has no refusal today, which is exactly when the hazard is cheap to remove.
+            prompt="$_impl_section
+$_kb_section"
         else
-            prompt="$(build_implementation_prompt "$story_id")
-$(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")"
+            _impl_section="$(build_implementation_prompt "$story_id")" || {
+                error "  [prompt] build_implementation_prompt REFUSED for $story_id — not invoking the writer"
+                return 1
+            }
+            _kb_section="$(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")" || {
+                error "  [prompt] build_kb_prompt_section REFUSED for $story_id — not invoking the writer"
+                return 1
+            }
+            # SEPARATE ASSIGNMENTS, DELIBERATELY. Joined as
+            #   prompt="$(build_implementation_prompt ...)\n$(build_kb_prompt_section ...)"
+            # the assignment takes its status from the LAST substitution, so every `return 1` in
+            # the builder was swallowed and `set -e` never fired. The writer was then invoked with
+            # the empty first line plus the KB section — no story, no criteria, no plan — and
+            # produced something confident that got committed. A blank that looks ordinary is the
+            # worst failure this pipeline can have.
+            prompt="$_impl_section
+$_kb_section"
         fi
         # Inject execution plan when planner/executor split is active
         if [ -n "${story_plan:-}" ]; then
-            prompt="$prompt
-
-## Execution Plan
-Follow this plan step by step:
-$story_plan"
+            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-plan-section-vals-XXXXXX.json")
+            jq -n \
+                  --arg story_plan "$story_plan" \
+                  --arg prompt "$prompt" \
+                  '{"__STORY_PLAN__":$story_plan,"__PROMPT__":$prompt}' > "$_cp_vals"
+            prompt="$(render_engine_prompt writer-plan-section "$_cp_vals" execution_plan)"
+            rm -f "$_cp_vals"
         fi
 
         # Inject coordinator prompt amendment when available (retry attempts only).
         # Uses _total_attempts, not retry_count — a free retry (deterministic-check
         # failure) doesn't advance retry_count, but it IS a real subsequent attempt
         # and must still see the guidance from what just failed.
-        if [ "$_total_attempts" -gt 1 ] && [ -n "${COORDINATOR_PROMPT_AMENDMENT:-}" ]; then
-            prompt="$prompt
+        # WHAT THE LAST ATTEMPT DID — facts, before anyone's opinion about them.
+        #
+        # The writer was told what was WRONG and never what it DID, so it could not tell "I tried
+        # this and it was rejected" from "I have not tried anything" and re-derived approaches it
+        # had already been told were wrong. Placed BEFORE the coordinator's one-line inference so
+        # the evidence is read first and the judgement second.
+        # PUBLISHED, NOT APPENDED — and not gated on an attempt counter.
+        #
+        # This used to be `if [ "$_total_attempts" -gt 1 ]`, a variable local to this function.
+        # The review cycle re-invokes the writer as a NEW PROCESS, where that counter starts at
+        # zero, so the writer being asked to fix its own work was never told what its own work
+        # was. Recorded as TF-1 in TESTING-FAILURES.md.
+        #
+        # What is on disk does not depend on which process asks. The engine publishes it; every
+        # agent that DECLARES attempt-evidence receives it — the writer and both failure analysts
+        # today, the reviewer the moment it declares it. Empty publishes nothing, so a first
+        # attempt carries no section.
+        # WAS THERE A PREVIOUS ATTEMPT? Asked of DURABLE state, not a process-local counter.
+        # read_story_retry_count persists in story-retry-state/ and is cleared by the pre-run
+        # reset, so it answers the same question across a re-invocation — which is precisely
+        # where _total_attempts failed.
+        #
+        # It matters because _attempt_change_summary never returns empty: when nothing changed it
+        # says so in words, and that sentence is the important one (a previous attempt that wrote
+        # NOTHING must be reported, not silently omitted). Published unconditionally it would tell
+        # a FIRST attempt that a previous attempt changed no files, which is a lie the writer has
+        # no way to check.
+        local _prior_attempts
+        _prior_attempts=$(read_story_retry_count "$LOG_DIR" "$story_id" 2>/dev/null || echo 0)
+        if [ "${_prior_attempts:-0}" -gt 0 ] || [ "$_total_attempts" -gt 1 ]; then
+            publish_agent_output engine attempt-evidence "$story_id" "$(_attempt_change_summary "$story_id")"
+        fi
 
-## Coordinator Guidance (retry ${retry_count})
-The following targeted instruction was identified from the previous failure:
-${COORDINATOR_PROMPT_AMENDMENT}"
+        if [ "$_total_attempts" -gt 1 ] && [ -n "${COORDINATOR_PROMPT_AMENDMENT:-}" ]; then
+            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-plan-section-vals-XXXXXX.json")
+            jq -n \
+                  --arg coordinator_prompt_amendment "${COORDINATOR_PROMPT_AMENDMENT}" \
+                  --arg retry_count "${retry_count}" \
+                  --arg prompt "$prompt" \
+                  '{"__COORDINATOR_PROMPT_AMENDMENT__":$coordinator_prompt_amendment,"__RETRY_COUNT__":$retry_count,"__PROMPT__":$prompt}' > "$_cp_vals"
+            prompt="$(render_engine_prompt writer-plan-section "$_cp_vals" coordinator_guidance_full)"
+            rm -f "$_cp_vals"
         fi
 
         # Prompt-size scratchpad summarization (found live, 2026-07-07): each retry
@@ -9265,37 +9208,61 @@ ${COORDINATOR_PROMPT_AMENDMENT}"
             # the last 3 distinct headings instead of 1 still bounds prompt growth
             # (the original purpose of this trim) while giving recent-but-not-
             # newest guidance a real chance to stay visible for a few more retries.
-            _trimmed_amendment=$(printf '%s' "$COORDINATOR_PROMPT_AMENDMENT" | EPAM_PROMPT_TRIM_KEEP="$_keep_sections" python3 -c "
-import os, sys
-text = sys.stdin.read()
-lines = text.split(chr(10))
-# How many recent guidance sections survive: config, not a literal. See lib/prompt-budget.sh.
-KEEP = int(os.environ['EPAM_PROMPT_TRIM_KEEP'])
-heading_idxs = [i for i, l in enumerate(lines) if l.startswith('## ')]
-keep_from = heading_idxs[-KEEP] if len(heading_idxs) >= KEEP else (heading_idxs[0] if heading_idxs else 0)
-print(chr(10).join(lines[keep_from:]) if heading_idxs else text)
-" 2>/dev/null || echo "$COORDINATOR_PROMPT_AMENDMENT")
+            _trimmed_amendment=$(printf '%s' "$COORDINATOR_PROMPT_AMENDMENT" | EPAM_PROMPT_TRIM_KEEP="$_keep_sections" python3 "$SCRIPT_DIR/lib/handlers/trim-coordinator-amendment.py" 2>/dev/null || echo "$COORDINATOR_PROMPT_AMENDMENT")
 
             if [ -n "$_trimmed_amendment" ] && [ "${#_trimmed_amendment}" -lt "${#COORDINATOR_PROMPT_AMENDMENT}" ]; then
                 warning "  [PromptScratchpad] Prompt exceeded ${_scratchpad_threshold} chars ($(( ${#prompt} )) actual) — full history written to $_scratchpad_file, trimming to most recent guidance (up to 3)"
                 if [ "${STORY_GENERATOR_MODE:-}" = "true" ]; then
-                    prompt="$(build_generator_prompt "$story_id")
-$(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")"
+                    _impl_section="$(build_generator_prompt "$story_id")" || {
+                error "  [prompt] build_generator_prompt REFUSED for $story_id — not invoking the writer"
+                return 1
+            }
+            _kb_section="$(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")" || {
+                error "  [prompt] build_kb_prompt_section REFUSED for $story_id — not invoking the writer"
+                return 1
+            }
+            # Same shape, same reason as the implementation branch below: a joined assignment takes
+            # its status from the LAST substitution, so a refusal in the first is lost. This branch
+            # has no refusal today, which is exactly when the hazard is cheap to remove.
+            prompt="$_impl_section
+$_kb_section"
                 else
-                    prompt="$(build_implementation_prompt "$story_id")
-$(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")"
+                    _impl_section="$(build_implementation_prompt "$story_id")" || {
+                error "  [prompt] build_implementation_prompt REFUSED for $story_id — not invoking the writer"
+                return 1
+            }
+            _kb_section="$(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")" || {
+                error "  [prompt] build_kb_prompt_section REFUSED for $story_id — not invoking the writer"
+                return 1
+            }
+            # SEPARATE ASSIGNMENTS, DELIBERATELY. Joined as
+            #   prompt="$(build_implementation_prompt ...)\n$(build_kb_prompt_section ...)"
+            # the assignment takes its status from the LAST substitution, so every `return 1` in
+            # the builder was swallowed and `set -e` never fired. The writer was then invoked with
+            # the empty first line plus the KB section — no story, no criteria, no plan — and
+            # produced something confident that got committed. A blank that looks ordinary is the
+            # worst failure this pipeline can have.
+            prompt="$_impl_section
+$_kb_section"
                 fi
                 if [ -n "${story_plan:-}" ]; then
-                    prompt="$prompt
-
-## Execution Plan
-Follow this plan step by step:
-$story_plan"
+                    _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-plan-section-vals-XXXXXX.json")
+                    jq -n \
+                          --arg story_plan "$story_plan" \
+                          --arg prompt "$prompt" \
+                          '{"__STORY_PLAN__":$story_plan,"__PROMPT__":$prompt}' > "$_cp_vals"
+                    prompt="$(render_engine_prompt writer-plan-section "$_cp_vals" execution_plan)"
+                    rm -f "$_cp_vals"
                 fi
-                prompt="$prompt
-
-## Coordinator Guidance (retry ${retry_count}, showing most recent up to 3 — full retry history: ${_scratchpad_file})
-${_trimmed_amendment}"
+                _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-plan-section-vals-XXXXXX.json")
+                jq -n \
+                      --arg trimmed_amendment "${_trimmed_amendment}" \
+                      --arg scratchpad_file "${_scratchpad_file}" \
+                      --arg retry_count "${retry_count}" \
+                      --arg prompt "$prompt" \
+                      '{"__TRIMMED_AMENDMENT__":$trimmed_amendment,"__SCRATCHPAD_FILE__":$scratchpad_file,"__RETRY_COUNT__":$retry_count,"__PROMPT__":$prompt}' > "$_cp_vals"
+                prompt="$(render_engine_prompt writer-plan-section "$_cp_vals" coordinator_guidance_trimmed)"
+                rm -f "$_cp_vals"
             fi
         fi
 
@@ -9339,6 +9306,13 @@ ${_trimmed_amendment}"
         # Change to project root for the CLI to have correct context
         cd "$PROJECT_ROOT"
 
+        # The provider must match the model this attempt will actually use — the ladder may have
+        # escalated the model since the provider was resolved for this story.
+        sync_provider_to_model
+        # BOTH, EVERY ATTEMPT. The model was logged per attempt and the provider once per story,
+        # so three very different failures — right pair, wrong pair, missing key — left identical
+        # records. The run that cost this diagnosis could not say which provider it had used.
+        log "  Attempt[$((retry_count + 1))] provider=${STORY_PROVIDER:-unset} model=${STORY_MODEL:-default}"
         echo "=== $story_cli Output (attempt $((retry_count + 1))) ===" >> "$output_file"
 
         local json_result_file="${output_file%.log}_result.json"
@@ -9828,14 +9802,18 @@ ${_trimmed_amendment}"
             # script runs under `set -e`), without adding extra output.
             _story_files_are_tests=$(jq -r --arg id "$story_id" \
                 '.stories[] | select(.id == $id) | .technicalNotes.files[]? // empty' \
-                "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null | { grep -c '\.test\.ts$' || true; })
+                "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null \
+                | { grep -cE '(\.|_)(spec|test)\.[A-Za-z0-9]+$|/__tests__/|(^|/)test_[^/]+$' || true; })
             if [ "${_story_files_are_tests:-0}" -eq 0 ]; then
                 log "  [tc-writer] Generating TCs for phase '${CURRENT_PHASE:-unknown}' (post-impl, pre-test)..."
-                if bash "$SCRIPT_DIR/post-impl-tc-writer.sh" \
+                # `if CMD | tee ...; then` TESTS TEE, which exits 0 essentially always — so this
+                # reported "TC generation complete" whatever the writer did, including refusing to
+                # run at all. No pipefail here; PIPESTATUS[0] is the writer's own code.
+                if { bash "$SCRIPT_DIR/post-impl-tc-writer.sh" \
                     --prd "${MAIN_PRD_FILE:-$PRD_FILE}" \
                     --phase "${CURRENT_PHASE:-unknown}" \
                     --output-dir "$PROJECT_ROOT" \
-                    2>&1 | tee -a "$output_file"; then
+                    2>&1 | tee -a "$output_file"; [ "${PIPESTATUS[0]}" -eq 0 ]; }; then
                     log "  [tc-writer] TC generation complete — test stories have testCriteria"
                 else
                     warning "  [tc-writer] TC generation failed — test stories will run without TCs (non-fatal)"
@@ -9918,6 +9896,18 @@ ${_trimmed_amendment}"
             # since the story just succeeded.
             _rung_attribute_changes "$story_id" "$_rung" "${STORY_MODEL:-}"
             _generate_rung_contribution_report "$story_id"
+            # ONE AUTHOR PER COUPLED FILE PAIR. The retry bookkeeping below is
+            # duplicated into this branch deliberately: a story that fails here has
+            # still BURNED this rung, and dropping out without persisting the count
+            # and model is what makes a ladder restart its climb from rung 0.
+            if ! _coupled_pair_gate_for_story "$story_id" "$output_file"; then
+                write_story_retry_count "$LOG_DIR" "$story_id" "$retry_count"
+                write_story_retry_model "$LOG_DIR" "$story_id" "${STORY_MODEL:-}"
+                write_story_iteration_bump "$LOG_DIR" "$story_id" "${STORY_ITERATION_BUMP_TOTAL:-0}"
+                rm -f "$(_rung_snapshot_path "$story_id")" 2>/dev/null || true
+                update_monitor_status "retry" "$story_id" "Coupled file pair had more than one author"
+                return 1
+            fi
             rm -f "$(_rung_snapshot_path "$story_id")" 2>/dev/null || true
             # Persisted even on success: a technically-successful attempt can
             # still be REJECTED by Step 3.6's review — the next
@@ -10030,31 +10020,20 @@ $(echo "$LAST_VERIFIED_UNCHANGED_FILES" | sed 's/^/- /')"
                 local _last_fa_diagnosis=""
                 local _heal_log="${LOG_DIR}/healing-events.jsonl"
                 if [ -f "$_heal_log" ]; then
-                    _last_fa_diagnosis=$(python3 -c "
-import json, sys
-story = '$story_id'
-last = ''
-try:
-    for line in open('$_heal_log'):
-        try:
-            e = json.loads(line)
-            if e.get('story_id') == story and e.get('diagnosis') and e.get('target') not in ('none', ''):
-                last = e['diagnosis']
-        except Exception:
-            pass
-except Exception:
-    pass
-print(last)
-" 2>/dev/null || echo "")
+                    _last_fa_diagnosis=$(python3 "$SCRIPT_DIR/lib/handlers/last-fa-diagnosis.py" "$_heal_log" "$story_id" 2>/dev/null || echo "")
                 fi
-                COORDINATOR_PROMPT_AMENDMENT="${_existing_amendment}
-## Deterministic Check Failure
-${VERIFICATION_FAILURE}
-This was caught by an automated check before the test suite even ran — fix the exact issue named above.${_last_fa_diagnosis:+
+                _cp_vals=$(mktemp "${TMPDIR:-/tmp}/coordinator-amendment-vals-XXXXXX.json")
+                jq -n \
+                      --arg prior_diagnosis_section "${_last_fa_diagnosis:+
 
 ## Prior failure-analyst diagnosis (re-injected for context)
 $_last_fa_diagnosis
-Apply the above diagnosis AND fix the deterministic check violation — both must be resolved.}"
+Apply the above diagnosis AND fix the deterministic check violation — both must be resolved.}" \
+                      --arg verification_failure "${VERIFICATION_FAILURE}" \
+                      --arg existing_amendment "${_existing_amendment}" \
+                      '{"__PRIOR_DIAGNOSIS_SECTION__":$prior_diagnosis_section,"__VERIFICATION_FAILURE__":$verification_failure,"__EXISTING_AMENDMENT__":$existing_amendment}' > "$_cp_vals"
+                COORDINATOR_PROMPT_AMENDMENT="$(render_engine_prompt coordinator-amendment "$_cp_vals" deterministic_check)"
+                rm -f "$_cp_vals"
 
                 # A deterministic-check violation repeating IDENTICALLY across attempts
                 # is just as strong an escalation signal as an LLM-diagnosed repeat, but
@@ -10088,6 +10067,22 @@ Apply the above diagnosis AND fix the deterministic check violation — both mus
                         error "  [DeterministicCheck] CRITICAL: same violation repeated for $story_id without resolution — treating as HealingBroken"
                         HEALING_BROKEN=1
                         export HEALING_BROKEN
+
+                        # THE SKIP ABOVE IS CORRECT ONCE, AND ONLY ONCE.
+                        #
+                        # Skipping the analyst is right while the violation is NEW: the check names
+                        # it precisely and a gate-model call to restate it is waste. That premise is
+                        # falsified here. The remedy has been injected and applied and the SAME
+                        # violation came back, so the open question is no longer WHAT is wrong — it
+                        # is why the known remedy keeps failing, which is the analyst's only job.
+                        #
+                        # Live 2026-08-14 (AMSD-2041): the story climbed rung 0 -> 1 -> 2, declared
+                        # HealingBroken three times, aborted at max rung, and the analyst was
+                        # invoked ZERO times. Its ladder was unreachable code on this whole class.
+                        if [ "$retry_count" -lt "$MAX_RETRIES" ]; then
+                            log "  [DeterministicCheck] the remedy was applied and the same violation returned — invoking the failure analyst to diagnose WHY"
+                            run_failure_analyst "$story_id" "$output_file" "$retry_count"
+                        fi
                     fi
                 fi
                 _prev_deterministic_violation="$VERIFICATION_FAILURE"
@@ -10246,6 +10241,30 @@ update_story_status() {
 # tracking, AND after every individual retry attempt (status="attempt",
 # attempt_num set) so real per-attempt token/cost usage is never invisible —
 # see the call site right after the provider-invocation case block above.
+# result_is_from_this_attempt <json_result_file> <started_at>
+#
+# WHOSE RESULT IS THIS? append_cost_record reads usage out of $json_result_file, and an attempt
+# that fails before writing one leaves the PREVIOUS attempt's file in place. The ledger then
+# records those numbers again for a call that never happened.
+#
+# Live 2026-08-18, MOCK3-1: attempts 3-12 asked a provider for a model it does not serve, came
+# back in about a second with nothing, and each recorded in=15812 out=1860 cost=$0.007 — attempt
+# 2's numbers, ten more times, on the measurement the story budget guard sums to enforce a limit.
+#
+# The attempt's start time is already a parameter. A result file older than the attempt did not
+# come from it. Absent file, absent path or absent start time all answer "not mine" rather than
+# guessing — an over-report here is invented spend, and an under-report is merely a gap.
+result_is_from_this_attempt() {
+    local _f="${1:-}" _started="${2:-}"
+    [ -n "$_f" ] && [ -f "$_f" ] || return 1
+    [ -n "$_started" ] || return 1
+    local _fm _sm
+    _fm=$(stat -c %Y "$_f" 2>/dev/null) || return 1
+    _sm=$(date -d "$_started" +%s 2>/dev/null) || return 1
+    [ -n "$_fm" ] && [ -n "$_sm" ] || return 1
+    [ "$_fm" -ge "$_sm" ]
+}
+
 append_cost_record() {
     local story_id=$1 status=$2 started_at=$3 ended_at=$4 output_file=$5 json_result_file=${6:-} attempt_num=${7:-}
     local cost_file="${PHASE_COST_FILE:-$LOG_DIR/phase-cost.jsonl}"
@@ -10259,6 +10278,12 @@ append_cost_record() {
     local forecast_cost=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .estimatedCost // 0' "$prd_target" 2>/dev/null || echo 0)
     local story_effort=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .effort // "medium"' "$prd_target")
     local story_type=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .storyType // "implementation"' "$prd_target")
+    # A result file that predates this attempt belongs to the previous one; reading it would
+    # bill this attempt for a call it never made. See result_is_from_this_attempt.
+    if [ -n "$json_result_file" ] && ! result_is_from_this_attempt "$json_result_file" "$started_at"; then
+        log "  Cost[$story_id] no result from this attempt — recording zero usage rather than repeating the previous attempt's"
+        json_result_file=""
+    fi
     local resolved_model="${STORY_MODEL:-}"
     local planner_model="${STORY_PLANNER_MODEL:-}"
     local prompt_tokens_measured="${STORY_PRECOUNT_TOKENS:-0}"
@@ -10447,13 +10472,7 @@ emit_story_artifact() {
         result_text=$(jq -r '.result // ""' "$json_result_file" 2>/dev/null || echo "")
         # Extract first JSON object/array from result text
         local extracted
-        extracted=$(echo "$result_text" | node -e "
-const chunks = []; process.stdin.on('data', c => chunks.push(c)); process.stdin.on('end', () => {
-    const text = chunks.join('');
-    const m = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
-    if (m) { try { JSON.parse(m[0]); process.stdout.write(m[0]); } catch { process.stdout.write('null'); } }
-    else process.stdout.write('null');
-});" 2>/dev/null || echo "null")
+        extracted=$(echo "$result_text" | node "$SCRIPT_DIR/lib/handlers/story-artifact-extract.js" 2>/dev/null || echo "null")
         [ -n "$extracted" ] && structured_output="$extracted"
     fi
 
@@ -10508,8 +10527,8 @@ get_relevant_kb_entries() {
     local role_kb; role_kb=$(_kb_file_for_story "$story_id" "$kb_dir")
     local shared_kb="${kb_dir}/KB-shared.md"
     local combined=""
-    [ -f "$role_kb"   ] && combined="${combined}$(tail -n 20 "$role_kb" 2>/dev/null)"$'\n'
-    [ -f "$shared_kb" ] && combined="${combined}$(tail -n 10 "$shared_kb" 2>/dev/null)"$'\n'
+    [ -f "$role_kb"   ] && combined="${combined}$(cat "$role_kb" 2>/dev/null)"$'\n'
+    [ -f "$shared_kb" ] && combined="${combined}$(cat "$shared_kb" 2>/dev/null)"$'\n'
 
     # Strip blank lines and return at most 10 bullet entries
     printf '%s' "$combined" | grep -v '^[[:space:]]*$' | tail -n 10
@@ -10768,138 +10787,7 @@ dry_run() {
 # an absolute second argument unchanged, so both callers work unmodified.
 _generate_contract_from_files() {
     local project_root="$1" contract_file="$2" files_json="$3" id_label="$4" config_file="$5"
-    python3 - "$project_root" "$contract_file" "$files_json" "$id_label" "$config_file" << 'PYEOF'
-import json, re, sys, os
-
-project_root, contract_file, files_json, id_label, config_file = sys.argv[1:6]
-files = json.loads(files_json)
-
-with open(config_file) as f:
-    cfg = json.load(f)
-
-exts = tuple(cfg['sourceExtensions'])
-exclude_re = re.compile(cfg['excludePattern'])
-src_files = [f for f in files if f.endswith(exts) and not exclude_re.search(f)]
-if not src_files:
-    sys.exit(0)
-
-interface_re = re.compile(cfg['interfacePattern'], re.S)
-class_re = re.compile(cfg['classPattern'])
-ctor_re = re.compile(cfg['ctorPattern'])
-method_re = re.compile(cfg['methodPattern'], re.M)
-
-# Live bug (2026-07-05, found backfilling SKY-002's contract): methodPattern
-# is a plain regex scan over the WHOLE class body — it has no notion of brace
-# depth, so control-flow statements nested inside a real method's body (e.g.
-# `if (!key) {`, `for (const x of y) {`) also match `\w+\s*\(...\)\s*{` and get
-# misidentified as methods, producing duplicate/garbage entries (a mock
-# skeleton with duplicate "if" mock-method entries — an invalid object
-# literal in the generated skeleton). This is a brace-
-# nesting concern, not a stack-specific one — applies to any C-like language a
-# future config might target — so it's engine logic, not per-project config.
-def top_level_matches(text, pattern):
-    depth_at = [0] * (len(text) + 1)
-    depth = 0
-    for i, c in enumerate(text):
-        if c == '{':
-            depth += 1
-        elif c == '}':
-            depth -= 1
-        depth_at[i + 1] = depth
-    return [m for m in pattern.finditer(text) if depth_at[m.start()] == 1]
-
-interfaces, classes = [], []
-for relpath in src_files:
-    full = os.path.join(project_root, relpath)
-    if not os.path.isfile(full):
-        continue
-    with open(full) as f:
-        text = f.read()
-
-    for m in interface_re.finditer(text):
-        interfaces.append((m.group(1), m.group(2).strip()))
-
-    for m in class_re.finditer(text):
-        cname = m.group(1)
-        start = m.end() - 1
-        depth, end = 0, start
-        for i, c in enumerate(text[start:], start):
-            if c == '{':
-                depth += 1
-            elif c == '}':
-                depth -= 1
-                if depth == 0:
-                    end = i
-                    break
-        body = text[start:end + 1]
-        ctor_m = ctor_re.search(body)
-        ctor_params = ctor_m.group(1).strip() if ctor_m else ''
-        methods = []
-        for mm in top_level_matches(body, method_re):
-            is_async, mname, params, ret = mm.groups()
-            if mname == 'constructor':
-                continue
-            methods.append((mname, (params or '').strip(), (ret or '').strip(), bool(is_async)))
-        classes.append((cname, ctor_params, methods))
-
-if not interfaces and not classes:
-    sys.exit(0)
-
-lines = [
-    f"# Contract: {id_label}", "",
-    "Auto-generated from actual source (deterministic — not model-transcribed).", "",
-]
-
-for name, body in interfaces:
-    rendered = cfg['interfaceRenderTemplate'].replace('{{name}}', name).replace('{{body}}', body)
-    lines += ["```typescript", rendered, "```", ""]
-
-mock_blocks = []
-for cname, ctor, methods in classes:
-    sig_lines = []
-    for mname, params, ret, is_async in methods:
-        async_prefix = cfg['asyncPrefixKeyword'] if is_async else ''
-        return_annotation = f"{cfg['returnAnnotationPrefix']}{ret}" if ret else ''
-        sig_lines.append(
-            cfg['methodSignatureTemplate']
-            .replace('{{asyncPrefix}}', async_prefix)
-            .replace('{{methodName}}', mname)
-            .replace('{{params}}', params)
-            .replace('{{returnAnnotation}}', return_annotation)
-        )
-    class_block = (
-        cfg['classDeclarationTemplate']
-        .replace('{{className}}', cname)
-        .replace('{{ctorParams}}', ctor)
-        .replace('{{methodSignatures}}', '\n'.join(sig_lines))
-    )
-    lines.append("```typescript")
-    lines.append(class_block)
-    lines.append("```")
-    lines.append("")
-
-    mock_methods = []
-    for mname, params, ret, is_async in methods:
-        template = cfg['mockMethodTemplateAsync'] if (is_async or 'Promise' in ret) else cfg['mockMethodTemplateSync']
-        mock_methods.append(template.replace('{{methodName}}', mname))
-    factory = (
-        cfg['mockFactoryTemplate']
-        .replace('{{className}}', cname)
-        .replace('{{methodMocks}}', '\n'.join(mock_methods))
-    )
-    mock_blocks.append(factory.split('\n'))
-
-if mock_blocks:
-    lines.append("Mock factory skeleton — every exported method MUST appear here (every method name is real; fill in real return values):")
-    lines.append("```typescript")
-    for block in mock_blocks:
-        lines.extend(block)
-    lines.append("```")
-
-with open(contract_file, 'w') as f:
-    f.write('\n'.join(lines))
-print(f"Contract auto-generated: {len(interfaces)} interface(s), {len(classes)} class(es)")
-PYEOF
+    python3 "$SCRIPT_DIR/lib/handlers/contract-from-files.py" "$project_root" "$contract_file" "$files_json" "$id_label" "$config_file"
 }
 
 generate_story_contract() {
@@ -11096,6 +10984,18 @@ run_implementation() {
             log "  [post-story] Commit step complete for $story_id"
             if [ "$_commit_rc" -ne 0 ]; then
                 error "  [post-story] $story_id: work is UNCOMMITTED (commit step exit ${_commit_rc}) — the story is not delivered; demoting from implemented"
+                update_story_status "$story_id" "failed"
+                failed=$((failed + 1))
+                implemented=$((implemented - 1))
+            elif ! _committed_change_uses_helpers "$story_id"; then
+                # THE ARTIFACT IS JUDGED, NOT THE TREE IT CAME FROM.
+                #
+                # The write-time guard rejects an attempt while it is still running, against
+                # the working tree. This asks the only question that survives the attempt:
+                # does what SHIPPED use every helper the spec verified? On 2026-08-15 a story
+                # committed 1 of 4 and was reported complete — tsc green, tests green, because
+                # the tests assert the SDK was configured, never that content re-renders.
+                error "  [post-story] $story_id: committed work is incomplete against the plan — demoting from implemented"
                 update_story_status "$story_id" "failed"
                 failed=$((failed + 1))
                 implemented=$((implemented - 1))
@@ -11450,7 +11350,14 @@ main() {
 run_pre_phase_assessment() {
     local phase_id=$1
     local profiles_file="$AGENT_PROFILES_FILE"
-    local profiles_backup="${profiles_file}.original"
+    # A SNAPSHOT OF NOW, NOT THE PRE-RUN CANONICAL FILE.
+    #
+    # This pointed at profiles.json.original — which pre-run-reset.sh and orchestrate.sh use as the
+    # canonical BASE state for a whole run. Restoring it after a corrupted assessment threw away
+    # every skill note, augmentation and mint result the run had accumulated up to that point, not
+    # just the corruption, while reporting only "restoring backup".
+    local profiles_backup="${LOG_DIR:-/tmp}/profiles-preassessment-${phase_id}.json"
+    cp "$profiles_file" "$profiles_backup" 2>/dev/null || profiles_backup=""
     local profiles_audit="$LOG_DIR/profiles-audit.jsonl"
     local assessment_log="$LOG_DIR/pre-assessment-${phase_id}.log"
 
@@ -11467,44 +11374,13 @@ run_pre_phase_assessment() {
     prd_rel=$(realpath --relative-to="$PROJECT_ROOT" "$PRD_FILE" 2>/dev/null || echo "orchestrations/prd.json")
 
     local assessment_prompt
-    assessment_prompt=$(cat << PROMPT_HEADER
-You are the skill assessment agent running in PRE-PHASE mode. Your job is to detect skill gaps in agent profiles BEFORE the phase runs, augment profiles with missing knowledge, and ensure test stories have the correct agent role.
-
-## PRD STRUCTURE (read this carefully before issuing any jq commands)
-The PRD file uses a FLAT structure — not nested phases. Key paths:
-- Story list: .stories[]
-- Phase story order: .implementationOrder["${phase_id}"] — returns an array of story IDs
-- Story lookup: .stories[] | select(.id == "<id>")
-- Agent role: .stories[] | select(.id == "<id>") | .agentRole
-- Files: .stories[] | select(.id == "<id>") | .technicalNotes.files[]
-
-DO NOT use .phases[0] — that path does not exist in this PRD.
-
-## Task
-1. Run: jq -r '.implementationOrder["${phase_id}"][]' ${prd_rel}
-   This gives you the list of story IDs for this phase.
-
-2. For each story ID, run: jq -c '.stories[] | select(.id == "<id>") | {id, agentRole, unitTests, technicalNotes}' ${prd_rel}
-
-3. ROLE VERIFICATION: For any story where all files in technicalNotes.files match *.test.ts or *.spec.ts:
-   - If agentRole is not "test-engineer", update it: jq --arg id "<id>" '(.stories[] | select(.id == \$id)).agentRole = "test-engineer"' ${prd_rel} > /tmp/prd_tmp.json && mv /tmp/prd_tmp.json ${prd_rel}
-   - Ensure the test-engineer profile exists in orchestrations/agents/profiles.json
-
-4. PROFILE CREATION: If "test-engineer" key is missing from profiles.json, add it based on the project's techStack in the PRD (read .project.techStack).
-
-5. SKILL GAP FILL: For each story, compare agentRole profile text against technicalNotes.requiredSkills. Add missing skills as sentences. Keep profiles.json valid JSON.
-
-6. Append JSONL audit records to orchestrations/logs/profiles-audit.jsonl using flock.
-
-7. Write summary to orchestrations/logs/phase-improvements/pre-${phase_id}.md
-
-Known skill categories: deployment_platform, language, framework, testing, database, infrastructure, api, cloud_service
-
-CRITICAL: Keep profiles.json valid JSON. Only ADD content, never remove. Use the exact jq paths above.
-
-## Phase: ${phase_id}
-PROMPT_HEADER
-    )
+    _ap_vals=$(mktemp "${TMPDIR:-/tmp}/skill-assessment-prephase-vals-XXXXXX.json")
+    jq -n \
+          --arg phase_id "$phase_id" \
+          --arg prd_rel "$prd_rel" \
+          '{"__PHASE_ID__":$phase_id,"__PRD_REL__":$prd_rel}' > "$_ap_vals"
+    assessment_prompt="$(render_engine_prompt skill-assessment-prephase "$_ap_vals" with_prd_structure)"
+    rm -f "$_ap_vals"
 
     cd "$PROJECT_ROOT"
     local _orch_provider="${EPAM_ORCHESTRATION_PROVIDER:-}"
@@ -11519,18 +11395,29 @@ PROMPT_HEADER
     # augmentation or role-fix ever happens (found live 2026-07-08 — a run's
     # assessment step logged a fabricated "content" diff for profiles.json that
     # was never actually written to disk).
-    elif echo "$assessment_prompt" | \
+    # SAME DEFECT AS THE TC WRITER: `elif CMD | tee ...; then` tested tee, so "Pre-phase
+    # assessment completed" was printed whether the agent ran, failed or timed out — and the
+    # profiles.json validity check below only runs on that branch, so a failed agent skipped it.
+    # THREE pipeline elements here (echo, ai-run, tee), so the agent's status is PIPESTATUS[1].
+    elif { echo "$assessment_prompt" | \
             AI_GATE_ALLOW_TOOLS=1 \
             AI_PROVIDER="$_orch_provider" \
             AI_MODEL="$_orch_model" \
             EPAM_CLI="$EPAM_CLI" \
             bash "$SCRIPT_DIR/ai-run.sh" --provider "$_orch_provider" \
             ${_orch_model:+--model "$_orch_model"} \
-            2>&1 | tee "$assessment_log"; then
+            2>&1 | tee "$assessment_log"; [ "${PIPESTATUS[1]}" -eq 0 ]; }; then
         success "Pre-phase assessment completed for '$phase_id'"
         if ! jq empty "$profiles_file" 2>/dev/null; then
-            warning "Pre-phase assessment may have corrupted profiles.json! Restoring backup."
-            cp "$profiles_backup" "$profiles_file"
+            # A SNAPSHOT THAT FAILED IS NOT A SNAPSHOT — the same guard Steps 11 and 12 needed.
+            # If the pre-call copy did not happen there is nothing to restore, and overwriting a
+            # corrupted profiles.json with nothing is worse than leaving it for a human.
+            if [ -n "$profiles_backup" ] && [ -s "$profiles_backup" ]; then
+                warning "Pre-phase assessment may have corrupted profiles.json! Restoring the pre-assessment snapshot."
+                cp "$profiles_backup" "$profiles_file"
+            else
+                error "Pre-phase assessment may have corrupted profiles.json AND no pre-assessment snapshot exists — leaving the file as-is. Restore it before the next phase."
+            fi
         fi
     else
         warning "Pre-phase assessment failed for '$phase_id' (non-critical, continuing)"

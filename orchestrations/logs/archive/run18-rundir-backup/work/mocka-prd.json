@@ -1,0 +1,272 @@
+{
+  "_what": "mock3's OWN PRD. Authored, never ingested: this project exists to rehearse the pipeline without any client system in the loop, so there is no Jira to synthesise from. The stories describe OBSERVABLE defects that exist in the codelines right now, each proven by an executable probe before this file was written -- a rehearsal against a defect that is not really there teaches nothing.",
+  "title": "mock3 rehearsal",
+  "project": {
+    "name": "mock3",
+    "description": "A two-codeline transit-fares and departure-board workspace used to exercise the orchestration pipeline end to end.",
+    "outputDirs": [
+      {
+        "codeline": "mocka",
+        "path": "/home/bradleyjerome/projects/mock3/mock-a"
+      },
+      {
+        "codeline": "mockb",
+        "path": "/home/bradleyjerome/projects/mock3/mock-b"
+      }
+    ],
+    "outputDir": "/home/bradleyjerome/projects/mock3/mock-a"
+  },
+  "currentIteration": 1,
+  "stories": [
+    {
+      "id": "MOCK3-1",
+      "jiraKey": "MOCK3-1",
+      "title": "Riders aged exactly 65 are charged the adult fare",
+      "description": "The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.",
+      "acceptanceCriteria": [
+        "A rider aged exactly 65 with no pass is charged the concession fare.",
+        "A rider aged 64 with no pass is still charged the base fare.",
+        "The existing fare behaviour for children, pass holders and adults is unchanged."
+      ],
+      "codelines": [
+        "mocka"
+      ],
+      "status": "failed",
+      "completed": true,
+      "effort": "low",
+      "kind": "defect",
+      "agentRoles": {
+        "mocka": "typescript-logic-fixer"
+      },
+      "agentRole": "typescript-logic-fixer",
+      "codeline": "mocka",
+      "specification": {
+        "guardVocabulary": {
+          "blacklist": [
+            {
+              "term": "concession_fare_cents",
+              "reason": "Internal constant that feeds the fare output; naming it in a criterion describes HOW the fare is produced, not what the caller observes. Evidence: src/fares.ts helper CONCESSION_FARE_CENTS."
+            },
+            {
+              "term": "rider.age > 65",
+              "reason": "The internal comparison logic that produces the bug; a criterion referencing this prescribes the mechanism rather than the observed result. Evidence: src/fares.ts line 10."
+            }
+          ],
+          "whitelist": [
+            {
+              "term": "farefor",
+              "reason": "The public function the ticket's surface is about — the API a client calls to receive a fare. Evidence: src/fares.ts fareFor."
+            },
+            {
+              "term": "fare",
+              "reason": "The observable value a caller receives from fareFor; the ticket's stated symptom is the charged fare amount."
+            },
+            {
+              "term": "rider",
+              "reason": "The input parameter a caller supplies; part of the observable input surface, not an internal structure."
+            },
+            {
+              "term": "age",
+              "reason": "The rider attribute a caller provides; observable input on the ticket's surface, not an internal field used to build output."
+            },
+            {
+              "term": "pass",
+              "reason": "The pass-holding status a caller supplies; observable input on the ticket's surface."
+            },
+            {
+              "term": "175",
+              "reason": "A specific observable fare value the caller receives; the correct concession fare the ticket requires."
+            },
+            {
+              "term": "350",
+              "reason": "A specific observable fare value the caller receives; the adult fare the ticket says is wrongly charged at age 65."
+            },
+            {
+              "term": "0",
+              "reason": "A specific observable fare value the caller receives when a pass is held; observable output."
+            }
+          ]
+        },
+        "runId": "20260818T101809Z",
+        "assignedAgents": [
+          "openspec"
+        ],
+        "coordinatorNotes": "AC is already crisp and covers the boundary (65), adjacent case (64), and regression guard (children, pass holders, adults unchanged). Fix is a single operator change (e.g. > 65 → >= 65). No elaboration or hardening needed — spec work would add no value.",
+        "status": "completed",
+        "updatedAt": "2026-08-18T11:20:24.264Z",
+        "appliedAgents": [
+          "openspec"
+        ],
+        "agentContributions": [
+          {
+            "agent": "openspec",
+            "applied": true,
+            "notes": "Defect: the comparison rider.age > 65 in fareFor excludes age 65 from the concession tier. Changing to >= fixes the boundary. VCs are derived from the acceptance criteria and observe only the function's return value.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-08-18T11:20:24.264Z"
+          }
+        ],
+        "manifestCheck": {
+          "missing": [],
+          "checkedAt": "2026-08-18T11:22:45.616Z"
+        },
+        "coordinatorReview": {
+          "verdict": "approved",
+          "reviewNotes": "Manifest evidence confirms both declared files exist; I read them and they match the spec's claims exactly. src/fares.ts line 10 contains `if (rider.age > 65) return CONCESSION_FARE_CENTS;` — the off-by-one that excludes age 65 from the concession tier. test/fares.test.ts covers ages 8, 30, and 70 but has no age-65 case, confirming the coverage gap the spec notes. Only openspec was assigned; the coordinator explicitly justified skipping speckit — a single-operator boundary fix (> → >=) with crisp pre-existing ACs needs no elaboration or hardening. That is a sound delegation decision, not a gap. Openspec's contribution is meaningful: it correctly diagnosed the off-by-one, derived six observable verification criteria from the ACs, and built a well-reasoned guard vocabulary (blacklisting internal constants and comparison logic; whitelisting the public API surface and observable fare values). The VCs are all testable — each specifies an exact input (age, pass status) and an exact return value. The fixSiteAnalysis pinpoints the broken line, prescribes the minimal change, and reuses the existing CONCESSION_FARE_CENTS constant with no new dependencies. Plan alignment is aligned:true — the detective's plan named fareFor, fares.ts, and the > vs >= operator bug, and the final fixSiteAnalysis identifies exactly those same symbols. No pivot, no unexplained mismatch. Advisory: the test-file fixSiteAnalysis entry says changeRequired:false and 'No edit required' while simultaneously noting age 65 is untested and the VCs require it — the test agent will need to add an age-65 case. This is not blocking because the VCs are unambiguous and the test agent follows VCs, but the fixSiteAnalysis entry is internally inconsistent on that point.",
+          "qualityScore": 0.9,
+          "flags": [
+            {
+              "flag": "test-file-change-required-inconsistency",
+              "severity": "advisory",
+              "why": "The fixSiteAnalysis entry for test/fares.test.ts sets changeRequired:false and states 'No edit required,' yet also acknowledges age 65 is untested and the VCs explicitly require 'fareFor returns 175 when called with a rider aged 65.' I confirmed by reading test/fares.test.ts that no age-65 test exists. An implementer reading only the fixSiteAnalysis might skip adding the age-65 test case. The VCs themselves are clear, so this is advisory, not blocking."
+            }
+          ],
+          "planAlignment": "aligned",
+          "reviewedAt": "2026-08-18T11:22:45.616Z"
+        }
+      },
+      "verificationCriteria": [
+        "fareFor returns 175 when called with a rider aged 65 who does not hold a pass",
+        "fareFor returns 350 when called with a rider aged 64 who does not hold a pass",
+        "fareFor returns 175 when called with a rider aged 8 who does not hold a pass",
+        "fareFor returns 0 when called with a rider aged 30 who holds a pass",
+        "fareFor returns 350 when called with a rider aged 30 who does not hold a pass",
+        "fareFor returns 175 when called with a rider aged 70 who does not hold a pass"
+      ],
+      "verificationCriteriaDetail": [
+        {
+          "criterion": "fareFor returns 175 when called with a rider aged 65 who does not hold a pass",
+          "observer": "tester",
+          "surface": "fareFor return value",
+          "setup": "rider = { age: 65, hasPass: false }"
+        },
+        {
+          "criterion": "fareFor returns 350 when called with a rider aged 64 who does not hold a pass",
+          "observer": "tester",
+          "surface": "fareFor return value",
+          "setup": "rider = { age: 64, hasPass: false }"
+        },
+        {
+          "criterion": "fareFor returns 175 when called with a rider aged 8 who does not hold a pass",
+          "observer": "tester",
+          "surface": "fareFor return value",
+          "setup": "rider = { age: 8, hasPass: false }"
+        },
+        {
+          "criterion": "fareFor returns 0 when called with a rider aged 30 who holds a pass",
+          "observer": "tester",
+          "surface": "fareFor return value",
+          "setup": "rider = { age: 30, hasPass: true }"
+        },
+        {
+          "criterion": "fareFor returns 350 when called with a rider aged 30 who does not hold a pass",
+          "observer": "tester",
+          "surface": "fareFor return value",
+          "setup": "rider = { age: 30, hasPass: false }"
+        },
+        {
+          "criterion": "fareFor returns 175 when called with a rider aged 70 who does not hold a pass",
+          "observer": "tester",
+          "surface": "fareFor return value",
+          "setup": "rider = { age: 70, hasPass: false }"
+        }
+      ],
+      "vcSource": "acceptance",
+      "vcResolution": "clean",
+      "fixSiteAnalysis": [
+        {
+          "file": "src/fares.ts",
+          "function": "fareFor",
+          "reason": "This function computes the fare for a rider. The comparison `rider.age > 65` on line 10 excludes age 65 from the concession tier, causing riders aged exactly 65 to fall through to the base fare. Changing `>` to `>=` makes age 65 satisfy the condition, producing the concession fare as the rules require.",
+          "fix": "Change `rider.age > 65` to `rider.age >= 65` on line 10 of src/fares.ts. Reuse the existing constant CONCESSION_FARE_CENTS (already imported/declared in this file) — no new helper needed.",
+          "helper": "CONCESSION_FARE_CENTS",
+          "brokenLine": "if (rider.age > 65) return CONCESSION_FARE_CENTS;",
+          "fixVerified": true,
+          "evidenceVerified": true,
+          "fileVerified": true,
+          "changeRequired": true,
+          "requiredPackages": [],
+          "deliveryRole": "produces",
+          "runsIn": "server",
+          "prescriptionNote": "",
+          "prescriptionUnderspecified": false,
+          "codeline": "mocka"
+        },
+        {
+          "file": "test/fares.test.ts",
+          "function": "fareFor",
+          "reason": "This test file exercises fareFor but does not cover age 65 (the boundary). Existing tests use ages 8, 30, and 70. After the production fix, all existing tests still pass, but age 65 remains untested. This file needs no edit (test agent owns it), only verification that existing tests continue to pass.",
+          "fix": "No edit required. Verify that existing tests still pass after the production change. The test suite does not yet cover age 65 — that coverage gap is for the test agent to address separately.",
+          "helper": "",
+          "brokenLine": "",
+          "fixVerified": null,
+          "evidenceVerified": null,
+          "fileVerified": true,
+          "changeRequired": false,
+          "requiredPackages": [],
+          "deliveryRole": "verifies",
+          "runsIn": "server",
+          "prescriptionNote": "",
+          "prescriptionUnderspecified": false,
+          "codeline": "mocka"
+        }
+      ],
+      "fixSiteAnalysisCoverage": {
+        "complete": true,
+        "uncoveredVerificationCriteria": []
+      },
+      "storyKind": "defect",
+      "technicalNotes": {
+        "files": [
+          "src/fares.ts",
+          "test/fares.test.ts"
+        ],
+        "perCodeline": {
+          "mocka": {
+            "files": [
+              "src/fares.ts",
+              "test/fares.test.ts"
+            ],
+            "resolved": [
+              {
+                "declared": "src/fares.ts",
+                "actual": "src/fares.ts",
+                "match": "exact",
+                "verified_against": "/home/bradleyjerome/projects/mock3/mock-a"
+              },
+              {
+                "declared": "test/fares.test.ts",
+                "actual": "test/fares.test.ts",
+                "match": "exact",
+                "verified_against": "/home/bradleyjerome/projects/mock3/mock-a"
+              }
+            ],
+            "unresolved": []
+          }
+        }
+      },
+      "estimatedAiMinutes": 5,
+      "estimatedCost": 0.15,
+      "estimatedTokens": 600000,
+      "estimatedTurns": 18,
+      "estimatedHours": 0.0833,
+      "cpaEffortTier": "medium",
+      "cpaConfidence": 0.9,
+      "cpaGate": "pass",
+      "ladderTier": "medium",
+      "cpaIterationEstimate": 1,
+      "model": "MiniMax-M3",
+      "aiProvider": "minimax",
+      "reasoningEffort": "low",
+      "completedAt": "2026-08-18T10:36:40-04:00",
+      "lastAttempt": "2026-08-18T10:36:40-04:00",
+      "actualCost": 0.3366
+    }
+  ],
+  "implementationOrder": {
+    "core": [
+      "MOCK3-1"
+    ]
+  }
+}

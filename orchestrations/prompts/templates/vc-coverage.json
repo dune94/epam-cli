@@ -1,0 +1,20 @@
+{
+  "$why": [
+    "Moved out of vc-coverage-check.sh on 2026-08-15 (19 of 20).",
+    "",
+    "Asked once per criterion, so it is deliberately narrow: one requirement, one suite, one",
+    "yes or no with the covering case named. Widening it is how a coverage check turns into an",
+    "opinion about the tests in general."
+  ],
+  "body": "You are checking whether a test suite covers ONE specific requirement.\n\n## The requirement\n__VERIFICATION_CRITERION__\n\n## The test file (complete)\n```\n__TEST_SOURCE__\n```\n\nAnswer ONE question: does this test file contain a case that would FAIL if this\nrequirement were violated?\n\nJudge the ASSERTIONS, not the titles. A test whose name mentions the same words\nis irrelevant if it does not actually exercise the requirement — in particular a\nrequirement stating something must NOT happen is not covered by a test asserting\nthat it DOES happen, however similar the wording.\n\nOutput ONLY this JSON, nothing else:\n{\"covered\": true|false, \"case\": \"<the test case name that covers it, or empty>\", \"why\": \"<one sentence>\"}",
+  "description": "Decide whether a test suite covers ONE specific verification criterion.",
+  "id": "vc-coverage",
+  "placeholders": [
+    "__TEST_SOURCE__",
+    "__VERIFICATION_CRITERION__"
+  ],
+  "version": 1,
+  "seams": [
+    "vc-coverage"
+  ]
+}

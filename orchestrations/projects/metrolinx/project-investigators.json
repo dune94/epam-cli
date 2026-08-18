@@ -1,13 +1,9 @@
 {
   "_what": "This project's minted READ-ONLY agents — investigators. They report what is in the code and never author it. The write perimeter does not read this file, and story assignment never offers these names.",
   "investigators": [
-    "gotransit-contentstack-investigator",
-    "upexpress-contentstack-investigator",
     "metrolinx-contentstack-investigator"
   ],
   "byCodeline": {
-    "gotransit": "gotransit-contentstack-investigator",
-    "upexpress": "upexpress-contentstack-investigator",
     "metrolinx": "metrolinx-contentstack-investigator"
   }
 }

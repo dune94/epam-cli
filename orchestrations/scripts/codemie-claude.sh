@@ -18,6 +18,11 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# The prompt renderer. This script renders the same templates claude.sh does -- it used to carry
+# its own copies of several prompts, which had already drifted from them.
+# shellcheck source=lib/render-engine-prompt.sh
+source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
 source "$SCRIPT_DIR/lib/flags.sh"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
@@ -122,8 +127,12 @@ normalize_provider_json() {
             local result_text
             result_text=$(grep '"type":"text"' "$raw_file" 2>/dev/null \
                 | jq -rs '[.[].part.text // .[].text // ""] | join("")' 2>/dev/null || echo "opencode run completed")
+            # --rawfile: a full model turn can exceed ARG_MAX, and argv would fail with 126
+            # ("Argument list too long") leaving an empty result that reads as "no output".
+            local _rt_file; _rt_file=$(mktemp "${TMPDIR:-/tmp}/rt-XXXXXX")
+            printf '%s' "$result_text" > "$_rt_file"
             jq -n \
-                --arg rt "$result_text" \
+                --rawfile rt "$_rt_file" \
                 --argjson sf "$sf_line" \
                 '{result: $rt,
                   total_cost_usd: ($sf.cost // $sf.part.cost // $sf.total_cost // 0),
@@ -140,8 +149,12 @@ normalize_provider_json() {
             local result_text
             result_text=$(grep '"type":"item.completed"' "$raw_file" 2>/dev/null \
                 | jq -rs '[.[].item.text // ""] | join("")' 2>/dev/null || echo "codex exec completed")
+            # --rawfile: a full model turn can exceed ARG_MAX, and argv would fail with 126
+            # ("Argument list too long") leaving an empty result that reads as "no output".
+            local _rt_file; _rt_file=$(mktemp "${TMPDIR:-/tmp}/rt-XXXXXX")
+            printf '%s' "$result_text" > "$_rt_file"
             jq -n \
-                --arg rt "$result_text" \
+                --rawfile rt "$_rt_file" \
                 --argjson tc "$tc_line" \
                 '{result: $rt,
                   total_cost_usd: 0,
@@ -360,38 +373,17 @@ run_plan_mode() {
         '.stories[] | select(.id == $id) | .agentRole // "unknown"' "$prd_target" 2>/dev/null || echo "unknown")
 
     local plan_prompt
-    plan_prompt=$(cat << PLAN_PROMPT_EOF
-You are a planning agent. Produce an execution-ready plan for story ${story_id} BEFORE implementation begins.
-
-## Required Outputs
-1. Implementation steps with target file paths
-2. Dependency validation (each dep: satisfied yes/no, reason)
-3. Risk register (top 3 risks + mitigations)
-4. Test plan (new tests required + regression scope)
-5. Acceptance criteria mapping (each criterion -> implementation step)
-6. Cost/effort forecast (confirm or adjust estimatedHours)
-
-## On Completion
-Append a single-line JSON record to orchestrations/logs/agent-messages.jsonl:
-{
-  "id":"plan_${story_id}_\$(date +%s)",
-  "timestamp":"\$(date -Iseconds)",
-  "from_agent":"plan-agent",
-  "to_agent":"${agent_role}",
-  "story_id":"${story_id}",
-  "phase_id":"${CURRENT_PHASE:-unknown}",
-  "message_type":"plan_summary",
-  "priority":"normal",
-  "subject":"Plan ready for ${story_id}",
-  "body":"<one-sentence summary of key risks/steps>",
-  "status":"new"
-}
-Write it atomically: (flock -w 10 9 >> orchestrations/logs/agent-messages.jsonl; printf '%s\n' '<json>' >&9) 9>>orchestrations/logs/agent-messages.jsonl
-
-## Story to Plan
-Read orchestrations/prd.json for story ${story_id} full details, then produce the plan above.
-PLAN_PROMPT_EOF
-    )
+    # RENDERED FROM THE TEMPLATE LAYER. Both provider scripts render the same document —
+    # they carried separate copies that had already drifted, and the copy here had the
+    # messages path written into the prompt text rather than passed as data.
+    _pp_vals=$(mktemp "${TMPDIR:-/tmp}/story-plan-agent-vals-XXXXXX.json")
+    jq -n --arg story_id "$story_id" \
+          --arg messages_jsonl "${messages_jsonl:-orchestrations/logs/agent-messages.jsonl}" \
+          --arg agent_role "$agent_role" \
+          --arg current_phase "${CURRENT_PHASE:-unknown}" \
+          '{"__STORY_ID__":$story_id,"__MESSAGES_JSONL__":$messages_jsonl,"__AGENT_ROLE__":$agent_role,"__CURRENT_PHASE__":$current_phase}' > "$_pp_vals"
+    plan_prompt="$(render_engine_prompt story-plan-agent "$_pp_vals")"
+    rm -f "$_pp_vals"
 
     log "Plan mode: generating execution plan for $story_id..."
     touch "$messages_jsonl"
@@ -644,41 +636,18 @@ build_implementation_prompt() {
     local files=$(echo "$story_json" | jq -r '.technicalNotes.files // [] | join(", ")')
     local dependencies=$(echo "$story_json" | jq -r '.dependencies | join(", ")')
 
-    cat << EOF
-Implement user story $story_id: $title
-
-## Story Description
-$description
-
-## Acceptance Criteria
-- $acceptance_criteria
-
-## Technical Notes
-$([ -n "$technical_notes" ] && echo "$technical_notes" | jq -r 'to_entries | map("- \(.key): \(.value)") | join("\n")' 2>/dev/null || echo "None specified")
-
-## Files to Create/Modify (EXACT ABSOLUTE PATHS — start here; this list is not exhaustive)
-These are the files the analysis identified. Use these exact paths for them. The list is a
-STARTING POINT, not a fence: it is derived from the ticket and may be incomplete or may name
-a path this repository spells differently. If your change genuinely requires another file in
-this repository, write it — the only files closed to you are ones another story OWNS, and
-attempting one of those returns a specific refusal saying so. Do NOT work around a refusal by
-repeatedly rewriting a file you can already write; that is never the fix. When you write a
-file that is not listed here, say which file and why in your final message, so the reviewer
-sees the whole change.
-$files
-
-## Dependencies
-${dependencies:-None}
-
-## Instructions
-1. Implement all acceptance criteria for this story
-2. Follow the project's existing code patterns and conventions
-3. Create any necessary files in the locations specified
-4. Ensure code compiles/runs without errors
-5. Do NOT create tests unless explicitly required in acceptance criteria
-
-After implementation, provide a brief summary of what was created/modified.
-EOF
+    _hd_vals=$(mktemp "${TMPDIR:-/tmp}/story-implementation-vals-XXXXXX.json")
+    jq -n \
+          --arg technical_notes "$([ -n "$technical_notes" ] && echo "$technical_notes" | jq -r 'to_entries | map("- \(.key): \(.value)") | join("\n")' 2>/dev/null || echo "None specified")" \
+          --arg dependencies "${dependencies:-None}" \
+          --arg acceptance_criteria "$acceptance_criteria" \
+          --arg description "$description" \
+          --arg story_id "$story_id" \
+          --arg title "$title" \
+          --arg files "$files" \
+          '{"__TECHNICAL_NOTES__":$technical_notes,"__DEPENDENCIES__":$dependencies,"__ACCEPTANCE_CRITERIA__":$acceptance_criteria,"__DESCRIPTION__":$description,"__STORY_ID__":$story_id,"__TITLE__":$title,"__FILES__":$files}' > "$_hd_vals"
+    render_engine_prompt story-implementation "$_hd_vals"
+    rm -f "$_hd_vals"
 }
 
 # Update monitor lane/story status via update-monitor.sh
@@ -1583,30 +1552,13 @@ run_pre_phase_assessment() {
     prd_rel=$(realpath --relative-to="$PROJECT_ROOT" "$PRD_FILE" 2>/dev/null || echo "orchestrations/prd.json")
 
     local assessment_prompt
-    assessment_prompt=$(cat << PROMPT_HEADER
-You are the skill assessment agent running in PRE-PHASE mode. Your job is to detect skill gaps in agent profiles BEFORE the phase runs, and augment profiles with missing knowledge.
-
-## Task
-1. Read ${prd_rel} and find the stories in the current phase's implementationOrder
-2. For each story, extract required skills from description + technicalNotes (especially technicalNotes.requiredSkills)
-3. Read orchestrations/agents/profiles.json and find the profile for each story's agentRole
-4. Compare: does the agent's profile text mention each required skill?
-5. For any GAPS found:
-   a. Append a sentence to the agent's profile in profiles.json mentioning the missing skill
-   b. Append a JSONL record to orchestrations/logs/profiles-audit.jsonl:
-      {"timestamp":"<ISO8601>","phase_id":"<phase>","agent_role":"<role>","event":"skill_added","skill":"<skill>","skill_category":"<category>","context":"Story <id> requires <skill>","added_by":"pre-phase-assessment"}
-   c. Use flock when writing to JSONL files
-6. Write a summary to orchestrations/logs/phase-improvements/pre-${phase_id}.md
-
-Known skill categories: deployment_platform, language, framework, testing, database, infrastructure, api, cloud_service
-
-IMPORTANT: Keep profiles.json valid JSON at all times. Only ADD to existing profile strings, never remove content.
-
-## Phase: ${phase_id}
-
-Read ${prd_rel} implementationOrder["${phase_id}"] for the story list, then proceed with the analysis above.
-PROMPT_HEADER
-    )
+    _ap_vals=$(mktemp "${TMPDIR:-/tmp}/skill-assessment-prephase-vals-XXXXXX.json")
+    jq -n \
+          --arg prd_rel "$prd_rel" \
+          --arg phase_id "$phase_id" \
+          '{"__PRD_REL__":$prd_rel,"__PHASE_ID__":$phase_id}' > "$_ap_vals"
+    assessment_prompt="$(render_engine_prompt skill-assessment-prephase "$_ap_vals" basic)"
+    rm -f "$_ap_vals"
 
     cd "$PROJECT_ROOT"
     if echo "$assessment_prompt" | "$CLAUDE_CMD" --print --output-format text --dangerously-skip-permissions 2>&1 | tee "$assessment_log"; then

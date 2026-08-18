@@ -1,61 +1,56 @@
 {
   "codelines": [
     {
-      "codeline": "gotransit",
+      "codeline": "mocka",
       "state": "in_scope",
-      "evidence": "Opened src/services/contentstack.ts which initializes contentstack.Stack(options) at line 69 with api_key, delivery_token, environment, branch — but NO live_preview config block. Searched entire codeline for live_preview, preview_token, onEntryChange, live-preview-utils, ContentstackLivePreview — zero matches. Also opened src/context/ContentstackContext.tsx (React context provider for content data, no preview wiring) and src/hooks/useContent.ts (reads from context, no preview logic). The @contentstack/live-preview-utils package is absent from the manifest. The Stack() initialization site is the integration point per the Contentstack CSR Live Preview docs.",
+      "evidence": "src/fares.ts contains the fare logic. fareFor (line 8) checks `if (rider.age > 65) return CONCESSION_FARE_CENTS` on line 10 — the boundary is strictly greater-than, so a rider aged exactly 65 falls through to BASE_FARE_CENTS (350) instead of the concession fare (175). This is MOCK3-1. Tests in test/fares.test.ts cover ages 30, 8, and 70 but do not test age 65, so the boundary gap is uncaught. No schedule or departure-board symbols were found in this codeline.",
       "surfaces": [
-        "src/services/contentstack.ts",
-        "src/context/ContentstackContext.tsx",
-        "src/hooks/useContent.ts"
+        "src/fares.ts",
+        "test/fares.test.ts"
       ],
       "filesRead": [
-        "src/services/contentstack.ts",
-        "src/context/ContentstackContext.tsx",
-        "src/hooks/useContent.ts"
+        "src/fares.ts",
+        "test/fares.test.ts"
       ],
       "evidenceGap": false
     },
     {
-      "codeline": "upexpress",
+      "codeline": "mockb",
       "state": "in_scope",
-      "evidence": "Opened src/services/contentstack.ts which initializes contentstack.Stack(options) with api_key, delivery_token, environment, branch — no live_preview config. Searched entire codeline for live_preview, preview_token, onEntryChange, live-preview-utils, ContentstackLivePreview — zero matches. The file is structurally near-identical to gotransit's contentstack service. @contentstack/live-preview-utils is absent from the manifest. The Stack() init site is the integration point.",
+      "evidence": "src/schedule.ts contains the departure-board logic. formatStops (line 4) loops `for (let i = 0; i < stops.length - 1; i++)` on line 6, which iterates up to the second-to-last stop, omitting the final stop entirely. totalMinutes (line 12) correctly reads the last element's minutes, so the journey length is right while the rendered list is short. This is MOCK3-2. Tests in test/schedule.test.ts assert the arrow separator and the first stop name but never assert the last stop appears, so the omission is uncaught. No fare-related symbols were found in this codeline.",
       "surfaces": [
-        "src/services/contentstack.ts"
+        "src/schedule.ts",
+        "test/schedule.test.ts"
       ],
       "filesRead": [
-        "src/services/contentstack.ts"
-      ],
-      "evidenceGap": false
-    },
-    {
-      "codeline": "metrolinx",
-      "state": "in_scope",
-      "evidence": "Opened src/services/contentstack.ts which initializes contentstack.Stack(options) with api_key, delivery_token, environment, branch, and additional fetchOptions (debug, logHandler, retryCondition) — but no live_preview config. Searched entire codeline for live_preview, preview_token, onEntryChange, live-preview-utils, ContentstackLivePreview — zero matches. This codeline also has a separate interactive maps stack config (INTERACTIVE_MAPS_STACK_* env vars) but neither stack has preview wiring. @contentstack/live-preview-utils is absent from the manifest. The Stack() init site is the integration point.",
-      "surfaces": [
-        "src/services/contentstack.ts"
-      ],
-      "filesRead": [
-        "src/services/contentstack.ts"
+        "src/schedule.ts",
+        "test/schedule.test.ts"
       ],
       "evidenceGap": false
     }
   ],
   "recommendedInvestigators": [
     {
-      "codeline": "gotransit",
-      "focus": "Wire Contentstack Live Preview into src/services/contentstack.ts Stack() initialization by adding live_preview config (preview_token, enable, host). Install @contentstack/live-preview-utils and initialize it in a separate utils file. Then wire onEntryChange into the client-side data fetching layer (src/context/ContentstackContext.tsx and src/hooks/useContent.ts) so draft entries refresh in preview mode.",
-      "why": "Stack() at line 69 of src/services/contentstack.ts is the sole Contentstack delivery SDK init site and has no live_preview block. The React context layer (ContentstackContext/useContent) is where content is injected into the component tree, making it the natural place to trigger re-fetches on entry change."
+      "codeline": "mocka",
+      "focus": "Confirm the age-65 boundary condition in fareFor and review whether any other code paths or callers depend on the current `> 65` behaviour.",
+      "why": "fareFor uses a strict greater-than comparison for the concession age boundary; the ticket says 65-and-over should qualify, and the test suite has no age-65 case to catch the discrepancy."
     },
     {
-      "codeline": "upexpress",
-      "focus": "Same pattern as gotransit: add live_preview config to Stack() in src/services/contentstack.ts, install and init @contentstack/live-preview-utils, and wire onEntryChange into the content context/hook layer. Verify whether this codeline shares a content context structure with gotransit or has its own variant.",
-      "why": "src/services/contentstack.ts is structurally near-identical to gotransit's, with the same Stack() init and no live_preview. The codeline has its own content context (confirmed by search showing ContentstackContext imports across components)."
+      "codeline": "mockb",
+      "focus": "Confirm the loop bound in formatStops and check whether any caller or display path compensates for the missing last stop.",
+      "why": "formatStops iterates to `stops.length - 1`, dropping the final stop; the test suite only checks for the arrow separator and first stop name, never the last stop."
+    }
+  ],
+  "recommendedWriters": [
+    {
+      "codeline": "mocka",
+      "focus": "Write a fix for the fare boundary condition and add a test covering age exactly 65; must be able to run vitest.",
+      "why": "The fare logic and its tests both live in this codeline; the fix is a small logic change plus a boundary test that the existing suite lacks."
     },
     {
-      "codeline": "metrolinx",
-      "focus": "Add live_preview config to Stack() in src/services/contentstack.ts (note this file has a more complex options object with fetchOptions/debug/retry — live_preview must coexist). Install and init @contentstack/live-preview-utils. Wire onEntryChange into the content context layer (this codeline uses context/contentstackContext.tsx per search results). Also consider whether the interactive maps stack needs its own preview config.",
-      "why": "src/services/contentstack.ts has a richer Stack() config than the other two codelines (debug logging, retry, interactive maps stack) but still lacks live_preview. The metrolinx codeline has its own contentstackContext.tsx (different file name from gotransit's ContentstackContext.tsx) that will need onEntryChange wiring."
+      "codeline": "mockb",
+      "focus": "Write a fix for the stop-rendering loop so the final stop is included, and add a test asserting the last stop appears in the output; must be able to run vitest.",
+      "why": "The schedule logic and its tests both live in this codeline; the fix is a loop-bound change plus a test that the existing suite lacks."
     }
   ],
   "violations": [],

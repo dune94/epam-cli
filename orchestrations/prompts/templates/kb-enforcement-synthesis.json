@@ -1,0 +1,27 @@
+{
+  "$why": [
+    "Moved out of lib/kb-synthesizer.js on 2026-08-16.",
+    "",
+    "The schema arrived here as constraintSchema().slice(0, 4000) -- a truncation, of the one",
+    "value the model is told its answer is VALIDATED against. Cutting a JSON schema at a byte",
+    "offset leaves a fragment that is not a schema at all, and the failure mode is an answer",
+    "rejected for not matching rules the model was never shown. The cut is gone; the schema is",
+    "supplied whole, per the standing no-truncation rule.",
+    "",
+    "2026-08-17: named tsc/vitest as the adjudicators of a deterministic gate. The KIND of check is the point; the tools belong to the codeline."
+  ],
+  "description": "Chooses the enforcement that prevents a repeated agent failure from recurring.",
+  "id": "kb-enforcement-synthesis",
+  "seams": [
+    "impl-failure-analyst"
+  ],
+  "placeholders": [
+    "__EPISODE_COUNT__",
+    "__AGENT_ROLE__",
+    "__SIGNATURE__",
+    "__EVIDENCE__",
+    "__CONSTRAINT_SCHEMA__"
+  ],
+  "version": 1,
+  "body": "You are deciding how to PREVENT a repeated agent failure, not how to describe it.\n\nThe same failure signature has now occurred __EPISODE_COUNT__ times for agent role\n\"__AGENT_ROLE__\". Below is the evidence.\n\nFAILURE SIGNATURE: __SIGNATURE__\nAGENT ROLE:        __AGENT_ROLE__\n\nEVIDENCE (__EPISODE_COUNT__ occurrences):\n__EVIDENCE__\n\nYour reply becomes an ENFORCED CONSTRAINT, not advice an agent may read and ignore.\nIt must therefore bind to a real mechanism. There are exactly six:\n\n  gate        a deterministic check adjudicated by this codeline's own type check and test run, failing closed\n              -> {\"kind\":\"gate\",\"check\":\"<check-id>\"}\n  param       a NON-BUDGET invocation field the agent cannot exceed\n              -> {\"kind\":\"param\",\"name\":\"EPAM_REASONING_EFFORT\",\"value\":\"high\"}\n  tool_scope  narrow what the agent may write or which tools it may call\n              -> {\"kind\":\"tool_scope\",\"allowed_write_paths\":\"src/x.ts\"}\n  pre_exec_block  refuse a command before it runs (literal substring)\n              -> {\"kind\":\"pre_exec_block\",\"pattern\":\"--no-verify\"}\n  response_schema bind the agent's output shape so it cannot reply free-form\n              -> {\"kind\":\"response_schema\",\"name\":\"verdict\",\"schema\":{...}}\n  effort_tier RAISE the story's effort tier when the agent ran out of ROOM\n              -> {\"kind\":\"effort_tier\",\"tier\":\"high\"}\n\nRESOURCE BUDGETS — READ THIS BEFORE PROPOSING ONE.\nYou may NOT set iteration counts, token limits or timeouts as a \"param\"\n(EPAM_MAX_ITERATIONS, EPAM_MAX_OUTPUT_TOKENS, *_TIMEOUT_SECS ...). Those are\nassigned by a pipeline you cannot see the whole of:\n\n    CPA estimates the story's hours\n      -> <=2h = low | <=6h = medium | >6h = high\n      -> low = 6 iterations | medium = 10 | high = 15   (fixed table)\n\nIf an agent genuinely ran out of ROOM, say so in the only vocabulary that plugs\ninto that pipeline: raise the tier with \"effort_tier\". It is applied UPGRADE-ONLY,\nso a lower tier is ignored. Never propose a number — you do not have the estimate,\nthe thresholds or the table, and a number invented from one failure will be wrong.\n\nIf none of the six can prevent this failure, reply exactly: NO_CONSTRAINT\nThat is a valid and useful answer. Inventing a mechanism that does not exist is not.\n\nOutput ONLY a JSON object with these two fields, no prose and no fences:\n{\"enforcement\": <one of the six shapes above>, \"reason\": \"<why this prevents a recurrence, under 25 words>\"}\n\nThe enforcement object is validated against this schema; anything else is discarded:\n__CONSTRAINT_SCHEMA__\n"
+}

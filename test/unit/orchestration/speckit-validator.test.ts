@@ -17,6 +17,7 @@
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { region } from '../../helpers/prompt-text';
 import { join } from 'node:path';
 
 // ─── AC validator ─────────────────────────────────────────────────────────────
@@ -208,7 +209,14 @@ describe('speckit prompt — describes WHAT not HOW', () => {
   // Widened from 8000 (2026-08-06): the AC guard is now ARMED before it is applied —
   // the vocabulary it checks is derived per story rather than hardcoded — and that
   // arming block sits between the prompt and the strip call.
-  const speckitSection = src.slice(speckitFnStart, speckitFnStart + 11000);
+  // The wording now lives in the templates this function renders, so the slice alone no
+  // longer contains it. region() hands back the code AND those prompts, which is the whole
+  // surface these assertions were ever about.
+  const speckitSection = region(
+    src.slice(speckitFnStart, speckitFnStart + 11000),
+    'spec-agent-speckit',
+    'spec-agent-speckit-refine',
+  );
 
   it('speckit prompt has an explicit WHAT-NOT-HOW rule heading', () => {
     expect(speckitSection).toContain('WHAT-NOT-HOW');

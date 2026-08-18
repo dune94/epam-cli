@@ -1,0 +1,148 @@
+{
+  "_what": "A model call reported $0 while consuming tokens. This is the record it reported, kept because the source file is deleted immediately after it is read.",
+  "agent": "estate-survey",
+  "model": "z-ai/glm-5.2",
+  "provider": "qwen",
+  "parsed": {
+    "costUsd": 0,
+    "tokensIn": 49497,
+    "tokensOut": 1725,
+    "tokensCached": 28608,
+    "costUnknown": true,
+    "costIsEstimate": false
+  },
+  "raw": {
+    "result": "{\n  \"codelines\": [\n    {\n      \"codeline\": \"mocka\",\n      \"state\": \"in_scope\",\n      \"evidence\": \"Opened src/fares.ts via codegraph_query. The fareFor function (line 8-13) uses `rider.age > 65` on line 10 to decide the concession fare, so a rider aged exactly 65 falls through to the base fare (350 cents) instead of the concession fare (175 cents). This matches MOCK3-1 precisely. The test file test/fares.test.ts was also read: it tests ages 30, 8, and 70 but has no test case for age 65 exactly, which is why the boundary bug went unnoticed. No schedule/formatStops symbols exist in this codeline — MOCK3-2 does not reach it.\",\n      \"surfaces\": [\"src/fares.ts\", \"test/fares.test.ts\"],\n      \"filesRead\": [\"src/fares.ts\", \"test/fares.test.ts\"]\n    },\n    {\n      \"codeline\": \"mockb\",\n      \"state\": \"in_scope\",\n      \"evidence\": \"Opened src/schedule.ts via codegraph_query. The formatStops function (line 4-10) loops `for (let i = 0; i < stops.length - 1; i++)`, which stops one element short of the end, omitting the final stop from the rendered string. This matches MOCK3-2 precisely. The test file test/schedule.test.ts was also read: it checks that the output contains '->' and 'Union' (the first stop) but never asserts the last stop ('Eglinton') appears, which is why the omission went unnoticed. totalMinutes (line 12-13) correctly reads the last element, confirming the ticket's note that journey length is correct. No fare/age/concession symbols exist in this codeline — MOCK3-1 does not reach it.\",\n      \"surfaces\": [\"src/schedule.ts\", \"test/schedule.test.ts\"],\n      \"filesRead\": [\"src/schedule.ts\", \"test/schedule.test.ts\"]\n    }\n  ],\n  \"recommendedInvestigators\": [\n    {\n      \"codeline\": \"mocka\",\n      \"focus\": \"Read the fare boundary logic in the fares module and its existing test coverage, concentrating on the age-65 boundary condition and how the comparison operator affects it.\",\n      \"why\": \"I saw `rider.age > 65` on line 10 of src/fares.ts where the comment says '65 AND OVER', and the test suite has no case for age 65 exactly.\"\n    },\n    {\n      \"codeline\": \"mockb\",\n      \"focus\": \"Read the formatStops loop and its test coverage, concentrating on the loop bound and whether the last stop is included in the output.\",\n      \"why\": \"I saw the loop condition `i < stops.length - 1` in src/schedule.ts which excludes the final stop, and the tests only assert the first stop and the arrow separator, never the last stop.\"\n    }\n  ],\n  \"recommendedWriters\": [\n    {\n      \"codeline\": \"mocka\",\n      \"focus\": \"Must be able to write TypeScript fare-logic changes and vitest test cases. The work involves correcting a comparison operator in the fare calculation and adding a boundary test for age 65.\",\n      \"why\": \"The bug is a single-operator boundary issue in src/fares.ts and the test gap is in test/fares.test.ts; both are TypeScript + vitest.\"\n    },\n    {\n      \"codeline\": \"mockb\",\n      \"focus\": \"Must be able to write TypeScript schedule-rendering changes and vitest test cases. The work involves correcting a loop bound in the stop-formatting function and adding a test that asserts the last stop appears in the output.\",\n      \"why\": \"The bug is an off-by-one loop bound in src/schedule.ts and the test gap is in test/schedule.test.ts; both are TypeScript + vitest.\"\n    }\n  ]\n}",
+    "model": "z-ai/glm-5.2",
+    "provider": "qwen",
+    "usage": {
+      "inputTokens": 49497,
+      "outputTokens": 1725,
+      "totalTokens": 51222,
+      "cached_input_tokens": 28608
+    },
+    "cost_usd": 0.0235,
+    "cost_is_estimate": false,
+    "toolCallCount": 16,
+    "iterations": 5,
+    "timings": [
+      {
+        "iteration": 1,
+        "modelLatencyMs": 3172,
+        "toolExecMs": 757,
+        "toolCalls": [
+          {
+            "name": "codegraph_query",
+            "resultBytes": 1626,
+            "isError": false
+          },
+          {
+            "name": "codegraph_query",
+            "resultBytes": 54,
+            "isError": false
+          },
+          {
+            "name": "codegraph_query",
+            "resultBytes": 65,
+            "isError": false
+          },
+          {
+            "name": "codegraph_query",
+            "resultBytes": 1334,
+            "isError": false
+          }
+        ]
+      },
+      {
+        "iteration": 2,
+        "modelLatencyMs": 2646,
+        "toolExecMs": 763,
+        "toolCalls": [
+          {
+            "name": "codegraph_query",
+            "resultBytes": 223,
+            "isError": false
+          },
+          {
+            "name": "codegraph_query",
+            "resultBytes": 36,
+            "isError": false
+          },
+          {
+            "name": "codegraph_query",
+            "resultBytes": 115,
+            "isError": false
+          },
+          {
+            "name": "codegraph_query",
+            "resultBytes": 32,
+            "isError": false
+          },
+          {
+            "name": "codegraph_query",
+            "resultBytes": 1324,
+            "isError": false
+          }
+        ]
+      },
+      {
+        "iteration": 3,
+        "modelLatencyMs": 2187,
+        "toolExecMs": 346,
+        "toolCalls": [
+          {
+            "name": "codegraph_query",
+            "resultBytes": 839,
+            "isError": false
+          },
+          {
+            "name": "codegraph_query",
+            "resultBytes": 828,
+            "isError": false
+          },
+          {
+            "name": "codegraph_query",
+            "resultBytes": 54,
+            "isError": false
+          },
+          {
+            "name": "codegraph_query",
+            "resultBytes": 65,
+            "isError": false
+          }
+        ]
+      },
+      {
+        "iteration": 4,
+        "modelLatencyMs": 1905,
+        "toolExecMs": 445,
+        "toolCalls": [
+          {
+            "name": "codegraph_query",
+            "resultBytes": 222,
+            "isError": false
+          },
+          {
+            "name": "codegraph_query",
+            "resultBytes": 225,
+            "isError": false
+          },
+          {
+            "name": "codegraph_query",
+            "resultBytes": 98,
+            "isError": false
+          }
+        ]
+      },
+      {
+        "iteration": 5,
+        "modelLatencyMs": 15250,
+        "toolExecMs": 0,
+        "toolCalls": []
+      }
+    ],
+    "total_cost_usd": 0,
+    "tokens": 0,
+    "planCostUsd": 0
+  }
+}

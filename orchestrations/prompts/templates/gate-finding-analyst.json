@@ -1,0 +1,24 @@
+{
+  "$why": [
+    "Moved out of run-agent-orchestration.sh on 2026-08-16.",
+    "",
+    "Turns a QA gate finding into an actionable diagnosis. The role instructions arrive as a",
+    "value now; they used to be a command substitution piping profiles.json through python",
+    "inside the heredoc, which is prompt assembly performed by a shell pipeline -- unreviewable",
+    "as prose, and silently empty when the file or the key is missing."
+  ],
+  "description": "Analyses one QA gate finding and reports what it means, quoting the log line that proves it.",
+  "id": "gate-finding-analyst",
+  "seams": [
+    "impl-failure-analyst"
+  ],
+  "placeholders": [
+    "__PROFILE__",
+    "__GATE_LABEL__",
+    "__GATE_LOG__",
+    "__PRD_FILE__",
+    "__PHASE_ID__"
+  ],
+  "version": 1,
+  "body": "__PROFILE__\n\nGate: __GATE_LABEL__\nGate log file: __GATE_LOG__\nPRD file: __PRD_FILE__\nCurrent phase: __PHASE_ID__\n\nRun your analysis now. Paste the verbatim log line proving the finding, then emit the JSON output."
+}

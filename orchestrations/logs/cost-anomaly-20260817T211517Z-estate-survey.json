@@ -1,0 +1,91 @@
+{
+  "_what": "A model call reported $0 while consuming tokens. This is the record it reported, kept because the source file is deleted immediately after it is read.",
+  "agent": "estate-survey",
+  "model": "z-ai/glm-5.2",
+  "provider": "qwen",
+  "parsed": {
+    "costUsd": 0,
+    "tokensIn": 41429,
+    "tokensOut": 1188,
+    "tokensCached": 19584,
+    "costUnknown": true,
+    "costIsEstimate": false
+  },
+  "raw": {
+    "result": "{\n  \"codelines\": [\n    {\n      \"codeline\": \"mocka\",\n      \"state\": \"in_scope\",\n      \"evidence\": \"Explored mocka via CodeGraph for fare/age/rider/concession symbols — returned src/fares.ts with fareFor, totalFor, Rider, BASE_FARE_CENTS, CONCESSION_FARE_CENTS. Read the verbatim source: fareFor (line 10) uses `if (rider.age > 65) return CONCESSION_FARE_CENTS`, so a rider aged exactly 65 does NOT match and falls through to BASE_FARE_CENTS (350) on line 12 — exactly MOCK3-1's symptom. The doc comment on line 7 says 'Riders aged 65 AND OVER pay the concession fare,' confirming intent is >= 65. Read test/fares.test.ts: the senior-boundary test (line 14) only tests age 70, so the boundary at 65 is uncovered and the bug passes silently. Queried callers of fareFor: it is called by totalFor in src/fares.ts and by the test file — no other call sites depend on the current off-by-one behavior.\",\n      \"surfaces\": [\"src/fares.ts\", \"test/fares.test.ts\"],\n      \"filesRead\": [\"src/fares.ts\", \"test/fares.test.ts\"]\n    },\n    {\n      \"codeline\": \"mockb\",\n      \"state\": \"in_scope\",\n      \"evidence\": \"Explored mockb via CodeGraph for stop/board/schedule/format symbols — returned src/schedule.ts with formatStops, Stop, totalMinutes. Read the verbatim source: formatStops (line 6) loops `for (let i = 0; i < stops.length - 1; i++)`, which skips the final stop — exactly MOCK3-2's symptom. totalMinutes (line 12) reads `stops[stops.length - 1].minutes`, so the journey length is correct while the rendered list drops the last entry, matching the ticket's explanation of why the omission went unnoticed. Read test/schedule.test.ts: tests check only that the output contains '->' and 'Union'; no test asserts the final stop ('Eglinton') appears, so the bug is uncaught. Queried callers of formatStops: only the test file calls it — no other call sites to consider.\",\n      \"surfaces\": [\"src/schedule.ts\", \"test/schedule.test.ts\"],\n      \"filesRead\": [\"src/schedule.ts\", \"test/schedule.test.ts\"]\n    }\n  ],\n  \"recommendedInvestigators\": [\n    {\n      \"codeline\": \"mocka\",\n      \"focus\": \"Confirm the age-65 boundary in fareFor against the fare-rule doc comment and the existing test coverage; verify no other call sites depend on the current off-by-one behavior.\",\n      \"why\": \"fareFor uses `> 65` where the comment says '65 and over,' and the test only covers age 70 — the boundary itself is untested. Callers are only totalFor and the test file, so the blast radius is small but should be confirmed.\"\n    },\n    {\n      \"codeline\": \"mockb\",\n      \"focus\": \"Confirm formatStops drops the last stop via the `length - 1` loop bound and that totalMinutes reads the last element correctly; check test coverage for the final stop.\",\n      \"why\": \"formatStops iterates to `stops.length - 1` omitting the last entry, while totalMinutes reads the last entry — the discrepancy the ticket describes. Tests never assert the final stop is rendered. formatStops has no caller outside the test file.\"\n    }\n  ],\n  \"recommendedWriters\": [\n    {\n      \"codeline\": \"mocka\",\n      \"focus\": \"Able to edit TypeScript source and vitest tests in a vitest+typescript stack — fix the boundary comparison and add a covering test for age exactly 65.\",\n      \"why\": \"The fix is a one-character boundary change in src/fares.ts plus a new test case in test/fares.test.ts; both are TypeScript/vitest.\"\n    },\n    {\n      \"codeline\": \"mockb\",\n      \"focus\": \"Able to edit TypeScript source and vitest tests in a vitest+typescript stack — fix the loop bound in formatStops and add a test asserting the final stop is rendered.\",\n      \"why\": \"The fix is the loop bound in src/schedule.ts plus a new assertion in test/schedule.test.ts; both are TypeScript/vitest.\"\n    }\n  ]\n}",
+    "model": "z-ai/glm-5.2",
+    "provider": "qwen",
+    "usage": {
+      "inputTokens": 41429,
+      "outputTokens": 1188,
+      "totalTokens": 42617,
+      "cached_input_tokens": 19584
+    },
+    "cost_usd": 0.0409,
+    "cost_is_estimate": false,
+    "toolCallCount": 6,
+    "iterations": 4,
+    "timings": [
+      {
+        "iteration": 1,
+        "modelLatencyMs": 22892,
+        "toolExecMs": 327,
+        "toolCalls": [
+          {
+            "name": "codegraph_query",
+            "resultBytes": 1626,
+            "isError": false
+          },
+          {
+            "name": "codegraph_query",
+            "resultBytes": 1324,
+            "isError": false
+          }
+        ]
+      },
+      {
+        "iteration": 2,
+        "modelLatencyMs": 1305,
+        "toolExecMs": 21,
+        "toolCalls": [
+          {
+            "name": "codegraph_query",
+            "resultBytes": 839,
+            "isError": false
+          },
+          {
+            "name": "codegraph_query",
+            "resultBytes": 828,
+            "isError": false
+          }
+        ]
+      },
+      {
+        "iteration": 3,
+        "modelLatencyMs": 1570,
+        "toolExecMs": 299,
+        "toolCalls": [
+          {
+            "name": "codegraph_query",
+            "resultBytes": 115,
+            "isError": false
+          },
+          {
+            "name": "codegraph_query",
+            "resultBytes": 85,
+            "isError": false
+          }
+        ]
+      },
+      {
+        "iteration": 4,
+        "modelLatencyMs": 6385,
+        "toolExecMs": 0,
+        "toolCalls": []
+      }
+    ],
+    "total_cost_usd": 0,
+    "tokens": 0,
+    "planCostUsd": 0
+  }
+}

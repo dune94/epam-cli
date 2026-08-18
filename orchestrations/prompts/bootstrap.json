@@ -1,0 +1,34 @@
+{
+  "_what": "Which prompt templates are COPIED verbatim into a project at pre-launch, and which are GENERATED from their template by the agent that mints the roster.",
+  "_why": "A bootstrap list hidden inside a provisioning script stops matching the templates beside it, and the mismatch only surfaces as \"project-authority prompt missing\" at the seam that needed it. Declared here, a test can hold the two in step.",
+  "copyVerbatim": [
+    "agent-proposal",
+    "project-prompt-generation"
+  ],
+  "why": {
+    "agent-proposal": "The mint needs this prompt in order to run, so it cannot be one of the prompts the mint produces.",
+    "project-prompt-generation": "This is the prompt that generates project prompts. It cannot be its own output."
+  },
+  "generated": [
+    "blocker-discipline",
+    "change-reviewer",
+    "cpa-system",
+    "detective-retry-note",
+    "guard-vocabulary-codegraph",
+    "guard-vocabulary-documentation",
+    "manifest-analysis",
+    "prd-change-reviewer-spec",
+    "prd-change-summarizer-tool",
+    "prd-generation",
+    "spec-agent-speckit",
+    "spec-agent-speckit-refine",
+    "spec-coordinator-review",
+    "spec-model-review",
+    "story-kind-hint-defect",
+    "story-kind-hint-other",
+    "test-ownership",
+    "vc-regenerate",
+    "vc-review"
+  ],
+  "_maintenance": "generated[] is derived from the template directory. It fell 35 entries behind during the 2026-08-15/16 migration and the test that exists to catch exactly that was not being run — which is why the guard now runs as part of the full orchestration suite, not beside the file it guards."
+}

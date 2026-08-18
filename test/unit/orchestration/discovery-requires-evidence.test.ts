@@ -43,10 +43,21 @@ import { join } from 'node:path';
 const DISCOVERY = join(__dirname, '../../../orchestrations/scripts/lib/codeline-discovery.js');
 const src = readFileSync(DISCOVERY, 'utf8');
 
+/**
+ * THE RENDERED PROMPT, not the function that builds it.
+ *
+ * This used to slice buildDiscoveryPrompt out of the .js file. Since the prompt moved into
+ * the template layer (2026-08-16) that slice contains only the render call, so every
+ * assertion below would pass or fail on the wrong text. Rendering the real thing asserts
+ * what the model is actually told, and survives the next move.
+ */
 function prompt(): string {
-  const i = src.indexOf('function buildDiscoveryPrompt');
-  const j = src.indexOf('\nfunction ', i + 1);
-  return src.slice(i, j > i ? j : src.length);
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+  const { buildDiscoveryPrompt } = require(DISCOVERY);
+  return buildDiscoveryPrompt(
+    [{ jiraKey: 'ZZ-1', title: 'a ticket', description: 'a requirement' }],
+    [{ name: 'r1', path: '/w/r1', stack: 'node', packageName: 'r1' }],
+  );
 }
 
 describe('the prompt demands evidence per selection', () => {

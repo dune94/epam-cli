@@ -27,15 +27,16 @@ import { tmpdir } from 'node:os';
 const REPO_ROOT = join(__dirname, '../../../');
 const orchSrc = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
 
-/** The audit-summarising python embedded in the SAST oracle. */
-function extractAuditPy(): string {
-  const start = orchSrc.indexOf("local _audit_py='");
-  if (start === -1) throw new Error('npm audit summariser not found');
-  const bodyStart = orchSrc.indexOf("'", start + "local _audit_py=".length) + 1;
-  const end = orchSrc.indexOf("\n'", bodyStart);
-  if (end === -1) throw new Error('unterminated _audit_py');
-  return orchSrc.slice(bodyStart, end);
-}
+/**
+ * THE SUMMARISER, WHICH IS NOW A FILE.
+ *
+ * It used to be a 48-line Python program held in a shell single-quoted string, so this suite had
+ * to cut it back out of run-agent-orchestration.sh and pipe it to `python3 -`. Extracting a
+ * program to test it is a sign the program is in the wrong place: it could not be run, linted or
+ * imported on its own. It is now lib/handlers/dependency-audit-summary.py and is executed the way
+ * the pipeline executes it.
+ */
+const AUDIT_HANDLER = join(REPO_ROOT, 'orchestrations/scripts/lib/handlers/dependency-audit-summary.py');
 
 const cleanupDirs: string[] = [];
 afterEach(() => {
@@ -53,9 +54,7 @@ function runSummariser(audit: unknown, pkg: unknown | null) {
     writeFileSync(pkgPath, JSON.stringify(pkg));
     args.push(pkgPath);
   }
-  const r = spawnSync('python3', ['-', ...args], {
-    input: extractAuditPy(), encoding: 'utf8', timeout: 20000,
-  });
+  const r = spawnSync('python3', [AUDIT_HANDLER, ...args], { encoding: 'utf8', timeout: 20000 });
   return ((r.stdout || '') + (r.stderr || '')).trim();
 }
 

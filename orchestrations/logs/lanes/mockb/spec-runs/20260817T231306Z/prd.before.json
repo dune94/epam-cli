@@ -1,0 +1,50 @@
+{
+  "_what": "mock3's OWN PRD. Authored, never ingested: this project exists to rehearse the pipeline without any client system in the loop, so there is no Jira to synthesise from. The stories describe OBSERVABLE defects that exist in the codelines right now, each proven by an executable probe before this file was written -- a rehearsal against a defect that is not really there teaches nothing.",
+  "title": "mock3 rehearsal",
+  "project": {
+    "name": "mock3",
+    "description": "A two-codeline transit-fares and departure-board workspace used to exercise the orchestration pipeline end to end.",
+    "outputDirs": [
+      {
+        "codeline": "mocka",
+        "path": "/home/bradleyjerome/projects/mock3/mock-a"
+      },
+      {
+        "codeline": "mockb",
+        "path": "/home/bradleyjerome/projects/mock3/mock-b"
+      }
+    ],
+    "outputDir": "/home/bradleyjerome/projects/mock3/mock-b"
+  },
+  "currentIteration": 0,
+  "stories": [
+    {
+      "id": "MOCK3-2",
+      "jiraKey": "MOCK3-2",
+      "title": "The departure board omits the final stop",
+      "description": "formatStops renders every stop except the last one, so a three-stop line shows two. The journey length reported by totalMinutes is correct, which is why the omission has gone unnoticed.",
+      "acceptanceCriteria": [
+        "Every stop on the line appears on the rendered board, including the final one.",
+        "Stops remain separated by the existing arrow separator.",
+        "An empty line still renders without error."
+      ],
+      "codelines": [
+        "mockb"
+      ],
+      "status": "pending",
+      "completed": false,
+      "effort": "low",
+      "kind": "defect",
+      "agentRoles": {
+        "mockb": "typescript-vitest-engineer"
+      },
+      "agentRole": "typescript-vitest-engineer",
+      "codeline": "mockb"
+    }
+  ],
+  "implementationOrder": {
+    "core": [
+      "MOCK3-2"
+    ]
+  }
+}

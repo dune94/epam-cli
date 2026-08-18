@@ -47,6 +47,15 @@ beforeEach(() => {
   git(['init', '-q', '-b', 'develop']);
   git(['config', 'user.email', 't@t.t']); git(['config', 'user.name', 't']);
   writeFileSync(join(repo, '.gitignore'), 'node_modules/\n'); // matches a real repo — the stub runner is never committed
+  // THE MANIFEST BELONGS TO THE BASELINE, as it does in any real repository. The gate used to
+  // probe node_modules/.bin/vitest by name, so this fixture supplied only the binary — which meant
+  // it also asserted the gate would run against a directory that is not a Node project at all.
+  // The gate now asks lib/ecosystems.js what THIS codeline's test command is, and step 4 reverts
+  // the fix files before re-running: a manifest committed as part of the FIX would be reverted
+  // away, and the pre-fix run would fail for want of a manifest rather than for want of the fix.
+  writeFileSync(join(repo, 'package.json'), JSON.stringify({
+    name: 'fixture', scripts: { test: './node_modules/.bin/vitest' },
+  }) + '\n');
   mkdirSync(join(repo, 'src'), { recursive: true });
   writeFileSync(join(repo, 'src', 'x.ts'), 'export const v = "buggy code";\n'); // no FIXED
   git(['add', '-A']); git(['commit', '-q', '-m', 'baseline (bug)']);

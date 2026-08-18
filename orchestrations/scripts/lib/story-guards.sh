@@ -467,26 +467,7 @@ _text_violates_anti_pattern() {
     local _rules_file="${EPAM_PROJECT_CONFIG_DIR:-}/anti-patterns.json"
     [ -f "$_rules_file" ] || return 0
 
-    python3 - "$_rules_file" "$_text" << 'PYEOF'
-import json, re, sys
-rules_file, text = sys.argv[1], sys.argv[2]
-try:
-    with open(rules_file, encoding='utf-8') as f:
-        rules = json.load(f)
-except Exception:
-    sys.exit(0)
-for rule in rules:
-    pattern = rule.get('textMatchPattern')
-    if not pattern:
-        continue
-    try:
-        if re.search(pattern, text):
-            print(rule.get('message', rule.get('id', 'anti-pattern match')))
-            sys.exit(1)
-    except re.error:
-        continue
-sys.exit(0)
-PYEOF
+    python3 "$SCRIPT_DIR/lib/handlers/story-text-rule-check.py" "$_rules_file" "$_text"
 }
 
 
@@ -533,25 +514,7 @@ _persist_skill_note_simple() {
     fi
 
     ( flock -w 10 200 || { error "  [skill-note] Could not acquire lock on $_profiles_file"; return 1; }
-    python3 - "$_raw_text" << PYEOF 2>&1 | while IFS= read -r line; do log "  [skill-note] $line"; done
-import json, sys, os
-profiles_path = '$_profiles_file'
-role = '$_role'
-note = '[Self-Heal] ' + sys.argv[1]
-with open(profiles_path) as f:
-    profiles = json.load(f)
-if role in profiles:
-    existing = profiles[role]
-    sep = '\n\n' if existing else ''
-    profiles[role] = existing + sep + note
-    _tmp_profiles_path = profiles_path + '.tmp'
-    with open(_tmp_profiles_path, 'w') as f:
-        json.dump(profiles, f, indent=2)
-    os.replace(_tmp_profiles_path, profiles_path)
-    print(f'Skill note appended to [{role}] profile — persisted for future runs')
-else:
-    print(f'Profile role [{role}] not found in profiles.json — skill note NOT persisted', file=sys.stderr)
-PYEOF
+    python3 "$SCRIPT_DIR/lib/handlers/skill-note-append.py" "$_raw_text" "$_profiles_file" "$_role" 2>&1 | while IFS= read -r line; do log "  [skill-note] $line"; done
     ) 200>"${_profiles_file}.lock"
     return 0
 }
@@ -619,6 +582,21 @@ _load_timeout_config() {
     # 2026-08-12: two attempts consumed 1780s of an 1800s wall that also claimed to bound eight.
     _v=$(_lt_get '.timeouts.perAttemptOverheadSecs'); [ -z "${EPAM_PER_ATTEMPT_OVERHEAD_SECS:-}" ] && [ -n "$_v" ] && export EPAM_PER_ATTEMPT_OVERHEAD_SECS="$_v"
     _v=$(_lt_get '.timeouts.storyWallMaxSecs'); [ -z "${EPAM_STORY_WALL_MAX_SECS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_WALL_MAX_SECS="$_v"
+
+    # HOW MANY ATTEMPTS RUN INSIDE ONE STORY WALL — needed HERE, in the parent.
+    #
+    # The watchdog multiplies the per-attempt wall by maxRetries+1 to size the story wall.
+    # EPAM_MAX_RETRIES is loaded by CLAUDE.SH from .retries.maxRetries, in claude.sh's process,
+    # and the watchdog runs in this one. So the multiplier defaulted to 0+1 = 1 and the story
+    # wall collapsed back to exactly one attempt — the two-scope fix was INERT on its first
+    # live run, which printed the floor branch:
+    #
+    #   [orch] story timeout 1800s (floor — no iteration budget granted yet for AMSD-2041)
+    #
+    # The tests passed because they SET EPAM_MAX_RETRIES in their own harness, supplying the
+    # one input reality never did: the caller tested instead of the receiver, the same error
+    # that left the 2026-08-10 wall derivation dead for two days.
+    _v=$(_lt_get '.retries.maxRetries'); [ -z "${EPAM_MAX_RETRIES:-}" ] && [ -n "$_v" ] && export EPAM_MAX_RETRIES="$_v"
 
     # THE MODEL LADDERS, LOADED WHERE THE ORCHESTRATOR CAN SEE THEM.
     #

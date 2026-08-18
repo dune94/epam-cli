@@ -88,15 +88,33 @@ describe('the writer is told tests are not its job — REAL execution', () => {
     const marker = 'local test_ownership_block=""';
     const start = claudeSrc.indexOf(marker);
     expect(start, 'the test-ownership block is gone from claude.sh').toBeGreaterThan(-1);
-    const end = claudeSrc.indexOf('\n    fi', start);
-    const snippet = claudeSrc.slice(start, end + 7).replace(/^\s*local /m, '');
+    // The block now ends at the render-failure guard, not the brownfield `fi`.
+    const end = claudeSrc.indexOf('\n    fi', claudeSrc.indexOf('refusing to build a writer prompt', start));
+    const snippet = claudeSrc.slice(start, end + 7).replace(/\blocal /g, '');
 
     const dir = mkdtempSync(join(tmpdir(), 'ownership-')); dirs.push(dir);
     const sh = join(dir, 'run.sh');
+    // UPDATED 2026-08-12. The policy is no longer a heredoc here: it is rendered from the
+    // project-authority prompt (prompts/test-ownership.json), the same document the REVIEWER
+    // renders its own half from. So the harness must supply what the real script has —
+    // SCRIPT_DIR, NODE_BIN and the project config dir. Stubbing the render instead would test
+    // the caller and not the receiver, which is how the analyst harness hid a dead feature.
+    const repo = join(__dirname, '../../../');
     writeFileSync(sh,
-      `#!/usr/bin/env bash\nset -u\ntest_ownership_block=""\n` +
-      `${snippet}\nprintf '%s' "$test_ownership_block"\n`);
-    return execFileSync('bash', [sh], { encoding: 'utf8', env: { ...process.env, ...env } });
+      `#!/usr/bin/env bash\nset -u\n`
+      + `SCRIPT_DIR=${JSON.stringify(join(repo, 'orchestrations/scripts'))}\n`
+      + `NODE_BIN=${JSON.stringify(process.execPath)}\n`
+      + `error() { echo "$*" >&2; }\n`
+      + `test_ownership_block=""\n`
+      + `${snippet}\nprintf '%s' "$test_ownership_block"\n`);
+    return execFileSync('bash', [sh], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        EPAM_PROJECT_CONFIG_DIR: join(repo, 'orchestrations/projects/metrolinx'),
+        ...env,
+      },
+    });
   }
 
   it('the block IS produced in brownfield when a fix site was found', () => {

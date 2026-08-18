@@ -26,6 +26,25 @@ const jiraClientSrc = readFileSync(join(ROOT, 'orchestrations/scripts/lib/jira-c
 const synthSrc = readFileSync(join(ROOT, 'orchestrations/scripts/synthesize-prd-from-jira.js'), 'utf8');
 const specSrc = readFileSync(join(ROOT, 'orchestrations/scripts/spec-mode-runner.js'), 'utf8');
 
+
+// THE PROMPT MOVED OUT OF THE ENGINE (2026-08-12) into
+// orchestrations/prompts/templates/code-graph-detective.json. Asserting prompt text against the
+// SOURCE of spec-mode-runner.js proves nothing now — and never proved much: a source grep
+// passes on a comment or a dead branch. This renders what the model is actually sent.
+const DETECTIVE_PROMPT = (() => {
+  const path = require('node:path');
+  const lib = path.join(__dirname, '../../../orchestrations/scripts/lib/prompt-library.js');
+  return require(lib).buildPrompt(
+    'code-graph-detective',
+    path.join(__dirname, '../../../orchestrations/projects/metrolinx'),
+    {
+      __DETECTIVE_PROFILE__: '', __REPO_PATH__: '/REPO', __TOOL_PATH__: '/TOOL',
+      __STORY_TITLE__: 'T', __STORY_DESCRIPTION__: '', __STORY_ACS__: '- AC',
+      __KIND_AND_CORRECTIVE_CONTEXT__: '', __PRESEED_BLOCK__: '', __PRESCRIPTION_RULES__: '',
+    },
+  );
+})();
+
 describe('#1 verifyDetectiveHelper — hallucination guard', () => {
   const repo = ROOT; // this repo has real exported symbols under src/
 
@@ -54,16 +73,12 @@ describe('#1 verifyDetectiveHelper — hallucination guard', () => {
 });
 
 describe('#1 injection — an UNVERIFIED helper is flagged as a hypothesis in the prompt', () => {
-  // Extract and run the real jq from claude.sh against a fixVerified:false finding.
-  function extractJq(): string {
-    const marker = 'fix_site_analysis=$(echo "$story_json" | jq -r ';
-    const start = claudeSrc.indexOf(marker);
-    const open = claudeSrc.indexOf("'", start);
-    const close = claudeSrc.indexOf("'", open + 1);
-    return claudeSrc.slice(open + 1, close);
-  }
-  const jq = extractJq();
-  const run = (o: object) => execFileSync('jq', ['-r', jq], { input: JSON.stringify(o), encoding: 'utf8' }).trim();
+  // RE-POINTED 2026-08-13: the rendering moved from a jq program inside claude.sh to its
+  // producer, lib/producers/fix-plan.js, so that the writer and the reviewer stop being told
+  // different things about the same finding. The assertions are unchanged.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { renderFixPlan } = require(join(ROOT, 'orchestrations/scripts/lib/producers/fix-plan.js'));
+  const run = (o: any) => renderFixPlan(o.fixSiteAnalysis).trim();
 
   it('appends the UNVERIFIED warning naming the missing helper when fixVerified=false', () => {
     const out = run({ fixSiteAnalysis: [{ file: 'src/a.ts', function: 'm', reason: 'match fails', fix: 'reuse fooBar', helper: 'fooBar', fixVerified: false }] });
@@ -86,7 +101,7 @@ describe('#1 injection — an UNVERIFIED helper is flagged as a hypothesis in th
 describe('#1 detective output schema requests a machine-checkable helper', () => {
   it('asks for a bare helper symbol and forbids inventing one', () => {
     expect(specSrc).toMatch(/"helper":"<bare existing symbol name to reuse, or empty>"/);
-    expect(specSrc).toMatch(/Do NOT invent a helper name/);
+    expect(DETECTIVE_PROMPT).toMatch(/Do NOT invent a helper name/);
   });
   it('parses helper + computes fixVerified per finding', () => {
     expect(specSrc).toMatch(/fixVerified: verifyDetectiveHelper\(helper, repoPath\)/);

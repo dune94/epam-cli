@@ -102,9 +102,17 @@ verdict: fail`;
   });
 
   it('SAST prompt instructs agent to downgrade dev-dep CVEs to minor', () => {
-    expect(orchSrc).toContain('devDependencies');
-    expect(orchSrc).toContain('NEVER classify a dev-dependency CVE as');
-    expect(orchSrc).toContain("severity 'minor' regardless of CVSS score");
+    // ASSERTED AGAINST THE TEMPLATE, where the sentinel prompts live since 2026-08-15.
+    //
+    // This rule exists because a dev-dependency CVE cannot reach production, and treating one
+    // as a blocker halts a run over a vulnerability in a test runner. It is worth pinning
+    // wherever the prompt lives.
+    const body = JSON.parse(readFileSync(
+      join(__dirname, '../../../orchestrations/prompts/templates/qa-sast-sentinel.json'),
+      'utf8')).body as string;
+    expect(body).toContain('devDependencies');
+    expect(body).toContain('NEVER classify a dev-dependency CVE as');
+    expect(body).toContain("severity 'minor' regardless of CVSS score");
   });
 
   it('SAST parser has summary-block regex fallback for malformed JSON', () => {

@@ -134,7 +134,9 @@ describe('it reports rather than decides', () => {
  */
 describe('the reviewer is both granted the tool and told to use it', () => {
   const fs = require('node:fs');
-  const REVIEW = join(__dirname, '../../../orchestrations/scripts/team-lead-review.sh');
+  const REVIEW = join(__dirname, '../../../orchestrations/prompts/templates/team-lead-review.json');
+  // The reviewer prompt is a document now; its text is the template body, not the script.
+  const reviewPromptText = () => JSON.parse(fs.readFileSync(REVIEW, 'utf8')).body as string;
   const PLUGINS = join(__dirname, '../../../orchestrations/projects/metrolinx/plugins.json');
 
   it('the plugin is provisioned for the project', () => {
@@ -153,20 +155,20 @@ describe('the reviewer is both granted the tool and told to use it', () => {
   });
 
   it('the reviewer prompt tells it to call scan_secrets with the diff', () => {
-    const src = fs.readFileSync(REVIEW, 'utf8');
-    const prompt = src.slice(src.indexOf('REVIEW_PROMPT="'), src.indexOf('REVIEW_OUTPUT=$('));
+    // The body IS the prompt now — no need to slice between shell markers, which is what the
+    // old version did and which yields '' against a document.
+    const prompt = reviewPromptText();
     expect(prompt, 'the tool is granted but nothing asks for it').toMatch(/scan_secrets/);
     expect(prompt).toMatch(/diff/i);
   });
 
   it('the prompt says a finding is a blocker, so the verdict has teeth', () => {
-    const src = fs.readFileSync(REVIEW, 'utf8');
-    const prompt = src.slice(src.indexOf('REVIEW_PROMPT="'), src.indexOf('REVIEW_OUTPUT=$('));
-    expect(prompt.toLowerCase()).toMatch(/finding is a blocker/);
+    expect(reviewPromptText().toLowerCase()).toMatch(/finding is a blocker/);
   });
 
   it('the grant appends project plugin tools, so provisioning is sufficient', () => {
-    const src = fs.readFileSync(REVIEW, 'utf8');
+    // The GRANT is script behaviour, not prompt text — it stays pointed at the script.
+    const src = fs.readFileSync(join(__dirname, '../../../orchestrations/scripts/team-lead-review.sh'), 'utf8');
     expect(src).toMatch(/EPAM_ALLOWED_TOOLS="[^"]*_review_plugin_tools/);
   });
 });

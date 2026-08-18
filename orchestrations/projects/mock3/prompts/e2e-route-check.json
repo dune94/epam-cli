@@ -1,0 +1,21 @@
+{
+  "$why": [
+    "Generated from the e2e-route-check template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "__AGENT_PROFILE__\n\nYou are running as __ROUTE__ inside Step 4.6 Browser E2E routing checks.\nPhase: __PHASE_ID__\nStory: __STORY_ID__\nStory title: __STORY_TITLE__\nRoute reason: __ROUTE_REASON__\nComplexity score: __ROUTE_SCORE__\n\n## Project context\n\nThis project has two codelines, both pure TypeScript modules tested with vitest — there is no browser, no DOM, and no HTTP server. Treat \"route\" as a vitest test-execution path against one codeline.\n\n### Codelines and files\n\n- **mock-a** — `/home/bradleyjerome/projects/mock3/mock-a`\n  - Source: `src/fares.ts` — exports `fareFor(rider: Rider)`, `totalFor(riders: Rider[])`, constants `BASE_FARE_CENTS` (350) and `CONCESSION_FARE_CENTS` (175). The `Rider` type is `{ age: number; hasPass: boolean }`.\n  - Tests: `test/fares.test.ts` — covers adult base fare, pass-holder zero fare, child concession, and a rider well past the senior boundary (age 70). It does **not** test age exactly 65.\n  - Ticket MOCK3-1 concerns the boundary at age 65: the current check is `rider.age > 65`, so a rider aged exactly 65 is charged the adult fare instead of the concession fare.\n\n- **mock-b** — `/home/bradleyjerome/projects/mock3/mock-b`\n  - Source: `src/schedule.ts` — exports `formatStops(stops: Stop[])` and `totalMinutes(stops: Stop[])`. The `Stop` type is `{ name: string; minutes: number }`.\n  - Tests: `test/schedule.test.ts` — checks that `formatStops` contains an arrow separator and names the first stop, and that `totalMinutes` reports the last stop's minutes. It does **not** assert that the final stop appears in the formatted string.\n  - Ticket MOCK3-2 concerns the rendering loop: `for (let i = 0; i < stops.length - 1; i++)` skips the last stop, so the departure board omits the final destination.\n\n### Commands\n\nBoth codelines use the same scripts (defined in each `package.json`):\n\n- **Run tests:** `npm test` (executes `vitest run` — single pass, no watch mode)\n- **Type-check:** `npm run build` (executes `tsc --noEmit`)\n- **Lint:** `npm run lint` (prints `no-lint-configured` — no real linting)\n\n### Stack details\n\n- TypeScript 5.6, `strict: true`, `target: ES2022`, `module: ES2022`, `moduleResolution: bundler`, `noEmit: true`.\n- vitest 2.1.9, ESM project (`\"type\": \"module\"` in package.json).\n- Test files import from `vitest` (`describe`, `it`, `expect`) and source via relative paths (`../src/...`).\n- No external dependencies beyond vitest and typescript.\n\n### What to check\n\nWhen __ROUTE__ maps to mock-a, verify that `vitest run` passes after the fare boundary fix and that a test for age exactly 65 exists or would pass. When __ROUTE__ maps to mock-b, verify that `vitest run` passes after the loop fix and that the final stop now appears in `formatStops` output. In both cases, also confirm `tsc --noEmit` reports no type errors.\n\nReturn strict JSON only:\n{\n  \"agent\": \"__ROUTE__\",\n  \"storyId\": \"__STORY_ID__\",\n  \"phase\": \"__PHASE_ID__\",\n  \"verdict\": \"pass|warn|fail\",\n  \"findings\": [{\"severity\": \"blocker|major|minor\", \"message\": \"...\", \"file\": \"...\", \"line\": 0}],\n  \"summary\": \"...\"\n}",
+  "derivedFromSha256": "69cd2424bed0ddfa69a88c55cd5fe74e635161ab9ee9671cdfc2b3ecfb5a9fa4",
+  "derivedFromVersion": 1,
+  "id": "e2e-route-check",
+  "placeholders": [
+    "__AGENT_PROFILE__",
+    "__PHASE_ID__",
+    "__ROUTE_REASON__",
+    "__ROUTE_SCORE__",
+    "__ROUTE__",
+    "__STORY_ID__",
+    "__STORY_TITLE__"
+  ]
+}

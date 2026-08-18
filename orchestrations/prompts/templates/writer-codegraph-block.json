@@ -1,0 +1,25 @@
+{
+  "$why": [
+    "Moved out of claude.sh on 2026-08-16.",
+    "",
+    "Three mutually exclusive states, each a different instruction to the writer: the helper to",
+    "reuse is already identified, the prescribed fix is known to be incomplete, or nothing is",
+    "known and here is the tool to find out. One body each — collapsing them would tell a writer",
+    "a helper was found when none was."
+  ],
+  "description": "Tells the writer what CodeGraph already established about the fix, or how to query it.",
+  "seams": [
+    "story-writer"
+  ],
+  "id": "writer-codegraph-block",
+  "version": 1,
+  "bodies": {
+    "helper_identified": "## The helper to reuse is ALREADY identified — do NOT search\nThe Root Cause Analysis above names the exact existing helper(s) to reuse: `__PRESCRIBED_HELPER__`. EVERY ONE of them must be imported and called — a write that uses some but not all is rejected at write time for the ones it omitted, and the rejection names only what was missed. Do NOT run CodeGraph or explore the codebase to re-find them — that wastes your turn budget. Import them, apply the prescribed minimal fix, write your file(s), and stop. Only search if you hit something the prescribed fix genuinely does not cover.",
+    "fix_incomplete": "## The prescribed fix is KNOWN INCOMPLETE — explore for the rest\nThe Root Cause Analysis above names existing helper(s) to reuse: `__PRESCRIBED_HELPER__` — apply those parts directly and use EVERY one of them, do NOT re-search for them. But the prescribed fix does NOT address every verification criterion. These are UNCOVERED and need your own investigation beyond the prescribed sites:\n__UNCOVERED_LIST__\nUse the codegraph_query tool (mode=\"helpers\", args=\"<domain nouns>\") to find existing code for THESE before writing new logic — do not assume they are out of scope.",
+    "tool_available": "## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)\nA codegraph_query tool is available — call it directly (NOT via Bash) to discover reusable functions instead of inventing new ones:\n  codegraph_query(mode=\"helpers\", args=\"<domain nouns>\")   # existing util/parser/formatter to REUSE (symbol + import path)\n  codegraph_query(mode=\"query\", args=\"<SymbolName>\")       # exact definition site of a symbol\n  codegraph_query(mode=\"callees\", args=\"<SymbolName>\")     # what a function already calls\nRULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better."
+  },
+  "placeholders": [
+    "__PRESCRIBED_HELPER__",
+    "__UNCOVERED_LIST__"
+  ]
+}

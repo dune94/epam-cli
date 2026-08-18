@@ -1,0 +1,40 @@
+{
+  "_what": "A model call reported $0 while consuming tokens. This is the record it reported, kept because the source file is deleted immediately after it is read.",
+  "agent": "role-assigner",
+  "model": "z-ai/glm-5.2",
+  "provider": "qwen",
+  "parsed": {
+    "costUsd": 0,
+    "tokensIn": 1862,
+    "tokensOut": 259,
+    "tokensCached": 640,
+    "costUnknown": true,
+    "costIsEstimate": false
+  },
+  "raw": {
+    "result": "{\"assignments\":[{\"agentRole\":\"typescript-vitest-engineer\",\"codeline\":\"mocka\",\"reason\":\"Story MOCK3-1 is a TypeScript production-code fix in mocka/src/fares.ts. The typescript-vitest-engineer role explicitly owns production-code fixes for ticket MOCK3-1 in mocka and is the only available role whose brief names src/fares.ts and the mocka codeline.\",\"storyId\":\"MOCK3-1\"},{\"agentRole\":\"typescript-vitest-engineer\",\"codeline\":\"mockb\",\"reason\":\"Story MOCK3-2 is a TypeScript production-code fix in mockb/src/schedule.ts. The typescript-vitest-engineer role explicitly owns production-code fixes for ticket MOCK3-2 in mockb and is the only available role whose brief names src/schedule.ts and the mockb codeline.\",\"storyId\":\"MOCK3-2\"}]}",
+    "model": "z-ai/glm-5.2",
+    "provider": "qwen",
+    "usage": {
+      "inputTokens": 1862,
+      "outputTokens": 259,
+      "totalTokens": 2121,
+      "cached_input_tokens": 640
+    },
+    "cost_usd": 0.0023,
+    "cost_is_estimate": false,
+    "toolCallCount": 0,
+    "iterations": 1,
+    "timings": [
+      {
+        "iteration": 1,
+        "modelLatencyMs": 3801,
+        "toolExecMs": 0,
+        "toolCalls": []
+      }
+    ],
+    "total_cost_usd": 0,
+    "tokens": 0,
+    "planCostUsd": 0
+  }
+}

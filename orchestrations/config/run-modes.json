@@ -1,0 +1,47 @@
+{
+  "_what": "Named run modes. A mode is a stated INTENT — 'resume the writer' — and the set of steps that intent turns off.",
+  "_why": [
+    "On 2026-08-13 an operator asked for a writer resume. It was launched with three environment",
+    "variables and needed six, so the CPA pre-pass, the pre-phase skill assessment and the",
+    "regression guard all ran anyway — each is a separate default-ACTIVE step, and nothing tied",
+    "any of them to the stated intent. The operator had to notice it mid-run.",
+    "",
+    "The intent already existed in run-checkpoint.sh's pre-writer stage, reachable only through a",
+    "checkpoint, and even that list omitted the regression guard. Two half-definitions of one idea.",
+    "",
+    "Declared here, the engine reads a mode and never knows one. Adding a mode is an edit to this",
+    "file. Nobody assembles a mode by hand, so no mode can be half-applied."
+  ],
+  "modes": {
+    "writer-only": {
+      "_what": "Resume at the writer. The spec pass, roster mint, Jira ingest, CPA pre-pass, pre-phase skill assessment and regression baseline have all already run, or are not wanted for this attempt.",
+      "_cost": "Skipping the regression baseline means later test gates judge the codeline's CURRENT state, so pre-existing failures can be attributed to this change. Right for testing a writer; wrong for a run you intend to merge.",
+      "skips": [
+        "EPAM_SPEC_MODE=0",
+        "EPAM_SKIP_AGENT_MINT=1",
+        "EPAM_SKIP_JIRA_INGEST=1",
+        "SKIP_CPA=1",
+        "SKIP_SKILL_ASSESSMENT=1",
+        "SKIP_REGRESSION_GUARD=true"
+      ],
+      "_why_no_mint": "The mint does NOT run. A writer re-run uses the roster that was already minted and reviewed; re-minting proposes against an existing roster and the merge is additive, so it accumulates near-duplicate roles and changes the agents under a story mid-stream."
+    },
+    "post-spec": {
+      "_what": "The spec pass and the roster are done and on disk; everything from the CPA pre-pass onward still runs.",
+      "skips": [
+        "EPAM_SPEC_MODE=0",
+        "EPAM_SKIP_JIRA_INGEST=1",
+        "EPAM_SKIP_AGENT_MINT=1"
+      ],
+      "_why_mint": "Skips the mint because this mode describes a RESUME of a run whose roster is already on disk — pre-run-reset preserves the registries when EPAM_RESUME_RUN is set. A fresh launch has no such protection, which is why writer-only does not skip it."
+    },
+    "post-roster": {
+      "_what": "The roster is minted and assignments are written; the spec pass still runs.",
+      "skips": [
+        "EPAM_SKIP_JIRA_INGEST=1",
+        "EPAM_SKIP_AGENT_MINT=1"
+      ],
+      "_why_mint": "Skips the mint because this mode describes a RESUME of a run whose roster is already on disk — pre-run-reset preserves the registries when EPAM_RESUME_RUN is set. A fresh launch has no such protection, which is why writer-only does not skip it."
+    }
+  }
+}

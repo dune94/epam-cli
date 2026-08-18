@@ -1,0 +1,16 @@
+{
+  "$why": [
+    "Generated from the cpa-inference template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "I don't have a WriteFile tool available — my tool set is limited to `read_file`, `list_files`, and `search`. The original instructions also explicitly state that the pipeline reads the reply text directly, not a file. Here is the specialised prompt body again:\n\n__SYSTEM_PROMPT__\n\n## Project context\n\nThis project has two codelines, both pure TypeScript ES modules (strict mode, ES2022, `\"type\": \"module\"`) with vitest as the only test runner.\n\n- **mocka** — source lives in `src/fares.ts`, tests in `test/fares.test.ts`. Exports: `fareFor`, `totalFor`, `BASE_FARE_CENTS`, `CONCESSION_FARE_CENTS`, type `Rider`.\n- **mockb** — source lives in `src/schedule.ts`, tests in `test/schedule.test.ts`. Exports: `formatStops`, `totalMinutes`, type `Stop`.\n\nBoth codelines use the same npm scripts:\n- `test` → `vitest run`\n- `build` → `tsc --noEmit` (type-check only; no emit)\n- `lint` → no-op (`echo no-lint-configured`) — there is no linter, so do not expect lint feedback.\n\nThe two tickets in scope are single-line boundary/off-by-one bugs in pure logic with no external dependencies:\n\n- **MOCK3-1** (mocka): In `fareFor`, the senior concession check uses `rider.age > 65` instead of `>= 65`, so a rider aged exactly 65 is charged `BASE_FARE_CENTS` instead of `CONCESSION_FARE_CENTS`. The existing test suite covers age 70 but not the 65 boundary.\n- **MOCK3-2** (mockb): In `formatStops`, the loop condition `i < stops.length - 1` skips the last stop. It should be `i < stops.length`. The existing tests assert the arrow separator and the first stop name but do not assert the presence of the final stop.\n\n---\n\n__SECTIONS__\n\n---\n\nRespond with ONLY the JSON object as specified in your instructions. No prose, no markdown fences.",
+  "derivedFromSha256": "57120c129bde372daffdd0c3678a56752e78d8a9e708194db1ffab96c9dc7828",
+  "derivedFromVersion": 1,
+  "id": "cpa-inference",
+  "placeholders": [
+    "__SECTIONS__",
+    "__SYSTEM_PROMPT__"
+  ]
+}

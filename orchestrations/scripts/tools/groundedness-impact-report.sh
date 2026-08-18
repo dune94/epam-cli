@@ -11,6 +11,9 @@
 
 set -euo pipefail
 
+# This script lives in tools/, so the handlers it runs are one directory up.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 OUTPUT_DIR="${1:?Usage: groundedness-impact-report.sh <output_dir>}"
 GROUNDEDNESS_LOG="$OUTPUT_DIR/failure-diagnosis-groundedness.jsonl"
 HEALING_LOG="$OUTPUT_DIR/healing-events.jsonl"
@@ -36,12 +39,7 @@ jq -r '.verdict' "$GROUNDEDNESS_LOG" | sort | uniq -c
 
 echo ""
 echo "--- Score distribution ---"
-jq -r '.score' "$GROUNDEDNESS_LOG" | python3 -c "
-import sys
-scores = [float(l) for l in sys.stdin if l.strip()]
-if scores:
-    print(f'  min={min(scores):.2f} max={max(scores):.2f} avg={sum(scores)/len(scores):.2f}')
-"
+jq -r '.score' "$GROUNDEDNESS_LOG" | python3 "$SCRIPT_DIR/lib/handlers/groundedness-impact.py"
 
 echo ""
 echo "--- Per-story detail ---"

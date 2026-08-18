@@ -135,7 +135,10 @@ describe('THE RESET DOES NOT LIE', () => {
     const start = src.indexOf('_RETRY_STATE_DIR="$LOG_DIR/story-retry-state"');
     const block = src.slice(start, src.indexOf('\nfi\n', start) + 4);
     expect(block).toMatch(/_RETRY_LEFT/);
-    expect(block, 'a leftover file must not fall through to the success message').toMatch(/fail /);
+    // fail_contamination specifically. Plain fail() exits 1, and every launcher swallowed
+    // exit 1 as "Docker unavailable — non-fatal, continuing", so this abort was advisory only.
+    expect(block, 'a leftover file must not fall through to the success message')
+      .toMatch(/fail_contamination /);
   });
 
   it('the sweep is by DIRECTORY, not by a list of extensions', () => {

@@ -1,14 +1,13 @@
 # Phase Handoff: core
-Generated: 2026-08-03T20:09:44-04:00
+Generated: 2026-08-14T20:02:07+00:00
 
 ## Completed Stories
-- MOCK-HW-1: getGreeting should return hello dolly
+- AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
 
 ## Key Artifacts
-- src/hello.ts
 
 ## Cost Summary
 Total cost: $0.0000
-Entries: 10
+Entries: 4
 
 ## Review Results

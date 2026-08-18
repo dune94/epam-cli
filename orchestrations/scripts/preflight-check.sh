@@ -98,6 +98,14 @@ fi
 # the PREVIOUS run, about to be discarded by ingest before the writer ever runs. The earlier
 # version of this guard only recognised a genuinely EMPTY placeholder (mock1's shape) and
 # missed this — a non-empty stale file about to be overwritten is the same situation.
+# The project's declared codeline root, read the same way the launcher reads it. Its presence is
+# what tells this gate that scope — and therefore outputDir — is resolved during the run.
+_codeline_root="${JIRA_CODELINE_ROOT:-}"
+if [[ -z "$_codeline_root" ]] && [[ -n "${PROJECT_CONFIG_DIR:-}" ]] && [[ -f "${PROJECT_CONFIG_DIR}/config.env" ]]; then
+  _codeline_root=$(sed -n 's/^[[:space:]]*JIRA_CODELINE_ROOT=//p' "${PROJECT_CONFIG_DIR}/config.env" \
+                   | tail -1 | tr -d '"'"'"'"' )
+fi
+
 _prd_pending_ingest=0
 if [[ -n "${JIRA_URL:-}" ]] && [[ -n "$PRD_FILE" ]]; then
   _synth_target="${JIRA_SYNTH_PRD_PATH:-$PRD_FILE}"
@@ -115,12 +123,7 @@ elif [[ ! -f "$PRD_FILE" ]]; then
 else
   # Detect canonical (pre-spec-pass) PRD: no story has specification.createdFrom set.
   # Strict phase/field checks only apply to elaborated PRDs — skip them for canonical.
-  _prd_is_canonical=$(python3 -c "
-import json
-d = json.load(open('$PRD_FILE'))
-has_splits = any(s.get('specification', {}).get('createdFrom') for s in d.get('stories', []))
-print('false' if has_splits else 'true')
-" 2>/dev/null || echo "false")
+  _prd_is_canonical=$(python3 "$SCRIPT_DIR/lib/handlers/prd-is-canonical.py" "$PRD_FILE" 2>/dev/null || echo "false")
 
   if [[ "$_prd_is_canonical" == "true" ]]; then
     # Even on a canonical (pre-spec-pass) PRD, no base story should carry a
@@ -135,18 +138,26 @@ print('false' if has_splits else 'true')
     # its own real specification data from this run's own spec pass — only
     # PENDING stories carrying specification data indicate prior-run
     # contamination baked into canonical.
-    _stale_spec=$(python3 -c "
-import json
-d = json.load(open('$PRD_FILE'))
-print(','.join(s['id'] for s in d.get('stories', []) if s.get('specification') and not s.get('completed')))
-" 2>/dev/null || echo "")
-    if [[ -n "$_stale_spec" ]] && [[ "$_prd_pending_ingest" != "1" ]]; then
+    _stale_spec=$(python3 "$SCRIPT_DIR/lib/handlers/prd-stale-specification-stories.py" "$PRD_FILE" 2>/dev/null || echo "")
+    # A RESUME LEGITIMATELY CARRIES ITS OWN SPEC PASS.
+    #
+    # This gate reads a pending story's specification block as a PRIOR run baked into the
+    # canonical, which is right for a fresh run and has fired for real (2026-07-06). A resume is
+    # the second case it cannot distinguish, alongside the pending-ingest one below: the blocks
+    # belong to the run being resumed, and that run IS this run. On 2026-08-18 it refused the
+    # resume of 20260818T101809Z — whose canonical was correctly lean while the runtime PRD held
+    # 6 and 3 verification criteria, 2 fix sites each and both roles — for carrying exactly the
+    # output the resume exists to reuse.
+    if [[ -n "$_stale_spec" ]] && [[ -n "${EPAM_RESUME_RUN:-}" ]]; then
+      ok "PRD carries specification data for the run being resumed (EPAM_RESUME_RUN=${EPAM_RESUME_RUN}) — this is the resumed run's own output, not a prior run's"
+      PASS=$((PASS+1))
+    elif [[ -n "$_stale_spec" ]] && [[ "$_prd_pending_ingest" != "1" ]]; then
       fail "Canonical PRD has pre-baked 'specification' blocks on base stories (must be lean/unelaborated): $_stale_spec"
     elif [[ -n "$_stale_spec" ]]; then
       ok "PRD carries stale specification data from a prior run, but Jira ingest overwrites this exact file before anything reads it — deferred"
       PASS=$((PASS+1))
     else
-      _base_count=$(python3 -c "import json; print(len(json.load(open('$PRD_FILE'))['stories']))" 2>/dev/null || echo "?")
+      _base_count=$(python3 "$SCRIPT_DIR/lib/handlers/prd-story-count.py" "$PRD_FILE" 2>/dev/null || echo "?")
       ok "PRD integrity OK — $_base_count base user stories (canonical/pre-spec-pass — strict phase checks deferred until after spec pass elaboration)"
       PASS=$((PASS+1))
     fi
@@ -181,8 +192,21 @@ else
     ok "PRD project.outputDir = $OUTPUT_DIR_VAL"
   elif [[ "$_prd_pending_ingest" == "1" ]]; then
     ok "PRD content is pending Jira ingest for this run — outputDir check deferred"
+  elif [[ -n "$_codeline_root" ]]; then
+    # DEFERRED FOR THE SAME REASON, ARRIVED AT DIFFERENTLY.
+    #
+    # project.outputDir is WRITTEN BY THE RUN: resolve-codeline-scope.sh calls
+    # apply-codeline-scope.js, which sets outputDirs and outputDir from the codelines it
+    # discovers. So this gate demanded a field the pipeline had not created yet, and no
+    # PRD-authored project could ever pass it.
+    #
+    # The deferral above already exists for the Jira path — the same reasoning, keyed to
+    # ingest. That is the Step 0.3 shape again: a mechanism written only for the branch it was
+    # first needed on. A project that declares a codeline root resolves its scope the same way,
+    # whether its PRD arrived from Jira or was authored by hand.
+    ok "codeline scope is resolved during the run (root: $_codeline_root) — outputDir check deferred"
   else
-    fail "PRD project.outputDir is NOT set — deliverables check will use wrong path"
+    fail "PRD project.outputDir is NOT set, and no codeline root is declared to resolve it from"
   fi
 
   # The RESOLVED OUTPUT_DIR must agree with the PRD's. This used to scrape `OUTPUT_DIR=`
@@ -206,40 +230,7 @@ else
     ok "Story field checks deferred — canonical PRD has no implementation stories yet"
     PASS=$((PASS+1))
   else
-    python3 << PYEOF
-import json, sys
-with open('$PRD_FILE') as f:
-    d = json.load(f)
-stories = d.get('stories', [])
-errors = []
-warns  = []
-valid_providers = {'qwen','openai','anthropic','claude','gemini','codex','cursor','opencode','minimax'}
-for s in stories:
-    sid = s.get('id','?')
-    provider = s.get('aiProvider','')
-    model    = s.get('model','')
-    effort   = s.get('effort','medium')
-    status   = s.get('status','pending')
-
-    if not provider:
-        errors.append(f"{sid}: aiProvider is MISSING")
-    elif provider not in valid_providers:
-        errors.append(f"{sid}: aiProvider='{provider}' is not a known provider")
-
-    if effort == 'low' and provider in ('qwen','openai','anthropic','claude','gemini'):
-        warns.append(f"{sid}: effort=low maps to HAIKU badge in viewer — consider 'medium'")
-
-    if status not in ('pending','completed','failed','deprecated'):
-        errors.append(f"{sid}: status='{status}' is unexpected")
-
-for e in errors:
-    print(f"  ✗ {e}")
-for w in warns:
-    print(f"  ⚠ {w}")
-if not errors:
-    print(f"  ✓ All {len(stories)} stories have valid aiProvider/model/status")
-sys.exit(1 if errors else 0)
-PYEOF
+    python3 "$SCRIPT_DIR/lib/handlers/prd-story-assignment-check.py" "$PRD_FILE" "$SCRIPT_DIR/../config/providers.json"
     story_exit=$?
     [[ $story_exit -eq 0 ]] && ((PASS++)) || ((FAIL++))
   fi
@@ -261,6 +252,40 @@ done
 # RAPIDAPI optional but warn
 if [[ -z "${RAPIDAPI_KEY:-}" ]]; then
   echo "  ⚠ RAPIDAPI_KEY not set — API contract discovery story may fail"
+fi
+
+# ── 5. Every assigned model is a rung of a declared ladder ───────────────────
+#
+# A model absent from the chain cannot escalate: the successor lookup returns EMPTY,
+# which every call site reads as "already at the top rung". The story then burns all of
+# its attempts on one model and the log is indistinguishable from a legitimate ceiling.
+#
+# Live, run 20260814T224748Z: the prd-model-coordinator assigned `gpt-5-codex`, a model
+# on no ladder this project declares. Its own deterministic reviewer checks STRUCTURE —
+# which fields changed, whether stories were added — and never membership. The run only
+# escaped because ladder position had persisted from an earlier run and it resumed
+# mid-chain, ignoring the PRD's assignment entirely.
+#
+# Here rather than in one launcher: this file is what all eight launchers pre-flight
+# through, and the same coordinator writes the PRD for every one of them.
+echo "[ Model ladders ]"
+_mlm_lib="$SCRIPT_DIR/lib/model-ladder-membership.sh"
+_mlm_settings="${EPAM_LLM_SETTINGS_FILE:-${PROJECT_CONFIG_DIR:-}/llm-settings.json}"
+if [[ ! -f "$_mlm_lib" ]]; then
+  fail "lib/model-ladder-membership.sh missing — cannot verify assigned models can escalate"
+elif [[ -z "${PRD_FILE:-}" || ! -f "${PRD_FILE:-}" ]]; then
+  echo "  ⚠ no PRD to check model assignments against"
+elif [[ ! -f "$_mlm_settings" ]]; then
+  # UNKNOWN, not fine: a project whose ladders cannot be read must not look verified.
+  fail "no llm-settings.json at '$_mlm_settings' — cannot tell whether assigned models can escalate"
+else
+  # shellcheck source=lib/model-ladder-membership.sh
+  . "$_mlm_lib"
+  if stories_with_unladdered_models "$PRD_FILE" "$_mlm_settings"; then
+    ok "every assigned model is a rung of a declared ladder"
+  else
+    fail "a story is assigned a model that is on no declared ladder (see above) — it could never escalate"
+  fi
 fi
 
 # ── Machine-environment checks: on by default ────────────────────────────────
@@ -366,17 +391,9 @@ fi
 # 6f. build-info.json was generated recently (within 120s) — proves the watcher
 # is actively refreshing, not just present-but-stalled.
 _generated_at=$(curl -sf "${_DASH}/build-info.json" 2>/dev/null \
-  | python3 -c "import json,sys; print(json.load(sys.stdin).get('generatedAt',''))" 2>/dev/null || echo '')
+  | python3 "$SCRIPT_DIR/lib/handlers/json-field.py" generatedAt 2>/dev/null || echo '')
 if [[ -n "$_generated_at" ]]; then
-  _age_s=$(python3 -c "
-import datetime, sys
-try:
-    ts = datetime.datetime.fromisoformat('$_generated_at'.replace('Z','+00:00'))
-    now = datetime.datetime.now(datetime.timezone.utc)
-    print(int((now-ts).total_seconds()))
-except Exception as e:
-    print(9999)
-" 2>/dev/null || echo 9999)
+  _age_s=$(python3 "$SCRIPT_DIR/lib/handlers/iso-timestamp-age-seconds.py" "$_generated_at" 2>/dev/null || echo 9999)
   if [[ "$_age_s" -lt 120 ]]; then
     ok "build-info.json is ${_age_s}s old — snapshot watcher is actively refreshing"
   else

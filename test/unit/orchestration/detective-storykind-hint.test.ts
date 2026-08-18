@@ -74,7 +74,10 @@ describe('inferStoryKindHint — cheap, deterministic, no LLM call', () => {
 describe('the detective prompt is steered by the hint, not hardcoded to bug framing', () => {
   const fnSrc = (() => {
     const start = SRC.indexOf('async function runCodeGraphDetective(');
-    const end = SRC.indexOf('\n}', SRC.indexOf('CRITICAL REALITY ANCHOR', start)) + 2;
+    // Anchored on the function's OWN closing brace. It used to anchor on a line of PROMPT
+    // TEXT ('CRITICAL REALITY ANCHOR'), which moved into the template on 2026-08-12 — the
+    // slice then collapsed to '' and every assertion below passed nothing to match.
+    const end = SRC.indexOf('\n}', start) + 2;
     return SRC.slice(start, end);
   })();
 
@@ -91,6 +94,8 @@ describe('the detective prompt is steered by the hint, not hardcoded to bug fram
   });
 
   it('novel framing mentions there is no fix site, mirroring SPEC_AGENT\'s own wording', () => {
-    expect(fnSrc).toMatch(/attachment point/i);
+    // Asserted on the ARTEFACT the function produces, not on source text near it.
+    const mod = require(require('node:path').join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'));
+    expect(String(mod.detectivePrescription('novel'))).toMatch(/attachment point/i);
   });
 });

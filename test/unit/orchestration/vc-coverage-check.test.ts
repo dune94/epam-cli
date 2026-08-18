@@ -222,9 +222,20 @@ describe('the wiring cannot skip in silence', () => {
   const ORCH = require('node:fs').readFileSync(
     join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
 
+  /**
+   * THE WHOLE vc-coverage BLOCK, anchored on its own boundaries.
+   *
+   * This sliced a fixed byte window (i-900 .. i+1200) around the vc-coverage-check.sh call, so it
+   * held the else-branch in range only while nothing was inserted between them — adding a comment
+   * to the block broke it while the behaviour was untouched. The block runs from the per-story
+   * resolver to the end of its loop; those are the boundaries that mean something.
+   */
   function wiring(): string {
     const i = ORCH.indexOf('vc-coverage-check.sh');
-    return ORCH.slice(Math.max(0, i - 900), i + 1200);
+    expect(i, 'the vc-coverage step is gone').toBeGreaterThan(-1);
+    const start = ORCH.lastIndexOf('_vc_test_file=', i);
+    const end = ORCH.indexOf('phase_stories_brownfield_scope', i);
+    return ORCH.slice(Math.max(0, start - 600), end > -1 ? end : i + 1200);
   }
 
   it('sources the library that defines the helper it calls', () => {

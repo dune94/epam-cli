@@ -1,0 +1,57 @@
+{
+  "_what": "Captured from cpa-inference buildPrompt BEFORE templating, 2026-08-15. Optional sections are filter(Boolean)-joined, so an absent one removes its separator too — both branches captured.",
+  "_how": "Generated mechanically from the shipped builder.",
+  "fixtures": {
+    "FULL": {
+      "story": {
+        "id": "S-1",
+        "title": "TITLE_S",
+        "description": "DESC_S"
+      },
+      "systemPrompt": "SYSPROMPT_S",
+      "formulaEstimate": {
+        "turns": 5
+      },
+      "kbChunks": [
+        {
+          "source": "KBSRC_S",
+          "score": 0.9,
+          "chunk": "KBCHUNK_S"
+        }
+      ],
+      "codebaseSignals": {
+        "files": 2
+      },
+      "adjacentStories": [
+        {
+          "id": "A-1",
+          "title": "ADJ_S",
+          "effort": "low",
+          "status": "done"
+        }
+      ],
+      "manifest": {
+        "name": "MANIFEST_S"
+      }
+    },
+    "BARE": {
+      "story": {
+        "id": "S-1",
+        "title": "TITLE_S",
+        "description": "DESC_S"
+      },
+      "systemPrompt": "SYSPROMPT_S",
+      "formulaEstimate": {
+        "turns": 5
+      }
+    }
+  },
+  "sha256": {
+    "full": "c9ab25c70c630efe0247b07a02364dfcd603dbc2aa1816acc880dd21fc2a4467",
+    "bare": "ae4389721444838c82df71b7562cf7985f6fd402fcfcee183e3155e94cd3ccee"
+  },
+  "output": {
+    "full": "SYSPROMPT_S\n\n---\n\n## Story Under Review\n```json\n{\n  \"id\": \"S-1\",\n  \"title\": \"TITLE_S\",\n  \"description\": \"DESC_S\"\n}\n```\n\n## Formula Baseline Estimate\n```json\n{\n  \"turns\": 5\n}\n```\n\n## Knowledge Base (1 retrieved sources)\n\n### Source 1: `KBSRC_S` (relevance: 0.9)\n```\nKBCHUNK_S\n```\n\n## Codebase Signals\n_No existing source files found — story targets new code._\n\n## Adjacent Stories in Phase\n- **A-1**: ADJ_S | effort: low | status: done\n\n## Project Manifest\n```json\n{\n  \"name\": \"MANIFEST_S\"\n}\n```\n\n---\n\nRespond with ONLY the JSON object as specified in your instructions. No prose, no markdown fences.",
+    "bare": "SYSPROMPT_S\n\n---\n\n## Story Under Review\n```json\n{\n  \"id\": \"S-1\",\n  \"title\": \"TITLE_S\",\n  \"description\": \"DESC_S\"\n}\n```\n\n## Formula Baseline Estimate\n```json\n{\n  \"turns\": 5\n}\n```\n\n## Knowledge Base\n_No matching KB sources found for this story's required skills._\n\n## Codebase Signals\n_No existing source files found — story targets new code._\n\n---\n\nRespond with ONLY the JSON object as specified in your instructions. No prose, no markdown fences."
+  }
+}

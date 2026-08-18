@@ -20,6 +20,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, chmodSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
+import { templateBody } from '../../helpers/prompt-text';
 import { tmpdir } from 'node:os';
 
 const REPO_ROOT = join(__dirname, '../../../');
@@ -54,12 +55,30 @@ describe('Step 1 loop — recovery wiring (static)', () => {
     // gate (e.g. pre-phase-assessment's profile-change gate) instead of
     // referencing an undefined cross-script function.
     const idx = orchSrc.indexOf('run_story_recovery_analyst() {');
-    const block = orchSrc.slice(idx, idx + 6000);
+    // THE WHOLE FUNCTION, brace-matched. A fixed 6000-character window had been sized to just
+    // reach the runner call; moving the retry prefix into the template layer added lines above
+    // it and pushed it past the edge, so the test failed for a reason unrelated to the wiring.
+    const block = (() => {
+      let depth = 0;
+      for (let i = orchSrc.indexOf('{', idx); i < orchSrc.length; i += 1) {
+        if (orchSrc[i] === '{') depth += 1;
+        else if (orchSrc[i] === '}') { depth -= 1; if (depth === 0) return orchSrc.slice(idx, i + 1); }
+      }
+      return orchSrc.slice(idx);
+    })();
     // The comment explaining the fix legitimately mentions the old function
     // name in prose -- what must never reappear is an actual INVOCATION of it.
     expect(block).not.toMatch(/[^#\n]*run_change_with_reviewer_retry "\$story_id"/);
     expect(block).toMatch(/"prd-change-reviewer" \/\/ ""/);
-    expect(block).toMatch(/CHANGE TYPE: ac_patch/);
+    // The change type is a VALUE the caller supplies, not words in the prompt: the template
+    // says "CHANGE TYPE: __CHANGE_TYPE__" and one reviewer prompt now serves every change type,
+    // where there used to be three near-identical copies. So the thing to assert is that this
+    // call site still declares its change as an ac_patch -- assert it on the prompt and it can
+    // only ever confirm that SOME call site somewhere passes one.
+    expect(orchSrc, 'the recovery analyst no longer declares its change as an ac_patch, so the reviewer judges it as something else')
+      .toMatch(/_render_change_reviewer "\$story_id" "ac_patch"/);
+    expect(templateBody('change-reviewer'), 'the reviewer is not told which kind of change it is judging')
+      .toMatch(/CHANGE TYPE: __CHANGE_TYPE__/);
     expect(block).toMatch(/"\$AI_RUNNER_CMD"/);
   });
 

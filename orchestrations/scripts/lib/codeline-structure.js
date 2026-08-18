@@ -37,82 +37,10 @@ const path = require('path');
  * `installDir: null` means the ecosystem vendors nothing locally, so a missing
  * directory is not evidence of an unbuildable repo.
  */
-const MANIFESTS = [
-  {
-    file: 'package.json',
-    installDir: 'node_modules',
-    deps: (text) => {
-      const pkg = JSON.parse(text);
-      return Object.keys({ ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) });
-    },
-  },
-  {
-    file: 'pyproject.toml',
-    installDir: null, // a virtualenv commonly lives outside the repo
-    deps: (text) => {
-      const out = [];
-      // [project] dependencies = ["a", "b>=1"]  and poetry's [tool.poetry.dependencies]
-      //
-      // Match a COMPLETE quoted string, then strip the version specifier. An
-      // earlier version matched from an opening quote to the next delimiter,
-      // which also matched the `", ` BETWEEN two entries and yielded a
-      // dependency literally named ",". That junk name normalised to the empty
-      // string, and "anything".includes("") is true in JS — so one malformed
-      // entry matched every ticket term and handed a repo a perfect structural
-      // score. Caught by codeline-discovery.test.ts's live AMSD-1820 ranking.
-      const arr = text.match(/dependencies\s*=\s*\[([\s\S]*?)\]/);
-      if (arr) {
-        for (const m of arr[1].matchAll(/["']([^"']+)["']/g)) {
-          const name = m[1].split(/[<>=!~^;[\s]/)[0].trim();
-          if (name) out.push(name);
-        }
-      }
-      const poetry = text.match(/\[tool\.poetry\.dependencies\]([\s\S]*?)(\n\[|$)/);
-      if (poetry) for (const m of poetry[1].matchAll(/^\s*([A-Za-z0-9_.-]+)\s*=/gm)) out.push(m[1]);
-      return out;
-    },
-  },
-  {
-    file: 'requirements.txt',
-    installDir: null,
-    deps: (text) => text.split('\n')
-      .map((l) => l.trim())
-      .filter((l) => l && !l.startsWith('#') && !l.startsWith('-'))
-      .map((l) => l.split(/[<>=!~[;]/)[0].trim())
-      .filter(Boolean),
-  },
-  {
-    file: 'go.mod',
-    installDir: null, // module cache is global, not in-repo
-    deps: (text) => [...text.matchAll(/^\s+([\w.\-/]+)\s+v[\d.]/gm)].map((m) => m[1]),
-  },
-  {
-    file: 'Cargo.toml',
-    installDir: null,
-    deps: (text) => {
-      const sec = text.match(/\[dependencies\]([\s\S]*?)(\n\[|$)/);
-      return sec ? [...sec[1].matchAll(/^\s*([A-Za-z0-9_-]+)\s*=/gm)].map((m) => m[1]) : [];
-    },
-  },
-  {
-    file: 'Gemfile',
-    installDir: null,
-    deps: (text) => [...text.matchAll(/^\s*gem\s+['"]([^'"]+)/gm)].map((m) => m[1]),
-  },
-];
-
-/** Extra ecosystems without editing this file: "manifest:installDir,manifest:" */
-function extraManifests(env) {
-  const raw = (env && env.EPAM_CODELINE_MANIFESTS) || '';
-  return raw.split(',').map((s) => s.trim()).filter(Boolean).map((pair) => {
-    const [file, installDir] = pair.split(':');
-    return { file, installDir: installDir || null, deps: () => [] };
-  });
-}
-
-function allManifests(env = process.env) {
-  return [...MANIFESTS, ...extraManifests(env)];
-}
+// THE ONE TABLE lives in ecosystems.js. This file used to carry its own copy, and the repo
+// scan in codeline-discovery.js carried a smaller one; they had already drifted by three
+// ecosystems. Re-exported here so existing importers of MANIFESTS keep working.
+const { MANIFESTS, extraManifests, allManifests } = require('./ecosystems.js');
 
 /**
  * declaredDependencies(repoPath) -> Set<string>

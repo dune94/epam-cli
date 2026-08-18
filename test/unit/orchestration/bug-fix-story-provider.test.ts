@@ -45,26 +45,38 @@ describe('run-agent-orchestration.sh — bug-fix story creation never uses "open
     expect(orchSrc).not.toMatch(/"openrouter"/);
   });
 
-  it('the owner-story aiProvider fallback defaults to "qwen", not "openrouter"', () => {
-    expect(orchSrc).toMatch(/\.aiProvider \/\/ "qwen"/);
+  it('the owner-story aiProvider has NO engine-chosen default at all', () => {
+    // WAS: expected `.aiProvider // "qwen"`. The concern behind it was real — "openrouter" is not
+    // a provider name this pipeline uses — but the fix named a DIFFERENT provider in the engine,
+    // which is the same defect one value over. A project declares its providers; the engine picks
+    // none. The provider now follows the model through EPAM_MODEL_PROVIDER_MAP.
+    expect(orchSrc, 'the engine still chooses a provider on the project’s behalf')
+      .not.toMatch(/\.aiProvider \/\/ "[a-z]/);
+    expect(orchSrc, 'the aiProvider read is gone entirely').toMatch(/\.aiProvider \/\/ empty/);
   });
 
-  it('round 2 bug-fix escalation uses the configured ESCALATION_MODEL, not a hardcoded Anthropic model', () => {
-    // A hardcoded anthropic/claude-sonnet model would be a third, inconsistent
-    // model path alongside the MiniMax + OpenRouter roster this pipeline uses
-    // everywhere else (ANTHROPIC_API_KEY existing globally is not sufficient
-    // justification — this tier3 pipeline is deliberately scoped).
+  it('round 2 escalation climbs the writer’s own ladder, not a shared escalation pin', () => {
+    // The original requirement stands: no third model path smuggled in here.
     expect(orchSrc).not.toMatch(/anthropic\/claude-sonnet/);
-    const idx = orchSrc.indexOf('model_override="${ESCALATION_MODEL');
-    expect(idx).toBeGreaterThan(-1);
-    const block = orchSrc.slice(idx, idx + 100);
-    expect(block).toMatch(/provider_override="qwen"/);
+
+    // What changed: ESCALATION_MODEL was ONE run-wide model every agent escalated to regardless
+    // of where it started — a second pin, not a ladder. Round 2 now walks one rung of the
+    // writer's own chain, and names no provider, because the provider follows the model.
+    const idx = orchSrc.indexOf('model_override=$(seam_next_model');
+    expect(idx, 'round 2 no longer climbs the ladder').toBeGreaterThan(-1);
+    const block = orchSrc.slice(idx, idx + 200);
+    expect(block, 'a provider is still named here').toMatch(/provider_override=""/);
   });
 
-  it('ESCALATION_MODEL fallback default matches the InferenceLadder default (z-ai/glm-5.2)', () => {
-    const idx = orchSrc.indexOf('model_override="${ESCALATION_MODEL');
+  it('the escalation target is not a model name written into the engine', () => {
+    // WAS: asserted the fallback literal WAS z-ai/glm-5.2 — a test whose only job was to keep a
+    // vendor model name pinned in the engine. Matching "the InferenceLadder default" is now
+    // structural rather than textual: both ask the same ladder, so they cannot disagree.
+    const idx = orchSrc.indexOf('model_override=');
+    expect(idx).toBeGreaterThan(-1);
     const line = orchSrc.slice(idx, orchSrc.indexOf('\n', idx));
-    expect(line).toMatch(/z-ai\/glm-5\.2/);
+    expect(line, 'a vendor model name is back in the escalation path')
+      .not.toMatch(/MiniMax-M|z-ai\/glm|moonshotai\/kimi/);
   });
 
   it('REGRESSION: bug-fix story\'s failing-file path uses $PROJECT_ROOT, not a hardcoded /tmp/skyscanner-app prefix (would point at a nonexistent path for the real project outputDir)', () => {

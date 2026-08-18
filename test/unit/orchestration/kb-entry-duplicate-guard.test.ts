@@ -134,12 +134,19 @@ describe('run_failure_analyst kb case — REAL execution', () => {
     expect(logOutput).toMatch(/exact duplicate/);
   });
 
-  it('still persists a genuinely NEW, non-duplicate note normally', () => {
+  // INVERTED 2026-08-12, same reason as kb-is-keyed-by-codeline: this asserted that an
+  // approved note is PERSISTED to the KB, i.e. carried into every later run. Forbidden now —
+  // "there can be no lingering anything to skew runs". The duplicate-guard tests above still
+  // stand on their own: they prove the analyst does not re-emit a note it has already made.
+  it('does NOT persist even a genuinely new, approved note across runs', () => {
     const { kbAfter } = run({
       existingKbContent: '- [2026-01-01T00:00:00Z] Some unrelated pre-existing note.\n',
       skillNote: 'Always export a main function from CLI entry points for testability',
       reviewerVerdict: 'pass',
     });
-    expect(kbAfter).toMatch(/Always export a main function/);
+    expect(kbAfter, 'an approved note is being written into the next run\'s context')
+      .not.toMatch(/Always export a main function/);
+    expect(kbAfter, 'the KB was rewritten rather than left alone')
+      .toMatch(/Some unrelated pre-existing note/);
   });
 });

@@ -45,5 +45,69 @@ kb_restore_canonical() {
     if command -v success >/dev/null 2>&1; then
         success "KB.md restored from canonical (within-run entries do not carry across runs)"
     fi
+
+    kb_clear_agent_residue "$_automation_dir"
+    return 0
+}
+
+# kb_clear_agent_residue <automation_dir>
+# KB.md was never the only KB. The failure analyst appends to KB-<codeline>.md and
+# KB-<role>.md, and self-heal writes agents/kb/. NONE of it was reset — KB-gotransit.md was
+# found carrying entries dated across FOUR SEPARATE DAYS, all injected into later runs'
+# prompts as current fact. pre-run-reset.sh had declared this deliberate:
+#
+#     # NOT cleared: KB-<role>.md. Per-agent knowledge is the one thing meant to persist
+#
+# Operator, 2026-08-12, overriding it: "agent kb files = remove all after every run - there
+# can be no lingering anything to skew runs. That is strictly forbidden."
+#
+# BY PATTERN, never a list of names. A list is what let the ladder state survive (*.count
+# cleared while .model and .iterbump remained) and what let review-feedback survive. A KB
+# minted for an agent invented tomorrow is covered by this the day it appears.
+kb_clear_agent_residue() {
+    local _automation_dir="${1:-${AUTOMATION_DIR:-}}"
+    [ -n "$_automation_dir" ] || return 0
+    local _agents="$_automation_dir/agents"
+    [ -d "$_agents" ] || return 0
+
+    # KB-*.md — per-codeline and per-role prose. Deleted outright: nothing reads one that does
+    # not exist, and an empty file still renders an empty KB section into a prompt.
+    local _cleared=0
+    _cleared=$(find "$_agents" -maxdepth 1 -type f -name 'KB-*.md' 2>/dev/null | wc -l)
+    find "$_agents" -maxdepth 1 -type f -name 'KB-*.md' -delete 2>/dev/null || true
+
+    # agents/kb/ — self-heal state. TRUNCATED, not deleted: the run reports and kb-replay.js
+    # read these, and a missing file is a different failure from an empty one. Emptied to the
+    # empty form of each type so a reader sees "no constraints", never a parse error.
+    local _f
+    if [ -d "$_agents/kb" ]; then
+        while IFS= read -r _f; do
+            [ -n "$_f" ] || continue
+            case "$_f" in
+                *.json)  printf '[]\n' > "$_f" 2>/dev/null || true ;;
+                *)       : > "$_f" 2>/dev/null || true ;;
+            esac
+            _cleared=$((_cleared + 1))
+        done <<EOF
+$(find "$_agents/kb" -maxdepth 1 -type f 2>/dev/null)
+EOF
+    fi
+
+    # A reset that could not clean must say so. Announcing a clean start while carrying the
+    # previous run's conclusions is the exact failure this whole file exists to prevent.
+    local _left
+    _left=$(find "$_agents" -maxdepth 1 -type f -name 'KB-*.md' 2>/dev/null | wc -l)
+    if [ "$_left" -gt 0 ]; then
+        if command -v fail_contamination >/dev/null 2>&1; then
+            fail_contamination "$_left agent KB file(s) could NOT be cleared in $_agents — a run started now would inherit a previous run's conclusions as fact"
+        else
+            echo "ERROR: $_left agent KB file(s) could NOT be cleared in $_agents" >&2
+            return 1
+        fi
+    fi
+
+    if [ "$_cleared" -gt 0 ] && command -v success >/dev/null 2>&1; then
+        success "Cleared $_cleared agent KB file(s) — no prior run's conclusions reach this one"
+    fi
     return 0
 }

@@ -24,8 +24,9 @@
  * enforcement path, or vocabulary is back in the guard by the side door.
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 const ROOT = join(__dirname, '../../../');
 const SRC = readFileSync(join(ROOT, 'orchestrations/scripts/spec-mode-runner.js'), 'utf8');
@@ -111,9 +112,23 @@ describe('samples reach the producer and never the guard', () => {
   });
 
   it('the regeneration prompt shows them', () => {
-    const i = SRC.indexOf('function regenerateVc');
-    expect(i).toBeGreaterThan(-1);
-    expect(SRC.slice(i, SRC.indexOf('\n}\n', i))).toMatch(/vcFormSamples/);
+    // ASSERTS THE RENDERED PROMPT, not the source that builds it.
+    //
+    // This used to slice regenerateVcViaOpenspec out of the file and look for the word
+    // "vcFormSamples". When the prompt moved into the template layer (2026-08-16) that check
+    // failed — and it was RIGHT to: the migration had captured the branch with no samples
+    // configured, so the conditional collapsed and the samples could never have reached the
+    // agent again. A byte-for-byte golden could not see it, because the fixture never
+    // exercised that branch. Rendering the real prompt with samples present does.
+    const tmp = join(tmpdir(), `vc-samples-${process.pid}.md`);
+    writeFileSync(tmp, 'REJECTED: a worked example — SAMPLE_PROBE_MARKER');
+    try {
+      const out = spec.buildVcRegeneratePrompt({
+        story: { description: 'd', acceptanceCriteria: [] },
+        flags: [], siteBlock: '', env: { VC_FORM_SAMPLES_FILE: tmp },
+      });
+      expect(out, 'the worked examples never reach the agent').toContain('SAMPLE_PROBE_MARKER');
+    } finally { rmSync(tmp, { force: true }); }
   });
 
   it('the first-pass producer shows them too — not only the retry', () => {
@@ -127,12 +142,12 @@ describe('the reviewer’s own output example carries no vocabulary either', () 
   it('it does not quote a past ticket’s domain word', () => {
     // Only PROMPT text — a comment quoting the old example is documentation, not something
     // sent to a model, and anchoring on it tests the wrong string.
-    const promptLines = SRC.split('\n').filter((l) => {
-      const t = l.trim();
-      return !t.startsWith('//') && !t.startsWith('*') && !t.startsWith('/*');
-    }).join('\n');
-    const i = promptLines.indexOf('Output ONLY a JSON array of short flag strings');
+    // The reviewer's output example lives in the template layer now.
+    const tplBody = JSON.parse(readFileSync(
+      join(__dirname, '../../../orchestrations/prompts/templates/vc-review.json'), 'utf8')).body as string;
+    const i = tplBody.indexOf('Output ONLY a JSON array of short flag strings');
     expect(i, 'the reviewer output example moved').toBeGreaterThan(-1);
+    const promptLines = tplBody;
     const example = promptLines.slice(i, i + 240);
     expect(
       example,

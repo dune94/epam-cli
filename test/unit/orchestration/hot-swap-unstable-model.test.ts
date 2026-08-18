@@ -68,7 +68,7 @@ describe('hot_swap_story_model_if_unstable — REAL execution', () => {
   }): { model: string; aiProvider: string | null; warned: string[] } {
     const dir = mkdtempSync(join(tmpdir(), 'hot-swap-test-'));
     try {
-      const fnBody = extractFunctionBodyBraceCounted('hot_swap_story_model_if_unstable');
+      const fnBody = [extractFunctionBodyBraceCounted('_story_archetype_ladder'), extractFunctionBodyBraceCounted('_resolve_ladder_tier'), extractFunctionBodyBraceCounted('hot_swap_story_model_if_unstable')].join('\n');
       const prdFile = join(dir, 'prd.json');
       writeFileSync(
         prdFile,
@@ -194,7 +194,7 @@ describe('hot_swap_story_model_if_unstable — top-of-ladder fallback (fixes liv
   }): { model: string; aiProvider: string | null; warned: string[] } {
     const dir = mkdtempSync(join(tmpdir(), 'hot-swap-fallback-test-'));
     try {
-      const fnBody = extractFunctionBodyBraceCounted('hot_swap_story_model_if_unstable');
+      const fnBody = [extractFunctionBodyBraceCounted('_story_archetype_ladder'), extractFunctionBodyBraceCounted('_resolve_ladder_tier'), extractFunctionBodyBraceCounted('hot_swap_story_model_if_unstable')].join('\n');
       const prdFile = join(dir, 'prd.json');
       writeFileSync(
         prdFile,
@@ -292,7 +292,7 @@ describe('run_story_with_watchdog — retry timeout scaling (REAL execution)', (
     const dir = mkdtempSync(join(tmpdir(), 'watchdog-timeout-test-'));
     try {
       const watchdogBody = extractFunctionBodyBraceCounted('run_story_with_watchdog');
-      const hotSwapBody = extractFunctionBodyBraceCounted('hot_swap_story_model_if_unstable');
+      const hotSwapBody = [extractFunctionBodyBraceCounted('_story_archetype_ladder'), extractFunctionBodyBraceCounted('_resolve_ladder_tier'), extractFunctionBodyBraceCounted('hot_swap_story_model_if_unstable')].join('\n');
       const callLog = join(dir, 'timeout-calls.txt');
       const logFile = join(dir, 'story.log');
       const scriptPath = join(dir, 'run.sh');

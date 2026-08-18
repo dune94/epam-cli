@@ -60,6 +60,11 @@ info()    { echo -e "${YELLOW}[pre-run-reset]${NC} $*"; }
 success() { echo -e "${GREEN}[pre-run-reset] ✓${NC} $*"; }
 fail()    { echo -e "${RED}[pre-run-reset] ✗${NC} $*" >&2; exit 1; }
 
+# Contamination gets its OWN exit code (9) so no launcher can swallow it as a Docker
+# problem. See lib/contamination-exit.sh.
+# shellcheck source=lib/contamination-exit.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/contamination-exit.sh"
+
 # ── Parse args ────────────────────────────────────────────────────────────────
 PRD_FILE=""
 LOG_DIR_ARG=""
@@ -174,7 +179,18 @@ sed -i "s|alias /prd-dir/[^;]*;|alias /prd-dir/${PRD_BASENAME};|" \
 # with, silently ignoring this run's PRD-basename patch (found live
 # 2026-07-13 verifying this exact fix — even the fix's own docs file wasn't
 # safe from the bug it documents).
-if docker compose \
+# THE DASHBOARD RESTART IS THE ONLY SLOW STEP, AND A TEST DOES NOT NEED IT.
+#
+# `docker compose up --force-recreate` costs ~3 seconds. Everything else this script does — the
+# roster restore, the PRD restore, clearing generated artefacts and prompts — is file work that
+# takes milliseconds. A test that exercises the RESET therefore paid three seconds per case for a
+# container it never looks at: two test files spent 23 of the 24 seconds my tests take, purely
+# here, and that is the difference between a suite that gets run and one that does not.
+#
+# Skipped only when asked. A run never sets this, so the live path is unchanged.
+if [ "${EPAM_SKIP_CONTAINER_RESTART:-0}" = "1" ]; then
+  info "  Container restart skipped (EPAM_SKIP_CONTAINER_RESTART=1)"
+elif docker compose \
      -f "$COMPOSE_BASE" \
      -f "$COMPOSE_OVERRIDE" \
      up -d --force-recreate agent-monitor 2>/dev/null; then
@@ -305,6 +321,131 @@ done < <(find "$LOG_DIR" -type f \( -name '*.log' -o -name 'story-outputs-*.txt'
 # added and nobody updates the sweep. This directory exists ONLY for per-story retry state and
 # none of it may survive a run, so clear ALL of it — a file type added tomorrow is covered
 # without anyone remembering this code exists.
+# ── Run-scoped feedback artefacts ───────────────────────────────────────────
+# NOTHING FROM A PREVIOUS RUN MAY REACH THIS ONE.
+#
+# review-feedback-<story>.json is written when a review REQUESTS CHANGES and deleted only when
+# a LATER review APPROVES — cleanup that depends on a success which may never come. Live:
+# review-feedback-AMSD-2041.json was written 2026-08-09 08:26 and was still being handed to the
+# writer on 2026-08-12, under the heading "The team-lead reviewer examined YOUR PREVIOUS ATTEMPT
+# ... This is the highest priority." It was a different run, against code that no longer
+# existed. Its blockers demanded work on files that HAD since been modified, and a dependency
+# that does not exist. The writer obeyed all of it, and was blamed for over-reaching.
+#
+# Operator, 2026-08-12: "I never granted permission to persist ANY such file across runs" and
+# "if it is frail - DELETE it after each run - simple."
+#
+# BY PATTERN, NOT BY NAME. This reset has now been caught twice enumerating specific names —
+# '*.count' while .model and .iterbump survived, and the PRD/roster while review feedback
+# survived. A feedback artefact added tomorrow is covered without anyone remembering this code.
+_RUN_ARTIFACT_DIR="${LOG_DIR:-}"
+if [ -n "$_RUN_ARTIFACT_DIR" ] && [ -d "$_RUN_ARTIFACT_DIR" ]; then
+    # EVERYWHERE A LANE CAN READ ONE, not just the parent directory.
+    #
+    # This swept `-maxdepth 1` while a lane runs with LOG_DIR=$LOG_DIR/lanes/<codeline> and the
+    # writer reads $LOG_DIR/review-feedback-<story>.json — so every lane's findings survived every
+    # reset. Found 2026-08-13: all three lanes still held files written on 2026-08-05, metrolinx's
+    # carrying NINE issues and FOUR blockers about an implementation discarded a week earlier. A
+    # run would have opened its writer's prompt with "a prior code review requested changes — this
+    # is the highest priority" and demands about code that no longer existed.
+    #
+    # Second time the reset has been caught missing lane-scoped state; the published agent-input
+    # store was the first, earlier the same day. Depth is the bug both times, so depth goes.
+    _RA_CLEARED=$(find "$_RUN_ARTIFACT_DIR" -type f -name 'review-*.json' 2>/dev/null | wc -l)
+    find "$_RUN_ARTIFACT_DIR" -type f -name 'review-*.json' -delete 2>/dev/null || true
+    _RA_LEFT=$(find "$_RUN_ARTIFACT_DIR" -type f -name 'review-*.json' 2>/dev/null | wc -l)
+    if [ "$_RA_LEFT" -gt 0 ]; then
+        # Starting a run on another run's review findings is the whole defect. Never announce a
+        # clean slate this script did not deliver.
+        fail_contamination "$_RA_LEFT run-scoped review artefact(s) could NOT be cleared in $_RUN_ARTIFACT_DIR — a run started now would act on a previous run's findings"
+    elif [ "$_RA_CLEARED" -gt 0 ]; then
+        info "  Cleared $_RA_CLEARED run-scoped review artefact(s) — no prior run's findings reach this one"
+    fi
+fi
+
+# PUBLISHED AGENT INPUTS — the store agents read each other's outputs from.
+#
+# Same ruling as the review artefacts above, for the same reason and with a shorter fuse: the
+# detective re-runs every pass, and yesterday's fix-plan is indistinguishable from today's to
+# every consumer that collects it. A plan that outlives the investigation which produced it is a
+# writer implementing a finding that has since been withdrawn.
+#
+# BY DIRECTORY, NOT BY KIND. Kinds are added as producers are migrated onto the framework; naming
+# them here would mean the next one silently survives, which is how this reset has already been
+# caught twice.
+# BY DIRECTORY NAME, EVERYWHERE UNDER LOG_DIR — not just the one this process would use.
+# Parallel lanes each publish into $LOG_DIR/lanes/<codeline>/agent-io, and clearing only the
+# parent's store left three lane stores intact while REPORTING a clean slate. Found in the
+# pre-launch review 2026-08-13, before it could reach a run.
+_AGENT_IO_DIRS=()
+if [ -n "${LOG_DIR:-}" ] && [ -d "$LOG_DIR" ]; then
+    while IFS= read -r _d; do [ -n "$_d" ] && _AGENT_IO_DIRS+=("$_d"); done \
+        < <(find "$LOG_DIR" -type d -name agent-io 2>/dev/null)
+fi
+# The configured store too, in case it was pointed outside LOG_DIR.
+if [ -n "${AGENT_IO_DIR:-}" ] && [ -d "$AGENT_IO_DIR" ]; then
+    _aio_known=" $(printf '%s ' "${_AGENT_IO_DIRS[@]+"${_AGENT_IO_DIRS[@]}"}")"
+    case "$_aio_known" in *" $AGENT_IO_DIR "*) ;; *) _AGENT_IO_DIRS+=("$AGENT_IO_DIR") ;; esac
+fi
+if [ "${#_AGENT_IO_DIRS[@]}" -gt 0 ]; then
+    _AIO_CLEARED=0
+    _AIO_LEFT=0
+    for _aio in "${_AGENT_IO_DIRS[@]}"; do
+        _n=$(find "$_aio" -mindepth 1 -type f 2>/dev/null | wc -l)
+        _AIO_CLEARED=$(( _AIO_CLEARED + _n ))
+        rm -rf "$_aio" 2>/dev/null || true
+        # COUNTING WHAT SURVIVED MUST NOT DEPEND ON THE DIRECTORY STILL EXISTING.
+        #
+        # This was `_AIO_LEFT=$(( _AIO_LEFT + $(find "$_aio" ... | wc -l) ))`. When the rm
+        # above SUCCEEDS the path is gone, so `find` exits 1; `pipefail` (set at the top of
+        # this file) propagates that through `| wc -l`; the arithmetic assignment inherits
+        # it; and `set -e` kills the script — right here, at line ~386 of 555.
+        #
+        # So the reset aborted BECAUSE the clearing worked, and everything sequenced after
+        # this point never ran: story-retry-state, the kb-scratchpad sweep, the roster
+        # clear. lib/pre-run-reset-gate.sh saw a plain exit 1, could only tell
+        # CONTAMINATION_EXIT from "environmental", and logged "(dashboard/environment, not
+        # state) — non-fatal, continuing". It was entirely about state.
+        #
+        # Live cost, run 20260814T223413Z: the story inherited 12/12 attempts and "failed
+        # after 12 attempts" in 18 seconds having made zero model calls.
+        #
+        # A directory that no longer exists has nothing left in it — say that directly
+        # rather than asking a tool that treats the absence as an error.
+        _remaining=0
+        [ -d "$_aio" ] && _remaining=$(find "$_aio" -mindepth 1 -type f 2>/dev/null | wc -l)
+        _AIO_LEFT=$(( _AIO_LEFT + _remaining ))
+    done
+    if [ "$_AIO_LEFT" -gt 0 ]; then
+        fail_contamination "$_AIO_LEFT published agent input(s) could NOT be cleared under ${LOG_DIR:-?} — a run started now would hand agents a previous run's outputs"
+    elif [ "$_AIO_CLEARED" -gt 0 ]; then
+        info "  Cleared $_AIO_CLEARED published agent input(s) across ${#_AGENT_IO_DIRS[@]} store(s) — no prior run's outputs reach this one"
+    fi
+fi
+
+# A PREVIOUS RUN'S COVERAGE VERDICT IS NOT THIS RUN'S.
+#
+# vc-coverage-<story>.json records which verification criteria had no test behind them.
+# lib/vc-coverage-findings.js reads it straight out of LOG_DIR and renders it into the
+# reviewer AND the writer, under text asserting it "compared this story's verification
+# criteria against the tests it ACTUALLY PRODUCED". Nothing cleared it, so it was the
+# LAST run's comparison, presented as this one's.
+#
+# Live 2026-08-15: an artifact written 08-14 18:35 reached the 07:17 writer prompt on
+# 08-15 — four criteria reported as untested before that run had written a line, judged
+# against a codeline hard-reset to baseline three times since. The block also carries
+# "if it is testable, it needs a test" into a prompt whose own test-ownership section
+# reads "Do NOT write, edit, or create any test file" — an instruction the writer is
+# forbidden to act on, argued from data that is not about its work.
+_VCC_CLEARED=0
+while IFS= read -r _vcc; do
+    [ -n "$_vcc" ] || continue
+    rm -f "$_vcc" 2>/dev/null && _VCC_CLEARED=$((_VCC_CLEARED+1)) || true
+done < <(find "$LOG_DIR" -maxdepth 1 -type f -name 'vc-coverage-*.json' 2>/dev/null)
+if [ "$_VCC_CLEARED" -gt 0 ]; then
+    info "  Cleared $_VCC_CLEARED VC-coverage verdict(s) — no prior run's coverage findings reach this writer"
+fi
+
 _RETRY_STATE_DIR="$LOG_DIR/story-retry-state"
 if [ -d "$_RETRY_STATE_DIR" ]; then
     _RETRY_CLEARED=$(find "$_RETRY_STATE_DIR" -maxdepth 1 -type f 2>/dev/null | wc -l)
@@ -314,7 +455,7 @@ if [ -d "$_RETRY_STATE_DIR" ]; then
         # ABORT rather than announce a clean slate we did not deliver. Surviving state means
         # the run starts mid-ladder on a model nobody chose, which is precisely what went
         # unnoticed through two runs — and this script's whole job is the clean slate.
-        fail "$_RETRY_LEFT inference-ladder state file(s) could NOT be cleared in $_RETRY_STATE_DIR — a run started now would resume mid-ladder"
+        fail_contamination "$_RETRY_LEFT inference-ladder state file(s) could NOT be cleared in $_RETRY_STATE_DIR — a run started now would resume mid-ladder"
     elif [ "$_RETRY_CLEARED" -gt 0 ]; then
         info "  Cleared $_RETRY_CLEARED inference-ladder state file(s) — every story starts this run at rung 0 on its PRD-declared model"
     fi
@@ -334,8 +475,11 @@ fi
 # Cleared here rather than in the mint step so no launcher can skip it, and so the
 # base is clean even for a run that never reaches the mint.
 #
-# NOT cleared: KB-<role>.md. Per-agent knowledge is the one thing meant to persist
-# across runs (879c705) — profiles.json is ephemeral, the KB files are the store.
+# KB-<role>.md USED to be exempt here: "per-agent knowledge is the one thing meant to
+# persist across runs" (879c705). That exemption is REVOKED — operator, 2026-08-12, after
+# KB-gotransit.md was found carrying conclusions from four separate days into every run.
+# All agent KB is now cleared by kb_clear_agent_residue (lib/kb-canonical.sh), invoked from
+# Step 3b below. Nothing an agent concluded survives the run that concluded it.
 _ROSTER_CLEARED=0
 _PROJECT_CFG_DIR="${EPAM_PROJECT_CONFIG_DIR:-}"
 # A RESUME KEEPS THE ROSTER IT IS RESUMING WITH.
@@ -348,9 +492,28 @@ _PROJECT_CFG_DIR="${EPAM_PROJECT_CONFIG_DIR:-}"
 #
 # The ephemeral-roster rule is about a FRESH run starting from the canonical base. A resume is
 # the continuation of a run that already did so.
+# DECIDED ONCE, READ EVERYWHERE. The roster is reset in TWO places in this script, and until
+# 2026-08-12 only this one knew about resumes: the canonical restore further down replaced
+# agents/profiles.json unconditionally. Both lines printed in the same reset, seconds apart —
+# "keeping the roster this run already minted and reviewed", then "generated agents from prior
+# runs are gone" — and the resumed run died at assignment with no agent. Any roster reset added
+# later must read _IS_RESUME rather than re-deriving this.
+_IS_RESUME=0
 if [ -n "${EPAM_RESUME_RUN:-}" ]; then
+    _IS_RESUME=1
     _PROJECT_CFG_DIR=""
     info "  Resuming ${EPAM_RESUME_RUN} — keeping the roster this run already minted and reviewed"
+elif [ "${EPAM_SKIP_AGENT_MINT:-0}" = "1" ]; then
+    # THE SAME PROTECTION, FOR THE SAME REASON. Clearing these is right when the mint is about to
+    # rebuild them: a registry naming agents the new roster never minted points consumers at
+    # briefless names. When the mint is SKIPPED nothing rebuilds them, and the run deletes the
+    # registries it is about to depend on — which on 2026-08-13 left the writer's own role absent
+    # from the roster it was about to run under, and was only unblocked by authoring the files by
+    # hand. They are agent artefacts; the pipeline preserves what an agent produced, and nobody
+    # curates them.
+    _IS_RESUME=1
+    _PROJECT_CFG_DIR=""
+    info "  Mint skipped (EPAM_SKIP_AGENT_MINT=1) — keeping the roster and registries the mint last produced"
 fi
 # BOTH registries. project-investigators.json was added after this list and never joined it,
 # so a previous run's investigators survived every reset. Live 2026-08-08: six investigators
@@ -376,15 +539,110 @@ if [ "$_ROSTER_CLEARED" -gt 0 ]; then
     info "  Cleared $_ROSTER_CLEARED generated-roster file(s) — this run mints from the canonical base"
 fi
 
+# ── The REST of what a run generates into the project config dir ────────────
+#
+# The registries above were cleared because a roster is ephemeral. Everything else a run WRITES
+# into this directory was not, and each survivor is derived state the next run's agents read as
+# though this run had produced it.
+#
+# Found 2026-08-17, mid-run 20260817T154640Z, checking whether it had provisioned its own prompts:
+#
+#   prompts/codeline-bridge.json      10:37   <- from the run whose survey returned state "failed"
+#   prompts/assign-agent-roles.json   10:40   <- roster: transit-fare-engineer, since deleted
+#   prompts/ac-classification.json    11:54
+#   this run started                  12:01
+#
+# A project prompt is specialised against a specific roster and a specific survey. Those were
+# written against a survey that read no files, for agents that no longer exist. Provisioning
+# overwrites most of them alphabetically, so the window is narrow — but anything this run's list
+# does not include is never overwritten and persists indefinitely.
+#
+# Same class as the PRD keeping the previous run's agentRole: derived state in a directory nothing
+# walked. codeline-facts.json comes from discovery, estate-survey.md from the survey,
+# prompt-agent-link.json from the mint — all rewritten every run that reaches those stages.
+#
+# _PROJECT_CFG_DIR is already empty on a resume and on a skipped mint, so this inherits both
+# protections rather than re-deriving them: a resume continues a run that already reset, and
+# nothing rebuilds these when the mint does not run.
+_GEN_CLEARED=0
+for _gf in "${_PROJECT_CFG_DIR:+$_PROJECT_CFG_DIR/codeline-facts.json}" \
+           "${_PROJECT_CFG_DIR:+$_PROJECT_CFG_DIR/estate-survey.md}" \
+           "${_PROJECT_CFG_DIR:+$_PROJECT_CFG_DIR/prompt-agent-link.json}"; do
+    [ -n "$_gf" ] && [ -f "$_gf" ] || continue
+    rm -f "$_gf" 2>/dev/null && _GEN_CLEARED=$((_GEN_CLEARED+1)) || true
+done
+if [ "$_GEN_CLEARED" -gt 0 ]; then
+    info "  Cleared $_GEN_CLEARED generated project artefact(s) — discovery, survey and mint rewrite these"
+fi
+
+# THE PROMPTS DIRECTORY, WHOLE. Named files would miss whatever the next seam adds, and the
+# directory holds nothing a human authored — every file in it is rendered from a template by the
+# prompt builder. Removed and recreated so the builder writes into a clean directory rather than
+# over a mixture of this run's output and some earlier run's.
+if [ -n "${_PROJECT_CFG_DIR:-}" ] && [ -d "$_PROJECT_CFG_DIR/prompts" ]; then
+    _PROMPTS_N=$(find "$_PROJECT_CFG_DIR/prompts" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l | tr -d '[:space:]')
+    rm -rf "$_PROJECT_CFG_DIR/prompts" && mkdir -p "$_PROJECT_CFG_DIR/prompts"
+    [ "${_PROMPTS_N:-0}" -gt 0 ] \
+        && info "  Cleared ${_PROMPTS_N} project prompt(s) — each was specialised for a roster this run has not minted"
+fi
+
 # Restore the live roster from its canonical original, so a run that begins here
 # starts from the base even if its launcher does not restore.
 # Overridable so this block is testable in isolation and so a project that keeps its
 # agents elsewhere is not assumed to keep them here.
 _AGENTS_DIR="${EPAM_AGENTS_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../agents" 2>/dev/null && pwd || true)}"
-if [ -n "$_AGENTS_DIR" ] && [ -f "$_AGENTS_DIR/profiles.json.original" ]; then
+if [ "$_IS_RESUME" = "1" ]; then
+    # A RESUME KEEPS THE ROSTER IT IS RESUMING WITH — including this one. The ephemeral-roster
+    # rule is about a FRESH run starting from the canonical base; a resume is the continuation
+    # of a run that already did so, and its roster was reviewed by a human at the pause.
+    info "  Resume — keeping agents/profiles.json as minted; not restoring from canonical"
+elif [ -n "$_AGENTS_DIR" ] && [ -f "$_AGENTS_DIR/profiles.json.original" ]; then
     cp "$_AGENTS_DIR/profiles.json.original" "$_AGENTS_DIR/profiles.json" 2>/dev/null \
         && info "  Roster restored from canonical original — generated agents from prior runs are gone" \
         || true
+fi
+
+# ── Restore the runtime PRD from its canonical original ─────────────────────
+#
+# THE PRD IS THE THIRD PLACE AN ASSIGNMENT LIVES, AND THE ONLY ONE NOTHING RESET.
+#
+# The two registries and role-assignments.json are cleared above, for the reason given there: a
+# roster is ephemeral, so an assignment that outlives it names an agent with no brief. Each story
+# in the PRD carries an agentRole too, written during the run — and nothing ever cleared it.
+#
+# Live 2026-08-17, mock3 run 20260817T152632Z. The reset ran, the roster was restored to canonical,
+# the mint drew a FRESH roster (typescript-logic-engineer, mocka-fares-investigator,
+# mockb-schedule-investigator) and the roster review passed. Assignment then read the PRD, found
+# "transit-fare-engineer" left there by the run before, and correctly refused:
+#
+#   [assign] MOCK3-1 was assigned "transit-fare-engineer", which is not in the roster — it has no
+#   profile entry, so the writer would run with an empty system prompt.
+#
+# Minted names are a fresh draw every run, so a persisted assignment is stale BY CONSTRUCTION: it
+# can only be right by coincidence, and the coincidence gets rarer as roles are renamed.
+#
+# The per-project launchers this repo replaced (tier3-travel-app-run.sh, tier3-skyscanner-app-run.sh)
+# each restored the PRD themselves. Generalising them into tier3-run.sh — "25 of that launcher's 588
+# lines name its project" — dropped the restore along with the project names, and no launcher has
+# done it since. It belongs here rather than in any launcher, next to the roster and KB restores, so
+# every launcher inherits it and there is one place to change.
+#
+# Restores the WHOLE file rather than stripping known fields: the canonical is the base state, and a
+# subtractive list would silently miss the next per-run field somebody adds.
+if [ "$_IS_RESUME" = "1" ]; then
+    info "  Resume — keeping the runtime PRD as the run left it; not restoring from canonical"
+elif [ -n "${PRD_FILE:-}" ] && [ -f "$(dirname "$PRD_FILE")/prd.canonical.json" ]; then
+    _PRD_CANON="$(dirname "$PRD_FILE")/prd.canonical.json"
+    # VALIDATED BEFORE IT REPLACES ANYTHING. Copying a corrupt canonical over the runtime PRD
+    # would destroy the only other copy and fail much later, somewhere that reads as a PRD defect.
+    if ! jq -e . "$_PRD_CANON" >/dev/null 2>&1; then
+        fail "$_PRD_CANON is not valid JSON. The runtime PRD is NOT restored and still carries the
+  previous run's assignments, so this run cannot start clean. Repair the canonical before running."
+    fi
+    cp "$_PRD_CANON" "$PRD_FILE" \
+        || fail "could not restore the PRD from $_PRD_CANON — refusing to start a run that would
+  inherit the previous run's agent assignments."
+    info "  PRD restored from canonical — prior run's agent assignments and resolved codelines are gone"
 fi
 
 # Clear stale lock files
@@ -413,6 +671,31 @@ else
   info "  KB scratchpad already empty (all lanes)"
 fi
 
+# ── Step 3a2: Clear persisted MODEL-LADDER position ─────────────────────────
+#
+# agent-ladder/ records which rung each agent climbed to, so a retry within a run resumes rather
+# than restarting at the base model. Nothing cleared it between RUNS, so the position survived —
+# and the state directory carried entries from other projects entirely.
+#
+# Live 2026-08-17: three failed mock3 launches left codeline-discovery.global pinned to the top
+# rung, so the FIRST call of the next run announced "resuming ladder on 'moonshotai/kimi-k3'
+# (persisted from an earlier invocation)" and started at the ceiling — no cheaper rung was ever
+# tried, and when that model returned empty the run had nowhere left to climb. Alongside it sat
+# impl-failure-analyst.AMSD-2041, two days old, from a different project.
+#
+# A run must start on the rung its seam declares. Same reasoning as the KB reset above: state that
+# outlives its run is contamination, not memory.
+_LADDER_DIR="$LOG_DIR/agent-ladder"
+if [ -d "$_LADDER_DIR" ]; then
+  _LADDER_N=$(find "$_LADDER_DIR" -type f 2>/dev/null | wc -l)
+  if [ "${_LADDER_N:-0}" -gt 0 ]; then
+    find "$_LADDER_DIR" -type f -delete 2>/dev/null || true
+    success "Cleared $_LADDER_N persisted ladder position(s) — every agent starts on the rung its seam declares"
+  else
+    info "  No persisted ladder positions"
+  fi
+fi
+
 # ── Step 3b: Restore the KB to its canonical state ──────────────────────────
 # The scratchpad above is per-run attempt notes. This is the KB ITSELF, which had no
 # canonical to restore from and therefore accumulated across every run — and it is
@@ -428,6 +711,23 @@ info "Resetting agent-status.json..."
 echo '{"startedAt":null,"phase":null,"orchMode":null,"lanes":{},"events":[],"stories":{},"completedAt":null}' \
   > "$LOG_DIR/agent-status.json"
 success "agent-status.json reset"
+
+# ── Completion signal ─────────────────────────────────────────────────────────
+#
+# POSITIVE PROOF THAT THE STATE WORK RAN, because an exit code cannot carry it.
+#
+# This script runs under `set -euo pipefail` and clears state in sequence. Any command
+# that fails part-way kills it, and the caller then sees a bare exit 1 — identical to
+# "the dashboard is down". On 2026-08-14 exactly that happened: a count of an
+# already-removed directory returned 1 (pipefail), the script died at line ~386 of 555,
+# and lib/pre-run-reset-gate.sh reported "(dashboard/environment, not state) —
+# non-fatal, continuing" while story-retry-state, the kb-scratchpad and the roster clear
+# had never run. The next run inherited 12/12 attempts and died in 18 seconds.
+#
+# A sentinel emitted HERE — after every state-clearing step, before the cosmetic summary
+# — is the only thing that distinguishes "finished" from "stopped somewhere". The gate
+# requires it and refuses the launch without it, whatever the exit code says.
+echo "PRE_RUN_RESET_STATE_CLEARED"
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""

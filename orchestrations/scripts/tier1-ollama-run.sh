@@ -42,14 +42,7 @@ if ! curl -sf "http://127.0.0.1:11434/api/tags" >/dev/null 2>&1; then
 fi
 
 # Check model is available
-if ! curl -sf "http://127.0.0.1:11434/api/tags" | python3 -c "
-import sys,json
-d=json.load(sys.stdin)
-names=[m['name'] for m in d.get('models',[])]
-if not any('$OLLAMA_MODEL' in n for n in names):
-    print('Model $OLLAMA_MODEL not found. Available:', names)
-    sys.exit(1)
-" 2>&1; then
+if ! curl -sf "http://127.0.0.1:11434/api/tags" | python3 "$SCRIPT_DIR/lib/handlers/ollama-model-present.py" "$OLLAMA_MODEL" 2>&1; then
   info "Pulling $OLLAMA_MODEL (this may take a minute)..."
   ~/.local/bin/ollama pull "$OLLAMA_MODEL" || fail "Failed to pull $OLLAMA_MODEL"
 fi
@@ -116,16 +109,7 @@ info "Validating story completion..."
 
 PASS=0; FAIL_LIST=""
 for story in HW-001 HW-002 HW-003 HW-004 HW-005 HW-006; do
-  status=$(python3 -c "
-import json, sys
-with open('$PRD_FILE') as f:
-  d = json.load(f)
-for s in d['stories']:
-  if s['id'] == '$story':
-    print(s.get('status','unknown'))
-    sys.exit(0)
-print('not_found')
-" 2>/dev/null)
+  status=$(python3 "$SCRIPT_DIR/lib/handlers/story-status.py" "$PRD_FILE" "$story" 2>/dev/null)
   if [ "$status" = "completed" ]; then
     success "$story: completed"
     PASS=$((PASS+1))

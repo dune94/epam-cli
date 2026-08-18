@@ -62,10 +62,12 @@ describe('estimate-stories.sh pricing — data-driven', () => {
   });
 
   it('uses prefix matching in lookup (handles moonshotai/kimi-k2 and MiniMax-M3)', () => {
-    const fnStart = estimateSrc.indexOf('lookup_model_pricing()');
-    const fnEnd   = estimateSrc.indexOf('\n}', fnStart);
-    const fnBody  = estimateSrc.slice(fnStart, fnEnd);
-    // Must have the prefix-match logic: startswith
+    // THE HANDLER, which is the lookup now. This sliced the shell function, and the program moved
+    // into lib/handlers/model-price-lookup.py when its heredoc was lifted — so the slice stopped
+    // containing the logic while still containing the function. Reading the handler is also
+    // stronger: it is the exact file the pipeline executes.
+    const fnBody = readFileSync(
+      join(__dirname, '../../../orchestrations/scripts/lib/handlers/model-price-lookup.py'), 'utf8');
     expect(fnBody).toContain('startswith');
   });
 

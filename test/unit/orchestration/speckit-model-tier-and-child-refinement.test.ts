@@ -30,6 +30,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { templateBody } from '../../helpers/prompt-text';
 import { join } from 'node:path';
 
 const SRC = readFileSync(join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'), 'utf8');
@@ -86,18 +87,18 @@ describe('runSpeckitReview — refineExistingChildren opt-in', () => {
   });
 
   it('the refineExistingChildren branch asks for per-child ACs returned under splitStories', () => {
-    const body = fnBody();
-    const branchIdx = body.indexOf('refineExistingChildren\n    ?');
-    expect(branchIdx).toBeGreaterThan(-1);
-    const trueBranch = body.slice(branchIdx, body.indexOf(':', branchIdx + 2000) > -1 ? body.indexOf('    : `', branchIdx) : branchIdx + 2500);
-    expect(trueBranch).toMatch(/ALREADY split into the children/);
-    expect(trueBranch).toMatch(/"splitStories": array of \{"id"/);
-    expect(trueBranch).not.toMatch(/ALWAYS omit/);
+    // The refine variant, by name: it is its own template now, so there is no ternary arm
+    // to hunt for and no chance of asserting against the wrong branch's text.
+    expect(templateBody('spec-agent-speckit-refine')).toMatch(/ALREADY split into the children/);
+    expect(templateBody('spec-agent-speckit-refine')).toMatch(/"splitStories": array of \{"id"/);
+    // And the opposite rule stays out of it: the refine branch is the one case where
+    // returning splitStories is correct, so inheriting the normal branch's ban would gut it.
+    expect(templateBody('spec-agent-speckit-refine')).not.toMatch(/ALWAYS omit/);
   });
 
   it('the normal (false) branch is unchanged — still forbids emitting splitStories', () => {
-    const body = fnBody();
-    expect(body).toMatch(/"splitStories":\s*ALWAYS omit this field\. Splitting is openspec's decision alone/);
+    expect(templateBody('spec-agent-speckit'))
+      .toMatch(/"splitStories":\s*ALWAYS omit this field\. Splitting is openspec's decision alone/);
   });
 
   it('validateMidExecutionSplits is the only caller passing refineExistingChildren: true', () => {

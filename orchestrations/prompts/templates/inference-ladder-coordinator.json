@@ -1,0 +1,27 @@
+{
+  "$why": [
+    "Moved out of claude.sh on 2026-08-16.",
+    "",
+    "The decision this prompt makes is which model a retry runs on and whether the prompt is",
+    "amended before it — so its wording directly governs escalation. It had no reviewable home,",
+    "and a wording change to it meant editing and shipping a 12,000-line shell script."
+  ],
+  "description": "Decides whether a failed story retry should escalate to a stronger model, and whether a prompt amendment would help.",
+  "id": "inference-ladder-coordinator",
+  "seams": [
+    "cpa-inference"
+  ],
+  "placeholders": [
+    "__PRIOR_FAILURE_SUMMARY__",
+    "__RESULT_TEXT__",
+    "__TEST_FAILURE_SNIPPET__",
+    "__LOG_TAIL__",
+    "__COORDINATOR_FAILURE_CLASS__",
+    "__CURRENT_MODEL__",
+    "__TARGET_MODEL__",
+    "__STORY_TITLE__",
+    "__STORY_ID__"
+  ],
+  "version": 1,
+  "body": "You are the inference ladder coordinator. A story implementation just failed. You must decide whether to escalate to a stronger model for the retry, and whether a targeted prompt amendment would help.\n\n## Story\n- ID: __STORY_ID__\n- Title: __STORY_TITLE__\n- Current model: __CURRENT_MODEL__\n- Proposed escalation model: __TARGET_MODEL__\n- Failure class (preliminary): __COORDINATOR_FAILURE_CLASS__\n\n## Failure Evidence (last attempt result)\n__RESULT_TEXT__\n\n## Log Tail\n__LOG_TAIL__\n\n## Test Failure Output (if tests ran)\n__TEST_FAILURE_SNIPPET__\n\n## Cross-Run History\n__PRIOR_FAILURE_SUMMARY__\n\n## Your Assessment\nAnswer ONLY with a single-line JSON object (no markdown, no prose):\n{\"escalate\":\"yes|no\",\"failure_class\":\"env|capability|quality|unknown\",\"prompt_amendment\":\"<targeted instruction to add to retry prompt, or empty string>\",\"rationale\":\"<one sentence>\"}\n\nRules:\n- escalate \"yes\" ONLY when the failure is due to model capability limits (max iterations, context window, weak reasoning, missing knowledge)\n- escalate \"no\" when the failure is environmental (missing API key, binary crash, file permission) — a stronger model won't fix it\n- escalate \"no\" when the failure is a prompt misunderstanding — suggest a prompt_amendment instead\n- prompt_amendment should be a concrete instruction (e.g., \"Do not import from node-fetch — use native global fetch only\") not a vague suggestion\n- Keep rationale under 15 words"
+}

@@ -21,9 +21,26 @@
 # ─────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
 
+# This script resolves handlers from its own location: it is executed, not sourced, so it cannot
+# borrow a caller's SCRIPT_DIR.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 STORY_ID="${1:?usage: brownfield-repro-test-gate.sh <story_id>}"
 PROJECT_ROOT="${PROJECT_ROOT:?PROJECT_ROOT required}"
-BASELINE_BRANCH="${JIRA_BASELINE_BRANCH:-develop}"
+
+# NO GUESSED BRANCH. This defaulted to the literal "develop"; every diff and every checkout in
+# this gate is against that ref, so on a project whose trunk is named anything else the gate
+# compared the fix against nothing. The caller declares it; otherwise take the repository's own
+# checked-out branch, which is at least true.
+BASELINE_BRANCH="${JIRA_BASELINE_BRANCH:-}"
+if [ -z "$BASELINE_BRANCH" ]; then
+    BASELINE_BRANCH="$(git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
+    [ "$BASELINE_BRANCH" = "HEAD" ] && BASELINE_BRANCH=""
+fi
+if [ -z "$BASELINE_BRANCH" ]; then
+    echo "[repro-gate] BLOCKED: no baseline branch declared and none resolvable in ${PROJECT_ROOT} — cannot diff the fix against anything, and will not report that as a pass." >&2
+    exit 1
+fi
 
 log()   { echo "[repro-gate] $*"; }
 block() { echo "[repro-gate] ⛔ BLOCK ($STORY_ID): $*" >&2; exit 1; }
@@ -65,22 +82,51 @@ if [ "${#FIX_FILES[@]}" -eq 0 ]; then
     log "no non-test files changed for $STORY_ID — nothing to revert; reproduction check not applicable, passing"; exit 0
 fi
 
-# Pick the test runner (project-local binaries preferred; npm test as fallback).
+# Run the story's test files with whatever command THIS codeline's ecosystem declares.
 # Output is CAPTURED, never discarded: the exit code alone cannot distinguish
 # "the test could not be parsed" from "the test ran and failed its assertions",
 # and those two demand opposite responses. Discarding it caused a live
 # misdiagnosis on 2026-07-24 (see _test_never_ran below).
 _LAST_TEST_OUTPUT=""
+# THE RUNNER COMES FROM THE ECOSYSTEM REGISTRY, NOT FROM NAMES IN HERE.
+#
+# This probed node_modules/.bin/vitest, then jest, then `npm test`. lib/ecosystems.js already
+# knows how every supported ecosystem runs its tests, and how it targets specific files — one
+# table, shared with the health check and the scanners.
+_repro_file_command() {
+    "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/codeline-ecosystem.js" \
+        "$PROJECT_ROOT" "" "$(printf '%s,' "$@")" 2>/dev/null \
+        | "${NODE_BIN:-node}" -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+             try{process.stdout.write(JSON.parse(s).testFileCommand||"")}catch{}})' 2>/dev/null
+}
+
+# RESOLVED ONCE, BEFORE ANYTHING IS REVERTED.
+#
+# Step 4 below reverts the FIX FILES to the baseline so the test can be run against pre-fix code —
+# and the manifest can be one of them, because a fix may legitimately touch package.json,
+# Cargo.toml or pyproject.toml (a new dependency, a changed script). With the manifest reverted or
+# gone, the ecosystem lookup resolves nothing, and the baseline run would report "cannot run" for a
+# codeline that runs its tests perfectly well. The old code was accidentally immune: it probed
+# node_modules/.bin directly, which survives a revert.
+#
+# The command is a property of the CODELINE, not of the working tree at one moment, so it is
+# resolved once here and reused for both runs.
+_REPRO_TEST_CMD=""
+
 run_new_tests() {
-    local _out _rc
+    local _out _rc _cmd="$_REPRO_TEST_CMD"
+    [ -n "$_cmd" ] || _cmd="$(_repro_file_command "$@")"
+    [ -n "$_cmd" ] || return 3
     _out=$( cd "$PROJECT_ROOT" || exit 2
-      if [ -x node_modules/.bin/vitest ]; then node_modules/.bin/vitest run "$@" --reporter=json 2>&1
-      elif [ -x node_modules/.bin/jest ]; then node_modules/.bin/jest "$@" 2>&1
-      elif [ -f package.json ] && grep -q '"test"' package.json 2>/dev/null; then npm test -- "$@" 2>&1
-      else exit 3; fi )
+      eval "$_cmd" 2>&1 )
     _rc=$?
     _LAST_TEST_OUTPUT="$_out"
-    _LAST_TEST_JSON="$_out"   # vitest --reporter=json emits JSON on stdout
+    # Held for the numeric never-ran check below, which parses it ONLY if it is JSON and falls
+    # back to the pattern check otherwise. The gate used to force `--reporter=json` on vitest
+    # specifically; it now runs whatever command the codeline declares, so JSON is available when
+    # that command happens to emit it and the fallback covers the rest — self-adjusting, and no
+    # reporter flag from any one ecosystem is named here.
+    _LAST_TEST_JSON="$_out"
     return "$_rc"
 }
 
@@ -95,7 +141,7 @@ _LAST_TEST_JSON=""
 _test_never_ran() {
     if [ -n "$_LAST_TEST_JSON" ]; then
         local total
-        total=$(printf '%s' "$_LAST_TEST_JSON" | node -e '
+        total=$(printf '%s' "$_LAST_TEST_JSON" | "${NODE_BIN:-node}" -e '
             let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
               try{ const j=JSON.parse(s.slice(s.indexOf("{")));
                    process.stdout.write(String(j.numTotalTests ?? 0)); }
@@ -109,9 +155,21 @@ _test_never_ran() {
 }
 
 # 3. The new test(s) must PASS with the fix in place.
+# Resolve the runner while the tree still carries the fix — see _REPRO_TEST_CMD above.
+_REPRO_TEST_CMD="$(_repro_file_command "${TEST_FILES[@]}")"
 if ! run_new_tests "${TEST_FILES[@]}"; then
     _rc=$?
-    [ "$_rc" = "3" ] && { log "no supported test runner found — skipping reproduction gate"; exit 0; }
+    # "CANNOT PROVE" IS NOT "PROVED". This exited 0 — so on every codeline whose ecosystem was not
+    # Node, the HARD gate that blocks a change shipping no working reproducing test passed
+    # vacuously, silently. Steps 3.54 and 3.545 both defer their findings here, so the entire
+    # brownfield test-proof chain evaporated on those projects while every step reported success.
+    #
+    # A codeline that declares no way to run its tests is a real, reportable condition. It is not
+    # evidence that the fix ships a working test.
+    if [ "$_rc" = "3" ]; then
+        log "BLOCKED: ${PROJECT_ROOT} declares no way to run its tests, so this fix's reproducing test cannot be executed — the gate cannot prove it, and will not report that as a pass."
+        exit 1
+    fi
     if _test_never_ran; then
         # A malformed test still BLOCKS — it cannot be allowed through — but the
         # defect is in the TEST, not the fix. Say so, and show the runner's error.
@@ -134,8 +192,21 @@ for f in "${FIX_FILES[@]}"; do
 done
 
 _repro_ok=1
-if run_new_tests "${TEST_FILES[@]}"; then
+_baseline_rc=0
+run_new_tests "${TEST_FILES[@]}" || _baseline_rc=$?
+if [ "$_baseline_rc" -eq 0 ]; then
     _repro_ok=0   # tests PASSED without the fix → they do NOT reproduce the bug
+elif [ "$_baseline_rc" -eq 3 ]; then
+    # 3 IS "COULD NOT RUN", NOT "FAILED". Every other non-zero here means the test failed on the
+    # pre-fix tree, which is exactly what a reproducing test should do — so treating 3 the same way
+    # turns "I could not execute anything" into "it reproduces the bug", and the gate PASSES.
+    #
+    # This is the same vacuous-pass shape as the skip that used to sit at the first call site, one
+    # branch further in, and it is why exit 3 has to be handled at EVERY call site rather than once.
+    for f in "${_reverted[@]}"; do
+        git -C "$PROJECT_ROOT" checkout HEAD -- "$f" 2>/dev/null || true
+    done
+    block "the test(s) could not be executed against the pre-fix baseline, so nothing proves they reproduce the bug. The fix has been restored."
 fi
 
 # 5. Always restore the fix, regardless of outcome.

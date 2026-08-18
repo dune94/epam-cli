@@ -28,6 +28,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync, chmodSync, readFileSync 
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { mintProjectPrompts } from '../../helpers/project-prompts';
 
 const WRITER = join(__dirname, '../../../orchestrations/scripts/brownfield-repro-test-writer.sh');
 const dirs: string[] = [];
@@ -127,7 +128,7 @@ function runWriter(repo: string, mode: Mode, env: Record<string, string> = {}) {
     out = execFileSync('bash', ['-c', `bash ${JSON.stringify(WRITER)} AMSD-1820 2>&1`], {
       encoding: 'utf8',
       env: {
-        ...process.env, PROJECT_ROOT: repo, JIRA_BASELINE_BRANCH: 'develop',
+        ...process.env, EPAM_PROJECT_CONFIG_DIR: mintProjectPrompts(), PROJECT_ROOT: repo, JIRA_BASELINE_BRANCH: 'develop',
         EPAM_BROWNFIELD: '1', AI_RUNNER_CMD: runner, REPRO_TEST_WRITER_MAX_ATTEMPTS: '2', ...env,
       },
     });
@@ -196,7 +197,7 @@ describe('repro-test-writer — validates the test before committing', () => {
     try {
       out = execFileSync('bash', ['-c', `bash ${JSON.stringify(WRITER)} AMSD-1820 2>&1`], {
         encoding: 'utf8',
-        env: { ...process.env, PROJECT_ROOT: repo, JIRA_BASELINE_BRANCH: 'develop',
+        env: { ...process.env, EPAM_PROJECT_CONFIG_DIR: mintProjectPrompts(), PROJECT_ROOT: repo, JIRA_BASELINE_BRANCH: 'develop',
                EPAM_BROWNFIELD: '1', AI_RUNNER_CMD: runner, REPRO_TEST_WRITER_MAX_ATTEMPTS: '1' },
       });
     } catch (e: any) { out = (e.stdout || '') + (e.stderr || ''); }

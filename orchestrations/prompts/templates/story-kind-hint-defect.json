@@ -1,0 +1,18 @@
+{
+  "$why": [
+    "A FRAGMENT of the detective prompt, 2026-08-16.",
+    "",
+    "The tracker's issue type is a HINT and the prompt says so in both directions. Both texts",
+    "exist because the wrong-way error is asymmetric: told it is a defect when it is not, the",
+    "agent hunts for a bug that was never there; told it is not when it is, it designs a feature",
+    "over a broken behaviour. Two fragments, so neither can be lost by editing the other."
+  ],
+  "body": "\\nJIRA CLASSIFIES THIS AS A DEFECT (issue type: Bug). This is a HINT, not a certainty — if the ticket's own text below clearly describes a capability that does not exist yet rather than broken existing behavior, trust the ticket over this hint. Assuming defect: there IS an existing bug and an existing symptom. Your job is the CAUSE, not the symptom (see CORE PRINCIPLE below).\\n",
+  "description": "Told to the detective when the tracker classifies the story as a defect.",
+  "id": "story-kind-hint-defect",
+  "placeholders": [],
+  "version": 1,
+  "seams": [
+    "story-writer"
+  ]
+}

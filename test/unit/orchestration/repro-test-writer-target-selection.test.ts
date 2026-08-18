@@ -27,6 +27,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync, chmodSync } from 'node:f
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { mintProjectPrompts } from '../../helpers/project-prompts';
 
 const WRITER = join(__dirname, '../../../orchestrations/scripts/brownfield-repro-test-writer.sh');
 const dirs: string[] = [];
@@ -79,7 +80,8 @@ function run(changed: string[], opts: { fixSite?: string } = {}) {
   try {
     out = execFileSync('bash', ['-c', `bash ${JSON.stringify(WRITER)} S1 2>&1`], {
       encoding: 'utf8',
-      env: { ...process.env, PROJECT_ROOT: repo, PRD_FILE: prd, JIRA_BASELINE_BRANCH: 'develop',
+      env: { ...process.env, EPAM_PROJECT_CONFIG_DIR: mintProjectPrompts(),
+             PROJECT_ROOT: repo, PRD_FILE: prd, JIRA_BASELINE_BRANCH: 'develop',
              EPAM_BROWNFIELD: '1', AI_RUNNER_CMD: agent, REPRO_TEST_WRITER_MAX_ATTEMPTS: '1' },
     });
   } catch (e: any) { out = (e.stdout || '') + (e.stderr || ''); }

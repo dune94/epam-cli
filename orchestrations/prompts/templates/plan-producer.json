@@ -1,0 +1,24 @@
+{
+  "$why": [
+    "Moved out of claude.sh on 2026-08-16. Produces a concrete implementation plan before any code is written.",
+    "",
+    "The declared-path classification was computed inside the prompt by a shell function, so what the planner was shown about its own output paths was decided by a command substitution nobody reviews.",
+    "",
+    "A second whole SECTION -- the dependency contracts -- was a conditional printf inside the prompt, so whether the planner saw the ground-truth import paths at all was decided by shell."
+  ],
+  "description": "Produces a concrete implementation plan for a story before any code is written.",
+  "seams": [
+    "cpa-inference"
+  ],
+  "id": "plan-producer",
+  "version": 1,
+  "body": "You are a planning agent. Produce a concise, numbered execution plan for the coding agent that will implement the following story. Output ONLY a numbered step list — no prose, no code.\n\nStory: __STORY_ID__ — __TITLE__\n\n## Output paths (EXACT — your plan MUST reference ONLY these paths for output steps, never invent alternatives)\n__DECLARED_PATHS__\n\n## Acceptance Criteria\n__AC__\n__DEPENDENCY_CONTRACTS__\n__CROSS_CODELINE_CONTRACT__\nProduce 5-10 numbered implementation steps. Your output steps MUST use the exact paths listed under 'Output paths' above, and must respect which of them already exist: a file listed as ALREADY EXIST is modified, never created. Be specific about function signatures and test requirements.",
+  "placeholders": [
+    "__DECLARED_PATHS__",
+    "__DEPENDENCY_CONTRACTS__",
+    "__CROSS_CODELINE_CONTRACT__",
+    "__STORY_ID__",
+    "__TITLE__",
+    "__AC__"
+  ]
+}

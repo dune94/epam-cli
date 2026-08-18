@@ -91,6 +91,16 @@ fail()    {
 }
 
 # ── Load .env then metrolinx project env ─────────────────────────────────────
+# Before ANY config file is read: what the operator set on the command line. A mode overrides a
+# project default but never this — see lib/run-modes.sh.
+. "$SCRIPT_DIR/lib/run-modes.sh"
+# HARD-FAIL IF THIS DOES NOT LOAD. Sourcing a missing file is non-fatal without
+# set -e, and phase_exit_is_retryable would then be "command not found" -> exit 127
+# -> falsy -> the legitimate gate-remediation retry silently never happens. A
+# capability that disappears without a word is the failure mode this whole change
+# exists to remove.
+. "$SCRIPT_DIR/lib/phase-exit.sh" || { echo "[preflight] lib/phase-exit.sh failed to load — refusing to run" >&2; exit 1; }
+snapshot_operator_env
 load_env_file_safe "$REPO_ROOT/.env"
 ENV_FILE="$SCRIPT_DIR/../jira/metrolinx.env"
 [ -f "$ENV_FILE" ] && load_env_file_safe "$ENV_FILE" preserve || fail "metrolinx.env not found at $ENV_FILE"
@@ -173,6 +183,71 @@ if [ "${EPAM_SKIP_BUILD_STALENESS_CHECK:-0}" != "1" ]; then
   info "Pre-flight: built CLI is current with src/"
 fi
 
+  # ── EVERY STORY DECLARES THE ROLE THAT WILL WRITE IT ────────────────────────
+  #
+  # agentRole decides which archetype's brief the writer runs under. A story with none falls
+  # through to the generic writer, which is not bound by the specialist's rules — including the
+  # test-ownership exclusion, "You do not create, edit, or maintain any test files."
+  #
+  # Live 2026-08-14, run 20260814T135343Z: agentRole was null, the writer ran generic, it edited a
+  # pre-existing spec file, and that single test file in the diff silenced the dedicated
+  # repro-test-writer ("a test already accompanies the change — nothing to write"). No reproducing
+  # test was authored, and Step 3.55 blocked the story twice for opposite reasons: the tests failed
+  # WITH the fix, then passed WITHOUT it. The code itself was fine and had already committed with a
+  # clean type check.
+  #
+  # It is null because assignment belongs to the MINT, and every writer-style resume skips the mint
+  # while the canonical PRD is reset each launch. So the role has to be DECLARED in the PRD, and
+  # this check makes its absence visible before the run spends anything.
+  if [ "${EPAM_SKIP_AGENT_ROLE_CHECK:-0}" != "1" ] && [ -f "$PRD_FILE" ]; then
+    # WHETHER THE MINT IS ABOUT TO RUN DECIDES WHAT "MISSING" MEANS.
+    #
+    # This block compared the PRD's agentRole against profiles.json with no notion of the
+    # mint — and it runs BEFORE the mint (here, vs ~line 297). Rosters are ephemeral: a
+    # fresh run restores the canonical base and the mint then produces this run's roles,
+    # so a role a PREVIOUS run minted can never match at this point. On 2026-08-14 that
+    # refused a launch the very next step would have fixed; the following launch minted
+    # the role and the run completed.
+    #
+    # The rule now lives in lib/agent-role-preflight.sh so it is testable and so the
+    # other launchers can adopt it instead of copying it.
+    . "$SCRIPT_DIR/lib/agent-role-preflight.sh"
+    if ! agent_roles_resolve "$PRD_FILE" "$REPO_ROOT/orchestrations/agents/profiles.json" \
+         "$([ "${EPAM_SKIP_AGENT_MINT:-0}" = "1" ] && echo 0 || echo 1)"; then
+      error "[preflight]   Set agentRole in $PRD_FILE, or run the mint so assignment happens."
+      error "[preflight]   Override (deliberate): EPAM_SKIP_AGENT_ROLE_CHECK=1"
+      exit 1
+    fi
+    # AND THAT THE PERIMETER WILL PERMIT IT TO WRITE.
+    #
+    # Existing in profiles.json is not the same as being allowed to author code. The write
+    # perimeter reads project-roles.json — and prefers the PER-PROJECT copy under
+    # EPAM_PROJECT_CONFIG_DIR over orchestrations/agents/, deliberately, so a client project does
+    # not inherit the engine's own implementation roles.
+    #
+    # Live 2026-08-14, run 20260814T185607Z: the role was declared on the story and present in
+    # profiles.json, this check passed, and the run was refused three minutes later —
+    # "not permitted to author code" — because the per-project file held roles: []. Verifying the
+    # wrong registry is the same as not verifying.
+    _perim_registry="${EPAM_PROJECT_ROLES_FILE:-}"
+    if [ -z "$_perim_registry" ] && [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] && [ -f "${EPAM_PROJECT_CONFIG_DIR}/project-roles.json" ]; then
+      _perim_registry="${EPAM_PROJECT_CONFIG_DIR}/project-roles.json"
+    fi
+    [ -n "$_perim_registry" ] || _perim_registry="$REPO_ROOT/orchestrations/agents/project-roles.json"
+    if [ -f "$_perim_registry" ]; then
+      _unpermitted=$(jq -r --slurpfile reg "$_perim_registry" '[.stories[]? | select((.agentRole // "") != "") | select((.agentRole) as $r | (($reg[0].roles // []) | index($r)) == null) | .id + " -> " + .agentRole] | join("; ")' "$PRD_FILE" 2>/dev/null)
+      if [ -n "$_unpermitted" ]; then
+        error "[preflight] agentRole is not a registered implementer: $_unpermitted"
+        error "[preflight]   The write perimeter reads: $_perim_registry"
+        error "[preflight]   It will refuse the writer with 'not permitted to author code'."
+        error "[preflight]   Add the role to .roles there, or run the mint so it is registered."
+        exit 1
+      fi
+      info "Pre-flight: every agentRole is a registered implementer in $(basename "$_perim_registry")"
+    fi
+    info "Pre-flight: every story declares an agentRole the roster holds"
+  fi
+
 # Also into $LOG_FILE: the line above goes to stdout, which is the launch log
 # that pre-run-reset deletes. The run report is generated from $LOG_FILE, so a
 # balance recorded only on stdout leaves every report saying "Billed by
@@ -216,8 +291,15 @@ PIPELINE_EXIT=0
 
 # ── Restore profiles.json from canonical original ─────────────────────────────
 # Agent mutations (profile-augmentor additions) must not carry forward across runs.
+# NOT WHEN THE MINT IS SKIPPED. Restoring base state is right before a run that will mint afresh —
+# it stops one run's profile mutations carrying into the next. When the mint is skipped there is
+# nothing to rebuild what this overwrites, so the restore destroys the very roster the run intends
+# to reuse. Live 2026-08-13: a writer-only launch found the generic base roster and the story's own
+# agent did not exist in it.
 PROFILES_ORIG="$REPO_ROOT/orchestrations/agents/profiles.json.original"
-if [ -f "$PROFILES_ORIG" ]; then
+if [ "${EPAM_SKIP_AGENT_MINT:-0}" = "1" ]; then
+  info "profiles.json NOT restored — the mint is skipped, so this run reuses the roster it last minted"
+elif [ -f "$PROFILES_ORIG" ]; then
   cp "$PROFILES_ORIG" "$REPO_ROOT/orchestrations/agents/profiles.json"
   info "profiles.json restored from canonical original"
 else
@@ -290,10 +372,10 @@ echo ""
 # .epam/ and .codegraph/ are deliberately left writable: the engine writes its
 # own state there mid-run. See lib/codeline-write-perimeter.sh.
 . "$SCRIPT_DIR/lib/codeline-write-perimeter.sh"
-for _cl_dir in "$JIRA_CODELINE_ROOT"/*/; do
-  [ -e "${_cl_dir}.git" ] || continue
-  perimeter_seal "${_cl_dir%/}" || true
-done
+# The loop that used to be here is now perimeter_seal_all, beside perimeter_release_all, and the
+# engine calls it for every project. This call is kept only for its TIMING — it seals before this
+# launcher's own preflight, earlier than the engine can. Same function, so the two cannot drift.
+perimeter_seal_all "$JIRA_CODELINE_ROOT" || true
 echo ""
 
 # ── Wire the dashboard to this run's live PRD + logs ─────────────────────────
@@ -301,8 +383,11 @@ echo ""
 # agent-status.json. Emitting preflight events before that reset would have
 # them wiped a moment later, before the dashboard ever showed them.
 info "Wiring dashboard to serve this run's live PRD + logs..."
-bash orchestrations/scripts/pre-run-reset.sh --prd "$PRD_FILE" || \
-  info "  pre-run-reset.sh failed or Docker unavailable — dashboard may show stale data (non-fatal, continuing)"
+# Contamination ABORTS the launch; everything else stays non-fatal. One gate,
+# lib/pre-run-reset-gate.sh, for all launchers — this used to be five copies of
+# "|| info", all of which swallowed a contaminated-state exit as a Docker problem.
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/pre-run-reset-gate.sh"
+pre_run_reset_or_abort --prd "$PRD_FILE"
 echo "${OUTPUT_DIR:-$JIRA_CODELINE_ROOT}" > "orchestrations/dashboards/.active-output-dir" 2>/dev/null || true
 echo ""
 
@@ -415,7 +500,7 @@ run_phase() {
     2>&1 | tee -a "$LOG_FILE" || phase_exit=${PIPESTATUS[0]}
   echo ""
 
-  if [ "$phase_exit" -eq 2 ]; then
+  if phase_exit_is_retryable "$phase_exit"; then
     info "  Self-healing: gate remediation applied — resetting and retrying phase '$phase'..."
     phase_exit=0
     SKIP_GATE_REMEDIATION=1 bash "$SCRIPT_DIR/run-agent-orchestration.sh" \
@@ -479,17 +564,7 @@ if [ -f "$PRD_FILE" ]; then
   PASS=0; FAIL_LIST=""
   while IFS= read -r story; do
     [ -z "$story" ] && continue
-    status=$(python3 -c "
-import json
-with open('$PRD_FILE') as f:
-  d = json.load(f)
-for s in d['stories']:
-  if s['id'] == '$story':
-    print(s.get('status','unknown'))
-    break
-else:
-  print('not_found')
-" 2>/dev/null)
+    status=$(python3 "$SCRIPT_DIR/lib/handlers/story-status.py" "$PRD_FILE" "$story" 2>/dev/null)
     if [ "$status" = "completed" ]; then
       success "$story: completed"
       PASS=$((PASS+1))
@@ -497,17 +572,7 @@ else:
       echo -e "${RED}[tier3-metrolinx] ✗${NC} $story: $status"
       FAIL_LIST="$FAIL_LIST $story"
     fi
-  done < <(python3 -c "
-import json
-with open('$PRD_FILE') as f:
-  d = json.load(f)
-seen = set()
-for ids in d.get('implementationOrder', {}).values():
-  for i in ids:
-    if i not in seen:
-      print(i)
-      seen.add(i)
-" 2>/dev/null)
+  done < <(python3 "$SCRIPT_DIR/lib/handlers/story-implementation-order.py" "$PRD_FILE" 2>/dev/null)
   echo ""
 fi
 

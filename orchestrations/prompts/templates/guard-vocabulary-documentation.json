@@ -1,0 +1,21 @@
+{
+  "$why": [
+    "A FRAGMENT of guard-vocabulary, 2026-08-15. Present only when documentation was fetched.",
+    "",
+    "It is NOT just a heading around the quotes: it carries the rule that a vendor-published",
+    "name describing OBSERVABLE behaviour must not be flagged, while the same name asserting",
+    "the shape of an internal object still must. Templating the heading alone silently dropped",
+    "those five lines, and the byte check caught it — a guard that had lost the distinction",
+    "would have started flagging every documented name it saw."
+  ],
+  "body": "DOCUMENTATION LINKED ON THIS TICKET (fetched and quoted verbatim — the vendor's published contract):\n__DOC_BLOCK__\n\nA name that appears above is something the VENDOR publishes, not something this team chose.\nDo NOT flag it when a statement uses it to describe OBSERVABLE behaviour — what a user or a\ntest can see happen. DO still flag it when the statement asserts the shape or contents of an\nINTERNAL object, argument or call, even if the name itself is documented: that is an\nimplementation detail wearing a published name.\n\n",
+  "description": "Told to the guard-vocabulary agent only when the ticket carried documentation.",
+  "id": "guard-vocabulary-documentation",
+  "placeholders": [
+    "__DOC_BLOCK__"
+  ],
+  "version": 1,
+  "seams": [
+    "guard-vocabulary"
+  ]
+}

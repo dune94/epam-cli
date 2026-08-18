@@ -73,7 +73,18 @@ function invoke(dir: string, logDir: string, binDir: string, extraEnv: Record<st
       AI_MODEL: 'model-a',
       AI_PROVIDER: 'claude',
       CLAUDE_CMD: 'claude',
+      // The chain is supplied for the tier this agent's ARCHETYPE declares. It used to be
+      // supplied only as _HIGH, which passed because ai-run.sh read the HIGH chain for every
+      // agent regardless of its declared tier — the defect that made every archetype's
+      // declaration decorative. Setting both keeps the fixture honest either way.
       EPAM_MODEL_LADDER_HIGH: LADDER,
+      EPAM_MODEL_LADDER_HIGHEST: LADDER,
+      // THE TIER ORDER, which every real run exports from the project's llm-settings.json via
+      // lib/model-ladders.sh. A profile declares a POSITION ("top"), not a tier, and without
+      // this there is nothing to resolve the position against — so the chains above are named
+      // for tiers no agent can ask for, and every agent sits on its base model. Supplying it
+      // is not fixture convenience: it is the project fact the resolution step consumes.
+      EPAM_MODEL_LADDER_TIER_ORDER: 'medium high highest',
       EPAM_CALL_MAX_ATTEMPTS: '2',
       EPAM_CALL_ATTEMPT_TIMEOUT_SECS: '10',
       PROJECT_ROOT: dir,
@@ -83,11 +94,23 @@ function invoke(dir: string, logDir: string, binDir: string, extraEnv: Record<st
   return { out: (r.stdout || '') + (r.stderr || ''), status: r.status };
 }
 
+describe('an unresolvable ladder position is never silent', () => {
+  it('says so when the tier order is missing, instead of quietly not climbing', () => {
+    // Without the tier order a declared position resolves to nothing and the agent falls back
+    // to the run's own chain. That is survivable; being silent about it is not. It cost every
+    // agent its declared ladder for a whole run with nothing in the log to show for it.
+    const { dir, logDir, binDir } = setup();
+    const { out } = invoke(dir, logDir, binDir, { EPAM_MODEL_LADDER_TIER_ORDER: '' });
+    expect(out, 'the position resolved to nothing and nothing said so')
+      .toMatch(/declares a ladder position but it resolves to no tier/);
+  });
+});
+
 describe('ai-run.sh persists ladder progress to LOG_DIR', () => {
   it('creates a state file for the (agent, story) key after escalating', () => {
     const { dir, logDir, binDir } = setup();
     invoke(dir, logDir, binDir);
-    const stateFile = join(logDir, 'story-retry-state', 'code-graph-detective__S-1.count');
+    const stateFile = join(logDir, 'agent-ladder', 'code-graph-detective.S-1');
     expect(existsSync(stateFile), 'ai-run.sh never persisted its ladder progress').toBe(true);
     expect(Number(readFileSync(stateFile, 'utf8').trim())).toBeGreaterThan(0);
   });
@@ -115,20 +138,23 @@ describe('ai-run.sh persists ladder progress to LOG_DIR', () => {
     const { dir, logDir, binDir } = setup();
     invoke(dir, logDir, binDir, { EPAM_STORY_ID: 'S-1' });
     const { out, status } = invoke(dir, logDir, binDir, { EPAM_STORY_ID: 'S-2' });
-    const stateFileS2 = join(logDir, 'story-retry-state', 'code-graph-detective__S-2.count');
+    const stateFileS2 = join(logDir, 'agent-ladder', 'code-graph-detective.S-2');
     // S-2's own state file may or may not exist depending on internal timing,
     // but the key assertion is S-2's run started fresh — its models-seen
     // trace (captured via the invoke() call above through modelsSeenFile,
     // recreated per setup()) is a SEPARATE dir per setup() call, so instead
     // assert directly on the persisted files being distinct artifacts.
-    expect(existsSync(join(logDir, 'story-retry-state', 'code-graph-detective__S-1.count'))).toBe(true);
+    expect(existsSync(join(logDir, 'agent-ladder', 'code-graph-detective.S-1'))).toBe(true);
     expect(status).toBe(1); // stub always fails — just confirms S-2's run executed
   });
 
   it('EPAM_AGENT_NAME containing ":" (a real value, e.g. a plan-pass suffix) is sanitized into a safe filename', () => {
     const { dir, logDir, binDir } = setup();
     invoke(dir, logDir, binDir, { EPAM_AGENT_NAME: 'code-graph-detective:plan' });
-    const stateFile = join(logDir, 'story-retry-state', 'code-graph-detective_plan__S-1.count');
+    // Rung state lives with the shared handler now: one file per (agent, story), with every
+    // character outside [alnum]._- replaced. The requirement is unchanged — a ":" in an agent
+    // name must not produce an unwritable path — only the location moved.
+    const stateFile = join(logDir, 'agent-ladder', 'code-graph-detective_plan.S-1');
     expect(existsSync(stateFile), 'the ":" in the agent name was not sanitized into a valid filename').toBe(true);
   });
 });

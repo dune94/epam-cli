@@ -162,10 +162,15 @@ describe('profile-augmentor — orch script wiring', () => {
   });
 
   it('orch script passes _profiles_file and finding JSON to Agent 3', () => {
-    const a3Idx = orchSrc.indexOf('[profile-augmentor]');
-    const a3Block = orchSrc.slice(a3Idx - 200, a3Idx + 800);
-    expect(a3Block).toMatch(/_profiles_file/);
-    expect(a3Block).toMatch(/_finding_json|finding.*json/i);
+    // THE VALUES THE CALL SITE SUPPLIES, not a window of text around a log label. The window
+    // worked while the prompt was a heredoc built beside that label; the prompt is rendered from
+    // a template now and the values are assembled just above the render call.
+    const i = orchSrc.indexOf('render_engine_prompt profile-augmentor');
+    expect(i, 'the profile-augmentor prompt is not rendered anywhere').toBeGreaterThan(-1);
+    const block = orchSrc.slice(i - 900, i + 200);
+    expect(block, 'the augmentor is not told which profiles file to amend').toMatch(/__PROFILES_FILE__/);
+    expect(block, 'the augmentor is not given the finding it is judging').toMatch(/__FINDING_JSON__/);
+    expect(block, 'the augmentor is not told which role to target').toMatch(/__STORY_AGENT_ROLE__/);
   });
 
   it('orch script checks profile_updated: true to log success', () => {

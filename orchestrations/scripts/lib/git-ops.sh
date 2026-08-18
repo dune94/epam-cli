@@ -186,16 +186,40 @@ git_add_client_outputs() {
 
     local _excludes=() _resets=() _d
     for _d in "${_ENGINE_OWNED_DIRS[@]}"; do
-        _excludes+=( ":!${_d}/*" ":!*/${_d}/*" )
+        # ONE GLOB, NOT TWO PREFIX FORMS. ":!<dir>/*" is FATAL, not merely unmatched, when the
+        # directory is a symlink — git refuses a pathspec that crosses one:
+        #
+        #   fatal: pathspec ':(exclude)node_modules/*' is beyond a symbolic link
+        #
+        # Live 2026-08-18, both lanes, at the LAST step of a run that had otherwise succeeded:
+        # the fix was correct, tests passed, the type check passed, and every commit failed with
+        # exit 128 because both codelines symlink node_modules to a shared install. Nothing could
+        # ever be committed in such a repo.
+        #
+        # The bare ":!<dir>" form survives the symlink but stops excluding NESTED copies, which
+        # would stage a client's vendored tree — fixing the error by weakening the exclusion. This
+        # glob is correct on all three counts: top-level contents, nested contents, and a
+        # symlinked directory.
+        _excludes+=( ":(exclude,glob)**/${_d}/**" ":(exclude,glob)**/${_d}" )
         _resets+=( "$_d" )
     done
-    # Build artefacts are not engine state, but staging them is never right either.
-    # BOTH forms are required: `:!*/node_modules/*` matches only a NESTED node_modules —
-    # a top-level one (the usual case) needs `:!node_modules/*`. The original list carried
-    # only the nested form, so a repo without node_modules in .gitignore staged the lot.
-    for _d in 'node_modules' 'build' '.next'; do
-        _excludes+=( ":!${_d}/*" ":!*/${_d}/*" )
-    done
+    # Build artefacts are not engine state, but staging them is never right either. This named
+    # node_modules, build and .next — one ecosystem — so a Rust codeline whose target/ was not
+    # gitignored had its whole build tree staged into the CUSTOMER'S repository. The list now
+    # comes from lib/ecosystems.js (ecosystem artefacts) and config/repo-artifacts.json (editor
+    # and OS droppings), which is also where worktree-health-check.sh reads it — they were two
+    # hand-written lists that had drifted apart.
+    #
+    # NO SILENT FALLBACK. An empty exclusion list stages a client's build tree, so a handler that
+    # cannot answer stops the staging rather than widening it.
+    local _ex_out
+    if ! _ex_out=$("${NODE_BIN:-node}" "$(dirname "${BASH_SOURCE[0]}")/handlers/repo-exclude-patterns.js" pathspec); then
+        echo "[git-add] could not resolve the exclusion list — refusing to stage without it" >&2
+        return 1
+    fi
+    while IFS= read -r _ex; do
+        [ -n "$_ex" ] && _excludes+=( "$_ex" )
+    done <<< "$_ex_out"
 
     # CAPTURE THE REASON. This was `2>/dev/null`, and live 2026-08-09 a run halted on
     # "git add failed (exit 1)" with no diagnosis at all: the deliverable gate had passed, tsc
@@ -260,15 +284,19 @@ git_add_client_outputs() {
     # undelivered, the phase aborted, and the codeline HALTed over a repo that had nothing to
     # commit.
     #
-    # engine_paths_filter is the same single definition the staging exclusions come from. The
-    # build dirs are dropped here too, for the same reason they are excluded above: a pending
-    # node_modules is not work.
+    # engine_paths_filter is the same single definition the staging exclusions come from, and the
+    # artefact dirs now are too — this was a THIRD copy of the list, naming node_modules, build and
+    # .next. A pending target/ or .venv/ counted as work, so a Rust or Python repo with nothing to
+    # commit produced 'nothing reached the index although N path(s) are pending' and HALTed the
+    # codeline. Reusing $_ex_re, already resolved above; if it is empty the filter is skipped
+    # rather than degenerating into a regex that matches everything.
+    local _ex_re
+    _ex_re=$("${NODE_BIN:-node}" "$(dirname "${BASH_SOURCE[0]}")/handlers/repo-exclude-patterns.js" regex 2>/dev/null || echo "")
     _pending=$(timeout "$_timeout" git -C "$_repo" status --porcelain 2>/dev/null \
         | sed 's/^...//' \
         | sed 's/^.* -> //' \
         | engine_paths_filter \
-        | grep -vE '^(node_modules|build|\.next)/' \
-        | grep -vE '(^|/)(node_modules|build|\.next)/' \
+        | { if [ -n "$_ex_re" ]; then grep -vE "$_ex_re"; else cat; fi; } \
         | wc -l | tr -d ' ')
     if [ "$_rc" -ne 0 ] && [ "${_pending:-0}" -eq 0 ]; then
         # git could not even report status: the repository is genuinely unusable.
@@ -299,12 +327,64 @@ ensure_story_branch() {
     # constraint, so the default preserves today's plain "AI-<story_id>" shape.
     local _branch="${EPAM_BRANCH_PREFIX:-}AI-${story_id}"
 
-    if ! git -C "$codeline_root" fetch origin "$baseline_branch" --quiet 2>/dev/null; then
-        warning "  [story-branch] $story_id: could not fetch origin/${baseline_branch} — proceeding on current branch state"
+    # THE START POINT IS WHAT VARIES, NOT THE PROCEDURE.
+    #
+    # This used to begin `git fetch origin` and return on failure, so a repository with no remote
+    # never reached checkout -B: the writer worked directly on the baseline branch and one warning
+    # line said so. That became a hard failure once the write perimeter went generic, because
+    # perimeter_apply — the call that REOPENS the repository — sits past that early return. A
+    # sealed repo with no remote could never be unsealed, and the writer was locked out of the one
+    # repository it was asked to change.
+    #
+    # With a remote, everything below is unchanged: fetch, then base off origin/<baseline>.
+    # Without one, the LOCAL baseline branch is the start point. With neither, this still fails.
+    local _base_ref=""
+    if git -C "$codeline_root" remote get-url origin >/dev/null 2>&1; then
+        if ! git -C "$codeline_root" fetch origin "$baseline_branch" --quiet 2>/dev/null; then
+            warning "  [story-branch] $story_id: could not fetch origin/${baseline_branch} — proceeding on current branch state"
+            return 1
+        fi
+        _base_ref="origin/${baseline_branch}"
+    elif git -C "$codeline_root" rev-parse --verify --quiet "refs/heads/${baseline_branch}" >/dev/null 2>&1; then
+        _base_ref="$baseline_branch"
+        info "  [story-branch] $story_id: no 'origin' remote — basing off the local '${baseline_branch}'"
+    else
+        warning "  [story-branch] $story_id: no 'origin' remote and no local '${baseline_branch}' — proceeding on current branch state"
         return 1
     fi
 
-    if git -C "$codeline_root" checkout -B "$_branch" "origin/${baseline_branch}" --quiet 2>/dev/null; then
+    # NOTHING IS DISCARDED SILENTLY OR UNRECOVERABLY.
+    #
+    # The hard reset below is wanted and stays. What is not acceptable is what it did
+    # on 2026-08-14: a story that had COMPLETED — `npm run test` green, `tsc` green,
+    # 4 files committed — was rejected by the reviewer over one inconsistent
+    # dependency declaration, and the retry moved this branch pointer back to
+    # origin/develop. The commit stopped being reachable from any ref. It survived
+    # only in the reflog, where nothing in this pipeline looks and where gc removes
+    # it. The same shape orphaned three FINISHED gotransit commits the same day
+    # (e780a8b7 / 45c82f2a / 20c2cea4), recovered by hand.
+    #
+    # The log line "freshly based on origin/<baseline>" reads as hygiene. It was
+    # deletion. So: before the pointer moves, anything that would stop being
+    # reachable is pinned under a real ref and named — recovery must never depend on
+    # the reflog. This is a local ref only; it pushes nothing.
+    local _unreachable=0
+    _unreachable=$(git -C "$codeline_root" rev-list --count "${_base_ref}..HEAD" 2>/dev/null || echo 0)
+    case "$_unreachable" in (''|*[!0-9]*) _unreachable=0 ;; esac
+    if [ "$_unreachable" -gt 0 ]; then
+        local _rescue_ref _head_short
+        _head_short=$(git -C "$codeline_root" rev-parse --short HEAD 2>/dev/null || echo unknown)
+        _rescue_ref="epam-rescue/${story_id}-${_head_short}"
+        if git -C "$codeline_root" branch -f "$_rescue_ref" HEAD --quiet 2>/dev/null; then
+            warning "  [story-branch] $story_id: ${_unreachable} commit(s) would have been discarded by this reset — preserved on branch '${_rescue_ref}'"
+            warning "  [story-branch]   recover with: git -C '${codeline_root}' log ${_rescue_ref}"
+        else
+            error "  [story-branch] $story_id: ${_unreachable} commit(s) are about to become unreachable and the rescue ref could not be created — refusing to reset"
+            return 1
+        fi
+    fi
+
+    if git -C "$codeline_root" checkout -B "$_branch" "$_base_ref" --quiet 2>/dev/null; then
         # checkout -B only forces tracked files that DIFFER between the old
         # branch tip and the new start-point — a tracked file whose content
         # is IDENTICAL in both survives untouched, dirty modifications and
@@ -322,7 +402,7 @@ ensure_story_branch() {
         # primitive brownfield-preflight-reset.sh already applies between
         # RUNS and _selective_worktree_reset applies between RUNGS, now also
         # applied here, once, before a story's FIRST attempt even begins.
-        git -C "$codeline_root" reset --hard "origin/${baseline_branch}" --quiet 2>/dev/null || true
+        git -C "$codeline_root" reset --hard "$_base_ref" --quiet 2>/dev/null || true
         git -C "$codeline_root" clean -fd --quiet 2>/dev/null || true
         _provision_epam_plugin_config "$codeline_root"
         # The repo is now on a story branch, which is where edits are allowed to
@@ -331,11 +411,11 @@ ensure_story_branch() {
         # rewrote ~1050 lines of client source there before any writer ran, and
         # a per-tool allowlist cannot stop that because `bash` bypasses it.
         perimeter_apply "$codeline_root"
-        success "  [story-branch] $story_id: on branch '${_branch}', freshly based on origin/${baseline_branch} (working tree hard-reset + cleaned)"
+        success "  [story-branch] $story_id: on branch '${_branch}', freshly based on ${_base_ref} (working tree hard-reset + cleaned)"
         return 0
     fi
 
-    warning "  [story-branch] $story_id: could not create/reset branch '${_branch}' off origin/${baseline_branch} — proceeding on current branch"
+    warning "  [story-branch] $story_id: could not create/reset branch '${_branch}' off ${_base_ref} — proceeding on current branch"
     return 1
 }
 

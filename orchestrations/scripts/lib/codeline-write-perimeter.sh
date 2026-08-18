@@ -270,6 +270,31 @@ perimeter_seal() {
     perimeter_lock "$repo"
 }
 
+# perimeter_seal_all <codeline-root>
+#
+# Seal every repository under the root. The MIRROR of perimeter_release_all, and the reason
+# this exists as a function at all: sealing used to be an inline loop in one launcher while
+# releasing was generic in the engine, so seven of eight projects ran with no perimeter and
+# nothing said so — releasing a repo that was never locked logs nothing.
+#
+# The defect that split cost: live 2026-08-17 run 20260817T231306Z, mock-a's src/fares.ts and
+# test/fares.test.ts were rewritten during the SPEC PASS, before the writer stage was reached,
+# on a project whose launcher never sealed. The same thing had already been recorded on the
+# client estate — ~1050 lines across five files, same stage, which is why this library exists.
+#
+# Idempotent, and never fails the caller: a locked repo re-locks to the same state.
+perimeter_seal_all() {
+    local root="${1:-}"
+    [ -n "$root" ] && [ -d "$root" ] || return 0
+    local _n=0 _cl
+    for _cl in "$root"/*/; do
+        [ -e "${_cl}.git" ] || continue
+        perimeter_seal "${_cl%/}" && _n=$((_n + 1))
+    done
+    [ "$_n" -gt 0 ] && _perim_log "sealed $_n codeline(s) — agents may not write until a story branch exists"
+    return 0
+}
+
 # perimeter_release_all <codeline-root>
 #
 # Give every repository under the root back to the operator. Called when the RUN ends —

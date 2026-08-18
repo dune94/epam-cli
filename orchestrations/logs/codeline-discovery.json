@@ -1,22 +1,36 @@
 {
   "codelines": [
     {
-      "name": "gotransit",
-      "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
-      "reason": "The ticket title and components field both name GO as a product area requiring live preview of CMS draft content, and this repo is the GO Transit front-end site.",
-      "evidence": "ticket component \"GO\" and title \"[GO, UP, MX] Live Preview of Content in CMS\""
+      "name": "mocka",
+      "path": "/home/bradleyjerome/projects/mock3/mock-a",
+      "reason": "MOCK3-1 covers the senior-fare boundary bug, and this repository's src/fares.ts contains the fare rule where riders aged 65 and over should pay the concession fare but age > 65 excludes exactly 65.",
+      "evidence": "ticket component \"mocka\"; src/fares.ts: \"if (rider.age > 65) return CONCESSION_FARE_CENTS;\" under the comment \"Riders aged 65 AND OVER pay the concession fare.\"",
+      "facts": [
+        {
+          "text": "Tests are run with vitest via the package.json script \"test\": \"vitest run\"; the build check is \"build\": \"tsc --noEmit\" and lint is a no-op (\"lint\": \"echo no-lint-configured\").",
+          "source": "package.json: \"scripts\": { \"test\": \"vitest run\", \"lint\": \"echo no-lint-configured\", \"build\": \"tsc --noEmit\" }"
+        },
+        {
+          "text": "Source lives in src/fares.ts and its tests in test/fares.test.ts; the existing suite has no case for a rider aged exactly 65, only age 70 (\"charges the concession fare well past the senior boundary\"), so the boundary bug is untested.",
+          "source": "test/fares.test.ts: \"expect(fareFor({ age: 70, hasPass: false })).toBe(CONCESSION_FARE_CENTS);\""
+        }
+      ]
     },
     {
-      "name": "upexpress",
-      "path": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com",
-      "reason": "The ticket title and components field both name UP as a product area requiring live preview of CMS draft content, and this repo is the UP Express front-end site.",
-      "evidence": "ticket component \"UP\" and title \"[GO, UP, MX] Live Preview of Content in CMS\""
-    },
-    {
-      "name": "metrolinx",
-      "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com",
-      "reason": "The ticket title and components field both name MX as a product area requiring live preview of CMS draft content, and this repo is the Metrolinx front-end site.",
-      "evidence": "ticket component \"MX\" and title \"[GO, UP, MX] Live Preview of Content in CMS\""
+      "name": "mockb",
+      "path": "/home/bradleyjerome/projects/mock3/mock-b",
+      "reason": "MOCK3-2 covers the departure board omitting the final stop, and this repository's src/schedule.ts contains formatStops looping to stops.length - 1, dropping the last stop, while totalMinutes is computed independently and stays correct.",
+      "evidence": "ticket component \"mockb\"; src/schedule.ts: \"for (let i = 0; i < stops.length - 1; i++)\" in formatStops",
+      "facts": [
+        {
+          "text": "Tests are run with vitest via the package.json script \"test\": \"vitest run\"; the build check is \"build\": \"tsc --noEmit\" and lint is a no-op (\"lint\": \"echo no-lint-configured\").",
+          "source": "package.json: \"scripts\": { \"test\": \"vitest run\", \"lint\": \"echo no-lint-configured\", \"build\": \"tsc --noEmit\" }"
+        },
+        {
+          "text": "Source lives in src/schedule.ts and its tests in test/schedule.test.ts; the existing formatStops tests only assert the arrow separator and the first stop's name, never that the last stop appears, which is why the omission passes the suite.",
+          "source": "test/schedule.test.ts: \"expect(formatStops(LINE)).toContain('->');\" and \"expect(formatStops(LINE)).toContain('Union');\""
+        }
+      ]
     }
   ]
 }

@@ -1,96 +1,66 @@
 {
   "minted": [
     {
-      "name": "gotransit-investigator",
-      "kind": "investigator",
-      "codeline": "gotransit",
-      "rationale": "The implementer needs to know where Contentstack Stack is initialized, how pages fetch CMS data, and what conventions gotransit follows before writing live preview integration code.",
-      "surfaces": [
-        "profiles.json",
-        "kb",
-        "project-investigators",
-        "project-profiles"
-      ]
-    },
-    {
-      "name": "upexpress-investigator",
-      "kind": "investigator",
-      "codeline": "upexpress",
-      "rationale": "The implementer needs to know where Contentstack Stack is initialized, how pages fetch CMS data, and what conventions upexpress follows before writing live preview integration code.",
-      "surfaces": [
-        "profiles.json",
-        "kb",
-        "project-investigators",
-        "project-profiles"
-      ]
-    },
-    {
-      "name": "metrolinx-investigator",
-      "kind": "investigator",
-      "codeline": "metrolinx",
-      "rationale": "The implementer needs to know where Contentstack Stack is initialized, how pages fetch CMS data, and what conventions metrolinx follows before writing live preview integration code.",
-      "surfaces": [
-        "profiles.json",
-        "kb",
-        "project-investigators",
-        "project-profiles"
-      ]
-    },
-    {
-      "name": "contentstack-live-preview-integration-engineer",
+      "name": "typescript-logic-fixer",
       "kind": "implementer",
       "codeline": "",
-      "rationale": "A single implementer is needed to add Contentstack Live Preview initialization, entry-change listeners, and preview-aware data fetching across all three codelines, because the work is the same pattern in each repository and splitting it would create near-duplicate roles.",
+      "rationale": "Both tickets are off-by-one / boundary bugs in pure TypeScript modules with no external dependencies, so one implementer who knows the two source files and the shared vitest+typescript stack can fix both.",
       "surfaces": [
         "profiles.json",
         "kb",
         "project-roles",
         "project-profiles"
       ]
-    }
-  ],
-  "rejected": [
-    {
-      "name": "gotransit-contentstack-investigator",
-      "reason": "brief names 1 path(s) that do not exist in codeline 'gotransit': src/lib/"
     },
     {
-      "name": "upexpress-contentstack-investigator",
-      "reason": "brief names 1 path(s) that do not exist in codeline 'upexpress': src/lib/"
+      "name": "fares-investigator",
+      "kind": "investigator",
+      "codeline": "mocka",
+      "rationale": "The fare bug is a one-line boundary comparison, but the implementer needs to know exactly where the age check lives, what the fare constants are, and what the existing test already covers before touching it.",
+      "surfaces": [
+        "profiles.json",
+        "kb",
+        "project-investigators",
+        "project-profiles"
+      ]
     },
     {
-      "name": "metrolinx-contentstack-investigator",
-      "reason": "brief names 1 path(s) that do not exist in codeline 'metrolinx': src/lib/"
+      "name": "schedule-investigator",
+      "kind": "investigator",
+      "codeline": "mockb",
+      "rationale": "The omitted-stop bug is in a rendering loop, but the implementer needs to know the exact function signature, the data shape, and how the loop truncates before editing.",
+      "surfaces": [
+        "profiles.json",
+        "kb",
+        "project-investigators",
+        "project-profiles"
+      ]
     }
   ],
+  "rejected": [],
   "unchanged": [],
   "projectRoles": [
-    "contentstack-live-preview-integration-engineer"
+    "typescript-logic-fixer"
   ],
   "projectInvestigators": [
-    "gotransit-investigator",
-    "upexpress-investigator",
-    "metrolinx-investigator"
+    "fares-investigator",
+    "schedule-investigator"
   ],
   "rejectedAcrossAttempts": [
     {
-      "name": "contentstack-live-preview-engineer",
-      "reason": "brief names 3 path(s) that do not exist in any codeline: lib/contentstack-live-preview.ts, utils/live-preview.ts, ts/.tsx"
+      "name": "typescript-logic-fixer",
+      "reason": "brief names 2 path(s) that do not exist in any codeline: src/fares.test.ts, src/schedule.test.ts"
     },
     {
-      "name": "gotransit-contentstack-investigator",
-      "reason": "brief names 1 path(s) that do not exist in codeline 'gotransit': src/lib/"
+      "name": "fares-investigator",
+      "reason": "brief names 1 path(s) that do not exist in codeline 'mocka': src/fares.test.ts"
     },
     {
-      "name": "upexpress-contentstack-investigator",
-      "reason": "brief names 1 path(s) that do not exist in codeline 'upexpress': src/lib/"
-    },
-    {
-      "name": "metrolinx-contentstack-investigator",
-      "reason": "brief names 1 path(s) that do not exist in codeline 'metrolinx': src/lib/"
+      "name": "schedule-investigator",
+      "reason": "brief names 1 path(s) that do not exist in codeline 'mockb': src/schedule.test.ts"
     }
   ],
-  "proposed": 8,
+  "proposed": 6,
   "attempts": 2,
   "protectedRoles": 21
 }

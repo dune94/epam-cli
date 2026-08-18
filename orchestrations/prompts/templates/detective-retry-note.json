@@ -1,0 +1,20 @@
+{
+  "$why": [
+    "A FRAGMENT prepended to the detective prompt on a retry, 2026-08-16.",
+    "",
+    "A retry that repeats the original instruction gets the original answer. This says what",
+    "went wrong — no JSON array came back, probably because a write tool was called — which is",
+    "the only new information the second attempt has.",
+    "",
+    "It is a template like any other prompt text. Retry fragments are the easiest thing to",
+    "leave embedded, precisely because they are short and feel like plumbing."
+  ],
+  "body": "\\n\\nRETRY — your previous reply contained NO JSON array (you may have called a write tool). Emit ONLY the JSON array as text in THIS reply now. Do NOT call WriteFile or write to any file.",
+  "description": "Prepended to the detective prompt when its previous reply contained no JSON array.",
+  "id": "detective-retry-note",
+  "placeholders": [],
+  "version": 1,
+  "seams": [
+    "code-graph-detective"
+  ]
+}

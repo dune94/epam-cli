@@ -1,0 +1,256 @@
+{
+  "_what": "mock3's OWN PRD. Authored, never ingested: this project exists to rehearse the pipeline without any client system in the loop, so there is no Jira to synthesise from. The stories describe OBSERVABLE defects that exist in the codelines right now, each proven by an executable probe before this file was written -- a rehearsal against a defect that is not really there teaches nothing.",
+  "title": "mock3 rehearsal",
+  "project": {
+    "name": "mock3",
+    "description": "A two-codeline transit-fares and departure-board workspace used to exercise the orchestration pipeline end to end.",
+    "outputDirs": [
+      {
+        "codeline": "mocka",
+        "path": "/home/bradleyjerome/projects/mock3/mock-a"
+      },
+      {
+        "codeline": "mockb",
+        "path": "/home/bradleyjerome/projects/mock3/mock-b"
+      }
+    ],
+    "outputDir": "/home/bradleyjerome/projects/mock3/mock-b"
+  },
+  "currentIteration": 1,
+  "stories": [
+    {
+      "id": "MOCK3-2",
+      "jiraKey": "MOCK3-2",
+      "title": "The departure board omits the final stop",
+      "description": "formatStops renders every stop except the last one, so a three-stop line shows two. The journey length reported by totalMinutes is correct, which is why the omission has gone unnoticed.",
+      "acceptanceCriteria": [
+        "Every stop on the line appears on the rendered board, including the final one.",
+        "Stops remain separated by the existing arrow separator.",
+        "An empty line still renders without error."
+      ],
+      "codelines": [
+        "mockb"
+      ],
+      "status": "failed",
+      "completed": false,
+      "effort": "low",
+      "kind": "defect",
+      "agentRoles": {
+        "mockb": "typescript-logic-fixer"
+      },
+      "agentRole": "typescript-logic-fixer",
+      "codeline": "mockb",
+      "specification": {
+        "guardVocabulary": {
+          "blacklist": [
+            {
+              "term": "formatstops",
+              "reason": "Internal function name that produces the rendered string; naming it in a verification criterion prescribes the implementation mechanism rather than the observable surface (the rendered departure-board string)."
+            },
+            {
+              "term": "input array",
+              "reason": "Internal array/loop structure used to build the output string; referencing it prescribes HOW the value is produced, not what the user observes."
+            },
+            {
+              "term": "parts",
+              "reason": "Internal accumulator structure that feeds the rendered output; naming it describes the mechanism behind the surface, not the surface itself."
+            },
+            {
+              "term": "stops.length",
+              "reason": "Internal loop-bound expression that controls which stops are included; referencing it prescribes the implementation fix, not the observable result."
+            },
+            {
+              "term": "stop[]",
+              "reason": "Internal type/parameter of the producing function; naming it describes the data structure feeding the surface, not what the user sees."
+            },
+            {
+              "term": "totalminutes",
+              "reason": "Sibling internal function unrelated to the ticket's surface (the rendered stop list); referencing it presumes a mechanism and is not part of the observable output."
+            }
+          ],
+          "whitelist": [
+            {
+              "term": "departure board",
+              "reason": "The observable surface the ticket is about: the rendered string of stop names shown on the departure board."
+            },
+            {
+              "term": "rendered string",
+              "reason": "The user-facing rendered output that a tester observes; the black-box surface, not the function that builds it."
+            },
+            {
+              "term": "final stop",
+              "reason": "Observable content a user/tester sees in the output; the ticket's stated symptom is that the final stop name is missing from the display."
+            },
+            {
+              "term": "stop name",
+              "reason": "Observable content a user/tester sees; the ticket intends every stop name to appear in the rendered output."
+            },
+            {
+              "term": "separator",
+              "reason": "Observable visual element between stop entries in the rendered string; a tester can see it in the output."
+            },
+            {
+              "term": "empty array",
+              "reason": "Observable behaviour: calling the surface with no stops must produce a string without error, which a tester can verify."
+            },
+            {
+              "term": "returns a string",
+              "reason": "Observable contract: the surface returns a string rather than throwing; a black-box check on the output."
+            },
+            {
+              "term": "without throwing an error",
+              "reason": "Observable negative behaviour: the surface must not throw for empty input; a tester can observe this."
+            }
+          ]
+        },
+        "runId": "20260818T101809Z",
+        "assignedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "coordinatorNotes": "AC is clear and the fix is mechanical (off-by-one loop bound: i < stops.length - 1 drops the last stop). No prd.json or provider policy ledger found, so no mandatory spec coverage. However, existing tests are inadequate — they only assert the arrow separator and first stop name, never validating the last stop appears, which is why this bug went unnoticed. Assign speckit only to harden testability criteria: ensure tests assert all stops render including the final one, and cover single-stop and empty-line edge cases. openspec not needed — no elaboration, splitting, or architectural depth required.",
+        "status": "completed",
+        "updatedAt": "2026-08-18T11:31:16.365Z",
+        "appliedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "agentContributions": [
+          {
+            "agent": "openspec",
+            "applied": true,
+            "notes": "Defect: the for-loop bound `i < stops.length - 1` in formatStops skips the last stop. The fix site is formatStops itself; totalMinutes is already correct. VCs are black-box checks on the returned string — no implementation prescription, no internal structure references, no cross-comparisons.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-08-18T11:26:16.934Z"
+          },
+          {
+            "agent": "speckit",
+            "applied": true,
+            "notes": "Read src/schedule.ts and test/schedule.test.ts to ground the review. The code confirms the bug: the loop bound `i < stops.length - 1` skips the last stop, and for a single-stop array (length 1) the loop body never executes, returning an empty string — a distinct edge case from the empty-line case. Openspec's AC1 said 'appears' but the rendered format is 'Name (Xm)', so I refined AC1 to specify that both the name and minute annotation must appear. I added AC4 (single-stop line) because it is a real edge case exposed by the same loop-bound bug: with one stop, `stops.length - 1` equals 0, the loop never runs, and the output is empty — different from the empty-line case and not covered by any existing AC. I added AC5 (no leading/trailing separator) because 'separated by' in AC2 could be satisfied even if a stray separator appeared at the start or end; this makes the boundary condition explicitly testable.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-08-18T11:31:16.365Z"
+          }
+        ],
+        "manifestCheck": {
+          "missing": [],
+          "checkedAt": "2026-08-18T11:32:11.128Z"
+        },
+        "coordinatorReview": {
+          "verdict": "approved",
+          "reviewNotes": "Manifest evidence confirms both declared paths exist (src/schedule.ts, test/schedule.test.ts) with exact matches — no missing paths. I read src/schedule.ts directly and it confirms every claim in the spec: the loop bound `i < stops.length - 1` on line 6 skips the last stop, the separator `' -> '` and per-stop template are already correct, and totalMinutes reads stops[stops.length-1].minutes independently — so the single-line fix (change bound to `i < stops.length`) is sufficient and correct. Both agents added non-overlapping value: openspec identified the defect and confirmed the fix site plus totalMinutes independence; speckit read the actual source, confirmed the bug, and surfaced two genuinely distinct edge cases — the single-stop case (length 1 → loop never runs → empty output, different from empty-input case) and the no-stray-separator boundary condition. verificationCriteria are observable, black-box, and free of guard-vocabulary blacklisted terms (no formatstops, input array, parts, stops.length, stop[], totalminutes). Brownfield redaction policy is respected: acceptanceChanged=false despite speckit describing AC refinements is the expected pipeline behavior, not a defect. planAlignmentEvidence shows aligned:true — the detective's plan and the final fixSiteAnalysis both center on formatStops with the identical loop-bound fix; the final analysis dropped the totalMinutes 'verifies' entry (changeRequired:false, no-op) which is a legitimate simplification, not an unexplained pivot. The spec is ready to implement.",
+          "qualityScore": 0.92,
+          "flags": [
+            {
+              "flag": "coordinator-note-inconsistency",
+              "severity": "advisory",
+              "why": "coordinatorNotes state 'openspec not needed — no elaboration, splitting, or architectural depth required' yet assignedAgents and appliedAgents both include openspec, and openspec's contribution (defect identification, fix-site confirmation, totalMinutes independence) was substantive. This is a note-vs-assignment inconsistency in the coordinator record, not a spec-quality or implementation-readiness defect — the resulting spec work is sound regardless of which agent produced it."
+            }
+          ],
+          "planAlignment": "aligned",
+          "reviewedAt": "2026-08-18T11:32:11.128Z"
+        }
+      },
+      "verificationCriteria": [
+        "The rendered departure-board string for a line with multiple stops includes the name of the last stop on that line, confirming the previously-omitted final stop now appears.",
+        "The rendered departure-board string displays each pair of consecutive stops separated by the arrow separator ' -> '.",
+        "Rendering a line with no stops yields a string without raising an error."
+      ],
+      "vcSource": "both",
+      "vcResolution": "regenerated",
+      "fixSiteAnalysis": [
+        {
+          "file": "src/schedule.ts",
+          "function": "formatStops",
+          "reason": "The for-loop bound `i < stops.length - 1` excludes the last index, so the final stop is never pushed into parts. Changing the bound to `i < stops.length` makes every stop, including the last, appear in the rendered string. The separator `' -> '` already exists on line 9 and is reused unchanged.",
+          "fix": "Change the loop bound on line 6 from `i < stops.length - 1` to `i < stops.length`. No other changes needed — the template literal on line 7 and the `' -> '` join on line 9 already handle the last stop correctly once the loop visits it.",
+          "helper": "",
+          "brokenLine": "for (let i = 0; i < stops.length - 1; i++)",
+          "fixVerified": null,
+          "evidenceVerified": true,
+          "fileVerified": true,
+          "changeRequired": true,
+          "requiredPackages": [],
+          "deliveryRole": "produces",
+          "runsIn": "n/a",
+          "prescriptionNote": "",
+          "prescriptionUnderspecified": false,
+          "codeline": "mockb"
+        },
+        {
+          "file": "test/schedule.test.ts",
+          "function": "schedule.test.ts",
+          "reason": "Existing tests only assert that the output contains '->' and 'Union'; none check the last stop ('Eglinton'). Once formatStops is fixed, a test must verify the final stop name appears in the rendered string, and that an empty line still renders without error (matching the acceptance criteria).",
+          "fix": "Add an assertion that formatStops(LINE) contains 'Eglinton' (the last stop in the 3-stop test data), and an assertion for the empty-line case (formatStops([]) returns ''). The existing LINE constant and the formatStops import are reused.",
+          "helper": "formatStops",
+          "brokenLine": "",
+          "fixVerified": true,
+          "evidenceVerified": null,
+          "fileVerified": true,
+          "changeRequired": true,
+          "requiredPackages": [],
+          "deliveryRole": "verifies",
+          "runsIn": "n/a",
+          "prescriptionNote": "",
+          "prescriptionUnderspecified": false,
+          "codeline": "mockb"
+        }
+      ],
+      "fixSiteAnalysisCoverage": {
+        "complete": true,
+        "uncoveredVerificationCriteria": []
+      },
+      "storyKind": "defect",
+      "technicalNotes": {
+        "files": [
+          "src/schedule.ts",
+          "test/schedule.test.ts"
+        ],
+        "perCodeline": {
+          "mockb": {
+            "files": [
+              "src/schedule.ts",
+              "test/schedule.test.ts"
+            ],
+            "resolved": [
+              {
+                "declared": "src/schedule.ts",
+                "actual": "src/schedule.ts",
+                "match": "exact",
+                "verified_against": "/home/bradleyjerome/projects/mock3/mock-b"
+              },
+              {
+                "declared": "test/schedule.test.ts",
+                "actual": "test/schedule.test.ts",
+                "match": "exact",
+                "verified_against": "/home/bradleyjerome/projects/mock3/mock-b"
+              }
+            ],
+            "unresolved": []
+          }
+        }
+      },
+      "estimatedAiMinutes": 4.5178,
+      "estimatedCost": 0.1404,
+      "estimatedTokens": 545670,
+      "estimatedTurns": 16,
+      "estimatedHours": 0.0752,
+      "cpaEffortTier": "medium",
+      "cpaConfidence": 0.95,
+      "cpaGate": "pass",
+      "ladderTier": "medium",
+      "cpaIterationEstimate": 1,
+      "model": "MiniMax-M3",
+      "aiProvider": "minimax",
+      "reasoningEffort": "low",
+      "lastAttempt": "2026-08-18T09:30:53-04:00",
+      "actualCost": 0.7494000000000002
+    }
+  ],
+  "implementationOrder": {
+    "core": [
+      "MOCK3-2"
+    ]
+  }
+}

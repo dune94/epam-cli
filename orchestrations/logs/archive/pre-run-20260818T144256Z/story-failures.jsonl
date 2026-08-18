@@ -1,0 +1,5 @@
+{"storyId":"MOCK3-2","failureClass":"quality","model":"MiniMax-M3","attempt":0,"exitCode":1,"rawBytes":3252,"outputTokens":2082,"maxIterations":16,"timestamp":"2026-08-18T14:30:40Z"}
+{"storyId":"MOCK3-1","failureClass":"quality","model":"MiniMax-M3","attempt":0,"exitCode":1,"rawBytes":2455,"outputTokens":3049,"maxIterations":16,"timestamp":"2026-08-18T14:30:46Z"}
+{"storyId":"MOCK3-1","failureClass":"quality","model":"MiniMax-M3","attempt":1,"exitCode":1,"rawBytes":3702,"outputTokens":1261,"maxIterations":16,"timestamp":"2026-08-18T14:32:03Z"}
+{"storyId":"MOCK3-2","failureClass":"quality","model":"MiniMax-M3","attempt":1,"exitCode":1,"rawBytes":3285,"outputTokens":1115,"maxIterations":16,"timestamp":"2026-08-18T14:33:26Z"}
+{"storyId":"MOCK3-1","failureClass":"quality","model":"z-ai/glm-5.2","attempt":2,"exitCode":1,"rawBytes":3932,"outputTokens":1855,"maxIterations":21,"timestamp":"2026-08-18T14:34:58Z"}

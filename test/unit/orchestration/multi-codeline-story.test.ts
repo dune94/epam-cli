@@ -28,12 +28,18 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
+import { templateBody } from '../../helpers/prompt-text';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const SYNTH = join(__dirname, '../../../orchestrations/scripts/synthesize-prd-from-jira.js');
+// The synthesizer has no built-in template: a built-in one lent every run another
+// project's identity. These tests are about the synthesizer's own logic, so the template
+// they supply is deliberately anonymous.
+const TEMPLATE = join(__dirname, '../../fixtures/prd/neutral-synthesis-template.json');
+
 
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
@@ -58,7 +64,7 @@ function synthesize(classifications: unknown[], env: Record<string, string> = {}
   const cls = join(dir, 'ac-gate.json');
   const out = join(dir, 'prd.json');
   writeFileSync(cls, JSON.stringify(classifications, null, 2));
-  const r = execFileSync('node', [SYNTH, '--classifications', cls, '--out', out], {
+  const r = execFileSync(process.execPath, [SYNTH, '--classifications', cls, '--out', out, '--template', TEMPLATE], {
     encoding: 'utf8', timeout: 30000,
     env: { ...process.env, JIRA_CODELINES: 'gotransit,upexpress,metrolinx', ...env },
   });
@@ -120,9 +126,11 @@ describe('the per-codeline filter includes a spanning story in every lane', () =
     // The filter PARTITIONS stories across codelines. A story that spans them
     // matches no partition, appears in zero filtered PRDs, and is silently
     // dropped from the run.
-    const i = ORCH.indexOf('Build filtered PRD containing only stories for codeline');
-    expect(i, 'the per-codeline filter was not found').toBeGreaterThan(-1);
-    const block = ORCH.slice(i, i + 1200);
+    // THE HANDLER, which is the filter now. This sliced 1200 characters after a comment in
+    // the shell script — a window that held the logic only while the logic was inline.
+    // Reading the handler is also stronger: it is the exact file the pipeline executes.
+    const block = readFileSync(
+      join(__dirname, '../../../orchestrations/scripts/lib/handlers/filtered-prd.js'), 'utf8');
     expect(block,
       'a story spanning codelines is filtered out of every lane and never runs')
       .toMatch(/codelines/);
@@ -223,7 +231,10 @@ describe('MC-2: the detective can see the neighbouring codeline', () => {
   it('tells the detective the cause may be outside this repository', () => {
     // Without this it will always find A cause here, because there is always
     // some line here that consumes the wrong value.
-    expect(SPEC,
+    // The warning lives in the published-contracts fragment now, which is the block that
+    // actually reaches the detective. Asserting it against spec-mode-runner.js could only
+    // ever confirm that the render call exists.
+    expect(templateBody('spec-context-fragments', 'published_contracts'),
       'nothing warns that a symptom in this repo can have its cause in another, ' +
       'so a defensive fix at the boundary looks like a correct diagnosis')
       .toMatch(/another codeline|other codeline|outside this repo|upstream codeline/i);

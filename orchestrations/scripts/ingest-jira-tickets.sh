@@ -43,8 +43,8 @@ OUT_PRD="${PRD_FILE:-}"
 _out_prd_required() {
   [ -n "$OUT_PRD" ] && return 0
   err "no output PRD path: pass --out-prd, or export PRD_FILE."
-  err "  (this used to default to travel-app-prd.json, so an ingest for ANY Jira"
-  err "   project silently overwrote the travel-app PRD)"
+  err "  (this used to default to a project-named PRD, so an ingest for ANY Jira"
+  err "   project silently overwrote that one project's PRD)"
   exit 2
 }
 DRY_RUN=0
@@ -84,18 +84,10 @@ fi
 log "Pulling tickets from ${JIRA_URL} — project: ${PROJECT_KEY}, status: '${JIRA_STATUS}'"
 
 # ── Step 1: Pull issues from Jira via jira-client.js ─────────────────────
-"$NODE_BIN" - <<EOF > "$ISSUES_JSON"
-const jira = require('${SCRIPT_DIR}/lib/jira-client');
-jira.getProjectIssues('${PROJECT_KEY}', '${JIRA_STATUS}').then(issues => {
-  process.stdout.write(JSON.stringify(issues, null, 2));
-}).catch(e => {
-  process.stderr.write('[ingest] Failed to fetch issues: ' + e.message + '\n');
-  process.stdout.write('[]');
-  process.exit(1);
-});
-EOF
+"$NODE_BIN" "${SCRIPT_DIR}/lib/handlers/fetch-tracker-issues.js" \
+  "${SCRIPT_DIR}" "${PROJECT_KEY}" "${JIRA_STATUS}" > "$ISSUES_JSON"
 
-ISSUE_COUNT=$("$NODE_BIN" -e "console.log(JSON.parse(require('fs').readFileSync('$ISSUES_JSON','utf8')).length)")
+ISSUE_COUNT=$("$NODE_BIN" "${SCRIPT_DIR}/lib/handlers/json-array-length.js" "$ISSUES_JSON")
 log "Found ${ISSUE_COUNT} issues."
 
 if [ "$ISSUE_COUNT" = "0" ]; then
@@ -148,22 +140,7 @@ if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -z "${JIRA_CODELINES:-}" ]; then
   fi
   # Export discovered codelines into the current shell so synthesize-prd-from-jira.js
   # inherits JIRA_CODELINES and JIRA_WORKTREE_<NAME> without any hardcoded env vars.
-  _discovery_exports=$("$NODE_BIN" - "$DISCOVERY_JSON" <<'NODE_EXPORT_EOF'
-const fs   = require('fs');
-const disc = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-const names = (disc.codelines || []).map(c => c.name).join(',');
-let out = `JIRA_CODELINES="${names}"\n`;
-for (const cl of (disc.codelines || [])) {
-  out += `JIRA_WORKTREE_${cl.name.toUpperCase().replace(/[^A-Z0-9]/g,'_')}="${cl.path}"\n`;
-}
-// Also export JIRA_DEFAULT_CODELINE when there is exactly one codeline so the
-// orch script's codeline-setup function can pair it with project.outputDir.
-if (disc.codelines && disc.codelines.length === 1) {
-  out += `JIRA_DEFAULT_CODELINE="${disc.codelines[0].name}"\n`;
-}
-process.stdout.write(out);
-NODE_EXPORT_EOF
-  )
+  _discovery_exports=$("$NODE_BIN" "${SCRIPT_DIR}/lib/handlers/codeline-discovery-exports.js" "$DISCOVERY_JSON")
   while IFS='=' read -r _key _val; do
     [ -z "$_key" ] && continue
     export "${_key}=${_val//\"/}"
@@ -188,18 +165,9 @@ if [ "$GATE_EXIT" != "0" ] && [ "$GATE_EXIT" != "2" ]; then
 fi
 
 # Show per-story verdicts
-"$NODE_BIN" -e "
-  const r = JSON.parse(require('fs').readFileSync('$GATE_JSON','utf8'));
-  r.forEach(s => {
-    const icon = s.verdict === 'sufficient' ? '✅' : s.verdict === 'enrichable' ? '🔶' : '🛑';
-    console.log('  ' + icon + ' ' + s.jiraKey + ' — ' + s.verdict + ': ' + s.reason);
-  });
-" 2>/dev/null || true
+"$NODE_BIN" "${SCRIPT_DIR}/lib/handlers/ac-gate-verdicts.js" "$GATE_JSON" 2>/dev/null || true
 
-INSUFFICIENT_COUNT=$("$NODE_BIN" -e "
-  const r = JSON.parse(require('fs').readFileSync('$GATE_JSON','utf8'));
-  console.log(r.filter(x=>x.verdict==='insufficient').length);
-" 2>/dev/null || echo "0")
+INSUFFICIENT_COUNT=$("$NODE_BIN" "${SCRIPT_DIR}/lib/handlers/ac-gate-insufficient-count.js" "$GATE_JSON" 2>/dev/null || echo "0")
 
 # Brownfield (AC/VC/TC design, 2026-07-24): a ticket with no/sparse ACs is NOT a
 # human-halt condition — the acceptanceCriteria stay as the ticket's immutable
@@ -214,9 +182,13 @@ elif [ "$GATE_EXIT" = "2" ] || [ "$INSUFFICIENT_COUNT" -gt "0" ]; then
   warn "  AC Gate: ${INSUFFICIENT_COUNT} story/stories have INSUFFICIENT ACs."
   warn "  Pipeline halted. Human approval required."
   warn ""
-  warn "  Permission-request comments have been posted to Jira."
-  warn "  Once a human approves (replies /approve-elaboration),"
-  warn "  re-trigger this run."
+  # NOTHING WAS POSTED. This said permission-request comments had been posted to Jira and
+  # to wait for a /approve-elaboration reply. ac-gate.js has no jira-client require and no
+  # comment-posting path at all — deliberately, since this pipeline never writes to a client
+  # system. So the message sent an operator to look for comments that do not exist, and to
+  # wait for an approval nothing was ever going to receive.
+  warn "  Nothing has been posted to Jira — this pipeline only reads client systems."
+  warn "  Add the missing acceptance criteria to the ticket(s) above, then re-run."
   warn "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   exit 2
 fi
@@ -231,7 +203,8 @@ log "Synthesizing PRD from classified tickets..."
 # project. JIRA_PRD_TEMPLATE lets a project supply its own; unset keeps the previous
 # default exactly, so existing projects are unaffected.
 # Resolution order: the operator's explicit choice, then the PROJECT'S OWN canonical, then
-# nothing (synthesize-prd-from-jira.js applies its built-in default).
+# nothing — and nothing is now an ERROR: synthesize-prd-from-jira.js requires --template and
+# has no built-in default, precisely so a run cannot inherit another project's identity.
 #
 # The middle step was missing, and no project set JIRA_PRD_TEMPLATE, so EVERY Jira-sourced
 # run fell through to a built-in canonical belonging to one project and inherited its
@@ -247,21 +220,35 @@ if [ -n "${JIRA_PRD_TEMPLATE:-}" ]; then
   else
     # Deliberately NOT falling through to the derived template: that would hide the typo
     # behind a run that looks fine until its project block is read.
-    log "WARN: JIRA_PRD_TEMPLATE set but not found: ${JIRA_PRD_TEMPLATE} — using default canonical"
+    log "WARN: JIRA_PRD_TEMPLATE set but not found: ${JIRA_PRD_TEMPLATE} — synthesis will fail; there is no built-in default"
   fi
 elif [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] && [ -f "${EPAM_PROJECT_CONFIG_DIR}/prd.canonical.json" ]; then
   _synth_template_args=(--template "${EPAM_PROJECT_CONFIG_DIR}/prd.canonical.json")
   log "Using PRD template: ${EPAM_PROJECT_CONFIG_DIR}/prd.canonical.json (this project's own canonical)"
 elif [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ]; then
-  log "WARN: no prd.canonical.json in ${EPAM_PROJECT_CONFIG_DIR} — this run will inherit ANOTHER project's identity from the built-in canonical"
+  log "WARN: no prd.canonical.json in ${EPAM_PROJECT_CONFIG_DIR} — synthesis requires a template and will fail"
 fi
 
 _out_prd_required
+# PIPESTATUS[0], not the pipeline status. Without pipefail the status here is sed's —
+# always 0 — so synthesize exiting 2 for a missing template was swallowed and the next line
+# logged "PRD ready" for a file that was never written. Same trap this file guards against
+# 70 lines above for the ingest call itself.
+_synth_exit=0
 "$NODE_BIN" "${SCRIPT_DIR}/synthesize-prd-from-jira.js" \
   --classifications "$GATE_JSON" \
   --out "$OUT_PRD" \
   "${_synth_template_args[@]}" \
-  2>&1 | grep '^\[synthesize-prd\]' | sed 's/\[synthesize-prd\]/[ingest]/' >&2
+  2>&1 | grep -E '^\[synthesize-prd\]|Error|error:' | sed 's/\[synthesize-prd\]/[ingest]/' >&2
+_synth_exit="${PIPESTATUS[0]}"
+# Exit 1, never synthesize's 2: this script already uses 2 for "insufficient ACs, human
+# approval required", and a missing template reported as a ticket-quality problem sends the
+# operator to fix the wrong thing.
+if [ "$_synth_exit" != "0" ]; then
+  err "PRD synthesis failed (exit ${_synth_exit}) — no PRD was written to ${OUT_PRD}"
+  exit 1
+fi
+[ -s "$OUT_PRD" ] || { err "PRD synthesis reported success but wrote nothing to ${OUT_PRD}"; exit 1; }
 
 log "PRD ready: ${OUT_PRD}"
 echo "$OUT_PRD"

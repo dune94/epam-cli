@@ -1,0 +1,11 @@
+{
+  "_what": "Stack declaration for mock3's codelines, in the shape orchestrations/plugins/dependency-scan-plugin.js reads (REQUIRED_KEYS). The previous version described the stack as {packageManager, manifest, lockfile} per codeline — a shape nothing consumes — so every writer attempt logged 'dependency declaration is incomplete' and the scan never ran. Both codelines are the same npm + typescript + vitest stack, so one declaration covers them.",
+  "manifestFile": "package.json",
+  "manifestKeys": ["dependencies", "devDependencies"],
+  "scanFileExtensions": [".ts", ".tsx", ".js", ".mjs", ".cjs"],
+  "importPattern": "from\\s+['\"]([^./][^'\"]*)['\"]|require\\(\\s*['\"]([^./][^'\"]*)['\"]\\s*\\)",
+  "installCommand": "npm install --save-dev {package}",
+  "ignorePackages": ["assert","buffer","child_process","crypto","events","fs","http","https","net","os","path","process","stream","string_decoder","timers","url","util","zlib","node:assert","node:buffer","node:crypto","node:events","node:fs","node:path","node:process","node:stream","node:url","node:util"],
+  "requiredDevDependencies": ["typescript", "vitest"],
+  "vendorDirs": ["node_modules"]
+}

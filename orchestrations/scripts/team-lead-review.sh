@@ -58,10 +58,67 @@ AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
 # engine_paths_pathspec — the owned-path set as git exclusions, one definition.
 # shellcheck source=lib/engine-paths.sh
 [ -f "$SCRIPT_DIR/lib/engine-paths.sh" ] && . "$SCRIPT_DIR/lib/engine-paths.sh"
-command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "team-lead-review"
+# WHICH AGENT THIS IS — declared ONCE, and exported so ai-run.sh keys this agent's ladder rung
+# state to it. Without it every agent shared one counter ("agent__<story>"): one agent escalating
+# advanced the ladder for all of them, and team-lead-review's cross-process resume read a key
+# nothing ever wrote.
+_SEAM_NAME="team-lead-review"
+export EPAM_AGENT_NAME="$_SEAM_NAME"
+# EVERY ENTRY POINT READS THE LADDER DECLARATION ITSELF.
+#
+# lib/model-ladders.sh exists so that "what a tier contains" is declared once and read the same
+# way everywhere. Only claude.sh, run-agent-orchestration.sh and detective-rerun.sh ever called
+# it, so this script resolved its model ONLY from environment its parent happened to export. Run
+# standalone — a replay, a retest, a test harness — nothing set EPAM_MODEL_LADDER_<TIER>,
+# seam_ladder_export set no EPAM_MODEL, and this seam skipped its work while exiting 0.
+#
+# export_model_ladders leaves an already-set value alone, so calling it here changes nothing when
+# the orchestrator has already exported the chain, and supplies it when nobody has.
+_ml_lib="${SCRIPT_DIR:-$(dirname "${BASH_SOURCE[0]}")}/lib/model-ladders.sh"
+if [ -f "$_ml_lib" ]; then
+    # shellcheck source=lib/model-ladders.sh
+    . "$_ml_lib" || true
+    command -v export_model_ladders >/dev/null 2>&1 \
+        && export_model_ladders "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json}" || true
+fi
+command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "$_SEAM_NAME"
+
+# THE SAME TEST-OWNERSHIP POLICY THE WRITER IS BOUND BY, from the one place it is declared.
+#
+# This reviewer had never heard of it and was told to "Check: ... test coverage", so it raised a
+# blocker for tests the implementer was FORBIDDEN to write — an unwinnable gate that cost whole
+# runs. Rendered here from prompts/test-ownership.json, the same document the writer renders its
+# own half from, so the rule cannot change for one agent and not the other.
+TEST_OWNERSHIP_BLOCK=""
+_to_vals=$(mktemp); printf '{}' > "$_to_vals"
+TEST_OWNERSHIP_BLOCK=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/prompt-library.js" \
+    render test-ownership "${EPAM_PROJECT_CONFIG_DIR:-}" "$_to_vals" reviewer 2>/dev/null || echo "")
+rm -f "$_to_vals"
+
+# WHAT MAY BE A BLOCKER. Same discipline as the policy above: declared once, in the prompt
+# layer, not invented here. A blocker the writer cannot satisfy is an unwinnable gate — live
+# 2026-08-12 this reviewer demanded a file the plan never named, and a package that does not
+# exist, and the writer failed on both repeatedly.
+BLOCKER_DISCIPLINE_BLOCK=""
+_bd_vals=$(mktemp); printf '{}' > "$_bd_vals"
+BLOCKER_DISCIPLINE_BLOCK=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/prompt-library.js" \
+    render blocker-discipline "${EPAM_PROJECT_CONFIG_DIR:-}" "$_bd_vals" reviewer 2>/dev/null || echo "")
+rm -f "$_bd_vals"
+if [ -z "$(printf '%s' "$BLOCKER_DISCIPLINE_BLOCK" | tr -d '[:space:]')" ]; then
+    echo "[team-lead-review] FATAL: blocker-discipline policy failed to render — refusing to review without it" >&2
+    exit 1
+fi
+if [ -z "$(printf '%s' "$TEST_OWNERSHIP_BLOCK" | tr -d '[:space:]')" ]; then
+    echo "[team-lead-review] FATAL: test-ownership policy failed to render — refusing to review without it" >&2
+    exit 1
+fi
 source "$SCRIPT_DIR/lib/project-tools.sh"
 source "$SCRIPT_DIR/lib/story-retry-state.sh"
-ORCH_GATE_MODEL="${ORCH_GATE_MODEL:-z-ai/glm-5.2}"
+# THE SEAM DECIDES. seam_ladder_export (above) sets EPAM_MODEL to the first rung of the chain this
+# seam's ARCHETYPE declares. The literal that stood here overrode that silently — the reviewer asked
+# for its tier and then ignored the answer, so the declaration selected nothing. An operator value
+# still wins; what is gone is the default no configuration could remove.
+ORCH_GATE_MODEL="${ORCH_GATE_MODEL:-${EPAM_MODEL:-}}"
 
 # Look up a model's HIGH-ladder successor (EPAM_MODEL_LADDER_HIGH is "from=to|...",
 # e.g. "z-ai/glm-5.1=moonshotai/kimi-k3"). Same laddering the detective + spec
@@ -378,7 +435,9 @@ while IFS= read -r story_id; do
 
     STORY_FIX_ANALYSIS=$(jq -r --arg id "$story_id" '
         .stories[] | select(.id == $id) | (.fixSiteAnalysis // []) | map(
-          "- **\(.file)**" + (if (.function // "") != "" then " (`\(.function)`)" else "" end) + ": \(.reason)"
+          "- **\(.file)**" + (if (.function // "") != "" then " (`\(.function)`)" else "" end)
+          + (if (.changeRequired | type == "boolean" and . == false) then "  [NO EDIT REQUIRED — part of the fix, correctly left unchanged; never raise a finding because this file is untouched]" else "" end)
+          + ": \(.reason)"
           + (if (.fix // "") != "" then "\n  - Prescribed minimal fix: \(.fix)" else "" end)
         ) | join("\n")' "$PRD_FILE" 2>/dev/null || echo "")
 
@@ -427,7 +486,13 @@ while IFS= read -r story_id; do
         #
         # Engine-owned paths are excluded through the single existing definition
         # (lib/engine-paths.sh), so the reviewer does not spend its budget on pipeline state.
-        local _diff_excludes=()
+        # NOT `local` — this is top-level script body (the nearest function closes at line 285),
+        # and bash rejects `local` outside a function AT RUNTIME. `bash -n` accepts it, so the
+        # script parsed clean and died the moment this line executed. Introduced 2026-08-10 in
+        # 2bb230e; the reviewer produced no verdict for two days and the caller retried it 701
+        # times in a single run. shellcheck (SC2168) caught it the whole time.
+        # Re-initialised each pass on purpose: this block runs once per story.
+        _diff_excludes=()
         if command -v engine_paths_pathspec >/dev/null 2>&1; then
             mapfile -t _diff_excludes < <(engine_paths_pathspec)
         fi
@@ -481,83 +546,65 @@ while IFS= read -r story_id; do
     _review_plugin_tools="$(project_tool_names "$PROJECT_ROOT")"
 
     # Build review prompt
-    REVIEW_PROMPT="${REVIEW_PROFILE}
+    # THE CONDITIONAL BLOCKS, COMPUTED HERE INSTEAD OF INSIDE THE PROMPT.
+    #
+    # Each was an inline $( ... ) inside the prompt string: render this heading only when the
+    # value is non-empty. The prompt is now a document, so the CALLER decides what a block
+    # contains and the template just places it. Same text, same emptiness rule.
 
----
-REVIEW TASK: Story $story_id — $STORY_TITLE
+    _review_fix_analysis_block=$([ -n "$STORY_FIX_ANALYSIS" ] && printf '\nROOT CAUSE ANALYSIS & PRESCRIBED MINIMAL FIX (from prior code investigation — the plan of record the implementer was given):\n%s\n\nThe acceptance criteria describe the desired BEHAVIOR to verify; they are NOT a blueprint. The correct implementation is the minimal fix above. Judge the diff against BOTH.\n' "$STORY_FIX_ANALYSIS" || true)
+    _review_uncovered_block=$([ -n "$STORY_UNCOVERED_VC" ] && printf '\n%s\n' "$STORY_UNCOVERED_VC" || true)
+    _review_vc_block=$([ -n "$STORY_VC" ] && printf '\nVERIFICATION CRITERIA (the observable checks this change MUST satisfy — judge the diff against every one):\n%s\n' "$STORY_VC" || true)
+    _review_codegraph_block=$([ -n "$_review_codegraph_tool" ] && printf '\nEXISTING-CODE TOOL (call the codegraph_query tool directly, NOT via Bash, to check whether a helper already exists before accepting hand-rolled logic):\n  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter (symbol + import path)\n  codegraph_query(mode="query", args="<SymbolName>")        # exact definition site\n' || true)
+    _review_learned_block=$([ -n "$_review_kb" ] && printf '\nLEARNED REVIEW RULES (from prior runs — apply these):\n%s\n' "$_review_kb" || true)
 
-DESCRIPTION:
-$STORY_DESC
-
-ACCEPTANCE CRITERIA:
-$STORY_ACS
-$([ -n "$STORY_VC" ] && printf '\nVERIFICATION CRITERIA (the observable checks this change MUST satisfy — judge the diff against every one):\n%s\n' "$STORY_VC" || true)
-$([ -n "$STORY_UNCOVERED_VC" ] && printf '\n%s\n' "$STORY_UNCOVERED_VC" || true)
-$([ -n "$STORY_FIX_ANALYSIS" ] && printf '\nROOT CAUSE ANALYSIS & PRESCRIBED MINIMAL FIX (from prior code investigation — the plan of record the implementer was given):\n%s\n\nThe acceptance criteria describe the desired BEHAVIOR to verify; they are NOT a blueprint. The correct implementation is the minimal fix above. Judge the diff against BOTH.\n' "$STORY_FIX_ANALYSIS" || true)
-
-RELEVANT FILES (fix files + the reproducing test the pipeline shipped — review BOTH): $STORY_FILES ${_test_files:-}
-
-GIT DIFF (recent changes):
-\`\`\`diff
-$STORY_DIFF
-\`\`\`
-
-PROJECT ROOT: $PROJECT_ROOT
-$([ -n "$_review_codegraph_tool" ] && printf '\nEXISTING-CODE TOOL (call the codegraph_query tool directly, NOT via Bash, to check whether a helper already exists before accepting hand-rolled logic):\n  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter (symbol + import path)\n  codegraph_query(mode="query", args="<SymbolName>")        # exact definition site\n' || true)
-
-CREDENTIALS. Call scan_secrets with the diff above before you finish. It reports values that
-have been PASTED INTO the code — a quoted, long, high-entropy literal assigned to a
-credential-shaped name. It deliberately does NOT report references (an identifier, a member
-expression, a process.env read), because those are the correct practice: a pasted key is always
-a literal, so nothing real is missed by ignoring them.
-
-  scan_secrets(diff="<the GIT DIFF above>")
-
-Judge what it returns; it does not block anything. A finding is a blocker — a credential in
-source is not fixable after the fact once committed. An empty result is not proof of safety on
-its own, so if the diff introduces configuration you can still say so in your own words.
-
-This check used to run at commit time and matched `name: value` on shape alone. On 2026-08-09
-it refused a correct commit for `management_token: CONTENTSTACK_LIVE_PREVIEW_TOKEN` — an
-environment-derived identifier — and had never caught a real leak. It is yours now because you
-have the diff and can tell the two apart.
-
-Review the implementation against each acceptance criterion above.
-Check: TypeScript strict compliance, test coverage, error handling, security (OWASP).
-
-CONCISION & REUSE (blocker-level checks):
-- If the change addresses the symptom but NOT the prescribed root cause above (e.g. adds new code paths the bug never reaches), that is a 'blocker' — request changes.
-- If a MORE CONCISE change (fewer lines) would achieve the same acceptance criteria, request changes and name the smaller change. Fewer lines of code is always better.
-- If the diff hand-rolls logic that an EXISTING function/helper already provides (verify with the tool above), that is a 'blocker' — request changes and name the helper to reuse instead.
-- Do NOT approve an over-engineered fix just because it satisfies the AC wording.
-
-TEST COVERAGE VERIFICATION (grounded, not a visual skim — found live 2026-08-03,
-Observed live: the reviewer claimed 2 of 3 required test scenarios were missing,
-TWICE in a row, against a diff that unambiguously contained all 3 as clearly-
-named \`it(...)\` blocks — a real, reproducible failure to verify a claim the
-tools below could have confirmed in one call):
-- Before flagging ANY acceptance-criteria test scenario as missing or absent, use
-  the search tool to grep the diff above (or read_file on the test file under
-  PROJECT_ROOT) for an \`it(\`/\`test(\` block whose name or body plausibly covers
-  that scenario. A large diff is easy to skim past a matching block — search for
-  it, do not judge from a visual read alone.
-- If your search finds a plausible match, do NOT flag that scenario as missing —
-  if the test's assertions are wrong or incomplete, say so specifically (quote
-  the test name and what it fails to assert); 'missing' and 'inadequate' are
-  different findings and must not be conflated.
-- If your search finds nothing, name the exact search you ran (tool + query) in
-  the issue description, so a genuinely absent test is distinguishable from an
-  unverified guess.
-Do NOT read from external URLs.
-$([ -n "$_review_kb" ] && printf '\nLEARNED REVIEW RULES (from prior runs — apply these):\n%s\n' "$_review_kb" || true)
-$([ -n "${_review_project_tools_block:-}" ] && printf '%s\n' "${_review_project_tools_block}" || true)
-
-Respond with ONLY a JSON object (no markdown fences):
-{\"verdict\":\"approved\",\"issues\":[],\"summary\":\"...\"}
-  OR
-{\"verdict\":\"changes_requested\",\"issues\":[{\"severity\":\"blocker|major|minor\",\"file\":\"...\",\"line\":0,\"description\":\"...\",\"suggestedFix\":\"...\"}],\"summary\":\"...\"}
-
-A 'blocker' issue MUST be fixed before merge. 'major' should be fixed. 'minor' is optional."
+    # THE PROMPT IS A DOCUMENT, NOT A SHELL STRING.
+    #
+    # Migrated 2026-08-13 to orchestrations/prompts/templates/team-lead-review.json and the
+    # project-authority copy the library renders. Byte-identical to the literal that stood here
+    # (3827 bytes, verified against a golden produced by evaluating that literal).
+    #
+    # It had to move. Prose inside a double-quoted bash string is LIVE CODE: a raw quote in the
+    # scan_secrets example closed the string so `<the GIT DIFF above>` parsed as an input
+    # redirection, and two backticks in the prose EXECUTED as commands and spliced their empty
+    # output into what the model was sent. The reviewer emitted no verdict for two days and the
+    # retry loop spun 701 cycles on a story that had already implemented cleanly.
+    # Values to a FILE, filter in SINGLE quotes. The first version inlined the jq filter inside
+    # a process substitution with nested quoting, and bash expanded $profile before jq ever saw
+    # it: "line 571: profile: unbound variable". This is the same shape the analyst render uses.
+    _review_vals=$(mktemp)
+    jq -n \
+        --arg profile "${REVIEW_PROFILE:-}" \
+        --arg blocker "${BLOCKER_DISCIPLINE_BLOCK:-}" \
+        --arg ownership "${TEST_OWNERSHIP_BLOCK:-}" \
+        --arg story_id "$story_id" \
+        --arg title "${STORY_TITLE:-}" \
+        --arg desc "${STORY_DESC:-}" \
+        --arg acs "${STORY_ACS:-}" \
+        --arg diff "${STORY_DIFF:-}" \
+        --arg files "${STORY_FILES:-}" \
+        --arg test_files "${_test_files:-}" \
+        --arg project_root "${PROJECT_ROOT:-}" \
+        --arg fix_analysis "${_review_fix_analysis_block:-}" \
+        --arg uncovered "${_review_uncovered_block:-}" \
+        --arg vc "${_review_vc_block:-}" \
+        --arg codegraph "${_review_codegraph_block:-}" \
+        --arg learned "${_review_learned_block:-}" \
+        --arg tools "${_review_project_tools_block:-}" \
+        '{"__REVIEW_PROFILE__":$profile,"__BLOCKER_DISCIPLINE__":$blocker,
+          "__TEST_OWNERSHIP__":$ownership,"__STORY_ID__":$story_id,"__STORY_TITLE__":$title,
+          "__STORY_DESC__":$desc,"__STORY_ACS__":$acs,"__STORY_DIFF__":$diff,
+          "__STORY_FILES__":$files,"__TEST_FILES__":$test_files,"__PROJECT_ROOT__":$project_root,
+          "__FIX_ANALYSIS_BLOCK__":$fix_analysis,"__UNCOVERED_VC_BLOCK__":$uncovered,
+          "__VC_BLOCK__":$vc,"__CODEGRAPH_TOOL_BLOCK__":$codegraph,
+          "__LEARNED_RULES_BLOCK__":$learned,"__PROJECT_TOOLS_BLOCK__":$tools}' > "$_review_vals"
+    if ! REVIEW_PROMPT=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/prompt-library.js" \
+            render team-lead-review "${EPAM_PROJECT_CONFIG_DIR:-}" "$_review_vals"); then
+        rm -f "$_review_vals"
+        echo "[team-lead-review] FATAL: could not render the review prompt" >&2
+        exit 1
+    fi
+    rm -f "$_review_vals"
 
     log "  Invoking review-agent for $story_id... (model=${ORCH_GATE_MODEL:-?} provider=${EPAM_ORCHESTRATION_PROVIDER:-?})"
     REVIEW_OUTPUT_FILE="$AUTOMATION_DIR/logs/review-agent-${story_id}.log"
@@ -592,39 +639,7 @@ A 'blocker' issue MUST be fixed before merge. 'major' should be fixed. 'minor' i
     # validation). Fixed by using json.JSONDecoder.raw_decode from the first '{'
     # — correctly parses a nested JSON object regardless of formatting/whitespace,
     # rather than pattern-matching text.
-    REVIEW_JSON=$(echo "$REVIEW_OUTPUT" | python3 -c "
-import re, sys, json
-text = sys.stdin.read()
-start = text.find('{')
-result = None
-if start != -1:
-    decoder = json.JSONDecoder()
-    try:
-        result, _ = decoder.raw_decode(text, start)
-    except (ValueError, json.JSONDecodeError):
-        # Live AMSD-2041, 2026-07-31: an otherwise complete, valid 10-blocker
-        # review was discarded whole because ONE field had a stray quote
-        # directly after a number, before the delimiter (\"line\":130\",
-        # instead of \"line\":130,) — a token shape that can never appear in
-        # valid JSON, so stripping exactly that pattern before retrying is a
-        # narrow, safe repair, not a general lenient-parse hack.
-        repaired = re.sub(r'(?<=\d)\"(?=\s*[,}])', '', text)
-        try:
-            result, _ = decoder.raw_decode(repaired, start)
-        except (ValueError, json.JSONDecodeError):
-            result = None
-if not isinstance(result, dict) or 'verdict' not in result:
-    # No parseable verdict = the review did NOT happen. Never silently approve —
-    # that rubber-stamped an unreviewed change live (2026-07-23). Block instead.
-    # reviewIncomplete marks this as REVIEWER failure, not a code finding. The
-    # orchestration loop keys on it to re-run the REVIEW instead of
-    # re-implementing a story nobody actually looked at (live 2026-07-26: a
-    # repro-gate-verified fix was re-implemented on the strength of this very
-    # verdict). Content-based, because the sibling paths signal the same thing
-    # with a flag FILE whose name must match across two scripts — and did not.
-    result = {'verdict': 'changes_requested', 'reviewIncomplete': True, 'issues': [{'severity': 'blocker', 'description': 'review-agent output had no parseable verdict — the change was NOT reviewed; blocking rather than auto-approving.'}], 'summary': 'review output unparseable'}
-print(json.dumps(result))
-" 2>/dev/null || echo '{"verdict":"changes_requested","issues":[{"severity":"blocker","description":"review verdict could not be parsed — not auto-approving"}],"summary":"review parse failure"}')
+    REVIEW_JSON=$(echo "$REVIEW_OUTPUT" | python3 "$SCRIPT_DIR/lib/handlers/team-lead-review-json.py" 2>/dev/null || echo '{"verdict":"changes_requested","issues":[{"severity":"blocker","description":"review verdict could not be parsed — not auto-approving"}],"summary":"review parse failure"}')
 
     STORY_VERDICT=$(echo "$REVIEW_JSON" | jq -r '.verdict // "changes_requested"' 2>/dev/null || echo "changes_requested")
     STORY_ISSUE_COUNT=$(echo "$REVIEW_JSON" | jq '.issues | length' 2>/dev/null || echo "0")

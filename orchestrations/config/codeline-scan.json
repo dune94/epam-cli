@@ -1,0 +1,8 @@
+{
+  "$comment": "What the repository scan skips before anything is scored. Data, not code: this was a `/^docs\\./i` literal inside codeline-discovery.js, which made one naming convention an engine fact — a project whose documentation repos are named anything else got no exclusion, and a project with a legitimately in-scope repo matching the pattern could not opt out without editing the engine. Extracted 2026-08-16.",
+
+  "$excludeComment": "JavaScript regular expressions, matched against the DIRECTORY NAME, case-insensitively. A repository that cannot be the target of a code change is noise in the candidate list: it matches ticket keywords through documentation prose rather than implementation, and every candidate costs prompt budget in the one decision that picks which client repository gets written to. Override per project with EPAM_CODELINE_EXCLUDE (same syntax, comma-separated); set it empty to exclude nothing.",
+  "exclude": [
+    "^docs\\."
+  ]
+}

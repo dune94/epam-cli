@@ -1,27 +1,22 @@
 {
   "canonicalFile": "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/agents/profiles.canonical.json",
   "canonicalRoles": 57,
-  "liveRoles": 61,
+  "liveRoles": 60,
   "generated": [
     {
-      "role": "gotransit-investigator",
-      "briefChars": 1913,
-      "mintedThisRun": false
+      "role": "typescript-logic-fixer",
+      "briefChars": 3177,
+      "mintedThisRun": true
     },
     {
-      "role": "upexpress-investigator",
-      "briefChars": 1932,
-      "mintedThisRun": false
+      "role": "fares-investigator",
+      "briefChars": 1747,
+      "mintedThisRun": true
     },
     {
-      "role": "metrolinx-investigator",
-      "briefChars": 1932,
-      "mintedThisRun": false
-    },
-    {
-      "role": "contentstack-live-preview-integration-engineer",
-      "briefChars": 5096,
-      "mintedThisRun": false
+      "role": "schedule-investigator",
+      "briefChars": 1973,
+      "mintedThisRun": true
     }
   ],
   "briefChanged": [],

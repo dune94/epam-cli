@@ -1,0 +1,21 @@
+{
+  "$why": [
+    "Moved out of claude.sh on 2026-08-15 (10 of 20).",
+    "",
+    "The tool-script variant. It is a SEPARATE prompt from the text variant rather than one",
+    "prompt with a branch: they instruct differently and their output caps differ (4000 vs 400),",
+    "so folding them together would hide which one an agent actually received."
+  ],
+  "body": "You are a bash script reviewer-summarizer. A dynamic tool script for story __STORY_ID__ was REJECTED by the change reviewer for these reasons:\n__ISSUES__\n\nORIGINAL SCRIPT:\n__REJECTED_TEXT__\n\nRewrite the script to fix ONLY the issues listed above — a real bash bug (syntax error, subshell variable scoping, unquoted expansion, etc). Preserve the shebang line, the overall purpose, and every argument ($1, $2, ...) exactly as used. The script must remain idempotent (safe to run more than once).\n\nEmit ONLY the corrected script — no markdown fences, no commentary, no explanation.",
+  "description": "Rewrite a rejected dynamic tool script to fix only the issues the reviewer raised.",
+  "id": "prd-change-summarizer-tool",
+  "placeholders": [
+    "__ISSUES__",
+    "__REJECTED_TEXT__",
+    "__STORY_ID__"
+  ],
+  "version": 1,
+  "seams": [
+    "prd-change-summarizer"
+  ]
+}

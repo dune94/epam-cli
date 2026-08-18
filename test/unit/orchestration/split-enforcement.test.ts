@@ -647,9 +647,15 @@ describe('speckit prompt — split hard-limits intentionally removed (speckit no
   const promptBlock = src.slice(promptIdx, promptIdx + 3000);
 
   it('speckit prompt no longer documents the 24-AC / 4-children split hard limits (it never emits splitStories)', () => {
-    expect(promptIdx).toBeGreaterThan(-1);
-    expect(promptBlock).not.toMatch(/HARD LIMITS/i);
-    expect(promptBlock).not.toContain('4 split children');
+    // ASSERTED AGAINST THE TEMPLATES, where the speckit prompts live since 2026-08-16.
+    // Both branches must stay free of the split hard limits: speckit never emits splitStories,
+    // so documenting a limit it cannot reach only invites it to try.
+    for (const id of ['spec-agent-speckit', 'spec-agent-speckit-refine']) {
+      const body = JSON.parse(readFileSync(
+        join(__dirname, '../../../orchestrations/prompts/templates', id + '.json'), 'utf8')).body as string;
+      expect(body, id).not.toMatch(/HARD LIMITS/i);
+      expect(body, id).not.toContain('4 split children');
+    }
   });
 
   it('the hard limits remain enforced in code regardless (MAX_ACS_PER_STORY / MAX_CHILDREN_PER_SPLIT, unaffected by this prompt change)', () => {
@@ -922,10 +928,15 @@ describe('split-MANDATE reject-and-retry — immediate same-run enforcement', ()
   const src = readFileSync(join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'), 'utf8');
 
   it('runSpecAgent prepends forcedRetryNote at the very top of the prompt (primacy — the mid-prompt splitWarning already failed once)', () => {
-    const idx = src.indexOf('const forcedRetryBlock = forcedRetryNote');
-    expect(idx).toBeGreaterThan(-1);
-    const promptIdx = src.indexOf('const prompt = `${forcedRetryBlock}You are the');
-    expect(promptIdx).toBeGreaterThan(idx);
+    // PRIMACY IS NOW A PROPERTY OF THE TEMPLATE, and this asserts it directly rather than
+    // inferring it from the order of two lines of source: the retry note must be the FIRST
+    // thing in the prompt, because the mid-prompt warning already failed once.
+    expect(src.indexOf('const forcedRetryBlock = forcedRetryNote')).toBeGreaterThan(-1);
+    const body = JSON.parse(readFileSync(
+      join(__dirname, '../../../orchestrations/prompts/templates/spec-agent-openspec.json'),
+      'utf8')).body as string;
+    expect(body.startsWith('__FORCED_RETRY_BLOCK__'),
+      'the forced-retry note is no longer first in the prompt').toBe(true);
   });
 
   it('the call site re-invokes runSpecAgent with agent explicitly forced to "openspec" (splitting is openspec\'s job, not speckit\'s)', () => {

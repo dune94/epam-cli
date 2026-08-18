@@ -1,0 +1,33 @@
+{
+  "$why": [
+    "Moved out of run-agent-orchestration.sh on 2026-08-16.",
+    "",
+    "Four of its inputs were command substitutions inside the heredoc: the lint log, the",
+    "writer-output manifest, the active PRD stories, and the role instructions. Each is an INPUT,",
+    "and each was being computed by a shell pipeline that fails to an empty string in silence.",
+    "",
+    "The lint log arrived `head -200`. That is a truncation of the evidence the analyst is asked",
+    "to attribute, and it cuts mid-file-list: the standing rule is drop whole entries or nothing,",
+    "and a lint log severed at 200 lines drops exactly the findings nobody looked at. The caller",
+    "passes the whole log.",
+    "",
+    "2026-08-17: named .spec.ts/.test.ts, so the reasoning about which files are declared held only for one ecosystem.",
+    "",
+    "2026-08-17: named .spec.ts/.test.ts, so the reasoning about which files a story declares held for one ecosystem only."
+  ],
+  "description": "Maps a lint or type-check failure to the story that owns the offending file.",
+  "id": "lint-finding-analyst",
+  "seams": [
+    "impl-failure-analyst"
+  ],
+  "placeholders": [
+    "__ACTIVE_STORIES__",
+    "__LINT_LOG__",
+    "__PHASE__",
+    "__PROFILE__",
+    "__TEST_FILE_CONVENTIONS__",
+    "__WRITER_OUTPUTS__"
+  ],
+  "version": 1,
+  "body": "You are the gate-finding-analyst. A lint gate (the project's type check + eslint) failed during the '__PHASE__' phase of an automated TypeScript project build.\n\n## Lint Gate Log\n__LINT_LOG__\n\n## Files THIS RUN produced or modified (the writer-output manifest)\n__WRITER_OUTPUTS__\n\nA finding in ANY file above was produced by this run and is in scope, even if\nthat file is not declared in a story's technicalNotes.files. Reproducing tests are written by a separate\nagent AFTER the story declares its files, so a test file (__TEST_FILE_CONVENTIONS__) will normally be\nabsent from the declared list while still being this run's work — live\n2026-07-26, a real finding in a newly-written test file was dropped for exactly\nthat reason. Attribute such a file to the story whose source file it tests.\n\n## PRD Stories (active)\n__ACTIVE_STORIES__\n\n## Agent Profile\n__PROFILE__\n\nIdentify: which story owns the file with the lint/type error? Output JSON only:\n{\"gate\":\"lint\",\"story_id\":\"<id>\",\"file\":\"<path>\",\"line\":<n>,\"rule\":\"<tsc-error-code or eslint-rule>\",\"message\":\"<description>\",\"suggested_fix\":\"<one-line fix>\"}"
+}

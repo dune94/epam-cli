@@ -1,0 +1,2299 @@
+{
+  "roster": "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/agents/profiles.json",
+  "audited": 60,
+  "minted": [
+    "typescript-bugfix-engineer",
+    "mocka-investigator",
+    "mockb-investigator"
+  ],
+  "agents": [
+    {
+      "agent": "spec-coordinator-agent",
+      "minted": false,
+      "seam": "cpa-inference",
+      "ladder": {
+        "model": "MiniMax-M2.5",
+        "effort": "medium",
+        "maxOutputTokens": "16384"
+      },
+      "prompt": {
+        "id": "cpa-inference",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "openspec-agent",
+      "minted": false,
+      "seam": "cpa-inference",
+      "ladder": {
+        "model": "MiniMax-M2.5",
+        "effort": "medium",
+        "maxOutputTokens": "16384"
+      },
+      "prompt": {
+        "id": "cpa-inference",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "speckit-agent",
+      "minted": false,
+      "seam": "cpa-inference",
+      "ladder": {
+        "model": "MiniMax-M2.5",
+        "effort": "medium",
+        "maxOutputTokens": "16384"
+      },
+      "prompt": {
+        "id": "cpa-inference",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "typescript-engineer",
+      "minted": false,
+      "seam": "story-writer",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "high",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "story-writer",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "verification-criteria",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "review-feedback",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "diagnosis",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "attempt-evidence",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "test-criteria",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "dependency-contracts",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "existing-code",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "execute",
+      "skills": null
+    },
+    {
+      "agent": "agent-systems-engineer",
+      "minted": false,
+      "seam": "story-writer",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "high",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "story-writer",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "verification-criteria",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "review-feedback",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "diagnosis",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "attempt-evidence",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "test-criteria",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "dependency-contracts",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "existing-code",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "execute",
+      "skills": null
+    },
+    {
+      "agent": "billing-engineer",
+      "minted": false,
+      "seam": "story-writer",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "high",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "story-writer",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "verification-criteria",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "review-feedback",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "diagnosis",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "attempt-evidence",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "test-criteria",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "dependency-contracts",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "existing-code",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "execute",
+      "skills": null
+    },
+    {
+      "agent": "cli-ux-engineer",
+      "minted": false,
+      "seam": "story-writer",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "high",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "story-writer",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "verification-criteria",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "review-feedback",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "diagnosis",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "attempt-evidence",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "test-criteria",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "dependency-contracts",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "existing-code",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "execute",
+      "skills": null
+    },
+    {
+      "agent": "test-engineer",
+      "minted": false,
+      "seam": "story-writer",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "high",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "story-writer",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "verification-criteria",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "review-feedback",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "diagnosis",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "attempt-evidence",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "test-criteria",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "dependency-contracts",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "existing-code",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "execute",
+      "skills": null
+    },
+    {
+      "agent": "team-lead-agent",
+      "minted": false,
+      "seam": "cpa-inference",
+      "ladder": {
+        "model": "MiniMax-M2.5",
+        "effort": "medium",
+        "maxOutputTokens": "16384"
+      },
+      "prompt": {
+        "id": "cpa-inference",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "review-agent",
+      "minted": false,
+      "seam": "cpa-inference",
+      "ladder": {
+        "model": "MiniMax-M2.5",
+        "effort": "medium",
+        "maxOutputTokens": "16384"
+      },
+      "prompt": {
+        "id": "cpa-inference",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "test-coordinator-agent",
+      "minted": false,
+      "seam": "cpa-inference",
+      "ladder": {
+        "model": "MiniMax-M2.5",
+        "effort": "medium",
+        "maxOutputTokens": "16384"
+      },
+      "prompt": {
+        "id": "cpa-inference",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "lightpanda-agent",
+      "minted": false,
+      "seam": "cpa-inference",
+      "ladder": {
+        "model": "MiniMax-M2.5",
+        "effort": "medium",
+        "maxOutputTokens": "16384"
+      },
+      "prompt": {
+        "id": "cpa-inference",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "playwright-agent",
+      "minted": false,
+      "seam": "cpa-inference",
+      "ladder": {
+        "model": "MiniMax-M2.5",
+        "effort": "medium",
+        "maxOutputTokens": "16384"
+      },
+      "prompt": {
+        "id": "cpa-inference",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "sast-sentinel",
+      "minted": false,
+      "seam": "code-review-cycle",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "high",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "code-review-cycle",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "implementation",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "execute",
+      "skills": null
+    },
+    {
+      "agent": "review-ranger",
+      "minted": false,
+      "seam": "code-review-cycle",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "high",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "code-review-cycle",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "implementation",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "execute",
+      "skills": null
+    },
+    {
+      "agent": "mutant-hunter",
+      "minted": false,
+      "seam": "repro-test-writer",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "high",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "repro-test-writer",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "ticket",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "existing-code",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "write",
+      "skills": null
+    },
+    {
+      "agent": "fuzz-weaver",
+      "minted": false,
+      "seam": "repro-test-writer",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "high",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "repro-test-writer",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "ticket",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "existing-code",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "write",
+      "skills": null
+    },
+    {
+      "agent": "perf-sentinel",
+      "minted": false,
+      "seam": "code-review-cycle",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "high",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "code-review-cycle",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "implementation",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "execute",
+      "skills": null
+    },
+    {
+      "agent": "spec-validator",
+      "minted": false,
+      "seam": "prd-change-reviewer",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "high",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "prd-change-reviewer",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "proposed-change",
+          "required": true,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "doc-coordinator",
+      "minted": false,
+      "seam": "cpa-inference",
+      "ladder": {
+        "model": "MiniMax-M2.5",
+        "effort": "medium",
+        "maxOutputTokens": "16384"
+      },
+      "prompt": {
+        "id": "cpa-inference",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "docstring-agent",
+      "minted": false,
+      "seam": "cpa-inference",
+      "ladder": {
+        "model": "MiniMax-M2.5",
+        "effort": "medium",
+        "maxOutputTokens": "16384"
+      },
+      "prompt": {
+        "id": "cpa-inference",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "api-doc-generator",
+      "minted": false,
+      "seam": "tc-writer",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "medium",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "tc-writer",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "implementation",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "ticket",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "guide-author",
+      "minted": false,
+      "seam": "tc-writer",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "medium",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "tc-writer",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "implementation",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "ticket",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "architecture-doc-agent",
+      "minted": false,
+      "seam": "cpa-inference",
+      "ladder": {
+        "model": "MiniMax-M2.5",
+        "effort": "medium",
+        "maxOutputTokens": "16384"
+      },
+      "prompt": {
+        "id": "cpa-inference",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "changelog-agent",
+      "minted": false,
+      "seam": "cpa-inference",
+      "ladder": {
+        "model": "MiniMax-M2.5",
+        "effort": "medium",
+        "maxOutputTokens": "16384"
+      },
+      "prompt": {
+        "id": "cpa-inference",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "doc-reviewer",
+      "minted": false,
+      "seam": "code-review-cycle",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "high",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "code-review-cycle",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "implementation",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "execute",
+      "skills": null
+    },
+    {
+      "agent": "doc-index-builder",
+      "minted": false,
+      "seam": "tc-writer",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "medium",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "tc-writer",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "implementation",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "ticket",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "doc-search-agent",
+      "minted": false,
+      "seam": "cpa-inference",
+      "ladder": {
+        "model": "MiniMax-M2.5",
+        "effort": "medium",
+        "maxOutputTokens": "16384"
+      },
+      "prompt": {
+        "id": "cpa-inference",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "doc-site-builder",
+      "minted": false,
+      "seam": "tc-writer",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "medium",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "tc-writer",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "implementation",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "ticket",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "grooming-coordinator",
+      "minted": false,
+      "seam": "cpa-inference",
+      "ladder": {
+        "model": "MiniMax-M2.5",
+        "effort": "medium",
+        "maxOutputTokens": "16384"
+      },
+      "prompt": {
+        "id": "cpa-inference",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "readiness-checker",
+      "minted": false,
+      "seam": "prd-change-reviewer",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "high",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "prd-change-reviewer",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "proposed-change",
+          "required": true,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "dedup-detector",
+      "minted": false,
+      "seam": "prd-change-reviewer",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "high",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "prd-change-reviewer",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "proposed-change",
+          "required": true,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "project-initiator-agent",
+      "minted": false,
+      "seam": "cpa-inference",
+      "ladder": {
+        "model": "MiniMax-M2.5",
+        "effort": "medium",
+        "maxOutputTokens": "16384"
+      },
+      "prompt": {
+        "id": "cpa-inference",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "prd-project-manager-agent",
+      "minted": false,
+      "seam": "cpa-inference",
+      "ladder": {
+        "model": "MiniMax-M2.5",
+        "effort": "medium",
+        "maxOutputTokens": "16384"
+      },
+      "prompt": {
+        "id": "cpa-inference",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "agent-skills-agent",
+      "minted": false,
+      "seam": "cpa-inference",
+      "ladder": {
+        "model": "MiniMax-M2.5",
+        "effort": "medium",
+        "maxOutputTokens": "16384"
+      },
+      "prompt": {
+        "id": "cpa-inference",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "dashboard-orchestrator-agent",
+      "minted": false,
+      "seam": "cpa-inference",
+      "ladder": {
+        "model": "MiniMax-M2.5",
+        "effort": "medium",
+        "maxOutputTokens": "16384"
+      },
+      "prompt": {
+        "id": "cpa-inference",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "dashboard-test-agent",
+      "minted": false,
+      "seam": "cpa-inference",
+      "ladder": {
+        "model": "MiniMax-M2.5",
+        "effort": "medium",
+        "maxOutputTokens": "16384"
+      },
+      "prompt": {
+        "id": "cpa-inference",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "ui-engineer",
+      "minted": false,
+      "seam": "story-writer",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "high",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "story-writer",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "verification-criteria",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "review-feedback",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "diagnosis",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "attempt-evidence",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "test-criteria",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "dependency-contracts",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "existing-code",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "execute",
+      "skills": null
+    },
+    {
+      "agent": "frontend-engineer",
+      "minted": false,
+      "seam": "story-writer",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "high",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "story-writer",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "verification-criteria",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "review-feedback",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "diagnosis",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "attempt-evidence",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "test-criteria",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "dependency-contracts",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "existing-code",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "execute",
+      "skills": null
+    },
+    {
+      "agent": "dashboard-update-agent",
+      "minted": false,
+      "seam": "cpa-inference",
+      "ladder": {
+        "model": "MiniMax-M2.5",
+        "effort": "medium",
+        "maxOutputTokens": "16384"
+      },
+      "prompt": {
+        "id": "cpa-inference",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "generator",
+      "minted": false,
+      "seam": "tc-writer",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "medium",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "tc-writer",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "implementation",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "ticket",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "spike-agent",
+      "minted": false,
+      "seam": "cpa-inference",
+      "ladder": {
+        "model": "MiniMax-M2.5",
+        "effort": "medium",
+        "maxOutputTokens": "16384"
+      },
+      "prompt": {
+        "id": "cpa-inference",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "tc-writer-agent",
+      "minted": false,
+      "seam": "cpa-inference",
+      "ladder": {
+        "model": "MiniMax-M2.5",
+        "effort": "medium",
+        "maxOutputTokens": "16384"
+      },
+      "prompt": {
+        "id": "cpa-inference",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "gate-finding-analyst",
+      "minted": false,
+      "seam": "impl-failure-analyst",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "high",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "failure-analyst",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "failure-evidence",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "attempt-evidence",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "verification-criteria",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "dependency-contracts",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "execute",
+      "skills": null
+    },
+    {
+      "agent": "story-ac-remediator",
+      "minted": false,
+      "seam": "ac-elaboration",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "medium",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "ac-elaboration",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "profile-augmentor",
+      "minted": false,
+      "seam": "ac-elaboration",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "medium",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "ac-elaboration",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "failure-analyst",
+      "minted": false,
+      "seam": "impl-failure-analyst",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "high",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "failure-analyst",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "failure-evidence",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "attempt-evidence",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "verification-criteria",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "dependency-contracts",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "execute",
+      "skills": null
+    },
+    {
+      "agent": "kb-change-reviewer",
+      "minted": false,
+      "seam": "code-review-cycle",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "high",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "code-review-cycle",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "implementation",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "execute",
+      "skills": null
+    },
+    {
+      "agent": "prd-change-reviewer",
+      "minted": false,
+      "seam": "prd-change-reviewer",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "high",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "prd-change-reviewer",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "proposed-change",
+          "required": true,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "prd-model-coordinator",
+      "minted": false,
+      "seam": "prd-model-coordinator",
+      "ladder": {
+        "model": "MiniMax-M3",
+        "effort": "medium",
+        "maxOutputTokens": "16384"
+      },
+      "prompt": {
+        "id": "prd-model-coordinator",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        }
+      ],
+      "tools": "write",
+      "skills": null
+    },
+    {
+      "agent": "codeline-bridge-agent",
+      "minted": false,
+      "seam": "codeline-bridge-agent",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "high",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "codeline-bridge",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "existing-code",
+          "required": true,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "retry-extension-coordinator",
+      "minted": false,
+      "seam": "cpa-inference",
+      "ladder": {
+        "model": "MiniMax-M2.5",
+        "effort": "medium",
+        "maxOutputTokens": "16384"
+      },
+      "prompt": {
+        "id": "cpa-inference",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "code-graph-detective",
+      "minted": false,
+      "seam": "code-graph-detective",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "high",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "code-graph-detective",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "codeline-facts",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "existing-code",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "execute",
+      "skills": null
+    },
+    {
+      "agent": "guard-vocabulary-agent",
+      "minted": false,
+      "seam": "cpa-inference",
+      "ladder": {
+        "model": "MiniMax-M2.5",
+        "effort": "medium",
+        "maxOutputTokens": "16384"
+      },
+      "prompt": {
+        "id": "cpa-inference",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "ticket-link-agent",
+      "minted": false,
+      "seam": "cpa-inference",
+      "ladder": {
+        "model": "MiniMax-M2.5",
+        "effort": "medium",
+        "maxOutputTokens": "16384"
+      },
+      "prompt": {
+        "id": "cpa-inference",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "discovery-vocabulary-agent",
+      "minted": false,
+      "seam": "cpa-inference",
+      "ladder": {
+        "model": "MiniMax-M2.5",
+        "effort": "medium",
+        "maxOutputTokens": "16384"
+      },
+      "prompt": {
+        "id": "cpa-inference",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "read-only",
+      "skills": null
+    },
+    {
+      "agent": "roster-reviewer",
+      "minted": false,
+      "seam": "code-review-cycle",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "high",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "code-review-cycle",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "implementation",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "execute",
+      "skills": null
+    },
+    {
+      "agent": "typescript-bugfix-engineer",
+      "minted": true,
+      "seam": "story-writer",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "high",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "story-writer",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "fix-plan",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "verification-criteria",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "review-feedback",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "diagnosis",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "attempt-evidence",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "test-criteria",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "dependency-contracts",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "existing-code",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "execute",
+      "skills": null
+    },
+    {
+      "agent": "mocka-investigator",
+      "minted": true,
+      "seam": "code-graph-detective",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "high",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "code-graph-detective",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "codeline-facts",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "existing-code",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "execute",
+      "skills": null
+    },
+    {
+      "agent": "mockb-investigator",
+      "minted": true,
+      "seam": "code-graph-detective",
+      "ladder": {
+        "model": "z-ai/glm-5.2",
+        "effort": "high",
+        "maxOutputTokens": "32768"
+      },
+      "prompt": {
+        "id": "code-graph-detective",
+        "project": true,
+        "template": true
+      },
+      "inputs": [
+        {
+          "kind": "ticket",
+          "required": true,
+          "hasProducer": true
+        },
+        {
+          "kind": "codeline-facts",
+          "required": false,
+          "hasProducer": true
+        },
+        {
+          "kind": "existing-code",
+          "required": false,
+          "hasProducer": true
+        }
+      ],
+      "tools": "execute",
+      "skills": null
+    }
+  ],
+  "gaps": [
+    {
+      "agent": "spec-coordinator-agent",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "openspec-agent",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "speckit-agent",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "typescript-engineer",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "agent-systems-engineer",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "billing-engineer",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "cli-ux-engineer",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "test-engineer",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "team-lead-agent",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "review-agent",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "test-coordinator-agent",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "lightpanda-agent",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "playwright-agent",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "sast-sentinel",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "review-ranger",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "mutant-hunter",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "fuzz-weaver",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "perf-sentinel",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "spec-validator",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "doc-coordinator",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "docstring-agent",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "api-doc-generator",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "guide-author",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "architecture-doc-agent",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "changelog-agent",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "doc-reviewer",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "doc-index-builder",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "doc-search-agent",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "doc-site-builder",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "grooming-coordinator",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "readiness-checker",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "dedup-detector",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "project-initiator-agent",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "prd-project-manager-agent",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "agent-skills-agent",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "dashboard-orchestrator-agent",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "dashboard-test-agent",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "ui-engineer",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "frontend-engineer",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "dashboard-update-agent",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "generator",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "spike-agent",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "tc-writer-agent",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "gate-finding-analyst",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "story-ac-remediator",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "profile-augmentor",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "failure-analyst",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "kb-change-reviewer",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "prd-change-reviewer",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "prd-model-coordinator",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "codeline-bridge-agent",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "retry-extension-coordinator",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "code-graph-detective",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "guard-vocabulary-agent",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "ticket-link-agent",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "discovery-vocabulary-agent",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "roster-reviewer",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "typescript-bugfix-engineer",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "mocka-investigator",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    },
+    {
+      "agent": "mockb-investigator",
+      "requirement": "skills",
+      "detail": "no project skills resolve — neither a codeline stack nor any KB, so every agent works with no knowledge of this project"
+    }
+  ],
+  "ready": false
+}

@@ -1,0 +1,40 @@
+{
+  "_what": "A model call reported $0 while consuming tokens. This is the record it reported, kept because the source file is deleted immediately after it is read.",
+  "agent": "agent-mint",
+  "model": "z-ai/glm-5.2",
+  "provider": "qwen",
+  "parsed": {
+    "costUsd": 0,
+    "tokensIn": 11320,
+    "tokensOut": 122,
+    "tokensCached": 0,
+    "costUnknown": true,
+    "costIsEstimate": false
+  },
+  "raw": {
+    "result": "{\"proposedAgents\": [{\"name\": \"typescript-vitest-engineer\", \"kind\": \"implementer\", \"codeline\": \"*\", \"systemPrompt\": \"...\", \"rationale\": \"...\"}, {\"name\": \"mocka-fares-investigator\", \"kind\": \"investigator\", \"codeline\": \"mocka\", \"systemPrompt\": \"...\", \"rationale\": \"...\"}, {\"name\": \"mockb-schedule-investigator\", \"kind\": \"investigator\", \"codeline\": \"mockb\", \"systemPrompt\": \"...\", \"rationale\": \"...\"}]}",
+    "model": "z-ai/glm-5.2",
+    "provider": "qwen",
+    "usage": {
+      "inputTokens": 11320,
+      "outputTokens": 122,
+      "totalTokens": 11442,
+      "cached_input_tokens": 0
+    },
+    "cost_usd": 0.0164,
+    "cost_is_estimate": false,
+    "toolCallCount": 0,
+    "iterations": 1,
+    "timings": [
+      {
+        "iteration": 1,
+        "modelLatencyMs": 1805,
+        "toolExecMs": 0,
+        "toolCalls": []
+      }
+    ],
+    "total_cost_usd": 0,
+    "tokens": 0,
+    "planCostUsd": 0
+  }
+}

@@ -1,0 +1,204 @@
+{
+  "derived": true,
+  "vocabulary": {
+    "blacklist": [
+      {
+        "term": "charged",
+        "reason": "Verb describing the observed billing behaviour, not any identifier; carries no signal separating mock-a from mock-b."
+      },
+      {
+        "term": "correct",
+        "reason": "Judgement word about behaviour, names nothing in either candidate's code."
+      },
+      {
+        "term": "wrong",
+        "reason": "Judgement word describing the bug, not a software artefact in either repo."
+      },
+      {
+        "term": "unnoticed",
+        "reason": "Process narrative about why the bug persisted; no selection signal."
+      },
+      {
+        "term": "omits",
+        "reason": "Verb describing the rendering defect; not an identifier in either candidate."
+      },
+      {
+        "term": "renders",
+        "reason": "Generic verb describing what formatStops does; appears only in a comment, not as code, and cannot discriminate between repos."
+      },
+      {
+        "term": "boundary",
+        "reason": "Describes the nature of the defect rather than naming anything in the software."
+      },
+      {
+        "term": "exactly",
+        "reason": "Grammatical filler emphasising the age value; no discriminative value."
+      },
+      {
+        "term": "reported",
+        "reason": "Process verb about output, names nothing in either candidate."
+      },
+      {
+        "term": "rather",
+        "reason": "Grammatical connective, pure filler."
+      },
+      {
+        "term": "except",
+        "reason": "Grammatical filler describing the off-by-one behaviour, not software."
+      },
+      {
+        "term": "gone",
+        "reason": "Grammatical filler from 'gone unnoticed'; no signal."
+      }
+    ],
+    "whitelist": [
+      {
+        "term": "fare",
+        "reason": "Core domain concept of mock-a, which defines fareFor, BASE_FARE_CENTS and CONCESSION_FARE_CENTS in src/fares.ts."
+      },
+      {
+        "term": "concession",
+        "reason": "Names CONCESSION_FARE_CENTS in mock-a; a real domain identifier fragment."
+      },
+      {
+        "term": "adult",
+        "reason": "Names the fare category (BASE_FARE_CENTS path) implemented in mock-a's fareFor."
+      },
+      {
+        "term": "riders",
+        "reason": "Matches the Rider type and fareFor(rider) parameter in mock-a."
+      },
+      {
+        "term": "cents",
+        "reason": "Matches the *_CENTS constants in mock-a; part of the domain vocabulary."
+      },
+      {
+        "term": "350",
+        "reason": "Literal value of BASE_FARE_CENTS in mock-a; a concrete code constant."
+      },
+      {
+        "term": "175",
+        "reason": "Literal value of CONCESSION_FARE_CENTS in mock-a; a concrete code constant."
+      },
+      {
+        "term": "65",
+        "reason": "The boundary constant compared against rider.age in mock-a's fareFor."
+      },
+      {
+        "term": "formatstops",
+        "reason": "Exported function in mock-b/src/schedule.ts; the exact identifier cited by the ticket."
+      },
+      {
+        "term": "totalminutes",
+        "reason": "Exported function in mock-b/src/schedule.ts; the exact identifier cited by the ticket."
+      },
+      {
+        "term": "stop",
+        "reason": "Matches the Stop type and stops parameters in mock-b."
+      },
+      {
+        "term": "departure",
+        "reason": "Domain term from mock-b's purpose (departure board rendering in schedule.ts)."
+      },
+      {
+        "term": "journey",
+        "reason": "Domain term for the schedule data totalMinutes computes over in mock-b."
+      },
+      {
+        "term": "line",
+        "reason": "Domain term for a transit line, used in mock-a's fare rules and mock-b's stop sequences."
+      },
+      {
+        "term": "mocka",
+        "reason": "Component label naming candidate mock-a; a component name is never filler."
+      },
+      {
+        "term": "mockb",
+        "reason": "Component label naming candidate mock-b; a component name is never filler."
+      }
+    ]
+  },
+  "termsDropped": [
+    {
+      "term": "exactly",
+      "reason": "Grammatical filler emphasising the age value; no discriminative value."
+    },
+    {
+      "term": "charged",
+      "reason": "Verb describing the observed billing behaviour, not any identifier; carries no signal separating mock-a from mock-b."
+    },
+    {
+      "term": "boundary",
+      "reason": "Describes the nature of the defect rather than naming anything in the software."
+    },
+    {
+      "term": "wrong",
+      "reason": "Judgement word describing the bug, not a software artefact in either repo."
+    },
+    {
+      "term": "rather",
+      "reason": "Grammatical connective, pure filler."
+    },
+    {
+      "term": "omits",
+      "reason": "Verb describing the rendering defect; not an identifier in either candidate."
+    },
+    {
+      "term": "renders",
+      "reason": "Generic verb describing what formatStops does; appears only in a comment, not as code, and cannot discriminate between repos."
+    },
+    {
+      "term": "except",
+      "reason": "Grammatical filler describing the off-by-one behaviour, not software."
+    },
+    {
+      "term": "reported",
+      "reason": "Process verb about output, names nothing in either candidate."
+    },
+    {
+      "term": "correct",
+      "reason": "Judgement word about behaviour, names nothing in either candidate's code."
+    },
+    {
+      "term": "gone",
+      "reason": "Grammatical filler from 'gone unnoticed'; no signal."
+    },
+    {
+      "term": "unnoticed",
+      "reason": "Process narrative about why the bug persisted; no selection signal."
+    }
+  ],
+  "termsUsed": [
+    "riders",
+    "aged",
+    "adult",
+    "fare",
+    "rules",
+    "over",
+    "concession",
+    "rider",
+    "full",
+    "cents",
+    "instead",
+    "above",
+    "correctly",
+    "itself",
+    "than",
+    "rule",
+    "departure",
+    "board",
+    "final",
+    "stop",
+    "formatstops",
+    "every",
+    "last",
+    "three",
+    "line",
+    "shows",
+    "journey",
+    "length",
+    "totalminutes",
+    "which",
+    "omission"
+  ]
+}

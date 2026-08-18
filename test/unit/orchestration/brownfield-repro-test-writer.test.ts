@@ -13,6 +13,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync, chmodSync, existsSync, r
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { mintProjectPrompts } from '../../helpers/project-prompts';
 
 const WRITER = join(__dirname, '../../../orchestrations/scripts/brownfield-repro-test-writer.sh');
 const ORCH = readFileSync(join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
@@ -69,7 +70,7 @@ function runWriter(repo: string, env: Record<string, string>): { code: number; o
     // merge stderr → stdout: the script's log() writes to stderr, and we assert on it
     const out = execFileSync('bash', ['-c', `bash ${JSON.stringify(WRITER)} AMSD-1820 2>&1`], {
       encoding: 'utf8',
-      env: { ...process.env, PROJECT_ROOT: repo, JIRA_BASELINE_BRANCH: 'develop', EPAM_BROWNFIELD: '1', ...env },
+      env: { ...process.env, EPAM_PROJECT_CONFIG_DIR: mintProjectPrompts(), PROJECT_ROOT: repo, JIRA_BASELINE_BRANCH: 'develop', EPAM_BROWNFIELD: '1', ...env },
     });
     return { code: 0, out };
   } catch (e: any) {
@@ -117,6 +118,11 @@ describe('brownfield-repro-test-writer — retry + ladder + self-heal', () => {
     const { out } = runWriter(repo, {
       PRD_FILE: prd,
       AI_RUNNER_CMD: stubRetryThenSucceed(repo, counter),
+      // The agent-driven target ASK calls the same runner this stub counts, so with it on the
+      // stub's attempt-1 whiff is spent choosing a file and never reaches authorship — which is
+      // what this test is about. Target selection has its own test
+      // (repro-test-writer-target-selection.test.ts); keeping the two separate is the point.
+      EPAM_TEST_TARGET_ASK: '0',
       SPEC_MODE_SPECKIT_MODEL: 'z-ai/glm-5.1',
       EPAM_MODEL_LADDER_HIGH: 'z-ai/glm-5.1=moonshotai/kimi-k3',
       EPAM_MODEL_PROVIDER_MAP: 'moonshotai/*=qwen|z-ai/*=qwen',
@@ -125,7 +131,35 @@ describe('brownfield-repro-test-writer — retry + ladder + self-heal', () => {
     expect(existsSync(join(repo, 'src', 'svc', 'discount.spec.ts'))).toBe(true);
     // self-heal engaged, and the ladder escalated on attempt 2
     expect(out).toMatch(/invoking self-heal analyst/);
-    expect(out).toMatch(/ladder escalation.*glm-5\.1 → moonshotai\/kimi-k3/);
+    // THE REQUIREMENT IS "IT ESCALATED", NOT "IT ESCALATED TO THIS LITERAL".
+    //
+    // This used to assert `glm-5.1 → moonshotai/kimi-k3`, a HIGH-tier pair the fixture set by
+    // hand. The seam declares tier HIGHEST in invocation-profiles.json, so once it read the
+    // project's own ladder declaration it escalated along the HIGHEST chain instead and the
+    // literal went stale. Assert the hop is a REAL rung of the tier this seam declares, read
+    // from the same file the pipeline reads — so a ladder change updates the test with it.
+    const hop = out.match(/ladder escalation \(attempt 2\/3\) — (\S+) → (\S+)/);
+    expect(hop, `no ladder escalation line in:\n${out}`).toBeTruthy();
+    // The seam declares a POSITION ('top'), not a tier name — the engine holds no tier
+    // vocabulary, so the project's own order is what turns one into the other. Indexing
+    // .ladders by the raw position reads undefined and the assertion dies before it runs.
+    const position = JSON.parse(
+      readFileSync(join(__dirname, '../../../orchestrations/agents/invocation-profiles.json'), 'utf8'),
+    ).profiles['repro-test-writer'].ladder;
+    const settings = JSON.parse(
+      readFileSync(join(__dirname, '../../../orchestrations/projects/metrolinx/llm-settings.json'), 'utf8'),
+    );
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+    const { resolveTierPosition } = require(join(__dirname, '../../../orchestrations/scripts/lib/seam-invocation.js'));
+    const tier = resolveTierPosition(position, {
+      EPAM_MODEL_LADDER_TIER_ORDER: (settings.ladderTierOrder || []).join(' '),
+    });
+    expect(tier, `position '${position}' resolves to no tier this project declares`).toBeTruthy();
+    const chain = settings.ladders[tier].modelLadder as Array<{ from: string; to: string }>;
+    expect(
+      chain.some((r) => r.from === hop![1] && r.to === hop![2]),
+      `${hop![1]} → ${hop![2]} is not a rung of the '${tier}' ladder this seam declares`,
+    ).toBe(true);
     expect(out).toMatch(/test produced on attempt 2/);
   });
 });

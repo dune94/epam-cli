@@ -1,0 +1,40 @@
+{
+  "_what": "A model call reported $0 while consuming tokens. This is the record it reported, kept because the source file is deleted immediately after it is read.",
+  "agent": "vc-agent",
+  "model": "z-ai/glm-5.2",
+  "provider": "qwen",
+  "parsed": {
+    "costUsd": 0,
+    "tokensIn": 1428,
+    "tokensOut": 624,
+    "tokensCached": 512,
+    "costUnknown": true,
+    "costIsEstimate": false
+  },
+  "raw": {
+    "result": "[\"VC 1 makes a cross-comparison ('every stop in the input array') — restate by declaring concrete stop names as preconditions and asserting each appears in the output on its own\"]",
+    "model": "z-ai/glm-5.1",
+    "provider": "qwen",
+    "usage": {
+      "inputTokens": 1428,
+      "outputTokens": 624,
+      "totalTokens": 2052,
+      "cached_input_tokens": 512
+    },
+    "cost_usd": 0.0029,
+    "cost_is_estimate": false,
+    "toolCallCount": 0,
+    "iterations": 1,
+    "timings": [
+      {
+        "iteration": 1,
+        "modelLatencyMs": 14472,
+        "toolExecMs": 0,
+        "toolCalls": []
+      }
+    ],
+    "total_cost_usd": 0,
+    "tokens": 0,
+    "planCostUsd": 0
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "_what": "A model call reported $0 while consuming tokens. This is the record it reported, kept because the source file is deleted immediately after it is read.",
+  "agent": "spec-agent",
+  "model": "z-ai/glm-5.2",
+  "provider": "qwen",
+  "parsed": {
+    "costUsd": 0,
+    "tokensIn": 3594,
+    "tokensOut": 1036,
+    "tokensCached": 1088,
+    "costUnknown": true,
+    "costIsEstimate": false
+  },
+  "raw": {
+    "result": "```json\n{\n  \"storyId\": \"MOCK3-1\",\n  \"agent\": \"openspec\",\n  \"notes\": \"Defect: fareFor uses strict > (now >= in code shown but the bug was >) at the senior boundary, so age 65 falls through to BASE_FARE_CENTS. Fix site is the comparison in fareFor. VCs are black-box checks on the fare value returned for each boundary case.\",\n  \"acceptanceCriteria\": [\n    \"A rider aged exactly 65 with no pass is charged the concession fare.\",\n    \"A rider aged 64 with no pass is still charged the base fare.\",\n    \"The existing fare behaviour for children, pass holders and adults is unchanged.\"\n  ],\n  \"description\": \"The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.\",\n  \"title\": \"Riders aged exactly 65 are charged the adult fare\",\n  \"storyKind\": \"defect\",\n  \"verificationCriteriaDetail\": [\n    {\n      \"criterion\": \"fareFor returns 175 (CONCESSION_FARE_CENTS) when called with a rider whose age is 65 and hasPass is false\",\n      \"observer\": \"tester\",\n      \"surface\": \"fareFor function return value\",\n      \"setup\": \"a rider object with age 65 and hasPass false is supplied\"\n    },\n    {\n      \"criterion\": \"fareFor returns 350 (BASE_FARE_CENTS) when called with a rider whose age is 64 and hasPass is false\",\n      \"observer\": \"tester\",\n      \"surface\": \"fareFor function return value\",\n      \"setup\": \"a rider object with age 64 and hasPass false is supplied\"\n    },\n    {\n      \"criterion\": \"fareFor returns 175 (CONCESSION_FARE_CENTS) when called with a rider whose age is 8 and hasPass is false\",\n      \"observer\": \"tester\",\n      \"surface\": \"fareFor function return value\",\n      \"setup\": \"a rider object with age 8 and hasPass false is supplied\"\n    },\n    {\n      \"criterion\": \"fareFor returns 0 when called with a rider whose age is 30 and hasPass is true\",\n      \"observer\": \"tester\",\n      \"surface\": \"fareFor function return value\",\n      \"setup\": \"a rider object with age 30 and hasPass true is supplied\"\n    },\n    {\n      \"criterion\": \"fareFor returns 350 (BASE_FARE_CENTS) when called with a rider whose age is 30 and hasPass is false\",\n      \"observer\": \"tester\",\n      \"surface\": \"fareFor function return value\",\n      \"setup\": \"a rider object with age 30 and hasPass false is supplied\"\n    }\n  ],\n  \"vcSource\": \"both\",\n  \"locationHint\": [\n    {\n      \"file\": \"src/fares.ts\",\n      \"function\": \"fareFor\",\n      \"reason\": \"fareFor is the sole function that computes a rider's fare; the senior-boundary comparison on line 10 is the single site producing the wrong fare value for age 65\"\n    }\n  ]\n}\n```",
+    "model": "z-ai/glm-5.1",
+    "provider": "qwen",
+    "usage": {
+      "inputTokens": 3594,
+      "outputTokens": 1036,
+      "totalTokens": 4630,
+      "cached_input_tokens": 1088
+    },
+    "cost_usd": 0.0058,
+    "cost_is_estimate": false,
+    "toolCallCount": 0,
+    "iterations": 1,
+    "timings": [
+      {
+        "iteration": 1,
+        "modelLatencyMs": 23532,
+        "toolExecMs": 0,
+        "toolCalls": []
+      }
+    ],
+    "total_cost_usd": 0,
+    "tokens": 0,
+    "planCostUsd": 0
+  }
+}

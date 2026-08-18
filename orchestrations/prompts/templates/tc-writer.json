@@ -1,0 +1,20 @@
+{
+  "$why": [
+    "Moved out of post-impl-tc-writer.sh on 2026-08-15 (17 of 20). It was a heredoc.",
+    "",
+    "The TC writer turns verification criteria into the tests that check them, so its wording",
+    "decides what \"verified\" means for every story that passes through."
+  ],
+  "body": "__TC_WRITER_PROFILE__\n\n## Your ONLY output is a valid JSON object — nothing else\n\nOutput format (one object, all story IDs as keys):\n{\n  \"<story-id>\": {\n    \"verifiedAt\": \"<ISO8601 timestamp>\",\n    \"sourceFiles\": [\"src/server.ts\"],\n    \"facts\": [\n      \"<concrete verifiable fact from source, e.g.: GET /search only — no /cheapest route exists>\",\n      \"<exact query param names used: 'from' and 'to' not 'origin'/'destination'>\",\n      \"<exact error shape: { error: string } with 400 status for missing params>\"\n    ],\n    \"mockStrategy\": \"<exact mock setup: e.g. vi.mock('<real module path from the diff>') with vi.hoisted constructor>\",\n    \"bannedPatterns\": [\"<string that must NOT appear in test file>\"]\n  }\n}\n\n## Stories to process\n\n__STORY_CONTEXT__\n\n## Instructions\n\nFor each story above:\n\n1. READ every IMPL_SOURCE_FILES path listed using your file reading tool. Read the COMPLETE file.\n\n2. Extract FACTS — only things you can verify by reading the source:\n   - Exact function/method signatures and parameter names\n   - Exact HTTP route paths and query parameter names\n   - Exact error message strings (copy verbatim from throw/send statements)\n   - Exact return shapes (copy from return statements)\n   - Alignment direction (left/right-pad) per column if it's a table story\n   - Which validations exist and which do not (e.g. \"adults=0 is valid — no lower-bound check\")\n   - The correct import path for the module under test\n\n3. Write MOCK_STRATEGY as a single sentence describing exactly how to mock dependencies:\n   - Include the exact vi.mock() path (the real path as it appears in the code under test, not a shortened form)\n   - State whether to use vi.stubGlobal, vi.hoisted, or constructor mock\n   - State whether beforeEach uses clearAllMocks or resetAllMocks\n\n4. Write BANNED_PATTERNS as strings that must not appear in the test file:\n   - Wrong endpoint paths that don't exist\n   - Wrong parameter names\n   - Wrong framework imports (@jest/globals)\n   - Wrong mock paths\n\n5. The testCriteria.facts OVERRIDE any conflicting AC. Write them as ground truth.\n\n6. Write your JSON to: __TC_OUT_FILE__\n   Use WriteFile to write the complete JSON object to that path.\n\nCRITICAL: Output ONLY the JSON object in the file. No markdown, no explanation, no code fences.\nAfter writing the file, output a single line: TC_WRITER_DONE",
+  "description": "Write the test criteria for a story after implementation.",
+  "id": "tc-writer",
+  "placeholders": [
+    "__STORY_CONTEXT__",
+    "__TC_OUT_FILE__",
+    "__TC_WRITER_PROFILE__"
+  ],
+  "version": 1,
+  "seams": [
+    "tc-writer"
+  ]
+}

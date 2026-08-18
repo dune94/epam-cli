@@ -41,7 +41,12 @@ const STORY_RETRY_LIB = join(REPO_ROOT, 'orchestrations/scripts/lib/story-retry-
 
 const REVIEW_LOOP_BLOCK = extractBlock(
   '_review_max_retries="${EPAM_MAX_RETRIES:-7}"',
-  'error "         A change the reviewer never approved must NOT proceed — human review required."\n    exit 2\nfi',
+  // END THE BLOCK ON A STABLE ANCHOR, NOT ON AN EXIT CODE.
+// This pinned `exit 2`, so the suite failed to LOAD the moment Step 3.6 changed to
+// exit 3 (a HALT is not a remediation and must not be retried). Stopping at the message
+// instead left the enclosing `if` unclosed, and bash exited 2 on the syntax error.
+// The next section header is outside the block and does not move when a code does.
+  '# Step 3.7: Pre-review build gate',
 );
 
 const cleanupDirs: string[] = [];

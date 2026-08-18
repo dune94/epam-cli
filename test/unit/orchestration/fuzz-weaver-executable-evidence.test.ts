@@ -33,12 +33,13 @@ const orchSrc = readFileSync(ORCH_SH, 'utf8');
 const NODE_BIN = process.execPath;
 
 function extractFuzzVerifyPython(): string {
-  const startMarker = 'import json, sys, os, re, subprocess, shutil';
-  const start = orchSrc.indexOf(startMarker);
-  if (start === -1) throw new Error('fuzz-verify python block not found');
-  const end = orchSrc.indexOf('\nPYEOF', start);
-  if (end === -1) throw new Error('PYEOF terminator not found');
-  return orchSrc.slice(start, end);
+  // THE HANDLER FILE, which is what the pipeline now runs. This sliced the program out of the
+  // shell script between an import line and a PYEOF terminator — a technique that worked only
+  // while the program was embedded, and that silently returned a fragment once it moved.
+  //
+  // Reading the file is also stronger: the test exercises the exact bytes the pipeline executes,
+  // rather than a slice that happened to match.
+  return readFileSync(join(REPO_ROOT, 'orchestrations/scripts/lib/handlers/fuzz-verify.py'), 'utf8');
 }
 
 function makeFixtureProject(): string {
@@ -335,15 +336,15 @@ describe('fuzz-weaver prompt — structural checks', () => {
   // immediately precedes the profile-prepend if-block.
   // Use "no markdown fences, no preamble" — unique to the fuzz prompt's
   // output format line and not shared with any other gate prompt.
+  // THE TEMPLATE, not a slice of the script.
+  //
+  // This used to anchor on two phrases inside run-agent-orchestration.sh and slice between
+  // them — a technique that needed the second phrase to be unique to this prompt, and broke
+  // the moment the prompt moved into the template layer (2026-08-15). The template IS the
+  // block, so there is nothing to delimit.
   function extractFuzzPromptBlock(): string {
-    const start = orchSrc.indexOf('You are acting as the fuzz-weaver agent.');
-    expect(start).toBeGreaterThan(-1);
-    // "no markdown fences, no preamble" appears only in the fuzz prompt output format
-    const outputFormatIdx = orchSrc.indexOf('no markdown fences, no preamble', start);
-    expect(outputFormatIdx).toBeGreaterThan(start);
-    // Extend to the end of that output format line
-    const lineEnd = orchSrc.indexOf('\n', outputFormatIdx);
-    return orchSrc.slice(start, lineEnd);
+    return JSON.parse(readFileSync(
+      join(REPO_ROOT, 'orchestrations/prompts/templates/qa-fuzz-weaver.json'), 'utf8')).body as string;
   }
 
   it('the fuzz prompt includes an executableTest field in the output schema', () => {
@@ -363,10 +364,16 @@ describe('fuzz-weaver prompt — structural checks', () => {
   });
 
   it('the gate step calls detect_node before invoking the python verification block', () => {
-    const pyIdx = orchSrc.indexOf('import json, sys, os, re, subprocess, shutil');
-    const detectNodeIdx = orchSrc.lastIndexOf('detect_node', pyIdx);
-    expect(detectNodeIdx).toBeGreaterThan(-1);
-    expect(pyIdx - detectNodeIdx).toBeLessThan(300);
+    // The CALL SITE, not the program. The verification python lives in a handler file now, so
+    // there is no import line in the script to measure a distance from — and the property being
+    // asserted was always about the shell: the node binary is detected before the verifier that
+    // needs it is invoked.
+    const callIdx = orchSrc.indexOf('handlers/fuzz-verify.py');
+    expect(callIdx, 'the fuzz verifier is never invoked').toBeGreaterThan(-1);
+    const detectNodeIdx = orchSrc.lastIndexOf('detect_node', callIdx);
+    expect(detectNodeIdx, 'detect_node does not run before the verifier that needs a node binary')
+      .toBeGreaterThan(-1);
+    expect(callIdx - detectNodeIdx).toBeLessThan(2000);
   });
 
   it('_run_qa_gate_with_retry retry prefix detects WriteFile-instead-of-stdout and corrects it', () => {

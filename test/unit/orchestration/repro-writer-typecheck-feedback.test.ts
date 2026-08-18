@@ -26,6 +26,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync, readFileSync, readdirSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { mintProjectPrompts } from '../../helpers/project-prompts';
 
 const REPO = join(__dirname, '../../../');
 const WRITER = join(REPO, 'orchestrations/scripts/brownfield-repro-test-writer.sh');
@@ -102,7 +103,7 @@ function run() {
   try {
     execFileSync('bash', [WRITER, STORY], {
       encoding: 'utf8', timeout: 180000,
-      env: { ...process.env, EPAM_BROWNFIELD: '1', PROJECT_ROOT: repo, PRD_FILE: prd,
+      env: { ...process.env, EPAM_PROJECT_CONFIG_DIR: mintProjectPrompts(), EPAM_BROWNFIELD: '1', PROJECT_ROOT: repo, PRD_FILE: prd,
              LOG_DIR: logDir, JIRA_BASELINE_BRANCH: 'develop', KB_ROOT: kbRoot,
              NODE_BIN: NODE20, AI_RUNNER_CMD: makeStub(capture, repo),
              // The verification helper resolves the plugin under AUTOMATION_DIR.
@@ -113,7 +114,15 @@ function run() {
 
   const prompts = readdirSync(capture).filter(f => f.startsWith('prompt-')).sort()
     .map(f => readFileSync(join(capture, f), 'utf8'))
-    .filter(p => !/FAILURE CLASS|PREVENT a repeated agent failure/.test(p));
+    .filter(p => !/FAILURE CLASS|PREVENT a repeated agent failure/.test(p))
+    // KEEP ONLY THE AUTHORSHIP PROMPTS, SELECTED BY WHAT THEY ARE — NOT BY POSITION.
+    //
+    // These were read as prompts[0] and prompts[1]. The seam later gained an agent-driven
+    // TARGET ASK ("which of the touched files carries the behaviour?") that runs through the
+    // same runner BEFORE authorship, so index 0 became the ask and both assertions read the
+    // wrong document. Positional indexing into a list of agent calls breaks every time a call
+    // is added; selecting the authorship prompt by its own identity does not.
+    .filter(p => /TEST ENGINEER/i.test(p));
   return { prompts, repo };
 }
 

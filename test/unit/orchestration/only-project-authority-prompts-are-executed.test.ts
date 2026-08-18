@@ -38,6 +38,10 @@ const VALUES = {
   __SKILL_ADDENDUM__: '(none)',
   __DEPENDENCY_CONTRACTS__: '(none)',
   __VERIFICATION_FAILURE__: 'SyntaxError: Unexpected token export',
+  // Added 2026-08-12 with the analyst's attempt-evidence. Rendering FAILS CLOSED on a missing
+  // value, which is why this test caught the new placeholder immediately — the analyst would
+  // have aborted rather than silently losing the evidence.
+  __ATTEMPT_CHANGES__: 'The previous attempt changed NO files — nothing was written.',
 };
 
 describe('the prompt exists as FILES, not as code', () => {

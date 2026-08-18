@@ -93,21 +93,7 @@ npx --yes diff2html-cli \
 # de-dupe by storyId (re-running for the same story replaces its old entry
 # rather than accumulating duplicates across repeat runs of the same ticket).
 NODE_BIN="${NODE_BIN:-node}"
-"$NODE_BIN" -e "
-  const fs = require('fs');
-  const manifestPath = '${MANIFEST}';
-  let entries = [];
-  try { entries = JSON.parse(fs.readFileSync(manifestPath, 'utf8')); } catch { entries = []; }
-  entries = entries.filter(e => e.storyId !== '${STORY_ID}');
-  entries.unshift({
-    storyId: '${STORY_ID}',
-    repo: '${REPO_NAME}',
-    branch: '${BRANCH}',
-    baselineRef: '${BASELINE_REF}',
-    file: 'diffs/${SAFE_STORY}.html',
-    generatedAt: new Date().toISOString(),
-  });
-  fs.writeFileSync(manifestPath, JSON.stringify(entries, null, 2));
-"
+"$NODE_BIN" "$SCRIPT_DIR/lib/handlers/diff-view-manifest-record.js" \
+  "${MANIFEST}" "${STORY_ID}" "${REPO_NAME}" "${BRANCH}" "${BASELINE_REF}" "diffs/${SAFE_STORY}.html"
 
 echo "[diff-view] ✓ ${STORY_ID}: ${REPO_NAME} (${BASELINE_REF}...${BRANCH}) → ${OUT_HTML}"

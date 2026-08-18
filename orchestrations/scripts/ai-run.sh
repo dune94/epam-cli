@@ -303,40 +303,45 @@ _plan_text=""
 # plan pass fires — the plan pass recurses into `bash "$0" --model
 # "$AI_MODEL"`, so if AI_MODEL were resumed only later, the plan-pass
 # sub-call would still use the un-resumed base model on every invocation.
-_ai_ladder_next_model() {
-  local _m="$1" _map="${EPAM_MODEL_LADDER_HIGH:-${EPAM_MODEL_LADDER:-}}" _pair
-  [ -z "$_map" ] && return 0
-  IFS='|' read -ra _pairs <<< "$_map"
-  for _pair in "${_pairs[@]}"; do
-    case "$_pair" in "${_m}="*) echo "${_pair#*=}"; return 0 ;; esac
-  done
-}
+# THE SHARED LADDER HANDLER — the same one claude.sh and the seam scripts use.
+#
+# What stood here was a second implementation, and it differed from the declaration in two ways
+# that made every archetype's tier decorative:
+#
+#   IT ALWAYS CLIMBED THE *HIGH* CHAIN.  _ai_ladder_next_model read EPAM_MODEL_LADDER_HIGH
+#   regardless of the tier the agent's archetype declares, so an agent declared HIGHEST escalated
+#   along HIGH. Changing a declaration changed no model.
+#
+#   EVERY AGENT SHARED ONE COUNTER.  The rung state was keyed on ${EPAM_AGENT_NAME:-agent}, and
+#   nothing set EPAM_AGENT_NAME except two callers — so the reviewer, the analyst, the tc-writer
+#   and the test-updater all read and wrote "agent__<story>". One agent escalating advanced the
+#   ladder for all of them; one agent exhausting it exhausted everyone's.
+#
+#   (team-lead-review.sh is NOT an instance of this: it keeps its own review-scoped key and
+#   writes it via advance_ladder_escalation, so its resume does work. Its separate defect is that
+#   its private chain is pinned to HIGH regardless of the tier it declares.)
+#
+# agent_ladder_model resolves the chain from the agent's ARCHETYPE and keeps rung state per
+# agent AND per story, so both faults go away by construction.
+# shellcheck source=lib/agent-ladder.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/agent-ladder.sh" 2>/dev/null || true
 
-# Cross-process ladder resume (backlog: "retries must proceed up the rungs,
-# nothing is allowed to intercede" — generalized from claude.sh's writer-only
-# fix to every agent, since ai-run.sh is the ONE seam all of them pass
-# through). A caller that re-invokes ai-run.sh for the SAME agent+story after
-# THIS process exits (whether from its own exhausted attempts, or an outer
-# reviewer rejecting a technically-successful call — see
-# advance_ladder_escalation) must not silently restart at the base model.
-# Only active when LOG_DIR is set (every real orchestration run sets it; a
-# standalone/manual invocation with no LOG_DIR behaves exactly as before).
-# Skipped entirely for a plan-pass sub-invocation (the flag this script sets
-# on its own recursive planning call, further below) —
-# it inherits AI_MODEL from its already-resumed parent via --model, and has
-# no ladder state of its own to resume (its key would be the parent's
-# key+":plan", which the parent never advances).
-_ai_ladder_key="$(ai_ladder_state_key "${EPAM_AGENT_NAME:-agent}" "${EPAM_STORY_ID:-global}")"
-_ai_ladder_progress=0
-if [ -n "${LOG_DIR:-}" ] && [ "${_EPAM_IN_PLAN_PASS:-0}" != "1" ]; then
-  _ai_ladder_progress="$(read_story_retry_count "$LOG_DIR" "$_ai_ladder_key")"
-  if [ "${_ai_ladder_progress:-0}" -gt 0 ] 2>/dev/null; then
-    echo "[ai-run] '${EPAM_AGENT_NAME:-agent}' resuming ladder at escalation ${_ai_ladder_progress} (persisted from an earlier invocation)" >&2
-    for _ai_replay in $(seq 1 "$_ai_ladder_progress"); do
-      _ai_next="$(_ai_ladder_next_model "${AI_MODEL:-}")"
-      [ -n "$_ai_next" ] && AI_MODEL="$_ai_next"
-    done
-    export AI_MODEL
+# WHICH AGENT THIS INVOCATION IS. Callers declare it; without it there is no per-agent rung state
+# and the ladder cannot be resolved from a declaration, so say so rather than climbing the wrong
+# chain silently.
+_LADDER_AGENT="${EPAM_AGENT_NAME:-}"
+_LADDER_STORY="${EPAM_STORY_ID:-global}"
+if [ -z "$_LADDER_AGENT" ]; then
+  echo "[ai-run] no EPAM_AGENT_NAME declared — this invocation has no archetype, so no ladder is resolved and no rung is recorded" >&2
+fi
+
+# Resume: one rung per failure already recorded for THIS agent on THIS story.
+# Skipped for a plan-pass sub-invocation, which inherits its parent's already-resumed model.
+if [ -n "$_LADDER_AGENT" ] && [ -n "${LOG_DIR:-}" ] && [ "${_EPAM_IN_PLAN_PASS:-0}" != "1" ]; then
+  _ai_resumed="$(agent_ladder_model "$_LADDER_AGENT" "$_LADDER_STORY" "${AI_MODEL:-}")"
+  if [ -n "$_ai_resumed" ] && [ "$_ai_resumed" != "${AI_MODEL:-}" ]; then
+    echo "[ai-run] '$_LADDER_AGENT' resuming ladder on '$_ai_resumed' (persisted from an earlier invocation)" >&2
+    AI_MODEL="$_ai_resumed"; export AI_MODEL
   fi
 fi
 
@@ -437,7 +442,9 @@ _merge_plan_cost() {
   _merged="$(jq -s '
       (.[0] // {}) as $plan | (.[1] // {}) as $exec |
       $exec
-      | .total_cost_usd = (($exec.total_cost_usd // 0) + ($plan.total_cost_usd // 0))
+      | (if (($exec.total_cost_usd // $plan.total_cost_usd) != null)
+         then .total_cost_usd = (($exec.total_cost_usd // 0) + ($plan.total_cost_usd // 0))
+         else . end)
       | .tokens         = (($exec.tokens         // 0) + ($plan.tokens         // 0))
       | .planCostUsd    = ($plan.total_cost_usd // 0)
     ' "$_plan_cost_json" "$ORCH_JSON_RESULT" 2>/dev/null)"
@@ -478,7 +485,7 @@ _merge_plan_cost() {
 #              now (explicitly by the caller, or derived from /proc above), so
 #              every agent accumulates its own KB.
 
-# (_ai_ladder_next_model is defined earlier, ahead of the plan-pass block —
+# (the shared ladder handler is sourced earlier, ahead of the plan-pass block —
 # see that definition's docstring for why.)
 
 # Self-heal is best-effort: a missing or broken KB must never take a model call
@@ -549,16 +556,19 @@ for _call_attempt in $(seq 1 "$_ai_max_attempts"); do
 if [ "$_call_attempt" -gt 1 ]; then
   # Escalate before retrying: repeating the same model on the same prompt is the
   # same gamble, which is how run 9 lost its premise on a single bad response.
-  _ai_next="$(_ai_ladder_next_model "${AI_MODEL:-}")"
+  # RECORD THE FAILURE, THEN ASK. The handler steps one rung per recorded failure along the chain
+  # this agent's ARCHETYPE declares, and keeps that count per agent AND per story — so recording
+  # and resolving are one operation and cannot drift, which is how the previous counter ended up
+  # written under one key and read under another.
+  agent_ladder_record_failure "$_LADDER_AGENT" "$_LADDER_STORY"
+  _ai_next="$(agent_ladder_model "$_LADDER_AGENT" "$_LADDER_STORY" "${AI_MODEL:-}")"
   if [ -n "$_ai_next" ] && [ "$_ai_next" != "${AI_MODEL:-}" ]; then
-    echo "[ai-run] attempt ${_call_attempt}/${_ai_max_attempts} for '${EPAM_AGENT_NAME:-agent}' — escalating ${AI_MODEL} -> ${_ai_next}" >&2
+    echo "[ai-run] attempt ${_call_attempt}/${_ai_max_attempts} for '${_LADDER_AGENT:-unnamed}' — escalating ${AI_MODEL} -> ${_ai_next}" >&2
     AI_MODEL="$_ai_next"; export AI_MODEL
-    if [ -n "${LOG_DIR:-}" ]; then
-      _ai_ladder_progress=$((_ai_ladder_progress + 1))
-      write_story_retry_count "$LOG_DIR" "$_ai_ladder_key" "$_ai_ladder_progress"
-    fi
+  elif agent_ladder_exhausted "$_LADDER_AGENT" "$_LADDER_STORY" "${AI_MODEL:-}"; then
+    echo "[ai-run] attempt ${_call_attempt}/${_ai_max_attempts} for '${_LADDER_AGENT:-unnamed}' — at the top of its declared chain (${AI_MODEL:-default}), retrying the same rung" >&2
   else
-    echo "[ai-run] attempt ${_call_attempt}/${_ai_max_attempts} for '${EPAM_AGENT_NAME:-agent}' — no further ladder rung, retrying on ${AI_MODEL:-default}" >&2
+    echo "[ai-run] attempt ${_call_attempt}/${_ai_max_attempts} for '${_LADDER_AGENT:-unnamed}' — no chain declared for this agent's tier, retrying on ${AI_MODEL:-default}" >&2
   fi
 fi
 

@@ -162,32 +162,12 @@ JSON
   # matched nothing ("No test files found, exiting with code 1"), the repro-gate blocked
   # the story, and the phase restarted. Moving the workspace out of the repo fixes the
   # instance; owning the config fixes the class, wherever the workspace ends up.
-  cat > "$seed/vitest.config.ts" <<'TS'
-import { defineConfig } from 'vitest/config';
-
-export default defineConfig({
-  test: {
-    root: __dirname,
-    include: ['src/**/*.{test,spec}.{ts,tsx}', 'test/**/*.{test,spec}.{ts,tsx}'],
-    environment: 'node',
-  },
-});
-TS
-  cat > "$seed/src/hello.ts" <<'TS'
-export function getGreeting(): string {
-  return 'hello world';
-}
-TS
-  cat > "$seed/src/hello.test.ts" <<'TS'
-import { describe, it, expect } from 'vitest';
-import { getGreeting } from './hello';
-
-describe('getGreeting', () => {
-  it('returns hello world', () => {
-    expect(getGreeting()).toBe('hello world');
-  });
-});
-TS
+  # The seed sources live with the project, not in this launcher. A seed file written by a
+  # heredoc is a project fact inside the pipeline, and it cannot be opened, linted or
+  # type-checked where it was.
+  _seed_src="$PROJECT_CONFIG_DIR/seed"
+  [ -d "$_seed_src" ] || { echo "[mock1-paused] seed sources not found at $_seed_src" >&2; exit 1; }
+  cp -R "$_seed_src/." "$seed/"
 
   git -C "$seed" add -A
   git -C "$seed" commit -m "seed: hello world baseline" --quiet

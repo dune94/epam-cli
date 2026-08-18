@@ -1,0 +1,20 @@
+{
+  "$why": [
+    "Moved out of run-agent-orchestration.sh on 2026-08-16. Same shape as lint-finding-analyst:",
+    "the current ACs and the role instructions were both computed by shell pipelines inside the",
+    "heredoc, so the remediator could be asked to extend criteria it had not been shown."
+  ],
+  "description": "Adds acceptance criteria to the story a lint failure was mapped to, so the failure cannot recur.",
+  "id": "lint-ac-remediator",
+  "seams": [
+    "ac-elaboration"
+  ],
+  "placeholders": [
+    "__STORY_ID__",
+    "__FINDING__",
+    "__CURRENT_ACS__",
+    "__PROFILE__"
+  ],
+  "version": 1,
+  "body": "You are the story-ac-remediator. A lint gate failure was mapped to story '__STORY_ID__'.\n\n## Finding\n__FINDING__\n\n## Current story ACs\n__CURRENT_ACS__\n\n## Agent Profile\n__PROFILE__\n\nAdd 1-2 ACs to story '__STORY_ID__' that would prevent this lint failure. Output JSON only:\n{\"story_id\":\"__STORY_ID__\",\"new_acs\":[\"<ac text>\"],\"rationale\":\"<why>\"}"
+}

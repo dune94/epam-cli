@@ -1,0 +1,1 @@
+{"event_id":"evt-cost-20260817185051953-540961","timestamp":"2026-08-17T18:50:51.953Z","agent":"ac-classification","story_id":null,"phase":null,"type":"cost_snapshot","model":"z-ai/glm-5.2","provider":"qwen","detail":{"costUsd":0,"tokensIn":31382,"tokensOut":435,"tokensCached":23488,"costUnknown":true,"costIsEstimate":false,"turns":1,"source":"spec-mode-runner"}}

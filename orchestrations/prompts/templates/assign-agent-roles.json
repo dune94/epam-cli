@@ -1,0 +1,22 @@
+{
+  "$why": [
+    "Moved out of spec-mode-runner.js on 2026-08-16.",
+    "",
+    "Two rules here were each written after a live failure, and both are about the same thing:",
+    "an assignment that looks complete and delivers nothing. A story listing three codelines",
+    "needs three assignments, because the repositories differ and so can the right owner. And",
+    "the assignee must be the role that EDITS FILES -- on 2026-08-07 a story went to the one",
+    "role of three that owned no source, and all such a role can produce is a configuration note."
+  ],
+  "description": "Assigns an implementation role to every (story, codeline) pair.",
+  "id": "assign-agent-roles",
+  "seams": [
+    "role-assigner"
+  ],
+  "placeholders": [
+    "__ROLE_BLOCK__",
+    "__STORY_BLOCK__"
+  ],
+  "version": 1,
+  "body": "Assign an implementation agent role to every story below.\n\nAVAILABLE ROLES — these are this project's own engineering roles. Choose from these and\nnothing else; the name you return must match one of them verbatim:\n__ROLE_BLOCK__\n\nSTORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:\n__STORY_BLOCK__\n\nPick the role whose stated expertise actually covers the work the story describes. If two\nroles could plausibly own a story, prefer the one whose brief names the surface the story\ntouches.\n\nTHE UNIT OF ASSIGNMENT IS A (STORY, CODELINE) PAIR, NOT A STORY. A story listing three\ncodelines needs THREE assignments — the repositories differ, so the right owner can differ.\nCount the codelines listed against each story and return exactly that many assignments for it,\nnaming the codeline on every one. A story is not assigned until every codeline it lists is.\n\nTHE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —\nthe one whose brief names those files or directories. A role whose brief is about settings in\na vendor's console, or about documentation, cannot deliver a story here: the agent's output is\na change in a repository. Live 2026-08-07: this story went to the one role of three that owned\nno source files, and all such a role can produce is a configuration note. Where the story needs\nboth console configuration and code, "
+}

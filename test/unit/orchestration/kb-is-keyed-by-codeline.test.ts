@@ -88,21 +88,33 @@ describe('nothing writes the roster after the mint', () => {
     ).toBeNull();
   });
 
-  it('the skill target appends to a KB file instead', () => {
-    expect(SRC).toMatch(/_skill_kb_file=\$\(_kb_file_for_story/);
-    expect(SRC).toMatch(/survives into later runs/);
+  // INVERTED 2026-08-12. These three tests asserted that skill notes were APPENDED to
+  // agents/KB-<codeline>.md and "survive into later runs". That behaviour is now forbidden:
+  //
+  //   Operator: "agent kb files = remove all after every run - there can be no lingering
+  //   anything to skew runs. That is strictly forbidden."
+  //
+  // A test that goes RED when the system is FIXED is backwards, and these did exactly that —
+  // they ratified the write instead of the requirement. What they were really protecting (the
+  // note must not be lost, and concurrent lanes must not corrupt the file) is preserved: the
+  // note still reaches this run's agents via profile skill notes, and a file nobody writes
+  // cannot be corrupted by three lanes at once.
+
+  it('NOTHING appends to a cross-run KB file — by pattern, not by known variable name', () => {
+    // BY PATTERN. The first removal pass grepped for the two variable names it already knew
+    // and reported "0 remaining"; $_sx_kb_file survived it and kept writing for another hour.
+    const appends = SRC.match(/>>\s*"\$[A-Za-z_]*kb[A-Za-z_]*"/gi) || [];
+    expect(appends, `cross-run KB append(s) are back: ${appends.join(', ')}`).toEqual([]);
   });
 
-  it('the syntax-escalation path does too, under a lock', () => {
-    expect(SRC).toMatch(/_sx_kb_file=\$\(_kb_file_for_story/);
-    const i = SRC.indexOf('_sx_kb_file=$(_kb_file_for_story');
-    expect(SRC.slice(i, i + 700), 'the second writer is unguarded again').toMatch(/flock/);
+  it('and nothing truncate-writes one either', () => {
+    const writes = SRC.match(/(?<!>)>\s*"\$[A-Za-z_]*kb[A-Za-z_]*"/gi) || [];
+    expect(writes, `cross-run KB write(s) are back: ${writes.join(', ')}`).toEqual([]);
   });
 
-  it('both suppress duplicates before appending', () => {
-    for (const v of ['_skill_kb_file', '_sx_kb_file']) {
-      const i = SRC.indexOf(`${v}=$(_kb_file_for_story`);
-      expect(SRC.slice(i, i + 500), `${v} appends duplicates`).toMatch(/grep -qF/);
-    }
+  it('the skill note still reaches THIS run — removing the write must not silently drop it', () => {
+    // The failure mode of over-correcting: delete the persistence and the note goes nowhere at
+    // all, which is a capability loss disguised as a cleanup.
+    expect(SRC).toMatch(/applied to this run only/i);
   });
 });

@@ -15,6 +15,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 const fs = require('node:fs');
 const path = require('node:path');
+// The prompt renderer. Required HERE, with the other top-level imports, because module-level
+// prompt constants below render at load time -- placed lower it is a temporal-dead-zone error.
+const { renderEngineTemplate } = require('./lib/engine-prompt.js');
 const os = require('node:os');
 const { spawn, execSync } = require('node:child_process');
 // Lazily loaded: this file is executed from an ISOLATED COPY by some callers
@@ -380,27 +383,18 @@ function publishedContracts(repoPath, story) {
 
   const done = Array.isArray(story && story.codelines) ? story.codelines : [];
   const parts = [];
-  for (const f of files.slice(0, 4)) {
+  for (const f of files) {
     let body = '';
-    try { body = fs.readFileSync(path.join(dir, f), 'utf8').slice(0, 4000); } catch { continue; }
+    try { body = fs.readFileSync(path.join(dir, f), 'utf8'); } catch { continue; }
     if (body.trim()) parts.push(`### ${f.replace(/\.md$/, '')}\n${body}`);
   }
   if (!parts.length) return '';
 
-  return `
-
-## Published contracts from codelines that already ran
-${done.length ? `This story spans ${done.length} codelines (${done.join(', ')}). ` : ''}\
-The following is the exported surface of work already completed elsewhere for this story.
-
-${parts.join('\n\n')}
-
-THE CAUSE MAY NOT BE IN THIS REPOSITORY. When a value arrives here already wrong,
-the defect is upstream and the fix belongs there — a defensive check at this
-boundary hides it and will pass every test you can write here. If what you see
-contradicts a contract above, say so and name the other codeline rather than
-prescribing a local workaround. There is always SOME line in this repository that
-consumes the wrong value; naming it is not the same as finding the cause.`;
+  // RENDERED FROM THE TEMPLATE LAYER.
+  return renderEngineTemplate('spec-context-fragments', {
+    __SPANS_SENTENCE__: done.length ? `This story spans ${done.length} codelines (${done.join(', ')}). ` : '',
+    __CONTRACTS__: parts.join('\n\n'),
+  }, 'published_contracts')
 }
 
 /**
@@ -451,26 +445,10 @@ function unreachableExternalsConstraint(env = process.env) {
   const hosts = String(env.EPAM_MOCK_EXTERNAL_CMS_HOSTS || '')
     .split(',').map((h) => h.trim()).filter(Boolean);
   if (!hosts.length) return '';
-  return `
-
-UNREACHABLE EXTERNAL SERVICE — write criteria to the boundary, not past it.
-This project cannot reach the following hosts at test time: ${hosts.join(', ')}.
-There are no credentials for them and no local substitute, so any criterion that
-asserts their real behaviour is unprovable and will fail verification no matter
-how correct the code is.
-
-Write criteria that stop at OUR side of that boundary and are therefore provable:
-what request our code makes, with what parameters, under what conditions; how it
-handles the responses and failures those services can return; what it renders or
-returns given a known response. State the assumption explicitly, e.g. "given the
-<service> client is mocked, ...", so a reader knows the claim's limits.
-
-SCOPE — this applies ONLY to the hosts listed above. Every other integration
-keeps its real coverage: internal APIs, this codeline's own services, databases,
-and anything else reachable are exercised for real exactly as normal. Do NOT mock
-a dependency merely because mocking it would be more convenient. Removing
-coverage from something we CAN test trades a real defect for a green tick, which
-is the opposite of why this constraint exists.`;
+  // RENDERED FROM THE TEMPLATE LAYER.
+  return renderEngineTemplate('spec-context-fragments', {
+    __HOSTS__: hosts.join(', '),
+  }, 'unreachable_externals')
 }
 
 function fetchExistingCodeContext(story) {
@@ -769,7 +747,9 @@ const MINIMAX_TOOL_TIMEOUT_MS = parseInt(process.env.MINIMAX_TOOL_TIMEOUT_MS || 
 async function callMiniMaxWithTool(prompt, toolDef, logPath, itemsKey) {
   const apiKey = process.env.MINIMAX_API_KEY || process.env.EPAM_API_KEY_MINIMAX;
   if (!apiKey) throw new Error('callMiniMaxWithTool: no API key (MINIMAX_API_KEY / EPAM_API_KEY_MINIMAX)');
-  const model = process.env.AI_MODEL || process.env.ORCH_GATE_MODEL || 'MiniMax-M3';
+  // The caller's explicit AI_MODEL, else this seam's ladder position. No vendor name here.
+  const model = process.env.AI_MODEL || seamStartModel('spec-coordinator');
+  if (!model) throw new Error('callMiniMaxWithTool: no model resolved from the spec-coordinator seam ladder');
   const baseURL = process.env.MINIMAX_BASE_URL || MINIMAX_BASE_URL;
 
   const body = {
@@ -1194,7 +1174,12 @@ function specModeDefaults() {
     return v;
   };
   const perSeam = tc.perSeam && typeof tc.perSeam === 'object' ? tc.perSeam : {};
-  return { perAgent: need('perAgent'), perCodelineSurvey: need('perCodelineSurvey'), perSeam };
+  // Passed through, not validated with need(): a call made at no seam is the only consumer, and
+  // runClaudeTimeoutMs reports a missing declaration itself with the precedence spelled out.
+  const timeouts = (cfg && cfg.timeouts && typeof cfg.timeouts === 'object') ? cfg.timeouts : {};
+  return {
+    perAgent: need('perAgent'), perCodelineSurvey: need('perCodelineSurvey'), perSeam, timeouts,
+  };
 }
 
 function surveyToolBudget(codelines, env = process.env) {
@@ -1283,15 +1268,15 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
     const logName = (logPath || '').toLowerCase();
     let specModel;
     if (logName.includes('speckit')) {
-      specModel = process.env.SPEC_MODE_SPECKIT_MODEL || 'z-ai/glm-5.2';
+      specModel = process.env.SPEC_MODE_SPECKIT_MODEL || seamStartModel('spec-agent');
     } else if (logName.includes('openspec') || logName.includes('-openspec-') || logName.includes('-spec.log')) {
       // Brownfield investigation requires tracing call chains through unfamiliar code —
       // use the HIGH model as the base so archaeology doesn't fall back to generation.
       specModel = (process.env.EPAM_BROWNFIELD === '1' && process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH)
         ? process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH
-        : process.env.SPEC_MODE_OPENSPEC_MODEL || 'z-ai/glm-5.2';
+        : process.env.SPEC_MODE_OPENSPEC_MODEL || seamStartModel('spec-agent');
     } else {
-      specModel = process.env.SPEC_MODE_MODEL || process.env.SPEC_MODE_OPENSPEC_MODEL || 'z-ai/glm-5.2';
+      specModel = process.env.SPEC_MODE_MODEL || process.env.SPEC_MODE_OPENSPEC_MODEL || seamStartModel('spec-agent');
     }
     console.log(`spec-mode: fast-path ${specModeProvider}/${specModel} (skipping MiniMax)`);
     const directExec = { cmd: execSpec.cmd, args: ['--provider', specModeProvider, '--model', specModel] };
@@ -1299,7 +1284,7 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
     // than the implementation default (4096) so speckit never truncates mid-JSON.
     // SPEC_MODE_MAX_OUTPUT_TOKENS is spec-only; it doesn't affect implementation runs.
     const specEnv = Object.assign(specAgentEnv(process.env, repoPath), envOverride || {});
-    const output = await runClaude(directExec, prompt, logPath, specEnv, { costAgent: tag, costStoryId: storyId });
+    const output = await runClaude(directExec, prompt, logPath, specEnv, { costAgent: costLabelFor(tag, specEnv), costStoryId: storyId });
     return _validatedOrNull(extractTaggedJson(output, tag), tag);
   }
 
@@ -1328,7 +1313,7 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
     // which always wins. Without this fix the ladder calls MiniMax again.
     const ladderExec = { cmd: execSpec.cmd, args: ['--provider', ladderProvider] };
     const output = await Promise.race([
-      runClaude(ladderExec, prompt, logPath, envOverride || {}, { costAgent: tag, costStoryId: storyId }),
+      runClaude(ladderExec, prompt, logPath, envOverride || {}, { costAgent: costLabelFor(tag, envOverride), costStoryId: storyId }),
       new Promise((_, reject) => setTimeout(() => reject(new Error(`ladder hard-timeout after ${ladderTimeout}ms`)), ladderTimeout + 5000))
     ]);
     return _validatedOrNull(extractTaggedJson(output, tag), tag);
@@ -1342,7 +1327,7 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
   // and ai-run.sh forces --no-tools without AI_GATE_ALLOW_TOOLS. The agent could then only
   // classify a URL from its address; its `quotes` field could never be populated, which is
   // the whole reason the step exists. Silent, and invisible in the output.
-  const output = await runClaude(execSpec, prompt, logPath, envOverride || {}, { costAgent: tag, costStoryId: storyId });
+  const output = await runClaude(execSpec, prompt, logPath, envOverride || {}, { costAgent: costLabelFor(tag, envOverride), costStoryId: storyId });
   return _validatedOrNull(extractTaggedJson(output, tag), tag);
 }
 
@@ -1474,28 +1459,11 @@ async function run() {
     2
   );
 
-  const coordinatorPrompt = `${specCoordinatorProfile ? specCoordinatorProfile + '\n\n' : ''}You are the EPAM CLI specification coordinator agent for phase ${opts.phase}.
-
-Decide which specification agents should run for each story below.
-Available agents and their roles:
-  - openspec: Elaborates requirements — refines AC, proposes story splits, adds technical depth
-  - speckit: Reviews & hardens — adds testability criteria, security checks, edge cases, flags gaps
-
-Agent collaboration model:
-  - If both are assigned, openspec runs FIRST, then speckit reviews openspec's output
-  - Assign both for complex/critical stories
-  - Assign only openspec for simple elaboration
-  - Assign only speckit for stories that just need test/security hardening
-
-Respond with raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
-[
-  {"storyId":"EPAM-123","agents":["openspec","speckit"],"notes":"reason","priority":"high"}
-]
-If a story does not need spec work, provide an empty agents array.
-
-Stories JSON:
-${storiesPayload}
-`;
+  const coordinatorPrompt = renderEngineTemplate('spec-coordinator', {
+    __PROFILE_PREFIX__: specCoordinatorProfile ? specCoordinatorProfile + '\n\n' : '',
+    __PHASE__: opts.phase,
+    __STORIES_PAYLOAD__: storiesPayload,
+  });
 
   let assignments = null;
   try {
@@ -1506,7 +1474,11 @@ ${storiesPayload}
       'SPEC_ASSIGNMENTS',
       path.join(logDir, `spec-coordinator-${opts.phase}.log`),
       'assignments',
-      `phase:${opts.phase}`   // phase-level agent — no single story owns it
+      `phase:${opts.phase}`, // phase-level agent — no single story owns it
+      // THE SEAM, asked for. This call passed no env, so it ran with no ladder, no budget
+      // and no tool grant — the settings sat in the registry reaching nothing.
+      '',
+      { ...seamInvocationEnv('spec-coordinator', logDir), EPAM_AGENT_NAME: 'spec-coordinator' },
     );
   } catch (error) {
     console.warn('spec-mode: coordinator failed, falling back to default agent pair:', error.message);
@@ -2137,78 +2109,21 @@ ${storiesPayload}
     const isBrownfieldReview = process.env.EPAM_BROWNFIELD === '1';
     const reviewPayload = buildReviewPayload(specifiedStories, isBrownfieldReview, prd.stories || [], logDir, opts.phase);
 
-    const reviewCriteria = isBrownfieldReview
-      ? `For each story, evaluate the quality of the collaborative spec work:
-1. Did both agents add meaningful, non-overlapping value?
-2. Flag any story needing human review.
-3. PLAN ALIGNMENT — where planAlignmentEvidence is present, it tells you what the
-   code-graph-detective SAID it would investigate (detectivePlan) and a deterministic,
-   cheap signal (aligned: true/false) for whether the final fixSiteAnalysis shares any
-   named symbol/file with that plan. This signal is NOT your verdict — it is evidence, the
-   same as MANIFEST EVIDENCE below. A plan can legitimately turn out wrong once real
-   exploration starts. Read detectivePlan and fixSiteAnalysis yourself and judge: did the
-   detective explain WHY it moved from its plan to its final answer (a stated pivot,
-   reasoning that connects the two), or did the answer just change with no explanation?
-   The latter is a real defect (a fix has shipped that shared no term with the detective's
-   own stated plan, with no explanation, more than once on the same ticket) — set
-   planAlignment to justified_deviation when the detective justifies its pivot, or
-   unexplained_mismatch when it does not, and say why in reviewNotes. aligned:true needs
-   no action.
+    // RENDERED FROM THE TEMPLATE LAYER. Brownfield drops the acceptance-criteria and split
+    // checks deliberately: both are moot when the AC array is empty by policy, and asked anyway
+    // the reviewer reported the empty array as a defect and lowered qualityScore for it.
+    const reviewCriteria = renderEngineTemplate(
+      'spec-review-criteria', {}, isBrownfieldReview ? 'brownfield' : 'greenfield');
 
-(Brownfield tickets never split and their acceptance criteria are immutable —
-do not evaluate split quality or AC completeness; there is nothing there for
-either agent to have changed.
-
-EXPECTED, NOT A DEFECT: an agent's notes may describe acceptance criteria it
-authored while the story's acceptanceCriteria array is empty, and report
-acceptanceChanged=false. That is this pipeline REDACTING them on purpose: on a
-brownfield ticket the ACs are the ticket's own, and a thin ticket legitimately
-has none. The observable checks live in verificationCriteria — judge THOSE.
-Do not report the mismatch as a hallucination, a persistence failure or a
-metadata inconsistency, and do not lower qualityScore for it. An empty
-acceptanceCriteria array on a brownfield story is correct by policy.)`
-      : `For each story, evaluate the quality of the collaborative spec work:
-1. Did both agents add meaningful, non-overlapping value?
-2. Are the acceptance criteria complete, testable, and non-overlapping?
-3. Are story splits logical and properly scoped?
-4. Flag any story needing human review.`;
-
-    const reviewPrompt = `${specCoordinatorProfile ? specCoordinatorProfile + '\n\n' : ''}You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase ${opts.phase}.
-
-Each story was processed by a sequential agent pipeline:
-  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
-  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
-
-${reviewCriteria}
-
-MANIFEST EVIDENCE (checked against the repository, not asserted):
-${manifestEvidence(specifiedStories, prd)}
-${codelineScopeBlock(prd, specifiedStories)}
-
-${MANIFEST_GROUNDING_BLOCK}
-
-QUALITY SCORE — what the number has to mean. It is enforced: below 0.7 halts the run
-before implementation, so an unanchored guess stops real work.
-  0.9-1.0  the spec is ready to implement; criteria are observable and the file set fits.
-  0.7-0.89 ready to implement, with ordinary open questions a competent writer resolves.
-  0.5-0.69 NOT ready: something concrete is wrong or missing — criteria that cannot be
-           observed, a file set that cannot deliver what is described, contradictions.
-  below 0.5 the spec would send a writer somewhere useless.
-Score what IS in front of you. Do NOT lower the score because an agent could not read the
-source files, or because a human "might want to check" — that is true of every ticket and
-is not a defect in this spec. If your notes cannot name something concretely wrong, the
-score belongs at 0.7 or above.
-
-Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
-[
-  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[{"flag":"short-slug","severity":"blocking|advisory","why":"what you checked and what you found"}],"planAlignment":"aligned|justified_deviation|unexplained_mismatch|not_applicable"}
-]
-
-Stories to review:
-${reviewPayload}
-
-<SPEC_REVIEW>
-</SPEC_REVIEW>`;
+    const reviewPrompt = renderEngineTemplate('spec-coordinator-review', {
+      __PROFILE_PREFIX__: specCoordinatorProfile ? specCoordinatorProfile + '\n\n' : '',
+      __PHASE__: opts.phase,
+      __REVIEW_CRITERIA__: reviewCriteria,
+      __MANIFEST_EVIDENCE__: manifestEvidence(specifiedStories, prd),
+      __CODELINE_SCOPE__: codelineScopeBlock(prd, specifiedStories),
+      __MANIFEST_GROUNDING__: MANIFEST_GROUNDING_BLOCK,
+      __REVIEW_PAYLOAD__: reviewPayload,
+    });
 
     let reviews = null;
     try {
@@ -2219,7 +2134,11 @@ ${reviewPayload}
         'SPEC_REVIEW',
         path.join(logDir, `spec-coordinator-review-${opts.phase}.log`),
         'items',
-        `phase:${opts.phase}`   // phase-level agent — no single story owns it
+        `phase:${opts.phase}`, // phase-level agent — no single story owns it
+        // THE SEAM, asked for. This call passed no env, so it ran with no ladder, no budget
+        // and no tool grant — the settings sat in the registry reaching nothing.
+        '',
+        { ...seamInvocationEnv('spec-coordinator', logDir), EPAM_AGENT_NAME: 'spec-coordinator' },
       );
     } catch (error) {
       console.warn('spec-mode: coordinator review failed:', error.message);
@@ -2312,8 +2231,10 @@ ${reviewPayload}
   // isValidModelString() accepted it as "known valid" by construction, so no
   // validation ever caught it (found live 2026-07-13: SKY-001 assigned
   // anthropic/claude-sonnet-4-6, failed 8/8 attempts, aborted the phase).
-  const upgradeModel = process.env.ORCH_UPGRADE_MODEL || 'MiniMax-M3';
-  const miniModel    = process.env.ORCH_MINI_MODEL    || 'MiniMax-M2.5';
+  // The ladder's own rungs: mid is the upgrade target, base is the cheap one. Naming models
+  // here made the engine decide what "upgrade" means for a project it knows nothing about.
+  const upgradeModel = process.env.ORCH_UPGRADE_MODEL || seamStartModel('impl-failure-analyst');
+  const miniModel    = process.env.ORCH_MINI_MODEL    || seamStartModel('ac-classification');
   // Ceiling model for veryHighComplexity stories — "the most appropriate
   // high model," reusing the SAME strongest-configured-model concept the
   // Rung3+ watchdog fallback already uses (EPAM_FINAL_FALLBACK_MODEL), so
@@ -2368,51 +2289,13 @@ ${reviewPayload}
         };
       });
 
-    const modelReviewPrompt = `${specCoordinatorProfile ? specCoordinatorProfile + '\n\n' : ''}You are the EPAM CLI model assignment coordinator for phase ${opts.phase}.
-
-A rule-based pass has already assessed every story's model assignment. Your job is to make the FINAL decision on each story's model — confirming rule recommendations, overriding them when wrong, and catching any false negatives the rules missed.
-
-## Available model tiers
-- **mini-tier** (fast, lower cost): ${miniModel}
-  Best for: simple tasks, small outputs, <8 ACs, modifying existing code, writing single focused functions
-  Risk: will timeout or fail on large generation tasks (>1500 output tokens in one turn)
-
-- **standard-tier** (higher capability): ${upgradeModel}
-  Best for: large single-file generation, 10+ ACs, HTML/UI files, self-contained complete modules
-  Use when: story needs to generate >1000 tokens reliably in one turn
-
-## Your decision criteria
-UPGRADE to standard-tier when:
-- Story must generate a large, complete artifact (full HTML page, large TypeScript module) in one agent turn
-- Story has >12 ACs targeting a single file output — generation load exceeds mini-tier reliability
-- Description uses "self-contained", "complete", "no build step" — indicates large monolithic output
-- Story involves HTML/CSS/JS UI generation — models smaller than standard-tier produce inconsistent results
-
-KEEP mini-tier when:
-- Story modifies existing code or adds small targeted functions
-- Output is small (<500 tokens estimated), well-scoped, and narrowly defined
-- Story primarily writes tests against already-specified contracts
-- AC count is high but spread across multiple small files, not one large generation
-
-IMPORTANT: A false negative (keeping mini when standard is needed) wastes 5+ minutes per attempt and burns 2 retries. A false positive (upgrading when mini would work) costs ~$0.01 extra. Err toward upgrading for borderline cases.
-
-## Stories to assess
-${JSON.stringify(storyContextForReview, null, 2)}
-
-Respond with JSON between <MODEL_REVIEW> and </MODEL_REVIEW>:
-[
-  {
-    "storyId": "...",
-    "finalModel": "keep-current | <model-string>",
-    "override": true/false,
-    "confidence": "high|medium|low",
-    "reason": "one sentence"
-  }
-]
-Use "keep-current" to accept the current (possibly rule-upgraded) model. Only provide a model string when changing it.
-
-<MODEL_REVIEW>
-</MODEL_REVIEW>`;
+    const modelReviewPrompt = renderEngineTemplate('spec-model-review', {
+      __PROFILE_PREFIX__: specCoordinatorProfile ? specCoordinatorProfile + '\n\n' : '',
+      __PHASE__: opts.phase,
+      __MINI_MODEL__: miniModel,
+      __UPGRADE_MODEL__: upgradeModel,
+      __STORY_CONTEXT__: JSON.stringify(storyContextForReview, null, 2),
+    });
 
     let llmDecisions = null;
     try {
@@ -2423,7 +2306,11 @@ Use "keep-current" to accept the current (possibly rule-upgraded) model. Only pr
         'MODEL_REVIEW',
         path.join(logDir, `spec-model-review-${opts.phase}.log`),
         'items',
-        `phase:${opts.phase}`   // phase-level agent — no single story owns it
+        `phase:${opts.phase}`, // phase-level agent — no single story owns it
+        // THE SEAM, asked for. This call passed no env, so it ran with no ladder, no budget
+        // and no tool grant — the settings sat in the registry reaching nothing.
+        '',
+        { ...seamInvocationEnv('spec-coordinator', logDir), EPAM_AGENT_NAME: 'spec-coordinator' },
       );
     } catch (err) { llmDecisions = null; }
     if (Array.isArray(llmDecisions)) {
@@ -2737,11 +2624,9 @@ function preserveDefectAcceptanceCriteria(payload, story, env = process.env) {
 // about what counts as "observable" — the disagreement that made AMSD-1820 loop
 // forever (producer emitted an internal "confirmation data" response field as a VC;
 // reviewer flagged that same field as a mechanism; regen re-emitted it; → fallback).
-const AC_PRESCRIPTIVENESS_RULE = `An acceptance criterion states WHAT MUST BE TRUE for the story to be done, observed from outside the implementation. It NEVER dictates the code that produces it.
-An acceptance criterion is FORBIDDEN if it names a specific library, framework, test double, API call, import, or code construct the implementation must use. Naming a required OUTCOME is correct; naming the machinery that achieves it is not.`;
+const AC_PRESCRIPTIVENESS_RULE = renderEngineTemplate('spec-authoring-rules', {}, 'ac_prescriptiveness');
 
-const SEARCH_TERM_RULE = `A search term is USEFUL when it names something that exists in the repository being searched — a symbol, function, file, module, or a domain noun the code itself uses. It is NOISE when it names the ticket's packaging rather than its subject: routing tags, brand or product labels, ticket prefixes, status words, people, or generic prose.
-Return as BLACKLIST every candidate that names packaging rather than subject, or that resolves to nothing in the index. Return as WHITELIST the terms that name the capability or code under discussion.`;
+const SEARCH_TERM_RULE = renderEngineTemplate('spec-authoring-rules', {}, 'search_term');
 
 /**
  * vcFormSamples(env) — worked examples of FORM for the VC producer, supplied PER PROJECT.
@@ -2779,12 +2664,7 @@ function vcFormSamples(env = process.env) {
   }
 }
 
-const VC_OBSERVABILITY_RULES = `A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
-A verification criterion is FORBIDDEN if it:
-- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
-- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
-- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
-Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.`;
+const VC_OBSERVABILITY_RULES = renderEngineTemplate('spec-authoring-rules', {}, 'vc_observability');
 
 // Validate + normalize the verification criteria openspec produced: an array of
 // non-empty strings. Kept separate so a malformed payload never corrupts the story.
@@ -2957,15 +2837,53 @@ function partitionFlaggedVc(vc, flags) {
 // ladder escalation across attempts, retries, provider fallback and self-heal. Nothing
 // about resilience is re-implemented here.
 //
+// THE CODE EVIDENCE BLOCK, whole.
+//
+// This used to read `findings.slice(0, 8)` with each `reason` cut at 300 chars. Both cuts
+// removed ground truth from the only block the prompt calls ground truth — the 9th finding
+// simply did not exist to the model, and a reason naming a literal past char 300 arrived
+// severed. Extracted so it can be EXECUTED by a test; inlined, its only reachable assertion
+// was a source-text grep, which passes on a comment.
+function buildGuardEvidence(findings) {
+  return (Array.isArray(findings) ? findings : [])
+    .map((f) => `- ${f.file || ''}${f.function ? ` :: ${f.function}` : ''}${f.reason ? ` — ${String(f.reason)}` : ''}${f.helper ? ` [existing helper: ${f.helper}]` : ''}`)
+    .join('\n');
+}
+
+/**
+ * The guard-vocabulary prompt. Extracted verbatim from deriveGuardVocabulary so its
+ * migration into the template layer can be proven byte-for-byte.
+ */
+function buildGuardVocabularyPrompt({ persona, seam, rule, _statements, manifest, docBlock, evidence, story, codegraphTool, repoPath }) {
+  // RENDERED FROM THE TEMPLATE LAYER. Four sections are conditional and are assembled here:
+  // present, each points the agent at real evidence; absent, the prompt must not carry an
+  // empty heading implying evidence exists. A template cannot branch.
+  return renderEngineTemplate('guard-vocabulary', {
+    __PERSONA_PREFIX__: persona ? persona + '\n\n' : '',
+    __SEAM__: seam || 'unspecified',
+    __RULE__: rule,
+    __STATEMENT_LIST__: _statements.map((c, i) => `${i + 1}. ${c}`).join('\n'),
+    __MANIFEST__: manifest || '- (none declared)',
+    __DOC_SECTION__: docBlock
+      ? renderEngineTemplate('guard-vocabulary-documentation', { __DOC_BLOCK__: docBlock })
+      : '',
+    __EVIDENCE__: evidence || '- (none available)',
+    __STORY_TITLE__: (story && story.title) || '',
+    __STORY_DESCRIPTION__: String((story && story.description) || ''),
+    __CODEGRAPH_SECTION__: codegraphTool && repoPath
+      ? renderEngineTemplate('guard-vocabulary-codegraph', { __REPO_PATH__: repoPath, __CODEGRAPH_TOOL__: codegraphTool })
+      : '',
+  });
+}
+
+
 // Returns a normalised vocabulary, or null. NULL IS NOT "NOTHING TO FLAG" — callers must
 // treat it as "the guard could not be armed" and say so loudly.
 async function deriveGuardVocabulary({ promptExec, rule, statements, story, findings, manifestFiles, logDir, seam, repoPath, codegraphTool, referencedDocs }) {
   const _statements = (Array.isArray(statements) ? statements : []).filter(Boolean);
   if (!_statements.length) return null;
 
-  const evidence = (Array.isArray(findings) ? findings : []).slice(0, 8)
-    .map((f) => `- ${f.file || ''}${f.function ? ` :: ${f.function}` : ''}${f.reason ? ` — ${String(f.reason).slice(0, 300)}` : ''}${f.helper ? ` [existing helper: ${f.helper}]` : ''}`)
-    .join('\n');
+  const evidence = buildGuardEvidence(findings);
   const manifest = (Array.isArray(manifestFiles) ? manifestFiles : []).map((f) => `- ${f}`).join('\n');
 
   // DOCUMENTATION LINKED ON THIS TICKET — evidence for a judgement no rule can make.
@@ -2992,49 +2910,7 @@ async function deriveGuardVocabulary({ promptExec, rule, statements, story, find
   })();
   const persona = profiles['guard-vocabulary-agent'] || '';
 
-  const prompt = `${persona ? persona + '\n\n' : ''}GUARD SEAM: ${seam || 'unspecified'}
-
-THE RULE THIS GUARD ENFORCES:
-${rule}
-
-THE STATEMENTS THE GUARD WILL CHECK:
-${_statements.map((c, i) => `${i + 1}. ${c}`).join('\n')}
-
-DECLARED MANIFEST (the files this story says it will touch):
-${manifest || '- (none declared)'}
-
-${docBlock ? `DOCUMENTATION LINKED ON THIS TICKET (fetched and quoted verbatim — the vendor's published contract):
-${docBlock}
-
-A name that appears above is something the VENDOR publishes, not something this team chose.
-Do NOT flag it when a statement uses it to describe OBSERVABLE behaviour — what a user or a
-test can see happen. DO still flag it when the statement asserts the shape or contents of an
-INTERNAL object, argument or call, even if the name itself is documented: that is an
-implementation detail wearing a published name.
-
-` : ''}CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):
-${evidence || '- (none available)'}
-
-STORY CONTEXT:
-Title: ${(story && story.title) || ''}
-Description: ${String((story && story.description) || '')}
-${codegraphTool && repoPath ? `
-VERIFY BEFORE YOU ANSWER — you have a real index of this repository.
-
-  PROJECT_ROOT="${repoPath}" bash "${codegraphTool}" query <SymbolName>
-  PROJECT_ROOT="${repoPath}" bash "${codegraphTool}" explore <terms>
-
-Run it via Bash. A candidate term that resolves to NOTHING in this index is noise and
-belongs in the blacklist, however unusual the word looks. Do not assert that a term is
-meaningful — check it.
-
-WHY THIS MATTERS HERE: the list you return feeds a BM25/IDF ranker. That ranker DEMOTES
-terms which are common in the corpus and AMPLIFIES terms which are rare. So a rare,
-meaningless token — a bracketed brand tag, a ticket label, a person's name — is not
-diluted, it is promoted to a top discriminator and drags the search away from the real
-code. Rare-and-meaningless is the failure mode you exist to prevent; do not mistake
-rarity for signal.
-` : ''}`;
+  const prompt = buildGuardVocabularyPrompt({ persona, seam, rule, _statements, manifest, docBlock, evidence, story, codegraphTool, repoPath });
 
   // Real tools when there is a repo to check against — the agent must VERIFY a candidate
   // term, not assert it. Inherits ladder/retry/self-heal from runAgentForJson like every
@@ -3046,16 +2922,44 @@ rarity for signal.
   // on every lane. The guards are right to refuse to run unarmed; the answer should never
   // have been lost in the first place. The schema the agent is asked for is now the schema
   // the provider enforces, from the same object.
+  // EVERY CALL SITE AT ONCE. The detective's site passed `opts.promptExec || null` and no caller
+  // ever supplied one, so this agent never ran; the null was dereferenced inside runAgentForJson
+  // and the TypeError read as a considered fallback. Resolving here means no call site can hand
+  // this agent something it cannot invoke, including the next one written.
   const payload = await runAgentForJson(
-    promptExec, prompt, TOOL_GUARD_VOCABULARY, 'GUARD_VOCABULARY',
+    promptExecFor({ promptExec }), prompt, TOOL_GUARD_VOCABULARY, 'GUARD_VOCABULARY',
     logDir ? path.join(logDir, `${(story && story.id) || 'phase'}-guard-vocabulary.log`) : null,
     null, (story && story.id) || '', _repo,
-    { EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_GUARD_VOCABULARY),
-      ...seamInvocationEnv('guard-vocabulary', logDir) },
+    // The identity travels with the seam: ai-run.sh keys the ladder and the self-heal KB on
+    // EPAM_AGENT_NAME, so without it this agent's constraints and episodes are filed under
+    // whatever ran before it.
+    { ...seamInvocationEnv('guard-vocabulary', logDir),
+      EPAM_AGENT_NAME: 'guard-vocabulary',
+      EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_GUARD_VOCABULARY) },
   );
   if (!payload) return null;
   const vocab = normaliseVocabulary(payload);
-  return isVocabularyUsable(vocab) ? vocab : null;
+  if (isVocabularyUsable(vocab)) return vocab;
+
+  // THE ANSWER IS NOT THROWN AWAY. An unusable vocabulary used to become a bare `null`, so the
+  // only trace of it was a caller's "no usable terms" line — and the one thing needed to say WHY
+  // (an empty blacklist? terms with no reason? a shape the normaliser dropped?) was the payload
+  // that had just been discarded. Live 2026-08-17, MOCK3-2: unusable, unexplained, unrecoverable.
+  // Same rule as the cost anomaly dump — a failure that destroys its own evidence cannot be
+  // diagnosed, only guessed at.
+  if (logDir) {
+    try {
+      const dump = path.join(logDir,
+        `vocabulary-unusable-${(story && story.id) || 'phase'}-${seam || 'unknown'}.json`);
+      if (!fs.existsSync(dump)) {
+        fs.writeFileSync(dump, JSON.stringify({
+          storyId: (story && story.id) || '', seam: seam || '', rule,
+          statements: _statements, payload, normalised: vocab,
+        }, null, 2));
+      }
+    } catch { /* diagnostics must never take the run down */ }
+  }
+  return null;
 }
 
 // ── DET-1: the estate survey — breadth before the roster ───────────────────
@@ -3082,7 +2986,20 @@ rarity for signal.
 // work over a file that is a phantom there. The schema therefore has no such fields, and
 // sanitizeSurvey() strips them if a model volunteers them anyway. Its remedy is always
 // "investigate this codeline", never "here is the answer for it".
-const SURVEY_STATES = ['in_scope', 'no_work_found', 'not_investigated', 'failed'];
+// THE SURVEY'S VOCABULARY, DEFINED ONCE AND NAMED BY MEANING.
+//
+// The four states were a bare array, so every consumer that needed one restated the string —
+// validateSurveyFilesRead carried 'in_scope' and 'not_investigated' of its own, and a rename in
+// the schema would have left it silently checking states that no longer exist. Naming them by
+// what they MEAN also stops a reader having to remember that "no_work_found" and
+// "not_investigated" are different claims: one looked, the other did not.
+const SURVEY_STATE = {
+  examined: 'in_scope',
+  lookedAndFoundNothing: 'no_work_found',
+  didNotLook: 'not_investigated',
+  triedAndFailed: 'failed',
+};
+const SURVEY_STATES = Object.values(SURVEY_STATE);
 
 // Fix-site vocabulary. Present so the sanitizer can PROVE the parent never emitted one —
 // three states are not enough if a fourth arrives smuggled inside a survey entry.
@@ -3096,7 +3013,7 @@ const TOOL_ESTATE_SURVEY = {
     'to look, not what to change. Do not answer in prose.',
   parameters: {
     type: 'object',
-    required: ['codelines', 'recommendedInvestigators'],
+    required: ['codelines', 'recommendedInvestigators', 'recommendedWriters'],
     properties: {
       codelines: {
         type: 'array',
@@ -3157,6 +3074,37 @@ const TOOL_ESTATE_SURVEY = {
           },
         },
       },
+      // THE SURVEY COULD ONLY EVER STAFF FOR LOOKING.
+      //
+      // recommendedInvestigators was the only team output, and it is iterated straight into the
+      // mint's context — so the mint saw N recommendations to investigate and none to build.
+      // Live 2026-08-17, run 20260817T171347Z: two stories to fix, two investigators minted,
+      // projectRoles [], and the run died at assignment with nobody to write a line of code.
+      //
+      // The coupling was perverse, which is why it surfaced only once the survey started working:
+      // a WEAK survey gave a weak investigator signal and the mint guessed 'implementer' for some
+      // roles; a CORRECT, richly investigator-focused survey made it label everything
+      // 'investigator'. Improving the survey made the roster worse.
+      //
+      // This still may never name a fix site — that constraint is what keeps one codeline's
+      // evidence out of another's writer manifest, and sanitizeSurvey strips those keys here
+      // exactly as it does above. "Someone who can write X" names no file and leaks nothing.
+      recommendedWriters: {
+        type: 'array',
+        description:
+          'Which codelines need an agent that WRITES the change, and what each should be able to '
+          + 'build. A recommendation about the TEAM, like the investigators above — and like them, '
+          + 'never a fix site: say what kind of work this codeline needs, never which file to edit.',
+        items: {
+          type: 'object',
+          required: ['codeline', 'focus', 'why'],
+          properties: {
+            codeline: { type: 'string' },
+            focus: { type: 'string', description: 'The kind of work this codeline needs written.' },
+            why: { type: 'string', description: 'What you saw that makes this codeline need one.' },
+          },
+        },
+      },
     },
   },
 };
@@ -3191,7 +3139,7 @@ function sanitizeSurvey(payload, codelines) {
         `survey entry for "${raw.codeline}" carried fix-site field(s) ${stripped.join(', ')} — ` +
         'the estate survey reports WHERE TO LOOK, never what to change; dropped');
     }
-    const _state = SURVEY_STATES.includes(raw.state) ? raw.state : 'not_investigated';
+    const _state = SURVEY_STATES.includes(raw.state) ? raw.state : SURVEY_STATE.didNotLook;
     const _read = Array.isArray(raw.filesRead)
       ? raw.filesRead.filter((f) => typeof f === 'string' && f.trim())
       : [];
@@ -3220,8 +3168,12 @@ function sanitizeSurvey(payload, codelines) {
     }
   }
 
-  const recommendedInvestigators =
-    (payload && Array.isArray(payload.recommendedInvestigators) ? payload.recommendedInvestigators : [])
+  // BOTH TEAM RECOMMENDATIONS ARE SANITISED THE SAME WAY. Rebuilt field by field rather than
+  // passed through, so a fix site volunteered on either one cannot survive: only codeline, focus
+  // and why are copied, and everything else — file, function, fix, locationHint — is dropped by
+  // construction. A new team field must never become a fourth contamination route.
+  const _teamRecs = (list) =>
+    (Array.isArray(list) ? list : [])
       .filter((r) => r && typeof r.codeline === 'string'
         && (!offered.length || offered.includes(r.codeline)))
       .map((r) => ({
@@ -3230,7 +3182,12 @@ function sanitizeSurvey(payload, codelines) {
         why: typeof r.why === 'string' ? r.why : '',
       }));
 
-  return { codelines: [...byName.values()], recommendedInvestigators, violations };
+  const recommendedInvestigators = _teamRecs(payload && payload.recommendedInvestigators);
+  const recommendedWriters = _teamRecs(payload && payload.recommendedWriters);
+
+  return {
+    codelines: [...byName.values()], recommendedInvestigators, recommendedWriters, violations,
+  };
 }
 
 /**
@@ -3255,6 +3212,7 @@ function sanitizeSurvey(payload, codelines) {
  * wording — it forbade naming a file at all, conflating evidence with prescription — and no
  * test could see that while the string was welded inside a 150-line function.
  */
+
 function buildSurveyPrompt({ codelines, tickets, referencedDocs, declaredDependencies } = {}) {
   const _cls = (Array.isArray(codelines) ? codelines : []).filter(Boolean);
   const _named = _cls.map((c) => (typeof c === 'string' ? { name: c } : c)).filter((c) => c && c.name);
@@ -3293,91 +3251,17 @@ function buildSurveyPrompt({ codelines, tickets, referencedDocs, declaredDepende
   const depBlock = (Array.isArray(declaredDependencies) ? declaredDependencies : [])
     .map((d) => `- ${d}`).join('\n');
 
-  return `You are surveying an estate of repositories BEFORE its agent team is assembled.
-
-THE WORK (real tickets from the tracker):
-${ticketBlock || '- (no tickets available)'}
-
-${docBlock ? `DOCUMENTS LINKED ON THOSE TICKETS:\n${docBlock}\n` : ''}
-${depBlock ? `WHAT EACH CODELINE DECLARES IT DEPENDS ON (its own manifest — ground truth about\nthe stack, not inference from ticket text):\n${depBlock}\n` : ''}
-THE CODELINES IN SCOPE, and where each is checked out:
-${_named.map((c) => `- ${c.name}: ${c.path || '(path unknown)'}`).join('\n')}
-
-HOW TO LOOK — USE THE SYMBOL INDEX, NOT TEXT SEARCH.
-
-Every codeline above is already indexed in CodeGraph. Use codegraph_query as your PRIMARY
-instrument, and call it iteratively — 5-10 calls is normal:
-  - codegraph_query explore "<domain nouns from the ticket>"  — START HERE, per codeline
-  - codegraph_query query|callers|callees "<symbol>"          — trace what explore surfaced
-  - codegraph_query show "<file> [start] [end]"               — read the real lines before
-                                                                quoting anything as evidence
-It returns real symbols, their definition sites, who calls them, and which have tests. That is
-the question you are actually asking: where does this codeline wire the thing the ticket is
-about. Text search cannot answer it and ranks a vendored copy of a package alongside the one
-line that initialises it.
-
-Reserve 'search' for what a symbol index cannot hold — a config key, an environment variable
-name, a literal string. Then treat its result with suspicion:
-
-  A SEARCH THAT RETURNS NOTHING IS NOT EVIDENCE THAT NOTHING IS THERE.
-
-On 2026-08-08 this survey reported "searched for seven patterns, all returned zero matches, no
-existing infrastructure was found, meaning this is greenfield work" about three codelines
-holding 243, 102 and 158 matching source files. The search tool was silently broken and every
-call returned "(no matches found)". The reasoning was sound and the premise was false. If a
-search comes back empty, confirm with codegraph_query before concluding absence — and if the
-two disagree, say so in your evidence rather than picking one.
-
-YOUR JOB, and its limits:
-
-1. For EVERY codeline above, OPEN IT and decide whether this work reaches it. The ticket's
-   labels and components are a claim, not evidence — they are frequently wrong about which
-   repositories are involved, which is why you exist. Report what you actually looked at.
-
-2. "I looked and this work does not reach this codeline" is a VALUABLE answer. Report it as
-   no_work_found, with the evidence. It is not the same as not having looked, and reporting
-   the two as one is how an unexamined repository comes to read as a clean bill of health.
-
-3. Recommend which codelines need their own investigator agent, and what each should focus on.
-   Keep that recommendation OUT of your findings: findings are what you saw, recommendations
-   are about the team.
-
-REPORT THE EXACT FILES YOU OPENED, in "filesRead". If you report a codeline as in_scope you
-must name AT LEAST ONE FILE you opened in it: saying the work reaches a repository you did not
-read is an assertion, and an assertion of exactly that kind produced "no existing
-infrastructure, this is greenfield work" about an estate with 243 matching source files.
-Looking and finding nothing is different, and is a valuable answer — report that as
-no_work_found with what you read. A directory tells a later reader almost
-nothing — src/context/ exists in most codelines — and a claim about it cannot be checked. A
-file path can be verified, and a brief built on one is grounded. Report what you read even
-where you conclude the work does not reach that codeline.
-
-WHAT YOU MUST NOT DO. You are not fixing anything and you are not choosing files to change.
-Do not say which file to edit, which function to patch, or what the change should be. Naming a
-file as something you READ is evidence and is wanted; naming one as the place to fix is a
-decision that is not yours. Each codeline gets its own investigator working inside that
-repository, and it decides. A fix site you supply for a repository you swept from the outside
-is how one codeline's file ends up in another's work — so report what you saw, state where to
-look, and let the investigator look.
-
-Respond with ONLY valid JSON (no markdown fences, no report, no commentary before or after):
-{
-  "codelines": [
-    {
-      "codeline": "<exactly as named in scope above>",
-      "state": "in_scope | no_work_found | not_investigated | failed",
-      "evidence": "<what you opened and what you saw>",
-      "surfaces": ["<directory or module>"],
-      "filesRead": ["<exact path of a file you opened>"]
-    }
-  ],
-  "recommendedInvestigators": [
-    { "codeline": "<name>", "focus": "<what it should concentrate on>", "why": "<what you saw>" }
-  ]
-}
-
-One entry in "codelines" for EVERY codeline listed in scope. Everything you want to say goes
-inside these fields — a prose report outside this JSON is discarded unread, however good it is.`;
+  // RENDERED FROM THE TEMPLATE LAYER, never from a string in this file. The conditional
+  // sections are computed here — whole, heading included, or empty — because a template that
+  // branches is a program and cannot be reviewed as prose.
+  return renderEngineTemplate('estate-survey', {
+    __TICKET_BLOCK__: ticketBlock || '- (no tickets available)',
+    __DOC_SECTION__: docBlock ? `DOCUMENTS LINKED ON THOSE TICKETS:\n${docBlock}\n` : '',
+    __DEP_SECTION__: depBlock
+      ? `WHAT EACH CODELINE DECLARES IT DEPENDS ON (its own manifest — ground truth about\nthe stack, not inference from ticket text):\n${depBlock}\n`
+      : '',
+    __CODELINE_BLOCK__: _named.map((c) => `- ${c.name}: ${c.path || '(path unknown)'}`).join('\n'),
+  });
 }
 
 async function surveyEstate({
@@ -3385,11 +3269,15 @@ async function surveyEstate({
 }) {
   const _cls = (Array.isArray(codelines) ? codelines : []).filter(Boolean);
   const _named = _cls.map((c) => (typeof c === 'string' ? { name: c } : c)).filter((c) => c && c.name);
-  if (!_named.length) return { codelines: [], recommendedInvestigators: [], violations: [], ran: false };
+  if (!_named.length) return { codelines: [], recommendedInvestigators: [], recommendedWriters: [], violations: [], ran: false };
 
   const prompt = buildSurveyPrompt({ codelines: _named, tickets, referencedDocs, declaredDependencies });
 
-  const _env = { EPAM_AGENT_NAME: 'estate-surveyor', EPAM_SEAM: 'estate-survey' };
+  // THE IDENTITY IS THE SEAM. This paired 'estate-surveyor' with EPAM_SEAM 'estate-survey',
+  // and EPAM_SEAM is written here and read NOWHERE — resolution goes through EPAM_AGENT_NAME
+  // alone. So the seam looked declared while the agent resolved to nothing and ran with no
+  // ladder and no budget, against a profile that had been written for it all along.
+  const _env = { ...seamInvocationEnv('estate-survey', logDir), EPAM_AGENT_NAME: 'estate-survey' };
   if (toolGrant) {
     _env.AI_GATE_ALLOW_TOOLS = '1';
     _env.EPAM_ALLOWED_TOOLS = toolGrant;
@@ -3412,11 +3300,15 @@ async function surveyEstate({
     process.stderr && process.stderr.write(`[survey] ${reason}\n`);
     return {
       codelines: _named.map((c) => ({ codeline: c.name, state: 'failed', evidence: reason, surfaces: [] })),
-      recommendedInvestigators: [], violations: [], ran: false, error: String(err && err.message),
+      recommendedInvestigators: [], recommendedWriters: [], violations: [], ran: false, error: String(err && err.message),
     };
   }
 
   const clean = sanitizeSurvey(payload, _named);
+  // The survey is persisted AS THE AGENT REPORTED IT. A validator used to rewrite it here,
+  // downgrading claims whose files did not exist — silently editing an agent's output, which is
+  // worse than reporting on it. Falsifying its claims is survey-review's job now, and that
+  // reviewer reports findings rather than changing what it reviewed.
   const result = { ...clean, ran: true };
 
   // Persisted at generation time. What the roster was grounded in has to outlive the process
@@ -3435,6 +3327,25 @@ async function surveyEstate({
 // The shape of a proposal. The SDK's proposeAgents() asks for exactly these three fields;
 // this binds them so the answer arrives parsed instead of as prose the pipeline has to
 // guess at (the failure that lost the guard-vocabulary answer on 2026-08-06).
+/**
+ * The permitted name shapes, in one sentence, from the same registry the mint's prompt rule is
+ * derived from. Falls back to naming no shape at all rather than inventing one: a description
+ * that guesses is how the three copies drifted apart in the first place.
+ */
+function mintNameShapeDescription() {
+  let vocab = null;
+  try {
+    vocab = require(path.join(__dirname, '..', '..', 'dist', 'sdk.js')).mintNameVocabulary();
+  } catch (_) { /* fall through */ }
+  if (!vocab || !Object.keys(vocab).length) {
+    return 'kebab-case role name, "<domain>-<suffix>", with the suffix required for its kind';
+  }
+  const parts = Object.keys(vocab).sort()
+    .map((k) => `${k}: ${vocab[k].map((sx) => `-${sx}`).join(' or ')}`);
+  return `kebab-case "<domain>-<suffix>". The suffix is fixed by the kind — ${parts.join('; ')}. `
+    + 'A name ending any other way cannot be routed to a seam.';
+}
+
 const TOOL_PROJECT_AGENTS = {
   name: 'submit_project_agents',
   description:
@@ -3451,7 +3362,12 @@ const TOOL_PROJECT_AGENTS = {
           type: 'object',
           required: ['name', 'kind', 'codeline', 'systemPrompt', 'rationale'],
           properties: {
-            name: { type: 'string', description: 'kebab-case role name, e.g. "<domain>-engineer"' },
+            // DERIVED, LIKE THE PROMPT'S RULE. This description used to read 'e.g.
+            // "<domain>-engineer"' — a third copy of a vocabulary the registry owns, alongside
+            // the template's own 'ending in "-engineer" or "-specialist"', which offered a shape
+            // resolveSeam throws on. Both now come from the registry's seamPatterns, so the
+            // schema cannot describe a name the pipeline refuses to route.
+            name: { type: 'string', description: mintNameShapeDescription() },
             kind: {
               type: 'string',
               enum: ['implementer', 'investigator'],
@@ -3553,7 +3469,22 @@ function reconcileMintTally(r) {
   const stillRejected = new Set((res.rejected || []).map((x) => x && x.name));
   const superseded = (res.rejectedAcrossAttempts || [])
     .filter((x) => x && !stillRejected.has(x.name)).length;
-  const unaccounted = Math.max(0, proposed - minted - unchanged - rejected - superseded);
+  // EVERY PROPOSAL EVENT HAS EXACTLY ONE OUTCOME: minted, unchanged, or refused.
+  //
+  // This subtracted `rejected` (UNIQUE names still refused) and `superseded` as if both were
+  // buckets. `proposed` counts proposal EVENTS across attempts, so an agent refused on two
+  // attempts consumed two proposals but was subtracted once — and `superseded` double-counted,
+  // because a superseded proposal's refusal is already in rejectedAcrossAttempts and its later
+  // success is already in `minted`.
+  //
+  // Live 2026-08-17, run 20260817T162132Z: proposed=5 minted=3 rejected=1 superseded=0 left
+  // UNACCOUNTED=1, which was mockb-codebase-investigator's SECOND refusal, not a lost agent.
+  // 3 minted + 0 unchanged + 2 refusal events = 5.
+  //
+  // `rejected` and `superseded` remain in the report as descriptors — which agents are still
+  // refused, and which were corrected on a later attempt — but only refusal EVENTS are subtracted.
+  const refusalEvents = Math.max(len(res.rejectedAcrossAttempts), rejected);
+  const unaccounted = Math.max(0, proposed - minted - unchanged - refusalEvents);
   return { proposed, minted, unchanged, rejected, superseded, unaccounted };
 }
 
@@ -3562,6 +3493,7 @@ async function mintProjectAgents({
   declaredDependencies, codelines, toolGrant, correctiveFindings, retainedAgents, estateSurvey,
 }) {
   const { mergeProjectAgents } = require('./lib/agent-roster.js');
+  const { retryUntilParsedAsync } = require('./lib/content-retry.js');
 
   let basePrompt = '';
   let fixedRoles = [];
@@ -3711,6 +3643,26 @@ async function mintProjectAgents({
               `- ${r.codeline}: focus on ${String(r.focus || '').replace(/\s+/g, ' ')}` +
               `${r.why ? ` (because ${String(r.why).replace(/\s+/g, ' ')})` : ''}`),
             '']
+         : []),
+       // THE OTHER HALF OF THE TEAM, WHICH THIS PROMPT NEVER MENTIONED.
+       //
+       // The block above tells the model "Propose one per codeline named here" for investigators
+       // and said nothing whatever about the roles that write the change. That is the strongest
+       // form of the bias: an explicit instruction to staff for looking, with no counterpart.
+       //
+       // Live 2026-08-17, run 20260817T171347Z: every proposed role came back kind
+       // 'investigator', projectRoles was empty, and the run died at assignment with nobody to
+       // write a line of code. The better the survey got, the worse the roster got — a weak
+       // survey gave a weak investigator signal and the mint guessed 'implementer' for some.
+       ...(_sv.recommendedWriters && _sv.recommendedWriters.length
+         ? ['AND — also a recommendation about the TEAM — the survey reports these codelines need',
+            'work WRITTEN, not merely read. An investigator cannot change code; every story is',
+            'assigned to an implementer, so propose at least one implementer that can build this:',
+            '',
+            ..._sv.recommendedWriters.map((r) =>
+              `- ${r.codeline}: must be able to write ${String(r.focus || '').replace(/\s+/g, ' ')}` +
+              `${r.why ? ` (because ${String(r.why).replace(/\s+/g, ' ')})` : ''}`),
+            '']
          : [])].join('\n')
     : '';
 
@@ -3784,12 +3736,7 @@ ${docBlock ? `DOCUMENTATION LINKED ON THESE TICKETS (fetched, quoted verbatim �
 ${docBlock}
 
 ` : ''}${codelineBlock}
-${toolGrant ? `You have READ-ONLY tools (${toolGrant}). Use them: open the manifests, find the modules
-this work touches, and VERIFY any API or package you are about to name in a brief actually
-exists in these repositories. A vendor's documentation describes its current product; these
-codelines pin the versions they pin, and where the two disagree the repository wins. A brief
-that names a symbol the installed package does not export sends an implementer to write code
-against something that is not there.` : `You have NO tools on this call — you cannot open these
+${toolGrant ? renderEngineTemplate('roster-tool-grant', { __TOOL_GRANT__: toolGrant }) : `You have NO tools on this call — you cannot open these
 repositories. Reason only from what is written above, and say in the rationale when a claim
 rests on documentation rather than on this codebase.`}
 
@@ -3853,19 +3800,53 @@ Do not propose a role that duplicates one of the canonical roles already listed 
   // SDK, taken on the vendor documentation's word because nothing could check it.
   //
   // Read-only by construction: no bash, no write_file. This stage has no story scope.
-  const _mintEnv = { EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_PROJECT_AGENTS) };
+  const _mintEnv = {
+    ...seamInvocationEnv('agent-mint', logDir),
+    EPAM_AGENT_NAME: 'agent-mint',
+    EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_PROJECT_AGENTS),
+  };
   if (toolGrant) {
     _mintEnv.AI_GATE_ALLOW_TOOLS = '1';
     _mintEnv.EPAM_ALLOWED_TOOLS = toolGrant;
   }
-  const payload = await runAgentForJson(
-    promptExec, prompt, TOOL_PROJECT_AGENTS, 'PROJECT_AGENTS',
-    logDir ? path.join(logDir, 'project-agents-mint.log') : null,
-    null, '', repoPath || '',
-    _mintEnv,
-  );
-
-  const proposals = (payload && Array.isArray(payload.proposedAgents)) ? payload.proposedAgents : [];
+  // AN UNPARSEABLE ANSWER IS NOT A DEAD RUN — AND THE RETRY BELOW CANNOT SEE ONE.
+  //
+  // The correction loop further down fires on `result.rejected.length`: proposals that PARSED and
+  // then failed the contract. A response that does not parse yields zero proposals AND zero
+  // rejections, so the loop never runs and the mint returns an empty roster.
+  //
+  // Live 2026-08-17, run 20260817T180859Z. The model answered correctly — three well-formed
+  // agents including the implementer this stage exists to produce — and 19 characters were
+  // dropped mid-stream: 'mocka-fares-investigator","rationale' arrived as 'mocka-fares-inale'.
+  // Unparseable JSON, proposed=0, and the run died with a perfect answer in the log.
+  //
+  // Same class as the discovery vocabulary agent: the call SUCCEEDS and the content is unusable,
+  // which neither ai-run.sh's transport retry nor the contract loop below covers. Corruption is
+  // transient by nature, so asking again is the entire remedy.
+  let _mintAttempt = 0;
+  const proposals = await retryUntilParsedAsync({
+    what: 'agent-mint proposals',
+    attempts: Number(process.env.EPAM_CONTENT_RETRY_ATTEMPTS || 3),
+    log: (m) => process.stderr.write(`${m}\n`),
+    call: async () => {
+      _mintAttempt += 1;
+      return runAgentForJson(
+        promptExec, prompt, TOOL_PROJECT_AGENTS, 'PROJECT_AGENTS',
+        logDir ? path.join(logDir, `project-agents-mint${_mintAttempt > 1 ? `-parse${_mintAttempt}` : ''}.log`) : null,
+        null, '', repoPath || '',
+        _mintEnv,
+      );
+    },
+    parse: (payload) => {
+      if (!payload) return { ok: false, reason: 'the response could not be parsed as JSON at all' };
+      if (!Array.isArray(payload.proposedAgents)) {
+        return { ok: false, reason: 'the response had no "proposedAgents" array' };
+      }
+      // An EMPTY array is a valid answer only if there is genuinely nothing to propose; the
+      // caller decides that. Parsing succeeded, so this is not a content-retry concern.
+      return { ok: true, value: payload.proposedAgents };
+    },
+  });
 
   // PERSIST WHAT WAS PROPOSED, NOT A COUNT OF IT.
   //
@@ -4027,7 +4008,7 @@ const TOOL_ROSTER_REVIEW = {
     properties: {
       verdict: {
         type: 'string',
-        enum: ['sound', 'defects_found'],
+        enum: ['sound', 'defects_found', 'nothing_to_review'],
         description: 'sound = every checkable claim held. defects_found = at least one did not.',
       },
       findings: {
@@ -4098,6 +4079,90 @@ const TOOL_ROSTER_REVIEW = {
 };
 
 /**
+ * The roster reviewer's prompt. Extracted verbatim from reviewRoster so its migration into
+ * the template layer can be proven byte-for-byte — a prompt built inline cannot be called by
+ * a test, and an unprovable migration is how a reworded prompt ships unnoticed.
+ */
+/**
+ * WHAT THIS RUN NEEDS THE TEAM TO PRODUCE, AND WHO CAN PRODUCE IT.
+ *
+ * Handed to the roster reviewer so it can see the one defect a member-by-member review never
+ * can: an absence. A roster of well-formed agents that cannot do the work reads as sound, because
+ * every agent it was shown was fine — live 2026-08-17, two investigators and no implementer,
+ * "sound - 0 finding(s), 0 blocking", dead at assignment.
+ *
+ * ENTIRELY DERIVED. The registry declares which artefacts a seam REQUIRES, which seam PRODUCES
+ * each, which kind each name-shape rule serves, and engineProduces lists what the pipeline
+ * supplies rather than an agent. No role, kind or artefact is named here — add a seam tomorrow and
+ * the block covers it without an edit. That is the difference between informing a reviewer and
+ * hardcoding a rule it must obey.
+ */
+/** The invocation registry, read where coverage needs it. */
+function readRegistryForCoverage() {
+  const si = require('./lib/seam-invocation.js');
+  return JSON.parse(fs.readFileSync(si.registryPath(), 'utf8'));
+}
+
+function rosterCoverageBlock(minted, registry) {
+  const P = (registry && registry.profiles) || {};
+  const fromEngine = new Set((registry && registry.engineProduces) || []);
+  const patterns = Array.isArray(registry && registry.seamPatterns) ? registry.seamPatterns : [];
+
+  const required = new Set();
+  for (const p of Object.values(P)) {
+    for (const c of (p && p.consumes) || []) if (c && c.required && c.kind) required.add(c.kind);
+  }
+
+  // Artefacts a MINTED agent is the one to produce: those whose producing seam is reachable by a
+  // kind rule. Everything else comes from a canonical agent that is always present.
+  const kindsFor = new Map();
+  for (const rule of patterns) {
+    if (!rule || !rule.kind || !rule.seam) continue;
+    const made = P[rule.seam] && P[rule.seam].produces;
+    if (!made) continue;
+    if (!kindsFor.has(made)) kindsFor.set(made, new Set());
+    kindsFor.get(made).add(rule.kind);
+  }
+
+  const roster = Array.isArray(minted) ? minted : [];
+  const haveKinds = new Set(roster.map((a) => a && a.kind).filter(Boolean));
+
+  const lines = [];
+  for (const kind of [...required].filter((k) => !fromEngine.has(k) && kindsFor.has(k))) {
+    const canMake = [...kindsFor.get(kind)];
+    const who = roster.filter((a) => canMake.includes(a && a.kind))
+      .map((a) => `${a.name} [${a.kind}]`);
+    lines.push(`- ${kind}: produced by ${canMake.join(' or ')} — this roster has `
+      + (who.length ? who.join(', ') : 'NOBODY'));
+  }
+  if (!lines.length) return '- (this run requires nothing a minted agent must produce)';
+  return lines.join('\n');
+}
+
+function buildRosterReviewPrompt({ persona, briefBlock, clBlock, ticketBlock, docBlock, toolLine, coverageBlock }) {
+  // RENDERED FROM THE TEMPLATE LAYER. The documentation section is assembled here because it
+  // is conditional prose — present, it points the reviewer at the vendor's own text; absent,
+  // it tells the reviewer that any vendor claim is unverifiable. A template cannot branch.
+  return renderEngineTemplate('roster-review', {
+    __PERSONA__: persona,
+    __BRIEF_BLOCK__: briefBlock,
+    __COVERAGE_BLOCK__: coverageBlock || '- (coverage could not be derived)',
+    __CODELINE_BLOCK__: clBlock || '- (none resolved)',
+    __TICKET_BLOCK__: ticketBlock || '- (no tickets available)',
+    __DOC_SECTION__: docBlock
+      ? 'THE DOCUMENTATION THESE BRIEFS WERE DERIVED FROM (fetched from the ticket\'s own links):\n'
+        + docBlock
+        + '\n\nWhere a brief follows this documentation into something the pinned version does not '
+        + 'have, the documentation is right about the product and wrong about these repositories. '
+        + 'Say which, so the remedy is the version-correct instruction rather than a deletion.'
+      : 'No documentation was fetched for this ticket — briefs resting on vendor knowledge have '
+        + 'nothing here to be checked against, and any such claim must be verified against the '
+        + 'repositories or reported as unverifiable.',
+    __TOOL_LINE__: toolLine,
+  });
+}
+
+/**
  * reviewRoster — the only adversary the roster has.
  *
  * Every other stage of this pipeline has one: the spec pass has a reviewer and a guard, the
@@ -4114,11 +4179,132 @@ const TOOL_ROSTER_REVIEW = {
  * Read-only tools, the same grant as the mint. It exists to falsify claims, so it must be able to
  * check them; it must never be able to change what it reviews.
  */
+/**
+ * FALSIFY THE SURVEY BEFORE A ROSTER IS MINTED FROM IT.
+ *
+ * The survey decides which codelines the work reaches and seeds every investigator brief, and
+ * nothing consumed it for review — no seam declared it as an input, so its claims reached the
+ * roster unchallenged. Live 2026-08-17: a codeline was reported in_scope on a file it does not
+ * contain, and an implementer was briefed to fix that codeline's defect in a repository with no
+ * such code.
+ *
+ * A generated prompt already gets exactly this before any agent inherits it. This is that
+ * reviewer, pointed at the survey, and it runs BEFORE the mint — reviewing afterwards would report
+ * on claims the roster has already absorbed.
+ *
+ * Never fatal, and it never edits the survey. It returns findings; what the mint does with them is
+ * the mint's decision. A reviewer that rewrites what it reviews is worse than one that reports.
+ */
+async function reviewSurvey({
+  promptExec, survey, codelines, tickets, logDir, repoPath, toolGrant,
+}) {
+  // A survey that did not run has nothing to falsify; findings about a failure are findings about
+  // nothing.
+  if (!survey || survey.ran !== true || !Array.isArray(survey.codelines) || !survey.codelines.length) {
+    return { findings: [], reviewed: 0, ran: false };
+  }
+
+  const _named = (Array.isArray(codelines) ? codelines : []).filter((c) => c && c.name && c.path);
+  const surveyBlock = survey.codelines.map((c) => [
+    `- ${c.codeline}: ${c.state}`,
+    c.evidence ? `  evidence: ${String(c.evidence).replace(/\s+/g, ' ')}` : '',
+    (c.filesRead || []).length ? `  filesRead: ${(c.filesRead || []).join(', ')}` : '',
+  ].filter(Boolean).join('\n')).join('\n');
+
+  const prompt = renderEngineTemplate('survey-review', {
+    __PERSONA__: 'You are reviewing an estate survey before a team is assembled from it.',
+    __SURVEY_BLOCK__: surveyBlock,
+    __CODELINE_BLOCK__: _named.map((c) => `- ${c.name} (${c.path})`).join('\n') || '- (none)',
+    __TICKET_BLOCK__: (Array.isArray(tickets) ? tickets : [])
+      .map((t) => `- ${t.jiraKey || t.id}: ${t.title || ''}`).join('\n') || '- (none)',
+    __TOOL_LINE__: toolGrant
+      ? 'You may open any file in the codelines above to check a claim.'
+      : 'You have no tools; report only what the text itself contradicts.',
+  });
+
+  const env = {
+    ...seamInvocationEnv('survey-review', logDir),
+    EPAM_AGENT_NAME: 'survey-review',
+  };
+  if (toolGrant) { env.AI_GATE_ALLOW_TOOLS = '1'; env.EPAM_ALLOWED_TOOLS = toolGrant; }
+
+  try {
+    // AN ANSWER THAT DOES NOT PARSE IS NOT A CLEAN REVIEW.
+    //
+    // This read `payload && Array.isArray(payload.findings) ? ... : []` and then reported
+    // `ran: true` over every codeline. Live 2026-08-18 the reviewer replied in prose —
+    // "Unexpected token 'I', \"I opened a\"..." — and the mint logged "survey review: 0
+    // finding(s) across 2 codeline(s)", which is exactly what a reviewer that examined both and
+    // approved them says. Nothing downstream could tell the two apart.
+    //
+    // A prose answer is a CONTENT failure and the pipeline already has the remedy: tell the model
+    // which contract it broke and ask again. Only when the retries are spent does the survey end
+    // UNREVIEWED — and then it says so rather than saying clean.
+    const { retryUntilParsedAsync } = require('./lib/content-retry.js');
+    const findings = await retryUntilParsedAsync({
+      what: 'survey-review',
+      attempts: Number(process.env.EPAM_CONTENT_RETRY_ATTEMPTS || 3),
+      log: (m) => process.stderr.write(`${m}\n`),
+      call: async (note) => runAgentForJson(
+        promptExecFor({ promptExec }), note ? `${note}${prompt}` : prompt,
+        TOOL_SURVEY_REVIEW, 'SURVEY_REVIEW',
+        logDir ? path.join(logDir, 'survey-review.log') : null,
+        null, '', repoPath || '', env,
+      ),
+      parse: (payload) => {
+        if (!payload) return { ok: false, reason: 'the response could not be parsed as JSON at all — a review must arrive inside its tags, not as prose' };
+        if (!Array.isArray(payload.findings)) return { ok: false, reason: 'the response had no "findings" array — an empty array is how a clean review is stated' };
+        return { ok: true, value: payload.findings };
+      },
+    });
+    if (logDir) {
+      try {
+        fs.writeFileSync(path.join(logDir, 'survey-review.json'),
+          JSON.stringify({ findings, reviewed: survey.codelines.length, ran: true }, null, 2));
+      } catch { /* the run must not die for want of an audit file */ }
+    }
+    return { findings, reviewed: survey.codelines.length, ran: true };
+  } catch (err) {
+    // The survey stands unreviewed rather than the run ending: this reviewer exists to catch a
+    // wrong claim, and its own failure is not evidence that a claim was wrong.
+    return { findings: [], reviewed: 0, ran: false, error: String((err && err.message) || err) };
+  }
+}
+
+const TOOL_SURVEY_REVIEW = {
+  name: 'submit_survey_review',
+  description: 'Report claims the estate survey makes that are false about these repositories.',
+  parameters: {
+    type: 'object',
+    required: ['findings'],
+    properties: {
+      findings: {
+        type: 'array',
+        description: 'One entry per FALSE claim. Empty when every claim checks out.',
+        items: {
+          type: 'object',
+          required: ['codeline', 'claim', 'checked', 'found'],
+          properties: {
+            codeline: { type: 'string', description: 'The codeline the claim is about.' },
+            claim: { type: 'string', description: 'What the survey asserted.' },
+            checked: { type: 'string', description: 'What you opened to check it.' },
+            found: { type: 'string', description: 'What was actually there.' },
+          },
+        },
+      },
+    },
+  },
+};
+
 async function reviewRoster({
   promptExec, minted, profiles, codelines, tickets, referencedDocs, logDir, repoPath, toolGrant,
 }) {
   const _minted = Array.isArray(minted) ? minted : [];
-  if (!_minted.length) return { verdict: 'sound', findings: [], reviewed: 0 };
+  // AN EMPTY SET IS NOT SOUND — IT IS UNREVIEWED. Returning 'sound' here reported a clean bill of
+  // health for something nothing examined: zero findings because there was nothing to find. Live
+  // 2026-08-17 a correction cycle cleared both implementers, minted no replacement, and the next
+  // review said "sound" — true of the empty set, and the run died at assignment.
+  if (!_minted.length) return { verdict: 'nothing_to_review', findings: [], reviewed: 0 };
 
   const briefBlock = _minted.map((m) => {
     const brief = (profiles && profiles[m.name]) || '';
@@ -4166,50 +4352,61 @@ async function reviewRoster({
       + 'briefs name. Confirm the files and directories they claim to own exist.'
     : 'You have NO tools on this call. Report only what the text above lets you establish, and say so.';
 
-  const prompt = [
-    persona,
-    '',
-    'THE ROSTER JUST MINTED FOR THIS PROJECT — review every brief below:',
-    '',
-    briefBlock,
-    '',
-    'THE CODELINES THESE BRIEFS DESCRIBE, and what each one declares:',
-    clBlock || '- (none resolved)',
-    '',
-    'THE WORK THE PROJECT WAS ASKED TO DO:',
-    ticketBlock || '- (no tickets available)',
-    '',
-    docBlock
-      ? 'THE DOCUMENTATION THESE BRIEFS WERE DERIVED FROM (fetched from the ticket\'s own links):\n'
-        + docBlock
-        + '\n\nWhere a brief follows this documentation into something the pinned version does not '
-        + 'have, the documentation is right about the product and wrong about these repositories. '
-        + 'Say which, so the remedy is the version-correct instruction rather than a deletion.'
-      : 'No documentation was fetched for this ticket — briefs resting on vendor knowledge have '
-        + 'nothing here to be checked against, and any such claim must be verified against the '
-        + 'repositories or reported as unverifiable.',
-    '',
-    toolLine,
-    '',
-    'Return every defect you can evidence, and nothing you cannot.',
-    '',
-    'Where a finding turns on whether a named dependency or path is present in a codeline, fill in',
-    'the verification field as well as writing the prose. The pipeline re-runs that exact check',
-    'against the repository and DISCARDS any finding the check refutes — so a careless reading',
-    'costs nothing, and a correct one is confirmed independently of how convincingly you argued it.',
-  ].join('\n');
+  // WHAT THE TEAM MUST BE ABLE TO PRODUCE, derived from the registry and handed to the reviewer.
+  // Without it the reviewer sees only briefs and cannot report the one defect that has no brief:
+  // a role nobody minted. See rosterCoverageBlock.
+  let coverageBlock = '';
+  try {
+    coverageBlock = rosterCoverageBlock(_minted, readRegistryForCoverage());
+  } catch { coverageBlock = ''; }
 
+  const prompt = buildRosterReviewPrompt({
+    persona, briefBlock, clBlock, ticketBlock, docBlock, toolLine, coverageBlock,
+  });
+
+  // THE IDENTITY TRAVELS WITH THE SEAM. This relied on the caller having set
+  // process.env.EPAM_AGENT_NAME in another file, so the two could drift apart without either
+  // looking wrong — and they had: the caller announced 'roster-reviewer', which resolved to the
+  // code reviewer's seam. Declared together here, they cannot.
   const env = {
-    EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_ROSTER_REVIEW),
     ...seamInvocationEnv('roster-review', logDir),
+    EPAM_AGENT_NAME: 'roster-review',
+    EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_ROSTER_REVIEW),
   };
   if (toolGrant) { env.AI_GATE_ALLOW_TOOLS = '1'; env.EPAM_ALLOWED_TOOLS = toolGrant; }
 
-  const payload = await runAgentForJson(
-    promptExec, prompt, TOOL_ROSTER_REVIEW, 'ROSTER_REVIEW',
-    logDir ? path.join(logDir, 'roster-review.log') : null,
-    null, '', repoPath || '', env,
-  );
+  // ONE EMPTY RESPONSE MUST NOT COST THE WHOLE RUN.
+  //
+  // runAgentForJson returns null on unparseable or empty output and does NOT retry. The guard
+  // below then refuses — correctly, an unreviewed roster is not a sound one — but that turns a
+  // single flaky response into a dead run, several minutes and several model calls in.
+  //
+  // Live 2026-08-17, mock3: 34KB of prompt in, ZERO bytes out, verdict review_failed, run over.
+  // The same shape killed codeline-discovery an hour earlier ("Empty response from ai-run.sh").
+  // The previous run's reviewer worked on the identical roster, so it is transient, not a defect
+  // in the prompt or the roster.
+  //
+  // A retry here is safe in a way a retry is not everywhere: the reviewer READS and reports, it
+  // writes nothing and mutates nothing, so a second attempt cannot double an effect. What is NOT
+  // retried is a review that ran and returned findings — only one that produced no usable
+  // payload at all. "Found nothing wrong" and "produced nothing" stay different, which is the
+  // whole point of the guard below.
+  const _rrAttempts = Number(process.env.EPAM_ROSTER_REVIEW_ATTEMPTS || 2);
+  let payload = null;
+  for (let _rrTry = 1; _rrTry <= Math.max(1, _rrAttempts); _rrTry += 1) {
+    payload = await runAgentForJson(
+      promptExec, prompt, TOOL_ROSTER_REVIEW, 'ROSTER_REVIEW',
+      logDir ? path.join(logDir, _rrTry === 1 ? 'roster-review.log' : `roster-review-attempt${_rrTry}.log`) : null,
+      null, '', repoPath || '', env,
+    );
+    if (payload && Array.isArray(payload.findings)) break;
+    if (_rrTry < Math.max(1, _rrAttempts)) {
+      process.stderr.write(
+        `[roster-review] attempt ${_rrTry} produced no usable findings — retrying ` +
+        `(${_rrTry + 1}/${Math.max(1, _rrAttempts)}). The reviewer only reads, so a retry cannot ` +
+        'double an effect.\n');
+    }
+  }
 
   // A REVIEW THAT DID NOT RUN IS NOT A CLEAN REVIEW.
   //
@@ -4274,7 +4471,10 @@ async function reviewRoster({
 function buildAssignmentPrompt(stories, roles) {
   const _stories = Array.isArray(stories) ? stories : [];
   const roleBlock = (Array.isArray(roles) ? roles : [])
-    .map((r) => `- ${r.name}\n    ${String(r.brief || '').replace(/\s+/g, ' ').slice(0, 320)}`)
+    // WHOLE, never a prefix. A brief is the role's definition; cutting it at 320 chars
+    // severed rules mid-sentence — and a severed rule reads as a complete one, so the
+    // model acts on the fragment. Whitespace is still collapsed; only the cut is gone.
+    .map((r) => `- ${r.name}\n    ${String(r.brief || '').replace(/\s+/g, ' ').trim()}`)
     .join('\n');
   const storyBlock = _stories
     .map((s) => {
@@ -4293,30 +4493,11 @@ function buildAssignmentPrompt(stories, roles) {
   // story; the run aborted with two lanes unowned after spending its entire retry and ladder
   // budget re-answering a question that had no consistent answer. The old wording is NOT
   // quoted in the prompt below: restating a rejected instruction to the model reintroduces it.
-  return `Assign an implementation agent role to every story below.
-
-AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
-nothing else; the name you return must match one of them verbatim:
-${roleBlock}
-
-STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
-${storyBlock}
-
-Pick the role whose stated expertise actually covers the work the story describes. If two
-roles could plausibly own a story, prefer the one whose brief names the surface the story
-touches.
-
-THE UNIT OF ASSIGNMENT IS A (STORY, CODELINE) PAIR, NOT A STORY. A story listing three
-codelines needs THREE assignments — the repositories differ, so the right owner can differ.
-Count the codelines listed against each story and return exactly that many assignments for it,
-naming the codeline on every one. A story is not assigned until every codeline it lists is.
-
-THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
-the one whose brief names those files or directories. A role whose brief is about settings in
-a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
-a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
-no source files, and all such a role can produce is a configuration note. Where the story needs
-both console configuration and code, the code owner is the assignee.`;
+  // RENDERED FROM THE TEMPLATE LAYER.
+  return renderEngineTemplate('assign-agent-roles', {
+    __ROLE_BLOCK__: roleBlock,
+    __STORY_BLOCK__: storyBlock,
+  });
 }
 
 async function assignAgentRoles({ promptExec, stories, profilesPath, logDir, repoPath, validateOnly }) {
@@ -4365,7 +4546,11 @@ async function assignAgentRoles({ promptExec, stories, profilesPath, logDir, rep
       promptExec, prompt, TOOL_ROLE_ASSIGNMENTS, 'ROLE_ASSIGNMENTS',
       logDir ? path.join(logDir, 'role-assignments.log') : null,
       null, '', repoPath || '',
-      { EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_ROLE_ASSIGNMENTS) },
+      {
+        ...seamInvocationEnv('role-assigner', logDir),
+        EPAM_AGENT_NAME: 'role-assigner',
+        EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_ROLE_ASSIGNMENTS),
+      },
     );
     rows = (payload && Array.isArray(payload.assignments)) ? payload.assignments : [];
   }
@@ -4554,8 +4739,8 @@ async function enforceVerificationCriteria(story, initialVc, opts = {}) {
 // speckit runs (see the escalation ladder at line ~968).
 async function _vcLlmCall(prompt, cycle, logPath, storyId = '', role = 'openspec', repoPath = '') {
   const baseModel = role === 'speckit'
-    ? (process.env.SPEC_MODE_SPECKIT_MODEL_HIGH || process.env.SPEC_MODE_SPECKIT_MODEL || process.env.ESCALATION_MODEL_HIGH || 'z-ai/glm-5.1')
-    : (process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH || process.env.ESCALATION_MODEL_HIGH || 'z-ai/glm-5.1');
+    ? (process.env.SPEC_MODE_SPECKIT_MODEL_HIGH || process.env.SPEC_MODE_SPECKIT_MODEL || seamStartModel('spec-coordinator'))
+    : (process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH || seamStartModel('spec-coordinator'));
   const escalated = ladderNextModel(baseModel, process.env);
   const useEsc = cycle >= 2 && escalated;
   const model = useEsc ? escalated : baseModel;
@@ -4584,6 +4769,36 @@ async function _vcLlmCall(prompt, cycle, logPath, storyId = '', role = 'openspec
     ...toolEnv,
   }, { costAgent: 'vc-agent', costStoryId: storyId, salvageOutputOnFailure: true, timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '450000') });
 }
+/**
+ * Extracted verbatim so its migration can be proven byte-for-byte.
+ */
+function buildVcReviewPrompt({ story, vc }) {
+  return renderEngineTemplate('vc-review', {
+    __AC_LIST__: (story.acceptanceCriteria || []).map((a) => '- ' + a).join('\n') || '- (none)',
+    __STORY_DESCRIPTION__: String(story.description || ''),
+    __VC_LIST__: vc.map((v, i) => `${i + 1}. ${v}`).join('\n'),
+    __OBSERVABILITY_RULES__: VC_OBSERVABILITY_RULES,
+  });
+}
+
+/**
+ * Extracted verbatim so its migration can be proven byte-for-byte.
+ */
+function buildVcRegeneratePrompt({ story, flags, siteBlock, env }) {
+  // The rules constant and the form samples are VALUES, not template text: the guard reads
+  // the same rules, and the samples are a project's own worked examples. Baking either in
+  // would fork it — and the first version of this migration did exactly that with the
+  // samples, silently, because the capture ran with none configured.
+  return renderEngineTemplate('vc-regenerate', {
+    __FLAG_LIST__: flags.map((x) => '- ' + x).join('\n'),
+    __SITE_BLOCK__: siteBlock,
+    __AC_LIST__: (story.acceptanceCriteria || []).map((a) => '- ' + a).join('\n') || '- (none)',
+    __STORY_DESCRIPTION__: String(story.description || ''),
+    __OBSERVABILITY_RULES__: VC_OBSERVABILITY_RULES,
+    __FORM_SAMPLES__: vcFormSamples(env) ? `\n${vcFormSamples(env)}\n` : '',
+  });
+}
+
 function _firstJsonArray(out) {
   const m = out && out.match(/\[[\s\S]*?\]/);
   if (!m) return null;
@@ -4594,24 +4809,7 @@ function _firstJsonArray(out) {
 // that prescribes HOW (mechanism), isn't observable/testable, or fails to cover
 // an AC's intent. Returns an array of flag strings ([] = all clean).
 async function reviewVcViaSpeckit({ story, vc, cycle, logDir }) {
-  const prompt = `You are a STRICT verification-criteria reviewer for a brownfield fix. REVIEW ONLY — do NOT rewrite anything.
-
-Acceptance criteria (IMMUTABLE ticket intent):
-${(story.acceptanceCriteria || []).map((a) => '- ' + a).join('\n') || '- (none)'}
-Description: ${String(story.description || '')}
-
-Proposed verification criteria:
-${vc.map((v, i) => `${i + 1}. ${v}`).join('\n')}
-
-Apply these rules EXACTLY (the producer is held to the same text — do not invent stricter or looser criteria):
-${VC_OBSERVABILITY_RULES}
-
-A criterion may declare a PRECONDITION the test establishes (for example a mocked client
-signalling a change). A declared precondition is NOT implementation prescription — do not flag
-it. Flag what the criterion ASSERTS, not what it sets up.
-
-FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
-Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes <an approach> — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.`;
+  const prompt = buildVcReviewPrompt({ story, vc });
   const out = await _vcLlmCall(prompt, cycle, logDir ? path.join(logDir, `${story.id}-vc-review.log`) : null, story.id, 'speckit', resolveCodelinePath(story));
   const arr = _firstJsonArray(out);
   return Array.isArray(arr) ? arr.filter((x) => typeof x === 'string') : [];
@@ -4627,22 +4825,15 @@ async function regenerateVcViaOpenspec({ story, flags, cycle, logDir, findings =
   // unanchored.
   const siteBlock = Array.isArray(findings) && findings.length
     ? `\nTHE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):\n`
-      + findings.slice(0, 5).map((f) => `- ${f.file}${f.function ? ` :: ${f.function}` : ''}${f.reason ? ` — ${f.reason}` : ''}`).join('\n')
+      // WHOLE, not the first five. These are the detective's findings — the files and
+      // functions the fix must touch — and they are the only reason regenerated criteria are
+      // concrete rather than vague. Capping them silently withheld evidence from the agent
+      // whose vagueness the cap was meant to be fixing.
+      + findings.map((f) => `- ${f.file}${f.function ? ` :: ${f.function}` : ''}${f.reason ? ` — ${f.reason}` : ''}`).join('\n')
       + `\nDo NOT write criteria about areas unrelated to this code.\n`
     : '';
 
-  const prompt = `Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
-${flags.map((f) => '- ' + f).join('\n')}
-${siteBlock}
-
-Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
-${(story.acceptanceCriteria || []).map((a) => '- ' + a).join('\n') || '- (none)'}
-Description: ${String(story.description || '')}
-
-${VC_OBSERVABILITY_RULES}
-${vcFormSamples() ? `\n${vcFormSamples()}\n` : ''}
-Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
-Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.`;
+  const prompt = buildVcRegeneratePrompt({ story, flags, siteBlock });
   const out = await _vcLlmCall(prompt, cycle, logDir ? path.join(logDir, `${story.id}-vc-regen.log`) : null, story.id, 'openspec', resolveCodelinePath(story));
   const arr = _firstJsonArray(out);
   if (!arr) return null;
@@ -4690,35 +4881,14 @@ Instead, PRODUCE`
     : `STEP 3 — VERIFICATION CRITERIA.
 PRODUCE`;
   const archaeologyBlock = isBrownfield
-    ? `\n\nBROWNFIELD MODE — answer as JSON.
-You MAY use read_file on any path named in this prompt (declared files, located fix sites, and any
-document persisted under the run's docs/ directory) when you need more than the excerpt shown.
-Looking is allowed; inventing is not — a file you have neither been shown nor read is a fabrication.
-
-STEP 1 — CLASSIFY THIS STORY. Set "storyKind":
-- "defect" if it reports that EXISTING behavior is wrong, broken, or produces an incorrect/missing result (a bug).
-- "novel" if it asks for a NEW capability that does not exist in the codebase yet. A brownfield story is not always a bug — genuinely new work is "novel".
-
-STEP 2 — LOCATE (always, for both kinds — but the question differs).
-Use ONLY the EXISTING CODE block already present in this prompt (injected above via CodeGraph or Semble).
-
-- If storyKind is "defect": find the FIX SITE — the file/function that COMPUTES the wrong value, not the one that displays it.
-- If storyKind is "novel": there is no fix site, and inventing one produces a confident wrong answer. Find the ATTACHMENT POINT instead — the existing file/function this new capability plugs INTO (the provider, hook, route, config or component it must integrate with), plus anything already present that the implementation should REUSE rather than rewrite. This is what keeps the change as small as possible: you cannot reuse what you have not found.
-
-Set "locationHint" to [{"file":"<repo-relative path>","function":"<function name>","reason":"<why this location — the fix site for a defect, the attachment point for a novel story>"}].
-If no relevant code appears above, set locationHint to []. Do NOT invent a plausible file: a named file whose contents you cannot see in this prompt is a fabrication, and an empty locationHint is a usable answer while a fabricated one is not.
-
-For EACH criterion also declare WHO observes it (end user, tester, api client, operator) and
-WHAT SURFACE they look at — the rendered page, the API response, the CLI output, a generated
-file. If no person or client can see it, it is not a verification criterion. A precondition
-the test establishes (for example a mocked client signalling a change) goes in "setup": that
-is allowed and is not implementation prescription.
-
-${_acPreamble} a "verificationCriteriaDetail" array — concrete, OBSERVABLE checks that confirm the change is correct — derived from ${_sources.join(' AND ')}. Apply these rules to EVERY verification criterion (a strict reviewer holds you to this SAME text, so a VC that breaks any rule will be flagged and rejected):
-${VC_OBSERVABILITY_RULES}${vcFormSamples(env) ? `\n\n${vcFormSamples(env)}\n` : ''}
-- If the ticket describes a SYMPTOM, the VCs verify that symptom is resolved AND that related existing behavior does not regress.
-Set "vcSource" to one of ${_vcSourceValues.split('|').map((v) => `"${v}"`).join(', ')} — where you actually derived the VCs from.${unreachableExternalsConstraint()}
-`
+    ? renderEngineTemplate('spec-brownfield-mode', {
+        __AC_PREAMBLE__: _acPreamble,
+        __SOURCES__: _sources.join(' AND '),
+        __VC_RULES__: VC_OBSERVABILITY_RULES,
+        __VC_FORM_SAMPLES__: vcFormSamples(env) ? `\n\n${vcFormSamples(env)}\n` : '',
+        __VC_SOURCE_VALUES_QUOTED__: _vcSourceValues.split('|').map((v) => `"${v}"`).join(', '),
+        __UNREACHABLE_EXTERNALS__: unreachableExternalsConstraint(),
+      })
     : '';
   const schemaLine = isBrownfield
     ? `\n  "storyKind":"defect|novel",\n  "verificationCriteriaDetail":[{"criterion":"<observable check>","observer":"end user|tester|api client|operator","surface":"<what they look at>","setup":"<optional precondition, e.g. a mocked client signalling a change>"}],\n  "vcSource":"${_vcSourceValues}",\n  "locationHint":[{"file":"path/relative/to/repo","function":"functionName","reason":"why this location — the fix site for a defect, the attachment point it integrates with for a novel story"}],`
@@ -5009,37 +5179,10 @@ function advanceAgentLadderEscalation(logDir, agentName, storyId) {
  * expensive error, and the one the reality anchor exists to prevent.
  */
 function detectivePrescription(kind) {
-  if (kind === 'defect') {
-    return `CONVERGE FAST — HARD LIMIT: 6 tool calls total. This is not a suggestion.
-By your 6th tool call you MUST stop querying and emit the JSON answer with your BEST current hypothesis. Exploring past 6 calls WITHOUT emitting the JSON means you FAIL and every bit of your investigation is thrown away — a best-guess fix site is infinitely better than no answer. If you are unsure, pick the single most likely file/function from what you have seen and emit it now; do NOT keep exploring to be "sure".
-1. First call: \`explore\` with the DOMAIN NOUNS only (drop symptom/presentation words like displayed/shown/email/confirmation/expected).
-2. Look at the top-ranked symbols. If the top hit's file only READS the wrong field (a mapper/sanitizer/display file), do ONE \`callers\` or \`callees\` (or one more \`explore\` toward the mechanism) to reach the code that COMPUTES/ASSIGNS it.
-3. As SOON as you identify a file whose function body actually computes/assigns the wrong value, STOP tracing and switch to prescribing the fix (step 4). Aim to finish tracing in 2-4 tool calls, never more than 6.
-4. PRESCRIBE THE MINIMAL FIX. This is the most important output. For the causal site:
-   - Name the EXACT broken line/expression (e.g. \`lineItem.id === discount.lineItemId\`) and why it is wrong.
-   - State the SMALLEST change that corrects it. Do NOT describe a re-architecture, a new abstraction, or a "split/recalculate/add-a-field" scheme unless the code genuinely has no simpler fix. Prefer a one-line/one-expression change.
-   - LOCATE AN EXISTING HELPER instead of inventing new logic. Before proposing any new function, use \`explore\` (and \`callers\`/\`callees\`) to search for an already-present util/helper/parser in this repo that does the needed transform (e.g. a key parser, id normalizer, formatter). If one exists, your fix MUST name it (exact symbol + its import path) and reuse it. Writing novel code when a helper already exists is a defect.
-
-
-SHOW THE BROKEN CODE — "brokenLine" is REQUIRED and is machine-verified. Quote the EXACT source expression, copied verbatim from the file you name, that is wrong today. It is checked against that file's real contents: if what you quote is not in the file, your answer is rejected as ungrounded and you will be asked again. This is the difference between a diagnosis and a guess — a confident story about code that is not there reads exactly like a correct one until this check runs. If you cannot point at a real line that is wrong, you have not found the cause yet: go back to the tool and trace further.
-
-`;
-  }
-  return `CONVERGE FAST — HARD LIMIT: 6 tool calls total. This is not a suggestion.
-By your 6th tool call you MUST stop querying and emit the JSON answer. A partial map of the attachment points is infinitely better than no answer.
-1. First call: \`explore\` with the DOMAIN NOUNS only (drop symptom/presentation words).
-2. NOTHING IS BROKEN HERE. This story asks for a capability that does not exist yet, so there is no wrong value to trace and no line to quote. Do not hunt for a cause — you will invent one.
-3. FIND EVERY PLACE THIS WORK MUST TOUCH. This is the most important output, and returning only ONE is the known failure of this step. A new capability almost never lands in a single file. Trace the SHAPE of it through this repository, in whatever terms this repository uses:
-   - WHERE IT IS SET UP — the place the thing being enabled is created, configured or registered. Start here.
-   - WHAT CARRIES IT — anything between that setup and the code that uses it: a shared module, a wrapper, an app-wide registration, a passed-down value. There may be none; there may be several.
-   - EVERYWHERE IT IS USED — every place that reads the affected data or must react when it changes. There is usually MORE THAN ONE. Name them all.
-   Do not force this repository into a shape it does not have, and do not skip a place because it has no obvious name. Describe each site in the vocabulary the codebase itself uses, which you have seen in the tool output — not in the vocabulary of some other project's architecture.
-4. COVER THE ACCEPTANCE CRITERIA. Read them again and check your site list against them: every criterion describing observable behaviour needs a site where that behaviour becomes possible. A criterion with no corresponding site means your map is incomplete — go back and find it.
-5. NAME WHAT TO REUSE at each site — whatever already exists there that the implementation should build on rather than duplicating. Use \`explore\`/\`callers\`/\`callees\` to find it; you cannot reuse what you have not found.
-6. \`brokenLine\` is NOT required for this story and must be left "" — there is no broken expression to quote.
-7. DO NOT INVENT A PATH OR A SYMBOL. Your grounding here is provenance, not a quoted line: every file and symbol you name must have been returned to you by a tool. If you believe something exists and the tools did not show it, PROVE it with ripgrep-search.sh before naming it, or report it absent.
-
-`;
+  // RENDERED FROM THE TEMPLATE LAYER. Two bodies, not one prompt with a branch: the two arms say
+  // OPPOSITE things about the most consequential field — brokenLine is required for a defect and
+  // must be empty for novel work — and a branching prompt hides which set an agent received.
+  return renderEngineTemplate('detective-prescription', {}, kind === 'defect' ? 'defect' : 'novel');
 }
 
 /**
@@ -5178,6 +5321,153 @@ function detectiveAnswerIsGrounded({ findings, kind } = {}) {
 // converges on the cause. Returns an array of repo-relative fix-site files
 // (may be empty). Best-effort: any failure (no repo, tool unavailable, parse
 // error, timeout) returns [] so the spec pass proceeds unblocked.
+// Lazy require: this module is loaded by tools that never invoke an agent.
+let _promptLibraryMod = null;
+function _promptLibrary() {
+  if (!_promptLibraryMod) _promptLibraryMod = require('./lib/prompt-library');
+  return _promptLibraryMod;
+}
+
+function parseDetectiveFindings(out, repoPath) {
+  const m = out && out.match(/\[\s*\{[\s\S]*?\}\s*\]/);
+  if (!m) return null;
+  let arr;
+  try { arr = JSON.parse(m[0]); } catch { return null; }
+  const seen = new Set();
+  const findings = [];
+  for (const h of (Array.isArray(arr) ? arr : [])) {
+    if (!h || typeof h.file !== 'string') continue;
+    const file = h.file.replace(/^\.?\//, '');
+    if (!file || seen.has(file)) continue;
+    seen.add(file);
+    const helper = typeof h.helper === 'string' ? h.helper : '';
+    const brokenLine = typeof h.brokenLine === 'string' ? h.brokenLine : '';
+    findings.push({
+      file,
+      function: typeof h.function === 'string' ? h.function : '',
+      reason: typeof h.reason === 'string' ? h.reason : '',
+      fix: typeof h.fix === 'string' ? h.fix : '',
+      helper,
+      brokenLine,
+      // true = named helper exists; false = named but not found (likely
+      // hallucinated); null = no helper named. Only false downgrades the fix.
+      fixVerified: verifyDetectiveHelper(helper, repoPath),
+      // true = the quoted broken expression is really in the named file;
+      // false = it is not (a diagnosis about code that does not exist —
+      // the live 2026-07-26 failure); null = nothing quoted.
+      evidenceVerified: verifyDetectiveEvidence(brokenLine, file, repoPath),
+      // PROVENANCE. A feature has no broken line to quote, so "does the file you named
+      // actually exist" is the grounding available to it — and it is the thing the novel
+      // prompt asks for. true = present, false = named but absent (invented), null = could
+      // not be checked.
+      fileVerified: (() => {
+        if (!file || !repoPath) return null;
+        try { return fs.existsSync(path.resolve(repoPath, file.replace(/^\.?\//, ''))); }
+        catch { return null; }
+      })(),
+      // TWO FIELDS THE PROMPT CALLS REQUIRED AND THIS PARSER THREW AWAY.
+      //
+      // This builds a NEW object from a hand-written list of keys, so anything the prompt
+      // asks for and this list omits is discarded silently — the model answers correctly and
+      // the answer is destroyed forty lines later. Both of these were omitted:
+      //
+      //   changeRequired   — the gate at claude.sh:3021 demands a real diff for every
+      //                      verified site not explicitly false. Absent means required, by
+      //                      design. So a site whose own prescription reads "No edit
+      //                      required" was demanded to show one: the writer correctly changed
+      //                      nothing, the gate rejected the story, and every retry reproduced
+      //                      it. Live AMSD-2041, all three codelines, three runs, ~nine
+      //                      attempts. Verified 2026-08-11 that the model DOES emit it
+      //                      (false/true/true/true/false across five sites) — the prompt was
+      //                      never the problem.
+      //   requiredPackages — the dependency gate at ~6385 reads it to check a prescribed fix
+      //                      against what the codeline actually installs. It has never fired:
+      //                      the field is absent from every PRD this pipeline has written.
+      //
+      // undefined, NOT false, for an absent changeRequired. The gate distinguishes "the
+      // detective said no edit" from "nothing said anything", and defaulting here would
+      // silently exempt every site the model declined to answer for.
+      //
+      // The deeper defect stands: this list and the JSON example in the prompt are two
+      // hand-maintained copies of one schema, and they drifted. They should be generated from
+      // a single declaration so a required field cannot be dropped by omission again.
+      changeRequired: typeof h.changeRequired === 'boolean' ? h.changeRequired : undefined,
+      requiredPackages: Array.isArray(h.requiredPackages)
+        ? h.requiredPackages.filter((n) => typeof n === 'string' && n.trim()).map((n) => n.trim())
+        : [],
+      // WHAT THIS CHANGE DOES TO THE VALUE, and WHERE IT RUNS. Both undefined when unstated —
+      // never defaulted. A plan whose sites all "carry" describes delivering a value it never
+      // obtains, which is what shipped on 2026-08-12: a signal was wired, a re-render was
+      // forced, and the data on the page was still the one fetched at page load.
+      deliveryRole: ['produces', 'carries', 'verifies'].includes(h.deliveryRole)
+        ? h.deliveryRole : undefined,
+      runsIn: ['server', 'browser', 'both', 'n/a'].includes(h.runsIn) ? h.runsIn : undefined,
+    });
+  }
+  return findings;
+}
+
+
+/**
+ * Does this prescription ever OBTAIN the value it promises to deliver?
+ *
+ * Live 2026-08-12: every site carried or verified and none produced. The plan wired a change
+ * signal, forced a re-render, and never fetched anything — so the page re-rendered the data it
+ * had loaded at page load. The writer built it exactly as prescribed and the review approved it.
+ *
+ * FAILS CLOSED. A site that did not state a deliveryRole does not count as a producer: "not
+ * stated" and "produces" are different claims, and collapsing them is the shape of nearly every
+ * defect this pipeline has shipped.
+ *
+ * Structural and generic: it knows nothing about fetching, HTTP, or any framework — only that
+ * SOMETHING in a plan must be the thing that makes the new value exist.
+ */
+function prescriptionMissingSource(sites) {
+  const list = Array.isArray(sites) ? sites.filter(Boolean) : [];
+  if (!list.length) return true;
+  return !list.some((f) => f && f.deliveryRole === 'produces');
+}
+
+/**
+ * surveyHypothesisBlock(codeline, logDir) — what the estate survey already found here.
+ *
+ * THE SURVEY IS OFTEN THE WHOLE ANSWER AND REACHED NOBODY. It reads every codeline before the
+ * roster is minted; live 2026-08-18 its mocka entry named the file, the function, the LINE, the
+ * defect and the missing test — and the detective then spent a top-ladder call with an iteration
+ * budget rediscovering it, because `estateSurvey` is consumed only by mintProjectAgents.
+ *
+ * Handed over as a HYPOTHESIS, not an answer. The survey is evidence about the estate, gathered
+ * before this story's spec existed, and the detective still owns the fix site and still verifies
+ * against the index. Empty whenever there is nothing trustworthy to hand over — no survey, a
+ * survey that did not run, a codeline it never covered, or one it put out of scope — because a
+ * fabricated starting point is worse than none.
+ */
+function surveyHypothesisBlock(codeline, logDir) {
+  if (!codeline || !logDir) return '';
+  let survey = null;
+  try {
+    survey = JSON.parse(fs.readFileSync(path.join(logDir, 'estate-survey.json'), 'utf8'));
+  } catch { return ''; }
+  if (!survey || survey.ran !== true || !Array.isArray(survey.codelines)) return '';
+  const entry = survey.codelines.find((c) => c && c.codeline === codeline);
+  if (!entry || entry.state !== 'in_scope') return '';
+  const evidence = String(entry.evidence || '').trim();
+  if (!evidence) return '';
+  const surfaces = (Array.isArray(entry.surfaces) ? entry.surfaces : []).filter(Boolean);
+  return [
+    '',
+    'WHAT THE ESTATE SURVEY ALREADY FOUND IN THIS CODELINE — a HYPOTHESIS, not a conclusion.',
+    '',
+    'This was read from the repository before your story was specified. It may be right, partial,',
+    'or aimed at a different story. VERIFY it against the index before you rely on it, and discard',
+    'it if the code does not agree — you own the fix site, not the survey.',
+    '',
+    evidence,
+    surfaces.length ? `\nFiles it named: ${surfaces.join(', ')}` : '',
+    '',
+  ].join('\n');
+}
+
 async function runCodeGraphDetective(story, logDir, opts = {}) {
   if (process.env.EPAM_BROWNFIELD !== '1') return [];
   const repoPath = resolveCodelinePath(story);
@@ -5271,7 +5561,7 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
   let _searchVocab = null;
   try {
     _searchVocab = await deriveGuardVocabulary({
-      promptExec: opts.promptExec || null,
+      promptExec: opts.promptExec,
       rule: SEARCH_TERM_RULE,
       statements: [story.title || '', String(story.description || '')].filter(Boolean),
       story,
@@ -5291,9 +5581,13 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
     : '';
 
   const _kindHint = inferStoryKindHint(story);
+  // BOTH HINTS ARE TEMPLATES. The tracker's issue type is a hint in both directions, and the
+  // wrong-way error is asymmetric — see the fragments' own notes.
   const _kindHintBlock = _kindHint === 'defect'
-    ? `\nJIRA CLASSIFIES THIS AS A DEFECT (issue type: Bug). This is a HINT, not a certainty — if the ticket's own text below clearly describes a capability that does not exist yet rather than broken existing behavior, trust the ticket over this hint. Assuming defect: there IS an existing bug and an existing symptom. Your job is the CAUSE, not the symptom (see CORE PRINCIPLE below).\n`
-    : `\nJIRA DOES NOT CLASSIFY THIS AS A BUG (issue type: ${story.issueType || story.issuetype || 'unset'}). This is a HINT, not a certainty — if the ticket's own text below clearly describes existing behavior that is wrong, trust the ticket over this hint. Assuming novel: there is likely NO existing bug and no wrong value to trace. Inventing a "cause" for a capability that does not exist yet produces a confident wrong answer. Your job is the ATTACHMENT POINT — the existing file/function/provider/hook/route/component this new capability must plug into, and anything already present the implementation should REUSE — not a fix site.\n`;
+    ? renderEngineTemplate('story-kind-hint-defect', {})
+    : renderEngineTemplate('story-kind-hint-other', {
+      __ISSUE_TYPE__: story.issueType || story.issuetype || 'unset',
+    });
 
   // CORRECTIVE CONTEXT — set only on a Step 4 re-invocation after SPEC_REVIEW flagged
   // planAlignment: "unexplained_mismatch" for this story's FIRST answer. Mirrors the
@@ -5301,51 +5595,34 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
   // ~3273) — the same feedback shape this file already trusts, applied to the detective.
   const correctiveContext = renderDetectiveCorrection(opts.correctiveContext);
 
-  const prompt = `${detectiveProfile ? detectiveProfile + '\n\n' : ''}You are investigating this ticket. The repository is at: ${repoPath}
-${_kindHintBlock}${correctiveContext}
-TICKET (read it, then decide for YOURSELF which few domain nouns matter — do not treat every word as a search term):
-Title: ${story.title || ''}
-${story.description ? 'Description: ' + String(story.description) + '\n' : ''}Acceptance criteria:
-${(story.acceptanceCriteria || []).map((a) => '- ' + String(a)).join('\n')}
-
-Your CodeGraph tool is the shell script at: ${toolPath}
-Invoke it with the Bash tool, always passing PROJECT_ROOT:
-  PROJECT_ROOT="${repoPath}" bash "${toolPath}" explore <domain nouns>
-  PROJECT_ROOT="${repoPath}" bash "${toolPath}" callers <SymbolName>
-  PROJECT_ROOT="${repoPath}" bash "${toolPath}" callees <SymbolName>
-  PROJECT_ROOT="${repoPath}" bash "${toolPath}" show <file> [startLine] [endLine]
-
-${preseedBlock}
-${detectivePrescription(_kindHint)}
-READ THE FILE BEFORE YOU QUOTE IT. Once you have a candidate file, run \`show <file>\` and look at the real lines. Your "brokenLine" must be COPIED EXACTLY from that output — it is checked character-for-character against the file, after whitespace normalisation. Do NOT reconstruct the line from symbol names: on 2026-07-26 that produced \`lineItemKey === orderLineItem.id\`, a plausible-looking expression using an identifier that exists nowhere in the repository, and the answer was rejected. \`show\` accepts a line range so you can read just the region you care about.
-
-CRITICAL REALITY ANCHOR: if the CodeGraph tool does not return a file or symbol, it does NOT exist in this codebase. Do not infer, assume, or extrapolate file paths, function signatures, or variable names from naming patterns — that is exactly how \`lineItemKey\` was invented. The index answers only for what it parsed, so a miss is a question, not an answer. If you believe something exists and CodeGraph did not return it, PROVE it before reasoning about it:
-
-    bash orchestrations/scripts/ripgrep-search.sh --string "<exact symbol>" [--glob "*.ts"]
-    bash orchestrations/scripts/ripgrep-search.sh --file "<part of a filename>"
-
-If your fix calls a method or function from a THIRD-PARTY package (not this repo's own code), a name existing somewhere in that package is not the same as it being the RIGHT way to call it — a symbol can be a real, internal implementation detail the package's own docs never call directly, or a static class method vs. an instance method, and picking the wrong one produces code that type-checks and fails at runtime. PROVE the real shape before naming it:
-
-    bash orchestrations/scripts/resolve-package-symbol.sh "<package name>" "<method or function name>"
-
-It reports whether the symbol is a direct/static call or needs an instance, and surfaces the package's own documented usage examples (README and JSDoc) so you can prefer the intended pattern over an internal detail that happens to exist.
-
-That searches the real working tree, so a hit is ground truth and "NOT FOUND" is definitive absence. If both tools come back empty, the thing does not exist — say so and revise your hypothesis. Never write a name into your answer that no tool has shown you.
-
-CRITICAL — HOW TO ANSWER: Emit the JSON array as TEXT directly in your reply. Do NOT call WriteFile and do NOT write your answer to any file — the pipeline reads your reply text, not a file. If you write your answer to a file, it is LOST and the whole investigation is wasted. Use the Bash tool ONLY to run the CodeGraph query script above (including its \`show\` subcommand, which you MUST use before quoting a line); use no other tool.
-
-NAME THE FORMAT, DO NOT DESCRIBE IT. If your fix depends on the SHAPE of a string — a prefix, suffix, separator, delimiter — you must QUOTE THE EXACT LITERAL (e.g. '#') or name the constant that defines it (e.g. DIVIDER). Saying "a prefix match that accounts for the suffix" without stating the suffix is not implementable: on 2026-07-26 exactly that wording made the implementer guess '-' where the repository uses '#', and the fix could never match. This is machine-checked.
-
-PREFER THE PARSER OVER THE WRITER. If a helper CONSTRUCTS the value (getX/buildX/toX) and another READS it (parseX/fromX), prescribe the reader. Naming the writer invites the implementer to reconstruct the format by hand — which is how the above happened. The best fix does no string surgery at all, because the helper owns the format.
-
-VERIFY THIRD-PARTY METHOD CALLS with resolve-package-symbol.sh before prescribing them (see above) — a name existing in a package is not proof it is called the way you assume.
-
-SAY WHETHER THE FILE MUST BE EDITED — "changeRequired" is REQUIRED. Set it true when your fix means editing THIS file. Set it FALSE when the file is genuinely part of the fix but needs no edit of its own: it already does the right thing, and will simply behave correctly once the other sites change. A consumer that reads state from a provider you are fixing is the usual case. This is not a lesser finding and must not be dropped — a downstream gate requires a real diff in every site you mark true, so marking a verify-only file true makes the story impossible to complete: the implementer changes nothing (correctly), the gate rejects it, and every retry repeats. Saying it in the "fix" prose is not enough; nothing reads prose.
-
-DECLARE ANY PACKAGE YOUR FIX NEEDS — "requiredPackages" is REQUIRED and is machine-verified. List the BARE package names, exactly as they appear in this project's manifest (e.g. "some-sdk", "@scope/pkg"), for every third-party package your fix imports or configures. Use [] when the fix needs none — that is the common case and is not a failure. Each name is checked against what this codeline actually declares and installs: a package that is not there means your fix CANNOT be implemented as written, and prescribing it produces a change that type-checks, passes tests, and fails for a real user. Prefer a fix built on what is already installed; if the work genuinely requires a package this project does not have, still declare it — that is the honest answer and the pipeline needs to see it, whereas an approach invented to avoid naming it is the failure this field exists to prevent.
-
-Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" field is REQUIRED and must be a concrete, minimal instruction naming the exact change and any existing helper to reuse. The "helper" field must be the BARE SYMBOL NAME of the existing function you are telling the implementer to reuse (so it can be machine-verified to actually exist) — leave it "" if the fix genuinely needs no existing helper. Do NOT invent a helper name; only put a symbol you actually saw in the tool output:
-[{"file":"<repo-relative path>","function":"<symbol>","reason":"<why THIS computes the value, not just displays it>","brokenLine":"<the exact existing expression that is wrong, copied verbatim from that file>","fix":"<the exact minimal change: which line/expression to change, to what, and which EXISTING helper (symbol + import path) to reuse — never 'write a new function' if one already exists>","helper":"<bare existing symbol name to reuse, or empty>","changeRequired":<true if this file must be EDITED; false if it is implicated but needs NO edit — it already behaves correctly and only needs to be VERIFIED once the other sites change>,"requiredPackages":["<bare package name this fix needs>"]}]`;
+  // THE PROMPT IS A DOCUMENT, NOT A LITERAL.
+  //
+  // Migrated 2026-08-12 to orchestrations/prompts/templates/code-graph-detective.json, and the
+  // project-authority copy the library prefers. Byte-identical to the literal that stood here.
+  //
+  // This prompt decides where every ticket lands and what every writer builds, so how it
+  // reasons must be reviewable as a diff on a document rather than a patch to engine source.
+  // It was also the largest prompt in this file held as code, where every backtick and ${} in
+  // the prose was live — the failure mode that silently corrupted the reviewer's prompt.
+  const prompt = _promptLibrary().buildPrompt(
+    'code-graph-detective',
+    process.env.EPAM_PROJECT_CONFIG_DIR || '',
+    {
+      __DETECTIVE_PROFILE__: detectiveProfile ? detectiveProfile + '\n\n' : '',
+      __REPO_PATH__: repoPath,
+      __TOOL_PATH__: toolPath,
+      __STORY_TITLE__: story.title || '',
+      __STORY_DESCRIPTION__: story.description ? 'Description: ' + String(story.description) + '\n' : '',
+      __STORY_ACS__: (story.acceptanceCriteria || []).map((a) => '- ' + String(a)).join('\n'),
+      // Adjacent in the original with no separator; the library reads __A____B__ as one token.
+      __KIND_AND_CORRECTIVE_CONTEXT__: String(_kindHintBlock) + String(correctiveContext),
+      // What the estate survey already found here — a hypothesis for the detective to verify,
+      // empty when there is nothing trustworthy to hand over. See surveyHypothesisBlock.
+      __SURVEY_HYPOTHESIS__: surveyHypothesisBlock(story && story.codeline, logDir),
+      __PRESEED_BLOCK__: preseedBlock,
+      __PRESCRIPTION_RULES__: detectivePrescription(_kindHint),
+    },
+  );
 
   // Model ladder — cohesive with openspec/speckit (which escalate to their HIGH
   // model on retry). Attempt 1 uses the base HIGH model (glm-5.1); a retry
@@ -5356,7 +5633,7 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
   // possibly-different infra). A single hard-pinned model was the non-cohesive
   // gap vs the rest of the pipeline.
   const runnerCmd = process.env.AI_RUNNER_CMD || path.join(scriptDir, 'ai-run.sh');
-  const baseModel = process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH || process.env.ESCALATION_MODEL_HIGH || 'z-ai/glm-5.1';
+  const baseModel = process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH || seamStartModel('spec-coordinator');
   const baseProvider = resolvePromptProvider(process.env);
   const escalatedModel = ladderNextModel(baseModel, process.env);
   const escalatedProvider = escalatedModel
@@ -5376,77 +5653,7 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
   // not actually answer (e.g. it wandered off and called WriteFile, returning
   // "The file has been written successfully" instead of the JSON). null → retry;
   // an explicit [] → the model's real answer of "no fix site".
-  const parseFindings = (out) => {
-    const m = out && out.match(/\[\s*\{[\s\S]*?\}\s*\]/);
-    if (!m) return null;
-    let arr;
-    try { arr = JSON.parse(m[0]); } catch { return null; }
-    const seen = new Set();
-    const findings = [];
-    for (const h of (Array.isArray(arr) ? arr : [])) {
-      if (!h || typeof h.file !== 'string') continue;
-      const file = h.file.replace(/^\.?\//, '');
-      if (!file || seen.has(file)) continue;
-      seen.add(file);
-      const helper = typeof h.helper === 'string' ? h.helper : '';
-      const brokenLine = typeof h.brokenLine === 'string' ? h.brokenLine : '';
-      findings.push({
-        file,
-        function: typeof h.function === 'string' ? h.function : '',
-        reason: typeof h.reason === 'string' ? h.reason : '',
-        fix: typeof h.fix === 'string' ? h.fix : '',
-        helper,
-        brokenLine,
-        // true = named helper exists; false = named but not found (likely
-        // hallucinated); null = no helper named. Only false downgrades the fix.
-        fixVerified: verifyDetectiveHelper(helper, repoPath),
-        // true = the quoted broken expression is really in the named file;
-        // false = it is not (a diagnosis about code that does not exist —
-        // the live 2026-07-26 failure); null = nothing quoted.
-        evidenceVerified: verifyDetectiveEvidence(brokenLine, file, repoPath),
-        // PROVENANCE. A feature has no broken line to quote, so "does the file you named
-        // actually exist" is the grounding available to it — and it is the thing the novel
-        // prompt asks for. true = present, false = named but absent (invented), null = could
-        // not be checked.
-        fileVerified: (() => {
-          if (!file || !repoPath) return null;
-          try { return fs.existsSync(path.resolve(repoPath, file.replace(/^\.?\//, ''))); }
-          catch { return null; }
-        })(),
-        // TWO FIELDS THE PROMPT CALLS REQUIRED AND THIS PARSER THREW AWAY.
-        //
-        // This builds a NEW object from a hand-written list of keys, so anything the prompt
-        // asks for and this list omits is discarded silently — the model answers correctly and
-        // the answer is destroyed forty lines later. Both of these were omitted:
-        //
-        //   changeRequired   — the gate at claude.sh:3021 demands a real diff for every
-        //                      verified site not explicitly false. Absent means required, by
-        //                      design. So a site whose own prescription reads "No edit
-        //                      required" was demanded to show one: the writer correctly changed
-        //                      nothing, the gate rejected the story, and every retry reproduced
-        //                      it. Live AMSD-2041, all three codelines, three runs, ~nine
-        //                      attempts. Verified 2026-08-11 that the model DOES emit it
-        //                      (false/true/true/true/false across five sites) — the prompt was
-        //                      never the problem.
-        //   requiredPackages — the dependency gate at ~6385 reads it to check a prescribed fix
-        //                      against what the codeline actually installs. It has never fired:
-        //                      the field is absent from every PRD this pipeline has written.
-        //
-        // undefined, NOT false, for an absent changeRequired. The gate distinguishes "the
-        // detective said no edit" from "nothing said anything", and defaulting here would
-        // silently exempt every site the model declined to answer for.
-        //
-        // The deeper defect stands: this list and the JSON example in the prompt are two
-        // hand-maintained copies of one schema, and they drifted. They should be generated from
-        // a single declaration so a required field cannot be dropped by omission again.
-        changeRequired: typeof h.changeRequired === 'boolean' ? h.changeRequired : undefined,
-        requiredPackages: Array.isArray(h.requiredPackages)
-          ? h.requiredPackages.filter((n) => typeof n === 'string' && n.trim()).map((n) => n.trim())
-          : [],
-      });
-    }
-    return findings;
-  };
+  const parseFindings = (out) => parseDetectiveFindings(out, repoPath);
 
   // The detective is a LOAD-BEARING step for a brownfield defect: if it yields
   // nothing, the implementer gets symptom ACs with no root cause (the exact
@@ -5463,8 +5670,8 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
     if (escalated) {
       console.warn(`spec-mode: code-graph-detective ladder escalation for ${story.id} (attempt ${attempt}/${maxAttempts}) — model ${baseModel} → ${attemptModel}`);
     }
-    const correctiveNote = attempt === 1 ? '' :
-      `\n\nRETRY — your previous reply contained NO JSON array (you may have called a write tool). Emit ONLY the JSON array as text in THIS reply now. Do NOT call WriteFile or write to any file.`;
+    const correctiveNote = attempt === 1 ? ''
+      : renderEngineTemplate('detective-retry-note', {});
     const _roundStarted = Date.now();
     try {
       // PHASE 1 — EXPLORE (tools). A reasoning model reliably EXPLORES but does
@@ -5541,6 +5748,10 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
         // from the registry by name. An explicit env override above still wins, and a seam
         // with no entry simply runs on the run's defaults.
         ...seamInvocationEnv('code-graph-detective', logDir),
+        // THE IDENTITY TRAVELS WITH THE SEAM. costAgent below names it for the cost row, but
+        // EPAM_AGENT_NAME is what ai-run.sh keys the ladder and the self-heal KB on — so this
+        // agent's constraints and episodes were filed under whatever ran before it.
+        EPAM_AGENT_NAME: 'code-graph-detective',
       }, { costAgent: 'code-graph-detective', costStoryId: story && story.id ? story.id : '',
         // Salvage the detective's JSON even if its process exits non-zero/null
         // (it emits the answer, then a detached grandchild teardown trips the
@@ -5968,23 +6179,21 @@ async function reviewTicketLinks({ promptExec, story, logDir, docPaths = [] }) {
   const commentBlock = (Array.isArray(story.ticketComments) ? story.ticketComments : [])
     .map((c) => `- ${c.author || 'unknown'}: ${String(c.text || '')}`).join('\n');
 
-  const prompt = `${persona ? persona + '\n\n' : ''}STORY
-Title: ${story.title || ''}
-Description: ${String(story.description || '')}
-Components: ${(Array.isArray(story.components) ? story.components : []).join(', ') || '(none)'}
-Declared files: ${((story.technicalNotes && story.technicalNotes.files) || []).join(', ') || '(none yet)'}
-
-LINKS FOUND IN THIS TICKET:
-${linkBlock}
-
-COMMENT THREAD (context for judging relevance — a link's surrounding discussion often says why it was posted):
-${commentBlock || '(none)'}
-${Array.isArray(docPaths) && docPaths.length ? `
-ALREADY RETRIEVED — these documents have been fetched for you and written to disk. Read them
-with read_file rather than fetching them again; the text is the same and it costs you nothing:
-${docPaths.map((p) => `- ${p}`).join('\n')}
-A document listed here that you did not read is a document you cannot quote.
-` : ''}`;
+  const prompt = renderEngineTemplate('spec-story-block', {
+    __PERSONA__: persona ? persona + '\n\n' : '',
+    __TITLE__: story.title || '',
+    __DESCRIPTION__: String(story.description || ''),
+    __COMPONENTS__: (Array.isArray(story.components) ? story.components : []).join(', ') || '(none)',
+    __DECLARED_FILES__: ((story.technicalNotes && story.technicalNotes.files) || []).join(', ') || '(none yet)',
+    __LINK_BLOCK__: linkBlock,
+    __COMMENT_BLOCK__: commentBlock || '(none)',
+    // The notice is its own body; whether it appears is still decided here, which is control flow.
+    __RETRIEVED_DOCS__: Array.isArray(docPaths) && docPaths.length
+      ? renderEngineTemplate('spec-story-block', {
+        __DOC_PATHS__: docPaths.map((p) => `- ${p}`).join('\n'),
+      }, 'retrieved_docs')
+      : '',
+  }, 'block');
 
   // THE AGENT MUST BE ABLE TO OPEN THE LINK.
   //
@@ -6017,7 +6226,11 @@ A document listed here that you did not read is a document you cannot quote.
     const payload = await runAgentForJson(
       promptExec, prompt, TOOL_TICKET_LINKS, 'TICKET_LINKS',
       logDir ? path.join(logDir, `${(story && story.id) || 'phase'}-ticket-links.log`) : null,
-      'links', (story && story.id) || '', resolveCodelinePath(story), _linkTools,
+      'links', (story && story.id) || '', resolveCodelinePath(story),
+      // THE SEAM, UNDER this call's own grant. _linkTools is already the envOverride, so a further
+      // argument was simply ignored. The seam supplies ladder, effort and budget; the explicit
+      // grant supplies the fetch_url this agent needs and must still win.
+      { ...seamInvocationEnv('ticket-links', logDir), EPAM_AGENT_NAME: 'ticket-links', ..._linkTools },
     );
     return normaliseTicketLinks(payload);
   } catch (err) {
@@ -6079,7 +6292,7 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, fo
   const priorFlags = story.specification?.coordinatorReview?.flags;
   const priorNotes = story.specification?.coordinatorReview?.reviewNotes;
   const priorGapsBlock = (Array.isArray(priorFlags) && priorFlags.length > 0)
-    ? `\n\nPRIOR COORDINATOR FLAGS (you MUST address each one — do NOT declare the spec complete without resolving these):\n${priorFlags.map((f, i) => `${i + 1}. ${f}`).join('\n')}\n${priorNotes ? `\nAdditional context from prior review: ${priorNotes.slice(0, 500)}` : ''}`
+    ? `\n\nPRIOR COORDINATOR FLAGS (you MUST address each one — do NOT declare the spec complete without resolving these):\n${priorFlags.map((f, i) => `${i + 1}. ${f}`).join('\n')}\n${priorNotes ? `\nAdditional context from prior review: ${priorNotes}` : ''}`
     : '';
 
   // Forced-retry note goes at the VERY TOP — highest-salience position in the
@@ -6132,14 +6345,7 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, fo
     : `\n  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."],"agentRole":"...","technicalNotes":{"files":[]}}]`;
   const splitRulesBlock = isBrownfieldSpec
     ? ''
-    : `\n\nSPLIT RULES (mandatory, not optional — enforce these before refining AC):
-1. AC count > 12 → you MUST propose a split. Target ≤8 ACs per split child. Never leave a story with >12 ACs unsplit.
-2. Both implementation files AND test files in technicalNotes.files → split into one impl child (non-test files) and one test child (*.test.ts files). Assign agentRole "typescript-engineer" to impl, "test-engineer" to test.
-3. 3+ independent deliverable modules with no shared exports (e.g. client.ts, server.ts, cli.ts all in same story) → split per concern. Each split gets the files it owns.
-4. External API discovery + implementation in same story → split: first child discovers/documents the API contract, second child implements against that contract.
-5. technicalNotes.files contains BOTH frontend/template files (*.html, *.css, *.scss, *.jsx, *.tsx, *.vue, *.svelte) AND build/tooling files (vite.config.*, webpack.config.*, rollup.config.*, package.json, Makefile, Dockerfile, *.sh) → split: one child owns the frontend/template files, one child owns the build/tooling files. These have different runtime roles and different owners — bundling them causes token bloat and diffuse responsibility.
-6. Story covers multiple independent runtime roles in the same deliverable (e.g. HTTP server AND CLI binary AND HTML dashboard) → split by runtime role, one child per runtime target. Each child's agentRole should match what it produces (typescript-engineer for application code, test-engineer for test-only files).
-These rules apply only when splitDepth === 0. Never split a story that is already a split child.`;
+    : renderEngineTemplate('speckit-split-rules', {});
   const generateInstruction = isBrownfieldSpec
     ? 'Generate refined acceptance criteria and optionally updated title/description. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:'
     : 'Generate refined acceptance criteria, optionally updated title/description, and split stories where required. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:';
@@ -6225,25 +6431,32 @@ These rules apply only when splitDepth === 0. Never split a story that is alread
     ? locationHintSchemaLine.replace(/,(\s*)$/, '$1')
     : locationHintSchemaLine;
 
-  const prompt = `${forcedRetryBlock}You are the ${agent} specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.${splitWarning}${priorGapsBlock}${sembleContext}${referencedDocsEvidence}${fixSiteBlock}${declaredFileBlock}${brownfieldArchaeologyBlock}
-${generateInstruction}
-{
-  "storyId":"${story.id}",
-  "agent":"${agent}",
-  "notes":"context",
-  "acceptanceCriteria":["..."],
-  "description":"...",
-  "title":"...",${locationHintSchemaLineTrimmed}${splitSchemaField}
-}
-Use existing text when no change is needed.${splitRulesBlock}
-
-Story context:
-${storyPayload}${publishedContracts(repoPath, story)}
-`;
+  const prompt = renderEngineTemplate('spec-agent-openspec', {
+    __FORCED_RETRY_BLOCK__: forcedRetryBlock,
+    __AGENT__: agent,
+    __PHASE__: phase,
+    __STORY_ID__: story.id,
+    __SPLIT_WARNING__: splitWarning,
+    __PRIOR_GAPS_BLOCK__: priorGapsBlock,
+    __SEMBLE_CONTEXT__: sembleContext,
+    __REFERENCED_DOCS_EVIDENCE__: referencedDocsEvidence,
+    __FIX_SITE_BLOCK__: fixSiteBlock,
+    __DECLARED_FILE_BLOCK__: declaredFileBlock,
+    __BROWNFIELD_ARCHAEOLOGY_BLOCK__: brownfieldArchaeologyBlock,
+    __GENERATE_INSTRUCTION__: generateInstruction,
+    __LOCATION_HINT_SCHEMA_LINE__: locationHintSchemaLineTrimmed,
+    __SPLIT_SCHEMA_FIELD__: splitSchemaField,
+    __SPLIT_RULES_BLOCK__: splitRulesBlock,
+    __STORY_PAYLOAD__: storyPayload,
+    __PUBLISHED_CONTRACTS__: publishedContracts(repoPath, story),
+  });
   try {
     const payload = await runAgentForJson(
       promptExec, prompt, TOOL_SPEC_AGENT, 'SPEC_AGENT',
-      path.join(logDir, `${story.id}-${agent}-spec.log`), null, story.id, repoPath
+      path.join(logDir, `${story.id}-${agent}-spec.log`), null, story.id, repoPath,
+      // THE SEAM, asked for. This call passed no env, so it ran with no ladder, no budget
+      // and no tool grant — the settings sat in the registry reaching nothing.
+      { ...seamInvocationEnv('spec-agent', logDir), EPAM_AGENT_NAME: 'spec-agent' },
     );
     // Merge fix-site candidates into locationHint. PRIMARY: the code-graph-
     // detective — a tool-using agent (GLM-5.1) that iterates CodeGraph queries
@@ -6526,104 +6739,42 @@ async function runSpeckitReview({ promptExec, story, openspecOutput, phase, runI
   // PROPOSING a split, not yet-created children) and conflating the two
   // would silently change behavior there. Only validateMidExecutionSplits
   // passes this true, for children it already created.
+  // TWO TEMPLATES, NOT ONE WITH A BRANCH. The refine path asks for different work from
+  // different starting material than the collaborative path, and folding them together would
+  // hide which instructions an agent actually received.
   const prompt = refineExistingChildren
-    ? `${forcedRetryBlock}You are the speckit specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.
-
-This story was ALREADY split into the children listed below (openspec's decision, already applied — you are not creating or removing any child). Your job: review and refine EACH CHILD's acceptanceCriteria for testability and completeness, exactly as you would for an unsplit story.
-1. For each child, review its acceptanceCriteria for testability and completeness
-2. Add missing edge-case, error-handling, security, and accessibility criteria per child
-3. Flag any AC that are vague, untestable, or overlapping
-4. Do NOT add, remove, or rename any child — return one entry per child id below, using the SAME ids
-5. Do NOT remove or duplicate the existing work — build on it
-
-━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
-Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
-NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
-mockResolvedValue, import statements, or require() calls, REPLACE it with a
-Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
-
-THE EXISTING CHILDREN (your input to review):
-${JSON.stringify(openspecOutput?.splitStories || [], null, 2)}
-
-ORIGINAL PARENT STORY CONTEXT:
-${JSON.stringify({
-  id: story.id,
-  title: story.title,
-  description: story.description,
-  originalAcceptanceCriteria: story.acceptanceCriteria,
-  technicalNotes: story.technicalNotes,
-  dependencies: story.dependencies || []
-}, null, 2)}
-
-Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble):
-- "splitStories": array of {"id": "<same child id>", "acceptanceCriteria": [...], "notes": "what you changed and why"} — one entry per child id above, same ids, no new/removed ids.
-- "notes": overall summary of what you changed and why.
-
-You may have read-only tools (read_file, list_files, search) available this turn for a
-brownfield story with a real codeline — if so, USE them for real to verify a file's actual
-contents before relying on it; do not invent what a tool would return. For a greenfield
-story with no existing codeline, you have none — answer from what is already in this
-prompt rather than guessing at file contents. Either way, never emit tool-call syntax
-(<tool_call>, <tool_use>, <function_call>) narrating an imagined result — a fabricated
-"tool_result" is worse than an honest "I don't know."
-`
-    : `${forcedRetryBlock}You are the speckit specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.
-
-You are reviewing and building on the openspec agent's output for this story.
-Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
-1. Review openspec's proposed acceptance criteria for testability and completeness
-2. Add missing edge-case, error-handling, security, and accessibility criteria
-3. Flag any AC that are vague, untestable, or overlapping
-4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
-   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
-   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
-   normal; per-child refinement of an already-split story's children happens on a later turn, not
-   here.
-5. Do NOT remove or duplicate openspec's good work — build on it
-
-━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
-Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
-NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
-mockResolvedValue, import statements, or require() calls, REPLACE it with a
-Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
-
-OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
-${JSON.stringify({
-  acceptanceCriteria: openspecOutput?.acceptanceCriteria || [],
-  notes: openspecOutput?.notes || '',
-  splitStories: openspecOutput?.splitStories || undefined,
-}, null, 2)}
-
-ORIGINAL STORY CONTEXT:
-${JSON.stringify({
-  id: story.id,
-  title: story.title,
-  description: story.description,
-  originalAcceptanceCriteria: story.acceptanceCriteria,
-  technicalNotes: story.technicalNotes,
-  dependencies: story.dependencies || []
-}, null, 2)}
-
-Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
-- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
-- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
-- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
-  split children of your own, even if openspec already split this story.
-- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
-- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
-- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
-
-For a brownfield story with a real codeline, you may have read-only tools (read_file,
-list_files, search) available this turn — if so, USE them for real to check a file's
-actual contents before relying on it; do not invent what a tool would return. For a
-greenfield story with no existing codeline, you have none — give your best answer from
-the description, title and paths you were given, and say so in "notes" if the file
-contents would have changed your answer. Either way, never narrate an imagined tool
-result: a real answer with an honest caveat is worth everything; fabricated tool-call
-syntax (<tool_call>, <tool_use>, <function_call>) is worth nothing — it is discarded in
-full and the work is lost (observed live, 2026-07-28: exactly this, on an empty-criteria
-story that got no answer at all).
-`;
+    ? renderEngineTemplate('spec-agent-speckit-refine', {
+      __FORCED_RETRY_BLOCK__: forcedRetryBlock,
+      __PHASE__: phase,
+      __STORY_ID__: story.id,
+      __EXISTING_CHILDREN__: JSON.stringify(openspecOutput?.splitStories || [], null, 2),
+    __STORY_PAYLOAD__: JSON.stringify({
+      id: story.id,
+      title: story.title,
+      description: story.description,
+      originalAcceptanceCriteria: story.acceptanceCriteria,
+      technicalNotes: story.technicalNotes,
+      dependencies: story.dependencies || []
+    }, null, 2),
+    })
+    : renderEngineTemplate('spec-agent-speckit', {
+      __FORCED_RETRY_BLOCK__: forcedRetryBlock,
+      __PHASE__: phase,
+      __STORY_ID__: story.id,
+      __OPENSPEC_OUTPUT__: JSON.stringify({
+        acceptanceCriteria: openspecOutput?.acceptanceCriteria || [],
+        notes: openspecOutput?.notes || '',
+        splitStories: openspecOutput?.splitStories || undefined,
+      }, null, 2),
+    __STORY_PAYLOAD__: JSON.stringify({
+      id: story.id,
+      title: story.title,
+      description: story.description,
+      originalAcceptanceCriteria: story.acceptanceCriteria,
+      technicalNotes: story.technicalNotes,
+      dependencies: story.dependencies || []
+    }, null, 2),
+    });
   try {
     const payload = await runAgentForJson(
       promptExec, prompt, TOOL_SPEC_AGENT, 'SPEC_AGENT',
@@ -7439,24 +7590,12 @@ function codelineScopeBlock(prd, stories) {
     .filter((cl) => cl && cl !== thisLane);
   if (!others.length) return '';
 
-  return `
-CODELINE SCOPE — you are reviewing ONE lane.
-
-This spec pass ran against '${thisLane}' only, using that codeline's own checkout. The story
-also spans: ${others.join(', ')}. Each of those is specified by its own pass, against its own
-checkout, and the results are recorded per codeline and merged afterwards. You are not seeing
-their work and it is not missing.
-
-So: judge whether this specification is correct, observable and implementable IN '${thisLane}'.
-Do not penalise it because a file, function or criterion it names does not exist in
-${others.join(' or ')} — those codelines wire the same behaviour at their own sites, which
-their own lane locates.
-
-A cross-codeline concern IS in scope, and you should raise it, when '${thisLane}'s own change
-depends on one: a shared contract it consumes, a payload shape another codeline produces, or
-work that cannot function unless another lane changes too. The distinction is dependency, not
-absence.
-`;
+  // RENDERED FROM THE TEMPLATE LAYER.
+  return renderEngineTemplate('spec-context-fragments', {
+    __THIS_LANE__: thisLane,
+    __OTHER_LANES__: others.join(', '),
+    __OTHER_LANES_OR__: others.join(' or '),
+  }, 'codeline_scope')
 }
 
 // laneCodeline(prd) → the codeline this process is running as, or null.
@@ -8133,9 +8272,30 @@ function extractTaggedJson(text, tag) {
 // silently ignored. When the guard-vocabulary agent timed out at 360s on 2026-08-06 and took
 // the specification pass with it, there was no lever to pull — the number had been baked in
 // at import.
-function runClaudeTimeoutMs() {
-  const v = parseInt(process.env.RUNCLAUDE_TIMEOUT_MS || '', 10);
-  return Number.isFinite(v) && v > 0 ? v : 360000;
+function runClaudeTimeoutMs(env) {
+  // 1. AN OPERATOR FORCING A NUMBER always wins. Someone debugging a hang must have a lever, and
+  //    that lever must not be silently overridden by a declaration.
+  const forced = parseInt(process.env.RUNCLAUDE_TIMEOUT_MS || '', 10);
+  if (Number.isFinite(forced) && forced > 0) return forced;
+
+  // 2. WHAT THE SEAM DECLARED. Every seam in invocation-profiles.json carries timeoutSecs and
+  //    seamInvocationEnv exports it — and until today nothing read it, so all 36 declarations were
+  //    inert and every call was bounded by a literal here instead. prompt-builder declared 900s,
+  //    was cut off at 360s, and took a survey, a roster, an assignment and 12 generated prompts
+  //    with it. Same class as the ladder and the tool grant: a declaration nothing consumes reads
+  //    as configuration and is documentation.
+  const declared = parseInt((env && env.EPAM_TIMEOUT_SECS) || '', 10);
+  if (Number.isFinite(declared) && declared > 0) return declared * 1000;
+
+  // 3. THE DEFAULT IS DECLARED, NOT BAKED IN — for calls made at no seam. A literal here is the
+  //    thing this function exists to remove; config/spec-mode-defaults.json owns the number.
+  const cfg = Number(((specModeDefaults() || {}).timeouts || {}).defaultSecs);
+  if (Number.isFinite(cfg) && cfg > 0) return cfg * 1000;
+
+  throw new Error(
+    'no timeout is available for this call: RUNCLAUDE_TIMEOUT_MS is unset, the seam declared no '
+    + 'timeoutSecs, and config/spec-mode-defaults.json declares no timeouts.defaultSecs. Declare '
+    + 'one rather than letting a call run unbounded or be cut off by a number nobody chose.');
 }
 
 function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
@@ -8163,10 +8323,17 @@ function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
       env.ORCH_JSON_RESULT = _costFile;
     } catch { _costFile = null; }
 
+    // WHEN THIS CALL STARTED. The ledger has always accepted startedAt and no caller passed it,
+    // so every JS-side agent recorded elapsed_minutes 0 while the bash-side writers recorded real
+    // spreads. A seam's timeoutSecs can only be set from measured duration, and prompt-builder was
+    // cut off at 360s with nobody able to say what it actually needed.
+    const _callStartedAt = new Date().toISOString();
     const _emitCost = () => {
       if (!_costFile) return;
       try {
         emitCostSnapshot({
+          startedAt: _callStartedAt,
+          logDir: process.env.LOG_DIR || process.env.EPAM_PROJECT_OUTPUT_DIR || '',
           resultFile: _costFile,
           activityFile: process.env.ACTIVITY_FILE ||
             path.join(process.env.LOG_DIR || path.join(__dirname, '..', 'logs'), 'agent-activity.jsonl'),
@@ -8223,7 +8390,7 @@ function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
     // other callers keep their strict reject-on-failure semantics.
     const finishOutput = () => `${stdout}\n${stderr}`.trim();
 
-    const timeoutMs = Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : runClaudeTimeoutMs();
+    const timeoutMs = Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : runClaudeTimeoutMs(env);
     const killTimer = setTimeout(() => {
       if (settled) return;
       settled = true;
@@ -8289,6 +8456,22 @@ function resolvePromptExec(aiRunnerCmd, env = process.env) {
   return { cmd: aiRunnerCmd, args: ['--provider', provider, ...modelArgs] };
 }
 
+// promptExecFor(opts, env) — THE EXEC AN AGENT RUNS WITH, WHEN ITS CALLER DID NOT SAY.
+//
+// The search-term vocabulary agent asked for one as `opts.promptExec || null`. No caller has
+// ever supplied it, so the value was always null, runAgentForJson dereferenced `.cmd` on it, and
+// the TypeError was swallowed by a catch that logged "vocabulary unavailable — seeding with an
+// unfiltered query". The agent never ran once, on any story, in any run, and the log said
+// fallback.
+//
+// Omission gets the SAME exec run() resolves, from the same function and the same environment,
+// rather than a null that reads as a decision. Threading the argument through each call site
+// would leave the next caller free to omit it again; a default cannot be omitted.
+function promptExecFor(opts = {}, env = process.env) {
+  if (opts && opts.promptExec) return opts.promptExec;
+  return resolvePromptExec(env.AI_RUNNER_CMD || path.join(__dirname, 'ai-run.sh'), env);
+}
+
 // buildKnownValidModels <upgradeModel, miniModel>
 // isValidModelString <model, currentModel, knownValidModels>
 //
@@ -8306,12 +8489,50 @@ function resolvePromptExec(aiRunnerCmd, env = process.env) {
 // validation is directly unit-testable, not just greppable — the whole
 // point is to catch this bug CLASS (any future unvalidated LLM-written
 // PRD field), not just this one instance.
+
+/**
+ * THE MODEL A SEAM STARTS ON — the project's ladder, and nothing else.
+ *
+ * Every model default in this file was `process.env.X || '<a vendor model name>'`. The literal
+ * always answered, so the ladder never had to: two of its three positions declared no startModel
+ * for months and no run noticed. And the env var is a second source of truth that silently
+ * outranks the seam an agent was declared to occupy.
+ *
+ * Returns '' when the ladder cannot answer, so a caller can refuse rather than invent one.
+ */
+function seamStartModel(agent) {
+  try {
+    return (seamInvocationEnv(agent) || {}).EPAM_MODEL || '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * WHICH MODELS ARE REAL — asked of the PROJECT, never of a list in here.
+ *
+ * This was nine vendor model names hardcoded in the engine. A project running anything else had
+ * its own perfectly valid models rejected as unknown, and the list went stale the moment a vendor
+ * shipped a version. The project already declares every model it uses, as the rungs of its
+ * ladders in llm-settings.json — that IS the set of models this run can legitimately name.
+ */
 function buildKnownValidModels(upgradeModel, miniModel) {
-  return new Set([
-    'MiniMax-M3', 'MiniMax-M2.5', 'MiniMax-M2.7', 'MiniMax-M2.1', 'MiniMax-M2',
-    'moonshotai/kimi-k3', 'z-ai/glm-5.2', 'z-ai/glm-5.1', 'z-ai/glm-4.7',
-    upgradeModel, miniModel,
-  ]);
+  const known = new Set();
+  for (const [key, value] of Object.entries(process.env)) {
+    if (!/^EPAM_MODEL_LADDER(_[A-Z0-9_]+)?$/.test(key) || !value) continue;
+    if (key.endsWith('_TIER_ORDER')) continue;
+    if (key.endsWith('_START')) { known.add(value.trim()); continue; }
+    // Chains are "from=to|from=to": both sides are models this project declares.
+    for (const pair of value.split('|')) {
+      const [from, to] = pair.split('=');
+      if (from && from.trim()) known.add(from.trim());
+      if (to && to.trim()) known.add(to.trim());
+    }
+  }
+  for (const extra of [upgradeModel, miniModel, process.env.EPAM_FINAL_FALLBACK_MODEL]) {
+    if (extra && extra.trim()) known.add(extra.trim());
+  }
+  return known;
 }
 
 // Anthropic/Claude models are never permitted as a story-agent assignment in
@@ -8344,7 +8565,11 @@ function buildGateExec(aiRunnerCmd, env = process.env) {
   // spec-pass call site silently ran a cheaper model tier than the
   // claude.sh call site for the identical review job, despite both claiming
   // "highest-quality model" intent.
-  const model = env.ESCALATION_MODEL_HIGH || env.ORCH_GATE_MODEL || 'MiniMax-M3';
+  // BOTH CALL SITES NOW ASK THE SAME SEAM, which is what "identical review job, identical
+  // model" actually requires. Matching claude.sh's precedence string was never the same thing as
+  // matching its model, and both strings ended in a vendor literal that always answered.
+  const model = seamStartModel('prd-change-reviewer');
+  if (!model) throw new Error('prd-change-reviewer: no model resolved from its seam ladder');
   return { cmd: aiRunnerCmd, args: ['--provider', provider, '--model', model] };
 }
 
@@ -8418,20 +8643,14 @@ async function reviewPrdChange({ aiRunnerCmd, profiles, storyId, changeType, bef
   // 2026-07-23 on AMSD-1820. Fix: cap acceptanceCriteria (the only field whose
   // length is unbounded) independently, and always include technicalNotes/
   // description/title in full so structural fields can never be truncated away.
-  const prompt = `${reviewerProfile}
-
-STORY: ${storyId}
-CHANGE TYPE: ${changeType}
-${splitNote}
-BEFORE:
-${JSON.stringify(capReviewSnapshot(before))}
-
-AFTER:
-${JSON.stringify(capReviewSnapshot(after))}
-
-You have read-only tools available (list/search/read files, run read-only shell commands). Several of your rejection rules ("introduces a technology this project does not already use," "TC fact cannot be verified by reading source code") require checking a claim against the real manifests/config/source of THIS codeline — do not judge those from the before/after snapshots alone. Verify before rejecting on that basis. Your tool budget is small — check the ONE fact your verdict depends on, not the whole codebase.
-
-Emit ONLY: {"verdict":"pass|fail","issues":["<issue1>"],"reason":"<15 words max>"}`;
+  const prompt = renderEngineTemplate('prd-change-reviewer-spec', {
+    __REVIEWER_PROFILE__: reviewerProfile,
+    __STORY_ID__: storyId,
+    __CHANGE_TYPE__: changeType,
+    __SPLIT_NOTE__: splitNote,
+    __BEFORE__: JSON.stringify(capReviewSnapshot(before)),
+    __AFTER__: JSON.stringify(capReviewSnapshot(after)),
+  });
 
   try {
     const gateExec = buildGateExec(aiRunnerCmd);
@@ -8860,7 +9079,32 @@ if (require.main === module) {
   }
 }
 
+/**
+ * WHICH NAME A COST ROW CARRIES.
+ *
+ * One invocation had two identities: the seam the call site declares, and an unrelated literal
+ * passed alongside it as the cost/log tag. They agreed by luck of spelling on some and differed
+ * outright on others, so per-agent spend could not be joined to the roster or the registry.
+ *
+ * Precedence, most specific first:
+ *   EPAM_AGENT_NAME  the actual agent, when one is named. Many agents share a seam — every
+ *                    -investigator runs at code-graph-detective — and collapsing them onto the
+ *                    archetype is exactly what makes per-agent cost unreadable.
+ *   EPAM_SEAM        the seam the invocation resolved into, stamped by seamInvocationEnv.
+ *   tag              the caller's literal, so a site not yet carrying a seam still records a row.
+ *                    Losing the row entirely would be worse than an unjoinable name.
+ */
+function costLabelFor(tag, env) {
+  const e = env || {};
+  return e.EPAM_AGENT_NAME || e.EPAM_SEAM || tag;
+}
+
 module.exports = {
+  reviewSurvey,
+  rosterCoverageBlock,
+  runClaudeTimeoutMs,
+  TOOL_ESTATE_SURVEY,
+  costLabelFor,
   // The tool definitions ARE the contract. Exported so lib/agent-output-schema.js can
   // validate answers against them instead of restating the shapes — a restated copy
   // drifted within hours and rejected valid coordinator output on a live run.
@@ -8882,6 +9126,10 @@ module.exports = {
   persistReferencedDocs,
   fetchTicketDocuments,
   manifestFileExcerpts,
+  buildGuardVocabularyPrompt,
+  buildVcReviewPrompt,
+  buildVcRegeneratePrompt,
+  buildGuardEvidence,
   deriveGuardVocabulary,
   mintProjectAgents,
   TOOL_PROJECT_AGENTS,
@@ -8893,6 +9141,7 @@ module.exports = {
   detectivePrescription,
   surveyEstate,
   sanitizeSurvey,
+  buildRosterReviewPrompt,
   buildSurveyPrompt,
   surveyLineFor,
   reconcileMintTally,
@@ -8964,6 +9213,8 @@ module.exports = {
   capReviewSnapshot,
   getDeterministicCandidateFiles,
   buildBrownfieldSearchQuery,
+  parseDetectiveFindings,
+  prescriptionMissingSource,
   runCodeGraphDetective,
   runSpecAgent,
   publishedContracts,
@@ -8972,6 +9223,8 @@ module.exports = {
   extractCodeRefs,
   resolvePromptProvider,
   resolvePromptExec,
+  promptExecFor,
+  surveyHypothesisBlock,
   buildGateExec,
   parseReviewVerdict,
   reviewPrdChange,

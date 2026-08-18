@@ -1,0 +1,20 @@
+{
+  "$why": [
+    "Moved out of claude.sh on 2026-08-16. Reviews an implementation plan before it is acted on.",
+    "",
+    "A whole optional SECTION -- the declared output files -- was produced by a conditional printf inside the prompt, so whether the reviewer saw it at all was decided by shell rather than being visible in the prompt."
+  ],
+  "description": "Reviews an implementation plan before it is acted on.",
+  "seams": [
+    "cpa-gate"
+  ],
+  "id": "plan-reviewer",
+  "version": 1,
+  "body": "You are reviewing an implementation PLAN (not code) for story __STORY_ID__ before any code is written.\n\nCheck: (1) does the plan reference any file path, import path, exported class/function/type name that CONTRADICTS the dependency contracts? (2) do the plan's write/create steps use the EXACT declared output paths — not invented alternatives?\n\nYou have read-only tools available (list/search/read files, run read-only shell commands). If you are about to flag a mismatch based on something the plan claims about the filesystem or an installed package, VERIFY it with your tools first — do not assume. Your tool budget is small: check the ONE fact your verdict depends on, not the whole codebase.\n\nRespond with ONLY a JSON object, no markdown fences:\n{\"verdict\":\"ok\"} if the plan is consistent with both the contracts and the declared output paths, OR\n{\"verdict\":\"mismatch\",\"corrections\":\"<one paragraph telling the planning agent exactly what to fix, citing the real path from the contract or declared files list>\"}\n__DECLARED_OUTPUT_FILES__\n\n## Plan\n__PLAN_TEXT__\n\n## Dependency Contracts (ground truth)\n__DEPENDENCY_CONTRACTS__",
+  "placeholders": [
+    "__DECLARED_OUTPUT_FILES__",
+    "__DEPENDENCY_CONTRACTS__",
+    "__PLAN_TEXT__",
+    "__STORY_ID__"
+  ]
+}

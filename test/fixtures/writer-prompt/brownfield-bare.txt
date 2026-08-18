@@ -1,0 +1,93 @@
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - <SCRATCH>/project/src/service.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+---
+
+Implement user story CAP-1: SENTINEL-TITLE render live content
+
+## Story Description
+SENTINEL-DESCRIPTION the page must refetch when the editor publishes
+
+## Acceptance Criteria
+- SENTINEL-AC-ONE the response contains "sentinel-literal-string"
+- SENTINEL-AC-TWO the request is not cached
+
+## CRITICAL COMPLIANCE: STRING INVARIANTS
+The Acceptance Criteria above contain exact string matches required by the test suite.
+You are FORBIDDEN from paraphrasing, summarizing, or optimizing these strings — reproduce them character-for-character, including case and spacing, wherever the AC requires them.
+
+LITERAL STRINGS TO USE VERBATIM:
+- "sentinel-literal-string"
+
+
+
+
+
+
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix.
+
+This is not a suggestion you can trade against a review comment: the reviewer has been given the same rule and will not reject you for absent tests. If a prior review comment appears to demand a test, it is stale — resolve it by making the fix correct, and say in your final message that test authorship belongs to the test-writer.
+
+Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+A codegraph_query tool is available — call it directly (NOT via Bash) to discover reusable functions instead of inventing new ones:
+  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter to REUSE (symbol + import path)
+  codegraph_query(mode="query", args="<SymbolName>")       # exact definition site of a symbol
+  codegraph_query(mode="callees", args="<SymbolName>")     # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+## Brownfield Testing Policy (READ — do not write unnecessary tests)
+This is a change to EXISTING code. The existing test suite already runs after your change (regression gate) — you do NOT need to re-prove already-tested behavior. Add a test ONLY for the file(s) below, which currently have NO covering tests, and add just ONE focused test covering the specific behavior you changed. Do NOT add tests for any other file, and do NOT expand scope:
+  - src/service.ts
+
+
+
+
+
+## Technical Notes
+- files: ["src/service.ts"]
+- notes: SENTINEL-TECHNICAL-NOTE
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### <SCRATCH>/project/src/service.ts
+```
+export const SENTINEL_EXISTING_CODE = 1;
+```
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — start here; this list is not exhaustive)
+These are the files the analysis identified. Use these exact paths for them. The list is a
+STARTING POINT, not a fence: it is derived from the ticket and may be incomplete or may name
+a path this repository spells differently. If your change genuinely requires another file in
+this repository, write it — the only files closed to you are ones another story OWNS, and
+attempting one of those returns a specific refusal saying so. Do NOT work around a refusal by
+repeatedly rewriting a file you can already write; that is never the fix. When you write a
+file that is not listed here, say which file and why in your final message, so the reviewer
+sees the whole change.
+src/service.ts
+
+## Dependencies
+None
+
+
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - <SCRATCH>/project/src/service.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.

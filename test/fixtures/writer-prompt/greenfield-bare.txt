@@ -1,0 +1,72 @@
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE <SCRATCH>/project/src/service.ts first, before any other action
+---
+
+Implement user story CAP-1: SENTINEL-TITLE render live content
+
+## Story Description
+SENTINEL-DESCRIPTION the page must refetch when the editor publishes
+
+## Acceptance Criteria
+- SENTINEL-AC-ONE the response contains "sentinel-literal-string"
+- SENTINEL-AC-TWO the request is not cached
+
+## CRITICAL COMPLIANCE: STRING INVARIANTS
+The Acceptance Criteria above contain exact string matches required by the test suite.
+You are FORBIDDEN from paraphrasing, summarizing, or optimizing these strings — reproduce them character-for-character, including case and spacing, wherever the AC requires them.
+
+LITERAL STRINGS TO USE VERBATIM:
+- "sentinel-literal-string"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Technical Notes
+- files: ["src/service.ts"]
+- notes: SENTINEL-TECHNICAL-NOTE
+
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — start here; this list is not exhaustive)
+These are the files the analysis identified. Use these exact paths for them. The list is a
+STARTING POINT, not a fence: it is derived from the ticket and may be incomplete or may name
+a path this repository spells differently. If your change genuinely requires another file in
+this repository, write it — the only files closed to you are ones another story OWNS, and
+attempting one of those returns a specific refusal saying so. Do NOT work around a refusal by
+repeatedly rewriting a file you can already write; that is never the fix. When you write a
+file that is not listed here, say which file and why in your final message, so the reviewer
+sees the whole change.
+src/service.ts
+
+## Dependencies
+None
+
+
+
+
+## Instructions
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+   - WRITE <SCRATCH>/project/src/service.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.

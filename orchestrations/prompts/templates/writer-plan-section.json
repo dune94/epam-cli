@@ -1,0 +1,28 @@
+{
+  "$why": [
+    "Moved out of claude.sh on 2026-08-16.",
+    "",
+    "Two sections appended to the writer's prompt: the execution plan it must follow, and the coordinator guidance identified from a previous failure. Both appear at more than one call site and were written out separately at each.",
+    "",
+    "The guidance section has two variants: one carries the whole amendment, the other the most recent three with the rest left in the log. That second one DECLARES its own truncation in the heading, which is the honest form -- whole entries dropped and said so, rather than a string cut mid-sentence."
+  ],
+  "description": "Sections appended to a writer prompt: the plan to follow, and guidance from a previous failure.",
+  "seams": [
+    "story-writer"
+  ],
+  "id": "writer-plan-section",
+  "version": 1,
+  "bodies": {
+    "coordinator_guidance_full": "__PROMPT__\n\n## Coordinator Guidance (retry __RETRY_COUNT__)\nThe following targeted instruction was identified from the previous failure:\n__COORDINATOR_PROMPT_AMENDMENT__",
+    "coordinator_guidance_trimmed": "__PROMPT__\n\n## Coordinator Guidance (retry __RETRY_COUNT__, showing most recent up to 3 — full retry history: __SCRATCHPAD_FILE__)\n__TRIMMED_AMENDMENT__",
+    "execution_plan": "__PROMPT__\n\n## Execution Plan\nFollow this plan step by step:\n__STORY_PLAN__"
+  },
+  "placeholders": [
+    "__COORDINATOR_PROMPT_AMENDMENT__",
+    "__RETRY_COUNT__",
+    "__PROMPT__",
+    "__TRIMMED_AMENDMENT__",
+    "__SCRATCHPAD_FILE__",
+    "__STORY_PLAN__"
+  ]
+}

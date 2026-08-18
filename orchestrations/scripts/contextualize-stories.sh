@@ -50,7 +50,30 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # fixed model silently, and there were sixteen of those.
 # shellcheck source=lib/seam-ladder.sh
 . "$SCRIPT_DIR/lib/seam-ladder.sh" 2>/dev/null || true
-command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "cpa-inference"
+# WHICH AGENT THIS IS — declared ONCE, and exported so ai-run.sh keys this agent's ladder rung
+# state to it. Without it every agent shared one counter ("agent__<story>"): one agent escalating
+# advanced the ladder for all of them, and team-lead-review's cross-process resume read a key
+# nothing ever wrote.
+_SEAM_NAME="cpa-inference"
+export EPAM_AGENT_NAME="$_SEAM_NAME"
+# EVERY ENTRY POINT READS THE LADDER DECLARATION ITSELF.
+#
+# lib/model-ladders.sh exists so that "what a tier contains" is declared once and read the same
+# way everywhere. Only claude.sh, run-agent-orchestration.sh and detective-rerun.sh ever called
+# it, so this script resolved its model ONLY from environment its parent happened to export. Run
+# standalone — a replay, a retest, a test harness — nothing set EPAM_MODEL_LADDER_<TIER>,
+# seam_ladder_export set no EPAM_MODEL, and this seam skipped its work while exiting 0.
+#
+# export_model_ladders leaves an already-set value alone, so calling it here changes nothing when
+# the orchestrator has already exported the chain, and supplies it when nobody has.
+_ml_lib="${SCRIPT_DIR:-$(dirname "${BASH_SOURCE[0]}")}/lib/model-ladders.sh"
+if [ -f "$_ml_lib" ]; then
+    # shellcheck source=lib/model-ladders.sh
+    . "$_ml_lib" || true
+    command -v export_model_ladders >/dev/null 2>&1 \
+        && export_model_ladders "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json}" || true
+fi
+command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "$_SEAM_NAME"
 
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 # Unconditional assignment here (no ${PROJECT_ROOT:-...} fallback) always
@@ -67,7 +90,6 @@ LIB_DIR="$SCRIPT_DIR/lib"
 PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
 COST_LOG="${COST_LOG:-$AUTOMATION_DIR/logs/phase-cost.jsonl}"
 CPA_LOG="${CPA_LOG:-$AUTOMATION_DIR/logs/cpa-review.jsonl}"
-SYSTEM_PROMPT_FILE="$AUTOMATION_DIR/prompts/cpa-system.md"
 KB_DIR="$AUTOMATION_DIR/agents"   # KB.md and AGENTS.md live here
 
 # Extra docs fed into TF-IDF beyond the KB dir
@@ -187,38 +209,19 @@ if [ ! -f "$LIB_DIR/cpa-inference.js" ]; then
   error "cpa-inference.js not found: $LIB_DIR/cpa-inference.js"; exit 1
 fi
 
-if [ ! -f "$SYSTEM_PROMPT_FILE" ]; then
-  warning "CPA system prompt not found: $SYSTEM_PROMPT_FILE"
-  warning "Using built-in fallback prompt (non-blocking)."
-  SYSTEM_PROMPT="$(cat <<'EOF'
-You are the Contextual Purveyor Agent (CPA).
-Goal: refine formula-based implementation estimates for a software story using provided context.
-
-Rules:
-- Return strict JSON only.
-- Be conservative when confidence is low.
-- Surface concrete risk flags and missing knowledge areas.
-- Prefer practical effort realism over optimism.
-
-Output schema:
-{
-  "confidence": 0.0,
-  "complexityAdjustment": 1.0,
-  "adjustedEstimate": {
-    "aiMinutes": 0,
-    "cost": 0,
-    "tokens": 0,
-    "turns": 1
-  },
-  "riskFlags": [],
-  "missingKbCoverage": [],
-  "citedSources": [],
-  "reasoning": "short rationale"
-}
-EOF
-)"
-else
-  SYSTEM_PROMPT="$(cat "$SYSTEM_PROMPT_FILE")"
+# ONE SOURCE, NO FALLBACK.
+#
+# This used to prefer $AUTOMATION_DIR/prompts/cpa-system.md and fall back to a copy embedded
+# in this script. That file has never existed, so every CPA run warned "prompt not found —
+# using built-in fallback (non-blocking)" and quietly ran the embedded copy. Two sources, one
+# of them dead, and the live one invisible to review.
+#
+# The template layer is now the only source, and an empty render is fatal: an estimator with
+# no instructions produces an estimate that looks like every other estimate.
+SYSTEM_PROMPT="$("${NODE_BIN:-node}" -e 'process.stdout.write(require(process.argv[1]).renderEngineTemplate("cpa-system", {}))' "$SCRIPT_DIR/lib/engine-prompt.js")"
+if [ -z "$SYSTEM_PROMPT" ]; then
+  error "cpa: the cpa-system prompt rendered empty — refusing to run the estimator with no instructions"
+  exit 1
 fi
 
 # ── Reconcile mode ───────────────────────────────────────────────────────────
@@ -437,104 +440,8 @@ load_calibration
 # Reads escalationRates from calibration.json and pricing from model-pricing.json.
 # Falls back to conservative defaults when calibration data is absent.
 compute_escalation_profile() {
-  local effort="$1" base_cost="$2" mean_tokens="$3" base_model="${4:-MiniMax-M3}"
-  python3 - <<PYEOF
-import json, os, sys
-
-effort      = "$effort"
-base_cost   = float("$base_cost" or 0)
-mean_tokens = int(float("$mean_tokens" or 0))
-base_model  = "$base_model"
-
-# ── Escalation rate priors (from calibration.json) ───────────────────────────
-try:
-    cal = json.load(open("$CAL_FILE"))
-    r = cal.get("escalationRates", {}).get(effort, {})
-except Exception:
-    r = {}
-
-p_r2       = r.get("p_rung2",  0.10)
-p_r3       = r.get("p_rung3",  0.030)
-p_k3       = r.get("p_k3",     0.005)
-self_heal_p= r.get("selfHealP",0.25)
-
-# ── Ladder models from env ────────────────────────────────────────────────────
-rung2_model = os.environ.get("ESCALATION_MODEL",      "z-ai/glm-5.2")
-rung3_model = os.environ.get("ESCALATION_MODEL_HIGH", "z-ai/glm-5.1")
-gate_model  = os.environ.get("ORCH_GATE_MODEL",       "z-ai/glm-5.2")
-
-# kimi-k3 rung: top entry in HIGH ladder (from=rung3_model)
-k3_model = "moonshotai/kimi-k3"
-ladder_high = os.environ.get("EPAM_MODEL_LADDER_HIGH", "")
-for pair in ladder_high.split("|"):
-    if "=" in pair:
-        f, t = pair.split("=", 1)
-        if f == rung3_model:
-            k3_model = t
-            break
-
-# ── Model pricing ─────────────────────────────────────────────────────────────
-try:
-    pricing = json.load(open("$SCRIPT_DIR/model-pricing.json"))
-except Exception:
-    pricing = {}
-
-def get_price(model):
-    p = pricing.get(model, {})
-    if not p:
-        ml = model.lower()
-        for k, v in pricing.items():
-            if k.lower() == ml or k.lower() in ml or ml in k.lower():
-                p = v; break
-    return float(p.get("input", 0)), float(p.get("output", 0))
-
-def rung_cost(model, tok_in, tok_out):
-    inp, out = get_price(model)
-    return (tok_in * inp + tok_out * out) / 1_000_000
-
-# Token estimate: assume 80/20 in/out split
-tok_in  = int(mean_tokens * 0.80) if mean_tokens > 0 else 40_000
-tok_out = int(mean_tokens * 0.20) if mean_tokens > 0 else 10_000
-
-cost_r2_attempt  = rung_cost(rung2_model, tok_in, tok_out)
-cost_r3_attempt  = rung_cost(rung3_model, tok_in, tok_out)
-cost_k3_attempt  = rung_cost(k3_model,    tok_in, tok_out)
-
-# Analyst/self-heal: gate model on ~150K in / 5K out (typical failure analysis)
-cost_per_heal = rung_cost(gate_model, 150_000, 5_000)
-
-# Expected attempts per rung before escalating (empirical: ~1.5 at each mid-rung)
-avg_r2 = 1.5; avg_r3 = 1.5; avg_k3 = 2.0
-
-exp_r2_cost   = p_r2 * avg_r2 * cost_r2_attempt
-exp_r3_cost   = p_r3 * avg_r3 * cost_r3_attempt
-exp_k3_cost   = p_k3 * avg_k3 * cost_k3_attempt
-exp_heal_cost = self_heal_p * cost_per_heal
-esc_cost      = exp_r2_cost + exp_r3_cost + exp_k3_cost
-exp_retries   = p_r2 * avg_r2 + p_r3 * avg_r3 + p_k3 * avg_k3
-
-out = {
-    "modelProfile": {
-        "rung1": {"model": base_model,  "p_resolves": round(1 - p_r2, 3),
-                  "expectedCost": round(base_cost, 4)},
-        "rung2": {"model": rung2_model, "p_reached": round(p_r2, 3),
-                  "costPerAttempt": round(cost_r2_attempt, 4),
-                  "expectedCost":   round(exp_r2_cost, 4)},
-        "rung3": {"model": rung3_model, "p_reached": round(p_r3, 3),
-                  "costPerAttempt": round(cost_r3_attempt, 4),
-                  "expectedCost":   round(exp_r3_cost, 4)},
-        "k3":    {"model": k3_model,    "p_reached": round(p_k3, 3),
-                  "costPerAttempt": round(cost_k3_attempt, 4),
-                  "expectedCost":   round(exp_k3_cost, 4)}
-    },
-    "expectedRetries":  round(exp_retries,   2),
-    "selfHealP":        round(self_heal_p,   2),
-    "selfHealCost":     round(exp_heal_cost, 4),
-    "escalationCost":   round(esc_cost,      4),
-    "totalStoryCost":   round(base_cost + esc_cost + exp_heal_cost, 4)
-}
-print(json.dumps(out))
-PYEOF
+  local effort="$1" base_cost="$2" mean_tokens="$3" base_model="${4:-${EPAM_MODEL:-}}"
+  python3 "$SCRIPT_DIR/lib/handlers/story-contextualization.py" "$mean_tokens" "$base_model" "$SCRIPT_DIR" "$base_cost" "$CAL_FILE" "$effort"
 }
 
 bc_eval() { echo "scale=4; $1" | bc | xargs printf "%.4f"; }
@@ -848,17 +755,23 @@ while IFS= read -r sid; do
       formulaEstimate: $formulaEstimate, adjacentStories: $adjacentStories,
       manifest: $manifest, systemPrompt: $systemPrompt}')
 
+  # STDERR CAPTURED, NEVER DISCARDED. This ran under 2>/dev/null with '|| echo ""' after it, so a
+  # crash, a missing key and a timeout all became an empty result and the caller quietly fell back
+  # to the formula with a 20% markup — an estimate that looks like every other estimate.
+  _cpa_err="$(mktemp "${TMPDIR:-/tmp}/cpa-err-XXXXXX")"
   t_start=$(date +%s%3N)
   cpa_raw=$(echo "$inference_input" | \
     CLAUDE_CMD="${CLAUDE_CMD:-claude}" \
     AI_PROVIDER="${CPA_PROVIDER:-${AI_PROVIDER:-qwen}}" \
-    AI_MODEL="${CPA_MODEL:-${AI_MODEL:-z-ai/glm-5.2}}" \
-    "$NODE_CMD" "$LIB_DIR/cpa-inference.js" 2>/dev/null || echo "")
+    AI_MODEL="${CPA_MODEL:-${AI_MODEL:-${EPAM_MODEL:-}}}" \
+    "$NODE_CMD" "$LIB_DIR/cpa-inference.js" 2>"$_cpa_err" || echo "")
   t_end=$(date +%s%3N)
   infer_ms=$(( t_end - t_start ))
 
   if [ -z "$cpa_raw" ]; then
     warning "  $sid: inference returned empty — using formula with 20% markup"
+    [ -s "$_cpa_err" ] && warning "  $sid: reason: $(tail -c 300 "$_cpa_err" | tr '\n' ' ')"
+    rm -f "$_cpa_err"
     cpa_raw=$(jq -n \
       --argjson fe "$formula_est_json" \
       '{confidence: 0.30, complexityAdjustment: 1.0,
@@ -915,7 +828,25 @@ while IFS= read -r sid; do
   # ── Escalation profile (probability-weighted model composition) ───────────────
   # Token basis: prefer calibrated mean_tokens; fall back to blended token estimate
   _esc_tok="${cal_tok:-${b_tok:-0}}"
-  _esc_profile=$(compute_escalation_profile "$f_effort" "$b_cost" "$_esc_tok" "${_story_model:-MiniMax-M3}" 2>/dev/null || echo "{}")
+  # THE STORY'S TIER REACHES THE PROFILE, OR THE LADDER WALK HAS NO CHAIN.
+  #
+  # compute_escalation_profile resolves the rungs above the ones it is handed by walking
+  # EPAM_MODEL_LADDER_<TIER>, selected by EPAM_STORY_LADDER_TIER. Nothing in this repository
+  # ever set that variable, so `_tier` was always empty, `_chain` fell back to the bare
+  # EPAM_MODEL_LADDER (only ever exported EMPTY, and only by two other launchers), `_hops`
+  # was always {} — and the TOP rung silently priced an attempt on model "".
+  #
+  # Measured on the same inputs, both versions executed:
+  #     before 2f8d980:  k3 = "z-ai/glm-5.2"
+  #     after:           k3 = ""
+  #     with this line:  k3 = "z-ai/glm-5.2"   (byte-identical to the predecessor)
+  #
+  # The tier comes from the STORY's own declaration, read from the story object already in
+  # scope — not from a tier named here, and not from a second PRD query. A project that
+  # declares different tiers is served by its own vocabulary.
+  EPAM_STORY_LADDER_TIER="$(echo "$story_json" | jq -r '.ladderTier // ""' 2>/dev/null || echo "")"
+  export EPAM_STORY_LADDER_TIER
+  _esc_profile=$(compute_escalation_profile "$f_effort" "$b_cost" "$_esc_tok" "${_story_model:-${EPAM_MODEL:-}}" 2>/dev/null || echo "{}")
   esc_cost=$(echo "$_esc_profile"    | jq -r '.escalationCost // 0')
   esc_heal_cost=$(echo "$_esc_profile" | jq -r '.selfHealCost // 0')
   esc_retries=$(echo "$_esc_profile"   | jq -r '.expectedRetries // 0')
@@ -1287,30 +1218,14 @@ ${_cpa_after}
 
 Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}" | \
           AI_PROVIDER="${ORCH_GATE_PROVIDER}" \
-          AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
+          AI_MODEL="${ORCH_GATE_MODEL:-${EPAM_MODEL:-}}" \
           EPAM_CLI="${EPAM_CLI:-epam}" \
           EPAM_MAX_OUTPUT_TOKENS="${CPA_GATE_MAX_OUTPUT_TOKENS:-16384}" \
           "$_cpa_ai_runner_cmd" \
               --provider "${ORCH_GATE_PROVIDER}" \
-              --model    "${ORCH_GATE_MODEL:-MiniMax-M3}" \
+              --model    "${ORCH_GATE_MODEL:-${EPAM_MODEL:-}}" \
           2>/dev/null | \
-          python3 -c "
-import sys, json, re
-text = sys.stdin.read()
-try:
-    obj = json.loads(text.strip())
-    # UNREVIEWED IS NOT APPROVED. Defaulting a missing verdict to 'pass' accepts an estimate
-    # nobody reviewed. code-review-cycle.sh settled this question on 2026-07-23 — 'SAFE default
-    # = BLOCK, never silently approve an unreviewed change' — and this path answered it the
-    # opposite way. 'fail' here reverts to the pre-CPA values, which is the conservative
-    # outcome: the story keeps the estimate it already had.
-    print(obj.get('verdict','fail'))
-    sys.exit(0)
-except Exception:
-    pass
-m = re.search(r'\"verdict\"\s*:\s*\"(pass|fail)\"', text)
-print(m.group(1) if m else 'fail')
-" 2>/dev/null || echo "fail")
+          python3 "$SCRIPT_DIR/lib/handlers/cpa-review-verdict.py" 2>/dev/null || echo "fail")
         if [ "$_cpa_verdict" = "fail" ]; then
           warning "  $sid: CPA estimate REJECTED by reviewer — reverting to pre-CPA values"
           jq --arg id "$sid" --argjson before "$_cpa_before" \

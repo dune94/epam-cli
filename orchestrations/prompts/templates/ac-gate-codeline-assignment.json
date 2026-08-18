@@ -1,0 +1,25 @@
+{
+  "$why": [
+    "Moved out of lib/ac-gate.js on 2026-08-16. Missed by the prose guard because it opens with",
+    "an imperative verb the pattern set did not carry -- one more demonstration that matching",
+    "prose reports a floor. Found by looking for the SHAPE instead: a multi-line literal.",
+    "",
+    "Routes one ticket to one codeline, or to the split value when the work spans several. The",
+    "split value is supplied rather than named here: which sentinel means 'spans codelines' is",
+    "the engine's business, and a prompt that spells it out drifts from the code that reads it."
+  ],
+  "description": "Assigns a single Jira story to exactly one codeline, or marks it as spanning several.",
+  "id": "ac-gate-codeline-assignment",
+  "seams": [
+    "ac-classification"
+  ],
+  "placeholders": [
+    "__JIRA_KEY__",
+    "__TITLE__",
+    "__DESCRIPTION__",
+    "__CODELINE_LIST__",
+    "__SPLIT_VALUE__"
+  ],
+  "version": 1,
+  "body": "Assign this Jira story to a codeline. Answer with JSON only — no prose, no markdown fences.\n\nSTORY: __JIRA_KEY__ — __TITLE__\n\nDESCRIPTION:\n__DESCRIPTION__\n\nCODELINES:\n__CODELINE_LIST__\n- \"__SPLIT_VALUE__\" — the work spans multiple codelines\n\nChoose exactly one. Answer:\n{\"codeline\": \"<one of the values above>\"}\n"
+}

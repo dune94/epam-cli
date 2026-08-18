@@ -1,0 +1,23 @@
+{
+  "$why": [
+    "Moved out of run-agent-orchestration.sh on 2026-08-16.",
+    "",
+    "The browser E2E routing check for one route."
+  ],
+  "description": "Checks one route renders and behaves in a browser E2E pass.",
+  "seams": [
+    "qa-gate:e2e"
+  ],
+  "id": "e2e-route-check",
+  "version": 1,
+  "body": "__AGENT_PROFILE__\n\nYou are running as __ROUTE__ inside Step 4.6 Browser E2E routing checks.\nPhase: __PHASE_ID__\nStory: __STORY_ID__\nStory title: __STORY_TITLE__\nRoute reason: __ROUTE_REASON__\nComplexity score: __ROUTE_SCORE__\n\nReturn strict JSON only:\n{\n  \"agent\": \"__ROUTE__\",\n  \"storyId\": \"__STORY_ID__\",\n  \"phase\": \"__PHASE_ID__\",\n  \"verdict\": \"pass|warn|fail\",\n  \"findings\": [{\"severity\": \"blocker|major|minor\", \"message\": \"...\", \"file\": \"...\", \"line\": 0}],\n  \"summary\": \"...\"\n}",
+  "placeholders": [
+    "__AGENT_PROFILE__",
+    "__ROUTE_REASON__",
+    "__STORY_TITLE__",
+    "__ROUTE_SCORE__",
+    "__PHASE_ID__",
+    "__STORY_ID__",
+    "__ROUTE__"
+  ]
+}

@@ -42,6 +42,15 @@ function extractFunctionBody(name: string): string {
 
 const FN_BODY = extractFunctionBody('_selective_worktree_reset');
 
+// A DEPENDENCY OF THE FUNCTION UNDER TEST, LIFTED WITH IT.
+//
+// The reset used to spell its baseline `origin/${JIRA_BASELINE_BRANCH:-develop}` inline; it now
+// asks _resolved_baseline_ref, which resolves the project's declaration or the repository's own
+// branch. Lifting only the reset left that helper undefined, the ref empty, and the reset
+// correctly refusing to clean a tree it could not restore — so these tests failed for the right
+// reason at the wrong level.
+const BASELINE_REF_FN = extractFunctionBody('_resolved_baseline_ref');
+
 const cleanupDirs: string[] = [];
 afterEach(() => {
   for (const d of cleanupDirs.splice(0)) rmSync(d, { recursive: true, force: true });
@@ -94,6 +103,7 @@ function runReset(projectRoot: string, tscPassed: boolean, opts: { brownfield?: 
       `LAST_ATTEMPT_TSC_PASSED=${tscPassed}`,
       `LAST_VERIFIED_TOUCHED_FILES="src/tracked.ts"`,
       `LAST_VERIFIED_UNCHANGED_FILES=""`,
+      BASELINE_REF_FN,
       FN_BODY,
       '_selective_worktree_reset "SKY-TEST"',
       'echo "TOUCHED_AFTER=[$LAST_VERIFIED_TOUCHED_FILES]"',

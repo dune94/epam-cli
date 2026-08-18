@@ -23,11 +23,30 @@ const ROOT = join(__dirname, '../../..');
 const specSrc = readFileSync(join(ROOT, 'orchestrations/scripts/spec-mode-runner.js'), 'utf8');
 const acGateSrc = readFileSync(join(ROOT, 'orchestrations/scripts/lib/ac-gate.js'), 'utf8');
 
+
+// THE PROMPT MOVED OUT OF THE ENGINE (2026-08-12) into
+// orchestrations/prompts/templates/code-graph-detective.json. Asserting prompt text against the
+// SOURCE of spec-mode-runner.js proves nothing now — and never proved much: a source grep
+// passes on a comment or a dead branch. This renders what the model is actually sent.
+const DETECTIVE_PROMPT = (() => {
+  const path = require('node:path');
+  const lib = path.join(__dirname, '../../../orchestrations/scripts/lib/prompt-library.js');
+  return require(lib).buildPrompt(
+    'code-graph-detective',
+    path.join(__dirname, '../../../orchestrations/projects/metrolinx'),
+    {
+      __DETECTIVE_PROFILE__: '', __REPO_PATH__: '/REPO', __TOOL_PATH__: '/TOOL',
+      __STORY_TITLE__: 'T', __STORY_DESCRIPTION__: '', __STORY_ACS__: '- AC',
+      __KIND_AND_CORRECTIVE_CONTEXT__: '', __PRESEED_BLOCK__: '', __PRESCRIPTION_RULES__: '',
+    },
+  );
+})();
+
 describe('detective prompt — forbids answering by writing a file', () => {
   it('explicitly tells the model NOT to call WriteFile and to emit JSON inline', () => {
-    expect(specSrc).toMatch(/Do NOT call WriteFile and do NOT write your answer to any file/);
-    expect(specSrc).toMatch(/the pipeline reads your reply text, not a file/);
-    expect(specSrc).toMatch(/Use the Bash tool ONLY to run the CodeGraph query/);
+    expect(DETECTIVE_PROMPT).toMatch(/Do NOT call WriteFile and do NOT write your answer to any file/);
+    expect(DETECTIVE_PROMPT).toMatch(/the pipeline reads your reply text, not a file/);
+    expect(DETECTIVE_PROMPT).toMatch(/Use the Bash tool ONLY to run the CodeGraph query/);
   });
 });
 
@@ -39,7 +58,16 @@ describe('detective invocation — loud retry instead of silent []', () => {
 
   it('retries with a corrective note when the output had no JSON array', () => {
     expect(specSrc).toMatch(/for \(let attempt = 1; attempt <= maxAttempts; attempt\+\+\)/);
-    expect(specSrc).toMatch(/RETRY — your previous reply contained NO JSON array/);
+    // The retry NOTE lives in the template layer since 2026-08-16; the retry LOOP and its
+    // attempt budget stay in code. Both halves are still asserted — the loop here, the text
+    // where the text now is — because a retry that repeats the original instruction gets the
+    // original answer, and the note is the only new information the second attempt has.
+    const note = JSON.parse(readFileSync(
+      join(__dirname, '../../../orchestrations/prompts/templates/detective-retry-note.json'),
+      'utf8')).body as string;
+    expect(note).toMatch(/RETRY — your previous reply contained NO JSON array/);
+    expect(specSrc, 'the retry note is no longer reached from the detective loop')
+      .toMatch(/detective-retry-note/);
     expect(specSrc).toMatch(/CODEGRAPH_DETECTIVE_MAX_ATTEMPTS/);
   });
 

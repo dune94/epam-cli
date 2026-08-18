@@ -1,0 +1,27 @@
+{
+  "$why": [
+    "Moved out of worktree-health-check.sh on 2026-08-16.",
+    "",
+    "Not a prompt — no model receives it. It is the commit message the health check writes when an",
+    "agent produced files and did not commit them, and it is PROSE: a human reads it in git log,",
+    "months later, trying to work out why a commit exists that no agent claims.",
+    "",
+    "Text a person reads belongs in the template layer for the same reason a prompt does. As a",
+    "heredoc it could not be reviewed, diffed against the other things the engine says, or changed",
+    "without editing a shell script — and the attribution line at the bottom had gone stale where",
+    "nobody could see it."
+  ],
+  "description": "The commit message written when an agent leaves its output uncommitted.",
+  "seams": [],
+  "consumer": "engine",
+  "id": "worktree-autocommit-message",
+  "version": 1,
+  "body": "chore(wt-__LANE__): auto-commit agent output for phase __PHASE__\n\nAutomated commit of __CHANGED_COUNT__ file(s) produced by the __LANE__ agent.\nPhase: __PHASE__\nLane: __LANE__\nTimestamp: __TIMESTAMP__\n\nWARNING: this was auto-committed by worktree-health-check.sh because the agent\ndid not commit its own changes. Review these files.\n\nCo-Authored-By: __AUTHOR__\n",
+  "placeholders": [
+    "__LANE__",
+    "__PHASE__",
+    "__CHANGED_COUNT__",
+    "__TIMESTAMP__",
+    "__AUTHOR__"
+  ]
+}

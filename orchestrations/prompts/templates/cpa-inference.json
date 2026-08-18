@@ -1,0 +1,25 @@
+{
+  "$why": [
+    "Moved out of lib/cpa-inference.js buildPrompt on 2026-08-15 (7 of 20).",
+    "",
+    "This prompt is mostly a DATA ENVELOPE: the story, the formula baseline, KB sources, code",
+    "signals, adjacent stories, the manifest and the detective's fix sites, each rendered as",
+    "JSON by the caller and joined. What is genuinely PROMPT here is the envelope itself and",
+    "the closing instruction, and that is what this template holds.",
+    "",
+    "Section assembly stays in the caller because it is filter(Boolean) logic — an absent",
+    "section removes its separator too, and a template cannot express that without becoming a",
+    "program."
+  ],
+  "body": "__SYSTEM_PROMPT__\n\n---\n\n__SECTIONS__\n\n---\n\nRespond with ONLY the JSON object as specified in your instructions. No prose, no markdown fences.",
+  "description": "Ask the estimator for an iteration count, given the story and everything known about it.",
+  "id": "cpa-inference",
+  "placeholders": [
+    "__SECTIONS__",
+    "__SYSTEM_PROMPT__"
+  ],
+  "version": 1,
+  "seams": [
+    "cpa-inference"
+  ]
+}

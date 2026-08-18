@@ -32,6 +32,8 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/render-engine-prompt.sh
+source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
 
 PRD_FILE=""; STORY_ID=""; TEST_FILE=""; OUT_FILE=""
@@ -73,26 +75,16 @@ for _i in $(seq 0 $(( _vc_count - 1 ))); do
     _vc=$(printf '%s' "$_vcs_json" | jq -r ".[$_i]" 2>/dev/null)
     [ -n "$_vc" ] || continue
 
-    _prompt="You are checking whether a test suite covers ONE specific requirement.
-
-## The requirement
-${_vc}
-
-## The test file (complete)
-\`\`\`
-${_test_src}
-\`\`\`
-
-Answer ONE question: does this test file contain a case that would FAIL if this
-requirement were violated?
-
-Judge the ASSERTIONS, not the titles. A test whose name mentions the same words
-is irrelevant if it does not actually exercise the requirement — in particular a
-requirement stating something must NOT happen is not covered by a test asserting
-that it DOES happen, however similar the wording.
-
-Output ONLY this JSON, nothing else:
-{\"covered\": true|false, \"case\": \"<the test case name that covers it, or empty>\", \"why\": \"<one sentence>\"}"
+    # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
+    _tpl_vals=$(mktemp "${TMPDIR:-/tmp}/vc-coverage-vals-XXXXXX.json")
+    jq -n --arg test_source "$_test_src" \
+          --arg verification_criterion "$_vc" \
+          '{"__TEST_SOURCE__":$test_source,"__VERIFICATION_CRITERION__":$verification_criterion}' > "$_tpl_vals" 2>/dev/null
+    if ! _prompt=$(render_engine_prompt vc-coverage "$_tpl_vals"); then
+        echo "[vc-coverage] cannot render its prompt — refusing to run with no instructions" >&2
+        rm -f "$_tpl_vals"; exit 1
+    fi
+    rm -f "$_tpl_vals"
 
     _raw=$(printf '%s' "$_prompt" | \
         EPAM_ALLOWED_TOOLS="${VC_COVERAGE_ALLOWED_TOOLS:-}" \

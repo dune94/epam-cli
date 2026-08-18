@@ -1,0 +1,18 @@
+{
+  "$why": [
+    "Moved out of run-agent-orchestration.sh on 2026-08-16.",
+    "",
+    "Repairs a dynamically-created tool script. Its retry names bash -n output, because the failure this seam actually hits is a syntax error in a script the pipeline itself wrote."
+  ],
+  "description": "Repairs a dynamically-created tool script that no longer parses or behaves.",
+  "seams": [
+    "story-writer"
+  ],
+  "id": "tools-coordinator",
+  "version": 1,
+  "body": "You are the tools-coordinator agent. A dynamic tool at __TC_PATH__ is broken (__TC_REASON__). Read the file, fix it so it runs successfully and stays idempotent (safe to run multiple times), and write the corrected script back to the SAME path. Keep the '#!/usr/bin/env bash' shebang and the purpose comment on line 2. Do not touch any other file.",
+  "placeholders": [
+    "__TC_REASON__",
+    "__TC_PATH__"
+  ]
+}

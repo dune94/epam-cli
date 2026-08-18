@@ -22,6 +22,8 @@
  */
 'use strict';
 
+const { renderEngineTemplate } = require('./engine-prompt.js');
+
 const path = require('path');
 const fs = require('fs');
 const { spawnSync, execFileSync } = require('child_process');
@@ -49,60 +51,20 @@ function constraintSchema() {
 }
 
 function buildPrompt({ agent_role, signature, episodes }) {
-  const evidence = episodes.slice(0, 12)
+  const evidence = episodes
     .map((e, i) => `  ${i + 1}. [${e.signature || 'unkeyed'}] ${e.diagnosis || '(no diagnosis)'}`)
     .join('\n');
 
-  return `You are deciding how to PREVENT a repeated agent failure, not how to describe it.
-
-The same failure signature has now occurred ${episodes.length} times for agent role
-"${agent_role}". Below is the evidence.
-
-FAILURE SIGNATURE: ${signature}
-AGENT ROLE:        ${agent_role}
-
-EVIDENCE (${episodes.length} occurrences):
-${evidence}
-
-Your reply becomes an ENFORCED CONSTRAINT, not advice an agent may read and ignore.
-It must therefore bind to a real mechanism. There are exactly six:
-
-  gate        a deterministic check adjudicated by tsc/vitest, failing closed
-              -> {"kind":"gate","check":"<check-id>"}
-  param       a NON-BUDGET invocation field the agent cannot exceed
-              -> {"kind":"param","name":"EPAM_REASONING_EFFORT","value":"high"}
-  tool_scope  narrow what the agent may write or which tools it may call
-              -> {"kind":"tool_scope","allowed_write_paths":"src/x.ts"}
-  pre_exec_block  refuse a command before it runs (literal substring)
-              -> {"kind":"pre_exec_block","pattern":"--no-verify"}
-  response_schema bind the agent's output shape so it cannot reply free-form
-              -> {"kind":"response_schema","name":"verdict","schema":{...}}
-  effort_tier RAISE the story's effort tier when the agent ran out of ROOM
-              -> {"kind":"effort_tier","tier":"high"}
-
-RESOURCE BUDGETS — READ THIS BEFORE PROPOSING ONE.
-You may NOT set iteration counts, token limits or timeouts as a "param"
-(EPAM_MAX_ITERATIONS, EPAM_MAX_OUTPUT_TOKENS, *_TIMEOUT_SECS ...). Those are
-assigned by a pipeline you cannot see the whole of:
-
-    CPA estimates the story's hours
-      -> <=2h = low | <=6h = medium | >6h = high
-      -> low = 6 iterations | medium = 10 | high = 15   (fixed table)
-
-If an agent genuinely ran out of ROOM, say so in the only vocabulary that plugs
-into that pipeline: raise the tier with "effort_tier". It is applied UPGRADE-ONLY,
-so a lower tier is ignored. Never propose a number — you do not have the estimate,
-the thresholds or the table, and a number invented from one failure will be wrong.
-
-If none of the six can prevent this failure, reply exactly: NO_CONSTRAINT
-That is a valid and useful answer. Inventing a mechanism that does not exist is not.
-
-Output ONLY a JSON object with these two fields, no prose and no fences:
-{"enforcement": <one of the six shapes above>, "reason": "<why this prevents a recurrence, under 25 words>"}
-
-The enforcement object is validated against this schema; anything else is discarded:
-${constraintSchema().slice(0, 4000)}
-`;
+  // RENDERED FROM THE TEMPLATE LAYER. The schema is supplied WHOLE: it used to arrive
+  // .slice(0, 4000)'d, and a JSON schema cut at a byte offset is not a schema — the model was
+  // told its answer is validated against rules it had only a fragment of.
+  return renderEngineTemplate('kb-enforcement-synthesis', {
+    __EPISODE_COUNT__: String(episodes.length),
+    __AGENT_ROLE__: agent_role,
+    __SIGNATURE__: signature,
+    __EVIDENCE__: evidence,
+    __CONSTRAINT_SCHEMA__: constraintSchema(),
+  });
 }
 
 /** Pull the first balanced {...} that parses. Models wrap JSON in prose. */

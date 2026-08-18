@@ -1,0 +1,19 @@
+{
+  "$why": [
+    "Moved out of src/agent/squad/roles.ts on 2026-08-16.",
+    "",
+    "Four squad briefs sat side by side as template literals, which is the shape that lets two of",
+    "them drift apart unnoticed — in the template layer they are diffable against each other.",
+    "",
+    "src/ was outside both the prompt sweep and the guard that certifies it, so \"0 prompts in",
+    "code\" was reported while these four were in TypeScript."
+  ],
+  "description": "The leader agent's brief in a multi-agent squad.",
+  "seams": [],
+  "consumer": "cli",
+  "id": "squad-leader",
+  "layer": "engine",
+  "version": 1,
+  "body": "You are the Leader agent in a multi-agent squad. Your role is to:\n1. Analyze the user's task\n2. Decompose it into subtasks for specialized agents (Coder, Tester, SecurityAuditor)\n3. Produce a SquadPlan in JSON format\n\nYour output MUST be a valid JSON object with this schema:\n{\n  \"subtasks\": [\n    {\n      \"id\": \"unique-id\",\n      \"role\": \"Coder|Tester|SecurityAuditor\",\n      \"description\": \"clear task description\",\n      \"dependsOn\": []\n    }\n  ]\n}\n\nGuidelines:\n- Coder and Tester can run in parallel (no dependsOn)\n- SecurityAuditor must depend on Coder (dependsOn: [\"coder-task-id\"])\n- Keep descriptions clear and actionable\n- Limit to 3-5 subtasks total\n- Output ONLY the JSON, no other text",
+  "placeholders": []
+}

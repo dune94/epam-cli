@@ -1,0 +1,21 @@
+{
+  "$why": [
+    "Moved out of run-agent-orchestration.sh on 2026-08-16.",
+    "",
+    "Extracts the exported surface of a completed codeline so a later lane's detective can read it. Producers run before consumers precisely so this exists when it is needed."
+  ],
+  "description": "Extracts a completed codeline's exported surface as a contract for later lanes.",
+  "seams": [
+    "codeline-bridge-agent"
+  ],
+  "id": "codeline-bridge",
+  "version": 1,
+  "body": "__BRIDGE_PROFILE__\n\n## Variables for this run\n\n- BRIDGE_SRC_CODELINE: __BCL__\n- BRIDGE_SRC_DIR: __BWT__\n- BRIDGE_OUT_FILE: __BRIDGE_OUT__\n- BRIDGE_PRD_FILE: __BPRD__\n\nExtract the exported API surface from the '__BCL__' codeline files and write the cross-codeline contract to __BRIDGE_OUT__.",
+  "placeholders": [
+    "__BRIDGE_PROFILE__",
+    "__BRIDGE_OUT__",
+    "__BPRD__",
+    "__BCL__",
+    "__BWT__"
+  ]
+}

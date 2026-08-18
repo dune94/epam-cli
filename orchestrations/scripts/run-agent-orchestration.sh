@@ -17,6 +17,30 @@ _release_write_perimeter() {
     perimeter_release_all "${JIRA_CODELINE_ROOT:-}" || true
 }
 trap '_release_write_perimeter' EXIT
+
+# ── Take them, on every run ──────────────────────────────────────────────────
+# The other half of the pair above, and it lived in ONE launcher. Sealing was an inline loop in
+# tier3-metrolinx-run.sh; releasing was generalised into this engine after two paused runs left
+# 23 repositories read-only. Seven launchers therefore ran with no perimeter, silently — a
+# release with nothing to release logs nothing.
+#
+# specAgentEnv states the design: "Writes are NOT prevented here. They are prevented at the
+# filesystem by the perimeter." Without this, a read-only tool grant is the only thing between a
+# diagnosing agent and the operator's source, and it is not an enforcement. Live 2026-08-17 run
+# 20260817T231306Z: mock-a was rewritten during the SPEC PASS, before the writer ran, so the
+# regression guard then certified already-changed code as the baseline.
+#
+# Here rather than in each launcher: this is the one script they all run, the trap that undoes it
+# is right above, and a launcher added later cannot forget a step it never had to take.
+_engage_write_perimeter() {
+    local _lib
+    _lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/codeline-write-perimeter.sh"
+    [ -f "$_lib" ] || return 0
+    # shellcheck source=lib/codeline-write-perimeter.sh
+    . "$_lib" 2>/dev/null || return 0
+    perimeter_seal_all "${JIRA_CODELINE_ROOT:-}" || true
+}
+_engage_write_perimeter
 #
 # Usage:
 #   ./run-agent-orchestration.sh                                    # Run default phase (finops)
@@ -25,6 +49,28 @@ trap '_release_write_perimeter' EXIT
 #   ./run-agent-orchestration.sh --skip-cleanup                     # Keep worktrees for inspection
 
 set -e
+
+# ONE REVIEWER PROMPT, THREE CALLERS.
+#
+# This prompt existed as three near-identical copies (ac_patch, profile_creation,
+# profile_addendum) that differed only in the evidence they showed. A wording fix was a
+# three-place edit, and they had already drifted: two showed a diff, one showed BEFORE and
+# AFTER separately. The evidence SECTION is the caller's, heading included; everything else
+# is one template.
+_render_change_reviewer() {
+    local _story="$1" _change_type="$2" _evidence="$3"
+    local _cr_vals; _cr_vals=$(mktemp "${TMPDIR:-/tmp}/change-reviewer-vals-XXXXXX.json")
+    jq -n --arg story "$_story" --arg ct "$_change_type" \
+          --rawfile ev <(printf '%s' "$_evidence") \
+          '{"__STORY__":$story,"__CHANGE_TYPE__":$ct,"__EVIDENCE__":$ev}' > "$_cr_vals" 2>/dev/null
+    local _out
+    if ! _out=$(render_engine_prompt change-reviewer "$_cr_vals"); then
+        echo "[change-reviewer] cannot render its prompt — refusing to review with no instructions" >&2
+        rm -f "$_cr_vals"; return 1
+    fi
+    rm -f "$_cr_vals"
+    printf '%s' "$_out"
+}
 
 # _run_project_verification <project_root>
 # Runs the project's declared check (.epam/verification.json) via the verification plugin.
@@ -47,6 +93,10 @@ _run_project_verification() {
 
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/seam-ladder.sh
+source "$SCRIPT_DIR/lib/seam-ladder.sh"
+# shellcheck source=lib/render-engine-prompt.sh
+source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 
 # ── WHICH ROLE IS THIS PROCESS? ──────────────────────────────────────────────
@@ -93,6 +143,10 @@ is_lane() { [ "$(orch_role)" = 'lane' ]; }
 # with whatever stale/wrong project is in jira/.env.
 if [ "${JIRA_PIPELINE:-0}" = "1" ] && is_parent && \
    [ -z "${JIRA_URL:-}" ] && [ -f "$AUTOMATION_DIR/jira/.env" ]; then
+  # Only when no launcher took it first — the earliest snapshot is the truthful one.
+  if [ -z "${EPAM_OPERATOR_SET_VARS:-}" ] && [ -f "$SCRIPT_DIR/lib/run-modes.sh" ]; then
+    . "$SCRIPT_DIR/lib/run-modes.sh"; snapshot_operator_env
+  fi
   load_env_file_safe "$AUTOMATION_DIR/jira/.env"
 fi
 
@@ -137,6 +191,33 @@ source "$SCRIPT_DIR/lib/story-retry-state.sh"
 # docstring in lib/story-guards.sh).
 _load_timeout_config
 
+# EXPORT THE LADDER CHAINS HERE, IN THE PARENT — for exactly the reason above.
+#
+# export_model_ladders turns the project's declared ladders into EPAM_MODEL_LADDER_<TIER> so that
+# seam_ladder_export can resolve a seam's declared tier to a real model. It was called in only two
+# places, neither of them this one: claude.sh (which runs as a SUBPROCESS of this script) and
+# detective-rerun.sh.
+#
+# Every seam script — team-lead-review.sh, brownfield-repro-test-writer.sh, agent-attempt-analyst.sh,
+# code-review-cycle.sh, post-impl-tc-writer.sh — is a child of THIS process, not of claude.sh. So
+# none of them inherited a chain, seam_ladder_export found nothing to resolve, and each fell back
+# to whatever fixed model its own script named. That is why every archetype's `ladder` declaration
+# was decorative: the declaration was read, and there was nothing on the other side of it.
+#
+# The literals are now gone, which turns that silence into a refusal — a seam with no resolvable
+# model declines rather than guessing. Correct, and useless if the chains never arrive. They must
+# be exported HERE, once, before any seam is invoked, the same reason _load_timeout_config is.
+# shellcheck source=lib/model-ladders.sh
+[ -f "$SCRIPT_DIR/lib/model-ladders.sh" ] && source "$SCRIPT_DIR/lib/model-ladders.sh"
+if command -v export_model_ladders >/dev/null 2>&1; then
+    export_model_ladders "${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json" || true
+else
+    # NOT SILENT. A missing loader here means every seam runs with no resolvable model and, now
+    # that the literals are gone, declines to run at all — the test-writer and the analyst would
+    # simply not happen, and the run would look normal while doing less than it reports.
+    echo "[orch] WARNING: lib/model-ladders.sh not loadable — no ladder chains exported; seams will have no resolvable model" >&2
+fi
+
 # Load project .env so API keys are available to all subprocesses (worktrees, epam-run, etc.)
 # Preserve caller-set gate overrides so tier scripts can override .env defaults.
 _pre_gate_provider="${ORCH_GATE_PROVIDER:-}"
@@ -160,6 +241,20 @@ if [ -z "${PROJECT_ROOT:-}" ]; then
     PROJECT_ROOT="$_prd_output_dir"
   elif [ -f "$_prd_dir/package.json" ]; then
     PROJECT_ROOT="$_prd_dir"
+  elif [ -n "${JIRA_CODELINE_ROOT:-}" ] && [ -d "${JIRA_CODELINE_ROOT}" ]; then
+    # THE PROJECT'S DECLARED CODELINE ROOT, WHICH IT ALREADY TOLD US ABOUT.
+    #
+    # project.outputDir is written LATER, by resolve-codeline-scope.sh — so at this point a
+    # multi-codeline project whose PRD was authored (not Jira-ingested) has neither outputDir nor
+    # a package.json beside its PRD, and fell through to `dirname $AUTOMATION_DIR`: the epam-cli
+    # REPOSITORY ITSELF. The safety guard immediately below then refused the run, correctly, with
+    # "PROJECT_ROOT resolves to the epam-cli repo root" — telling the operator to set a field the
+    # pipeline populates for them a few steps later.
+    #
+    # The codeline root is the estate those codelines live in and is declared in config.env, which
+    # the launcher has already loaded. Per-lane PROJECT_ROOT is still set by the codeline loop;
+    # this only has to be somewhere outside the engine until then.
+    PROJECT_ROOT="$JIRA_CODELINE_ROOT"
   else
     PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
   fi
@@ -259,6 +354,31 @@ export GATE_LOG="$LOG_DIR/phase-gates.jsonl"
 export COST_LOG="$LOG_DIR/phase-cost.jsonl"
 export MESSAGES_DIR="$LOG_DIR/messages"
 export LOG_DIR
+
+# WHERE PUBLISHED AGENT OUTPUTS LIVE, agreed explicitly rather than derived twice.
+#
+# The store defaults to $LOG_DIR/agent-io, but claude.sh reassigns LOG_DIR unconditionally from
+# its OWN location (claude.sh:25) and ignores what it inherited. A producer publishing under this
+# process's LOG_DIR and a consumer collecting under claude.sh's would be two stores, and the
+# consumer would simply find nothing — silently, which is the failure mode this framework exists
+# to end. Naming it here makes both sides agree. It stays under LOG_DIR so the pre-run reset
+# clears it with everything else: an input surviving into the next run is contamination.
+export AGENT_IO_DIR="${AGENT_IO_DIR:-$LOG_DIR/agent-io}"
+
+# NAMED RUN MODE. "Resume the writer" is one word, not six variables an operator must assemble.
+# The mode declares which steps it turns off (config/run-modes.json); an unknown mode is refused
+# rather than silently running everything. A variable the operator set themselves always wins.
+. "$SCRIPT_DIR/lib/run-modes.sh"
+# HARD-FAIL IF THIS DOES NOT LOAD. Sourcing a missing file is non-fatal without
+# set -e, and phase_exit_is_retryable would then be "command not found" -> exit 127
+# -> falsy -> the legitimate gate-remediation retry silently never happens. A
+# capability that disappears without a word is the failure mode this whole change
+# exists to remove.
+. "$SCRIPT_DIR/lib/phase-exit.sh" || { echo "[preflight] lib/phase-exit.sh failed to load — refusing to run" >&2; exit 1; }
+. "$SCRIPT_DIR/lib/cost-ledger.sh"
+if [ -n "${EPAM_RUN_MODE:-}" ]; then
+    apply_run_mode "$EPAM_RUN_MODE" || exit 1
+fi
 # PHASE reaches ai-run.sh so each agent plan is filed under the phase that
 # produced it. Unexported, every plan landed in plans-unknown.jsonl.
 export PHASE
@@ -554,9 +674,12 @@ print_step_checklist() {
         echo -e "${color}${planned}${reason_str}${NC}"
     }
 
+    if [ -n "${RESOLVED_RUN_MODE:-}" ]; then
+        echo -e "  ${CYAN}RUN MODE: ${RESOLVED_RUN_MODE}${NC} — the SKIP rows below are what it turns off"
+    fi
     _checklist_row "1"    "Specification pass"       "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "EPAM_SPEC_MODE=0"
-    _checklist_row "1a"   "  openspec (elaboration)" "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "${SPEC_MODE_OPENSPEC_MODEL:-z-ai/glm-5.2}"
-    _checklist_row "1b"   "  speckit (verification)" "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "${SPEC_MODE_SPECKIT_MODEL:-z-ai/glm-5.2}"
+    _checklist_row "1a"   "  openspec (elaboration)" "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "$(seam_model_or_fail "spec-agent" 2>/dev/null || printf '<unresolved>')"
+    _checklist_row "1b"   "  speckit (verification)" "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "$(seam_model_or_fail "spec-agent" 2>/dev/null || printf '<unresolved>')"
     _checklist_row "2"  "CPA pre-pass"             "$(is_truthy "${SKIP_CPA:-}" && echo SKIP || echo ACTIVE)"           "SKIP_CPA=1"
     _checklist_row "3"  "Pre-phase skill assess"   "$(is_truthy "${SKIP_SKILL_ASSESSMENT:-}" && echo SKIP || echo ACTIVE)" "$(is_truthy "${SKIP_SKILL_ASSESSMENT:-}" && echo SKIP_SKILL_ASSESSMENT=1 || true)"
     _checklist_row "4"  "Hybrid pre-coord"         "$([ "${RESOLVED_ORCH_MODE:-bash}" = "hybrid" ] && echo ACTIVE || echo SKIP)" "ORCH_MODE≠hybrid"
@@ -693,12 +816,7 @@ resolve_codeline_node() {
     local required=""
 
     if [ -f "$pkg" ]; then
-        required=$(node -e '
-          try {
-            const p = require(process.argv[1]);
-            process.stdout.write((p.engines && p.engines.node) || "");
-          } catch { process.stdout.write(""); }
-        ' "$pkg" 2>/dev/null || true)
+        required=$(node "$SCRIPT_DIR/lib/handlers/package-engines-node.js" "$pkg" 2>/dev/null || true)
     fi
 
     if [ -z "$required" ] || ! command -v fnm &>/dev/null; then
@@ -1042,7 +1160,11 @@ append_pipeline_cost_record() {
 # bound to a specific story) so the agent badge and story badge don't repeat.
 _emit_agent() {
     local _action="$1" _role="$2" _msg="${3:-}"
-    local _gate_model="${ORCH_GATE_MODEL:-MiniMax-M3}"
+    # THE MODEL THE AGENT ACTUALLY RUNS ON, which is its seam's — not a run-wide pin and not a
+    # vendor name written here. This is a display value, so an unresolvable model is left blank
+    # rather than failing: the monitor showing nothing is honest, showing the wrong model is not.
+    local _gate_model
+    _gate_model=$(seam_model_or_fail "$_role" 2>/dev/null || printf '')
     local _gate_provider="${ORCH_GATE_PROVIDER:-}"
     case "$_action" in
         # story_start: <story_id> <lane> <role> [title] [provider] [model]
@@ -1081,9 +1203,55 @@ run_orch_prompt() {
         return 1
     fi
 
-    local gate_model="${ORCH_GATE_MODEL:-MiniMax-M3}"
-    local model_args=()
-    [ -n "$gate_model" ] && model_args=(--model "$gate_model")
+    # THE SEAM DECIDES, IF THE REGISTRY KNOWS THIS AGENT.
+    #
+    # Two invocation paths ran side by side and the registry governed only one of them: the
+    # spec pass resolved a seam and climbed a ladder, while everything invoked here took a
+    # single fixed gate model. So the six QA sentinels declared 'ladder: top' and never used
+    # it — the registry was describing a pipeline the runtime did not run, and the ladder
+    # tests all passed because they check the DECLARATION is coherent, never that anything
+    # reads it.
+    #
+    # seam_ladder_export is the shell counterpart of seam-invocation.js and reads the SAME
+    # registry, so a seam means the same thing whichever language invokes it. An agent the
+    # registry does not know is left exactly as it was: this widens what the registry governs,
+    # it does not force every caller through it.
+    local _seam_err; _seam_err=$(mktemp "${TMPDIR:-/tmp}/seam-err-XXXXXX")
+    # NOT SILENCED. This was `2>/dev/null || true`, and what it swallowed was resolveSeam's own
+    # error — the registry refusing to guess. skills_audit, tools_audit, story_recovery and
+    # lint-fixer all threw it, and all four ran with no ladder, no reasoning effort and no tool
+    # grant while every log line looked normal. Three of them hold Bash and WriteFile.
+    #
+    # It stays non-fatal: a seam is configuration, and refusing to run a gate because the registry
+    # is incomplete would take down more than it protects. But it says the agent's name, once, so
+    # the next unregistered caller is visible instead of merely unconfigured.
+    if ! seam_ladder_export "$agent_type" 2>"$_seam_err"; then
+        warning "run_orch_prompt: no seam configured for '$agent_type' — running with no ladder, effort or tool grant from the registry"
+        [ -s "$_seam_err" ] && sed 's/^/  [seam] /' "$_seam_err" >&2
+    fi
+    rm -f "$_seam_err"
+    # THE LADDER IS THE ONLY SOURCE. seam_ladder_export just set EPAM_MODEL from this agent's
+    # ladder position. What stood here was `${EPAM_MODEL:-${ORCH_GATE_MODEL:-<a vendor model>}}` —
+    # a run-wide pin that silently outranked the seam, behind a literal that always answered. So
+    # an agent declared at the base of the ladder ran on whatever the run had pinned, and the
+    # ladder never had to work: two of its three positions resolved no model for months and
+    # nothing noticed, because the literal covered it.
+    #
+    # No substitution. An unresolvable model is a configuration fault in the registry or in the
+    # project's llm-settings.json, and running the wrong model is worse than not running.
+    #
+    # ONE EXCEPTION, AND IT IS STILL THE LADDER: a caller retrying this agent sets
+    # ORCH_AGENT_MODEL_CLIMB to the next rung of THIS agent's own chain (seam_next_model). That is
+    # not a second source — it is the same ladder, one step along. It is read after the seam
+    # resolves, because seam_ladder_export overwrites EPAM_MODEL and would clobber it.
+    local gate_model
+    if [ -n "${ORCH_AGENT_MODEL_CLIMB:-}" ]; then
+        gate_model="$ORCH_AGENT_MODEL_CLIMB"
+    elif ! gate_model=$(seam_model_or_fail "$agent_type"); then
+        error "run_orch_prompt: refusing to invoke '${agent_type}' with no model resolved from the ladder"
+        return 1
+    fi
+    local model_args=(--model "$gate_model")
 
     local started_at
     started_at=$(date -Iseconds)
@@ -1120,25 +1288,7 @@ run_orch_prompt() {
         if [ "${cost:-0}" = "0" ] && { [ "${tokens_in:-0}" -gt 0 ] || [ "${tokens_out:-0}" -gt 0 ]; }; then
             local _pricing_file="$SCRIPT_DIR/model-pricing.json"
             if [ -f "$_pricing_file" ]; then
-                cost=$(python3 - "$_pricing_file" "${gate_model:-}" "${tokens_in:-0}" "${tokens_out:-0}" <<'PYEOF'
-import sys, json
-pricing_file, model, tin, tout = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
-try:
-    with open(pricing_file) as f:
-        table = json.load(f)
-    prices = table.get(model)
-    if not prices:
-        for k, v in table.items():
-            if model.startswith(k) or k.startswith(model):
-                prices = v
-                break
-    if prices:
-        print("{:.6f}".format((tin * prices["input"] + tout * prices["output"]) / 1_000_000))
-    else:
-        print("0")
-except Exception:
-    print("0")
-PYEOF
+                cost=$(python3 "$SCRIPT_DIR/lib/handlers/model-call-cost.py" "$_pricing_file" "${gate_model:-}" "${tokens_in:-0}" "${tokens_out:-0}"
 2>/dev/null || echo "0")
             fi
         fi
@@ -1239,25 +1389,14 @@ _brownfield_gate_scope() {
         . "$SCRIPT_DIR/lib/story-outputs.sh" 2>/dev/null || true
         _files=$(story_outputs_files "$PROJECT_ROOT" "$LOG_DIR" 2>/dev/null | head -20)
     fi
-    cat <<BROWNFIELD_SCOPE
-
-## BROWNFIELD — judge THIS CHANGE, not the codebase
-This is an existing production repository. It contains problems that predate this
-run and are none of this run's business. You are reviewing one small change to it.
-
-Files this run produced or modified:
-${_files:-  (none recorded — fall back to the injected diff)}
-
-RULES:
-1. Findings MUST be about the lines this run changed. A pre-existing issue in an
-   untouched file, or on an untouched line of a touched file, is NOT a finding
-   here — reporting it blocks a correct change over somebody else's problem.
-2. If ${_gate} has nothing meaningful to say about a change of this kind, return
-   verdict "not_applicable" with a one-line reason. That is a valid, useful
-   answer. Do NOT invent a finding to look thorough, and do NOT return "pass" to
-   mean "I could not evaluate this".
-3. Prefer fewer, real findings over broad coverage.
-BROWNFIELD_SCOPE
+    # RENDERED FROM THE TEMPLATE LAYER. Values through a FILE, never argv: the file list is
+    # unbounded and argv is capped at ARG_MAX.
+    local _bs_vals; _bs_vals=$(mktemp "${TMPDIR:-/tmp}/qa-brownfield-scope-XXXXXX.json")
+    jq -n --arg gate "$_gate" \
+          --arg files "${_files:-  (none recorded — fall back to the injected diff)}" \
+          '{"__GATE__":$gate,"__FILES__":$files}' > "$_bs_vals"
+    render_engine_prompt qa-brownfield-scope "$_bs_vals" || true
+    rm -f "$_bs_vals"
 }
 
 run_orch_prompt_with_tools() {
@@ -1318,23 +1457,14 @@ _lint_fix_findings_directly() {
         _lf_attempt=$(( _lf_attempt + 1 ))
         info "  [lint-fix] repairing ${_lf_findings_count:-$(printf '%s\n' "$_lf_findings" | wc -l | tr -d ' ')} finding(s) in place (attempt ${_lf_attempt}/${_lf_max})"
 
-        local _lf_prompt="You are fixing code-style findings a linter reported on files THIS RUN just wrote.
-
-## Findings to fix (and nothing else)
-${_lf_findings}
-
-## Rules
-1. Fix ONLY these findings, ONLY in these files. Do not refactor anything else.
-2. Do NOT weaken any test. Assertions, expected values and the scenario under
-   test must be preserved EXACTLY — a test here is the only executable proof the
-   bug is fixed, and a test that no longer proves it is far worse than a lint
-   warning. Extracting a repeated literal into a constant is fine; changing what
-   is asserted is not.
-3. Keep the change minimal and idiomatic for this repository.
-4. Edit the files in place with your write tool. Do not create new files.
-
-Files: ${_lf_files}
-Project root: ${PROJECT_ROOT}"
+        _cp_vals=$(mktemp "${TMPDIR:-/tmp}/lint-fixer-vals-XXXXXX.json")
+        jq -n \
+              --arg lf_findings "${_lf_findings}" \
+              --arg project_root "${PROJECT_ROOT}" \
+              --arg lf_files "${_lf_files}" \
+              '{"__LF_FINDINGS__":$lf_findings,"__PROJECT_ROOT__":$project_root,"__LF_FILES__":$lf_files}' > "$_cp_vals"
+        local _lf_prompt="$(render_engine_prompt lint-fixer "$_cp_vals")"
+        rm -f "$_cp_vals"
 
         AI_GATE_ALLOW_TOOLS=1 \
         EPAM_ALLOWED_TOOLS="${LINT_FIX_ALLOWED_TOOLS:-bash,read_file,write_file,list_files,search}" \
@@ -1391,7 +1521,12 @@ _run_qa_gate_with_retry() {
         rm -f "$_qg_log"
         local _qg_eff_prompt="$_qg_prompt"
         if [ "$_qg_attempt" -ge 1 ]; then
-            [ -n "${ESCALATION_MODEL_HIGH:-}" ] && ORCH_GATE_MODEL="${ESCALATION_MODEL_HIGH}"
+            # CLIMB THIS GATE'S OWN CHAIN. This assigned ORCH_GATE_MODEL, which run_orch_prompt
+            # stopped reading when the ladder became the only source — so the retry silently
+            # re-ran the SAME model and the escalation was gone. It was also one run-wide "high"
+            # model every gate jumped to regardless of where it started, which is a pin.
+            ORCH_AGENT_MODEL_CLIMB=$(seam_next_model "$_qg_agent" "$(seam_model_or_fail "$_qg_agent" 2>/dev/null)")
+            export ORCH_AGENT_MODEL_CLIMB
             local _qg_retry_prefix
             if echo "$_qg_prompt" | grep -q "Do NOT attempt to call any shell commands"; then
                 _qg_retry_prefix="RETRY (attempt $(( _qg_attempt + 1 ))): The previous invocation produced no structured output. Re-analyze the pre-injected evidence already present in this prompt and emit your JSON verdict now. Do NOT call any tools. Do NOT use WriteFile — output your JSON as plain text in this message."
@@ -1470,6 +1605,7 @@ $_qg_prompt"
         if [ -z "$_qg_schema_reason" ] \
            && grep -qE '"(verdict|findings|agent|summary)"' "$_qg_log" 2>/dev/null; then
             ORCH_GATE_MODEL="$_saved_gate_model"
+            unset ORCH_AGENT_MODEL_CLIMB
             return 0
         fi
         [ -n "$_qg_schema_reason" ] && \
@@ -1497,6 +1633,7 @@ $_qg_prompt"
             cat "$_qg_recovered" >> "$_qg_log"
             if grep -qE '"(verdict|findings|agent|summary)"' "$_qg_log" 2>/dev/null; then
                 ORCH_GATE_MODEL="$_saved_gate_model"
+                unset ORCH_AGENT_MODEL_CLIMB
                 return 0
             fi
         fi
@@ -1508,6 +1645,7 @@ $_qg_prompt"
         _qg_attempt=$(( _qg_attempt + 1 ))
     done
     ORCH_GATE_MODEL="$_saved_gate_model"
+    unset ORCH_AGENT_MODEL_CLIMB
     return 1
 }
 
@@ -1600,6 +1738,68 @@ stop_control_plane() {
 # claude.sh's bash functions aren't available in this process). No vendor/
 # model names hardcoded — every decision reads from env-configured maps.
 # No-op (silent) when no ladder step is configured for the current model.
+# _story_archetype_ladder <story-id> — the ladder the story's AGENT ARCHETYPE declares.
+#
+# Read through the seam, so a minted agent inherits its archetype's declaration rather than needing
+# one of its own. Empty when the story names no role, or the registry declares no ladder for it.
+_story_archetype_ladder() {
+    local _sid="${1:-}" _role
+    [ -n "$_sid" ] || { printf ''; return 0; }
+    _role=$(jq -r --arg id "$_sid" '.stories[] | select(.id == $id) | .agentRole // ""' \
+        "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "")
+    [ -n "$_role" ] || { printf ''; return 0; }
+    "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/seam-ladder-position.js" "$SCRIPT_DIR/lib/seam-invocation.js" \
+      "${AGENT_PROFILES_REGISTRY:-$EPAM_AGENTS_DIR/invocation-profiles.json}" "$_role" 2>/dev/null || printf ''
+}
+
+# _resolve_ladder_tier <story-tier> — the tier this story actually runs on.
+#
+# THE ARCHETYPE'S LADDER IS A FLOOR. The operator asked for the writer on the highest ladder and
+# story-writer declares `ladder: HIGHEST`; nothing read it. The tier came from the story record,
+# which the CPA pre-pass writes, so a deliberate declaration was silently overridden by an
+# automated one on every run — the writer ran `high` on 2026-08-14.
+#
+# The CPA may still RAISE a hard story above its archetype. It may not lower one below.
+_resolve_ladder_tier() {
+    local _story_tier _floor _rank_story _rank_floor
+    _story_tier=$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')
+    _floor=$(printf '%s' "$(_story_archetype_ladder "${story_id:-}")" | tr '[:upper:]' '[:lower:]')
+
+    # ORDER COMES FROM THE DECLARATION, never from a list here. EPAM_MODEL_LADDER_TIER_ORDER is
+    # exported by lib/model-ladders.sh from the settings file's own ordering. Ranking tiers in the
+    # engine would embed a project's vocabulary in shared code — the exact thing the exporter
+    # already refuses to do — and would silently rank an unknown tier lowest.
+    #
+    # NO DECLARED ORDER MEANS NO FLOOR. The story's tier is used unchanged, which is exactly the
+    # behaviour before this function existed: a project that has not declared an order gets no
+    # silent change, and the floor activates only when the operator says what the order is.
+    local _order="${EPAM_MODEL_LADDER_TIER_ORDER:-}"
+    if [ -z "$_order" ] || [ -z "$_floor" ]; then
+        [ -n "$_story_tier" ] && { printf '%s' "$_story_tier"; return 0; }
+        # NOTHING KNOWN: the LOWEST DECLARED tier, which is the first the order names. Defaulting
+        # to a tier named here would be the same vocabulary the ranking refuses to hold, and it
+        # only ever worked because one project happened to declare a tier by that name.
+        printf '%s' "$(printf '%s' "$_order" | awk '{print $1}')"
+        return 0
+    fi
+
+    _rank() {
+        local _t="${1:-}" _i=0 _c
+        [ -n "$_t" ] || { printf '0'; return 0; }
+        for _c in $_order; do
+            _i=$((_i + 1))
+            [ "$_c" = "$_t" ] && { printf '%s' "$_i"; return 0; }
+        done
+        printf '0'
+    }
+    _rank_story=$(_rank "$_story_tier")
+    _rank_floor=$(_rank "$_floor")
+
+    if [ "$_rank_floor" -gt "$_rank_story" ]; then printf '%s' "$_floor"; return 0; fi
+    [ -n "$_story_tier" ] && { printf '%s' "$_story_tier"; return 0; }
+    printf '%s' "$_floor"
+}
+
 hot_swap_story_model_if_unstable() {
     local story_id="$1"
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
@@ -1612,14 +1812,18 @@ hot_swap_story_model_if_unstable() {
     [ -z "$current_model" ] && return 1
 
     local tier
-    tier=$(jq -r --arg id "$story_id" \
-        '.stories[] | select(.id == $id) | .ladderTier // "medium"' "$prd_target" 2>/dev/null || echo "medium")
+    tier=$(_resolve_ladder_tier "$(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .ladderTier // ""' "$prd_target" 2>/dev/null || echo "")")
     local ladder="${EPAM_MODEL_LADDER:-}"
     if [ -z "$ladder" ]; then
-        case "$tier" in
-            high) ladder="${EPAM_MODEL_LADDER_HIGH:-}" ;;
-            *)    ladder="${EPAM_MODEL_LADDER_MEDIUM:-}" ;;
-        esac
+        # DERIVED, NOT BRANCHED. lib/model-ladders.sh exports EPAM_MODEL_LADDER_<TIER> for every
+        # tier the settings file declares, and names the variable this way; reading it the same
+        # way means a project adding a tier never edits the engine. The branch this replaced knew
+        # only `high` and a medium default, so a story on any other tier — `highest` included —
+        # silently received the MEDIUM ladder while still appearing to have one.
+        local _lvar
+        _lvar="EPAM_MODEL_LADDER_$(printf '%s' "$tier" | tr '[:lower:]-' '[:upper:]_')"
+        ladder="${!_lvar:-}"
     fi
     [ -z "$ladder" ] && return 1
 
@@ -1813,26 +2017,28 @@ run_story_recovery_analyst() {
     [ -z "$_story_json" ] && return 1
 
     local _log_tail
-    _log_tail=$(tail -c 4000 "$log_file" 2>/dev/null || echo "")
+    _log_tail=$(cat "$log_file" 2>/dev/null || echo "")
 
-    local _prompt="You are the story-recovery-analyst. Story ${story_id} timed out twice (watchdog) and was marked failed -- it never finished within its time budget. Diagnose whether the story's OWN scope is the root cause (too many acceptance criteria, ambiguous/contradictory requirements, an unbounded/open-ended task) as opposed to a transient model/infra hiccup.
-
-Story (full PRD entry):
-${_story_json}
-
-Tail of its execution log (what it was doing when it timed out):
-${_log_tail}
-
-If the story's scope is genuinely too large or ambiguous: respond with JSON {\"restructure\": true, \"new_acs\": [\"...\", \"...\"], \"reason\": \"...\"} -- new_acs must be a TRIMMED, CONCRETE, non-overlapping replacement for the story's current acceptanceCriteria array (same intent, narrower/clearer scope, each one independently verifiable).
-If this looks like a transient issue (model hiccup, infra flake) rather than a scope problem: respond with JSON {\"restructure\": false, \"reason\": \"...\"}.
-Respond with ONLY the JSON object, nothing else."
+    _cp_vals=$(mktemp "${TMPDIR:-/tmp}/story-recovery-analyst-vals-XXXXXX.json")
+    jq -n \
+          --arg story_json "${_story_json}" \
+          --arg log_tail "${_log_tail}" \
+          --arg story_id "${story_id}" \
+          '{"__STORY_JSON__":$story_json,"__LOG_TAIL__":$log_tail,"__STORY_ID__":$story_id}' > "$_cp_vals"
+    local _prompt="$(render_engine_prompt story-recovery-analyst "$_cp_vals")"
+    rm -f "$_cp_vals"
 
     local _analyst_response="" _sra_attempt=0
     while [ "$_sra_attempt" -lt 2 ]; do
         local _sra_prompt="$_prompt"
-        [ "$_sra_attempt" -ge 1 ] && _sra_prompt="RETRY (attempt 2): Your previous response was empty or unparseable. Respond with ONLY the JSON: {\"restructure\": true/false, \"reason\": \"...\", \"new_acs\": [...]}.
-
-$_prompt"
+        if [ "$_sra_attempt" -ge 1 ]; then
+          _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
+          jq -n \
+                --arg prompt "$_prompt" \
+                '{"__PROMPT__":$prompt}' > "$_rp_vals"
+          _sra_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" story_recovery_analyst)"
+          rm -f "$_rp_vals"
+        fi
         local _sra_raw
         _sra_raw=$(run_orch_prompt_with_tools "$_sra_prompt" "story_recovery" "$story_id" 2>/dev/null)
         if [ -n "$_sra_raw" ] && echo "$_sra_raw" | python3 -c "import sys,json; json.load(sys.stdin)" 2>/dev/null; then
@@ -1892,20 +2098,15 @@ $_prompt"
                 [ "$_rev_attempt" -gt 0 ] && _corrective_rev="CORRECTION: Your previous response did not contain parseable JSON with a verdict field. Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}
 
 "
-                local _rev_model="${ORCH_GATE_MODEL:-MiniMax-M3}"
-                [ "$_rev_attempt" -ge 1 ] && [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _rev_model="${ESCALATION_MODEL_HIGH}"
+                # Its seam's model, then one rung up ITS OWN chain on retry. This read a run-wide
+                # pin behind a vendor literal, and escalated to a single run-wide "high" model that
+                # every agent shared regardless of where it started. That is a pin, not a ladder.
+                local _rev_model
+                _rev_model=$(seam_model_or_fail "prd-change-reviewer") || _rev_model=""
+                [ "$_rev_attempt" -ge 1 ] && _rev_model=$(seam_next_model "prd-change-reviewer" "$_rev_model")
                 _rev_raw=$(echo "${_corrective_rev}${_src_reviewer_profile}
 
-STORY: ${story_id}
-CHANGE TYPE: ac_patch
-
-BEFORE:
-${_before_acs:0:1000}
-
-AFTER:
-${_candidate:0:1000}
-
-Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}" | \
+                $(_render_change_reviewer "$story_id" "ac_patch" "BEFORE:\n${_before_acs}\n\nAFTER:\n${_candidate}")" | \
                     AI_PROVIDER="${ORCH_GATE_PROVIDER}" \
                     AI_MODEL="${_rev_model}" \
                     EPAM_CLI="${EPAM_CLI:-epam}" \
@@ -1913,19 +2114,7 @@ Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}" | \
                         --provider "${ORCH_GATE_PROVIDER}" \
                         --model    "${_rev_model}" \
                     2>/dev/null | \
-                    python3 -c "
-import sys, json, re
-text = sys.stdin.read()
-try:
-    obj = json.loads(text.strip())
-    v = obj.get('verdict','')
-    if v in ('pass','fail'):
-        print(v); sys.exit(0)
-except Exception:
-    pass
-m = re.search(r'\"verdict\"\s*:\s*\"(pass|fail)\"', text)
-if m: print(m.group(1)); sys.exit(0)
-" 2>/dev/null || true)
+                    python3 "$SCRIPT_DIR/lib/handlers/run-story-recovery-analyst.py" 2>/dev/null || true)
                 _rev_attempt=$(( _rev_attempt + 1 ))
             done
             if [ "$_rev_raw" = "pass" ] || [ "$_rev_raw" = "fail" ]; then
@@ -2023,10 +2212,7 @@ run_story_with_watchdog() {
         esac
         local role_multiplier
         role_multiplier=$(resolve_role_timeout_multiplier "$story_id")
-        timeout_secs=$(python3 -c "
-import math
-print(math.ceil(${timeout_secs} * ${role_multiplier}))
-" 2>/dev/null || echo "$timeout_secs")
+        timeout_secs=$(python3 "$SCRIPT_DIR/lib/handlers/scaled-timeout-secs.py" "${role_multiplier}" "${timeout_secs}" 2>/dev/null || echo "$timeout_secs")
     fi
 
     # THE WALL MUST HONOUR THE ITERATION BUDGET IT IS POLICING.
@@ -2131,10 +2317,7 @@ print(math.ceil(${timeout_secs} * ${role_multiplier}))
         # configurable (EPAM_WATCHDOG_RETRY_MULTIPLIER, default 1.5x); set to 1
         # to restore the old flat-timeout behavior.
         local retry_timeout_secs
-        retry_timeout_secs=$(python3 -c "
-import math
-print(math.ceil(${timeout_secs} * ${EPAM_WATCHDOG_RETRY_MULTIPLIER:-1.5}))
-" 2>/dev/null || echo "$timeout_secs")
+        retry_timeout_secs=$(python3 "$SCRIPT_DIR/lib/handlers/scaled-timeout-secs.py" "${EPAM_WATCHDOG_RETRY_MULTIPLIER:-1.5}" "${timeout_secs}" 2>/dev/null || echo "$timeout_secs")
         # ── Climb the ladder, do not merely swap once ─────────────────────
         # This was a single retry, so at most ONE escalation could ever happen.
         # The HIGH ladder is four rungs (MiniMax-M2.5 -> MiniMax-M3 ->
@@ -2707,27 +2890,23 @@ _run_codeline_bridge() {
   # Load the codeline-bridge-agent profile
   local _bridge_profile=""
   if [ -f "$_profiles_file" ]; then
-    _bridge_profile=$(python3 -c "
-import sys, json
-p = json.load(open('$_profiles_file'))
-print(p.get('codeline-bridge-agent', ''))
-" 2>/dev/null || true)
+    _bridge_profile=$(python3 "$SCRIPT_DIR/lib/handlers/bridge-profile.py" "$_profiles_file" 2>/dev/null || true)
   fi
   if [ -z "$_bridge_profile" ]; then
     warning "[bridge] codeline-bridge-agent profile not found in profiles.json — skipping"
     return 0
   fi
 
-  local _base_prompt="${_bridge_profile}
-
-## Variables for this run
-
-- BRIDGE_SRC_CODELINE: ${_bcl}
-- BRIDGE_SRC_DIR: ${_bwt}
-- BRIDGE_OUT_FILE: ${_bridge_out}
-- BRIDGE_PRD_FILE: ${_bprd}
-
-Extract the exported API surface from the '${_bcl}' codeline files and write the cross-codeline contract to ${_bridge_out}."
+  _cp_vals=$(mktemp "${TMPDIR:-/tmp}/codeline-bridge-vals-XXXXXX.json")
+  jq -n \
+        --arg bridge_profile "${_bridge_profile}" \
+        --arg bridge_out "${_bridge_out}" \
+        --arg bprd "${_bprd}" \
+        --arg bcl "${_bcl}" \
+        --arg bwt "${_bwt}" \
+        '{"__BRIDGE_PROFILE__":$bridge_profile,"__BRIDGE_OUT__":$bridge_out,"__BPRD__":$bprd,"__BCL__":$bcl,"__BWT__":$bwt}' > "$_cp_vals"
+  local _base_prompt="$(render_engine_prompt codeline-bridge "$_cp_vals")"
+  rm -f "$_cp_vals"
 
   local _bridge_attempt=0 _bridge_ok=0 _corrective_note=""
   while [ "$_bridge_attempt" -le "$_bridge_max_retries" ]; do
@@ -2854,17 +3033,7 @@ _run_codeline_loop() {
   # Extract codeline:path entries from project.outputDirs.
   # Falls back to project.outputDir + JIRA_DEFAULT_CODELINE for single-codeline PRDs.
   local _cl_entries=()
-  mapfile -t _cl_entries < <("$NODE_BIN" -e "
-    const p = JSON.parse(require('fs').readFileSync('${_prd_path}','utf8'));
-    const dirs = p.project && p.project.outputDirs ? p.project.outputDirs : [];
-    if (dirs.length > 0) {
-      dirs.forEach(d => console.log(d.codeline + ':' + d.path));
-    } else {
-      const cl  = process.env.JIRA_DEFAULT_CODELINE || '';
-      const dir = p.project && p.project.outputDir ? p.project.outputDir : '';
-      if (cl && dir) console.log(cl + ':' + dir);
-    }
-  " 2>/dev/null)
+  mapfile -t _cl_entries < <("$NODE_BIN" "$SCRIPT_DIR/lib/handlers/cl-entries.js" "${_prd_path}" 2>/dev/null)
 
   # CODELINE SELECTION — run a subset of the story's codelines, one launch at a time.
   #
@@ -2989,12 +3158,20 @@ _run_codeline_loop() {
       # project's main branch — not the full commit history.
       local _baseline_branch="${JIRA_BASELINE_BRANCH:-main}"
       local _baseline_sha=""
-      _baseline_sha=$(git -C "$_wt" rev-parse "origin/${_baseline_branch}" 2>/dev/null || \
-                      git -C "$_wt" rev-parse "${_baseline_branch}" 2>/dev/null || \
-                      git -C "$_wt" rev-parse HEAD 2>/dev/null || echo "")
+      # --verify --quiet: fail cleanly for a ref that does not exist. Without it,
+      # `git rev-parse origin/develop` ECHOES the literal "origin/develop" to stdout and exits
+      # 128, so the || chain runs the next command and the substitution captures BOTH — a
+      # two-line value whose first line is not a SHA. Every gate diff oracle reads this file
+      # (review-ranger, mutant-hunter, fuzz-weaver, sast-sentinel), which is the known
+      # "reviewers saw 0 files" failure. brownfield-preflight-reset.sh already guards this
+      # exact shape; this call site did not. A repo with no remote hits it on every lane.
+      _baseline_sha=$(git -C "$_wt" rev-parse --verify --quiet "origin/${_baseline_branch}" 2>/dev/null || \
+                      git -C "$_wt" rev-parse --verify --quiet "${_baseline_branch}" 2>/dev/null || \
+                      git -C "$_wt" rev-parse --verify --quiet HEAD 2>/dev/null || echo "")
       if [ -n "$_baseline_sha" ]; then
-        echo "$_baseline_sha" > "$LOG_DIR/phase-baseline-sha.txt"
-        log "[orch] Brownfield baseline: ${_baseline_branch} @ ${_baseline_sha:0:8}"
+        # NOT WRITTEN HERE. See above: nothing reads this path, and the value means something
+        # different from the one Step 8 writes into the lane's own directory.
+        log "[orch] Brownfield baseline branch: ${_baseline_branch} @ ${_baseline_sha:0:8}"
       else
         warning "[orch] Could not resolve baseline branch '${_baseline_branch}' — gate diffs will use HEAD"
       fi
@@ -3095,6 +3272,13 @@ KNOWNFIXES_EOF
           mkdir -p "$_wt/.epam"
           echo "$_cl_facts" > "$_wt/.epam/codeline-facts.json"
           log "[orch] Provisioned .epam/codeline-facts.json for '${_cl}' from ${_facts_cfg}"
+        else
+          # SAY SO. This skipped in silence, so a file in the wrong SHAPE was indistinguishable
+          # from no file and from an agent that observed nothing — three different problems with
+          # one symptom, which is none. The file is keyed by codeline name at the top level;
+          # a hand-written one nesting them under another key parses fine and yields nothing for
+          # every codeline, which is exactly what happened to mock3's before discovery produced it.
+          warning "[orch] '${_facts_cfg}' exists but has no entry for codeline '${_cl}' — agents there will work from the source alone. Codeline names must be TOP-LEVEL keys; the engine reads one with jq '.[\$cl]'."
         fi
       fi
 
@@ -3132,14 +3316,7 @@ KNOWNFIXES_EOF
   _rebuild_cross() {
     [ -z "$_completed_list" ] && { unset CROSS_CODELINE_PRD; return; }
     COMPLETED_LIST="$_completed_list" \
-    "$NODE_BIN" -e "
-      const fs = require('fs');
-      const paths = (process.env.COMPLETED_LIST||'').split(':').filter(Boolean);
-      const stories = paths.flatMap(p => {
-        try { return JSON.parse(fs.readFileSync(p,'utf8')).stories||[]; } catch { return []; }
-      });
-      fs.writeFileSync('${_cross_prd}', JSON.stringify({stories},null,2));
-    " 2>/dev/null
+    "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/rebuild-cross-contract.js" "${_cross_prd}" 2>/dev/null
     export CROSS_CODELINE_PRD="$_cross_prd"
   }
 
@@ -3148,86 +3325,31 @@ KNOWNFIXES_EOF
   _filtered_prd() {
     local _fcl="$1" _fout="$2" _fsrc="$3"
     JIRA_DEFAULT_CODELINE="${JIRA_DEFAULT_CODELINE:-}" \
-    "$NODE_BIN" -e "
-      const fs  = require('fs');
-      const prd = JSON.parse(fs.readFileSync('${_fsrc}','utf8'));
-      const cl  = '${_fcl}', dcl = process.env.JIRA_DEFAULT_CODELINE||'';
-      // A story may SPAN codelines. codelines[] is authoritative when present:
-      // the story stays whole and participates in each lane's execution, rather
-      // than being partitioned into exactly one. Without this it matches no
-      // partition, appears in zero filtered PRDs, and is silently dropped from
-      // the run — which is how a [GO, UP, MX] ticket reached ingest and died.
-      const stories = prd.stories.filter(s =>
-        (Array.isArray(s.codelines) && s.codelines.length
-          ? s.codelines.includes(cl)
-          : (s.codeline === cl || (!s.codeline && cl === dcl)))
-      // THIS LANE'S PRD SAYS WHICH LANE IT IS.
-      //
-      // Stories were copied through unchanged, so a story spanning three codelines carried
-      // its PRIMARY codeline into all three lane PRDs. Every consumer reading the singular
-      // field then got the same answer everywhere: the detective resolved the first lane's
-      // investigator in all three lanes and investigated two repositories with a brief written
-      // for a different one. agentRole had the identical defect, and project.outputDir vs
-      // outputDirs a third instance.
-      //
-      // Fixed HERE rather than in each reader. A lane's PRD describing a different lane is the
-      // lie; once it tells the truth, every consumer — the detective, the guards, the manifest,
-      // whatever is added next — is correct without knowing lanes exist. codelines[] is left
-      // intact, so nothing loses the knowledge that the story spans more than this one.
-      // THIS LANE'S CRITERIA, NOT THE UNION.
-      //
-      // verificationCriteria / fixSiteAnalysis on canonical are the UNION across every lane —
-      // that is what canonical is for. Copying them through means a lane is handed other
-      // codelines' criteria, describing files that do not exist in its checkout.
-      //
-      // On a first run the spec pass overwrote them before anything read them, so it never
-      // showed. On a RESUME the spec pass is skipped — the whole point of resuming — so the
-      // lane keeps the union, its writer and gates verify against it, and
-      // mergeLaneIntoCanonical then faithfully records the union as THIS LANE'S OWN criteria.
-      // Live 2026-08-09: four killed runs turned gotransit's 4 criteria into all 14, and 13 fix
-      // sites into 22, compounding on every kill.
-      //
-      // Same rule as `codeline` above, and for the same reason: a lane's PRD states that lane's
-      // truth. Falls back to the flat list when there is no entry for this codeline (a first
-      // run, or a lane added later) — never to nothing, which would hand a writer an empty
-      // plan. An explicitly EMPTY entry is honoured, because 'this lane found nothing to
-      // verify' is a real state and differs from 'this lane has not run'.
-      //
-      // No double quotes anywhere in this block, comments included: the node script is passed
-      // inside a double-quoted shell string, so one would end it and bash would execute the
-      // JavaScript that follows.
-      ).map(s => {
-        const _scoped = (flat, perCl) =>
-          (perCl && Object.prototype.hasOwnProperty.call(perCl, cl)) ? perCl[cl] : flat;
-        return {
-          ...s,
-          codeline: cl,
-          verificationCriteria: _scoped(s.verificationCriteria, s.verificationCriteriaPerCodeline),
-          fixSiteAnalysis: _scoped(s.fixSiteAnalysis, s.fixSiteAnalysisPerCodeline),
-        };
-      });
-      const ids = new Set(stories.map(s => s.id));
-      const order = {};
-      for (const [phase, list] of Object.entries(prd.implementationOrder||{})) {
-        const f = (list||[]).filter(id => ids.has(id));
-        if (f.length > 0) order[phase] = f;
-      }
-      if (Object.keys(order).length === 0) order.core = stories.map(s => s.id);
-      const out = {...prd, stories, implementationOrder: order};
-      if (prd.project && prd.project.outputDirs) {
-        const d = prd.project.outputDirs.find(d => d.codeline === cl);
-        if (d) out.project = {...prd.project, outputDir: d.path};
-      }
-      fs.writeFileSync('${_fout}', JSON.stringify(out, null, 2));
-      console.log(stories.length);
-    " 2>/dev/null
+    "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/filtered-prd.js" "${_fsrc}" "${_fout}" "${_fcl}" 2>/dev/null
   }
 
+  # THE PATH THE CALLER PASSED, ACTUALLY FORWARDED.
+  #
+  # This took "$1" and never used it, so the handler read no PRD; and `2>/dev/null` hid the error
+  # it raised about that. The phase list came back EMPTY, every lane's phase loop ran zero times,
+  # and each lane reported "✓ completed" in five seconds having invoked nothing. Live 2026-08-17,
+  # mock3: two lanes, two pending stories, no writer, no commit, "Pipeline complete".
+  #
+  # An empty phase list is a real answer ("this PRD declares no phases") and indistinguishable
+  # from a failure to read one — so the failure must be loud, and is.
   _prd_phases() {
-    "$NODE_BIN" -e "
-      const p = JSON.parse(require('fs').readFileSync('$1','utf8'));
-      console.log(Object.keys(p.implementationOrder||{}).join('\n'));
-    " 2>/dev/null
+    local _pp_prd="${1:-${PRD_FILE:-}}"
+    local _pp_err _pp_out _pp_rc=0
+    _pp_err=$(mktemp "${TMPDIR:-/tmp}/prd-phases-err-XXXXXX")
+    _pp_out=$("$NODE_BIN" "$SCRIPT_DIR/lib/handlers/prd-phases.js" "$_pp_prd" 2>"$_pp_err") || _pp_rc=$?
+    if [ "$_pp_rc" -ne 0 ]; then
+        error "[orch] could not read the phases of ${_pp_prd}: $(cat "$_pp_err" 2>/dev/null)"
+        error "[orch]   Refusing to treat that as 'no phases' — a lane with no phases does nothing and reports success."
+        rm -f "$_pp_err"
+        return 1
+    fi
+    rm -f "$_pp_err"
+    printf '%s' "$_pp_out"
   }
 
   # ── Lane execution: parallel by default ────────────────────────────────────
@@ -3321,6 +3443,7 @@ KNOWNFIXES_EOF
       JIRA_CODELINE_RUN=1 \
       EPAM_CODELINE="$_cl" \
       LOG_DIR="$_lane_log_dir" \
+      AGENT_IO_DIR="$_lane_log_dir/agent-io" \
       PRD_FILE="$_cl_prd" \
       PROJECT_ROOT="$_wt" \
       OUTPUT_DIR="$_wt" \
@@ -3333,12 +3456,13 @@ KNOWNFIXES_EOF
       _pex=${PIPESTATUS[0]}
 
       # exit 2 = gate remediation applied — reset stories and retry once (mirrors tier3 launcher)
-      if [ "$_pex" -eq 2 ]; then
+      if phase_exit_is_retryable "$_pex"; then
         log "[orch] Gate remediation applied for '${_phase}' ('${_cl}') — retrying with SKIP_GATE_REMEDIATION=1"
         _pex=0
         JIRA_CODELINE_RUN=1 \
       EPAM_CODELINE="$_cl" \
       LOG_DIR="$_lane_log_dir" \
+      AGENT_IO_DIR="$_lane_log_dir/agent-io" \
         PRD_FILE="$_cl_prd" \
         PROJECT_ROOT="$_wt" \
         OUTPUT_DIR="$_wt" \
@@ -3471,14 +3595,8 @@ KNOWNFIXES_EOF
     # sequential and the parallel path, it decides what survives a multi-lane run,
     # and inline in a heredoc it could not be tested. See that module for why a
     # spanning story cannot be merged wholesale.
-    if "$NODE_BIN" -e "
-      const fs = require('fs');
-      const { mergeLaneIntoCanonical } = require('${SCRIPT_DIR}/lib/story-merge.js');
-      const canonical = JSON.parse(fs.readFileSync('${_prd_path}', 'utf8'));
-      const updated = JSON.parse(fs.readFileSync('${_cl_prd}', 'utf8'));
-      mergeLaneIntoCanonical({ canonical, updated, codeline: '${_cl}' });
-      fs.writeFileSync('${_prd_path}', JSON.stringify(canonical, null, 2));
-    "; then
+    if "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/merge-lane-into-canonical.js" \
+         "$SCRIPT_DIR" "${_prd_path}" "${_cl_prd}" "${_cl}"; then
       log "[orch] Merged codeline '${_cl}' story state back into canonical PRD"
     else
       # Previously 2>/dev/null: a failed merge was indistinguishable from a
@@ -3537,7 +3655,7 @@ KNOWNFIXES_EOF
       _pex=${PIPESTATUS[0]}
 
       # exit 2 = gate remediation applied — reset stories and retry once (mirrors tier3 launcher)
-      if [ "$_pex" -eq 2 ]; then
+      if phase_exit_is_retryable "$_pex"; then
         log "[orch] Gate remediation applied for '${_phase}' ('${_cl}') — retrying with SKIP_GATE_REMEDIATION=1"
         _pex=0
         JIRA_CODELINE_RUN=1 \
@@ -3585,14 +3703,8 @@ KNOWNFIXES_EOF
     # sequential and the parallel path, it decides what survives a multi-lane run,
     # and inline in a heredoc it could not be tested. See that module for why a
     # spanning story cannot be merged wholesale.
-    if "$NODE_BIN" -e "
-      const fs = require('fs');
-      const { mergeLaneIntoCanonical } = require('${SCRIPT_DIR}/lib/story-merge.js');
-      const canonical = JSON.parse(fs.readFileSync('${_prd_path}', 'utf8'));
-      const updated = JSON.parse(fs.readFileSync('${_cl_prd}', 'utf8'));
-      mergeLaneIntoCanonical({ canonical, updated, codeline: '${_cl}' });
-      fs.writeFileSync('${_prd_path}', JSON.stringify(canonical, null, 2));
-    "; then
+    if "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/merge-lane-into-canonical.js" \
+         "$SCRIPT_DIR" "${_prd_path}" "${_cl_prd}" "${_cl}"; then
       log "[orch] Merged codeline '${_cl}' story state back into canonical PRD"
     else
       # Previously 2>/dev/null: a failed merge was indistinguishable from a
@@ -3634,19 +3746,7 @@ KNOWNFIXES_EOF
   # Checked against what the story DECLARED, not against how many lanes we
   # happened to execute.
   if [ "$_overall" = "0" ] && [ -f "$_prd_path" ]; then
-    _mc_incomplete=$("$NODE_BIN" -e "
-      const fs = require('fs');
-      const prd = JSON.parse(fs.readFileSync('${_prd_path}', 'utf8'));
-      const bad = [];
-      for (const s of (prd.stories || [])) {
-        const want = Array.isArray(s.codelines) ? s.codelines : [];
-        if (want.length < 2) continue;                 // not a spanning story
-        const got = s.perCodeline || {};
-        const missing = want.filter(cl => !got[cl]);
-        if (missing.length) bad.push(s.id + ' → no result for: ' + missing.join(', '));
-      }
-      process.stdout.write(bad.join('; '));
-    " 2>/dev/null || true)
+    _mc_incomplete=$("$NODE_BIN" "$SCRIPT_DIR/lib/handlers/spanning-stories-incomplete.js" "$_prd_path" 2>/dev/null || true)
     if [ -n "$_mc_incomplete" ]; then
       error "[orch] Spanning story INCOMPLETE — a declared codeline never ran: ${_mc_incomplete}"
       error "[orch] The run touched fewer codelines than the story requires; this is not a success."
@@ -3685,10 +3785,75 @@ KNOWNFIXES_EOF
   fi
 
   [ "$_overall" = "0" ] \
-    && log "[orch] ✅ Pipeline complete." \
+    && # A RUN THAT SPENT MONEY MUST NOT REPORT NOTHING. Checked here, at the end, where the run knows
+# both what it did and what it recorded — see lib/cost-ledger.sh for the run this exists for.
+assert_cost_ledger_not_silently_empty || true
+log "[orch] ✅ Pipeline complete." \
     || error "[orch] ⚠️  Pipeline completed with errors."
 
   return $_overall
+}
+
+# ── The agent mint ────────────────────────────────────────────────────────────
+# EVERY PROJECT MINTS ITS OWN AGENTS, however its PRD arrived.
+#
+# This lived inside _run_jira_pipeline, so a project whose PRD is authored never reached it and ran
+# on the canonical base roster — epam-cli's own first-commit agents, which is the exact failure the
+# mint was built to end. It also meant no role assignment, no project prompt library and no
+# prompt-agent-link, so a project declaring EPAM_PROMPT_PROVISION_MODE=generate exercised none of
+# that path.
+#
+# Same shape as codeline discovery, which was also reachable only from the Jira branch: a
+# capability every project needs cannot live behind the branch only some projects take.
+#
+#   $1 — the PRD to mint against
+#   $2 — the log file to tee into
+_run_agent_mint() {
+  local _prd="$1" _log="${2:-/dev/null}"
+
+  # THE SCAFFOLD PHASE, first. It carries no implementation stories; its only job is to make the
+  # phase loop fire the pre-phase skill assessment over every story, so each agent's profile gains
+  # this project's skills before any implementation begins. Without it that assessment never runs
+  # and every agent works without them.
+  #
+  # It lived inside the Jira branch, so a project with an authored PRD never got one — the same
+  # shape as the mint itself and as codeline discovery. Paired with the mint here because both
+  # prepare the roster's working conditions and both are needed by every project.
+  if "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/run-jira-pipeline.js" "$_prd"; then
+    log "[mint] Scaffold phase present for the pre-phase skill assessment"
+  else
+    error "[mint] could not inject the scaffold phase into ${_prd} — the pre-phase skill"
+    error "[mint] assessment would not run, so every agent would work without this project's skills."
+    return 1
+  fi
+
+  # SKIPPING THE MINT REQUIRES A ROSTER TO SKIP TO. Travels with the mint rather than sitting in
+  # one caller, so the other path cannot skip into nothing.
+  if [ "${EPAM_SKIP_AGENT_MINT:-0}" = "1" ]; then
+    local _roster_file="${EPAM_AGENTS_DIR}/profiles.json" _roster_n=0
+    [ -s "$_roster_file" ] && _roster_n=$("$NODE_BIN" "$SCRIPT_DIR/lib/handlers/roster-size.js" "$_roster_file" 2>/dev/null || echo 0)
+    if [ "${_roster_n:-0}" -lt 1 ]; then
+      error "[mint] EPAM_SKIP_AGENT_MINT=1 but no minted roster exists at ${_roster_file}."
+      error "[mint] Skipping the mint now would hand every story to an agent that was never defined."
+      return 1
+    fi
+    log "[mint] Agent mint skipped (EPAM_SKIP_AGENT_MINT=1) — using the roster on disk (${_roster_n} agent(s))"
+  fi
+  [ "${EPAM_SKIP_AGENT_MINT:-0}" = "1" ] || {
+    log "[mint] Minting project agents and assigning roles..."
+    "$NODE_BIN" "$SCRIPT_DIR/mint-agents-step.js" \
+        --prd "$_prd" \
+        --agents-dir "$EPAM_AGENTS_DIR" \
+        --log-dir "$LOG_DIR" \
+        --codeline-root "${PROJECT_ROOT:-}" 2>&1 | tee -a "$_log"
+    # PIPESTATUS[0], not the pipeline status: without pipefail the status here is tee's, so a
+    # failed mint would read as a success and every story would run with no assigned agent.
+    if [ "${PIPESTATUS[0]}" != "0" ]; then
+      error "[mint] Agent mint/assignment failed — refusing to run stories with no assigned agent."
+      return 1
+    fi
+  }
+  return 0
 }
 
 # ── Jira ingest flow ───────────────────────────────────────────────────────────
@@ -3731,9 +3896,15 @@ _run_jira_pipeline() {
   # Overridable so a test (or any concurrent, isolated Jira-pipeline run) can
   # point the synthesized PRD at its own disposable path instead of colliding
   # with whatever real project last used the shared default location.
-  # Follows the run's own PRD_FILE. Defaulting to travel-app-prd.json meant every
-  # Jira-driven project synthesized into the travel-app PRD (2026-07-25 clobber).
-  local _synth_prd="${JIRA_SYNTH_PRD_PATH:-${PRD_FILE:-$AUTOMATION_DIR/travel-app-prd.json}}"
+  # Follows the run's own PRD_FILE. There is NO built-in default: a default that names
+  # one project does not fail when it is wrong, it succeeds against that project's data —
+  # which is exactly how every Jira-driven run once synthesized into one shared PRD
+  # (2026-07-25 clobber). Absent is an error, not a substitution.
+  local _synth_prd="${JIRA_SYNTH_PRD_PATH:-${PRD_FILE:-}}"
+  if [ -z "$_synth_prd" ]; then
+    error "[jira] no PRD path: set JIRA_SYNTH_PRD_PATH or PRD_FILE. Refusing to guess — the engine names no project."
+    return 1
+  fi
   local _ingest_exit=0
   # IMPORTANT: do NOT use `|| _ingest_exit=${PIPESTATUS[0]}` here.
   # Without pipefail, the pipeline exit code is tee's exit code (almost always 0),
@@ -3779,15 +3950,6 @@ _run_jira_pipeline() {
   # profile before any core implementation begins. Agent SKILLS are assessed per project
   # here; agent IDENTITIES are minted per project immediately below — they used to be kept
   # wholesale from the canonical, which is how a client codeline ran epam-cli's own roster.
-  "$NODE_BIN" -e "
-    const fs = require('fs');
-    const prd = JSON.parse(fs.readFileSync('${_synth_prd}', 'utf8'));
-    if (!prd.implementationOrder) prd.implementationOrder = {};
-    if (!prd.implementationOrder.scaffold) {
-      prd.implementationOrder = { scaffold: [], ...prd.implementationOrder };
-    }
-    fs.writeFileSync('${_synth_prd}', JSON.stringify(prd, null, 2));
-  " 2>/dev/null && log "[jira] Injected empty scaffold phase for pre-phase skill assessment"
 
   # ── Mint this project's agents, then assign every story one ────────────────
   #
@@ -3798,21 +3960,20 @@ _run_jira_pipeline() {
   # Until now the roster was inherited wholesale: a client codeline ran with epam-cli's OWN
   # first-commit agents, and synthesize-prd-from-jira.js assigned every ticket to one of them
   # with a hardcoded literal. Nothing errored — it was simply always the wrong agent.
-  if [ "${EPAM_SKIP_AGENT_MINT:-0}" != "1" ] || [ -n "${EPAM_RESUME_RUN:-}" ]; then
-    log "[jira] Minting project agents and assigning roles..."
-    if ! "$NODE_BIN" "$SCRIPT_DIR/mint-agents-step.js" \
-        --prd "$_synth_prd" \
-        --agents-dir "$EPAM_AGENTS_DIR" \
-        --log-dir "$LOG_DIR" \
-        --codeline-root "${PROJECT_ROOT:-}" 2>&1 | tee -a "$_log_file"; then
-      error "[jira] Agent mint/assignment failed — refusing to run stories with no assigned agent."
-      return 1
-    fi
-    if [ "${PIPESTATUS[0]}" != "0" ]; then
-      error "[jira] Agent mint/assignment failed — refusing to run stories with no assigned agent."
-      return 1
-    fi
-  fi
+  # THE SKIP IS HONOURED, INCLUDING ON A RESUME.
+  #
+  # This used to read `|| [ -n "${EPAM_RESUME_RUN:-}" ]`, which forced the mint back ON for every
+  # checkpoint-based resume — exactly contradicting the instruction the checkpoint had just
+  # issued, and for the reason it states: the merge is additive, so each resume accumulated
+  # near-duplicate roles in a roster the operator had already settled.
+  #
+  # The danger the clause was reaching for is still real and is now handled properly: skipping the
+  # mint when nothing was ever minted would hand stories to agents that do not exist. That is a
+  # refusal, not a silent re-mint — the same rule as every other guard here, which is to stop
+  # rather than proceed on unknown state.
+  # The skip guard travels with the mint now — see _run_agent_mint — so neither path can skip
+  # into a roster that was never minted.
+  _run_agent_mint "$_synth_prd" "$_log_file" || return 1
 
   # PAUSE 1 of 2 — the roster is minted and every story assigned, and nothing has been
   # specified or written yet. Which roles exist, how they are briefed, and which story each
@@ -3939,18 +4100,7 @@ unset _ep_i _ep_j
 resume_spec_output_present() {
     local _prd="${1:-}"
     [ -n "$_prd" ] && [ -f "$_prd" ] || return 1
-    "${NODE_BIN:-node}" -e "
-      try {
-        const p = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
-        const stories = Array.isArray(p.stories) ? p.stories : [];
-        const has = (v) => Array.isArray(v) ? v.length > 0
-          : (v && typeof v === 'object') ? Object.keys(v).length > 0 : false;
-        const survived = stories.some((s) => s && (
-          has(s.fixSiteAnalysis) || has(s.verificationCriteria) ||
-          has(s.specification) || has((s.technicalNotes || {}).files)));
-        process.exit(survived ? 0 : 1);
-      } catch { process.exit(1); }
-    " "$_prd" 2>/dev/null
+    "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/resume-spec-output-present.js" "$_prd" 2>/dev/null
 }
 
 if is_parent && [ -n "${EPAM_RESUME_RUN:-}" ]; then
@@ -3996,12 +4146,33 @@ if is_parent; then
     # Jira flow: ingest → synthesize → route codelines
     _run_jira_pipeline; exit $?
   else
+    # RESOLVE THE SCOPE BEFORE COUNTING IT.
+    #
+    # The count below is the whole dispatch decision, and it reads project.outputDirs — which
+    # only the Jira synthesizer ever wrote. A project whose PRD is authored therefore counted 0
+    # however many codelines it really had, fell through to single-lane execution, and the mint
+    # reported success against one unnamed codeline.
+    #
+    # Discovery is not a Jira capability; it is the answer to "which repositories does this work
+    # touch", which every brownfield project needs. The resolver is a no-op when the scope is
+    # already declared, and a no-op when no codeline root is configured — so a single-repo
+    # project and a project that declares its own codelines both reach the count unchanged.
+    #
+    # HALTS on failure. A run that proceeds with an unresolved scope writes to whichever single
+    # repository it happens to land on.
+    if ! bash "$SCRIPT_DIR/resolve-codeline-scope.sh" --prd "$PRD_FILE"; then
+      error "[orch] codeline scope could not be resolved — refusing to run against an unknown scope"
+      exit 1
+    fi
+
+    # THE MINT, on this path too. Scope is resolved above, so the codelines it needs exist.
+
+    # THE MINT, on this path too. Scope is resolved above, so the codelines it needs exist.
+    _run_agent_mint "$PRD_FILE" "${LOG_DIR:-}/orchestration.log" || exit 1
+
     # Canonical PRD flow: if the PRD defines multiple codelines, route them.
     # Single-codeline PRDs fall through to the normal phase execution below.
-    _cl_count=$("${NODE_BIN:-node}" -e "
-      const p = JSON.parse(require('fs').readFileSync('$PRD_FILE','utf8'));
-      console.log((p.project && p.project.outputDirs ? p.project.outputDirs : []).length);
-    " 2>/dev/null || echo 0)
+    _cl_count=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/cl-count.js" "$PRD_FILE" 2>/dev/null || echo 0)
     if [ "${_cl_count:-0}" -gt 1 ]; then
       # Pass _ep_caller_phase as third arg so the loop runs only the requested phase.
       # Empty string = run all PRD phases (Jira path, or direct invocation without --phase).
@@ -4252,10 +4423,19 @@ if [ "${RESET_STORIES:-false}" = "true" ]; then
     # Clean up review artifacts for review stories being reset so AC pre-existing-file guard doesn't block re-runs
     while IFS= read -r _review_id; do
         [ -z "$_review_id" ] && continue
-        _review_artifact="$PROJECT_ROOT/review/${_review_id}-review.md"
+        # INSIDE THE ENGINE PERIMETER. This wrote to $PROJECT_ROOT/review/, which is NOT in
+        # _ENGINE_OWNED_DIRS — so git_add_client_outputs staged it and the engine's own review
+        # markdown was COMMITTED into the customer's repository. Verified by execution: with
+        # .epam/ and orchestrations/ correctly excluded, review/ came through.
+        #
+        # The fix is NOT to add "review" to _ENGINE_OWNED_DIRS: that name is generic enough that a
+        # client repo may legitimately have one, and excluding it would silently drop their work
+        # from every commit. .epam/ is already engine-owned and claims no new name.
+        _review_artifact="$PROJECT_ROOT/.epam/review/${_review_id}-review.md"
+        mkdir -p "$(dirname "$_review_artifact")" 2>/dev/null || true
         if [ -f "$_review_artifact" ]; then
             rm -f "$_review_artifact"
-            info "  Removed stale review artifact: review/${_review_id}-review.md"
+            info "  Removed stale review artifact: .epam/review/${_review_id}-review.md"
         fi
     done < <(jq -r '.stories[]? | select(.agentRole == "review-agent") | .id' "$PRD_FILE" 2>/dev/null)
     # Immediately push reset state to dashboard so viewer shows clean slate
@@ -4322,7 +4502,6 @@ run_specification_pass() {
     set +e
     PRD_FILE="$PRD_FILE" OUTPUT_DIR="$LOG_DIR" CLAUDE_CMD="${CLAUDE_CMD}" \
         AI_RUNNER_CMD="$AI_RUNNER_CMD" EPAM_ORCHESTRATION_PROVIDER="${ORCH_GATE_PROVIDER:-${EPAM_ORCHESTRATION_PROVIDER:-}}" \
-        AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
         "$node_cmd" "$spec_runner" --phase "$phase_id" 2>&1 | tee "$LOG_DIR/spec-${phase_id}.log"
     local spec_rc=${PIPESTATUS[0]}
     set -e
@@ -4334,7 +4513,7 @@ run_specification_pass() {
     _spec_usage=$(_spec_pass_usage "$phase_id")
     read -r _spec_cost _spec_tin _spec_tout _spec_turns <<< "${_spec_usage:-0 0 0 0}"
     append_pipeline_cost_record "spec-pass" "$phase_id" \
-        "${ORCH_GATE_MODEL:-z-ai/glm-5.2}" "$_spec_started" \
+        "$(seam_model_or_fail "spec-agent")" "$_spec_started" \
         "${_spec_cost:-0}" "${_spec_tin:-0}" "${_spec_tout:-0}" "${_spec_turns:-0}" 2>/dev/null || true
     # Surface openspec/speckit as visible checklist sub-steps instead of only
     # showing as "spec-mode: fast-path ..." log lines buried inside Step 0's
@@ -4343,8 +4522,8 @@ run_specification_pass() {
     # count per agent; model comes from the same env vars the runner itself
     # uses (SPEC_MODE_OPENSPEC_MODEL/SPEC_MODE_SPECKIT_MODEL).
     local _spec_summary="$LOG_DIR/spec-summary.json"
-    local _openspec_model="${SPEC_MODE_OPENSPEC_MODEL:-z-ai/glm-5.2}"
-    local _speckit_model="${SPEC_MODE_SPECKIT_MODEL:-z-ai/glm-5.2}"
+    local _openspec_model="$(seam_model_or_fail "spec-agent")"
+    local _speckit_model="$(seam_model_or_fail "spec-agent")"
     local _openspec_count=0 _speckit_count=0
     if [ -f "$_spec_summary" ]; then
         _openspec_count=$(jq -r '.stats.agents.openspec // 0' "$_spec_summary" 2>/dev/null || echo 0)
@@ -4415,9 +4594,31 @@ else
     run_specification_pass "$PHASE"
 fi
 
+
 # Story-ID-loss invariant: snapshot the settled post-spec-pass story set for
 # this phase. See capture_story_ids_snapshot's own docstring above for why.
 capture_story_ids_snapshot "presplit"
+
+# PUBLISH THE PLAN THIS PROCESS WILL WORK FROM — outside the spec-pass branch, deliberately.
+#
+# The detective renders its own answer (lib/producers/fix-plan.js) and it is published once, from
+# THIS process's PRD, so consumers stop reading story.fixSiteAnalysis and inventing their own
+# wording of it. Publishing from this PRD is what keeps a lane's writer on its own plan: a lane
+# runs with its own scoped PRD, while the canonical one holds the UNION of every codeline — on
+# AMSD-2041 that is 13 sites where gotransit has 4, including three conflicting prescriptions for
+# one file.
+#
+# It sits OUTSIDE the spec-pass branch because a resume routinely skips the spec pass. Inside it,
+# a resumed run would publish nothing, the plan would simply be absent, and the writer would go in
+# blind — which looks exactly like a run that never had a plan.
+_publish_agent_outputs() {
+    local _node="${NODE_CMD:-${HOME}/.nvm/versions/node/v20.20.0/bin/node}"
+    [ -x "$_node" ] || _node="$(command -v node 2>/dev/null || echo node)"
+    [ -f "${PRD_FILE:-}" ] || return 0
+    "$_node" "$SCRIPT_DIR/lib/producers/fix-plan.js" --publish "$PRD_FILE" \
+        || warning "fix-plan publication failed — consumers will find no published plan"
+}
+_publish_agent_outputs
 
 # ── Checkpoint: the spec pass's output is now settled ────────────────────────
 # Persist it UNCONDITIONALLY, whether or not we are pausing. Anything generated and not
@@ -4645,7 +4846,11 @@ if [ -f "$_router_js" ] && command -v node &>/dev/null; then
         _topology_source=$(echo "$_router_out"   | jq -r '.source   // "heuristic"' 2>/dev/null || echo "heuristic")
         # GAP-P22: track topology router cost when LLM was invoked
         if [ "$_topology_source" = "llm" ]; then
-            _router_model=$(echo "$_router_out" | jq -r '.model // "z-ai/glm-5.2"' 2>/dev/null || echo "z-ai/glm-5.2")
+            # WHAT ACTUALLY RAN, or nothing. This is a COST record: a vendor literal here
+            # attributes real spend to a model that was never invoked, which is worse than an
+            # unattributed record because it looks correct in the cost report.
+            _router_model=$(echo "$_router_out" | jq -r '.model // empty' 2>/dev/null || echo "")
+            [ -n "$_router_model" ] || _router_model=$(seam_model_or_fail "prd-model-coordinator" 2>/dev/null || printf 'unrecorded')
             append_pipeline_cost_record "topology-router" "pipeline" "$_router_model" "$_router_started" \
                 "0.001" "800" "50" "1" 2>/dev/null || true
         fi
@@ -4923,109 +5128,29 @@ run_pre_phase_assessment() {
     # Build assessment prompt
     local assessment_prompt
     # shellcheck disable=SC2287
-    assessment_prompt=$(cat << PROMPT_HEADER
-CONVERGE FAST — HARD LIMIT: ${_pfa_tool_budget} tool calls total. This is not a suggestion.
-By your ${_pfa_tool_budget}th tool call you MUST stop investigating and return your BEST current
-answer. Exploring past the budget WITHOUT answering means you return nothing at all and every
-bit of your investigation is discarded — a partially-informed augmentation is worth far more
-than none. If you are unsure, decide from what you have already seen and answer now.
-
-You are the skill assessment agent running in PRE-PHASE mode. Your job is to deeply reason about what each assigned agent will need to succeed — not just check a list of requiredSkills, but actively anticipate pitfalls given the tech stack, file types, and implementation patterns the stories demand. You augment agent profiles with the specific knowledge needed to avoid failures before they happen.
-
-## PRD STRUCTURE (read this carefully before issuing any jq commands)
-The PRD file uses a FLAT structure — not nested phases. Key paths:
-- Story list: .stories[]
-- Phase story order: .implementationOrder["${phase_id}"] — returns an array of story IDs
-- Story lookup: .stories[] | select(.id == "<id>")
-- Agent role field: .agentRole on each story object
-- Files field: .technicalNotes.files[] on each story object
-
-DO NOT use .phases[0] — that path does not exist in this PRD.
-
-${_pfa_facts}
-
-## Task
-1. Run: jq -r '.implementationOrder["${phase_id}"][]' ${PRD_REL}
-   This gives you the ordered list of story IDs for this phase.
-
-2. For each story ID, run: jq -c --arg id "<id>" '.stories[] | select(.id == \$id) | {id, agentRole, unitTests, technicalNotes}' ${PRD_REL}
-
-3. ROLE ASSIGNMENT — For any story where agentRole is null or empty:
-   a. Examine the story's technicalNotes.files list
-   b. If ALL files in the list are test files (matching *.test.ts or *.spec.ts), assign agentRole "test-engineer"
-   c. If the story has unitTests:true AND its files include test files mixed with implementation files, this story MUST be split:
-      - Implementation child: files without *.test.ts, agentRole "typescript-engineer"
-      - Test child: only the *.test.ts files, agentRole "test-engineer"
-      - Report the agentRole for each child in storyRoleAssignments
-   d. Otherwise assign the most appropriate role from ${PROFILES_REL} based on the story's tech stack
-   e. Report it in storyRoleAssignments. Do NOT edit ${PRD_REL} yourself.
-
-4. PROFILE CREATION — For any agentRole assigned in step 3 that does NOT exist as a key in ${PROFILES_REL}:
-   a. Read the project context from ${PRD_REL} (projectName, techStack, constraints)
-   b. Read the story's technicalNotes to understand the testing conventions for this project
-   c. Generate a new profile string for that role, derived from THIS project: its name, its test framework and version, its module system, its mocking convention, its forbidden packages, its test config path and include pattern — every one of these read from the project's own manifest and existing tests, never assumed. Include the instruction that a test-only role writes test files and never implementation files.
-   d. Report it in newProfiles. Do NOT edit ${PROFILES_REL} yourself.
-
-5. PROACTIVE SKILL INFERENCE — For each story's agentRole, reason beyond the requiredSkills list. Read the story's full technicalNotes, acceptanceCriteria, and files. Then ask: given this tech stack and these implementation patterns, what are the specific pitfalls an agent is likely to walk into that are NOT already covered in the profile?
-
-   Infer gaps by reasoning about the code the agent will write, not the labels in requiredSkills. The SHAPE of the reasoning is:
-     "<something concrete this story's code will do, read from THIS repository>
-      → the specific mistake an agent tends to make there
-      → the exact rule that prevents it"
-
-   EVERY rule you report must come from THIS project's code. Name a real file, a
-   real dependency, a real convention you have actually seen in this repository.
-   You are given no worked examples on purpose: any example would be from some
-   other project, and reproducing it here would hand this project's agents
-   another codebase's rules. If you cannot ground a rule in something you have
-   read, do not report it — an empty profileAdditions is a correct answer.
-
-   Be specific and actionable — state the exact rule, not a general category. Do NOT edit ${PROFILES_REL} yourself.
-
-6. EXPLICIT SKILL GAP FILL — After proactive inference, also do the traditional check:
-   a. Compare each story's technicalNotes.requiredSkills against the agent's profile text
-   b. For any skills explicitly listed but not covered in the profile, report them in profileAdditions
-
-## YOUR OUTPUT — A DECISION, NOT AN EDIT
-
-You do NOT write any file. You have no write tool, and hand-rolling scripts to
-edit a 136,000-character JSON file is what made every previous attempt at this
-task run out of iterations without ever finishing — one of them appended the same
-rule four times and then spent its remaining turns undoing that.
-
-Return ONE JSON object and nothing else. The pipeline applies it deterministically:
-
-  {
-    "storyRoleAssignments": [{"storyId": "<id>", "agentRole": "<role>"}],
-    "profileAdditions":     [{"role": "<role>", "rules": ["<exact rule>", "..."]}],
-    "newProfiles":          [{"role": "<role>", "profile": "<full profile text>"}]
-  }
-
-All three keys are required; use an empty array when there is nothing for one.
-Rules already present in a profile are ignored, so do not try to de-duplicate.
-A role that already has a profile is never replaced — use profileAdditions for it.
-A story that already has an agentRole is never reassigned.
-
-Known skill categories: deployment_platform, language, framework, testing, database, infrastructure, api, cloud_service
-
-CRITICAL RULES:
-- Keep ${PROFILES_REL} valid JSON at all times. Only ADD to existing profile strings, never remove content.
-- A test-engineer profile must instruct the agent to ONLY write test files — never touch implementation files.
-- The same agentRole must NEVER appear on both an implementation story and its paired test story in the same phase.
-- Inferred skill additions must be specific and actionable (a concrete rule the agent can follow), not vague capability claims.
-- NEVER write example API keys, tokens, or secrets into any source file — not even as placeholders. If example values are needed in documentation, read the credential from the environment (whatever variable THIS project already uses for it) or write the literal string \`YOUR_API_KEY_HERE\`. Any string matching \`/sk-[a-z]+-[a-zA-Z0-9]+/\` or resembling a credential will trigger a SAST blocker.
-- NEVER modify package.json, tsconfig.json, vitest.config.ts, or any other scaffold-phase infrastructure file. These are owned by the scaffold phase and are immutable to all subsequent phases. If a story appears to require changing these files, flag it as a blocker in skills-gap-report.jsonl instead.
-- NEVER rewrite the PRD file (${PRD_REL}) with a different story structure. You may only update agentRole fields and append to ${PROFILES_REL}. Any other structural change to the PRD is forbidden.
-- NEVER modify .env, .env.*, *credentials*, or any file containing API keys or secrets. These files are immutable to all agents — modification would break the entire pipeline for all subsequent runs.
-PROMPT_HEADER
-    )
+    local _pfa_facts_file; _pfa_facts_file=$(mktemp "${TMPDIR:-/tmp}/pfa-facts-XXXXXX.txt")
+    printf '%s' "${_pfa_facts:-}" > "$_pfa_facts_file"
+    _ap_vals=$(mktemp "${TMPDIR:-/tmp}/post-failure-analyst-vals-XXXXXX.json")
+    jq -n \
+          --rawfile pfa_facts "$_pfa_facts_file" \
+          --arg pfa_tool_budget "$_pfa_tool_budget" \
+          --arg phase_id "$phase_id" \
+          --arg prd_rel "$prd_rel" \
+          --arg profiles_rel "$profiles_rel" \
+          '{"__PFA_FACTS__":$pfa_facts,"__PFA_TOOL_BUDGET__":$pfa_tool_budget,"__PHASE_ID__":$phase_id,"__PRD_REL__":$prd_rel,"__PROFILES_REL__":$profiles_rel}' > "$_ap_vals"
+    assessment_prompt="$(render_engine_prompt post-failure-analyst "$_ap_vals")"
+    rm -f "$_ap_vals"
+    rm -f "$_pfa_facts_file"
 
     # Append the phase-specific context
-    assessment_prompt="${assessment_prompt}
-
-## Phase: ${phase_id}
-
-Read ${PRD_REL} implementationOrder[\"${phase_id}\"] for the story list, then proceed with the analysis above."
+    _cp_vals=$(mktemp "${TMPDIR:-/tmp}/phase-assessment-header-vals-XXXXXX.json")
+    jq -n \
+          --arg assessment_prompt "${assessment_prompt}" \
+          --arg phase_id "${phase_id}" \
+          --arg prd_rel "${PRD_REL}" \
+          '{"__ASSESSMENT_PROMPT__":$assessment_prompt,"__PHASE_ID__":$phase_id,"__PRD_REL__":$prd_rel}' > "$_cp_vals"
+    assessment_prompt="$(render_engine_prompt phase-assessment-header "$_cp_vals")"
+    rm -f "$_cp_vals"
 
     # Fresh pre-call snapshot for reviewer diffing (profiles_backup is the
     # canonical original floor, not necessarily the immediately-prior state).
@@ -5060,10 +5185,13 @@ Read ${PRD_REL} implementationOrder[\"${phase_id}\"] for the story list, then pr
     for _pfa_attempt in 1 2 3; do
         local _pfa_prompt_this_attempt="$assessment_prompt"
         if [ -n "$_pfa_corrective_note" ]; then
-            _pfa_prompt_this_attempt="${_pfa_prompt_this_attempt}
-
-CRITICAL — YOUR PREVIOUS ATTEMPT VIOLATED YOUR OWN INSTRUCTIONS: ${_pfa_corrective_note}
-Fix this and retry. Do not repeat the same mistake."
+            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/corrective-note-vals-XXXXXX.json")
+            jq -n \
+                  --arg pfa_prompt_this_attempt "${_pfa_prompt_this_attempt}" \
+                  --arg pfa_corrective_note "${_pfa_corrective_note}" \
+                  '{"__PFA_PROMPT_THIS_ATTEMPT__":$pfa_prompt_this_attempt,"__PFA_CORRECTIVE_NOTE__":$pfa_corrective_note}' > "$_cp_vals"
+            _pfa_prompt_this_attempt="$(render_engine_prompt corrective-note "$_cp_vals" phase_assessment)"
+            rm -f "$_cp_vals"
         fi
 
         local _pfa_call_ok=1
@@ -5165,20 +5293,7 @@ Fix this and retry. Do not repeat the same mistake."
             _pfa_before_tmp=$(mktemp)
             printf '%s' "$_pfa_profiles_before" > "$_pfa_before_tmp"
             local _pfa_diff
-            _pfa_diff=$(python3 - "$_pfa_before_tmp" "$profiles_file" <<'PFA_DIFF_PY'
-import json, sys
-with open(sys.argv[1]) as f:
-    before = json.load(f)
-with open(sys.argv[2]) as f:
-    after = json.load(f)
-new_keys = [k for k in after if k not in before]
-changed_keys = [k for k in after if k in before and after[k] != before[k]]
-out = {
-    "new_profiles": {k: after[k][:1500] for k in new_keys},
-    "changed_profiles": {k: {"before": before[k][-800:], "after": after[k][-800:]} for k in changed_keys}
-}
-print(json.dumps(out))
-PFA_DIFF_PY
+            _pfa_diff=$(python3 "$SCRIPT_DIR/lib/handlers/pfa-diff.py" "$_pfa_before_tmp" "$profiles_file"
 )
             rm -f "$_pfa_before_tmp"
             local _pfa_has_changes
@@ -5191,32 +5306,15 @@ PFA_DIFF_PY
                     local _pfa_verdict
                     _pfa_verdict=$(echo "${_pfa_reviewer_profile}
 
-STORY: pre-phase-assessment-${phase_id}
-CHANGE TYPE: profile_creation
-
-BEFORE/AFTER DIFF:
-${_pfa_diff:0:3000}
-
-Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}" | \
+        $(_render_change_reviewer "pre-phase-assessment-${phase_id}" "profile_creation" "BEFORE/AFTER DIFF:\n${_pfa_diff}")" | \
                         AI_PROVIDER="${ORCH_GATE_PROVIDER}" \
-                        AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
+                        AI_MODEL="$(seam_model_or_fail "prd-change-reviewer")" \
                         EPAM_CLI="${EPAM_CLI:-epam}" \
                         "$AI_RUNNER_CMD" \
                             --provider "${ORCH_GATE_PROVIDER}" \
-                            --model    "${ORCH_GATE_MODEL:-MiniMax-M3}" \
+                            --model    "$(seam_model_or_fail "prd-change-reviewer")" \
                         2>/dev/null | \
-                        python3 -c "
-import sys, json, re
-text = sys.stdin.read()
-try:
-    obj = json.loads(text.strip())
-    print(obj.get('verdict','pass'))
-    sys.exit(0)
-except Exception:
-    pass
-m = re.search(r'\"verdict\"\s*:\s*\"(pass|fail)\"', text)
-print(m.group(1) if m else 'pass')
-" 2>/dev/null || echo "pass")
+                        python3 "$SCRIPT_DIR/lib/handlers/run-pre-phase-assessment.py" 2>/dev/null || echo "pass")
                     if [ "$_pfa_verdict" = "fail" ]; then
                         _pfa_violated=1
                         _pfa_violation_reason="${_pfa_violation_reason}profiles.json content was rejected by the reviewer (bad/vague skill rule content); "
@@ -5234,54 +5332,7 @@ print(m.group(1) if m else 'pass')
         local _pfa_prd_stderr_file
         _pfa_prd_stderr_file=$(mktemp)
         local _pfa_prd_verdict
-        _pfa_prd_verdict=$(python3 - "$_pfa_prd_before_file" "$PRD_FILE" "$phase_id" 2>"$_pfa_prd_stderr_file" <<'PFA_PRD_DIFF_PY'
-import json, sys
-
-ALLOWED_FIELDS = {'agentRole', 'model', 'aiProvider', 'reasoningEffort'}
-
-before_path, after_path, phase_id = sys.argv[1], sys.argv[2], sys.argv[3]
-try:
-    with open(before_path) as f:
-        before = json.load(f)
-    with open(after_path) as f:
-        after = json.load(f)
-except Exception as e:
-    print('fail')
-    print(f"VIOLATION: PRD is not valid JSON after write: {e}", file=sys.stderr)
-    sys.exit(0)
-
-phase_ids = set(before.get('implementationOrder', {}).get(phase_id, []))
-before_by_id = {s['id']: s for s in before.get('stories', []) if 'id' in s}
-after_by_id = {s['id']: s for s in after.get('stories', []) if 'id' in s}
-
-violations = []
-if set(before_by_id) != set(after_by_id):
-    added = set(after_by_id) - set(before_by_id)
-    removed = set(before_by_id) - set(after_by_id)
-    if added:
-        violations.append(f"stories added: {sorted(added)}")
-    if removed:
-        violations.append(f"stories removed: {sorted(removed)}")
-
-for sid in phase_ids:
-    b = before_by_id.get(sid)
-    a = after_by_id.get(sid)
-    if b is None or a is None:
-        continue  # already reported above as added/removed
-    all_keys = set(b.keys()) | set(a.keys())
-    for key in all_keys:
-        if key in ALLOWED_FIELDS:
-            continue
-        if b.get(key) != a.get(key):
-            violations.append(f"{sid}.{key} changed (not an allowed field for pre-phase assessment)")
-
-if violations:
-    print('fail')
-    for v in violations[:20]:
-        print(f"VIOLATION: {v}", file=sys.stderr)
-else:
-    print('pass')
-PFA_PRD_DIFF_PY
+        _pfa_prd_verdict=$(python3 "$SCRIPT_DIR/lib/handlers/pfa-prd-diff.py" "$_pfa_prd_before_file" "$PRD_FILE" "$phase_id" 2>"$_pfa_prd_stderr_file"
 )
         if [ "$_pfa_prd_verdict" = "fail" ]; then
             _pfa_violated=1
@@ -5309,24 +5360,7 @@ PFA_PRD_DIFF_PY
 
     local _pfa_violation_types="[]"
     if [ -n "$_pfa_corrective_note" ]; then
-        _pfa_violation_types=$(printf '%s' "$_pfa_corrective_note" | python3 -c "
-import json, sys
-reason = sys.stdin.read()
-types = []
-if 'tool call itself failed' in reason:
-    types.append('tool_call_failed')
-if 'profiles.json content was rejected' in reason:
-    types.append('profiles_content_rejected')
-if 'not valid JSON' in reason:
-    types.append('invalid_json')
-if 'stories added' in reason:
-    types.append('story_added')
-if 'stories removed' in reason:
-    types.append('story_removed')
-if 'changed (not an allowed field' in reason:
-    types.append('field_out_of_scope')
-print(json.dumps(types))
-" 2>/dev/null || echo "[]")
+        _pfa_violation_types=$(printf '%s' "$_pfa_corrective_note" | python3 "$SCRIPT_DIR/lib/handlers/pfa-violation-types.py" 2>/dev/null || echo "[]")
     fi
 
     _log_guarded_step_retry "$(jq -n -c \
@@ -5403,25 +5437,13 @@ run_hybrid_precoordination() {
     local coord_prompt
     touch "$MESSAGES_JSONL"
 
-    coord_prompt=$(cat << COORD_EOF
-You are the coordination agent running in HYBRID PRE-PHASE mode for phase: ${phase_id}.
-
-## Task
-1. Read ${PRD_REL} and locate all stories in implementationOrder["${phase_id}"].
-2. Identify cross-lane dependencies between main, primary, and independent agent groups.
-3. Flag any stories where estimatedHours >= 6 or dependencies count >= 2 — these require plan mode.
-4. For each cross-lane dependency or plan-mode story, append a JSON message to orchestrations/logs/agent-messages.jsonl.
-   Use this schema (one compact JSON line per message):
-   {"id":"coord_<storyid>_<epoch>","timestamp":"<ISO8601>","from_agent":"coordination-agent","to_agent":"<agentRole>","story_id":"<id>","phase_id":"${phase_id}","message_type":"<handoff|plan_required|risk>","priority":"normal","subject":"<subject>","body":"<body>","status":"new"}
-5. Post a final {"message_type":"phase_ready","to_agent":"orchestrator","phase_id":"${phase_id}",...} message when complete.
-6. Use: (flock -w 10 9 >> orchestrations/logs/agent-messages.jsonl; printf '%s\n' '<json>' >&9) 9>>orchestrations/logs/agent-messages.jsonl for atomic writes.
-7. Write a summary of actions to orchestrations/logs/hybrid-coord-${phase_id}.log.
-
-## Constraints
-- Do NOT modify source code or prd.json stories.
-- Only write to orchestrations/logs/agent-messages.jsonl and orchestrations/logs/hybrid-coord-${phase_id}.log.
-COORD_EOF
-    )
+    _cp_vals=$(mktemp "${TMPDIR:-/tmp}/hybrid-prephase-coordinator-vals-XXXXXX.json")
+    jq -n \
+          --arg phase_id "$phase_id" \
+          --arg prd_rel "$prd_rel" \
+          '{"__PHASE_ID__":$phase_id,"__PRD_REL__":$prd_rel}' > "$_cp_vals"
+    coord_prompt="$(render_engine_prompt hybrid-prephase-coordinator "$_cp_vals")"
+    rm -f "$_cp_vals"
 
     cd "$PROJECT_ROOT"
     # run_orch_prompt_with_tools (not plain run_orch_prompt): the prompt above
@@ -5430,9 +5452,14 @@ COORD_EOF
     local _hpc_attempt=0 _hpc_ok=0
     while [ "$_hpc_attempt" -lt 2 ] && [ "$_hpc_ok" = "0" ]; do
         local _hpc_prompt="$coord_prompt"
-        [ "$_hpc_attempt" -ge 1 ] && _hpc_prompt="RETRY (attempt 2): The previous invocation produced no output. Use your tools to read the PRD, write coordination messages to agent-messages.jsonl, and write the summary log now.
-
-$coord_prompt"
+        if [ "$_hpc_attempt" -ge 1 ]; then
+          _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
+          jq -n \
+                --arg coord_prompt "$coord_prompt" \
+                '{"__COORD_PROMPT__":$coord_prompt}' > "$_rp_vals"
+          _hpc_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" hybrid_prephase_coordinator)"
+          rm -f "$_rp_vals"
+        fi
         # No story_id — phase-level coordination call, not tied to a single story.
         # PIPESTATUS, not `[ -s "$coord_log" ]` alone. This is a PIPELINE and its exit status is
         # tee's — always 0 — so `set -e` cannot help either (no `set -o pipefail`). Judging
@@ -5512,18 +5539,19 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
     # Now: the project's own `scripts.test`, executed through the package manager
     # its lockfile names. No runner name and no runner-specific flag appears
     # here, so a stack neither of us has seen still works.
-    _rg_test_declared=0
-    if [ -f "$_rg_root/package.json" ] &&
-       jq -e '(.scripts.test // "") != ""' "$_rg_root/package.json" >/dev/null 2>&1; then
-        _rg_test_declared=1
-    fi
+    # FROM THE ECOSYSTEM REGISTRY, not from a manifest this file names. It tested package.json and
+    # four npm lockfiles, so a Rust, Python or Ruby codeline had _rg_test_declared=0, the condition
+    # below never fired, and the cross-phase regression check was SILENTLY SKIPPED — the same free
+    # pass codeline-health.sh was giving, and for the same reason. Its own comment two lines up
+    # claims no runner name appears here, which was true of the runner and false of the ecosystem.
+    _rg_facts="$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/codeline-ecosystem.js" "$_rg_root" 2>/dev/null || echo '{}')"
+    _rg_test_cmd="$(printf '%s' "$_rg_facts" | python3 "$SCRIPT_DIR/lib/handlers/json-field.py" testCommand 2>/dev/null || echo "")"
+    _rg_pm="$(printf '%s' "$_rg_facts" | python3 "$SCRIPT_DIR/lib/handlers/json-field.py" packageManager 2>/dev/null || echo "")"
 
-    # The package manager, from the lockfile the project committed.
-    _rg_pm=""
-    [ -f "$_rg_root/pnpm-lock.yaml" ]      && _rg_pm="pnpm"
-    [ -z "$_rg_pm" ] && [ -f "$_rg_root/yarn.lock" ] && _rg_pm="yarn"
-    [ -z "$_rg_pm" ] && { [ -f "$_rg_root/package-lock.json" ] || [ -f "$_rg_root/npm-shrinkwrap.json" ]; } && _rg_pm="npm"
-    [ -z "$_rg_pm" ] && [ "$_rg_test_declared" -eq 1 ] && _rg_pm="npm"
+    # A project that declares no test command has nothing to regress against. That is not a pass —
+    # the caller below runs the guard only when there IS something to run, and says so either way.
+    _rg_test_declared=0
+    [ -n "$_rg_test_cmd" ] && _rg_test_declared=1
 
     # Kept for ensure_node_modules_healthy's smoke test below, which asks "is
     # node_modules usable" — any installed executable answers that.
@@ -5537,7 +5565,9 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
     # hasn't touched before. Smoke-test + repair BEFORE trusting the test
     # runner, so a broken environment reads as a clear repair attempt, not a
     # confusing "tests broken" failure that's actually an environment issue.
-    if [ -n "$_rg_node" ] && [ -f "$_rg_root/package.json" ]; then
+    # The repair below is ecosystem-specific by nature: it repairs a vendored install. Gated on
+    # the registry saying this ecosystem vendors in-repo, rather than on a manifest name.
+    if [ -n "$_rg_node" ] && [ -n "$_rg_vendored" ] && [ "$_rg_vendored" != "null" ]; then
         # CANNOT-VERIFY is a third outcome, and it is never a pass.
         #
         # This was `|| true`. Live metrolinx 2026-07-29: the repair guard reported
@@ -5566,9 +5596,17 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
             _rg_bin="$(find "$_rg_root/node_modules/.bin" -maxdepth 1 -type f -o -maxdepth 1 -type l 2>/dev/null | head -1)"
         fi
     fi
-    if [ -n "$_rg_node" ] && [ "$_rg_test_declared" -eq 1 ] && [ -n "$_rg_pm" ] && [ -n "$_rg_bin" ]; then
+    _rg_vendored="$(printf '%s' "$_rg_facts" | python3 "$SCRIPT_DIR/lib/handlers/json-field.py" installDir 2>/dev/null || echo "")"
+    _rg_ready=1
+    [ "$_rg_test_declared" -eq 1 ] || _rg_ready=0
+    # Only an ecosystem that vendors in-repo needs its interpreter and its install present before
+    # the tests can be trusted. Requiring them of every ecosystem is what skipped the guard.
+    if [ -n "$_rg_vendored" ] && [ "$_rg_vendored" != "null" ]; then
+      { [ -n "$_rg_node" ] && [ -n "$_rg_bin" ]; } || _rg_ready=0
+    fi
+    if [ "$_rg_ready" -eq 1 ]; then
         step_emit "5" "running" "Step 5: Regression guard"
-        log "Step 5: Cross-phase regression guard ($_rg_pm test) in $_rg_root..."
+        log "Step 5: Cross-phase regression guard ($_rg_test_cmd) in $_rg_root..."
         _rg_log="$LOG_DIR/regression-guard-${PHASE}.log"
         # ── Retry before calling it a regression ──────────────────────────────
         # The rule this gate enforces is that coding must not INCREASE the
@@ -5602,7 +5640,7 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
             # The project's OWN command. Its node is put on PATH first so the script
             # resolves the version the codeline declares, without us naming a runner
             # or guessing its arguments.
-            (cd "$_rg_root" && PATH="$(dirname "$_rg_node"):$PATH" "$_rg_pm" test) > "$_rg_try_log" 2>&1
+            (cd "$_rg_root" && PATH="${_rg_node:+$(dirname "$_rg_node"):}$PATH" sh -c "$_rg_test_cmd") > "$_rg_try_log" 2>&1
             _rg_rc=$?
             set -e
             [ "$_rg_rc" -eq 0 ] && break
@@ -5632,64 +5670,24 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
             fi
             if [ -n "$_rg_pattern" ]; then
                 _rg_baseline_file="$LOG_DIR/regression-guard-baseline-${PHASE}.json"
-                _rg_intersect=$(python3 - "$_rg_pattern" "$_rg_max" "$_rg_log" << 'RG_INTERSECT_PY'
-import re, sys, json
-
-pattern, max_attempts, log_base = sys.argv[1], int(sys.argv[2]), sys.argv[3]
-try:
-    rx = re.compile(pattern, re.MULTILINE)
-except re.error:
-    print(json.dumps({"stable": False, "failures": []}))
-    sys.exit(0)
-
-def attempt_log(i):
-    if i == 1:
-        return log_base
-    if log_base.endswith('.log'):
-        return log_base[:-4] + f"-attempt-{i}.log"
-    return f"{log_base}-attempt-{i}"
-
-sets = []
-for i in range(1, max_attempts + 1):
-    try:
-        with open(attempt_log(i)) as f:
-            text = f.read()
-    except OSError:
-        sets.append(None)
-        continue
-    ids = set()
-    for m in rx.finditer(text):
-        g = next((x for x in m.groups() if x), None)
-        if g:
-            ids.add(g)
-    sets.append(ids)
-
-# A missing log, or an attempt that parsed NO failing identity despite the
-# command's own nonzero exit, means the pattern is not matching this run's
-# real output — never silently treat "found nothing" as "an empty stable
-# set", which would look identical to a genuinely green baseline.
-if any(s is None or len(s) == 0 for s in sets):
-    print(json.dumps({"stable": False, "failures": []}))
-else:
-    # Live AMSD-2041, 2026-07-31 (gotransit): a test surviving every attempt
-    # (schedules.spec.tsx) is reproducible per the backlog's own bar — but
-    # attempt 3 ALSO had two unrelated tests flake in under parallel-suite
-    # interference. Requiring the WHOLE union to match across every attempt
-    # (the original version here) let that one-off noise poison an
-    # otherwise-clean, genuinely reproducible baseline and blocked a real
-    # launch outright. The intersection ALONE is what's trustworthy —
-    # tolerate exactly that, and simply drop the one-off extras as the
-    # flakiness the 3-attempt retry exists to filter, never adding them to
-    # the tolerated set (which would risk masking a real regression there).
-    stable = set.intersection(*sets)
-    print(json.dumps({"stable": len(stable) > 0, "failures": sorted(stable)}))
-RG_INTERSECT_PY
+                _rg_intersect=$(python3 "$SCRIPT_DIR/lib/handlers/rg-intersect.py" "$_rg_pattern" "$_rg_max" "$_rg_log"
 )
-                if echo "$_rg_intersect" | python3 -c "import json,sys; sys.exit(0 if json.load(sys.stdin).get('stable') else 1)" 2>/dev/null; then
-                    echo "$_rg_intersect" > "$_rg_baseline_file"
-                    _rg_tolerated_count=$(echo "$_rg_intersect" | python3 -c "import json,sys; print(len(json.load(sys.stdin)['failures']))" 2>/dev/null || echo 0)
-                    _rg_tolerated=1
-                    _rg_rc=0
+                if printf '%s' "$_rg_intersect" | python3 "$SCRIPT_DIR/lib/handlers/json-bool.py" stable; then
+                    # THE BASELINE MUST REACH DISK BEFORE THE GUARD IS TURNED GREEN.
+                    #
+                    # This wrote the file unchecked and then set _rg_rc=0 regardless. A failed
+                    # write left Step 5 PASSING with pre-existing failures "tolerated" and no
+                    # record of what was tolerated — and Step 3.58 compares against exactly that
+                    # file. Without it, either every inherited failure is reported as newly
+                    # introduced by the phase, or the delta gate cannot verify at all.
+                    if printf '%s\n' "$_rg_intersect" > "$_rg_baseline_file"; then
+                        _rg_tolerated_count=$(printf '%s' "$_rg_intersect" \
+                            | jq -r '(.failures // []) | length' 2>/dev/null || echo 0)
+                        _rg_tolerated=1
+                        _rg_rc=0
+                    else
+                        error "Step 5: could not write the tolerated baseline to ${_rg_baseline_file} — refusing to pass the guard on a record that does not exist."
+                    fi
                 fi
             fi
         fi
@@ -5697,8 +5695,22 @@ RG_INTERSECT_PY
             step_emit "5" "fail" "Step 5: Regression guard"
             error "Step 5: Regression guard FAILED — tests red in all ${_rg_max} attempt(s) before phase '$PHASE' starts"
             error "  The failure survived every attempt, so it is reproducible, not a flake."
-            error "  Fix failing tests from the previous phase before continuing."
             error "  See: $_rg_log"
+            # NAME THE MECHANISM THAT WOULD HAVE TOLERATED THIS.
+            #
+            # Operator policy is that brownfield INHERITS pre-existing failures and is not expected
+            # to fix them — and this step implements exactly that, by recording a stable failure
+            # set as a tolerated baseline. It only does so when the project declares
+            # testFailurePattern. Without it, a codeline carrying inherited failures hard-fails
+            # here on EVERY run, and the operator was told to "fix failing tests from the previous
+            # phase" — the one thing the policy says they should not have to do — with no hint
+            # that the mechanism exists.
+            if [ -z "${_rg_pattern:-}" ]; then
+                error "  This project declares no testFailurePattern, so pre-existing failures cannot be told apart from new ones and none can be tolerated."
+                error "  If these failures are INHERITED, declare testFailurePattern in ${EPAM_PROJECT_CONFIG_DIR:-<project config dir>}/dependency-check.json and they will be recorded as a tolerated baseline instead."
+            else
+                error "  Fix failing tests from the previous phase before continuing."
+            fi
             error "  Bypass with: SKIP_REGRESSION_GUARD=true"
             exit 1
         fi
@@ -5738,7 +5750,7 @@ RG_INTERSECT_PY
         if [ "$_rg_test_declared" -eq 1 ]; then
             step_emit "5" "fail" "Step 5: Regression guard" "declares a test script but it could not be run"
             error "Step 5: Regression guard COULD NOT RUN — $_rg_root declares a test script but it could not be executed"
-            error "  node: ${_rg_node:-<not found>}   package manager: ${_rg_pm:-<none detected>}   node_modules: $([ -n "$_rg_bin" ] && echo present || echo empty)"
+            error "  test command: ${_rg_test_cmd:-<none declared>}   package manager: ${_rg_pm:-<none detected>}   vendored: ${_rg_vendored:-<none>}"
             error "  The baseline is therefore UNVERIFIED: a break introduced by an earlier phase would not be caught."
             error "  This is an environment failure, not an absence of tests — check the codeline's node_modules install."
             error "  Bypass with: SKIP_REGRESSION_GUARD=true"
@@ -5758,9 +5770,16 @@ fi
 # without relying on the model creating the directory first.
 # ──────────────────────────────────────────────
 step_emit "6" "running" "Step 6: mkdir src/ dirs"
-# Only generic scaffolding dirs. A client-named subdirectory here was created in
-    # EVERY project the engine ran, regardless of what that project is.
-    mkdir -p "$PROJECT_ROOT/src" "$PROJECT_ROOT/public" "$PROJECT_ROOT/review" 2>/dev/null || true
+# Only generic scaffolding dirs. A client-named subdirectory here was created in EVERY project
+# the engine ran, regardless of what that project is — and `public/` was the same mistake one
+# level of generality up: a web-frontend convention, meaningless to a library, a service or a
+# Rust crate, and read by nothing in this pipeline. `review/` was engine output being created in
+# the customer's tree; it lives under .epam/ now.
+#
+# src/ stays. WriteFile calls ensureDir on the parent, so an agent using it does not need this —
+# but a story whose writer shells out does, and an empty directory git will not even track is a
+# cheap way to keep that working.
+mkdir -p "$PROJECT_ROOT/src" 2>/dev/null || true
 step_emit "6" "pass" "Step 6: mkdir src/ dirs"
 
 # ──────────────────────────────────────────────
@@ -5805,45 +5824,69 @@ else
         # wrong and let it try again. Same "detect, explain, retry" shape as
         # checkSplitMandateViolation's existing precedent in spec-mode-runner.js.
         for _mc_attempt in 1 2 3; do
-        _mc_prompt=$(cat << ENDPROMPT_MC
-$(cat "$_mc_profiles_file" | python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('prd-model-coordinator',''))" 2>/dev/null)
-
-PRD file: ${_mc_prd_target}
-Phase: ${_mc_phase}
-
-Assign model, aiProvider, and reasoningEffort to every pending story in this phase that is missing one or more of these fields. Write the updated PRD back to the file, then emit the JSON summary.
-ENDPROMPT_MC
-)
+        _mc_role_file=$(mktemp "${TMPDIR:-/tmp}/mc-role-XXXXXX.txt")
+        jq -r '.["prd-model-coordinator"] // ""' "$_mc_profiles_file" > "$_mc_role_file" 2>/dev/null || : > "$_mc_role_file"
+        _cp_vals=$(mktemp "${TMPDIR:-/tmp}/prd-model-coordinator-vals-XXXXXX.json")
+        jq -n \
+              --rawfile profile "$_mc_role_file" \
+              --arg mc_prd_target "$_mc_prd_target" \
+              --arg mc_phase "$_mc_phase" \
+              '{"__PROFILE__":$profile,"__MC_PRD_TARGET__":$mc_prd_target,"__MC_PHASE__":$mc_phase}' > "$_cp_vals"
+        _mc_prompt="$(render_engine_prompt prd-model-coordinator "$_cp_vals")"
+        rm -f "$_cp_vals"
+        rm -f "$_mc_role_file"
         if [ -n "$_mc_corrective_note" ]; then
-            _mc_prompt="${_mc_prompt}
-
-CRITICAL — YOUR PREVIOUS ATTEMPT VIOLATED YOUR OWN INSTRUCTIONS: ${_mc_corrective_note}
-Fix this and retry. Do not repeat the same mistake."
+            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/corrective-note-vals-XXXXXX.json")
+            jq -n \
+                  --arg mc_corrective_note "${_mc_corrective_note}" \
+                  --arg mc_prompt "${_mc_prompt}" \
+                  '{"__MC_CORRECTIVE_NOTE__":$mc_corrective_note,"__MC_PROMPT__":$mc_prompt}' > "$_cp_vals"
+            _mc_prompt="$(render_engine_prompt corrective-note "$_cp_vals" model_coordinator)"
+            rm -f "$_cp_vals"
         fi
+        # THE SEAM, ASKED FOR. This call resolved to no profile at all — the registry had none —
+        # so a step that EDITS THE PRD every later stage reads ran with no ladder, no budget, and
+        # a tool grant of AI_GATE_ALLOW_TOOLS=1 with no list. The seam declares all of it now.
+        #
+        # NO VENDOR LITERALS. The provider and model fell back to minimax / MiniMax-M3 written
+        # here, which is the shape the ladder work removed everywhere else under the rule that a
+        # seam with no resolvable model must decline rather than guess.
+        # NOT SWALLOWED. I wrote this as 2>/dev/null || echo "" while fixing the defects above,
+        # which is the same silence: a seam that fails to resolve would leave the call running on
+        # ambient settings and looking as though it had asked. The handler says WHY on stderr.
+        _mc_seam_err="$(mktemp "${TMPDIR:-/tmp}/mc-seam-err-XXXXXX")"
+        _mc_seam="$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/seam-env-args.js" prd-model-coordinator "$AUTOMATION_DIR/agents" 2>"$_mc_seam_err")" || {
+            warning "  [prd-model-coordinator] seam did not resolve — running on ambient settings: $(tail -c 200 "$_mc_seam_err" | tr '\n' ' ')"
+            _mc_seam=""
+        }
+        rm -f "$_mc_seam_err"
+        _mc_cost="${TMPDIR:-/tmp}/prd-model-coordinator-cost-$.json"
         _mc_result=$(echo "$_mc_prompt" | \
+            env $_mc_seam \
+            EPAM_AGENT_NAME=prd-model-coordinator \
+            ORCH_JSON_RESULT="$_mc_cost" \
             AI_GATE_ALLOW_TOOLS=1 \
-            AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
-            AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
+            ${ORCH_GATE_PROVIDER:+AI_PROVIDER="$ORCH_GATE_PROVIDER"} \
+            ${ORCH_GATE_MODEL:+AI_MODEL="$ORCH_GATE_MODEL"} \
             EPAM_DANGEROUS_SKIP_APPROVAL=1 \
             EPAM_MAX_TOOL_CALLS="${PRD_MODEL_COORDINATOR_MAX_TOOL_CALLS:-12}" \
             CLAUDE_CMD="$CLAUDE_CMD" \
             EPAM_CLI="${EPAM_CLI:-epam}" \
             "$AI_RUNNER_CMD" \
-                --provider "${ORCH_GATE_PROVIDER:-minimax}" \
-                --model    "${ORCH_GATE_MODEL:-MiniMax-M3}" \
+                ${ORCH_GATE_PROVIDER:+--provider "$ORCH_GATE_PROVIDER"} \
+                ${ORCH_GATE_MODEL:+--model "$ORCH_GATE_MODEL"} \
             2>&1 | tee -a "$LOG_DIR/prd-model-coordinator-${_mc_phase}.log")
+        # PIPESTATUS[0], not the pipeline status: without pipefail this is tee's, always 0, so a
+        # failed coordinator read as a success and every story kept whatever model it had.
+        _mc_rc="${PIPESTATUS[0]}"
+        ACTIVITY_FILE="${ACTIVITY_FILE:-$LOG_DIR/agent-activity.jsonl}" LOG_DIR="$LOG_DIR" \
+          "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/emit-cost.js" "$_mc_cost" prd-model-coordinator 2>/dev/null || true
+        rm -f "$_mc_cost" 2>/dev/null || true
+        if [ "${_mc_rc:-1}" != "0" ]; then
+            warning "  [prd-model-coordinator] the call failed (exit ${_mc_rc}) — stories keep their existing assignment"
+        fi
 
-        _mc_assigned_count=$(echo "$_mc_result" | python3 -c "
-import sys, re, json
-txt = sys.stdin.read()
-for m in re.finditer(r'\{[^{}]*\"assigned_count\"[^{}]*\}', txt, re.DOTALL):
-    try:
-        obj = json.loads(m.group(0))
-        print(obj.get('assigned_count', 0))
-        break
-    except: pass
-else: print(0)
-" 2>/dev/null || echo 0)
+        _mc_assigned_count=$(echo "$_mc_result" | python3 "$SCRIPT_DIR/lib/handlers/mc-assigned-count.py" 2>/dev/null || echo 0)
 
         _mc_prd_after=$(cat "$_mc_prd_target" 2>/dev/null || echo "{}")
         # Gate on whether the PRD FILE actually changed, not the agent's own
@@ -5879,56 +5922,9 @@ else: print(0)
             _mc_verdict_stderr=$(mktemp)
             printf '%s' "$_mc_prd_before" > "$_mc_before_file"
             printf '%s' "$_mc_prd_after" > "$_mc_after_file"
-            _mc_verdict=$(python3 - "$_mc_before_file" "$_mc_after_file" 2>"$_mc_verdict_stderr" << 'MC_REVIEW_PY'
-import json, sys
-
-ALLOWED_FIELDS = {'model', 'aiProvider', 'reasoningEffort'}
-
-before_path, after_path = sys.argv[1], sys.argv[2]
-try:
-    with open(before_path) as f:
-        before = json.load(f)
-    with open(after_path) as f:
-        after = json.load(f)
-except Exception as e:
-    print('fail')
-    print(f"  [prd-model-coordinator][reviewer] VIOLATION: PRD is not valid JSON after write: {e}", file=sys.stderr)
-    sys.exit(0)
-
-before_by_id = {s['id']: s for s in before.get('stories', []) if 'id' in s}
-after_by_id = {s['id']: s for s in after.get('stories', []) if 'id' in s}
-
-violations = []
-
-if before_by_id.keys() != after_by_id.keys():
-    added = after_by_id.keys() - before_by_id.keys()
-    removed = before_by_id.keys() - after_by_id.keys()
-    if added:
-        violations.append(f"stories added: {sorted(added)}")
-    if removed:
-        violations.append(f"stories removed: {sorted(removed)}")
-
-if before.get('implementationOrder') != after.get('implementationOrder'):
-    violations.append("implementationOrder was modified")
-
-for sid, before_story in before_by_id.items():
-    after_story = after_by_id.get(sid)
-    if after_story is None:
-        continue
-    all_keys = set(before_story.keys()) | set(after_story.keys())
-    for key in all_keys:
-        if key in ALLOWED_FIELDS:
-            continue
-        if before_story.get(key) != after_story.get(key):
-            violations.append(f"{sid}.{key} changed (not an allowed model-assignment field)")
-
-if violations:
-    print('fail')
-    for v in violations[:20]:
-        print(f"  [prd-model-coordinator][reviewer] VIOLATION: {v}", file=sys.stderr)
-else:
-    print('pass')
-MC_REVIEW_PY
+            _mc_verdict=$(python3 "$SCRIPT_DIR/lib/handlers/mc-review.py" "$_mc_before_file" "$_mc_after_file" \
+                "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json}" \
+                2>"$_mc_verdict_stderr"
 )
             rm -f "$_mc_before_file" "$_mc_after_file"
             if [ "$_mc_verdict" = "fail" ]; then
@@ -5953,22 +5949,7 @@ MC_REVIEW_PY
 
         _mc_violation_types="[]"
         if [ -n "$_mc_corrective_note" ]; then
-            _mc_violation_types=$(printf '%s' "$_mc_corrective_note" | python3 -c "
-import json, sys
-reason = sys.stdin.read()
-types = []
-if 'not valid JSON' in reason:
-    types.append('invalid_json')
-if 'stories added' in reason:
-    types.append('story_added')
-if 'stories removed' in reason:
-    types.append('story_removed')
-if 'implementationOrder was modified' in reason:
-    types.append('implementation_order_modified')
-if 'changed (not an allowed model-assignment field)' in reason:
-    types.append('field_out_of_scope')
-print(json.dumps(types))
-" 2>/dev/null || echo "[]")
+            _mc_violation_types=$(printf '%s' "$_mc_corrective_note" | python3 "$SCRIPT_DIR/lib/handlers/mc-violation-types.py" 2>/dev/null || echo "[]")
         fi
 
         _log_guarded_step_retry "$(jq -n -c \
@@ -5987,33 +5968,7 @@ print(json.dumps(types))
     # back to a fixed default so the pipeline never silently relies on a
     # provider's own hardcoded default model.
     ( flock -w 10 200 || { error "  [prd-model-coordinator] Could not acquire lock on $_mc_prd_target"; exit 1; }
-    python3 - "$_mc_prd_target" "$_mc_phase" <<'MC_FALLBACK_PY'
-import json, sys, os
-prd_path, phase = sys.argv[1], sys.argv[2]
-with open(prd_path) as f:
-    prd = json.load(f)
-changed = False
-for s in prd.get('stories', []):
-    if s.get('status') != 'pending':
-        continue
-    if s.get('phase', phase) != phase:
-        continue
-    if not s.get('model'):
-        s['model'] = 'MiniMax-M3'
-        changed = True
-    if not s.get('aiProvider'):
-        s['aiProvider'] = 'minimax'
-        changed = True
-    if not s.get('reasoningEffort'):
-        eff = s.get('effort', 'medium')
-        s['reasoningEffort'] = eff if eff in ('low', 'high') else 'medium'
-        changed = True
-if changed:
-    _tmp_prd_path = prd_path + '.tmp'
-    with open(_tmp_prd_path, 'w') as f:
-        json.dump(prd, f, indent=2)
-    os.replace(_tmp_prd_path, prd_path)
-MC_FALLBACK_PY
+    python3 "$SCRIPT_DIR/lib/handlers/mc-fallback.py" "$_mc_prd_target" "$_mc_phase"
     ) 200>"${_mc_prd_target}.lock"
 fi
 _emit_agent complete "prd-model-coordinator" "PRD model assignments done"
@@ -6156,8 +6111,23 @@ if [ -n "$main_stories" ]; then
     log "Step 8: Running main-branch stories..."
         # Capture baseline SHA before any story commits so the testing-gates
         # git diff oracle can diff the full run's changes (not just HEAD~1).
+        # THE ONE WRITER, and the value every diff-based gate reads: review-ranger,
+        # mutant-hunter, fuzz-weaver, sast-sentinel and the committed-change helper check.
+        #
+        # --verify --quiet, for the same reason the branch resolution above uses it: a bare
+        # rev-parse ECHOES an unresolvable ref to stdout and exits 128, so the file would hold a
+        # ref name rather than a commit and every gate would diff against nothing.
+        #
+        # An unwritable baseline is LOUD. It used to end in `|| true`, so a repository the run
+        # could not read produced no file and every gate silently compared against nothing —
+        # which reads as "this story changed no files", the shape of a false pass.
         if [ -d "$PROJECT_ROOT/.git" ]; then
-            git -C "$PROJECT_ROOT" rev-parse HEAD 2>/dev/null > "$LOG_DIR/phase-baseline-sha.txt" || true
+            _phase_baseline="$(git -C "$PROJECT_ROOT" rev-parse --verify --quiet HEAD 2>/dev/null || echo "")"
+            if [ -n "$_phase_baseline" ]; then
+                echo "$_phase_baseline" > "$LOG_DIR/phase-baseline-sha.txt"
+            else
+                warning "[orch] could not resolve a baseline commit in $PROJECT_ROOT — every diff-based gate will compare against nothing"
+            fi
         fi
         # _run_one_main_story: single-story execution body shared between the
         # main loop (fixed snapshot) and the tail-sweep pass (split children).
@@ -6239,9 +6209,13 @@ if [ -n "$main_stories" ]; then
 
             log "  Running: $story"
             local _story_monitor_role _story_model_hint _story_provider_hint
+            # NO ROLE NAME AS A FALLBACK. This defaulted to typescript-engineer — one of
+            # epam-cli's OWN roles, from its project-roles.json — so a client story with no
+            # agentRole was displayed under a role that project never minted. The monitor showing
+            # 'unassigned' is the true answer, and it is the one worth seeing.
             _story_monitor_role=$(jq -r --arg id "$story" \
-                '.stories[] | select(.id == $id) | .agentRole // "typescript-engineer"' \
-                "$PRD_FILE" 2>/dev/null || echo "typescript-engineer")
+                '.stories[] | select(.id == $id) | .agentRole // "unassigned"' \
+                "$PRD_FILE" 2>/dev/null || echo "unassigned")
             _story_model_hint=$(jq -r --arg id "$story" \
                 '.stories[] | select(.id == $id) | .model // ""' \
                 "$PRD_FILE" 2>/dev/null || echo "")
@@ -6378,12 +6352,15 @@ if [ -n "${main_stories:-}" ] && \
     git_add_client_outputs "$PROJECT_ROOT" || true
     # THE COMMIT-TIME CREDENTIAL SCAN WAS REMOVED HERE (operator decision, 2026-08-09).
     #
-    # It matched the SHAPE `credential_name: value` without inspecting `value`, so on
-    # AMSD-2041 it refused the commit for
+    # It matched the SHAPE `credential_name: value` without inspecting `value`, so it refused a
+    # commit for
     #
-    #     management_token: CONTENTSTACK_LIVE_PREVIEW_TOKEN,
+    #     management_token: SOME_SERVICE_API_TOKEN,
     #
     # an environment-derived identifier — the exact pattern its own error message recommends.
+    # (Client identifiers and ticket ids are kept out of engine source, comments included: they
+    # date the engine to one customer, and a generic prompt built from them is wrong for the
+    # next one.)
     # The story is about wiring a preview token, so it would have blocked every commit the
     # work produced, and it had never caught a real leak. Worse, refusing here also unstaged
     # the writer's changes while the story was still reported "Implemented: 1, Failed: 0".
@@ -6573,6 +6550,25 @@ if [ "$need_worktrees" = true ]; then
     # against a branch that may not exist.
     _merge_current_branch=$(git -C "$_merge_git_root" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "${JIRA_BASELINE_BRANCH:-}")
 
+    # THE TARGET MUST BE A REAL BRANCH, AND SAYING SO IS THE WHOLE POINT.
+    #
+    # Two ways it is not, and NEITHER ANNOUNCES ITSELF. An unreadable HEAD with no configured
+    # baseline leaves this EMPTY — and an empty side of a git range silently defaults to HEAD, so
+    # `rev-list --count "..wt-primary"` returns a perfectly sensible number and every check below
+    # passes. A detached HEAD makes `--abbrev-ref` return the literal string "HEAD", which is not a
+    # branch either.
+    #
+    # Both then merge onto a detached HEAD: the merge commit is referenced by no branch, so the
+    # lane's work is unreachable at the next checkout and the next phase, which recreates lane
+    # branches from HEAD, inherits nothing. Every step reports success while the work is discarded.
+    # Verified rather than assumed — see the-merge-back-says-what-actually-stopped-it.test.ts.
+    if [ -z "$_merge_current_branch" ] || [ "$_merge_current_branch" = "HEAD" ] \
+       || ! git -C "$_merge_git_root" show-ref --verify --quiet "refs/heads/$_merge_current_branch"; then
+        error "Step 17: cannot resolve a branch to merge into in $_merge_git_root (HEAD resolves to '${_merge_current_branch:-<nothing>}')"
+        error "  The lane branches and their commits are intact — this is the target, not the work. Nothing was merged and nothing was discarded."
+        exit 1
+    fi
+
     MERGE_FAILED=false
 
     _active_wt_branches=()
@@ -6627,11 +6623,20 @@ if [ "$need_worktrees" = true ]; then
             _mt_conflict_files=$(echo "$_mt_output" | tail -n +2 | awk '/^$/{exit} {print}')
             error "  Merge-integrity guard: $_wt_branch conflicts with $_merge_current_branch in: ${_mt_conflict_files:-<unknown file>}"
             error "  Proceeding with '-X ours' would SILENTLY DISCARD $_wt_branch's changes there with no trace — refusing to auto-resolve."
-            mkdir -p "${PROJECT_ROOT}/.epam/merge-conflicts"
-            jq -n --arg branch "$_wt_branch" --arg target "$_merge_current_branch" \
+            # BESIDE THE REPOSITORY THAT ACTUALLY CONFLICTED. This wrote to PROJECT_ROOT while the
+            # merge runs in $_merge_git_root, so whenever the two differ the record landed next to a
+            # repository that had no conflict, and the one that did carried no evidence.
+            #
+            # AND THE WRITE IS NOT SILENCED. It ended in `2>/dev/null`, so a failed jq left no file
+            # and no message — this record is the only durable trace of which files a lane could not
+            # merge, and the error above scrolls away with the run log.
+            _mc_dir="${_merge_git_root}/.epam/merge-conflicts"
+            if ! mkdir -p "$_mc_dir" 2>/dev/null || ! jq -n --arg branch "$_wt_branch" --arg target "$_merge_current_branch" \
                 --arg files "$_mt_conflict_files" --arg phase "$PHASE" \
                 '{phase: $phase, branch: $branch, target: $target, conflictingFiles: ($files | split("\n") | map(select(length > 0))), detectedAt: (now | todate)}' \
-                > "${PROJECT_ROOT}/.epam/merge-conflicts/${PHASE}-${_wt_branch}.json" 2>/dev/null
+                > "${_mc_dir}/${PHASE}-${_wt_branch}.json"; then
+                error "  Could not record the conflict to ${_mc_dir} — the file list above is the only copy."
+            fi
             "$SCRIPT_DIR/update-monitor.sh" event "merge_conflict" \
                 "Merge-integrity guard: $_wt_branch conflicts with $_merge_current_branch in ${_mt_conflict_files:-unknown file} — refusing silent -X ours resolution" "" "main" "orchestrator" 2>/dev/null || true
             MERGE_FAILED=true
@@ -6697,13 +6702,16 @@ if is_truthy "${SKIP_TC_WRITER:-}"; then
     info "Step 10: TC writer gate skipped (SKIP_TC_WRITER=1)"
     _tc_writer_needed=0
 else
-_tc_writer_needed=$(jq -r --arg phase "$PHASE" \
-    '(.implementationOrder[$phase] // []) as $ids |
-     [.stories[] | select(.id as $id | $ids | index($id)) |
-      select(
-        (.technicalNotes.files // [] | map(endswith(".test.ts")) | any) and
-        ((.testCriteria.facts // []) | length == 0)
-      )] | length' "$PRD_FILE" 2>/dev/null || echo 0)
+# WHICH STORIES NEED TEST CRITERIA — ASKED OF THE ONE PLACE THAT KNOWS.
+#
+# This was an inline jq matching endswith(".test.ts"). post-impl-tc-writer.sh, the script this
+# gate exists to invoke, already asks lib/handlers/_testfile.py, which recognises .spec., .test.,
+# _spec., _test., test_* and __tests__/. So on a project using ANY other convention — .spec.ts,
+# test_*.py, anything not Node — this returned 0, the writer was never invoked, and the step
+# reported "all TCs present". A gate that silently answers "nothing to do" on every project but
+# one is not a gate. Verified against a fixture: the handler finds 2, this jq found 0.
+_tc_writer_needed=$(python3 "$SCRIPT_DIR/lib/handlers/tc-stories-needing-criteria.py" \
+    "$PRD_FILE" "$PHASE" "" 2>/dev/null | awk 'NF{n++} END{print n+0}')
 fi
 
 # TC WRITER IS A GREENFIELD MECHANISM (decision, 2026-07-26).
@@ -6760,13 +6768,11 @@ elif [ "${_tc_writer_needed:-0}" -gt 0 ]; then
             exit 1
         fi
 
-        _tc_batch_still_missing=$(jq -r --arg phase "$PHASE" \
-            '(.implementationOrder[$phase] // []) as $ids |
-             [.stories[] | select(.id as $id | $ids | index($id)) |
-              select(
-                (.technicalNotes.files // [] | map(endswith(".test.ts")) | any) and
-                ((.testCriteria.facts // []) | length == 0)
-              ) | .id] | join(",")' "$PRD_FILE" 2>/dev/null || echo "")
+        # THE SAME QUESTION, SO THE SAME ANSWER. This carried its own copy of the .test.ts
+        # match, so on any other convention it reported nothing still missing and the gate
+        # PASSED — after a writer run that had produced nothing, because it was never needed.
+        _tc_batch_still_missing=$(python3 "$SCRIPT_DIR/lib/handlers/tc-stories-needing-criteria.py" \
+            "$PRD_FILE" "$PHASE" "" 2>/dev/null | awk 'NF{printf "%s%s", (n++ ? "," : ""), $0}')
 
         if [ -z "$_tc_batch_still_missing" ]; then
             step_emit "10" "pass" "Step 10: TC writer gate"
@@ -6841,58 +6847,7 @@ run_skills_audit_scan() {
     # processing only (no LLM call inside), so holding the lock this long
     # never risks stalling a parallel worktree story on model latency.
     ( flock -w 10 200 || { error "  [SkillsAudit] Could not acquire lock on $profiles_file"; return 1; }
-    python3 - "$profiles_file" << 'PYEOF'
-import json, re, sys, os
-
-path = sys.argv[1]
-with open(path) as f:
-    profiles = json.load(f)
-
-duplicates_removed = 0
-contradictions = []
-
-for role, text in profiles.items():
-    if not isinstance(text, str) or '[Self-Heal]' not in text:
-        continue
-    paragraphs = text.split('\n\n')
-    seen = set()
-    deduped = []
-    for para in paragraphs:
-        key = para.strip()
-        if key.startswith('[Self-Heal]'):
-            if key in seen:
-                duplicates_removed += 1
-                continue
-            seen.add(key)
-        deduped.append(para)
-    new_text = '\n\n'.join(deduped)
-    if new_text != text:
-        profiles[role] = new_text
-        text = new_text
-
-    for para in text.split('\n\n'):
-        if not para.strip().startswith('[Self-Heal]'):
-            continue
-        m = re.search(r"(?:do not|never|avoid)\s+use\s+'([^']+)'", para, re.IGNORECASE)
-        if not m:
-            continue
-        token = re.escape(m.group(1))
-        # Does the note ALSO recommend using the same token elsewhere (past
-        # the "do not use" clause itself)? The token may reappear as its own
-        # quoted string ('as') or embedded as a whole word inside a longer
-        # quoted phrase ('value as Type') -- both are the same contradiction.
-        rest = para[m.end():]
-        if re.search(r"\buse\b[^.]*'[^']*\b" + token + r"\b[^']*'", rest, re.IGNORECASE):
-            contradictions.append({'role': role, 'note': para.strip()})
-
-if duplicates_removed > 0:
-    _tmp_path = path + '.tmp'
-    with open(_tmp_path, 'w') as f:
-        json.dump(profiles, f, indent=2)
-    os.replace(_tmp_path, path)
-
-print(json.dumps({'duplicates_removed': duplicates_removed, 'contradictions': contradictions}))
-PYEOF
+    python3 "$SCRIPT_DIR/lib/handlers/skill-note-duplicates.py" "$profiles_file"
     ) 200>"${profiles_file}.lock"
 }
 
@@ -6900,7 +6855,16 @@ if is_truthy "${SKIP_SKILLS_AUDIT:-}"; then
     step_emit "11" "skip" "Step 11: Skills coordinator audit" "SKIP_SKILLS_AUDIT=1"
 else
     step_emit "11" "running" "Step 11: Skills coordinator audit"
-    _skills_audit_result=$(run_skills_audit_scan "$AGENT_PROFILES_FILE" 2>/dev/null || echo '{"duplicates_removed":0,"contradictions":[]}')
+    # A FAILED SCAN IS NOT A CLEAN SCAN. This substituted a zero-findings result for any failure
+    # — a lock it could not take, a crashed handler, an unreadable profiles.json — and the step
+    # then reported "pass" having audited nothing. The duplicate and self-contradictory notes this
+    # step exists to catch went straight into the writer's profile.
+    _skills_audit_ok=1
+    if ! _skills_audit_result=$(run_skills_audit_scan "$AGENT_PROFILES_FILE" 2>&1); then
+        _skills_audit_ok=0
+        warning "  [SkillsAudit] scan failed — profiles.json was NOT audited this phase: ${_skills_audit_result}"
+        _skills_audit_result='{"duplicates_removed":0,"contradictions":[]}'
+    fi
     _skills_dupes_removed=$(echo "$_skills_audit_result" | jq -r '.duplicates_removed // 0' 2>/dev/null || echo 0)
     _skills_contradiction_count=$(echo "$_skills_audit_result" | jq -r '.contradictions | length' 2>/dev/null || echo 0)
 
@@ -6910,29 +6874,63 @@ else
 
     if [ "${_skills_contradiction_count:-0}" -gt 0 ]; then
         warning "  [SkillsAudit] ${_skills_contradiction_count} suspected self-contradictory skill note(s) found — invoking skills-coordinator to rewrite"
-        _skills_before=$(cat "$AGENT_PROFILES_FILE" 2>/dev/null || echo "{}")
+        # A SNAPSHOT THAT FAILED IS NOT A SNAPSHOT. This fell back to "{}" — and the only use of
+        # this variable is to be WRITTEN BACK over profiles.json when the coordinator corrupts it.
+        # So an unreadable profiles.json produced a snapshot of "{}", and the "restore" destroyed
+        # every agent profile in the project while logging that it had restored them.
+        _skills_before=""
+        _skills_before=$(cat "$AGENT_PROFILES_FILE" 2>/dev/null || true)
         while IFS= read -r _sc_row; do
             [ -z "$_sc_row" ] && continue
             _sc_role=$(echo "$_sc_row" | jq -r '.role')
             _sc_note=$(echo "$_sc_row" | jq -r '.note')
-            _sc_prompt="You are the skills-coordinator agent. A persisted self-heal skill note in profiles.json for the '${_sc_role}' role is suspected to be internally self-contradictory (it says not to use something, then recommends using that same thing). Read ${AGENT_PROFILES_FILE}, find the EXACT paragraph below inside the '${_sc_role}' profile string, and rewrite ONLY that paragraph so it states one clear, non-contradictory rule — keep the '[Self-Heal]' prefix and stay under 200 characters. Do not touch any other part of the profile.
-
-Flagged note:
-${_sc_note}"
+            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/skills-coordinator-vals-XXXXXX.json")
+            jq -n \
+                  --arg agent_profiles_file "${AGENT_PROFILES_FILE}" \
+                  --arg sc_role "${_sc_role}" \
+                  --arg sc_note "${_sc_note}" \
+                  '{"__AGENT_PROFILES_FILE__":$agent_profiles_file,"__SC_ROLE__":$sc_role,"__SC_NOTE__":$sc_note}' > "$_cp_vals"
+            # EXIT STATUS IS THE CONTRACT — render-engine-prompt.sh says so in its own header:
+            # non-zero means nothing was rendered and the caller must refuse to invoke an agent
+            # rather than send it an empty prompt. The assignment swallowed it, so a failed render
+            # handed run_orch_prompt_with_tools an EMPTY prompt and an agent with Bash and
+            # WriteFile answered from nothing, against profiles.json.
+            if ! _sc_prompt="$(render_engine_prompt skills-coordinator "$_cp_vals")" || [ -z "$_sc_prompt" ]; then
+                rm -f "$_cp_vals"
+                error "  [SkillsAudit] could not render the skills-coordinator prompt for [${_sc_role}] — leaving the note as-is rather than invoking an agent with nothing to read"
+                continue
+            fi
+            rm -f "$_cp_vals"
             _sc_attempt=0
             while [ "$_sc_attempt" -lt 2 ]; do
                 _sc_run_prompt="$_sc_prompt"
-                [ "$_sc_attempt" -ge 1 ] && _sc_run_prompt="RETRY (attempt 2): Previous attempt did not update profiles.json. Read ${AGENT_PROFILES_FILE}, find the exact flagged note, and rewrite it now.
-
-$_sc_prompt"
+                if [ "$_sc_attempt" -ge 1 ]; then
+                  _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
+                  jq -n \
+                        --arg agent_profiles_file "${AGENT_PROFILES_FILE}" \
+                        --arg sc_prompt "$_sc_prompt" \
+                        '{"__AGENT_PROFILES_FILE__":$agent_profiles_file,"__SC_PROMPT__":$sc_prompt}' > "$_rp_vals"
+                  # Same contract. A failed retry render used to blank the prompt that the first
+                  # attempt had rendered correctly, turning a retry into an empty call.
+                  if ! _sc_run_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" skills_coordinator)" \
+                     || [ -z "$_sc_run_prompt" ]; then
+                      warning "  [SkillsAudit] could not render the retry prefix — retrying with the original prompt"
+                      _sc_run_prompt="$_sc_prompt"
+                  fi
+                  rm -f "$_rp_vals"
+                fi
                 # No story_id — phase-level audit, not tied to a single story.
                 if run_orch_prompt_with_tools "$_sc_run_prompt" "skills_audit" > "$LOG_DIR/skills-coordinator-${PHASE}.log" 2>&1; then
                     if jq empty "$AGENT_PROFILES_FILE" 2>/dev/null; then
                         success "  [SkillsAudit] Rewrote contradictory note for [${_sc_role}]"
                         break
                     else
-                        error "  [SkillsAudit] skills-coordinator corrupted profiles.json! Restoring pre-audit snapshot."
-                        echo "$_skills_before" > "$AGENT_PROFILES_FILE"
+                        if [ -n "$_skills_before" ]; then
+                            error "  [SkillsAudit] skills-coordinator corrupted profiles.json! Restoring pre-audit snapshot."
+                            printf '%s\n' "$_skills_before" > "$AGENT_PROFILES_FILE"
+                        else
+                            error "  [SkillsAudit] skills-coordinator corrupted profiles.json AND no pre-audit snapshot was captured — leaving the file as-is rather than overwriting it with nothing. Restore it before the next phase."
+                        fi
                         break
                     fi
                 fi
@@ -6945,7 +6943,14 @@ $_sc_prompt"
                 >> "$LOG_DIR/skills-coordinator-audit.jsonl" 2>/dev/null || true
         done < <(echo "$_skills_audit_result" | jq -c '.contradictions[]' 2>/dev/null)
     fi
-    step_emit "11" "pass" "Step 11: Skills coordinator audit"
+    # THE STATUS IS WHAT HAPPENED. This emitted "pass" unconditionally — after a scan that
+    # failed, after a coordinator that gave up on a note ("leaving as-is"), and after one that
+    # corrupted profiles.json and had to be rolled back. All three read as a clean audit.
+    if [ "${_skills_audit_ok:-1}" -eq 1 ]; then
+        step_emit "11" "pass" "Step 11: Skills coordinator audit"
+    else
+        step_emit "11" "warn" "Step 11: Skills coordinator audit" "scan failed — profiles.json not audited"
+    fi
 fi
 
 # ──────────────────────────────────────────────
@@ -6974,68 +6979,23 @@ fi
 run_tools_audit_scan() {
     local tools_dir="$1"
     local log_dir="$2"
-    python3 - "$tools_dir" "$log_dir" << 'PYEOF'
-import glob, json, os, re, sys
-
-tools_dir, log_dir = sys.argv[1], sys.argv[2]
-result = {"broken": [], "duplicates": []}
-
-if not os.path.isdir(tools_dir):
-    print(json.dumps(result))
-    sys.exit(0)
-
-tool_files = sorted(glob.glob(os.path.join(tools_dir, "*.sh")))
-reviewed = [t for t in tool_files if os.path.exists(t + ".reviewed")]
-
-# Combined text of this phase's per-story logs, for the failure-count check.
-log_text = ""
-for log_file in glob.glob(os.path.join(log_dir, "main-*.log")):
-    try:
-        with open(log_file, errors="ignore") as f:
-            log_text += f.read()
-    except Exception:
-        pass
-
-purposes = {}
-for tool_path in reviewed:
-    name = os.path.basename(tool_path)[:-3]
-    with open(tool_path) as f:
-        content = f.read()
-
-    syntax_rc = os.system(f"bash -n {tool_path!r} >/dev/null 2>&1")
-    if syntax_rc != 0:
-        result["broken"].append({"tool": name, "reason": "syntax"})
-        continue
-
-    fail_count = len(re.findall(re.escape(name) + r"\.sh exited non-zero", log_text))
-    if fail_count >= 2:
-        result["broken"].append({"tool": name, "reason": f"runtime ({fail_count} non-zero exits this phase)"})
-
-    # Purpose is the second line: "# <purpose>" (first line is the shebang).
-    lines = content.split("\n")
-    purpose = lines[1][2:].strip() if len(lines) > 1 and lines[1].startswith("#") else ""
-    purposes[name] = purpose
-
-names = list(purposes.keys())
-for i in range(len(names)):
-    for j in range(i + 1, len(names)):
-        a, b = names[i], names[j]
-        pa, pb = purposes[a].lower().split(), purposes[b].lower().split()
-        if not pa or not pb:
-            continue
-        overlap = len(set(pa) & set(pb)) / max(len(set(pa) | set(pb)), 1)
-        if overlap >= 0.6:
-            result["duplicates"].append({"tool_a": a, "tool_b": b})
-
-print(json.dumps(result))
-PYEOF
+    python3 "$SCRIPT_DIR/lib/handlers/tool-scripts-health.py" "$tools_dir" "$log_dir"
 }
 
 if is_truthy "${SKIP_TOOLS_AUDIT:-}"; then
     step_emit "12" "skip" "Step 12: Tools coordinator audit" "SKIP_TOOLS_AUDIT=1"
 else
     step_emit "12" "running" "Step 12: Tools coordinator audit"
-    _tools_audit_result=$(run_tools_audit_scan "$PROJECT_ROOT/.epam/dynamic-tools" "$LOG_DIR" 2>/dev/null || echo '{"broken":[],"duplicates":[]}')
+    # A FAILED SCAN IS NOT A CLEAN SCAN — same substitution as Step 11 carried. A crashed handler
+    # or an unreadable tools directory read as "no broken tools", and the step reported pass. The
+    # broken tool then runs on every retry for the rest of the run, which is the exact cost this
+    # step exists to stop.
+    _tools_audit_ok=1
+    if ! _tools_audit_result=$(run_tools_audit_scan "$PROJECT_ROOT/.epam/dynamic-tools" "$LOG_DIR" 2>&1); then
+        _tools_audit_ok=0
+        warning "  [ToolsAudit] scan failed — dynamic tools were NOT audited this phase: ${_tools_audit_result}"
+        _tools_audit_result='{"broken":[],"duplicates":[]}'
+    fi
     _tools_broken_count=$(echo "$_tools_audit_result" | jq -r '.broken | length' 2>/dev/null || echo 0)
     _tools_dup_count=$(echo "$_tools_audit_result" | jq -r '.duplicates | length' 2>/dev/null || echo 0)
 
@@ -7046,17 +7006,42 @@ else
             _tc_tool=$(echo "$_tc_row" | jq -r '.tool')
             _tc_reason=$(echo "$_tc_row" | jq -r '.reason')
             _tc_path="$PROJECT_ROOT/.epam/dynamic-tools/${_tc_tool}.sh"
-            _tc_before=$(cat "$_tc_path" 2>/dev/null || echo "")
-            _tc_prompt="You are the tools-coordinator agent. A dynamic tool at ${_tc_path} is broken (${_tc_reason}). Read the file, fix it so it runs successfully and stays idempotent (safe to run multiple times), and write the corrected script back to the SAME path. Keep the '#!/usr/bin/env bash' shebang and the purpose comment on line 2. Do not touch any other file."
+            # Same failure as Step 11's snapshot, and worse here: an empty script passes `bash -n`,
+            # so writing the failed snapshot back would neuter the tool AND report it as fixed.
+            _tc_before=""
+            _tc_before=$(cat "$_tc_path" 2>/dev/null || true)
+            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/tools-coordinator-vals-XXXXXX.json")
+            jq -n \
+                  --arg tc_reason "${_tc_reason}" \
+                  --arg tc_path "${_tc_path}" \
+                  '{"__TC_REASON__":$tc_reason,"__TC_PATH__":$tc_path}' > "$_cp_vals"
+            # EXIT STATUS IS THE CONTRACT. A failed render handed an EMPTY prompt to an agent
+            # holding Bash and WriteFile, pointed at a script the pipeline then executes on every
+            # subsequent retry.
+            if ! _tc_prompt="$(render_engine_prompt tools-coordinator "$_cp_vals")" || [ -z "$_tc_prompt" ]; then
+                rm -f "$_cp_vals"
+                error "  [ToolsAudit] could not render the tools-coordinator prompt for [${_tc_tool}] — leaving the tool as-is rather than invoking an agent with nothing to read"
+                continue
+            fi
+            rm -f "$_cp_vals"
             _tc_attempt=0
             while [ "$_tc_attempt" -lt 2 ]; do
                 _tc_run_prompt="$_tc_prompt"
                 if [ "$_tc_attempt" -ge 1 ]; then
                     _tc_bn_err=""
                     _tc_bn_err=$(bash -n "$_tc_path" 2>&1 || true)
-                    _tc_run_prompt="RETRY (attempt 2): Previous fix left ${_tc_tool}.sh syntactically broken. bash -n reports: ${_tc_bn_err}. Fix the syntax error and write the corrected script back now.
-
-$_tc_prompt"
+                    _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
+                    jq -n \
+                          --arg tc_bn_err "${_tc_bn_err}" \
+                          --arg tc_tool "${_tc_tool}" \
+                          --arg tc_prompt "$_tc_prompt" \
+                          '{"__TC_BN_ERR__":$tc_bn_err,"__TC_TOOL__":$tc_tool,"__TC_PROMPT__":$tc_prompt}' > "$_rp_vals"
+                    if ! _tc_run_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" tools_coordinator)" \
+                       || [ -z "$_tc_run_prompt" ]; then
+                        warning "  [ToolsAudit] could not render the retry prefix — retrying with the original prompt"
+                        _tc_run_prompt="$_tc_prompt"
+                    fi
+                    rm -f "$_rp_vals"
                 fi
                 # No story_id — phase-level audit, not tied to a single story.
                 if run_orch_prompt_with_tools "$_tc_run_prompt" "tools_audit" > "$LOG_DIR/tools-coordinator-${PHASE}.log" 2>&1; then
@@ -7065,14 +7050,29 @@ $_tc_prompt"
                         break
                     else
                         if [ "$_tc_attempt" -ge 1 ]; then
-                            error "  [ToolsAudit] tools-coordinator left ${_tc_tool}.sh syntactically broken after 2 attempt(s)! Restoring pre-audit snapshot."
-                            echo "$_tc_before" > "$_tc_path"
+                            if [ -n "$_tc_before" ]; then
+                                error "  [ToolsAudit] tools-coordinator left ${_tc_tool}.sh syntactically broken after 2 attempt(s)! Restoring pre-audit snapshot."
+                                printf '%s\n' "$_tc_before" > "$_tc_path"
+                            else
+                                error "  [ToolsAudit] ${_tc_tool}.sh is broken and no pre-audit snapshot was captured — leaving it as-is. An empty script passes bash -n, so overwriting it would hide the breakage rather than fix it."
+                            fi
                             break
                         fi
                         warning "  [ToolsAudit] tools-coordinator left ${_tc_tool}.sh broken on attempt 1 — retrying with corrective note"
                     fi
                 else
-                    [ "$_tc_attempt" -ge 1 ] && warning "  [ToolsAudit] tools-coordinator failed to fix [${_tc_tool}] — leaving as-is"
+                    # "LEAVING AS-IS" HAD TO BE MADE TRUE. If attempt 1 succeeded but left the
+                    # script broken, and attempt 2 then errored, the loop ended with the agent's
+                    # half-rewritten file on disk — reported as "leaving as-is", and executed on
+                    # every later retry. Restore what was actually there.
+                    if [ "$_tc_attempt" -ge 1 ]; then
+                        if [ -n "$_tc_before" ] && ! bash -n "$_tc_path" 2>/dev/null; then
+                            warning "  [ToolsAudit] tools-coordinator failed to fix [${_tc_tool}] and left it broken — restoring the pre-audit script"
+                            printf '%s\n' "$_tc_before" > "$_tc_path"
+                        else
+                            warning "  [ToolsAudit] tools-coordinator failed to fix [${_tc_tool}] — leaving as-is"
+                        fi
+                    fi
                 fi
                 _tc_attempt=$(( _tc_attempt + 1 ))
             done
@@ -7093,7 +7093,12 @@ $_tc_prompt"
                 >> "$LOG_DIR/tools-coordinator-audit.jsonl" 2>/dev/null || true
         done < <(echo "$_tools_audit_result" | jq -c '.duplicates[]' 2>/dev/null)
     fi
-    step_emit "12" "pass" "Step 12: Tools coordinator audit"
+    # THE STATUS IS WHAT HAPPENED, not what was attempted.
+    if [ "${_tools_audit_ok:-1}" -eq 1 ]; then
+        step_emit "12" "pass" "Step 12: Tools coordinator audit"
+    else
+        step_emit "12" "warn" "Step 12: Tools coordinator audit" "scan failed — dynamic tools not audited"
+    fi
 fi
 
 # ──────────────────────────────────────────────
@@ -7184,166 +7189,43 @@ run_phase_assessment() {
     # deterministic-apply pattern.
     local _pa_summary_file
     _pa_summary_file=$(mktemp)
-    python3 - "$cost_file" "$PRD_FILE" "$phase_id" "$_pa_summary_file" << 'ASSESS_PRECOMPUTE_PY'
-import json, os, sys
-from datetime import datetime
-
-cost_file, prd_file, phase_id, out_file = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
-
-def parse_ts(s):
-    if not s:
-        return None
-    try:
-        return datetime.fromisoformat(s)
-    except Exception:
-        return None
-
-# Dedupe: for each story_id, keep only the record with the highest started_at
-# (the log accumulates records across multiple runs of the same phase).
-latest = {}
-with open(cost_file) as f:
-    for line in f:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            rec = json.loads(line)
-        except Exception:
-            continue
-        if rec.get('phase_id') != phase_id:
-            continue
-        sid = rec.get('story_id')
-        if not sid:
-            continue
-        prev = latest.get(sid)
-        if prev is None or (rec.get('started_at') or '') > (prev.get('started_at') or ''):
-            latest[sid] = rec
-
-with open(prd_file) as f:
-    prd = json.load(f)
-
-stories_by_id = {s['id']: s for s in prd.get('stories', []) if s.get('id')}
-
-# implementationOrder is the authoritative phase->story-ids mapping (a
-# story's own optional .phase field is not reliably populated) — build a
-# reverse lookup and use ordering position to find phases AFTER this one,
-# for the corrective-action scope.
-impl_order = prd.get('implementationOrder', {}) or {}
-phase_names = list(impl_order.keys())
-story_to_phase = {}
-for pname, ids in impl_order.items():
-    for sid in (ids or []):
-        story_to_phase[sid] = pname
-try:
-    future_phases = set(phase_names[phase_names.index(phase_id) + 1:])
-except ValueError:
-    future_phases = set()
-
-# Only records whose story_id matches a REAL PRD story are per-story
-# variance data — other story_ids (e.g. "core", "pipeline") are gate/
-# pipeline-level cost records, not story work, and are excluded here.
-per_story = []
-actual_minutes_total = 0.0
-forecast_minutes_total = 0.0
-actual_cost_total = 0.0
-forecast_cost_total = 0.0
-
-for sid, rec in latest.items():
-    story = stories_by_id.get(sid)
-    if not story:
-        continue
-    completed = bool(story.get('completed'))
-    status = 'succeeded' if completed else rec.get('status', 'unknown')
-    started = parse_ts(rec.get('started_at'))
-    ended = parse_ts(rec.get('ended_at'))
-    elapsed_minutes = 0.0
-    if started and ended:
-        elapsed_minutes = max(0.0, (ended - started).total_seconds() / 60.0)
-    forecast_minutes = story.get('estimatedAiMinutes')
-    if forecast_minutes is None:
-        forecast_minutes = (story.get('estimatedHours') or 0) * 60
-    forecast_cost = story.get('estimatedCost') or 0
-    actual_cost = rec.get('task_cost_usd') or 0
-
-    actual_minutes_total += elapsed_minutes
-    forecast_minutes_total += forecast_minutes
-    actual_cost_total += actual_cost
-    forecast_cost_total += forecast_cost
-
-    per_story.append({
-        'story_id': sid,
-        'status': status,
-        'elapsed_minutes': round(elapsed_minutes, 3),
-        'forecast_minutes': round(forecast_minutes, 3),
-        'actual_cost_usd': round(actual_cost, 4),
-        'forecast_cost_usd': round(forecast_cost, 4),
-        'description': story.get('description', ''),
-        'agentRole': story.get('agentRole', ''),
-    })
-
-variance_minutes = actual_minutes_total - forecast_minutes_total
-variance_cost_usd = actual_cost_total - forecast_cost_total
-threshold_pct = float(os.environ.get('PHASE_ASSESSMENT_OVER_THRESHOLD_PCT', '20'))
-over_threshold = (
-    forecast_minutes_total > 0
-    and actual_minutes_total > forecast_minutes_total * (1 + threshold_pct / 100.0)
-)
-
-future_pending_stories = []
-for s in prd.get('stories', []):
-    sid = s.get('id')
-    if story_to_phase.get(sid) in future_phases and s.get('status') == 'pending' and not s.get('completed'):
-        future_pending_stories.append({
-            'story_id': sid,
-            'description': s.get('description', ''),
-            'agentRole': s.get('agentRole', ''),
-            'phase': story_to_phase.get(sid),
-        })
-
-summary = {
-    'phase_id': phase_id,
-    'actual_minutes': round(actual_minutes_total, 3),
-    'forecast_minutes': round(forecast_minutes_total, 3),
-    'actual_cost_usd': round(actual_cost_total, 4),
-    'forecast_cost_usd': round(forecast_cost_total, 4),
-    'variance_minutes': round(variance_minutes, 3),
-    'variance_cost_usd': round(variance_cost_usd, 4),
-    'over_threshold': over_threshold,
-    'over_threshold_pct': threshold_pct,
-    'per_story': per_story,
-    'future_pending_stories': future_pending_stories,
-    }
-
-with open(out_file, 'w') as f:
-    json.dump(summary, f, indent=2)
-ASSESS_PRECOMPUTE_PY
+    # THE PRECOMPUTE IS THE EVIDENCE. Its whole purpose is that the agent no longer explores for
+    # the numbers — so if it fails, the agent is handed '{}' and asked to judge a phase it can see
+    # nothing of. It will still answer, fluently, about nothing. Neither the exit status nor the
+    # empty result was checked.
+    if ! python3 "$SCRIPT_DIR/lib/handlers/assess-precompute.py" \
+            "$cost_file" "$PRD_FILE" "$phase_id" "$_pa_summary_file"; then
+        rm -f "$_pa_summary_file"
+        error "Step 18: could not compute the phase summary — refusing to ask for an assessment of evidence that was never gathered"
+        return 1
+    fi
 
     local _pa_summary
-    _pa_summary=$(cat "$_pa_summary_file" 2>/dev/null || echo '{}')
+    _pa_summary=$(cat "$_pa_summary_file" 2>/dev/null || printf '')
     rm -f "$_pa_summary_file"
+    if [ -z "$_pa_summary" ] || [ "$_pa_summary" = "{}" ]; then
+        error "Step 18: the phase summary is empty — there is nothing for the assessor to read"
+        return 1
+    fi
 
     local assessment_prompt
-    assessment_prompt=$(cat << PROMPT_EOF
-You are the skill assessment agent. All cost/variance data below is PRE-COMPUTED, real, and already deduplicated (latest record per story) and cross-referenced against the PRD's completion state — do not re-derive it, do not ask to see any file, just judge it.
-
-## Phase: $phase_id
-
-## Pre-computed assessment data
-${_pa_summary}
-
-## Your job (judgment only — you have no tools and do not need any)
-1. Write "notes": a short human-readable summary of the variance (or "No improvements needed." if over_threshold is false and future_pending_stories is empty).
-2. Write "agent_recommendations": an array of short strings (empty array if none).
-3. CORRECTIVE ACTION: for each entry in future_pending_stories, decide whether its "description" clearly requires a
-   different skill domain than its current "agentRole". Skill domain indicators: $_skill_domain_guidance
-   Only propose a reassignment when the mismatch is unambiguous — conservative judgment, not a guess.
-   Return "role_reassignments" as an array of {"story_id":"...","newAgentRole":"...","reason":"..."} (empty array if none).
-   You do NOT write to any file yourself — the orchestrator applies your reassignments deterministically.
-
-Output ONLY this JSON object, no markdown fences, no preamble:
-{"notes":"...","agent_recommendations":["..."],"role_reassignments":[{"story_id":"...","newAgentRole":"...","reason":"..."}]}
-PROMPT_EOF
-    )
+    local _sap_guidance_file; _sap_guidance_file=$(mktemp "${TMPDIR:-/tmp}/sap-guidance-XXXXXX.txt")
+    printf '%s' "${_skill_domain_guidance:-}" > "$_sap_guidance_file"
+    _cp_vals=$(mktemp "${TMPDIR:-/tmp}/skill-assessment-postphase-vals-XXXXXX.json")
+    jq -n \
+          --rawfile skill_domain_guidance "$_sap_guidance_file" \
+          --arg phase_id "$phase_id" \
+          '{"__SKILL_DOMAIN_GUIDANCE__":$skill_domain_guidance,"__PHASE_ID__":$phase_id}' > "$_cp_vals"
+    # EXIT STATUS IS THE CONTRACT — a failed render sends the assessor an empty prompt, and its
+    # output feeds a PRD mutation.
+    if ! assessment_prompt="$(render_engine_prompt skill-assessment-postphase "$_cp_vals")" \
+       || [ -z "$assessment_prompt" ]; then
+        rm -f "$_cp_vals"
+        error "Step 18: could not render the phase-assessment prompt — not invoking the assessor with nothing to read"
+        return 1
+    fi
+    rm -f "$_cp_vals"
+    rm -f "$_sap_guidance_file"
 
     log "Running assessment agent for phase '$phase_id'..."
     local assessment_log="$LOG_DIR/assessment-${phase_id}.log"
@@ -7359,10 +7241,20 @@ PROMPT_EOF
     while [ "$_pa_attempt" -lt 2 ] && [ "$_pa_success" = "0" ]; do
         local _pa_prompt="$assessment_prompt"
         if [ "$_pa_attempt" -ge 1 ]; then
-            [ -n "${ESCALATION_MODEL_HIGH:-}" ] && ORCH_GATE_MODEL="${ESCALATION_MODEL_HIGH}"
-            _pa_prompt="RETRY (attempt 2): Your previous response was not valid JSON in the required shape. Emit ONLY the JSON object now.
-
-$assessment_prompt"
+            # Climb the assessor's own chain — see the QA-gate retry for why assigning
+            # ORCH_GATE_MODEL no longer does anything.
+            ORCH_AGENT_MODEL_CLIMB=$(seam_next_model "team-lead-agent" "$(seam_model_or_fail "team-lead-agent" 2>/dev/null)")
+            export ORCH_AGENT_MODEL_CLIMB
+            _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
+            jq -n \
+                  --arg assessment_prompt "$assessment_prompt" \
+                  '{"__ASSESSMENT_PROMPT__":$assessment_prompt}' > "$_rp_vals"
+            if ! _pa_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" phase_assessment)" \
+               || [ -z "$_pa_prompt" ]; then
+                warning "Step 18: could not render the retry prefix — retrying with the original prompt"
+                _pa_prompt="$assessment_prompt"
+            fi
+            rm -f "$_rp_vals"
         fi
         local _assessment_rc=0
         run_orch_prompt "$_pa_prompt" "team-lead-agent" > "$assessment_log" 2>&1 || _assessment_rc=$?
@@ -7374,10 +7266,7 @@ $assessment_prompt"
             continue
         fi
 
-        if echo "$_pa_raw" | python3 -c "import sys,json,re
-t=sys.stdin.read()
-m=re.search(r'\{.*\}', t, re.DOTALL)
-sys.exit(0 if m and isinstance(json.loads(m.group(0)), dict) else 1)" 2>/dev/null; then
+        if echo "$_pa_raw" | python3 "$SCRIPT_DIR/lib/handlers/run-phase-assessment.py" 2>/dev/null; then
             _pa_success=1
         else
             warning "Phase assessment attempt $(( _pa_attempt + 1 )) for '$phase_id' produced no valid JSON$([ "$_pa_attempt" -lt 1 ] && echo " — retrying with escalated model" || echo "")"
@@ -7385,6 +7274,7 @@ sys.exit(0 if m and isinstance(json.loads(m.group(0)), dict) else 1)" 2>/dev/nul
         _pa_attempt=$(( _pa_attempt + 1 ))
     done
     ORCH_GATE_MODEL="$_saved_pa_model"
+    unset ORCH_AGENT_MODEL_CLIMB
     EPAM_GATE_TIMEOUT_SECS="$_saved_gate_timeout"
 
     if [ "$_pa_success" = "0" ]; then
@@ -7403,108 +7293,7 @@ sys.exit(0 if m and isinstance(json.loads(m.group(0)), dict) else 1)" 2>/dev/nul
     _pa_raw_tmp=$(mktemp); echo "$_pa_raw" > "$_pa_raw_tmp"
     _pa_summary_tmp=$(mktemp); echo "$_pa_summary" > "$_pa_summary_tmp"
     ( flock -w 10 200 || { error "  [phase-assessment] Could not acquire lock on $assessment_file"; rm -f "$_pa_raw_tmp" "$_pa_summary_tmp"; return 1; }
-    python3 - "$_pa_summary_tmp" "$_pa_raw_tmp" "$assessment_file" "$improvement_report_file" "${MAIN_PRD_FILE:-$PRD_FILE}" <<'ASSESS_APPLY_PY'
-import json, re, sys, os
-from datetime import datetime, timezone
-
-summary_file, raw_file, assessment_file, report_file, prd_file = sys.argv[1:6]
-
-with open(summary_file) as f:
-    summary = json.load(f)
-raw = open(raw_file).read()
-
-decoder = json.JSONDecoder()
-payload = {}
-idx = 0
-while True:
-    start = raw.find('{', idx)
-    if start == -1:
-        break
-    try:
-        obj, end = decoder.raw_decode(raw, start)
-        if isinstance(obj, dict) and ('notes' in obj or 'agent_recommendations' in obj or 'role_reassignments' in obj):
-            payload = obj
-            break
-        idx = end
-    except json.JSONDecodeError:
-        idx = start + 1
-
-notes = payload.get('notes') or ('No improvements needed.' if not summary['over_threshold'] and not summary['future_pending_stories'] else '')
-recommendations = payload.get('agent_recommendations') or []
-reassignments = payload.get('role_reassignments') or []
-
-record = {
-    'phase_id': summary['phase_id'],
-    'phase_name': summary['phase_id'],
-    'actual_minutes': summary['actual_minutes'],
-    'forecast_minutes': summary['forecast_minutes'],
-    'actual_cost_usd': summary['actual_cost_usd'],
-    'forecast_cost_usd': summary['forecast_cost_usd'],
-    'variance_minutes': summary['variance_minutes'],
-    'variance_cost_usd': summary['variance_cost_usd'],
-    'over_threshold': summary['over_threshold'],
-    'agent_recommendations': recommendations,
-    'notes': notes,
-    }
-with open(assessment_file, 'a') as f:
-    f.write(json.dumps(record) + '\n')
-
-# Re-validate reassignments against the SAME future_pending_stories set the
-# LLM was given — never trust a story_id/role pair from the model's own
-# text without re-checking it against real, deterministically-computed
-# eligibility (pending, not completed, phase strictly after this one).
-eligible = {s['story_id']: s for s in summary['future_pending_stories']}
-applied = []
-if reassignments:
-    with open(prd_file) as f:
-        prd = json.load(f)
-    stories_by_id = {s['id']: s for s in prd.get('stories', []) if s.get('id')}
-    changed = False
-    for r in reassignments:
-        sid = r.get('story_id')
-        new_role = r.get('newAgentRole')
-        if not sid or not new_role or sid not in eligible:
-            continue
-        story = stories_by_id.get(sid)
-        if not story or story.get('status') != 'pending' or story.get('completed'):
-            continue
-        if story.get('agentRole') == new_role:
-            continue
-        if 'originalAgentRole' not in story:
-            story['originalAgentRole'] = story.get('agentRole')
-        story['agentRole'] = new_role
-        applied.append({'story_id': sid, 'newAgentRole': new_role, 'reason': r.get('reason', '')})
-        changed = True
-    if changed:
-        tmp_path = prd_file + '.tmp'
-        with open(tmp_path, 'w') as f:
-            json.dump(prd, f, indent=2)
-        os.replace(tmp_path, prd_file)
-
-ts = datetime.now(timezone.utc).isoformat()
-lines = [
-    f"# Phase Improvement Report: {summary['phase_id']}",
-    f"_Generated: {ts}_",
-    "",
-    f"- Actual: {summary['actual_minutes']} min / ${summary['actual_cost_usd']}",
-    f"- Forecast: {summary['forecast_minutes']} min / ${summary['forecast_cost_usd']}",
-    f"- Variance: {summary['variance_minutes']} min / ${summary['variance_cost_usd']}",
-    f"- Over threshold ({summary['over_threshold_pct']}%): {summary['over_threshold']}",
-    "",
-    "## Notes",
-    notes,
-]
-if recommendations:
-    lines += ["", "## Recommendations"] + [f"- {r}" for r in recommendations]
-if applied:
-    lines += ["", "## Role reassignments applied"] + [
-        f"- {a['story_id']}: -> {a['newAgentRole']} ({a['reason']})" for a in applied
-    ]
-with open(report_file, 'w') as f:
-    f.write("\n".join(lines) + "\n")
-
-print(f"assessment record written; {len(applied)} role reassignment(s) applied")
-ASSESS_APPLY_PY
+    python3 "$SCRIPT_DIR/lib/handlers/assess-apply.py" "$_pa_summary_tmp" "$_pa_raw_tmp" "$assessment_file" "$improvement_report_file" "${MAIN_PRD_FILE:-$PRD_FILE}"
     ) 200>"${assessment_file}.lock"
     rm -f "$_pa_raw_tmp" "$_pa_summary_tmp"
 
@@ -7553,17 +7342,41 @@ assert_no_story_ids_gained "post-parallel" "Step 18: Post-parallel assessment"
 # validates fail-on-baseline/pass-with-fix; this only ensures a test EXISTS to check.
 # ──────────────────────────────────────────────
 if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/brownfield-repro-test-writer.sh" ]; then
+    # NO GUESSED BRANCH. This fell back to the literal "develop" — a branch name that is a fact of
+    # some projects and not of others. Every diff the writer takes is against this ref, so on a
+    # project whose trunk is named anything else it resolved nothing and the writer compared
+    # against an empty baseline. The project declares it; otherwise take the repository's own
+    # current branch, which is at least true.
+    _tw_baseline="${JIRA_BASELINE_BRANCH:-}"
+    if [ -z "$_tw_baseline" ]; then
+        _tw_baseline=$(git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+        [ "$_tw_baseline" = "HEAD" ] && _tw_baseline=""
+        [ -n "$_tw_baseline" ] && warning "Step 3.54: no JIRA_BASELINE_BRANCH declared — diffing against the checked-out branch '$_tw_baseline'"
+    fi
+    if [ -z "$_tw_baseline" ]; then
+        error "Step 3.54: no baseline branch declared and none resolvable — skipping the reproducing-test writer rather than diffing against nothing. Step 3.55 will block these stories."
+    else
     while IFS= read -r _tw_story; do
         [ -z "$_tw_story" ] && continue
+        # THE WRITER'S EXIT STATUS SURVIVES THE PIPE. `cmd | tee` returns tee's status, which is
+        # always 0, so a writer that produced no test at all reported success — and Step 3.55 then
+        # blocked the story, pointing the investigation at the story rather than at the writer.
         PROJECT_ROOT="$PROJECT_ROOT" PRD_FILE="$PRD_FILE" LOG_DIR="$LOG_DIR" \
-        JIRA_BASELINE_BRANCH="${JIRA_BASELINE_BRANCH:-develop}" \
+        JIRA_BASELINE_BRANCH="$_tw_baseline" \
             bash "$SCRIPT_DIR/brownfield-repro-test-writer.sh" "$_tw_story" 2>&1 | tee -a "$LOG_DIR/repro-test-writer-${PHASE}.log"
+        _tw_rc=${PIPESTATUS[0]}
+        # An explicit `if`, not `[ ... ] && warning`: that form returns non-zero when the test is
+        # false, and as the last statement in a loop body it becomes the body's exit status.
+        if [ "${_tw_rc:-0}" -ne 0 ]; then
+            warning "Step 3.54: the reproducing-test writer produced no test for $_tw_story (exit ${_tw_rc}) — Step 3.55 will block it"
+        fi
     # EVERY story in the phase, novel included. This selector was narrowed to
     # exclude novel by fe5d6cb, which was fixing the GATE below — the writer was
     # collateral. It does not need a bug: it reads the committed fix diff and the
     # story's verificationCriteria, and validates that its test PASSES against the
     # fix. See lib/story-guards.sh for the full history.
     done < <(phase_stories_brownfield_scope "$PRD_FILE" "$PHASE")
+    fi
 fi
 
 # ──────────────────────────────────────────────
@@ -7579,14 +7392,31 @@ fi
 # rewrite its own oracle to go green.
 # ──────────────────────────────────────────────
 if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/update-invalidated-tests.sh" ]; then
+    # Same resolution as Step 3.54: the project declares it, else the repository's own branch.
+    # The literal "develop" is a fact of some projects and not of others, and every diff this step
+    # takes is against this ref.
+    _uit_baseline="${JIRA_BASELINE_BRANCH:-}"
+    if [ -z "$_uit_baseline" ]; then
+        _uit_baseline=$(git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+        [ "$_uit_baseline" = "HEAD" ] && _uit_baseline=""
+    fi
     _uit_failed=0
     while IFS= read -r _uit_story; do
         [ -z "$_uit_story" ] && continue
         _uit_vcs=$(jq -r --arg id "$_uit_story" \
             '(.stories[] | select(.id == $id) | .verificationCriteria // []) | join("\n- ")' \
             "$PRD_FILE" 2>/dev/null || echo "")
+        # THE ORACLE IS NOT OPTIONAL. The agent below is the only one granted write access to
+        # PRE-EXISTING tests, and it decides what to edit by asking whether a failure is explained
+        # by these criteria. With none, it was handed "(not supplied)" and asked to judge against
+        # nothing while holding that grant — the path by which a wrong fix rewrites its own oracle.
+        if [ -z "$_uit_vcs" ]; then
+            warning "Step 3.545: $_uit_story declares no verification criteria — skipping it rather than letting a write-enabled agent judge against nothing"
+            continue
+        fi
+        # NO GUESSED BRANCH — see Step 3.54. Resolved once above, from the project or the repo.
         PROJECT_ROOT="$PROJECT_ROOT" PRD_FILE="$PRD_FILE" LOG_DIR="$LOG_DIR" \
-        JIRA_BASELINE_BRANCH="${JIRA_BASELINE_BRANCH:-develop}" \
+        JIRA_BASELINE_BRANCH="$_uit_baseline" \
         STORY_VERIFICATION_CRITERIA="$_uit_vcs" \
             bash "$SCRIPT_DIR/update-invalidated-tests.sh" "$_uit_story" 2>&1 \
             | tee -a "$LOG_DIR/update-invalidated-tests-${PHASE}.log"
@@ -7635,6 +7465,48 @@ if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/update-invalidated-tes
     #
     # An UNDECLARED parse (no test.failurePattern) returns unknown, the delta declines, and the
     # stamp proceeds — reporting everything rather than guessing. That refusal is deliberate.
+# _clear_suite_state_for_phase <prd_file> <phase>
+# WHATEVER SETS THE FLAG CAN UNSET IT.
+#
+# Step 3.545 stamps suiteState=red when it cannot reconcile a failing test, and Step 3.55
+# blocks on that flag. Nothing ever cleared it, so it was a latch: a run that recovered was
+# still failed by its own history.
+#
+# Live, run 20260815T142007Z (metrolinx, AMSD-2041): pass 1's generated spec mocked a module
+# the SDK does not use, the suite went red, and 3.545 stamped it. The retry fixed the code —
+# tsc passed, external verification passed, the story completed and committed. At 16:03
+# update-invalidated-tests re-checked and reported "suite already green — nothing to do",
+# and seconds later Step 3.55 failed the phase on the stale flag, asserting "Step 3.545
+# could not reconcile it" about a step that had just reported the opposite. The suite was
+# green: 1203/1203 under the project's declared TZ.
+#
+# This ONLY clears. Step 3.55 is untouched, so a suite that never recovered still blocks —
+# that is the behaviour the flag exists to provide.
+_clear_suite_state_for_phase() {
+    local _prd="${1:-}" _phase="${2:-}"
+    [ -f "$_prd" ] || return 0
+    local _ids
+    _ids=$(jq -r --arg phase "$_phase" '(.implementationOrder[$phase] // [])[]?' "$_prd" 2>/dev/null)
+    [ -n "$_ids" ] || return 0
+    local _sid
+    while IFS= read -r _sid; do
+        [ -n "$_sid" ] || continue
+        jq -e --arg id "$_sid" '.stories[] | select(.id == $id) | has("suiteState")' "$_prd" >/dev/null 2>&1 || continue
+        local _tmp
+        _tmp="$(mktemp)"
+        # Staged through a temp file and moved: a truncated PRD is worse than a stale flag.
+        if jq --arg id "$_sid" \
+            '(.stories[] | select(.id == $id)) |= (del(.suiteState) | del(.suiteStateStep))' \
+            "$_prd" > "$_tmp" 2>/dev/null; then
+            mv "$_tmp" "$_prd"
+            info "Step 3.545: suite recovered — cleared suiteState on $_sid"
+        else
+            rm -f "$_tmp"
+        fi
+    done <<< "$_ids"
+    return 0
+}
+
     if [ "$_uit_failed" -ne 0 ] && command -v baseline_new_failures >/dev/null 2>&1; then
         _uit_log="$LOG_DIR/update-invalidated-tests-${PHASE}.log"
         if [ -f "$_uit_log" ]; then
@@ -7644,6 +7516,12 @@ if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/update-invalidated-tes
                 _uit_failed=0
             fi
         fi
+    fi
+
+    if [ "$_uit_failed" -eq 0 ]; then
+        # RECOVERED. Clear anything an earlier pass stamped, or Step 3.55 fails a phase whose
+        # suite is green — which is exactly what happened on 2026-08-15.
+        _clear_suite_state_for_phase "$PRD_FILE" "$PHASE"
     fi
 
     if [ "$_uit_failed" -ne 0 ]; then
@@ -7682,15 +7560,27 @@ if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/brownfield-repro-test-
         # tests tee's exit (always 0) — the gate's `exit 1` on BLOCK was swallowed
         # and a testless change PASSED (live AMSD-1820 run #3). Capture the gate's
         # real exit via ${PIPESTATUS[0]}; tee exits 0 so `set -e` is not tripped.
-        PROJECT_ROOT="$PROJECT_ROOT" JIRA_BASELINE_BRANCH="${JIRA_BASELINE_BRANCH:-develop}" \
+        # NO GUESSED BRANCH — see Step 3.54. The gate resolves its own when none is declared.
+        PROJECT_ROOT="$PROJECT_ROOT" JIRA_BASELINE_BRANCH="${JIRA_BASELINE_BRANCH:-}" \
              bash "$SCRIPT_DIR/brownfield-repro-test-gate.sh" "$_rg_story" 2>&1 | tee -a "$LOG_DIR/repro-gate-${PHASE}.log"
         _rg_rc=${PIPESTATUS[0]}
         if [ "${_rg_rc:-1}" -ne 0 ]; then
             warning "Step 3.55: reproduction gate BLOCKED $_rg_story (gate exit ${_rg_rc})"
             _repro_blocked=1
-            _tmp_prd="$(mktemp)"; jq --arg id "$_rg_story" \
+            # THE FINDING HAS TO LAND ON THE STORY. Step 3.545 hard-fails when it cannot record
+            # suiteState, for the same reason: a block that exists only in a log line cannot be
+            # inherited, so the retry does not know which story failed and re-runs it unchanged.
+            # This swallowed the write with `|| rm -f`.
+            _tmp_prd="$(mktemp)"
+            if jq --arg id "$_rg_story" \
                 '(.stories[] | select(.id == $id)) |= (. + {reviewStatus: "escalated", reproGate: "failed"})' \
-                "$PRD_FILE" > "$_tmp_prd" 2>/dev/null && mv "$_tmp_prd" "$PRD_FILE" || rm -f "$_tmp_prd"
+                "$PRD_FILE" > "$_tmp_prd" 2>/dev/null; then
+                mv "$_tmp_prd" "$PRD_FILE"
+            else
+                rm -f "$_tmp_prd"
+                error "Step 3.55: could not record the reproduction-gate block on $_rg_story — the retry would not know it failed."
+                exit 2
+            fi
         fi
     # Only stories with a bug to reproduce. A novel story cannot satisfy
     # fail-on-baseline and is deliberately not gated here (fe5d6cb).
@@ -7745,7 +7635,11 @@ if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/vc-coverage-check.sh" 
     [ -f "$SCRIPT_DIR/lib/story-outputs.sh" ] && . "$SCRIPT_DIR/lib/story-outputs.sh"
     while IFS= read -r _vc_story; do
         [ -z "$_vc_story" ] && continue
-        _vc_test_file=$(story_outputs_tests "$PROJECT_ROOT" "$LOG_DIR" 2>/dev/null | head -1)
+        # THIS STORY'S TEST, not the phase's first. story_outputs_tests reads the PHASE
+        # manifest, which carries no story attribution — so `| head -1` gave every story the
+        # same file and reported one story's coverage against another story's test. The check
+        # ran, produced an artefact, and measured the wrong thing.
+        _vc_test_file=$(story_outputs_tests_for "$PROJECT_ROOT" "$LOG_DIR" "$_vc_story" 2>/dev/null | head -1)
         if [ -n "$_vc_test_file" ]; then
             bash "$SCRIPT_DIR/vc-coverage-check.sh" \
                 --prd "$PRD_FILE" --story "$_vc_story" \
@@ -7762,10 +7656,16 @@ if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/vc-coverage-check.sh" 
             # shape of the coverage gate returning `complete: null` while claude.sh read null
             # as pass, which ran fail-open for its entire life. The survey sanitiser already
             # states the rule: silence is not a state.
-            printf '%s\n' "$(jq -n --arg s "$_vc_story" \
+            # AND THE WRITE ITSELF IS NOT SILENCED. This ended in `2>/dev/null || true` — so the
+            # artefact whose whole purpose is that absence must never have to be interpreted
+            # could fail to appear, silently, restoring exactly the ambiguity the comment above
+            # exists to remove.
+            if ! jq -n --arg s "$_vc_story" \
                 '{state:"not_checked", story:$s, results:[],
-                  reason:"no test file in the writer manifest for this story — nothing to check the verification criteria against"}')" \
-                > "$LOG_DIR/vc-coverage-${_vc_story}.json" 2>/dev/null || true
+                  reason:"this story committed no test file — nothing to check the verification criteria against"}' \
+                > "$LOG_DIR/vc-coverage-${_vc_story}.json"; then
+                warning "  [vc-coverage] could not write the not_checked record for ${_vc_story} — its absence must not be read as covered"
+            fi
         fi
     done < <(phase_stories_brownfield_scope "$PRD_FILE" "$PHASE")
 fi
@@ -7805,9 +7705,9 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
         fi
     fi
     if [ -n "$_rgd_pattern" ] && [ "$_rgd_high_effort" = "1" ] && \
-       [ -n "${_rg_root:-}" ] && [ -n "${_rg_pm:-}" ] && [ "${_rg_test_declared:-0}" -eq 1 ]; then
+       [ -n "${_rg_root:-}" ] && [ -n "${_rg_test_cmd:-}" ] && [ "${_rg_test_declared:-0}" -eq 1 ]; then
         step_emit "3.58" "running" "Step 3.58: Regression delta gate"
-        log "Step 3.58: Regression delta gate — re-running $_rg_pm test in $_rg_root (effort:high story in phase '$PHASE')..."
+        log "Step 3.58: Regression delta gate — re-running $_rg_test_cmd in $_rg_root (effort:high story in phase '$PHASE')..."
         _rgd_baseline_file="$LOG_DIR/regression-guard-baseline-${PHASE}.json"
         _rgd_max="${EPAM_REGRESSION_GUARD_RETRIES:-2}"
         _rgd_max=$(( _rgd_max + 1 ))
@@ -7815,59 +7715,11 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
         for _rgd_try in $(seq 1 "$_rgd_max"); do
             _rgd_try_log="$_rgd_log"
             [ "$_rgd_try" -gt 1 ] && _rgd_try_log="${_rgd_log%.log}-attempt-${_rgd_try}.log"
-            (cd "$_rg_root" && PATH="$(dirname "$_rg_node"):$PATH" "$_rg_pm" test) > "$_rgd_try_log" 2>&1 || true
+            # The project's OWN command, same as the guard above. Assembling "<pm> test" assumed an
+            # ecosystem whose package manager takes a test subcommand.
+            (cd "$_rg_root" && PATH="${_rg_node:+$(dirname "$_rg_node"):}$PATH" sh -c "$_rg_test_cmd") > "$_rgd_try_log" 2>&1 || true
         done
-        _rgd_result=$(python3 - "$_rgd_pattern" "$_rgd_max" "$_rgd_log" "$_rgd_baseline_file" << 'RGD_DIFF_PY'
-import re, sys, json
-
-pattern, max_attempts, log_base, baseline_file = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4]
-try:
-    rx = re.compile(pattern, re.MULTILINE)
-except re.error:
-    print(json.dumps({"verdict": "unknown", "new_failures": []}))
-    sys.exit(0)
-
-def attempt_log(i):
-    if i == 1:
-        return log_base
-    if log_base.endswith('.log'):
-        return log_base[:-4] + f"-attempt-{i}.log"
-    return f"{log_base}-attempt-{i}"
-
-sets = []
-for i in range(1, max_attempts + 1):
-    try:
-        with open(attempt_log(i)) as f:
-            text = f.read()
-    except OSError:
-        sets.append(set())
-        continue
-    ids = set()
-    for m in rx.finditer(text):
-        g = next((x for x in m.groups() if x), None)
-        if g:
-            ids.add(g)
-    sets.append(ids)
-
-# Same correction as Step 5's baseline capture (live AMSD-2041, 2026-07-31):
-# the intersection ALONE is the reproducible signal. A test failing in every
-# after-attempt is a real, confirmed new failure; a one-off flake in a single
-# attempt (present in the union but not the intersection) is exactly the
-# noise the 3-attempt retry exists to filter, on EITHER side of this
-# comparison — it must not block a clean phase, and it must not be silently
-# folded into "new failures" either.
-stable_after = set.intersection(*sets) if sets else set()
-
-baseline = set()
-try:
-    with open(baseline_file) as f:
-        baseline = set(json.load(f).get('failures', []))
-except OSError:
-    pass
-
-new_failures = sorted(stable_after - baseline)
-print(json.dumps({"verdict": "fail" if new_failures else "pass", "new_failures": new_failures}))
-RGD_DIFF_PY
+        _rgd_result=$(python3 "$SCRIPT_DIR/lib/handlers/rgd-diff.py" "$_rgd_pattern" "$_rgd_max" "$_rgd_log" "$_rgd_baseline_file"
 )
         _rgd_verdict=$(echo "$_rgd_result" | python3 -c "import json,sys; print(json.load(sys.stdin)['verdict'])" 2>/dev/null || echo unknown)
         if [ "$_rgd_verdict" = "pass" ]; then
@@ -7877,8 +7729,14 @@ RGD_DIFF_PY
             step_emit "3.58" "fail" "Step 3.58: Regression delta gate"
             _rgd_new=$(echo "$_rgd_result" | python3 -c "import json,sys; print(', '.join(json.load(sys.stdin)['new_failures']))" 2>/dev/null || echo "")
             if [ "$_rgd_verdict" = "unknown" ]; then
-                error "Step 3.58: Regression delta gate CANNOT VERIFY — testFailurePattern does not compile as a regex"
-                error "  This is not a confirmed regression, but it cannot be ruled out either — fix the pattern in dependency-check.json."
+                # SAY WHICH "cannot verify" THIS IS. There are three now — an uncompilable
+                # pattern, a suite that produced no output, and a missing tolerated baseline —
+                # and they are fixed in three different places. Naming only the pattern sent
+                # every investigation at dependency-check.json.
+                _rgd_reason=$(printf '%s' "$_rgd_result" \
+                    | python3 "$SCRIPT_DIR/lib/handlers/json-field.py" reason 2>/dev/null || echo "")
+                error "Step 3.58: Regression delta gate CANNOT VERIFY — ${_rgd_reason:-testFailurePattern does not compile as a regex}"
+                error "  This is not a confirmed regression, but it cannot be ruled out either."
             else
                 error "Step 3.58: Regression delta gate FAILED — this phase's changes broke test(s) that were passing at baseline: $_rgd_new"
                 error "  Pre-existing failures are tolerated; these are NEW."
@@ -8076,10 +7934,36 @@ while true; do
     # Re-implementing is the wrong response when the story was never the problem.
     if review_feedback_is_incomplete; then
         rm -f "$LOG_DIR/review-incomplete-${PHASE}.flag" 2>/dev/null || true
-        warning "Step 3.6: the REVIEWER did not produce a verdict (no per-story feedback) — re-running the REVIEW, not re-implementing (cycle $_review_cycle → $((_review_cycle + 1)))"
+
+        # BOUNDED. This branch used to `continue` straight past the safety valve below, so it
+        # was the ONE exit from `while true` with no ceiling on it. Live 2026-08-12: the
+        # reviewer died on a bash runtime error (`local` at top level, 2bb230e) and this ran
+        # 701 CYCLES on a story that had already implemented cleanly — 18 minutes, and it
+        # would have continued to the story wall.
+        #
+        # Retrying a missing verdict is right ONCE OR TWICE (a model can return junk once) and
+        # wrong forever after: a reviewer that cannot execute produces no verdict every time,
+        # and no number of retries changes that. The loop cannot tell those apart, which is
+        # exactly why it must be bounded rather than trusting.
+        #
+        # Reuses _review_max_cycles — the bound that already exists and already means "how many
+        # times may this loop go round". A second counter would be a second thing to maintain.
+        _review_noverdict_cycles=$(( ${_review_noverdict_cycles:-0} + 1 ))
+        if [ "$_review_noverdict_cycles" -ge "$_review_max_cycles" ]; then
+            error "Step 3.6: the REVIEWER produced NO VERDICT ${_review_noverdict_cycles} time(s) in a row (limit ${_review_max_cycles}) — it is not failing to approve, it is failing to RUN."
+            error "         Nothing was reviewed. The change is NOT approved and this phase must not proceed."
+            error "         Check the reviewer itself before re-running: bash -n does not catch a runtime error; try"
+            error "           shellcheck -S error orchestrations/scripts/team-lead-review.sh"
+            error "         and read the reviewer's own stderr in $LOG_DIR."
+            exit 2
+        fi
+        warning "Step 3.6: the REVIEWER did not produce a verdict (no per-story feedback) — re-running the REVIEW, not re-implementing (cycle $_review_cycle → $((_review_cycle + 1)), no-verdict ${_review_noverdict_cycles}/${_review_max_cycles})"
         _review_cycle=$((_review_cycle + 1))
         continue
     fi
+    # A verdict arrived: the reviewer is alive. Reset the streak so an earlier transient miss
+    # cannot accumulate across a healthy run and trip the limit later.
+    _review_noverdict_cycles=0
     # Partition rejected stories: a story whose ladder is ALREADY exhausted
     # (its persisted rung has reached the top — see lib/story-retry-state.sh)
     # has nothing left to try and escalates now, regardless of cycle count. A
@@ -8180,7 +8064,12 @@ _escalated=$(jq -r --arg phase "$PHASE" \
 if [ "${_review_escalated:-0}" -eq 1 ] || [ "${_escalated:-0}" -gt 0 ]; then
     error "Step 3.6: review changes unresolved after $_review_cycle cycle(s), ladder exhausted (escalated: flag=${_review_escalated:-0} tagged-stories=${_escalated:-0})"
     error "         A change the reviewer never approved must NOT proceed — human review required."
-    exit 2
+    # EXIT 3, NOT 2. This is a HALT, not a remediation. Every caller used to read 2 as
+    # "a fix was applied, retry" and re-ran the phase — which hard-reset the branch,
+    # orphaned the already-green committed work, and burned 12 attempts against a
+    # ladder with nothing left to escalate to (live, 20260814T213253Z). The retryable
+    # /not-retryable distinction is defined once in lib/phase-exit.sh.
+    exit 3
 fi
 
 # ──────────────────────────────────────────────
@@ -8328,8 +8217,15 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
     _probe_file=""
     if [ -n "$_eslint_bin" ]; then
         for _ext in js jsx mjs cjs ts tsx mts cts vue svelte; do
-            _probe_file="$(find "$PROJECT_ROOT/src" -type f -name "*.${_ext}" \
-                            -not -path '*/node_modules/*' -print -quit 2>/dev/null)"
+            # THE PROBE MUST LOOK WHERE THE GATE WILL LINT. eslint_baseline_gate below is given
+            # $PROJECT_ROOT — the whole repository — but this probe searched only src/. So a repo
+            # laying its code out any other way (lib/, app/, packages/, or flat at the root) found
+            # no probe file, took the "nothing to lint" branch, and eslint was SKIPPED on a
+            # codebase it would have linted perfectly well. The probe decided the gate's fate on a
+            # narrower question than the gate itself asks.
+            _probe_file="$(find "$PROJECT_ROOT" -type f -name "*.${_ext}" \
+                            -not -path '*/node_modules/*' -not -path '*/.git/*' \
+                            -print -quit 2>/dev/null)"
             [ -n "$_probe_file" ] && break
         done
     fi
@@ -8344,8 +8240,8 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
         # about. Reporting this as FAIL would push an empty finding into the
         # remediation pipeline, which can only answer "could not map lint
         # failure to a story".
-        info "  [lint] eslint: SKIP (no lintable source files under src/)"
-        echo "eslint: no lintable source files under src/ — nothing examined" >> "$_lint_log"
+        info "  [lint] eslint: SKIP (no lintable source files anywhere in the repository)"
+        echo "eslint: no lintable source files in $PROJECT_ROOT — nothing examined" >> "$_lint_log"
     elif [ -n "$_eslint_bin" ] && [ -n "$_eslint_config" ]; then
         # Delegated to lib/eslint-baseline-gate.sh — see that file's header for
         # why. In short: this used to be `eslint src/ --max-warnings 0`, which
@@ -8415,42 +8311,42 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
                     kb_record_episode "${_phase:-${PHASE:-core}}" "lint-gate" "lint gate failed" || true
             fi
             info "  [lint-gate:analyst] Extracting grounded finding from lint log..."
-            _lint_finding_prompt="$(cat <<LINT_FIND_EOF
-You are the gate-finding-analyst. A lint gate (the project's type check + eslint) failed during the '$PHASE' phase of an automated TypeScript project build.
-
-## Lint Gate Log
-$(cat "$_lint_log" 2>/dev/null | head -200)
-
-## Files THIS RUN produced or modified (the writer-output manifest)
-$(if [ -f "$SCRIPT_DIR/lib/story-outputs.sh" ]; then . "$SCRIPT_DIR/lib/story-outputs.sh" 2>/dev/null; story_outputs_files "$PROJECT_ROOT" "$LOG_DIR" 2>/dev/null | head -30; fi)
-
-A finding in ANY file above was produced by this run and is in scope, even if
-that file is not declared in a story's technicalNotes.files. Reproducing tests are written by a separate
-agent AFTER the story declares its files, so a .spec.ts/.test.ts will normally be
-absent from the declared list while still being this run's work — live
-2026-07-26, a real finding in a newly-written test file was dropped for exactly
-that reason. Attribute such a file to the story whose source file it tests.
-
-## PRD Stories (active)
-$(python3 -c "import json,sys; d=json.load(open('${MAIN_PRD_FILE:-$PRD_FILE}')); active=set(s for p in d['implementationOrder'].values() for s in p); [print(json.dumps({'id':s['id'],'title':s.get('title',''),'files':s.get('technicalNotes',{}).get('files',[])})) for s in d['stories'] if s['id'] in active]" 2>/dev/null | head -50)
-
-## Agent Profile
-$(cat "$_profiles_file" | python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('gate-finding-analyst',''))" 2>/dev/null)
-
-Identify: which story owns the file with the lint/type error? Output JSON only:
-{"gate":"lint","story_id":"<id>","file":"<path>","line":<n>,"rule":"<tsc-error-code or eslint-rule>","message":"<description>","suggested_fix":"<one-line fix>"}
-LINT_FIND_EOF
-)"
+            # The evidence, gathered into files. The log used to arrive `head -200` — a truncation of
+            # the very evidence the analyst attributes, cutting mid-file-list, so the findings nobody
+            # looked at were exactly the ones dropped. It goes whole.
+            _lf_outputs_file=$(mktemp "${TMPDIR:-/tmp}/lint-outputs-XXXXXX.txt")
+            _lf_stories_file=$(mktemp "${TMPDIR:-/tmp}/lint-stories-XXXXXX.txt")
+            if [ -f "$SCRIPT_DIR/lib/story-outputs.sh" ]; then
+              . "$SCRIPT_DIR/lib/story-outputs.sh" 2>/dev/null || true
+              story_outputs_files "$PROJECT_ROOT" "$LOG_DIR" > "$_lf_outputs_file" 2>/dev/null || true
+            fi
+            python3 -c "import json,sys; d=json.load(open('${MAIN_PRD_FILE:-$PRD_FILE}')); active=[s for s in d.get('stories',[]) if not s.get('completed')]; print(json.dumps([{k:s.get(k) for k in ('id','title','agentRole')} for s in active], indent=2))" > "$_lf_stories_file" 2>/dev/null || echo "[]" > "$_lf_stories_file"
+            _lp_vals=$(mktemp "${TMPDIR:-/tmp}/lint-finding-analyst-vals-XXXXXX.json")
+            _lp_role_file=$(mktemp "${TMPDIR:-/tmp}/lint-finding-analyst-role-XXXXXX.txt")
+            jq -r --arg r "gate-finding-analyst" '.[$r] // ""' "$_profiles_file" > "$_lp_role_file" 2>/dev/null || : > "$_lp_role_file"
+            jq -n --rawfile profile "$_lp_role_file" \
+                  --rawfile lint_log "$_lint_log" \
+                  --rawfile writer_outputs "$_lf_outputs_file" \
+                  --rawfile active_stories "$_lf_stories_file" \
+                  --arg phase "$PHASE" \
+                  '{"__PROFILE__":$profile,"__LINT_LOG__":$lint_log,"__WRITER_OUTPUTS__":$writer_outputs,"__ACTIVE_STORIES__":$active_stories,"__PHASE__":$phase}' > "$_lp_vals"
+            _lint_finding_prompt="$(render_engine_prompt lint-finding-analyst "$_lp_vals")"
+            rm -f "$_lp_vals" "$_lp_role_file"
+            rm -f "$_lf_outputs_file" "$_lf_stories_file"
             _lint_finding_raw=""
             _lga_attempt=0
             while [ "$_lga_attempt" -lt 2 ] && [ -z "$_lint_finding_raw" ]; do
                 _lga_prompt="$_lint_finding_prompt"
-                _lga_model="${ORCH_GATE_MODEL:-z-ai/glm-5.2}"
+                _lga_model="$(seam_model_or_fail "gate-finding-analyst")"
                 if [ "$_lga_attempt" -ge 1 ]; then
                     [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _lga_model="${ESCALATION_MODEL_HIGH}"
-                    _lga_prompt="RETRY (attempt 2): Your previous response was empty. Read the lint log at ${_lint_log}, identify the failing file and story, and emit ONLY the JSON output.
-
-$_lint_finding_prompt"
+                    _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
+                    jq -n \
+                          --arg lint_finding_prompt "$_lint_finding_prompt" \
+                          --arg lint_log "${_lint_log}" \
+                          '{"__LINT_FINDING_PROMPT__":$lint_finding_prompt,"__LINT_LOG__":$lint_log}' > "$_rp_vals"
+                    _lga_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" lint_gate_analyst)"
+                    rm -f "$_rp_vals"
                 fi
                 # Full agent audit, 2026-07-31: gate-finding-analyst gets tool
                 # access via TWO DIFFERENT mechanisms at its two call sites —
@@ -8490,32 +8386,32 @@ if m:
                 info "  [lint-gate:analyst] Finding mapped to story: $_lint_story_id"
                 # Agent 2: story-ac-remediator — add AC to prevent recurrence
                 info "  [lint-gate:remediator] Augmenting ACs for story $_lint_story_id..."
-                _lint_ac_prompt="$(cat <<LINT_AC_EOF
-You are the story-ac-remediator. A lint gate failure was mapped to story '$_lint_story_id'.
-
-## Finding
-$_lint_finding_raw
-
-## Current story ACs
-$(python3 -c "import json; d=json.load(open('${MAIN_PRD_FILE:-$PRD_FILE}')); [print(json.dumps(s.get('acceptanceCriteria',[]))) for s in d['stories'] if s['id']=='$_lint_story_id']" 2>/dev/null)
-
-## Agent Profile
-$(cat "$_profiles_file" | python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('story-ac-remediator',''))" 2>/dev/null)
-
-Add 1-2 ACs to story '$_lint_story_id' that would prevent this lint failure. Output JSON only:
-{"story_id":"$_lint_story_id","new_acs":["<ac text>"],"rationale":"<why>"}
-LINT_AC_EOF
-)"
+                _lac_acs_file=$(mktemp "${TMPDIR:-/tmp}/lint-acs-XXXXXX.txt")
+                python3 -c "import json; d=json.load(open('${MAIN_PRD_FILE:-$PRD_FILE}')); [print(json.dumps(s.get('acceptanceCriteria', []), indent=2)) for s in d.get('stories',[]) if s.get('id')=='$_lint_story_id']" > "$_lac_acs_file" 2>/dev/null || echo "[]" > "$_lac_acs_file"
+                _lp_vals=$(mktemp "${TMPDIR:-/tmp}/lint-ac-remediator-vals-XXXXXX.json")
+                _lp_role_file=$(mktemp "${TMPDIR:-/tmp}/lint-ac-remediator-role-XXXXXX.txt")
+                jq -r --arg r "story-ac-remediator" '.[$r] // ""' "$_profiles_file" > "$_lp_role_file" 2>/dev/null || : > "$_lp_role_file"
+                jq -n --rawfile profile "$_lp_role_file" \
+                      --rawfile current_acs "$_lac_acs_file" \
+                      --arg story_id "$_lint_story_id" \
+                      --arg finding "$_lint_finding_raw" \
+                      '{"__PROFILE__":$profile,"__CURRENT_ACS__":$current_acs,"__STORY_ID__":$story_id,"__FINDING__":$finding}' > "$_lp_vals"
+                _lint_ac_prompt="$(render_engine_prompt lint-ac-remediator "$_lp_vals")"
+                rm -f "$_lp_vals" "$_lp_role_file"
+                rm -f "$_lac_acs_file"
                 _lint_ac_raw=""
                 _lrem_attempt=0
                 while [ "$_lrem_attempt" -lt 2 ] && [ -z "$_lint_ac_raw" ]; do
                     _lrem_prompt="$_lint_ac_prompt"
-                    _lrem_model="${ORCH_GATE_MODEL:-z-ai/glm-5.2}"
+                    _lrem_model="$(seam_model_or_fail "story-ac-remediator")"
                     if [ "$_lrem_attempt" -ge 1 ]; then
                         [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _lrem_model="${ESCALATION_MODEL_HIGH}"
-                        _lrem_prompt="RETRY (attempt 2): Your previous response was empty or missing the 'new_acs' field. Emit ONLY the JSON: {\"story_id\":\"...\",\"new_acs\":[\"...\"]}.
-
-$_lint_ac_prompt"
+                        _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
+                        jq -n \
+                              --arg lint_ac_prompt "$_lint_ac_prompt" \
+                              '{"__LINT_AC_PROMPT__":$lint_ac_prompt}' > "$_rp_vals"
+                        _lrem_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" lint_remediator)"
+                        rm -f "$_rp_vals"
                     fi
                     _lrem_raw="$(echo "$_lrem_prompt" | \
                         timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-qwen}" \
@@ -8531,47 +8427,7 @@ $_lint_ac_prompt"
                 _lint_ac_tmp="$(mktemp)"
                 echo "$_lint_ac_raw" > "$_lint_ac_tmp"
                 _lint_acs_added="$( ( flock -w 10 200 || { error "  [lint-gate:remediator] Could not acquire lock on ${MAIN_PRD_FILE:-$PRD_FILE}"; return 1; }
-                python3 - "${MAIN_PRD_FILE:-$PRD_FILE}" "$_lint_story_id" "$_lint_ac_tmp" <<'LINT_AC_PY'
-import sys,json,os
-prd_path=sys.argv[1]; story_id=sys.argv[2]; raw_file=sys.argv[3]
-raw=open(raw_file).read()
-# Robust JSON-object scan, not a brace-depth-free regex -- see the sibling
-# fix in the Step 4.2 story-ac-remediator above for why: a suggested AC's
-# own verification snippet (e.g. `node -e "...{...}..."`) can contain
-# literal braces inside a JSON string value, which a regex requiring ZERO
-# braces in the whole match can never find. json.JSONDecoder.raw_decode
-# respects real JSON nesting/escaping regardless of string contents.
-decoder=json.JSONDecoder()
-payload=None
-idx=0
-while True:
-    start=raw.find('{', idx)
-    if start==-1: break
-    try:
-        obj,end=decoder.raw_decode(raw, start)
-        if isinstance(obj, dict) and 'new_acs' in obj:
-            payload=obj
-            break
-        idx=end
-    except json.JSONDecodeError:
-        idx=start+1
-if not payload: sys.exit(0)
-new_acs=payload.get('new_acs',[])
-if not new_acs: sys.exit(0)
-with open(prd_path) as f: d=json.load(f)
-added=0
-for s in d['stories']:
-    if s['id']==story_id:
-        existing=[a.get('text','') if isinstance(a,dict) else str(a) for a in s.get('acceptanceCriteria',[])]
-        for ac in new_acs:
-            if ac and ac not in existing and len(existing)<24:
-                s.setdefault('acceptanceCriteria',[]).append({'text':ac,'status':'pending'})
-                added+=1
-_tmp_prd_path=prd_path+'.tmp'
-with open(_tmp_prd_path,'w') as f: json.dump(d,f,indent=2)
-os.replace(_tmp_prd_path, prd_path)
-print(added)
-LINT_AC_PY
+                python3 "$SCRIPT_DIR/lib/handlers/lint-ac.py" "${MAIN_PRD_FILE:-$PRD_FILE}" "$_lint_story_id" "$_lint_ac_tmp"
                 2>/dev/null || echo "0"
                 ) 200>"${MAIN_PRD_FILE:-$PRD_FILE}.lock" )"
                 rm -f "$_lint_ac_tmp"
@@ -8584,13 +8440,13 @@ LINT_AC_PY
                 info "  [lint-gate:augmentor] Recording lint anti-pattern in profile..."
                 _laug_raw="$(echo "$_lint_finding_raw" | \
                     timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-qwen}" \
-                        --model "${ORCH_GATE_MODEL:-z-ai/glm-5.2}" \
+                        --model "$(seam_model_or_fail "gate-finding-analyst")" \
                         --json - 2>>"$_lint_rem_log" || echo "")"
                 if [ -z "$_laug_raw" ]; then
                     warning "  [lint-gate:augmentor] attempt 1 returned no output — retrying"
                     echo "$_lint_finding_raw" | \
                         timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-qwen}" \
-                            --model "${ORCH_GATE_MODEL:-z-ai/glm-5.2}" \
+                            --model "$(seam_model_or_fail "story-ac-remediator")" \
                             --json - 2>>"$_lint_rem_log" || true
                 fi
             else
@@ -8635,10 +8491,10 @@ if [ -n "$review_stories" ]; then
         apply_redirect_if_any "$story"
         "$SCRIPT_DIR/update-monitor.sh" event "code_review" "Team Lead code review completed" "" "main" "team-lead-agent" 2>/dev/null || true
         # Remove stale review artifact before each run so the pre-existing-file AC never blocks a retry
-        _stale_review="$PROJECT_ROOT/review/${story}-review.md"
+        _stale_review="$PROJECT_ROOT/.epam/review/${story}-review.md"
         if [ -f "$_stale_review" ]; then
             rm -f "$_stale_review"
-            info "  Removed stale review artifact before retry: review/${story}-review.md"
+            info "  Removed stale review artifact before retry: .epam/review/${story}-review.md"
         fi
         log "  Running review: $story"
         run_story_with_watchdog "$story" "$LOG_DIR/review-${story}.log"
@@ -8664,6 +8520,17 @@ fi
 # Blocks phase gate if any agent returns a blocker-severity finding.
 # Skippable with SKIP_TESTING_GATES=true.
 # ──────────────────────────────────────────────
+# _gate_diff_excludes — the pathspecs that keep artefacts out of a gate's diff.
+#
+# THE GATES USED TO FILTER BY EXTENSION INSTEAD: `-- '*.ts'`. That is the wrong axis. It answers
+# "is this TypeScript", when the question is "is this the change under review" — so on a Python,
+# Rust, Go, Ruby or plain-JS codeline the reviewer was handed an EMPTY patch and reviewed nothing,
+# while its verdict still counted. Excluding known artefacts keeps lockfiles and build output out
+# without deciding what language the customer writes.
+_gate_diff_excludes() {
+    "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/repo-exclude-patterns.js" diff 2>/dev/null || true
+}
+
 run_testing_gates() {
     local phase_id="$1"
     local gate_log="$LOG_DIR/testing-gates-${phase_id}.log"
@@ -8850,24 +8717,18 @@ step_emit "23"  "skip" "Step 23: Browser E2E" "SKIP_TESTING_GATES=true"
             fi
 
             story_log="$LOG_DIR/${route}-${phase_id}-${story_id}.log"
-            prompt="$agent_profile
-
-You are running as $route inside Step 4.6 Browser E2E routing checks.
-Phase: $phase_id
-Story: $story_id
-Story title: $story_title
-Route reason: $route_reason
-Complexity score: $route_score
-
-Return strict JSON only:
-{
-  \"agent\": \"$route\",
-  \"storyId\": \"$story_id\",
-  \"phase\": \"$phase_id\",
-  \"verdict\": \"pass|warn|fail\",
-  \"findings\": [{\"severity\": \"blocker|major|minor\", \"message\": \"...\", \"file\": \"...\", \"line\": 0}],
-  \"summary\": \"...\"
-}"
+            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/e2e-route-check-vals-XXXXXX.json")
+            jq -n \
+                  --arg agent_profile "$agent_profile" \
+                  --arg route_reason "$route_reason" \
+                  --arg story_title "$story_title" \
+                  --arg route_score "$route_score" \
+                  --arg phase_id "$phase_id" \
+                  --arg story_id "$story_id" \
+                  --arg route "$route" \
+                  '{"__AGENT_PROFILE__":$agent_profile,"__ROUTE_REASON__":$route_reason,"__STORY_TITLE__":$story_title,"__ROUTE_SCORE__":$route_score,"__PHASE_ID__":$phase_id,"__STORY_ID__":$story_id,"__ROUTE__":$route}' > "$_cp_vals"
+            prompt="$(render_engine_prompt e2e-route-check "$_cp_vals")"
+            rm -f "$_cp_vals"
 
             echo "[$(date -Iseconds)] story=$story_id route=$route score=$route_score reason=$route_reason" >> "$e2e_route_log"
             set +e
@@ -8927,39 +8788,18 @@ Return strict JSON only:
     step_emit "22a" "running" "Step 22a: SAST sentinel"
     log "  Step 4.2a: Running SAST sentinel..."
     {
-        local sast_prompt="You are acting as the sast-sentinel agent.
-
-Phase: $phase_id
-Project root: $PROJECT_ROOT
-
-IMPORTANT: All evidence has been pre-computed and is injected above. Do NOT attempt to call any shell commands, bash, or tools. Analyze ONLY the injected Semgrep, npm audit, and TypeScript compiler data.
-$(_brownfield_gate_scope sast-sentinel)
-
-Analyze the pre-computed evidence above and produce a structured JSON report covering:
-
-1. TypeScript compiler diagnostics: Results are pre-injected as '## TypeScript Compiler Results'. Each 'error TS' line is a finding with severity 'major'.
-
-2. Security pattern scan: Based on the Semgrep results injected above, classify findings:
-   - ERROR/WARNING severity Semgrep findings → severity 'major' or 'blocker'
-   - INFO severity findings → severity 'minor'
-   - Patterns to flag if Semgrep missed them (text scan only, no tool calls):
-     command injection, path traversal, hardcoded secrets, unsafe eval
-
-3. Dependency CVE classification (npm audit results):
-   - CVEs in RUNTIME dependencies (listed under "dependencies" in package.json) → severity 'blocker' if critical, 'major' if high
-   - CVEs in DEV-ONLY dependencies (listed under "devDependencies" in package.json, e.g. vitest, esbuild, vite, typescript, tsup, eslint) → severity 'minor' regardless of CVSS score. Dev tools never run in production and their CVEs do not affect application security.
-   - NEVER classify a dev-dependency CVE as 'blocker' or 'major'.
-
-If the injected evidence is insufficient to determine a verdict with confidence, output \"verdict\": \"pass\" with 0 findings rather than fabricating a failure.
-
-Output format (strict JSON, no markdown fences, no preamble):
-{
-  \"agent\": \"sast-sentinel\",
-  \"phase\": \"$phase_id\",
-  \"summary\": { \"filesScanned\": N, \"findingsCount\": N, \"blockerCount\": N },
-  \"findings\": [{ \"severity\": \"blocker|major|minor\", \"rule\": \"...\", \"file\": \"...\", \"line\": N, \"description\": \"...\", \"suggestedFix\": \"...\" }],
-  \"verdict\": \"pass|fail\"
-}"
+        # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
+        local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-sast-sentinel-vals-XXXXXX.json")
+        jq -n --arg gate_scope "$(_brownfield_gate_scope sast-sentinel)" \
+              --arg phase_id "$phase_id" \
+              --arg project_root "$PROJECT_ROOT" \
+              '{"__GATE_SCOPE__":$gate_scope,"__PHASE_ID__":$phase_id,"__PROJECT_ROOT__":$project_root}' > "$_qa_vals" 2>/dev/null
+        local sast_prompt
+        if ! sast_prompt=$(render_engine_prompt qa-sast-sentinel "$_qa_vals"); then
+            error "  [sast-sentinel] cannot render its prompt — refusing to gate with no instructions" >&2
+            rm -f "$_qa_vals"; return 1
+        fi
+        rm -f "$_qa_vals"
 
         if [ -n "$sast_profile" ]; then
             sast_prompt="$sast_profile
@@ -8970,7 +8810,11 @@ $sast_prompt"
         # ── Semgrep Oracle: inject static analysis evidence before LLM invocation ──
         local semgrep_json="$LOG_DIR/semgrep-oracle-${phase_id}.json"
         local semgrep_summary=""
-        if command -v semgrep > /dev/null 2>&1 && [ -d "$PROJECT_ROOT/src" ]; then
+        # NO LAYOUT ASSUMPTION. This required $PROJECT_ROOT/src to exist, so a repository laying
+        # its code out any other way — lib/, app/, pkg/, cmd/, or a flat root — got NO static
+        # analysis evidence at all, silently, and the SAST agent judged the change without it.
+        # semgrep scans a directory; the repository root is the honest one to give it.
+        if command -v semgrep > /dev/null 2>&1 && [ -d "$PROJECT_ROOT" ]; then
             set +e
             semgrep scan \
                 --config=auto \
@@ -8978,40 +8822,12 @@ $sast_prompt"
                 --quiet \
                 --timeout=60 \
                 --max-target-bytes=500000 \
-                "$PROJECT_ROOT/src" \
+                "$PROJECT_ROOT" \
                 > "$semgrep_json" 2>/dev/null
             local _semgrep_rc=$?
             set -e
             if [ -f "$semgrep_json" ] && [ -s "$semgrep_json" ]; then
-                semgrep_summary=$(python3 - "$semgrep_json" <<'PYEOF'
-import sys, json
-try:
-    with open(sys.argv[1]) as f:
-        data = json.load(f)
-    results = data.get("results", [])
-    errors_count = len(data.get("errors", []))
-    by_sev = {}
-    for r in results:
-        sev = r.get("extra", {}).get("severity", "INFO").upper()
-        by_sev.setdefault(sev, []).append(r)
-    lines = [f"totalFindings={len(results)}  scanErrors={errors_count}"]
-    for sev in ("ERROR", "WARNING", "INFO"):
-        items = by_sev.get(sev, [])
-        if not items:
-            continue
-        lines.append(f"\n{sev} ({len(items)}):")
-        for r in items[:10]:
-            path = r.get("path", "?")
-            line = r.get("start", {}).get("line", 0)
-            rule = r.get("check_id", "?").split(".")[-1]
-            msg  = r.get("extra", {}).get("message", "")[:120]
-            lines.append(f"  [{rule}] {path}:{line} — {msg}")
-        if len(items) > 10:
-            lines.append(f"  ... and {len(items)-10} more {sev} findings")
-    print("\n".join(lines))
-except Exception as e:
-    print(f"(semgrep parse error: {e})")
-PYEOF
+                semgrep_summary=$(python3 "$SCRIPT_DIR/lib/handlers/semgrep-summary.py" "$semgrep_json"
 2>/dev/null || echo "(semgrep unavailable)")
             else
                 semgrep_summary="(semgrep produced no output — exit code $_semgrep_rc)"
@@ -9020,10 +8836,13 @@ PYEOF
             semgrep_summary="(semgrep oracle skipped — semgrep not in PATH or src/ missing)"
         fi
 
-        sast_prompt="## Semgrep Static Analysis Results (hard evidence — treat as ground truth)
-$semgrep_summary
-
-$sast_prompt"
+        _oe_vals=$(mktemp "${TMPDIR:-/tmp}/qa-oracle-vals-XXXXXX.json")
+        jq -n \
+              --arg semgrep_summary "$semgrep_summary" \
+              --arg sast_prompt "$sast_prompt" \
+              '{"__SEMGREP_SUMMARY__":$semgrep_summary,"__SAST_PROMPT__":$sast_prompt}' > "$_oe_vals"
+        sast_prompt="$(render_engine_prompt qa-oracle-evidence "$_oe_vals" semgrep)"
+        rm -f "$_oe_vals"
 
         # ── npm audit Oracle: inject dependency CVE evidence ──
         local audit_json="$LOG_DIR/npm-audit-oracle-${phase_id}.json"
@@ -9037,57 +8856,11 @@ $sast_prompt"
             local _audit_rc=$?
             set -e
             if [ -f "$audit_json" ] && [ -s "$audit_json" ]; then
-                local _audit_py='
-import sys, json
-# Each package is tagged runtime / dev / transitive. The SAST prompt REQUIRES
-# that classification (runtime high = major, dev-only = minor regardless of
-# CVSS) but the evidence never carried it, so the agent could not comply. Live
-# 2026-07-26 it said so and left 70 CVEs unclassified. This is a dictionary
-# lookup, not a judgement — the pipeline should answer it, not delegate it.
-runtime_deps, dev_deps = set(), set()
-if len(sys.argv) > 2:
-    try:
-        with open(sys.argv[2]) as f:
-            pkg = json.load(f)
-        runtime_deps = set((pkg.get("dependencies") or {}).keys()) | set((pkg.get("optionalDependencies") or {}).keys())
-        dev_deps = set((pkg.get("devDependencies") or {}).keys())
-    except Exception:
-        pass
-
-def classify(name):
-    if name in runtime_deps: return "runtime"
-    if name in dev_deps: return "dev"
-    if not runtime_deps and not dev_deps: return "unclassified"
-    return "transitive"
-
-try:
-    with open(sys.argv[1]) as f:
-        data = json.load(f)
-    vulns = data.get("vulnerabilities", {})
-    meta  = data.get("metadata", {}).get("vulnerabilities", {})
-    total      = sum(meta.values()) if meta else len(vulns)
-    critical   = meta.get("critical", 0)
-    high       = meta.get("high", 0)
-    moderate   = meta.get("moderate", 0)
-    low        = meta.get("low", 0)
-    lines = [f"total={total}  critical={critical}  high={high}  moderate={moderate}  low={low}"]
-    if runtime_deps or dev_deps:
-        lines.append("  (each package tagged runtime|dev|transitive from package.json — apply the major/minor rule directly)")
-    shown = 0
-    for name, v in vulns.items():
-        if shown >= 15:
-            lines.append(f"  ... and {len(vulns)-shown} more packages")
-            break
-        sev  = v.get("severity", "?")
-        via  = ", ".join(str(x.get("title", x) if isinstance(x, dict) else x)
-                         for x in (v.get("via") or [])[:2])
-        lines.append(f"  [{sev}] ({classify(name)}) {name}: {via[:100]}")
-        shown += 1
-    print("\n".join(lines))
-except Exception as e:
-    print(f"(audit parse error: {e})")
-'
-                audit_summary=$(echo "$_audit_py" | python3 - "$audit_json" "$PROJECT_ROOT/package.json" 2>/dev/null \
+                # MOVED TO A HANDLER. This was a 48-line Python program held in a shell
+                # single-quoted string and piped to `python3 -`, inside a 1590-line function:
+                # unrunnable on its own, untestable, and invisible to every Python tool here.
+                audit_summary=$(python3 "$SCRIPT_DIR/lib/handlers/dependency-audit-summary.py" \
+                    "$audit_json" "$PROJECT_ROOT/package.json" 2>/dev/null \
                     || echo "(audit parse error)")
             else
                 audit_summary="(npm audit produced no output — exit code $_audit_rc)"
@@ -9096,10 +8869,13 @@ except Exception as e:
             audit_summary="(npm audit skipped — npm not found or no package.json)"
         fi
 
-        sast_prompt="## npm Audit Results (hard evidence — dependency CVEs)
-$audit_summary
-
-$sast_prompt"
+        _oe_vals=$(mktemp "${TMPDIR:-/tmp}/qa-oracle-vals-XXXXXX.json")
+        jq -n \
+              --arg audit_summary "$audit_summary" \
+              --arg sast_prompt "$sast_prompt" \
+              '{"__AUDIT_SUMMARY__":$audit_summary,"__SAST_PROMPT__":$sast_prompt}' > "$_oe_vals"
+        sast_prompt="$(render_engine_prompt qa-oracle-evidence "$_oe_vals" npm_audit)"
+        rm -f "$_oe_vals"
 
         # ── TypeScript Oracle: run tsc in shell and inject results ──
         local tsc_summary=""
@@ -9126,47 +8902,7 @@ $sast_prompt"
             # hardcoded file names, no assumption beyond "this is a tsconfig.json".
             if [ $_tsc_rc -ne 0 ] && echo "$_tsc_out" | grep -q "error TS18003"; then
                 local _placeholder_created=""
-                _placeholder_created=$(python3 - "$PROJECT_ROOT" << 'PYEOF'
-import json, os, re, glob, sys
-
-project_root = sys.argv[1] if len(sys.argv) > 1 else "."
-tsconfig_path = os.path.join(project_root, "tsconfig.json")
-try:
-    with open(tsconfig_path) as f:
-        raw = f.read()
-    raw_nocomments = re.sub(r'^\s*//.*$', '', raw, flags=re.MULTILINE)
-    cfg = json.loads(raw_nocomments)
-except Exception:
-    print("")
-    sys.exit(0)
-
-includes = cfg.get("include") or []
-if not includes:
-    print("")
-    sys.exit(0)
-
-# Already has real inputs somewhere? Nothing to heal.
-for pattern in includes:
-    matches = [m for m in glob.glob(os.path.join(project_root, pattern), recursive=True) if os.path.isfile(m)]
-    if matches:
-        print("")
-        sys.exit(0)
-
-# Derive a placeholder path from the first include pattern's static (non-glob) prefix.
-first_pattern = includes[0]
-m = re.match(r'^([^*?{}\[\]]*)', first_pattern)
-base = m.group(1) if m else ""
-base_dir = os.path.dirname(os.path.join(project_root, base)) or project_root
-if not base_dir.startswith(project_root):
-    base_dir = project_root
-
-os.makedirs(base_dir, exist_ok=True)
-placeholder_path = os.path.join(base_dir, "index.ts")
-if not os.path.exists(placeholder_path):
-    with open(placeholder_path, "w") as f:
-        f.write("export {};\n")
-print(os.path.relpath(placeholder_path, project_root))
-PYEOF
+                _placeholder_created=$(python3 "$SCRIPT_DIR/lib/handlers/tsconfig-strictness.py" "$PROJECT_ROOT"
 2>/dev/null || echo "")
 
                 if [ -n "$_placeholder_created" ]; then
@@ -9200,10 +8936,13 @@ $(echo "$_tsc_out" | head -40)"
             tsc_summary="(tsc oracle skipped — node or tsc binary not found at $PROJECT_ROOT)"
         fi
 
-        sast_prompt="## TypeScript Compiler Results (hard evidence — treat as ground truth)
-$tsc_summary
-
-$sast_prompt"
+        _oe_vals=$(mktemp "${TMPDIR:-/tmp}/qa-oracle-vals-XXXXXX.json")
+        jq -n \
+              --arg tsc_summary "$tsc_summary" \
+              --arg sast_prompt "$sast_prompt" \
+              '{"__TSC_SUMMARY__":$tsc_summary,"__SAST_PROMPT__":$sast_prompt}' > "$_oe_vals"
+        sast_prompt="$(render_engine_prompt qa-oracle-evidence "$_oe_vals" typescript)"
+        rm -f "$_oe_vals"
 
         _run_qa_gate_with_retry "$sast_prompt" "qa-gate:sast" "${PHASE:-unknown}" "$sast_log"
     } &
@@ -9232,43 +8971,12 @@ $sast_prompt"
             local _spec_diff_stat
             _spec_diff_stat=$(cd "$PROJECT_ROOT" && "$_spec_git_bin" diff --stat "$_spec_diff_ref" 2>/dev/null || echo "(no diff)")
             local _spec_diff_patch
-            _spec_diff_patch=$(cd "$PROJECT_ROOT" && "$_spec_git_bin" diff -U2 "$_spec_diff_ref" -- '*.ts' '*.json' 2>/dev/null | head -400 || echo "")
+            local _spec_ex; mapfile -t _spec_ex < <(_gate_diff_excludes)
+            _spec_diff_patch=$(cd "$PROJECT_ROOT" && "$_spec_git_bin" diff -U2 "$_spec_diff_ref" -- . ${_spec_ex[0]+"${_spec_ex[@]}"} 2>/dev/null | head -400 || echo "")
             set -e
             # Also inject content of expected files listed in technicalNotes.files
             local _spec_file_excerpts=""
-            _spec_file_excerpts=$(python3 - "$PRD_FILE" "$phase_id" "$PROJECT_ROOT" <<'PYEOF'
-import sys, json, os
-prd_path, phase_id, proj = sys.argv[1], sys.argv[2], sys.argv[3]
-try:
-    with open(prd_path) as f:
-        prd = json.load(f)
-    phase_ids = set(prd.get('implementationOrder', {}).get(phase_id, []))
-    story_map = {s['id']: s for s in prd.get('stories', [])}
-    out, total_lines = [], 0
-    for sid in prd.get('implementationOrder', {}).get(phase_id, []):
-        s = story_map.get(sid, {})
-        tn = s.get('technicalNotes')
-        files = tn.get('files', []) if isinstance(tn, dict) else []
-        for rel in files[:3]:
-            full = os.path.join(proj, rel)
-            if not os.path.isfile(full):
-                continue
-            try:
-                lines = open(full).readlines()
-                excerpt = ''.join(lines[:80])
-                out.append(f'\n### {rel} (first {min(80,len(lines))} lines)\n{excerpt}')
-                total_lines += min(80, len(lines))
-                if total_lines > 600:
-                    out.append('\n(file evidence truncated — limit reached)')
-                    break
-            except Exception:
-                pass
-        if total_lines > 600:
-            break
-    print(''.join(out) if out else '(no expected files found in technicalNotes)')
-except Exception as e:
-    print(f'(file oracle error: {e})')
-PYEOF
+            _spec_file_excerpts=$(python3 "$SCRIPT_DIR/lib/handlers/phase-story-summary.py" "$PRD_FILE" "$phase_id" "$PROJECT_ROOT"
 2>/dev/null || echo "(file oracle unavailable)")
             _spec_impl_evidence="## Implementation Evidence (pre-computed — do NOT call any tools)
 
@@ -9285,37 +8993,21 @@ $_spec_file_excerpts"
 (git oracle skipped — git not found or no .git directory; use untestable for ACs that cannot be verified from the story oracle alone)"
         fi
 
-        local spec_prompt="You are acting as the spec-validator agent.
-$(_brownfield_gate_scope spec-validator)
-
-Phase: $phase_id
-Project root: $PROJECT_ROOT
-E2E routing override context:
-- FORCE_LIGHTPANDA=$force_lightpanda
-- FORCE_PLAYWRIGHT=$force_playwright
-- routingDecision=$routing_decision
-
-IMPORTANT: All evidence has been pre-injected below. Do NOT call any tools, ReadFile, or Bash commands. Classify each AC using ONLY the injected story oracle, test oracle, and implementation evidence.
-
-For each story in the phase:
-1. Use the pre-injected criteria from the Story Oracle section — it states which\n   kind the story is judged against. If it records none, you cannot report\n   compliance against an empty set: say so, do not pass.
-2. Use the pre-injected git diff and file excerpts as implementation evidence
-3. Classify each criterion as: met, partial, unmet, or untestable
-   - untestable: evidence is insufficient to determine status — do NOT call tools to investigate further
-
-Output format (strict JSON, no markdown fences, no preamble — emit directly as your final message, do NOT write to a file):
-{
-  \"agent\": \"spec-validator\",
-  \"phase\": \"$phase_id\",
-  \"stories\": [{
-    \"storyId\": \"...\",
-    \"title\": \"...\",
-    \"criteria\": [{ \"text\": \"...\", \"status\": \"met|partial|unmet|untestable\", \"evidence\": \"...\", \"gaps\": \"...\" }],
-    \"overallCompliance\": 85,
-    \"verdict\": \"pass|warn|fail\"
-  }],
-  \"overallVerdict\": \"pass|warn|fail\"
-}"
+        # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
+        local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-spec-validator-vals-XXXXXX.json")
+        jq -n --arg force_lightpanda "$force_lightpanda" \
+              --arg force_playwright "$force_playwright" \
+              --arg gate_scope "$(_brownfield_gate_scope spec-validator)" \
+              --arg phase_id "$phase_id" \
+              --arg project_root "$PROJECT_ROOT" \
+              --arg routing_decision "$routing_decision" \
+              '{"__FORCE_LIGHTPANDA__":$force_lightpanda,"__FORCE_PLAYWRIGHT__":$force_playwright,"__GATE_SCOPE__":$gate_scope,"__PHASE_ID__":$phase_id,"__PROJECT_ROOT__":$project_root,"__ROUTING_DECISION__":$routing_decision}' > "$_qa_vals" 2>/dev/null
+        local spec_prompt
+        if ! spec_prompt=$(render_engine_prompt qa-spec-validator "$_qa_vals"); then
+            error "  [spec-validator] cannot render its prompt — refusing to gate with no instructions" >&2
+            rm -f "$_qa_vals"; return 1
+        fi
+        rm -f "$_qa_vals"
 
         if [ -n "$spec_profile" ]; then
             spec_prompt="$spec_profile
@@ -9339,33 +9031,7 @@ $spec_prompt"
             local _oracle_rc=$?
             set -e
             if [ -f "$oracle_json" ]; then
-                oracle_summary=$(python3 - "$oracle_json" <<'PYEOF'
-import sys, json
-try:
-    with open(sys.argv[1]) as f:
-        data = json.load(f)
-    num_passed   = data.get("numPassedTests", 0)
-    num_failed   = data.get("numFailedTests", 0)
-    num_total    = data.get("numTotalTests", 0)
-    num_skipped  = data.get("numPendingTests", 0)
-    failed_names = []
-    for suite in data.get("testResults", []):
-        for t in suite.get("testResults", []):
-            if t.get("status") == "failed":
-                failed_names.append(t.get("fullName", t.get("title", "?")))
-    lines = [
-        f"numTotal={num_total}  numPassed={num_passed}  numFailed={num_failed}  numSkipped={num_skipped}"
-    ]
-    if failed_names:
-        lines.append("Failed tests:")
-        for n in failed_names[:20]:
-            lines.append(f"  - {n}")
-        if len(failed_names) > 20:
-            lines.append(f"  ... and {len(failed_names)-20} more")
-    print("\n".join(lines))
-except Exception as e:
-    print(f"(oracle parse error: {e})")
-PYEOF
+                oracle_summary=$(python3 "$SCRIPT_DIR/lib/handlers/vitest-oracle-summary.py" "$oracle_json"
 2>/dev/null || echo "(oracle unavailable)")
             else
                 oracle_summary="(vitest ran but produced no JSON output — exit code $_oracle_rc)"
@@ -9374,10 +9040,13 @@ PYEOF
             oracle_summary="(vitest oracle skipped — node or vitest binary not found)"
         fi
 
-        spec_prompt="## Actual Test Results (hard evidence — use this as ground truth)
-$oracle_summary
-
-$spec_prompt"
+        _oe_vals=$(mktemp "${TMPDIR:-/tmp}/qa-oracle-vals-XXXXXX.json")
+        jq -n \
+              --arg oracle_summary "$oracle_summary" \
+              --arg spec_prompt "$spec_prompt" \
+              '{"__ORACLE_SUMMARY__":$oracle_summary,"__SPEC_PROMPT__":$spec_prompt}' > "$_oe_vals"
+        spec_prompt="$(render_engine_prompt qa-oracle-evidence "$_oe_vals" test_results)"
+        rm -f "$_oe_vals"
 
         # ── Story Oracle: inject the criteria the story is JUDGED against ──
         # Not acceptanceCriteria specifically: brownfield stories carry
@@ -9417,44 +9086,7 @@ $spec_prompt"
         # Trust blockerCount from the oracle-injected evidence, not the LLM's self-reported verdict
         # field — the LLM defaults to "fail" when it can't run tools, even with 0 blockers.
         local _sast_blockers
-        _sast_blockers=$(python3 -c "
-import sys, json, re
-try:
-    text = open('$sast_log').read()
-    parsed = None
-    # Try full JSON parse
-    m = re.search(r'\{.*\}', text, re.DOTALL)
-    if m:
-        try:
-            parsed = json.loads(m.group(0))
-        except Exception:
-            pass
-    if parsed is not None:
-        # Prefer summary.blockerCount
-        summary_count = parsed.get('summary', {}).get('blockerCount', None)
-        if summary_count is not None:
-            print(summary_count)
-        else:
-            findings = parsed.get('findings', [])
-            print(sum(1 for f in findings if str(f.get('severity','')).lower() == 'blocker'))
-    else:
-        # Malformed JSON — extract summary block directly (it appears before findings)
-        sm = re.search(r'\"summary\"\s*:\s*\{([^}]*)\}', text, re.DOTALL)
-        if sm:
-            try:
-                summary = json.loads('{' + sm.group(1) + '}')
-                bc = summary.get('blockerCount', None)
-                if bc is not None:
-                    print(bc)
-                    sys.exit(0)
-            except Exception:
-                pass
-        # Last resort: count severity:blocker occurrences in raw text
-        hits = len(re.findall(r'\"severity\"\s*:\s*\"blocker\"', text, re.IGNORECASE))
-        print(hits)
-except Exception:
-    print(-1)
-" 2>/dev/null || echo "-1")
+        _sast_blockers=$(python3 "$SCRIPT_DIR/lib/handlers/sast-blockers.py" "$sast_log" 2>/dev/null || echo "-1")
         if [ "$_sast_blockers" = "-1" ]; then
             # Fallback: no parseable JSON — check raw verdict string
             if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$sast_log" 2>/dev/null; then
@@ -9502,59 +9134,7 @@ except Exception:
         # spec-validator "fail" verdict (e.g. SKY-004 missing /search, /cheapest,
         # dashboard) was silently downgraded to a non-blocking warning on every
         # run, never once actually parsed. Fixed: double-quote so bash expands it.
-        _spec_failing=$(python3 - "$spec_log" <<'SPEC_EXTRACTOR_PY'
-import sys, re
-
-# The spec-validator agent often emits JSON with unescaped newlines inside string
-# values, making the output unparseable by json.loads regardless of extraction strategy.
-# Use targeted line-level pattern matching instead — robust against malformed JSON.
-try:
-    text = open(sys.argv[1]).read()
-
-    # Check the agent ran at all (must contain storyId references)
-    if '"storyId"' not in text and '"stories"' not in text:
-        print('no-json')
-        sys.exit(0)
-
-    if not re.search(r'"verdict"\s*:', text):
-        print('no-data')
-        sys.exit(0)
-
-    # Grounding check (same principle already applied to fuzz-weaver/perf-sentinel):
-    # a story's "fail" verdict is only trustworthy if the agent actually verified
-    # SOMETHING about it. When every one of a story's criteria is self-reported
-    # as "untestable" (the agent had no real evidence — e.g. it never actually
-    # used its Read tool despite having access), that "fail" is a hallucinated
-    # conclusion with nothing behind it, not a real finding. Slice the text by
-    # story boundary (storyId occurrence) so each story's own verdict/criteria
-    # are only matched against its OWN slice, not the whole document.
-    story_starts = [m.start() for m in re.finditer(r'"storyId"\s*:\s*"[^"]*"', text)]
-    grounded_failing = 0
-    for i, start in enumerate(story_starts):
-        end = story_starts[i + 1] if i + 1 < len(story_starts) else len(text)
-        story_slice = text[start:end]
-        if not re.search(r'"verdict"\s*:\s*"fail"', story_slice):
-            continue
-        statuses = re.findall(r'"status"\s*:\s*"(met|partial|unmet|untestable)"', story_slice)
-        has_grounded_criterion = any(s != 'untestable' for s in statuses)
-        if has_grounded_criterion:
-            grounded_failing += 1
-        # else: every criterion is untestable — ungrounded fail, don't count it
-
-    # The overallVerdict line is a top-level field — distinct from per-story verdict
-    overall_m = re.search(r'"overallVerdict"\s*:\s*"(\w+)"', text)
-    overall = overall_m.group(1) if overall_m else None
-
-    if grounded_failing > 0:
-        print(grounded_failing)
-    elif overall == 'warn':
-        # Non-blocking partial — treat as 0 failures (warn path handled separately)
-        print(0)
-    else:
-        print(0)
-except Exception:
-    print('error')
-SPEC_EXTRACTOR_PY
+        _spec_failing=$(python3 "$SCRIPT_DIR/lib/handlers/spec-extractor.py" "$spec_log"
 2>/dev/null || echo "error")
         if [ "$_spec_failing" = "no-data" ] || [ "$_spec_failing" = "no-json" ] || [ "$_spec_failing" = "error" ]; then
             step_emit "22b" "warn" "Step 22b: Spec validator" "no story data"
@@ -9626,46 +9206,33 @@ SPEC_EXTRACTOR_PY
                 local _diff_stat
                 _diff_stat=$(cd "$PROJECT_ROOT" && "$_git_bin" diff --stat "$_diff_ref" 2>/dev/null || echo "(no diff available)")
                 local _diff_patch
-                _diff_patch=$(cd "$PROJECT_ROOT" && "$_git_bin" diff -U3 "$_diff_ref" -- '*.ts' 2>/dev/null | head -300 || echo "")
+                local _rr_ex; mapfile -t _rr_ex < <(_gate_diff_excludes)
+                _diff_patch=$(cd "$PROJECT_ROOT" && "$_git_bin" diff -U3 "$_diff_ref" -- . ${_rr_ex[0]+"${_rr_ex[@]}"} 2>/dev/null | head -300 || echo "")
                 set -e
-                review_diff_summary="Files changed:
-$_diff_stat
-
-TypeScript diff (first 300 lines):
-$_diff_patch"
+                _cp_vals=$(mktemp "${TMPDIR:-/tmp}/qa-evidence-labels-vals-XXXXXX.json")
+                jq -n \
+                      --arg diff_patch "$_diff_patch" \
+                      --arg diff_stat "$_diff_stat" \
+                      '{"__DIFF_PATCH__":$diff_patch,"__DIFF_STAT__":$diff_stat}' > "$_cp_vals"
+                review_diff_summary="$(render_engine_prompt qa-evidence-labels "$_cp_vals" review_diff)"
+                rm -f "$_cp_vals"
             else
                 review_diff_summary="(git diff oracle skipped — git not found or no .git directory)"
             fi
 
-            local review_prompt="You are acting as the review-ranger agent.
-
-Phase: $phase_id
-Project root: $PROJECT_ROOT
-
-IMPORTANT: All evidence has been pre-computed and is injected below. Do NOT attempt to call any shell commands, bash, or tools. Analyze ONLY the injected git diff data.
-$(_brownfield_gate_scope review-ranger)
-
-## Git Diff Evidence (hard evidence — treat as ground truth)
-$review_diff_summary
-
-Analyze the pre-computed diff above and produce a structured JSON report covering:
-1. Complexity hotspots (cyclomatic complexity > 10, nesting > 4)
-2. Code duplication (near-identical blocks > 5 lines)
-3. API contract drift (exported signature changes without test updates)
-4. Error handling completeness (swallowed errors in critical paths)
-5. Test coverage gaps (new public functions without tests)
-6. Naming consistency (camelCase vars, PascalCase types, UPPER_SNAKE constants)
-
-If the injected evidence is insufficient to determine a verdict with confidence, output \"verdict\": \"pass\" with 0 findings rather than fabricating a failure.
-
-Output format (strict JSON, no markdown fences, no preamble):
-{
-  \"agent\": \"review-ranger\",
-  \"phase\": \"$phase_id\",
-  \"summary\": { \"filesReviewed\": N, \"findingsCount\": N, \"blockerCount\": N, \"majorCount\": N, \"minorCount\": N },
-  \"findings\": [{ \"severity\": \"blocker|major|minor\", \"category\": \"...\", \"file\": \"...\", \"line\": N, \"codeSnippet\": \"<the EXACT line(s) from the file that show the problem, copied verbatim — required for any blocker-severity finding, or it will be treated as unverified>\", \"description\": \"...\", \"suggestedFix\": \"...\" }],
-  \"verdict\": \"pass|fail\"
-}"
+            # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
+            local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-review-ranger-vals-XXXXXX.json")
+            jq -n --arg gate_scope "$(_brownfield_gate_scope review-ranger)" \
+                  --arg phase_id "$phase_id" \
+                  --arg project_root "$PROJECT_ROOT" \
+                  --arg review_diff_summary "$review_diff_summary" \
+                  '{"__GATE_SCOPE__":$gate_scope,"__PHASE_ID__":$phase_id,"__PROJECT_ROOT__":$project_root,"__REVIEW_DIFF_SUMMARY__":$review_diff_summary}' > "$_qa_vals" 2>/dev/null
+            local review_prompt
+            if ! review_prompt=$(render_engine_prompt qa-review-ranger "$_qa_vals"); then
+                error "  [review-ranger] cannot render its prompt — refusing to gate with no instructions" >&2
+                rm -f "$_qa_vals"; return 1
+            fi
+            rm -f "$_qa_vals"
 
             if [ -n "$review_profile" ]; then
                 review_prompt="$review_profile
@@ -9702,11 +9269,15 @@ $review_prompt"
                 # shellcheck disable=SC1090
                 [ -f "$SCRIPT_DIR/lib/story-outputs.sh" ] && . "$SCRIPT_DIR/lib/story-outputs.sh"
                 local _changed_src
-                _changed_src=$(story_outputs_sources "$PROJECT_ROOT" "$LOG_DIR" 2>/dev/null | \
-                               grep -E '\.ts$' | head -10 || echo "")
+                # story_outputs_sources ALREADY excludes test files, using the broad convention
+                # regex that knows .spec., _test, test_* and __tests__/. Re-filtering to `.ts`
+                # threw away every source file on any other stack — and the fallback re-derived a
+                # narrower test rule (`.test.ts`) that the same library had already generalised.
+                local _mh_ex; mapfile -t _mh_ex < <(_gate_diff_excludes)
+                _changed_src=$(story_outputs_sources "$PROJECT_ROOT" "$LOG_DIR" 2>/dev/null | head -10 || echo "")
                 [ -z "$_changed_src" ] && \
-                    _changed_src=$(cd "$PROJECT_ROOT" && "$_git_bin2" diff --name-only "$_mut_diff_ref" -- '*.ts' 2>/dev/null | \
-                                   grep -v '\.test\.ts$' | head -10 || echo "")
+                    _changed_src=$(cd "$PROJECT_ROOT" && "$_git_bin2" diff --name-only "$_mut_diff_ref" -- . ${_mh_ex[0]+"${_mh_ex[@]}"} 2>/dev/null | \
+                                   grep -vE "$_STORY_OUTPUTS_TEST_RE" | head -10 || echo "")
                 set -e
                 local _src_content=""
                 if [ -n "$_changed_src" ]; then
@@ -9722,8 +9293,12 @@ $review_prompt"
                         # was cut — the agent could confidently judge mutations
                         # against a partial file and never know it.
                         if [ "${_mut_src_total_lines:-0}" -gt 100 ]; then
-                            _mut_src_marker="
-[TRUNCATED — ${_mut_src_total_lines} total lines, showing first 100. Do not assume the omitted tail is unmutated.]"
+                            _cp_vals=$(mktemp "${TMPDIR:-/tmp}/qa-evidence-labels-vals-XXXXXX.json")
+                            jq -n \
+                                  --arg mut_src_total_lines "${_mut_src_total_lines}" \
+                                  '{"__MUT_SRC_TOTAL_LINES__":$mut_src_total_lines}' > "$_cp_vals"
+                            _mut_src_marker="$(render_engine_prompt qa-evidence-labels "$_cp_vals" truncation_notice_source)"
+                            rm -f "$_cp_vals"
                         fi
                         _src_content="$_src_content
 --- $_f ---
@@ -9749,50 +9324,41 @@ $(head -100 "$PROJECT_ROOT/$_f" 2>/dev/null || echo '(unreadable)')${_mut_src_ma
                     local _mut_test_total_lines _mut_test_marker=""
                     _mut_test_total_lines=$(wc -l < "$_tf" 2>/dev/null || echo 0)
                     if [ "${_mut_test_total_lines:-0}" -gt 60 ]; then
-                        _mut_test_marker="
-[TRUNCATED — ${_mut_test_total_lines} total lines, showing first 60. Do not assume the omitted tail has no assertions.]"
+                        _cp_vals=$(mktemp "${TMPDIR:-/tmp}/qa-evidence-labels-vals-XXXXXX.json")
+                        jq -n \
+                              --arg mut_test_total_lines "${_mut_test_total_lines}" \
+                              '{"__MUT_TEST_TOTAL_LINES__":$mut_test_total_lines}' > "$_cp_vals"
+                        _mut_test_marker="$(render_engine_prompt qa-evidence-labels "$_cp_vals" truncation_notice_test)"
+                        rm -f "$_cp_vals"
                     fi
                     _test_content="$_test_content
 --- $_tf ---
 $(head -60 "$_tf" 2>/dev/null || echo '(unreadable)')${_mut_test_marker}"
                 done <<< "$_test_files"
-                mutant_oracle_summary="Changed source files:
-${_src_content:-  (none — no TypeScript source changes in this phase)}
-
-Existing test files (first 60 lines each):
-${_test_content:-  (no test files found)}"
+                _cp_vals=$(mktemp "${TMPDIR:-/tmp}/qa-evidence-labels-vals-XXXXXX.json")
+                jq -n \
+                      --arg src_content "${_src_content:-  (none — no TypeScript source changes in this phase)}" \
+                      --arg test_content "${_test_content:-  (no test files found)}" \
+                      '{"__SRC_CONTENT__":$src_content,"__TEST_CONTENT__":$test_content}' > "$_cp_vals"
+                mutant_oracle_summary="$(render_engine_prompt qa-evidence-labels "$_cp_vals" mutant_oracle)"
+                rm -f "$_cp_vals"
             else
                 mutant_oracle_summary="(mutation oracle skipped — git not found or no .git directory)"
             fi
 
-            local mutant_prompt="You are acting as the mutant-hunter agent.
-
-Phase: $phase_id
-Project root: $PROJECT_ROOT
-
-IMPORTANT: All evidence has been pre-computed and is injected below. Do NOT attempt to call any shell commands, bash, or tools. Analyze ONLY the injected source and test file data.
-$(_brownfield_gate_scope mutant-hunter)
-
-## Source and Test Evidence (hard evidence — treat as ground truth)
-$mutant_oracle_summary
-
-Analyze the pre-computed source and test code above. For each changed source file:
-1. Propose mutations: operator swaps, comparison inversions, boolean negations,
-   early returns, boundary shifts, removed null checks, swapped arguments
-2. For each mutation, determine if the existing tests shown above would catch it
-3. Focus on critical paths: provider failover, tool safety, auth, billing, agent state
-
-If no source changes are detected or evidence is insufficient, output \"verdict\": \"warn\" with mutationScore of 100 and 0 mutations (non-blocking — nothing to test).
-
-Output format (strict JSON, no markdown fences, no preamble):
-{
-  \"agent\": \"mutant-hunter\",
-  \"phase\": \"$phase_id\",
-  \"summary\": { \"mutationsProposed\": N, \"killed\": N, \"survived\": N, \"noCoverage\": N, \"mutationScore\": 75 },
-  \"mutations\": [{ \"file\": \"...\", \"line\": N, \"originalCode\": \"<the EXACT line(s) from the file being mutated, copied verbatim — required for any status:survived mutation, or it will be treated as unverified>\", \"mutatedCode\": \"...\", \"status\": \"killed|survived|no-coverage\", \"relatedTest\": \"...\", \"recommendation\": \"...\" }],
-  \"verdict\": \"pass|warn|fail\"
-}
-The summary.survived count MUST equal the number of status:survived entries in the mutations array — they describe the same thing and must agree."
+            # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
+            local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-mutant-hunter-vals-XXXXXX.json")
+            jq -n --arg gate_scope "$(_brownfield_gate_scope mutant-hunter)" \
+                  --arg mutant_oracle_summary "$mutant_oracle_summary" \
+                  --arg phase_id "$phase_id" \
+                  --arg project_root "$PROJECT_ROOT" \
+                  '{"__GATE_SCOPE__":$gate_scope,"__MUTANT_ORACLE_SUMMARY__":$mutant_oracle_summary,"__PHASE_ID__":$phase_id,"__PROJECT_ROOT__":$project_root}' > "$_qa_vals" 2>/dev/null
+            local mutant_prompt
+            if ! mutant_prompt=$(render_engine_prompt qa-mutant-hunter "$_qa_vals"); then
+                error "  [mutant-hunter] cannot render its prompt — refusing to gate with no instructions" >&2
+                rm -f "$_qa_vals"; return 1
+            fi
+            rm -f "$_qa_vals"
 
             if [ -n "$mutant_profile" ]; then
                 mutant_prompt="$mutant_profile
@@ -9827,41 +9393,7 @@ $mutant_prompt"
                 # pipeline. Same "quote it, then verify the quote" pattern now
                 # applied here: require at least one blocker finding whose
                 # codeSnippet is a literal substring of the real file on disk.
-                _review_grounded=$(python3 - "$review_log" "$PROJECT_ROOT" << 'REVIEW_PYEOF'
-import json, sys, re, os
-
-log_file, project_root = sys.argv[1], sys.argv[2]
-content = open(log_file).read()
-json_match = re.search(r'\{.*"agent".*"review-ranger".*\}', content, re.DOTALL)
-if not json_match:
-    print("0"); sys.exit(0)
-
-try:
-    data = json.loads(json_match.group(0))
-except Exception:
-    print("0"); sys.exit(0)
-
-findings = data.get("findings", [])
-grounded = 0
-for f in findings:
-    if str(f.get("severity", "")).lower() != "blocker":
-        continue
-    file_rel = f.get("file", "")
-    snippet = (f.get("codeSnippet") or "").strip()
-    if not file_rel or not snippet:
-        continue
-    file_path = file_rel if os.path.isabs(file_rel) else os.path.join(project_root, file_rel)
-    try:
-        with open(file_path) as fh:
-            real_content = fh.read()
-    except Exception:
-        continue
-    if snippet in real_content:
-        grounded = 1
-        break
-
-print(str(grounded))
-REVIEW_PYEOF
+                _review_grounded=$(python3 "$SCRIPT_DIR/lib/handlers/review.py" "$review_log" "$PROJECT_ROOT"
 2>/dev/null || echo "0")
                 if [ "${_review_grounded:-0}" -gt 0 ]; then
                     step_emit "22c" "fail" "Step 22c: Review ranger"
@@ -9901,46 +9433,7 @@ REVIEW_PYEOF
                 # originalCode is a literal substring of the real file on disk
                 # (catches a fabricated file/line/code claim, same "quote it,
                 # verify it" pattern as review-ranger/perf-sentinel).
-                _mutant_grounded=$(python3 - "$mutant_log" "$PROJECT_ROOT" << 'MUTANT_PYEOF'
-import json, sys, re, os
-
-log_file, project_root = sys.argv[1], sys.argv[2]
-content = open(log_file).read()
-json_match = re.search(r'\{.*"agent".*"mutant-hunter".*\}', content, re.DOTALL)
-if not json_match:
-    print("0"); sys.exit(0)
-
-try:
-    data = json.loads(json_match.group(0))
-except Exception:
-    print("0"); sys.exit(0)
-
-summary = data.get("summary") or {}
-mutations = data.get("mutations", [])
-survived = [m for m in mutations if str(m.get("status", "")).lower() == "survived"]
-
-# Self-consistency: the aggregate score must agree with the model's own detail.
-if summary.get("survived", -1) != len(survived):
-    print("0"); sys.exit(0)
-
-grounded = 0
-for m in survived:
-    file_rel = m.get("file", "")
-    snippet = (m.get("originalCode") or "").strip()
-    if not file_rel or not snippet:
-        continue
-    file_path = file_rel if os.path.isabs(file_rel) else os.path.join(project_root, file_rel)
-    try:
-        with open(file_path) as fh:
-            real_content = fh.read()
-    except Exception:
-        continue
-    if snippet in real_content:
-        grounded = 1
-        break
-
-print(str(grounded))
-MUTANT_PYEOF
+                _mutant_grounded=$(python3 "$SCRIPT_DIR/lib/handlers/mutant.py" "$mutant_log" "$PROJECT_ROOT"
 2>/dev/null || echo "0")
                 if [ "${_mutant_grounded:-0}" -gt 0 ]; then
                     step_emit "22d" "fail" "Step 22d: Mutant hunter"
@@ -9986,42 +9479,21 @@ MUTANT_PYEOF
         step_emit "22e" "running" "Step 22e: Fuzz-weaver"
         log "  Step 4.4a: Running fuzz-weaver..."
         {
-            local fuzz_prompt="You are acting as the fuzz-weaver agent.
-$(_brownfield_gate_scope fuzz-weaver)
-
-Phase: $phase_id
-Project root: $PROJECT_ROOT
-E2E routing override context:
-- FORCE_LIGHTPANDA=$force_lightpanda
-- FORCE_PLAYWRIGHT=$force_playwright
-- routingDecision=$routing_decision
-
-Perform property-based / fuzz testing analysis on changed files in this phase.
-Use git diff to identify changed source files, then for each public function:
-1. Derive input domains from TypeScript parameter types
-2. Propose fuzz test cases with fast-check style property definitions
-3. Assess whether existing tests cover each edge case
-
-Focus on: config parsing, provider request construction, billing calculations,
-tool input validation (path traversal, shell metacharacters), auth token parsing.
-
-For any case with status=\"vulnerability\", you MAY include an optional
-\"executableTest\" field: a vitest test skeleton (as a single string) showing
-the import path and the assertion that SHOULD pass if the code is correct —
-e.g. \`import { parseAdults } from '../src/server'; expect(parseAdults('0')).toBeNull()\`.
-IMPORTANT: Do NOT run or execute any tests. Do NOT use Bash to run vitest or
-any test runner. Write the test structure only — it will be reviewed by a
-human. A vulnerability claim is valid without an executableTest; do not spend
-time executing code to verify findings.
-
-Output format (strict JSON, no markdown fences, no preamble — emit directly as your final message, do NOT write to a file):
-{
-  \"agent\": \"fuzz-weaver\",
-  \"phase\": \"$phase_id\",
-  \"summary\": { \"functionsAnalysed\": N, \"fuzzCasesProposed\": N, \"covered\": N, \"gaps\": N, \"vulnerabilities\": N },
-  \"cases\": [{ \"function\": \"...\", \"file\": \"...\", \"line\": N, \"property\": \"...\", \"generator\": \"...\", \"invariant\": \"...\", \"status\": \"covered|gap|vulnerability\", \"recommendation\": \"...\", \"executableTest\": \"...(only when status=vulnerability)...\" }],
-  \"verdict\": \"pass|warn|fail\"
-}"
+            # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
+            local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-fuzz-weaver-vals-XXXXXX.json")
+            jq -n --arg force_lightpanda "$force_lightpanda" \
+                  --arg force_playwright "$force_playwright" \
+                  --arg gate_scope "$(_brownfield_gate_scope fuzz-weaver)" \
+                  --arg phase_id "$phase_id" \
+                  --arg project_root "$PROJECT_ROOT" \
+                  --arg routing_decision "$routing_decision" \
+                  '{"__FORCE_LIGHTPANDA__":$force_lightpanda,"__FORCE_PLAYWRIGHT__":$force_playwright,"__GATE_SCOPE__":$gate_scope,"__PHASE_ID__":$phase_id,"__PROJECT_ROOT__":$project_root,"__ROUTING_DECISION__":$routing_decision}' > "$_qa_vals" 2>/dev/null
+            local fuzz_prompt
+            if ! fuzz_prompt=$(render_engine_prompt qa-fuzz-weaver "$_qa_vals"); then
+                error "  [fuzz-weaver] cannot render its prompt — refusing to gate with no instructions" >&2
+                rm -f "$_qa_vals"; return 1
+            fi
+            rm -f "$_qa_vals"
 
             if [ -n "$fuzz_profile" ]; then
                 fuzz_prompt="$fuzz_profile
@@ -10038,32 +9510,21 @@ $fuzz_prompt"
         step_emit "22f" "running" "Step 22f: Perf sentinel"
         log "  Step 4.4b: Running perf-sentinel..."
         {
-            local perf_prompt="You are acting as the perf-sentinel agent.
-$(_brownfield_gate_scope perf-sentinel)
-
-Phase: $phase_id
-Project root: $PROJECT_ROOT
-E2E routing override context:
-- FORCE_LIGHTPANDA=$force_lightpanda
-- FORCE_PLAYWRIGHT=$force_playwright
-- routingDecision=$routing_decision
-
-Perform performance analysis on files changed in this phase.
-Use git diff to identify changed source files, then analyse:
-1. Algorithmic complexity (flag O(n²)+ on unbounded inputs)
-2. Memory allocation hotspots (object creation in loops, unbounded caches)
-3. Async performance (sequential awaits → Promise.all, missing timeouts, stream backpressure)
-4. Startup time impact (heavy imports, sync I/O at module load)
-5. Provider-specific (unnecessary Message[] copies, redundant token counting)
-
-Output format (strict JSON, no markdown fences, no preamble — emit directly as your final message, do NOT write to a file):
-{
-  \"agent\": \"perf-sentinel\",
-  \"phase\": \"$phase_id\",
-  \"summary\": { \"filesAnalysed\": N, \"findingsCount\": N, \"blockerCount\": N, \"estimatedStartupImpactMs\": N },
-  \"findings\": [{ \"severity\": \"blocker|major|minor\", \"category\": \"complexity|memory|async|startup|provider\", \"file\": \"...\", \"line\": N, \"codeSnippet\": \"<the EXACT line(s) from the file that show the problem, copied verbatim — required for any blocker-severity finding, or it will be treated as unverified>\", \"description\": \"...\", \"estimatedImpact\": \"high|medium|low\", \"suggestedFix\": \"...\" }],
-  \"verdict\": \"pass|warn|fail\"
-}"
+            # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
+            local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-perf-sentinel-vals-XXXXXX.json")
+            jq -n --arg force_lightpanda "$force_lightpanda" \
+                  --arg force_playwright "$force_playwright" \
+                  --arg gate_scope "$(_brownfield_gate_scope perf-sentinel)" \
+                  --arg phase_id "$phase_id" \
+                  --arg project_root "$PROJECT_ROOT" \
+                  --arg routing_decision "$routing_decision" \
+                  '{"__FORCE_LIGHTPANDA__":$force_lightpanda,"__FORCE_PLAYWRIGHT__":$force_playwright,"__GATE_SCOPE__":$gate_scope,"__PHASE_ID__":$phase_id,"__PROJECT_ROOT__":$project_root,"__ROUTING_DECISION__":$routing_decision}' > "$_qa_vals" 2>/dev/null
+            local perf_prompt
+            if ! perf_prompt=$(render_engine_prompt qa-perf-sentinel "$_qa_vals"); then
+                error "  [perf-sentinel] cannot render its prompt — refusing to gate with no instructions" >&2
+                rm -f "$_qa_vals"; return 1
+            fi
+            rm -f "$_qa_vals"
 
             if [ -n "$perf_profile" ]; then
                 perf_prompt="$perf_profile
@@ -10110,79 +9571,7 @@ $perf_prompt"
                 #     were actually demonstrated against the real source, not merely asserted.
                 local _node_bin
                 _node_bin=$(detect_node 2>/dev/null || true)
-                _fuzz_grounded=$(python3 - "$fuzz_log" "$PROJECT_ROOT" "${_node_bin:-}" << 'PYEOF'
-import json, sys, os, re, subprocess, shutil
-
-log_file, project_root, node_bin = sys.argv[1], sys.argv[2], sys.argv[3]
-
-# Extract JSON from the log (agent may emit preamble text)
-content = open(log_file).read()
-json_match = re.search(r'\{.*"agent".*"fuzz-weaver".*\}', content, re.DOTALL)
-if not json_match:
-    print("0")
-    sys.exit(0)
-
-try:
-    data = json.loads(json_match.group(0))
-except Exception:
-    print("0")
-    sys.exit(0)
-
-verify_dir = os.path.join(project_root, ".fuzz-verify")
-os.makedirs(verify_dir, exist_ok=True)
-vitest_bin = os.path.join(project_root, "node_modules", ".bin", "vitest")
-can_run = bool(node_bin) and os.path.exists(vitest_bin)
-
-confirmed = 0
-for i, case in enumerate(data.get("cases", [])):
-    if case.get("status") != "vulnerability":
-        continue
-    f = case.get("file", "")
-    candidates = [
-        f,
-        os.path.join(project_root, f),
-        os.path.join(project_root, "src", os.path.basename(f)),
-    ]
-    if not any(os.path.exists(p) for p in candidates):
-        continue  # unverifiable file reference — likely hallucinated, skip
-
-    test_src = case.get("executableTest", "")
-    if not test_src or not can_run:
-        continue  # no executable evidence supplied — do not block on an unverified claim
-
-    # One file at a time in verify_dir: vitest's path argument is a filter,
-    # not a hard restriction, so a leftover file from a PREVIOUS case would
-    # get swept into THIS case's run and could contaminate the result.
-    test_path = os.path.join(verify_dir, f"case-{i}.test.ts")
-    try:
-        with open(test_path, "w") as tf:
-            tf.write(test_src)
-        result = subprocess.run(
-            [node_bin, vitest_bin, "run", test_path, "--reporter=json"],
-            cwd=project_root, capture_output=True, text=True, timeout=60,
-        )
-        # A nonzero exit code alone doesn't distinguish "assertion genuinely
-        # failed" from "syntax/transform error, zero tests ever ran" — both
-        # exit nonzero. Only a REAL assertion failure (numFailedTests > 0,
-        # meaning at least one test actually executed and failed) counts as
-        # confirmation; a test that never ran proves nothing about the code.
-        try:
-            report = json.loads(result.stdout)
-            if report.get("numFailedTests", 0) > 0:
-                confirmed += 1
-        except Exception:
-            pass  # no parseable report — unverified, don't block
-    except Exception:
-        continue  # test didn't even run (timeout, etc.) — unverified, don't block
-    finally:
-        try:
-            os.remove(test_path)
-        except OSError:
-            pass
-
-shutil.rmtree(verify_dir, ignore_errors=True)
-print(str(confirmed))
-PYEOF
+                _fuzz_grounded=$(python3 "$SCRIPT_DIR/lib/handlers/fuzz-verify.py" "$fuzz_log" "$PROJECT_ROOT" "${_node_bin:-}"
 2>/dev/null || echo "0")
                 if [ "${_fuzz_grounded:-0}" -gt 0 ]; then
                     step_emit "22e" "fail" "Step 22e: Fuzz-weaver"
@@ -10230,41 +9619,7 @@ PYEOF
                 # content — same "quote it, then we verify the quote"
                 # pattern already used for the code-graph-detective's
                 # brokenLine field.
-                _perf_grounded=$(python3 - "$perf_log" "$PROJECT_ROOT" << 'PERF_PYEOF'
-import json, sys, re, os
-
-log_file, project_root = sys.argv[1], sys.argv[2]
-content = open(log_file).read()
-json_match = re.search(r'\{.*"agent".*"perf-sentinel".*\}', content, re.DOTALL)
-if not json_match:
-    print("0"); sys.exit(0)
-
-try:
-    data = json.loads(json_match.group(0))
-except Exception:
-    print("0"); sys.exit(0)
-
-findings = data.get("findings", [])
-grounded = 0
-for f in findings:
-    if str(f.get("severity", "")).lower() != "blocker":
-        continue
-    file_rel = f.get("file", "")
-    snippet = (f.get("codeSnippet") or "").strip()
-    if not file_rel or not snippet:
-        continue
-    file_path = file_rel if os.path.isabs(file_rel) else os.path.join(project_root, file_rel)
-    try:
-        with open(file_path) as fh:
-            real_content = fh.read()
-    except Exception:
-        continue
-    if snippet in real_content:
-        grounded = 1
-        break
-
-print(str(grounded))
-PERF_PYEOF
+                _perf_grounded=$(python3 "$SCRIPT_DIR/lib/handlers/perf.py" "$perf_log" "$PROJECT_ROOT"
 2>/dev/null || echo "0")
                 if [ "${_perf_grounded:-0}" -gt 0 ]; then
                     step_emit "22f" "fail" "Step 22f: Perf sentinel"
@@ -10358,26 +9713,33 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                 # ── Agent 1: gate-finding-analyst ──────────────────────────────────
                 # Reads gate log + PRD, emits JSON { gate, story_id, file, line, rule, message, suggested_fix }
                 local _finding_prompt
-                _finding_prompt=$(cat << ENDPROMPT1
-$(cat "$_profiles_file" | python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('gate-finding-analyst',''))")
-
-Gate: ${_glabel}
-Gate log file: ${_glog}
-PRD file: ${PRD_FILE}
-Current phase: ${phase_id}
-
-Run your analysis now. Paste the verbatim log line proving the finding, then emit the JSON output.
-ENDPROMPT1
-)
+                # RENDERED FROM THE TEMPLATE LAYER. The role instructions come from the project's own
+                # profiles, supplied as a VALUE — they used to be a command substitution piping
+                # profiles.json through python inside the heredoc, which fails to an empty string in
+                # silence, so the agent could be given no role at all and nothing would say so.
+                local _fp_vals; _fp_vals=$(mktemp "${TMPDIR:-/tmp}/gate-finding-analyst-vals-XXXXXX.json")
+                local _fp_role; _fp_role=$(jq -r --arg r "gate-finding-analyst" '.[$r] // ""' "$_profiles_file" 2>/dev/null || echo "")
+                jq -n --arg profile "$_fp_role" \
+                      --arg gate_label "$_glabel" \
+                      --arg gate_log "$_glog" \
+                      --arg prd_file "$PRD_FILE" \
+                      --arg phase_id "$phase_id" \
+                      '{"__PROFILE__":$profile,"__GATE_LABEL__":$gate_label,"__GATE_LOG__":$gate_log,"__PRD_FILE__":$prd_file,"__PHASE_ID__":$phase_id}' > "$_fp_vals"
+                _finding_prompt="$(render_engine_prompt gate-finding-analyst "$_fp_vals")"
+                rm -f "$_fp_vals"
                 local _finding_json="" _gfa_attempt=0
                 while [ "$_gfa_attempt" -lt 2 ] && [ -z "$_finding_json" ]; do
                     local _gfa_prompt="$_finding_prompt"
-                    local _gfa_model="${ORCH_GATE_MODEL:-MiniMax-M3}"
+                    local _gfa_model="$(seam_model_or_fail "gate-finding-analyst")"
                     if [ "$_gfa_attempt" -ge 1 ]; then
                         [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _gfa_model="${ESCALATION_MODEL_HIGH}"
-                        _gfa_prompt="RETRY (attempt 2): Your previous response was empty. Use ReadFile to read the gate log at ${_glog}, extract the finding, and emit ONLY the JSON output.
-
-$_finding_prompt"
+                        _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
+                        jq -n \
+                              --arg finding_prompt "$_finding_prompt" \
+                              --arg glog "${_glog}" \
+                              '{"__FINDING_PROMPT__":$finding_prompt,"__GLOG__":$glog}' > "$_rp_vals"
+                        _gfa_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" gate_finding_analyst)"
+                        rm -f "$_rp_vals"
                     fi
                     local _gfa_raw
                     _gfa_raw=$(echo "$_gfa_prompt" | \
@@ -10405,18 +9767,7 @@ $_finding_prompt"
 
                 # Check analyst returned a grounded finding (has story_id and rule)
                 local _story_id
-                _story_id=$(echo "$_finding_json" | python3 -c "
-import sys, re, json
-txt = sys.stdin.read()
-for m in re.finditer(r'\{[^{}]*\"story_id\"[^{}]*\}', txt, re.DOTALL):
-    try:
-        obj = json.loads(m.group(0))
-        sid = obj.get('story_id')
-        if sid and sid != 'null':
-            print(sid)
-            break
-    except: pass
-" 2>/dev/null || true)
+                _story_id=$(echo "$_finding_json" | python3 "$SCRIPT_DIR/lib/handlers/story-id.py" 2>/dev/null || true)
 
                 if [ -z "$_story_id" ] || [ "$_story_id" = "null" ]; then
                     # Deterministic fallback (found live 2026-07-08): the analyst
@@ -10457,8 +9808,8 @@ for m in re.finditer(r'\{[^{}]*\"story_id\"[^{}]*\}', txt, re.DOTALL):
                 # who touches this story will ever read).
                 local _story_agent_role
                 _story_agent_role=$(jq -r --arg id "$_story_id" \
-                    '.stories[] | select(.id == $id) | .agentRole // "typescript-engineer"' \
-                    "$PRD_FILE" 2>/dev/null || echo "typescript-engineer")
+                    '.stories[] | select(.id == $id) | .agentRole // ""' \
+                    "$PRD_FILE" 2>/dev/null || echo "")
 
                 # ── Agent 2: story-ac-remediator ───────────────────────────────────
                 # Reads the finding JSON + PRD, proposes ACs for the owning story.
@@ -10478,31 +9829,31 @@ for m in re.finditer(r'\{[^{}]*\"story_id\"[^{}]*\}', txt, re.DOTALL):
                 # deterministically in Python rather than trusting the agent to.
                 info "  [story-ac-remediator] Augmenting ACs for story ${_story_id}..."
                 local _ac_prompt
-                _ac_prompt=$(cat << ENDPROMPT2
-$(cat "$_profiles_file" | python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('story-ac-remediator',''))")
-
-## Finding to remediate
-\`\`\`json
-${_finding_json}
-\`\`\`
-
-Story to update: ${_story_id}
-
-## Story's existing acceptanceCriteria
-$(jq -c --arg id "$_story_id" '.stories[] | select(.id == $id) | (.acceptanceCriteria // []) | map(if type == "object" then .text else . end)' "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "[]")
-
-Draft the new ACs now and emit ONLY the JSON summary — do not write any files yourself; the orchestrator applies your proposed ACs to the PRD deterministically.
-ENDPROMPT2
-)
+                # RENDERED FROM THE TEMPLATE LAYER. The role instructions come from the project's own
+                # profiles, supplied as a VALUE — they used to be a command substitution piping
+                # profiles.json through python inside the heredoc, which fails to an empty string in
+                # silence, so the agent could be given no role at all and nothing would say so.
+                local _fp_vals; _fp_vals=$(mktemp "${TMPDIR:-/tmp}/story-ac-remediator-vals-XXXXXX.json")
+                local _fp_role; _fp_role=$(jq -r --arg r "story-ac-remediator" '.[$r] // ""' "$_profiles_file" 2>/dev/null || echo "")
+                jq -n --arg profile "$_fp_role" \
+                      --arg finding_json "$_finding_json" \
+                      --arg story_id "$_story_id" \
+                      --arg existing_acs "$(jq -c --arg id "$_story_id" '.stories[] | select(.id == $id) | (.acceptanceCriteria // []) | map(.)' "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "[]")" \
+                      '{"__PROFILE__":$profile,"__FINDING_JSON__":$finding_json,"__STORY_ID__":$story_id,"__EXISTING_ACS__":$existing_acs}' > "$_fp_vals"
+                _ac_prompt="$(render_engine_prompt story-ac-remediator "$_fp_vals")"
+                rm -f "$_fp_vals"
                 local _ac_result="" _acr_attempt=0
                 while [ "$_acr_attempt" -lt 2 ] && [ -z "$_ac_result" ]; do
                     local _acr_prompt="$_ac_prompt"
-                    local _acr_model="${ORCH_GATE_MODEL:-MiniMax-M3}"
+                    local _acr_model="$(seam_model_or_fail "story-ac-remediator")"
                     if [ "$_acr_attempt" -ge 1 ]; then
                         [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _acr_model="${ESCALATION_MODEL_HIGH}"
-                        _acr_prompt="RETRY (attempt 2): Your previous response was empty or missing the 'acs' field. Emit ONLY the JSON: {\"acs_added\": N, \"acs\": [\"...\"]}.
-
-$_ac_prompt"
+                        _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
+                        jq -n \
+                              --arg ac_prompt "$_ac_prompt" \
+                              '{"__AC_PROMPT__":$ac_prompt}' > "$_rp_vals"
+                        _acr_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" ac_remediator)"
+                        rm -f "$_rp_vals"
                     fi
                     local _acr_raw
                     _acr_raw=$(echo "$_acr_prompt" | \
@@ -10526,66 +9877,7 @@ $_ac_prompt"
                 echo "$_ac_result" > "$_ac_result_tmp"
                 local _acs_added
                 _acs_added=$( ( flock -w 10 200 || { error "  [story-ac-remediator] Could not acquire lock on ${MAIN_PRD_FILE:-$PRD_FILE}"; return 1; }
-                python3 - "${MAIN_PRD_FILE:-$PRD_FILE}" "$_story_id" "$_ac_result_tmp" <<'AC_APPLY_PY'
-import sys, json, os
-
-prd_path, story_id, raw_file = sys.argv[1], sys.argv[2], sys.argv[3]
-txt = open(raw_file).read()
-
-# Robust JSON-object scan (NOT a brace-depth-free regex): the agent's own
-# suggested ACs frequently embed verification snippets like
-# `node -e "...{...}..."`, whose literal { } characters inside a JSON
-# string value broke the old regex (`\{[^{}]*"acs_added"[^{}]*\}` requires
-# ZERO braces anywhere in the match, including inside string content).
-# json.JSONDecoder.raw_decode respects real JSON string escaping/nesting,
-# so it finds the object regardless of what's inside its string values.
-decoder = json.JSONDecoder()
-payload = None
-idx = 0
-while True:
-    start = txt.find('{', idx)
-    if start == -1:
-        break
-    try:
-        obj, end = decoder.raw_decode(txt, start)
-        if isinstance(obj, dict) and 'acs' in obj:
-            payload = obj
-            break
-        idx = end
-    except json.JSONDecodeError:
-        idx = start + 1
-
-if not payload:
-    print(0)
-    sys.exit(0)
-
-new_acs = payload.get('acs', [])
-if not new_acs:
-    print(0)
-    sys.exit(0)
-
-with open(prd_path) as f:
-    prd = json.load(f)
-
-added = 0
-for s in prd.get('stories', []):
-    if s.get('id') != story_id:
-        continue
-    existing = [a.get('text', '') if isinstance(a, dict) else str(a) for a in s.get('acceptanceCriteria', [])]
-    for ac in new_acs:
-        if ac and ac not in existing and len(existing) < 24:
-            s.setdefault('acceptanceCriteria', []).append({'text': ac, 'status': 'pending'})
-            existing.append(ac)
-            added += 1
-
-if added > 0:
-    _tmp_prd_path = prd_path + '.tmp'
-    with open(_tmp_prd_path, 'w') as f:
-        json.dump(prd, f, indent=2)
-    os.replace(_tmp_prd_path, prd_path)
-
-print(added)
-AC_APPLY_PY
+                python3 "$SCRIPT_DIR/lib/handlers/ac-apply.py" "${MAIN_PRD_FILE:-$PRD_FILE}" "$_story_id" "$_ac_result_tmp"
                 2>/dev/null || echo 0
                 ) 200>"${MAIN_PRD_FILE:-$PRD_FILE}.lock" )
                 rm -f "$_ac_result_tmp"
@@ -10619,21 +9911,32 @@ AC_APPLY_PY
                 local _profiles_before
                 _profiles_before=$(cat "$_profiles_file" 2>/dev/null || echo "{}")
                 local _prof_prompt
-                _prof_prompt=$(cat << ENDPROMPT3
-$(cat "$_profiles_file" | python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('profile-augmentor',''))")
-
-## Finding to evaluate
-\`\`\`json
-${_finding_json}
-\`\`\`
-
-Profiles file: ${_profiles_file}
-Story that wrote the offending code: ${_story_id}
-That story's agentRole (target THIS profile, not a guess from the gate name): ${_story_agent_role}
-
-Check if the pattern is novel and append a rule if needed. Write the updated profiles.json back, then emit the JSON summary.
-ENDPROMPT3
-)
+                # THE CHANGE, NOT A TAIL.
+                #
+                # This showed the reviewer the LAST 500 CHARACTERS of each version of a 148 KB
+                # roster. JSON key order means the addendum it was asked to approve was almost
+                # never in that window — the reviewer was judging a change it could not see,
+                # and a truncation this arbitrary reads as evidence.
+                #
+                # A diff is the whole change and drops only what did not change, which is the
+                # difference between summarising and cutting.
+                local _profiles_change
+                _profiles_change=$(diff <(printf '%s' "$_profiles_before") <(printf '%s' "$_profiles_after") 2>/dev/null || true)
+                [ -z "$_profiles_change" ] && _profiles_change="(no textual difference between before and after)"
+                # RENDERED FROM THE TEMPLATE LAYER. The role instructions come from the project's own
+                # profiles, supplied as a VALUE — they used to be a command substitution piping
+                # profiles.json through python inside the heredoc, which fails to an empty string in
+                # silence, so the agent could be given no role at all and nothing would say so.
+                local _fp_vals; _fp_vals=$(mktemp "${TMPDIR:-/tmp}/profile-augmentor-vals-XXXXXX.json")
+                local _fp_role; _fp_role=$(jq -r --arg r "profile-augmentor" '.[$r] // ""' "$_profiles_file" 2>/dev/null || echo "")
+                jq -n --arg profile "$_fp_role" \
+                      --arg finding_json "$_finding_json" \
+                      --arg profiles_file "$_profiles_file" \
+                      --arg story_id "$_story_id" \
+                      --arg story_agent_role "$_story_agent_role" \
+                      '{"__PROFILE__":$profile,"__FINDING_JSON__":$finding_json,"__PROFILES_FILE__":$profiles_file,"__STORY_ID__":$story_id,"__STORY_AGENT_ROLE__":$story_agent_role}' > "$_fp_vals"
+                _prof_prompt="$(render_engine_prompt profile-augmentor "$_fp_vals")"
+                rm -f "$_fp_vals"
                 local _prof_result="" _pfa3_attempt=0 _pfa3_disk_changed=0
                 local _profiles_after=""
                 while [ "$_pfa3_attempt" -lt 2 ] && [ "$_pfa3_disk_changed" = "0" ]; do
@@ -10643,15 +9946,15 @@ ENDPROMPT3
 $_prof_prompt"
                     _prof_result=$(echo "$_pfa3_prompt" | \
                         AI_GATE_ALLOW_TOOLS=1 \
-                        AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
-                        AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
+                        AI_PROVIDER="${ORCH_GATE_PROVIDER:-}" \
+                        AI_MODEL="$(seam_model_or_fail "profile-augmentor")" \
                         EPAM_DANGEROUS_SKIP_APPROVAL=1 \
                         EPAM_MAX_TOOL_CALLS="${PROFILE_AUGMENTOR_MAX_TOOL_CALLS:-10}" \
                         CLAUDE_CMD="$CLAUDE_CMD" \
                         EPAM_CLI="${EPAM_CLI:-epam}" \
                         "$AI_RUNNER_CMD" \
                             --provider "${ORCH_GATE_PROVIDER:-minimax}" \
-                            --model    "${ORCH_GATE_MODEL:-MiniMax-M3}" \
+                            --model    "$(seam_model_or_fail "profile-augmentor")" \
                         2>&1 | tee -a "$_rem_log")
                     if echo "$_prof_result" | grep -q '"profile_updated"[[:space:]]*:[[:space:]]*true'; then
                         _profiles_after=$(cat "$_profiles_file" 2>/dev/null || echo "{}")
@@ -10717,7 +10020,7 @@ $_prof_prompt"
                     # Reviewer gate — validate the change before accepting it
                     local _reviewer_profile
                     _reviewer_profile=$(echo "$_profiles_after" | \
-                        python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('prd-change-reviewer',''))" 2>/dev/null || echo "")
+                        python3 "$SCRIPT_DIR/lib/handlers/json-field.py" 'prd-change-reviewer' 2>/dev/null || echo "")
                     local _review_verdict="pass"  # fail-safe only when reviewer not configured
                     if [ -n "${ORCH_GATE_PROVIDER:-}" ] && [ -n "$_reviewer_profile" ]; then
                         local _pa_rev_raw="" _pa_rev_attempt=0
@@ -10726,20 +10029,12 @@ $_prof_prompt"
                             [ "$_pa_rev_attempt" -gt 0 ] && _pa_corrective="CORRECTION: Your previous response did not contain parseable JSON with a verdict field. Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}
 
 "
-                            local _pa_model="${ORCH_GATE_MODEL:-MiniMax-M3}"
-                            [ "$_pa_rev_attempt" -ge 1 ] && [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _pa_model="${ESCALATION_MODEL_HIGH}"
+                            local _pa_model
+                            _pa_model=$(seam_model_or_fail "prd-change-reviewer") || _pa_model=""
+                            [ "$_pa_rev_attempt" -ge 1 ] && _pa_model=$(seam_next_model "prd-change-reviewer" "$_pa_model")
                             _pa_rev_raw=$(echo "${_pa_corrective}${_reviewer_profile}
 
-STORY: gate-remediation
-CHANGE TYPE: profile_addendum
-
-BEFORE (excerpt, last 500 chars):
-${_profiles_before: -500}
-
-AFTER (excerpt, last 500 chars):
-${_profiles_after: -500}
-
-Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}" | \
+                            $(_render_change_reviewer "gate-remediation" "profile_addendum" "THE CHANGE ITSELF (unified diff of the roster before and after):\n${_profiles_change}")" | \
                                 AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
                                 AI_MODEL="${_pa_model}" \
                                 EPAM_CLI="${EPAM_CLI:-epam}" \
@@ -10747,19 +10042,7 @@ Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}" | \
                                     --provider "${ORCH_GATE_PROVIDER:-minimax}" \
                                     --model    "${_pa_model}" \
                                 2>/dev/null | \
-                                python3 -c "
-import sys, json, re
-text = sys.stdin.read()
-try:
-    obj = json.loads(text.strip())
-    v = obj.get('verdict','')
-    if v in ('pass','fail'):
-        print(v); sys.exit(0)
-except Exception:
-    pass
-m = re.search(r'\"verdict\"\s*:\s*\"(pass|fail)\"', text)
-if m: print(m.group(1)); sys.exit(0)
-" 2>/dev/null || true)
+                                python3 "$SCRIPT_DIR/lib/handlers/run-testing-gates.py" 2>/dev/null || true)
                             _pa_rev_attempt=$(( _pa_rev_attempt + 1 ))
                         done
                         if [ "$_pa_rev_raw" = "pass" ] || [ "$_pa_rev_raw" = "fail" ]; then
@@ -10825,6 +10108,28 @@ _create_bug_fix_phase() {
     local model_override="$4"
     local provider_override="$5"
 
+# _failure_is_tolerated <failing_file> <phase>
+#
+# WAS THIS ALREADY BROKEN BEFORE THE RUN TOUCHED IT? The regression guard records the codeline's
+# pre-existing failures at run start, so later stages can tell "this change broke it" from
+# "inherit what the codeline already had, never add to it". Exactly one consumer read that record
+# — the regression DELTA gate — so a tolerated failure could still be parsed out of the test
+# output and turned into a bug-fix story, putting a writer on a defect the run had already decided
+# was not its business.
+#
+# The same file the delta gate reads. Tolerates nothing when there is no baseline (writer-only
+# mode skips the guard), when the recorded set was UNSTABLE (it proved nothing), or when the file
+# is unreadable — every one of those errs toward treating a failure as real.
+_failure_is_tolerated() {
+    local _f="${1:-}" _phase="${2:-}"
+    [ -n "$_f" ] && [ -n "$_phase" ] || return 1
+    local _bl="${LOG_DIR:-}/regression-guard-baseline-${_phase}.json"
+    [ -f "$_bl" ] || return 1
+    jq -e --arg f "$_f" '
+        (.stable == true) and ((.failures // []) | index($f) != null)
+    ' "$_bl" >/dev/null 2>&1
+}
+
     local failing_files
     failing_files=$(echo "$vitest_output" | grep -E '^ FAIL ' | awk '{print $2}' | sort -u)
     if [ -z "$failing_files" ]; then
@@ -10835,6 +10140,13 @@ _create_bug_fix_phase() {
     local seen_owners=""
     while IFS= read -r failing_file; do
         [ -z "$failing_file" ] && continue
+
+        # A failure the run was told to tolerate is not this change's to fix. See
+        # _failure_is_tolerated — same record the regression delta gate reads.
+        if _failure_is_tolerated "$failing_file" "$parent_phase"; then
+            info "  [bug-fix] $failing_file was already failing before this run (regression baseline) — not opening a story for it"
+            continue
+        fi
 
         local owner_story
         owner_story=$(jq -r --arg rel "$failing_file" --arg phase "$parent_phase" \
@@ -10877,15 +10189,55 @@ _create_bug_fix_phase() {
             story_model="$model_override"
             story_provider="$provider_override"
         else
+            # THE OWNER'S OWN MODEL, then the WRITER'S LADDER — never a vendor name written
+            # here. The literals meant a story that declared no model was silently written by
+            # whatever the engine happened to name, on whatever provider the engine happened to
+            # name, regardless of what the project configured.
             story_model=$(jq -r --arg id "$owner_story" \
-                '.stories[] | select(.id == $id) | .model // "MiniMax-M3"' \
+                '.stories[] | select(.id == $id) | .model // empty' \
                 "$PRD_FILE" 2>/dev/null)
+            [ -n "$story_model" ] || story_model=$(seam_model_or_fail "story-writer") || story_model=""
             story_provider=$(jq -r --arg id "$owner_story" \
-                '.stories[] | select(.id == $id) | .aiProvider // "qwen"' \
+                '.stories[] | select(.id == $id) | .aiProvider // empty' \
                 "$PRD_FILE" 2>/dev/null)
         fi
 
         local owner_notes
+        # THE OWNER'S ROLE, inherited like its model and provider. A bug fix belongs to whoever
+        # owns the code it is fixing; naming a role here assigns work to an agent this project may
+        # never have minted.
+        owner_role=$(jq -r --arg id "$owner_story" \
+            '.stories[] | select(.id == $id) | .agentRole // ""' "$PRD_FILE" 2>/dev/null || echo "")
+        [ -n "$owner_role" ] || owner_role="unassigned"
+
+        # THE BUG-FIX STORY'S TITLE AND INSTRUCTIONS COME FROM THE TEMPLATE LAYER. They were shell
+        # literals, and the writer that picks this story up reads the description AS ITS PROMPT — so
+        # a prompt was living in this script where no prompt review reaches. The test runner is a
+        # fact of the codeline, not of the engine: the literal here named vitest, which told a Rust
+        # or Python writer to fix tests for a runner that codeline has never run.
+        _bug_test_cmd=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/codeline-ecosystem.js" "$PROJECT_ROOT" 2>/dev/null \
+            | jq -r '.testCommand // ""' 2>/dev/null || echo "")
+        [ -n "$_bug_test_cmd" ] || _bug_test_cmd="<this codeline declares no test command>"
+
+        # ONE VALUES FILE PER BODY. The renderer rejects a value the body does not use — a value
+        # nobody reads means the caller believes it supplied something that had no effect — and the
+        # title uses only the filename.
+        _bug_vals=$(mktemp "${TMPDIR:-/tmp}/bug-story-vals-XXXXXX.json")
+        _bug_vals_t=$(mktemp "${TMPDIR:-/tmp}/bug-story-title-XXXXXX.json")
+        jq -n --arg f "$failing_file" --arg tc "$_bug_test_cmd" --arg ex "$failure_excerpt" \
+            '{__FAILING_FILE__: $f, __TEST_COMMAND__: $tc, __FAILING_TESTS__: $ex}' > "$_bug_vals"
+        jq -n --arg f "$failing_file" '{__FAILING_FILE__: $f}' > "$_bug_vals_t"
+
+        # Exit status is the contract: an unrendered story would be appended to the PRD with an
+        # empty description, and the writer would answer from nothing.
+        if ! bug_title=$(render_engine_prompt "bug-fix-story" "$_bug_vals_t" "title") \
+           || ! bug_desc=$(render_engine_prompt "bug-fix-story" "$_bug_vals" "prompt"); then
+            rm -f "$_bug_vals" "$_bug_vals_t"
+            error "[orch] could not render the bug-fix story for $failing_file — not appending an empty story to the PRD"
+            return 1
+        fi
+        rm -f "$_bug_vals" "$_bug_vals_t"
+
         owner_notes=$(jq -c --arg id "$owner_story" \
             '.stories[] | select(.id == $id) | .technicalNotes' \
             "$PRD_FILE" 2>/dev/null || echo '{}')
@@ -10897,8 +10249,9 @@ _create_bug_fix_phase() {
             --arg bid "$bug_id" \
             --arg model "$story_model" \
             --arg provider "$story_provider" \
-            --arg title "Bug fix: failing tests in ${failing_file}" \
-            --arg desc "Fix the failing vitest tests in ${failing_file}. Do not rewrite the whole file — make the minimum change to fix the failures below. The technicalNotes carry the original story CRITICAL constraints — they still apply.\n\nFAILING TESTS:\n${failure_excerpt}" \
+            --arg ownerRole "$owner_role" \
+            --arg title "$bug_title" \
+            --arg desc "$bug_desc" \
             --arg phase "$bug_phase" \
             --arg ffile "${PROJECT_ROOT}/${failing_file}" \
             --argjson onotes "$owner_notes" \
@@ -10911,7 +10264,7 @@ _create_bug_fix_phase() {
                 completed: false,
                 aiProvider: $provider,
                 model: $model,
-                agentRole: "typescript-engineer",
+                agentRole: $ownerRole,
                 unitTests: false,
                 technicalNotes: ($onotes + {
                     files: [$ffile],
@@ -10983,9 +10336,31 @@ run_unit_tests_gate() {
         return 0
     fi
 
-    if [ ! -f "$PROJECT_ROOT/package.json" ]; then
-        info "Step 4.5: No package.json at PROJECT_ROOT — skipping vitest/tsc"
-        return 0
+    # THE ECOSYSTEM DECIDES, AND "CANNOT RUN" IS NOT A PASS.
+    #
+    # This checked for package.json and returned 0 — so on any codeline that is not Node, the unit
+    # test gate reported SUCCESS for stories that explicitly declare unitTests:true, having run
+    # nothing. Below it hardcoded `npm install` and then REQUIRED node_modules/.bin/vitest, so a
+    # Node project using any other runner hard-failed instead.
+    # TWO CAUSES, TWO MESSAGES. An empty test command can mean the PROJECT declares none, or that
+    # the ENGINE could not ask — an unresolvable handler path, a missing node. Those are fixed by
+    # different people in different files, and collapsing them into one message blames the
+    # customer's repository for the engine's own failure.
+    local _ut_facts _ut_facts_rc=0 _ut_test_cmd _ut_install_cmd _ut_install_dir
+    _ut_facts=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/codeline-ecosystem.js" "$PROJECT_ROOT" 2>/dev/null) || _ut_facts_rc=$?
+    if [ "$_ut_facts_rc" -ne 0 ] || [ -z "$_ut_facts" ]; then
+        error "Step 4.5: could not read the ecosystem of ${PROJECT_ROOT} (codeline-ecosystem.js exited ${_ut_facts_rc})."
+        error "  This is an engine fault, not a fact about the project — refusing to certify unit tests that were never run."
+        return 1
+    fi
+    _ut_test_cmd=$(printf '%s' "$_ut_facts" | python3 "$SCRIPT_DIR/lib/handlers/json-field.py" testCommand 2>/dev/null || echo "")
+    _ut_install_cmd=$(printf '%s' "$_ut_facts" | python3 "$SCRIPT_DIR/lib/handlers/json-field.py" installCommand 2>/dev/null || echo "")
+    _ut_install_dir=$(printf '%s' "$_ut_facts" | python3 "$SCRIPT_DIR/lib/handlers/json-field.py" installDir 2>/dev/null || echo "")
+
+    if [ -z "$_ut_test_cmd" ]; then
+        error "Step 4.5: ${phase_id} has stories declaring unitTests:true, but ${PROJECT_ROOT} declares no way to run its tests."
+        error "  The gate cannot verify them and will not report that as a pass. Declare a test command for this codeline, or set unitTests:false on those stories."
+        return 1
     fi
 
     local _node_bin
@@ -10998,33 +10373,32 @@ run_unit_tests_gate() {
     echo "=== Unit Test Gate: $phase_id @ $(date -Iseconds) ===" > "$gate_log"
     log "Step 4.5: Running unit test gate for '$phase_id'..."
 
-    # ── Ensure node_modules exist before running vitest ────────────────────────
-    if [ ! -d "$PROJECT_ROOT/node_modules" ]; then
-        log "  node_modules missing — running npm install..."
+    # ── Ensure this ecosystem's dependencies are present before running its tests ─────────────
+    if [ -n "$_ut_install_dir" ] && [ -n "$_ut_install_cmd" ] && [ ! -d "$PROJECT_ROOT/$_ut_install_dir" ]; then
+        log "  ${_ut_install_dir} missing — running: ${_ut_install_cmd}"
         local install_output install_exit=0
-        install_output=$(cd "$PROJECT_ROOT" && timeout "${EPAM_INSTALL_TIMEOUT_SECS:-180}" npm install 2>&1) || install_exit=$?
+        install_output=$(cd "$PROJECT_ROOT" && timeout "${EPAM_INSTALL_TIMEOUT_SECS:-180}" sh -c "$_ut_install_cmd" 2>&1) || install_exit=$?
         echo "$install_output" >> "$gate_log"
         if [ "$install_exit" -eq 124 ]; then
-            error "  npm install TIMED OUT after ${EPAM_INSTALL_TIMEOUT_SECS:-180}s — cannot run vitest"
+            error "  '${_ut_install_cmd}' TIMED OUT after ${EPAM_INSTALL_TIMEOUT_SECS:-180}s — cannot run the tests"
             echo "$install_output" | tail -20 >&2
             return 1
         fi
         if [ "$install_exit" -ne 0 ]; then
-            error "  npm install failed — cannot run vitest"
+            error "  '${_ut_install_cmd}' failed — cannot run the tests"
             echo "$install_output" | tail -20 >&2
             return 1
         fi
-        log "  npm install completed"
+        log "  '${_ut_install_cmd}' completed"
     fi
 
-    if [ ! -f "$PROJECT_ROOT/node_modules/.bin/vitest" ]; then
-        error "  node_modules/.bin/vitest not found after npm install — vitest may not be in package.json"
-        return 1
-    fi
-
-    # ── Initial vitest run ─────────────────────────────────────────────────────
+    # ── The project's own test command ────────────────────────────────────────
+    # Was: require node_modules/.bin/vitest, then exec it directly. A Node project using jest,
+    # mocha, node --test or anything else hard-failed here with "vitest may not be in
+    # package.json" — a message about the engine's expectation, not about the project.
+    log "  Running: ${_ut_test_cmd}"
     local vitest_output vitest_exit=0
-    vitest_output=$(cd "$PROJECT_ROOT" && timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" "$_node_bin" ./node_modules/.bin/vitest run 2>&1) || vitest_exit=$?
+    vitest_output=$(cd "$PROJECT_ROOT" && timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" sh -c "$_ut_test_cmd" 2>&1) || vitest_exit=$?
     echo "$vitest_output" >> "$gate_log"
 
     if [ "$vitest_exit" -eq 0 ]; then
@@ -11083,8 +10457,11 @@ run_unit_tests_gate() {
             provider_override=""
             log "Step 4.5: Creating bug fix stories (round $bug_round — original model)..."
         else
-            model_override="${ESCALATION_MODEL:-z-ai/glm-5.2}"
-            provider_override="qwen"
+            # Round 2 climbs the WRITER'S OWN ladder rather than jumping to one run-wide
+            # escalation model, and names no provider: the provider follows the model through
+            # EPAM_MODEL_PROVIDER_MAP, which is where the project already declares it.
+            model_override=$(seam_next_model "story-writer" "$(seam_model_or_fail "story-writer")")
+            provider_override=""
             log "Step 4.5: Creating bug fix stories (round $bug_round — escalated model: ${model_override})..."
         fi
 
@@ -11102,10 +10479,12 @@ run_unit_tests_gate() {
             --phase "$bug_phase" --reset \
             2>&1 | tee -a "$gate_log" || true
 
-        # Re-run vitest after bug fix phase completes
+        # Re-run THE SAME COMMAND after the bug-fix phase completes. This still exec'd vitest
+        # directly, so on a project using any other runner the verification of the fix ran a
+        # different thing from the check that found the failure — or nothing at all.
         vitest_exit=0
-        vitest_output=$(cd "$PROJECT_ROOT" && timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" "$_node_bin" ./node_modules/.bin/vitest run 2>&1) || vitest_exit=$?
-        echo "=== Post-bug-fix vitest (round $bug_round) ===" >> "$gate_log"
+        vitest_output=$(cd "$PROJECT_ROOT" && timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" sh -c "$_ut_test_cmd" 2>&1) || vitest_exit=$?
+        echo "=== Post-bug-fix test run (round $bug_round): ${_ut_test_cmd} ===" >> "$gate_log"
         echo "$vitest_output" >> "$gate_log"
 
         if [ "$vitest_exit" -eq 0 ]; then
@@ -11260,7 +10639,11 @@ Phase gate passed ✓
 esac
 
 # ──────────────────────────────────────────────
-# Step 6: Final Post-Phase Assessment
+# Step 24: Final Post-Phase Assessment
+#
+# Labelled "Step 6" here while emitting and logging 24, which is what the checklist registers
+# ("6:mkdir" is a different step entirely). A header that disagrees with the step id sends anyone
+# reading the monitor to the wrong block.
 # ──────────────────────────────────────────────
 log "Step 24: Running final post-phase assessment..."
 if [ -s "$LOG_DIR/phase-cost.jsonl" ]; then
@@ -11319,20 +10702,7 @@ _handoff_file="$LOG_DIR/phase-handoff-${PHASE}.md"
     echo ""
     echo "## Cost Summary"
     if [ -s "$LOG_DIR/phase-cost.jsonl" ]; then
-        python3 -c "
-import sys, json
-total = 0.0
-entries = []
-for line in open('$LOG_DIR/phase-cost.jsonl'):
-    try:
-        e = json.loads(line)
-        total += float(e.get('actual_cost_usd', 0) or 0)
-        entries.append(e)
-    except Exception:
-        pass
-print(f'Total cost: \${total:.4f}')
-print(f'Entries: {len(entries)}')
-" 2>/dev/null || echo "(cost data unavailable)"
+        python3 "$SCRIPT_DIR/lib/handlers/phase-cost-total.py" "$LOG_DIR/phase-cost.jsonl" 2>/dev/null || echo "(cost data unavailable)"
     else
         echo "(no cost data)"
     fi
@@ -11340,18 +10710,7 @@ print(f'Entries: {len(entries)}')
     echo "## Review Results"
     if [ -s "$AUTOMATION_DIR/logs/code-reviews.jsonl" ]; then
         grep "\"phase_id\":\"${PHASE}\"" "$AUTOMATION_DIR/logs/code-reviews.jsonl" 2>/dev/null | \
-            python3 -c "
-import sys, json
-for line in sys.stdin:
-    try:
-        e = json.loads(line)
-        status = e.get('review_status','?')
-        issues = e.get('issues_found', 0)
-        ts = e.get('timestamp','?')
-        print(f'- {ts}: {status} ({issues} issues)')
-    except Exception:
-        pass
-" 2>/dev/null || echo "(review data unavailable)"
+            python3 "$SCRIPT_DIR/lib/handlers/run-interstitial-e2e-phase-2.py" 2>/dev/null || echo "(review data unavailable)"
     else
         echo "(no review data)"
     fi
@@ -11420,30 +10779,7 @@ if [ "${AUTO_PROMOTE_PHASE:-false}" = "true" ]; then
         warning "Step 8: Phase promotion skipped — $_incomplete_count stories still incomplete in '$PHASE'"
     else
         # Find next phase in insertion order, skipping excluded phases
-        _next_phase=$(python3 -c "
-import sys, json
-prd = json.load(open('$PRD_FILE'))
-phases = list(prd.get('implementationOrder', {}).keys())
-phases_config = prd.get('phasesConfig', {})
-current = '$PHASE'
-try:
-    idx = phases.index(current)
-except ValueError:
-    sys.exit(1)
-for candidate in phases[idx+1:]:
-    cfg = phases_config.get(candidate, {})
-    desc = (cfg.get('description') or '').lower()
-    if 'excluded from normal execution paths' in desc:
-        continue
-    # Skip if all stories already complete
-    ids = prd['implementationOrder'].get(candidate, [])
-    pending = [s for s in prd.get('stories', []) if s['id'] in ids and not s.get('completed')]
-    if not ids or not pending:
-        continue
-    print(candidate)
-    sys.exit(0)
-sys.exit(1)
-" 2>/dev/null || true)
+        _next_phase=$(python3 "$SCRIPT_DIR/lib/handlers/next-phase.py" "$PRD_FILE" "$PHASE" 2>/dev/null || true)
 
         if [ -n "$_next_phase" ]; then
             success "Step 8: Promoting to next phase: '$_next_phase'"

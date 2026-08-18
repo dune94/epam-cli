@@ -41,6 +41,23 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 #
 # Until 2026-08-12 only team-lead-review.sh called this, so sixteen of seventeen seams kept
 # whatever fixed model their script hardcoded while the registry looked authoritative. The
+# EVERY ENTRY POINT READS THE LADDER DECLARATION ITSELF.
+#
+# lib/model-ladders.sh exists so that "what a tier contains" is declared once and read the same
+# way everywhere. Only claude.sh, run-agent-orchestration.sh and detective-rerun.sh ever called
+# it, so this script resolved its model ONLY from environment its parent happened to export. Run
+# standalone — a replay, a retest, a test harness — nothing set EPAM_MODEL_LADDER_<TIER>,
+# seam_ladder_export set no EPAM_MODEL, and this seam skipped its work while exiting 0.
+#
+# export_model_ladders leaves an already-set value alone, so calling it here changes nothing when
+# the orchestrator has already exported the chain, and supplies it when nobody has.
+_ml_lib="${SCRIPT_DIR:-$(dirname "${BASH_SOURCE[0]}")}/lib/model-ladders.sh"
+if [ -f "$_ml_lib" ]; then
+    # shellcheck source=lib/model-ladders.sh
+    . "$_ml_lib" || true
+    command -v export_model_ladders >/dev/null 2>&1 \
+        && export_model_ladders "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json}" || true
+fi
 # ask must come BEFORE any model is resolved below: seam_ladder_export sets EPAM_MODEL, and
 # a later assignment that wins makes the whole thing decorative.
 #
@@ -48,7 +65,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # model rather than kill a run.
 # shellcheck source=lib/seam-ladder.sh
 . "$SCRIPT_DIR/lib/seam-ladder.sh" 2>/dev/null || true
-command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "agent-failure-analyst"
+# WHICH AGENT THIS IS — declared ONCE, and exported so ai-run.sh keys this agent's ladder rung
+# state to it. Without it every agent shared one counter ("agent__<story>"): one agent escalating
+# advanced the ladder for all of them, and team-lead-review's cross-process resume read a key
+# nothing ever wrote.
+_SEAM_NAME="agent-failure-analyst"
+export EPAM_AGENT_NAME="$_SEAM_NAME"
+command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "$_SEAM_NAME"
 
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
 
@@ -60,44 +83,67 @@ case "$FAILURE_CLASS" in
 esac
 
 _provider="${AGENT_ANALYST_PROVIDER:-${ORCH_GATE_PROVIDER:-${EPAM_ORCHESTRATION_PROVIDER:-qwen}}}"
-# Same escalation model the impl failure-analyst uses (never a plain chat model).
-_model="${AGENT_ANALYST_MODEL:-${ESCALATION_MODEL:-${ORCH_GATE_MODEL:-z-ai/glm-5.2}}}"
+# THE SEAM DECIDES. seam_ladder_export (above) sets EPAM_MODEL to the first rung of the chain this
+# seam's ARCHETYPE declares, which is the whole point of declaring a ladder. The literal that stood
+# last in this chain overrode that silently: the seam asked for its tier and the answer was
+# discarded, so editing the declaration moved no model. Operator overrides still win; what is gone
+# is the hardcoded final fallback, which no configuration could remove.
+_model="${AGENT_ANALYST_MODEL:-${ESCALATION_MODEL:-${ORCH_GATE_MODEL:-${EPAM_MODEL:-}}}}"
+if [ -z "$_model" ]; then
+    # A diagnosis produced by a guessed model is worse than an honest absence: it reads as
+    # authoritative and nothing downstream can tell it was never grounded in a declared tier.
+    warning "no model resolved for this seam — its archetype declares no ladder, or the tier's chain is unset. Not analysing rather than guessing a model."
+    exit 0
+fi
 
 # Reuse the failure-analyst profile (the crown-jewel role instructions) when present.
 _profile=""
 _profiles_file="$(dirname "$SCRIPT_DIR")/agents/profiles.json"
 [ -f "$_profiles_file" ] && _profile=$(jq -r '."failure-analyst" // ""' "$_profiles_file" 2>/dev/null || echo "")
-[ -z "$_profile" ] && _profile="You are a self-healing pipeline analyst. Diagnose the exact reason an agent failed and prescribe the minimum corrective directive so its NEXT attempt succeeds."
+# THE PROMPT, AND THE FIVE CLASS HINTS, FROM THE TEMPLATE LAYER.
+#
+# All of it used to sit here: the fallback role line, a five-arm case statement whose every arm
+# was a sentence addressed to the analyst, and the prompt heredoc. The engine still chooses
+# WHICH hint by failure class -- that is a decision, not wording -- but it no longer holds the
+# wording of any of them.
+. "$SCRIPT_DIR/lib/render-engine-prompt.sh"
 
-_failed_output=$(head -c 4000 "$FAILED_OUTPUT_FILE" 2>/dev/null || echo "")
-_context=$(head -c 6000 "$CONTEXT_FILE" 2>/dev/null || echo "")
+_tpl="$(dirname "$SCRIPT_DIR")/prompts/templates/agent-failure-analyst.json"
+_body() { "${NODE_BIN:-node}" -e '
+  const d = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+  process.stdout.write(String((d.bodies || {})[process.argv[2]] || ""));
+' "$_tpl" "$1"; }
+
+[ -z "$_profile" ] && _profile="$(_body role_fallback)"
+
+_failed_output=$(cat "$FAILED_OUTPUT_FILE" 2>/dev/null || echo "")
+_context=$(cat "$CONTEXT_FILE" 2>/dev/null || echo "")
 
 # Class-specific framing so the analyst targets the right behaviour.
-_class_hint=""
 case "$FAILURE_CLASS" in
-    max_iterations) _class_hint="The agent EXHAUSTED its iteration budget exploring and NEVER produced its output. The corrective directive must make it commit output EARLY — e.g. 'you have N calls; do the minimum lookup then WRITE your file/answer as your very next action; do NOT keep exploring.'" ;;
-    no_file)        _class_hint="The agent finished WITHOUT writing the required file. The directive must make writing the file its FIRST action, at the exact required path." ;;
-    no_json|malformed) _class_hint="The agent produced no parseable structured output (prose, or a tool-call wrapper). The directive must make it emit ONLY the required output inline, no tool calls, no prose." ;;
-    invalid_test)   _class_hint="The agent DID write the file, but it is not valid, runnable code — it failed to parse/compile, so the test never executed (the runner's exact error is in the output below). This is a SYNTAX/structure problem, not a logic problem: the directive must tell it to emit a complete, syntactically valid file — balanced braces/brackets, correct object-literal and array syntax, every import present — and to re-read its own output end-to-end before finishing. Do NOT tell it to change the assertion or the scenario; the previous attempt's intent was fine, only the code was malformed." ;;
-    *)              _class_hint="The agent failed to produce usable output." ;;
+    max_iterations)    _class_hint="$(_body hint_max_iterations)" ;;
+    no_file)           _class_hint="$(_body hint_no_file)" ;;
+    no_json|malformed) _class_hint="$(_body hint_no_json)" ;;
+    invalid_test)      _class_hint="$(_body hint_invalid_test)" ;;
+    *)                 _class_hint="$(_body hint_default)" ;;
 esac
 
-read -r -d '' _prompt <<PROMPT || true
-${_profile}
-
-An AI agent failed its task and must retry. Diagnose the SPECIFIC reason it failed from its output below, then prescribe a SHORT, CONCRETE corrective directive (1-3 sentences) to prepend to its next attempt so it SUCCEEDS this time. ${_class_hint}
-
-Ground the directive in what the agent ACTUALLY did (below) and the REAL task — do not give generic advice. Output ONLY the corrective directive text, nothing else.
-
-=== FAILURE CLASS ===
-${FAILURE_CLASS}
-
-=== WHAT THE AGENT PRODUCED (its output/log) ===
-${_failed_output:-(empty — it produced nothing)}
-
-=== THE TASK IT WAS GIVEN (ground truth) ===
-${_context:-(not provided)}
-PROMPT
+# Values via a FILE, never argv: a failed agent's output is routinely megabytes and argv is
+# capped at ARG_MAX. This is the same crash that took out the failure analyst on 2026-08-15.
+_aa_vals=$(mktemp "${TMPDIR:-/tmp}/agent-failure-analyst-vals-XXXXXX.json")
+jq -n --arg profile "$_profile" \
+      --arg class_hint "$_class_hint" \
+      --arg failure_class "$FAILURE_CLASS" \
+      --arg failed_output "${_failed_output:-(empty — it produced nothing)}" \
+      --arg context "${_context:-(not provided)}" \
+      '{"__PROFILE__":$profile,"__CLASS_HINT__":$class_hint,"__FAILURE_CLASS__":$failure_class,"__FAILED_OUTPUT__":$failed_output,"__CONTEXT__":$context}' \
+      > "$_aa_vals"
+if ! _prompt=$(render_engine_prompt agent-failure-analyst "$_aa_vals" prompt); then
+    rm -f "$_aa_vals"
+    warning "cannot render the analyst prompt — not analysing rather than asking with no instructions"
+    exit 0
+fi
+rm -f "$_aa_vals"
 
 # Activity emit — the failure-agent is a first-class agent and MUST be visible in
 # agent-activity.html like every other agent (2026-07-24). storyId comes from the caller.

@@ -56,8 +56,37 @@ function readRegistry(file) {
  * @param {string} agent      any agent name, minted or hand-written
  * @param {string} [file]     registry path; defaults to the shipped one
  */
-function resolveSeam(agent, file) {
+/**
+ * Resolve a POSITION in the project's declared tier order to that project's own tier name.
+ *
+ * The order is lowest → highest, so:
+ *   base -> the first tier the project declares
+ *   top  -> the last
+ *   mid  -> the middle one, biased low when the count is even, because over-spending is the
+ *           more expensive mistake and a seam asking for "mid" is not asking for the ceiling.
+ *
+ * Returns '' when no order is available; the caller reports that rather than guessing a name.
+ */
+function resolveTierPosition(position, sourceEnv) {
+  const order = String((sourceEnv && sourceEnv.EPAM_MODEL_LADDER_TIER_ORDER) || '')
+    .split(/[\s,]+/).filter(Boolean);
+  if (!order.length) return '';
+  const p = String(position || '').trim().toLowerCase();
+  if (p === 'base') return order[0];
+  if (p === 'top') return order[order.length - 1];
+  if (p === 'mid') return order[Math.floor((order.length - 1) / 2)];
+  // Not a position: a project tier name may still be passed through unchanged, so an older
+  // registry keeps working while it is being migrated.
+  return order.includes(p) ? p : '';
+}
+
+function resolveSeam(agent, file, opts) {
   if (!agent) throw new Error('cannot resolve a seam for an empty agent name');
+  // ignoreXref: resolve from the RULES alone, as if this agent had never been mapped. The mint
+  // needs this to re-derive an entry it wrote itself — reading the cross-reference there would
+  // return the stale answer and a corrected rule could never land. Every other caller wants the
+  // recorded decision and gets it.
+  const _ignoreXref = !!(opts && opts.ignoreXref);
   const reg = readRegistry(file || registryPath());
   const profiles = reg.profiles || {};
 
@@ -68,7 +97,7 @@ function resolveSeam(agent, file) {
   // 2. The explicit cross-reference: this agent enters by this seam. Named agents that are
   //    not themselves profiles live here, and an entry always beats a pattern — a family rule
   //    must never override a decision someone made deliberately about one agent.
-  const xref = reg.agentSeams || {};
+  const xref = _ignoreXref ? {} : (reg.agentSeams || {});
   if (Object.prototype.hasOwnProperty.call(xref, agent)) {
     const seam = xref[agent];
     if (!profiles[seam]) {
@@ -94,19 +123,65 @@ function resolveSeam(agent, file) {
     return rule.seam;
   }
 
-  // 3. A declared default, which must itself be real.
-  if (reg.defaultSeam) {
-    if (!profiles[reg.defaultSeam]) {
-      throw new Error(`registry defaultSeam '${reg.defaultSeam}' names a profile that does not exist`);
+  // 3. WHAT THE AGENT SAYS IT IS, when its name matched nothing.
+  //
+  // The steps above key entirely off the NAME. The roster is model-authored, so the name is never
+  // ours: run 20260817T181432Z minted exactly the right roster and died on
+  // "'typescript-vitest-implementer' resolves to no seam" — a correctly declared implementer,
+  // refused because the suffix rules know '-engineer' and '-fixer'.
+  //
+  // Proposals declare kind outright, so the archetype is stated rather than inferred. Read from
+  // the SAME rules above, which already name a seam and now say which kind they serve; a separate
+  // kind->seam table would be a second place to keep correct.
+  //
+  // Best-effort: many callers run in processes that never load a roster, and a kind lookup must
+  // never turn a working resolution into a crash.
+  // Read from the module that OWNS the two registries the kind is recorded in. A roster entry is
+  // the brief STRING, so there is no field to read here; the kind is membership of
+  // project-roles.json or project-investigators.json. Written against a {kind, brief} fixture at
+  // first, which made this inert on real data while a green unit test said otherwise.
+  const _kind = (() => {
+    try {
+      return require('./agent-roster.js').kindOfAgent(agent, (opts && opts.agentsDir) || undefined) || '';
+    } catch { return ''; }
+  })();
+  if (_kind) {
+    for (const rule of Array.isArray(reg.seamPatterns) ? reg.seamPatterns : []) {
+      if (!rule || rule.kind !== _kind || !rule.seam) continue;
+      if (!profiles[rule.seam]) continue;
+      return rule.seam;
     }
-    return reg.defaultSeam;
   }
 
-  // 4. Never {}.
+  // 4. A default the PROJECT declares — never one the engine holds.
+  //
+  // The registry used to carry defaultSeam: cpa-inference, so resolution could not fail. Every
+  // unmatched agent silently became a planning agent and inherited its ladder, effort and tool
+  // grants, and the mint's "fails if any agent resolves to nothing" guard could essentially
+  // never fire. Seven gate-path agents were found running the wrong ladder for exactly this
+  // reason, and nothing had reported anything. A safety net that catches everything catches
+  // nothing.
+  //
+  // A project that genuinely wants unmatched agents absorbed says so in its own config. The
+  // engine declares no default, so for everyone else an unmatched agent is a loud failure at
+  // mint time — one line to fix, before any story runs — instead of a silent misconfiguration
+  // discovered hours into a run.
+  const declaredDefault = (opts && opts.defaultSeam)
+    || ((opts && opts.env) || process.env).EPAM_DEFAULT_SEAM
+    || '';
+  if (declaredDefault) {
+    if (!profiles[declaredDefault]) {
+      throw new Error(`EPAM_DEFAULT_SEAM names '${declaredDefault}', which the registry does not define`);
+    }
+    return declaredDefault;
+  }
+
+  // 4. Never {}, and never a guess.
   throw new Error(
-    `agent '${agent}' resolves to no seam: it is not a named profile, no seamPattern matches it, ` +
-    'and the registry declares no defaultSeam. A minted agent must be able to enter the ' +
-    'pipeline — add a pattern or a default rather than leaving it unconfigured.');
+    `agent '${agent}' resolves to no seam: it is not a named profile and no seamPattern matches ` +
+    'it. Add a seamPattern for its family, or an agentSeams entry for this one agent, or set ' +
+    'EPAM_DEFAULT_SEAM in the project config if unmatched agents should share one seam. Leaving ' +
+    'it unconfigured would run it with no ladder, no effort and no tool grants.');
 }
 
 /**
@@ -127,20 +202,148 @@ function seamInvocationEnv(agent, agentsDir, opts) {
   if (!profile) return {};
 
   const env = {};
+
+  // THE SEAM THAT WAS RESOLVED, STAMPED ONCE, SO EVERY CONSUMER READS ONE IDENTITY.
+  //
+  // Call sites already name their seam — seamInvocationEnv('agent-mint', …) — and then separately
+  // pass an unrelated literal for the cost label, the log tag and the dashboard row. Two identities
+  // for one invocation, kept in step by hand.
+  //
+  // Live 2026-08-17, run 20260817T162132Z: phase-cost.jsonl recorded ESTATE_SURVEY, PROJECT_AGENTS,
+  // ROSTER_REVIEW and ROLE_ASSIGNMENTS beside codeline-discovery and prompt-builder. Two of those
+  // four name no seam at all (PROJECT_AGENTS is 'agent-mint', ROLE_ASSIGNMENTS is 'role-assigner'),
+  // so per-agent spend could not be joined to the roster, the registry or the activity timeline —
+  // and normalising the case would not have fixed it, because the names genuinely differ.
+  //
+  // Resolved, not declared: this is the seam the invocation ACTUALLY entered, including via a
+  // seamPattern, so it stays correct for a minted agent whose name nobody wrote down anywhere.
+  env.EPAM_SEAM = seam;
+
   if (profile.reasoningEffort) env.EPAM_REASONING_EFFORT = String(profile.reasoningEffort);
   if (profile.temperature !== undefined && profile.temperature !== '') {
     env.EPAM_TEMPERATURE = String(profile.temperature);
   }
+
+  // WHAT THE SEAM IS ALLOWED TO DO, AND HOW LONG IT HAS.
+  //
+  // The registry has let a seam declare these for weeks and none of them were exported, so every
+  // one was inert: story-writer declared bash,read_file,list_files,search and the writer received
+  // no grant at all through this path. Same shape as a ladder that resolves to nothing — a
+  // declaration nothing reads is documentation, and it reads as configuration.
+  //
+  // ABSENT STAYS ABSENT. An empty grant and a missing one differ downstream: "these zero tools"
+  // would override a caller's own explicit grant, while "nothing configured here" lets it stand.
+  if (profile.allowedTools !== undefined && profile.allowedTools !== '') {
+    env.EPAM_ALLOWED_TOOLS = String(profile.allowedTools);
+  } else if (profile.toolGrant) {
+    // A GRANT KIND RESOLVES TO A LIST PER PROJECT, because part of the list belongs to the
+    // project: a codeline that provisions the codegraph plugin grants codegraph_query, and a
+    // project without it must not be handed a tool that does not exist. A literal list in the
+    // registry freezes one project's answer into the engine — which is what allowedTools above
+    // still does for the seams that carry one, and why nothing new should.
+    //
+    // Codeline paths come from the run, never from here: EPAM_CODELINE_PATHS is set by the
+    // codeline loop, and PROJECT_ROOT is the single-codeline case.
+    const src = (opts && opts.env) || process.env;
+    const paths = String(src.EPAM_CODELINE_PATHS || src.PROJECT_ROOT || '')
+      .split(/[,:]/).map((x) => x.trim()).filter(Boolean);
+    try {
+      const grant = require('./agent-tools.js').toolGrantFor(profile.toolGrant, paths);
+      if (grant) {
+        env.EPAM_ALLOWED_TOOLS = grant;
+        // The channel and the list are separate switches: granting one without the other
+        // produces an agent that quietly has nothing.
+        env.AI_GATE_ALLOW_TOOLS = '1';
+      }
+    } catch (e) {
+      // A seam asking for a grant this engine does not define is mis-declared. Say so rather
+      // than silently running it with no tools, which looks identical to a seam that needs none.
+      throw new Error(`[seam-invocation] '${agent}' -> seam '${seam}': ${e.message}`);
+    }
+  }
+  // ── SKILLS: what this agent knows about THIS project, resolved at invocation ──────────────
+  //
+  // Not declared per seam, because a skill is not a property of the archetype: an -investigator on
+  // a Rust service and one on a Node front end are the same seam and need different knowledge. It
+  // is derived from what the project already has — the ecosystem registry (stack, manifest, test
+  // command, declared dependencies) and the KB the pipeline itself wrote for THAT codeline, plus
+  // the shared KB.
+  //
+  // Passed as a PATH, not as text. Skills grow with the KB, and an unbounded string in the
+  // environment hits ARG_MAX exactly the way prompt values did — the failure being a command that
+  // exits 126 with no output, three steps from the cause.
+  //
+  // Best-effort by design: a project on its first run has no KB and a codeline may not resolve.
+  // An agent with no skills file behaves as it did before this existed; one that refuses to start
+  // because the KB is empty would refuse every first run.
+  try {
+    const src = (opts && opts.env) || process.env;
+    const cl = String(src.EPAM_CODELINE_PATH || src.PROJECT_ROOT || '');
+    const all = String(src.EPAM_CODELINE_PATHS || '');
+    const outDir = src.LOG_DIR || require('os').tmpdir();
+    const skillsFile = path.join(outDir, `agent-skills-${String(agent).replace(/[^\w.-]/g, '_')}.json`);
+    const out = require('child_process').execFileSync(process.execPath, [
+      path.join(__dirname, 'handlers', 'agent-skills.js'), cl,
+      path.join(__dirname, '..', '..', 'agents'), all,
+    ], { encoding: 'utf8', timeout: 20000 });
+    require('fs').writeFileSync(skillsFile, out);
+    env.EPAM_AGENT_SKILLS_FILE = skillsFile;
+  } catch { /* no skills resolved — the agent runs as it did before this existed */ }
+
+  if (profile.maxIterations !== undefined) env.EPAM_MAX_ITERATIONS = String(profile.maxIterations);
+  if (profile.maxOutputTokens !== undefined) env.EPAM_MAX_OUTPUT_TOKENS = String(profile.maxOutputTokens);
+  if (profile.timeoutSecs !== undefined) env.EPAM_TIMEOUT_SECS = String(profile.timeoutSecs);
+
+  // WHERE THE TEMPLATE ZONE IS, for a seam granted the tools to read it. A read grant with no
+  // path is useless, and the alternative — a directory named inside a prompt — is exactly the
+  // project fact in prompt text that this layer exists to remove. Resolved from the engine's own
+  // location, never from a caller's guess.
+  if (env.EPAM_ALLOWED_TOOLS && /read_file|list_files/.test(env.EPAM_ALLOWED_TOOLS)) {
+    env.EPAM_PROMPT_TEMPLATES_DIR = path.join(__dirname, '..', '..', 'prompts', 'templates');
+  }
   if (profile.ladder) {
-    const key = 'EPAM_MODEL_LADDER_' + String(profile.ladder).toUpperCase().replace(/[^A-Z0-9]/g, '_');
+    // A SEAM DECLARES A POSITION; THE PROJECT SUPPLIES THE NAME.
+    //
+    // The registry used to name tiers literally ('HIGHEST', 'medium'). llm-settings.json
+    // already said that was wrong in its own words — "the engine holds no ordering of its
+    // own" — and a project naming its tiers anything else left every seam pointing at a tier
+    // it does not have. Live on hello-dolly: twenty seams asked for HIGHEST, the project
+    // declared only high and medium, and all twenty ran with no escalation chain because the
+    // miss below is reported and then continued past.
+    //
+    // ladderTierOrder is declared lowest-to-highest by the project and exported by
+    // model-ladders.sh. Positions are resolved against it, so they hold whatever a project
+    // calls its tiers and however many it declares.
+    const tierName = resolveTierPosition(profile.ladder, sourceEnv);
+    if (!tierName) {
+      process.stderr.write(
+        "[seam-invocation] seam '" + seam + "' asks for ladder position '" + profile.ladder +
+        "' but EPAM_MODEL_LADDER_TIER_ORDER is unset or empty — the project declares no tier " +
+        "order, so no position can be resolved\n");
+    }
+    const key = 'EPAM_MODEL_LADDER_' + String(tierName || profile.ladder).toUpperCase().replace(/[^A-Z0-9]/g, '_');
     const rungs = sourceEnv[key];
     if (rungs) {
       // The ladder this seam climbs, under the generic name every consumer reads.
       env.EPAM_MODEL_LADDER = rungs;
-      // The first rung is where this seam STARTS. Without it the seam begins on the run's
-      // default model and the ladder only governs where it escalates to.
-      const first = String(rungs).split('|')[0].split('=')[0].trim();
-      if (first) env.EPAM_MODEL = first;
+      // WHERE THIS SEAM STARTS — declared, not inferred.
+      //
+      // This used to take the first pair's "from". A modelLadder is a set of HOPS with several
+      // independent roots (MiniMax, zhipuai, z-ai, moonshotai all appear in one map), so that
+      // picked whichever root was listed first in the JSON and made every seam's opening model a
+      // property of text ordering. Reordering the file changed which model every agent began on,
+      // with nothing to indicate it had.
+      const declaredStart = (sourceEnv[key + '_START'] || '').trim();
+      if (declaredStart) {
+        env.EPAM_MODEL = declaredStart;
+      } else {
+        // Absent stays absent: the seam keeps whatever model it would otherwise resolve, and the
+        // gap is stated rather than filled with a root chosen by accident.
+        process.stderr.write(
+          "[seam-invocation] seam '" + seam + "' climbs ladder '" + profile.ladder +
+          "' which declares no startModel — not inferring one from map order; the seam will start " +
+          "on whatever model it resolves for itself\n");
+      }
     } else {
       // Not fatal: the seam is resolved and its effort/temperature still apply. But a ladder
       // that cannot be reached is not a ladder assignment, so it is never silent.
@@ -153,4 +356,6 @@ function seamInvocationEnv(agent, agentsDir, opts) {
   return env;
 }
 
-module.exports = { seamInvocationEnv, resolveSeam, registryPath };
+// resolveTierPosition is exported because the SHELL side needs the same answer: a profile
+// declares a position, and two places must not each decide what a position means.
+module.exports = { seamInvocationEnv, resolveSeam, registryPath, resolveTierPosition };

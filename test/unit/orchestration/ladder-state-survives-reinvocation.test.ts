@@ -131,9 +131,7 @@ describe('the rejection names each file once', () => {
     expect(out).toEqual(['a.ts', 'b.ts', 'c.ts']);
   });
 
-  it('claude.sh renders the list through sort -u', () => {
-    const i = SRC.indexOf('VERIFIED fix site(s) left unchanged');
-    expect(i).toBeGreaterThan(-1);
-    expect(SRC.slice(i, i + 900)).toMatch(/sort -u/);
-  });
+  // REMOVED 2026-08-12: this asserted the dedup of the VERIFIED-fix-site rejection list.
+  // That gate is deleted — it demanded a diff in every prescribed file, which is conformance to
+  // a plan that is explicitly guidance. There is no such rejection to dedup any more.
 });

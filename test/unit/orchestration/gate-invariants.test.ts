@@ -14,6 +14,7 @@
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { templateBody } from '../../helpers/prompt-text';
 import { join } from 'node:path';
 
 const ORCH_SCRIPT = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
@@ -112,12 +113,14 @@ describe('gate prompts — oracle injection, no tool execution', () => {
   });
 
   it('review-ranger prompt uses injected git diff (not a live git call inside the model)', () => {
-    // The prompt should reference a pre-computed diff, not instruct the model to run git
-    expect(orchSrc).toContain('Git Diff Evidence');
+    // The prompt should reference a pre-computed diff, not instruct the model to run git.
+    // Read from the gate's own template: the wording left the script with the prompt, and
+    // grepping the script for it counted zero for every gate simultaneously.
+    expect(templateBody('qa-review-ranger')).toContain('Git Diff Evidence');
   });
 
   it('mutant-hunter prompt uses injected source/test files', () => {
-    expect(orchSrc).toContain('Source and Test Evidence');
+    expect(templateBody('qa-mutant-hunter')).toContain('Source and Test Evidence');
   });
 
   it('orch script does NOT instruct gates to run tsc themselves', () => {
@@ -324,9 +327,10 @@ describe('spec validator — oracle injection (prevents max-iteration exhaustion
   });
 
   it('spec validator prompt tells the agent NOT to call tools', () => {
-    const specIdx = orchSrc.indexOf('_run_qa_gate_with_retry "$spec_prompt" "qa-gate:spec-validator"');
-    const before = orchSrc.slice(Math.max(0, specIdx - 6000), specIdx);
-    expect(before).toMatch(/Do NOT call any tools|Do NOT attempt to call any/);
+    // Was a 6000-character window ending at the call site — which only ever worked while the
+    // prompt was assembled immediately above it. The rule belongs to the validator's prompt,
+    // so it is asserted there, where moving the call site cannot break it.
+    expect(templateBody('qa-spec-validator')).toMatch(/Do NOT call any tools|Do NOT attempt to call any/);
   });
 
   it('implementation evidence is injected into spec_prompt before gate call', () => {

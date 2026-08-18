@@ -25,6 +25,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { execFileSync, spawnSync } = require('child_process');
 
 const spec = require('./spec-mode-runner.js');
 
@@ -182,28 +183,36 @@ function declaredDependencies(repoPath) {
   for (const c of candidates) {
     try { cfg = JSON.parse(fs.readFileSync(c, 'utf8')); break; } catch { /* next */ }
   }
-  if (!cfg) {
-    process.stderr.write(
-      '[mint-step] no dependency-check.json for this codeline or project — the mint gets no ' +
-      'dependency evidence (the engine will not guess which manifest this project uses)\n');
-    return [];
-  }
-  const manifestFile = typeof cfg.manifestFile === 'string' ? cfg.manifestFile : '';
-  const manifestKeys = Array.isArray(cfg.manifestKeys) ? cfg.manifestKeys : [];
-  if (!manifestFile || !manifestKeys.length) {
-    process.stderr.write('[mint-step] dependency-check.json declares no manifestFile/manifestKeys — no dependency evidence\n');
-    return [];
-  }
+  // THE MANIFEST IS DETECTED, NEVER DECLARED.
+  //
+  // This required the project to write down manifestFile and manifestKeys in dependency-check.json
+  // — so every project had to tell the engine that Node uses package.json and that dependencies
+  // live under "dependencies"/"devDependencies". mock3 declared its manifest under a DIFFERENT
+  // shape (codelines.<name>.manifest), which this never read, so the mint reported "no dependency
+  // evidence" and the agent brief said the codelines "declare no manifest configuration".
+  //
+  // The roster reviewer then read the repositories, found package.json in both with vitest and
+  // typescript, and correctly blocked the roster for describing them wrongly. Two schemas for one
+  // fact, and the run died between them.
+  //
+  // lib/ecosystems.js already answers this for every supported ecosystem: it finds the manifest by
+  // PRESENCE and each entry knows how to read its own dependency sections — which is exactly what
+  // manifestKeys was spelling out by hand, one project at a time. It extends at runtime through
+  // EPAM_CODELINE_MANIFESTS, so a new ecosystem needs no engine change and no project config.
   try {
-    const manifest = JSON.parse(fs.readFileSync(path.join(repoPath, manifestFile), 'utf8'));
-    const names = [];
-    for (const key of manifestKeys) {
-      const section = manifest[key];
-      if (section && typeof section === 'object') names.push(...Object.keys(section));
+    const out = execFileSync(process.execPath, [
+      path.join(__dirname, 'lib', 'handlers', 'codeline-ecosystem.js'), repoPath,
+    ], { encoding: 'utf8', timeout: 20000 });
+    const facts = JSON.parse(out);
+    if (!facts.manifest) {
+      process.stderr.write(
+        `[mint-step] ${repoPath} carries no manifest this engine recognises — no dependency ` +
+        'evidence. Extend EPAM_CODELINE_MANIFESTS if this ecosystem should be supported.\n');
+      return [];
     }
-    return [...new Set(names)];
+    return facts.declaredDeps || [];
   } catch (err) {
-    process.stderr.write(`[mint-step] could not read ${manifestFile}: ${err && err.message}\n`);
+    process.stderr.write(`[mint-step] could not read the ecosystem of ${repoPath}: ${err && err.message}\n`);
     return [];
   }
 }
@@ -361,13 +370,34 @@ function writeRosterDiff(profilesPath, agentsDir, logDir, mintedThisRun, mintedD
  * No agent name and no seam name appears here: the roster supplies the names, the registry
  * supplies the shapes.
  */
+
+/**
+ * The roster file exists in TWO shapes in the wild: a flat { agent: brief } map, and a wrapper
+ * { runId, _what, profiles: { agent: brief } }. Reading one shape in one function and the other
+ * elsewhere is how a validator ends up examining `runId` and `_what` as if they were agents.
+ * One reader, both shapes.
+ */
+function rosterAgents(profilesPath) {
+  const parsed = JSON.parse(fs.readFileSync(profilesPath, 'utf8'));
+  const map = (parsed && typeof parsed.profiles === 'object' && parsed.profiles) ? parsed.profiles : parsed;
+  const out = {};
+  for (const [k, v] of Object.entries(map || {})) {
+    if (k.startsWith('_') || k === 'runId') continue;
+    out[k] = v;
+  }
+  return out;
+}
+
 function writeAgentSeamCrossReference(profilesPath, registryPath) {
   const { resolveSeam } = require('./lib/seam-invocation.js');
 
-  const roster = JSON.parse(fs.readFileSync(profilesPath, 'utf8'));
+  const roster = rosterAgents(profilesPath);
   const registry = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
   const profiles = registry.profiles || {};
   const previous = registry.agentSeams || {};
+  // Provenance lives BESIDE the map, not inside it: agentSeams stays a plain
+  // agent -> seam string, so seam-invocation.js and every other reader is untouched.
+  const origin = {};
 
   // RE-CREATED, not merged: an agent dropped from the roster must not linger. Rebuilt from the
   // roster alone, so the cross-reference always describes the agents that actually exist.
@@ -377,14 +407,28 @@ function writeAgentSeamCrossReference(profilesPath, registryPath) {
     // An agent that IS a seam already wins at resolution; recording it too would create a
     // second place to drift from.
     if (profiles[agent]) continue;
-    // A deliberate decision about an agent that still exists survives a re-mint. Regenerating
-    // the mapping must not silently revert an operator's override.
-    if (Object.prototype.hasOwnProperty.call(previous, agent) && profiles[previous[agent]]) {
+    // AN OVERRIDE SURVIVES; A DERIVED VALUE DOES NOT.
+    //
+    // This used to preserve ANY previous mapping, which is right for an operator's deliberate
+    // decision and wrong for a value the mint itself derived last time — and it could not tell
+    // them apart. Live 2026-08-13: the -engineer rule had pointed ten implementers at the
+    // failure analyst; correcting the rule reached none of them, because every stale entry
+    // outranked it. The correction had to be applied by hand, and so would the next one.
+    //
+    // A BARE STRING IS TREATED AS DERIVED. Every entry written before this change is one, and
+    // reading them as overrides would freeze today's mappings permanently.
+    const _prevOrigin = (registry.agentSeamOrigin || {})[agent];
+    if (_prevOrigin === 'override'
+        && Object.prototype.hasOwnProperty.call(previous, agent)
+        && profiles[previous[agent]]) {
       next[agent] = previous[agent];
+      origin[agent] = 'override';
       continue;
     }
     try {
-      next[agent] = resolveSeam(agent, registryPath);
+      // From the RULES, not from what we recorded last time — see resolveSeam's ignoreXref.
+      next[agent] = resolveSeam(agent, registryPath, { ignoreXref: true });
+      origin[agent] = 'derived';
     } catch (e) {
       unresolved.push(`${agent}: ${(e && e.message) || e}`);
     }
@@ -397,11 +441,64 @@ function writeAgentSeamCrossReference(profilesPath, registryPath) {
   }
 
   registry.agentSeams = next;
+  registry.agentSeamOrigin = origin;
   fs.writeFileSync(registryPath, `${JSON.stringify(registry, null, 2)}\n`);
   return next;
 }
 
-module.exports = { resolveRepoPath, resolveCodelines, declaredDependencies, writeRosterDiff, mintTools, provisionPlugins, writeAgentSeamCrossReference };
+
+/**
+ * validateWorkflow(profilesPath, registryPath)
+ *
+ * IS THIS ROSTER BUILDABLE? Every archetype declares what it produces and what it requires, so
+ * a roster containing a consumer whose REQUIRED input nobody produces is decidable from the
+ * data — before any story runs, with no model involved.
+ *
+ * That is the shape of every unwinnable story this pipeline has produced: an actor waiting for
+ * something nobody was configured to make. The mint already refuses a roster whose agent
+ * resolves to no seam, for the same reason and with the same timing — "caught here, before any
+ * story runs, not three hours into a run".
+ *
+ * OPTIONAL INPUTS ARE NOT CHECKED. Optional means the workflow runs without it; requiring a
+ * producer for every optional kind would force every roster to carry every archetype, which is
+ * the opposite of letting a project mint only what it needs.
+ */
+function validateWorkflow(profilesPath, registryPath) {
+  const registry = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+  const roster = rosterAgents(profilesPath);
+  const archetypes = registry.profiles || {};
+  const { resolveSeam } = require('./lib/seam-invocation.js');
+
+  // What this roster can produce: every archetype an agent resolves to, plus the engine.
+  const produced = new Set(registry.engineProduces || []);
+  const seamOf = {};
+  for (const agent of Object.keys(roster)) {
+    const seam = archetypes[agent] ? agent : resolveSeam(agent, registryPath);
+    seamOf[agent] = seam;
+    const p = archetypes[seam] && archetypes[seam].produces;
+    if (p) produced.add(String(p));
+  }
+
+  const missing = [];
+  for (const agent of Object.keys(roster)) {
+    const arch = archetypes[seamOf[agent]];
+    if (!arch) continue;
+    for (const c of arch.consumes || []) {
+      if (!c || !c.required) continue;
+      if (!produced.has(String(c.kind))) {
+        missing.push(`${agent} (${seamOf[agent]}) requires '${c.kind}', which nothing in this roster produces`);
+      }
+    }
+  }
+  if (missing.length) {
+    throw new Error(
+      `${missing.length} agent(s) in this roster require an input nobody produces, so they would `
+      + `wait forever. Mint a producer, or make the input optional:\n  ` + missing.join('\n  '));
+  }
+  return true;
+}
+
+module.exports = { resolveRepoPath, rosterAgents, resolveCodelines, declaredDependencies, writeRosterDiff, mintTools, provisionPlugins, writeAgentSeamCrossReference, validateWorkflow };
 
 if (require.main !== module) return;
 
@@ -511,7 +608,7 @@ if (require.main !== module) return;
     // The survey is cheap by construction: it decides where to look, not what to change. Its
     // failure is not fatal — an estate that cannot be surveyed is the state the roster was
     // minted in until today.
-    process.env.EPAM_AGENT_NAME = 'estate-surveyor';
+    process.env.EPAM_AGENT_NAME = 'estate-survey';
     const survey = await spec.surveyEstate({
       promptExec,
       tickets: stories,
@@ -533,6 +630,30 @@ if (require.main !== module) return;
     } else {
       process.stderr.write('[mint-step]   survey did not run — the roster is minted from the ticket alone\n');
     }
+    // FALSIFY THE SURVEY BEFORE ANYTHING IS MINTED FROM IT.
+    //
+    // The survey seeds every investigator brief and scoped the whole run, and nothing reviewed it
+    // — a codeline was reported in_scope on a file it does not contain and an implementer was
+    // briefed accordingly. Runs HERE, before mintProjectAgents, because reviewing afterwards
+    // reports on claims the roster has already absorbed.
+    //
+    // Never fatal and never edits the survey: it reports, and the findings travel with it.
+    try {
+      const _sr = await spec.reviewSurvey({
+        promptExec, survey, codelines, tickets: stories, logDir: LOG_DIR,
+        repoPath: REPO_PATH, toolGrant,
+      });
+      if (_sr.ran) {
+        process.stderr.write(`[mint-step] survey review: ${_sr.findings.length} finding(s) across `
+          + `${_sr.reviewed} codeline(s)\n`);
+        for (const f of _sr.findings) {
+          process.stderr.write(`[mint-step]   ! survey claim refuted (${f.codeline}): ${f.claim} `
+            + `— checked ${f.checked}, found ${f.found}\n`);
+        }
+        survey.reviewFindings = _sr.findings;
+      }
+    } catch { /* the survey stands unreviewed; its own reviewer failing is not a finding */ }
+
     // A boundary crossed is reported, never swallowed: the surveyor is structurally barred
     // from naming fix sites, and an attempt to name one says something about the prompt.
     for (const v of survey.violations || []) {
@@ -600,8 +721,9 @@ if (require.main !== module) return;
   // same, and the reviewer's own capped budget went on re-checking settled work. Only the
   // agents a blocking finding NAMES are replaced.
   const runRosterReview = async () => {
-    if (!_mintedDetail.length) return { verdict: 'sound', findings: [], reviewed: 0 };
-    process.env.EPAM_AGENT_NAME = 'roster-reviewer';
+    // Same reason as reviewRoster: nothing was examined, so nothing may be certified.
+    if (!_mintedDetail.length) return { verdict: 'nothing_to_review', findings: [], reviewed: 0 };
+    process.env.EPAM_AGENT_NAME = 'roster-review';
     try {
       const liveProfiles = JSON.parse(fs.readFileSync(PROFILES_PATH, 'utf8'));
       return await spec.reviewRoster({
@@ -680,6 +802,8 @@ if (require.main !== module) return;
       const tag = m.kind === 'investigator' ? `investigator:${m.codeline || '(no codeline!)'}` : 'implementer';
       process.stderr.write(`[mint-step]   + [${tag}] ${m.name} — ${m.rationale}\n`);
     }
+
+
     cycle += 1;
   }
 
@@ -774,9 +898,192 @@ if (require.main !== module) return;
   // Record which seam every agent just minted enters the pipeline by. Throws if any of them
   // resolves to nothing, which fails the mint — that is the point: an unconfigured agent is
   // caught here, before any story runs, not three hours into a run.
-  const _xref = writeAgentSeamCrossReference(PROFILES_PATH,
-    process.env.AGENT_PROFILES_REGISTRY || path.join(AGENTS_DIR, "invocation-profiles.json"));
+  const _registryPath = process.env.AGENT_PROFILES_REGISTRY || path.join(AGENTS_DIR, "invocation-profiles.json");
+  const _xref = writeAgentSeamCrossReference(PROFILES_PATH, _registryPath);
   process.stderr.write(`[mint-step] agent→seam cross-reference written for ${Object.keys(_xref).length} agent(s)\n`);
+
+  // And that the roster we just minted can actually RUN: every required input of every agent has
+  // somebody in this roster — or the engine — producing it. A writer waiting on a plan nobody was
+  // minted to make is the shape of every unwinnable story this pipeline has produced, and it is
+  // decidable here from the data alone, with no model involved and no tokens spent.
+  validateWorkflow(PROFILES_PATH, _registryPath);
+  process.stderr.write(`[mint-step] ✓ workflow is buildable: every required input has a producer\n`);
+
+  // ── THE ROSTER IS SETTLED, SO NOW BUILD THIS PROJECT'S PROMPTS ─────────────
+  //
+  // The agent that minted the roster also builds the prompts, because this is the only stage
+  // that knows both what the project is and which roles will work on it — the two things a
+  // specialised prompt needs. Nothing generated project prompts before this existed, which is
+  // why the repo held a handful of hand-authored ones and a new project had none at all.
+  //
+  // It runs HERE, after the review/correction loop and after validateWorkflow, for the same
+  // reason assignment does: generating against a proposed roster would specialise prompts for
+  // roles the reviewer is about to replace.
+  //
+  // The generator is invoked through runClaude, the same seam every other agent uses, so it
+  // inherits ladder, retry, timeout and cost capture rather than being a private call.
+  {
+    const promptsLib = require('./lib/prompt-library.js');
+    const { seamInvocationEnv } = require('./lib/seam-invocation.js');
+    const { buildProjectPrompts } = require('./lib/project-prompt-builder.js');
+    const engineRoot = path.join(__dirname, '..', '..');
+    const templatesDir = path.join(engineRoot, promptsLib.TEMPLATE_DIR_REL);
+    const bootstrapFile = path.join(engineRoot, 'orchestrations', 'prompts', 'bootstrap.json');
+    const projectConfigDir = process.env.EPAM_PROJECT_CONFIG_DIR || '';
+
+    // No project dir means nowhere to install them, and prompt-library will not fall back to a
+    // template. Guessing a location would provision a project nobody asked for.
+    if (!projectConfigDir) {
+      throw new Error(
+        'cannot build project prompts: EPAM_PROJECT_CONFIG_DIR is unset. The project-authority ' +
+        'prompts are the only ones ever rendered, and the template is never executed.');
+    }
+
+    // THE PROVISIONING MODE IS THE PROJECT'S DECISION, and no mode was being passed at all —
+    // so every project silently got 'generate', including the ones whose prompts are meant to
+    // stay identical to the generic text. metrolinx is a copy-mode project that the next mint
+    // would have regenerated. A project is data; this is one of its facts.
+    const promptMode = process.env.EPAM_PROMPT_PROVISION_MODE || '';
+    if (!promptMode) {
+      throw new Error(
+        'cannot build project prompts: EPAM_PROMPT_PROVISION_MODE is unset. Declare it in the '
+        + "project's config.env as 'copy' (install the generic templates as they are) or "
+        + "'generate' (specialise each one for this project). There is no engine default: "
+        + 'picking one silently is how a project ends up running prompts nobody chose.');
+    }
+
+    process.env.EPAM_AGENT_NAME = 'prompt-builder';
+    // Opt-in per project; the registry's prompt-review.enabledBy names this variable.
+    const _promptReviewEnabled = String(process.env.EPAM_PROMPT_REVIEW_ENABLED || '') === '1';
+    // Hoisted so the reviewer is handed exactly the codelines the generator was — a reviewer
+    // checking claims against different facts than the writer saw is not a review.
+    const _codelineContext = codelines
+      .map((c) => `- ${(c && c.name) || c}`).join('\n');
+    const _built = await buildProjectPrompts({
+      templatesDir,
+      bootstrapFile,
+      // The seam registry decides what needs a project copy — a seam that runs a template needs
+      // one, or it executes the generic parent. bootstrap still supplies auxiliary prompts.
+      registryFile: path.join(AGENTS_DIR, 'invocation-profiles.json'),
+      projectConfigDir,
+      mode: promptMode,
+      projectContext: [
+        `Project config: ${projectConfigDir}`,
+        `Tickets in scope: ${stories.map((t) => `${t.jiraKey || t.id}: ${t.title || ''}`).join(' | ')}`,
+      ].join('\n'),
+      codelineContext: codelines
+        .map((c) => `- ${c.name} (${c.path})${c.dependencies && c.dependencies.length ? ` deps: ${c.dependencies.join(', ')}` : ''}`)
+        .join('\n'),
+      mintedRoles: _mintedDetail.length
+        ? _mintedDetail.map((m) => `- ${m.name} [${m.kind}] — ${m.rationale || ''}`).join('\n')
+        : '(none minted this run)',
+      // THE BUILDER RUNS AT ITS OWN SEAM, with the grants that seam declares.
+      //
+      // It passed {} as the environment, so it inherited whatever the mint process happened to
+      // have: no tool grant, no iteration budget, and the ladder of whichever agent ran last.
+      // The operator's design is that this agent READS the templates and decorates them, which
+      // it cannot do without read_file and list_files -- and a declaration that never reaches
+      // the invocation is the same defect as a ladder that resolves to nothing.
+      //
+      // AI_GATE_ALLOW_TOOLS is what actually opens the tool channel; the seam decides WHICH
+      // tools. Granting the channel without the list, or the list without the channel, both
+      // produce an agent that quietly has nothing.
+      runText: (prompt, meta) => {
+        const seamEnv = seamInvocationEnv('prompt-builder', path.join(engineRoot, 'orchestrations', 'agents'));
+        if (seamEnv.EPAM_ALLOWED_TOOLS) seamEnv.AI_GATE_ALLOW_TOOLS = '1';
+        // The identity travels WITH the seam. It was set on process.env far above, so the two could
+        // drift apart without either looking wrong — and elsewhere in this stage they already had.
+        seamEnv.EPAM_AGENT_NAME = 'prompt-builder';
+        return spec.runClaude(
+          promptExec, prompt,
+          path.join(LOG_DIR, `prompt-build-${(meta && meta.id) || 'unknown'}.log`),
+          seamEnv, { costAgent: 'prompt-builder' });
+      },
+      // THE REVIEWER, WHEN THE PROJECT ASKS FOR ONE.
+      //
+      // prompt-review is a full seam — its own template, three required inputs, a declared
+      // produces — invoked behind this optional parameter, which no caller supplied. So the one
+      // artefact every downstream agent inherits WHOLE was the only generated thing installed
+      // unexamined, while its sibling roster-review ran on every mint.
+      //
+      // Opt-in, because turning it on costs a model call per generated prompt (35 last run) and
+      // can block provisioning: the project says EPAM_PROMPT_REVIEW_ENABLED=1. The registry marks
+      // the seam optIn and names this variable, so the two cannot drift.
+      reviewPrompt: _promptReviewEnabled ? async ({ id, template, generated }) => {
+        const seamEnv = seamInvocationEnv('prompt-review', path.join(engineRoot, 'orchestrations', 'agents'));
+        if (seamEnv.EPAM_ALLOWED_TOOLS) seamEnv.AI_GATE_ALLOW_TOOLS = '1';
+        seamEnv.EPAM_AGENT_NAME = 'prompt-review';
+        // EXACTLY the placeholders prompt-review.json declares. The renderer is strict in both
+        // directions, and either kind of mismatch would be swallowed by the catch below and put
+        // this seam right back to silence — which is how __MANIFEST_FILE__ blinded the failure
+        // analyst for a whole run. A test pins these two lists together.
+        const _vals = {
+          // The reviewer's own brief, from the canonical roster it is registered in. Absent is
+          // fine — the template's persona section is then simply empty.
+          __PERSONA__: (() => {
+            try {
+              return JSON.parse(fs.readFileSync(path.join(AGENTS_DIR, 'profiles.json'), 'utf8'))['prompt-review'] || '';
+            } catch { return ''; }
+          })(),
+          __PROMPT_ID__: id,
+          __TEMPLATE_BODY__: (template && template.body) || '',
+          __GENERATED_BODY__: (generated && generated.body) || '',
+          __CODELINE_BLOCK__: _codelineContext,
+          __TICKET_BLOCK__: (Array.isArray(stories) ? stories : [])
+            .map((t) => `- ${t.id || ''}: ${t.title || ''}`).join('\n'),
+          __TOOL_LINE__: toolGrant || '',
+        };
+        let out = '';
+        try {
+          out = await spec.runClaude(
+            promptExec, promptsLib.render('prompt-review', projectConfigDir, _vals),
+            path.join(LOG_DIR, `prompt-review-${id}.log`),
+            seamEnv, { costAgent: 'prompt-review' });
+        } catch (e) {
+          // A REVIEWER THAT CANNOT RUN DOES NOT CONDEMN THE ARTEFACT. Its own failure is not
+          // evidence that the prompt is wrong — the same rule reviewSurvey follows.
+          process.stderr.write(`[prompt-review] ${id}: reviewer did not run (${e && e.message}) — installing unreviewed\n`);
+          return { ok: true };
+        }
+        const m = String(out || '').match(/<PROMPT_REVIEW>([\s\S]*?)<\/PROMPT_REVIEW>/);
+        if (!m) return { ok: true };   // unparseable: cannot condemn, and says nothing false
+        try {
+          const v = JSON.parse(m[1].trim());
+          const bad = Array.isArray(v.falseClaims) ? v.falseClaims : [];
+          if (bad.length) return { ok: false, reason: bad.join('; ') };
+        } catch { /* as above */ }
+        return { ok: true };
+      } : undefined,
+      log: (m) => process.stderr.write(`${m}\n`),
+    });
+    process.stderr.write(
+      `[mint-step] ✓ prompts provisioned (${promptMode}): ${_built.copied.length} copied (bootstrap), ` +
+      `${_built.generated.length} generated → ${path.join(projectConfigDir, 'prompts')}\n`);
+
+    // ── LINK THE PROMPTS TO THE AGENTS JUST MINTED ────────────────────────────
+    //
+    // Provisioning and minting ran in the same stage and knew nothing about each other: the
+    // builder walked a static list, the mint separately resolved agents to seams, and nobody
+    // asked whether the seam a minted agent enters at has a prompt in THIS project. The answer
+    // arrived at that agent's first invocation instead, hours in, with the run already spending.
+    //
+    // Decidable from data — roster, registry, installed library — so it costs nothing and lands
+    // here, where a gap is one line to fix.
+    const { linkPromptsToRoster } = require('./lib/prompt-agent-link.js');
+    const _link = linkPromptsToRoster({
+      projectConfigDir,
+      registryFile: _registryPath,
+      // rosterAgents returns agent -> brief; the link step wants the NAMES. Passing the object
+      // made the roster look empty, which the step correctly refused rather than linking nothing
+      // and reporting success.
+      agents: Object.keys(rosterAgents(PROFILES_PATH)),
+    });
+    process.stderr.write(
+      `[mint-step] ✓ prompts linked: ${Object.keys(_link.agents).length} agent(s) across ` +
+      `${_link.seamsInUse.length} seam(s) → ${path.join(projectConfigDir, 'prompt-agent-link.json')}\n`);
+
+  }
+
   process.stderr.write(`[mint-step] ✓ roster and assignments written to ${PRD_PATH}\n`);
 })().catch((err) => {
   process.stderr.write(`[mint-step] FAILED: ${(err && err.message) || err}\n`);

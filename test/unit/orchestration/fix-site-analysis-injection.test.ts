@@ -12,30 +12,32 @@
  * Tests the REAL jq extraction from claude.sh against fixture story JSON, plus
  * that the prompt template wires it in.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
+import { renderWriterPrompt, cleanupWriterPromptFixtures } from '../../helpers/writer-prompt';
 
 const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
 const src = readFileSync(CLAUDE_SH, 'utf8');
 
-// Extract the exact jq program claude.sh uses for fix_site_analysis.
-function extractJqProgram(): string {
-  const marker = 'fix_site_analysis=$(echo "$story_json" | jq -r ';
-  const start = src.indexOf(marker);
-  if (start === -1) throw new Error('fix_site_analysis jq extraction not found');
-  const open = src.indexOf("'", start);
-  const close = src.indexOf("'", open + 1);
-  return src.slice(open + 1, close);
-}
-const jqProgram = extractJqProgram();
+/*
+ * RE-POINTED 2026-08-13. This file used to lift the jq program out of claude.sh and run it. The
+ * rendering has since moved to its PRODUCER — lib/producers/fix-plan.js — because two consumers
+ * were each rendering the detective's answer their own way and had drifted apart. The assertions
+ * below are unchanged: they are about what the writer is told, which is the thing that matters,
+ * and they now run against the renderer that actually produces it.
+ */
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { renderFixPlan } = require(join(__dirname, '../../../orchestrations/scripts/lib/producers/fix-plan.js'));
 
-function runJq(storyJson: object): string {
-  return execFileSync('jq', ['-r', jqProgram], { input: JSON.stringify(storyJson), encoding: 'utf8' }).trim();
+function runJq(storyJson: any): string {
+  return renderFixPlan(storyJson && storyJson.fixSiteAnalysis).trim();
 }
 
-describe('fix-site-analysis injection (real jq from claude.sh)', () => {
+afterAll(cleanupWriterPromptFixtures);
+
+describe('fix-site-analysis injection (the producer own renderer)', () => {
   it('formats a detective finding into a markdown bullet with file, function, and reason', () => {
     const out = runJq({
       fixSiteAnalysis: [{
@@ -94,20 +96,37 @@ describe('fix-site-analysis injection (real jq from claude.sh)', () => {
     expect(out).toContain('src/b.ts');
   });
 
-  it('build_implementation_prompt injects the Root Cause Analysis section with the do-not-re-trace directive', () => {
-    // The prompt template must reference fix_site_analysis and the header.
-    expect(src).toMatch(/\$\(\[ -n "\$fix_site_analysis" \]/);
-    expect(src).toContain('Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)');
+  // RE-POINTED 2026-08-13. These asserted that strings appeared in claude.sh, which passes on a
+  // comment and proves nothing about what an agent is told. The framing moved into the writer's
+  // prompt document when inputs became declared; the assertions now run against the RENDERED
+  // prompt — the artifact the writer actually receives.
+  const rendered = (id: string) => renderWriterPrompt({
+    story: {
+      id, title: 't', description: 'd', acceptanceCriteria: ['ac'],
+      technicalNotes: { files: ['src/a.ts'] },
+      fixSiteAnalysis: [{ file: 'src/a.ts', function: 'f', reason: 'because', fix: 'do it' }],
+    },
+    env: { EPAM_BROWNFIELD: '1' },
+    projectFiles: { 'src/a.ts': 'export const a = 1;\n' },
+  });
+
+  it('the writer prompt carries the Root Cause section and the do-not-re-trace directive', () => {
+    const r = rendered('RC-1');
+    expect(r.rc, r.stderr).toBe(0);
+    expect(r.text).toContain('Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)');
+    expect(r.text).toContain('do NOT re-read the whole codebase to re-derive it');
+    expect(r.text, 'the plan itself never arrived, so the framing frames nothing').toContain('because');
   });
 
   it('frames the injected fix as AUTHORITATIVE over the ACs (ACs = verification, not blueprint)', () => {
-    // The live failure: the agent followed 8 splitting-flavored ACs instead of
-    // the (vaguer) root cause and built the wrong fix. The section must now
-    // explicitly demote the ACs to verification and forbid re-architecting.
-    expect(src).toContain('NOT an implementation blueprint');
-    expect(src).toMatch(/SMALLEST change/);
-    expect(src).toMatch(/Fewer lines of code is always better/);
-    expect(src).toMatch(/REUSE existing functions/);
+    // The live failure: the agent followed eight splitting-flavoured ACs instead of the vaguer
+    // root cause and built the wrong fix.
+    const r = rendered('RC-2');
+    expect(r.rc, r.stderr).toBe(0);
+    expect(r.text).toContain('NOT an implementation blueprint');
+    expect(r.text).toMatch(/SMALLEST change/);
+    expect(r.text).toMatch(/Fewer lines of code is always better/);
+    expect(r.text).toMatch(/REUSE existing functions/);
   });
 
   it('offers the CodeGraph helpers tool to the brownfield implementation agent', () => {

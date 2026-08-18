@@ -31,13 +31,19 @@ const argv   = process.argv.slice(2);
 const getArg = (flag, def = '') => { const i = argv.indexOf(flag); return i !== -1 ? argv[i + 1] : def; };
 
 const CLASSIFICATIONS_PATH = getArg('--classifications');
-const TEMPLATE_PATH        = getArg('--template',
-  path.join(__dirname, '..', 'travel-app-prd.canonical.json'));
+// NO default, for the same reason as --out below: a built-in template names one project,
+// so a run whose project has no canonical of its own silently inherits that project's
+// identity — its name, its metadata — and looks like a successful synthesis.
+const TEMPLATE_PATH        = getArg('--template', '');
+if (!TEMPLATE_PATH) {
+  console.error('[synthesize-prd] --template is required (no default: a built-in one lends this run another project\'s identity)');
+  process.exit(2);
+}
 // NO default. This defaulted to travel-app-prd.json, so omitting --out silently
 // overwrote the travel-app PRD with whatever project was being synthesized.
 const OUT_PATH             = getArg('--out', '');
 if (!OUT_PATH) {
-  console.error('[synthesize-prd] --out is required (no default: it used to overwrite travel-app-prd.json)');
+  console.error('[synthesize-prd] --out is required (no default: it used to overwrite whichever PRD the built-in default named)');
   process.exit(2);
 }
 const PROJECT_NAME         = getArg('--project-name', '');

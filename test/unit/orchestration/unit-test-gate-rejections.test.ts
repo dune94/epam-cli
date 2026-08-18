@@ -52,7 +52,13 @@ function project(opts: {
 } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'utgate-')); dirs.push(dir);
   mkdirSync(join(dir, 'logs'), { recursive: true });
-  writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'x' }));
+  // A REAL PROJECT DECLARES HOW ITS TESTS RUN. This wrote `{ name: 'x' }` — no test script —
+  // which only worked because the gate ignored the declaration and exec'd node_modules/.bin/vitest
+  // by path. The gate now asks lib/ecosystems.js what THIS codeline's test command is, so the
+  // fixture declares one, as every project that has unit tests does. The runner stays a stub.
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({
+    name: 'x', scripts: { test: './node_modules/.bin/vitest run' },
+  }));
   // THE PROJECT DECLARES HOW IT VERIFIES ITSELF. The gate no longer invokes a compiler; it runs
   // this command through orchestrations/plugins/verification-plugin.js. A project that declares
   // nothing reports UNKNOWN and is REFUSED — deliberately, because the old behaviour was to skip
@@ -87,10 +93,26 @@ function project(opts: {
   writeFileSync(node, '#!/usr/bin/env bash\nexec bash "$@"\n');
   chmodSync(node, 0o755);
 
-  // npm, only reached when node_modules is absent.
+  // A STUB THAT BEHAVES LIKE THE THING IT STANDS IN FOR.
+  //
+  // This only ever answered `npm install`, because that was the only npm the gate ran — the test
+  // suite itself was exec'd as node_modules/.bin/vitest by path. The gate now runs the project's
+  // DECLARED command, which is `npm test`, so a stub that exits 0 for every argument reports a red
+  // suite as green and the two most important rejection tests here pass vacuously.
+  //
+  // So it dispatches like npm: `install` honours installExit, `test` runs the declared script.
   const npmDir = join(dir, 'fakebin'); mkdirSync(npmDir, { recursive: true });
   writeFileSync(join(npmDir, 'npm'),
-    `#!/usr/bin/env bash\n${opts.installExit === 124 ? 'sleep 30\n' : ''}exit ${opts.installExit ?? 0}\n`);
+    '#!/usr/bin/env bash\n'
+    + 'if [ "$1" = "test" ]; then\n'
+    + '  script=$(sed -n \'s/.*"test"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p\' package.json)\n'
+    + '  [ -n "$script" ] || { echo "npm ERR! missing script: test" >&2; exit 1; }\n'
+    + '  shift\n'
+    + '  [ "$1" = "--" ] && shift\n'
+    + '  eval "$script \"$@\""\n'
+    + '  exit $?\n'
+    + 'fi\n'
+    + `${opts.installExit === 124 ? 'sleep 30\n' : ''}exit ${opts.installExit ?? 0}\n`);
   chmodSync(join(npmDir, 'npm'), 0o755);
   return { dir, node, npmDir };
 }
@@ -109,6 +131,8 @@ function runGate(p: ReturnType<typeof project>, env: Record<string, string> = {}
      warning() { echo "WARN:$*"; }; error() { echo "ERR:$*"; }; success() { echo "OK:$*"; }
      is_truthy() { case "\${1:-}" in true|1|yes) return 0 ;; *) return 1 ;; esac; }
      detect_node() { echo ${JSON.stringify(p.node)}; }
+     ${'SCRIPT_DIR=' + JSON.stringify(join(__dirname, '../../../orchestrations/scripts'))}
+     ${'NODE_BIN=' + JSON.stringify(process.execPath)}
      step_emit() { :; }
      ${'AUTOMATION_DIR=' + JSON.stringify(join(__dirname, '../../../orchestrations'))}
      ${'NODE_CMD=' + JSON.stringify(process.execPath)}
@@ -164,11 +188,36 @@ describe('"does not apply" stays distinct from "applies and failed"', () => {
     expect(runGate(project(), { SKIP_UNIT_TEST_GATE: 'true' }).rc).toBe(0);
   });
 
-  it('a project with no package.json is skipped, not failed', () => {
+  it('a phase with no unit-test stories is skipped, not failed — the real "does not apply"', () => {
+    // THE DISTINCTION THIS DESCRIBE BLOCK PROTECTS, applied to the case that actually is one.
+    // Nothing in the phase asked for unit tests, so there is nothing to verify and nothing to
+    // report. This is the check the gate makes FIRST, and it still returns 0.
+    const p = project();
+    writeFileSync(join(p.dir, 'prd.json'), JSON.stringify({
+      implementationOrder: { core: ['S-1'] },
+      stories: [{ id: 'S-1', unitTests: false }],
+    }));
+    expect(runGate(p).rc, 'a phase that declares no unit tests was failed by the unit-test gate')
+      .toBe(0);
+  });
+
+  it('a project the engine cannot run tests for is a REFUSAL, not a skip', () => {
+    // WAS: "a project with no package.json is skipped, not failed", expecting 0.
+    //
+    // That conflated two different things. "The phase declares no unit tests" genuinely does not
+    // apply — covered above, and still returns 0. "The phase declares unitTests:true and the
+    // engine cannot run them" is the gate APPLYING and being unable to verify, which is the case
+    // this test actually set up: it deletes package.json while leaving a story demanding unit
+    // tests, and then asserted success.
+    //
+    // Returning 0 there certified stories as unit-tested having executed nothing — the same
+    // vacuous pass the bug-reproduction gate had, in the gate whose failure is most expensive to
+    // miss. Same principle: cannot prove is not proved.
     const p = project();
     rmSync(join(p.dir, 'package.json'));
     const r = runGate(p);
-    expect(r.rc, 'a project the gate does not apply to was failed by it').toBe(0);
+    expect(r.rc, 'stories declaring unitTests:true were certified with nothing run').not.toBe(0);
+    expect(r.out, 'the refusal does not say what was wrong').toMatch(/no way to run its tests/i);
   });
 
   it('the skip paths say why, so a silent pass is never mistaken for a green run', () => {

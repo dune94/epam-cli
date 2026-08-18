@@ -1,0 +1,40 @@
+{
+  "_what": "A model call reported $0 while consuming tokens. This is the record it reported, kept because the source file is deleted immediately after it is read.",
+  "agent": "role-assigner",
+  "model": "z-ai/glm-5.2",
+  "provider": "qwen",
+  "parsed": {
+    "costUsd": 0,
+    "tokensIn": 1794,
+    "tokensOut": 265,
+    "tokensCached": 1542,
+    "costUnknown": true,
+    "costIsEstimate": false
+  },
+  "raw": {
+    "result": "{ \"assignments\": [ { \"agentRole\": \"typescript-vitest-engineer\", \"codeline\": \"mocka\", \"reason\": \"The story requires editing src/fares.ts to correct the age comparison operator in fareFor so that riders aged exactly 65 receive the concession fare. The typescript-vitest-engineer role explicitly owns source fixes across both mocka and mockb, names src/fares.ts as the relevant source, and is responsible for making the vitest suite pass. No other role is available, and no other role's brief names source-file editing.\", \"storyId\": \"MOCK3-1\" }, { \"agentRole\": \"typescript-vitest-engineer\", \"codeline\": \"mockb\", \"reason\": \"The story requires editing src/schedule.ts to correct the loop bound in formatStops so the final stop is rendered. The typescript-vitest-engineer role explicitly owns source fixes in mockb, names src/schedule.ts as the relevant source, and is responsible for running the vitest suite declared in mockb's manifest. No other role is available, and the brief directly names the surface this story touches.\", \"storyId\": \"MOCK3-2\" } ] }",
+    "model": "z-ai/glm-5.2",
+    "provider": "qwen",
+    "usage": {
+      "inputTokens": 1794,
+      "outputTokens": 265,
+      "totalTokens": 2059,
+      "cached_input_tokens": 1542
+    },
+    "cost_usd": 0.0007,
+    "cost_is_estimate": false,
+    "toolCallCount": 0,
+    "iterations": 1,
+    "timings": [
+      {
+        "iteration": 1,
+        "modelLatencyMs": 3099,
+        "toolExecMs": 0,
+        "toolCalls": []
+      }
+    ],
+    "total_cost_usd": 0,
+    "tokens": 0,
+    "planCostUsd": 0
+  }
+}

@@ -153,7 +153,9 @@ describe('claude.sh — _total_attempts fixes the amendment-injection gate for f
 
   it('COORDINATOR_PROMPT_AMENDMENT injection is gated on _total_attempts, not retry_count', () => {
     const idx = claudeSrc.indexOf('Inject coordinator prompt amendment when available');
-    const block = claudeSrc.slice(idx, idx + 400);
+    // Widened 2026-08-12: the "What Your Last Attempt Did" block was inserted between this
+    // comment and the amendment gate, so a 400-char window no longer reached the gate.
+    const block = claudeSrc.slice(idx, idx + 1600);
     expect(block).toMatch(/\[ "\$_total_attempts" -gt 1 \]/);
     expect(block).not.toMatch(/\[ "\$retry_count" -gt 0 \] && \[ -n "\$\{COORDINATOR_PROMPT_AMENDMENT/);
   });

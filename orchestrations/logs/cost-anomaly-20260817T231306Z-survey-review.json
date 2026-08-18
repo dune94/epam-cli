@@ -1,0 +1,94 @@
+{
+  "_what": "A model call reported $0 while consuming tokens. This is the record it reported, kept because the source file is deleted immediately after it is read.",
+  "agent": "survey-review",
+  "model": "z-ai/glm-5.2",
+  "provider": "qwen",
+  "parsed": {
+    "costUsd": 0,
+    "tokensIn": 8202,
+    "tokensOut": 1885,
+    "tokensCached": 0,
+    "costUnknown": true,
+    "costIsEstimate": false
+  },
+  "raw": {
+    "result": "## Findings\n\nNo false claims found.\n\n**What I checked:**\n\n**mock-a** (`/home/bradleyjerome/projects/mock3/mock-a`):\n- `src/fares.ts`: `fareFor` exists at lines 8–13; line 10 reads `if (rider.age > 65) return CONCESSION_FARE_CENTS;`; base fare is 350 cents, concession is 175 cents. A rider aged exactly 65 does fall through to the base fare. All claims confirmed.\n- `test/fares.test.ts`: Tests ages 30, 8, and 70; no test for age 65. Confirmed.\n- Searched `src/` for `formatStops` and `schedule` — no matches. Confirmed no schedule/formatStops symbols exist in this codeline.\n\n**mock-b** (`/home/bradleyjerome/projects/mock3/mock-b`):\n- `src/schedule.ts`: `formatStops` exists at lines 4–10; line 6 reads `for (let i = 0; i < stops.length - 1; i++)`, omitting the final stop. `totalMinutes` at lines 12–13 reads `stops[stops.length - 1].minutes`, correctly accessing the last element. All claims confirmed.\n- `test/schedule.test.ts`: Asserts output contains `->` and `Union`; does not assert `Eglinton` appears. Confirmed.\n- Searched `src/` for `fareFor`, `fare`, `concession`, and `age` — no matches. Confirmed no fare/age/concession symbols exist in this codeline.\n\nEvery concrete claim in the survey is accurate.",
+    "model": "z-ai/glm-5.2",
+    "provider": "qwen",
+    "usage": {
+      "inputTokens": 8202,
+      "outputTokens": 1885,
+      "totalTokens": 10087,
+      "cached_input_tokens": 0
+    },
+    "cost_usd": 0.0105,
+    "cost_is_estimate": false,
+    "toolCallCount": 8,
+    "iterations": 3,
+    "timings": [
+      {
+        "iteration": 1,
+        "modelLatencyMs": 3694,
+        "toolExecMs": 2,
+        "toolCalls": [
+          {
+            "name": "read_file",
+            "resultBytes": 574,
+            "isError": false
+          },
+          {
+            "name": "read_file",
+            "resultBytes": 709,
+            "isError": false
+          },
+          {
+            "name": "read_file",
+            "resultBytes": 451,
+            "isError": false
+          },
+          {
+            "name": "read_file",
+            "resultBytes": 658,
+            "isError": false
+          }
+        ]
+      },
+      {
+        "iteration": 2,
+        "modelLatencyMs": 18504,
+        "toolExecMs": 78,
+        "toolCalls": [
+          {
+            "name": "search",
+            "resultBytes": 18,
+            "isError": false
+          },
+          {
+            "name": "search",
+            "resultBytes": 18,
+            "isError": false
+          },
+          {
+            "name": "list_files",
+            "resultBytes": 31,
+            "isError": false
+          },
+          {
+            "name": "list_files",
+            "resultBytes": 37,
+            "isError": false
+          }
+        ]
+      },
+      {
+        "iteration": 3,
+        "modelLatencyMs": 11242,
+        "toolExecMs": 0,
+        "toolCalls": []
+      }
+    ],
+    "total_cost_usd": 0,
+    "tokens": 0,
+    "planCostUsd": 0
+  }
+}

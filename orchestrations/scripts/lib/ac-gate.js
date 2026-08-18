@@ -31,6 +31,62 @@
 'use strict';
 
 const fs           = require('fs');
+const { renderEngineTemplate } = require('./engine-prompt');
+
+/**
+ * THE ENVIRONMENT A SEAM GRANTS: ladder position, effort, output budget, timeout, tool grant.
+ *
+ * This gate announced itself as 'ac-gate' and 'ac-gate-codeline'. Neither is a seam the registry
+ * knows, so resolveSeam found nothing and every call ran with no ladder and no budget — on a
+ * hardcoded fallback model, which is the shape the ladder work removed everywhere else under the
+ * rule that a seam with no resolvable model must decline rather than guess.
+ *
+ * Meanwhile the registry declared 'ac-classification' (ladder=base, effort=low) and
+ * 'ac-elaboration' (ladder=top, effort=medium) for exactly this stage: profiles written for a
+ * step, addressed by no caller.
+ *
+ * The identity IS the seam, which is how discovery already does it and what makes the two
+ * impossible to drift apart. Each template declares the seam it serves, and these match.
+ *
+ * Cost travels with it: ai-run.sh writes the normalized result JSON when ORCH_JSON_RESULT is set,
+ * and this gate runs once per ticket — the more expensive of the two invisible stages.
+ */
+/** The tail of a failed call's stderr, as a phrase to append to an error. */
+function _why(errFile) {
+  try {
+    const t = fs.readFileSync(errFile, 'utf8').trim();
+    return t ? ` — stderr: ${t.slice(-400)}` : ' (no stderr captured)';
+  } catch { return ' (no stderr captured)'; }
+}
+
+function seamEnv(seam, costFile) {
+  let granted = {};
+  try {
+    granted = require('./seam-invocation.js').seamInvocationEnv(seam);
+  } catch (e) {
+    // Loud. Running anyway on ambient settings is what this replaced.
+    process.stderr.write(`[ac-gate] seam '${seam}' did not resolve: ${(e && e.message) || e}\n`);
+  }
+  if (granted.EPAM_ALLOWED_TOOLS) granted.AI_GATE_ALLOW_TOOLS = '1';
+  return { ...process.env, ...granted, EPAM_AGENT_NAME: seam, ORCH_JSON_RESULT: costFile };
+}
+
+/** Append this call's spend to the activity log. Best-effort; never breaks the call it measured. */
+function emitSpend(costFile, seam) {
+  try {
+    require('./cost-emitter.js').emitCostSnapshot({
+      resultFile: costFile,
+      activityFile: process.env.ACTIVITY_FILE
+        || path.join(process.env.LOG_DIR || path.join(__dirname, '..', '..', 'logs'), 'agent-activity.jsonl'),
+      agent: seam,
+      storyId: '',
+      phase: process.env.PHASE || '',
+      model: MODEL,
+      provider: PROVIDER,
+    });
+  } catch { /* cost emission must never break the agent call */ }
+  try { fs.unlinkSync(costFile); } catch { /* ignore */ }
+}
 const path         = require('path');
 const { execSync } = require('child_process');
 
@@ -53,13 +109,20 @@ const MODEL   = getArg('--model', process.env.ORCH_GATE_MODEL || process.env.EPA
 const ISSUES_PATH = getArg('--issues');
 const OUT_PATH    = getArg('--out', '');   // write JSON results to file instead of stdout
 
-if (!ISSUES_PATH && !argv.includes('--help')) {
+// Scoped to DIRECT invocation: unscoped, requiring this module to call a prompt builder
+// exits the requiring process. The check itself is unchanged.
+if (require.main === module && (!ISSUES_PATH && !argv.includes('--help'))) {
   process.stderr.write('Usage: node ac-gate.js --issues <path> [--out <path>]\n');
   process.exit(1);
 }
 
 const SCRIPT_DIR  = path.join(__dirname, '..');
-const AI_RUN_SH   = path.join(SCRIPT_DIR, 'ai-run.sh');
+// OVERRIDABLE, so this gate can be exercised without reaching a provider. lib/cpa-inference.js
+// and lib/kb-synthesizer.js already read AI_RUNNER_CMD, and codeline-discovery.js has its own
+// override for the same reason: a model caller that can only be tested by calling a model is
+// one whose failure handling never gets tested, which is how three swallowed stderr redirects
+// survived here. Empty by default; no behaviour change unless set.
+const AI_RUN_SH   = process.env.AI_RUNNER_CMD || path.join(SCRIPT_DIR, 'ai-run.sh');
 // process.execPath IS a node that satisfies this repo's requirement — it is the one
 // currently executing this file. The path that was here was valid on one machine, for one
 // nvm install, until that version was upgraded.
@@ -139,52 +202,20 @@ function buildClassificationPrompt(issue, knownCodelines) {
     .map(cl => `"${cl}Acs"`)
     .join(' and ');
 
-  return `You are an AC sufficiency gate for an autonomous software development pipeline.
-
-Assess whether the acceptance criteria for this Jira story are sufficient for an AI agent
-to implement it without human clarification.
-
-STORY: ${issue.jiraKey} — ${issue.title}
-
-DESCRIPTION:
-${(issue.description || '(none)')}
-
-ACCEPTANCE CRITERIA:
-${acsText}
-
-CLASSIFICATION RULES:
-- "sufficient": ACs are present, specific, testable, and cover the primary success path
-  AND at least one error/edge case. Agent can implement without asking questions.
-- "enrichable": ACs exist but are vague, incomplete, or missing error paths. Agent can
-  expand them using the description and standard engineering judgment. Low risk of drift.
-- "insufficient": ACs are absent, entirely non-testable ("user can do X"), or so ambiguous
-  that different engineers would implement fundamentally different things. Human must clarify.
-
-CODELINE CLASSIFICATION:
-Also determine which codeline(s) this story touches:
-${clBullets}
-${splitLine}
-
-When codeline is "${SPLIT_VALUE}", split the ACs per codeline:
-${splitAcLines}
-Use your understanding of the story domain — do NOT use keyword matching.
-If an AC straddles two codelines, place it in the one where the primary implementation work lives.
-
-RESPOND WITH JSON ONLY — no explanation, no markdown fences:
-{
-  "verdict": "sufficient" | "enrichable" | "insufficient",
-  "reason": "<one sentence explaining the verdict>",
-  "codeline": ${clList} | "${SPLIT_VALUE}",
-  "gaps": ["<gap 1>", ...],
-  "enrichedAcs": ["<expanded AC 1>", ...],
-${schemaAcFields}
-}
-
-"enrichedAcs" is required when verdict is "enrichable". "enrichedAcs" should be [] otherwise.
-${splitNote} are required when codeline is "${SPLIT_VALUE}". All should be [] otherwise.
-"gaps" should be [] when verdict is "sufficient".
-
-ENRICHMENT RULE (critical): enrichedAcs must describe OBSERVABLE BEHAVIOR to VERIFY — never HOW to implement it. Do NOT prescribe an internal mechanism or algorithm. Forbidden: "calculate independently", "split", "halve"/"×0.5", "per segment", "for each line item", adding new fields/flags, or any phrasing that presumes a particular code approach. A bug ticket describes a SYMPTOM ("the amount is not displayed for the return leg"); keep the enriched ACs at that symptom/behavior level (what a tester observes), and enrich ONLY for clarity, testability, and genuinely-missing edge/error cases. Inventing an implementation approach in an AC misdirects the downstream code investigation toward the wrong fix.`;
+  // RENDERED FROM THE TEMPLATE LAYER. Every codeline-shaped block is assembled here from the
+  // run's own registered codelines — the template names no codeline, and could not stay
+  // correct for another project if it did.
+  return renderEngineTemplate('ac-classification', {
+    __STORY_KEY__: issue.jiraKey,
+    __STORY_TITLE__: issue.title,
+    __STORY_DESCRIPTION__: issue.description || '(none)',
+    __AC_LIST__: acsText,
+    __CODELINE_LIST__: clList,
+    __CODELINE_BULLETS__: clBullets,
+    __SPLIT_AC_LINES__: splitAcLines,
+    __SCHEMA_AC_FIELDS__: schemaAcFields,
+    __SPLIT_NOTE__: splitNote,
+  });
 }
 
 // ── LLM call via epam run ──────────────────────────────────────────────────
@@ -206,22 +237,30 @@ function classifyWithLLM(issue, knownCodelines) {
   const prompt = buildClassificationPrompt(issue, knownCodelines);
 
   const tmpPrompt = `/tmp/ac-gate-prompt-${issue.jiraKey}.txt`;
+  // Declared outside the try: a call that threw spent money too, and dropping its record
+  // is how the expensive failures become the invisible ones.
+  const _costFile = `${tmpPrompt}.cost.json`;
+  // STDERR IS CAPTURED, NEVER DISCARDED. `2>/dev/null` turned a timeout, a missing key and a
+  // provider refusal into the same bare "Empty response", and the reason a call failed is
+  // the only thing that makes the fallback judgeable. Discovery already learned this: there
+  // it produced a tidy fallback to the highest-scored repo, against the wrong codeline.
+  const _errFile = `${tmpPrompt}.err`;
   fs.writeFileSync(tmpPrompt, prompt);
 
   try {
     // Use ai-run.sh for provider-agnostic LLM call with proper env/key routing
-    const cmd = `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>/dev/null`;
+    const cmd = `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>${_errFile}`;
     const raw = execSync(cmd, {
       encoding: 'utf8',
       timeout: Number(process.env.AC_GATE_TIMEOUT_MS || 360000),
-      env: { ...process.env, EPAM_AGENT_NAME: 'ac-gate' },
+      env: seamEnv('ac-classification', _costFile),
     }).trim();
 
-    if (!raw) throw new Error('Empty response from ai-run.sh');
+    if (!raw) throw new Error(`Empty response from ai-run.sh${_why(_errFile)}`);
 
     return parseLooseJson(raw, 'classification');
   } catch (e) {
-    process.stderr.write(`[ac-gate] LLM call failed for ${issue.jiraKey}: ${e.message}\n`);
+    process.stderr.write(`[ac-gate] LLM call failed for ${issue.jiraKey}: ${e.message}${_why(_errFile)}\n`);
     // A FAILED CALL IS NOT A VERDICT. This used to return 'enrichable', which
     // is a claim about the STORY, invented from a failure to reach or parse the
     // model. Live metrolinx 2026-07-29: the model actually answered
@@ -235,11 +274,13 @@ function classifyWithLLM(issue, knownCodelines) {
     // pass — see the caller's handling.
     return {
       verdict: 'unknown',
-      reason: `AC gate could not reach a verdict — the call or its parse failed: ${e.message.slice(0, 150)}`,
+      reason: `AC gate could not reach a verdict — the call or its parse failed: ${e.message.slice(0, 150)}${_why(_errFile)}`,
       gaps: [],
       enrichedAcs: [],
     };
   } finally {
+    emitSpend(_costFile, 'ac-classification');
+    try { fs.unlinkSync(_errFile); } catch { /* ignore */ }
     try { fs.unlinkSync(tmpPrompt); } catch { /* ignore */ }
   }
 }
@@ -260,40 +301,44 @@ function classifyCodelineOnly(issue, knownCodelines) {
   }
 
   const codelineList = knownCodelines.map((cl) => `- "${cl}" — ${codelineDesc(cl)}`).join('\n');
-  const prompt = `Assign this Jira story to a codeline. Answer with JSON only — no prose, no markdown fences.
-
-STORY: ${issue.jiraKey} — ${issue.title || ''}
-
-DESCRIPTION:
-${(issue.description || '')}
-
-CODELINES:
-${codelineList}
-- "${SPLIT_VALUE}" — the work spans multiple codelines
-
-Choose exactly one. Answer:
-{"codeline": "<one of the values above>"}
-`;
+  // RENDERED FROM THE TEMPLATE LAYER.
+  const prompt = renderEngineTemplate('ac-gate-codeline-assignment', {
+    __JIRA_KEY__: issue.jiraKey,
+    __TITLE__: issue.title || '',
+    __DESCRIPTION__: issue.description || '',
+    __CODELINE_LIST__: codelineList,
+    __SPLIT_VALUE__: SPLIT_VALUE,
+  });
 
   const tmpPrompt = `/tmp/ac-gate-codeline-${issue.jiraKey}.txt`;
+  // Declared outside the try: a call that threw spent money too, and dropping its record
+  // is how the expensive failures become the invisible ones.
+  const _costFile = `${tmpPrompt}.cost.json`;
+  // STDERR IS CAPTURED, NEVER DISCARDED. `2>/dev/null` turned a timeout, a missing key and a
+  // provider refusal into the same bare "Empty response", and the reason a call failed is
+  // the only thing that makes the fallback judgeable. Discovery already learned this: there
+  // it produced a tidy fallback to the highest-scored repo, against the wrong codeline.
+  const _errFile = `${tmpPrompt}.err`;
   fs.writeFileSync(tmpPrompt, prompt);
   try {
-    const cmd = `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>/dev/null`;
+    const cmd = `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>${_errFile}`;
     const raw = execSync(cmd, {
       encoding: 'utf8',
       timeout: Number(process.env.AC_GATE_TIMEOUT_MS || 360000),
-      env: { ...process.env, EPAM_AGENT_NAME: 'ac-gate-codeline' },
+      env: seamEnv('ac-classification', _costFile),
     }).trim();
-    if (!raw) throw new Error('Empty response from ai-run.sh');
+    if (!raw) throw new Error(`Empty response from ai-run.sh${_why(_errFile)}`);
     const parsed = parseLooseJson(raw, 'codeline classification');
     return { verdict, reason, gaps: [], enrichedAcs: [], codeline: parsed.codeline || SPLIT_VALUE };
   } catch (e) {
     // A failed call is not a routing decision. SPLIT_VALUE is the inclusive fallback —
     // the story spans every codeline rather than silently reaching none, which is the
     // failure this whole change caused once already.
-    process.stderr.write(`[ac-gate] codeline classification failed for ${issue.jiraKey}: ${e.message}\n`);
+    process.stderr.write(`[ac-gate] codeline classification failed for ${issue.jiraKey}: ${e.message}${_why(_errFile)}\n`);
     return { verdict, reason, gaps: [], enrichedAcs: [], codeline: SPLIT_VALUE };
   } finally {
+    emitSpend(_costFile, 'ac-classification');
+    try { fs.unlinkSync(_errFile); } catch { /* ignore */ }
     try { fs.unlinkSync(tmpPrompt); } catch { /* best effort */ }
   }
 }
@@ -303,38 +348,39 @@ Choose exactly one. Answer:
 // the description and title so the pipeline can continue without Jira intervention.
 // Result is stored in prd.json as enrichedAcs — never written to Jira.
 
+/**
+ * The AC-elaboration prompt. Extracted verbatim so a test can call it.
+ */
+function buildElaborationPrompt(issue) {
+  // RENDERED FROM THE TEMPLATE LAYER.
+  return renderEngineTemplate('ac-elaboration', {
+    __STORY_KEY__: issue.jiraKey,
+    __STORY_TITLE__: issue.title,
+    __STORY_DESCRIPTION__: issue.description || '(none)',
+  });
+}
+
 function elaborateAcs(issue) {
   if (DRY_RUN) {
     return [`Given "${issue.title}", verify the feature behaves as described.`];
   }
 
-  const prompt = `You are an acceptance-criteria writer for a brownfield software pipeline.
-
-A Jira story has NO formal acceptance criteria. Generate a complete, testable set of ACs
-so that an AI agent can implement the change without human clarification.
-
-STORY: ${issue.jiraKey} — ${issue.title}
-
-DESCRIPTION:
-${(issue.description || '(none)')}
-
-Rules:
-1. Each AC must be specific and testable (observable in UI, API response, or logs).
-2. Infer "expected" behaviour from the description, domain knowledge, and the word "NOT".
-3. Include: primary success path, at least one edge case, and one error/boundary case.
-4. Do NOT invent requirements not implied by the description.
-5. Use plain English, present tense, third-person ("The system...", "The UI shows...").
-6. Describe WHAT to verify (observable behavior), never HOW to implement it. Do NOT prescribe a mechanism/algorithm — no "calculate independently", "split", "halve", "per segment", "for each line item", new fields, or internal approach. Keep a bug's ACs at the symptom/behavior level; prescribing an implementation misdirects the downstream code investigation.
-
-Respond with JSON only — no markdown, no preamble:
-{ "enrichedAcs": ["<AC 1>", "<AC 2>", ...] }`;
+  const prompt = buildElaborationPrompt(issue);
 
   const tmpPrompt = `/tmp/ac-gate-elaborate-${issue.jiraKey}.txt`;
+  // Declared outside the try: a call that threw spent money too, and dropping its record
+  // is how the expensive failures become the invisible ones.
+  const _costFile = `${tmpPrompt}.cost.json`;
+  // STDERR IS CAPTURED, NEVER DISCARDED. `2>/dev/null` turned a timeout, a missing key and a
+  // provider refusal into the same bare "Empty response", and the reason a call failed is
+  // the only thing that makes the fallback judgeable. Discovery already learned this: there
+  // it produced a tidy fallback to the highest-scored repo, against the wrong codeline.
+  const _errFile = `${tmpPrompt}.err`;
   fs.writeFileSync(tmpPrompt, prompt);
   try {
-    const cmd = `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>/dev/null`;
-    const raw = execSync(cmd, { encoding: 'utf8', timeout: Number(process.env.AC_GATE_TIMEOUT_MS || 360000), env: { ...process.env, EPAM_AGENT_NAME: 'ac-gate' } }).trim();
-    if (!raw) throw new Error('Empty elaboration response');
+    const cmd = `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>${_errFile}`;
+    const raw = execSync(cmd, { encoding: 'utf8', timeout: Number(process.env.AC_GATE_TIMEOUT_MS || 360000), env: seamEnv('ac-elaboration', _costFile) }).trim();
+    if (!raw) throw new Error(`Empty elaboration response${_why(_errFile)}`);
     const parsed = parseLooseJson(raw, 'elaboration');
     return Array.isArray(parsed.enrichedAcs) && parsed.enrichedAcs.length > 0
       ? parsed.enrichedAcs
@@ -349,15 +395,21 @@ Respond with JSON only — no markdown, no preamble:
     // Elaboration failing means the pipeline does not know what the story
     // requires. Proceeding on an invented criterion is worse than stopping,
     // and the caller treats a throw here as 'unknown', which halts.
-    process.stderr.write(`[ac-gate]     elaboration failed: ${e.message}\n`);
+    process.stderr.write(`[ac-gate]     elaboration failed: ${e.message}${_why(_errFile)}\n`);
     process.stderr.write('[ac-gate]     NOT substituting a title-based criterion — that is a fabricated answer.\n');
     throw e;
   } finally {
+    emitSpend(_costFile, 'ac-elaboration');
+    try { fs.unlinkSync(_errFile); } catch { /* ignore */ }
     try { fs.unlinkSync(tmpPrompt); } catch { /* ignore */ }
   }
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────
+
+module.exports = { buildClassificationPrompt, buildElaborationPrompt };
+
+if (require.main !== module) return;
 
 (async () => {
   const issues = JSON.parse(fs.readFileSync(ISSUES_PATH, 'utf8'));

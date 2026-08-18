@@ -29,6 +29,10 @@ const src = readFileSync(CLAUDE_SH, 'utf8');
 // test, it is told the test is not its job and the repro-test-writer owns it.
 function extractRequiredTestBlock(): string {
   const start = src.indexOf('    local test_ownership_block=""');
+  // The block now ends at the render-failure guard. It used to end at the reviewer-feedback
+  // comment, which still works, but anchoring to the guard keeps the ABORT path in the slice —
+  // a harness that cut it off would never exercise "a policy that failed to render must not be
+  // treated as an empty policy".
   const end = src.indexOf('    # Reviewer feedback');
   if (start === -1 || end === -1) throw new Error('test_ownership_block markers not found');
   return src.slice(start, end);
@@ -43,7 +47,15 @@ function runRequiredTest(opts: { brownfield: boolean; fixSite: boolean; fixFile?
       : [],
     verificationCriteria: ['The return-trip promo discount amount is displayed in the email.'],
   });
+  // UPDATED 2026-08-12: the policy is rendered from the project-authority prompt now, not a
+  // heredoc, so the harness supplies SCRIPT_DIR, NODE_BIN and the project config dir the real
+  // script has. Stubbing the render would test the caller, not the receiver.
+  const repoRoot = join(__dirname, '../../../');
   const script = `
+export EPAM_PROJECT_CONFIG_DIR=${JSON.stringify(join(repoRoot, 'orchestrations/projects/metrolinx'))}
+SCRIPT_DIR=${JSON.stringify(join(repoRoot, 'orchestrations/scripts'))}
+NODE_BIN=${JSON.stringify(process.execPath)}
+error() { echo "$*" >&2; }
 run_it() {
   local PROJECT_ROOT='/tmp/mockrepo'
   local story_json='${storyJson}'

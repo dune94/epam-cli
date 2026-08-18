@@ -1,0 +1,17 @@
+{
+  "$why": [
+    "Moved out of claude.sh on 2026-08-16. Names the string literals a change must not disturb.",
+    "",
+    "The list was formatted inside the prompt by a sed pipeline. The caller formats it and passes it: a prompt that runs a shell pipeline to lay out its own content cannot be read as prose, which is what this layer exists for."
+  ],
+  "description": "Tells the writer which string literals in the target file must not change.",
+  "seams": [
+    "story-writer"
+  ],
+  "id": "writer-string-invariants",
+  "version": 1,
+  "body": "\n## CRITICAL COMPLIANCE: STRING INVARIANTS\nThe Acceptance Criteria above contain exact string matches required by the test suite.\nYou are FORBIDDEN from paraphrasing, summarizing, or optimizing these strings — reproduce them character-for-character, including case and spacing, wherever the AC requires them.\n\nLITERAL STRINGS TO USE VERBATIM:\n__STRING_LIST__\n",
+  "placeholders": [
+    "__STRING_LIST__"
+  ]
+}

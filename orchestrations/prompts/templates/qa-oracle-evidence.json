@@ -1,0 +1,35 @@
+{
+  "$why": [
+    "Moved out of run-agent-orchestration.sh on 2026-08-16.",
+    "",
+    "The ORACLE HEADINGS: each prepends a block of precomputed evidence to a gate prompt and tells",
+    "the gate how to treat it — \"hard evidence, treat as ground truth\". That framing is the whole",
+    "point of precomputing it. Without it a gate re-derives what it was already given, which is the",
+    "max-iteration exhaustion these oracles exist to prevent.",
+    "",
+    "One body per oracle, because each names its own source and a gate is handed only its own.",
+    "",
+    "2026-08-17: the section heading named npm. It is rendered above whatever dependency evidence the codeline produced, which is not always npm audit."
+  ],
+  "description": "Prepends precomputed oracle evidence to a QA gate prompt and frames it as ground truth.",
+  "seams": [
+    "qa-gate:sast",
+    "qa-gate:spec-validator"
+  ],
+  "id": "qa-oracle-evidence",
+  "version": 1,
+  "bodies": {
+    "semgrep": "## Semgrep Static Analysis Results (hard evidence — treat as ground truth)\n__SEMGREP_SUMMARY__\n\n__SAST_PROMPT__",
+    "npm_audit": "## Dependency Audit Results (hard evidence — dependency CVEs)\n__AUDIT_SUMMARY__\n\n__SAST_PROMPT__",
+    "typescript": "## TypeScript Compiler Results (hard evidence — treat as ground truth)\n__TSC_SUMMARY__\n\n__SAST_PROMPT__",
+    "test_results": "## Actual Test Results (hard evidence — use this as ground truth)\n__ORACLE_SUMMARY__\n\n__SPEC_PROMPT__"
+  },
+  "placeholders": [
+    "__SEMGREP_SUMMARY__",
+    "__SAST_PROMPT__",
+    "__AUDIT_SUMMARY__",
+    "__TSC_SUMMARY__",
+    "__ORACLE_SUMMARY__",
+    "__SPEC_PROMPT__"
+  ]
+}

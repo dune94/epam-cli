@@ -70,10 +70,17 @@ describe('EVERY SEAM CAN ESCALATE', () => {
   });
 
   it('every declared ladder resolves to one the project actually defines', () => {
+    // A PROFILE DECLARES A POSITION, and a position is resolvable against ANY project's tier
+    // order — that is the point of holding no tier vocabulary in the engine. Comparing the
+    // declared value against metrolinx's tier names made every seam look unresolvable, and tied
+    // an engine-wide invariant to one project's settings file besides.
     const known = declaredLadders();
     expect(known.length, 'no ladders declared — this check would pass vacuously').toBeGreaterThan(0);
+    const order = known.join(' ');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+    const { resolveTierPosition } = require(join(ROOT, 'orchestrations/scripts/lib/seam-invocation.js'));
     const unresolvable = Object.entries(profiles())
-      .filter(([, v]) => v.ladder && !known.includes(String(v.ladder).toLowerCase()))
+      .filter(([, v]) => v.ladder && !resolveTierPosition(String(v.ladder), { EPAM_MODEL_LADDER_TIER_ORDER: order }))
       .map(([k, v]) => `${k} -> ${v.ladder}`);
     expect(
       unresolvable,
@@ -106,7 +113,10 @@ describe('THE TIER IS A CHOICE, NOT A DEFAULT', () => {
     const p = profiles();
     for (const seam of ['team-lead-review', 'roster-review', 'code-review-cycle', 'cpa-gate', 'prd-change-reviewer']) {
       if (!p[seam]) continue;
-      expect(String(p[seam].ladder).toLowerCase(), `${seam} judges other work; a wrong verdict is invisible`).toBe('highest');
+      // 'top', the POSITION — not 'highest', which is what metrolinx happens to call its top
+      // tier. The assertion is that these seams sit at the top of whatever ladder the project
+      // declares; naming the tier here would make the invariant false for the next project.
+      expect(String(p[seam].ladder).toLowerCase(), `${seam} judges other work; a wrong verdict is invisible`).toBe('top');
     }
   });
 });
@@ -131,6 +141,10 @@ describe('A DYNAMIC AGENT INHERITS ITS SEAM\'S LADDER', () => {
     const { seamInvocationEnv } = require(join(ROOT, 'orchestrations/scripts/lib/seam-invocation.js'));
     process.env.AGENT_PROFILES_REGISTRY = REGISTRY;
     process.env.EPAM_MODEL_LADDER_HIGHEST = 'model-a=model-b';
+    // The project fact that turns the seam's declared position into 'highest'. Without it the
+    // position resolves to nothing and the seam falls back to the run default.
+    process.env.EPAM_MODEL_LADDER_TIER_ORDER = 'medium high highest';
+    process.env.EPAM_MODEL_LADDER_HIGHEST_START = 'model-a';
     const env = seamInvocationEnv('code-graph-detective', '');
     expect(
       env.EPAM_MODEL_LADDER,
@@ -164,10 +178,17 @@ describe('EVERY TIER IN USE IS ACTUALLY EXPORTED BY THE LOADER', () => {
        # The loader falls back to AUTOMATION_DIR when no project config dir is set, so both must
        # be defined for set -u to survive. Supplying them is what the real script does.
        AUTOMATION_DIR=${JSON.stringify(join(ROOT, 'orchestrations'))}
+       # SCRIPT_DIR too: the loader now reads the ladders through lib/model-ladders.sh, shared
+       # with every other entry point rather than hand-written inside claude.sh. Lifting the
+       # function out of the script means BASH_SOURCE points at the temp file, so the script
+       # directory has to be supplied — as the real script does.
+       SCRIPT_DIR=${JSON.stringify(join(ROOT, 'orchestrations/scripts'))}
        EPAM_PROJECT_CONFIG_DIR=${JSON.stringify(join(ROOT, 'orchestrations/projects/metrolinx'))}
        ${body}
        load_llm_settings_json >/dev/null 2>&1 || true
-       for v in EPAM_MODEL_LADDER_HIGH EPAM_MODEL_LADDER_MEDIUM EPAM_MODEL_LADDER_HIGHEST; do
+       # TIER_ORDER too: it is what a declared position is resolved against, so collecting the
+       # chains without it leaves the caller unable to tell which chain a seam actually asks for.
+       for v in EPAM_MODEL_LADDER_HIGH EPAM_MODEL_LADDER_MEDIUM EPAM_MODEL_LADDER_HIGHEST EPAM_MODEL_LADDER_TIER_ORDER; do
          echo "$v=\${!v:-}"
        done`,
     ], { encoding: 'utf8' });
@@ -182,7 +203,18 @@ describe('EVERY TIER IN USE IS ACTUALLY EXPORTED BY THE LOADER', () => {
 
   it('every tier a seam asks for is populated with real rungs', () => {
     const vars = loadedLadderVars();
-    const used = new Set(Object.values(profiles()).map((v) => String(v.ladder || '').toUpperCase()));
+    // A PROFILE DECLARES A POSITION, NOT A TIER. Uppercasing profile.ladder and looking up
+    // EPAM_MODEL_LADDER_TOP asks for a variable no project exports, so this reported every seam
+    // as unresolvable while the engine was resolving them correctly. Resolving the position the
+    // same way the engine does also makes the assertion stronger: it now checks the whole
+    // position -> project tier -> rungs path rather than one link of it.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+    const { resolveTierPosition } = require(join(ROOT, 'orchestrations/scripts/lib/seam-invocation.js'));
+    const used = new Set(
+      Object.values(profiles())
+        .map((v) => resolveTierPosition(String(v.ladder || ''), vars).toUpperCase())
+        .filter(Boolean),
+    );
     expect(used.size, 'no tiers in use — vacuous').toBeGreaterThan(0);
     for (const tier of used) {
       const key = `EPAM_MODEL_LADDER_${tier}`;

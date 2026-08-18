@@ -21,6 +21,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # weaker copy of the engine-artefact exclusions.
 # shellcheck source=lib/git-ops.sh
 source "$SCRIPT_DIR/lib/git-ops.sh"
+source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
 PROJECT_ROOT="${GIT_WORK_ROOT:-${PROJECT_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}}"
 PROJECT_ROOT="$(cd "$PROJECT_ROOT" && pwd)"
 
@@ -35,18 +36,25 @@ AUTO_COMMIT="${AUTO_COMMIT:-false}"
 PHASE="${PHASE:-unknown-phase}"
 LANE="${LANE:-}"
 
-# Files/patterns to exclude from the untracked check
-# (build artifacts, IDE dirs, OS files that agents shouldn't commit)
-EXCLUDE_PATTERNS=(
-    "*.dart_tool*"
-    "*/build/*"
-    "*/node_modules/*"
-    "*.DS_Store"
-    "*.idea/*"
-    "orchestrations/logs/*"
-    "orchestrations/prd.json.lock"
-    "orchestrations/prd.json.backup"
-)
+# WHAT IS NOT THE AGENT'S UNCOMMITTED WORK — from the one place that knows.
+#
+# This was a hand-written list naming .dart_tool, build and node_modules, and lib/git-ops.sh
+# carried a different one. It decides what counts as an uncommitted file, which sets issues=1,
+# which makes Step 3.1 exit 1 — so on a Rust or Python codeline whose target/ or .venv/ was not
+# gitignored, the build tree was reported as thousands of files of agent output and killed the
+# phase.
+#
+# NO SILENT FALLBACK: an empty list here reports every artefact as agent work and fails the run,
+# so a handler that cannot answer stops the check with a diagnosis instead.
+EXCLUDE_PATTERNS=()
+_wthc_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib"
+if ! _wthc_ex=$("${NODE_BIN:-node}" "$_wthc_lib/handlers/repo-exclude-patterns.js" glob); then
+    error "could not resolve the exclusion list — every build artefact would be reported as agent output"
+    exit 1
+fi
+while IFS= read -r _wthc_pat; do
+    [ -n "$_wthc_pat" ] && EXCLUDE_PATTERNS+=( "$_wthc_pat" )
+done <<< "$_wthc_ex"
 
 # ─────────────────────────────────────────────
 # Build gitignore-style exclude args for git status
@@ -156,21 +164,23 @@ _auto_commit_worktree() {
         return 0
     fi
 
-    local commit_msg
-    commit_msg="$(cat <<EOF
-chore(wt-$lane): auto-commit agent output for phase $PHASE
-
-Automated commit of $changed_count file(s) produced by $lane agent.
-Phase: $PHASE
-Lane: $lane
-Timestamp: $timestamp
-
-WARNING: This was auto-committed by worktree-health-check.sh because
-the agent did not commit its own changes. Review these files.
-
-Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
-EOF
-)"
+    # RENDERED FROM THE TEMPLATE LAYER. A commit message is prose a human reads in git log
+    # months later; as a heredoc it could not be reviewed or diffed against anything else the
+    # engine says, and its attribution line had gone stale where nobody would see it.
+    local commit_msg _wt_vals
+    _wt_vals=$(mktemp "${TMPDIR:-/tmp}/wt-autocommit-vals-XXXXXX.json")
+    jq -n --arg lane "$lane" \
+          --arg phase "$PHASE" \
+          --arg changed_count "$changed_count" \
+          --arg timestamp "$timestamp" \
+          --arg author "${EPAM_AUTOCOMMIT_AUTHOR:-Claude <noreply@anthropic.com>}" \
+          '{"__LANE__":$lane,"__PHASE__":$phase,"__CHANGED_COUNT__":$changed_count,"__TIMESTAMP__":$timestamp,"__AUTHOR__":$author}' > "$_wt_vals"
+    if ! commit_msg=$(render_engine_prompt worktree-autocommit-message "$_wt_vals"); then
+        rm -f "$_wt_vals"
+        error "cannot render the auto-commit message — refusing to write a commit nobody can explain"
+        return 1
+    fi
+    rm -f "$_wt_vals"
 
     if git -C "$wt_path" commit -m "$commit_msg"; then
         success "Auto-committed $changed_count file(s) in worktree '$lane'"

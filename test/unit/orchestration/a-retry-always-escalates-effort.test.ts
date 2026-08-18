@@ -182,10 +182,18 @@ describe('rung 0 is never "low"', () => {
   it('effort never decreases as rungs climb', () => {
     const cfg = JSON.parse(readFileSync(
       join(__dirname, '../../../orchestrations/projects/metrolinx/llm-settings.json'), 'utf8'));
-    const rank: Record<string, number> = { low: 0, medium: 1, high: 2 };
+    // 'max' added 2026-08-12 when the top rung was raised to it. The rank table silently
+    // produced undefined for an effort it did not know, so the comparison compared nothing —
+    // an unknown level must be a failure, not a gap.
+    const rank: Record<string, number> = { low: 0, medium: 1, high: 2, max: 3 };
     const seq = cfg.rungs
       .sort((a: { rung: number }, b: { rung: number }) => a.rung - b.rung)
-      .map((r: { reasoningEffort: string }) => rank[r.reasoningEffort]);
+      .map((r: { reasoningEffort: string }) => {
+        const v = rank[r.reasoningEffort];
+        expect(v, `unknown reasoningEffort '${r.reasoningEffort}' — the rank table is stale`)
+          .not.toBeUndefined();
+        return v;
+      });
     for (let i = 1; i < seq.length; i++) {
       expect(seq[i], `rung ${i} is lower effort than rung ${i - 1}`).toBeGreaterThanOrEqual(seq[i - 1]);
     }

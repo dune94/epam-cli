@@ -4,5 +4,6 @@
   "roles": [
     "typescript-engineer",
     "test-engineer"
-  ]
+  ],
+  "_leak": "2026-08-16: contentstack-live-preview-integration-engineer was appended here by a metrolinx run. This file is epam-cli own roles and is the FALLBACK the write perimeter uses when a project has no project-roles.json of its own — so one client’s role was a role every other project would have accepted. metrolinx keeps it in projects/metrolinx/project-roles.json, where it belongs."
 }

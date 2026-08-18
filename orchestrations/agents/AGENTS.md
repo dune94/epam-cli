@@ -14226,3 +14226,219 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/AMSD-2041_*.log
 
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-11 19:57:55
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-12 12:48:38
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-12 14:41:36
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-12 15:21:50
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-13 17:57:50
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-13 19:49:56
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-13 20:25:13
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-14 10:36:51
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-14 11:52:42
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-14 17:47:49
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-14 18:03:42
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-14 18:31:56
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-14 18:58:51
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-14 19:58:37
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-14 22:22:17
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-14 23:05:20
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-14 23:27:37
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-15 00:02:06
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-15 00:18:00
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-15 02:39:44
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-15 03:00:14
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-15 03:11:35
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-15 14:04:48
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-15 15:10:41
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-15 15:53:37
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-15 20:14:01
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## MOCK3-1: Riders aged exactly 65 are charged the adult fare
+- **Date**: 2026-08-18 07:26:40
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-1_*.log
+
+## MOCK3-2: The departure board omits the final stop
+- **Date**: 2026-08-18 07:37:29
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-2_*.log
+
+## MOCK3-2: The departure board omits the final stop
+- **Date**: 2026-08-18 09:30:53
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-2_*.log
+
+## MOCK3-1: Riders aged exactly 65 are charged the adult fare
+- **Date**: 2026-08-18 09:31:12
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-1_*.log
+
+## MOCK3-2: The departure board omits the final stop
+- **Date**: 2026-08-18 10:36:04
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK3-2_*.log
+
+## MOCK3-2: The departure board omits the final stop
+- **Date**: 2026-08-18 10:36:04
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-2_*.log
+
+## MOCK3-1: Riders aged exactly 65 are charged the adult fare
+- **Date**: 2026-08-18 10:36:40
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK3-1_*.log
+
+## MOCK3-1: Riders aged exactly 65 are charged the adult fare
+- **Date**: 2026-08-18 10:36:40
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-1_*.log
+
+## MOCK3-2: The departure board omits the final stop
+- **Date**: 2026-08-18 11:02:12
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK3-2_*.log
+
+## MOCK3-1: Riders aged exactly 65 are charged the adult fare
+- **Date**: 2026-08-18 11:07:08
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK3-1_*.log
+

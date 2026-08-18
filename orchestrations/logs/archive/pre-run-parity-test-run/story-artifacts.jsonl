@@ -1,1 +1,10 @@
-{"storyId":"AMSD-2041","phase":"core","status":"attempt","elapsedMinutes":8.73,"costUsd":3.5781,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-10T20:12:55Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"attempt","elapsedMinutes":4.11,"costUsd":0.5861,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-15T14:25:51Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"attempt","elapsedMinutes":5.65,"costUsd":0.5861,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-15T14:31:46Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"attempt","elapsedMinutes":9.56,"costUsd":0.6972,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-15T14:43:00Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"attempt","elapsedMinutes":0.70,"costUsd":0.1255,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-15T14:48:50Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"attempt","elapsedMinutes":18.95,"costUsd":0.7888,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-15T15:10:12Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"completed","elapsedMinutes":49.85,"costUsd":0.7888,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-15T15:10:41Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"attempt","elapsedMinutes":15.88,"costUsd":0.0767,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-15T15:37:19Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"attempt","elapsedMinutes":9.53,"costUsd":0.0638,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-15T15:47:07Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"attempt","elapsedMinutes":4.06,"costUsd":0.8004,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-15T15:53:08Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"completed","elapsedMinutes":33.75,"costUsd":0.8004,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-15T15:53:36Z"}

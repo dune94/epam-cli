@@ -19,6 +19,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# HARD-FAIL IF THIS DOES NOT LOAD. Sourcing a missing file is non-fatal without
+# set -e, and phase_exit_is_retryable would then be "command not found" -> exit 127
+# -> falsy -> the legitimate gate-remediation retry silently never happens. A
+# capability that disappears without a word is the failure mode this whole change
+# exists to remove.
+. "$SCRIPT_DIR/lib/phase-exit.sh" || { echo "[preflight] lib/phase-exit.sh failed to load — refusing to run" >&2; exit 1; }
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # Config files are DATA: load them without executing them. See lib/env-file.sh.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/env-file.sh"
@@ -192,11 +198,7 @@ if [ "${EPAM_BROWNFIELD:-0}" != "1" ]; then
   done
 
   # Secondary worktree teardown (multi-codeline PRDs)
-  _sec_wts=$("$NODE_BIN" -e "
-    const p = JSON.parse(require('fs').readFileSync('$PRD_CANONICAL','utf8'));
-    const dirs = p.project && p.project.outputDirs ? p.project.outputDirs : [];
-    dirs.filter(d => d.path !== '$OUTPUT_DIR').forEach(d => process.stdout.write(d.path+'\n'));
-  " 2>/dev/null || true)
+  _sec_wts=$("$NODE_BIN" "$SCRIPT_DIR/lib/handlers/secondary-codeline-dirs.js" "$PRD_CANONICAL" "$OUTPUT_DIR" 2>/dev/null || true)
   if [ -n "$_sec_wts" ]; then
     info "Multi-codeline PRD — tearing down secondary worktrees..."
     while IFS= read -r _sec_wt; do
@@ -264,8 +266,11 @@ echo ""
 
 # ── Wire dashboard to this run's live PRD + logs ──────────────────────────────
 info "Wiring dashboard..."
-bash "$SCRIPT_DIR/pre-run-reset.sh" --prd "$PRD_FILE" || \
-  info "  pre-run-reset.sh failed or Docker unavailable — dashboard may show stale data (non-fatal)"
+# Contamination ABORTS the launch; everything else stays non-fatal. One gate,
+# lib/pre-run-reset-gate.sh, for all launchers — this used to be five copies of
+# "|| info", all of which swallowed a contaminated-state exit as a Docker problem.
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/pre-run-reset-gate.sh"
+pre_run_reset_or_abort --prd "$PRD_FILE"
 if [ -n "${OUTPUT_DIR:-}" ]; then
   echo -n "$OUTPUT_DIR" > "$REPO_ROOT/orchestrations/dashboards/.active-output-dir"
 fi
@@ -308,7 +313,7 @@ run_phase() {
   echo ""
 
   # exit 2 = gate remediation was applied — reset stories and retry once
-  if [ "$phase_exit" -eq 2 ]; then
+  if phase_exit_is_retryable "$phase_exit"; then
     info "  Self-healing: gate remediation applied — resetting and retrying phase '$phase'..."
     if [ "${EPAM_BROWNFIELD:-0}" != "1" ]; then
       bash "$SCRIPT_DIR/prd-remediate.sh" --prd "$PRD_FILE" --phase "$phase" --mid-phase-retry \
@@ -351,16 +356,7 @@ if [ -f "$PRD_FILE" ]; then
   PASS=0; FAIL_LIST=""
   while IFS= read -r story; do
     [ -z "$story" ] && continue
-    status=$(python3 -c "
-import json
-with open('$PRD_FILE') as f:
-  d = json.load(f)
-for s in d['stories']:
-  if s['id'] == '$story':
-    print(s.get('status','unknown')); break
-else:
-  print('not_found')
-" 2>/dev/null)
+    status=$(python3 "$SCRIPT_DIR/lib/handlers/story-status.py" "$PRD_FILE" "$story" 2>/dev/null)
     if [ "$status" = "completed" ]; then
       success "$story: completed"
       PASS=$((PASS+1))
@@ -368,15 +364,7 @@ else:
       echo -e "${RED}[orchestrate:${PROJECT}] ✗${NC} $story: $status"
       FAIL_LIST="$FAIL_LIST $story"
     fi
-  done < <(python3 -c "
-import json
-with open('$PRD_FILE') as f:
-  d = json.load(f)
-seen = set()
-for ids in d.get('implementationOrder', {}).values():
-  for i in ids:
-    if i not in seen: print(i); seen.add(i)
-" 2>/dev/null)
+  done < <(python3 "$SCRIPT_DIR/lib/handlers/story-implementation-order.py" "$PRD_FILE" 2>/dev/null)
   echo ""
 fi
 

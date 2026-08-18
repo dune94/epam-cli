@@ -57,11 +57,30 @@ done
 MAX_ITERATIONS=3
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/render-engine-prompt.sh
+source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
 
 # THIS SEAM ASKS FOR ITS LADDER.
 #
 # Until 2026-08-12 only team-lead-review.sh called this, so sixteen of seventeen seams kept
 # whatever fixed model their script hardcoded while the registry looked authoritative. The
+# EVERY ENTRY POINT READS THE LADDER DECLARATION ITSELF.
+#
+# lib/model-ladders.sh exists so that "what a tier contains" is declared once and read the same
+# way everywhere. Only claude.sh, run-agent-orchestration.sh and detective-rerun.sh ever called
+# it, so this script resolved its model ONLY from environment its parent happened to export. Run
+# standalone — a replay, a retest, a test harness — nothing set EPAM_MODEL_LADDER_<TIER>,
+# seam_ladder_export set no EPAM_MODEL, and this seam skipped its work while exiting 0.
+#
+# export_model_ladders leaves an already-set value alone, so calling it here changes nothing when
+# the orchestrator has already exported the chain, and supplies it when nobody has.
+_ml_lib="${SCRIPT_DIR:-$(dirname "${BASH_SOURCE[0]}")}/lib/model-ladders.sh"
+if [ -f "$_ml_lib" ]; then
+    # shellcheck source=lib/model-ladders.sh
+    . "$_ml_lib" || true
+    command -v export_model_ladders >/dev/null 2>&1 \
+        && export_model_ladders "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json}" || true
+fi
 # ask must come BEFORE any model is resolved below: seam_ladder_export sets EPAM_MODEL, and
 # a later assignment that wins makes the whole thing decorative.
 #
@@ -69,7 +88,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # model rather than kill a run.
 # shellcheck source=lib/seam-ladder.sh
 . "$SCRIPT_DIR/lib/seam-ladder.sh" 2>/dev/null || true
-command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "code-review-cycle"
+# WHICH AGENT THIS IS — declared ONCE, and exported so ai-run.sh keys this agent's ladder rung
+# state to it. Without it every agent shared one counter ("agent__<story>"): one agent escalating
+# advanced the ladder for all of them, and team-lead-review's cross-process resume read a key
+# nothing ever wrote.
+_SEAM_NAME="code-review-cycle"
+export EPAM_AGENT_NAME="$_SEAM_NAME"
+command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "$_SEAM_NAME"
 
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
@@ -78,7 +103,10 @@ REVIEW_LOG="${REVIEW_LOG:-$AUTOMATION_DIR/logs/code-reviews.jsonl}"
 MESSAGES_DIR="${MESSAGES_DIR:-$AUTOMATION_DIR/logs/messages}"
 AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$AUTOMATION_DIR/agents/profiles.json}"
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
-ORCH_GATE_MODEL="${ORCH_GATE_MODEL:-z-ai/glm-5.2}"
+# THE SEAM DECIDES. seam_ladder_export set EPAM_MODEL to the first rung of the chain this
+# seam's archetype declares; the literal that stood here overrode it silently, so editing the
+# declared tier moved no model. An operator value still wins; the unremovable default is gone.
+ORCH_GATE_MODEL="${ORCH_GATE_MODEL:-${EPAM_MODEL:-}}"
 
 run_review_prompt() {
     local prompt_text="$1"
@@ -213,34 +241,25 @@ $_PRIOR_ISSUES"
     fi
 fi
 
-_REVIEW_PROMPT="${_REVIEW_PROFILE}
-
----
-REVIEW TASK (Iteration $ITERATION): Story $STORY_ID — $STORY_TITLE
-AGENT: $STORY_AGENT
-
-DESCRIPTION: $_STORY_DESC
-
-ACCEPTANCE CRITERIA:
-$_STORY_ACS
-
-RELEVANT FILES: $_STORY_FILES
-
-GIT DIFF:
-\`\`\`diff
-$_STORY_DIFF
-\`\`\`
-$_PRIOR_CONTEXT
-PROJECT ROOT: $PROJECT_ROOT
-
-Review the implementation against each acceptance criterion.
-Check: TypeScript strict compliance, test coverage, error handling, security.
-
-Respond with ONLY a JSON object:
-{\"verdict\":\"approved\",\"issues\":[],\"summary\":\"...\"}
-  OR
-{\"verdict\":\"changes_requested\",\"issues\":[{\"severity\":\"blocker|major|minor\",\"file\":\"...\",\"line\":0,\"description\":\"...\",\"suggestedFix\":\"...\"}],\"summary\":\"...\"}"
-
+# RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
+_tpl_vals=$(mktemp "${TMPDIR:-/tmp}/code-review-cycle-vals-XXXXXX.json")
+jq -n --arg iteration "$ITERATION" \
+      --arg prior_context "$_PRIOR_CONTEXT" \
+      --arg project_root "$PROJECT_ROOT" \
+      --arg review_profile "$_REVIEW_PROFILE" \
+      --arg story_acs "$_STORY_ACS" \
+      --arg story_agent "$STORY_AGENT" \
+      --arg story_description "$_STORY_DESC" \
+      --arg story_diff "$_STORY_DIFF" \
+      --arg story_files "$_STORY_FILES" \
+      --arg story_id "$STORY_ID" \
+      --arg story_title "$STORY_TITLE" \
+      '{"__ITERATION__":$iteration,"__PRIOR_CONTEXT__":$prior_context,"__PROJECT_ROOT__":$project_root,"__REVIEW_PROFILE__":$review_profile,"__STORY_ACS__":$story_acs,"__STORY_AGENT__":$story_agent,"__STORY_DESCRIPTION__":$story_description,"__STORY_DIFF__":$story_diff,"__STORY_FILES__":$story_files,"__STORY_ID__":$story_id,"__STORY_TITLE__":$story_title}' > "$_tpl_vals" 2>/dev/null
+if ! _REVIEW_PROMPT=$(render_engine_prompt code-review-cycle "$_tpl_vals"); then
+    echo "[code-review-cycle] cannot render its prompt — refusing to run with no instructions" >&2
+    rm -f "$_tpl_vals"; exit 1
+fi
+rm -f "$_tpl_vals"
 _REVIEW_OUTPUT_FILE="$AUTOMATION_DIR/logs/review-agent-${STORY_ID}-iter${ITERATION}.log"
 _REVIEW_OUTPUT=$(run_review_prompt "$_REVIEW_PROMPT" 2>&1 | tee "$_REVIEW_OUTPUT_FILE")
 # Also write to canonical log (latest) for subsequent iterations to reference
@@ -251,29 +270,7 @@ cp "$_REVIEW_OUTPUT_FILE" "$AUTOMATION_DIR/logs/review-agent-${STORY_ID}.log"
 # flat, non-nested JSON object — real review responses' "issues" array
 # contains nested {...} objects, which neither pattern can span, silently
 # falling through to the "approved" default regardless of the actual verdict.
-_REVIEW_JSON=$(echo "$_REVIEW_OUTPUT" | python3 -c "
-import re, sys, json
-text = sys.stdin.read()
-start = text.find('{')
-result = None
-if start != -1:
-    decoder = json.JSONDecoder()
-    try:
-        result, _ = decoder.raw_decode(text, start)
-    except (ValueError, json.JSONDecodeError):
-        # Same fix as team-lead-review.sh (live AMSD-2041, 2026-07-31): strip
-        # a stray quote directly after a number before a delimiter — a token
-        # shape that can never appear in valid JSON — then retry once.
-        repaired = re.sub(r'(?<=\d)\"(?=\s*[,}])', '', text)
-        try:
-            result, _ = decoder.raw_decode(repaired, start)
-        except (ValueError, json.JSONDecodeError):
-            result = None
-if not isinstance(result, dict) or 'verdict' not in result:
-    # SAFE default = BLOCK, never silently approve an unreviewed change (2026-07-23).
-    result = {'verdict': 'changes_requested', 'issues': [{'severity': 'blocker', 'description': 'review output had no parseable verdict — the change was NOT reviewed; blocking rather than auto-approving.'}], 'summary': 'review output unparseable'}
-print(json.dumps(result))
-" 2>/dev/null || echo '{"verdict":"changes_requested","issues":[{"severity":"blocker","description":"review verdict unparseable — not auto-approving"}],"summary":"review parse failure"}')
+_REVIEW_JSON=$(echo "$_REVIEW_OUTPUT" | python3 "$SCRIPT_DIR/lib/handlers/code-review-json.py" 2>/dev/null || echo '{"verdict":"changes_requested","issues":[{"severity":"blocker","description":"review verdict unparseable — not auto-approving"}],"summary":"review parse failure"}')
 
 ISSUES=()
 _RAW_VERDICT=$(echo "$_REVIEW_JSON" | jq -r '.verdict // "approved"' 2>/dev/null || echo "approved")

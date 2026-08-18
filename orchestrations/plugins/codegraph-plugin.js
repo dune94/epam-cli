@@ -56,6 +56,75 @@ const MODE_FIELDS = {
   show:     { field: 'file',   split: false },
 };
 
+
+/**
+ * WHICH REPOSITORY THIS QUERY IS ABOUT.
+ *
+ * The tool used to answer from process.cwd() with no way to ask about anything else, so an agent
+ * sweeping several codelines queried ONE and got no error — from the tool's side nothing was wrong.
+ * Live 2026-08-17: every query about one codeline was answered from another's index, and a roster
+ * was minted briefing a fix into a repository that does not contain the code.
+ *
+ * AMBIGUITY IS THE DEFECT, not the default. So cwd remains correct when the scope holds a single
+ * codeline — the single-codeline agents that never name one keep working unchanged — and becomes a
+ * refusal when several are in scope and the call names none. Answering a neighbour silently is the
+ * one outcome that must be impossible.
+ *
+ * The scope is READ FROM WHAT THE RUN ALREADY PUBLISHES: codeline-discovery.json, written by
+ * discovery with {name, path} per codeline, and EPAM_CODELINE_PATHS, exported by the codeline loop
+ * before that artefact lands. No path, project or codeline name is written here; a table in this
+ * file would make the plugin a one-project file.
+ *
+ * @returns {{ok:true, repo:string}|{ok:false, error:string}}
+ */
+function resolveQueryRepo(input, opts) {
+  const o = opts || {};
+  const cwd = o.cwd || process.cwd();
+  const env = o.env || process.env;
+  const named = input && typeof input.codeline === 'string' ? input.codeline.trim() : '';
+
+  // The run's own record of what is in scope, most authoritative first.
+  const scope = [];
+  const addScope = (name, p) => {
+    if (!p || scope.some((c) => c.path === p)) return;
+    scope.push({ name: name || path.basename(p), path: p });
+  };
+  const logDir = env.EPAM_PROJECT_OUTPUT_DIR || env.LOG_DIR || '';
+  if (logDir) {
+    try {
+      const disc = JSON.parse(require('fs').readFileSync(path.join(logDir, 'codeline-discovery.json'), 'utf8'));
+      for (const c of disc.codelines || []) addScope(c && c.name, c && c.path);
+    } catch { /* discovery has not written it yet */ }
+  }
+  for (const p of String(env.EPAM_CODELINE_PATHS || '').split(/[,:]/).map((x) => x.trim()).filter(Boolean)) {
+    addScope('', p);
+  }
+
+  if (named) {
+    const hit = scope.find((c) => c.name === named)
+      || scope.find((c) => path.basename(c.path) === named);
+    if (hit) return { ok: true, repo: hit.path };
+    return {
+      ok: false,
+      error: `codeline '${named}' is not in scope for this run. In scope: `
+        + `${scope.map((c) => c.name).join(', ') || '(nothing published yet)'}. `
+        + 'Name one of those, or omit codeline when only one is in scope.',
+    };
+  }
+
+  if (scope.length > 1) {
+    return {
+      ok: false,
+      error: `${scope.length} codelines are in scope (${scope.map((c) => c.name).join(', ')}) and this `
+        + 'query names none, so which repository to answer from is ambiguous. Pass codeline=<name>. '
+        + 'Answering from whichever repository this process happens to be in returns another '
+        + "codeline's symbols as though they were this one's.",
+    };
+  }
+  // One codeline, or none published: the unambiguous case, unchanged.
+  return { ok: true, repo: scope.length === 1 ? scope[0].path : cwd };
+}
+
 function buildArgv(input) {
   const mode = input && input.mode;
   if (!mode || !MODES.includes(mode)) {
@@ -124,6 +193,20 @@ const codegraphQueryTool = {
           enum: MODES,
           description: 'Which CodeGraph query to run.',
         },
+        // WHICH REPOSITORY THE ANSWER COMES FROM.
+        //
+        // Without this the tool answered from whichever repository the process happened to be in,
+        // so an agent asked about several codelines queried one and was told nothing was wrong.
+        // Required in practice whenever more than one codeline is in scope: resolveQueryRepo
+        // refuses an ambiguous call rather than returning a neighbour's symbols.
+        codeline: {
+          type: 'string',
+          description:
+            'The codeline to answer from, named exactly as it appears in the scope you were given. '
+            + 'Omit it only when a single codeline is in scope; with several, a query that names '
+            + "none is refused, because answering from the wrong one returns another repository's "
+            + 'symbols as though they were this one\'s.',
+        },
         // TYPED PER MODE, rather than one `args` string meaning five different things.
         //
         // `mode` was enum-constrained and machine-checked; `args` was checked by nobody, so a
@@ -179,7 +262,14 @@ const codegraphQueryTool = {
         };
       }
 
-      const projectRoot = process.cwd();
+      // WHICH REPOSITORY THIS ANSWER COMES FROM — resolved, never assumed from the cwd.
+      // A refusal here is the point: answering an ambiguous query from whichever repository the
+      // process is standing in is what put another codeline's symbols into a roster brief.
+      const scoped = resolveQueryRepo(input, { cwd: process.cwd(), env: process.env });
+      if (!scoped.ok) {
+        return { toolUseId: '', content: `Error: ${scoped.error}`, isError: true };
+      }
+      const projectRoot = scoped.repo;
       const argv = built.argv.slice(1);
       let output;
       try {
@@ -218,4 +308,5 @@ const codegraphQueryTool = {
 module.exports = {
   tools: [codegraphQueryTool],
   buildArgv,
+  resolveQueryRepo,
 };

@@ -1,0 +1,20 @@
+{
+  "$why": [
+    "Moved out of spec-mode-runner.js on 2026-08-16.",
+    "",
+    "The clause that turns a tool grant into an instruction to USE it: open the manifests and",
+    "verify any API or package before naming it in a brief. A vendor's documentation describes",
+    "the vendor's current product; these repositories are what the run will actually change."
+  ],
+  "description": "Tells a roster-minting agent it has read-only tools and must verify any API or package it names.",
+  "id": "roster-tool-grant",
+  "seams": [
+    "roster-review",
+    "estate-survey"
+  ],
+  "placeholders": [
+    "__TOOL_GRANT__"
+  ],
+  "version": 1,
+  "body": "You have READ-ONLY tools (__TOOL_GRANT__). Use them: open the manifests, find the modules\nthis work touches, and VERIFY any API or package you are about to name in a brief actually\nexists in these repositories. A vendor's documentation describes its current product; these\ncodelines pin the versions they pin, and where the two disagree the repository wins. A brief\nthat names a symbol the installed package does not export sends an implementer to write code\nagainst something that is not there."
+}

@@ -1,0 +1,9 @@
+{"storyId":"MOCK3-2","phase":"core","status":"attempt","elapsedMinutes":0.35,"costUsd":0.0106,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-18T14:30:40Z"}
+{"storyId":"MOCK3-1","phase":"core","status":"attempt","elapsedMinutes":0.45,"costUsd":0.0098,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-18T14:30:46Z"}
+{"storyId":"MOCK3-1","phase":"core","status":"attempt","elapsedMinutes":0.58,"costUsd":0.014,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-18T14:32:03Z"}
+{"storyId":"MOCK3-2","phase":"core","status":"attempt","elapsedMinutes":0.28,"costUsd":0.0085,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-18T14:33:26Z"}
+{"storyId":"MOCK3-1","phase":"core","status":"attempt","elapsedMinutes":0.53,"costUsd":0.0278,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-18T14:34:58Z"}
+{"storyId":"MOCK3-2","phase":"core","status":"attempt","elapsedMinutes":0.65,"costUsd":0.0405,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-18T14:36:01Z"}
+{"storyId":"MOCK3-2","phase":"core","status":"completed","elapsedMinutes":5.75,"costUsd":0.0405,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-18T14:36:03Z"}
+{"storyId":"MOCK3-1","phase":"core","status":"attempt","elapsedMinutes":0.48,"costUsd":0.0248,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-18T14:36:38Z"}
+{"storyId":"MOCK3-1","phase":"core","status":"completed","elapsedMinutes":6.36,"costUsd":0.0248,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-18T14:36:40Z"}

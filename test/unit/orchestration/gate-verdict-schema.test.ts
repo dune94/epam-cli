@@ -21,6 +21,7 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
+import { templateBody } from '../../helpers/prompt-text';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -143,6 +144,9 @@ describe('brownfield gates judge the change, not the codebase', () => {
     // On 2026-07-26 only TWO of six gates mentioned the code the run changed.
     for (const gate of ['sast-sentinel', 'spec-validator', 'review-ranger',
                         'mutant-hunter', 'fuzz-weaver', 'perf-sentinel']) {
+      // The CALL SITE, which is script. Which gate asks for the scope is a property of the
+      // invocation; what the scope SAYS is a property of the prompt, asserted below against
+      // the template that now carries it.
       expect(ORCH, `${gate} is still pointed at the whole codebase`)
         .toMatch(new RegExp(`_brownfield_gate_scope ${gate}`));
     }
@@ -155,23 +159,24 @@ describe('brownfield gates judge the change, not the codebase', () => {
   });
 
   it('tells the gate which files this run produced', () => {
-    const fn = ORCH.slice(ORCH.indexOf('_brownfield_gate_scope() {'),
-                          ORCH.indexOf('BROWNFIELD_SCOPE\n}'));
-    expect(fn, 'the gate is told to scope itself but not to what')
+    const fn = templateBody('qa-brownfield-scope');
+    // The caller gathers the file list; the prompt declares where it goes. Both, so neither
+    // can quietly stop happening.
+    expect(ORCH, 'the gate is told to scope itself but not to what')
       .toMatch(/story_outputs_files/);
+    expect(templateBody('qa-brownfield-scope'), 'the prompt has nowhere to put the file list')
+      .toMatch(/__FILES__/);
   });
 
   it('forbids reporting pre-existing problems as findings', () => {
-    const fn = ORCH.slice(ORCH.indexOf('_brownfield_gate_scope() {'),
-                          ORCH.indexOf('BROWNFIELD_SCOPE\n}'));
+    const fn = templateBody('qa-brownfield-scope');
     expect(fn).toMatch(/pre-existing issue.*NOT a finding/s);
   });
 
   it('makes not_applicable a legitimate answer, with a reason', () => {
     // perf-sentinel on a backend string comparison has nothing to say. It must
     // be able to say that instead of returning nothing or faking a pass.
-    const fn = ORCH.slice(ORCH.indexOf('_brownfield_gate_scope() {'),
-                          ORCH.indexOf('BROWNFIELD_SCOPE\n}'));
+    const fn = templateBody('qa-brownfield-scope');
     expect(fn).toMatch(/not_applicable/);
     expect(fn, 'a gate could still return "pass" to mean "I could not evaluate this"')
       .toMatch(/do NOT return "pass" to\s*#?\s*mean/is);

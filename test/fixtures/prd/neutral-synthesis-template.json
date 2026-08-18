@@ -1,0 +1,10 @@
+{
+  "_why": "A PRD synthesis template carrying NO project identity, for tests whose subject is the synthesizer's own logic (codeline filtering, multi-codeline stories) rather than any project's facts. synthesize-prd-from-jira.js requires --template and has no built-in default, because a built-in one lent every Jira run another project's identity — run 20260805T192100Z executed hello-dolly and produced project.name 'skyscanner-app'. Pointing these tests at a real project's canonical would reintroduce exactly that contamination inside the test suite, so the fixture is deliberately anonymous: the synthesizer overlays the run's own facts on top of whatever it is given.",
+  "title": "synthesis template",
+  "project": {
+    "name": "template",
+    "description": "a synthesis template with no project of its own"
+  },
+  "stories": [],
+  "currentIteration": 0
+}

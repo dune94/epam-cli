@@ -31,6 +31,48 @@ const path         = require('path');
 const { execSync } = require('child_process');
 const { crossRepoTermScores, applyRecency, repoRecency, orderCodelines, rankingConfidence } = require('./codeline-score');
 const { rankByStructure } = require('./codeline-structure');
+// THE ONE ECOSYSTEM TABLE. This file used to carry a three-branch stack ladder of its own.
+const { allManifests } = require('./ecosystems.js');
+
+/**
+ * Append this call's spend to the activity log. Best-effort by design: a cost record that fails
+ * to write must never take down the call it was measuring, and every failure here is silent for
+ * that reason. What is NOT silent is the absence of the plumbing — that is what the test guards.
+ */
+function _emitDiscoveryCost(costFile, agent) {
+  try {
+    const { emitCostSnapshot } = require('./cost-emitter.js');
+    emitCostSnapshot({
+      resultFile: costFile,
+      activityFile: process.env.ACTIVITY_FILE
+        || path.join(process.env.LOG_DIR || path.join(__dirname, '..', '..', 'logs'), 'agent-activity.jsonl'),
+      agent,
+      storyId: '',
+      phase: process.env.PHASE || '',
+      model: MODEL,
+      provider: PROVIDER,
+    });
+  } catch { /* cost emission must never break the agent call */ }
+  try { fs.unlinkSync(costFile); } catch { /* ignore */ }
+}
+
+/**
+ * The directory-name patterns the scan skips. Read once per scan so a test can change the
+ * environment between scans, and so a malformed pattern fails loudly rather than silently
+ * excluding nothing — a scan that quietly stops excluding grows the candidate list and shifts
+ * the ranking that chooses a client repository.
+ */
+function _scanExclusions() {
+  const env = (process.env.EPAM_CODELINE_EXCLUDE || '').trim();
+  let patterns;
+  if (env) {
+    patterns = env.split(',').map((p) => p.trim()).filter(Boolean);
+  } else {
+    const cfg = path.join(__dirname, '..', '..', 'config', 'codeline-scan.json');
+    patterns = JSON.parse(fs.readFileSync(cfg, 'utf8')).exclude || [];
+  }
+  return patterns.map((p) => new RegExp(p, 'i'));
+}
 
 // Semble removed from codeline scoring — all repos are CodeGraph-indexed,
 // making Tier 3 probabilistic scoring redundant and a source of re-ranking noise.
@@ -60,7 +102,11 @@ const ISSUES_PATH = getArg('--issues');
 const ROOT_DIR    = getArg('--root', process.env.JIRA_CODELINE_ROOT || '');
 const OUT_PATH    = getArg('--out', '');
 
-if (!ISSUES_PATH || !ROOT_DIR || !OUT_PATH) {
+// Scoped to DIRECT invocation. Unscoped, requiring this module for any reason exits the
+// requiring process — which is what happened the moment a test tried to call the prompt
+// builder to prove its migration changed no bytes. The check itself is unchanged: a run
+// invoked without its paths still refuses to start.
+if (require.main === module && (!ISSUES_PATH || !ROOT_DIR || !OUT_PATH)) {
   process.stderr.write('Usage: node codeline-discovery.js --issues <path> --root <dir> --out <path>\n');
   process.exit(1);
 }
@@ -98,30 +144,36 @@ function buildRepoManifest(rootDir) {
     const isGit = fs.existsSync(path.join(full, '.git'));
     if (!isGit) continue;
 
-    // Exclude docs.* repos — documentation projects are never in scope for
-    // brownfield code changes and add Semble noise (they match ticket keywords
-    // via documentation content rather than implementation code).
-    if (/^docs\./i.test(name)) {
-      log(`Skipping docs repo (not in maintenance scope): ${name}`);
+    // EXCLUSIONS ARE DATA. This was a /^docs\./i literal, which made one naming convention an
+    // engine fact: a project whose documentation repos are named anything else got no exclusion,
+    // and a project with an in-scope repo matching the pattern could not opt out without editing
+    // the engine. config/codeline-scan.json holds the patterns; EPAM_CODELINE_EXCLUDE overrides.
+    const _skip = _scanExclusions().find((re) => re.test(name));
+    if (_skip) {
+      log(`Skipping ${name} — excluded by ${_skip} (config/codeline-scan.json)`);
       continue;
     }
 
-    // Stack detection from manifest files
+    // ECOSYSTEM FROM THE ONE REGISTRY. This was a three-branch ladder written here, while
+    // codeline-structure.js knew six manifest files — so a Rust or Ruby repository reached the
+    // discovery agent labelled 'unknown', on the single input it uses to choose which client
+    // repository gets written to. First match wins, in registry order.
     let stack = 'unknown';
     let packageName = name;
     let description = '';
 
-    if (fs.existsSync(path.join(full, 'package.json'))) {
-      try {
-        const pkg = JSON.parse(fs.readFileSync(path.join(full, 'package.json'), 'utf8'));
-        stack       = 'typescript';
-        packageName = pkg.name || name;
-        description = pkg.description || '';
-      } catch { /* use defaults */ }
-    } else if (fs.existsSync(path.join(full, 'pyproject.toml'))) {
-      stack = 'python';
-    } else if (fs.existsSync(path.join(full, 'go.mod'))) {
-      stack = 'go';
+    for (const eco of allManifests()) {
+      const mf = path.join(full, eco.file);
+      if (!fs.existsSync(mf)) continue;
+      stack = eco.stack;
+      if (typeof eco.describe === 'function') {
+        try {
+          const d = eco.describe(fs.readFileSync(mf, 'utf8'));
+          packageName = d.packageName || name;
+          description = d.description || '';
+        } catch { /* an unparseable manifest still identifies the ecosystem */ }
+      }
+      break;
     }
 
     // README PROSE — what the repository says it is.
@@ -230,41 +282,42 @@ function deriveDiscoveryVocabulary(issues, manifest) {
     r.readmeExcerpt ? `  readme: ${r.readmeExcerpt}` : '',
   ].filter(Boolean).join('\n')).join('\n');
 
-  const prompt = `${persona ? persona + '\n\n' : ''}TICKETS UNDER DISCOVERY
-${ticketBlock}
+  // RENDERED FROM THE TEMPLATE LAYER. This prompt was missed by the prose guard for the same
+  // reason every earlier sweep under-reported: it opens with a heading rather than "You are".
+  const prompt = renderEngineTemplate('discovery-vocabulary', {
+    __PERSONA__: persona ? persona + '\n\n' : '',
+    __TICKET_BLOCK__: ticketBlock,
+    __CANDIDATE_BLOCK__: candidateBlock,
+  });
 
-CANDIDATE REPOSITORIES IN THE CODELINE ROOT
-${candidateBlock}
-
-TASK
-The ticket text above is about to be broken into terms and searched against the code of every
-candidate repository, to decide which one gets modified. Some of those terms cannot separate
-one candidate from another: grammatical filler, process and workflow words, and words that
-describe the request rather than the software.
-
-Return the vocabulary as JSON inside <DISCOVERY_VOCABULARY></DISCOVERY_VOCABULARY>:
-
-<DISCOVERY_VOCABULARY>
-{"blacklist":[{"term":"<a lowercase term from the ticket text that cannot discriminate between these candidates>","reason":"<why it carries no selection signal here>"}],
- "whitelist":[{"term":"<a term that must survive filtering because it names something in the software>","reason":"<why>"}]}
-</DISCOVERY_VOCABULARY>
-
-RULES
-- Every term must appear in the ticket text above. Do not invent vocabulary.
-- Judge against THESE candidates. A word that is filler on another project may be the product
-  name here; a word that names a component of one of the candidates above is never filler.
-- An identifier, symbol, filename, endpoint, product or component name is NEVER blacklisted,
-  even when it is rare or looks like an abbreviation. Whitelist it if in doubt.
-- The blacklist may not be empty: if the ticket really contains no filler at all, say so by
-  returning the single least informative term with that reason.
-- No prose outside the tags.`;
-
-  const raw = callLlm(prompt, { rawText: true });
-  const m = String(raw || '').match(/<DISCOVERY_VOCABULARY>([\s\S]*?)<\/DISCOVERY_VOCABULARY>/);
-  if (!m) throw new Error('discovery-vocabulary-agent returned no tagged JSON');
-  const vocab = normaliseVocabulary(JSON.parse(m[1].trim().replace(/^```(?:json)?/i, '').replace(/```$/, '')));
-  if (!isVocabularyUsable(vocab)) throw new Error('discovery-vocabulary-agent returned an empty blacklist');
-  return vocab;
+  // SELF-HEAL, NOT A SINGLE SHOT. The call succeeds and the CONTENT is wrong: ai-run.sh's retry
+  // only covers a failed call, so one malformed answer used to end the run before any work began
+  // — live 2026-08-17, two runs in three, each after a four-minute call. Both checks below are
+  // contract violations the model can correct once it is told which one it broke, exactly as the
+  // mint's refused proposals are re-proposed. See lib/content-retry.js.
+  const { retryUntilParsed } = require('./content-retry.js');
+  return retryUntilParsed({
+    what: 'discovery-vocabulary-agent',
+    attempts: Number(process.env.EPAM_CONTENT_RETRY_ATTEMPTS || 3),
+    log,
+    call: (note) => callLlm(note ? `${note}${prompt}` : prompt, { rawText: true }),
+    parse: (raw) => {
+      const m = String(raw || '').match(/<DISCOVERY_VOCABULARY>([\s\S]*?)<\/DISCOVERY_VOCABULARY>/);
+      if (!m) {
+        return { ok: false, reason: 'the JSON was not inside <DISCOVERY_VOCABULARY></DISCOVERY_VOCABULARY> tags' };
+      }
+      let vocab;
+      try {
+        vocab = normaliseVocabulary(JSON.parse(m[1].trim().replace(/^```(?:json)?/i, '').replace(/```$/, '')));
+      } catch (e) {
+        return { ok: false, reason: `the text inside the tags was not valid JSON (${e.message})` };
+      }
+      if (!isVocabularyUsable(vocab)) {
+        return { ok: false, reason: 'the blacklist was empty — every ticket has some term that cannot discriminate between candidates' };
+      }
+      return { ok: true, value: vocab };
+    },
+  });
 }
 
 /**
@@ -321,9 +374,21 @@ function scoreRepos(issues, manifest, topN = 8, vocabulary = null) {
   // PERSISTED, because it is generated and because it is the only evidence of what the
   // filter actually did. The count in a log line says a vocabulary was DERIVED; this file
   // says which terms were APPLIED, which is the part that changes the repository chosen.
-  // Written beside the discovery output so it survives whatever cleared the logs.
+  //
+  // INTO THE RUN'S EVIDENCE, not beside the discovery output. It went beside the output, and
+  // every caller points that output at a temp directory it deletes on exit — the ingest at
+  // $TMPDIR_INGEST, the scope resolver at an mktemp -d under a trap. So this file had never
+  // survived a single run and nothing had ever read it. spec-mode-runner.js names the mistake
+  // by this filename in its own comment while taking care to avoid it.
+  //
+  // Falls back to the output directory when there is no run directory, which is the standalone
+  // case a test or a manual invocation takes; that is the only situation where beside-the-output
+  // is the best available answer.
   try {
-    const _vocabPath = path.join(path.dirname(OUT_PATH), 'discovery-vocabulary.json');
+    const _vocabDir = (process.env.LOG_DIR && fs.existsSync(process.env.LOG_DIR))
+      ? process.env.LOG_DIR
+      : path.dirname(OUT_PATH);
+    const _vocabPath = path.join(_vocabDir, 'discovery-vocabulary.json');
     fs.writeFileSync(_vocabPath, JSON.stringify({
       derived: !!vocabulary,
       vocabulary: vocabulary || null,
@@ -588,6 +653,8 @@ const { deriveCodelineName, deriveCodelineNames } = require('./codeline-name');
 
 // ── LLM discovery call ─────────────────────────────────────────────────────
 
+const { renderEngineTemplate } = require('./engine-prompt');
+
 function buildDiscoveryPrompt(issues, manifest) {
   const manifestSummary = manifest.map(r =>
     `- dir: ${r.name}\n  path: ${r.path}\n  stack: ${r.stack}\n  package: ${r.packageName}` +
@@ -609,96 +676,12 @@ function buildDiscoveryPrompt(issues, manifest) {
       `\n  description: ${i.description || ''}`;
   }).join('\n\n');
 
-  return `You are the codeline-discovery agent for a brownfield engineering pipeline.
-
-Your task: given a set of Jira tickets and a manifest of local code repositories,
-identify which repository (or repositories) each ticket's changes belong to.
-
-JIRA TICKETS:
-${issuesSummary}
-
-REPOSITORY MANIFEST (git repos only):
-${manifestSummary}
-
-The repository manifest above is PRE-SCORED and pre-filtered before reaching you —
-each one is already a plausible candidate, not a random sample of all repos. It is
-listed in descending order of match confidence: the FIRST entry is the strongest
-candidate found by keyword and code-symbol matching against the ticket text.
-
-Rules:
-1. Match each ticket to the repository whose name, packageName, or description
-   best fits the ticket's domain. Use context clues: service names, domain terms,
-   technology references, component names, file path mentions.
-2. You MUST return at least one repository for every ticket — an empty result is
-   NEVER acceptable and will abort the entire pipeline run before any work can
-   happen. If you are not fully confident, select your best guess from the list
-   (the first-listed entry is usually a good choice, since the list is already
-   ranked by match confidence) rather than returning nothing.
-
-2a. ONE TICKET MAY SPAN SEVERAL REPOSITORIES, and you MUST return one entry for
-   each. This estate is maintained as many separate codelines, so a single
-   ticket routinely covers work in more than one of them — a change with both
-   front-end and back-end parts, or one applied across several product areas.
-   Returning a single repository for such a ticket silently drops the rest of
-   the work: those repositories are never touched, and the run reports success
-   having done a fraction of the job.
-
-   The strongest evidence is the ticket's own "components" field, which is the
-   tracker's record of which product areas it touches. When a ticket names
-   several distinct product areas, return the repository that owns each one.
-   Do not collapse them because one candidate scored highest — the ranking
-   measures textual similarity to a single repository, not how much of the
-   ticket that repository covers.
-
-   Decide the count from the ticket. Do not aim for any particular number.
-3. SELECT ON EVIDENCE, NOT ON A HUNCH. Every selected repository must be grounded
-   in something concrete you can point at:
-     - a ticket component, label or phrase that names that product area, or
-     - something in the repository itself (its name, its manifest, its code)
-       that matches what the ticket asks for.
-   Its RANK IS NOT EVIDENCE. The scores are the thing you are adjudicating, so
-   "it was the second-ranked candidate" justifies nothing. Neither does "it is
-   probably the backend for X" — if you have to say likely, probably, or may be,
-   you do not have evidence.
-   If a part of the ticket clearly belongs SOMEWHERE but you cannot ground it in
-   one of these repositories, DO NOT SELECT ONE ANYWAY. Put it in "unsure" with
-   what you could not resolve. An unresolved component is real information and a
-   human can settle it; a guess promoted to a selection cannot be spotted later.
-   Do not omit a candidate you CAN ground merely because another also fits — a
-   ticket spanning several product areas needs all of them (rule 2a).
-4. Assign each selected repo a short codeline identifier: 2-20 chars, lowercase,
-   alphanumeric only, no dots or dashes. Derive it from the directory name by
-   removing only decoration - a domain suffix, or an organisation or platform
-   prefix - and keeping the part that actually names the product. Keep every
-   remaining word: for a directory "alpha-beta-gamma" the identifier is
-   "alphabetagamma", NOT "gamma". Dropping words produces an identifier that no
-   longer identifies the repository.
-5. Return exactly one entry only when the ticket genuinely belongs to exactly one
-   repository. "One entry" is the right answer for a self-contained change, and
-   the wrong answer for a ticket spanning several product areas — see rule 2a.
-6. "reason" must be one sentence explaining why THIS repository was selected, and
-   what part of the ticket it covers. Every selected repository needs its own
-   reason — a single justification covering the whole set makes a wrong
-   selection impossible to spot afterwards.
-7. "evidence" must quote the CONCRETE thing that grounds the selection: the
-   ticket component/label/phrase verbatim, or the file, directory or manifest
-   entry in that repository. It is not a second reason and not a restatement —
-   if you cannot fill it without hedging, the repository belongs in "unsure",
-   not in "codelines".
-
-Output format (strict JSON, no markdown fences, no preamble, no trailing text):
-{
-  "codelines": [
-    { "name": "<short-identifier-derived-from-the-directory-name>",
-      "path": "/absolute/path/to/repo",
-      "reason": "what part of the ticket this repo covers",
-      "evidence": "ticket component \\"<the-component-verbatim>\\"" }
-  ],
-  "unsure": [
-    { "part": "the part of the ticket you could not place",
-      "why": "what you would need in order to place it" }
-  ]
-}`;
+  // RENDERED FROM THE TEMPLATE LAYER. The two summaries are assembled above, because
+  // assembling them is logic and a template that branches cannot be reviewed as prose.
+  return renderEngineTemplate('codeline-discovery', {
+    __ISSUES_SUMMARY__: issuesSummary,
+    __MANIFEST_SUMMARY__: manifestSummary,
+  });
 }
 
 /**
@@ -761,6 +744,18 @@ function callLlm(prompt, opts = {}) {
   const tmpPrompt = `/tmp/codeline-discovery-prompt-${process.pid}.txt`;
   fs.writeFileSync(tmpPrompt, prompt);
   const debug = process.env.DEBUG_CODELINE_DISCOVERY === '1';
+  // COST IS RECORDED, NOT ASSUMED. Discovery makes two model calls per run — the vocabulary
+  // agent and the matcher, one of them at effort:high with a 16k output budget — and neither
+  // appeared in any cost ledger, under any name. It spawns ai-run.sh directly rather than through
+  // a path that emits a cost_snapshot, which is exactly the invisibility lib/cost-emitter.js was
+  // written to close for spec-mode-runner.
+  //
+  // ai-run.sh already writes the normalized result JSON whenever ORCH_JSON_RESULT is set; it was
+  // never asked to. Per CALL, so both calls are recorded rather than only the last.
+  //
+  // Declared OUTSIDE the try so the finally can still see it: a call that threw spent money too,
+  // and dropping its record is how the expensive failures become the invisible ones.
+  const _costFile = `${tmpPrompt}.cost.json`;
   try {
     // stderr is captured (not discarded) when DEBUG_CODELINE_DISCOVERY=1, so
     // provider-side warnings/errors that still produce SOME stdout output
@@ -770,6 +765,7 @@ function callLlm(prompt, opts = {}) {
     // highest-scored repo and proceeded against the wrong codeline. The reason a
     // call failed is the only thing that makes the fallback judgeable.
     const _errFile = `${tmpPrompt}.err`;
+
     const cmd = debug
       ? `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt}`
       : `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>${_errFile}`;
@@ -798,6 +794,7 @@ function callLlm(prompt, opts = {}) {
       env:        {
         ...process.env,
         EPAM_AGENT_NAME: 'codeline-discovery',
+        ORCH_JSON_RESULT: _costFile,
         ...(() => { try { return require('./seam-invocation.js').seamInvocationEnv('codeline-discovery'); }
                     catch { return {}; } })(),
       },
@@ -830,11 +827,19 @@ function callLlm(prompt, opts = {}) {
     }
     return dropUngroundedCodelines(named);
   } finally {
+    _emitDiscoveryCost(_costFile, opts.costAgent || 'codeline-discovery');
     try { fs.unlinkSync(tmpPrompt); } catch { /* ignore */ }
   }
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────
+
+// Requirable without running. The prompt below is migrating into the template layer, and a
+// migration has to be provable byte-for-byte — which means a test must be able to call the
+// builder. An unguarded IIFE runs a whole discovery pass the moment anything requires this.
+module.exports = { buildDiscoveryPrompt, buildRepoManifest };
+
+if (require.main !== module) return;
 
 (async () => {
   const issues = JSON.parse(fs.readFileSync(ISSUES_PATH, 'utf8'));
@@ -925,6 +930,37 @@ function callLlm(prompt, opts = {}) {
 
   const output = { codelines: ordered };
   fs.writeFileSync(OUT_PATH, JSON.stringify(output, null, 2));
+
+  // ── THE CODELINE FACTS THIS RUN OBSERVED ─────────────────────────────────
+  //
+  // codeline-facts.json had no producer: every one in the repo was typed by hand, so a new
+  // project had none and whatever a run learned died with it. This agent is the single
+  // producer, because it is the only stage that opens every candidate repository and sees the
+  // estate at once. Written here, where the answer is, rather than exported and lost across the
+  // process boundary — the mistake that cost this file its codelines on 2026-08-07.
+  //
+  // Rewritten every run, never merged: a fact that outlives the run that observed it is a fact
+  // nobody re-checks.
+  if (process.env.EPAM_PROJECT_CONFIG_DIR) {
+    try {
+      const { writeCodelineFacts } = require('./codeline-facts.js');
+      const res = writeCodelineFacts({
+        projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR,
+        codelines: ordered,
+        warn: (m) => log(m),
+      });
+      log(`Codeline facts written → ${res.path} (${res.codelines.length} codeline(s)` +
+          `${res.withoutFacts.length ? `, ${res.withoutFacts.length} with none` : ''})`);
+    } catch (e) {
+      // Loud, and non-fatal: the codelines themselves are valid and the run can proceed on
+      // them. What must never happen is proceeding while BELIEVING facts were provisioned.
+      log(`WARN: could not write codeline facts: ${(e && e.message) || e} — ` +
+          'agents will work from the source alone');
+    }
+  } else {
+    log('WARN: EPAM_PROJECT_CONFIG_DIR is unset, so this run\'s codeline facts have nowhere to '
+        + 'go — agents will work from the source alone');
+  }
 
   for (const cl of ordered) {
     log(`  → codeline '${cl.name}' = ${cl.path} (${cl.reason})`);

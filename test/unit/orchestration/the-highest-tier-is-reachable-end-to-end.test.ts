@@ -28,6 +28,10 @@ import { tmpdir } from 'node:os';
 
 const ROOT = join(__dirname, '../../../');
 const SRC = readFileSync(join(ROOT, 'orchestrations/scripts/claude.sh'), 'utf8');
+// The ladder SERIALISATION moved to a shared lib on 2026-08-13 so entry points that never
+// load claude.sh (detective-rerun.sh) get the same ladders. claude.sh still owns the
+// RESOLVER (get_model_ladder_step), so this file reads both.
+const LADDER_LIB = readFileSync(join(ROOT, 'orchestrations/scripts/lib/model-ladders.sh'), 'utf8');
 const CFG = JSON.parse(readFileSync(join(ROOT, 'orchestrations/projects/metrolinx/llm-settings.json'), 'utf8'));
 const SCHEMA = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/llm-settings.schema.json'), 'utf8'));
 const TIERS: string[] = Object.keys(CFG.ladders);
@@ -88,10 +92,30 @@ describe('layer 1+2: the tier exists in schema and config', () => {
 });
 
 describe('layer 3: the loader serialises every configured tier', () => {
-  it('claude.sh reads each tier into its own env var', () => {
+  // REPOINTED 2026-08-13. This asserted claude.sh named each tier literally. The serialisation
+  // moved to lib/model-ladders.sh, which iterates the tiers the FILE declares rather than
+  // naming three — so a project adding a tier needs no engine edit, and a hand-written list
+  // cannot go stale the way the pinned HIGHEST ladder did. Naming tiers here would recreate
+  // exactly the staleness this replaced.
+  it('the shared loader serialises whatever tiers the project declares', () => {
+    expect(LADDER_LIB, 'the loader hard-codes a tier list instead of reading the declared ones')
+      .toContain('.ladders[$t].modelLadder');
+    expect(LADDER_LIB, 'the tiers are not enumerated from the settings file')
+      .toMatch(/\(\.ladders \/\/ \{\}\) \| keys/);
+  });
+
+  it('and every tier in TIERS is reachable through it', () => {
+    // The behavioural half: each declared tier really does end up in its own env var.
+    const out = execFileSync('bash', ['-c', `set +e
+      . ${JSON.stringify(join(ROOT, 'orchestrations/scripts/lib/model-ladders.sh'))}
+      export_model_ladders ${JSON.stringify(join(ROOT, 'orchestrations/projects/metrolinx/llm-settings.json'))} >/dev/null 2>&1
+      for t in ${TIERS.join(' ')}; do
+        v=EPAM_MODEL_LADDER_$(printf '%s' "$t" | tr '[:lower:]' '[:upper:]')
+        printf '%s=%s\n' "$t" "\${!v:-}"
+      done`], { encoding: 'utf8' });
     for (const t of TIERS) {
-      expect(SRC, `.ladders.${t} is never read — its ladder is dead config`)
-        .toContain(`.ladders.${t}.modelLadder`);
+      const line = out.split('\n').find((l) => l.startsWith(`${t}=`)) || '';
+      expect(line.slice(t.length + 1), `tier '${t}' resolved to nothing`).toBeTruthy();
     }
   });
 });

@@ -5045,6 +5045,30 @@ run_repo_lint_verification() {
     # [HealingBroken]. The self-heal detector was right that healing was broken; it was broken
     # because this gate fed it nothing.
     #
+    # THE FLAG IS WHAT DELIVERS IT.
+    #
+    # This gate set VERIFICATION_FAILURE and returned 1 WITHOUT the flag, so the retry loop never
+    # routed the text into COORDINATOR_PROMPT_AMENDMENT -- the text the next attempt actually
+    # reads. Delivery fell to the failure-analyst's discretionary target, and live on 2026-08-18
+    # (AMSD-2041) it chose "kb": the knowledge base, which later runs inherit and THIS retry never
+    # sees. Attempt 6 was launched on the top model of the ladder with no idea which lint errors
+    # to fix, ran 22 minutes, and was killed. Exactly the failure the prescribed-helper check
+    # documents from 2026-08-09 -- "the finding was assigned and dropped, and the writer was never
+    # told" -- recurring at this site.
+    #
+    # Lint belongs in the deterministic class by this file's own definition: eslint either passes
+    # or it does not, and its message already names the rule and the line, so a gate-model call to
+    # restate it is waste.
+    DETERMINISTIC_CHECK_FAILURE=1
+    export DETERMINISTIC_CHECK_FAILURE
+    # Keyed so an identical lint rejection twice escalates the ladder instead of looking novel on
+    # every attempt. Keyed on the RULE IDS (eslint prints them as the last field), which are the
+    # stable part: the file list changes as the writer works, so keying on it would make every
+    # attempt look like a brand new problem.
+    local _lint_rules
+    _lint_rules=$(printf '%s\n' "$_lint_output" | awk 'NF{print $NF}' | grep -E '^[a-z@]' | sort -u | head -5 | tr '\n' ',')
+    STORY_REJECTION_KEY="lint:${_lint_rules}"
+
     # Same '## Verification Failure' heading as the others so the analyst parses it identically.
     VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe repository'"'"'s own lint rejects file(s) THIS story changed. This is not advisory: the pre-commit hook runs these checks, refuses the commit, and lint-staged then REVERTS your work — the story cannot be delivered until every one is fixed. Fix these before anything else:\n\n%s\n' "$_lint_output")
 

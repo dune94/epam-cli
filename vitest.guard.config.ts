@@ -50,6 +50,7 @@ export default defineConfig({
       // Reviewers — a full seam invoked behind a parameter nobody passed.
       'test/unit/orchestration/the-prompt-reviewer-was-never-executed.test.ts',
       'test/unit/orchestration/discovery-honours-operator-scope.test.ts',
+      'test/unit/orchestration/lint-failure-reaches-the-writer.test.ts',
 
       'test/unit/orchestration/a-reviewer-nobody-invoked.test.ts',
       // Prompt/tool contracts — prompts that instruct calls the tool refuses.

@@ -17,6 +17,30 @@ _release_write_perimeter() {
     perimeter_release_all "${JIRA_CODELINE_ROOT:-}" || true
 }
 trap '_release_write_perimeter' EXIT
+
+# ── Take them, on every run ──────────────────────────────────────────────────
+# The other half of the pair above, and it lived in ONE launcher. Sealing was an inline loop in
+# tier3-metrolinx-run.sh; releasing was generalised into this engine after two paused runs left
+# 23 repositories read-only. Seven launchers therefore ran with no perimeter, silently — a
+# release with nothing to release logs nothing.
+#
+# specAgentEnv states the design: "Writes are NOT prevented here. They are prevented at the
+# filesystem by the perimeter." Without this, a read-only tool grant is the only thing between a
+# diagnosing agent and the operator's source, and it is not an enforcement. Live 2026-08-17 run
+# 20260817T231306Z: mock-a was rewritten during the SPEC PASS, before the writer ran, so the
+# regression guard then certified already-changed code as the baseline.
+#
+# Here rather than in each launcher: this is the one script they all run, the trap that undoes it
+# is right above, and a launcher added later cannot forget a step it never had to take.
+_engage_write_perimeter() {
+    local _lib
+    _lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/codeline-write-perimeter.sh"
+    [ -f "$_lib" ] || return 0
+    # shellcheck source=lib/codeline-write-perimeter.sh
+    . "$_lib" 2>/dev/null || return 0
+    perimeter_seal_all "${JIRA_CODELINE_ROOT:-}" || true
+}
+_engage_write_perimeter
 #
 # Usage:
 #   ./run-agent-orchestration.sh                                    # Run default phase (finops)

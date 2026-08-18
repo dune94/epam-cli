@@ -46,6 +46,10 @@ export default defineConfig({
       'test/unit/orchestration/agents-parse-once-and-die.test.ts',
       // Agent invocation — an agent handed a null exec never ran, and the log said "fallback".
       'test/unit/orchestration/the-search-vocabulary-agent-never-ran.test.ts',
+      // Story branch — a repo with no remote never got one, so the write window never opened.
+      'test/unit/orchestration/a-repo-with-no-remote-never-got-a-story-branch.test.ts',
+      // Write perimeter — sealing was in one launcher of eight; a spec agent rewrote the source.
+      'test/unit/orchestration/only-one-launcher-locked-the-repos.test.ts',
       // Tool scoping — a query answered from whichever repo the process was standing in.
       'test/unit/orchestration/codegraph-answers-from-whatever-repo-it-is-standing-in.test.ts',
       // Timeouts — 36 seams declared one and nothing read it.

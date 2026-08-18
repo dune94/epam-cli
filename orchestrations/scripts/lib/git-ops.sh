@@ -313,8 +313,29 @@ ensure_story_branch() {
     # constraint, so the default preserves today's plain "AI-<story_id>" shape.
     local _branch="${EPAM_BRANCH_PREFIX:-}AI-${story_id}"
 
-    if ! git -C "$codeline_root" fetch origin "$baseline_branch" --quiet 2>/dev/null; then
-        warning "  [story-branch] $story_id: could not fetch origin/${baseline_branch} — proceeding on current branch state"
+    # THE START POINT IS WHAT VARIES, NOT THE PROCEDURE.
+    #
+    # This used to begin `git fetch origin` and return on failure, so a repository with no remote
+    # never reached checkout -B: the writer worked directly on the baseline branch and one warning
+    # line said so. That became a hard failure once the write perimeter went generic, because
+    # perimeter_apply — the call that REOPENS the repository — sits past that early return. A
+    # sealed repo with no remote could never be unsealed, and the writer was locked out of the one
+    # repository it was asked to change.
+    #
+    # With a remote, everything below is unchanged: fetch, then base off origin/<baseline>.
+    # Without one, the LOCAL baseline branch is the start point. With neither, this still fails.
+    local _base_ref=""
+    if git -C "$codeline_root" remote get-url origin >/dev/null 2>&1; then
+        if ! git -C "$codeline_root" fetch origin "$baseline_branch" --quiet 2>/dev/null; then
+            warning "  [story-branch] $story_id: could not fetch origin/${baseline_branch} — proceeding on current branch state"
+            return 1
+        fi
+        _base_ref="origin/${baseline_branch}"
+    elif git -C "$codeline_root" rev-parse --verify --quiet "refs/heads/${baseline_branch}" >/dev/null 2>&1; then
+        _base_ref="$baseline_branch"
+        info "  [story-branch] $story_id: no 'origin' remote — basing off the local '${baseline_branch}'"
+    else
+        warning "  [story-branch] $story_id: no 'origin' remote and no local '${baseline_branch}' — proceeding on current branch state"
         return 1
     fi
 
@@ -334,7 +355,7 @@ ensure_story_branch() {
     # reachable is pinned under a real ref and named — recovery must never depend on
     # the reflog. This is a local ref only; it pushes nothing.
     local _unreachable=0
-    _unreachable=$(git -C "$codeline_root" rev-list --count "origin/${baseline_branch}..HEAD" 2>/dev/null || echo 0)
+    _unreachable=$(git -C "$codeline_root" rev-list --count "${_base_ref}..HEAD" 2>/dev/null || echo 0)
     case "$_unreachable" in (''|*[!0-9]*) _unreachable=0 ;; esac
     if [ "$_unreachable" -gt 0 ]; then
         local _rescue_ref _head_short
@@ -349,7 +370,7 @@ ensure_story_branch() {
         fi
     fi
 
-    if git -C "$codeline_root" checkout -B "$_branch" "origin/${baseline_branch}" --quiet 2>/dev/null; then
+    if git -C "$codeline_root" checkout -B "$_branch" "$_base_ref" --quiet 2>/dev/null; then
         # checkout -B only forces tracked files that DIFFER between the old
         # branch tip and the new start-point — a tracked file whose content
         # is IDENTICAL in both survives untouched, dirty modifications and
@@ -367,7 +388,7 @@ ensure_story_branch() {
         # primitive brownfield-preflight-reset.sh already applies between
         # RUNS and _selective_worktree_reset applies between RUNGS, now also
         # applied here, once, before a story's FIRST attempt even begins.
-        git -C "$codeline_root" reset --hard "origin/${baseline_branch}" --quiet 2>/dev/null || true
+        git -C "$codeline_root" reset --hard "$_base_ref" --quiet 2>/dev/null || true
         git -C "$codeline_root" clean -fd --quiet 2>/dev/null || true
         _provision_epam_plugin_config "$codeline_root"
         # The repo is now on a story branch, which is where edits are allowed to
@@ -376,11 +397,11 @@ ensure_story_branch() {
         # rewrote ~1050 lines of client source there before any writer ran, and
         # a per-tool allowlist cannot stop that because `bash` bypasses it.
         perimeter_apply "$codeline_root"
-        success "  [story-branch] $story_id: on branch '${_branch}', freshly based on origin/${baseline_branch} (working tree hard-reset + cleaned)"
+        success "  [story-branch] $story_id: on branch '${_branch}', freshly based on ${_base_ref} (working tree hard-reset + cleaned)"
         return 0
     fi
 
-    warning "  [story-branch] $story_id: could not create/reset branch '${_branch}' off origin/${baseline_branch} — proceeding on current branch"
+    warning "  [story-branch] $story_id: could not create/reset branch '${_branch}' off ${_base_ref} — proceeding on current branch"
     return 1
 }
 

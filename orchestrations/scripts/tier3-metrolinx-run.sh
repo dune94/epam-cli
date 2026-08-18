@@ -372,10 +372,10 @@ echo ""
 # .epam/ and .codegraph/ are deliberately left writable: the engine writes its
 # own state there mid-run. See lib/codeline-write-perimeter.sh.
 . "$SCRIPT_DIR/lib/codeline-write-perimeter.sh"
-for _cl_dir in "$JIRA_CODELINE_ROOT"/*/; do
-  [ -e "${_cl_dir}.git" ] || continue
-  perimeter_seal "${_cl_dir%/}" || true
-done
+# The loop that used to be here is now perimeter_seal_all, beside perimeter_release_all, and the
+# engine calls it for every project. This call is kept only for its TIMING — it seals before this
+# launcher's own preflight, earlier than the engine can. Same function, so the two cannot drift.
+perimeter_seal_all "$JIRA_CODELINE_ROOT" || true
 echo ""
 
 # ── Wire the dashboard to this run's live PRD + logs ─────────────────────────

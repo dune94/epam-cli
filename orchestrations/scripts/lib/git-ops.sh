@@ -186,7 +186,21 @@ git_add_client_outputs() {
 
     local _excludes=() _resets=() _d
     for _d in "${_ENGINE_OWNED_DIRS[@]}"; do
-        _excludes+=( ":!${_d}/*" ":!*/${_d}/*" )
+        # ONE GLOB, NOT TWO PREFIX FORMS. ":!<dir>/*" is FATAL, not merely unmatched, when the
+        # directory is a symlink — git refuses a pathspec that crosses one:
+        #
+        #   fatal: pathspec ':(exclude)node_modules/*' is beyond a symbolic link
+        #
+        # Live 2026-08-18, both lanes, at the LAST step of a run that had otherwise succeeded:
+        # the fix was correct, tests passed, the type check passed, and every commit failed with
+        # exit 128 because both codelines symlink node_modules to a shared install. Nothing could
+        # ever be committed in such a repo.
+        #
+        # The bare ":!<dir>" form survives the symlink but stops excluding NESTED copies, which
+        # would stage a client's vendored tree — fixing the error by weakening the exclusion. This
+        # glob is correct on all three counts: top-level contents, nested contents, and a
+        # symlinked directory.
+        _excludes+=( ":(exclude,glob)**/${_d}/**" ":(exclude,glob)**/${_d}" )
         _resets+=( "$_d" )
     done
     # Build artefacts are not engine state, but staging them is never right either. This named

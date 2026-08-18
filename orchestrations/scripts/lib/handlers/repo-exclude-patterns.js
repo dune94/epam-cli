@@ -70,7 +70,25 @@ if (form === 'pathspec' || form === 'diff') {
   // THE LONG FORM, ALWAYS. git parses `:!` as the start of a magic signature and keeps reading
   // magic characters, so `:!__pycache__/*` dies with "Unimplemented pathspec magic '_'" — which
   // fails the whole `git add` and stages NOTHING. `:(exclude)` is unambiguous whatever follows.
-  for (const d of dirs) out.push(`:(exclude)${d}/*`, `:(exclude)*/${d}/*`);
+  // ONE GLOB PER DIRECTORY, NOT A TOP-LEVEL AND A NESTED PREFIX.
+  //
+  // `:(exclude)<dir>/*` is FATAL, not merely unmatched, when the directory is a symlink — git
+  // refuses a pathspec that crosses one:
+  //
+  //   fatal: pathspec ':(exclude)node_modules/*' is beyond a symbolic link
+  //
+  // Live 2026-08-18, both lanes, at the LAST step of a run that had otherwise succeeded — the fix
+  // was correct, the tests passed, the type check passed — every commit failed with exit 128
+  // because both codelines symlink node_modules to a shared install. Nothing could ever be
+  // committed in such a repo, and the story was demoted as undelivered.
+  //
+  // The bare `:(exclude)<dir>` form survives the symlink but stops excluding NESTED copies, which
+  // would stage a client's vendored tree: fixing the error by weakening the exclusion. The glob
+  // form is correct on all three counts — top-level contents, nested contents, and a symlinked
+  // directory — and replaces both prefixes with one pattern.
+  // TWO PATTERNS: the CONTENTS at any depth, and the ENTRY itself. A symlinked directory is a
+  // single entry to git, so the contents glob does not cover it and the link would be staged.
+  for (const d of dirs) out.push(`:(exclude,glob)**/${d}/**`, `:(exclude,glob)**/${d}`);
   for (const f of files) out.push(`:(exclude)${f}`, `:(exclude)*/${f}`);
   for (const p of enginePaths) out.push(`:(exclude)${p}`);
   if (form === 'diff') {

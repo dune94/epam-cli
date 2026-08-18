@@ -78,6 +78,8 @@ export default defineConfig({
       'test/unit/orchestration/the-ledger-cannot-say-how-long-anything-took.test.ts',
       // Upstream congestion — a pinned provider that 429s must not end the run.
       'test/unit/providers/a-rate-limited-pin-had-nowhere-to-fall-back.test.ts',
+      // Commit — a symlinked dependency dir made every commit fatal at the last step.
+      'test/unit/orchestration/a-symlinked-node-modules-blocked-every-commit.test.ts',
       // Gates — an undeclared check reported as type errors the writer could not find.
       'test/unit/orchestration/an-undeclared-check-was-reported-as-type-errors.test.ts',
       // Cost — the measurement the operator calls priority #1.

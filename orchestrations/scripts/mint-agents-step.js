@@ -924,7 +924,7 @@ if (require.main !== module) return;
   // inherits ladder, retry, timeout and cost capture rather than being a private call.
   {
     const promptsLib = require('./lib/prompt-library.js');
-    const { makePromptReviewer } = require('./lib/prompt-review.js');
+    const { makePromptReviewer, makePromptRenderer } = require('./lib/prompt-review.js');
     const { seamInvocationEnv } = require('./lib/seam-invocation.js');
     const { buildProjectPrompts } = require('./lib/project-prompt-builder.js');
     const engineRoot = path.join(__dirname, '..', '..');
@@ -1019,7 +1019,7 @@ if (require.main !== module) return;
       // Every dependency is injected here; the paths are covered by
       // the-prompt-reviewer-was-never-executed.test.ts.
       reviewPrompt: _promptReviewEnabled ? makePromptReviewer({
-        render: (id, dir, vals) => promptsLib.render(id, dir, vals),
+        render: makePromptRenderer(promptsLib),
         invoke: (prompt, logPath) => {
           const seamEnv = seamInvocationEnv('prompt-review', path.join(engineRoot, 'orchestrations', 'agents'));
           if (seamEnv.EPAM_ALLOWED_TOOLS) seamEnv.AI_GATE_ALLOW_TOOLS = '1';

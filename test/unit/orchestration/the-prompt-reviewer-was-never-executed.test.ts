@@ -121,3 +121,107 @@ describe('the prompt reviewer was never executed', () => {
     expect(out.reason).toContain('fenced claim');
   });
 });
+
+// THE SEAM: the tests above inject a fake `render`, so they agree with themselves about a
+// signature the real library never had. The shipped adapter called `render(id, dir, vals)` against
+// `render(doc, values)`. That returns undefined WITHOUT THROWING, so the rendered prompt was
+// empty, every review took the fail-open path, and the feature was inert while looking wired.
+// A live invocation caught it; 268 green tests did not. These execute the real adapter.
+describe('the render adapter, against the real prompt library', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { makePromptRenderer } = require(join(ROOT, 'orchestrations/scripts/lib/prompt-review.js'));
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const promptsLib = require(join(ROOT, 'orchestrations/scripts/lib/prompt-library.js'));
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const fs = require('node:fs');
+
+  const REVIEW_ID = 'prompt-review';
+
+  /** Any provisioned project carrying the reviewer's prompt. Discovered, never named. */
+  function aProjectWithTheReviewersPrompt(): string | null {
+    const projects = join(ROOT, 'orchestrations/projects');
+    if (!fs.existsSync(projects)) return null;
+    for (const name of fs.readdirSync(projects)) {
+      const dir = join(projects, name);
+      if (fs.existsSync(promptsLib.projectPromptPath(REVIEW_ID, dir))) return dir;
+    }
+    return null;
+  }
+
+  it('renders a NON-EMPTY prompt carrying both artefacts — the shipped adapter rendered nothing', () => {
+    const dir = aProjectWithTheReviewersPrompt();
+    expect(dir, 'no project has the reviewer prompt provisioned; this test would pass vacuously').not.toBeNull();
+
+    const doc = promptsLib.loadProjectPrompt(REVIEW_ID, dir);
+    // Values come from what the prompt DECLARES, so a template change cannot silently skip one.
+    const declared: string[] = doc.placeholders ?? [];
+    expect(declared.length, 'the reviewer prompt declares no placeholders').toBeGreaterThan(0);
+
+    const TEMPLATE_MARK = 'ZZ-generic-body-mark';
+    const GENERATED_MARK = 'ZZ-specialised-body-mark';
+    const values: Record<string, string> = {};
+    // Filler must not echo the placeholder name back, or the rendered output looks unrendered.
+    for (const p of declared) values[p] = `filler-${p.replace(/_/g, '')}`;
+    // The two that must actually reach the model: what was written vs what shipped.
+    if ('__TEMPLATE_BODY__' in values) values.__TEMPLATE_BODY__ = TEMPLATE_MARK;
+    if ('__GENERATED_BODY__' in values) values.__GENERATED_BODY__ = GENERATED_MARK;
+
+    const render = makePromptRenderer(promptsLib);
+    const out = render(REVIEW_ID, dir, values);
+
+    expect(typeof out, 'the adapter returned a non-string — this is the shipped defect').toBe('string');
+    expect(out.trim().length, 'the adapter rendered an empty prompt; every review would fail open').toBeGreaterThan(0);
+    expect(out, 'the artefact under review never reached the prompt').toContain(GENERATED_MARK);
+    expect(out, 'the template it is compared against never reached the prompt').toContain(TEMPLATE_MARK);
+    expect(out, 'a placeholder survived unrendered').not.toMatch(/__[A-Z_]+__/);
+  });
+
+  it('spends NO model call when the prompt renders empty', async () => {
+    let invoked = 0;
+    const warnings: string[] = [];
+    const review = makePromptReviewer({
+      render: () => undefined,          // exactly what the shipped adapter returned
+      invoke: async () => { invoked += 1; return '<PROMPT_REVIEW>{"falseClaims":[]}</PROMPT_REVIEW>'; },
+      values: () => ({}),
+      warn: (m: string) => warnings.push(m),
+      projectConfigDir: '/nonexistent',
+    });
+    const out = await review(ARTEFACT);
+    expect(invoked, 'an empty prompt was sent to the model, buying a verdict about nothing').toBe(0);
+    expect(out.ok).toBe(true);
+    expect(warnings.join('\n'), 'the inert reviewer said nothing').toMatch(/empty prompt.*UNREVIEWED/s);
+  });
+});
+
+// THE CONTRACT: the parser matches <PROMPT_REVIEW>…</PROMPT_REVIEW> and reads `falseClaims`.
+// The template never asked for either. A live invocation on 2026-08-18 confirmed the consequence:
+// the model did real falsification work, then delivered it as a write_file payload in its own
+// invented shape. No tag, no parse, fail open — every time, for every prompt, however well the
+// review went. The prompt is the contract; a validator the prompt never states cannot be met.
+describe('the reviewer prompt states the contract its parser enforces', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const fs = require('node:fs');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const promptsLib = require(join(ROOT, 'orchestrations/scripts/lib/prompt-library.js'));
+
+  // Read the tag and the verdict key out of the PARSER, so the test cannot hold a stale copy.
+  const parserSrc: string = fs.readFileSync(join(ROOT, 'orchestrations/scripts/lib/prompt-review.js'), 'utf8');
+  const TAG = parserSrc.match(/<(\w+)>\(\[\\s\\S\]\*\?\)<\\\/\1>/)?.[1];
+  const KEY = parserSrc.match(/verdict\.(\w+)/)?.[1];
+
+  it('derives the tag and key from the parser itself', () => {
+    expect(TAG, 'could not read the verdict tag out of the parser; this suite would pass vacuously').toBeTruthy();
+    expect(KEY, 'could not read the verdict key out of the parser; this suite would pass vacuously').toBeTruthy();
+  });
+
+  it('the TEMPLATE asks for exactly what the parser reads', () => {
+    const body: string = JSON.parse(
+      fs.readFileSync(join(ROOT, `orchestrations/prompts/templates/prompt-review.json`), 'utf8'),
+    ).body ?? '';
+    expect(body.length, 'the template is empty').toBeGreaterThan(0);
+    expect(body, `the template never asks for <${TAG}> — the parser can never match`).toContain(`<${TAG}>`);
+    expect(body, `the template never closes </${TAG}>`).toContain(`</${TAG}>`);
+    expect(body, `the template never names '${KEY}', the field the verdict is read from`).toContain(KEY!);
+  });
+
+});

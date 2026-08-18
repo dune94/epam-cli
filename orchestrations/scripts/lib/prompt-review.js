@@ -42,6 +42,12 @@ function makePromptReviewer({ render, invoke, values, logPathFor, warn, projectC
       return { ok: true };
     }
 
+    // The renderer returning nothing means the reviewer never had an artefact to judge.
+    // Sending an empty prompt to the model buys a confident-looking verdict about nothing.
+    if (typeof prompt !== 'string' || !prompt.trim()) {
+      _warn(`[prompt-review] ${id}: rendered an empty prompt — installing UNREVIEWED`);
+      return { ok: true };
+    }
     let out = '';
     try {
       out = await invoke(prompt, typeof logPathFor === 'function' ? logPathFor(id) : undefined);
@@ -70,4 +76,18 @@ function makePromptReviewer({ render, invoke, values, logPathFor, warn, projectC
   };
 }
 
-module.exports = { makePromptReviewer };
+/**
+ * The render adapter the call site injects.
+ *
+ * It exists here rather than as a lambda in mint-agents-step.js because it is a SEAM, and the
+ * lambda form shipped the wrong one: `render(id, dir, vals)` against a library whose signature is
+ * `render(doc, values)`. That returns undefined without throwing, so every prompt rendered empty
+ * and every review fell through to the fail-open path. `buildPrompt` is the load-then-render entry
+ * point that takes an id. Living here, a test can execute the real adapter against the real
+ * library instead of re-implementing it and agreeing with itself.
+ */
+function makePromptRenderer(promptsLib) {
+  return (id, projectConfigDir, values) => promptsLib.buildPrompt(id, projectConfigDir, values);
+}
+
+module.exports = { makePromptReviewer, makePromptRenderer };

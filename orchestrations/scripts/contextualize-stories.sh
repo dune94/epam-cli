@@ -743,17 +743,37 @@ while IFS= read -r sid; do
     --argjson tok "$f_tok" --argjson turns "$f_turns" \
     '{aiMinutes: $min, cost: $cost, tokens: $tok, turns: $turns}')
 
+  # PAYLOADS TRAVEL BY FILE, NEVER BY ARGV.
+  #
+  # Linux caps a SINGLE argument at MAX_ARG_STRLEN (32 * PAGE_SIZE = 128KB), independently of
+  # ARG_MAX. Passing kbChunks/manifest/systemPrompt as --argjson/--arg values meant one ticket with
+  # enough linked documentation could not be estimated at all: live AMSD-2041, 2026-08-18, the
+  # kbChunks value alone cleared 128KB and exec() failed with E2BIG —
+  #   contextualize-stories.sh: line 756: jq: Argument list too long
+  # which bash reports as exit 126, and the step swallowed it as "non-critical", falling back to
+  # the formula baseline. A bigger truncation cap cannot fix this; only getting the bytes off argv
+  # can. --slurpfile reads JSON (wrapped in an array, hence [0]); --rawfile reads text verbatim.
+  _cpa_argdir=$(mktemp -d "${TMPDIR:-/tmp}/cpa-args-XXXXXX")
+  printf '%s' "$story_json"        > "$_cpa_argdir/story.json"
+  printf '%s' "$kb_chunks"         > "$_cpa_argdir/kb.json"
+  printf '%s' "$codebase_signals"  > "$_cpa_argdir/signals.json"
+  printf '%s' "$formula_est_json"  > "$_cpa_argdir/formula.json"
+  printf '%s' "$adjacent_json"     > "$_cpa_argdir/adjacent.json"
+  printf '%s' "$MANIFEST_JSON"     > "$_cpa_argdir/manifest.json"
+  printf '%s' "$SYSTEM_PROMPT"     > "$_cpa_argdir/system_prompt.txt"
+
   inference_input=$(jq -n \
-    --argjson story "$story_json" \
-    --argjson kbChunks "$kb_chunks" \
-    --argjson codebaseSignals "$codebase_signals" \
-    --argjson formulaEstimate "$formula_est_json" \
-    --argjson adjacentStories "$adjacent_json" \
-    --argjson manifest "$MANIFEST_JSON" \
-    --arg systemPrompt "$SYSTEM_PROMPT" \
-    '{story: $story, kbChunks: $kbChunks, codebaseSignals: $codebaseSignals,
-      formulaEstimate: $formulaEstimate, adjacentStories: $adjacentStories,
-      manifest: $manifest, systemPrompt: $systemPrompt}')
+    --slurpfile story "$_cpa_argdir/story.json" \
+    --slurpfile kbChunks "$_cpa_argdir/kb.json" \
+    --slurpfile codebaseSignals "$_cpa_argdir/signals.json" \
+    --slurpfile formulaEstimate "$_cpa_argdir/formula.json" \
+    --slurpfile adjacentStories "$_cpa_argdir/adjacent.json" \
+    --slurpfile manifest "$_cpa_argdir/manifest.json" \
+    --rawfile systemPrompt "$_cpa_argdir/system_prompt.txt" \
+    '{story: $story[0], kbChunks: $kbChunks[0], codebaseSignals: $codebaseSignals[0],
+      formulaEstimate: $formulaEstimate[0], adjacentStories: $adjacentStories[0],
+      manifest: $manifest[0], systemPrompt: $systemPrompt}')
+  rm -rf "$_cpa_argdir"
 
   # STDERR CAPTURED, NEVER DISCARDED. This ran under 2>/dev/null with '|| echo ""' after it, so a
   # crash, a missing key and a timeout all became an empty result and the caller quietly fell back

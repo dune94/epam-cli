@@ -51,6 +51,7 @@ export default defineConfig({
       'test/unit/orchestration/the-prompt-reviewer-was-never-executed.test.ts',
       'test/unit/orchestration/discovery-honours-operator-scope.test.ts',
       'test/unit/orchestration/lint-failure-reaches-the-writer.test.ts',
+      'test/unit/orchestration/undeclared-dependency-reaches-the-writer.test.ts',
 
       'test/unit/orchestration/a-reviewer-nobody-invoked.test.ts',
       // Prompt/tool contracts — prompts that instruct calls the tool refuses.

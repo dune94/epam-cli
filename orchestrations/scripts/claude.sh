@@ -4027,6 +4027,7 @@ run_dependency_check() {
     [ -z "$_out" ] && return 0
 
     local _line _kind _rest
+    local _undeclared=()
     while IFS= read -r _line; do
         [ -z "$_line" ] && continue
         _kind="${_line%%	*}"; _rest="${_line#*	}"
@@ -4040,9 +4041,11 @@ run_dependency_check() {
                 warning "  [dependency-scan] malformed import capture (NOT a package): ${_rest}"
                 ;;
             unknown_external)
+                _undeclared+=("${_rest}")
                 warning "  [dependency-scan] undeclared import: ${_rest}"
                 ;;
             installed_undeclared)
+                _undeclared+=("${_rest}")
                 # Present in a vendor directory, absent from the manifest, and imported by a file
                 # THIS story changed. It builds here and breaks from a clean checkout — live
                 # 2026-08-09 the first story ever committed to a client codeline was undeliverable
@@ -4059,6 +4062,37 @@ run_dependency_check() {
     # Only when the PROJECT asks for it, and only with the command the PROJECT declares.
     local _auto _install_tpl
     _auto=$(_project_dep_config_value "$project_root" autoInstall)
+
+    # AN IMPORT THE MANIFEST CANNOT REPRODUCE FAILS THE ATTEMPT, AND THE WRITER IS TOLD.
+    #
+    # This scan warned and returned 0. Live metrolinx AMSD-2041, 2026-08-18: the writer imported
+    # @contentstack/live-preview-utils in src/pages/_app.tsx without declaring it. The package sat
+    # in node_modules from an earlier run, so the import RESOLVED -- tsc passed, every gate passed,
+    # and the branch would have been broken for anyone running a clean install. The scan caught it
+    # on all six attempts and package.json was never touched, because the finding went to the
+    # terminal and nowhere else: no VERIFICATION_FAILURE for the retry prompt, and no
+    # STORY_REJECTION_KEY for the ladder's repeat detector. Same defect as repo-lint, and as the
+    # 2026-08-09 incident this file already documents.
+    #
+    # Deterministic by definition -- the specifier is either in the manifest or it is not.
+    #
+    # Only when autoInstall will NOT resolve it: a project that installs the package itself is
+    # already fixing the problem, and failing it would reject work that is about to become correct.
+    if [ ${#_undeclared[@]} -gt 0 ] && [ "$_auto" != "true" ]; then
+        local _manifest _specs _first
+        _manifest=$(_project_dep_config_value "$project_root" manifestFile)
+        [ -n "$_manifest" ] || _manifest="the project manifest"
+        _specs=$(printf '  - %s\n' "${_undeclared[@]}")
+        _first="${_undeclared[0]%%	*}"
+        DETERMINISTIC_CHECK_FAILURE=1
+        export DETERMINISTIC_CHECK_FAILURE
+        STORY_REJECTION_KEY="dependency:${_first}"
+        VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nYour change imports package(s) that %s does not declare. They resolve here only because a vendor directory happens to contain them, so this builds on this machine and is BROKEN from a clean checkout -- and every type check and test passes either way, which is why nothing else will catch it.\n\n%s\nAdd each one to %s with a version, in the same section its siblings use. Do not remove the import and do not work around it.\n' \
+            "$_manifest" "$_specs" "$_manifest")
+        error "  [dependency-scan] ${#_undeclared[@]} import(s) not declared in ${_manifest} — the change cannot be reproduced from a clean checkout"
+        return 1
+    fi
+
     [ "$_auto" = "true" ] || return 0
     _install_tpl=$(_project_install_command "$project_root")
     [ -n "$_install_tpl" ] || { warning "  [dependency-scan] autoInstall declared but no installCommand — nothing installed"; return 0; }

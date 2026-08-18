@@ -58,7 +58,14 @@ function parseCostRecord(text) {
   const usage = (j.usage && typeof j.usage === 'object') ? j.usage : {};
   const tokens = (j.tokens && typeof j.tokens === 'object') ? j.tokens : {};
 
-  const costUsd = num(j.total_cost_usd ?? j.cost_usd ?? j.cost ?? (j.part && j.part.cost));
+  // FIRST POSITIVE ALIAS, not first present one. `??` falls through on null/undefined only, so a
+  // total_cost_usd that is present and ZERO used to outrank a real cost_usd sitting one field
+  // along — and that zero was fabricated by ai-run.sh's merge rather than reported by anyone.
+  // Live 2026-08-17 (evidence-anomaly-agent-mint.json): total_cost_usd 0 beat cost_usd 0.0164 and
+  // every ledger row read $0, on the measurement the story budget guard sums to enforce a limit.
+  // A zero-valued alias carries no information; all-zero still yields 0, a genuinely free call.
+  const costUsd = [j.total_cost_usd, j.cost_usd, j.cost, j.part && j.part.cost]
+    .map(num).find(v => v > 0) || 0;
   const tokensIn = num(
     usage.input_tokens ?? usage.inputTokens ?? usage.input ?? tokens.input ?? 0);
   const tokensOut = num(

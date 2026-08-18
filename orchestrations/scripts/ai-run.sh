@@ -442,7 +442,9 @@ _merge_plan_cost() {
   _merged="$(jq -s '
       (.[0] // {}) as $plan | (.[1] // {}) as $exec |
       $exec
-      | .total_cost_usd = (($exec.total_cost_usd // 0) + ($plan.total_cost_usd // 0))
+      | (if (($exec.total_cost_usd // $plan.total_cost_usd) != null)
+         then .total_cost_usd = (($exec.total_cost_usd // 0) + ($plan.total_cost_usd // 0))
+         else . end)
       | .tokens         = (($exec.tokens         // 0) + ($plan.tokens         // 0))
       | .planCostUsd    = ($plan.total_cost_usd // 0)
     ' "$_plan_cost_json" "$ORCH_JSON_RESULT" 2>/dev/null)"

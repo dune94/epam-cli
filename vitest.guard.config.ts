@@ -44,6 +44,8 @@ export default defineConfig({
       'test/unit/orchestration/bootstrap-duplicates-the-seam-registry.test.ts',
       // Self-heal — an agent whose answer does not parse must retry, not end the run.
       'test/unit/orchestration/agents-parse-once-and-die.test.ts',
+      // Agent invocation — an agent handed a null exec never ran, and the log said "fallback".
+      'test/unit/orchestration/the-search-vocabulary-agent-never-ran.test.ts',
       // Tool scoping — a query answered from whichever repo the process was standing in.
       'test/unit/orchestration/codegraph-answers-from-whatever-repo-it-is-standing-in.test.ts',
       // Timeouts — 36 seams declared one and nothing read it.

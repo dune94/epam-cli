@@ -2922,8 +2922,12 @@ async function deriveGuardVocabulary({ promptExec, rule, statements, story, find
   // on every lane. The guards are right to refuse to run unarmed; the answer should never
   // have been lost in the first place. The schema the agent is asked for is now the schema
   // the provider enforces, from the same object.
+  // EVERY CALL SITE AT ONCE. The detective's site passed `opts.promptExec || null` and no caller
+  // ever supplied one, so this agent never ran; the null was dereferenced inside runAgentForJson
+  // and the TypeError read as a considered fallback. Resolving here means no call site can hand
+  // this agent something it cannot invoke, including the next one written.
   const payload = await runAgentForJson(
-    promptExec, prompt, TOOL_GUARD_VOCABULARY, 'GUARD_VOCABULARY',
+    promptExecFor({ promptExec }), prompt, TOOL_GUARD_VOCABULARY, 'GUARD_VOCABULARY',
     logDir ? path.join(logDir, `${(story && story.id) || 'phase'}-guard-vocabulary.log`) : null,
     null, (story && story.id) || '', _repo,
     // The identity travels with the seam: ai-run.sh keys the ladder and the self-heal KB on
@@ -2935,7 +2939,27 @@ async function deriveGuardVocabulary({ promptExec, rule, statements, story, find
   );
   if (!payload) return null;
   const vocab = normaliseVocabulary(payload);
-  return isVocabularyUsable(vocab) ? vocab : null;
+  if (isVocabularyUsable(vocab)) return vocab;
+
+  // THE ANSWER IS NOT THROWN AWAY. An unusable vocabulary used to become a bare `null`, so the
+  // only trace of it was a caller's "no usable terms" line — and the one thing needed to say WHY
+  // (an empty blacklist? terms with no reason? a shape the normaliser dropped?) was the payload
+  // that had just been discarded. Live 2026-08-17, MOCK3-2: unusable, unexplained, unrecoverable.
+  // Same rule as the cost anomaly dump — a failure that destroys its own evidence cannot be
+  // diagnosed, only guessed at.
+  if (logDir) {
+    try {
+      const dump = path.join(logDir,
+        `vocabulary-unusable-${(story && story.id) || 'phase'}-${seam || 'unknown'}.json`);
+      if (!fs.existsSync(dump)) {
+        fs.writeFileSync(dump, JSON.stringify({
+          storyId: (story && story.id) || '', seam: seam || '', rule,
+          statements: _statements, payload, normalised: vocab,
+        }, null, 2));
+      }
+    } catch { /* diagnostics must never take the run down */ }
+  }
+  return null;
 }
 
 // ── DET-1: the estate survey — breadth before the roster ───────────────────
@@ -5451,7 +5475,7 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
   let _searchVocab = null;
   try {
     _searchVocab = await deriveGuardVocabulary({
-      promptExec: opts.promptExec || null,
+      promptExec: opts.promptExec,
       rule: SEARCH_TERM_RULE,
       statements: [story.title || '', String(story.description || '')].filter(Boolean),
       story,
@@ -8343,6 +8367,22 @@ function resolvePromptExec(aiRunnerCmd, env = process.env) {
   return { cmd: aiRunnerCmd, args: ['--provider', provider, ...modelArgs] };
 }
 
+// promptExecFor(opts, env) — THE EXEC AN AGENT RUNS WITH, WHEN ITS CALLER DID NOT SAY.
+//
+// The search-term vocabulary agent asked for one as `opts.promptExec || null`. No caller has
+// ever supplied it, so the value was always null, runAgentForJson dereferenced `.cmd` on it, and
+// the TypeError was swallowed by a catch that logged "vocabulary unavailable — seeding with an
+// unfiltered query". The agent never ran once, on any story, in any run, and the log said
+// fallback.
+//
+// Omission gets the SAME exec run() resolves, from the same function and the same environment,
+// rather than a null that reads as a decision. Threading the argument through each call site
+// would leave the next caller free to omit it again; a default cannot be omitted.
+function promptExecFor(opts = {}, env = process.env) {
+  if (opts && opts.promptExec) return opts.promptExec;
+  return resolvePromptExec(env.AI_RUNNER_CMD || path.join(__dirname, 'ai-run.sh'), env);
+}
+
 // buildKnownValidModels <upgradeModel, miniModel>
 // isValidModelString <model, currentModel, knownValidModels>
 //
@@ -9094,6 +9134,7 @@ module.exports = {
   extractCodeRefs,
   resolvePromptProvider,
   resolvePromptExec,
+  promptExecFor,
   buildGateExec,
   parseReviewVerdict,
   reviewPrdChange,

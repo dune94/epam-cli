@@ -74,6 +74,11 @@ export default defineConfig({
       'test/unit/orchestration/a-failed-attempt-billed-the-previous-ones-tokens.test.ts',
       'test/unit/orchestration/the-failure-analyst-could-not-build-its-own-prompt.test.ts',
       'test/unit/orchestration/an-unparseable-review-was-reported-as-clean.test.ts',
+      // Self-heal economics — the producer was judged by a limit it was never told.
+      'test/unit/orchestration/the-analyst-was-never-told-the-limit-it-was-judged-by.test.ts',
+      // Consumption — outputs the pipeline already had and handed to nobody.
+      'test/unit/orchestration/the-survey-found-the-fix-site-and-told-nobody.test.ts',
+      'test/unit/orchestration/a-tolerated-failure-spawned-a-bug-fix-story.test.ts',
       // Ledger — duration was always 0, and an unexplained $0 destroyed its own evidence.
       'test/unit/orchestration/the-ledger-cannot-say-how-long-anything-took.test.ts',
       // Upstream congestion — a pinned provider that 429s must not end the run.

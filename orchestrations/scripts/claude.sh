@@ -6560,12 +6560,28 @@ run_prd_change_summarizer() {
 # existing rule, is the underlying lesson actually sound) are out of scope
 # here and still need a real reviewer, so this only short-circuits the
 # specific failure mode that was observed wasting cost.
+# The declared skill-note length limit. One source (config/self-heal.json), read by the checker
+# here and handed to the failure analyst so it writes within it in the first place.
+_skill_note_max_chars() {
+    local _cfg="${AUTOMATION_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}/config/self-heal.json"
+    local _v=""
+    [ -f "$_cfg" ] && _v=$(jq -r '.skillNote.maxChars // empty' "$_cfg" 2>/dev/null)
+    case "$_v" in (''|*[!0-9]*) 
+        echo "[skill-note] config/self-heal.json declares no numeric skillNote.maxChars — refusing to guess a limit" >&2
+        return 1 ;;
+    esac
+    printf '%s' "$_v"
+}
+
 _skill_note_format_ok() {
     local note="$1"
     local story_id="$2"
     local existing_profile_text="${3:-}"
     [ -z "$note" ] && return 1
-    [ "${#note}" -le 200 ] || return 1
+    # THE DECLARED LIMIT, NOT A NUMBER WRITTEN HERE. See config/self-heal.json: the producer is
+    # told the same value, so a note no longer has to be rejected and rewritten to discover it.
+    local _max; _max=$(_skill_note_max_chars)
+    [ "${#note}" -le "$_max" ] || return 1
     echo "$note" | grep -Eiq "^(${SKILL_NOTE_IMPERATIVE_OPENERS})\\b" || return 1
     if [ -n "$story_id" ] && echo "$note" | grep -qi "$story_id"; then
         return 1
@@ -6967,6 +6983,10 @@ $(cat "$_fa_vendor_contract")
     fi
     [ -n "$_analyst_manifest_file" ] || _analyst_manifest_file="the codeline's dependency manifest"
 
+    # The same declaration the checker enforces (config/self-heal.json), so the analyst writes
+    # within the limit rather than discovering it as a rejection.
+    local _analyst_skill_note_max; _analyst_skill_note_max=$(_skill_note_max_chars) || return 1
+
     if ! jq -n \
         --rawfile profile "$_av_dir/profile" \
         --arg story_id "$story_id" \
@@ -6977,8 +6997,10 @@ $(cat "$_fa_vendor_contract")
         --rawfile verification_failure "$_av_dir/vf" \
         --rawfile attempt_changes "$_av_dir/changes" \
         --arg manifest_file "$_analyst_manifest_file" \
+        --arg skill_note_max "$_analyst_skill_note_max" \
         '{"__ANALYST_PROFILE__":$profile,
           "__MANIFEST_FILE__":$manifest_file,
+          "__SKILL_NOTE_MAX__":$skill_note_max,
           "__STORY_ID__":$story_id,
           "__STORY_ROLE__":$story_role,
           "__STORY_ACS__":$story_acs,

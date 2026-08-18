@@ -10108,6 +10108,28 @@ _create_bug_fix_phase() {
     local model_override="$4"
     local provider_override="$5"
 
+# _failure_is_tolerated <failing_file> <phase>
+#
+# WAS THIS ALREADY BROKEN BEFORE THE RUN TOUCHED IT? The regression guard records the codeline's
+# pre-existing failures at run start, so later stages can tell "this change broke it" from
+# "inherit what the codeline already had, never add to it". Exactly one consumer read that record
+# — the regression DELTA gate — so a tolerated failure could still be parsed out of the test
+# output and turned into a bug-fix story, putting a writer on a defect the run had already decided
+# was not its business.
+#
+# The same file the delta gate reads. Tolerates nothing when there is no baseline (writer-only
+# mode skips the guard), when the recorded set was UNSTABLE (it proved nothing), or when the file
+# is unreadable — every one of those errs toward treating a failure as real.
+_failure_is_tolerated() {
+    local _f="${1:-}" _phase="${2:-}"
+    [ -n "$_f" ] && [ -n "$_phase" ] || return 1
+    local _bl="${LOG_DIR:-}/regression-guard-baseline-${_phase}.json"
+    [ -f "$_bl" ] || return 1
+    jq -e --arg f "$_f" '
+        (.stable == true) and ((.failures // []) | index($f) != null)
+    ' "$_bl" >/dev/null 2>&1
+}
+
     local failing_files
     failing_files=$(echo "$vitest_output" | grep -E '^ FAIL ' | awk '{print $2}' | sort -u)
     if [ -z "$failing_files" ]; then
@@ -10118,6 +10140,13 @@ _create_bug_fix_phase() {
     local seen_owners=""
     while IFS= read -r failing_file; do
         [ -z "$failing_file" ] && continue
+
+        # A failure the run was told to tolerate is not this change's to fix. See
+        # _failure_is_tolerated — same record the regression delta gate reads.
+        if _failure_is_tolerated "$failing_file" "$parent_phase"; then
+            info "  [bug-fix] $failing_file was already failing before this run (regression baseline) — not opening a story for it"
+            continue
+        fi
 
         local owner_story
         owner_story=$(jq -r --arg rel "$failing_file" --arg phase "$parent_phase" \

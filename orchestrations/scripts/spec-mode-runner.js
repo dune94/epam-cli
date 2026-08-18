@@ -5428,6 +5428,46 @@ function prescriptionMissingSource(sites) {
   return !list.some((f) => f && f.deliveryRole === 'produces');
 }
 
+/**
+ * surveyHypothesisBlock(codeline, logDir) — what the estate survey already found here.
+ *
+ * THE SURVEY IS OFTEN THE WHOLE ANSWER AND REACHED NOBODY. It reads every codeline before the
+ * roster is minted; live 2026-08-18 its mocka entry named the file, the function, the LINE, the
+ * defect and the missing test — and the detective then spent a top-ladder call with an iteration
+ * budget rediscovering it, because `estateSurvey` is consumed only by mintProjectAgents.
+ *
+ * Handed over as a HYPOTHESIS, not an answer. The survey is evidence about the estate, gathered
+ * before this story's spec existed, and the detective still owns the fix site and still verifies
+ * against the index. Empty whenever there is nothing trustworthy to hand over — no survey, a
+ * survey that did not run, a codeline it never covered, or one it put out of scope — because a
+ * fabricated starting point is worse than none.
+ */
+function surveyHypothesisBlock(codeline, logDir) {
+  if (!codeline || !logDir) return '';
+  let survey = null;
+  try {
+    survey = JSON.parse(fs.readFileSync(path.join(logDir, 'estate-survey.json'), 'utf8'));
+  } catch { return ''; }
+  if (!survey || survey.ran !== true || !Array.isArray(survey.codelines)) return '';
+  const entry = survey.codelines.find((c) => c && c.codeline === codeline);
+  if (!entry || entry.state !== 'in_scope') return '';
+  const evidence = String(entry.evidence || '').trim();
+  if (!evidence) return '';
+  const surfaces = (Array.isArray(entry.surfaces) ? entry.surfaces : []).filter(Boolean);
+  return [
+    '',
+    'WHAT THE ESTATE SURVEY ALREADY FOUND IN THIS CODELINE — a HYPOTHESIS, not a conclusion.',
+    '',
+    'This was read from the repository before your story was specified. It may be right, partial,',
+    'or aimed at a different story. VERIFY it against the index before you rely on it, and discard',
+    'it if the code does not agree — you own the fix site, not the survey.',
+    '',
+    evidence,
+    surfaces.length ? `\nFiles it named: ${surfaces.join(', ')}` : '',
+    '',
+  ].join('\n');
+}
+
 async function runCodeGraphDetective(story, logDir, opts = {}) {
   if (process.env.EPAM_BROWNFIELD !== '1') return [];
   const repoPath = resolveCodelinePath(story);
@@ -5576,6 +5616,9 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
       __STORY_ACS__: (story.acceptanceCriteria || []).map((a) => '- ' + String(a)).join('\n'),
       // Adjacent in the original with no separator; the library reads __A____B__ as one token.
       __KIND_AND_CORRECTIVE_CONTEXT__: String(_kindHintBlock) + String(correctiveContext),
+      // What the estate survey already found here — a hypothesis for the detective to verify,
+      // empty when there is nothing trustworthy to hand over. See surveyHypothesisBlock.
+      __SURVEY_HYPOTHESIS__: surveyHypothesisBlock(story && story.codeline, logDir),
       __PRESEED_BLOCK__: preseedBlock,
       __PRESCRIPTION_RULES__: detectivePrescription(_kindHint),
     },
@@ -9181,6 +9224,7 @@ module.exports = {
   resolvePromptProvider,
   resolvePromptExec,
   promptExecFor,
+  surveyHypothesisBlock,
   buildGateExec,
   parseReviewVerdict,
   reviewPrdChange,

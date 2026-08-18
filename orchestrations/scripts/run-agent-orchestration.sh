@@ -5800,7 +5800,7 @@ else
         # wrong and let it try again. Same "detect, explain, retry" shape as
         # checkSplitMandateViolation's existing precedent in spec-mode-runner.js.
         for _mc_attempt in 1 2 3; do
-        _mc_role_file; _mc_role_file=$(mktemp "${TMPDIR:-/tmp}/mc-role-XXXXXX.txt")
+        _mc_role_file=$(mktemp "${TMPDIR:-/tmp}/mc-role-XXXXXX.txt")
         jq -r '.["prd-model-coordinator"] // ""' "$_mc_profiles_file" > "$_mc_role_file" 2>/dev/null || : > "$_mc_role_file"
         _cp_vals=$(mktemp "${TMPDIR:-/tmp}/prd-model-coordinator-vals-XXXXXX.json")
         jq -n \
@@ -8290,7 +8290,6 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
             # The evidence, gathered into files. The log used to arrive `head -200` — a truncation of
             # the very evidence the analyst attributes, cutting mid-file-list, so the findings nobody
             # looked at were exactly the ones dropped. It goes whole.
-            _lf_outputs_file _lf_stories_file
             _lf_outputs_file=$(mktemp "${TMPDIR:-/tmp}/lint-outputs-XXXXXX.txt")
             _lf_stories_file=$(mktemp "${TMPDIR:-/tmp}/lint-stories-XXXXXX.txt")
             if [ -f "$SCRIPT_DIR/lib/story-outputs.sh" ]; then
@@ -8298,8 +8297,8 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
               story_outputs_files "$PROJECT_ROOT" "$LOG_DIR" > "$_lf_outputs_file" 2>/dev/null || true
             fi
             python3 -c "import json,sys; d=json.load(open('${MAIN_PRD_FILE:-$PRD_FILE}')); active=[s for s in d.get('stories',[]) if not s.get('completed')]; print(json.dumps([{k:s.get(k) for k in ('id','title','agentRole')} for s in active], indent=2))" > "$_lf_stories_file" 2>/dev/null || echo "[]" > "$_lf_stories_file"
-            _lp_vals; _lp_vals=$(mktemp "${TMPDIR:-/tmp}/lint-finding-analyst-vals-XXXXXX.json")
-            _lp_role_file; _lp_role_file=$(mktemp "${TMPDIR:-/tmp}/lint-finding-analyst-role-XXXXXX.txt")
+            _lp_vals=$(mktemp "${TMPDIR:-/tmp}/lint-finding-analyst-vals-XXXXXX.json")
+            _lp_role_file=$(mktemp "${TMPDIR:-/tmp}/lint-finding-analyst-role-XXXXXX.txt")
             jq -r --arg r "gate-finding-analyst" '.[$r] // ""' "$_profiles_file" > "$_lp_role_file" 2>/dev/null || : > "$_lp_role_file"
             jq -n --rawfile profile "$_lp_role_file" \
                   --rawfile lint_log "$_lint_log" \
@@ -8363,10 +8362,10 @@ if m:
                 info "  [lint-gate:analyst] Finding mapped to story: $_lint_story_id"
                 # Agent 2: story-ac-remediator — add AC to prevent recurrence
                 info "  [lint-gate:remediator] Augmenting ACs for story $_lint_story_id..."
-                _lac_acs_file; _lac_acs_file=$(mktemp "${TMPDIR:-/tmp}/lint-acs-XXXXXX.txt")
+                _lac_acs_file=$(mktemp "${TMPDIR:-/tmp}/lint-acs-XXXXXX.txt")
                 python3 -c "import json; d=json.load(open('${MAIN_PRD_FILE:-$PRD_FILE}')); [print(json.dumps(s.get('acceptanceCriteria', []), indent=2)) for s in d.get('stories',[]) if s.get('id')=='$_lint_story_id']" > "$_lac_acs_file" 2>/dev/null || echo "[]" > "$_lac_acs_file"
-                _lp_vals; _lp_vals=$(mktemp "${TMPDIR:-/tmp}/lint-ac-remediator-vals-XXXXXX.json")
-                _lp_role_file; _lp_role_file=$(mktemp "${TMPDIR:-/tmp}/lint-ac-remediator-role-XXXXXX.txt")
+                _lp_vals=$(mktemp "${TMPDIR:-/tmp}/lint-ac-remediator-vals-XXXXXX.json")
+                _lp_role_file=$(mktemp "${TMPDIR:-/tmp}/lint-ac-remediator-role-XXXXXX.txt")
                 jq -r --arg r "story-ac-remediator" '.[$r] // ""' "$_profiles_file" > "$_lp_role_file" 2>/dev/null || : > "$_lp_role_file"
                 jq -n --rawfile profile "$_lp_role_file" \
                       --rawfile current_acs "$_lac_acs_file" \

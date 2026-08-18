@@ -38,6 +38,7 @@ export default defineConfig({
       'test/unit/orchestration/the-survey-only-ever-staffs-for-looking.test.ts',
       // Prompt provenance — a generated copy must serve the seam its template declares.
       'test/unit/orchestration/the-prompt-seam-link-is-stored-twice.test.ts',
+      'test/unit/orchestration/an-unroutable-name-killed-the-mint.test.ts',
       // Mint vocabulary — the prompt offered a name shape the registry routes nowhere.
       'test/unit/orchestration/the-mint-was-offered-a-suffix-nothing-routes.test.ts',
       'test/unit/orchestration/the-mint-prompt-lives-in-the-template-zone.test.ts',

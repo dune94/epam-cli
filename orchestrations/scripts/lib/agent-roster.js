@@ -259,6 +259,66 @@ function isUsableProposal(p) {
 }
 
 /**
+ * WHY A NAME THE PIPELINE CANNOT ROUTE IS A REJECTION, NOT A CRASH.
+ *
+ * mint-agents-step.js resolves every minted agent to a seam after the model has answered, and
+ * resolveSeam throws when nothing matches — so one badly-suffixed name ended the run with a
+ * correct roster sitting in the log. This is the same class as a rationale that says nothing or
+ * a brief naming paths that do not exist: it parses, it fails the contract, and the correction
+ * loop re-mints against the reason. It just had no reason to re-mint against.
+ *
+ * The reason names the shapes permitted FOR THE DECLARED KIND, derived from the registry exactly
+ * as the mint's prompt rule is, so a rejection can never suggest a suffix the resolver refuses.
+ *
+ * @returns {string|null} the reason, or null when the name routes to a seam serving its kind
+ */
+function unroutableName(p) {
+  const { resolveSeam, registryPath } = require('./seam-invocation.js');
+  const kind = proposalKind(p);
+
+  let seam = null;
+  try {
+    seam = resolveSeam(p.name);
+  } catch (_) {
+    return `the name "${p.name}" resolves to no seam, so nothing can run this role. `
+      + `${permittedShapes(kind)}`;
+  }
+
+  // Kind and suffix must agree: the suffix decides the seam, and a seam serves declared kinds.
+  // Where the registry declares no kind for the matched seam there is nothing to disagree with —
+  // an exact profile entry, for instance — so that is not a rejection.
+  let registry = null;
+  try { registry = JSON.parse(fs.readFileSync(registryPath(), 'utf8')); } catch (_) { return null; }
+  const kindsForSeam = (Array.isArray(registry.seamPatterns) ? registry.seamPatterns : [])
+    .filter((r) => r && r.seam === seam && r.kind)
+    .map((r) => r.kind);
+  if (!kindsForSeam.length || kindsForSeam.includes(kind)) return null;
+
+  return `the name "${p.name}" routes to the '${seam}' seam, which serves `
+    + `${[...new Set(kindsForSeam)].join(' or ')} — not the "${kind}" it declares. `
+    + `${permittedShapes(kind)}`;
+}
+
+/** The name endings permitted for one kind, in a sentence, derived from the registry. */
+function permittedShapes(kind) {
+  let vocab = null;
+  try {
+    // The same derivation the mint's own prompt rule is rendered from. dist/sdk.js is already a
+    // hard requirement of this stage — mintProjectAgents loads its prompt from it — so this adds
+    // no new dependency, and a reason without shapes is still better than a crash.
+    vocab = require(path.join(__dirname, '..', '..', '..', 'dist', 'sdk.js')).mintNameVocabulary();
+  } catch (_) { /* fall through to the shapeless form */ }
+  const allowed = vocab && vocab[kind];
+  if (!allowed || !allowed.length) {
+    return 'Rename it with the ending this pipeline requires for its kind.';
+  }
+  // No article before the kind: kind names come from the registry, so "a"/"an" cannot be chosen
+  // here without writing a rule about words the registry is free to change.
+  return `An agent of kind "${kind}" must be named ending in `
+    + `${allowed.map((sx) => `"-${sx}"`).join(' or ')}.`;
+}
+
+/**
  * Merge proposals into profiles.json and seed each new role's KB file.
  *
  * @param {object}   opts
@@ -296,6 +356,9 @@ function mergeProjectAgents(opts) {
       rejected.push({ name: p.name, reason: 'collides with a protected canonical role' });
       continue;
     }
+
+    const _unroutable = unroutableName(p);
+    if (_unroutable) { rejected.push({ name: p.name, reason: _unroutable }); continue; }
 
     // A brief is inherited whole and re-checked by nothing, so a path it names becomes an
     // instruction. Refused here rather than surfaced later: the correction cycle re-mints on

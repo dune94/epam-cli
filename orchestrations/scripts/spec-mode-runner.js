@@ -4229,12 +4229,34 @@ async function reviewSurvey({
   if (toolGrant) { env.AI_GATE_ALLOW_TOOLS = '1'; env.EPAM_ALLOWED_TOOLS = toolGrant; }
 
   try {
-    const payload = await runAgentForJson(
-      promptExec, prompt, TOOL_SURVEY_REVIEW, 'SURVEY_REVIEW',
-      logDir ? path.join(logDir, 'survey-review.log') : null,
-      null, '', repoPath || '', env,
-    );
-    const findings = (payload && Array.isArray(payload.findings)) ? payload.findings : [];
+    // AN ANSWER THAT DOES NOT PARSE IS NOT A CLEAN REVIEW.
+    //
+    // This read `payload && Array.isArray(payload.findings) ? ... : []` and then reported
+    // `ran: true` over every codeline. Live 2026-08-18 the reviewer replied in prose —
+    // "Unexpected token 'I', \"I opened a\"..." — and the mint logged "survey review: 0
+    // finding(s) across 2 codeline(s)", which is exactly what a reviewer that examined both and
+    // approved them says. Nothing downstream could tell the two apart.
+    //
+    // A prose answer is a CONTENT failure and the pipeline already has the remedy: tell the model
+    // which contract it broke and ask again. Only when the retries are spent does the survey end
+    // UNREVIEWED — and then it says so rather than saying clean.
+    const { retryUntilParsedAsync } = require('./lib/content-retry.js');
+    const findings = await retryUntilParsedAsync({
+      what: 'survey-review',
+      attempts: Number(process.env.EPAM_CONTENT_RETRY_ATTEMPTS || 3),
+      log: (m) => process.stderr.write(`${m}\n`),
+      call: async (note) => runAgentForJson(
+        promptExecFor({ promptExec }), note ? `${note}${prompt}` : prompt,
+        TOOL_SURVEY_REVIEW, 'SURVEY_REVIEW',
+        logDir ? path.join(logDir, 'survey-review.log') : null,
+        null, '', repoPath || '', env,
+      ),
+      parse: (payload) => {
+        if (!payload) return { ok: false, reason: 'the response could not be parsed as JSON at all — a review must arrive inside its tags, not as prose' };
+        if (!Array.isArray(payload.findings)) return { ok: false, reason: 'the response had no "findings" array — an empty array is how a clean review is stated' };
+        return { ok: true, value: payload.findings };
+      },
+    });
     if (logDir) {
       try {
         fs.writeFileSync(path.join(logDir, 'survey-review.json'),

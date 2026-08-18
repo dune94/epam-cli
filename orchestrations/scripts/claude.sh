@@ -5630,7 +5630,22 @@ classify_failure_class() {
     COORDINATOR_FAILURE_CLASS="unknown"
     COORDINATOR_ESCALATE="yes"
 
-    # Class A: environment crash — raw output is empty and exit code != 0
+    # Class A: environment crash — raw output is EMPTY and exit code != 0.
+    #
+    # ABSENT IS NOT EMPTY. This measured emptiness as `raw_size=0` with a default of 0, so a file
+    # that was never written — or an empty path, which is exactly what the caller passes when its
+    # fallbacks miss — scored identically to a file the CLI wrote nothing into. On 2026-08-18 no
+    # _result_raw.json existed for either story, so ten attempts were diagnosed "environment
+    # crash", the coordinator confirmed a healthy binary and key, and the real cause (a provider
+    # that did not follow its escalated model) was never considered. A conclusion drawn from
+    # absent evidence is worse than no conclusion: it sends the next step somewhere confident and
+    # wrong. Missing stays UNKNOWN, and says so.
+    if [ "$exit_code" -ne 0 ] && { [ -z "$raw_file" ] || [ ! -f "$raw_file" ]; }; then
+        COORDINATOR_FAILURE_CLASS="unknown"
+        COORDINATOR_ESCALATE="yes"
+        warning "  Coordinator[L1]: no raw output file to read (${raw_file:-<no path>}) — the attempt's output was never written, so the failure class is UNKNOWN, not diagnosed"
+        return 0
+    fi
     local raw_size=0
     [ -f "$raw_file" ] && raw_size=$(wc -c < "$raw_file" 2>/dev/null || echo 0)
     if [ "$raw_size" -eq 0 ] && [ "$exit_code" -ne 0 ]; then
@@ -6172,6 +6187,34 @@ resolve_model_provider() {
         esac
     done
     echo ""
+}
+
+# sync_provider_to_model
+#
+# MODEL AND PROVIDER ARE ONE DECISION. Several escalation arms re-resolve the provider after
+# changing the model; the invocation trusted that every arm did. On 2026-08-18 one did not, and
+# ten of twelve writer attempts asked the minimax provider for z-ai/glm-5.2:
+#
+#   minimax + MiniMax-M3    exit=0  413 bytes
+#   qwen    + z-ai/glm-5.2  exit=0  410 bytes
+#   minimax + z-ai/glm-5.2  exit=1  0 bytes   "All providers exhausted"
+#
+# Zero bytes and a non-zero exit read as an environment crash, so the coordinator spent the rest
+# of the story diagnosing a healthy binary and a healthy key. Both writer stories were already
+# correct on disk when the loop gave up.
+#
+# Resolving at the point of USE means no arm can forget, including one written later. It never
+# guesses: a model the map does not know leaves the provider exactly as it was.
+sync_provider_to_model() {
+    [ -n "${STORY_MODEL:-}" ] || return 0
+    local _p
+    _p=$(resolve_model_provider "${STORY_MODEL}")
+    [ -n "$_p" ] || return 0
+    if [ "$_p" != "${STORY_PROVIDER:-}" ]; then
+        log "  Provider[follows-model] -> $_p (was ${STORY_PROVIDER:-unset}; model is ${STORY_MODEL})"
+        STORY_PROVIDER="$_p"
+    fi
+    return 0
 }
 
 # assess_model_escalation <story_id> <raw_file> <result_json> <log_file>
@@ -6894,6 +6937,19 @@ $(cat "$_fa_vendor_contract")
     printf '%s' "${VERIFICATION_FAILURE:-}"             > "$_av_dir/vf"
     _attempt_change_summary "$story_id"                 > "$_av_dir/changes" 2>/dev/null || : > "$_av_dir/changes"
 
+    # THE TEMPLATE DECLARES __MANIFEST_FILE__ AND NOTHING SUPPLIED IT.
+    #
+    # Live 2026-08-18: the analyst could not build its prompt on any of the twelve writer attempts
+    # — "missing values for: __MANIFEST_FILE__" — so the one component whose job is to diagnose a
+    # failing writer was blind for the whole story, on both lanes, in the run where it was needed
+    # most. The value is the codeline's manifest name, read from the project's own dependency
+    # declaration rather than named here, so a project on another stack answers for itself.
+    local _analyst_manifest_file=""
+    if [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] && [ -f "${EPAM_PROJECT_CONFIG_DIR}/dependency-check.json" ]; then
+        _analyst_manifest_file=$(jq -r '.manifestFile // ""' "${EPAM_PROJECT_CONFIG_DIR}/dependency-check.json" 2>/dev/null || echo "")
+    fi
+    [ -n "$_analyst_manifest_file" ] || _analyst_manifest_file="the codeline's dependency manifest"
+
     if ! jq -n \
         --rawfile profile "$_av_dir/profile" \
         --arg story_id "$story_id" \
@@ -6903,7 +6959,9 @@ $(cat "$_fa_vendor_contract")
         --rawfile dependency_contracts "$_av_dir/contracts" \
         --rawfile verification_failure "$_av_dir/vf" \
         --rawfile attempt_changes "$_av_dir/changes" \
+        --arg manifest_file "$_analyst_manifest_file" \
         '{"__ANALYST_PROFILE__":$profile,
+          "__MANIFEST_FILE__":$manifest_file,
           "__STORY_ID__":$story_id,
           "__STORY_ROLE__":$story_role,
           "__STORY_ACS__":$story_acs,
@@ -9209,6 +9267,13 @@ $_kb_section"
         # Change to project root for the CLI to have correct context
         cd "$PROJECT_ROOT"
 
+        # The provider must match the model this attempt will actually use — the ladder may have
+        # escalated the model since the provider was resolved for this story.
+        sync_provider_to_model
+        # BOTH, EVERY ATTEMPT. The model was logged per attempt and the provider once per story,
+        # so three very different failures — right pair, wrong pair, missing key — left identical
+        # records. The run that cost this diagnosis could not say which provider it had used.
+        log "  Attempt[$((retry_count + 1))] provider=${STORY_PROVIDER:-unset} model=${STORY_MODEL:-default}"
         echo "=== $story_cli Output (attempt $((retry_count + 1))) ===" >> "$output_file"
 
         local json_result_file="${output_file%.log}_result.json"
@@ -10137,6 +10202,30 @@ update_story_status() {
 # tracking, AND after every individual retry attempt (status="attempt",
 # attempt_num set) so real per-attempt token/cost usage is never invisible —
 # see the call site right after the provider-invocation case block above.
+# result_is_from_this_attempt <json_result_file> <started_at>
+#
+# WHOSE RESULT IS THIS? append_cost_record reads usage out of $json_result_file, and an attempt
+# that fails before writing one leaves the PREVIOUS attempt's file in place. The ledger then
+# records those numbers again for a call that never happened.
+#
+# Live 2026-08-18, MOCK3-1: attempts 3-12 asked a provider for a model it does not serve, came
+# back in about a second with nothing, and each recorded in=15812 out=1860 cost=$0.007 — attempt
+# 2's numbers, ten more times, on the measurement the story budget guard sums to enforce a limit.
+#
+# The attempt's start time is already a parameter. A result file older than the attempt did not
+# come from it. Absent file, absent path or absent start time all answer "not mine" rather than
+# guessing — an over-report here is invented spend, and an under-report is merely a gap.
+result_is_from_this_attempt() {
+    local _f="${1:-}" _started="${2:-}"
+    [ -n "$_f" ] && [ -f "$_f" ] || return 1
+    [ -n "$_started" ] || return 1
+    local _fm _sm
+    _fm=$(stat -c %Y "$_f" 2>/dev/null) || return 1
+    _sm=$(date -d "$_started" +%s 2>/dev/null) || return 1
+    [ -n "$_fm" ] && [ -n "$_sm" ] || return 1
+    [ "$_fm" -ge "$_sm" ]
+}
+
 append_cost_record() {
     local story_id=$1 status=$2 started_at=$3 ended_at=$4 output_file=$5 json_result_file=${6:-} attempt_num=${7:-}
     local cost_file="${PHASE_COST_FILE:-$LOG_DIR/phase-cost.jsonl}"
@@ -10150,6 +10239,12 @@ append_cost_record() {
     local forecast_cost=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .estimatedCost // 0' "$prd_target" 2>/dev/null || echo 0)
     local story_effort=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .effort // "medium"' "$prd_target")
     local story_type=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .storyType // "implementation"' "$prd_target")
+    # A result file that predates this attempt belongs to the previous one; reading it would
+    # bill this attempt for a call it never made. See result_is_from_this_attempt.
+    if [ -n "$json_result_file" ] && ! result_is_from_this_attempt "$json_result_file" "$started_at"; then
+        log "  Cost[$story_id] no result from this attempt — recording zero usage rather than repeating the previous attempt's"
+        json_result_file=""
+    fi
     local resolved_model="${STORY_MODEL:-}"
     local planner_model="${STORY_PLANNER_MODEL:-}"
     local prompt_tokens_measured="${STORY_PRECOUNT_TOKENS:-0}"

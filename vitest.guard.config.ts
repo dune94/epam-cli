@@ -62,6 +62,13 @@ export default defineConfig({
       'test/unit/orchestration/every-seam-declares-a-timeout-nothing-reads.test.ts',
       // Provisioning — one slow call must not destroy the whole mint step.
       'test/unit/orchestration/one-slow-prompt-destroyed-thirty-minutes-of-work.test.ts',
+      // Writer loop — a provider that did not follow its model, and a failure path that
+      // destroyed its own evidence: correct work discarded as an environment crash.
+      'test/unit/orchestration/the-ladder-escalated-the-model-and-left-the-provider.test.ts',
+      'test/unit/orchestration/a-missing-raw-file-was-called-an-environment-crash.test.ts',
+      'test/unit/orchestration/a-failed-attempt-billed-the-previous-ones-tokens.test.ts',
+      'test/unit/orchestration/the-failure-analyst-could-not-build-its-own-prompt.test.ts',
+      'test/unit/orchestration/an-unparseable-review-was-reported-as-clean.test.ts',
       // Ledger — duration was always 0, and an unexplained $0 destroyed its own evidence.
       'test/unit/orchestration/the-ledger-cannot-say-how-long-anything-took.test.ts',
       // Cost — the measurement the operator calls priority #1.

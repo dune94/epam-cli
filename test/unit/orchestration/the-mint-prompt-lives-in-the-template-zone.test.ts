@@ -44,6 +44,10 @@ import {
   getPrdGenerationPrompt,
 } from '../../../src/scaffold/prompts.js';
 import { FIXED_AGENT_ROLES } from '../../../src/scaffold/prdTypes.js';
+// The naming rule is derived from the invocation registry, not written in the template, so the
+// template render must be given the same value the source render computes — otherwise this
+// oracle would compare a rendered rule against an unreplaced placeholder.
+import { mintNameRule } from '../../../src/scaffold/seamVocabulary.js';
 
 function fixedRoles(): string[] {
   return [...FIXED_AGENT_ROLES];
@@ -84,6 +88,7 @@ describe('the agent-proposal (mint) prompt is a template', () => {
     const out = renderTemplate('agent-proposal', {
       __FIXED_ROLE_COUNT__: String(roles.length),
       __FIXED_ROLE_LIST__: roles.join(', '),
+      __NAME_RULE__: mintNameRule(),
     });
     expect(out).toBe(getAgentProposalPrompt());
   });

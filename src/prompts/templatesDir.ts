@@ -25,7 +25,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, parse, resolve } from 'node:path';
 
 /** The engine's own root: the nearest ancestor with a package.json. Never a level count. */
-function engineRoot(): string {
+export function engineRoot(): string {
   const override = process.env.EPAM_ENGINE_ROOT;
   if (override) return resolve(override);
 

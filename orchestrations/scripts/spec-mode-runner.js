@@ -3327,6 +3327,25 @@ async function surveyEstate({
 // The shape of a proposal. The SDK's proposeAgents() asks for exactly these three fields;
 // this binds them so the answer arrives parsed instead of as prose the pipeline has to
 // guess at (the failure that lost the guard-vocabulary answer on 2026-08-06).
+/**
+ * The permitted name shapes, in one sentence, from the same registry the mint's prompt rule is
+ * derived from. Falls back to naming no shape at all rather than inventing one: a description
+ * that guesses is how the three copies drifted apart in the first place.
+ */
+function mintNameShapeDescription() {
+  let vocab = null;
+  try {
+    vocab = require(path.join(__dirname, '..', '..', 'dist', 'sdk.js')).mintNameVocabulary();
+  } catch (_) { /* fall through */ }
+  if (!vocab || !Object.keys(vocab).length) {
+    return 'kebab-case role name, "<domain>-<suffix>", with the suffix required for its kind';
+  }
+  const parts = Object.keys(vocab).sort()
+    .map((k) => `${k}: ${vocab[k].map((sx) => `-${sx}`).join(' or ')}`);
+  return `kebab-case "<domain>-<suffix>". The suffix is fixed by the kind — ${parts.join('; ')}. `
+    + 'A name ending any other way cannot be routed to a seam.';
+}
+
 const TOOL_PROJECT_AGENTS = {
   name: 'submit_project_agents',
   description:
@@ -3343,7 +3362,12 @@ const TOOL_PROJECT_AGENTS = {
           type: 'object',
           required: ['name', 'kind', 'codeline', 'systemPrompt', 'rationale'],
           properties: {
-            name: { type: 'string', description: 'kebab-case role name, e.g. "<domain>-engineer"' },
+            // DERIVED, LIKE THE PROMPT'S RULE. This description used to read 'e.g.
+            // "<domain>-engineer"' — a third copy of a vocabulary the registry owns, alongside
+            // the template's own 'ending in "-engineer" or "-specialist"', which offered a shape
+            // resolveSeam throws on. Both now come from the registry's seamPatterns, so the
+            // schema cannot describe a name the pipeline refuses to route.
+            name: { type: 'string', description: mintNameShapeDescription() },
             kind: {
               type: 'string',
               enum: ['implementer', 'investigator'],

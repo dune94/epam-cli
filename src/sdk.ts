@@ -59,3 +59,6 @@ export type { AgentProposal } from './scaffold/prdTypes.js';
 // PROMPT and drives it through the pipeline's own agent seam instead. Exporting it keeps
 // one definition of what a project role is; a second copy would drift on the first edit.
 export { getAgentProposalPrompt } from './scaffold/prompts.js';
+// The mint's naming vocabulary, so the orchestration side constrains `name` in the response
+// schema from the same registry the prompt's rule is derived from.
+export { mintNameVocabulary, mintNameRule } from './scaffold/seamVocabulary.js';

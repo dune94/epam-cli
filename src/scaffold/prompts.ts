@@ -18,6 +18,7 @@ import { templatesDir } from '../prompts/templatesDir';
 import { join } from 'node:path';
 
 import { FIXED_AGENT_ROLES } from './prdTypes.js';
+import { mintNameRule } from './seamVocabulary.js';
 
 /**
  * The template layer, found from this module rather than from the working directory: `epam new`
@@ -56,9 +57,14 @@ export function getManifestAnalysisPrompt(): string {
 
 /** Phase B: propose project-specific agent roles. */
 export function getAgentProposalPrompt(): string {
+  // The naming rule is DERIVED from the invocation registry, not written here or in the
+  // template: the registry decides which name shapes resolve to a seam, and a rule written
+  // separately drifted from it — 'ending in "-engineer" or "-specialist"' offered a shape that
+  // resolves to nothing and killed the run at mint.
   return render('agent-proposal', {
     __FIXED_ROLE_COUNT__: String(FIXED_AGENT_ROLES.length),
     __FIXED_ROLE_LIST__: FIXED_AGENT_ROLES.join(', '),
+    __NAME_RULE__: mintNameRule(),
   });
 }
 

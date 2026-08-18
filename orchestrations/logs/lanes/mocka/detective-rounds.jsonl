@@ -1,0 +1,2 @@
+{"storyId":"MOCK3-1","attempt":1,"maxAttempts":3,"model":"z-ai/glm-5.1","escalated":false,"elapsedSec":290,"maxToolCalls":7,"phase1Findings":2,"phase2Used":false,"findings":2,"planExecutionAligned":null,"exploreChars":1931,"hitIterationCap":false,"timestamp":"2026-08-18T00:06:54.112Z"}
+{"storyId":"MOCK3-1","attempt":1,"maxAttempts":3,"model":"z-ai/glm-5.1","escalated":false,"elapsedSec":77,"maxToolCalls":7,"phase1Findings":2,"phase2Used":false,"findings":2,"planExecutionAligned":true,"exploreChars":1423,"hitIterationCap":false,"timestamp":"2026-08-18T11:16:41.304Z"}

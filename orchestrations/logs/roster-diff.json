@@ -4,18 +4,18 @@
   "liveRoles": 60,
   "generated": [
     {
-      "role": "typescript-bugfix-engineer",
-      "briefChars": 2016,
+      "role": "typescript-logic-fixer",
+      "briefChars": 3177,
       "mintedThisRun": true
     },
     {
-      "role": "mocka-investigator",
-      "briefChars": 1497,
+      "role": "fares-investigator",
+      "briefChars": 1747,
       "mintedThisRun": true
     },
     {
-      "role": "mockb-investigator",
-      "briefChars": 1651,
+      "role": "schedule-investigator",
+      "briefChars": 1973,
       "mintedThisRun": true
     }
   ],

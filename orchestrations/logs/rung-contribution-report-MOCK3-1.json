@@ -1,0 +1,10 @@
+[
+  {
+    "rung": "1",
+    "model": "z-ai/glm-5.2",
+    "files": [
+      ".epam/verification.json",
+      "orchestrations/logs/agent-activity.jsonl"
+    ]
+  }
+]

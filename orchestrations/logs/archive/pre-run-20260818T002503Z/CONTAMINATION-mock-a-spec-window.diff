@@ -1,0 +1,28 @@
+diff --git a/src/fares.ts b/src/fares.ts
+index 307ebd9..e4cb471 100644
+--- a/src/fares.ts
++++ b/src/fares.ts
+@@ -7,7 +7,7 @@ export const CONCESSION_FARE_CENTS = 175;
+ /** Riders aged 65 AND OVER pay the concession fare. */
+ export function fareFor(rider: Rider): number {
+   if (rider.hasPass) return 0;
+-  if (rider.age > 65) return CONCESSION_FARE_CENTS;
++  if (rider.age >= 65) return CONCESSION_FARE_CENTS;
+   if (rider.age < 13) return CONCESSION_FARE_CENTS;
+   return BASE_FARE_CENTS;
+ }
+diff --git a/test/fares.test.ts b/test/fares.test.ts
+index 48656f2..346bd28 100644
+--- a/test/fares.test.ts
++++ b/test/fares.test.ts
+@@ -14,4 +14,10 @@ describe('fareFor', () => {
+   it('charges the concession fare well past the senior boundary', () => {
+     expect(fareFor({ age: 70, hasPass: false })).toBe(CONCESSION_FARE_CENTS);
+   });
++  it('charges the concession fare for a rider aged exactly 65', () => {
++    expect(fareFor({ age: 65, hasPass: false })).toBe(CONCESSION_FARE_CENTS);
++  });
++  it('charges the base fare for a rider aged 64', () => {
++    expect(fareFor({ age: 64, hasPass: false })).toBe(BASE_FARE_CENTS);
++  });
+ });

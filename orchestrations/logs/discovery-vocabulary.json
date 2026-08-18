@@ -3,223 +3,174 @@
   "vocabulary": {
     "blacklist": [
       {
-        "term": "exactly",
-        "reason": "Grammatical modifier with no presence in either candidate's code; cannot discriminate"
+        "term": "charged",
+        "reason": "Verb describing the observed billing behaviour, not any identifier; carries no signal separating mock-a from mock-b."
       },
       {
-        "term": "instead",
-        "reason": "Grammatical filler describing the bug symptom, not a software term"
+        "term": "correct",
+        "reason": "Judgement word about behaviour, names nothing in either candidate's code."
       },
       {
         "term": "wrong",
-        "reason": "Describes the defect, not anything in the software"
-      },
-      {
-        "term": "correctly",
-        "reason": "Describes expected behaviour, not a software term"
-      },
-      {
-        "term": "rather",
-        "reason": "Grammatical filler connecting clauses"
-      },
-      {
-        "term": "above",
-        "reason": "Directional filler; appears in neither repo"
-      },
-      {
-        "term": "boundary",
-        "reason": "Describes the bug concept; not an identifier or component in either repo"
-      },
-      {
-        "term": "omits",
-        "reason": "Describes the defect behaviour, not a software term"
-      },
-      {
-        "term": "omission",
-        "reason": "Describes the defect, not a software term"
-      },
-      {
-        "term": "renders",
-        "reason": "Generic verb; not an identifier in either repo"
-      },
-      {
-        "term": "every",
-        "reason": "Quantifier filler with no code presence"
-      },
-      {
-        "term": "except",
-        "reason": "Grammatical filler; not a software term"
-      },
-      {
-        "term": "noticed",
-        "reason": "Process word about discovery of the bug"
+        "reason": "Judgement word describing the bug, not a software artefact in either repo."
       },
       {
         "term": "unnoticed",
-        "reason": "Process word about discovery of the bug"
+        "reason": "Process narrative about why the bug persisted; no selection signal."
       },
       {
-        "term": "shows",
-        "reason": "Generic verb; not an identifier"
+        "term": "omits",
+        "reason": "Verb describing the rendering defect; not an identifier in either candidate."
       },
       {
-        "term": "final",
-        "reason": "Describes the bug; not in either repo's code"
+        "term": "renders",
+        "reason": "Generic verb describing what formatStops does; appears only in a comment, not as code, and cannot discriminate between repos."
+      },
+      {
+        "term": "boundary",
+        "reason": "Describes the nature of the defect rather than naming anything in the software."
+      },
+      {
+        "term": "exactly",
+        "reason": "Grammatical filler emphasising the age value; no discriminative value."
       },
       {
         "term": "reported",
-        "reason": "Generic verb; not an identifier in either repo"
+        "reason": "Process verb about output, names nothing in either candidate."
+      },
+      {
+        "term": "rather",
+        "reason": "Grammatical connective, pure filler."
+      },
+      {
+        "term": "except",
+        "reason": "Grammatical filler describing the off-by-one behaviour, not software."
+      },
+      {
+        "term": "gone",
+        "reason": "Grammatical filler from 'gone unnoticed'; no signal."
       }
     ],
     "whitelist": [
       {
         "term": "fare",
-        "reason": "Appears throughout mock-a: fares.ts, fareFor, BASE_FARE_CENTS"
-      },
-      {
-        "term": "fares",
-        "reason": "Names the module and domain in mock-a (fares.ts)"
+        "reason": "Core domain concept of mock-a, which defines fareFor, BASE_FARE_CENTS and CONCESSION_FARE_CENTS in src/fares.ts."
       },
       {
         "term": "concession",
-        "reason": "Names CONCESSION_FARE_CENTS in mock-a"
+        "reason": "Names CONCESSION_FARE_CENTS in mock-a; a real domain identifier fragment."
       },
       {
         "term": "adult",
-        "reason": "Appears in mock-a test ('charges the base fare for an adult')"
-      },
-      {
-        "term": "rider",
-        "reason": "Names the Rider type in mock-a"
+        "reason": "Names the fare category (BASE_FARE_CENTS path) implemented in mock-a's fareFor."
       },
       {
         "term": "riders",
-        "reason": "Names the Rider type and totalFor parameter in mock-a"
-      },
-      {
-        "term": "charged",
-        "reason": "Appears as 'charges' in mock-a test descriptions"
-      },
-      {
-        "term": "350",
-        "reason": "Value of BASE_FARE_CENTS in mock-a"
-      },
-      {
-        "term": "175",
-        "reason": "Value of CONCESSION_FARE_CENTS in mock-a"
-      },
-      {
-        "term": "65",
-        "reason": "Boundary literal in mock-a fareFor (> 65)"
+        "reason": "Matches the Rider type and fareFor(rider) parameter in mock-a."
       },
       {
         "term": "cents",
-        "reason": "Part of identifier names BASE_FARE_CENTS and CONCESSION_FARE_CENTS in mock-a"
+        "reason": "Matches the *_CENTS constants in mock-a; part of the domain vocabulary."
       },
       {
-        "term": "rules",
-        "reason": "Appears in mock-a source comment ('Fare rules for a transit line')"
+        "term": "350",
+        "reason": "Literal value of BASE_FARE_CENTS in mock-a; a concrete code constant."
+      },
+      {
+        "term": "175",
+        "reason": "Literal value of CONCESSION_FARE_CENTS in mock-a; a concrete code constant."
+      },
+      {
+        "term": "65",
+        "reason": "The boundary constant compared against rider.age in mock-a's fareFor."
       },
       {
         "term": "formatstops",
-        "reason": "Identifier in mock-b schedule.ts; must never be blacklisted"
+        "reason": "Exported function in mock-b/src/schedule.ts; the exact identifier cited by the ticket."
       },
       {
         "term": "totalminutes",
-        "reason": "Identifier in mock-b schedule.ts; must never be blacklisted"
+        "reason": "Exported function in mock-b/src/schedule.ts; the exact identifier cited by the ticket."
       },
       {
         "term": "stop",
-        "reason": "Names the Stop type in mock-b"
-      },
-      {
-        "term": "stops",
-        "reason": "Names the stops parameter and formatStops in mock-b"
+        "reason": "Matches the Stop type and stops parameters in mock-b."
       },
       {
         "term": "departure",
-        "reason": "Appears in mock-b source comment ('departure board')"
-      },
-      {
-        "term": "board",
-        "reason": "Appears in mock-b source comment ('departure board')"
+        "reason": "Domain term from mock-b's purpose (departure board rendering in schedule.ts)."
       },
       {
         "term": "journey",
-        "reason": "Appears in mock-b test ('reports the journey length')"
+        "reason": "Domain term for the schedule data totalMinutes computes over in mock-b."
+      },
+      {
+        "term": "line",
+        "reason": "Domain term for a transit line, used in mock-a's fare rules and mock-b's stop sequences."
+      },
+      {
+        "term": "mocka",
+        "reason": "Component label naming candidate mock-a; a component name is never filler."
+      },
+      {
+        "term": "mockb",
+        "reason": "Component label naming candidate mock-b; a component name is never filler."
       }
     ]
   },
   "termsDropped": [
     {
       "term": "exactly",
-      "reason": "Grammatical modifier with no presence in either candidate's code; cannot discriminate"
+      "reason": "Grammatical filler emphasising the age value; no discriminative value."
     },
     {
-      "term": "instead",
-      "reason": "Grammatical filler describing the bug symptom, not a software term"
-    },
-    {
-      "term": "above",
-      "reason": "Directional filler; appears in neither repo"
-    },
-    {
-      "term": "correctly",
-      "reason": "Describes expected behaviour, not a software term"
+      "term": "charged",
+      "reason": "Verb describing the observed billing behaviour, not any identifier; carries no signal separating mock-a from mock-b."
     },
     {
       "term": "boundary",
-      "reason": "Describes the bug concept; not an identifier or component in either repo"
+      "reason": "Describes the nature of the defect rather than naming anything in the software."
     },
     {
       "term": "wrong",
-      "reason": "Describes the defect, not anything in the software"
+      "reason": "Judgement word describing the bug, not a software artefact in either repo."
     },
     {
       "term": "rather",
-      "reason": "Grammatical filler connecting clauses"
+      "reason": "Grammatical connective, pure filler."
     },
     {
       "term": "omits",
-      "reason": "Describes the defect behaviour, not a software term"
-    },
-    {
-      "term": "final",
-      "reason": "Describes the bug; not in either repo's code"
+      "reason": "Verb describing the rendering defect; not an identifier in either candidate."
     },
     {
       "term": "renders",
-      "reason": "Generic verb; not an identifier in either repo"
-    },
-    {
-      "term": "every",
-      "reason": "Quantifier filler with no code presence"
+      "reason": "Generic verb describing what formatStops does; appears only in a comment, not as code, and cannot discriminate between repos."
     },
     {
       "term": "except",
-      "reason": "Grammatical filler; not a software term"
-    },
-    {
-      "term": "shows",
-      "reason": "Generic verb; not an identifier"
+      "reason": "Grammatical filler describing the off-by-one behaviour, not software."
     },
     {
       "term": "reported",
-      "reason": "Generic verb; not an identifier in either repo"
+      "reason": "Process verb about output, names nothing in either candidate."
     },
     {
-      "term": "omission",
-      "reason": "Describes the defect, not a software term"
+      "term": "correct",
+      "reason": "Judgement word about behaviour, names nothing in either candidate's code."
+    },
+    {
+      "term": "gone",
+      "reason": "Grammatical filler from 'gone unnoticed'; no signal."
     },
     {
       "term": "unnoticed",
-      "reason": "Process word about discovery of the bug"
+      "reason": "Process narrative about why the bug persisted; no selection signal."
     }
   ],
   "termsUsed": [
     "riders",
     "aged",
-    "charged",
     "adult",
     "fare",
     "rules",
@@ -228,21 +179,26 @@
     "rider",
     "full",
     "cents",
+    "instead",
+    "above",
+    "correctly",
     "itself",
     "than",
     "rule",
     "departure",
     "board",
+    "final",
     "stop",
     "formatstops",
+    "every",
     "last",
     "three",
     "line",
+    "shows",
     "journey",
     "length",
     "totalminutes",
-    "correct",
     "which",
-    "gone"
+    "omission"
   ]
 }

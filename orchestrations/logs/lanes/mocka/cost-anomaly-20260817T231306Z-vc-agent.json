@@ -1,0 +1,78 @@
+{
+  "_what": "A model call reported $0 while consuming tokens. This is the record it reported, kept because the source file is deleted immediately after it is read.",
+  "agent": "vc-agent",
+  "model": "z-ai/glm-5.2",
+  "provider": "qwen",
+  "parsed": {
+    "costUsd": 0,
+    "tokensIn": 2882,
+    "tokensOut": 97,
+    "tokensCached": 1984,
+    "costUnknown": true,
+    "costIsEstimate": false
+  },
+  "raw": {
+    "result": "Agent reached maximum iterations (2) without completing.",
+    "model": "z-ai/glm-5.1",
+    "provider": "qwen",
+    "usage": {
+      "inputTokens": 2882,
+      "outputTokens": 97,
+      "totalTokens": 2979,
+      "cached_input_tokens": 1984
+    },
+    "cost_usd": 0.0015,
+    "cost_is_estimate": false,
+    "toolCallCount": 6,
+    "iterations": 2,
+    "timings": [
+      {
+        "iteration": 1,
+        "modelLatencyMs": 3097,
+        "toolExecMs": 7,
+        "toolCalls": [
+          {
+            "name": "list_files",
+            "resultBytes": 16,
+            "isError": false
+          },
+          {
+            "name": "list_files",
+            "resultBytes": 31,
+            "isError": false
+          },
+          {
+            "name": "list_files",
+            "resultBytes": 16,
+            "isError": false
+          },
+          {
+            "name": "list_files",
+            "resultBytes": 16,
+            "isError": false
+          }
+        ]
+      },
+      {
+        "iteration": 2,
+        "modelLatencyMs": 2072,
+        "toolExecMs": 1,
+        "toolCalls": [
+          {
+            "name": "read_file",
+            "resultBytes": 575,
+            "isError": false
+          },
+          {
+            "name": "read_file",
+            "resultBytes": 1001,
+            "isError": false
+          }
+        ]
+      }
+    ],
+    "total_cost_usd": 0,
+    "tokens": 0,
+    "planCostUsd": 0
+  }
+}

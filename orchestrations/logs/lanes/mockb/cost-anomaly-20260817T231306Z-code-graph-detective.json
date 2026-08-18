@@ -1,0 +1,57 @@
+{
+  "_what": "A model call reported $0 while consuming tokens. This is the record it reported, kept because the source file is deleted immediately after it is read.",
+  "agent": "code-graph-detective",
+  "model": "z-ai/glm-5.2",
+  "provider": "qwen",
+  "parsed": {
+    "costUsd": 0,
+    "tokensIn": 12609,
+    "tokensOut": 875,
+    "tokensCached": 6016,
+    "costUnknown": true,
+    "costIsEstimate": false
+  },
+  "raw": {
+    "result": "[{\"file\":\"src/schedule.ts\",\"function\":\"formatStops\",\"reason\":\"The loop bound `i < stops.length - 1` iterates only to the penultimate index, so the last stop is never pushed into parts and never appears in the joined string. The string construction (push + join with ' -> ') is otherwise correct — no additional issues.\",\"brokenLine\":\"for (let i = 0; i < stops.length - 1; i++) {\",\"fix\":\"Change the loop condition on line 6 from `i < stops.length - 1` to `i < stops.length` so the final stop is included. The separator `' -> '` and the per-element template `${stops[i].name} (${stops[i].minutes}m)` are already correct and need no change.\",\"helper\":\"\",\"changeRequired\":true,\"requiredPackages\":[],\"deliveryRole\":\"produces\",\"runsIn\":\"n/a\"},{\"file\":\"test/schedule.test.ts\",\"function\":\"formatStops\",\"reason\":\"Existing tests only assert the arrow separator and the first stop name. No test asserts the last stop appears (e.g. 'Eglinton'), the full rendered string, or empty-line handling for formatStops. Adding these assertions verifies the loop fix and covers all acceptance criteria.\",\"brokenLine\":\"\",\"fix\":\"Add test cases: (1) assert formatStops(LINE) contains 'Eglinton' (the last stop), (2) assert the full rendered string equals 'Union (0m) -> Bloor (12m) -> Eglinton (25m)', (3) assert formatStops([]) returns '' (empty-line no-error criterion). These reuse the existing LINE constant and the formatStops import already in the file.\",\"helper\":\"\",\"changeRequired\":true,\"requiredPackages\":[],\"deliveryRole\":\"verifies\",\"runsIn\":\"n/a\"}]",
+    "model": "z-ai/glm-5.1",
+    "provider": "qwen",
+    "usage": {
+      "inputTokens": 12609,
+      "outputTokens": 875,
+      "totalTokens": 13484,
+      "cached_input_tokens": 6016
+    },
+    "cost_usd": 0.0101,
+    "cost_is_estimate": false,
+    "toolCallCount": 2,
+    "iterations": 2,
+    "timings": [
+      {
+        "iteration": 1,
+        "modelLatencyMs": 5248,
+        "toolExecMs": 28,
+        "toolCalls": [
+          {
+            "name": "bash",
+            "resultBytes": 562,
+            "isError": false
+          },
+          {
+            "name": "bash",
+            "resultBytes": 833,
+            "isError": false
+          }
+        ]
+      },
+      {
+        "iteration": 2,
+        "modelLatencyMs": 15296,
+        "toolExecMs": 0,
+        "toolCalls": []
+      }
+    ],
+    "total_cost_usd": 0,
+    "tokens": 0,
+    "planCostUsd": 0
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "_what": "A model call reported $0 while consuming tokens. This is the record it reported, kept because the source file is deleted immediately after it is read.",
+  "agent": "prd-change-reviewer",
+  "model": "z-ai/glm-5.2",
+  "provider": "qwen",
+  "parsed": {
+    "costUsd": 0,
+    "tokensIn": 6432,
+    "tokensOut": 997,
+    "tokensCached": 3264,
+    "costUnknown": true,
+    "costIsEstimate": false
+  },
+  "raw": {
+    "result": "All symbols referenced in the verificationCriteria (`fareFor`, `BASE_FARE_CENTS`, `CONCESSION_FARE_CENTS`) exist in `src/fares.ts`. The VCs are concrete, measurable, and align with the description's claim about the age-65 boundary. ACs are unchanged (immutable), the title is specific, and no ACs are duplicated or contain implementation instructions.\n\n{\"verdict\":\"pass\",\"issues\":[],\"reason\":\"VCs are concrete, match description, reference verified source symbols.\"}",
+    "model": "z-ai/glm-5.2",
+    "provider": "qwen",
+    "usage": {
+      "inputTokens": 6432,
+      "outputTokens": 997,
+      "totalTokens": 7429,
+      "cached_input_tokens": 3264
+    },
+    "cost_usd": 0.0073,
+    "cost_is_estimate": false,
+    "toolCallCount": 1,
+    "iterations": 2,
+    "timings": [
+      {
+        "iteration": 1,
+        "modelLatencyMs": 2524,
+        "toolExecMs": 2,
+        "toolCalls": [
+          {
+            "name": "read_file",
+            "resultBytes": 575,
+            "isError": false
+          }
+        ]
+      },
+      {
+        "iteration": 2,
+        "modelLatencyMs": 19852,
+        "toolExecMs": 0,
+        "toolCalls": []
+      }
+    ],
+    "total_cost_usd": 0,
+    "tokens": 0,
+    "planCostUsd": 0
+  }
+}

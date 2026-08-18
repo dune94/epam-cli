@@ -5,8 +5,12 @@
     "path": "/home/bradleyjerome/projects/mock3/mock-a",
     "facts": [
       {
-        "text": "Tests are run with `vitest run` (the npm test script) and the build check is `tsc --noEmit`; both must pass before a change is accepted. The bug is on line 9 of src/fares.ts: `if (rider.age > 65)` should be `>= 65` to include riders aged exactly 65 in the concession fare.",
-        "source": "package.json scripts: \"test\": \"vitest run\", \"build\": \"tsc --noEmit\"; src/fares.ts line 9"
+        "text": "Tests are run with vitest via the package.json script \"test\": \"vitest run\"; the build check is \"build\": \"tsc --noEmit\" and lint is a no-op (\"lint\": \"echo no-lint-configured\").",
+        "source": "package.json: \"scripts\": { \"test\": \"vitest run\", \"lint\": \"echo no-lint-configured\", \"build\": \"tsc --noEmit\" }"
+      },
+      {
+        "text": "Source lives in src/fares.ts and its tests in test/fares.test.ts; the existing suite has no case for a rider aged exactly 65, only age 70 (\"charges the concession fare well past the senior boundary\"), so the boundary bug is untested.",
+        "source": "test/fares.test.ts: \"expect(fareFor({ age: 70, hasPass: false })).toBe(CONCESSION_FARE_CENTS);\""
       }
     ]
   },
@@ -14,8 +18,12 @@
     "path": "/home/bradleyjerome/projects/mock3/mock-b",
     "facts": [
       {
-        "text": "Tests are run with `vitest run` (the npm test script) and the build check is `tsc --noEmit`; both must pass before a change is accepted. The bug is on line 6 of src/schedule.ts: the loop condition `i < stops.length - 1` skips the last stop; it should iterate through all stops.",
-        "source": "package.json scripts: \"test\": \"vitest run\", \"build\": \"tsc --noEmit\"; src/schedule.ts line 6"
+        "text": "Tests are run with vitest via the package.json script \"test\": \"vitest run\"; the build check is \"build\": \"tsc --noEmit\" and lint is a no-op (\"lint\": \"echo no-lint-configured\").",
+        "source": "package.json: \"scripts\": { \"test\": \"vitest run\", \"lint\": \"echo no-lint-configured\", \"build\": \"tsc --noEmit\" }"
+      },
+      {
+        "text": "Source lives in src/schedule.ts and its tests in test/schedule.test.ts; the existing formatStops tests only assert the arrow separator and the first stop's name, never that the last stop appears, which is why the omission passes the suite.",
+        "source": "test/schedule.test.ts: \"expect(formatStops(LINE)).toContain('->');\" and \"expect(formatStops(LINE)).toContain('Union');\""
       }
     ]
   }

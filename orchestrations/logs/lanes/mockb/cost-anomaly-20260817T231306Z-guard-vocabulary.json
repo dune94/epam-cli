@@ -1,0 +1,40 @@
+{
+  "_what": "A model call reported $0 while consuming tokens. This is the record it reported, kept because the source file is deleted immediately after it is read.",
+  "agent": "guard-vocabulary",
+  "model": "z-ai/glm-5.2",
+  "provider": "qwen",
+  "parsed": {
+    "costUsd": 0,
+    "tokensIn": 2782,
+    "tokensOut": 6731,
+    "tokensCached": 1088,
+    "costUnknown": true,
+    "costIsEstimate": false
+  },
+  "raw": {
+    "result": "{\"blacklist\": [], \"whitelist\": []}",
+    "model": "z-ai/glm-5.2",
+    "provider": "qwen",
+    "usage": {
+      "inputTokens": 2782,
+      "outputTokens": 6731,
+      "totalTokens": 9513,
+      "cached_input_tokens": 1088
+    },
+    "cost_usd": 0.0223,
+    "cost_is_estimate": false,
+    "toolCallCount": 0,
+    "iterations": 1,
+    "timings": [
+      {
+        "iteration": 1,
+        "modelLatencyMs": 141539,
+        "toolExecMs": 0,
+        "toolCalls": []
+      }
+    ],
+    "total_cost_usd": 0,
+    "tokens": 0,
+    "planCostUsd": 0
+  }
+}

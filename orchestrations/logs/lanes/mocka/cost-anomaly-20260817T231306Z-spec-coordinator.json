@@ -1,0 +1,40 @@
+{
+  "_what": "A model call reported $0 while consuming tokens. This is the record it reported, kept because the source file is deleted immediately after it is read.",
+  "agent": "spec-coordinator",
+  "model": "z-ai/glm-5.2",
+  "provider": "qwen",
+  "parsed": {
+    "costUsd": 0,
+    "tokensIn": 1929,
+    "tokensOut": 362,
+    "tokensCached": 192,
+    "costUnknown": true,
+    "costIsEstimate": false
+  },
+  "raw": {
+    "result": "[\n  {\"storyId\":\"MOCK3-1\",\"agents\":[\"speckit\"],\"notes\":\"Boundary-condition bug fix (off-by-one at age 65). AC are already specific and well-scoped — fix, regression guard (age 64), and non-regression of other behaviors are all stated, so openspec elaboration is not needed. Assigning speckit only to harden testability and flag edge-case gaps, e.g. a rider aged exactly 65 who also holds a pass (AC only covers no-pass scenarios), and to verify the boundary is inclusive (>=65) across all fare-rule code paths.\",\"priority\":\"medium\"}\n]",
+    "model": "z-ai/glm-5.2",
+    "provider": "qwen",
+    "usage": {
+      "inputTokens": 1929,
+      "outputTokens": 362,
+      "totalTokens": 2291,
+      "cached_input_tokens": 192
+    },
+    "cost_usd": 0.0031,
+    "cost_is_estimate": false,
+    "toolCallCount": 0,
+    "iterations": 1,
+    "timings": [
+      {
+        "iteration": 1,
+        "modelLatencyMs": 8586,
+        "toolExecMs": 0,
+        "toolCalls": []
+      }
+    ],
+    "total_cost_usd": 0,
+    "tokens": 0,
+    "planCostUsd": 0
+  }
+}

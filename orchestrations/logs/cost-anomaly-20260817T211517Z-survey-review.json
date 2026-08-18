@@ -1,0 +1,67 @@
+{
+  "_what": "A model call reported $0 while consuming tokens. This is the record it reported, kept because the source file is deleted immediately after it is read.",
+  "agent": "survey-review",
+  "model": "z-ai/glm-5.2",
+  "provider": "qwen",
+  "parsed": {
+    "costUsd": 0,
+    "tokensIn": 5882,
+    "tokensOut": 2847,
+    "tokensCached": 3008,
+    "costUnknown": true,
+    "costIsEstimate": false
+  },
+  "raw": {
+    "result": "I opened all four named files. Checking every concrete claim:\n\n## mocka (`/home/bradleyjerome/projects/mock3/mock-a`)\n\n**`src/fares.ts`** — All five symbols exist: `fareFor`, `totalFor`, `Rider`, `BASE_FARE_CENTS`, `CONCESSION_FARE_CENTS`. Line-by-line:\n- Line 7: `/** Riders aged 65 AND OVER pay the concession fare. */` ✓\n- Line 10: `if (rider.age > 65) return CONCESSION_FARE_CENTS;` ✓ (uses `>`, not `>=`)\n- Line 12: `return BASE_FARE_CENTS;` ✓ (BASE_FARE_CENTS = 350) ✓\n- `totalFor` calls `fareFor` (line 13) ✓\n\n**`test/fares.test.ts`** — Line 14 is the senior-boundary test (`it('charges the concession fare well past the senior boundary'...)`), testing age 70 only. No test for age 65. ✓\n\n## mockb (`/home/bradleyjerome/projects/mock3/mock-b`)\n\n**`src/schedule.ts`** — All three symbols exist: `formatStops`, `Stop`, `totalMinutes`. Line-by-line:\n- Line 6: `for (let i = 0; i < stops.length - 1; i++) {` ✓ (skips final stop)\n- Line 12: `export function totalMinutes(...)` — the body on line 13 reads `stops[stops.length - 1].minutes` ✓ (function identified at its declaration line 12; the expression is in its body)\n\n**`test/schedule.test.ts`** — Tests assert `->` and `Union` only. No test asserts `Eglinton` appears, though `Eglinton` is in the `LINE` fixture. ✓\n\n## Cross-codeline check\n\nmocka's symbols (`fareFor`, `Rider`, `BASE_FARE_CENTS`, etc.) are all in mock-a. mockb's symbols (`formatStops`, `Stop`, `totalMinutes`) are all in mock-b. No claim is attributed to the wrong codeline.\n\n---\n\n## Findings\n\n**No findings.** Every file named in `filesRead` exists in its stated codeline. Every symbol, line number, and verbatim code quote matches the source. No claim is attributed to the wrong repository. The survey is sound.",
+    "model": "z-ai/glm-5.2",
+    "provider": "qwen",
+    "usage": {
+      "inputTokens": 5882,
+      "outputTokens": 2847,
+      "totalTokens": 8729,
+      "cached_input_tokens": 3008
+    },
+    "cost_usd": 0.0124,
+    "cost_is_estimate": false,
+    "toolCallCount": 4,
+    "iterations": 2,
+    "timings": [
+      {
+        "iteration": 1,
+        "modelLatencyMs": 3935,
+        "toolExecMs": 2,
+        "toolCalls": [
+          {
+            "name": "read_file",
+            "resultBytes": 574,
+            "isError": false
+          },
+          {
+            "name": "read_file",
+            "resultBytes": 709,
+            "isError": false
+          },
+          {
+            "name": "read_file",
+            "resultBytes": 451,
+            "isError": false
+          },
+          {
+            "name": "read_file",
+            "resultBytes": 658,
+            "isError": false
+          }
+        ]
+      },
+      {
+        "iteration": 2,
+        "modelLatencyMs": 22385,
+        "toolExecMs": 0,
+        "toolCalls": []
+      }
+    ],
+    "total_cost_usd": 0,
+    "tokens": 0,
+    "planCostUsd": 0
+  }
+}

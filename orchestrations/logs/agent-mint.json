@@ -1,10 +1,10 @@
 {
   "minted": [
     {
-      "name": "typescript-bugfix-engineer",
+      "name": "typescript-logic-fixer",
       "kind": "implementer",
       "codeline": "",
-      "rationale": "Both tickets are small boundary/off-by-one fixes in TypeScript source files exercised by vitest, so a single implementer spanning both codelines is the correct scope rather than two near-duplicate roles.",
+      "rationale": "Both mocka and mockb declare vitest and typescript and need small logic fixes in TypeScript source files, so one implementer spanning the project can author both fixes without minting near-duplicate roles per codeline.",
       "surfaces": [
         "profiles.json",
         "kb",
@@ -13,10 +13,10 @@
       ]
     },
     {
-      "name": "mocka-investigator",
+      "name": "fares-investigator",
       "kind": "investigator",
       "codeline": "mocka",
-      "rationale": "The fare-boundary fix is a one-line change, but the investigator must confirm no caller of fareFor or totalFor relies on the current incorrect boundary and characterise what test coverage for age 65 should look like — work that requires reading mocka specifically.",
+      "rationale": "mocka's fare boundary bug sits in a single module whose comparison operator and callers must be read in-repo before any fix is written, so this codeline needs its own reader.",
       "surfaces": [
         "profiles.json",
         "kb",
@@ -25,10 +25,10 @@
       ]
     },
     {
-      "name": "mockb-investigator",
+      "name": "schedule-investigator",
       "kind": "investigator",
       "codeline": "mockb",
-      "rationale": "The loop-bound fix in formatStops is small, but the investigator must verify no caller compensates for the missing last stop and describe what the test suite currently asserts about stop rendering — work that requires reading mockb specifically.",
+      "rationale": "mockb's departure-board bug hinges on a loop bound in formatStops whose callers and display paths must be read in-repo before any fix is written, so this codeline needs its own reader.",
       "surfaces": [
         "profiles.json",
         "kb",
@@ -40,11 +40,11 @@
   "rejected": [],
   "unchanged": [],
   "projectRoles": [
-    "typescript-bugfix-engineer"
+    "typescript-logic-fixer"
   ],
   "projectInvestigators": [
-    "mocka-investigator",
-    "mockb-investigator"
+    "fares-investigator",
+    "schedule-investigator"
   ],
   "proposed": 3,
   "rejectedAcrossAttempts": [],

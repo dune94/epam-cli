@@ -1,0 +1,5 @@
+{"timestamp":"2026-08-18T00:12:50.826Z","step":"ac-review","storyId":"MOCK3-2","runId":"20260817T231306Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"1084093"}
+{"timestamp":"2026-08-18T00:17:55Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260817T231306Z","promptVersion":"1084093"}
+{"timestamp":"2026-08-18T11:26:16.912Z","step":"ac-review","storyId":"MOCK3-2","runId":"20260818T101809Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"c8bb392"}
+{"timestamp":"2026-08-18T11:34:30Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260818T101809Z","promptVersion":"c8bb392"}
+{"timestamp":"2026-08-18T11:34:31Z","step":"0.9","phaseId":"core","attempts":1,"outcome":"noop","reason":"","violationTypes":[],"runId":"20260818T101809Z","promptVersion":"c8bb392"}

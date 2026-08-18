@@ -342,6 +342,24 @@
       "prompts": [
         "code-review-cycle"
       ]
+    },
+    "typescript-logic-fixer": {
+      "seam": "story-writer",
+      "prompts": [
+        "story-writer"
+      ]
+    },
+    "fares-investigator": {
+      "seam": "code-graph-detective",
+      "prompts": [
+        "code-graph-detective"
+      ]
+    },
+    "schedule-investigator": {
+      "seam": "code-graph-detective",
+      "prompts": [
+        "code-graph-detective"
+      ]
     }
   },
   "seamsInUse": [
@@ -358,49 +376,23 @@
     "tc-writer"
   ],
   "promptsBySeam": {
-    "ac-classification": [
-      "ac-classification"
-    ],
-    "ac-elaboration": [
-      "ac-elaboration"
-    ],
-    "agent-mint": [
-      "agent-proposal"
-    ],
-    "role-assigner": [
-      "assign-agent-roles"
-    ],
     "team-lead-review": [
-      "blocker-discipline",
-      "team-lead-review",
-      "test-ownership"
-    ],
-    "code-graph-detective": [
-      "code-graph-detective"
+      "team-lead-review"
     ],
     "code-review-cycle": [
       "code-review-cycle"
     ],
-    "codeline-bridge-agent": [
-      "codeline-bridge"
+    "agent-failure-analyst": [
+      "failure-analyst"
     ],
-    "codeline-discovery": [
-      "codeline-discovery"
+    "repro-test-writer": [
+      "repro-test-writer"
+    ],
+    "tc-writer": [
+      "tc-writer"
     ],
     "cpa-inference": [
       "cpa-inference"
-    ],
-    "qa-gate:e2e": [
-      "e2e-route-check"
-    ],
-    "estate-survey": [
-      "estate-survey"
-    ],
-    "impl-failure-analyst": [
-      "failure-analyst"
-    ],
-    "guard-vocabulary": [
-      "guard-vocabulary"
     ],
     "prd-change-reviewer": [
       "prd-change-reviewer"
@@ -408,26 +400,35 @@
     "prd-change-summarizer": [
       "prd-change-summarizer-text"
     ],
-    "prd-model-coordinator": [
-      "prd-model-coordinator"
+    "impl-failure-analyst": [
+      "failure-analyst"
     ],
-    "prompt-builder": [
-      "project-prompt-generation"
+    "ac-classification": [
+      "ac-classification"
     ],
-    "prompt-review": [
-      "prompt-review"
+    "ac-elaboration": [
+      "ac-elaboration"
     ],
-    "qa-gate:fuzz-weaver": [
-      "qa-fuzz-weaver"
+    "codeline-discovery": [
+      "codeline-discovery"
     ],
-    "qa-gate:mutant-hunter": [
-      "qa-mutant-hunter"
+    "roster-review": [
+      "roster-review"
     ],
-    "qa-gate:perf-sentinel": [
-      "qa-perf-sentinel"
+    "code-graph-detective": [
+      "code-graph-detective"
     ],
-    "qa-gate:review-ranger": [
-      "qa-review-ranger"
+    "guard-vocabulary": [
+      "guard-vocabulary"
+    ],
+    "estate-survey": [
+      "estate-survey"
+    ],
+    "story-writer": [
+      "story-writer"
+    ],
+    "vc-coverage": [
+      "vc-coverage"
     ],
     "qa-gate:sast": [
       "qa-sast-sentinel"
@@ -435,32 +436,53 @@
     "qa-gate:spec-validator": [
       "qa-spec-validator"
     ],
-    "repro-test-writer": [
-      "repro-test-writer"
+    "qa-gate:review-ranger": [
+      "qa-review-ranger"
     ],
-    "roster-review": [
-      "roster-review"
+    "qa-gate:mutant-hunter": [
+      "qa-mutant-hunter"
     ],
-    "phase-assessment": [
-      "skill-assessment-prephase"
+    "qa-gate:fuzz-weaver": [
+      "qa-fuzz-weaver"
     ],
-    "spec-agent": [
-      "spec-agent-openspec"
+    "qa-gate:perf-sentinel": [
+      "qa-perf-sentinel"
+    ],
+    "prompt-builder": [
+      "project-prompt-generation"
+    ],
+    "codeline-bridge-agent": [
+      "codeline-bridge"
+    ],
+    "qa-gate:e2e": [
+      "e2e-route-check"
+    ],
+    "agent-mint": [
+      "agent-proposal"
+    ],
+    "role-assigner": [
+      "assign-agent-roles"
     ],
     "spec-coordinator": [
       "spec-coordinator"
     ],
+    "spec-agent": [
+      "spec-agent-openspec"
+    ],
     "ticket-links": [
       "spec-story-block"
     ],
-    "story-writer": [
-      "story-writer"
+    "phase-assessment": [
+      "skill-assessment-prephase"
     ],
-    "tc-writer": [
-      "tc-writer"
+    "prd-model-coordinator": [
+      "prd-model-coordinator"
     ],
-    "vc-coverage": [
-      "vc-coverage"
+    "prompt-review": [
+      "prompt-review"
+    ],
+    "survey-review": [
+      "survey-review"
     ]
   }
 }

@@ -1,10 +1,10 @@
 {
   "minted": [
     {
-      "name": "fare-schedule-engineer",
+      "name": "typescript-logic-fixer",
       "kind": "implementer",
       "codeline": "",
-      "rationale": "Both codelines share the same vitest+typescript stack and both tickets are small boundary/off-by-one fixes in TypeScript modules, so one implementer spanning both avoids redundant roles.",
+      "rationale": "Both tickets are off-by-one / boundary bugs in pure TypeScript modules with no external dependencies, so one implementer who knows the two source files and the shared vitest+typescript stack can fix both.",
       "surfaces": [
         "profiles.json",
         "kb",
@@ -13,10 +13,10 @@
       ]
     },
     {
-      "name": "mocka-investigator",
+      "name": "fares-investigator",
       "kind": "investigator",
       "codeline": "mocka",
-      "rationale": "A dedicated investigator for the mocka codeline ensures the fare logic and its surrounding conventions are understood before changes are made.",
+      "rationale": "The fare bug is a one-line boundary comparison, but the implementer needs to know exactly where the age check lives, what the fare constants are, and what the existing test already covers before touching it.",
       "surfaces": [
         "profiles.json",
         "kb",
@@ -25,10 +25,10 @@
       ]
     },
     {
-      "name": "mockb-investigator",
+      "name": "schedule-investigator",
       "kind": "investigator",
       "codeline": "mockb",
-      "rationale": "A dedicated investigator for the mockb codeline ensures the schedule rendering logic and its surrounding conventions are understood before changes are made.",
+      "rationale": "The omitted-stop bug is in a rendering loop, but the implementer needs to know the exact function signature, the data shape, and how the loop truncates before editing.",
       "surfaces": [
         "profiles.json",
         "kb",
@@ -40,14 +40,27 @@
   "rejected": [],
   "unchanged": [],
   "projectRoles": [
-    "fare-schedule-engineer"
+    "typescript-logic-fixer"
   ],
   "projectInvestigators": [
-    "mocka-investigator",
-    "mockb-investigator"
+    "fares-investigator",
+    "schedule-investigator"
   ],
-  "proposed": 3,
-  "rejectedAcrossAttempts": [],
-  "attempts": 1,
+  "rejectedAcrossAttempts": [
+    {
+      "name": "typescript-logic-fixer",
+      "reason": "brief names 2 path(s) that do not exist in any codeline: src/fares.test.ts, src/schedule.test.ts"
+    },
+    {
+      "name": "fares-investigator",
+      "reason": "brief names 1 path(s) that do not exist in codeline 'mocka': src/fares.test.ts"
+    },
+    {
+      "name": "schedule-investigator",
+      "reason": "brief names 1 path(s) that do not exist in codeline 'mockb': src/schedule.test.ts"
+    }
+  ],
+  "proposed": 6,
+  "attempts": 2,
   "protectedRoles": 21
 }

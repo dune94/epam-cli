@@ -1,0 +1,57 @@
+{
+  "_what": "A model call reported $0 while consuming tokens. This is the record it reported, kept because the source file is deleted immediately after it is read.",
+  "agent": "prd-change-reviewer",
+  "model": "z-ai/glm-5.2",
+  "provider": "qwen",
+  "parsed": {
+    "costUsd": 0,
+    "tokensIn": 6074,
+    "tokensOut": 114,
+    "tokensCached": 2816,
+    "costUnknown": true,
+    "costIsEstimate": false
+  },
+  "raw": {
+    "result": "{\"verdict\":\"pass\",\"issues\":[],\"reason\":\"VCs are concrete, files verified, no rule violations.\"}",
+    "model": "z-ai/glm-5.2",
+    "provider": "qwen",
+    "usage": {
+      "inputTokens": 6074,
+      "outputTokens": 114,
+      "totalTokens": 6188,
+      "cached_input_tokens": 2816
+    },
+    "cost_usd": 0.0052,
+    "cost_is_estimate": false,
+    "toolCallCount": 2,
+    "iterations": 2,
+    "timings": [
+      {
+        "iteration": 1,
+        "modelLatencyMs": 1611,
+        "toolExecMs": 5,
+        "toolCalls": [
+          {
+            "name": "list_files",
+            "resultBytes": 15,
+            "isError": false
+          },
+          {
+            "name": "list_files",
+            "resultBytes": 21,
+            "isError": false
+          }
+        ]
+      },
+      {
+        "iteration": 2,
+        "modelLatencyMs": 1639,
+        "toolExecMs": 0,
+        "toolCalls": []
+      }
+    ],
+    "total_cost_usd": 0,
+    "tokens": 0,
+    "planCostUsd": 0
+  }
+}

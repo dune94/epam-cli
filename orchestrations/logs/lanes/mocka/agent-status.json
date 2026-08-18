@@ -1,0 +1,1213 @@
+{
+  "startedAt": "2026-08-18T10:59:00-04:00",
+  "phase": "core",
+  "orchMode": "bash",
+  "lanes": {
+    "main": {
+      "status": "done",
+      "currentStory": null,
+      "storiesCompleted": 58,
+      "storiesFailed": 0
+    },
+    "primary": {
+      "status": "done",
+      "currentStory": null,
+      "storiesCompleted": 0,
+      "storiesFailed": 0
+    },
+    "independent": {
+      "status": "done",
+      "currentStory": null,
+      "storiesCompleted": 0,
+      "storiesFailed": 0
+    }
+  },
+  "events": [
+    {
+      "type": "story_start",
+      "story": "",
+      "lane": "main",
+      "role": "prd-model-coordinator",
+      "provider": "qwen",
+      "model": "MiniMax-M3",
+      "message": "Starting PRD Model Coordinator",
+      "timestamp": "2026-08-18T10:59:00-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "",
+      "lane": "main",
+      "role": "prd-model-coordinator",
+      "message": "Completed PRD model assignments done",
+      "timestamp": "2026-08-18T10:59:00-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "claude",
+      "model": "MiniMax-M3",
+      "message": "Starting ",
+      "timestamp": "2026-08-18T10:59:01-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "failure-analyst",
+      "lane": "main",
+      "role": "failure-analyst",
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "message": "Starting Failure Analyst: MOCK3-1",
+      "timestamp": "2026-08-18T10:59:30-04:00"
+    },
+    {
+      "type": "self_heal_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "failure-analyst",
+      "message": "Self-heal started for MOCK3-1 (attempt 0, gate=z-ai/glm-5.2)",
+      "timestamp": "2026-08-18T10:59:30-04:00"
+    },
+    {
+      "type": "self_heal_result",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "failure-analyst",
+      "message": "Self-heal result for MOCK3-1: target=kb patches=0 profile=true — .epam/verification.json declares only the test command; missing typecheck entry, so the orchestrator skipped type checking.",
+      "timestamp": "2026-08-18T11:04:10-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "failure-analyst",
+      "lane": "main",
+      "role": "failure-analyst",
+      "message": "Completed Analysis complete: MOCK3-1",
+      "timestamp": "2026-08-18T11:04:10-04:00"
+    },
+    {
+      "type": "retry",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Retry R1 Rung0: model=MiniMax-M3 (self-heal active)",
+      "timestamp": "2026-08-18T11:04:15-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "failure-analyst",
+      "lane": "main",
+      "role": "failure-analyst",
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "message": "Starting Failure Analyst: MOCK3-1",
+      "timestamp": "2026-08-18T11:04:38-04:00"
+    },
+    {
+      "type": "self_heal_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "failure-analyst",
+      "message": "Self-heal started for MOCK3-1 (attempt 1, gate=z-ai/glm-5.2)",
+      "timestamp": "2026-08-18T11:04:38-04:00"
+    },
+    {
+      "type": "self_heal_result",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "failure-analyst",
+      "message": "Self-heal result for MOCK3-1: target=tool patches=0 profile=true — verification.json lacks typecheck entry; package.json declares build as tsc --noEmit",
+      "timestamp": "2026-08-18T11:06:15-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "failure-analyst",
+      "lane": "main",
+      "role": "failure-analyst",
+      "message": "Completed Analysis complete: MOCK3-1",
+      "timestamp": "2026-08-18T11:06:15-04:00"
+    },
+    {
+      "type": "ladder_rung",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "InferenceLadder Rung1/R2: MiniMax-M3→z-ai/glm-5.2 effort=max",
+      "timestamp": "2026-08-18T11:06:20-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed ",
+      "timestamp": "2026-08-18T11:07:09-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:10-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:10-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:10-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:10-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:10-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:10-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:10-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:10-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:10-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:10-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:10-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:10-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:10-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:11-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:12-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:13-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:13-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:13-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:13-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:13-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:13-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:13-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:13-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:13-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:13-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:13-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:13-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:13-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:13-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:13-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:13-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:13-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:13-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:13-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "message": "Completed Riders aged exactly 65 are charged the adult fare",
+      "timestamp": "2026-08-18T11:07:13-04:00"
+    },
+    {
+      "type": "phase_assessment",
+      "story": "",
+      "lane": "main",
+      "role": "team-lead-agent",
+      "message": "Running post-phase assessment",
+      "timestamp": "2026-08-18T11:07:13-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "",
+      "lane": "main",
+      "role": "review-agent",
+      "provider": "qwen",
+      "model": "MiniMax-M2.5",
+      "message": "Starting Team Lead Code Review",
+      "timestamp": "2026-08-18T11:13:07-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "",
+      "lane": "main",
+      "role": "review-agent",
+      "message": "Completed Code review approved",
+      "timestamp": "2026-08-18T11:13:40-04:00"
+    },
+    {
+      "type": "pre_review_test_pass",
+      "story": "",
+      "lane": "main",
+      "role": "unit-test-runner",
+      "message": "Pre-review vitest passed for core",
+      "timestamp": "2026-08-18T11:13:40-04:00"
+    },
+    {
+      "type": "testing_gate_start",
+      "story": "",
+      "lane": "main",
+      "role": "test-coordinator-agent",
+      "message": "Starting testing gates for core",
+      "timestamp": "2026-08-18T11:13:42-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "",
+      "lane": "main",
+      "role": "sast-sentinel",
+      "provider": "qwen",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting SAST Sentinel",
+      "timestamp": "2026-08-18T11:13:42-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "",
+      "lane": "main",
+      "role": "spec-validator",
+      "provider": "qwen",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Spec Validator",
+      "timestamp": "2026-08-18T11:13:42-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "",
+      "lane": "main",
+      "role": "spec-validator",
+      "message": "Completed ",
+      "timestamp": "2026-08-18T11:14:29-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "",
+      "lane": "main",
+      "role": "spec-validator",
+      "message": "Completed ",
+      "timestamp": "2026-08-18T11:14:38-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "",
+      "lane": "main",
+      "role": "review-ranger",
+      "provider": "qwen",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Review Ranger",
+      "timestamp": "2026-08-18T11:14:38-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "",
+      "lane": "main",
+      "role": "mutant-hunter",
+      "provider": "qwen",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Mutant Hunter",
+      "timestamp": "2026-08-18T11:14:38-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "",
+      "lane": "main",
+      "role": "mutant-hunter",
+      "message": "Completed ",
+      "timestamp": "2026-08-18T11:14:55-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "",
+      "lane": "main",
+      "role": "mutant-hunter",
+      "message": "Completed ",
+      "timestamp": "2026-08-18T11:19:52-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "",
+      "lane": "main",
+      "role": "fuzz-weaver",
+      "provider": "qwen",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Fuzz Weaver",
+      "timestamp": "2026-08-18T11:19:53-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "",
+      "lane": "main",
+      "role": "perf-sentinel",
+      "provider": "qwen",
+      "model": "z-ai/glm-5.2",
+      "message": "Starting Perf Sentinel",
+      "timestamp": "2026-08-18T11:19:53-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "",
+      "lane": "main",
+      "role": "perf-sentinel",
+      "message": "Completed ",
+      "timestamp": "2026-08-18T11:20:56-04:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "",
+      "lane": "main",
+      "role": "perf-sentinel",
+      "message": "Completed ",
+      "timestamp": "2026-08-18T11:20:57-04:00"
+    },
+    {
+      "type": "testing_gate_pass",
+      "story": "",
+      "lane": "main",
+      "role": "test-coordinator-agent",
+      "message": "Testing gates pass for core (435042ms)",
+      "timestamp": "2026-08-18T11:20:57-04:00"
+    },
+    {
+      "type": "phase_gate_check",
+      "story": "",
+      "lane": "main",
+      "role": "team-lead-agent",
+      "message": "Checking phase gate for core",
+      "timestamp": "2026-08-18T11:20:57-04:00"
+    },
+    {
+      "type": "phase_gate_pass",
+      "story": "",
+      "lane": "main",
+      "role": "team-lead-agent",
+      "message": "Phase gate passed for core",
+      "timestamp": "2026-08-18T11:20:57-04:00"
+    },
+    {
+      "type": "orchestration_complete",
+      "story": "",
+      "lane": "main",
+      "role": "",
+      "message": "All steps finished - 58 stories completed",
+      "timestamp": "2026-08-18T11:20:58-04:00"
+    },
+    {
+      "type": "orchestration_complete",
+      "story": "",
+      "lane": "main",
+      "role": "",
+      "message": "All steps finished",
+      "timestamp": "2026-08-18T11:20:58-04:00"
+    }
+  ],
+  "stories": {
+    "MOCK3-1": {
+      "status": "complete",
+      "lane": "main",
+      "role": "typescript-logic-fixer",
+      "title": "Riders aged exactly 65 are charged the adult fare",
+      "provider": "minimax",
+      "model": "z-ai/glm-5.2",
+      "updatedAt": "2026-08-18T11:07:13-04:00"
+    },
+    "": {
+      "status": "complete",
+      "lane": "main",
+      "role": "perf-sentinel",
+      "title": "Perf Sentinel",
+      "provider": "qwen",
+      "model": "z-ai/glm-5.2",
+      "updatedAt": "2026-08-18T11:20:57-04:00"
+    },
+    "failure-analyst": {
+      "status": "complete",
+      "lane": "main",
+      "role": "failure-analyst",
+      "title": "Failure Analyst: MOCK3-1",
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "updatedAt": "2026-08-18T11:06:15-04:00"
+    }
+  },
+  "completedAt": "2026-08-18T11:20:58-04:00"
+}

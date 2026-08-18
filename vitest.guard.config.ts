@@ -44,6 +44,8 @@ export default defineConfig({
       // Mint vocabulary — the prompt offered a name shape the registry routes nowhere.
       'test/unit/orchestration/the-mint-was-offered-a-suffix-nothing-routes.test.ts',
       'test/unit/orchestration/the-mint-prompt-lives-in-the-template-zone.test.ts',
+      // Reviewers — a full seam invoked behind a parameter nobody passed.
+      'test/unit/orchestration/a-reviewer-nobody-invoked.test.ts',
       // Prompt/tool contracts — prompts that instruct calls the tool refuses.
       'test/unit/orchestration/prompts-advertise-tool-calls-the-tool-rejects.test.ts',
       'test/unit/orchestration/prompts-name-tools-that-do-not-exist.test.ts',

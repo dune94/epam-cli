@@ -953,6 +953,12 @@ if (require.main !== module) return;
     }
 
     process.env.EPAM_AGENT_NAME = 'prompt-builder';
+    // Opt-in per project; the registry's prompt-review.enabledBy names this variable.
+    const _promptReviewEnabled = String(process.env.EPAM_PROMPT_REVIEW_ENABLED || '') === '1';
+    // Hoisted so the reviewer is handed exactly the codelines the generator was — a reviewer
+    // checking claims against different facts than the writer saw is not a review.
+    const _codelineContext = codelines
+      .map((c) => `- ${(c && c.name) || c}`).join('\n');
     const _built = await buildProjectPrompts({
       templatesDir,
       bootstrapFile,
@@ -993,6 +999,61 @@ if (require.main !== module) return;
           path.join(LOG_DIR, `prompt-build-${(meta && meta.id) || 'unknown'}.log`),
           seamEnv, { costAgent: 'prompt-builder' });
       },
+      // THE REVIEWER, WHEN THE PROJECT ASKS FOR ONE.
+      //
+      // prompt-review is a full seam — its own template, three required inputs, a declared
+      // produces — invoked behind this optional parameter, which no caller supplied. So the one
+      // artefact every downstream agent inherits WHOLE was the only generated thing installed
+      // unexamined, while its sibling roster-review ran on every mint.
+      //
+      // Opt-in, because turning it on costs a model call per generated prompt (35 last run) and
+      // can block provisioning: the project says EPAM_PROMPT_REVIEW_ENABLED=1. The registry marks
+      // the seam optIn and names this variable, so the two cannot drift.
+      reviewPrompt: _promptReviewEnabled ? async ({ id, template, generated }) => {
+        const seamEnv = seamInvocationEnv('prompt-review', path.join(engineRoot, 'orchestrations', 'agents'));
+        if (seamEnv.EPAM_ALLOWED_TOOLS) seamEnv.AI_GATE_ALLOW_TOOLS = '1';
+        seamEnv.EPAM_AGENT_NAME = 'prompt-review';
+        // EXACTLY the placeholders prompt-review.json declares. The renderer is strict in both
+        // directions, and either kind of mismatch would be swallowed by the catch below and put
+        // this seam right back to silence — which is how __MANIFEST_FILE__ blinded the failure
+        // analyst for a whole run. A test pins these two lists together.
+        const _vals = {
+          // The reviewer's own brief, from the canonical roster it is registered in. Absent is
+          // fine — the template's persona section is then simply empty.
+          __PERSONA__: (() => {
+            try {
+              return JSON.parse(fs.readFileSync(path.join(AGENTS_DIR, 'profiles.json'), 'utf8'))['prompt-review'] || '';
+            } catch { return ''; }
+          })(),
+          __PROMPT_ID__: id,
+          __TEMPLATE_BODY__: (template && template.body) || '',
+          __GENERATED_BODY__: (generated && generated.body) || '',
+          __CODELINE_BLOCK__: _codelineContext,
+          __TICKET_BLOCK__: (Array.isArray(stories) ? stories : [])
+            .map((t) => `- ${t.id || ''}: ${t.title || ''}`).join('\n'),
+          __TOOL_LINE__: toolGrant || '',
+        };
+        let out = '';
+        try {
+          out = await spec.runClaude(
+            promptExec, promptsLib.render('prompt-review', projectConfigDir, _vals),
+            path.join(LOG_DIR, `prompt-review-${id}.log`),
+            seamEnv, { costAgent: 'prompt-review' });
+        } catch (e) {
+          // A REVIEWER THAT CANNOT RUN DOES NOT CONDEMN THE ARTEFACT. Its own failure is not
+          // evidence that the prompt is wrong — the same rule reviewSurvey follows.
+          process.stderr.write(`[prompt-review] ${id}: reviewer did not run (${e && e.message}) — installing unreviewed\n`);
+          return { ok: true };
+        }
+        const m = String(out || '').match(/<PROMPT_REVIEW>([\s\S]*?)<\/PROMPT_REVIEW>/);
+        if (!m) return { ok: true };   // unparseable: cannot condemn, and says nothing false
+        try {
+          const v = JSON.parse(m[1].trim());
+          const bad = Array.isArray(v.falseClaims) ? v.falseClaims : [];
+          if (bad.length) return { ok: false, reason: bad.join('; ') };
+        } catch { /* as above */ }
+        return { ok: true };
+      } : undefined,
       log: (m) => process.stderr.write(`${m}\n`),
     });
     process.stderr.write(

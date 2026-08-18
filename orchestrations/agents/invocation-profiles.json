@@ -743,6 +743,9 @@
     },
     "prompt-review": {
       "_what": "Falsifies what a generated project prompt claims about this project, before any agent inherits it.",
+      "optIn": true,
+      "enabledBy": "EPAM_PROMPT_REVIEW_ENABLED",
+      "_optInNote": "DECLARED, BUILT, AND NOT INVOKED BY DEFAULT. project-prompt-builder.js calls this behind an optional `reviewPrompt` parameter; a project turns it on by setting EPAM_PROMPT_REVIEW_ENABLED=1 in its config.env. Marked here because without the mark this seam is indistinguishable from one that always runs — it carries a template, a produces and three required inputs like any other — and an audit had to read the call site to discover that no project had ever switched it on.",
       "ladder": "top",
       "reasoningEffort": "high",
       "temperature": "0.1",
@@ -975,9 +978,9 @@
     "ticket-link-agent": "cpa-inference",
     "discovery-vocabulary-agent": "cpa-inference",
     "roster-reviewer": "code-review-cycle",
-    "typescript-bugfix-engineer": "story-writer",
-    "mocka-investigator": "code-graph-detective",
-    "mockb-investigator": "code-graph-detective"
+    "typescript-logic-fixer": "story-writer",
+    "fares-investigator": "code-graph-detective",
+    "schedule-investigator": "code-graph-detective"
   },
   "engineProduces": [
     "ticket",
@@ -1045,9 +1048,9 @@
     "ticket-link-agent": "derived",
     "discovery-vocabulary-agent": "derived",
     "roster-reviewer": "derived",
-    "typescript-bugfix-engineer": "derived",
-    "mocka-investigator": "derived",
-    "mockb-investigator": "derived"
+    "typescript-logic-fixer": "derived",
+    "fares-investigator": "derived",
+    "schedule-investigator": "derived"
   },
   "_ladderPositions": "A seam declares a POSITION in the project’s ladderTierOrder (base|mid|top), never a tier NAME. The project owns its tier vocabulary; the engine owns none. Converted 2026-08-15 after twenty seams asking for a literal HIGHEST ran unladdered on a project that declared only high and medium.",
   "_defaultSeam": "REMOVED 2026-08-16. A project may declare EPAM_DEFAULT_SEAM in its config if it wants unmatched agents absorbed; the engine declares none, so an unmatched agent fails the mint loudly and is fixed with one line rather than discovered mid-run.",

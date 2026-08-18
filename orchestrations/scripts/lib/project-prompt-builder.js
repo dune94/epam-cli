@@ -130,6 +130,18 @@ async function buildProjectPrompts({
   templatesDir, bootstrapFile, registryFile, projectConfigDir, runText, reviewPrompt,
   projectContext, codelineContext, mintedRoles, attempts = 3, mode = 'generate', log = () => {},
 }) {
+  // SAY WHICH IT WAS. This reviewer is opt-in (registry: prompt-review.optIn), and a run with no
+  // reviewer looked exactly like a run whose reviewer approved everything — 35 prompts
+  // provisioned, "REVIEW REJECTED: 0". Silence is not a clean bill of health, so the run states
+  // plainly that these prompts went in unexamined. Turned on per project via
+  // EPAM_PROMPT_REVIEW_ENABLED; see mint-agents-step.js.
+  if (typeof reviewPrompt === 'function') {
+    log('[prompt-builder] prompt review ENABLED — each generated prompt is falsified before install');
+  } else {
+    log('[prompt-builder] prompt review is OFF — generated prompts are installed NOT REVIEWED '
+      + '(set EPAM_PROMPT_REVIEW_ENABLED=1 in the project config to turn it on)');
+  }
+
   const boot = readJson(bootstrapFile);
   let copyVerbatim = Array.isArray(boot.copyVerbatim) ? boot.copyVerbatim : [];
   let generated = Array.isArray(boot.generated) ? boot.generated : [];

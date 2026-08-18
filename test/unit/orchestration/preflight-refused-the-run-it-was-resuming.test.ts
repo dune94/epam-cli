@@ -33,11 +33,11 @@ const MSG = /pre-baked 'specification' blocks/;
 
 /** A runtime PRD in the live shape: pending stories that already carry the spec pass's output. */
 const ELABORATED = JSON.stringify({
-  project: { name: 'mock3' },
+  project: { name: 'a-project' },
   stories: [
-    { id: 'MOCK3-1', title: 'a', completed: false, agentRole: 'r',
+    { id: 'S-1', title: 'a', completed: false, agentRole: 'r',
       specification: { status: 'completed' }, verificationCriteria: ['vc'], acceptanceCriteria: ['ac'] },
-    { id: 'MOCK3-2', title: 'b', completed: false, agentRole: 'r',
+    { id: 'S-2', title: 'b', completed: false, agentRole: 'r',
       specification: { status: 'completed' }, verificationCriteria: ['vc'], acceptanceCriteria: ['ac'] },
   ],
 });

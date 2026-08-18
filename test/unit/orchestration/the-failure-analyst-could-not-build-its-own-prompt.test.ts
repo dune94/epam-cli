@@ -24,14 +24,14 @@
  */
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const ROOT = join(__dirname, '../../..');
 const TEMPLATES = join(ROOT, 'orchestrations/prompts/templates');
 const LIB = join(ROOT, 'orchestrations/scripts/lib/prompt-library.js');
-const MOCK3 = join(ROOT, 'orchestrations/projects/mock3');
+const PROJECTS = join(ROOT, 'orchestrations/projects');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { readScanManifest, REQUIRED_KEYS } = require(join(ROOT, 'orchestrations/plugins/dependency-scan-plugin.js'));
 
@@ -71,21 +71,23 @@ describe('the failure analyst could not build its own prompt', () => {
     }
   });
 
-  it("MOCK3'S DEPENDENCY DECLARATION IS READABLE BY ITS CONSUMER — executed", () => {
-    const res = readScanManifest('/nonexistent-project-root', { EPAM_PROJECT_CONFIG_DIR: MOCK3 });
-    expect(res.ok, `the dependency scan is still disabled: ${res.reason}`).toBe(true);
-    for (const k of REQUIRED_KEYS) {
-      expect(res.cfg[k], `dependency-check.json has no usable '${k}'`).toBeTruthy();
+  it('EVERY PROJECT DECLARATION ITS CONSUMER READS IS USABLE — executed, all of them', () => {
+    // Not one project: the contract is between the plugin and ANY project that declares a
+    // dependency-check.json. A declaration in a shape nothing consumes disables the dependency
+    // scan silently, and takes the failure analyst's manifest name down with it.
+    const projects = readdirSync(PROJECTS, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => join(PROJECTS, d.name))
+      .filter((p) => existsSync(join(p, 'dependency-check.json')));
+    expect(projects.length, 'no project declares a dependency-check.json, so this proves nothing')
+      .toBeGreaterThan(0);
+    for (const proj of projects) {
+      const res = readScanManifest('/nonexistent-project-root', { EPAM_PROJECT_CONFIG_DIR: proj });
+      expect(res.ok, `${proj}: the dependency scan is disabled — ${res.reason}`).toBe(true);
+      for (const k of REQUIRED_KEYS) {
+        expect(res.cfg[k], `${proj}: dependency-check.json has no usable '${k}'`).toBeTruthy();
+      }
     }
-  });
-
-  it('the manifest name the analyst is given is the one the project declares', () => {
-    const cfg = JSON.parse(readFileSync(join(MOCK3, 'dependency-check.json'), 'utf8'));
-    const pkg = JSON.parse(readFileSync(
-      '/home/bradleyjerome/projects/mock3/mock-a/package.json', 'utf8'));
-    expect(cfg.manifestFile, 'the declared manifest is not the file the codeline actually has')
-      .toBe('package.json');
-    expect(pkg.name).toBe('mock-a');
   });
 
   it('AND THE ENGINE READS IT FROM THERE, not from a name written into the engine', () => {

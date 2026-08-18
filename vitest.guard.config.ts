@@ -25,6 +25,8 @@ export default defineConfig({
       'test/unit/orchestration/a-lane-with-no-phases-did-nothing-and-said-success.test.ts',
       // Shell hygiene — a stripped `local` ran as a command and returned 127 at Step 7.
       'test/unit/orchestration/a-stripped-declaration-runs-as-a-command.test.ts',
+      // Launchers — the generic launcher loaded the project config and reset nothing.
+      'test/unit/orchestration/a-launcher-that-never-reset-anything.test.ts',
       // Reset completeness — stale PRD assignments, prompts and artefacts crossing runs.
       'test/unit/orchestration/prd-kept-the-previous-runs-assignments.test.ts',
       'test/unit/orchestration/reset-leaves-last-runs-generated-artefacts.test.ts',

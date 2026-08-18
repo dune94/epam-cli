@@ -139,6 +139,22 @@ if [ "$ASSUME_YES" != "1" ]; then
   case "$_reply" in y|Y|yes|YES) ;; *) fail "not launched" ;; esac
 fi
 
+# ── Clean slate, after the human said yes ─────────────────────────────────────
+# THIS LAUNCHER LOADED THE PROJECT AND RESET NOTHING. Every other tier3 launcher calls this gate;
+# this one carried a comment claiming it did and never made the call, so the previous run's state
+# reached the next one. Live 2026-08-18 run 20260818T095717Z died of exactly that: the PRD still
+# named last run's implementer while this run minted a new one, the two proposed investigators
+# collided by name with the leftovers and were dropped as "unchanged", and the assignment gate
+# refused — "typescript-logic-fixer is not in the roster, so the writer would run with an empty
+# system prompt".
+#
+# AFTER the confirmation above and BEFORE the orchestrator: the reset archives logs and restores
+# the PRD and roster, so it must not fire for a run the operator declines, and must be complete
+# before anything reads either file.
+# shellcheck source=lib/pre-run-reset-gate.sh
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/pre-run-reset-gate.sh"
+pre_run_reset_or_abort --prd "$PRD_FILE"
+
 # ── Run ───────────────────────────────────────────────────────────────────────
 # The orchestrator owns codeline routing: it resolves scope when the project declared none, counts
 # the codelines and fans out one lane each. This launcher's job is to make sure it has the

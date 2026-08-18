@@ -27,6 +27,8 @@ export default defineConfig({
       'test/unit/orchestration/a-stripped-declaration-runs-as-a-command.test.ts',
       // Launchers — the generic launcher loaded the project config and reset nothing.
       'test/unit/orchestration/a-launcher-that-never-reset-anything.test.ts',
+      // Resume — a run that never paused saved only checkpoints its own resume could not see.
+      'test/unit/orchestration/a-run-that-never-paused-was-never-resumable.test.ts',
       // Reset completeness — stale PRD assignments, prompts and artefacts crossing runs.
       'test/unit/orchestration/prd-kept-the-previous-runs-assignments.test.ts',
       'test/unit/orchestration/reset-leaves-last-runs-generated-artefacts.test.ts',

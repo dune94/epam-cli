@@ -296,6 +296,12 @@ save_run_checkpoint() {
 #
 # VALIDATE FIRST, THEN WRITE. A rejected checkpoint must leave the runtime PRD untouched:
 # resuming onto half-restored state would be worse than not resuming at all.
+# The merge and count programs live in files: a multi-line jq literal inside this function broke
+# the parser, and a one-line version would be unreadable.
+_CKPT_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_CKPT_MERGE_JQ="$_CKPT_LIB_DIR/jq/checkpoint-merge.jq"
+_CKPT_SPEC_JQ="$_CKPT_LIB_DIR/jq/checkpoint-spec-count.jq"
+
 restore_run_checkpoint() {
     local _rid="${1:-}"
     if [ -z "$_rid" ]; then
@@ -304,9 +310,57 @@ restore_run_checkpoint() {
     fi
     local _dir; _dir=$(checkpoint_dir "$_rid") || return 1
 
+    # THE ONLY CHECKPOINT MOST RUNS SAVE IS A LANE ONE.
+    #
+    # Of the two save sites, post-roster is guarded by should_pause_after_agent_mint, and post-spec
+    # — the one whose comment says "buys a resumable run" — executes INSIDE the lane, so it writes
+    # to runs/<id>/lanes/<lane>/checkpoint. A project that does not pause produces lane checkpoints
+    # and nothing else, while this restore looked only at runs/<id>/checkpoint and refused.
+    #
+    # Live 2026-08-18: run 20260818T101809Z had both lanes checkpointed pre-writer, with the spec
+    # pass's whole output on disk, and had to be repeated from zero — about 50 minutes of mint and
+    # spec — to retry the writer. So the parent reads the lane checkpoints rather than demanding a
+    # file the design does not produce at that stage. Everything below is unchanged: the same
+    # validity checks, and the same rule that a restore never moves the PRD backwards.
+    local _base_runs; _base_runs=$(dirname "$_dir")
     if [ ! -d "$_dir" ]; then
-        echo "[checkpoint] no checkpoint found for run '$_rid' (looked in $_dir)" >&2
-        return 1
+        # EVERY LANE, MERGED. A lane checkpoints only ITS OWN story, so taking the richest
+        # single lane would hand the other lane a PRD with nothing in it. Merged by story id,
+        # each story keeping the copy that carries the most spec output.
+        local _lanes_glob _lane_dir _merged _lane_count=0 _tmp _meta=""
+        _lanes_glob="${_base_runs}/lanes"
+        _merged=$(mktemp "${TMPDIR:-/tmp}/ckpt-merge-XXXXXX.json")
+        for _lane_dir in "$_lanes_glob"/*/checkpoint; do
+            [ -f "$_lane_dir/prd.json" ] || continue
+            jq -e . "$_lane_dir/prd.json" >/dev/null 2>&1 || continue
+            _lane_count=$((_lane_count + 1))
+            [ -z "$_meta" ] && [ -f "$_lane_dir/checkpoint.json" ] && _meta="$_lane_dir/checkpoint.json"
+            if [ "$_lane_count" -eq 1 ]; then
+                cp "$_lane_dir/prd.json" "$_merged"
+                continue
+            fi
+            _tmp=$(mktemp "${TMPDIR:-/tmp}/ckpt-merge-XXXXXX.json")
+            if jq -s -f "$_CKPT_MERGE_JQ" "$_merged" "$_lane_dir/prd.json" > "$_tmp" 2>/dev/null && [ -s "$_tmp" ]; then
+                mv "$_tmp" "$_merged"
+            else
+                rm -f "$_tmp" "$_merged"
+                echo "[checkpoint] could not merge the lane checkpoint at $_lane_dir — refusing a partial resume" >&2
+                return 1
+            fi
+        done
+        if [ "$_lane_count" -gt 0 ]; then
+            local _n_stories _n_spec
+            _n_stories=$(jq '(.stories // []) | length' "$_merged" 2>/dev/null || echo 0)
+            _n_spec=$(jq -f "$_CKPT_SPEC_JQ" "$_merged" 2>/dev/null || echo 0)
+            echo "[checkpoint] no parent checkpoint for run '$_rid' — resuming from $_lane_count lane checkpoint(s): $_n_stories story(ies), $_n_spec spec item(s). Lane checkpoints are what a run that does not pause saves." >&2
+            _dir=$(mktemp -d "${TMPDIR:-/tmp}/ckpt-lane-XXXXXX")
+            mv "$_merged" "$_dir/prd.json"
+            [ -n "$_meta" ] && cp "$_meta" "$_dir/checkpoint.json" || true
+        else
+            rm -f "$_merged"
+            echo "[checkpoint] no checkpoint found for run '$_rid' — no parent checkpoint at $_dir and no usable lane checkpoint under $_lanes_glob" >&2
+            return 1
+        fi
     fi
     if [ ! -f "$_dir/prd.json" ]; then
         echo "[checkpoint] checkpoint for run '$_rid' has no prd.json — refusing a partial resume" >&2
@@ -353,7 +407,10 @@ restore_run_checkpoint() {
         cp "$_dir/profiles.json" "$AGENT_PROFILES_FILE" || return 1
     fi
 
-    echo "[checkpoint] resumed run '$_rid' — $(jq -r '.storyCount // "?"' "$_dir/checkpoint.json" 2>/dev/null) story(ies), taken at $(jq -r '.createdAt // "?"' "$_dir/checkpoint.json" 2>/dev/null)"
+    # COUNTED FROM THE PRD BEING RESTORED, not from the metadata. A merged lane restore carries
+    # every lane's stories while any single lane's checkpoint.json records only its own, so the
+    # metadata count would under-report exactly what the merge exists to fix.
+    echo "[checkpoint] resumed run '$_rid' — $(jq -r '(.stories // []) | length' "$_dir/prd.json" 2>/dev/null) story(ies), taken at $(jq -r '.createdAt // "?"' "$_dir/checkpoint.json" 2>/dev/null)"
     return 0
 }
 

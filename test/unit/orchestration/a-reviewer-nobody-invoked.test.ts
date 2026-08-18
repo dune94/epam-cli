@@ -108,9 +108,11 @@ describe('a reviewer nobody invoked', () => {
     const tpl = JSON.parse(readFileSync(
       join(ROOT, 'orchestrations/prompts/templates/prompt-review.json'), 'utf8'));
     const src = readFileSync(MINT, 'utf8');
-    const start = src.indexOf("const _vals = {");
+    // The values the reviewer supplies, wherever they are built. Located by the injected
+    // `values:` factory rather than a variable name, so a refactor moves the test with the code.
+    const start = src.indexOf('values: ({ id, template, generated }) => ({');
     expect(start, 'the reviewer no longer builds a values object').toBeGreaterThan(-1);
-    const block = src.slice(start, src.indexOf('};', start));
+    const block = src.slice(start, src.indexOf('}),', start));
     const supplied = [...block.matchAll(/(__[A-Z0-9_]+__)\s*:/g)].map((m) => m[1]).sort();
     const declared = [...(tpl.placeholders as string[])].sort();
     expect(supplied, 'the reviewer and its template disagree on placeholders').toEqual(declared);

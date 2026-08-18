@@ -924,6 +924,7 @@ if (require.main !== module) return;
   // inherits ladder, retry, timeout and cost capture rather than being a private call.
   {
     const promptsLib = require('./lib/prompt-library.js');
+    const { makePromptReviewer } = require('./lib/prompt-review.js');
     const { seamInvocationEnv } = require('./lib/seam-invocation.js');
     const { buildProjectPrompts } = require('./lib/project-prompt-builder.js');
     const engineRoot = path.join(__dirname, '..', '..');
@@ -1009,15 +1010,23 @@ if (require.main !== module) return;
       // Opt-in, because turning it on costs a model call per generated prompt (35 last run) and
       // can block provisioning: the project says EPAM_PROMPT_REVIEW_ENABLED=1. The registry marks
       // the seam optIn and names this variable, so the two cannot drift.
-      reviewPrompt: _promptReviewEnabled ? async ({ id, template, generated }) => {
-        const seamEnv = seamInvocationEnv('prompt-review', path.join(engineRoot, 'orchestrations', 'agents'));
-        if (seamEnv.EPAM_ALLOWED_TOOLS) seamEnv.AI_GATE_ALLOW_TOOLS = '1';
-        seamEnv.EPAM_AGENT_NAME = 'prompt-review';
-        // EXACTLY the placeholders prompt-review.json declares. The renderer is strict in both
-        // directions, and either kind of mismatch would be swallowed by the catch below and put
-        // this seam right back to silence — which is how __MANIFEST_FILE__ blinded the failure
-        // analyst for a whole run. A test pins these two lists together.
-        const _vals = {
+      // THE REVIEWER, WHEN THE PROJECT ASKS FOR ONE — lib/prompt-review.js.
+      //
+      // It lived here as an anonymous closure, which no test could reach: on 2026-08-18 its
+      // ability to REJECT was disabled by hand and all 268 tests passed. It fails open by design
+      // (a reviewer that cannot run must not condemn the artefact), so every internal defect looks
+      // exactly like approval — which is precisely why the body has to be executable by a test.
+      // Every dependency is injected here; the paths are covered by
+      // the-prompt-reviewer-was-never-executed.test.ts.
+      reviewPrompt: _promptReviewEnabled ? makePromptReviewer({
+        render: (id, dir, vals) => promptsLib.render(id, dir, vals),
+        invoke: (prompt, logPath) => {
+          const seamEnv = seamInvocationEnv('prompt-review', path.join(engineRoot, 'orchestrations', 'agents'));
+          if (seamEnv.EPAM_ALLOWED_TOOLS) seamEnv.AI_GATE_ALLOW_TOOLS = '1';
+          seamEnv.EPAM_AGENT_NAME = 'prompt-review';
+          return spec.runClaude(promptExec, prompt, logPath, seamEnv, { costAgent: 'prompt-review' });
+        },
+        values: ({ id, template, generated }) => ({
           // The reviewer's own brief, from the canonical roster it is registered in. Absent is
           // fine — the template's persona section is then simply empty.
           __PERSONA__: (() => {
@@ -1032,28 +1041,10 @@ if (require.main !== module) return;
           __TICKET_BLOCK__: (Array.isArray(stories) ? stories : [])
             .map((t) => `- ${t.id || ''}: ${t.title || ''}`).join('\n'),
           __TOOL_LINE__: toolGrant || '',
-        };
-        let out = '';
-        try {
-          out = await spec.runClaude(
-            promptExec, promptsLib.render('prompt-review', projectConfigDir, _vals),
-            path.join(LOG_DIR, `prompt-review-${id}.log`),
-            seamEnv, { costAgent: 'prompt-review' });
-        } catch (e) {
-          // A REVIEWER THAT CANNOT RUN DOES NOT CONDEMN THE ARTEFACT. Its own failure is not
-          // evidence that the prompt is wrong — the same rule reviewSurvey follows.
-          process.stderr.write(`[prompt-review] ${id}: reviewer did not run (${e && e.message}) — installing unreviewed\n`);
-          return { ok: true };
-        }
-        const m = String(out || '').match(/<PROMPT_REVIEW>([\s\S]*?)<\/PROMPT_REVIEW>/);
-        if (!m) return { ok: true };   // unparseable: cannot condemn, and says nothing false
-        try {
-          const v = JSON.parse(m[1].trim());
-          const bad = Array.isArray(v.falseClaims) ? v.falseClaims : [];
-          if (bad.length) return { ok: false, reason: bad.join('; ') };
-        } catch { /* as above */ }
-        return { ok: true };
-      } : undefined,
+        }),
+        logPathFor: (id) => path.join(LOG_DIR, `prompt-review-${id}.log`),
+        projectConfigDir,
+      }) : undefined,
       log: (m) => process.stderr.write(`${m}\n`),
     });
     process.stderr.write(

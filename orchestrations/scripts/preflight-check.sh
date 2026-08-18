@@ -139,7 +139,19 @@ else
     # PENDING stories carrying specification data indicate prior-run
     # contamination baked into canonical.
     _stale_spec=$(python3 "$SCRIPT_DIR/lib/handlers/prd-stale-specification-stories.py" "$PRD_FILE" 2>/dev/null || echo "")
-    if [[ -n "$_stale_spec" ]] && [[ "$_prd_pending_ingest" != "1" ]]; then
+    # A RESUME LEGITIMATELY CARRIES ITS OWN SPEC PASS.
+    #
+    # This gate reads a pending story's specification block as a PRIOR run baked into the
+    # canonical, which is right for a fresh run and has fired for real (2026-07-06). A resume is
+    # the second case it cannot distinguish, alongside the pending-ingest one below: the blocks
+    # belong to the run being resumed, and that run IS this run. On 2026-08-18 it refused the
+    # resume of 20260818T101809Z — whose canonical was correctly lean while the runtime PRD held
+    # 6 and 3 verification criteria, 2 fix sites each and both roles — for carrying exactly the
+    # output the resume exists to reuse.
+    if [[ -n "$_stale_spec" ]] && [[ -n "${EPAM_RESUME_RUN:-}" ]]; then
+      ok "PRD carries specification data for the run being resumed (EPAM_RESUME_RUN=${EPAM_RESUME_RUN}) — this is the resumed run's own output, not a prior run's"
+      PASS=$((PASS+1))
+    elif [[ -n "$_stale_spec" ]] && [[ "$_prd_pending_ingest" != "1" ]]; then
       fail "Canonical PRD has pre-baked 'specification' blocks on base stories (must be lean/unelaborated): $_stale_spec"
     elif [[ -n "$_stale_spec" ]]; then
       ok "PRD carries stale specification data from a prior run, but Jira ingest overwrites this exact file before anything reads it — deferred"

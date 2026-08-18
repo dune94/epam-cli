@@ -112,6 +112,38 @@ export function openRouterProviderOrder(): string[] | undefined {
   return order.length ? order : undefined;
 }
 
+/**
+ * Send an OpenRouter request, releasing the upstream pin if — and only if — the pinned upstream
+ * rate-limits us.
+ *
+ * The pin (modelOverrides.providerOrder, sent as provider.order with allow_fallbacks:false) is an
+ * OPTIMISATION: it buys measured cache stickiness. Correctness must not depend on it. Live
+ * 2026-08-18 it did: OpenRouter returned 429 "temporarily rate-limited upstream"
+ * (limit_source: upstream_provider_shared_pool), the pin left nowhere to fall back, the request
+ * failed with no output, and a coordinator read that as an environment crash — burning 10 of 12
+ * attempts on each of two lanes while correct, passing work sat on disk.
+ *
+ * Only 429 is retried. A 400, 401 or 500 says something a reroute cannot fix, and masking those
+ * would hide a real fault. One retry, never a loop: if the whole model is saturated, failing is
+ * the honest answer.
+ */
+async function postOpenRouter(
+  url: string,
+  headers: Record<string, string>,
+  body: Record<string, unknown>,
+): Promise<Response> {
+  const pinned = body.provider !== undefined;
+  const first = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+  if (first.ok || first.status !== 429 || !pinned) return first;
+
+  // Deliberate, announced reroute — not the silent one allow_fallbacks:false exists to prevent.
+  const { provider: _dropped, ...unpinned } = body;
+  process.stderr.write(
+    '[openrouter] the pinned upstream is rate-limited (429) — retrying once without the pin; '
+    + 'this turn loses the cache stickiness the pin buys\n');
+  return fetch(url, { method: 'POST', headers, body: JSON.stringify(unpinned) });
+}
+
 export function openRouterSessionId(): string {
   const fromEnv = process.env.EPAM_SESSION_ID;
   if (fromEnv) return fromEnv;
@@ -214,16 +246,13 @@ export class QwenProvider implements LLMProvider {
       function: { name: t.name, description: t.description, parameters: t.inputSchema },
     }));
 
-    const response = await fetch(`${this.baseURL}/chat/completions`, {
-      method: 'POST',
-      headers: {
+    const response = await postOpenRouter(`${this.baseURL}/chat/completions`, {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.apiKey}`,
         'HTTP-Referer': 'https://epam.com',
         'X-Title': 'EPAM CLI',
         ...(this.openRouterMode ? { 'x-session-id': openRouterSessionId() } : {}),
-      },
-      body: JSON.stringify({
+      }, {
         model,
         messages,
         max_tokens: request.maxTokens || 4096,
@@ -253,8 +282,7 @@ export class QwenProvider implements LLMProvider {
         // downgrading the contract.
         ...(this.openRouterMode && this.resolveResponseFormat(request)
           ? { provider: { require_parameters: true } } : {}),
-      }),
-    });
+      });
 
     if (!response.ok) {
       const error = await response.text();
@@ -323,16 +351,13 @@ export class QwenProvider implements LLMProvider {
       function: { name: t.name, description: t.description, parameters: t.inputSchema },
     }));
 
-    const response = await fetch(`${this.baseURL}/chat/completions`, {
-      method: 'POST',
-      headers: {
+    const response = await postOpenRouter(`${this.baseURL}/chat/completions`, {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.apiKey}`,
         'HTTP-Referer': 'https://epam.com',
         'X-Title': 'EPAM CLI',
         ...(this.openRouterMode ? { 'x-session-id': openRouterSessionId() } : {}),
-      },
-      body: JSON.stringify({
+      }, {
         model,
         messages,
         max_tokens: request.maxTokens || 4096,
@@ -360,8 +385,7 @@ export class QwenProvider implements LLMProvider {
         // downgrading the contract.
         ...(this.openRouterMode && this.resolveResponseFormat(request)
           ? { provider: { require_parameters: true } } : {}),
-      }),
-    });
+      });
 
     if (!response.ok) {
       const error = await response.text();

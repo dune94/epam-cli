@@ -5214,6 +5214,23 @@ run_tsc_verification() {
     # than the project's own, on every repo, for the life of this pipeline.
     _tsc_output=$(_run_project_verification "$PROJECT_ROOT" 2>&1) || _tsc_exit=$?
 
+    # NOT DECLARED IS NOT FAILED. _run_project_verification exits 2 when the project declares no
+    # typecheck command, and every non-zero exit used to become "TypeScript errors — fix them so
+    # tsc exits 0". There are none to fix: live 2026-08-18, mock-a's `npx tsc --noEmit` exited 0
+    # while the plugin's own verdict was "verification manifest declares no typecheck command".
+    # The writer spent its attempts hunting errors that did not exist, HealingBroken fired on the
+    # repeated diagnosis, and the analyst eventually said so outright. The sibling lane proves the
+    # remedy: mock-b's writer added the block and its verification returns pass.
+    #
+    # Refusing an undeclared check stays — an undeclared repo must never silently pass. Only what
+    # the writer is TOLD changes: declare the command, do not chase type errors.
+    if [ "$_tsc_exit" -eq 2 ]; then
+        warning "  [tsc-verify] $story_id: the project declares no typecheck command — the check could not run"
+        VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe orchestrator could not run this project'"'"'s type check because the verification manifest does not declare one. This is NOT a type error in your code — nothing was checked.\n\nDeclare the command in `.epam/verification.json` alongside the existing `test` entry, taking it from the project'"'"'s own manifest — read it and use whatever this project already declares — in this shape:\n\n```json\n"typecheck": { "command": "<the project'"'"'s own type-check command>" }\n```\n\nThe orchestrator reported:\n\n```\n%s\n```\n' \
+            "$_tsc_output")
+        return 1
+    fi
+
     if [ "$_tsc_exit" -ne 0 ]; then
         # Brownfield: a large existing repo can have pre-existing tsc errors in
         # files no story ever touches (live, 2026-07-22 — Redis/Stripe/OTel type

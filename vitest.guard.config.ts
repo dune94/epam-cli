@@ -76,6 +76,10 @@ export default defineConfig({
       'test/unit/orchestration/an-unparseable-review-was-reported-as-clean.test.ts',
       // Ledger — duration was always 0, and an unexplained $0 destroyed its own evidence.
       'test/unit/orchestration/the-ledger-cannot-say-how-long-anything-took.test.ts',
+      // Upstream congestion — a pinned provider that 429s must not end the run.
+      'test/unit/providers/a-rate-limited-pin-had-nowhere-to-fall-back.test.ts',
+      // Gates — an undeclared check reported as type errors the writer could not find.
+      'test/unit/orchestration/an-undeclared-check-was-reported-as-type-errors.test.ts',
       // Cost — the measurement the operator calls priority #1.
       'test/unit/orchestration/the-run-recorded-no-cost.test.ts',
       'test/unit/orchestration/cost-rows-cannot-be-joined-to-the-roster.test.ts',

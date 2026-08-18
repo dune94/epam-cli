@@ -87,6 +87,7 @@ export default defineConfig({
       'test/unit/orchestration/a-symlinked-node-modules-blocked-every-commit.test.ts',
       // Gates — an undeclared check reported as type errors the writer could not find.
       'test/unit/orchestration/an-undeclared-check-was-reported-as-type-errors.test.ts',
+      'test/unit/orchestration/a-fabricated-zero-shadows-the-real-cost.test.ts',
       // Cost — the measurement the operator calls priority #1.
       'test/unit/orchestration/the-run-recorded-no-cost.test.ts',
       'test/unit/orchestration/cost-rows-cannot-be-joined-to-the-roster.test.ts',

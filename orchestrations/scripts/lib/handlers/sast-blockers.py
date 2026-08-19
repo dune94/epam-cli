@@ -22,7 +22,34 @@ import sys, json, re, os
 # The story's added packages arrive as EPAM_STORY_INTRODUCED_DEPS (comma-separated). Absent or
 # empty means the story introduced none.
 
-_DEP_RULE = re.compile(r'^dependency-cve-', re.IGNORECASE)
+# HOW A DEPENDENCY-CVE FINDING IS RECOGNISED. The prefix is DECLARED, not assumed: this used to be
+# the literal r'^dependency-cve-', read off one live run's output, while the SAST prompt's contract
+# for that field was free-form ("rule": "..."). Nothing required the model to produce it. A model
+# emitting 'cve-dependency-critical' would make every dependency finding invisible here, and the
+# gate would silently revert to hard-stopping on pre-existing debt — the failure this file exists
+# to prevent, with a broken run and a correct run looking identical.
+#
+# config/sast-vocabulary.json is the one declaration; the prompt that instructs the sentinel is
+# rendered from the same value, so the two cannot drift. EPAM_SAST_VOCABULARY overrides the path.
+def _rule_prefix():
+    path = os.environ.get('EPAM_SAST_VOCABULARY', '') or os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', 'config', 'sast-vocabulary.json')
+    try:
+        with open(path, 'r', encoding='utf-8') as fh:
+            prefix = json.load(fh).get('dependencyCveRulePrefix', '')
+    except Exception:
+        prefix = ''
+    if not prefix:
+        # NO SILENT DEFAULT. Guessing here reinstates exactly the guess this removed; without the
+        # declaration nothing can be classified as pre-existing debt, so every finding blocks --
+        # the safe direction, and it is said out loud.
+        sys.stderr.write('[sast] no dependencyCveRulePrefix declared — no finding can be treated '
+                         'as pre-existing dependency debt\n')
+        return None
+    return re.compile('^' + re.escape(prefix), re.IGNORECASE)
+
+
+_DEP_RULE = _rule_prefix()
 
 
 def _introduced():
@@ -34,7 +61,7 @@ def _is_preexisting_dependency_finding(f):
     """A dependency-CVE finding naming no package this story introduced."""
     if os.environ.get('EPAM_BROWNFIELD', '0') != '1':
         return False
-    if not _DEP_RULE.match(str(f.get('rule', '') or '')):
+    if _DEP_RULE is None or not _DEP_RULE.match(str(f.get('rule', '') or '')):
         return False
     blob = json.dumps(f)
     for pkg in _introduced():

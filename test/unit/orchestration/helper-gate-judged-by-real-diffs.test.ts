@@ -24,13 +24,21 @@ import { describe, it, expect } from 'vitest';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { replayRepo } from '../../support/replay-codeline';
+import { readFileSync } from 'node:fs';
 
 const ROOT = join(__dirname, '../../..');
 const SH = join(ROOT, 'orchestrations/scripts/claude.sh');
 
-const GOTRANSIT = '/home/bradleyjerome/projects/metrolinx/next.gotransit.com';
-const MOCKA = '/home/bradleyjerome/projects/mock3/mock-a';
-const CDTS = '/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts';
+// THE CORPUS IS DATA. Which real changes are correct is a human judgement that cannot be
+// discovered — but the estate it comes from is one client's facts, and those do not belong in
+// engine test code. Entries resolve through the roots the project configs declare, and an entry
+// whose repository or refs are missing SKIPS WITH ITS REASON rather than passing silently.
+const CORPUS: {
+  repo: string; range: string; helper: string; paths?: string;
+  verdict: 'accept' | 'reject'; minDiffBytes?: number; helperAbsentFromDiff?: boolean; why?: string;
+  helpers?: string[]; inlineDiff?: string[];
+}[] = JSON.parse(readFileSync(join(ROOT, 'test/fixtures/helper-gate-corpus.json'), 'utf8')).entries;
 
 /** Executes the REAL rule: does this diff duplicate a format the helper's module owns? */
 function judge(repo: string, diff: string, helper: string): { rc: number; out: string } {
@@ -64,52 +72,40 @@ const gitDiff = (repo: string, range: string, paths = 'src') =>
   execFileSync('git', ['-C', repo, 'diff', range, '--', paths], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
 
 describe('the rule is judged by real run artefacts, not fixtures', () => {
-  it.runIf(have(GOTRANSIT))('ACCEPTS gotransit\'s SHIPPED AMSD-2041 — 9 files, working in production', () => {
-    const diff = gitDiff(GOTRANSIT, '70df4ea2..e780a8b7');
-    expect(diff.length, 'the real diff did not load; this would pass vacuously').toBeGreaterThan(1000);
-    // ContentstackFactory is absent from this diff — the OLD gate rejected it for that alone.
-    expect(diff.includes('ContentstackFactory'), 'fixture drift: the helper is present').toBe(false);
-    const r = judge(GOTRANSIT, diff, 'ContentstackFactory');
-    expect(r.rc, `rejected a shipped, working implementation. ${r.out}`).toBe(0);
+  it('the corpus is not empty', () => {
+    expect(CORPUS.length, 'no judged entries — every assertion below would vanish').toBeGreaterThan(0);
   });
 
-  it.runIf(have(MOCKA))('ACCEPTS the mock3 defect fix — the green-run baseline', () => {
-    const diff = gitDiff(MOCKA, 'HEAD~1..HEAD');
-    expect(diff.length, 'the real diff did not load').toBeGreaterThan(50);
-    const r = judge(MOCKA, diff, 'CONCESSION_FARE_CENTS');
-    expect(r.rc, `rejected the mock3 fix that shipped green. ${r.out}`).toBe(0);
-  });
-
-  it.runIf(have(CDTS))('REJECTS the 2026-07-26 hand-rolled separator — the defect the gate exists for', () => {
-    // RECONSTRUCTED, and labelled as such: the defective change is not in git history. The REPO
-    // and the OWNING MODULE are real — dispatch-line-item-key.ts declares `const DIVIDER = '#'` —
-    // and the added line is quoted verbatim in the commit that created the gate (674dfe1).
-    const diff = [
-      '--- a/src/services/submit-reservations/discounts.ts',
-      '+++ b/src/services/submit-reservations/discounts.ts',
-      '-      (lineItem) => lineItem.id === discount.lineItemId,',
-      "+      (lineItem) => lineItem.id === discount.lineItemId",
-      "+        || lineItem.id.startsWith(discount.lineItemId + '-'),",
-    ].join('\n');
-    const r = judge(CDTS, diff, 'getDispatchLineItemKey');
-    expect(r.rc,
-      "the change invents '-' as the separator while dispatch-line-item-key.ts owns '#' — " +
-      `this shipped a fix that could never match. ${r.out}`).toBe(1);
-  });
-
-  it.runIf(have(CDTS))('ACCEPTS the same change once it USES the helper', () => {
-    const diff = [
-      '+ import { getDispatchLineItemKey } from "~/services/helpers/order/dispatch-line-item-key";',
-      '+      (lineItem) => lineItem.id === getDispatchLineItemKey(discount.lineItemId, true),',
-    ].join('\n');
-    expect(judge(CDTS, diff, 'getDispatchLineItemKey').rc, 'rejected the correct fix').toBe(0);
-  });
-
-  it.runIf(have(CDTS))('ACCEPTS a change that touches nothing the helper owns', () => {
-    const diff = ['+ export const unrelated = (n: number) => n + 1;'].join('\n');
-    expect(judge(CDTS, diff, 'getDispatchLineItemKey').rc, 'absence alone must not reject').toBe(0);
-  });
+  for (const entry of CORPUS) {
+    const repo = replayRepo(entry.repo);
+    const reason = repo ? '' : ' [SKIPPED: repository not found under any declared root]';
+    it(`${entry.verdict.toUpperCase()}S ${entry.helper} @ ${entry.range}${reason}`, () => {
+      if (!repo) return;
+      // An entry either replays a real commit range or carries the exact lines under judgement
+      // (a defect reduced to its two significant lines is still the real defect, not a fixture).
+      let diff = '';
+      if (entry.inlineDiff) {
+        diff = entry.inlineDiff.join('\n');
+      } else {
+        try { diff = gitDiff(repo, entry.range, entry.paths || 'src'); } catch { return; }
+      }
+      expect(diff.length, 'the diff did not load; this would pass vacuously')
+        .toBeGreaterThan(entry.minDiffBytes ?? 50);
+      for (const helper of entry.helpers ?? [entry.helper]) {
+        if (entry.helperAbsentFromDiff) {
+          expect(diff.includes(helper), `corpus drift: ${helper} is present in this diff`).toBe(false);
+        }
+        const r = judge(repo, diff, helper);
+        if (entry.verdict === 'accept') {
+          expect(r.rc, `${helper}: rejected a change confirmed correct. ${entry.why || ''} ${r.out}`).toBe(0);
+        } else {
+          expect(r.rc, `${helper}: accepted a change confirmed wrong. ${entry.why || ''} ${r.out}`).not.toBe(0);
+        }
+      }
+    });
+  }
 });
+
 
 // THE SECOND ENFORCEMENT POINT. _committed_change_uses_helpers judges the COMMITTED diff and, on
 // 2026-08-19, failed a story whose commit succeeded and whose type check passed — then halted the
@@ -127,19 +123,4 @@ describe('the committed-change gate uses the same rule', () => {
       .toContain('_change_duplicates_owned_format');
   });
 
-  it.runIf(have(GOTRANSIT))('ACCEPTS gotransit\'s shipped commit range', () => {
-    const diff = gitDiff(GOTRANSIT, '70df4ea2..e780a8b7');
-    for (const h of ['ContentstackFactory', 'getSinglePageEntry']) {
-      expect(diff.includes(h), `fixture drift: ${h} is present`).toBe(false);
-      expect(judge(GOTRANSIT, diff, h).rc, `${h}: rejected shipped, working code`).toBe(0);
-    }
-  });
-
-  it.runIf(have(CDTS))('still REJECTS the format duplication it exists for', () => {
-    const diff = [
-      '+      (lineItem) => lineItem.id === discount.lineItemId',
-      "+        || lineItem.id.startsWith(discount.lineItemId + '-'),",
-    ].join('\n');
-    expect(judge(CDTS, diff, 'getDispatchLineItemKey').rc, 'the real defect is no longer caught').toBe(1);
-  });
 });

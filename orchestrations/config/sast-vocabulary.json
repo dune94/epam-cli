@@ -1,0 +1,10 @@
+{
+  "_why": [
+    "THE RULE NAMES THE SAST SENTINEL MUST USE, declared once so the prompt and the gate cannot drift.",
+    "",
+    "665f1a5 made a brownfield CVE advisory when the story did not introduce the package. It found dependency findings with the literal prefix 'dependency-cve-', read off one live run. The prompt's contract for that field was free-form ('rule': '...'), so nothing required the model to produce it: a different model, or a different draw, emitting 'cve-dependency-critical' would make every dependency CVE invisible to the advisory path and silently revert the gate to hard-stopping on pre-existing repository debt — the exact failure that fix exists to prevent.",
+    "",
+    "The prompt is told to use this prefix and the gate reads the same file. Changing the value here changes both."
+  ],
+  "dependencyCveRulePrefix": "dependency-cve-"
+}

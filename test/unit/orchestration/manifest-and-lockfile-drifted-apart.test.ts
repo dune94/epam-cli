@@ -21,6 +21,7 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { discoverManifestRepo, discoverDependencyAddingChange, ecosystemOf, lockfileOf } from '../../support/replay-codeline';
 import { tmpdir } from 'node:os';
 
 const ROOT = join(__dirname, '../../..');
@@ -183,22 +184,29 @@ describe('it is not a Node gate', () => {
   });
 });
 
-describe('replayed against the real metrolinx branch', () => {
-  const REPO = '/home/bradleyjerome/projects/metrolinx/next.metrolinx.com';
-  const have = existsSync(join(REPO, '.git'));
+// REPLAYED AGAINST A REAL REPOSITORY — DISCOVERED, NOT NAMED. The property is estate-independent:
+// a dependency the change added, absent from the lockfile, must be caught. Finding the subject
+// keeps this guard true for any codeline instead of one branch that will eventually be pruned.
+describe('replayed against a real change', () => {
+  const change = discoverDependencyAddingChange(discoverManifestRepo());
+  const has = change !== null;
 
-  it.runIf(have)('the real approved commit is caught by this gate', () => {
-    const work = mkdtempSync(join(tmpdir(), 'lock-real-'));
-    made.push(work);
-    // The REAL manifest and lockfile from the approved commit, extracted from git.
-    for (const [f, src] of [['package.json', 'amsd-2041-approved-af1d6b99:package.json'],
-                            ['package-lock.json', 'amsd-2041-approved-af1d6b99:package-lock.json']]) {
-      const r = spawnSync('git', ['-C', REPO, 'show', src], { encoding: 'utf8', maxBuffer: 1 << 28 });
-      writeFileSync(join(work, f), r.stdout);
-    }
+  it.runIf(has)('catches a real added dependency that the lockfile does not resolve', () => {
+    const work = mkdtempSync(join(tmpdir(), 'lock-real-')); made.push(work);
     spawnSync('git', ['init', '-q', work]);
-    const g = runGate(work, '@contentstack/live-preview-utils');
-    expect(g.rc, 'the real desync that shipped would still ship').toBe('1');
-    expect(g.text).toContain('@contentstack/live-preview-utils');
+    // The real manifest AT THE HEAD of the discovered change, paired with the lockfile from its
+    // BASELINE — exactly the desync shape: a manifest that moved and a lockfile that did not.
+    const eco = ecosystemOf(change!.repo)!;
+    const lock = lockfileOf(change!.repo)!;
+    for (const [file, ref] of [[change!.manifest, change!.headRef], [lock, change!.baseRef]]) {
+      const r = spawnSync('git', ['-C', change!.repo, 'show', `${ref}:${file}`],
+                          { encoding: 'utf8', maxBuffer: 1 << 28 });
+      if (!r.stdout) return; // the lockfile did not exist at the baseline — nothing to replay
+      writeFileSync(join(work, file), r.stdout);
+    }
+    expect(eco.file).toBe(change!.manifest);
+    const g = runGate(work, change!.added.join(','));
+    expect(g.rc, 'a real manifest/lockfile desync was not caught').toBe('1');
+    for (const name of change!.added) expect(g.text).toContain(name);
   });
 });

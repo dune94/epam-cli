@@ -8945,10 +8945,15 @@ step_emit "23"  "skip" "Step 23: Browser E2E" "SKIP_TESTING_GATES=true"
     {
         # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
         local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-sast-sentinel-vals-XXXXXX.json")
+        # The rule vocabulary comes from the one declaration the gate also reads, so the prompt
+        # cannot ask for a name the gate does not recognise (config/sast-vocabulary.json).
+        local _dep_cve_prefix
+        _dep_cve_prefix=$(jq -r '.dependencyCveRulePrefix // ""' "$AUTOMATION_DIR/config/sast-vocabulary.json" 2>/dev/null)
         jq_vals --arg gate_scope "$(_brownfield_gate_scope sast-sentinel)" \
               --arg phase_id "$phase_id" \
               --arg project_root "$PROJECT_ROOT" \
-              '{"__GATE_SCOPE__":$gate_scope,"__PHASE_ID__":$phase_id,"__PROJECT_ROOT__":$project_root}' > "$_qa_vals" 2>/dev/null
+              --arg dependency_cve_rule_prefix "$_dep_cve_prefix" \
+              '{"__GATE_SCOPE__":$gate_scope,"__PHASE_ID__":$phase_id,"__PROJECT_ROOT__":$project_root,"__DEPENDENCY_CVE_RULE_PREFIX__":$dependency_cve_rule_prefix}' > "$_qa_vals" 2>/dev/null
         local sast_prompt
         if ! sast_prompt=$(render_engine_prompt qa-sast-sentinel "$_qa_vals"); then
             error "  [sast-sentinel] cannot render its prompt — refusing to gate with no instructions" >&2

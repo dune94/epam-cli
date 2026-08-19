@@ -5155,11 +5155,28 @@ run_repo_lint_verification() {
             _files+=("$_f")
         done <<< "$_changed"
     fi
-    [ ${#_files[@]} -eq 0 ] && return 0
+    # Same principle as the pass below: a run that examined NOTHING must not read as a clean lint.
+    # Changed files existed, but none survived the project's own `eslint --print-config` filter.
+    if [ ${#_files[@]} -eq 0 ]; then
+        log "  [repo-lint] $story_id: no changed file is covered by this project's eslint config — nothing was linted"
+        return 0
+    fi
 
     local _lint_output _lint_exit=0
     _lint_output=$(cd "$PROJECT_ROOT" && "$_eslint_bin" "${_files[@]}" 2>&1) || _lint_exit=$?
-    [ "$_lint_exit" -eq 0 ] && return 0
+    # A PASS SAYS SO. The three absent-check exits above were made loud under the comment "AN
+    # ABSENT CHECK IS NOT A PASS" — and this, the PASS itself, was left silent. So of the gate's
+    # outcomes only two of three were legible: failure loud, absence loud, success mute. A run
+    # where lint passed produced ZERO repo-lint lines and was therefore indistinguishable from a
+    # run where the gate never executed.
+    #
+    # Live 2026-08-19: a whole metrolinx writer run emitted no repo-lint output. It was read as
+    # "the gate never ran", which produced a false suppression hypothesis, hours of investigation,
+    # and an open defect reported to the operator that did not exist. Lint had run and passed.
+    if [ "$_lint_exit" -eq 0 ]; then
+        success "  [repo-lint] $story_id: the repository's own lint accepts ${#_files[@]} changed file(s)"
+        return 0
+    fi
 
     error "  [repo-lint] $story_id: the repository's own eslint rejects ${#_files[@]} changed file(s) —"
     error "  [repo-lint]   the pre-commit hook will refuse this commit and lint-staged will REVERT the work."

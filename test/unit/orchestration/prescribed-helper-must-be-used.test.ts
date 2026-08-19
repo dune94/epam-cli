@@ -101,6 +101,11 @@ function run(fx: { repo: string; logDir: string; prd: string }) {
     'warning() { echo "WARNING: $*"; }',
     'error()   { echo "ERROR: $*"; }',
     'success() { echo "SUCCESS: $*"; }',
+    // All three, not just the gate: it delegates to _change_duplicates_owned_format, and an
+    // unlifted dependency is command-not-found (127) — non-zero — so every helper reads as
+    // "missing" and the suite silently tests the wrong thing.
+    extractFunctionBody('_helper_module_separators'),
+    extractFunctionBody('_change_duplicates_owned_format'),
     extractFunctionBody('verify_prescribed_helper_used'),
     'verify_prescribed_helper_used "S-1"',
     'echo "RC=$?"',
@@ -133,10 +138,14 @@ describe('a prescribed, existing helper must appear in the change', () => {
     //
     // It must still SAY the helper is unused — that information is worth having — and decide
     // nothing.
-    expect(out, 'the advisory must still name the unused helper').toMatch(/getDispatchLineItemKey/);
-    expect(rc, 'a veto here rejects working code and suppresses the lint gate').toBe(0);
-    expect(flag, 'setting the deterministic-failure flag makes this a veto again').toBe(0);
-    expect(key, 'a rejection key escalates the ladder — that is deciding, not advising').toBe('');
+    // The fixture reproduces run-5 exactly: keys.ts declares DIVIDER='#' and the change invents
+    // '-'. That is DUPLICATION of a format the helper owns, so it must be rejected — this is the
+    // defect the gate exists for. Absence alone is NOT rejected; see the sibling test below and
+    // helper-gate-judged-by-real-diffs.test.ts, which replays gotransit's shipped code.
+    expect(out, 'the rejection must name the helper that owns the format').toMatch(/getDispatchLineItemKey/);
+    expect(rc, 'the hand-rolled separator went unchallenged').toBe(1);
+    expect(flag, 'a retryable finding must reach the next attempt').toBe(1);
+    expect(key, 'no rejection key — an identical repeat cannot escalate').toMatch(/helper-duplication/);
   });
 
   it('accepts a change that uses the helper', () => {
@@ -200,6 +209,11 @@ describe('a prescribed, existing helper must appear in the change', () => {
       'warning() { echo "WARNING: $*"; }',
       'error()   { echo "ERROR: $*"; }',
       'success() { echo "SUCCESS: $*"; }',
+      // All three, not just the gate: it delegates to _change_duplicates_owned_format, and an
+      // unlifted dependency is command-not-found (127) — non-zero — so every helper reads as
+      // "missing" and the suite silently tests the wrong thing.
+      extractFunctionBody('_helper_module_separators'),
+      extractFunctionBody('_change_duplicates_owned_format'),
       extractFunctionBody('verify_prescribed_helper_used'),
       'verify_prescribed_helper_used "S-1"',
       'echo "RC=$?"',

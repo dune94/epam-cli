@@ -98,6 +98,8 @@ function runGuard(helpers: string[], used: string[]) {
      # an early return. Confirmed by hand 2026-08-19.
      _resolved_baseline_ref() { echo "origin/develop"; }
      is_truthy() { case "\${1:-}" in true|1|yes) return 0 ;; *) return 1 ;; esac; }
+${lift('_helper_module_separators')}
+${lift('_change_duplicates_owned_format')}
 ${lift('verify_prescribed_helper_used')}
      verify_prescribed_helper_used S1; echo "RC=$?"
      echo "FLAG=\${DETERMINISTIC_CHECK_FAILURE:-0}"
@@ -119,106 +121,56 @@ ${lift('verify_prescribed_helper_used')}
  */
 const FOUR = ['helperAlpha', 'helperBeta', 'helperGamma', 'helperDelta'];
 
-describe('the fixture reproduces the live shape', () => {
-  it('four verified helpers, all existing in the repo', () => {
-    const { prd } = fixture(FOUR, ['options']);
-    const sites = JSON.parse(readFileSync(prd, 'utf8')).stories[0].fixSiteAnalysis;
-    expect(sites).toHaveLength(4);
-    expect(sites.every((s: { fixVerified: boolean }) => s.fixVerified)).toBe(true);
+// WHAT THIS SUITE CAN AND CANNOT PROVE.
+//
+// Every fixture here declares a helper in a module that owns NO format
+// (`export const helperX = (x: string) => x;` — no separator literal). Under the rule adopted
+// 2026-08-19 the gate keys on DUPLICATION, not absence: a change that does not re-create a format
+// the helper owns is not a finding, so these fixtures can only ever demonstrate the NEGATIVE case.
+//
+// That is exactly what they are kept for. The gate's history is a history of false positives —
+// it rejected gotransit's shipped AMSD-2041 (e780a8b7, 9 files, +379) and halted a live codeline
+// on 2026-08-19 — so a suite that pins "no rejection without duplication" is guarding the failure
+// mode that actually occurred.
+//
+// The POSITIVE case cannot be proved here, and is deliberately not attempted: it is replayed
+// against the real repository and the real owning module in
+// helper-gate-judged-by-real-diffs.test.ts, which is the authority for this gate.
+describe('a helper that owns no format is never a finding', () => {
+  it('the fixture genuinely declares no separator — else this suite proves nothing', () => {
+    const { dir } = fixture(FOUR, ['options']);
+    const src = readFileSync(join(dir, 'src', `${FOUR[0]}.ts`), 'utf8');
+    expect(src, 'fixture drift: the helper module now owns a literal').not.toMatch(/=\s*['"][^a-zA-Z0-9 ]{1,3}['"]/);
   });
-});
 
-// ADVISORY SINCE 2026-08-19. The requirement is no longer "reject", it is "report EVERY unused
-// verified helper and decide nothing". Checking all of them still matters — reporting only the
-// first would tell the writer a third of what the spec asked for — but the verdict must not be a
-// veto: gotransit shipped this ticket successfully without two of metrolinx's verified helpers,
-// and the veto additionally short-circuited the repo's own lint gate via invoke_success=false.
-describe('every verified helper is REPORTED, not just the first', () => {
-  it('using ONLY the first helper reports the other three — the exact live case', () => {
+  it('using only one of four verified helpers is NOT rejected', () => {
     const r = runGuard(FOUR, ['options']);
-    // The original defect: it checked .[0].helper only, so satisfying one verified site silenced
-    // it for the other three and the story shipped 1 of 4 fix sites reported complete.
-    for (const h of FOUR.slice(1)) {
-      expect(r.out, `${h} unreported — the writer cannot know the spec asked for it`).toMatch(h);
-    }
-    expect(r.rc, 'advisory: it must not fail the attempt').toBe(0);
-    expect(r.flag, 'advisory: it must not set the deterministic-failure flag').toBe(0);
+    expect(r.rc, 'absence alone rejected the change — this is what rejected gotransit').toBe(0);
+    expect(r.flag, 'absence alone set the failure flag').toBe(0);
+    expect(r.vf, 'absence alone entered the retry-rejection channel').toBe('');
   });
 
-  it.each([1, 2, 3])('using only helper #%i of four still reports the rest', (i) => {
+  it.each([1, 2, 3])('using only helper #%i of four is NOT rejected either', (i) => {
     const r = runGuard(FOUR, [FOUR[i]]);
     expect(r.rc).toBe(0);
     expect(r.flag).toBe(0);
-    expect(r.out, 'nothing was reported').toMatch(/ADVISORY|advisor/i);
   });
 
-  it('using three of four still reports the fourth, and still does not reject', () => {
-    const r = runGuard(FOUR, FOUR.slice(0, 3));
-    expect(r.out, 'the one missing helper was not named').toMatch(FOUR[3]);
-    expect(r.rc).toBe(0);
+  it('using three of four is NOT rejected', () => {
+    expect(runGuard(FOUR, FOUR.slice(0, 3)).rc).toBe(0);
   });
 
-  it('the message names the helpers that are MISSING, not just one', () => {
-    const { out } = runGuard(FOUR, ['options']);
-    for (const h of FOUR.slice(1)) {
-      expect(out, `${h} was never mentioned, so the writer cannot know the spec asked for it`).toMatch(h);
-    }
-  });
-
-  it('and does not demand the one already used', () => {
-    const { vf } = runGuard(FOUR, ['options']);
-    const missingSection = vf.slice(vf.search(/missing|not appear|MUST/i));
-    expect(missingSection).not.toMatch(/\boptions\b(?![a-zA-Z])/);
-  });
-});
-
-describe('it does not over-reject', () => {
-  it('using ALL four passes', () => {
+  it('using ALL four is NOT rejected', () => {
     expect(runGuard(FOUR, FOUR).rc).toBe(0);
   });
 
-  it('a single verified helper, used, still passes — the original case is intact', () => {
-    expect(runGuard(['options'], ['options']).rc).toBe(0);
-  });
-
-  it('a single verified helper, NOT used, is REPORTED and not rejected', () => {
-    const r = runGuard(['helperAlpha'], []);
-    expect(r.out, 'the unused helper was not named').toMatch('helperAlpha');
-    expect(r.rc, 'advisory: a single unused helper must not fail the attempt').toBe(0);
-    expect(r.flag, 'advisory: it must not set the deterministic-failure flag').toBe(0);
-  });
-
-  it('an UNVERIFIED site is not required', () => {
-    // fixVerified:false means the spec guessed. Demanding it would fail stories for a candidate.
-    const { dir, prd } = fixture(['options'], ['options']);
-    const cfg = JSON.parse(readFileSync(prd, 'utf8'));
-    cfg.stories[0].fixSiteAnalysis.push({ file: 'src/guess.ts', helper: 'speculative', fixVerified: false });
-    writeFileSync(prd, JSON.stringify(cfg));
-    const out = execFileSync('bash', ['-c',
-      `set +e
-       EPAM_BROWNFIELD=1 PROJECT_ROOT=${JSON.stringify(dir)}
-       MAIN_PRD_FILE=${JSON.stringify(prd)} PRD_FILE=${JSON.stringify(prd)} LOG_DIR=${JSON.stringify(dir)}
-       VERIFICATION_FAILURE="" DETERMINISTIC_CHECK_FAILURE=0
-       warning() { :; }; error() { :; }; log() { :; }; info() { :; }; success() { :; }
-       is_truthy() { return 1; }
-${lift('verify_prescribed_helper_used')}
-       verify_prescribed_helper_used S1; echo "RC=$?"`,
-    ], { encoding: 'utf8' });
-    expect(Number((out.match(/RC=(\d+)/) || [])[1])).toBe(0);
+  it('a single verified helper, unused, is NOT rejected', () => {
+    const r = runGuard([FOUR[0]], []);
+    expect(r.rc).toBe(0);
+    expect(r.flag).toBe(0);
   });
 
   it('no verified helpers at all is a no-op', () => {
     expect(runGuard([], []).rc).toBe(0);
-  });
-});
-
-// The advisory must still REACH a human, but it must not enter the retry-routing channel:
-// DETERMINISTIC_CHECK_FAILURE is what turns text into a veto delivered to the next attempt.
-describe('the advisory informs without entering the rejection channel', () => {
-    it('reports the helper but sets no routing flag', () => {
-    const r = runGuard(FOUR, ['options']);
-    expect(r.out, 'nothing was reported to the operator').toMatch(/WARN|ADVISORY/i);
-    expect(r.flag, 'the routing flag makes this a veto again').toBe(0);
-    expect(r.vf, 'VERIFICATION_FAILURE is the veto channel — it must stay empty').toBe('');
   });
 });

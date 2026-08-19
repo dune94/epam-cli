@@ -1093,6 +1093,60 @@ _coupled_pair_gate_for_story() {
 #
 # Same filter as the write-time guard, deliberately — one definition of "required helper".
 # No symbol, path or project vocabulary appears here.
+# ── Does the change DUPLICATE a format the prescribed helper already owns? ───────────────────
+#
+# Helper-ABSENCE was the wrong signal. It holds only for defect stories, where the prescribed
+# helper sits on the changed line by construction (mock3 MOCK3-1: the fix IS `age >= 65` on the
+# line returning CONCESSION_FARE_CENTS, so the helper cannot be absent). For a feature it is a
+# design choice: gotransit SHIPPED AMSD-2041 working, 9 files, with ContentstackFactory and
+# getSinglePageEntry absent — and the absence rule rejects that.
+#
+# The 2026-07-26 defect was never about absence. It was DUPLICATION: the change hand-rolled a
+# format the repository already parses — `startsWith(id + '-')` while
+# dispatch-line-item-key.ts declares `const DIVIDER = '#'`. So the fix could never match.
+#
+# The rule: if the helper's own module declares a separator-like literal, and the change performs
+# format surgery with a DIFFERENT one, the change is re-creating knowledge the helper owns.
+# Absence alone proves nothing and is never rejected.
+
+# _helper_module_separators <repo> <helper> — separator-like literals declared by the module that
+# defines <helper>. Empty when the helper owns no format, which is why a feature helper like
+# ContentstackFactory (zero such literals) can never trigger a rejection.
+_helper_module_separators() {
+    local _repo="$1" _helper="$2" _mod
+    _mod=$(grep -rlE "(export +)?(function|const|class|let) +${_helper}\b" "$_repo/src" 2>/dev/null | head -1)
+    [ -n "$_mod" ] || return 0
+    grep -oE "(const|let|var) +[A-Za-z_][A-Za-z0-9_]* *= *'[^a-zA-Z0-9 ]{1,3}'|(const|let|var) +[A-Za-z_][A-Za-z0-9_]* *= *\"[^a-zA-Z0-9 ]{1,3}\"" "$_mod" 2>/dev/null \
+        | grep -oE "'[^']{1,3}'|\"[^\"]{1,3}\"" | tr -d "\"'" | sort -u
+}
+
+# _change_duplicates_owned_format <repo> <helper> <diff>
+# 1 when the change invents its own separator for a format the helper owns. 0 otherwise.
+_change_duplicates_owned_format() {
+    local _repo="$1" _helper="$2" _diff="$3"
+    # Already uses the helper — nothing is being re-created.
+    printf '%s' "$_diff" | grep -q -- "$_helper" && return 0
+    local _owned; _owned=$(_helper_module_separators "$_repo" "$_helper")
+    [ -n "$_owned" ] || return 0          # the helper owns no format: absence proves nothing
+    # Separator-like literals the ADDED lines introduce inside format surgery: concatenation, or a
+    # prefix/suffix/split/replace comparison. A literal in an import or a message is not surgery.
+    local _used
+    _used=$(printf '%s\n' "$_diff" | grep '^+' | grep -v '^+++' \
+        | grep -oE "(\+ *'[^a-zA-Z0-9 ]{1,3}'|\+ *\"[^a-zA-Z0-9 ]{1,3}\"|(startsWith|endsWith|split|replace|includes)\( *'[^a-zA-Z0-9 ]{1,3}'|(startsWith|endsWith|split|replace|includes)\( *\"[^a-zA-Z0-9 ]{1,3}\")" \
+        | grep -oE "'[^']{1,3}'|\"[^\"]{1,3}\"" | tr -d "\"'" | sort -u)
+    [ -n "$_used" ] || return 0
+    local _u _o
+    while IFS= read -r _u; do
+        [ -n "$_u" ] || continue
+        while IFS= read -r _o; do
+            [ -n "$_o" ] || continue
+            [ "$_u" = "$_o" ] && continue           # same separator: not a duplication
+            return 1
+        done <<< "$_owned"
+    done <<< "$_used"
+    return 0
+}
+
 _committed_change_uses_helpers() {
     local story_id="$1"
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
@@ -1119,7 +1173,18 @@ _committed_change_uses_helpers() {
     local _missing=() _h
     while IFS= read -r _h; do
         [ -n "$_h" ] || continue
-        printf '%s' "$_diff" | grep -q -- "$_h" || _missing+=("$_h")
+        # ABSENCE IS NOT THE SIGNAL — DUPLICATION IS. This demanded every fixVerified helper
+        # appear in the committed diff. That premise holds only for a DEFECT, where the helper
+        # sits on the changed line by construction (mock3 MOCK3-1: the fix IS `age >= 65` on the
+        # line returning CONCESSION_FARE_CENTS). For a FEATURE it is a design choice and it
+        # rejects working code: gotransit SHIPPED AMSD-2041 (e780a8b7, 9 files, +379) with
+        # ContentstackFactory and getSinglePageEntry absent. Live 2026-08-19 this failed a story
+        # whose commit succeeded and whose type check passed, and halted the codeline.
+        #
+        # The 2026-07-26 defect was never absence: it hand-rolled a format the repo already
+        # parses — startsWith(id + '-') while dispatch-line-item-key.ts declares DIVIDER='#'.
+        # A helper whose module owns no format can never trigger a rejection.
+        _change_duplicates_owned_format "$PROJECT_ROOT" "$_h" "$_diff" || _missing+=("$_h")
     done <<< "$_helpers"
     [ ${#_missing[@]} -eq 0 ] && return 0
 
@@ -3069,10 +3134,13 @@ verify_prescribed_helper_used() {
     # Collect every verified helper the change does NOT use. Reporting only the first would
     # make the writer fix them one attempt at a time, which is the retry ladder spent on
     # information the guard already had.
+    # Duplication, not absence — see _change_duplicates_owned_format. A helper whose module owns
+    # no format can never trigger a rejection, so a feature that legitimately does not need it
+    # passes, while a change that re-creates a format the helper owns is still caught.
     local _missing=() _h
     while IFS= read -r _h; do
         [ -n "$_h" ] || continue
-        printf '%s' "$_diff" | grep -q -- "$_h" || _missing+=("$_h")
+        _change_duplicates_owned_format "$PROJECT_ROOT" "$_h" "$_diff" || _missing+=("$_h")
     done <<< "$_helpers"
     [ ${#_missing[@]} -eq 0 ] && return 0
     local _helper="${_missing[0]}"
@@ -3087,33 +3155,25 @@ verify_prescribed_helper_used() {
             _note=" [attempt $((retry_count + 1))/$((MAX_RETRIES + 1)) — no retries remain]"
         fi
     fi
-    # ── ADVISORY ONLY. THIS GATE BLOCKED WORKING CODE. ───────────────────────────
+    # IT BLOCKS AGAIN, ON A SIGNAL THAT CANNOT REJECT WORKING CODE.
     #
-    # It vetoed any change where a helper the spec marked fixVerified:true was absent from the
-    # diff. Proven against run artefacts, not fixtures: gotransit shipped AMSD-2041 successfully
-    # on 2026-08-13 (e780a8b7, 9 files, +379) and that implementation contains ZERO occurrences of
-    # ContentstackFactory and getSinglePageEntry — two helpers metrolinx's prd.json marks verified
-    # for the SAME ticket. Judged by that prescription, the working implementation is rejected on
-    # 2 of 5 helpers.
+    # It used to veto on helper ABSENCE. Proven against run artefacts: gotransit shipped
+    # AMSD-2041 (e780a8b7, 9 files, +379) with two of metrolinx's fixVerified helpers absent, so
+    # absence rejects working code — and each false rejection cost a whole writer attempt
+    # (7.3M tokens, $2.25) before escalating the ladder to ask for something worse.
     #
-    # A veto that can reject a correct implementation is not neutral. Each false rejection costs a
-    # whole writer attempt — measured 2026-08-19: 7.3M input tokens, $2.25, eleven minutes — and
-    # then escalates the ladder to ask a stronger model to produce something worse. Live metrolinx
-    # spent three ladder cycles on exactly this before committing.
-    #
-    # THE SIGNAL WAS WRONG, not merely too strict. The 2026-07-26 defect this was built for was a
-    # change that HAND-ROLLED A FORMAT the repository already parses — startsWith(id + '-') where
-    # DIVIDER is '#'. Helper-absence only correlated with that on one example. Generalising the
-    # correlation into a rule made every alternative implementation indistinguishable from the
-    # defect. And fixVerified:true is the detective's JUDGEMENT, not a fact — it was treated here
-    # as ground truth.
-    #
-    # It informs now and decides nothing: no DETERMINISTIC_CHECK_FAILURE, no VERIFICATION_FAILURE,
-    # no STORY_REJECTION_KEY, exit 0. Restoring any blocking power requires evidence from REAL RUN
-    # DIFFS — accepting gotransit's shipped implementation AND rejecting the 2026-07-26
-    # hand-rolled-separator change — not from fixtures written against the assumption under test.
-    warning "Story $story_id: ADVISORY — the spec marked ${#_missing[@]} helper(s) verified that this change does not use: ${_missing_list}. Not a rejection: the spec's fixVerified flag is a judgement, and a working implementation may legitimately not need them."
-    return 0
+    # The 2026-07-26 defect it exists for was DUPLICATION: startsWith(id + '-') while
+    # dispatch-line-item-key.ts declares DIVIDER='#', so the fix could never match. That is what
+    # is checked now. mock3's defect fixes still pass (the helper is on the changed line by
+    # construction); gotransit's feature still passes (its helper module owns no format).
+    STORY_REJECTION_KEY="helper-duplication:${_helper}"
+    DETERMINISTIC_CHECK_FAILURE=1
+    export DETERMINISTIC_CHECK_FAILURE
+    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\n%d prescribed helper(s) OWN a format your change re-creates with its own literal: %s\n\nThe repository already parses this format. Hand-rolling it is how a fix comes to match on the wrong separator and silently never work. Import and use the helper instead of inventing the format.\n' "${#_missing[@]}" "$_missing_list")
+    # WARNING, not ERROR: this is a RETRYABLE verdict and the writer gets another attempt. An
+    # existing test asserts this, because an ERROR line reads as a dead run to anyone watching.
+    warning "Story $story_id: the change re-creates a format owned by ${_missing_list} — import the helper rather than inventing the separator (${_helper} owns it; hand-rolling is how a fix matches on the wrong separator and silently never works)"
+    return 1
 }
 
 # Resolve a DECLARED deliverable to a real file.

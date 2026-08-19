@@ -9242,7 +9242,30 @@ $spec_prompt"
         # Trust blockerCount from the oracle-injected evidence, not the LLM's self-reported verdict
         # field — the LLM defaults to "fail" when it can't run tools, even with 0 blockers.
         local _sast_blockers
-        _sast_blockers=$(python3 "$SCRIPT_DIR/lib/handlers/sast-blockers.py" "$sast_log" 2>/dev/null || echo "-1")
+        # WHICH DEPENDENCIES DID THIS STORY ADD?
+        #
+        # On brownfield the blocker counter treats a dependency CVE the story did not introduce as
+        # advisory — pre-existing repository debt is not a defect in the work under review, and no
+        # writer output can change `npm audit`. It still blocks for a package the story ADDS. That
+        # distinction needs the manifest delta, computed here from the phase baseline: every
+        # dependency line the change ADDS, name only.
+        local _introduced_deps=""
+        if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -n "${PROJECT_ROOT:-}" ]; then
+            local _dep_ref=""
+            [ -f "${LOG_DIR:-}/phase-baseline-sha.txt" ] && \
+                _dep_ref=$(tr -d '[:space:]' < "$LOG_DIR/phase-baseline-sha.txt" 2>/dev/null)
+            [ -n "$_dep_ref" ] || _dep_ref="$(_resolved_baseline_ref 2>/dev/null || echo '')"
+            if [ -n "$_dep_ref" ] && git -C "$PROJECT_ROOT" rev-parse --verify "$_dep_ref" >/dev/null 2>&1; then
+                _introduced_deps=$(git -C "$PROJECT_ROOT" diff "$_dep_ref" -- package.json 2>/dev/null \
+                    | grep '^+' | grep -v '^+++' \
+                    | grep -oE '"[@A-Za-z0-9._/-]+" *:' \
+                    | tr -d '":' | tr -d ' ' | sort -u | paste -sd, -)
+            fi
+            [ -n "$_introduced_deps" ] && \
+                log "  [sast] dependencies introduced by this story: ${_introduced_deps}"
+        fi
+        _sast_blockers=$(EPAM_STORY_INTRODUCED_DEPS="$_introduced_deps" \
+            python3 "$SCRIPT_DIR/lib/handlers/sast-blockers.py" "$sast_log" 2>/dev/null || echo "-1")
         if [ "$_sast_blockers" = "-1" ]; then
             # Fallback: no parseable JSON — check raw verdict string
             if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$sast_log" 2>/dev/null; then

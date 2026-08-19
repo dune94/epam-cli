@@ -60,6 +60,7 @@ export default defineConfig({
       'test/unit/orchestration/helper-gate-judged-by-real-diffs.test.ts',
       'test/unit/orchestration/halt-claimed-exhaustion-that-never-happened.test.ts',
       'test/unit/orchestration/a-passing-lint-run-was-silent.test.ts',
+      'test/unit/orchestration/brownfield-cve-hard-stopped-on-existing-debt.test.ts',
 
       'test/unit/orchestration/a-reviewer-nobody-invoked.test.ts',
       // Prompt/tool contracts — prompts that instruct calls the tool refuses.

@@ -112,6 +112,31 @@ _parse_failing_test_files() {
         | sort -u
 }
 
+# _halt_recovery_state <story_id> — report the recovery state ACTUALLY observed for this story.
+#
+# The halt used to assert "failed after its retries and self-heal completed" and "recovery is
+# exhausted" unconditionally. Live metrolinx AMSD-2041, 2026-08-19: a gate failed one story at
+# attempt 2 of 12, the ladder had not left its first rung, and the writer was mid-way through
+# addressing the reviewer's findings — and the run reported exhaustion. That message is the
+# evidence an operator reads when deciding whether to retry, and it said the opposite of the truth.
+#
+# HALTING IS STILL THE MANDATE: let recovery run, then stop. What must not happen is CLAIMING
+# exhaustion without checking. story_ladder_exhausted() already existed and was already used
+# elsewhere in this file; the halt simply never asked it.
+_halt_recovery_state() {
+    local _story="${1:-}"
+    local _used _max="${MAX_RETRIES:-11}"
+    _used="$(read_story_retry_count "${LOG_DIR:-}" "$_story" 2>/dev/null || echo 0)"
+    case "$_used" in (''|*[!0-9]*) _used=0 ;; esac
+    if story_ladder_exhausted "${LOG_DIR:-}" "$_story" "$_max" 2>/dev/null; then
+        error "[orch]   recovery is exhausted for '${_story}' — ${_used} of $((_max + 1)) attempt(s) used and the model ladder reached its top rung."
+        error "[orch]   Another lane would reproduce the same failure at full ladder price."
+    else
+        error "[orch]   recovery was NOT exhausted for '${_story}': ${_used} of $((_max + 1)) attempt(s) used, ladder still below its top rung."
+        error "[orch]   The story failed on a gate verdict, not on running out of attempts — read the last gate message before assuming the work cannot converge."
+    fi
+}
+
 _run_project_verification() {
     local _root="${1:-$PROJECT_ROOT}"
     local _auto="${AUTOMATION_DIR:-$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")}"
@@ -3839,9 +3864,9 @@ KNOWNFIXES_EOF
     # run died. Nothing is guessed about WHY it failed: a lane that reached here
     # exhausted every recovery the pipeline has.
     if [ "$_cl_failed" = "1" ]; then
-      error "[orch] HALT: codeline '${_cl}' failed after its retries and self-heal completed."
-      error "[orch]   Not starting the remaining codeline(s) — recovery is exhausted, so"
-      error "[orch]   another lane would reproduce the same failure at full ladder price."
+      error "[orch] HALT: codeline '${_cl}' failed."
+      _halt_recovery_state "${_cl_failed_story:-}"
+      error "[orch]   Not starting the remaining codeline(s)."
       break
     fi
   done
@@ -6355,10 +6380,11 @@ if [ -n "$main_stories" ]; then
             record_story_actual_cost "$story" "$LOG_DIR/main-${story}.log"
             if [ "$_story_exit" -ne 0 ]; then
                 _phase_story_failures=$((_phase_story_failures+1))
+                _phase_failed_stories="${_phase_failed_stories:-} $story"
                 "$SCRIPT_DIR/update-monitor.sh" story_fail "$story" "main" "exit $_story_exit" 2>/dev/null || true
             else
                 # Story reported success — verify TypeScript still compiles before moving on
-                story_tsc_gate "$story" || _phase_story_failures=$((_phase_story_failures+1))
+                story_tsc_gate "$story" || { _phase_story_failures=$((_phase_story_failures+1)); _phase_failed_stories="${_phase_failed_stories:-} $story"; }
                 "$SCRIPT_DIR/update-monitor.sh" story_complete "$story" "main" "" "${STORY_MODEL:-}" "${STORY_PROVIDER:-}" 2>/dev/null || true
             fi
             checkpoint_complete "$story"
@@ -6366,6 +6392,7 @@ if [ -n "$main_stories" ]; then
             validate_mid_execution_splits "$PHASE"
         }
         _phase_story_failures=0
+        _phase_failed_stories=""
         while IFS= read -r story; do
             [ -z "$story" ] && continue
             _run_one_main_story "$story"
@@ -6406,6 +6433,14 @@ if [ -n "$main_stories" ]; then
         if [ "$_phase_story_failures" -gt 0 ]; then
             step_emit "8" "fail" "Step 8: Main-branch stories"
             error "Phase '$PHASE': $_phase_story_failures story/stories failed — aborting phase"
+            # WHY it failed, not just that it did. Aborting is correct — the mandate is let
+            # recovery run, then halt — but a bare count cannot distinguish "the ladder is spent"
+            # from "a gate returned a verdict on attempt 2 of 12". Live metrolinx 2026-08-19 was
+            # the latter and was reported as the former, which is what stopped a converging run.
+            for _psf in $_phase_failed_stories; do
+                [ -n "$_psf" ] || continue
+                _halt_recovery_state "$_psf"
+            done
             exit 1
         fi
         step_emit "8" "pass" "Step 8: Main-branch stories"

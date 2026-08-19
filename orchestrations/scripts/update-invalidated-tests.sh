@@ -31,6 +31,11 @@ set -uo pipefail
 
 STORY_ID="${1:?Usage: update-invalidated-tests.sh <story_id>}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# jq_vals — prompt values files whose content never becomes an argv entry.
+# Placed with the other library sources, NOT beside SCRIPT_DIR: the path-resolution
+# block is lifted verbatim by tests that build a minimal script tree, and a source
+# line inside it makes those probes fail on a library they have no reason to carry.
+source "$SCRIPT_DIR/lib/jq-vals.sh"
 
 # THIS SEAM ASKS FOR ITS LADDER.
 #
@@ -133,7 +138,7 @@ fi
 # in the one place no prompt review reaches. Values through a FILE, never argv — the diff and the
 # suite output are both unbounded and argv is capped at ARG_MAX.
 _uit_vals=$(mktemp "${TMPDIR:-/tmp}/uit-vals-XXXXXX.json")
-jq -n --arg pre "${_preexisting:-(none)}" \
+jq_vals --arg pre "${_preexisting:-(none)}" \
       --arg vcs "$STORY_VERIFICATION_CRITERIA" \
       --arg diff "${_fix_diff:-(unavailable)}" \
       --arg out "$(printf '%s' "$_out")" \

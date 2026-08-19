@@ -114,6 +114,11 @@ if [ -z "$(printf '%s' "$TEST_OWNERSHIP_BLOCK" | tr -d '[:space:]')" ]; then
 fi
 source "$SCRIPT_DIR/lib/project-tools.sh"
 source "$SCRIPT_DIR/lib/story-retry-state.sh"
+# jq_vals — prompt values files whose content never becomes an argv entry.
+# Placed with the other library sources, NOT beside SCRIPT_DIR: the path-resolution
+# block is lifted verbatim by tests that build a minimal script tree, and a source
+# line inside it makes those probes fail on a library they have no reason to carry.
+source "$SCRIPT_DIR/lib/jq-vals.sh"
 # THE SEAM DECIDES. seam_ladder_export (above) sets EPAM_MODEL to the first rung of the chain this
 # seam's ARCHETYPE declares. The literal that stood here overrode that silently — the reviewer asked
 # for its tier and then ignored the answer, so the declaration selected nothing. An operator value
@@ -573,7 +578,7 @@ while IFS= read -r story_id; do
     # a process substitution with nested quoting, and bash expanded $profile before jq ever saw
     # it: "line 571: profile: unbound variable". This is the same shape the analyst render uses.
     _review_vals=$(mktemp)
-    jq -n \
+    jq_vals \
         --arg profile "${REVIEW_PROFILE:-}" \
         --arg blocker "${BLOCKER_DISCIPLINE_BLOCK:-}" \
         --arg ownership "${TEST_OWNERSHIP_BLOCK:-}" \

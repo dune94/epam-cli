@@ -51,6 +51,11 @@ fi
 command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "tc-writer"
 
 source "$SCRIPT_DIR/lib/flags.sh"
+# jq_vals — prompt values files whose content never becomes an argv entry.
+# Placed with the other library sources, NOT beside SCRIPT_DIR: the path-resolution
+# block is lifted verbatim by tests that build a minimal script tree, and a source
+# line inside it makes those probes fail on a library they have no reason to carry.
+source "$SCRIPT_DIR/lib/jq-vals.sh"
 
 # Files this run PRODUCED supersede the files it DECLARED.
 #
@@ -144,7 +149,7 @@ STORY_CONTEXT=$(python3 "$SCRIPT_DIR/lib/handlers/tc-story-context.py" "$OUTPUT_
 
 # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
 _tpl_vals=$(mktemp "${TMPDIR:-/tmp}/tc-writer-vals-XXXXXX.json")
-jq -n --arg story_context "$STORY_CONTEXT" \
+jq_vals --arg story_context "$STORY_CONTEXT" \
       --arg tc_out_file "$TC_OUT_FILE" \
       --arg tc_writer_profile "$TC_WRITER_PROFILE" \
       '{"__STORY_CONTEXT__":$story_context,"__TC_OUT_FILE__":$tc_out_file,"__TC_WRITER_PROFILE__":$tc_writer_profile}' > "$_tpl_vals" 2>/dev/null

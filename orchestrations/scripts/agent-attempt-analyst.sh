@@ -36,6 +36,11 @@ FAILURE_CLASS="${1:-}"
 FAILED_OUTPUT_FILE="${2:-/dev/null}"
 CONTEXT_FILE="${3:-/dev/null}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# jq_vals — prompt values files whose content never becomes an argv entry.
+# Placed with the other library sources, NOT beside SCRIPT_DIR: the path-resolution
+# block is lifted verbatim by tests that build a minimal script tree, and a source
+# line inside it makes those probes fail on a library they have no reason to carry.
+source "$SCRIPT_DIR/lib/jq-vals.sh"
 
 # THIS SEAM ASKS FOR ITS LADDER.
 #
@@ -131,7 +136,7 @@ esac
 # Values via a FILE, never argv: a failed agent's output is routinely megabytes and argv is
 # capped at ARG_MAX. This is the same crash that took out the failure analyst on 2026-08-15.
 _aa_vals=$(mktemp "${TMPDIR:-/tmp}/agent-failure-analyst-vals-XXXXXX.json")
-jq -n --arg profile "$_profile" \
+jq_vals --arg profile "$_profile" \
       --arg class_hint "$_class_hint" \
       --arg failure_class "$FAILURE_CLASS" \
       --arg failed_output "${_failed_output:-(empty — it produced nothing)}" \

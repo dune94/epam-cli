@@ -46,6 +46,10 @@ PROJECT_ROOT="${PROJECT_ROOT:-}"
 PRD_FILE="${PRD_FILE:-}"
 BASELINE_BRANCH="${JIRA_BASELINE_BRANCH:-develop}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# jq_vals — prompt values files whose content never becomes an argv entry.
+# Immediately after SCRIPT_DIR, because the source line NEEDS it: placed earlier (as it
+# briefly was) the script dies with "SCRIPT_DIR: unbound variable" before doing anything.
+source "$SCRIPT_DIR/lib/jq-vals.sh"
 
 # THIS SEAM ASKS FOR ITS LADDER.
 #
@@ -413,7 +417,7 @@ _typecheck_written_test() {
     _out=$(_run_project_verification "$PROJECT_ROOT" 2>&1) || true
     if printf '%s\n' "$_out" | grep -qF "${rel}("; then
         _cp_vals=$(mktemp "${TMPDIR:-/tmp}/repro-feedback-vals-XXXXXX.json")
-        jq -n \
+        jq_vals \
               --arg compiler_errors "$(printf '%s\n' "$_out" | grep -F "${rel}(" | head -8)" \
               '{"__COMPILER_ERRORS__":$compiler_errors}' > "$_cp_vals"
         _typecheck_feedback="$(render_engine_prompt repro-feedback "$_cp_vals" typecheck)"
@@ -487,7 +491,7 @@ _validate_written_test() {
         elif [ "${total:-0}" -gt 0 ] && [ "${_failed:-0}" -gt 0 ]; then
             log "written test FAILS against the committed fix (${_failed}/${total}) — rejecting so the writer can retry"
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/repro-feedback-vals-XXXXXX.json")
-            jq -n \
+            jq_vals \
                   --arg failure_json "$(printf '%s' "$json" | head -c 1200)" \
                   --arg failed "${_failed}" \
                   --arg total "${total}" \

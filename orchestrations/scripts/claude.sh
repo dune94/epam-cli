@@ -65,6 +65,11 @@ source "$SCRIPT_DIR/lib/project-tools.sh"
 source "$SCRIPT_DIR/lib/git-ops.sh"
 # shellcheck source=lib/story-retry-state.sh
 source "$SCRIPT_DIR/lib/story-retry-state.sh"
+# jq_vals — prompt values files whose content never becomes an argv entry.
+# Placed with the other library sources, NOT beside SCRIPT_DIR: the path-resolution
+# block is lifted verbatim by tests that build a minimal script tree, and a source
+# line inside it makes those probes fail on a library they have no reason to carry.
+source "$SCRIPT_DIR/lib/jq-vals.sh"
 . "$SCRIPT_DIR/lib/agent-io.sh"
 . "$SCRIPT_DIR/lib/agent-ladder.sh"
 PROGRESS_LOG="$LOG_DIR/progress.txt"
@@ -1892,7 +1897,7 @@ run_plan_mode() {
     # they carried separate copies that had already drifted, and the copy here had the
     # messages path written into the prompt text rather than passed as data.
     _pp_vals=$(mktemp "${TMPDIR:-/tmp}/story-plan-agent-vals-XXXXXX.json")
-    jq -n --arg story_id "$story_id" \
+    jq_vals --arg story_id "$story_id" \
           --arg messages_jsonl "$messages_jsonl" \
           --arg agent_role "$agent_role" \
           --arg current_phase "${CURRENT_PHASE:-unknown}" \
@@ -2519,7 +2524,7 @@ build_implementation_prompt() {
     string_invariants=$(printf '%s' "$acceptance_criteria" | grep -oE '"[^"]{3,}"' | sort -u)
     if [ -n "$string_invariants" ]; then
         _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-string-invariants-vals-XXXXXX.json")
-        jq -n \
+        jq_vals \
               --arg string_list "$(printf '%s\n' "$string_invariants" | sed 's/^/- /')" \
               '{"__STRING_LIST__":$string_list}' > "$_cp_vals"
         string_invariants_block="$(render_engine_prompt writer-string-invariants "$_cp_vals")"
@@ -2743,14 +2748,14 @@ Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:"
         _uncovered_list=$(echo "$story_json" | jq -r '(.fixSiteAnalysisCoverage.uncoveredVerificationCriteria // []) | map("- " + .) | join("\n")' 2>/dev/null)
         if [ -n "$_prescribed_helper" ] && [ "$_cov_incomplete" != "true" ]; then
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-codegraph-block-vals-XXXXXX.json")
-            jq -n \
+            jq_vals \
                   --arg prescribed_helper "${_prescribed_helper}" \
                   '{"__PRESCRIBED_HELPER__":$prescribed_helper}' > "$_cp_vals"
             codegraph_tool_block="$(render_engine_prompt writer-codegraph-block "$_cp_vals" helper_identified)"
             rm -f "$_cp_vals"
         elif [ -n "$_prescribed_helper" ] && [ "$_cov_incomplete" = "true" ]; then
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-codegraph-block-vals-XXXXXX.json")
-            jq -n \
+            jq_vals \
                   --arg prescribed_helper "${_prescribed_helper}" \
                   --arg uncovered_list "${_uncovered_list}" \
                   '{"__PRESCRIBED_HELPER__":$prescribed_helper,"__UNCOVERED_LIST__":$uncovered_list}' > "$_cp_vals"
@@ -2818,13 +2823,13 @@ Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:"
             local _nd_note=""
             if [ -n "$_nd_manifest" ] && [ -n "$_nd_lock" ]; then
                 local _nd_nvals; _nd_nvals=$(mktemp "${TMPDIR:-/tmp}/new-dep-note-XXXXXX")
-                jq -n --arg manifest "$_nd_manifest" --arg lock "$_nd_lock" \
+                jq_vals --arg manifest "$_nd_manifest" --arg lock "$_nd_lock" \
                   '{"__MANIFEST_FILE__":$manifest,"__LOCKFILE__":$lock}' > "$_nd_nvals"
                 _nd_note="$(render_engine_prompt new-dependency-lockfile-note "$_nd_nvals" 2>/dev/null || true)"
                 rm -f "$_nd_nvals"
             fi
             local _nd_vals; _nd_vals=$(mktemp "${TMPDIR:-/tmp}/new-dep-vals-XXXXXX")
-            jq -n --arg install "$_nd_install" --arg note "$_nd_note" \
+            jq_vals --arg install "$_nd_install" --arg note "$_nd_note" \
               '{"__INSTALL_COMMAND__":$install,"__LOCKFILE_NOTE__":$note}' > "$_nd_vals"
             new_dependency_directive="$(render_engine_prompt new-dependency-directive "$_nd_vals" 2>/dev/null || true)"
             rm -f "$_nd_vals"
@@ -2989,7 +2994,7 @@ build_generator_prompt() {
     fi
 
     _hd_vals=$(mktemp "${TMPDIR:-/tmp}/story-file-generation-vals-XXXXXX.json")
-    jq -n \
+    jq_vals \
           --arg technical_notes "$(_render_technical_notes "$technical_notes" "$_lane")" \
           --arg dependencies "${dependencies:-None}" \
           --arg acceptance_criteria "$acceptance_criteria" \
@@ -5707,7 +5712,7 @@ $(cat "$_cf")
     done < <(echo "$_dep_ids_json" | jq -r '.[]?' 2>/dev/null)
 
     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/plan-producer-vals-XXXXXX.json")
-    jq -n \
+    jq_vals \
           --arg declared_paths "$(_classify_declared_paths "${declared_files_raw}")" \
           --arg dependency_contracts "$([ -n "$plan_dep_contracts" ] && printf '\n## Dependency Contracts (ground-truth import paths and signatures — use these verbatim in read/import steps)\n%s\n' "$plan_dep_contracts" || true)" \
           --arg cross_codeline_contract "$([ -n "${CROSS_CODELINE_CONTRACT:-}" ] && [ -f "${CROSS_CODELINE_CONTRACT}" ] && printf '\n## Cross-Codeline API Contract (upstream codeline exports — use these types and endpoints verbatim when integrating)\n%s\n' "$(cat "${CROSS_CODELINE_CONTRACT}")" || true)" \
@@ -5818,7 +5823,7 @@ $(cat "$_contract_file")
     [ -z "$_orch_provider" ] && { echo "$plan_text"; return; }
 
     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/plan-reviewer-vals-XXXXXX.json")
-    jq -n \
+    jq_vals \
           --arg declared_output_files "$([ -n "$_review_declared_files" ] && printf '\n## Declared Output Files (EXACT paths the plan MUST write to)\n%s\n' "$_review_declared_files" || true)" \
           --arg dependency_contracts "${dependency_contracts}" \
           --arg plan_text "${plan_text}" \
@@ -5876,7 +5881,7 @@ $(cat "$_contract_file")
     warning "  PlanReview: mismatch detected for $story_id against dependency contracts — one corrective re-plan"
 
     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/plan-corrective-vals-XXXXXX.json")
-    jq -n \
+    jq_vals \
           --arg corrections "${corrections}" \
           --arg plan_text "${plan_text}" \
           --arg story_id "${story_id}" \
@@ -6014,13 +6019,13 @@ classify_failure_class() {
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/coordinator-amendment-vals-XXXXXX.json")
             jq -n \
                   '{}' > "$_cp_vals"
-            COORDINATOR_PROMPT_AMENDMENT="$(render_engine_prompt coordinator-amendment "$_cp_vals" turns_exhausted_files_exist)"
+            _render_out="$(render_or_keep coordinator-amendment "$_cp_vals" turns_exhausted_files_exist)" && COORDINATOR_PROMPT_AMENDMENT="$_render_out"
             rm -f "$_cp_vals"
         else
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/coordinator-amendment-vals-XXXXXX.json")
             jq -n \
                   '{}' > "$_cp_vals"
-            COORDINATOR_PROMPT_AMENDMENT="$(render_engine_prompt coordinator-amendment "$_cp_vals" turns_exhausted_nothing_written)"
+            _render_out="$(render_or_keep coordinator-amendment "$_cp_vals" turns_exhausted_nothing_written)" && COORDINATOR_PROMPT_AMENDMENT="$_render_out"
             rm -f "$_cp_vals"
         fi
         log "  Coordinator[L1]: capability failure (max iterations) — escalation approved, write-first amendment injected"
@@ -6579,7 +6584,7 @@ assess_model_escalation() {
     printf '%s' "${test_failure_snippet:-"(no test failure output)"}" > "$_ilc_tf_file"
     printf '%s' "${prior_failure_summary:-"(no prior failures recorded for this story)"}" > "$_ilc_prior_file"
     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/inference-ladder-coordinator-vals-XXXXXX.json")
-    jq -n \
+    jq_vals \
           --rawfile result_text "$_ilc_result_file" \
           --rawfile log_tail "$_ilc_log_file" \
           --rawfile test_failure_snippet "$_ilc_tf_file" \
@@ -6673,7 +6678,7 @@ run_prd_change_reviewer() {
     # whole PRD fragments, and a value past ARG_MAX exits 126 with an empty result — which is
     # how the FailureAnalyst died silently earlier today.
     local _rv_vals; _rv_vals=$(mktemp "${TMPDIR:-/tmp}/prd-review-vals-XXXXXX.json")
-    jq -n --arg profile "$reviewer_profile" --arg story "$story_id" --arg ct "$change_type" \
+    jq_vals --arg profile "$reviewer_profile" --arg story "$story_id" --arg ct "$change_type" \
           --rawfile before <(printf '%s' "$before_json") --rawfile after <(printf '%s' "$after_json") \
           '{"__REVIEWER_PROFILE__":$profile,"__STORY_ID__":$story,"__CHANGE_TYPE__":$ct,"__BEFORE__":$before,"__AFTER__":$after}' \
           > "$_rv_vals" 2>/dev/null
@@ -6794,13 +6799,13 @@ run_prd_change_summarizer() {
     # the prompt never mentions, which is the same defect as a missing one seen from the other
     # side. The tool variant carries no change type — a bash script is a bash script.
     if [ "$_sum_template" = "prd-change-summarizer-tool" ]; then
-        jq -n --arg story "$story_id" \
+        jq_vals --arg story "$story_id" \
               --rawfile issues <(printf '%s' "${issues:-no details}") \
               --rawfile rejected <(printf '%s' "$rejected_text") \
               '{"__STORY_ID__":$story,"__ISSUES__":$issues,"__REJECTED_TEXT__":$rejected}' \
               > "$_sum_vals" 2>/dev/null
     else
-        jq -n --arg story "$story_id" --arg ct "$change_type" \
+        jq_vals --arg story "$story_id" --arg ct "$change_type" \
               --rawfile issues <(printf '%s' "${issues:-no details}") \
               --rawfile rejected <(printf '%s' "$rejected_text") \
               '{"__STORY_ID__":$story,"__CHANGE_TYPE__":$ct,"__ISSUES__":$issues,"__REJECTED_TEXT__":$rejected}' \
@@ -8179,13 +8184,13 @@ resolve_escalation() {
     local _saved_amendment="${COORDINATOR_PROMPT_AMENDMENT:-}"
     local _saved_max_retries="$MAX_RETRIES"
     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/coordinator-amendment-vals-XXXXXX.json")
-    jq -n \
+    jq_vals \
           --arg escalating_story_id "${escalating_story_id}" \
           --arg required_fix "${required_fix}" \
           --arg target_file "${target_file}" \
           --arg diagnosis "${diagnosis}" \
           '{"__ESCALATING_STORY_ID__":$escalating_story_id,"__REQUIRED_FIX__":$required_fix,"__TARGET_FILE__":$target_file,"__DIAGNOSIS__":$diagnosis}' > "$_cp_vals"
-    COORDINATOR_PROMPT_AMENDMENT="$(render_engine_prompt coordinator-amendment "$_cp_vals" sibling_escalation)"
+    _render_out="$(render_or_keep coordinator-amendment "$_cp_vals" sibling_escalation)" && COORDINATOR_PROMPT_AMENDMENT="$_render_out"
     rm -f "$_cp_vals"
     export COORDINATOR_PROMPT_AMENDMENT
     MAX_RETRIES="${ESCALATION_FIX_MAX_RETRIES:-1}"
@@ -8689,7 +8694,7 @@ run_retry_extension_coordinator() {
 
     local coord_prompt
     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-extension-coordinator-vals-XXXXXX.json")
-    jq -n \
+    jq_vals \
           --arg retry_count "${retry_count:-unknown}" \
           --arg max_retries "${MAX_RETRIES:-unknown}" \
           --arg coordinator_profile "${coordinator_profile}" \
@@ -9418,11 +9423,11 @@ $_kb_section"
         # Inject execution plan when planner/executor split is active
         if [ -n "${story_plan:-}" ]; then
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-plan-section-vals-XXXXXX.json")
-            jq -n \
+            jq_vals \
                   --arg story_plan "$story_plan" \
                   --arg prompt "$prompt" \
                   '{"__STORY_PLAN__":$story_plan,"__PROMPT__":$prompt}' > "$_cp_vals"
-            prompt="$(render_engine_prompt writer-plan-section "$_cp_vals" execution_plan)"
+            _render_out="$(render_or_keep writer-plan-section "$_cp_vals" execution_plan)" && prompt="$_render_out"
             rm -f "$_cp_vals"
         fi
 
@@ -9465,12 +9470,12 @@ $_kb_section"
 
         if [ "$_total_attempts" -gt 1 ] && [ -n "${COORDINATOR_PROMPT_AMENDMENT:-}" ]; then
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-plan-section-vals-XXXXXX.json")
-            jq -n \
+            jq_vals \
                   --arg coordinator_prompt_amendment "${COORDINATOR_PROMPT_AMENDMENT}" \
                   --arg retry_count "${retry_count}" \
                   --arg prompt "$prompt" \
                   '{"__COORDINATOR_PROMPT_AMENDMENT__":$coordinator_prompt_amendment,"__RETRY_COUNT__":$retry_count,"__PROMPT__":$prompt}' > "$_cp_vals"
-            prompt="$(render_engine_prompt writer-plan-section "$_cp_vals" coordinator_guidance_full)"
+            _render_out="$(render_or_keep writer-plan-section "$_cp_vals" coordinator_guidance_full)" && prompt="$_render_out"
             rm -f "$_cp_vals"
         fi
 
@@ -9555,21 +9560,21 @@ $_kb_section"
                 fi
                 if [ -n "${story_plan:-}" ]; then
                     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-plan-section-vals-XXXXXX.json")
-                    jq -n \
+                    jq_vals \
                           --arg story_plan "$story_plan" \
                           --arg prompt "$prompt" \
                           '{"__STORY_PLAN__":$story_plan,"__PROMPT__":$prompt}' > "$_cp_vals"
-                    prompt="$(render_engine_prompt writer-plan-section "$_cp_vals" execution_plan)"
+                    _render_out="$(render_or_keep writer-plan-section "$_cp_vals" execution_plan)" && prompt="$_render_out"
                     rm -f "$_cp_vals"
                 fi
                 _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-plan-section-vals-XXXXXX.json")
-                jq -n \
+                jq_vals \
                       --arg trimmed_amendment "${_trimmed_amendment}" \
                       --arg scratchpad_file "${_scratchpad_file}" \
                       --arg retry_count "${retry_count}" \
                       --arg prompt "$prompt" \
                       '{"__TRIMMED_AMENDMENT__":$trimmed_amendment,"__SCRATCHPAD_FILE__":$scratchpad_file,"__RETRY_COUNT__":$retry_count,"__PROMPT__":$prompt}' > "$_cp_vals"
-                prompt="$(render_engine_prompt writer-plan-section "$_cp_vals" coordinator_guidance_trimmed)"
+                _render_out="$(render_or_keep writer-plan-section "$_cp_vals" coordinator_guidance_trimmed)" && prompt="$_render_out"
                 rm -f "$_cp_vals"
             fi
         fi
@@ -10336,7 +10341,7 @@ $(echo "$LAST_VERIFIED_UNCHANGED_FILES" | sed 's/^/- /')"
                     _last_fa_diagnosis=$(python3 "$SCRIPT_DIR/lib/handlers/last-fa-diagnosis.py" "$_heal_log" "$story_id" 2>/dev/null || echo "")
                 fi
                 _cp_vals=$(mktemp "${TMPDIR:-/tmp}/coordinator-amendment-vals-XXXXXX.json")
-                jq -n \
+                jq_vals \
                       --arg prior_diagnosis_section "${_last_fa_diagnosis:+
 
 ## Prior failure-analyst diagnosis (re-injected for context)
@@ -10345,7 +10350,7 @@ Apply the above diagnosis AND fix the deterministic check violation — both mus
                       --arg verification_failure "${VERIFICATION_FAILURE}" \
                       --arg existing_amendment "${_existing_amendment}" \
                       '{"__PRIOR_DIAGNOSIS_SECTION__":$prior_diagnosis_section,"__VERIFICATION_FAILURE__":$verification_failure,"__EXISTING_AMENDMENT__":$existing_amendment}' > "$_cp_vals"
-                COORDINATOR_PROMPT_AMENDMENT="$(render_engine_prompt coordinator-amendment "$_cp_vals" deterministic_check)"
+                _render_out="$(render_or_keep coordinator-amendment "$_cp_vals" deterministic_check)" && COORDINATOR_PROMPT_AMENDMENT="$_render_out"
                 rm -f "$_cp_vals"
 
                 # A deterministic-check violation repeating IDENTICALLY across attempts
@@ -11688,7 +11693,7 @@ run_pre_phase_assessment() {
 
     local assessment_prompt
     _ap_vals=$(mktemp "${TMPDIR:-/tmp}/skill-assessment-prephase-vals-XXXXXX.json")
-    jq -n \
+    jq_vals \
           --arg phase_id "$phase_id" \
           --arg prd_rel "$prd_rel" \
           '{"__PHASE_ID__":$phase_id,"__PRD_REL__":$prd_rel}' > "$_ap_vals"

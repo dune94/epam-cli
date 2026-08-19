@@ -60,7 +60,7 @@ set -e
 _render_change_reviewer() {
     local _story="$1" _change_type="$2" _evidence="$3"
     local _cr_vals; _cr_vals=$(mktemp "${TMPDIR:-/tmp}/change-reviewer-vals-XXXXXX.json")
-    jq -n --arg story "$_story" --arg ct "$_change_type" \
+    jq_vals --arg story "$_story" --arg ct "$_change_type" \
           --rawfile ev <(printf '%s' "$_evidence") \
           '{"__STORY__":$story,"__CHANGE_TYPE__":$ct,"__EVIDENCE__":$ev}' > "$_cr_vals" 2>/dev/null
     local _out
@@ -243,6 +243,11 @@ source "$SCRIPT_DIR/lib/run-checkpoint.sh"
 # shellcheck source=lib/git-ops.sh
 source "$SCRIPT_DIR/lib/git-ops.sh"
 source "$SCRIPT_DIR/lib/story-retry-state.sh"
+# jq_vals — prompt values files whose content never becomes an argv entry.
+# Placed with the other library sources, NOT beside SCRIPT_DIR: the path-resolution
+# block is lifted verbatim by tests that build a minimal script tree, and a source
+# line inside it makes those probes fail on a library they have no reason to carry.
+source "$SCRIPT_DIR/lib/jq-vals.sh"
 
 # Load timeout config from EPAM_PROJECT_CONFIG_DIR/llm-settings.json BEFORE
 # any call to the watchdog wrapper defined further below — its `timeout`
@@ -1521,7 +1526,7 @@ _brownfield_gate_scope() {
     # RENDERED FROM THE TEMPLATE LAYER. Values through a FILE, never argv: the file list is
     # unbounded and argv is capped at ARG_MAX.
     local _bs_vals; _bs_vals=$(mktemp "${TMPDIR:-/tmp}/qa-brownfield-scope-XXXXXX.json")
-    jq -n --arg gate "$_gate" \
+    jq_vals --arg gate "$_gate" \
           --arg files "${_files:-  (none recorded — fall back to the injected diff)}" \
           '{"__GATE__":$gate,"__FILES__":$files}' > "$_bs_vals"
     render_engine_prompt qa-brownfield-scope "$_bs_vals" || true
@@ -1587,7 +1592,7 @@ _lint_fix_findings_directly() {
         info "  [lint-fix] repairing ${_lf_findings_count:-$(printf '%s\n' "$_lf_findings" | wc -l | tr -d ' ')} finding(s) in place (attempt ${_lf_attempt}/${_lf_max})"
 
         _cp_vals=$(mktemp "${TMPDIR:-/tmp}/lint-fixer-vals-XXXXXX.json")
-        jq -n \
+        jq_vals \
               --arg lf_findings "${_lf_findings}" \
               --arg project_root "${PROJECT_ROOT}" \
               --arg lf_files "${_lf_files}" \
@@ -2154,7 +2159,7 @@ run_story_recovery_analyst() {
     _log_tail=$(cat "$log_file" 2>/dev/null || echo "")
 
     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/story-recovery-analyst-vals-XXXXXX.json")
-    jq -n \
+    jq_vals \
           --arg story_json "${_story_json}" \
           --arg log_tail "${_log_tail}" \
           --arg story_id "${story_id}" \
@@ -2167,7 +2172,7 @@ run_story_recovery_analyst() {
         local _sra_prompt="$_prompt"
         if [ "$_sra_attempt" -ge 1 ]; then
           _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
-          jq -n \
+          jq_vals \
                 --arg prompt "$_prompt" \
                 '{"__PROMPT__":$prompt}' > "$_rp_vals"
           _sra_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" story_recovery_analyst)"
@@ -3032,7 +3037,7 @@ _run_codeline_bridge() {
   fi
 
   _cp_vals=$(mktemp "${TMPDIR:-/tmp}/codeline-bridge-vals-XXXXXX.json")
-  jq -n \
+  jq_vals \
         --arg bridge_profile "${_bridge_profile}" \
         --arg bridge_out "${_bridge_out}" \
         --arg bprd "${_bprd}" \
@@ -5265,7 +5270,7 @@ run_pre_phase_assessment() {
     local _pfa_facts_file; _pfa_facts_file=$(mktemp "${TMPDIR:-/tmp}/pfa-facts-XXXXXX.txt")
     printf '%s' "${_pfa_facts:-}" > "$_pfa_facts_file"
     _ap_vals=$(mktemp "${TMPDIR:-/tmp}/post-failure-analyst-vals-XXXXXX.json")
-    jq -n \
+    jq_vals \
           --rawfile pfa_facts "$_pfa_facts_file" \
           --arg pfa_tool_budget "$_pfa_tool_budget" \
           --arg phase_id "$phase_id" \
@@ -5278,7 +5283,7 @@ run_pre_phase_assessment() {
 
     # Append the phase-specific context
     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/phase-assessment-header-vals-XXXXXX.json")
-    jq -n \
+    jq_vals \
           --arg assessment_prompt "${assessment_prompt}" \
           --arg phase_id "${phase_id}" \
           --arg prd_rel "${PRD_REL}" \
@@ -5320,7 +5325,7 @@ run_pre_phase_assessment() {
         local _pfa_prompt_this_attempt="$assessment_prompt"
         if [ -n "$_pfa_corrective_note" ]; then
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/corrective-note-vals-XXXXXX.json")
-            jq -n \
+            jq_vals \
                   --arg pfa_prompt_this_attempt "${_pfa_prompt_this_attempt}" \
                   --arg pfa_corrective_note "${_pfa_corrective_note}" \
                   '{"__PFA_PROMPT_THIS_ATTEMPT__":$pfa_prompt_this_attempt,"__PFA_CORRECTIVE_NOTE__":$pfa_corrective_note}' > "$_cp_vals"
@@ -5572,7 +5577,7 @@ run_hybrid_precoordination() {
     touch "$MESSAGES_JSONL"
 
     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/hybrid-prephase-coordinator-vals-XXXXXX.json")
-    jq -n \
+    jq_vals \
           --arg phase_id "$phase_id" \
           --arg prd_rel "$prd_rel" \
           '{"__PHASE_ID__":$phase_id,"__PRD_REL__":$prd_rel}' > "$_cp_vals"
@@ -5588,7 +5593,7 @@ run_hybrid_precoordination() {
         local _hpc_prompt="$coord_prompt"
         if [ "$_hpc_attempt" -ge 1 ]; then
           _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
-          jq -n \
+          jq_vals \
                 --arg coord_prompt "$coord_prompt" \
                 '{"__COORD_PROMPT__":$coord_prompt}' > "$_rp_vals"
           _hpc_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" hybrid_prephase_coordinator)"
@@ -5961,7 +5966,7 @@ else
         _mc_role_file=$(mktemp "${TMPDIR:-/tmp}/mc-role-XXXXXX.txt")
         jq -r '.["prd-model-coordinator"] // ""' "$_mc_profiles_file" > "$_mc_role_file" 2>/dev/null || : > "$_mc_role_file"
         _cp_vals=$(mktemp "${TMPDIR:-/tmp}/prd-model-coordinator-vals-XXXXXX.json")
-        jq -n \
+        jq_vals \
               --rawfile profile "$_mc_role_file" \
               --arg mc_prd_target "$_mc_prd_target" \
               --arg mc_phase "$_mc_phase" \
@@ -5971,7 +5976,7 @@ else
         rm -f "$_mc_role_file"
         if [ -n "$_mc_corrective_note" ]; then
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/corrective-note-vals-XXXXXX.json")
-            jq -n \
+            jq_vals \
                   --arg mc_corrective_note "${_mc_corrective_note}" \
                   --arg mc_prompt "${_mc_prompt}" \
                   '{"__MC_CORRECTIVE_NOTE__":$mc_corrective_note,"__MC_PROMPT__":$mc_prompt}' > "$_cp_vals"
@@ -7029,7 +7034,7 @@ else
             _sc_role=$(echo "$_sc_row" | jq -r '.role')
             _sc_note=$(echo "$_sc_row" | jq -r '.note')
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/skills-coordinator-vals-XXXXXX.json")
-            jq -n \
+            jq_vals \
                   --arg agent_profiles_file "${AGENT_PROFILES_FILE}" \
                   --arg sc_role "${_sc_role}" \
                   --arg sc_note "${_sc_note}" \
@@ -7050,7 +7055,7 @@ else
                 _sc_run_prompt="$_sc_prompt"
                 if [ "$_sc_attempt" -ge 1 ]; then
                   _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
-                  jq -n \
+                  jq_vals \
                         --arg agent_profiles_file "${AGENT_PROFILES_FILE}" \
                         --arg sc_prompt "$_sc_prompt" \
                         '{"__AGENT_PROFILES_FILE__":$agent_profiles_file,"__SC_PROMPT__":$sc_prompt}' > "$_rp_vals"
@@ -7155,7 +7160,7 @@ else
             _tc_before=""
             _tc_before=$(cat "$_tc_path" 2>/dev/null || true)
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/tools-coordinator-vals-XXXXXX.json")
-            jq -n \
+            jq_vals \
                   --arg tc_reason "${_tc_reason}" \
                   --arg tc_path "${_tc_path}" \
                   '{"__TC_REASON__":$tc_reason,"__TC_PATH__":$tc_path}' > "$_cp_vals"
@@ -7175,7 +7180,7 @@ else
                     _tc_bn_err=""
                     _tc_bn_err=$(bash -n "$_tc_path" 2>&1 || true)
                     _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
-                    jq -n \
+                    jq_vals \
                           --arg tc_bn_err "${_tc_bn_err}" \
                           --arg tc_tool "${_tc_tool}" \
                           --arg tc_prompt "$_tc_prompt" \
@@ -7356,7 +7361,7 @@ run_phase_assessment() {
     local _sap_guidance_file; _sap_guidance_file=$(mktemp "${TMPDIR:-/tmp}/sap-guidance-XXXXXX.txt")
     printf '%s' "${_skill_domain_guidance:-}" > "$_sap_guidance_file"
     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/skill-assessment-postphase-vals-XXXXXX.json")
-    jq -n \
+    jq_vals \
           --rawfile skill_domain_guidance "$_sap_guidance_file" \
           --arg phase_id "$phase_id" \
           '{"__SKILL_DOMAIN_GUIDANCE__":$skill_domain_guidance,"__PHASE_ID__":$phase_id}' > "$_cp_vals"
@@ -7390,7 +7395,7 @@ run_phase_assessment() {
             ORCH_AGENT_MODEL_CLIMB=$(seam_next_model "team-lead-agent" "$(seam_model_or_fail "team-lead-agent" 2>/dev/null)")
             export ORCH_AGENT_MODEL_CLIMB
             _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
-            jq -n \
+            jq_vals \
                   --arg assessment_prompt "$assessment_prompt" \
                   '{"__ASSESSMENT_PROMPT__":$assessment_prompt}' > "$_rp_vals"
             if ! _pa_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" phase_assessment)" \
@@ -8474,7 +8479,7 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
             _lp_vals=$(mktemp "${TMPDIR:-/tmp}/lint-finding-analyst-vals-XXXXXX.json")
             _lp_role_file=$(mktemp "${TMPDIR:-/tmp}/lint-finding-analyst-role-XXXXXX.txt")
             jq -r --arg r "gate-finding-analyst" '.[$r] // ""' "$_profiles_file" > "$_lp_role_file" 2>/dev/null || : > "$_lp_role_file"
-            jq -n --rawfile profile "$_lp_role_file" \
+            jq_vals --rawfile profile "$_lp_role_file" \
                   --rawfile lint_log "$_lint_log" \
                   --rawfile writer_outputs "$_lf_outputs_file" \
                   --rawfile active_stories "$_lf_stories_file" \
@@ -8491,7 +8496,7 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
                 if [ "$_lga_attempt" -ge 1 ]; then
                     [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _lga_model="${ESCALATION_MODEL_HIGH}"
                     _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
-                    jq -n \
+                    jq_vals \
                           --arg lint_finding_prompt "$_lint_finding_prompt" \
                           --arg lint_log "${_lint_log}" \
                           '{"__LINT_FINDING_PROMPT__":$lint_finding_prompt,"__LINT_LOG__":$lint_log}' > "$_rp_vals"
@@ -8541,7 +8546,7 @@ if m:
                 _lp_vals=$(mktemp "${TMPDIR:-/tmp}/lint-ac-remediator-vals-XXXXXX.json")
                 _lp_role_file=$(mktemp "${TMPDIR:-/tmp}/lint-ac-remediator-role-XXXXXX.txt")
                 jq -r --arg r "story-ac-remediator" '.[$r] // ""' "$_profiles_file" > "$_lp_role_file" 2>/dev/null || : > "$_lp_role_file"
-                jq -n --rawfile profile "$_lp_role_file" \
+                jq_vals --rawfile profile "$_lp_role_file" \
                       --rawfile current_acs "$_lac_acs_file" \
                       --arg story_id "$_lint_story_id" \
                       --arg finding "$_lint_finding_raw" \
@@ -8557,7 +8562,7 @@ if m:
                     if [ "$_lrem_attempt" -ge 1 ]; then
                         [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _lrem_model="${ESCALATION_MODEL_HIGH}"
                         _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
-                        jq -n \
+                        jq_vals \
                               --arg lint_ac_prompt "$_lint_ac_prompt" \
                               '{"__LINT_AC_PROMPT__":$lint_ac_prompt}' > "$_rp_vals"
                         _lrem_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" lint_remediator)"
@@ -8868,7 +8873,7 @@ step_emit "23"  "skip" "Step 23: Browser E2E" "SKIP_TESTING_GATES=true"
 
             story_log="$LOG_DIR/${route}-${phase_id}-${story_id}.log"
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/e2e-route-check-vals-XXXXXX.json")
-            jq -n \
+            jq_vals \
                   --arg agent_profile "$agent_profile" \
                   --arg route_reason "$route_reason" \
                   --arg story_title "$story_title" \
@@ -8940,7 +8945,7 @@ step_emit "23"  "skip" "Step 23: Browser E2E" "SKIP_TESTING_GATES=true"
     {
         # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
         local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-sast-sentinel-vals-XXXXXX.json")
-        jq -n --arg gate_scope "$(_brownfield_gate_scope sast-sentinel)" \
+        jq_vals --arg gate_scope "$(_brownfield_gate_scope sast-sentinel)" \
               --arg phase_id "$phase_id" \
               --arg project_root "$PROJECT_ROOT" \
               '{"__GATE_SCOPE__":$gate_scope,"__PHASE_ID__":$phase_id,"__PROJECT_ROOT__":$project_root}' > "$_qa_vals" 2>/dev/null
@@ -8987,7 +8992,7 @@ $sast_prompt"
         fi
 
         _oe_vals=$(mktemp "${TMPDIR:-/tmp}/qa-oracle-vals-XXXXXX.json")
-        jq -n \
+        jq_vals \
               --arg semgrep_summary "$semgrep_summary" \
               --arg sast_prompt "$sast_prompt" \
               '{"__SEMGREP_SUMMARY__":$semgrep_summary,"__SAST_PROMPT__":$sast_prompt}' > "$_oe_vals"
@@ -9020,7 +9025,7 @@ $sast_prompt"
         fi
 
         _oe_vals=$(mktemp "${TMPDIR:-/tmp}/qa-oracle-vals-XXXXXX.json")
-        jq -n \
+        jq_vals \
               --arg audit_summary "$audit_summary" \
               --arg sast_prompt "$sast_prompt" \
               '{"__AUDIT_SUMMARY__":$audit_summary,"__SAST_PROMPT__":$sast_prompt}' > "$_oe_vals"
@@ -9087,7 +9092,7 @@ $(echo "$_tsc_out" | head -40)"
         fi
 
         _oe_vals=$(mktemp "${TMPDIR:-/tmp}/qa-oracle-vals-XXXXXX.json")
-        jq -n \
+        jq_vals \
               --arg tsc_summary "$tsc_summary" \
               --arg sast_prompt "$sast_prompt" \
               '{"__TSC_SUMMARY__":$tsc_summary,"__SAST_PROMPT__":$sast_prompt}' > "$_oe_vals"
@@ -9145,7 +9150,7 @@ $_spec_file_excerpts"
 
         # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
         local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-spec-validator-vals-XXXXXX.json")
-        jq -n --arg force_lightpanda "$force_lightpanda" \
+        jq_vals --arg force_lightpanda "$force_lightpanda" \
               --arg force_playwright "$force_playwright" \
               --arg gate_scope "$(_brownfield_gate_scope spec-validator)" \
               --arg phase_id "$phase_id" \
@@ -9197,7 +9202,7 @@ $spec_prompt"
         fi
 
         _oe_vals=$(mktemp "${TMPDIR:-/tmp}/qa-oracle-vals-XXXXXX.json")
-        jq -n \
+        jq_vals \
               --arg oracle_summary "$oracle_summary" \
               --arg spec_prompt "$spec_prompt" \
               '{"__ORACLE_SUMMARY__":$oracle_summary,"__SPEC_PROMPT__":$spec_prompt}' > "$_oe_vals"
@@ -9380,7 +9385,7 @@ $spec_prompt"
                 _diff_patch=$(cd "$PROJECT_ROOT" && "$_git_bin" diff -U3 "$_diff_ref" -- . ${_rr_ex[0]+"${_rr_ex[@]}"} 2>/dev/null | head -300 || echo "")
                 set -e
                 _cp_vals=$(mktemp "${TMPDIR:-/tmp}/qa-evidence-labels-vals-XXXXXX.json")
-                jq -n \
+                jq_vals \
                       --arg diff_patch "$_diff_patch" \
                       --arg diff_stat "$_diff_stat" \
                       '{"__DIFF_PATCH__":$diff_patch,"__DIFF_STAT__":$diff_stat}' > "$_cp_vals"
@@ -9392,7 +9397,7 @@ $spec_prompt"
 
             # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
             local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-review-ranger-vals-XXXXXX.json")
-            jq -n --arg gate_scope "$(_brownfield_gate_scope review-ranger)" \
+            jq_vals --arg gate_scope "$(_brownfield_gate_scope review-ranger)" \
                   --arg phase_id "$phase_id" \
                   --arg project_root "$PROJECT_ROOT" \
                   --arg review_diff_summary "$review_diff_summary" \
@@ -9464,7 +9469,7 @@ $review_prompt"
                         # against a partial file and never know it.
                         if [ "${_mut_src_total_lines:-0}" -gt 100 ]; then
                             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/qa-evidence-labels-vals-XXXXXX.json")
-                            jq -n \
+                            jq_vals \
                                   --arg mut_src_total_lines "${_mut_src_total_lines}" \
                                   '{"__MUT_SRC_TOTAL_LINES__":$mut_src_total_lines}' > "$_cp_vals"
                             _mut_src_marker="$(render_engine_prompt qa-evidence-labels "$_cp_vals" truncation_notice_source)"
@@ -9495,7 +9500,7 @@ $(head -100 "$PROJECT_ROOT/$_f" 2>/dev/null || echo '(unreadable)')${_mut_src_ma
                     _mut_test_total_lines=$(wc -l < "$_tf" 2>/dev/null || echo 0)
                     if [ "${_mut_test_total_lines:-0}" -gt 60 ]; then
                         _cp_vals=$(mktemp "${TMPDIR:-/tmp}/qa-evidence-labels-vals-XXXXXX.json")
-                        jq -n \
+                        jq_vals \
                               --arg mut_test_total_lines "${_mut_test_total_lines}" \
                               '{"__MUT_TEST_TOTAL_LINES__":$mut_test_total_lines}' > "$_cp_vals"
                         _mut_test_marker="$(render_engine_prompt qa-evidence-labels "$_cp_vals" truncation_notice_test)"
@@ -9506,7 +9511,7 @@ $(head -100 "$PROJECT_ROOT/$_f" 2>/dev/null || echo '(unreadable)')${_mut_src_ma
 $(head -60 "$_tf" 2>/dev/null || echo '(unreadable)')${_mut_test_marker}"
                 done <<< "$_test_files"
                 _cp_vals=$(mktemp "${TMPDIR:-/tmp}/qa-evidence-labels-vals-XXXXXX.json")
-                jq -n \
+                jq_vals \
                       --arg src_content "${_src_content:-  (none — no TypeScript source changes in this phase)}" \
                       --arg test_content "${_test_content:-  (no test files found)}" \
                       '{"__SRC_CONTENT__":$src_content,"__TEST_CONTENT__":$test_content}' > "$_cp_vals"
@@ -9518,7 +9523,7 @@ $(head -60 "$_tf" 2>/dev/null || echo '(unreadable)')${_mut_test_marker}"
 
             # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
             local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-mutant-hunter-vals-XXXXXX.json")
-            jq -n --arg gate_scope "$(_brownfield_gate_scope mutant-hunter)" \
+            jq_vals --arg gate_scope "$(_brownfield_gate_scope mutant-hunter)" \
                   --arg mutant_oracle_summary "$mutant_oracle_summary" \
                   --arg phase_id "$phase_id" \
                   --arg project_root "$PROJECT_ROOT" \
@@ -9651,7 +9656,7 @@ $mutant_prompt"
         {
             # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
             local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-fuzz-weaver-vals-XXXXXX.json")
-            jq -n --arg force_lightpanda "$force_lightpanda" \
+            jq_vals --arg force_lightpanda "$force_lightpanda" \
                   --arg force_playwright "$force_playwright" \
                   --arg gate_scope "$(_brownfield_gate_scope fuzz-weaver)" \
                   --arg phase_id "$phase_id" \
@@ -9682,7 +9687,7 @@ $fuzz_prompt"
         {
             # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
             local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-perf-sentinel-vals-XXXXXX.json")
-            jq -n --arg force_lightpanda "$force_lightpanda" \
+            jq_vals --arg force_lightpanda "$force_lightpanda" \
                   --arg force_playwright "$force_playwright" \
                   --arg gate_scope "$(_brownfield_gate_scope perf-sentinel)" \
                   --arg phase_id "$phase_id" \
@@ -9889,7 +9894,7 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                 # silence, so the agent could be given no role at all and nothing would say so.
                 local _fp_vals; _fp_vals=$(mktemp "${TMPDIR:-/tmp}/gate-finding-analyst-vals-XXXXXX.json")
                 local _fp_role; _fp_role=$(jq -r --arg r "gate-finding-analyst" '.[$r] // ""' "$_profiles_file" 2>/dev/null || echo "")
-                jq -n --arg profile "$_fp_role" \
+                jq_vals --arg profile "$_fp_role" \
                       --arg gate_label "$_glabel" \
                       --arg gate_log "$_glog" \
                       --arg prd_file "$PRD_FILE" \
@@ -9904,7 +9909,7 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                     if [ "$_gfa_attempt" -ge 1 ]; then
                         [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _gfa_model="${ESCALATION_MODEL_HIGH}"
                         _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
-                        jq -n \
+                        jq_vals \
                               --arg finding_prompt "$_finding_prompt" \
                               --arg glog "${_glog}" \
                               '{"__FINDING_PROMPT__":$finding_prompt,"__GLOG__":$glog}' > "$_rp_vals"
@@ -10005,7 +10010,7 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                 # silence, so the agent could be given no role at all and nothing would say so.
                 local _fp_vals; _fp_vals=$(mktemp "${TMPDIR:-/tmp}/story-ac-remediator-vals-XXXXXX.json")
                 local _fp_role; _fp_role=$(jq -r --arg r "story-ac-remediator" '.[$r] // ""' "$_profiles_file" 2>/dev/null || echo "")
-                jq -n --arg profile "$_fp_role" \
+                jq_vals --arg profile "$_fp_role" \
                       --arg finding_json "$_finding_json" \
                       --arg story_id "$_story_id" \
                       --arg existing_acs "$(jq -c --arg id "$_story_id" '.stories[] | select(.id == $id) | (.acceptanceCriteria // []) | map(.)' "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "[]")" \
@@ -10019,7 +10024,7 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                     if [ "$_acr_attempt" -ge 1 ]; then
                         [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _acr_model="${ESCALATION_MODEL_HIGH}"
                         _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
-                        jq -n \
+                        jq_vals \
                               --arg ac_prompt "$_ac_prompt" \
                               '{"__AC_PROMPT__":$ac_prompt}' > "$_rp_vals"
                         _acr_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" ac_remediator)"
@@ -10099,7 +10104,7 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                 # silence, so the agent could be given no role at all and nothing would say so.
                 local _fp_vals; _fp_vals=$(mktemp "${TMPDIR:-/tmp}/profile-augmentor-vals-XXXXXX.json")
                 local _fp_role; _fp_role=$(jq -r --arg r "profile-augmentor" '.[$r] // ""' "$_profiles_file" 2>/dev/null || echo "")
-                jq -n --arg profile "$_fp_role" \
+                jq_vals --arg profile "$_fp_role" \
                       --arg finding_json "$_finding_json" \
                       --arg profiles_file "$_profiles_file" \
                       --arg story_id "$_story_id" \
@@ -10394,9 +10399,9 @@ _failure_is_tolerated() {
         # title uses only the filename.
         _bug_vals=$(mktemp "${TMPDIR:-/tmp}/bug-story-vals-XXXXXX.json")
         _bug_vals_t=$(mktemp "${TMPDIR:-/tmp}/bug-story-title-XXXXXX.json")
-        jq -n --arg f "$failing_file" --arg tc "$_bug_test_cmd" --arg ex "$failure_excerpt" \
+        jq_vals --arg f "$failing_file" --arg tc "$_bug_test_cmd" --arg ex "$failure_excerpt" \
             '{__FAILING_FILE__: $f, __TEST_COMMAND__: $tc, __FAILING_TESTS__: $ex}' > "$_bug_vals"
-        jq -n --arg f "$failing_file" '{__FAILING_FILE__: $f}' > "$_bug_vals_t"
+        jq_vals --arg f "$failing_file" '{__FAILING_FILE__: $f}' > "$_bug_vals_t"
 
         # Exit status is the contract: an unrendered story would be appended to the PRD with an
         # empty description, and the writer would answer from nothing.

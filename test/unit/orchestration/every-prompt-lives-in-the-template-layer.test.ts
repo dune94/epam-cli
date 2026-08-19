@@ -236,9 +236,12 @@ const ALLOW: Record<string, string> = {
   'orchestrations/scripts/claude.sh#15f48a1c6038':
     'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
     + 'prompt text; it is not prompt text, and no model receives it.',
-  'orchestrations/scripts/claude.sh#225a59b88db5':
-    'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
-    + 'prompt text; it is not prompt text, and no model receives it.',
+  'orchestrations/scripts/claude.sh#f9b33d43266b':
+    'The shell pipeline that EXTRACTS quoted string invariants from the acceptance criteria and '
+    + 'formats them as a list. Its output becomes a template value (__STRING_LIST__); the pipeline '
+    + 'itself is text processing, not prompt text. Re-keyed 2026-08-19: the block changed when its '
+    + 'values file moved to jq_vals, and the key is a content hash, which is the point — an edited '
+    + 'block loses its exemption and has to be re-explained rather than silently keeping it.',
   'orchestrations/scripts/claude.sh#29cd61ddd376':
     'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
     + 'prompt text; it is not prompt text, and no model receives it.',

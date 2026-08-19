@@ -91,13 +91,21 @@ function runGuard(helpers: string[], used: string[]) {
      LOG_DIR=${JSON.stringify(dir)}
      VERIFICATION_FAILURE="" DETERMINISTIC_CHECK_FAILURE=0
      warning() { echo "WARN:$*"; }; error() { :; }; log() { :; }; info() { :; }; success() { :; }
+     # WITHOUT THIS THE SUITE IS VACUOUS. The gate resolves its baseline through
+     # _resolved_baseline_ref when LOG_DIR has no phase-baseline-sha.txt. Undefined, that is
+     # command-not-found, _ref is empty, the rev-parse verify fails, and the gate returns 0
+     # from a guard that has nothing to do with helpers — so every assertion below was passing on
+     # an early return. Confirmed by hand 2026-08-19.
+     _resolved_baseline_ref() { echo "origin/develop"; }
      is_truthy() { case "\${1:-}" in true|1|yes) return 0 ;; *) return 1 ;; esac; }
 ${lift('verify_prescribed_helper_used')}
      verify_prescribed_helper_used S1; echo "RC=$?"
+     echo "FLAG=\${DETERMINISTIC_CHECK_FAILURE:-0}"
      echo "__VF__"; printf '%s' "$VERIFICATION_FAILURE"`,
   ], { encoding: 'utf8' });
   return {
     rc: Number((out.match(/RC=(\d+)/) || [])[1]),
+    flag: Number((out.match(/FLAG=(\d+)/) || [])[1]),
     vf: (out.split('__VF__')[1] ?? '').trim(),
     out,
   };
@@ -120,28 +128,40 @@ describe('the fixture reproduces the live shape', () => {
   });
 });
 
-describe('THE DEFECT: every verified helper is checked, not just the first', () => {
-  it('using ONLY the first helper is rejected — the exact live case', () => {
+// ADVISORY SINCE 2026-08-19. The requirement is no longer "reject", it is "report EVERY unused
+// verified helper and decide nothing". Checking all of them still matters — reporting only the
+// first would tell the writer a third of what the spec asked for — but the verdict must not be a
+// veto: gotransit shipped this ticket successfully without two of metrolinx's verified helpers,
+// and the veto additionally short-circuited the repo's own lint gate via invoke_success=false.
+describe('every verified helper is REPORTED, not just the first', () => {
+  it('using ONLY the first helper reports the other three — the exact live case', () => {
     const r = runGuard(FOUR, ['options']);
-    expect(
-      r.rc,
-      'the guard checked .[0].helper only, so satisfying one verified site silenced it for the ' +
-      'other three — the story shipped 1 of 4 fix sites and was reported complete',
-    ).not.toBe(0);
+    // The original defect: it checked .[0].helper only, so satisfying one verified site silenced
+    // it for the other three and the story shipped 1 of 4 fix sites reported complete.
+    for (const h of FOUR.slice(1)) {
+      expect(r.out, `${h} unreported — the writer cannot know the spec asked for it`).toMatch(h);
+    }
+    expect(r.rc, 'advisory: it must not fail the attempt').toBe(0);
+    expect(r.flag, 'advisory: it must not set the deterministic-failure flag').toBe(0);
   });
 
-  it.each([1, 2, 3])('using only helper #%i of four is rejected', (i) => {
-    expect(runGuard(FOUR, [FOUR[i]]).rc).not.toBe(0);
+  it.each([1, 2, 3])('using only helper #%i of four still reports the rest', (i) => {
+    const r = runGuard(FOUR, [FOUR[i]]);
+    expect(r.rc).toBe(0);
+    expect(r.flag).toBe(0);
+    expect(r.out, 'nothing was reported').toMatch(/ADVISORY|advisor/i);
   });
 
-  it('using three of four is still rejected', () => {
-    expect(runGuard(FOUR, FOUR.slice(0, 3)).rc).not.toBe(0);
+  it('using three of four still reports the fourth, and still does not reject', () => {
+    const r = runGuard(FOUR, FOUR.slice(0, 3));
+    expect(r.out, 'the one missing helper was not named').toMatch(FOUR[3]);
+    expect(r.rc).toBe(0);
   });
 
   it('the message names the helpers that are MISSING, not just one', () => {
-    const { vf } = runGuard(FOUR, ['options']);
+    const { out } = runGuard(FOUR, ['options']);
     for (const h of FOUR.slice(1)) {
-      expect(vf, `${h} was never mentioned, so the writer cannot know it is required`).toMatch(h);
+      expect(out, `${h} was never mentioned, so the writer cannot know the spec asked for it`).toMatch(h);
     }
   });
 
@@ -161,8 +181,11 @@ describe('it does not over-reject', () => {
     expect(runGuard(['options'], ['options']).rc).toBe(0);
   });
 
-  it('a single verified helper, NOT used, still fails — no regression', () => {
-    expect(runGuard(['options'], []).rc).not.toBe(0);
+  it('a single verified helper, NOT used, is REPORTED and not rejected', () => {
+    const r = runGuard(['helperAlpha'], []);
+    expect(r.out, 'the unused helper was not named').toMatch('helperAlpha');
+    expect(r.rc, 'advisory: a single unused helper must not fail the attempt').toBe(0);
+    expect(r.flag, 'advisory: it must not set the deterministic-failure flag').toBe(0);
   });
 
   it('an UNVERIFIED site is not required', () => {
@@ -189,11 +212,13 @@ ${lift('verify_prescribed_helper_used')}
   });
 });
 
-describe('the rejection still reaches the next attempt', () => {
-  it('sets both the message and the routing flag', () => {
-    const { vf, out } = runGuard(FOUR, ['options']);
-    expect(vf).not.toBe('');
-    expect(lift('verify_prescribed_helper_used')).toMatch(/DETERMINISTIC_CHECK_FAILURE=1/);
-    expect(out).toMatch(/WARN:/);
+// The advisory must still REACH a human, but it must not enter the retry-routing channel:
+// DETERMINISTIC_CHECK_FAILURE is what turns text into a veto delivered to the next attempt.
+describe('the advisory informs without entering the rejection channel', () => {
+    it('reports the helper but sets no routing flag', () => {
+    const r = runGuard(FOUR, ['options']);
+    expect(r.out, 'nothing was reported to the operator').toMatch(/WARN|ADVISORY/i);
+    expect(r.flag, 'the routing flag makes this a veto again').toBe(0);
+    expect(r.vf, 'VERIFICATION_FAILURE is the veto channel — it must stay empty').toBe('');
   });
 });

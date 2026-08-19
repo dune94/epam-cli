@@ -3087,24 +3087,33 @@ verify_prescribed_helper_used() {
             _note=" [attempt $((retry_count + 1))/$((MAX_RETRIES + 1)) — no retries remain]"
         fi
     fi
-    STORY_REJECTION_KEY="helper:${_helper}"
-    # STORY_REJECTION_KEY is NOT feedback. _rejection_repeat_check reads it to notice an
-    # identical rejection twice and advance the model ladder — so the loop escalates to a
-    # stronger model and asks it to guess again, with the reason still withheld. Live
-    # 2026-08-09 attempts 1 and 2 produced the identical violation for exactly that reason,
-    # and all eight would have. VERIFICATION_FAILURE is the channel the failure analyst reads
-    # and turns into the next attempt's prompt.
-    # THE FLAG IS WHAT DELIVERS IT. VERIFICATION_FAILURE alone goes nowhere: the retry loop
-    # routes it into COORDINATOR_PROMPT_AMENDMENT — the text the next attempt actually reads —
-    # only when DETERMINISTIC_CHECK_FAILURE=1. Setting the variable without the flag is what
-    # made attempts 2 and 5 byte-identical live on 2026-08-09: the finding was assigned and
-    # dropped, and the writer was never told. This IS a deterministic check — the helper either
-    # appears in the diff or it does not — so it belongs in that class.
-    DETERMINISTIC_CHECK_FAILURE=1
-    export DETERMINISTIC_CHECK_FAILURE
-    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\n%d prescribed helper(s) EXIST in this repository and your change does not use them: %s\n\nEach was VERIFIED by the spec as owning part of this fix, so re-implementing that logic is how a fix comes to match on the wrong format and silently never work. Import and use every one of them, then make the change again. Using only some of them leaves the story incomplete.\n' "${#_missing[@]}" "$_missing_list")
-    warning "Story $story_id: the prescribed helper \`${_helper}\` EXISTS in this repository but does NOT appear in the change. The agent hand-rolled the logic instead of reusing it — live 2026-07-26 that produced a fix matching on '-' when the repository's own separator is '#', so the fix could never work. Import and use ${_helper}, which owns that format, rather than re-implementing it.${_note}"
-    return 1
+    # ── ADVISORY ONLY. THIS GATE BLOCKED WORKING CODE. ───────────────────────────
+    #
+    # It vetoed any change where a helper the spec marked fixVerified:true was absent from the
+    # diff. Proven against run artefacts, not fixtures: gotransit shipped AMSD-2041 successfully
+    # on 2026-08-13 (e780a8b7, 9 files, +379) and that implementation contains ZERO occurrences of
+    # ContentstackFactory and getSinglePageEntry — two helpers metrolinx's prd.json marks verified
+    # for the SAME ticket. Judged by that prescription, the working implementation is rejected on
+    # 2 of 5 helpers.
+    #
+    # A veto that can reject a correct implementation is not neutral. Each false rejection costs a
+    # whole writer attempt — measured 2026-08-19: 7.3M input tokens, $2.25, eleven minutes — and
+    # then escalates the ladder to ask a stronger model to produce something worse. Live metrolinx
+    # spent three ladder cycles on exactly this before committing.
+    #
+    # THE SIGNAL WAS WRONG, not merely too strict. The 2026-07-26 defect this was built for was a
+    # change that HAND-ROLLED A FORMAT the repository already parses — startsWith(id + '-') where
+    # DIVIDER is '#'. Helper-absence only correlated with that on one example. Generalising the
+    # correlation into a rule made every alternative implementation indistinguishable from the
+    # defect. And fixVerified:true is the detective's JUDGEMENT, not a fact — it was treated here
+    # as ground truth.
+    #
+    # It informs now and decides nothing: no DETERMINISTIC_CHECK_FAILURE, no VERIFICATION_FAILURE,
+    # no STORY_REJECTION_KEY, exit 0. Restoring any blocking power requires evidence from REAL RUN
+    # DIFFS — accepting gotransit's shipped implementation AND rejecting the 2026-07-26
+    # hand-rolled-separator change — not from fixtures written against the assumption under test.
+    warning "Story $story_id: ADVISORY — the spec marked ${#_missing[@]} helper(s) verified that this change does not use: ${_missing_list}. Not a rejection: the spec's fixVerified flag is a judgement, and a working implementation may legitimately not need them."
+    return 0
 }
 
 # Resolve a DECLARED deliverable to a real file.

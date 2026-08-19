@@ -104,23 +104,39 @@ function run(fx: { repo: string; logDir: string; prd: string }) {
     extractFunctionBody('verify_prescribed_helper_used'),
     'verify_prescribed_helper_used "S-1"',
     'echo "RC=$?"',
+    'echo "FLAG=${DETERMINISTIC_CHECK_FAILURE:-0}"',
+    'echo "KEY=${STORY_REJECTION_KEY:-}"',
   ].join('\n'));
   const r = spawnSync('bash', [script], { encoding: 'utf8', timeout: 30000 });
   const out = (r.stdout || '') + (r.stderr || '');
-  return { rc: parseInt((out.match(/RC=(\d+)/) || [, '-1'])[1], 10), out };
+  return {
+    rc: parseInt((out.match(/RC=(\d+)/) || [, '-1'])[1], 10),
+    flag: parseInt((out.match(/FLAG=(\d+)/) || [, '-1'])[1], 10),
+    key: (out.match(/KEY=(.*)/) || [, ''])[1],
+    out,
+  };
 }
 
 describe('a prescribed, existing helper must appear in the change', () => {
-  it('rejects the live run-5 change — hand-rolled matching, helper unused', () => {
+  it('ADVISES on the live run-5 change — hand-rolled matching, helper unused', () => {
     const fx = fixture({
       helper: 'getDispatchLineItemKey',
       change: "export const m = (a: string, b: string) => a === b || a.startsWith(b + '-');\n",
     });
-    const { rc, out } = run(fx);
-    expect(rc,
-      'the change invents its own separator instead of using the prescribed helper, ' +
-      'and shipped a fix that cannot work').toBe(1);
-    expect(out).toMatch(/getDispatchLineItemKey/);
+    const { rc, flag, key, out } = run(fx);
+    // THE REQUIREMENT CHANGED, 2026-08-19. This gate used to veto. Proven against run artefacts:
+    // gotransit shipped AMSD-2041 successfully (e780a8b7, 9 files, +379) with ZERO occurrences of
+    // two helpers metrolinx's prd.json marks fixVerified for the SAME ticket — so the veto rejects
+    // working code. Worse, verify_story_deliverables sets invoke_success=false on its failure,
+    // which SILENTLY short-circuits the repo's own lint gate at the next call site: the veto
+    // suppressed lint on every attempt it fired.
+    //
+    // It must still SAY the helper is unused — that information is worth having — and decide
+    // nothing.
+    expect(out, 'the advisory must still name the unused helper').toMatch(/getDispatchLineItemKey/);
+    expect(rc, 'a veto here rejects working code and suppresses the lint gate').toBe(0);
+    expect(flag, 'setting the deterministic-failure flag makes this a veto again').toBe(0);
+    expect(key, 'a rejection key escalates the ladder — that is deciding, not advising').toBe('');
   });
 
   it('accepts a change that uses the helper', () => {

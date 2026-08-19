@@ -61,6 +61,9 @@ export default defineConfig({
       'test/unit/orchestration/halt-claimed-exhaustion-that-never-happened.test.ts',
       'test/unit/orchestration/a-passing-lint-run-was-silent.test.ts',
       'test/unit/orchestration/brownfield-cve-hard-stopped-on-existing-debt.test.ts',
+      'test/unit/orchestration/manifest-and-lockfile-drifted-apart.test.ts',
+      'test/unit/orchestration/introduced-deps-was-a-node-only-regex.test.ts',
+      'test/unit/orchestration/writer-was-told-installs-happen-by-magic.test.ts',
 
       'test/unit/orchestration/a-reviewer-nobody-invoked.test.ts',
       // Prompt/tool contracts — prompts that instruct calls the tool refuses.

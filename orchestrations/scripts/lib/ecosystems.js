@@ -41,6 +41,38 @@ const MANIFESTS = [
     installDir: 'node_modules',
     // Which tool installs it, decided by the lockfile the repository carries. First match wins.
     lockfiles: { 'pnpm-lock.yaml': 'pnpm', 'yarn.lock': 'yarn', 'package-lock.json': 'npm', 'npm-shrinkwrap.json': 'npm' },
+    // HOW THIS ECOSYSTEM ADDS ONE NEW DEPENDENCY.
+    //
+    // installCommand provisions what the manifest ALREADY declares; it cannot add anything. The
+    // writer directive needs the other command — the one that writes the manifest and the lockfile
+    // together — and telling an agent to run a bare provisioning install to add a package is how
+    // AMSD-2041 ended up with a manifest entry no lockfile resolved. `{package}` is substituted
+    // by the caller.
+    addCommand: (manager) => (manager === 'yarn' || manager === 'pnpm' ? `${manager} add {package}` : 'npm install {package}'),
+    // DOES THE LOCKFILE RESOLVE THIS DEPENDENCY?
+    //
+    // A manifest states an intent; the lockfile is the only record of what a clean checkout will
+    // actually install. Live metrolinx AMSD-2041 added a package to package.json and to nothing
+    // else, and every check the pipeline owns passed anyway because a node_modules left over from
+    // an earlier run already contained it. `npm ci` on that branch fails.
+    //
+    // Returns true/false, or NULL when this ecosystem cannot answer for the lockfile it was
+    // handed — which the caller must read as "cannot prove", never as "declared".
+    lockDeclares: (lockText, name) => {
+      // npm and npm-shrinkwrap are JSON. pnpm and yarn lockfiles are not, and this returns null
+      // for them rather than guessing at a format it does not parse.
+      let doc;
+      try { doc = JSON.parse(lockText); } catch { return null; }
+      const inPackages = Object.keys(doc.packages || {}).some(
+        (k) => k === `node_modules/${name}` || k.endsWith(`/node_modules/${name}`),
+      );
+      if (inPackages) return true;
+      // lockfileVersion 1 carries a nested `dependencies` tree instead of a flat `packages` map.
+      const walk = (node) => Object.entries(node || {}).some(
+        ([k, v]) => k === name || walk(v && v.dependencies),
+      );
+      return walk(doc.dependencies);
+    },
     // The name a manifest gives itself, used to resolve one repository's dependency to another
     // repository in the same estate.
     selfName: (text) => JSON.parse(text).name || '',
@@ -102,6 +134,27 @@ const MANIFESTS = [
     stack: 'python',
     installDir: null, // a virtualenv commonly lives outside the repo
     lockfiles: { 'poetry.lock': 'poetry', 'uv.lock': 'uv', 'pdm.lock': 'pdm' },
+    // HOW THIS ECOSYSTEM ADDS ONE NEW DEPENDENCY.
+    //
+    // installCommand provisions what the manifest ALREADY declares; it cannot add anything. The
+    // writer directive needs the other command — the one that writes the manifest and the lockfile
+    // together — and telling an agent to run a bare provisioning install to add a package is how
+    // AMSD-2041 ended up with a manifest entry no lockfile resolved. `{package}` is substituted
+    // by the caller.
+    addCommand: (manager) => (manager ? `${manager} add {package}` : 'pip install {package}'),
+    // DOES THE LOCKFILE RESOLVE THIS DEPENDENCY?
+    //
+    // A manifest states an intent; the lockfile is the only record of what a clean checkout will
+    // actually install. Live metrolinx AMSD-2041 added a package to package.json and to nothing
+    // else, and every check the pipeline owns passed anyway because a node_modules left over from
+    // an earlier run already contained it. `npm ci` on that branch fails.
+    //
+    // Returns true/false, or NULL when this ecosystem cannot answer for the lockfile it was
+    // handed — which the caller must read as "cannot prove", never as "declared".
+    // poetry, uv and pdm all record resolved packages as TOML [[package]] tables.
+    lockDeclares: (lockText, name) => new RegExp(
+      `^\\s*name\\s*=\\s*["']${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`, 'm',
+    ).test(lockText),
     testCommand: (text) => (/\[tool\.pytest/.test(text) ? 'pytest' : ''),
     // HOW THIS ECOSYSTEM RUNS SPECIFIC TEST FILES.
     //
@@ -196,6 +249,27 @@ const MANIFESTS = [
     stack: 'go',
     installDir: null, // module cache is global, not in-repo
     lockfiles: { 'go.sum': 'go' },
+    // HOW THIS ECOSYSTEM ADDS ONE NEW DEPENDENCY.
+    //
+    // installCommand provisions what the manifest ALREADY declares; it cannot add anything. The
+    // writer directive needs the other command — the one that writes the manifest and the lockfile
+    // together — and telling an agent to run a bare provisioning install to add a package is how
+    // AMSD-2041 ended up with a manifest entry no lockfile resolved. `{package}` is substituted
+    // by the caller.
+    addCommand: () => 'go get {package}',
+    // DOES THE LOCKFILE RESOLVE THIS DEPENDENCY?
+    //
+    // A manifest states an intent; the lockfile is the only record of what a clean checkout will
+    // actually install. Live metrolinx AMSD-2041 added a package to package.json and to nothing
+    // else, and every check the pipeline owns passed anyway because a node_modules left over from
+    // an earlier run already contained it. `npm ci` on that branch fails.
+    //
+    // Returns true/false, or NULL when this ecosystem cannot answer for the lockfile it was
+    // handed — which the caller must read as "cannot prove", never as "declared".
+    // go.sum lists one module path per line, followed by a version.
+    lockDeclares: (lockText, name) => new RegExp(
+      `^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s`, 'm',
+    ).test(lockText),
     testCommand: () => 'go test ./...',
     // HOW THIS ECOSYSTEM RUNS SPECIFIC TEST FILES.
     //
@@ -237,6 +311,26 @@ const MANIFESTS = [
     stack: 'rust',
     installDir: null,
     lockfiles: { 'Cargo.lock': 'cargo' },
+    // HOW THIS ECOSYSTEM ADDS ONE NEW DEPENDENCY.
+    //
+    // installCommand provisions what the manifest ALREADY declares; it cannot add anything. The
+    // writer directive needs the other command — the one that writes the manifest and the lockfile
+    // together — and telling an agent to run a bare provisioning install to add a package is how
+    // AMSD-2041 ended up with a manifest entry no lockfile resolved. `{package}` is substituted
+    // by the caller.
+    addCommand: () => 'cargo add {package}',
+    // DOES THE LOCKFILE RESOLVE THIS DEPENDENCY?
+    //
+    // A manifest states an intent; the lockfile is the only record of what a clean checkout will
+    // actually install. Live metrolinx AMSD-2041 added a package to package.json and to nothing
+    // else, and every check the pipeline owns passed anyway because a node_modules left over from
+    // an earlier run already contained it. `npm ci` on that branch fails.
+    //
+    // Returns true/false, or NULL when this ecosystem cannot answer for the lockfile it was
+    // handed — which the caller must read as "cannot prove", never as "declared".
+    lockDeclares: (lockText, name) => new RegExp(
+      `^\\s*name\\s*=\\s*"${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`, 'm',
+    ).test(lockText),
     testCommand: () => 'cargo test',
     // HOW THIS ECOSYSTEM RUNS SPECIFIC TEST FILES.
     //
@@ -281,6 +375,27 @@ const MANIFESTS = [
     stack: 'ruby',
     installDir: null,
     lockfiles: { 'Gemfile.lock': 'bundle' },
+    // HOW THIS ECOSYSTEM ADDS ONE NEW DEPENDENCY.
+    //
+    // installCommand provisions what the manifest ALREADY declares; it cannot add anything. The
+    // writer directive needs the other command — the one that writes the manifest and the lockfile
+    // together — and telling an agent to run a bare provisioning install to add a package is how
+    // AMSD-2041 ended up with a manifest entry no lockfile resolved. `{package}` is substituted
+    // by the caller.
+    addCommand: () => 'bundle add {package}',
+    // DOES THE LOCKFILE RESOLVE THIS DEPENDENCY?
+    //
+    // A manifest states an intent; the lockfile is the only record of what a clean checkout will
+    // actually install. Live metrolinx AMSD-2041 added a package to package.json and to nothing
+    // else, and every check the pipeline owns passed anyway because a node_modules left over from
+    // an earlier run already contained it. `npm ci` on that branch fails.
+    //
+    // Returns true/false, or NULL when this ecosystem cannot answer for the lockfile it was
+    // handed — which the caller must read as "cannot prove", never as "declared".
+    // Gemfile.lock indents each resolved gem under specs:, name first then a parenthesised version.
+    lockDeclares: (lockText, name) => new RegExp(
+      `^\\s+${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\(`, 'm',
+    ).test(lockText),
     testCommand: (text) => (/rspec|minitest/.test(text) ? 'bundle exec rake test' : ''),
     // HOW THIS ECOSYSTEM RUNS SPECIFIC TEST FILES.
     //
@@ -327,4 +442,12 @@ function allArtifactDirs() {
   return [...seen];
 }
 
-module.exports = { MANIFESTS, allManifests, extraManifests, allArtifactDirs };
+/**
+ * WHICH LOCKFILE THIS REPOSITORY CARRIES, first match wins — the same order that decides the
+ * package manager, so the two can never disagree. Takes an `exists` predicate rather than
+ * touching the filesystem, because this file is a table and stays one.
+ */
+const lockfileFor = (eco, exists) => Object.keys((eco && eco.lockfiles) || {}).find((f) => exists(f)) || '';
+
+module.exports = {
+  lockfileFor, MANIFESTS, allManifests, extraManifests, allArtifactDirs };

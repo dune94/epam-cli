@@ -125,6 +125,10 @@ describe('run_external_verification — env sanitization REAL execution', () => 
       '_vendor_unlock() { :; }',
       'run_dynamic_tools_in_unlocked_window() { :; }',
       'run_dependency_check() { :; }',
+      // Added 2026-08-19 alongside run_dependency_check, which it sits beside in
+      // run_external_verification. Unstubbed, `set -e` kills the harness before the test command
+      // ever runs — the same isolation reason as every stub above.
+      'run_lockfile_sync_check() { :; }',
       'run_relative_import_check() { return 0; }',
       'run_named_import_check() { return 0; }',
       'run_anti_pattern_check() { return 0; }',

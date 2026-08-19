@@ -67,8 +67,26 @@ function makeRepo(withManifest: boolean): string {
   return d;
 }
 
+const ROOT = join(__dirname, '../../..');
+const NODE = join(process.env.HOME || '', '.nvm/versions/node/v20.20.0/bin/node');
+
 function run(block: string, env: NodeJS.ProcessEnv, projectRoot: string): string {
+  // THE BLOCK NO LONGER STANDS ALONE. Since 2026-08-19 it renders a template rather than carrying
+  // its own prose, so it calls render_engine_prompt, _project_install_command and the ecosystem
+  // handler. Stubbing those would test a stub; the REAL ones are sourced and lifted here, and the
+  // caller below asserts the render is non-empty so a harness that silently produces nothing
+  // cannot pass as "the directive correctly stayed silent".
   const script = `
+SCRIPT_DIR='${join(ROOT, 'orchestrations/scripts')}'
+AUTOMATION_DIR='${join(ROOT, 'orchestrations')}'
+NODE_CMD='${NODE}'
+source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
+eval "$(awk '/^_project_dep_config_value\\(\\) \\{/,/^\\}/' "$SCRIPT_DIR/claude.sh")"
+eval "$(awk '/^_project_install_command\\(\\) \\{/,/^\\}/' "$SCRIPT_DIR/claude.sh")"
+# A HARNESS THAT LIFTED NOTHING MUST NOT LOOK LIKE A DIRECTIVE THAT CORRECTLY STAYED SILENT.
+# The awk patterns above lost their backslashes through the template literal once already, which
+# defined no functions, emitted no directive, and made every empty-string expectation below pass.
+command -v _project_install_command >/dev/null || { echo "HARNESS DID NOT LIFT claude.sh" >&2; exit 3; }
 run_extracted() {
   local PROJECT_ROOT='${projectRoot}'
 ${block}
@@ -76,7 +94,11 @@ ${block}
 }
 run_extracted
 `;
-  return execFileSync('bash', ['-c', script], { encoding: 'utf8', env: { ...process.env, ...env } });
+  try {
+    return execFileSync('bash', ['-c', script], { encoding: 'utf8', env: { ...process.env, ...env } });
+  } catch (e) {
+    throw new Error(`harness failed: ${(e as { stderr?: Buffer }).stderr ?? e}`);
+  }
 }
 
 describe('the new-dependency directive exists and is wired into the prompt', () => {
@@ -92,19 +114,34 @@ describe('the new-dependency directive exists and is wired into the prompt', () 
       'model is left to guess again, exactly as it did live').not.toBe('');
   });
 
-  it('names no specific package, language, or install command — stays generic', () => {
+  it('names no specific package, and no install command of the ENGINE\'s choosing', () => {
     const repo = makeRepo(true);
     const out = run(block, { EPAM_BROWNFIELD: '1' }, repo);
     expect(out).not.toMatch(/contentstack/i);
+    // The rendered directive DOES name an install command from 2026-08-19 -- it has to, or the
+    // writer cannot act on it -- but only the one this project declares. The fixture declares
+    // `echo {package}`, so any ecosystem default appearing here means the engine guessed.
+    expect(out).toContain('echo <package>');
     expect(out).not.toMatch(/npm install|pip install|cargo add/i);
+  });
+
+  it('carries no ecosystem in the template itself — that is where hardcoding would live', () => {
+    const body = JSON.parse(readFileSync(
+      join(ROOT, 'orchestrations/prompts/templates/new-dependency-directive.json'), 'utf8')).body as string;
+    expect(body).not.toMatch(/npm|pip|cargo|yarn|pnpm|bundle|package\.json/i);
   });
 
   it('tells the agent to act, not to ask', () => {
     const repo = makeRepo(true);
     const out = run(block, { EPAM_BROWNFIELD: '1' }, repo);
-    // The live failure was literally the model asking "can be installed" and
-    // stopping. The directive must make clear no permission step is needed.
-    expect(out.toLowerCase()).toMatch(/automatic|does not need|no need to ask|proceed/);
+    // The live failure was literally the model asking "can be installed" and stopping, so the
+    // requirement is that the agent is told not to stall. The old assertion matched the old
+    // WORDING -- including "automatic" and "does not need your permission", which were the false
+    // half of that prose: nothing installs on its own unless the project declares autoInstall,
+    // and AMSD-2041 believed it and shipped a manifest no lockfile resolved. The requirement
+    // survives the rewording; the wording does not.
+    expect(out.toLowerCase()).toMatch(/do not stop|without asking|no need to ask|continue|proceed/);
+    expect(out.toLowerCase(), 'the false promise came back').not.toContain('automatically');
   });
 
   it('does not fire when no dependency-check manifest exists — the claim would be false', () => {

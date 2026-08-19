@@ -2796,10 +2796,39 @@ Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:"
     # Generic on purpose: no package name, language, or install command
     # appears here, the same way dependency-check.json's own installCommand
     # is config-supplied rather than hardcoded to npm/pip/cargo.
+    #
+    # THE DIRECTIVE IS A TEMPLATE, and its three facts come from the codeline. The prose used to
+    # live here as a shell string that promised the install happened by itself; AMSD-2041 followed
+    # it, and the lockfile never moved. See prompts/templates/new-dependency-directive.json.
     local new_dependency_directive=""
     if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -f "$PROJECT_ROOT/.epam/dependency-check.json" ]; then
-        new_dependency_directive="## Adding a New Dependency
-If the fix genuinely requires a package this project does not yet declare, import it directly and continue — do not stop to ask whether this is possible or search for an alternative that avoids it. Missing imports are detected and installed automatically after your change; this does not need your permission or a separate step. Proceed with the real fix."
+        local _nd_facts _nd_install _nd_manifest _nd_lock
+        _nd_facts=$("${NODE_CMD:-node}" "$SCRIPT_DIR/lib/handlers/codeline-ecosystem.js" "$PROJECT_ROOT" 2>/dev/null || echo '{}')
+        # The PROJECT's own per-package install command wins when it declares one; the ecosystem
+        # answers otherwise. `{package}` is the placeholder both use.
+        _nd_install="$(_project_install_command 2>/dev/null || true)"
+        [ -n "$_nd_install" ] || _nd_install=$(printf '%s' "$_nd_facts" | jq -r '.addCommand // ""')
+        _nd_install="${_nd_install//\{package\}/<package>}"
+        _nd_manifest=$(printf '%s' "$_nd_facts" | jq -r '.manifest // ""')
+        _nd_lock=$(printf '%s' "$_nd_facts" | jq -r '.lockfile // ""')
+        # THE INSTALL COMMAND IS THE ONLY HARD REQUIREMENT. A directive that tells an agent to run
+        # "" is worse than none. The lockfile half is separate and conditional: a codeline with no
+        # lockfile still needs the half that stops it stalling, which is why this directive exists.
+        if [ -n "$_nd_install" ]; then
+            local _nd_note=""
+            if [ -n "$_nd_manifest" ] && [ -n "$_nd_lock" ]; then
+                local _nd_nvals; _nd_nvals=$(mktemp "${TMPDIR:-/tmp}/new-dep-note-XXXXXX")
+                jq -n --arg manifest "$_nd_manifest" --arg lock "$_nd_lock" \
+                  '{"__MANIFEST_FILE__":$manifest,"__LOCKFILE__":$lock}' > "$_nd_nvals"
+                _nd_note="$(render_engine_prompt new-dependency-lockfile-note "$_nd_nvals" 2>/dev/null || true)"
+                rm -f "$_nd_nvals"
+            fi
+            local _nd_vals; _nd_vals=$(mktemp "${TMPDIR:-/tmp}/new-dep-vals-XXXXXX")
+            jq -n --arg install "$_nd_install" --arg note "$_nd_note" \
+              '{"__INSTALL_COMMAND__":$install,"__LOCKFILE_NOTE__":$note}' > "$_nd_vals"
+            new_dependency_directive="$(render_engine_prompt new-dependency-directive "$_nd_vals" 2>/dev/null || true)"
+            rm -f "$_nd_vals"
+        fi
     fi
 
     # Deterministic contract injection — root cause of a recurring live-run
@@ -4069,6 +4098,93 @@ _generate_vendor_contract() {
 # THE ENGINE NO LONGER DECIDES. An unresolvable import is a FINDING. Installing happens only
 # when the PROJECT declares autoInstall, using the installCommand the project declares — never
 # on this script's own verdict.
+# run_lockfile_sync_check <project_root>
+#
+# THE MANIFEST AND THE LOCKFILE DRIFTED APART AND EVERY CHECK PASSED ANYWAY.
+#
+# Live metrolinx AMSD-2041, approved commit af1d6b99. package.json gained
+# "@contentstack/live-preview-utils" and package-lock.json -- tracked, not ignored, clean in the
+# worktree -- was never touched; the package is absent from it entirely. tsc, ESLint and the build
+# passed and the reviewer APPROVED, because node_modules already held the package from a run five
+# days earlier that survived the codeline reset. `npm install` appears zero times in the run log.
+# `npm ci` on that branch fails outright.
+#
+# run_dependency_check answers the neighbouring question -- does the manifest declare what the code
+# imports -- and cannot see this one, because the manifest DID declare it. Only the lockfile
+# records what a clean checkout installs.
+#
+# IT DOES NOT BLOCK ON DRIFT THE STORY DID NOT CAUSE. That is 665f1a5's lesson: pre-existing desync
+# is repository debt, and hard-stopping on debt no writer output can repair burns the story budget
+# in a loop with no exit. The discriminator is EPAM_STORY_INTRODUCED_DEPS, the same manifest-delta
+# the SAST gate uses.
+run_lockfile_sync_check() {
+    local project_root="$1"
+    local _handler="${SCRIPT_DIR}/lib/handlers/lockfile-sync.js"
+    local _node="${NODE_CMD:-node}"
+
+    [ -n "$project_root" ] && [ -d "$project_root" ] || return 0
+    [ -f "$_handler" ] || { warning "  [lockfile-sync] handler missing — cannot prove the lockfile is in sync"; return 0; }
+
+    local _out
+    _out=$("$_node" "$_handler" "$project_root" 2>/dev/null) || {
+        warning "  [lockfile-sync] check did not run — cannot prove the lockfile is in sync"
+        return 0
+    }
+
+    local _unprovable
+    _unprovable=$(printf '%s\n' "$_out" | awk -F'\t' '$1=="unprovable"{print $2}')
+    if [ -n "$_unprovable" ]; then
+        # NOT a pass. Said out loud, because a check reporting success from absent evidence is the
+        # class of defect this gate exists to remove.
+        info "  [lockfile-sync] cannot prove: ${_unprovable}"
+        return 0
+    fi
+
+    local _missing=()
+    while IFS= read -r _line; do
+        [ -n "$_line" ] || continue
+        case "$_line" in missing*) ;; *) continue ;; esac
+        _missing+=("$_line")
+    done <<< "$_out"
+    [ ${#_missing[@]} -gt 0 ] || return 0
+
+    # Which of them did THIS story introduce? Everything else is pre-existing debt.
+    #
+    # The producer may have exported the answer already (the SAST gate needs the same one). An
+    # EMPTY export is a real answer -- "this story added nothing" -- so only an UNSET variable
+    # sends us to compute it.
+    local _intro_list="${EPAM_STORY_INTRODUCED_DEPS-}"
+    if [ -z "${EPAM_STORY_INTRODUCED_DEPS+x}" ] && command -v story_introduced_deps >/dev/null 2>&1; then
+        _intro_list="$(story_introduced_deps "$project_root")"
+    fi
+    local _introduced=",${_intro_list},"
+    local _blocking=() _preexisting=() _pkg _lock
+    for _line in "${_missing[@]}"; do
+        _pkg=$(printf '%s' "$_line" | cut -f2)
+        _lock=$(printf '%s' "$_line" | cut -f3)
+        case "$_introduced" in
+            *",${_pkg},"*) _blocking+=("$_pkg") ;;
+            *) _preexisting+=("$_pkg") ;;
+        esac
+    done
+
+    if [ ${#_preexisting[@]} -gt 0 ]; then
+        warning "  [lockfile-sync] ${#_preexisting[@]} pre-existing dependency(ies) absent from ${_lock} — advisory, not introduced by this story: $(printf '%s ' "${_preexisting[@]}")"
+    fi
+
+    [ ${#_blocking[@]} -gt 0 ] || return 0
+
+    local _specs
+    _specs=$(printf '  - %s\n' "${_blocking[@]}")
+    DETERMINISTIC_CHECK_FAILURE=1
+    export DETERMINISTIC_CHECK_FAILURE
+    STORY_REJECTION_KEY="lockfile:${_blocking[0]}"
+    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nYour change added dependency(ies) to the manifest that %s does not resolve:\n\n%s\nA lockfile is the only record of what a clean checkout installs. They resolve here because a vendor directory happens to already contain them, so the type check, the tests and the build all pass on this machine and the branch is BROKEN for anyone installing from the lockfile.\n\nInstall each one with this project'"'"'s package manager so the manifest and %s are written together. Do not hand-edit %s, and do not remove the dependency.\n' \
+        "$_lock" "$_specs" "$_lock" "$_lock")
+    error "  [lockfile-sync] ${#_blocking[@]} dependency(ies) this story added are absent from ${_lock} — the change cannot be installed from a clean checkout"
+    return 1
+}
+
 run_dependency_check() {
     local project_root="$1"
     local _plugin="${AUTOMATION_DIR}/plugins/dependency-scan-plugin.js"
@@ -4844,6 +4960,7 @@ run_external_verification() {
     fi
 
     run_dependency_check "$PROJECT_ROOT"
+    run_lockfile_sync_check "$PROJECT_ROOT"
 
     # Fail fast on a broken relative import BEFORE running the (often
     # multi-minute) test command — this recurring failure class was
@@ -9481,6 +9598,7 @@ $_kb_section"
         # dependency is already satisfied by the time the agent's turn
         # starts, so there's nothing left for the agent to (mis)fix itself.
         run_dependency_check "$PROJECT_ROOT"
+        run_lockfile_sync_check "$PROJECT_ROOT"
 
         # Vendor-dir guard: lock configured vendored-dependency directories
         # (e.g. node_modules) read-only — no story ever legitimately writes

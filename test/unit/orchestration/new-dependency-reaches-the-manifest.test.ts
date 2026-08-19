@@ -217,13 +217,23 @@ describe('the prompt and the mechanism do not contradict each other', () => {
   const cfg = JSON.parse(readFileSync(DEP_CONFIG, 'utf8'));
   const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
 
-  it('the writer is still told to import a needed package directly', () => {
+  it('the writer is still told to add a needed package directly', () => {
+    // This asserted that claude.sh's SOURCE contained the heading. On 2026-08-19 the prose moved
+    // to the template layer and the assertion failed while the directive itself was intact and
+    // improved -- which is the failure mode CLAUDE.md warns about: a source-text match proves
+    // nothing about what an agent is actually handed. Ask the artifact instead.
+    const template = join(
+      __dirname, '../../../orchestrations/prompts/templates/new-dependency-directive.json');
+    expect(existsSync(template), 'the directive has no prompt file at all').toBe(true);
+    const body = JSON.parse(readFileSync(template, 'utf8')).body as string;
     expect(
-      claudeSrc,
+      body,
       'if this directive is removed, the writer must instead be given an explicit way to ' +
         'report that it is blocked — silently working around a missing dependency is what ' +
         'produced the dead-code fix on AMSD-2041',
     ).toMatch(/Adding a New Dependency/);
+    // And it must still be REACHED: a template nothing renders is the same silence.
+    expect(claudeSrc).toMatch(/render_engine_prompt new-dependency-directive/);
   });
 
   it('so the configured install must NOT discard the manifest write', () => {

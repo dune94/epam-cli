@@ -1,0 +1,24 @@
+{
+  "$why": [
+    "Moved out of claude.sh on 2026-08-19, and corrected in the same move.",
+    "",
+    "The shell string it replaces told the writer: 'import it directly and continue -- missing imports are detected and installed automatically after your change; this does not need your permission or a separate step.' Live metrolinx AMSD-2041 followed that instruction exactly. Nothing installed anything: the automatic path fires only when the PROJECT declares autoInstall, and this one does not. The manifest gained a dependency, the lockfile never moved, and the branch cannot be installed from a clean checkout -- while the type check, the tests and the build all passed against a vendor directory left over from an earlier run.",
+    "",
+    "The directive exists because agents used to STALL, asking permission for a dependency in an unattended run. That problem is real, so this still says 'do not stop to ask'. What changed is the second half: the writer is told to run the install itself, and told why -- so the manifest and the lockfile are written together by the one tool that keeps them consistent.",
+    "",
+    "It names no package manager, no manifest and no lockfile. All three are values, resolved from lib/ecosystems.js for whichever codeline this is.",
+    "",
+    "SPLIT ON 2026-08-19, same day: the first version required a lockfile before it would render anything, which silently withdrew the anti-stall instruction from every codeline that has no lockfile -- reintroducing the exact stall this directive was created to stop. The lockfile half is now its own block, rendered only when there is a lockfile to keep in step."
+  ],
+  "description": "Tells the writer how to add a dependency this project does not yet declare.",
+  "seams": [
+    "story-writer"
+  ],
+  "id": "new-dependency-directive",
+  "version": 1,
+  "placeholders": [
+    "__INSTALL_COMMAND__",
+    "__LOCKFILE_NOTE__"
+  ],
+  "body": "## Adding a New Dependency\nIf the change genuinely requires a package this project does not yet declare, add it and continue — do not stop to ask whether this is allowed, and do not look for a worse solution that avoids it.\n\nAdd it by running:\n\n    __INSTALL_COMMAND__\n__LOCKFILE_NOTE__"
+}

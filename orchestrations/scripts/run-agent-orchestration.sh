@@ -9251,16 +9251,7 @@ $spec_prompt"
         # dependency line the change ADDS, name only.
         local _introduced_deps=""
         if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -n "${PROJECT_ROOT:-}" ]; then
-            local _dep_ref=""
-            [ -f "${LOG_DIR:-}/phase-baseline-sha.txt" ] && \
-                _dep_ref=$(tr -d '[:space:]' < "$LOG_DIR/phase-baseline-sha.txt" 2>/dev/null)
-            [ -n "$_dep_ref" ] || _dep_ref="$(_resolved_baseline_ref 2>/dev/null || echo '')"
-            if [ -n "$_dep_ref" ] && git -C "$PROJECT_ROOT" rev-parse --verify "$_dep_ref" >/dev/null 2>&1; then
-                _introduced_deps=$(git -C "$PROJECT_ROOT" diff "$_dep_ref" -- package.json 2>/dev/null \
-                    | grep '^+' | grep -v '^+++' \
-                    | grep -oE '"[@A-Za-z0-9._/-]+" *:' \
-                    | tr -d '":' | tr -d ' ' | sort -u | paste -sd, -)
-            fi
+            _introduced_deps="$(story_introduced_deps "$PROJECT_ROOT")"
             [ -n "$_introduced_deps" ] && \
                 log "  [sast] dependencies introduced by this story: ${_introduced_deps}"
         fi

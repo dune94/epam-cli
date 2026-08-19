@@ -2805,8 +2805,18 @@ Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:"
     # THE DIRECTIVE IS A TEMPLATE, and its three facts come from the codeline. The prose used to
     # live here as a shell string that promised the install happened by itself; AMSD-2041 followed
     # it, and the lockfile never moved. See prompts/templates/new-dependency-directive.json.
+    # GATED ON WHAT IT NEEDS, which is a known ecosystem — not on .epam/dependency-check.json.
+    #
+    # That file gated the ORIGINAL text, correctly: it promised "missing imports are detected and
+    # installed automatically", true only where the project declares autoInstall. The replacement
+    # promises nothing and tells the writer to run the add-command itself, so what it requires is a
+    # manifest, a lockfile and an add-command — all from lib/ecosystems.js.
+    #
+    # Live metrolinx AMSD-2041, 2026-08-19: that file was absent from the codeline, so lockfile-sync
+    # blocked four times while the one instruction that makes the block actionable was switched off.
+    # The writer was told what was wrong and never how to fix it.
     local new_dependency_directive=""
-    if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -f "$PROJECT_ROOT/.epam/dependency-check.json" ]; then
+    if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
         local _nd_facts _nd_install _nd_manifest _nd_lock
         _nd_facts=$("${NODE_CMD:-node}" "$SCRIPT_DIR/lib/handlers/codeline-ecosystem.js" "$PROJECT_ROOT" 2>/dev/null || echo '{}')
         # The PROJECT's own per-package install command wins when it declares one; the ecosystem
@@ -4964,8 +4974,20 @@ run_external_verification() {
         fi
     fi
 
-    run_dependency_check "$PROJECT_ROOT"
-    run_lockfile_sync_check "$PROJECT_ROOT"
+    # THE VERDICT IS READ. Both of these were called bare until 2026-08-19, so their `return 1`
+    # was discarded: they set VERIFICATION_FAILURE and DETERMINISTIC_CHECK_FAILURE (which is why
+    # their findings still reached the retry prompt) and then verification carried on to the test
+    # suite and could return 0. Live AMSD-2041: lockfile-sync blocked FOUR times and the story
+    # completed anyway, with a manifest the lockfile does not resolve. The four sibling checks
+    # below have always been guarded; these two were the exception.
+    #
+    # Each check sets the failure text and the flag itself, so the caller only reads the verdict.
+    if ! run_dependency_check "$PROJECT_ROOT"; then
+        return 1
+    fi
+    if ! run_lockfile_sync_check "$PROJECT_ROOT"; then
+        return 1
+    fi
 
     # Fail fast on a broken relative import BEFORE running the (often
     # multi-minute) test command — this recurring failure class was

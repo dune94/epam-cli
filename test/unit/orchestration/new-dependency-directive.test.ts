@@ -56,6 +56,12 @@ afterEach(() => {
 function makeRepo(withManifest: boolean): string {
   const d = mkdtempSync(join(tmpdir(), 'new-dep-directive-'));
   cleanupDirs.push(d);
+  // A real ecosystem manifest + lockfile. Since 2026-08-19 the directive is gated on a KNOWN
+  // ECOSYSTEM (what it needs to name an add-command) rather than on .epam/dependency-check.json
+  // (what the OLD auto-install promise needed). `withManifest` still controls the .epam/ config,
+  // which now only decides WHICH command is named, not whether the directive fires.
+  writeFileSync(join(d, 'package.json'), JSON.stringify({ name: 'fixture', dependencies: {} }));
+  writeFileSync(join(d, 'package-lock.json'), JSON.stringify({ lockfileVersion: 2, packages: {} }));
   if (withManifest) {
     mkdirSync(join(d, '.epam'), { recursive: true });
     writeFileSync(join(d, '.epam', 'dependency-check.json'), JSON.stringify({
@@ -81,6 +87,10 @@ SCRIPT_DIR='${join(ROOT, 'orchestrations/scripts')}'
 AUTOMATION_DIR='${join(ROOT, 'orchestrations')}'
 NODE_CMD='${NODE}'
 source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
+# The block builds its values file with jq_vals (values reach jq through files, never
+# argv). Unsourced it is command-not-found, the values file is EMPTY, and the render fails
+# — which reads here as "the directive did not fire".
+source "$SCRIPT_DIR/lib/jq-vals.sh"
 eval "$(awk '/^_project_dep_config_value\\(\\) \\{/,/^\\}/' "$SCRIPT_DIR/claude.sh")"
 eval "$(awk '/^_project_install_command\\(\\) \\{/,/^\\}/' "$SCRIPT_DIR/claude.sh")"
 # A HARNESS THAT LIFTED NOTHING MUST NOT LOOK LIKE A DIRECTIVE THAT CORRECTLY STAYED SILENT.
@@ -144,11 +154,34 @@ describe('the new-dependency directive exists and is wired into the prompt', () 
     expect(out.toLowerCase(), 'the false promise came back').not.toContain('automatically');
   });
 
-  it('does not fire when no dependency-check manifest exists — the claim would be false', () => {
+  it('never claims a capability nothing configures', () => {
+    // RE-EXPRESSED 2026-08-19, and the change is deliberate.
+    //
+    // This asserted the directive stays SILENT without .epam/dependency-check.json, because the
+    // original text promised "missing imports are detected and installed automatically" — true
+    // only where the project declares autoInstall. The requirement was: do not tell the agent
+    // something untrue.
+    //
+    // The text no longer makes that promise; it tells the writer to run the add-command itself.
+    // So silence is no longer what protects the agent from a false claim — and enforcing it did
+    // real harm: live AMSD-2041 on 2026-08-19, that file was absent, lockfile-sync blocked four
+    // times, and the writer was never told how to comply.
+    //
+    // The REQUIREMENT survives; only what satisfies it changed. The directive must promise no
+    // automation, and must name a command that actually exists.
     const repo = makeRepo(false);
     const out = run(block, { EPAM_BROWNFIELD: '1' }, repo);
-    expect(out.trim(), 'the directive claimed auto-install is available when nothing ' +
-      'configures it — the agent would be told something untrue').toBe('');
+    expect(out.toLowerCase(), 'the false auto-install promise came back').not.toContain('automatic');
+    expect(out.toLowerCase()).not.toContain('does not need your permission');
+    expect(out, 'named no command at all, so the writer cannot act on it').toMatch(/install|add/);
+  });
+
+  it('stays silent when it cannot name a real command', () => {
+    // The genuine "say nothing" case: no manifest of any known ecosystem, so there is no
+    // add-command to name and nothing truthful to say.
+    const d = mkdtempSync(join(tmpdir(), 'new-dep-noeco-'));
+    cleanupDirs.push(d);
+    expect(run(block, { EPAM_BROWNFIELD: '1' }, d).trim()).toBe('');
   });
 
   it('does not fire outside brownfield', () => {

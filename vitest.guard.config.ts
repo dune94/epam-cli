@@ -55,6 +55,7 @@ export default defineConfig({
       'test/unit/orchestration/ladder-resume-is-undone-by-prd-remodel.test.ts',
       'test/unit/orchestration/tc-writer-ran-in-phase-unknown.test.ts',
       'test/unit/orchestration/test-runner-assumed-vitest-on-a-jest-repo.test.ts',
+      'test/unit/orchestration/node-runtime-ignored-the-codelines-own-requirement.test.ts',
 
       'test/unit/orchestration/a-reviewer-nobody-invoked.test.ts',
       // Prompt/tool contracts — prompts that instruct calls the tool refuses.

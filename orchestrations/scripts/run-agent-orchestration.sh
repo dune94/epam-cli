@@ -773,18 +773,86 @@ seed_runtime_logs() {
 }
 
 # Detect the Node.js binary — checks fnm, nvm, and PATH in order.
+# ── Which Node the CODELINE requires, and which one is installed ─────────────
+#
+# detect_node() listed four literal paths (v20.20.2 / v20.20.0 under fnm and nvm) and checked them
+# BEFORE whatever `node` is on PATH. next.metrolinx.com declares Node 22 in three places — .nvmrc,
+# package.json engines, and the .epam/codeline-facts.json this pipeline generated itself, which
+# says "Node 22.x is required; other versions may not work" — and the engine ran its 245-file jest
+# suite under 20 anyway. Any failure then reads as a defect in the story's code, and no env var
+# existed to correct it.
+#
+# The requirement is a fact of the CODELINE. The runtime is DISCOVERED from what is installed.
+# Neither is a literal here: replacing the v20 list with a v22 list would just move the defect.
+_codeline_node_requirement() {
+    local _root="${1:-${PROJECT_ROOT:-}}"
+    [ -n "$_root" ] || return 0
+    # .nvmrc exists for exactly this purpose, so it is asked first.
+    if [ -f "$_root/.nvmrc" ]; then
+        head -1 "$_root/.nvmrc" | sed -E 's/^[[:space:]]*v?//; s/[^0-9].*$//' | tr -d '[:space:]'
+        return 0
+    fi
+    # Otherwise the manifest's own engines field. Major only: a codeline pinning a patch is
+    # pinning its own business, and the engine matches what it can actually satisfy.
+    if [ -f "$_root/package.json" ] && command -v jq >/dev/null 2>&1; then
+        jq -r '.engines.node // ""' "$_root/package.json" 2>/dev/null \
+            | sed -E 's/[^0-9]*([0-9]+).*/\1/' | tr -d '[:space:]'
+        return 0
+    fi
+    printf ''
+}
+
+# detect_node [codeline_root]
+#
+# Install ROOTS are locations of standard version managers, overridable with
+# EPAM_NODE_INSTALL_ROOTS (colon-separated). Paths, not versions — adding a Node release requires
+# no edit here.
 detect_node() {
-    local candidates=(
-        "$HOME/.local/share/fnm/node-versions/v20.20.2/installation/bin/node"
-        "$HOME/.local/share/fnm/node-versions/v20.20.0/installation/bin/node"
-        "$HOME/.nvm/versions/node/v20.20.2/bin/node"
-        "$HOME/.nvm/versions/node/v20.20.0/bin/node"
-        "$(command -v node 2>/dev/null || true)"
-    )
-    local c
-    for c in "${candidates[@]}"; do
-        [ -n "$c" ] && [ -x "$c" ] && echo "$c" && return 0
+    local _root="${1:-${PROJECT_ROOT:-}}"
+    local _want; _want="$(_codeline_node_requirement "$_root" 2>/dev/null)"
+    # A codeline that declares nothing inherits the ENGINE's own declaration — this repo states it
+    # in .nvmrc and package.json engines, so it is read the same way rather than written here.
+    # Without this, "declares nothing" would mean "highest installed", silently moving a green
+    # codeline (mock3 declares neither) onto a major nobody chose.
+    if [ -z "$_want" ]; then
+        _want="$(_codeline_node_requirement "${EPAM_ENGINE_ROOT:-$SCRIPT_DIR/../..}" 2>/dev/null)"
+    fi
+    local _roots="${EPAM_NODE_INSTALL_ROOTS:-$HOME/.local/share/fnm/node-versions:$HOME/.nvm/versions/node}"
+
+    local _cands="" _d _vd _ver _bin _major
+    local _oifs="$IFS"; IFS=':'
+    for _d in $_roots; do
+        IFS="$_oifs"
+        [ -d "$_d" ] || continue
+        for _vd in "$_d"/v*; do
+            [ -d "$_vd" ] || continue
+            _ver="$(basename "$_vd")"
+            _bin=""
+            [ -x "$_vd/bin/node" ] && _bin="$_vd/bin/node"
+            [ -z "$_bin" ] && [ -x "$_vd/installation/bin/node" ] && _bin="$_vd/installation/bin/node"
+            [ -n "$_bin" ] || continue
+            _major="${_ver#v}"; _major="${_major%%.*}"
+            if [ -n "$_want" ] && [ "$_major" != "$_want" ]; then continue; fi
+            _cands="${_cands}${_ver}\t${_bin}\n"
+        done
+        IFS=':'
     done
+    IFS="$_oifs"
+
+    # Highest version wins within whatever survived the requirement filter.
+    if [ -n "$_cands" ]; then
+        printf '%b' "$_cands" | sort -V | tail -1 | cut -f2
+        return 0
+    fi
+
+    # PATH node only when it SATISFIES the requirement. Handing back a runtime the codeline said
+    # will not work is how a green suite stops meaning anything.
+    local _p; _p="$(command -v node 2>/dev/null || true)"
+    if [ -n "$_p" ] && [ -x "$_p" ]; then
+        if [ -z "$_want" ]; then echo "$_p"; return 0; fi
+        local _pv; _pv="$("$_p" --version 2>/dev/null)"; _pv="${_pv#v}"; _pv="${_pv%%.*}"
+        [ "$_pv" = "$_want" ] && { echo "$_p"; return 0; }
+    fi
     echo ""
     return 1
 }

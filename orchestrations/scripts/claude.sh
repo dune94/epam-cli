@@ -259,6 +259,13 @@ load_llm_settings_json() {
     _v=$(_get '.timeouts.storyTimeoutMaxSecs'); [ -z "${EPAM_STORY_TIMEOUT_MAX_SECS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_TIMEOUT_MAX_SECS="$_v"
     _v=$(_get '.timeouts.storyTimeoutSecs'); [ -z "${EPAM_STORY_TIMEOUT_SECS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_TIMEOUT_SECS="$_v"
     _v=$(_get '.timeouts.gateTimeoutSecs'); [ -z "${EPAM_GATE_TIMEOUT_SECS:-}" ] && [ -n "$_v" ] && export EPAM_GATE_TIMEOUT_SECS="$_v"
+    # The test timeout belongs with the other timeouts, not in config.env. It was the only one a
+    # project could not declare: six call sites read a bare ${EPAM_TEST_TIMEOUT_SECS:-300} with no
+    # declared source, so raising it meant reintroducing the duplication that consolidating
+    # timeouts into this file removed (EPAM_STORY_TIMEOUT_SECS had already drifted 690 vs 600).
+    # 300s is a real constraint on a large suite, and when `timeout` kills it the run reports
+    # FAILING TESTS rather than a timeout.
+    _v=$(_get '.timeouts.testTimeoutSecs'); [ -z "${EPAM_TEST_TIMEOUT_SECS:-}" ] && [ -n "$_v" ] && export EPAM_TEST_TIMEOUT_SECS="$_v"
 
     _v=$(_get '.brownfield.minOutputTokens'); [ -z "${EPAM_BROWNFIELD_MIN_OUTPUT_TOKENS:-}" ] && [ -n "$_v" ] && export EPAM_BROWNFIELD_MIN_OUTPUT_TOKENS="$_v"
     _v=$(_get '.brownfield.maxScaledIterations'); [ -z "${EPAM_BROWNFIELD_MAX_SCALED_ITERATIONS:-}" ] && [ -n "$_v" ] && export EPAM_BROWNFIELD_MAX_SCALED_ITERATIONS="$_v"

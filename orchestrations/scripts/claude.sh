@@ -1144,6 +1144,24 @@ _brownfield_rung_bump() {
 # resolve_model_from_story <story_id>
 # For epam-run providers (copilot/openai/qwen/cursor), the prd.json story carries
 # a .model field directly.  If set, it overrides the effort-based STORY_MODEL.
+# _tc_writer_phase — which phase the TC writer is generating for.
+#
+# CURRENT_PHASE is a claude.sh-internal global: declared empty at the top of this file and assigned
+# in exactly ONE place, the phase-filter path. PHASE is what run-agent-orchestration.sh exports and
+# passes per invocation. Reading only CURRENT_PHASE and falling back to the literal 'unknown' meant
+# that on every ordinary run the writer was asked for a phase no story is in — live metrolinx
+# AMSD-2041, 2026-08-18:
+#   [tc-writer] Generating TCs for phase 'unknown' (post-impl, pre-test)...
+#   [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+#   [tc-writer] TC generation complete — test stories have testCriteria
+# and the story's testCriteria stayed empty while the log reported completion.
+#
+# Emits EMPTY when neither is set, never a literal that looks like an answer: the caller can detect
+# an absent phase, but 'unknown' is indistinguishable from a phase that simply has no test stories.
+_tc_writer_phase() {
+    printf '%s' "${CURRENT_PHASE:-${PHASE:-}}"
+}
+
 resolve_model_from_story() {
     local story_id="$1"
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
@@ -1151,6 +1169,13 @@ resolve_model_from_story() {
     story_model=$(jq -r --arg id "$story_id" \
         '.stories[] | select(.id == $id) | .model // ""' \
         "$prd_target" 2>/dev/null || echo "")
+    # A ladder position restored for THIS story outranks the PRD's base model: the PRD says where
+    # the story STARTS, the persisted rung says where it got to. Matched by VALUE, so a stale
+    # marker from a previous story cannot suppress this story's own PRD model.
+    if [ -n "${STORY_MODEL_LADDER_RESUMED:-}" ] && [ "${STORY_MODEL:-}" = "${STORY_MODEL_LADDER_RESUMED}" ]; then
+        log "  Model[prd.json] -> keeping resumed ladder position $STORY_MODEL (PRD declares ${story_model:-none})"
+        return 0
+    fi
     if [ -n "$story_model" ]; then
         STORY_MODEL="$story_model"
         log "  Model[prd.json] -> $STORY_MODEL (overrides effort default)"
@@ -8680,6 +8705,21 @@ implement_story() {
     if [ -n "$_persisted_model" ] && [ "$_persisted_model" != "${STORY_MODEL:-}" ]; then
         log "  [InferenceLadder] $story_id resuming on '$_persisted_model' (escalated in an earlier invocation; PRD model is '${STORY_MODEL:-}')"
         STORY_MODEL="$_persisted_model"
+        # A RESTORED RUNG IS NOT A DEFAULT TO BE RE-DERIVED.
+        #
+        # resolve_model_from_story() runs further down this same function and assigns STORY_MODEL
+        # straight from prd.json whenever the story declares one — it cannot know a ladder position
+        # was just restored. Live 2026-08-19 (AMSD-2041): the ladder reached moonshotai/kimi-k3,
+        # produced the story's best attempt and committed it; the next re-implementation cycle
+        # resumed on kimi-k3, was silently re-derived back to MiniMax-M3, and escalated from THERE
+        # to z-ai/glm-5.2 — a step DOWN, immediately after reaching the top. Every re-implementation
+        # crosses an invocation boundary, so the ladder could climb within an invocation and never
+        # hold ground across one.
+        #
+        # This is the same defect the comment above already fixed for resolve_provider_settings,
+        # recurring at the SECOND re-derivation below it.
+        STORY_MODEL_LADDER_RESUMED="$_persisted_model"
+        export STORY_MODEL_LADDER_RESUMED
         local _resumed_provider
         _resumed_provider=$(resolve_model_provider "$_persisted_model")
         [ -n "$_resumed_provider" ] && STORY_PROVIDER="$_resumed_provider"
@@ -9863,13 +9903,17 @@ $_kb_section"
                 "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null \
                 | { grep -cE '(\.|_)(spec|test)\.[A-Za-z0-9]+$|/__tests__/|(^|/)test_[^/]+$' || true; })
             if [ "${_story_files_are_tests:-0}" -eq 0 ]; then
-                log "  [tc-writer] Generating TCs for phase '${CURRENT_PHASE:-unknown}' (post-impl, pre-test)..."
+                local _tcw_phase; _tcw_phase="$(_tc_writer_phase)"
+                if [ -z "$_tcw_phase" ]; then
+                    warning "  [tc-writer] no phase is set (CURRENT_PHASE and PHASE both empty) — TCs NOT generated"
+                fi
+                log "  [tc-writer] Generating TCs for phase '${_tcw_phase:-<unset>}' (post-impl, pre-test)..."
                 # `if CMD | tee ...; then` TESTS TEE, which exits 0 essentially always — so this
                 # reported "TC generation complete" whatever the writer did, including refusing to
                 # run at all. No pipefail here; PIPESTATUS[0] is the writer's own code.
                 if { bash "$SCRIPT_DIR/post-impl-tc-writer.sh" \
                     --prd "${MAIN_PRD_FILE:-$PRD_FILE}" \
-                    --phase "${CURRENT_PHASE:-unknown}" \
+                    --phase "$_tcw_phase" \
                     --output-dir "$PROJECT_ROOT" \
                     2>&1 | tee -a "$output_file"; [ "${PIPESTATUS[0]}" -eq 0 ]; }; then
                     log "  [tc-writer] TC generation complete — test stories have testCriteria"

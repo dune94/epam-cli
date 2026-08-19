@@ -76,6 +76,42 @@ _render_change_reviewer() {
 # Runs the project's declared check (.epam/verification.json) via the verification plugin.
 # The engine names no tool, extension, directory or runtime path. Undeclared -> non-zero with a
 # reason, never a silent pass.
+# ── The codeline's OWN test runner ────────────────────────────────────────────
+#
+# This file carried 40 executable `vitest` references and zero `jest` ones. metrolinx runs jest, so
+# on that codeline the post-repair re-verification skipped silently, the review oracle skipped, and
+# Step 19 executed a binary that does not exist and reported "vitest: FAIL — fix test failures
+# before review proceeds": a missing binary reported as failing tests.
+#
+# codeline-ecosystem.js already answers this from the repository itself. The runner is a fact of
+# the codeline, never of the engine.
+_codeline_test_command() {
+    local _root="${1:-$PROJECT_ROOT}"
+    [ -n "$_root" ] || return 0
+    local _facts
+    _facts=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/codeline-ecosystem.js" "$_root" 2>/dev/null) || return 0
+    [ -n "$_facts" ] || return 0
+    printf '%s' "$_facts" | python3 "$SCRIPT_DIR/lib/handlers/json-field.py" testCommand 2>/dev/null || true
+}
+
+# ── Failing test files, whatever printed them ─────────────────────────────────
+#
+# The COMMAND at Step 4.5 was genericised to the codeline's declared testCommand; the PARSER was
+# left in vitest's output format (`^ FAIL `, `^ ❯ `, `^ +→ `). On a jest repo nothing matched, so
+# no failing file was ever named, no bug-fix story could be created, and the run reported
+# "Could not parse failing test files". Half the fix is not the fix.
+#
+# Both runners print FAIL followed by the path; jest indents differently and uses ● for the
+# assertion. Matching on the FAIL line alone covers both without encoding either as the truth.
+_parse_failing_test_files() {
+    printf '%s\n' "$1" \
+        | grep -aE '^[[:space:]]*(FAIL|✕|×)[[:space:]]+' \
+        | sed -E 's/^[[:space:]]*(FAIL|✕|×)[[:space:]]+//' \
+        | awk '{print $1}' \
+        | grep -aE '\.[A-Za-z0-9]+$' \
+        | sort -u
+}
+
 _run_project_verification() {
     local _root="${1:-$PROJECT_ROOT}"
     local _auto="${AUTOMATION_DIR:-$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")}"
@@ -1488,9 +1524,14 @@ _lint_fix_findings_directly() {
         fi
 
         # 3. the tests still pass — a repair must never weaken the proof
-        if [ "$_lf_ok" = "1" ] && [ -n "${_node_bin:-}" ] && [ -x "$PROJECT_ROOT/node_modules/.bin/vitest" ]; then
-            ( cd "$PROJECT_ROOT" && timeout 600 "$_node_bin" ./node_modules/.bin/vitest run ) \
-                >/dev/null 2>&1 || _lf_ok=0
+        # The codeline's own command — a `-x .bin/vitest` guard skipped this entirely on a jest
+        # repo and left _lf_ok=1, accepting a repair without re-running its proof.
+        local _lf_test_cmd; _lf_test_cmd="$(_codeline_test_command "$PROJECT_ROOT")"
+        if [ "$_lf_ok" = "1" ] && [ -n "$_lf_test_cmd" ]; then
+            ( cd "$PROJECT_ROOT" && timeout 600 sh -c "$_lf_test_cmd" ) >/dev/null 2>&1 || _lf_ok=0
+        elif [ "$_lf_ok" = "1" ]; then
+            warning "  loop-fix: ${PROJECT_ROOT} declares no test command — repair NOT re-verified"
+            _lf_ok=0
         fi
 
         if [ "$_lf_ok" = "1" ]; then
@@ -8097,7 +8138,13 @@ if ! is_truthy "${SKIP_PRE_REVIEW_GATE:-}" && [ -f "$PROJECT_ROOT/package.json" 
         # npm install, or a test that leaves a server/resource open) with zero
         # diagnostic signal about which command was actually stuck. Same fix
         # applied consistently across every instance in this file.
-        if timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" "$_node_bin" ./node_modules/.bin/vitest run \
+        _pr_test_cmd="$(_codeline_test_command "$PROJECT_ROOT")"
+        if [ -z "$_pr_test_cmd" ]; then
+            # An absent declaration is not a failure of the code under review. Reporting it as
+            # "tests failed" blamed the story for the engine being unable to ask.
+            warning "  Step 19: ${PROJECT_ROOT} declares no test command — pre-review tests NOT run"
+            _pre_review_failed=1
+        elif timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" sh -c "$_pr_test_cmd" \
                 2>&1 | tee -a "$_pre_review_log"; then
             success "  vitest: PASS"
             "$SCRIPT_DIR/update-monitor.sh" event "pre_review_test_pass" \
@@ -9021,13 +9068,19 @@ $spec_prompt"
         local _node_bin
         _node_bin=$(detect_node 2>/dev/null || true)
         if [ -n "$_node_bin" ] && [ -f "$PROJECT_ROOT/package.json" ] && \
-           [ -f "$PROJECT_ROOT/node_modules/.bin/vitest" ]; then
+           [ -n "$(_codeline_test_command "$PROJECT_ROOT")" ]; then
             set +e
-            "$_node_bin" "$PROJECT_ROOT/node_modules/.bin/vitest" run \
-                --reporter=json \
-                --outputFile="$oracle_json" \
-                --root "$PROJECT_ROOT" \
-                > /dev/null 2>&1
+            # The oracle wants machine-readable output; only vitest is asked for --reporter=json,
+            # and any other runner falls back to its plain output, which _parse_failing_test_files
+            # understands. Previously a non-vitest codeline got no oracle at all.
+            if [ -x "$PROJECT_ROOT/node_modules/.bin/vitest" ]; then
+                "$_node_bin" "$PROJECT_ROOT/node_modules/.bin/vitest" run \
+                    --reporter=json --outputFile="$oracle_json" --root "$PROJECT_ROOT" \
+                    > /dev/null 2>&1
+            else
+                ( cd "$PROJECT_ROOT" && timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" \
+                    sh -c "$(_codeline_test_command "$PROJECT_ROOT")" ) > "${oracle_json}.txt" 2>&1
+            fi
             local _oracle_rc=$?
             set -e
             if [ -f "$oracle_json" ]; then
@@ -10131,7 +10184,7 @@ _failure_is_tolerated() {
 }
 
     local failing_files
-    failing_files=$(echo "$vitest_output" | grep -E '^ FAIL ' | awk '{print $2}' | sort -u)
+    failing_files=$(_parse_failing_test_files "$vitest_output")
     if [ -z "$failing_files" ]; then
         error "  Could not parse failing test files from vitest output"
         return 1
@@ -10291,7 +10344,7 @@ _emit_unfixed_bug_list() {
     echo "╚══════════════════════════════════════════════════════════╝"
     echo ""
     # Failing test files
-    echo "$vitest_output" | grep -E '^ FAIL ' | while read -r line; do
+    _parse_failing_test_files "$vitest_output" | while read -r line; do
         echo "  FILE  $line"
     done
     echo ""

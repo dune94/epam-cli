@@ -5442,6 +5442,24 @@ function prescriptionMissingSource(sites) {
  * survey that did not run, a codeline it never covered, or one it put out of scope — because a
  * fabricated starting point is worse than none.
  */
+/**
+ * configSurfaceBlock — the configuration files this codeline carries that govern what its code is
+ * permitted to do, one per line, or an explicit statement that there are none.
+ *
+ * The names come from client-env-boundary-plugin's adapters, which resolve the stack from the
+ * repository's own manifest. Nothing here knows a framework. "None" is stated rather than left
+ * blank: an empty section reads as an omission, and the detective must be able to tell the
+ * difference between "no configuration governs this" and "nobody asked".
+ */
+function configSurfaceBlock(repoPath) {
+  let files = [];
+  try {
+    files = require('../plugins/client-env-boundary-plugin.js').configSurface(repoPath) || [];
+  } catch { files = []; }
+  if (!files.length) return '(this codeline declares no configuration this engine recognises)';
+  return files.map((f) => '- ' + f).join('\n');
+}
+
 function surveyHypothesisBlock(codeline, logDir) {
   if (!codeline || !logDir) return '';
   let survey = null;
@@ -5621,6 +5639,9 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
       __SURVEY_HYPOTHESIS__: surveyHypothesisBlock(story && story.codeline, logDir),
       __PRESEED_BLOCK__: preseedBlock,
       __PRESCRIPTION_RULES__: detectivePrescription(_kindHint),
+      // The configuration this codeline actually carries, resolved from its OWN manifest by
+      // the adapter that already knows this stack. Empty for a stack no adapter recognises.
+      __CONFIG_SURFACE__: configSurfaceBlock(repoPath),
     },
   );
 

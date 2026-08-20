@@ -9,14 +9,19 @@
   "proposed    = derived mechanically from the evidence, never from a name",
   "disposition = YOURS. null until you set it. CONTRACT | MASK | DEAD | NOT-A-GATE | KEEP",
   "",
-  "Nothing acts on this file yet. Phase 2 works only the rows you dispose."
+  "Nothing acts on this file yet. Phase 2 works only the rows you dispose.",
+  "",
+  "2026-08-20: dispositions set for the rows VERIFIED BY INSPECTION. Every other row carries",
+  "verified:false and is a machine proposal that is known to over-report — three passes of the",
+  "classifier produced 40, 21 and 66 candidates for the same codebase. Ten rows survived checking."
  ],
  "generated": "2026-08-20",
  "totals": {
-  "NOT-A-GATE": 113,
-  "CONTRACT": 105,
-  "MASK": 21,
-  "DEAD": 40
+  "undecided": 269,
+  "NOT-A-GATE": 2,
+  "MASK": 2,
+  "DEAD": 5,
+  "CONTRACT": 1
  },
  "guards": [
   {
@@ -30,7 +35,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-002",
@@ -41,7 +47,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-003",
@@ -54,7 +61,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-004",
@@ -65,7 +73,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-005",
@@ -78,7 +87,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-006",
@@ -89,7 +99,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-007",
@@ -102,7 +113,8 @@
    ],
    "proposed": "MASK",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-008",
@@ -115,7 +127,8 @@
    ],
    "proposed": "MASK",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-009",
@@ -126,7 +139,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-010",
@@ -139,7 +153,8 @@
    ],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-011",
@@ -152,7 +167,8 @@
    ],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-012",
@@ -166,7 +182,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-013",
@@ -177,7 +194,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-014",
@@ -190,7 +208,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-015",
@@ -203,7 +222,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-016",
@@ -214,7 +234,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-017",
@@ -225,7 +246,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-018",
@@ -238,7 +260,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-019",
@@ -251,7 +274,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-020",
@@ -262,7 +286,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-021",
@@ -275,7 +300,8 @@
    ],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-022",
@@ -288,7 +314,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-023",
@@ -301,7 +328,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-024",
@@ -312,7 +340,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-025",
@@ -323,7 +352,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-026",
@@ -334,7 +364,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-027",
@@ -348,7 +379,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-028",
@@ -359,7 +391,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-029",
@@ -373,7 +406,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-030",
@@ -384,7 +418,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-031",
@@ -395,7 +430,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-032",
@@ -406,7 +442,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-033",
@@ -420,7 +457,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-034",
@@ -431,7 +469,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-035",
@@ -442,7 +481,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-036",
@@ -453,7 +493,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-037",
@@ -464,7 +505,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-038",
@@ -475,7 +517,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-039",
@@ -486,7 +529,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-040",
@@ -497,7 +541,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-041",
@@ -508,7 +553,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-042",
@@ -519,7 +565,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-043",
@@ -530,7 +577,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-044",
@@ -541,7 +589,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-045",
@@ -552,7 +601,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-046",
@@ -563,7 +613,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-047",
@@ -574,7 +625,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-048",
@@ -585,7 +637,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-049",
@@ -598,7 +651,8 @@
    ],
    "proposed": "MASK",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-050",
@@ -611,7 +665,8 @@
    ],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-051",
@@ -622,7 +677,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-052",
@@ -635,7 +691,8 @@
    ],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-053",
@@ -646,7 +703,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-054",
@@ -657,7 +715,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-055",
@@ -668,7 +727,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-056",
@@ -679,7 +739,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-057",
@@ -690,7 +751,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-058",
@@ -703,7 +765,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-059",
@@ -714,7 +777,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-060",
@@ -726,8 +790,9 @@
     "2 call site(s), verdict never read"
    ],
    "proposed": "DEAD",
-   "disposition": null,
-   "note": ""
+   "disposition": "NOT-A-GATE",
+   "note": "Invoked for its side effect (writing an analysis), not for a verdict. Flagged as verdict-never-read by a signal that cannot tell the two apart.",
+   "verified": "by inspection, 2026-08-20"
   },
   {
    "id": "GD-061",
@@ -738,7 +803,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-062",
@@ -749,7 +815,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-063",
@@ -760,7 +827,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-064",
@@ -773,7 +841,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-065",
@@ -784,7 +853,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-066",
@@ -797,7 +867,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-067",
@@ -810,7 +881,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-068",
@@ -823,7 +895,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-069",
@@ -836,7 +909,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-070",
@@ -847,7 +921,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-071",
@@ -858,7 +933,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-072",
@@ -871,7 +947,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-073",
@@ -882,7 +959,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-074",
@@ -895,7 +973,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-075",
@@ -908,7 +987,8 @@
    ],
    "proposed": "MASK",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-076",
@@ -919,7 +999,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-077",
@@ -930,7 +1011,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-078",
@@ -944,7 +1026,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-079",
@@ -955,7 +1038,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-080",
@@ -966,7 +1050,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-081",
@@ -980,7 +1065,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-082",
@@ -991,7 +1077,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-083",
@@ -1004,7 +1091,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-084",
@@ -1017,7 +1105,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-085",
@@ -1030,7 +1119,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-086",
@@ -1043,7 +1133,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-087",
@@ -1056,7 +1147,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-088",
@@ -1067,7 +1159,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-089",
@@ -1078,7 +1171,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-090",
@@ -1091,7 +1185,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-091",
@@ -1102,7 +1197,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-092",
@@ -1113,7 +1209,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-093",
@@ -1127,7 +1224,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-094",
@@ -1140,7 +1238,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-095",
@@ -1151,7 +1250,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-096",
@@ -1162,7 +1262,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-097",
@@ -1175,7 +1276,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-098",
@@ -1186,7 +1288,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-099",
@@ -1197,7 +1300,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-100",
@@ -1208,7 +1312,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-101",
@@ -1219,7 +1324,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-102",
@@ -1233,7 +1339,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-103",
@@ -1246,7 +1353,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-104",
@@ -1259,7 +1367,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-105",
@@ -1270,7 +1379,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-106",
@@ -1283,7 +1393,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-107",
@@ -1296,7 +1407,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-108",
@@ -1309,7 +1421,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-109",
@@ -1320,7 +1433,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-110",
@@ -1333,7 +1447,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-111",
@@ -1346,7 +1461,8 @@
    ],
    "proposed": "MASK",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-112",
@@ -1359,7 +1475,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-113",
@@ -1370,7 +1487,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-114",
@@ -1381,7 +1499,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-115",
@@ -1394,7 +1513,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-116",
@@ -1408,7 +1528,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-117",
@@ -1421,7 +1542,8 @@
    ],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-118",
@@ -1434,7 +1556,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-119",
@@ -1445,7 +1568,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-120",
@@ -1456,7 +1580,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-121",
@@ -1469,7 +1594,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-122",
@@ -1480,7 +1606,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-123",
@@ -1491,7 +1618,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-124",
@@ -1502,7 +1630,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-125",
@@ -1513,7 +1642,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-126",
@@ -1524,7 +1654,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-127",
@@ -1537,7 +1668,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-128",
@@ -1548,7 +1680,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-129",
@@ -1561,7 +1694,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-130",
@@ -1575,7 +1709,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-131",
@@ -1586,7 +1721,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-132",
@@ -1599,7 +1735,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-133",
@@ -1612,7 +1749,8 @@
    ],
    "proposed": "MASK",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-134",
@@ -1623,7 +1761,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-135",
@@ -1634,7 +1773,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-136",
@@ -1644,8 +1784,9 @@
    "symbol": "review_feedback_is_incomplete",
    "evidence": [],
    "proposed": "MASK",
-   "disposition": null,
-   "note": "G-001 — reads .reviewIncomplete from a file whose writer projects it away; always false"
+   "disposition": "MASK",
+   "note": "Reads .reviewIncomplete from a file whose writer projects that field away, so it always evaluates false.",
+   "verified": "by inspection, 2026-08-20"
   },
   {
    "id": "GD-137",
@@ -1658,7 +1799,8 @@
    ],
    "proposed": "MASK",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-138",
@@ -1671,7 +1813,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-139",
@@ -1682,7 +1825,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-140",
@@ -1693,7 +1837,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-141",
@@ -1706,7 +1851,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-142",
@@ -1717,7 +1863,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-143",
@@ -1728,7 +1875,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-144",
@@ -1739,7 +1887,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-145",
@@ -1752,7 +1901,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-146",
@@ -1763,7 +1913,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-147",
@@ -1774,7 +1925,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-148",
@@ -1787,7 +1939,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-149",
@@ -1800,7 +1953,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-150",
@@ -1813,7 +1967,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-151",
@@ -1826,7 +1981,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-152",
@@ -1837,7 +1993,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-153",
@@ -1851,7 +2008,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-154",
@@ -1862,7 +2020,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-155",
@@ -1875,7 +2034,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-156",
@@ -1886,7 +2046,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-157",
@@ -1897,7 +2058,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-158",
@@ -1908,7 +2070,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-159",
@@ -1921,7 +2084,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-160",
@@ -1932,7 +2096,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-161",
@@ -1943,7 +2108,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-162",
@@ -1956,7 +2122,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-163",
@@ -1967,7 +2134,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-164",
@@ -1978,7 +2146,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-165",
@@ -1989,7 +2158,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-166",
@@ -2002,7 +2172,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-167",
@@ -2015,7 +2186,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-168",
@@ -2028,7 +2200,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-169",
@@ -2042,7 +2215,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-170",
@@ -2055,7 +2229,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-171",
@@ -2066,7 +2241,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-172",
@@ -2079,7 +2255,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-173",
@@ -2092,7 +2269,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-174",
@@ -2105,7 +2283,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-175",
@@ -2116,7 +2295,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-176",
@@ -2127,7 +2307,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-177",
@@ -2140,7 +2321,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-178",
@@ -2151,7 +2333,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-179",
@@ -2162,7 +2345,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-180",
@@ -2173,7 +2357,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-181",
@@ -2184,7 +2369,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-182",
@@ -2197,7 +2383,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-183",
@@ -2208,7 +2395,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-184",
@@ -2219,7 +2407,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-185",
@@ -2232,7 +2421,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-186",
@@ -2245,7 +2435,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-187",
@@ -2258,8 +2449,9 @@
     "no test names it"
    ],
    "proposed": "MASK",
-   "disposition": null,
-   "note": ""
+   "disposition": "NOT-A-GATE",
+   "note": "An informational observability probe at launch. `|| true` is correct: Langfuse being down is reported, not fatal.",
+   "verified": "by inspection, 2026-08-20"
   },
   {
    "id": "GD-188",
@@ -2272,7 +2464,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-189",
@@ -2283,7 +2476,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-190",
@@ -2294,7 +2488,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-191",
@@ -2307,7 +2502,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-192",
@@ -2318,7 +2514,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-193",
@@ -2329,7 +2526,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-194",
@@ -2342,7 +2540,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-195",
@@ -2353,7 +2552,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-196",
@@ -2364,7 +2564,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-197",
@@ -2375,7 +2576,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-198",
@@ -2386,7 +2588,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-199",
@@ -2397,7 +2600,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-200",
@@ -2408,7 +2612,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-201",
@@ -2419,7 +2624,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-202",
@@ -2430,7 +2636,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-203",
@@ -2443,7 +2650,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-204",
@@ -2454,7 +2662,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-205",
@@ -2465,7 +2674,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-206",
@@ -2478,7 +2688,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-207",
@@ -2491,7 +2702,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-208",
@@ -2504,7 +2716,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-209",
@@ -2515,7 +2728,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-210",
@@ -2528,7 +2742,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-211",
@@ -2541,7 +2756,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-212",
@@ -2554,7 +2770,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-213",
@@ -2567,7 +2784,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-214",
@@ -2580,7 +2798,8 @@
    ],
    "proposed": "MASK",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-215",
@@ -2593,7 +2812,8 @@
    ],
    "proposed": "MASK",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-216",
@@ -2606,7 +2826,8 @@
    ],
    "proposed": "MASK",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-217",
@@ -2617,7 +2838,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-218",
@@ -2630,7 +2852,8 @@
    ],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-219",
@@ -2643,7 +2866,8 @@
    ],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-220",
@@ -2656,7 +2880,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-221",
@@ -2667,7 +2892,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-222",
@@ -2680,7 +2906,8 @@
    ],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-223",
@@ -2692,8 +2919,9 @@
     "never called"
    ],
    "proposed": "DEAD",
-   "disposition": null,
-   "note": ""
+   "disposition": "DEAD",
+   "note": "The agent invocation gateway. Zero call sites — its only self-reference is its own ${1:?} error string. Every defect this session entered through a path that bypassed it.",
+   "verified": "by inspection, 2026-08-20"
   },
   {
    "id": "GD-224",
@@ -2706,8 +2934,9 @@
     "no test names it"
    ],
    "proposed": "DEAD",
-   "disposition": null,
-   "note": ""
+   "disposition": "DEAD",
+   "note": "Zero call sites.",
+   "verified": "by inspection, 2026-08-20"
   },
   {
    "id": "GD-225",
@@ -2718,7 +2947,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-226",
@@ -2729,7 +2959,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-227",
@@ -2740,7 +2971,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-228",
@@ -2753,7 +2985,8 @@
    ],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-229",
@@ -2766,7 +2999,8 @@
    ],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-230",
@@ -2779,7 +3013,8 @@
    ],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-231",
@@ -2790,7 +3025,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-232",
@@ -2803,7 +3039,8 @@
    ],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-233",
@@ -2815,8 +3052,9 @@
     "1 fail-open call site(s)"
    ],
    "proposed": "MASK",
-   "disposition": null,
-   "note": ""
+   "disposition": "MASK",
+   "note": "Its only call site is `assert_cost_ledger_not_silently_empty || true`. A guard against a run recording nothing, made silent.",
+   "verified": "by inspection, 2026-08-20"
   },
   {
    "id": "GD-234",
@@ -2827,7 +3065,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-235",
@@ -2840,7 +3079,8 @@
    ],
    "proposed": "MASK",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-236",
@@ -2851,7 +3091,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-237",
@@ -2864,7 +3105,8 @@
    ],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-238",
@@ -2875,7 +3117,8 @@
    "evidence": [],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-239",
@@ -2888,7 +3131,8 @@
    ],
    "proposed": "MASK",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-240",
@@ -2901,7 +3145,8 @@
    ],
    "proposed": "MASK",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-241",
@@ -2913,8 +3158,9 @@
     "1 fail-open call site(s)"
    ],
    "proposed": "MASK",
-   "disposition": null,
-   "note": ""
+   "disposition": "CONTRACT",
+   "note": "Fail-open at its call site and DELIBERATELY so, documented in place: a repo with no remote must not abort the phase, the story proceeds on whatever branch is checked out. Verified, not a mask.",
+   "verified": "by inspection, 2026-08-20"
   },
   {
    "id": "GD-242",
@@ -2925,7 +3171,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-243",
@@ -2936,7 +3183,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-244",
@@ -2949,7 +3197,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-245",
@@ -2962,7 +3211,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-246",
@@ -2976,7 +3226,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-247",
@@ -2989,7 +3240,8 @@
    ],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-248",
@@ -3001,8 +3253,9 @@
     "never called"
    ],
    "proposed": "DEAD",
-   "disposition": null,
-   "note": ""
+   "disposition": "DEAD",
+   "note": "Zero call sites.",
+   "verified": "by inspection, 2026-08-20"
   },
   {
    "id": "GD-249",
@@ -3013,7 +3266,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-250",
@@ -3026,7 +3280,8 @@
    ],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-251",
@@ -3039,7 +3294,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-252",
@@ -3051,8 +3307,9 @@
     "never called"
    ],
    "proposed": "DEAD",
-   "disposition": null,
-   "note": ""
+   "disposition": "DEAD",
+   "note": "Zero call sites. Its own docstring: returns 0 when every changed file is inside the plan and not exempt — a real gate, never wired.",
+   "verified": "by inspection, 2026-08-20"
   },
   {
    "id": "GD-253",
@@ -3065,7 +3322,8 @@
    ],
    "proposed": "NOT-A-GATE",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-254",
@@ -3076,7 +3334,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-255",
@@ -3090,7 +3349,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-256",
@@ -3103,7 +3363,8 @@
    ],
    "proposed": "MASK",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-257",
@@ -3114,7 +3375,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-258",
@@ -3125,7 +3387,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-259",
@@ -3138,7 +3401,8 @@
    ],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-260",
@@ -3151,7 +3415,8 @@
    ],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-261",
@@ -3162,7 +3427,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-262",
@@ -3173,7 +3439,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-263",
@@ -3184,7 +3451,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-264",
@@ -3195,7 +3463,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-265",
@@ -3206,7 +3475,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-266",
@@ -3217,7 +3487,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-267",
@@ -3230,7 +3501,8 @@
    ],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-268",
@@ -3243,7 +3515,8 @@
    ],
    "proposed": "MASK",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-269",
@@ -3256,7 +3529,8 @@
    ],
    "proposed": "MASK",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-270",
@@ -3267,7 +3541,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-271",
@@ -3280,7 +3555,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-272",
@@ -3291,7 +3567,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-273",
@@ -3303,8 +3580,9 @@
     "never called"
    ],
    "proposed": "DEAD",
-   "disposition": null,
-   "note": ""
+   "disposition": "DEAD",
+   "note": "Zero call sites. Its own comment: fifteen consumers read agentRole as `// \"unknown\"`, so an unassigned story runs with an empty system prompt and the run completes with nobody the wiser. A guard written to stop a silent defect, never called.",
+   "verified": "by inspection, 2026-08-20"
   },
   {
    "id": "GD-274",
@@ -3317,7 +3595,8 @@
    ],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-275",
@@ -3328,7 +3607,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-276",
@@ -3341,7 +3621,8 @@
    ],
    "proposed": "DEAD",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-277",
@@ -3352,7 +3633,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-278",
@@ -3365,7 +3647,8 @@
    ],
    "proposed": "MASK",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   },
   {
    "id": "GD-279",
@@ -3376,7 +3659,8 @@
    "evidence": [],
    "proposed": "CONTRACT",
    "disposition": null,
-   "note": ""
+   "note": "MECHANICAL PROPOSAL ONLY — not verified. The signals over-report: loggers that return non-zero read as checks, and stdout-producing helpers read as verdict-never-read. Do not act on this row without checking it.",
+   "verified": false
   }
  ]
 }

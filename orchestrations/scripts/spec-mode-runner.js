@@ -5752,9 +5752,14 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
         // explore already handed over, and one successful live pass used 7
         // round-trips. EPAM_MAX_ITERATIONS stays as the outer backstop.
         EPAM_MAX_TOOL_CALLS: process.env.CODEGRAPH_DETECTIVE_MAX_TOOL_CALLS || String(specModeDefaults().perSeam.codegraphDetective),
-        // Identity for the Langfuse trace. Without it every trace in the run
-        // renders as `llm-stream (uuid)` with no agent, no story and no prompt
-        // — a list of 35 identical unreadable rows.
+        // IDENTITY, FOR TWO CONSUMERS. Without it every Langfuse trace in the run renders as
+        // `llm-stream (uuid)` with no agent, no story and no prompt — 35 identical unreadable
+        // rows — AND ai-run.sh keys the ladder and the self-heal KB on it, so this agent's
+        // constraints and episodes get filed under whatever ran before it.
+        //
+        // It was set TWICE in this same object literal, once for each reason, neither addition
+        // aware of the other. Same value, so nothing misbehaved — but the second silently won,
+        // and a future edit to the first would have had no effect at all.
         EPAM_AGENT_NAME: 'code-graph-detective',
         EPAM_STORY_ID: (story && story.id) || '',
         // The detective TRACES the causal fix site + picks the helper to reuse —
@@ -5769,10 +5774,7 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
         // from the registry by name. An explicit env override above still wins, and a seam
         // with no entry simply runs on the run's defaults.
         ...seamInvocationEnv('code-graph-detective', logDir),
-        // THE IDENTITY TRAVELS WITH THE SEAM. costAgent below names it for the cost row, but
-        // EPAM_AGENT_NAME is what ai-run.sh keys the ladder and the self-heal KB on — so this
-        // agent's constraints and episodes were filed under whatever ran before it.
-        EPAM_AGENT_NAME: 'code-graph-detective',
+        // THE IDENTITY TRAVELS WITH THE SEAM: set once above, for both consumers.
       }, { costAgent: 'code-graph-detective', costStoryId: story && story.id ? story.id : '',
         // Salvage the detective's JSON even if its process exits non-zero/null
         // (it emits the answer, then a detached grandchild teardown trips the
@@ -9166,7 +9168,6 @@ module.exports = {
   buildSurveyPrompt,
   surveyLineFor,
   reconcileMintTally,
-  TOOL_ESTATE_SURVEY,
   SURVEY_STATES,
   TOOL_ROSTER_REVIEW,
   seamInvocationEnv,

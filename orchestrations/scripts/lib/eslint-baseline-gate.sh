@@ -77,8 +77,8 @@ _eslint_tree_globs() {
     # and the gate examined no files while reporting a verdict.
     local _vd
     while IFS= read -r _vd; do
-        [ -n "$_vd" ] && _prune+=(-not -path "*/$(basename "$_vd")/*")
-    done < <(_eslint_vendor_dirs "$_root" 2>/dev/null)
+        [ -n "$_vd" ] && _prune+=(-not -path "*/${_vd}/*")
+    done < <(_eslint_vendor_dir_names "$_root" 2>/dev/null)
 
     for _mr in $(_eslint_source_roots "$_root"); do
         [ -d "$_root/$_mr" ] || continue
@@ -95,6 +95,26 @@ _eslint_tree_globs() {
 # file — run-agent-orchestration.sh does. Calling it here would silently return nothing: no
 # vendor prune, no baseline symlink, and a linter that cannot resolve at baseline reports every
 # pre-existing finding as new. Same declaration, read locally.
+# THE DECLARED VENDOR DIRECTORY NAMES — regardless of where they sit in the tree.
+#
+# _eslint_vendor_dirs below emits only vendor directories that exist AT THE ROOT, because its other
+# caller symlinks them into a baseline worktree and needs real paths. Pruning is a different
+# question: a vendored tree can sit at any depth — src/node_modules/, packages/*/node_modules/ — and
+# the find prune matches by basename, so it never needed the directory to exist at the root.
+#
+# It did need one, and that is the defect: a repo whose only vendored copy is nested had nothing
+# pruned, so a .js file belonging to a DEPENDENCY decided that .js was a project source extension,
+# and eslint was handed `src/**/*.js` for a TypeScript project.
+_eslint_vendor_dir_names() {
+    local _root="${1:-$PROJECT_ROOT}"
+    local _cfg="$_root/.epam/dependency-check.json"
+    [ -f "$_cfg" ] || _cfg="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+    [ -f "$_cfg" ] || return 0
+    jq -r '.vendorDirs[]? // empty' "$_cfg" 2>/dev/null | while IFS= read -r _d; do
+        [ -n "$_d" ] && basename "$_d"
+    done
+}
+
 _eslint_vendor_dirs() {
     local _root="${1:-$PROJECT_ROOT}"
     local _cfg="$_root/.epam/dependency-check.json"

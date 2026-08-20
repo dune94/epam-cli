@@ -284,12 +284,9 @@ const ALLOW: Record<string, string> = {
   'orchestrations/scripts/run-agent-orchestration.sh#0df4a51b79cf':
     'Usage text printed to a human operator on a bad invocation. It reaches a terminal, '
     + 'never a model.',
-  'orchestrations/scripts/run-agent-orchestration.sh#3604cccfdc29':
-    'A JSON config file written to disk for a codeline. Data the engine reads back, not '
-    + 'instructions given to an agent.',
-  'orchestrations/scripts/run-agent-orchestration.sh#531a929bc126':
-    'A JSON config file written to disk for a codeline. Data the engine reads back, not '
-    + 'instructions given to an agent.',
+  'orchestrations/scripts/preflight-static.sh#6a43ac38a0ba':
+    'A node -e scanner program the pre-flight runs over engine source. It is executed by '
+    + 'node and its output is read by the shell; no model ever sees it.',
   'orchestrations/scripts/test/test-epam-providers.sh#5304c244046b':
     'A test fixture: a stub script written to disk so a test runs without the real binary. '
     + 'Executed, never sent to a model.',

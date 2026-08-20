@@ -241,6 +241,46 @@ function detectTests(projectRoot) {
 }
 
 
+/**
+ * Detect how THIS repo lints, from its own scripts. Same rule as detectVerification and
+ * detectTests: prefer a script the project already defines, and return null rather than guess.
+ *
+ * run_repo_lint_verification resolves its linter by probing for eslint. That is right for a repo
+ * that lints with eslint and wrong for every other one: on finding none it warns "lint was NOT run;
+ * nothing here proves the change is clean" and returns 0 -- a Tier-A gate carrying the delivery
+ * contract, passing on a state it describes in its own words as unproven.
+ *
+ * Nothing here names eslint. A project that lints with biome, oxlint, ruff or a Makefile target
+ * says so in its own scripts, and that is what runs.
+ */
+function detectLint(projectRoot) {
+  const pkgPath = join(projectRoot, 'package.json');
+  if (existsSync(pkgPath)) {
+    let pkg = null;
+    try { pkg = JSON.parse(readFileSync(pkgPath, 'utf8')); } catch { pkg = null; }
+    const scripts = (pkg && pkg.scripts) || {};
+    const named = ['lint', 'lint:js', 'lint:src', 'eslint']
+      .find((s) => typeof scripts[s] === 'string' && scripts[s].trim() !== '');
+    if (named) {
+      const runner = existsSync(join(projectRoot, 'pnpm-lock.yaml')) ? 'pnpm'
+        : existsSync(join(projectRoot, 'yarn.lock')) ? 'yarn'
+          : 'npm run';
+      return {
+        lint: {
+          command: `${runner} ${named}`,
+          // A lint diagnostic names the FILE it is about; rule ids churn between versions and
+          // configs, so the file is the stable identity for a baseline subtraction.
+          failurePattern: '^\\s*(\\S+\\.[A-Za-z0-9]+)',
+          failureIdentity: '{1}',
+          detected: `package.json scripts.${named}`,
+        },
+      };
+    }
+  }
+  return null;
+}
+
+
 /* ── FAILURE IDENTITY ─────────────────────────────────────────────────────────
  *
  * The baseline-delta gate — run the check, and if RED, run it again at the baseline SHA and
@@ -375,6 +415,7 @@ module.exports = {
   readManifest,
   runVerification,
   detectTests,
+  detectLint,
   readTestManifest,
   runTests,
   parseFailures,

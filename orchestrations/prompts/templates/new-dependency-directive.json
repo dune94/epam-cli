@@ -6,7 +6,7 @@
     "",
     "The directive exists because agents used to STALL, asking permission for a dependency in an unattended run. That problem is real, so this still says 'do not stop to ask'. What changed is the second half: the writer is told to run the install itself, and told why -- so the manifest and the lockfile are written together by the one tool that keeps them consistent.",
     "",
-    "It names no package manager, no manifest and no lockfile. All three are values, resolved from lib/ecosystems.js for whichever codeline this is.",
+    "It names no package manager, no manifest and no lockfile. All three are values, resolved from lib/ecosystem-registry.js for whichever codeline this is.",
     "",
     "SPLIT ON 2026-08-19, same day: the first version required a lockfile before it would render anything, which silently withdrew the anti-stall instruction from every codeline that has no lockfile -- reintroducing the exact stall this directive was created to stop. The lockfile half is now its own block, rendered only when there is a lockfile to keep in step."
   ],

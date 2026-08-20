@@ -32,7 +32,7 @@ const { execSync } = require('child_process');
 const { crossRepoTermScores, applyRecency, repoRecency, orderCodelines, rankingConfidence } = require('./codeline-score');
 const { rankByStructure } = require('./codeline-structure');
 // THE ONE ECOSYSTEM TABLE. This file used to carry a three-branch stack ladder of its own.
-const { allManifests } = require('./ecosystems.js');
+const { allManifests } = require('./ecosystem-registry.js');
 
 /**
  * Append this call's spend to the activity log. Best-effort by design: a cost record that fails

@@ -1000,144 +1000,15 @@ resolve_codeline_node() {
 # block every other stack's install). Returns 0 if at least one recognized
 # manifest was found and its handler didn't hard-fail; 1 if no manifest was
 # recognized, or the one that WAS found failed outright.
-detect_and_install_dependencies() {
-    local codeline_root="$1"
-    local node_bin="$2"
-    local ran_any=0
-    local ok=1
-
-    if [ -f "$codeline_root/package.json" ]; then
-        ran_any=1
-        local npm_bin
-        npm_bin="$(dirname "$node_bin")/npm"
-        if [ ! -x "$npm_bin" ]; then
-            warning "  [deps-install] npm not found alongside $node_bin"
-            ok=0
-        else
-            # WHICH package manager is the PROJECT's answer. Its `packageManager`
-            # field first (the standard corepack declaration), then the lockfile
-            # it committed. Read, never assumed.
-            local pm_name=""
-            pm_name="$("$node_bin" -e '
-              try {
-                const p = JSON.parse(require("fs").readFileSync(process.argv[1] + "/package.json", "utf8"));
-                process.stdout.write(String(p.packageManager || "").split("@")[0]);
-              } catch (e) { /* no declaration */ }
-            ' "$codeline_root" 2>/dev/null)"
-            if [ -z "$pm_name" ]; then
-                [ -f "$codeline_root/pnpm-lock.yaml" ] && pm_name="pnpm"
-                [ -z "$pm_name" ] && [ -f "$codeline_root/yarn.lock" ] && pm_name="yarn"
-            fi
-
-            local pm_bin="$npm_bin"
-            if [ -n "$pm_name" ] && [ "$pm_name" != "npm" ] && command -v "$pm_name" &>/dev/null; then
-                pm_bin="$(command -v "$pm_name")"
-            fi
-
-            # DESTRUCTIVE OR NOT is OUR policy, and the default is: never.
-            #
-            # This used to select `ci` whenever a lockfile existed. `npm ci`
-            # DELETES node_modules before installing, so on 2026-07-28 a repair
-            # wiped a working 1,530-package install, hit a 401 on a private
-            # dependency, aborted, and left the codeline with an EMPTY
-            # node_modules — strictly worse than it found it. The warning below
-            # already said "often a private-registry auth wall": the failure was
-            # anticipated and the destructive command ran first anyway.
-            #
-            # We did not create these repositories and cannot restore what we
-            # remove. A caller that owns its tree can opt in.
-            local pm_cmd="install"
-            [ "${DEPS_CLEAN_INSTALL:-0}" = "1" ] && [ -f "$codeline_root/package-lock.json" ] && pm_cmd="ci"
-
-            # What was there before, so the repair can be judged rather than
-            # trusted. A repair that reduces the tree must not be handed on as a
-            # working install.
-            local _deps_before=0
-            [ -d "$codeline_root/node_modules" ] && _deps_before=$(find "$codeline_root/node_modules" -maxdepth 1 -mindepth 1 2>/dev/null | wc -l)
-
-            local repair_log; repair_log=$(mktemp)
-            if [ "$pm_bin" = "$npm_bin" ]; then
-                (cd "$codeline_root" && "$node_bin" "$npm_bin" "$pm_cmd" --no-audit --no-fund) > "$repair_log" 2>&1
-            else
-                (cd "$codeline_root" && "$pm_bin" "$pm_cmd") > "$repair_log" 2>&1
-            fi
-            local _install_rc=$?
-            local _deps_after=0
-            [ -d "$codeline_root/node_modules" ] && _deps_after=$(find "$codeline_root/node_modules" -maxdepth 1 -mindepth 1 2>/dev/null | wc -l)
-
-            if [ "$_install_rc" -eq 0 ]; then
-                success "  [deps-install] install ($pm_cmd via $(basename "$pm_bin")) succeeded in $codeline_root"
-            else
-                warning "  [deps-install] install FAILED in $codeline_root — tail below (often a private-registry auth wall):"
-                tail -10 "$repair_log" >&2
-                ok=0
-            fi
-
-            # Did the repair leave LESS than it found? Silence here is how a
-            # working codeline became an empty one and the next gate was handed
-            # the wreckage as if it were a tree.
-            if [ "$_deps_after" -lt "$_deps_before" ]; then
-                error "  [deps-install] REPAIR DESTROYED WHAT IT FOUND in $codeline_root: $_deps_before entries -> $_deps_after"
-                error "    The codeline is now in a worse state than before this ran, and its gates cannot run."
-                error "    Reinstall its dependencies before relying on any result from this run."
-                ok=0
-            fi
-            rm -f "$repair_log"
-        fi
-    fi
-
-    if [ -f "$codeline_root/Pipfile" ] && command -v pipenv &>/dev/null; then
-        ran_any=1
-        (cd "$codeline_root" && pipenv install --dev --quiet) 2>&1 || { warning "  [deps-install] pipenv install failed in $codeline_root"; ok=0; }
-    elif { [ -f "$codeline_root/requirements.txt" ] || [ -f "$codeline_root/pyproject.toml" ]; } \
-         && { command -v pip3 &>/dev/null || command -v pip &>/dev/null; }; then
-        ran_any=1
-        local pip_bin; pip_bin=$(command -v pip3 || command -v pip)
-        if [ -f "$codeline_root/requirements.txt" ]; then
-            (cd "$codeline_root" && "$pip_bin" install --quiet -r requirements.txt) 2>&1 \
-              || { warning "  [deps-install] pip install failed in $codeline_root"; ok=0; }
-        else
-            (cd "$codeline_root" && "$pip_bin" install --quiet -e .) 2>&1 \
-              || { warning "  [deps-install] pip install (pyproject) failed in $codeline_root"; ok=0; }
-        fi
-    fi
-
-    if [ -f "$codeline_root/Cargo.toml" ] && command -v cargo &>/dev/null; then
-        ran_any=1
-        (cd "$codeline_root" && cargo fetch --quiet) 2>&1 || { warning "  [deps-install] cargo fetch failed in $codeline_root"; ok=0; }
-    fi
-
-    if [ -f "$codeline_root/go.mod" ] && command -v go &>/dev/null; then
-        ran_any=1
-        (cd "$codeline_root" && go mod download) 2>&1 || { warning "  [deps-install] go mod download failed in $codeline_root"; ok=0; }
-    fi
-
-    if [ -f "$codeline_root/pom.xml" ] && command -v mvn &>/dev/null; then
-        ran_any=1
-        (cd "$codeline_root" && mvn -q dependency:resolve) 2>&1 || { warning "  [deps-install] mvn dependency:resolve failed in $codeline_root"; ok=0; }
-    fi
-
-    if { [ -f "$codeline_root/build.gradle" ] || [ -f "$codeline_root/build.gradle.kts" ]; } && command -v gradle &>/dev/null; then
-        ran_any=1
-        (cd "$codeline_root" && ./gradlew dependencies --quiet) 2>&1 || { warning "  [deps-install] gradle dependencies failed in $codeline_root"; ok=0; }
-    fi
-
-    if [ -f "$codeline_root/Gemfile" ] && command -v bundle &>/dev/null; then
-        ran_any=1
-        (cd "$codeline_root" && bundle install --quiet) 2>&1 || { warning "  [deps-install] bundle install failed in $codeline_root"; ok=0; }
-    fi
-
-    if [ -f "$codeline_root/composer.json" ] && command -v composer &>/dev/null; then
-        ran_any=1
-        (cd "$codeline_root" && composer install --quiet --no-interaction) 2>&1 || { warning "  [deps-install] composer install failed in $codeline_root"; ok=0; }
-    fi
-
-    if [ "$ran_any" -eq 0 ]; then
-        warning "  [deps-install] no recognized manifest found in $codeline_root — nothing to install"
-        return 1
-    fi
-    [ "$ok" -eq 1 ]
-}
+# DEPENDENCY PROVISIONING LIVES IN lib/deps-install.sh.
+#
+# It was 138 lines here: nine `if` branches, one per ecosystem the engine happened to know, each
+# with a hardcoded package-manager command. A tenth ecosystem meant a tenth branch inside this
+# file. The ecosystem facts now come from the providers via lib/handlers/install-plan.js; the
+# policy that is ours — clean installs are opt-in, and a repair that leaves less than it found is
+# destruction — stayed, in the library, where it can be tested without sourcing 11,000 lines.
+# shellcheck source=lib/deps-install.sh
+. "$SCRIPT_DIR/lib/deps-install.sh"
 
 # ensure_node_modules_healthy <codeline_root> <node_bin> <test_bin>
 # Detects a missing or CORRUPTED dependency install (not just "missing") and
@@ -3316,62 +3187,33 @@ _run_codeline_loop() {
         warning "[orch] Could not resolve baseline branch '${_baseline_branch}' — gate diffs will use HEAD"
       fi
     fi
-    # Write .epam/ manifests if absent — these are consumed by run_dependency_check(),
-    # generate_story_contract(), and apply_known_fix() in claude.sh. The tier3 launcher
-    # writes them for canonical runs; the Jira codeline path must do the same so every
-    # codeline worktree gets the manifests regardless of how many codelines exist.
+    # THE CODELINE'S DECLARATION IS DETECTED, NEVER AUTHORED HERE.
+    #
+    # This wrote three .epam/ manifests from heredocs -- 80 lines asserting, of a repository the
+    # engine had never inspected, that its manifest is package.json, its sources are .ts/.tsx/.js,
+    # its vendor directory is node_modules, and that it must carry typescript, @types/node, vitest
+    # and tsx. Seventeen scripts read dependency-check.json as the codeline's OWN declaration, so
+    # fabricating it defeated every generic component downstream at the source: a non-Node codeline
+    # was handed a document saying it is TypeScript, in client-repo space, with facts nobody
+    # detected.
+    #
+    # lib/handlers/codeline-manifests.js assembles them from the provider whose manifest the
+    # repository actually carries. A codeline no provider recognises gets NOTHING and is reported
+    # -- an undeclared codeline is a state to surface, never one to invent an answer for.
     if [ ! -f "$_wt/.epam/dependency-check.json" ]; then
-      mkdir -p "$_wt/.epam"
-      cat > "$_wt/.epam/dependency-check.json" << 'DEPCHECK_EOF'
-{
-  "manifestFile": "package.json",
-  "manifestKeys": ["dependencies", "devDependencies"],
-  "scanFileExtensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
-  "importPattern": "from\\s+['\"]([^./][^'\"]*)['\"]|require\\(\\s*['\"]([^./][^'\"]*)['\"]\\s*\\)",
-  "installCommand": "npm install --save-dev {package}",
-  "ignorePackages": ["assert","buffer","child_process","cluster","crypto","dgram","dns","domain","events","fs","http","http2","https","net","os","path","perf_hooks","process","punycode","querystring","readline","repl","stream","string_decoder","timers","tls","tty","url","util","v8","vm","worker_threads","zlib","node:assert","node:buffer","node:child_process","node:crypto","node:events","node:fs","node:http","node:https","node:net","node:os","node:path","node:process","node:stream","node:url","node:util","node:vm","node:zlib"],
-  "requiredDevDependencies": ["typescript", "@types/node", "vitest", "tsx"],
-  "vendorDirs": ["node_modules"]
-}
-DEPCHECK_EOF
-      cat > "$_wt/.epam/contract-generation.json" << 'CONTRACTGEN_EOF'
-{
-  "language": "typescript",
-  "sourceExtensions": [".ts"],
-  "excludePattern": "\\.(test|spec)\\.ts$",
-  "interfacePattern": "export\\s+interface\\s+(\\w+)\\s*\\{([^}]*)\\}",
-  "classPattern": "export\\s+class\\s+(\\w+)\\s*(?:extends\\s+\\w+\\s*)?\\{",
-  "ctorPattern": "constructor\\s*\\(([^)]*)\\)",
-  "methodPattern": "^\\s*(?:public\\s+|private\\s+|protected\\s+)?(async\\s+)?(\\w+)\\s*\\(([^)]*)\\)\\s*(?::\\s*([^{;]+))?\\s*\\{",
-  "interfaceRenderTemplate": "export interface {{name}} {{{body}}}",
-  "classDeclarationTemplate": "export class {{className}} {\n  constructor({{ctorParams}});\n{{methodSignatures}}\n}",
-  "methodSignatureTemplate": "  {{asyncPrefix}}{{methodName}}({{params}}){{returnAnnotation}};",
-  "asyncPrefixKeyword": "async ",
-  "returnAnnotationPrefix": ": ",
-  "mockFactoryTemplate": "vi.mock('<import-path-to-{{className}}>', () => ({\n  {{className}}: vi.fn().mockImplementation(() => ({\n{{methodMocks}}\n  })),\n}));",
-  "mockMethodTemplateSync": "    {{methodName}}: vi.fn(),",
-  "mockMethodTemplateAsync": "    {{methodName}}: vi.fn().mockResolvedValue(undefined),",
-  "testFileExtensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
-  "testFilePattern": "\\.(test|spec)\\.[a-zA-Z0-9]+$",
-  "mockFactoryStartPattern": "vi\\.mock\\(\\s*['\"](\\.[^'\"]+)['\"]\\s*,\\s*\\(\\)\\s*=>\\s*\\(\\{",
-  "mockClassPattern": "(\\w+)\\s*:\\s*vi\\.fn\\(\\)\\.mockImplementation\\(\\(\\)\\s*=>\\s*\\(\\{",
-  "mockedMethodPattern": "^\\s*(\\w+)\\s*:",
-  "testFileAgentRole": "test-engineer"
-}
-CONTRACTGEN_EOF
-      cat > "$_wt/.epam/known-fixes.json" << 'KNOWNFIXES_EOF'
-[
-  {
-    "id": "vitest-pass-with-no-tests",
-    "symptomPattern": "(?:vitest|test).*(?:no test files|zero test files).*exit|exit.*1.*(?:no|zero) test files|passWithNoTests",
-    "targetFile": "vitest.config.ts",
-    "checkPattern": "passWithNoTests",
-    "insertAfterPattern": "test:\\s*\\{",
-    "insertText": "\n    passWithNoTests: true,"
-  }
-]
-KNOWNFIXES_EOF
-      log "[orch] Wrote .epam/ manifests to ${_wt} (dependency-check, contract-generation, known-fixes)"
+      local _clm _clm_rc=0
+      _clm=$("$NODE_BIN" "$SCRIPT_DIR/lib/handlers/codeline-manifests.js" "$_wt" 2>&1) || _clm_rc=$?
+      if [ "$_clm_rc" -ne 0 ]; then
+        warning "[orch] ${_wt}: no provider declares how this codeline is checked — .epam/ manifests NOT written"
+        printf '%s\n' "$_clm" | sed 's/^/    /' >&2
+      else
+        mkdir -p "$_wt/.epam"
+        printf '%s' "$_clm" | jq -r 'keys[]' | while IFS= read -r _mf; do
+          [ -z "$_mf" ] && continue
+          printf '%s' "$_clm" | jq --arg k "$_mf" '.[$k]' > "$_wt/.epam/$_mf"
+        done
+        log "[orch] Wrote .epam/ manifests to ${_wt} from the resolved ecosystem provider"
+      fi
     fi
 
     # ── Plugin provisioning: config-driven, zero project-specific hardcoding ──

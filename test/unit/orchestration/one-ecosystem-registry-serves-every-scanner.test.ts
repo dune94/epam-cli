@@ -34,7 +34,7 @@ function repoWith(name: string, manifestFile: string, contents: string): string 
   return dir;
 }
 
-const ecosystems = () => require(join(LIB, 'ecosystems.js'));
+const ecosystems = () => require(join(LIB, 'ecosystem-registry.js'));
 
 describe('one ecosystem registry serves every scanner', () => {
   it('the registry exists and names every manifest file the structure scanner already knew', () => {

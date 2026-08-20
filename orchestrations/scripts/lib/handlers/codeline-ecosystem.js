@@ -8,7 +8,7 @@
  * had nothing checked, and was reported HEALTHY without ever being assessed. A free pass from the
  * one gate that exists to stop a run before it pays for an unusable baseline.
  *
- * Every answer here comes from lib/ecosystems.js, the one table. This file names no manifest, no
+ * Every answer here comes from lib/ecosystem-registry.js, the one table. This file names no manifest, no
  * lockfile and no package manager.
  *
  *   argv[2]  the repository
@@ -35,7 +35,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const { allManifests, lockfileFor } = require('../ecosystems.js');
+const { allManifests, lockfileFor } = require('../ecosystem-registry.js');
 
 const repo = process.argv[2];
 if (!repo) {

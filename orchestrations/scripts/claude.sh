@@ -2810,7 +2810,7 @@ Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:"
     # That file gated the ORIGINAL text, correctly: it promised "missing imports are detected and
     # installed automatically", true only where the project declares autoInstall. The replacement
     # promises nothing and tells the writer to run the add-command itself, so what it requires is a
-    # manifest, a lockfile and an add-command — all from lib/ecosystems.js.
+    # manifest, a lockfile and an add-command — all from lib/ecosystem-registry.js.
     #
     # Live metrolinx AMSD-2041, 2026-08-19: that file was absent from the codeline, so lockfile-sync
     # blocked four times while the one instruction that makes the block actionable was switched off.
@@ -5207,6 +5207,66 @@ _attempt_change_summary() {
 #
 # Runs only where the repo ENFORCES lint at commit time. A repo with no pre-commit hook is held
 # to its own standard, not ours.
+# THE DECLARED-LINT PATH -- for a codeline whose linter is not eslint.
+#
+# Separate from run_repo_lint_verification on purpose: the eslint path below it resolves its files
+# through lint-staged routing and an eslint --print-config probe, both of which are questions only
+# eslint can answer. This one asks the codeline which of its changed files are source, runs the
+# command the codeline declares, and reads the exit status.
+#
+# 127 -- the declared command cannot be run here -- is a FAILURE of a project that lints, never the
+# same thing as a project that does not lint. The old probe could not express that difference.
+_run_declared_lint_gate() {
+    local story_id="$1" output_file="${2:-/dev/null}" _cmd="$3"
+    local _dl_changed _dl_testable="" _dl_files=() _dl_f
+
+    _dl_changed=$( { git -C "$PROJECT_ROOT" diff --name-only --diff-filter=d 2>/dev/null
+                     git -C "$PROJECT_ROOT" diff --cached --name-only --diff-filter=d 2>/dev/null
+                     git -C "$PROJECT_ROOT" ls-files --others --exclude-standard 2>/dev/null; } \
+                   | sort -u | engine_paths_filter)
+    if [ -n "$_dl_changed" ]; then
+        # shellcheck disable=SC2086
+        _dl_testable=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/testable-source.js" \
+            "$PROJECT_ROOT" $_dl_changed 2>/dev/null || echo "")
+    fi
+    while IFS= read -r _dl_f; do
+        [ -n "$_dl_f" ] || continue
+        [ -f "$PROJECT_ROOT/$_dl_f" ] || continue
+        _dl_files+=("$_dl_f")
+    done <<< "$_dl_testable"
+
+    if [ ${#_dl_files[@]} -eq 0 ]; then
+        log "  [repo-lint] $story_id: no changed file is source this codeline declares — nothing was linted"
+        return 0
+    fi
+
+    local _dl_out _dl_rc=0
+    _dl_out=$(cd "$PROJECT_ROOT" && eval "$_cmd" "${_dl_files[@]}" 2>&1) || _dl_rc=$?
+
+    if [ "$_dl_rc" -eq 127 ]; then
+        error "  [repo-lint] $story_id: this codeline declares [$_cmd] and it could not be run — lint NOT PERFORMED"
+        printf '%s\n' "$_dl_out" | head -10 >&2
+        return 1
+    fi
+    if [ "$_dl_rc" -eq 0 ]; then
+        success "  [repo-lint] $story_id: the repository lint [$_cmd] accepts ${#_dl_files[@]} changed file(s)"
+        return 0
+    fi
+
+    error "  [repo-lint] $story_id: the repository lint [$_cmd] rejects ${#_dl_files[@]} changed file(s) —"
+    error "  [repo-lint]   the pre-commit hook will refuse this commit and may REVERT the work."
+    printf '%s\n' "$_dl_out" | head -40 >&2
+
+    DETERMINISTIC_CHECK_FAILURE=1
+    export DETERMINISTIC_CHECK_FAILURE
+    STORY_REJECTION_KEY="lint:${story_id}"
+    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe repository lints with `%s` and it rejects your change:\n\n```\n%s\n```\n\nFix these before the change can be committed.\n' \
+        "$_cmd" "$(printf '%s' "$_dl_out" | head -40)")
+    export VERIFICATION_FAILURE
+    printf '%s\n' "$_dl_out" >> "$output_file" 2>/dev/null || true
+    return 1
+}
+
 run_repo_lint_verification() {
     local story_id="$1"
     local output_file="${2:-/dev/null}"
@@ -5232,10 +5292,43 @@ run_repo_lint_verification() {
         return 0
     fi
 
+    # WHAT THIS CODELINE LINTS WITH, ASKED OF THE CODELINE FIRST.
+    #
+    # This probed for eslint and nothing else. On a codeline that lints with biome, oxlint, ruff or
+    # a Makefile target it found none, said in its own words that nothing proved the change clean,
+    # and returned 0 -- the only one of this engine's seventeen delivery-contract gates that was
+    # coupled to a stack.
+    #
+    # .epam/verification.json already declares typecheck and test; lint is the third of the same
+    # shape, detected by the plugin that owns detection. The eslint probe below is KEPT as the
+    # fallback, so every repo that lints with eslint behaves exactly as before -- including the
+    # lint-staged routing and the --print-config coverage probe, which are questions only eslint
+    # can answer.
+    local _declared_lint=""
+    _declared_lint=$("${NODE_BIN:-node}" -e '
+      const fs = require("fs"), path = require("path");
+      let cmd = "";
+      try {
+        const j = JSON.parse(fs.readFileSync(path.join(process.argv[2], ".epam", "verification.json"), "utf8"));
+        cmd = ((j.lint || {}).command) || "";
+      } catch (e) { /* not declared on disk */ }
+      if (!cmd) {
+        try {
+          const p = require(process.argv[1]);
+          cmd = (((p.detectLint(process.argv[2]) || {}).lint) || {}).command || "";
+        } catch (e) { cmd = ""; }
+      }
+      process.stdout.write(cmd);
+    ' "${AUTOMATION_DIR:-$(dirname "$SCRIPT_DIR")}/plugins/verification-plugin.js" "$PROJECT_ROOT" 2>/dev/null || echo "")
+
     local _eslint_bin=""
     for _candidate in "$PROJECT_ROOT/node_modules/.bin/eslint" "$(command -v eslint 2>/dev/null)"; do
         [ -x "$_candidate" ] && { _eslint_bin="$_candidate"; break; }
     done
+    if [ -z "$_eslint_bin" ] && [ -n "$_declared_lint" ]; then
+        _run_declared_lint_gate "$story_id" "$output_file" "$_declared_lint"
+        return $?
+    fi
     if [ -z "$_eslint_bin" ]; then
         warning "  [repo-lint] $story_id: no eslint binary in $PROJECT_ROOT or on PATH — lint was NOT run; nothing here proves the change is clean"
         return 0

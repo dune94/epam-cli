@@ -90,7 +90,7 @@ fi
 _LAST_TEST_OUTPUT=""
 # THE RUNNER COMES FROM THE ECOSYSTEM REGISTRY, NOT FROM NAMES IN HERE.
 #
-# This probed node_modules/.bin/vitest, then jest, then `npm test`. lib/ecosystems.js already
+# This probed node_modules/.bin/vitest, then jest, then `npm test`. lib/ecosystem-registry.js already
 # knows how every supported ecosystem runs its tests, and how it targets specific files — one
 # table, shared with the health check and the scanners.
 _repro_file_command() {

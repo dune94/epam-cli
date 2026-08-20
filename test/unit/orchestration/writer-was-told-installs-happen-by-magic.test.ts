@@ -13,7 +13,7 @@
 //
 // Two defects in one string: the prose lived in code rather than in the template layer, and it was
 // false. Both are fixed here, and the directive now names the project's OWN install command,
-// resolved from lib/ecosystems.js rather than assumed to be npm.
+// resolved from lib/ecosystem-registry.js rather than assumed to be npm.
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { readFileSync, existsSync, writeFileSync, mkdtempSync } from 'node:fs';
@@ -120,7 +120,7 @@ describe('what the directive now says', () => {
 // precisely how AMSD-2041 produced a manifest entry no lockfile resolved.
 describe('the command the directive names', () => {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { MANIFESTS } = require(join(ROOT, 'orchestrations/scripts/lib/ecosystems.js'));
+  const { MANIFESTS } = require(join(ROOT, 'orchestrations/scripts/lib/ecosystem-registry.js'));
   const eco = (f: string) => MANIFESTS.find((e: { file: string }) => e.file === f);
 
   it('adds a package rather than provisioning the manifest', () => {

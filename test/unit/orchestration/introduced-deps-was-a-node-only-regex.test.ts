@@ -7,7 +7,7 @@
 // silently converts every finding into pre-existing debt and disarms the gate.
 //
 // The lockfile-sync gate needs the same answer, so it moves to one handler that asks
-// lib/ecosystems.js — the one table — rather than to a second copy of the regex.
+// lib/ecosystem-registry.js — the one table — rather than to a second copy of the regex.
 import { describe, it, expect, afterAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';

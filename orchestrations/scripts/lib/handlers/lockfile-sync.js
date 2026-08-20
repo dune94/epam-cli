@@ -10,7 +10,7 @@
  *
  * This asks a file comparison, not a judgement, so it belongs with the deterministic checks and
  * carries no model. It names no package manager and no manifest filename: every answer comes from
- * lib/ecosystems.js, the one table.
+ * lib/ecosystem-registry.js, the one table.
  *
  *   usage: lockfile-sync.js <repo>
  *
@@ -24,7 +24,7 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { allManifests, lockfileFor } = require('../ecosystems.js');
+const { allManifests, lockfileFor } = require('../ecosystem-registry.js');
 
 const repo = process.argv[2];
 if (!repo) {

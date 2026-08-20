@@ -9,7 +9,7 @@
  * it pays for an unusable baseline. The failure is silent in the worst direction: it says the word
  * "healthy".
  *
- * Every ecosystem fact now comes from lib/ecosystems.js through one handler. These tests hold that
+ * Every ecosystem fact now comes from lib/ecosystem-registry.js through one handler. These tests hold that
  * shut in both directions — the shell names no ecosystem, and a repository that declares tooling
  * it cannot resolve is still caught.
  */

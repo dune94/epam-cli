@@ -1,0 +1,3382 @@
+{
+ "_": [
+  "PHASE 1 GUARD CLASSIFICATION — proposed, awaiting operator disposition.",
+  "",
+  "tier A = carries the delivery contract (DETERMINISTIC_CHECK_FAILURE / VERIFICATION_FAILURE)",
+  "tier B = returns non-zero as its product (a check)",
+  "tier C = an action or emitter that can fail; not a gate",
+  "",
+  "proposed    = derived mechanically from the evidence, never from a name",
+  "disposition = YOURS. null until you set it. CONTRACT | MASK | DEAD | NOT-A-GATE | KEEP",
+  "",
+  "Nothing acts on this file yet. Phase 2 works only the rows you dispose."
+ ],
+ "generated": "2026-08-20",
+ "totals": {
+  "NOT-A-GATE": 113,
+  "CONTRACT": 105,
+  "MASK": 21,
+  "DEAD": 40
+ },
+ "guards": [
+  {
+   "id": "GD-001",
+   "tier": "C",
+   "file": "agent-attempt-analyst.sh",
+   "line": 83,
+   "symbol": "log",
+   "evidence": [
+    "1 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-002",
+   "tier": "C",
+   "file": "agent-attempt-analyst.sh",
+   "line": 117,
+   "symbol": "_body",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-003",
+   "tier": "C",
+   "file": "agent-attempt-analyst.sh",
+   "line": 156,
+   "symbol": "_emit_fa",
+   "evidence": [
+    "3 call site(s), verdict never read"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-004",
+   "tier": "B",
+   "file": "ai-run.sh",
+   "line": 138,
+   "symbol": "run_provider_once",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-005",
+   "tier": "C",
+   "file": "brownfield-repro-test-gate.sh",
+   "line": 45,
+   "symbol": "log",
+   "evidence": [
+    "1 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-006",
+   "tier": "B",
+   "file": "brownfield-repro-test-gate.sh",
+   "line": 116,
+   "symbol": "run_new_tests",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-007",
+   "tier": "B",
+   "file": "brownfield-repro-test-writer.sh",
+   "line": 28,
+   "symbol": "_run_project_verification",
+   "evidence": [
+    "2 fail-open call site(s)"
+   ],
+   "proposed": "MASK",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-008",
+   "tier": "B",
+   "file": "brownfield-repro-test-writer.sh",
+   "line": 104,
+   "symbol": "log",
+   "evidence": [
+    "1 fail-open call site(s)"
+   ],
+   "proposed": "MASK",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-009",
+   "tier": "B",
+   "file": "brownfield-repro-test-writer.sh",
+   "line": 108,
+   "symbol": "warning",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-010",
+   "tier": "B",
+   "file": "brownfield-repro-test-writer.sh",
+   "line": 148,
+   "symbol": "_is_testable_source",
+   "evidence": [
+    "no test names it"
+   ],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-011",
+   "tier": "B",
+   "file": "brownfield-repro-test-writer.sh",
+   "line": 176,
+   "symbol": "_choose_target",
+   "evidence": [
+    "no test names it"
+   ],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-012",
+   "tier": "C",
+   "file": "brownfield-repro-test-writer.sh",
+   "line": 309,
+   "symbol": "_emit_tw",
+   "evidence": [
+    "4 call site(s), verdict never read",
+    "no test names it"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-013",
+   "tier": "C",
+   "file": "brownfield-repro-test-writer.sh",
+   "line": 433,
+   "symbol": "_typecheck_written_test",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-014",
+   "tier": "C",
+   "file": "brownfield-repro-test-writer.sh",
+   "line": 454,
+   "symbol": "_validate_written_test",
+   "evidence": [
+    "1 call site(s), verdict never read"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-015",
+   "tier": "C",
+   "file": "check-phase-gate.sh",
+   "line": 43,
+   "symbol": "log",
+   "evidence": [
+    "1 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-016",
+   "tier": "C",
+   "file": "check-phase-gate.sh",
+   "line": 44,
+   "symbol": "success",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-017",
+   "tier": "C",
+   "file": "check-phase-gate.sh",
+   "line": 45,
+   "symbol": "warning",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-018",
+   "tier": "C",
+   "file": "check-phase-gate.sh",
+   "line": 46,
+   "symbol": "error",
+   "evidence": [
+    "3 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-019",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 204,
+   "symbol": "load_llm_settings_json",
+   "evidence": [
+    "1 call site(s), verdict never read"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-020",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 218,
+   "symbol": "_get",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-021",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 226,
+   "symbol": "_getd",
+   "evidence": [
+    "no test names it"
+   ],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-022",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 227,
+   "symbol": "_budget",
+   "evidence": [
+    "7 call site(s), verdict never read"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-023",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 788,
+   "symbol": "_selective_worktree_reset",
+   "evidence": [
+    "1 call site(s), verdict never read"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-024",
+   "tier": "A",
+   "file": "claude.sh",
+   "line": 1033,
+   "symbol": "_coupled_pair_gate_for_story",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-025",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 1130,
+   "symbol": "_change_duplicates_owned_format",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-026",
+   "tier": "A",
+   "file": "claude.sh",
+   "line": 1155,
+   "symbol": "_committed_change_uses_helpers",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-027",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 1368,
+   "symbol": "resolve_codex_model_settings",
+   "evidence": [
+    "1 call site(s), verdict never read",
+    "no test names it"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-028",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 1519,
+   "symbol": "provider_to_cli",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-029",
+   "tier": "C",
+   "file": "claude.sh",
+   "line": 1741,
+   "symbol": "check_prerequisites",
+   "evidence": [
+    "4 call site(s), verdict never read",
+    "no test names it"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-030",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 1813,
+   "symbol": "is_story_completed",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-031",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 1835,
+   "symbol": "are_dependencies_satisfied",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-032",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 1858,
+   "symbol": "check_plan_mode_required",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-033",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 2011,
+   "symbol": "log_to_monitor",
+   "evidence": [
+    "4 call site(s), verdict never read",
+    "no test names it"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-034",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 2277,
+   "symbol": "build_implementation_prompt",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-035",
+   "tier": "A",
+   "file": "claude.sh",
+   "line": 3101,
+   "symbol": "verify_client_env_boundary",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-036",
+   "tier": "A",
+   "file": "claude.sh",
+   "line": 3143,
+   "symbol": "verify_prescribed_helper_used",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-037",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 3243,
+   "symbol": "_resolve_deliverable_path",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-038",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 3344,
+   "symbol": "_rejection_repeat_check",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-039",
+   "tier": "A",
+   "file": "claude.sh",
+   "line": 3356,
+   "symbol": "verify_story_deliverables",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-040",
+   "tier": "A",
+   "file": "claude.sh",
+   "line": 3934,
+   "symbol": "run_vendor_integrity_check",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-041",
+   "tier": "A",
+   "file": "claude.sh",
+   "line": 4135,
+   "symbol": "run_lockfile_sync_check",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-042",
+   "tier": "A",
+   "file": "claude.sh",
+   "line": 4203,
+   "symbol": "run_dependency_check",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-043",
+   "tier": "A",
+   "file": "claude.sh",
+   "line": 4378,
+   "symbol": "run_mock_completeness_check",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-044",
+   "tier": "A",
+   "file": "claude.sh",
+   "line": 4466,
+   "symbol": "run_anti_pattern_check",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-045",
+   "tier": "A",
+   "file": "claude.sh",
+   "line": 4502,
+   "symbol": "run_relative_import_check",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-046",
+   "tier": "A",
+   "file": "claude.sh",
+   "line": 4666,
+   "symbol": "run_named_import_check",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-047",
+   "tier": "A",
+   "file": "claude.sh",
+   "line": 4757,
+   "symbol": "run_external_verification",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-048",
+   "tier": "A",
+   "file": "claude.sh",
+   "line": 5210,
+   "symbol": "run_repo_lint_verification",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-049",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 5398,
+   "symbol": "_run_project_verification",
+   "evidence": [
+    "2 fail-open call site(s)"
+   ],
+   "proposed": "MASK",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-050",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 5422,
+   "symbol": "_verification_plugin_call",
+   "evidence": [
+    "no test names it"
+   ],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-051",
+   "tier": "A",
+   "file": "claude.sh",
+   "line": 5505,
+   "symbol": "run_tsc_verification",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-052",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 6200,
+   "symbol": "effort_is_higher",
+   "evidence": [
+    "no test names it"
+   ],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-053",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 6314,
+   "symbol": "assert_ladder_model",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-054",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 6669,
+   "symbol": "run_prd_change_reviewer",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-055",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 6785,
+   "symbol": "run_prd_change_summarizer",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-056",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 6885,
+   "symbol": "_skill_note_max_chars",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-057",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 6896,
+   "symbol": "_skill_note_format_ok",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-058",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 6982,
+   "symbol": "_tool_recipe_reinvokes_test_cmd",
+   "evidence": [
+    "1 call site(s), verdict never read"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-059",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 7000,
+   "symbol": "run_change_with_reviewer_retry",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-060",
+   "tier": "A",
+   "file": "claude.sh",
+   "line": 7128,
+   "symbol": "run_failure_analyst",
+   "evidence": [
+    "2 call site(s), verdict never read"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-061",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 8072,
+   "symbol": "apply_known_fix",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-062",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 8149,
+   "symbol": "resolve_escalation",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-063",
+   "tier": "A",
+   "file": "claude.sh",
+   "line": 8777,
+   "symbol": "implement_story",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-064",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 10547,
+   "symbol": "update_story_status",
+   "evidence": [
+    "7 call site(s), verdict never read"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-065",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 10597,
+   "symbol": "result_is_from_this_attempt",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-066",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 10608,
+   "symbol": "append_cost_record",
+   "evidence": [
+    "6 call site(s), verdict never read"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-067",
+   "tier": "B",
+   "file": "claude.sh",
+   "line": 11166,
+   "symbol": "run_implementation",
+   "evidence": [
+    "4 call site(s), verdict never read"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-068",
+   "tier": "C",
+   "file": "claude.sh",
+   "line": 11428,
+   "symbol": "main",
+   "evidence": [
+    "12 call site(s), verdict never read"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-069",
+   "tier": "C",
+   "file": "code-review-cycle.sh",
+   "line": 28,
+   "symbol": "log",
+   "evidence": [
+    "1 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-070",
+   "tier": "C",
+   "file": "code-review-cycle.sh",
+   "line": 29,
+   "symbol": "success",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-071",
+   "tier": "C",
+   "file": "code-review-cycle.sh",
+   "line": 30,
+   "symbol": "warning",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-072",
+   "tier": "C",
+   "file": "code-review-cycle.sh",
+   "line": 31,
+   "symbol": "error",
+   "evidence": [
+    "3 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-073",
+   "tier": "C",
+   "file": "codegraph-agent-query.sh",
+   "line": 47,
+   "symbol": "err",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-074",
+   "tier": "C",
+   "file": "codegraph-agent-query.sh",
+   "line": 149,
+   "symbol": "_scan",
+   "evidence": [
+    "1 call site(s), verdict never read"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-075",
+   "tier": "B",
+   "file": "codegraph-preflight-index.sh",
+   "line": 30,
+   "symbol": "log",
+   "evidence": [
+    "1 fail-open call site(s)"
+   ],
+   "proposed": "MASK",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-076",
+   "tier": "B",
+   "file": "codegraph-preflight-index.sh",
+   "line": 31,
+   "symbol": "err",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-077",
+   "tier": "B",
+   "file": "codegraph-preflight-index.sh",
+   "line": 49,
+   "symbol": "is_valid_codegraph_db",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-078",
+   "tier": "C",
+   "file": "codemie-claude.sh",
+   "line": 246,
+   "symbol": "check_prerequisites",
+   "evidence": [
+    "4 call site(s), verdict never read",
+    "no test names it"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-079",
+   "tier": "B",
+   "file": "codemie-claude.sh",
+   "line": 320,
+   "symbol": "are_dependencies_satisfied",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-080",
+   "tier": "B",
+   "file": "codemie-claude.sh",
+   "line": 343,
+   "symbol": "check_plan_mode_required",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-081",
+   "tier": "B",
+   "file": "codemie-claude.sh",
+   "line": 463,
+   "symbol": "log_to_monitor",
+   "evidence": [
+    "4 call site(s), verdict never read",
+    "no test names it"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-082",
+   "tier": "C",
+   "file": "codemie-claude.sh",
+   "line": 684,
+   "symbol": "implement_story",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-083",
+   "tier": "B",
+   "file": "codemie-claude.sh",
+   "line": 837,
+   "symbol": "update_story_status",
+   "evidence": [
+    "7 call site(s), verdict never read"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-084",
+   "tier": "B",
+   "file": "codemie-claude.sh",
+   "line": 871,
+   "symbol": "append_cost_record",
+   "evidence": [
+    "6 call site(s), verdict never read"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-085",
+   "tier": "B",
+   "file": "codemie-claude.sh",
+   "line": 1152,
+   "symbol": "run_implementation",
+   "evidence": [
+    "4 call site(s), verdict never read"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-086",
+   "tier": "C",
+   "file": "codemie-claude.sh",
+   "line": 1288,
+   "symbol": "main",
+   "evidence": [
+    "12 call site(s), verdict never read"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-087",
+   "tier": "C",
+   "file": "contextualize-stories.sh",
+   "line": 36,
+   "symbol": "log",
+   "evidence": [
+    "1 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-088",
+   "tier": "C",
+   "file": "contextualize-stories.sh",
+   "line": 37,
+   "symbol": "success",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-089",
+   "tier": "C",
+   "file": "contextualize-stories.sh",
+   "line": 38,
+   "symbol": "warning",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-090",
+   "tier": "C",
+   "file": "contextualize-stories.sh",
+   "line": 39,
+   "symbol": "error",
+   "evidence": [
+    "3 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-091",
+   "tier": "C",
+   "file": "contextualize-stories.sh",
+   "line": 40,
+   "symbol": "info",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-092",
+   "tier": "B",
+   "file": "dashboard-health-check.sh",
+   "line": 78,
+   "symbol": "run_check",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-093",
+   "tier": "B",
+   "file": "dashboard-health-check.sh",
+   "line": 179,
+   "symbol": "attempt_fix",
+   "evidence": [
+    "2 call site(s), verdict never read",
+    "no test names it"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-094",
+   "tier": "C",
+   "file": "estimate-stories.sh",
+   "line": 37,
+   "symbol": "log",
+   "evidence": [
+    "1 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-095",
+   "tier": "C",
+   "file": "estimate-stories.sh",
+   "line": 38,
+   "symbol": "success",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-096",
+   "tier": "C",
+   "file": "estimate-stories.sh",
+   "line": 39,
+   "symbol": "warning",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-097",
+   "tier": "C",
+   "file": "estimate-stories.sh",
+   "line": 40,
+   "symbol": "error",
+   "evidence": [
+    "3 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-098",
+   "tier": "C",
+   "file": "generate-qa-report.sh",
+   "line": 30,
+   "symbol": "info",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-099",
+   "tier": "C",
+   "file": "generate-qa-report.sh",
+   "line": 31,
+   "symbol": "ok",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-100",
+   "tier": "C",
+   "file": "generate-run-narrative.sh",
+   "line": 33,
+   "symbol": "info",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-101",
+   "tier": "C",
+   "file": "generate-run-narrative.sh",
+   "line": 34,
+   "symbol": "ok",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-102",
+   "tier": "B",
+   "file": "index-codelines.sh",
+   "line": 85,
+   "symbol": "index_repo",
+   "evidence": [
+    "1 call site(s), verdict never read",
+    "no test names it"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-103",
+   "tier": "C",
+   "file": "ingest-jira-tickets.sh",
+   "line": 32,
+   "symbol": "log",
+   "evidence": [
+    "1 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-104",
+   "tier": "C",
+   "file": "ingest-jira-tickets.sh",
+   "line": 33,
+   "symbol": "warn",
+   "evidence": [
+    "1 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-105",
+   "tier": "C",
+   "file": "ingest-jira-tickets.sh",
+   "line": 34,
+   "symbol": "err",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-106",
+   "tier": "C",
+   "file": "ingest-jira-tickets.sh",
+   "line": 43,
+   "symbol": "_out_prd_required",
+   "evidence": [
+    "1 call site(s), verdict never read"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-107",
+   "tier": "C",
+   "file": "ingest-jira-tickets.sh",
+   "line": 74,
+   "symbol": "cleanup",
+   "evidence": [
+    "7 call site(s), verdict never read"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-108",
+   "tier": "C",
+   "file": "load-phase-graph.sh",
+   "line": 23,
+   "symbol": "log",
+   "evidence": [
+    "1 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-109",
+   "tier": "C",
+   "file": "load-phase-graph.sh",
+   "line": 24,
+   "symbol": "success",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-110",
+   "tier": "C",
+   "file": "load-phase-graph.sh",
+   "line": 25,
+   "symbol": "error",
+   "evidence": [
+    "3 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-111",
+   "tier": "B",
+   "file": "merge-worktree.sh",
+   "line": 29,
+   "symbol": "_run_project_verification",
+   "evidence": [
+    "2 fail-open call site(s)"
+   ],
+   "proposed": "MASK",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-112",
+   "tier": "C",
+   "file": "merge-worktree.sh",
+   "line": 52,
+   "symbol": "log",
+   "evidence": [
+    "1 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-113",
+   "tier": "C",
+   "file": "merge-worktree.sh",
+   "line": 53,
+   "symbol": "success",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-114",
+   "tier": "C",
+   "file": "merge-worktree.sh",
+   "line": 54,
+   "symbol": "warning",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-115",
+   "tier": "C",
+   "file": "merge-worktree.sh",
+   "line": 55,
+   "symbol": "error",
+   "evidence": [
+    "3 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-116",
+   "tier": "C",
+   "file": "mock1-paused-run.sh",
+   "line": 135,
+   "symbol": "build_workspace",
+   "evidence": [
+    "1 call site(s), verdict never read",
+    "no test names it"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-117",
+   "tier": "B",
+   "file": "mock1-paused-run.sh",
+   "line": 201,
+   "symbol": "start_jira",
+   "evidence": [
+    "no test names it"
+   ],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-118",
+   "tier": "C",
+   "file": "mock1-paused-run.sh",
+   "line": 213,
+   "symbol": "cleanup",
+   "evidence": [
+    "7 call site(s), verdict never read"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-119",
+   "tier": "C",
+   "file": "orchestrate.sh",
+   "line": 90,
+   "symbol": "info",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-120",
+   "tier": "C",
+   "file": "orchestrate.sh",
+   "line": 91,
+   "symbol": "success",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-121",
+   "tier": "C",
+   "file": "orchestrate.sh",
+   "line": 92,
+   "symbol": "fail",
+   "evidence": [
+    "2 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-122",
+   "tier": "C",
+   "file": "orchestrate.sh",
+   "line": 294,
+   "symbol": "run_phase",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-123",
+   "tier": "C",
+   "file": "prd-remediate.sh",
+   "line": 29,
+   "symbol": "info",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-124",
+   "tier": "C",
+   "file": "prd-remediate.sh",
+   "line": 30,
+   "symbol": "success",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-125",
+   "tier": "C",
+   "file": "pre-run-reset.sh",
+   "line": 59,
+   "symbol": "info",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-126",
+   "tier": "C",
+   "file": "pre-run-reset.sh",
+   "line": 60,
+   "symbol": "success",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-127",
+   "tier": "C",
+   "file": "pre-run-reset.sh",
+   "line": 61,
+   "symbol": "fail",
+   "evidence": [
+    "2 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-128",
+   "tier": "C",
+   "file": "preflight-check.sh",
+   "line": 40,
+   "symbol": "ok",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-129",
+   "tier": "C",
+   "file": "preflight-check.sh",
+   "line": 41,
+   "symbol": "fail",
+   "evidence": [
+    "2 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-130",
+   "tier": "B",
+   "file": "reset-cost-test.sh",
+   "line": 16,
+   "symbol": "safe_jq_update",
+   "evidence": [
+    "2 call site(s), verdict never read",
+    "no test names it"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-131",
+   "tier": "C",
+   "file": "resolve-package-symbol.sh",
+   "line": 37,
+   "symbol": "err",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-132",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 60,
+   "symbol": "_render_change_reviewer",
+   "evidence": [
+    "3 call site(s), verdict never read"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-133",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 140,
+   "symbol": "_run_project_verification",
+   "evidence": [
+    "2 fail-open call site(s)"
+   ],
+   "proposed": "MASK",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-134",
+   "tier": "C",
+   "file": "run-agent-orchestration.sh",
+   "line": 190,
+   "symbol": "is_parent",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-135",
+   "tier": "C",
+   "file": "run-agent-orchestration.sh",
+   "line": 193,
+   "symbol": "is_lane",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-136",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 643,
+   "symbol": "review_feedback_is_incomplete",
+   "evidence": [],
+   "proposed": "MASK",
+   "disposition": null,
+   "note": "G-001 — reads .reviewIncomplete from a file whose writer projects it away; always false"
+  },
+  {
+   "id": "GD-137",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 841,
+   "symbol": "detect_node",
+   "evidence": [
+    "4 fail-open call site(s)"
+   ],
+   "proposed": "MASK",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-138",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 1003,
+   "symbol": "detect_and_install_dependencies",
+   "evidence": [
+    "1 call site(s), verdict never read"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-139",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 1315,
+   "symbol": "run_orch_prompt",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-140",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 1565,
+   "symbol": "_lint_fix_findings_directly",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-141",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 1653,
+   "symbol": "_run_qa_gate_with_retry",
+   "evidence": [
+    "8 call site(s), verdict never read"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-142",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 1943,
+   "symbol": "hot_swap_story_model_if_unstable",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-143",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 2142,
+   "symbol": "run_story_recovery_analyst",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-144",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 2327,
+   "symbol": "run_story_with_watchdog",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-145",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 2387,
+   "symbol": "_derive_attempt_wall",
+   "evidence": [
+    "1 call site(s), verdict never read"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-146",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 2413,
+   "symbol": "_derive_story_wall_total",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-147",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 2596,
+   "symbol": "checkpoint_already_done",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-148",
+   "tier": "C",
+   "file": "run-agent-orchestration.sh",
+   "line": 2762,
+   "symbol": "assert_no_story_ids_lost",
+   "evidence": [
+    "4 call site(s), verdict never read"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-149",
+   "tier": "C",
+   "file": "run-agent-orchestration.sh",
+   "line": 2828,
+   "symbol": "assert_no_story_ids_gained",
+   "evidence": [
+    "4 call site(s), verdict never read"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-150",
+   "tier": "C",
+   "file": "run-agent-orchestration.sh",
+   "line": 2882,
+   "symbol": "assert_no_illegitimate_deprecation",
+   "evidence": [
+    "2 call site(s), verdict never read"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-151",
+   "tier": "C",
+   "file": "run-agent-orchestration.sh",
+   "line": 2923,
+   "symbol": "start_dashboards_watch",
+   "evidence": [
+    "1 call site(s), verdict never read"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-152",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 3165,
+   "symbol": "_run_codeline_loop",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-153",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 3456,
+   "symbol": "_rebuild_cross",
+   "evidence": [
+    "1 call site(s), verdict never read",
+    "no test names it"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-154",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 3465,
+   "symbol": "_filtered_prd",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-155",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 3480,
+   "symbol": "_prd_phases",
+   "evidence": [
+    "2 call site(s), verdict never read"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-156",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 3951,
+   "symbol": "_run_agent_mint",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-157",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 4001,
+   "symbol": "_run_jira_pipeline",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-158",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 4240,
+   "symbol": "resume_spec_output_present",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-159",
+   "tier": "C",
+   "file": "run-agent-orchestration.sh",
+   "line": 4624,
+   "symbol": "run_specification_pass",
+   "evidence": [
+    "1 call site(s), verdict never read"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-160",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 5187,
+   "symbol": "_pfa_capability_failed",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-161",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 5193,
+   "symbol": "run_pre_phase_assessment",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-162",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 6279,
+   "symbol": "_run_one_main_story",
+   "evidence": [
+    "2 call site(s), verdict never read"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-163",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 6996,
+   "symbol": "run_skills_audit_scan",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-164",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 7287,
+   "symbol": "run_phase_assessment",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-165",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 8042,
+   "symbol": "_review_approval_is_giveup",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-166",
+   "tier": "C",
+   "file": "run-agent-orchestration.sh",
+   "line": 8712,
+   "symbol": "run_testing_gates",
+   "evidence": [
+    "1 call site(s), verdict never read"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-167",
+   "tier": "C",
+   "file": "run-agent-orchestration.sh",
+   "line": 8787,
+   "symbol": "e2e_story_score",
+   "evidence": [
+    "no test names it"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-168",
+   "tier": "C",
+   "file": "run-agent-orchestration.sh",
+   "line": 8810,
+   "symbol": "should_route_browser_story",
+   "evidence": [
+    "no test names it"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-169",
+   "tier": "C",
+   "file": "run-agent-orchestration.sh",
+   "line": 8821,
+   "symbol": "run_browser_e2e_routing",
+   "evidence": [
+    "1 call site(s), verdict never read",
+    "no test names it"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-170",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 10363,
+   "symbol": "_create_bug_fix_phase",
+   "evidence": [
+    "1 call site(s), verdict never read"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-171",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 10382,
+   "symbol": "_failure_is_tolerated",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-172",
+   "tier": "C",
+   "file": "run-agent-orchestration.sh",
+   "line": 10578,
+   "symbol": "run_unit_tests_gate",
+   "evidence": [
+    "1 call site(s), verdict never read"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-173",
+   "tier": "B",
+   "file": "run-agent-orchestration.sh",
+   "line": 10779,
+   "symbol": "run_interstitial_e2e_phase",
+   "evidence": [
+    "1 call site(s), verdict never read"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-174",
+   "tier": "C",
+   "file": "team-lead-review.sh",
+   "line": 26,
+   "symbol": "log",
+   "evidence": [
+    "1 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-175",
+   "tier": "C",
+   "file": "team-lead-review.sh",
+   "line": 27,
+   "symbol": "success",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-176",
+   "tier": "C",
+   "file": "team-lead-review.sh",
+   "line": 28,
+   "symbol": "warning",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-177",
+   "tier": "C",
+   "file": "team-lead-review.sh",
+   "line": 29,
+   "symbol": "error",
+   "evidence": [
+    "3 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-178",
+   "tier": "C",
+   "file": "tier1-mock-run.sh",
+   "line": 31,
+   "symbol": "info",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-179",
+   "tier": "C",
+   "file": "tier1-mock-run.sh",
+   "line": 32,
+   "symbol": "success",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-180",
+   "tier": "C",
+   "file": "tier1-ollama-run.sh",
+   "line": 34,
+   "symbol": "info",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-181",
+   "tier": "C",
+   "file": "tier1-ollama-run.sh",
+   "line": 35,
+   "symbol": "success",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-182",
+   "tier": "C",
+   "file": "tier1-ollama-run.sh",
+   "line": 36,
+   "symbol": "fail",
+   "evidence": [
+    "2 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-183",
+   "tier": "C",
+   "file": "tier2-free-run.sh",
+   "line": 33,
+   "symbol": "info",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-184",
+   "tier": "C",
+   "file": "tier2-free-run.sh",
+   "line": 34,
+   "symbol": "success",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-185",
+   "tier": "C",
+   "file": "tier2-free-run.sh",
+   "line": 35,
+   "symbol": "fail",
+   "evidence": [
+    "2 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-186",
+   "tier": "C",
+   "file": "tier3-metrolinx-run.sh",
+   "line": 87,
+   "symbol": "fail",
+   "evidence": [
+    "2 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-187",
+   "tier": "B",
+   "file": "tier3-metrolinx-run.sh",
+   "line": 413,
+   "symbol": "_obs_check",
+   "evidence": [
+    "2 fail-open call site(s)",
+    "no test names it"
+   ],
+   "proposed": "MASK",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-188",
+   "tier": "B",
+   "file": "tier3-metrolinx-run.sh",
+   "line": 454,
+   "symbol": "_emit_preflight_event",
+   "evidence": [
+    "3 call site(s), verdict never read"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-189",
+   "tier": "C",
+   "file": "tier3-mock-run.sh",
+   "line": 52,
+   "symbol": "info",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-190",
+   "tier": "C",
+   "file": "tier3-mock-run.sh",
+   "line": 53,
+   "symbol": "success",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-191",
+   "tier": "C",
+   "file": "tier3-mock-run.sh",
+   "line": 60,
+   "symbol": "fail",
+   "evidence": [
+    "2 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-192",
+   "tier": "C",
+   "file": "tier3-paid-run.sh",
+   "line": 29,
+   "symbol": "info",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-193",
+   "tier": "C",
+   "file": "tier3-paid-run.sh",
+   "line": 30,
+   "symbol": "success",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-194",
+   "tier": "C",
+   "file": "tier3-paid-run.sh",
+   "line": 31,
+   "symbol": "fail",
+   "evidence": [
+    "2 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-195",
+   "tier": "C",
+   "file": "tier3-run.sh",
+   "line": 34,
+   "symbol": "info",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-196",
+   "tier": "C",
+   "file": "tier3-run.sh",
+   "line": 35,
+   "symbol": "success",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-197",
+   "tier": "C",
+   "file": "tier3-skyscanner-app-run.sh",
+   "line": 60,
+   "symbol": "info",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-198",
+   "tier": "C",
+   "file": "tier3-skyscanner-app-run.sh",
+   "line": 61,
+   "symbol": "success",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-199",
+   "tier": "C",
+   "file": "tier3-skyscanner-app-run.sh",
+   "line": 444,
+   "symbol": "run_phase",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-200",
+   "tier": "C",
+   "file": "tier3-travel-app-run.sh",
+   "line": 58,
+   "symbol": "info",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-201",
+   "tier": "C",
+   "file": "tier3-travel-app-run.sh",
+   "line": 59,
+   "symbol": "success",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-202",
+   "tier": "C",
+   "file": "tier3-travel-app-run.sh",
+   "line": 405,
+   "symbol": "run_phase",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-203",
+   "tier": "C",
+   "file": "update-cost-forecasts.sh",
+   "line": 24,
+   "symbol": "log",
+   "evidence": [
+    "1 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-204",
+   "tier": "C",
+   "file": "update-cost-forecasts.sh",
+   "line": 25,
+   "symbol": "success",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-205",
+   "tier": "C",
+   "file": "update-cost-forecasts.sh",
+   "line": 26,
+   "symbol": "warning",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-206",
+   "tier": "C",
+   "file": "update-cost-forecasts.sh",
+   "line": 27,
+   "symbol": "error",
+   "evidence": [
+    "3 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-207",
+   "tier": "C",
+   "file": "update-invalidated-tests.sh",
+   "line": 84,
+   "symbol": "log",
+   "evidence": [
+    "1 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-208",
+   "tier": "C",
+   "file": "update-invalidated-tests.sh",
+   "line": 90,
+   "symbol": "run_suite",
+   "evidence": [
+    "no test names it"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-209",
+   "tier": "C",
+   "file": "validate-dashboards.sh",
+   "line": 26,
+   "symbol": "pass",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-210",
+   "tier": "C",
+   "file": "validate-dashboards.sh",
+   "line": 27,
+   "symbol": "fail",
+   "evidence": [
+    "2 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-211",
+   "tier": "C",
+   "file": "validate-dashboards.sh",
+   "line": 28,
+   "symbol": "warn",
+   "evidence": [
+    "1 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-212",
+   "tier": "C",
+   "file": "validate-dashboards.sh",
+   "line": 29,
+   "symbol": "header",
+   "evidence": [
+    "8 call site(s), verdict never read"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-213",
+   "tier": "C",
+   "file": "vc-coverage-check.sh",
+   "line": 55,
+   "symbol": "log",
+   "evidence": [
+    "1 fail-open call site(s)"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-214",
+   "tier": "B",
+   "file": "worktree-health-check.sh",
+   "line": 35,
+   "symbol": "log",
+   "evidence": [
+    "1 fail-open call site(s)"
+   ],
+   "proposed": "MASK",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-215",
+   "tier": "B",
+   "file": "worktree-health-check.sh",
+   "line": 36,
+   "symbol": "warn",
+   "evidence": [
+    "1 fail-open call site(s)"
+   ],
+   "proposed": "MASK",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-216",
+   "tier": "B",
+   "file": "worktree-health-check.sh",
+   "line": 37,
+   "symbol": "error",
+   "evidence": [
+    "3 fail-open call site(s)"
+   ],
+   "proposed": "MASK",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-217",
+   "tier": "B",
+   "file": "worktree-health-check.sh",
+   "line": 38,
+   "symbol": "success",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-218",
+   "tier": "B",
+   "file": "worktree-health-check.sh",
+   "line": 67,
+   "symbol": "_is_excluded",
+   "evidence": [
+    "no test names it"
+   ],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-219",
+   "tier": "B",
+   "file": "worktree-health-check.sh",
+   "line": 82,
+   "symbol": "check_worktree",
+   "evidence": [
+    "no test names it"
+   ],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-220",
+   "tier": "B",
+   "file": "worktree-health-check.sh",
+   "line": 150,
+   "symbol": "_auto_commit_worktree",
+   "evidence": [
+    "1 call site(s), verdict never read"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-221",
+   "tier": "B",
+   "file": "lib/agent-invoke.sh",
+   "line": 36,
+   "symbol": "agent_profile_get",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-222",
+   "tier": "B",
+   "file": "lib/agent-invoke.sh",
+   "line": 46,
+   "symbol": "agent_profile_validate",
+   "evidence": [
+    "no test names it"
+   ],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-223",
+   "tier": "B",
+   "file": "lib/agent-invoke.sh",
+   "line": 67,
+   "symbol": "invoke_agent",
+   "evidence": [
+    "never called"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-224",
+   "tier": "B",
+   "file": "lib/agent-io.sh",
+   "line": 49,
+   "symbol": "agent_input_present",
+   "evidence": [
+    "never called",
+    "no test names it"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-225",
+   "tier": "B",
+   "file": "lib/agent-ladder.sh",
+   "line": 173,
+   "symbol": "agent_ladder_exhausted",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-226",
+   "tier": "B",
+   "file": "lib/agent-role-preflight.sh",
+   "line": 28,
+   "symbol": "agent_roles_resolve",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-227",
+   "tier": "B",
+   "file": "lib/build-freshness.sh",
+   "line": 26,
+   "symbol": "build_is_current",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-228",
+   "tier": "B",
+   "file": "lib/codeline-health.sh",
+   "line": 85,
+   "symbol": "_ch_link_local",
+   "evidence": [
+    "no test names it"
+   ],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-229",
+   "tier": "B",
+   "file": "lib/codeline-health.sh",
+   "line": 158,
+   "symbol": "_ch_install",
+   "evidence": [
+    "no test names it"
+   ],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-230",
+   "tier": "B",
+   "file": "lib/codeline-write-perimeter.sh",
+   "line": 62,
+   "symbol": "perimeter_is_write_allowed",
+   "evidence": [
+    "no test names it"
+   ],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-231",
+   "tier": "B",
+   "file": "lib/codeline-write-perimeter.sh",
+   "line": 208,
+   "symbol": "perimeter_role_may_write",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-232",
+   "tier": "B",
+   "file": "lib/cost-ledger.sh",
+   "line": 46,
+   "symbol": "_cost_ledger_run_start",
+   "evidence": [
+    "no test names it"
+   ],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-233",
+   "tier": "B",
+   "file": "lib/cost-ledger.sh",
+   "line": 94,
+   "symbol": "assert_cost_ledger_not_silently_empty",
+   "evidence": [
+    "1 fail-open call site(s)"
+   ],
+   "proposed": "MASK",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-234",
+   "tier": "B",
+   "file": "lib/coupled-pair-gate.sh",
+   "line": 43,
+   "symbol": "coupled_pair_check",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-235",
+   "tier": "B",
+   "file": "lib/dist-freshness.sh",
+   "line": 28,
+   "symbol": "error",
+   "evidence": [
+    "3 fail-open call site(s)"
+   ],
+   "proposed": "MASK",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-236",
+   "tier": "B",
+   "file": "lib/dist-freshness.sh",
+   "line": 31,
+   "symbol": "assert_dist_fresh",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-237",
+   "tier": "B",
+   "file": "lib/eslint-baseline-gate.sh",
+   "line": 64,
+   "symbol": "_eslint_is_lintable",
+   "evidence": [
+    "no test names it"
+   ],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-238",
+   "tier": "C",
+   "file": "lib/eslint-baseline-gate.sh",
+   "line": 118,
+   "symbol": "eslint_baseline_gate",
+   "evidence": [],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-239",
+   "tier": "B",
+   "file": "lib/flags.sh",
+   "line": 31,
+   "symbol": "is_truthy",
+   "evidence": [
+    "3 fail-open call site(s)"
+   ],
+   "proposed": "MASK",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-240",
+   "tier": "B",
+   "file": "lib/git-ops.sh",
+   "line": 182,
+   "symbol": "git_add_client_outputs",
+   "evidence": [
+    "1 fail-open call site(s)"
+   ],
+   "proposed": "MASK",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-241",
+   "tier": "B",
+   "file": "lib/git-ops.sh",
+   "line": 314,
+   "symbol": "ensure_story_branch",
+   "evidence": [
+    "1 fail-open call site(s)"
+   ],
+   "proposed": "MASK",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-242",
+   "tier": "B",
+   "file": "lib/git-ops.sh",
+   "line": 428,
+   "symbol": "commit_completed_story",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-243",
+   "tier": "B",
+   "file": "lib/git-ops.sh",
+   "line": 557,
+   "symbol": "setup_worktrees",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-244",
+   "tier": "B",
+   "file": "lib/git-ops.sh",
+   "line": 618,
+   "symbol": "cleanup_worktrees",
+   "evidence": [
+    "2 call site(s), verdict never read"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-245",
+   "tier": "B",
+   "file": "lib/jq-vals.sh",
+   "line": 35,
+   "symbol": "jq_vals",
+   "evidence": [
+    "81 call site(s), verdict never read"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-246",
+   "tier": "B",
+   "file": "lib/kb-canonical.sh",
+   "line": 67,
+   "symbol": "kb_clear_agent_residue",
+   "evidence": [
+    "1 call site(s), verdict never read",
+    "no test names it"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-247",
+   "tier": "B",
+   "file": "lib/model-ladder-membership.sh",
+   "line": 29,
+   "symbol": "_ladder_rungs",
+   "evidence": [
+    "no test names it"
+   ],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-248",
+   "tier": "B",
+   "file": "lib/model-ladder-membership.sh",
+   "line": 41,
+   "symbol": "model_is_on_ladder",
+   "evidence": [
+    "never called"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-249",
+   "tier": "B",
+   "file": "lib/model-ladder-membership.sh",
+   "line": 61,
+   "symbol": "stories_with_unladdered_models",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-250",
+   "tier": "B",
+   "file": "lib/node-bin.sh",
+   "line": 33,
+   "symbol": "_node_major_of",
+   "evidence": [
+    "no test names it"
+   ],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-251",
+   "tier": "B",
+   "file": "lib/node-bin.sh",
+   "line": 47,
+   "symbol": "resolve_node_bin",
+   "evidence": [
+    "6 call site(s), verdict never read"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-252",
+   "tier": "B",
+   "file": "lib/plan-fidelity-gate.sh",
+   "line": 64,
+   "symbol": "plan_fidelity_check",
+   "evidence": [
+    "never called"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-253",
+   "tier": "C",
+   "file": "lib/pre-run-reset-gate.sh",
+   "line": 20,
+   "symbol": "pre_run_reset_or_abort",
+   "evidence": [
+    "6 call site(s), verdict never read"
+   ],
+   "proposed": "NOT-A-GATE",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-254",
+   "tier": "B",
+   "file": "lib/preflight.sh",
+   "line": 18,
+   "symbol": "require_preflight",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-255",
+   "tier": "B",
+   "file": "lib/prompt-budget.sh",
+   "line": 33,
+   "symbol": "_prompt_budget_value",
+   "evidence": [
+    "3 call site(s), verdict never read",
+    "no test names it"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-256",
+   "tier": "B",
+   "file": "lib/render-engine-prompt.sh",
+   "line": 25,
+   "symbol": "render_engine_prompt",
+   "evidence": [
+    "3 fail-open call site(s)"
+   ],
+   "proposed": "MASK",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-257",
+   "tier": "B",
+   "file": "lib/render-engine-prompt.sh",
+   "line": 76,
+   "symbol": "render_or_keep",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-258",
+   "tier": "B",
+   "file": "lib/run-checkpoint.sh",
+   "line": 63,
+   "symbol": "checkpoint_dir",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-259",
+   "tier": "B",
+   "file": "lib/run-checkpoint.sh",
+   "line": 117,
+   "symbol": "_is_known_stage",
+   "evidence": [
+    "no test names it"
+   ],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-260",
+   "tier": "B",
+   "file": "lib/run-checkpoint.sh",
+   "line": 175,
+   "symbol": "run_stage",
+   "evidence": [
+    "no test names it"
+   ],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-261",
+   "tier": "B",
+   "file": "lib/run-checkpoint.sh",
+   "line": 204,
+   "symbol": "resume_skip_env",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-262",
+   "tier": "B",
+   "file": "lib/run-checkpoint.sh",
+   "line": 245,
+   "symbol": "save_run_checkpoint",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-263",
+   "tier": "B",
+   "file": "lib/run-checkpoint.sh",
+   "line": 305,
+   "symbol": "restore_run_checkpoint",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-264",
+   "tier": "B",
+   "file": "lib/run-modes.sh",
+   "line": 62,
+   "symbol": "apply_run_mode",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-265",
+   "tier": "B",
+   "file": "lib/seam-ladder.sh",
+   "line": 8,
+   "symbol": "seam_ladder_export",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-266",
+   "tier": "B",
+   "file": "lib/seam-ladder.sh",
+   "line": 93,
+   "symbol": "seam_model_or_fail",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-267",
+   "tier": "B",
+   "file": "lib/service-urls.sh",
+   "line": 14,
+   "symbol": "_service_config_path",
+   "evidence": [
+    "no test names it"
+   ],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-268",
+   "tier": "B",
+   "file": "lib/service-urls.sh",
+   "line": 29,
+   "symbol": "service_url",
+   "evidence": [
+    "1 fail-open call site(s)"
+   ],
+   "proposed": "MASK",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-269",
+   "tier": "B",
+   "file": "lib/story-guards.sh",
+   "line": 14,
+   "symbol": "_run_project_verification",
+   "evidence": [
+    "2 fail-open call site(s)"
+   ],
+   "proposed": "MASK",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-270",
+   "tier": "B",
+   "file": "lib/story-guards.sh",
+   "line": 249,
+   "symbol": "story_tsc_gate",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-271",
+   "tier": "B",
+   "file": "lib/story-guards.sh",
+   "line": 495,
+   "symbol": "_persist_skill_note_simple",
+   "evidence": [
+    "1 call site(s), verdict never read"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-272",
+   "tier": "B",
+   "file": "lib/story-guards.sh",
+   "line": 677,
+   "symbol": "spec_review_gate",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-273",
+   "tier": "B",
+   "file": "lib/story-guards.sh",
+   "line": 922,
+   "symbol": "assert_phase_stories_have_roles",
+   "evidence": [
+    "never called"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-274",
+   "tier": "B",
+   "file": "lib/story-outputs.sh",
+   "line": 98,
+   "symbol": "story_outputs_baseline_ref",
+   "evidence": [
+    "no test names it"
+   ],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-275",
+   "tier": "B",
+   "file": "lib/tc-writer-gate.sh",
+   "line": 50,
+   "symbol": "run_inline_tc_writer_gate",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-276",
+   "tier": "B",
+   "file": "lib/tc-writer-gate.sh",
+   "line": 86,
+   "symbol": "_tc_ladder_next_model",
+   "evidence": [
+    "1 call site(s), verdict never read"
+   ],
+   "proposed": "DEAD",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-277",
+   "tier": "B",
+   "file": "lib/tc-writer-gate.sh",
+   "line": 254,
+   "symbol": "_tc_writer_gate_maybe_split_test_story",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-278",
+   "tier": "B",
+   "file": "lib/tsc-baseline-gate.sh",
+   "line": 6,
+   "symbol": "_run_project_verification",
+   "evidence": [
+    "2 fail-open call site(s)"
+   ],
+   "proposed": "MASK",
+   "disposition": null,
+   "note": ""
+  },
+  {
+   "id": "GD-279",
+   "tier": "B",
+   "file": "lib/tsc-baseline-gate.sh",
+   "line": 45,
+   "symbol": "baseline_new_failures",
+   "evidence": [],
+   "proposed": "CONTRACT",
+   "disposition": null,
+   "note": ""
+  }
+ ]
+}

@@ -12,7 +12,7 @@
  * uncommitted work: the same directory was reported as thousands of uncommitted files, which set
  * issues=1, which made Step 3.1 exit 1 and killed the phase.
  *
- * Ecosystem artefacts come from lib/ecosystems.js, beside the ecosystem that produces them. Editor
+ * Ecosystem artefacts come from lib/ecosystem-registry.js, beside the ecosystem that produces them. Editor
  * and OS droppings come from config/repo-artifacts.json. Nothing is named here.
  *
  *   argv[2]  the form the caller wants:
@@ -40,7 +40,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const { allArtifactDirs, allManifests } = require('../ecosystems.js');
+const { allArtifactDirs, allManifests } = require('../ecosystem-registry.js');
 
 const form = process.argv[2] || 'pathspec';
 if (!['pathspec', 'glob', 'regex', 'diff'].includes(form)) {

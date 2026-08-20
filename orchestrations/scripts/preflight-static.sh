@@ -119,6 +119,58 @@ const bare=b.split("\n").map(l=>l.trim()).filter(l=>/^run_[a-z_]+_check "/.test(
 console.log(bare.join("\n"));' 2>&1)
 [ -z "$out" ] && pass "gate verdicts read" "all" || { fail "gate verdicts read" "$(echo "$out"|wc -l) bare"; echo "$out" | sed 's/^/    /'; }
 
+# ── 7. RATCHETS — THE DEBT MAY ONLY SHRINK ───────────────────────────────────
+# Eight of the ten defects confirmed on 2026-08-20 were hardcoding, and every one of them was
+# added by a change that passed every check above. Counting is not a fix; it is the only thing
+# that stops the number growing while the fixes are worked through one at a time.
+#
+# A count BELOW its baseline lowers the baseline in place — today's number becomes tomorrow's
+# ceiling. A count ABOVE it fails. Raising a baseline by hand is an operator decision.
+BASELINES="orchestrations/config/preflight-baselines.json"
+ratchet() {
+  local _label="$1" _key="$2" _scanner="$3"
+  local _out _n _base _rc
+  # An empty scan is not automatically a pass: a scanner that cannot run reports nothing, which
+  # is the exact shape of every defect this file exists to catch. rc is captured on the SAME
+  # logical step as the call — a check that reads $? a line later reads whatever ran in between.
+  _out=$("$NODE" "orchestrations/scripts/lib/handlers/$_scanner" "$ROOT" 2>&1); _rc=$?
+  if [ "$_rc" -ne 0 ]; then fail "$_label" "scanner did not run"; printf '%s\n' "$_out" | sed 's/^/    /'; return; fi
+  _n=$(printf '%s' "$_out" | grep -c . || true)
+  _base=$("$NODE" -e 'try{const j=require(process.argv[1]);const v=j[process.argv[2]];console.log(Number.isFinite(v)?v:"")}catch{console.log("")}' \
+          "$ROOT/$BASELINES" "$_key" 2>/dev/null)
+  if [ -z "$_base" ]; then fail "$_label" "no baseline for $_key in $BASELINES"; return; fi
+  if [ "$_n" -gt "$_base" ]; then
+    fail "$_label" "$_n > baseline $_base — $(($_n - _base)) new"
+    printf '%s\n' "$_out" | sed 's/^/    /'
+  elif [ "$_n" -lt "$_base" ]; then
+    "$NODE" -e '
+      const fs=require("fs");const p=process.argv[1];const j=JSON.parse(fs.readFileSync(p,"utf8"));
+      j[process.argv[2]]=Number(process.argv[3]);fs.writeFileSync(p,JSON.stringify(j,null,2)+"\n");' \
+      "$ROOT/$BASELINES" "$_key" "$_n" 2>/dev/null
+    pass "$_label" "$_n (improved from $_base — baseline tightened)"
+  else
+    pass "$_label" "$_n (at baseline)"
+  fi
+}
+ratchet "literal ratchet" "duplicatedLiterals" "scan-duplicated-literals.js"
+ratchet "guard calibration" "uncalibratedGuards" "scan-uncalibrated-guards.js"
+
+# ── 8. THE OPERATOR'S OWN DECISIONS ──────────────────────────────────────────
+# orchestrations/config/remediation-register.json is DATA the operator owns: literals that must be
+# gone, and guards judged useless. Marking one enforce:true makes it fatal here — no code change,
+# no negotiation with this file. An unreadable register FAILS rather than reporting nothing.
+out=$("$NODE" "orchestrations/scripts/lib/handlers/check-remediation-register.js" "$ROOT" 2>&1)
+rc=$?
+if [ "$rc" -eq 2 ]; then
+  fail "remediation register" "unreadable — decisions cannot be enforced"
+  echo "$out" | sed 's/^/    /'
+elif [ "$rc" -ne 0 ]; then
+  fail "remediation register" "$(printf '%s' "$out" | grep -c . || true) enforced item(s) still present"
+  echo "$out" | sed 's/^/    /'
+else
+  pass "remediation register" "no enforced violations"
+fi
+
 echo
 [ "$FAILED" -eq 0 ] && echo "PRE-FLIGHT PASS — nothing here will surface in a run" \
                     || echo "PRE-FLIGHT FAIL — $FAILED check(s); each one WILL surface in a run"

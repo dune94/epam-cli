@@ -51,6 +51,22 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # briefly was) the script dies with "SCRIPT_DIR: unbound variable" before doing anything.
 source "$SCRIPT_DIR/lib/jq-vals.sh"
 
+# THE PROMPT RENDERER THIS SCRIPT CALLS EIGHT TIMES.
+#
+# It was never sourced. "render_engine_prompt: command not found" appears 21 times across the run
+# logs and again in run 4; every one of those prompt sections rendered EMPTY, so the agent was
+# briefed with holes and the only signal was a warning on stderr.
+# shellcheck source=lib/render-engine-prompt.sh
+source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
+
+# THE REPO ROOT, ASSIGNED ONCE.
+#
+# $AUTOMATION_DIR was read further down and never set. Under `set -u` the command substitution that
+# resolves the typecheck command died, _typecheck_cmd came back empty, and the fallback told the
+# agent "this codeline declares no typecheck command" -- of a codeline that declares
+# `npm run check-types`. Resolution failing is not the same as nothing being declared.
+AUTOMATION_DIR="${AUTOMATION_DIR:-$(dirname "$SCRIPT_DIR")}"
+
 # THIS SEAM ASKS FOR ITS LADDER.
 #
 # Until 2026-08-12 only team-lead-review.sh called this, so sixteen of seventeen seams kept
@@ -145,17 +161,30 @@ done
 #   2. the first changed file that is genuinely testable source
 #   3. nothing sensible -> skip; a garbage test is worse than none, and the
 #      repro-gate will report the absence honestly.
+# WHAT A TEST COULD TARGET -- ASKED OF THE CODELINE, NOT OF A CASE STATEMENT.
+#
+# This ended `*.ts|*.tsx|*.js|*.jsx|*.mjs|*.cjs) return 0 ;; *) return 1`. A .py, .go, .rs, .java or
+# .rb file falls to the default, so on any non-Node codeline NO file is ever testable, _choose_target
+# finds no candidate, and this script skips -- reported as "nothing sensible to test", which reads
+# exactly like a correct decision. Bug-reproduction tests silently never happened there.
+#
+# lib/handlers/testable-source.js applies two rules, both from data that already exists: the
+# extensions the CODELINE declares as source, and the manifests/lockfiles/protected files the
+# ecosystem registry knows. The old exclusion list for .md/.json/.png/.css is gone -- each of those
+# fails the positive rule on its own once that rule is grounded in a declaration.
+#
+# Resolved ONCE per run: this is called in a loop and a process per file is a process per file.
+_TESTABLE_SET=""
+_TESTABLE_RESOLVED=0
 _is_testable_source() {
-    case "$1" in
-        # lockfiles / manifests / docs / config / data — never a test target
-        package-lock.json|*/package-lock.json|yarn.lock|*/yarn.lock|pnpm-lock.yaml|*/pnpm-lock.yaml) return 1 ;;
-        package.json|*/package.json|tsconfig*.json|*/tsconfig*.json) return 1 ;;
-        *.md|*.markdown|*.txt|*.json|*.yml|*.yaml|*.toml|*.ini|*.env|*.lock) return 1 ;;
-        *.snap|*.png|*.jpg|*.svg|*.ico|*.css|*.scss) return 1 ;;
-        # genuinely testable source
-        *.ts|*.tsx|*.js|*.jsx|*.mjs|*.cjs) return 0 ;;
-        *) return 1 ;;
-    esac
+    local _f="$1"
+    if [ "$_TESTABLE_RESOLVED" -eq 0 ]; then
+        _TESTABLE_RESOLVED=1
+        _TESTABLE_SET=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/testable-source.js" \
+            "$PROJECT_ROOT" $(git -C "$PROJECT_ROOT" ls-files 2>/dev/null) 2>/dev/null || echo "")
+    fi
+    [ -z "$_TESTABLE_SET" ] && return 1
+    printf '%s\n' "$_TESTABLE_SET" | grep -Fxq "$_f"
 }
 
 # WHICH FILE CARRIES THE FEATURE — ASKED, NOT GUESSED BY POSITION.

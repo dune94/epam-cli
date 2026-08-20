@@ -15,7 +15,7 @@
 //     this authorises the tests to canonise whatever the writer produced — including a defect —
 //     and to overrule the requirement while doing it. A descriptive test ratifies the defect.
 //
-// The codeline's own answers already exist: lib/ecosystems.js knows the test command, and
+// The codeline's own answers already exist: lib/ecosystem-registry.js knows the test command, and
 // stack-facts.js produces __TEST_FILE_CONVENTIONS__ and __TEST_COMMAND__ ready to merge into a
 // values file. This seam received neither — its only placeholders were __STORY_CONTEXT__,
 // __TC_OUT_FILE__ and __TC_WRITER_PROFILE__.

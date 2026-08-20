@@ -89,7 +89,7 @@ describe('the repro gate cannot pass what it cannot run', () => {
     const r = spawnSync(NODE, ['-e',
       'const {allManifests}=require(process.argv[1]);'
       + 'process.stdout.write(allManifests().filter(e=>typeof e.testFileCommand!=="function").map(e=>e.file).join(","))',
-      join(SCRIPTS, 'lib/ecosystems.js'),
+      join(SCRIPTS, 'lib/ecosystem-registry.js'),
     ], { encoding: 'utf8' });
     expect(r.stdout.trim(), 'an ecosystem cannot target individual test files, so the gate skips it')
       .toBe('');

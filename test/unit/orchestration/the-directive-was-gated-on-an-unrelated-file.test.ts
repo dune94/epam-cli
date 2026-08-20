@@ -13,7 +13,7 @@
 // "missing imports are detected and installed automatically", which is true only when the PROJECT
 // declares autoInstall — hence the file check. The replacement (c981785) promises nothing: it
 // tells the writer to run the add-command itself. What it needs is a KNOWN ECOSYSTEM — a manifest,
-// a lockfile and an add-command — all of which come from lib/ecosystems.js, never from .epam/.
+// a lockfile and an add-command — all of which come from lib/ecosystem-registry.js, never from .epam/.
 //
 // Gating an instruction on a file it does not depend on is how a writer ends up told what is wrong
 // and never told how to fix it.

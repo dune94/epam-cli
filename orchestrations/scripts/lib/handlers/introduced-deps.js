@@ -10,7 +10,7 @@
  * `git diff <ref> -- package.json | grep -oE '"[^"]+" *:'`. That names a manifest and assumes a
  * JSON one, so every non-Node codeline got the empty answer — and the empty answer means "this
  * story introduced nothing", which silently turns every finding into debt and disarms both gates.
- * The manifest and the way to read it come from lib/ecosystems.js, the one table.
+ * The manifest and the way to read it come from lib/ecosystem-registry.js, the one table.
  *
  *   usage: introduced-deps.js <repo> <baseline_ref>
  *
@@ -21,7 +21,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { allManifests } = require('../ecosystems.js');
+const { allManifests } = require('../ecosystem-registry.js');
 
 const repo = process.argv[2];
 const ref = process.argv[3];

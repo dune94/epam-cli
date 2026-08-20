@@ -195,7 +195,7 @@ function declaredDependencies(repoPath) {
   // typescript, and correctly blocked the roster for describing them wrongly. Two schemas for one
   // fact, and the run died between them.
   //
-  // lib/ecosystems.js already answers this for every supported ecosystem: it finds the manifest by
+  // lib/ecosystem-registry.js already answers this for every supported ecosystem: it finds the manifest by
   // PRESENCE and each entry knows how to read its own dependency sections — which is exactly what
   // manifestKeys was spelling out by hand, one project at a time. It extends at runtime through
   // EPAM_CODELINE_MANIFESTS, so a new ecosystem needs no engine change and no project config.

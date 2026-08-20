@@ -5,7 +5,7 @@
     "The TC writer turns verification criteria into the tests that check them, so its wording",
     "decides what \"verified\" means for every story that passes through.",
     "",
-    "2026-08-19: the body prescribed ONE test framework (vi.mock, vi.hoisted, vi.stubGlobal, clearAllMocks/resetAllMocks, and @jest/globals as a banned import) to every codeline, and illustrated every instruction with the sample travel app's domain — /search, /cheapest, 'from'/'to', adults=0, src/server.ts, table column alignment. The codeline's own answers already existed in lib/ecosystems.js and stack-facts.js and were never passed in.",
+    "2026-08-19: the body prescribed ONE test framework (vi.mock, vi.hoisted, vi.stubGlobal, clearAllMocks/resetAllMocks, and @jest/globals as a banned import) to every codeline, and illustrated every instruction with the sample travel app's domain — /search, /cheapest, 'from'/'to', adults=0, src/server.ts, table column alignment. The codeline's own answers already existed in lib/ecosystem-registry.js and stack-facts.js and were never passed in.",
     "",
     "It also said 'The testCriteria.facts OVERRIDE any conflicting AC. Write them as ground truth.' The seam consumes `implementation` (required) and reads the BUILT source, so that authorised the tests to canonise whatever the writer produced and overrule the requirement while doing it. On brownfield, live AMSD-2041, the requirement was all that stood between the run and a regression its own verification criteria described.",
     "",

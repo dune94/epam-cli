@@ -81,7 +81,7 @@ export function replayTitle(base: string, repo: string, name: string): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { allManifests, lockfileFor } = require('../../orchestrations/scripts/lib/ecosystems.js');
+const { allManifests, lockfileFor } = require('../../orchestrations/scripts/lib/ecosystem-registry.js');
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { execFileSync } = require('node:child_process');

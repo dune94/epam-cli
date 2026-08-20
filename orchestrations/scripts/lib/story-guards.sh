@@ -942,7 +942,7 @@ assert_phase_stories_have_roles() {
 # package the story added it blocks) and lockfile-sync (drift the story caused blocks; drift it
 # inherited does not) -- so it is computed ONCE, here, and read from here.
 #
-# It names no manifest file: the handler asks lib/ecosystems.js. The first version was an inline
+# It names no manifest file: the handler asks lib/ecosystem-registry.js. The first version was an inline
 # `grep` over package.json that returned the empty answer on every non-Node codeline, and the empty
 # answer disarms both gates silently.
 story_introduced_deps() {

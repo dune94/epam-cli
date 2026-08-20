@@ -8058,9 +8058,19 @@ while true; do
             error "Step 3.6: review APPROVED after a blocker-level rejection, with the codeline UNCHANGED since that rejection."
             error "Step 3.6: the verdict changed and the code did not — the blocker was never resolved. Escalating instead of approving."
             _emit_agent complete "review-agent" "Code review escalated (approval after unresolved blocker)"
-            for _entry in "${_review_climbable_stories[@]:-}"; do
-                [ -n "$_entry" ] && _escalate_story_review "${_entry%%:*}" || true
-            done
+            # NO REMEDY IS CLAIMED HERE. This called `_escalate_story_review`, which is defined
+            # nowhere in the engine, wrapped in `|| true` so its absence could not even fail the
+            # line. Live 2026-08-20: "Escalating instead of approving." followed immediately by
+            # "_escalate_story_review: command not found", and the story carried on. The array it
+            # iterated is not assigned until further below, so on this path it was empty anyway.
+            #
+            # The REFUSAL below is what actually took effect and is what matters: the loop exits
+            # without recording the approval. Announcing an action the engine cannot take is worse
+            # than announcing none — an operator reads the log and believes it was handled.
+            #
+            # The flip-flop this tried to compensate for is now prevented at its source: the
+            # reviewer receives its own prior verdicts and is told an unresolved blocker still
+            # stands (1f24c70).
             break
         fi
         success "Team Lead code review APPROVED for phase '$PHASE' (cycle $_review_cycle)"

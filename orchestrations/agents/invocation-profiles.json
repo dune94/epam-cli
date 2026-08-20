@@ -69,6 +69,7 @@
       "_what": "Reviews the story's code change AND its test; emits a verdict.",
       "maxOutputTokens": 32768,
       "maxIterations": 25,
+      "maxToolCalls": 8,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
       "ladder": "top",

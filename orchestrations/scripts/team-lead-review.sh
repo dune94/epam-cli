@@ -48,6 +48,8 @@ AUTO_APPROVE="${AUTO_APPROVE:-false}"
 REVIEW_LOG="${REVIEW_LOG:-$AUTOMATION_DIR/logs/code-reviews.jsonl}"
 AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$AUTOMATION_DIR/agents/profiles.json}"
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
+# shellcheck source=lib/agent-invoke.sh
+source "$SCRIPT_DIR/lib/agent-invoke.sh"
 
 # The model settings this seam is configured to run with — ladder, effort, temperature — read
 # from the registry by name. This seam decides whether code is accepted, and it fails silently
@@ -241,20 +243,29 @@ run_review_prompt() {
     # evidence already gathered. The iteration cap stays as the guard against a
     # reviewer that stalls WITHOUT calling tools — the two bound different
     # failures, so both are set.
-    _review_out=$(echo "$prompt_text" | \
-        AI_MODEL="$_model" \
-        CLAUDE_CMD="${CLAUDE_CMD:-claude}" \
-        EPAM_CLI="${EPAM_CLI:-epam}" \
-        ORCH_JSON_RESULT="$_review_json_result" \
-        AI_GATE_ALLOW_TOOLS=1 \
-        EPAM_ALLOWED_TOOLS="bash,read_file,list_files,search${_review_plugin_tools:+,${_review_plugin_tools}}" \
-        EPAM_MAX_TOOL_CALLS="${REVIEW_MAX_TOOL_CALLS:-8}" \
-        EPAM_MAX_ITERATIONS="${REVIEW_MAX_ITERATIONS:-25}" \
-        EPAM_REASONING_EFFORT="${REVIEW_REASONING_EFFORT:-high}" \
-        EPAM_MAX_OUTPUT_TOKENS="${REVIEW_MAX_OUTPUT_TOKENS:-32768}" \
-        PROJECT_ROOT="$PROJECT_ROOT" \
-        "$AI_RUNNER_CMD" --provider "$_provider" \
-            --model "$_model" 2>&1)
+    # THROUGH THE ONE DOOR.
+    #
+    # This set the execution budget itself -- output tokens, iterations, tool calls and reasoning
+    # effort, each as ${REVIEW_*:-default}. lib/agent-invoke.sh was built to end exactly that, and
+    # had no call sites at all: "silently falling back to a default is what let a reviewer run at
+    # 4096 tokens for months without anyone noticing." A default written here is a value nobody
+    # chose, and it is invisible on the day it is wrong.
+    #
+    # The budget AND the tool grant now come from the team-lead-review profile in
+    # agents/invocation-profiles.json. The profile has declared "toolGrant": "execute" all along and
+    # nothing read it, so this wrote its own list -- bash,read_file,list_files,search plus plugin
+    # tools discovered separately -- four tool names hardcoded beside a declaration that already
+    # said it. lib/agent-tools.js resolves the kind into the read-only floor, the plugin tools THIS
+    # codeline provisioned, and whatever the kind adds.
+    #
+    # Model and provider stay here: routing is per-site and dynamic, which the gateway says is the
+    # caller's to own.
+    export PROJECT_ROOT
+    _review_out=$(echo "$prompt_text" | invoke_agent team-lead-review \
+        --model "$_model" --provider "$_provider" \
+        --json-result "$_review_json_result" \
+        --codeline "$PROJECT_ROOT" \
+        2>&1)
     # Emit cost_snapshot so agent-activity dashboard shows review-agent cost
     if [ -f "$_review_json_result" ] && [ -s "$_review_json_result" ]; then
         local _rc _tin _tout _cost _turns _phase_id
@@ -543,12 +554,17 @@ while IFS= read -r story_id; do
     fi
 
     # The plugin tools THIS codeline registered — discovered, never listed inline.
-    # Both halves are required: the BLOCK tells the reviewer the tools exist, and the
-    # NAMES extend EPAM_ALLOWED_TOOLS so applyToolAllowlist() does not filter them out
-    # before the model sees them. Advertising without permitting (or permitting without
-    # advertising) leaves the tool exactly as dead as it was.
+    #
+    # Both halves are still required, but only one of them is computed here now. The BLOCK tells the
+    # reviewer the tools exist; PERMITTING them is the grant's job, and the grant is declared on the
+    # profile ("toolGrant": "execute") and resolved by lib/agent-tools.js, which discovers the same
+    # plugin tools itself. project_tool_names() was the second half, and keeping it would be a second
+    # answer to a question already answered — the shape that drifts.
+    #
+    # Advertising without permitting (or permitting without advertising) leaves the tool exactly as
+    # dead as it was, so if the grant ever stops including plugin tools, this block is the thing
+    # that becomes a lie.
     _review_project_tools_block="$(build_project_tools_block "$PROJECT_ROOT")"
-    _review_plugin_tools="$(project_tool_names "$PROJECT_ROOT")"
 
     # Build review prompt
     # THE CONDITIONAL BLOCKS, COMPUTED HERE INSTEAD OF INSIDE THE PROMPT.

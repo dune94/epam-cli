@@ -315,6 +315,26 @@ _emit_tw "spec_update" "repro-test-writer started for ${STORY_ID} → ${_target_
 # It lived here as a heredoc — one of the 34 prompts embedded in scripts. Prompt prose in a shell
 # string is live code: a quote ends the string, a backtick executes. It also could not be reviewed
 # or corrected without editing the engine. The template is never run; the project-authority copy is.
+# THE PROJECT'S OWN TYPECHECK COMMAND, not an engine function.
+#
+# The prompt used to tell the agent to run `_run_project_verification` — defined in claude.sh, and
+# therefore absent from the agent's bash subprocess. It failed to stderr, the grep matched nothing,
+# and the agent concluded its file typechecked. Verified in the trace of 2026-08-20: "no output
+# means no typecheck errors for our file".
+#
+# Absent is absent: a codeline that declares no typecheck is TOLD so, and the prompt then asks for
+# no verification it cannot perform, rather than naming a command that silently succeeds.
+_typecheck_cmd=$("${NODE_BIN:-node}" -e '
+  try {
+    const p = require(process.argv[1]);
+    const v = p.detectVerification(process.argv[2]) || {};
+    process.stdout.write(((v.typecheck || {}).command) || "");
+  } catch { process.stdout.write(""); }
+' "$AUTOMATION_DIR/plugins/verification-plugin.js" "$PROJECT_ROOT" 2>/dev/null || echo "")
+if [ -z "$_typecheck_cmd" ]; then
+    _typecheck_cmd="echo '(this codeline declares no typecheck command — skip this check and say so in your summary)'"
+fi
+
 _prompt_values=$(mktemp)
 "${NODE_BIN:-node}" -e '
   const fs = require("fs");
@@ -332,6 +352,7 @@ _prompt_values=$(mktemp)
   __PROMPT_ROLE__ "$_prompt_role" \
   __REQ_PROOF__ "$_req_proof" \
   __TARGET_REL__ "$_target_rel" \
+  __TYPECHECK_COMMAND__ "$_typecheck_cmd" \
   __VCS__ "${_vcs:-- The behavior described in the ticket is now correct, and related behavior did not regress.}"
 _prompt=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/prompt-library.js" \
     render repro-test-writer "${EPAM_PROJECT_CONFIG_DIR:-}" "$_prompt_values") || {

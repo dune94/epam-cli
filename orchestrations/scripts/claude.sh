@@ -11715,10 +11715,22 @@ run_pre_phase_assessment() {
 
     local assessment_prompt
     _ap_vals=$(mktemp "${TMPDIR:-/tmp}/skill-assessment-prephase-vals-XXXXXX.json")
+    # WHAT THIS PROJECT ACTUALLY IS — the template's own words. lib/handlers/agent-skills.js
+    # derives it from the codeline's ecosystem and the KB the pipeline wrote while working on it
+    # ("DERIVED, NEVER TYPED"). It existed with NO CALLERS, so this placeholder was never supplied
+    # and the render threw. Absent is absent: an unresolvable project reports that, never a guess.
+    local _ap_skills_file; _ap_skills_file=$(mktemp "${TMPDIR:-/tmp}/project-skills-XXXXXX.json")
+    "${NODE_CMD:-node}" "$SCRIPT_DIR/lib/handlers/agent-skills.js" "${PROJECT_ROOT:-}" \
+        "$AUTOMATION_DIR/agents" > "$_ap_skills_file" 2>/dev/null \
+        || printf '%s' '(this project could not be resolved — do not infer skills from role names)' > "$_ap_skills_file"
     jq_vals \
           --arg phase_id "$phase_id" \
           --arg prd_rel "$prd_rel" \
-          '{"__PHASE_ID__":$phase_id,"__PRD_REL__":$prd_rel}' > "$_ap_vals"
+          --rawfile project_skills "$_ap_skills_file" \
+          '{"__PHASE_ID__":$phase_id,"__PRD_REL__":$prd_rel,"__PROJECT_SKILLS__":$project_skills}' > "$_ap_vals"
+    rm -f "$_ap_skills_file"
+    # The codeline's own facts — this template declares them and nothing supplied them.
+    merge_stack_facts "$_ap_vals" "${PROJECT_ROOT:-}"
     assessment_prompt="$(render_engine_prompt skill-assessment-prephase "$_ap_vals" with_prd_structure)"
     rm -f "$_ap_vals"
 

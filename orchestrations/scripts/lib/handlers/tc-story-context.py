@@ -56,10 +56,25 @@ for sid in phase_ids:
         continue
     s = by_id.get(sid, {})
     files = _files_for(s)
+
+    # WHAT GETS A BRIEF IS WHAT NEEDS ONE — the same rule as its sibling,
+    # tc-stories-needing-criteria.py, which decides what qualifies.
+    #
+    # This used to require `any(_is_test_file(f) for f in files)`: a story got a brief only if its
+    # own file list held a test file — the greenfield shape, where the spec pass splits work into an
+    # implementation story and a paired test story. When the sibling was fixed and a brownfield
+    # story started to QUALIFY, this one still skipped it, so the pipeline decided the story needed
+    # test criteria and then handed the writer nothing. Live 2026-08-20, three invocations, and the
+    # agent said so each time: "the 'Stories to process' section is empty — no story IDs, source
+    # files, or verification criteria were provided." The gate reported PASSED regardless.
+    #
+    # The two handlers must agree, and a test asserts that every story which needs criteria can be
+    # given a brief.
     is_test_story = any(_is_test_file(f) for f in files)
-    if not is_test_story:
+    has_vcs = bool(s.get('verificationCriteria'))
+    if not (is_test_story or has_vcs):
         continue
-    if s.get('testCriteria', {}).get('facts'):
+    if (s.get('testCriteria') or {}).get('facts'):
         continue
 
     impl_files = [f for f in files if not _is_test_file(f)]

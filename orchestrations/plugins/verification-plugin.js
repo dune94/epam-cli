@@ -314,7 +314,15 @@ function newFailures(current, baseline) {
   return current.filter((f) => !before.has(f));
 }
 
+// THE LOADER READS name/execute FROM THE TOOL, NOT FROM ITS DEFINITION.
+// src/tools/PluginLoader.ts:79-80 requires both on the tool object. Every other plugin hoists
+// them (see scan_secrets); this one nested them inside `definition`, so the loader rejected it
+// with "plugin missing required field: name" — a WARNING, not an error, so nothing surfaced it and
+// the verification tools silently never reached any agent. 15 such warnings across the runs of
+// 2026-08-19/20. Hoisted here to match the shape the loader and every sibling plugin use.
 const verifyTypecheckTool = {
+  name: 'verify_typecheck',
+  pluginApiVersion: PLUGIN_API_VERSION,
   definition: {
     name: 'verify_typecheck',
     pluginApiVersion: PLUGIN_API_VERSION,

@@ -584,7 +584,10 @@ while IFS= read -r story_id; do
     # had itself raised and which had not changed since. It did not change its mind — it never knew.
     # The record was already append-only in code-reviews.jsonl; it simply was never read back.
     # Absent is absent: no prior review renders no section.
-    local _review_prior_block=""
+    # NOT `local`: this runs at top level inside the per-story while-loop, not in a function.
+    # `local` here is a RUNTIME error bash -n cannot see (SC2168) — it aborted the reviewer on
+    # every cycle, produced NO VERDICT eight times, and halted the run of 2026-08-20.
+    _review_prior_block=""
     _review_prior_block=$(python3 "$SCRIPT_DIR/lib/handlers/prior-reviews.py" "$REVIEW_LOG" "$story_id" 2>/dev/null || true)
 
     _review_vals=$(mktemp)

@@ -5278,6 +5278,8 @@ run_pre_phase_assessment() {
           --arg prd_rel "$prd_rel" \
           --arg profiles_rel "$profiles_rel" \
           '{"__PFA_FACTS__":$pfa_facts,"__PFA_TOOL_BUDGET__":$pfa_tool_budget,"__PHASE_ID__":$phase_id,"__PRD_REL__":$prd_rel,"__PROFILES_REL__":$profiles_rel}' > "$_ap_vals"
+    # The codeline's own facts — this template declares them and nothing supplied them.
+    merge_stack_facts "$_pfa_facts_file" "${PROJECT_ROOT:-}"
     assessment_prompt="$(render_engine_prompt post-failure-analyst "$_ap_vals")"
     rm -f "$_ap_vals"
     rm -f "$_pfa_facts_file"
@@ -7362,10 +7364,18 @@ run_phase_assessment() {
     local _sap_guidance_file; _sap_guidance_file=$(mktemp "${TMPDIR:-/tmp}/sap-guidance-XXXXXX.txt")
     printf '%s' "${_skill_domain_guidance:-}" > "$_sap_guidance_file"
     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/skill-assessment-postphase-vals-XXXXXX.json")
+    # __PA_SUMMARY__ is the assessor's ONLY evidence — the template calls it "Pre-computed
+    # assessment data", and the code above refuses to continue without it ("there is nothing for
+    # the assessor to read"). It was computed, validated, and then never passed, so the render threw
+    # "missing values for: __PA_SUMMARY__" on the runs of 2026-08-19 and -20.
+    local _pa_summary_val_file; _pa_summary_val_file=$(mktemp "${TMPDIR:-/tmp}/pa-summary-XXXXXX.txt")
+    printf '%s' "${_pa_summary}" > "$_pa_summary_val_file"
     jq_vals \
           --rawfile skill_domain_guidance "$_sap_guidance_file" \
+          --rawfile pa_summary "$_pa_summary_val_file" \
           --arg phase_id "$phase_id" \
-          '{"__SKILL_DOMAIN_GUIDANCE__":$skill_domain_guidance,"__PHASE_ID__":$phase_id}' > "$_cp_vals"
+          '{"__SKILL_DOMAIN_GUIDANCE__":$skill_domain_guidance,"__PA_SUMMARY__":$pa_summary,"__PHASE_ID__":$phase_id}' > "$_cp_vals"
+    rm -f "$_pa_summary_val_file"
     # EXIT STATUS IS THE CONTRACT — a failed render sends the assessor an empty prompt, and its
     # output feeds a PRD mutation.
     if ! assessment_prompt="$(render_engine_prompt skill-assessment-postphase "$_cp_vals")" \
@@ -8486,6 +8496,8 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
                   --rawfile active_stories "$_lf_stories_file" \
                   --arg phase "$PHASE" \
                   '{"__PROFILE__":$profile,"__LINT_LOG__":$lint_log,"__WRITER_OUTPUTS__":$writer_outputs,"__ACTIVE_STORIES__":$active_stories,"__PHASE__":$phase}' > "$_lp_vals"
+            # The codeline's own facts — this template declares them and nothing supplied them.
+            merge_stack_facts "$_lf_outputs_file" "${PROJECT_ROOT:-}"
             _lint_finding_prompt="$(render_engine_prompt lint-finding-analyst "$_lp_vals")"
             rm -f "$_lp_vals" "$_lp_role_file"
             rm -f "$_lf_outputs_file" "$_lf_stories_file"
@@ -9670,6 +9682,8 @@ $mutant_prompt"
                   --arg routing_decision "$routing_decision" \
                   '{"__FORCE_LIGHTPANDA__":$force_lightpanda,"__FORCE_PLAYWRIGHT__":$force_playwright,"__GATE_SCOPE__":$gate_scope,"__PHASE_ID__":$phase_id,"__PROJECT_ROOT__":$project_root,"__ROUTING_DECISION__":$routing_decision}' > "$_qa_vals" 2>/dev/null
             local fuzz_prompt
+            # The codeline's own facts — this template declares them and nothing supplied them.
+            merge_stack_facts "$_qa_vals" "${PROJECT_ROOT:-}"
             if ! fuzz_prompt=$(render_engine_prompt qa-fuzz-weaver "$_qa_vals"); then
                 error "  [fuzz-weaver] cannot render its prompt — refusing to gate with no instructions" >&2
                 rm -f "$_qa_vals"; return 1

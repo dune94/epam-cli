@@ -85,3 +85,27 @@ jq_vals() {
     rm -f "${_files[@]}" 2>/dev/null
     return "$_rc"
 }
+
+# merge_stack_facts <values-file> [repo]
+#
+# THE CODELINE'S OWN FACTS, MERGED INTO A VALUES FILE.
+#
+# lib/handlers/stack-facts.js produces exactly the placeholders several templates declare —
+# __TEST_FILE_CONVENTIONS__, __TEST_COMMAND__, __PROTECTED_FILES__, __IMPL_ROLE__, __TEST_ROLE__,
+# __MANIFEST_FILE__, __STACK__ — "ready to merge into a values file", in its own words. Five call
+# sites declared those placeholders and never merged it, so the renderer threw AT RUN TIME:
+# 'skill-assessment-postphase' and 'plan-corrective' both died live on consecutive runs of
+# 2026-08-19/20, and each failure was one static comparison away from being known before launch.
+#
+# Merged, never overwriting: a value the caller already supplied wins, so a site with a better
+# answer for its own context keeps it.
+merge_stack_facts() {
+    local _vals="$1" _repo="${2:-${PROJECT_ROOT:-}}"
+    local _facts _merged
+    [ -f "$_vals" ] || return 0
+    [ -n "$_repo" ] && [ -d "$_repo" ] || return 0
+    _facts=$("${NODE_CMD:-node}" "${SCRIPT_DIR}/lib/handlers/stack-facts.js" "$_repo" 2>/dev/null) || return 0
+    printf '%s' "$_facts" | jq -e . >/dev/null 2>&1 || return 0
+    _merged=$(jq -s '.[0] * .[1]' <(printf '%s' "$_facts") "$_vals" 2>/dev/null) || return 0
+    [ -n "$_merged" ] && printf '%s' "$_merged" > "$_vals"
+}

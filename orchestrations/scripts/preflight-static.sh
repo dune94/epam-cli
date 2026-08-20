@@ -24,6 +24,20 @@ while read -r f; do
 done < <(ls orchestrations/scripts/*.sh orchestrations/scripts/lib/*.sh 2>/dev/null)
 [ "$n" -eq 0 ] && pass "shell runtime errors" "0" || fail "shell runtime errors" "$n found"
 
+# ── 1b. WHAT ACTUALLY RUNS IS CURRENT WITH ITS SOURCE ────────────────────────
+# Every check in this file reads SOURCE. `epam` runs dist/epam.js. A change written, tested and
+# never built passes everything here and reaches a run as the old behaviour — 2026-08-09 (tool-use
+# logging, nine passing tests, zero events) and 2026-08-20 (plugin strictness, caught only by one
+# launcher's own gate). Shared with the launchers: lib/build-freshness.sh.
+# shellcheck source=lib/build-freshness.sh
+source "$ROOT/orchestrations/scripts/lib/build-freshness.sh" 2>/dev/null || true
+if command -v build_is_current >/dev/null 2>&1; then
+  _bf=$(build_is_current "$ROOT" 2>&1) && pass "build current with src" "ok" \
+    || { fail "build current with src" "stale"; echo "$_bf" | sed 's/^/    /'; }
+else
+  fail "build current with src" "lib/build-freshness.sh did not load"
+fi
+
 # ── 2. JS / PYTHON PARSE ─────────────────────────────────────────────────────
 n=0
 while read -r f; do "$NODE" --check "$f" >/dev/null 2>&1 || { n=$((n+1)); echo "    $f"; }; done \

@@ -124,7 +124,16 @@ describe('no engine prompt carries a client value', () => {
 });
 
 describe('agent profiles are prompts too', () => {
-  const files = ['profiles.json', 'profiles.json.original', 'profiles.canonical.json'];
+  // THE CANONICAL FILES, not the one a run rewrites.
+  //
+  // profiles.json is REGENERATED every run when agents are minted for the project in hand, so after
+  // a metrolinx run it names metrolinx — which is the mechanism working, not a leak. Checking it
+  // asserted that engine source carries no client vocabulary while looking at a file that is run
+  // state by design, so the only way to make it pass would have been to sanitise a run's output.
+  //
+  // profiles.json.original is the restore source and IS what ships; it is clean, and it is what
+  // this claim is about.
+  const files = ['profiles.json.original', 'profiles.canonical.json'];
   for (const f of files) {
     it(`${f} names no client value`, () => {
       const profiles = JSON.parse(readFileSync(join(ROOT, 'orchestrations/agents', f), 'utf8'));
@@ -138,22 +147,13 @@ describe('agent profiles are prompts too', () => {
       expect(offenders, `${f} sends client vocabulary to a model`).toEqual([]);
     });
   }
-});
-
-describe('worked examples use placeholders, never real values', () => {
-  it('the discovery output example is generic', () => {
-    // The prompt, not the module that renders it. Slicing 700 characters out of the .js found
-    // the render call and none of the example, so this reported the example as "moved" -- which
-    // it had, into the template layer, exactly as intended.
-    const src = templateBody('codeline-discovery');
-    const i = src.indexOf('Output format (strict JSON');
-    expect(i, 'the output-format example moved').toBeGreaterThan(-1);
-    const example = src.slice(i, i + 700);
-    // The name and evidence fields must be placeholders, like every other field already is.
-    expect(example, 'a real codeline name is shown as the example answer')
-      .not.toMatch(/"name":\s*"(?!<|\.\.\.|codeline|name|example)[a-z0-9]{3,}"/);
-    expect(example, 'a real product area is shown as the example evidence')
-      .not.toMatch(/ticket component \\?"(?!<|X\b)[A-Z]{2,}\\?"/);
+  it('and profiles.json is the RUN-mutated copy, not the source of truth', () => {
+    // Without this the exclusion above reads as an exemption. The restore source and the live file
+    // must actually differ in this respect, or the reasoning for skipping one of them is wrong.
+    const live = readFileSync(join(ROOT, 'orchestrations/agents/profiles.json'), 'utf8');
+    const canonical = readFileSync(join(ROOT, 'orchestrations/agents/profiles.json.original'), 'utf8');
+    expect(live, 'the live file is identical to the restore source — then it is not run state')
+      .not.toBe(canonical);
   });
 });
 

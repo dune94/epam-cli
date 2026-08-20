@@ -293,18 +293,6 @@ const ALLOW: Record<string, string> = {
   'orchestrations/scripts/test/test-epam-providers.sh#d8a768c48c03':
     'A test fixture: a stub script written to disk so a test runs without the real binary. '
     + 'Executed, never sent to a model.',
-  'orchestrations/scripts/tier3-skyscanner-app-run.sh#3604cccfdc29':
-    'A JSON config file written to disk for a codeline. Data the engine reads back, not '
-    + 'instructions given to an agent.',
-  'orchestrations/scripts/tier3-skyscanner-app-run.sh#531a929bc126':
-    'A JSON config file written to disk for a codeline. Data the engine reads back, not '
-    + 'instructions given to an agent.',
-  'orchestrations/scripts/tier3-travel-app-run.sh#531a929bc126':
-    'A JSON config file written to disk for a codeline. Data the engine reads back, not '
-    + 'instructions given to an agent.',
-  'orchestrations/scripts/tier3-travel-app-run.sh#ff1b10a652fb':
-    'A JSON config file written to disk for a codeline. Data the engine reads back, not '
-    + 'instructions given to an agent.',
   'orchestrations/scripts/update-cost-forecasts.sh#a1a0b8b48d07':
     'Usage text printed to a human operator on a bad invocation. It reaches a terminal, '
     + 'never a model.',

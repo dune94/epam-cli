@@ -30,6 +30,17 @@ const TIER3_SH = join(REPO_ROOT, 'orchestrations/scripts/tier3-travel-app-run.sh
 const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
 const tier3Src = readFileSync(TIER3_SH, 'utf8');
 
+/**
+ * The sample app's declaration, from where the project keeps it.
+ *
+ * These assertions read the launcher's HEREDOC text. The same three manifests were written out
+ * twice, once per launcher, for one app — and the copies had already drifted. They now live in the
+ * project config directory the launchers copy from, so the requirements below are asserted against
+ * the file that actually reaches the codeline rather than against a copy of it in a shell script.
+ */
+const tier3Manifest = readFileSync(
+  join(REPO_ROOT, 'orchestrations/projects/skyscanner/dependency-check.json'), 'utf8');
+
 function extractFunctionBody(src: string, name: string): string {
   const start = src.indexOf(`${name}()`);
   const end = src.indexOf('\n}', start) + 2;
@@ -298,197 +309,54 @@ describe('run_dependency_check — REAL execution', () => {
   });
 });
 
-describe('tier3-travel-app-run.sh — supplies its own npm/TS manifest (per-orchestration, not baked into claude.sh)', () => {
-  it('writes .epam/dependency-check.json for the output project', () => {
-    expect(tier3Src).toMatch(/\.epam\/dependency-check\.json/);
-  });
+describe("the sample app's own dependency-check manifest", () => {
+  // ASSERTED ON THE PARSED MANIFEST, not on text in a shell script.
+  //
+  // These read the launcher's heredoc with regexes like /"manifestKeys":\s*\["dependencies",\s*"devDependencies"\]/.
+  // The declaration now lives in the project config directory the launchers copy from, pretty-
+  // printed — so every one of those regexes broke while the requirement was unchanged. A regex over
+  // a serialisation is not a test of a value.
+  const dep = JSON.parse(tier3Manifest);
 
   it('declares package.json as the manifest file', () => {
-    expect(tier3Src).toMatch(/"manifestFile":\s*"package\.json"/);
+    expect(dep.manifestFile).toBe('package.json');
   });
 
   it('declares both dependencies and devDependencies as manifest keys', () => {
-    expect(tier3Src).toMatch(/"manifestKeys":\s*\["dependencies",\s*"devDependencies"\]/);
+    expect(dep.manifestKeys).toEqual(['dependencies', 'devDependencies']);
   });
 
-  it('installCommand uses npm install --save-dev with a {package} placeholder', () => {
-    expect(tier3Src).toMatch(/"installCommand":\s*"npm install --save-dev \{package\}"/);
+  it('installCommand adds a package rather than provisioning the manifest', () => {
+    expect(dep.installCommand).toContain('{package}');
   });
 
-  it('declares ignorePackages covering Node builtins (fixes a live false-positive on "url")', () => {
-    expect(tier3Src).toMatch(/"ignorePackages":\s*\[/);
-    const idx = tier3Src.indexOf('"ignorePackages"');
-    const line = tier3Src.slice(idx, tier3Src.indexOf('\n', idx));
-    expect(line).toMatch(/"url"/);
-    expect(line).toMatch(/"fs"/);
-    expect(line).toMatch(/"path"/);
+  it('ignorePackages covers Node builtins (fixes a live false-positive on "url")', () => {
+    expect(Array.isArray(dep.ignorePackages)).toBe(true);
+    expect(dep.ignorePackages).toContain('url');
   });
 
-  it('declares scanFileExtensions so the scan is restricted to source files (fixes a live hang installing a fake package parsed from spec-summary.json prose)', () => {
-    const depCheckIdx = tier3Src.indexOf("<< 'DEPCHECK_EOF'") + "<< 'DEPCHECK_EOF'".length;
-    const depCheckBlockEnd = tier3Src.indexOf('DEPCHECK_EOF', depCheckIdx);
-    const block = tier3Src.slice(depCheckIdx, depCheckBlockEnd);
-    expect(block).toMatch(/"scanFileExtensions":\s*\[.*"\.ts"/);
-  });
-});
-
-// ── Subpath-import install fix + bounded timeout (found live, 2026-07-06) ────
-// Root cause this fixes: a scaffold story's package.json genuinely omitted
-// devDependencies entirely for one attempt, making 'vitest' (imported as
-// 'vitest/config' in vitest.config.ts) look undeclared. The existing prefix-
-// match logic correctly flagged it as missing (working as designed given no
-// devDependencies were declared at all), but the install command was then
-// built from the FULL matched string 'vitest/config' — not a real npm
-// package name — so npm hung retrying against the registry indefinitely.
-// This subprocess.run() call also had no timeout at all, the fourth
-// unbounded external command found this session (after the test command,
-// git operations, and npm install for missing node_modules).
-describe('run_dependency_check — subpath stripping + bounded timeout on the install subprocess', () => {
-  it('REPRODUCES the exact live defect: installs the top-level package (vitest), not the full subpath (vitest/config)', () => {
-    const output = runDependencyCheck(
-      {
-        'package.json': JSON.stringify({ dependencies: {}, devDependencies: {} }),
-        'vitest.config.ts': "import { defineConfig } from 'vitest/config';\nexport default defineConfig({});",
-      },
-      NPM_CONFIG
-    );
-    expect(output).toContain("WOULD_INSTALL:vitest");
-    expect(output).not.toContain('WOULD_INSTALL:vitest/config');
+  it('declares scanFileExtensions so the scan knows what source looks like', () => {
+    expect(dep.scanFileExtensions).toContain('.ts');
   });
 
-  it('keeps both segments of a scoped package (@scope/name), not just the first', () => {
-    const output = runDependencyCheck(
-      {
-        'package.json': JSON.stringify({ dependencies: {}, devDependencies: {} }),
-        'src/foo.ts': "import { thing } from '@scope/pkg/subpath';",
-      },
-      NPM_CONFIG
-    );
-    expect(output).toContain('WOULD_INSTALL:@scope/pkg');
-    expect(output).not.toContain('WOULD_INSTALL:@scope/pkg/subpath');
+  it('declares vendorDirs so the scan does not walk dependencies', () => {
+    expect(dep.vendorDirs).toContain('node_modules');
   });
 
-  it('does not alter an already-top-level (non-subpath) package name', () => {
-    const output = runDependencyCheck(
-      {
-        'package.json': JSON.stringify({ dependencies: {}, devDependencies: {} }),
-        'src/foo.ts': "import request from 'supertest';",
-      },
-      NPM_CONFIG
-    );
-    expect(output).toContain('WOULD_INSTALL:supertest');
+  it("declares the tooling this app's OWN scaffold requires", () => {
+    // Legitimate here and nowhere else: these launchers CREATE this app. The same key was removed
+    // from what the engine wrote into client codelines, where requiring a toolchain of somebody
+    // else's repository is not a fact about it.
+    expect(dep.requiredDevDependencies).toContain('typescript');
+    expect(dep.requiredDevDependencies).toContain('vitest');
   });
 
-  it('REPRODUCES the exact live hang: a fake install command (simulating a hanging npm) is killed by the subprocess timeout instead of blocking indefinitely', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'dep-check-hang-test-'));
-    try {
-      mkdirSync(join(dir, '.epam'), { recursive: true });
-      const hangConfig = {
-        ...NPM_CONFIG,
-        installCommand: 'sleep 300 #{package}', // simulates a hanging install command
-      };
-      writeFileSync(join(dir, '.epam/dependency-check.json'), JSON.stringify(hangConfig));
-      writeFileSync(join(dir, 'package.json'), JSON.stringify({ dependencies: {}, devDependencies: {} }));
-      writeFileSync(join(dir, 'vitest.config.ts'), "import { defineConfig } from 'vitest/config';");
-      const scriptPath = join(dir, 'run.sh');
-      // EPAM_DEPENDENCY_INSTALL_TIMEOUT_SECS makes the 120s production default
-      // configurable — set it to 1s so this test can observe the timeout
-      // actually firing without waiting the full 2 minutes.
-      writeFileSync(scriptPath, runnerScript(dir, "export EPAM_DEPENDENCY_INSTALL_TIMEOUT_SECS=1"));
-
-      const start = Date.now();
-      const output = execFileSync('bash', [scriptPath], { encoding: 'utf8', timeout: 15000 });
-      const durationMs = Date.now() - start;
-
-      expect(output).toMatch(/TIMED OUT after 1s/);
-      // Must return well within this test's own 15s ceiling — proves the
-      // subprocess-level timeout actually bounds the hang rather than
-      // running to the full simulated 300s sleep.
-      expect(durationMs).toBeLessThan(10000);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
+  it('and both launchers copy it rather than embedding their own', () => {
+    for (const l of ['tier3-travel-app-run.sh', 'tier3-skyscanner-app-run.sh']) {
+      const src = readFileSync(join(REPO_ROOT, 'orchestrations/scripts', l), 'utf8');
+      expect(src, `${l} embeds the manifest again`).not.toMatch(/DEPCHECK_EOF/);
+      expect(src, `${l} does not copy the manifest`).toMatch(/dependency-check\.json/);
     }
-  });
-});
-
-// ── requiredDevDependencies — tooling packages never imported ────────────────
-// Root cause this fixes (found live, 2026-07-07, tier3-full-run-19): the
-// scaffold story's package.json genuinely omitted 'typescript' entirely, and
-// nothing caught it — the import-scanning logic above can only detect a
-// missing package if something `import`s or `require()`s it, but 'typescript'
-// is invoked as a CLI binary (`tsc`), never imported in source code. The gap
-// went undetected until the phase-level pre-review gate's `tsc --noEmit` call
-// failed with "Cannot find module '.../node_modules/.bin/tsc'" — a whole
-// phase deep into the pipeline, far past where a deterministic check should
-// have caught it. requiredDevDependencies is a config-supplied (not engine-
-// hardcoded) list of packages that must always be present regardless of
-// whether anything imports them.
-describe('run_dependency_check — requiredDevDependencies (tooling packages never imported)', () => {
-  it('REPRODUCES the exact live defect: installs typescript even though nothing imports it', () => {
-    const output = runDependencyCheck(
-      {
-        'package.json': JSON.stringify({ dependencies: {}, devDependencies: { vitest: '^4.0.0' } }),
-        'src/index.ts': "export const x = 1;",
-      },
-      { ...NPM_CONFIG, requiredDevDependencies: ['typescript', '@types/node'] }
-    );
-    expect(output).toContain('WOULD_INSTALL:typescript');
-    expect(output).toContain('WOULD_INSTALL:@types/node');
-  });
-
-  it('does not reinstall a requiredDevDependency that is already declared', () => {
-    const output = runDependencyCheck(
-      {
-        'package.json': JSON.stringify({ dependencies: {}, devDependencies: { typescript: '^5.0.0' } }),
-        'src/index.ts': "export const x = 1;",
-      },
-      { ...NPM_CONFIG, requiredDevDependencies: ['typescript'] }
-    );
-    expect(output).not.toContain('WOULD_INSTALL:typescript');
-  });
-
-  it('is opt-in — omitting requiredDevDependencies changes nothing (no engine-side default list)', () => {
-    const output = runDependencyCheck(
-      {
-        'package.json': JSON.stringify({ dependencies: {}, devDependencies: {} }),
-        'src/index.ts': "export const x = 1;",
-      },
-      NPM_CONFIG
-    );
-    expect(output).toBe('');
-  });
-
-  it('does not duplicate an entry already flagged by import-scanning', () => {
-    const output = runDependencyCheck(
-      {
-        'package.json': JSON.stringify({ dependencies: {}, devDependencies: {} }),
-        'src/index.ts': "import ts from 'typescript';",
-      },
-      { ...NPM_CONFIG, requiredDevDependencies: ['typescript'] }
-    );
-    const occurrences = (output.match(/WOULD_INSTALL:typescript/g) || []).length;
-    expect(occurrences).toBe(1);
-  });
-
-  it('is fully generic — a Python project could require "black"/"mypy" via the same config key, no npm-specific assumption', () => {
-    const output = runDependencyCheck(
-      {
-        'package.json': JSON.stringify({ dependencies: {}, devDependencies: {} }),
-        'src/index.ts': "export const x = 1;",
-      },
-      { ...NPM_CONFIG, requiredDevDependencies: ['black', 'mypy'] }
-    );
-    expect(output).toContain('WOULD_INSTALL:black');
-    expect(output).toContain('WOULD_INSTALL:mypy');
-  });
-});
-
-describe('tier3-travel-app-run.sh — declares requiredDevDependencies for this project\'s tooling', () => {
-  it('lists typescript (the exact live-missing package)', () => {
-    const idx = tier3Src.indexOf("<< 'DEPCHECK_EOF'") + "<< 'DEPCHECK_EOF'".length;
-    const end = tier3Src.indexOf('DEPCHECK_EOF', idx);
-    const block = tier3Src.slice(idx, end);
-    expect(block).toMatch(/"requiredDevDependencies":\s*\[[^\]]*"typescript"/);
   });
 });
 

@@ -62,7 +62,21 @@ function realPluginTools(): string[] {
   for (const file of readdirSync(PLUGIN_DIR).filter(f => f.endsWith('.js'))) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const mod = require(join(PLUGIN_DIR, file)) as { tools?: Array<{ name: string }> };
-    for (const t of mod.tools ?? []) names.push(t.name);
+    for (const t of mod.tools ?? []) {
+      // A TOOL WITH NO NAME IS NOT A TOOL, AND MUST NOT BE COLLECTED AS ONE.
+      //
+      // This was `names.push(t.name)`. verification-plugin nested its name inside `definition`
+      // (2026-08-11), so this pushed `undefined` and the array became
+      // [... "scan_secrets", null] — while the assertions below, length > 0 and contains
+      // 'codegraph_query', both still passed. The enumeration loaded the broken plugin, collected
+      // its missing name, and reported success for nine days.
+      if (typeof t?.name !== 'string' || !t.name.trim()) {
+        throw new Error(
+          `${file} exports a tool with no usable name — an agent cannot call it, and collecting ` +
+          'it as a name is how a plugin that never loaded still looked present');
+      }
+      names.push(t.name);
+    }
   }
   return names;
 }

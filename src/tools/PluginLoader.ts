@@ -12,6 +12,17 @@ export interface PluginLoaderOptions {
   projectRoot?: string;
   /** Emit warnings to stderr (default: true) */
   warn?: boolean;
+  /**
+   * Throw when a plugin fails to load, instead of collecting it into `failed` for a caller that
+   * may ignore it (default: false).
+   *
+   * A plugin listed in `.epam/settings.json` is a capability the project EXPLICITLY asked for. When
+   * one silently fails, its tools are simply absent from every agent and nothing says so beyond one
+   * warning line. That has now happened twice: scan_secrets (2026-08-09, see the note below) and
+   * verification-plugin (added 2026-08-11 with `name` nested inside `definition`, rejected on every
+   * invocation until 2026-08-20 — 15 warnings across three runs).
+   */
+  failOnError?: boolean;
 }
 
 /**
@@ -30,15 +41,21 @@ export interface PluginLoaderOptions {
 export class PluginLoader {
   private projectRoot: string;
   private warn: boolean;
+  private failOnError: boolean;
 
   constructor(options: PluginLoaderOptions = {}) {
     this.projectRoot = options.projectRoot ?? process.cwd();
     this.warn = options.warn ?? true;
+    this.failOnError = options.failOnError ?? false;
   }
 
   /**
    * Load all plugins listed in the `tools` array and register them.
-   * Invalid/missing plugins emit warnings and are skipped — never throw.
+   *
+   * By default an invalid or missing plugin emits a warning and is skipped, and the caller decides
+   * what that means. With `failOnError` the first failure THROWS — for callers where a missing
+   * capability is not a survivable state, which is every caller loading what a project explicitly
+   * provisioned.
    */
   loadAll(pluginEntries: string[], registry: ToolRegistry): { loaded: string[]; failed: string[] } {
     const loaded: string[] = [];
@@ -57,6 +74,14 @@ export class PluginLoader {
           process.stderr.write(`[epam] Plugin load warning: ${entry} — ${(err as Error).message}\n`);
         }
         failed.push(entry);
+        if (this.failOnError) {
+          // A capability the project explicitly provisioned is absent. Returning it for a caller to
+          // ignore is how verification-plugin's tools went missing from every agent for nine days
+          // (2026-08-11 to 2026-08-20) behind one warning line per invocation.
+          throw new Error(
+            `plugin "${entry}" is provisioned by this project but failed to load: ` +
+            `${(err as Error).message}`);
+        }
       }
     }
 

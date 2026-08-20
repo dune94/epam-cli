@@ -79,6 +79,8 @@ export EPAM_AGENT_NAME="$_SEAM_NAME"
 command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "$_SEAM_NAME"
 
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
+# shellcheck source=lib/agent-invoke.sh
+source "$SCRIPT_DIR/lib/agent-invoke.sh"
 
 log() { echo "[agent-attempt-analyst] $*" >&2; }
 
@@ -160,12 +162,23 @@ log "diagnosing ${FAILURE_CLASS} via ${_model}"
 # Keep the runner's stderr: it is the only evidence of WHY self-heal failed, and
 # both call sites used to discard it along with everything else.
 _analyst_err="$(mktemp 2>/dev/null || echo /tmp/agent-analyst-err.$$)"
-_note=$(echo "$_prompt" | \
-    EPAM_MAX_ITERATIONS=1 \
-    EPAM_REASONING_EFFORT="${AGENT_ANALYST_REASONING_EFFORT:-high}" \
-    EPAM_MAX_OUTPUT_TOKENS="${AGENT_ANALYST_MAX_OUTPUT_TOKENS:-32768}" \
-    AI_MODEL="$_model" \
-    bash "$AI_RUNNER_CMD" --provider "$_provider" --model "$_model" 2>"$_analyst_err")
+# THROUGH THE ONE DOOR -- AND THE ANALYST CAN FINALLY LOOK AT SOMETHING.
+#
+# This granted NO TOOLS. Not a restricted set: none. EPAM_ALLOWED_TOOLS was never set and the tool
+# gate was never opened, so the agent asked to work out WHY an attempt failed could not read the
+# file that failed, search for the symbol, or run the check that reported it. It diagnosed from a
+# description of the evidence.
+#
+# Its profile has declared "toolGrant": "execute" the whole time. Nothing read it, because nothing
+# went through lib/agent-invoke.sh -- so the declaration and the invocation disagreed and the
+# invocation won silently.
+#
+# The budget was the same story one field over: three ${VAR:-default} literals duplicating a
+# profile that already states them.
+_note=$(echo "$_prompt" | invoke_agent agent-failure-analyst \
+    --model "$_model" --provider "$_provider" \
+    --codeline "${PROJECT_ROOT:-}" \
+    2>"$_analyst_err")
 _analyst_rc=$?
 
 # Trim to a bounded directive; never emit a huge blob.

@@ -61,6 +61,7 @@ export default defineConfig({
       'test/unit/orchestration/halt-claimed-exhaustion-that-never-happened.test.ts',
       'test/unit/orchestration/a-passing-lint-run-was-silent.test.ts',
       'test/unit/orchestration/brownfield-cve-hard-stopped-on-existing-debt.test.ts',
+      'test/unit/orchestration/the-tc-writer-could-not-write.test.ts',
       'test/unit/orchestration/an-agent-was-told-to-run-an-engine-function.test.ts',
       'test/unit/orchestration/a-review-finding-needed-no-evidence.test.ts',
       'test/unit/orchestration/the-only-reviewer-had-no-memory.test.ts',

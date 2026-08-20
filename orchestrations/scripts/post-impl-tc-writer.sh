@@ -162,11 +162,10 @@ _tc_command=$(printf '%s' "$_tc_facts_json" | jq -r '.__TEST_COMMAND__ // ""')
 # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
 _tpl_vals=$(mktemp "${TMPDIR:-/tmp}/tc-writer-vals-XXXXXX.json")
 jq_vals --arg story_context "$STORY_CONTEXT" \
-      --arg tc_out_file "$TC_OUT_FILE" \
       --arg tc_writer_profile "$TC_WRITER_PROFILE" \
       --arg test_file_conventions "$_tc_conventions" \
       --arg test_command "$_tc_command" \
-      '{"__STORY_CONTEXT__":$story_context,"__TC_OUT_FILE__":$tc_out_file,"__TC_WRITER_PROFILE__":$tc_writer_profile,"__TEST_FILE_CONVENTIONS__":$test_file_conventions,"__TEST_COMMAND__":$test_command}' > "$_tpl_vals" 2>/dev/null
+      '{"__STORY_CONTEXT__":$story_context,"__TC_WRITER_PROFILE__":$tc_writer_profile,"__TEST_FILE_CONVENTIONS__":$test_file_conventions,"__TEST_COMMAND__":$test_command}' > "$_tpl_vals" 2>/dev/null
 if ! TC_PROMPT=$(render_engine_prompt tc-writer "$_tpl_vals"); then
     echo "[tc-writer] cannot render its prompt — refusing to run with no instructions" >&2
     rm -f "$_tpl_vals"; exit 1
@@ -204,6 +203,14 @@ set +e
 ) 2>&1 | tee "$LOG_FILE"
 TC_EXIT=${PIPESTATUS[0]}
 set -e
+
+# THE ENGINE WRITES THE ANSWER. The agent is read-only and has no tool that can write; it returns
+# the object and this turns it into the file the applier reads. On no JSON the destination is
+# REMOVED, so a previous run's file can never stand in for this run's answer — which is exactly
+# what happened on 2026-08-20, when a tc-core.json from 31 July was applied instead.
+python3 "$SCRIPT_DIR/lib/handlers/tc-extract-output.py" "$TC_OUT_FILE" < "$LOG_FILE" \
+    || echo "  [tc-writer] no criteria extracted from the agent's answer"
+
 
 # ── Validate and apply TCs to prd.json ─────────────────────────────────────────
 python3 "$SCRIPT_DIR/lib/handlers/tc-apply-to-prd.py" "$TC_OUT_FILE" "$OUTPUT_DIR" "$PRD_FILE" "$TC_EXIT" "$PHASE" "$STORY"

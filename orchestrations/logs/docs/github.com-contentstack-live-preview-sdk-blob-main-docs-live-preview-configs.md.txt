@@ -1,0 +1,729 @@
+SOURCE: https://github.com/contentstack/live-preview-sdk/blob/main/docs/live-preview-configs.md
+
+HTTP 200
+
+live-preview-sdk/docs/live-preview-configs.md at main · contentstack/live-preview-sdk · GitHub 
+
+ Skip to content 
+
+ Navigation Menu
+ 
+ Sign in Appearance settings
+
+ Platform AI CODE CREATION GitHub Copilot Write better code with AI 
+ GitHub Copilot app Direct agents from issue to merge 
+ MCP Registry Integrate external tools 
+
+ DEVELOPER WORKFLOWS Actions Automate any workflow 
+ Codespaces Instant dev environments 
+ Issues Plan and track work 
+ Code Review Manage code changes 
+ Code Quality Enforce quality at merge 
+
+ APPLICATION SECURITY GitHub Advanced Security Find and fix vulnerabilities 
+ Code security Secure your code as you build 
+ Secret protection Stop leaks before they start 
+
+ EXPLORE Why GitHub 
+ Documentation 
+ Blog 
+ Changelog 
+ Marketplace 
+
+ View all features 
+
+ Solutions BY COMPANY SIZE Enterprises 
+ Small and medium teams 
+ Startups 
+ Nonprofits 
+
+ BY USE CASE App Modernization 
+ DevSecOps 
+ DevOps 
+ CI/CD 
+ View all use cases 
+
+ BY INDUSTRY Healthcare 
+ Financial services 
+ Manufacturing 
+ Government 
+ View all industries 
+
+ View all solutions 
+
+ Resources EXPLORE BY TOPIC AI 
+ Software Development 
+ DevOps 
+ Security 
+ View all topics 
+
+ EXPLORE BY TYPE Customer stories 
+ Events & webinars 
+ Ebooks & reports 
+ Business insights 
+ GitHub Skills 
+
+ SUPPORT & SERVICES Documentation 
+ Customer support 
+ Community forum 
+ Trust center 
+ Partners 
+
+ View all resources 
+
+ Open Source COMMUNITY GitHub Sponsors Fund open source developers 
+
+ PROGRAMS Security Lab 
+ Maintainer Community 
+ Accelerator 
+ GitHub Stars 
+ Archive Program 
+
+ REPOSITORIES Topics 
+ Trending 
+ Collections 
+
+ Enterprise ENTERPRISE SOLUTIONS Enterprise platform AI-powered developer platform 
+
+ AVAILABLE ADD-ONS GitHub Advanced Security Enterprise-grade security features 
+ Copilot for Business Enterprise-grade AI features 
+ Premium Support Enterprise-grade 24/7 support 
+
+ Pricing 
+ Search / 
+
+ Sign in 
+ Sign up Appearance settings
+
+ You signed in with another tab or window. Reload to refresh your session. 
+ You signed out in another tab or window. Reload to refresh your session. 
+ You switched accounts on another tab or window. Reload to refresh your session. 
+
+ Dismiss alert 
+
+ Uh oh!
+
+ There was an error while loading. Please reload this page .
+
+ contentstack
+ 
+ / 
+ 
+ live-preview-sdk 
+
+ Public 
+
+ Notifications
+ You must be signed in to change notification settings 
+
+ Fork
+ 1 
+
+ Star
+ 3 
+
+ Code 
+
+ Issues 
+ 0 
+
+ Pull requests 
+ 12 
+
+ Actions 
+
+ Projects 
+
+ Security and quality 
+ 0 
+
+ Insights 
+
+ Additional navigation options 
+
+ Code
+
+ Issues
+
+ Pull requests
+
+ Actions
+
+ Projects
+
+ Security and quality
+
+ Insights
+
+ Files Expand file tree 
+
+ main 
+
+ Breadcrumbs
+ live-preview-sdk 
+ / docs 
+ / live-preview-configs.md
+
+ Copy path 
+
+ Blame 
+ More file actions 
+
+ Blame 
+ More file actions 
+
+ Latest commit
+
+ History
+ History 
+ History 
+
+ 420 lines (299 loc) · 17.5 KB 
+
+ main 
+
+ Breadcrumbs
+ live-preview-sdk 
+ / docs 
+ / live-preview-configs.md
+
+ Copy path 
+
+ Top 
+
+ File metadata and controls
+ Preview
+ 
+ Code
+ 
+ Blame
+
+ 420 lines (299 loc) · 17.5 KB 
+
+ Raw 
+ Copy raw file 
+ Download raw file 
+
+ Outline Edit and raw actions 
+
+ Contentstack Live Preview Utils SDK Configs
+
+ The init data has following structure
+
+ Contentstack Live Preview Utils SDK Configs 
+ 
+ init(config: IConfig) 
+ 
+ enable 
+
+ ssr 
+
+ mode 
+
+ editButton 
+
+ cleanCslpOnProduction 
+
+ stackDetails 
+ 
+ apiKey 
+
+ environment 
+
+ clientUrlParams 
+ 
+ NA config 
+
+ EU config 
+
+ stackSdk 
+
+ onLiveEdit(callback: () => void) 
+
+ onEntryChange(callback: () => void) 
+
+ setPageContext(context) 
+
+ hash 
+
+ setConfigFromParams(config: ConstructorParameters[0]) 
+
+ getGatsbyDataFormat(sdkQuery: IStackSdk, prefix: string) 
+
+ init(config: IConfig) 
+
+ The init() method initializes the Live Preview Utils SDK by setting up the necessary event listeners.
+​
+The init() method accepts a configuration object as a parameter. The following explains all the options available for the configuration.
+
+ enable 
+
+ type 
+ default 
+ optional 
+
+ boolean 
+ true 
+ yes 
+
+ ​
+The enable property determines whether Live Preview communications have been enabled.
+
+ ssr 
+
+ type 
+ default 
+ optional 
+
+ boolean 
+ true 
+ yes 
+
+ The ssr property determines the data update strategy for previewed content whenever you make changes to entry content. It depends on whether your app is SSR or CSR .
+
+ If you set the property to true , then your app or website is rendered from the server (SSR) and a request will be sent for a fresh HTML page every time you edit content.
+
+ When you set the property to false , then app is rendered from the client side (CSR). Your framework, e.g. React, will fetch the data and reload the existing page.
+
+ Note: For CSR mode, stackSDK is required. Hence, we automatically switch mode to CSR when you pass this object. This config is provided to override the default behavior.
+
+ mode 
+
+ type 
+ default 
+ optional 
+
+ string 
+ preview 
+ Yes 
+
+ The mode property specifies whether the site is editable in the Live Preview or Visual Builder environment.
+
+ If set to preview , clicking the hovered edit button navigates to the Contentstack Live Preview panel.
+
+ If set to builder , clicking the Start Editing button navigates to the Contentstack Visual Builder. Note that the site will still function in the Live Preview panel even when set to 'builder'.
+
+ editButton 
+
+ The editButton object allows you to manage the "Edit" button both within and outside the Live Preview portal. It offers the following features:
+
+ Enable/disable the "Edit" button
+
+ Include/exclude the "Edit" button from inside/outside the Live Preview panel
+
+ Adjust the position of the "Edit" button using eight over predefined positions
+
+ The editButton object contains four keys:
+
+ enable 
+
+ type 
+ default 
+ optional 
+
+ boolean 
+ true 
+ no 
+
+ This key lets you specify whether you want to display the “Edit” button or not. It is of type “Boolean” with value true/false.
+
+ exclude 
+
+ type 
+ default 
+ optional 
+
+ array 
+ [ ] 
+ yes 
+
+ This key provides you with the option to exclude the editButton from either inside or outside the Live Preview portal for certain conditions. It is of type “Array” with any one of the following string values:
+
+ insideLivePreviewPortal 
+
+ Used when you want to remove the “Edit” button from within the Live Preview portal.
+
+ outsideLivePreviewPortal 
+
+ Used when you want to remove the “Edit” button from outside the Live Preview portal.
+
+ Note: Although you have excluded the "Edit" button for Live Preview, you can add the cslp-buttons query parameter in your website URL to display the "Edit" button outside of your Live Preview-enabled website.
+
+ includeByQueryParameter 
+
+ type 
+ default 
+ optional 
+
+ boolean 
+ true 
+ yes 
+
+ This key is used to override the cslp-buttons query parameter. You can set this to true/false to enable/disable the "Edit" button option, respectively.
+
+ position 
+
+ type 
+ default 
+ optional 
+
+ string 
+ top 
+ yes 
+
+ The user can place the "Edit" button in eight predefined positions within or over the Live Preview portal using these values: left, right, top-left (or top), top-right, top-center, bottom-left (or bottom), bottom-right, and bottom-center.
+
+ Note: The default position of the "Edit" button is set to "top". In a collaborative work environment, you can also manually position the “Edit” button on your website by applying the data-cslp-button-position attribute to the HTML tag with one of the position values.
+
+ For example: 
+
+ ContentstackLivePreview . init ( { 
+ ...
+ editButton : { 
+ enable : true , 
+ exclude : [ "outsideLivePreviewPortal" ] , 
+ includeByQueryParameter : false , 
+ position : 'top-right' , 
+ } 
+ } ) ; 
+
+ editInVisualBuilderButton 
+
+ the editInVisualBuilderButton object allows you to manage the "Start Editing" button outside Visual Builder. It offers the following features:
+
+ Enable/disable the "Start Editing" button
+
+ Adjust the position of the "Start Editing" button using four predefined positions
+
+ The editInVisualBuilderButton object contains two keys:
+
+ enable 
+
+ type 
+ default 
+ optional 
+
+ boolean 
+ true 
+ yes 
+
+ This key lets you specify whether you want to display the “Start Editing” button or not. It is of type “Boolean” with value true/false.
+
+ position 
+
+ type 
+ default 
+ optional 
+
+ string 
+ bottom-right 
+ yes 
+
+ The user can place the "Start Editing" button in four predefined positions
+top-left, top-right, bottom-left, and bottom-right.
+
+ overlayPropagation 
+
+ Use this option when hovering or clicking on a field in your app does nothing — no outline appears and the Edit button doesn't show up. This typically happens when another element (such as a navigation overlay, image layer, or layout spacer) sits on top of the field and captures the mouse event instead.
+
+ Enabling overlayPropagation tells the SDK to look through stacked elements at the cursor position to find the field underneath. It works in both Visual Builder and the standalone Live Preview Edit button.
+
+ When to enable: Only turn this on if you notice fields that are invisible to hover/click in your specific app layout. It is off by default.
+
+ The overlayPropagation object contains one key:
+
+ enable 
+
+ type 
+ default 
+ optional 
+
+ boolean 
+ false 
+ yes 
+
+ Set to true to allow the SDK to detect fields that are visually covered by other elements.
+
+ For example: 
+
+ ContentstackLivePreview . init ( { 
+ ...
+ overlayPropagation : { 
+ enable : true , 
+ } 
+ } ) ; 
+
+ cleanCslpOnProduction 
+
+ type 
+ default 
+ optional 
+
+ boolean 
+ true 
+ yes 
+
+ When enable is set to false and cleanCslpOnProduction is set to true , the data-cslp attributes are removed from the website.
+
+ stackDetails 
+
+ The stackDetails object contains stack related information that helps in redirecting to the corresponding entry whenever you use edit tags within your website.
+
+ If you do not use live edit tags, then you don't need to use the stackDetails property.
+
+ stackDetails { 
+ apiKey: string 
+ environment: string 
+ } 
+
+ apiKey 
+
+ The API key of the concerned stack.
+
+ Note: This is required if you are using the live edit tags.
+
+ type 
+ optional 
+
+ string 
+ yes (no, if you are using edit tags) 
+
+ environment 
+
+ The environment name of the concerned stack.
+
+ type 
+ optional 
+
+ string 
+ yes 
+
+ clientUrlParams 
+
+ The clientUrlParams object contains the URL information of the stack that contains your webpage content. By default, the configuration details are set for the NA region.
+
+ NA config
+
+ { 
+ protocol : "https" , 
+ host : "app.contentstack.com" , 
+ port : 443 , 
+ } 
+
+ EU config
+
+ { 
+ protocol : "https" , 
+ host : "eu-app.contentstack.com" , 
+ port : 443 , 
+ } 
+
+ Pass the clientUrlParams object only if you need to modify the URL.
+​
+
+ stackSdk 
+
+ The stackSdk object represents the Stack class that we get by executing the Contentstack.Stack() method. It is required for Client-Side Rendering (CSR) as we need to inject the Live Preview hash and content type UID into the Stack class.
+
+ onLiveEdit(callback: () => void) 
+
+ The onLiveEdit method modifies or alters the content inside the Live Preview panel as soon as a change is made in the entry. This method runs a single API request to retrieve draft content from the entry and display the changes in the Live Preview panel.
+
+ Note: The onLiveEdit method will not fetch the published content of the entry and is only applicable in the Client-Side Rendering ( CSR ) mode.
+
+ For Client-Side Rendering (CSR), as the framework handles data collection and rendering by itself, we recommend creating a function, say updateData , to fetch data and pass it to the onLiveEdit method. The onLiveEdit method will execute the updateData function whenever new data is available.
+
+ For example, in a React application, you can create an updateData function that will fetch data from Contentstack and store it in a React state. Inside the useEffect function, you need to call the onLiveEdit method and pass the updateData function to it.
+​
+
+ // utils.js 
+...
+ export const onLiveEdit = ContentstackLivePreview . onLiveEdit ; 
+...
+
+ // Footer.js 
+ import React from "react" ; 
+ import ContentstackLivePreview from "./utils.js" ; 
+
+ const Footer = ( ) => { 
+ const [ data , setData ] = React . useState ( { } ) ; 
+
+ const updateData = ( ) => { 
+ const fetchedData = SomeCallToGetData ( ) ; 
+ setData ( fetchedData ) ; 
+ } ; 
+
+ React . useEffect ( ( ) => { 
+ ContentstackLivePreview . onLiveEdit ( updateData ) ; 
+ } , [ ] ) ; 
+
+ return < div > { data . company_name } </ div > ; 
+ } ; 
+
+ onEntryChange(callback: () => void) 
+
+ For Client-Side Rendering (CSR), data collection and rendering is handled by the framework itself. Hence, for CSR, we recommend creating a function responsible for fetching and storing data, for example, updatePage() , and passing it to the onEntryChange() method. This will execute the updatePage() function whenever new data is available.
+​
+
+ Note: This function only works when ssr is set to false , indicating that the application is of type CSR .
+
+ For example, in a React application, you can create an updateData() function that will fetch data from Contentstack and store it in a React state. Inside the useEffect() function, you need to call the onEntryChange() method and pass the updateData() function to it.
+​
+
+ // utils.js 
+...
+ export const onEntryChange = ContentstackLivePreview . onEntryChange ; 
+...
+
+ // Footer.js 
+ import React from "react" ; 
+ import ContentstackLivePreview from "live-preview-utils" ; 
+
+ const Footer = ( ) => { 
+ const [ data , setData ] = React . useState ( { } ) ; 
+
+ const updateData = ( ) => { 
+ const fetchedData = SomeCallToGetData ( ) ; 
+ setData ( fetchedData ) ; 
+ } ; 
+
+ React . useEffect ( ( ) => { 
+ ContentstackLivePreview . onEntryChange ( updateData ) ; 
+ } , [ ] ) ; 
+
+ return < div > { data . company_name } </ div > ; 
+ } ; 
+
+ Note: To make the onEntryChange method work similarly to the onLiveEdit method, you can utilize the optional parameter skipInitialRender:true . This will enable the function to only call the Contentstack API once.
+
+ For example: 
+
+ onEntryChange ( fetchData , { skipInitialRender : true } ) ; 
+
+ setPageContext(context) 
+
+ setPageContext ( context : { entryUid : string ; contentTypeUid: string } ) : void 
+
+ The setPageContext() method tells the Visual Builder which entry the current page is rendering. The Visual Builder uses this context so that the "Start Editing" button (and the init handshake) target the correct entry, even when a page is served from a custom URL that the SDK cannot map to an entry on its own.
+
+ This context is used in two places: on the initial init handshake, so the Visual Builder can confirm whether the entry it has open matches the page rendered in the iframe; and on the "Start Editing" button click, so it can navigate to the correct entry in the Visual Editor. Because init() runs before your async data fetch resolves, the handshake may carry no entry context on its own — calling setPageContext() once your entry is available sends the context to the Visual Builder so it can update its current entry.
+
+ Place the call alongside your existing addEditableTags call — both reference the same entry object, so there is no extra lookup.
+
+ parameter 
+ type 
+ description 
+
+ context.entryUid 
+ string 
+ UID of the entry the current page is rendering. 
+
+ context.contentTypeUid 
+ string 
+ UID of that entry's content type. 
+
+ For example: 
+
+ import ContentstackLivePreview from "@contentstack/live-preview-utils" ; 
+ import Utils from "@contentstack/utils" ; 
+
+ // In your page component (e.g. inside useEffect, once the entry is fetched) 
+ Utils . addEditableTags ( entry , "blog_post" , true , "en-us" ) ; 
+ ContentstackLivePreview . setPageContext ( { 
+ entryUid : entry . uid , 
+ contentTypeUid : "blog_post" , 
+ } ) ; 
+
+ Note: When the page is loaded inside the Visual Builder/Live Preview iframe, the context is also sent to Contentstack via a post message. Outside an iframe, the context is only stored locally and used when generating the "Start Editing" redirection URL.
+
+ Alternative ways to supply page context
+
+ If you cannot call setPageContext() directly (for example, when no JavaScript hook is available for injecting runtime values), the SDK resolves the page context from the following sources, in order of precedence:
+
+ The value set via ContentstackLivePreview.setPageContext() .
+
+ A window.__CS_PAGE_CONTEXT__ global:
+
+ window . __CS_PAGE_CONTEXT__ = { 
+ entryUid : "entry-123" , 
+ contentTypeUid : "blog_post" , 
+ } ; 
+
+ <meta> tags in the page <head> :
+
+ < meta name =" contentstack:entry-uid " content =" entry-123 " /> 
+ < meta name =" contentstack:content-type-uid " content =" blog_post " /> 
+
+ Meta tags are a useful fallback for frameworks that render <meta> natively (for example, Next.js App Router metadata / generateMetadata() or Nuxt useHead() ) and for sites with a strict Content Security Policy ( no unsafe-inline ) that blocks inline <script> tags but allows meta tags.
+
+ hash
+
+ The hash property returns the live preview hash of the entry. It returns an empty string if the page is not opened in live preivew pane.
+
+ Note: In the SSR mode, the hash may not be populated automatically and may require you to pass it using the setConfigFromParams() method.
+
+ For example: 
+
+ console . log ( ContentstackLivePreview . hash ) ; // "hash" 
+
+ config
+
+ The config property returns the following properties and their values:
+
+ ssr 
+
+ enable 
+
+ cleanCslpOnProduction 
+
+ stackDetails 
+The stackDetails object provides information relevant to the live preview context, including:
+
+ stackDetails { 
+ apiKey: string ; // API key of the stack 
+ environment: string ; // Environment in which the preview is running 
+ contentTypeUid: string ; // UID of the content type 
+ entryUid: string ; // UID of the specific entry 
+ } 
+
+ clientUrlParams 
+
+ windowType : The windowType property determines the context of the parent window. It can have one of the following values:
+ 
+ preview : The site is loaded as an iframe within a Live Preview or Timeline preview environment.
+
+ builder : The site is loaded as an iframe within the Visual Builder environment.
+
+ independent : The site is loaded directly outside the Contentstack platform.
+
+ hash 
+
+ editButton 
+
+ mode 
+
+ Footer
+
+ &copy; 2026 GitHub, Inc.
+
+ Footer navigation
+
+ Terms 
+
+ Privacy 
+
+ Security 
+
+ Status 
+
+ Community 
+
+ Docs 
+
+ Contact 
+
+ Manage cookies
+
+ Do not share my personal information
+
+ You can’t perform that action at this time.

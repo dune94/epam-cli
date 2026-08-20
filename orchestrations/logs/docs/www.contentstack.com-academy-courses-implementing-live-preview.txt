@@ -1,0 +1,335 @@
+SOURCE: https://www.contentstack.com/academy/courses/implementing-live-preview
+
+HTTP 200
+
+Implementing Live Preview | Contentstack Academy 
+ Get inspired at ContentCon. Learn more and register today 
+ 
+ Login Login 
+
+ Get inspired at ContentCon. Learn more and register today 
+
+ Contentstack.com Docs Login 
+
+ Implementing Live Preview
+ Course 
+ 45m 28s 
+ Released: March 24, 2025 
+ copy_all Copy for LLM 
+ code_blocks View as Markdown 
+
+ Overview Feedback 
+ Hey there!
+ Welcome to our course on the Live Preview feature in Contentstack! Get ready to explore a powerful tool that brings real-time content editing to your fingertips.
+ In this course, we'll dive into the Live Preview feature within Contentstack. Live Preview allows you to see your content updates instantly as you make them, providing a seamless and dynamic editing experience. Whether you're tweaking text, adjusting images, or making layout changes, Live Preview lets you view your content exactly as it will appear to your audience, eliminating the guesswork and streamlining your content creation process.
+ We'll cover everything from setting up Live Preview to configuring it for different environments, including both Client-Side Rendering (CSR) and Server-Side Rendering (SSR). 
+ By the end of this training, you'll have a solid understanding of how to leverage Live Preview in Contentstack, empowering you to create, edit, and publish content with confidence and precision.
+ Ready to enhance your content editing experience with Live Preview in Contentstack? Let's embark on this exciting journey together!
+
+ Course
+ Implementing Live Preview
+
+ How to Complete the Live Preview Course
+ Text Lesson
+ 
+ 0m 35s
+
+ Introduction to Live Preview
+ Text Lesson
+ 
+ 2m 40s
+
+ Basic implementation
+ Text Lesson
+ 
+ 0m 35s
+
+ How Live Preview works
+ Text Lesson
+ 
+ 5m 3s
+
+ Live preview: REST Delivery SDK
+ Text Lesson
+ 
+ 8m 32s
+
+ Live Preview - GraphQL API
+ Text Lesson
+ 
+ 13m 14s
+
+ Live Edit Tags
+ Text Lesson
+ 
+ 10m 12s
+
+ Chrome Extension
+ Text Lesson
+ 
+ 1m 47s
+
+ Comprehensive guide to setting up CSR and SSR for Live Preview
+ Text Lesson
+ 
+ 2m 30s
+
+ Limitations of Live Preview
+ Text Lesson
+ 
+ 0m 20s
+
+ Additional Resources and References
+ Text Lesson
+
+ Course
+ Implementing Live Preview
+
+ How to Complete the Live Preview Course
+ Text Lesson
+ 
+ 0m 35s
+
+ Introduction to Live Preview
+ Text Lesson
+ 
+ 2m 40s
+
+ Basic implementation
+ Text Lesson
+ 
+ 0m 35s
+
+ How Live Preview works
+ Text Lesson
+ 
+ 5m 3s
+
+ Live preview: REST Delivery SDK
+ Text Lesson
+ 
+ 8m 32s
+
+ Live Preview - GraphQL API
+ Text Lesson
+ 
+ 13m 14s
+
+ Live Edit Tags
+ Text Lesson
+ 
+ 10m 12s
+
+ Chrome Extension
+ Text Lesson
+ 
+ 1m 47s
+
+ Comprehensive guide to setting up CSR and SSR for Live Preview
+ Text Lesson
+ 
+ 2m 30s
+
+ Limitations of Live Preview
+ Text Lesson
+ 
+ 0m 20s
+
+ Additional Resources and References
+ Text Lesson
+
+ Platform keyboard_arrow_down Solution Center
+ 
+ Marketplace
+ 
+ Changelog
+ 
+ Developers & IT
+ 
+ Business users
+ 
+ Digital leaders
+ 
+ Developer Fast Track
+ 
+ Plans & Pricing
+
+ Solutions keyboard_arrow_down Retail
+ 
+ Travel and tourism
+ 
+ Financial services
+ 
+ Technology
+ 
+ Manufacturing
+ 
+ E-commerce
+ 
+ Localization
+ 
+ Personalization
+ 
+ Portals and knowledge bases
+
+ Resources keyboard_arrow_down Academy
+ 
+ Docs
+ 
+ Product updates
+ 
+ Contentstack on Contentstack
+ 
+ Blog
+ 
+ Insights and analyst reports
+ 
+ Webinars
+ 
+ Podcasts
+ 
+ Glossary
+ 
+ Content generative library
+ 
+ Community
+ 
+ Headless CMS
+ 
+ Composable AXP
+ 
+ Personalization
+ 
+ CDP
+
+ Customers keyboard_arrow_down Case Studies
+ 
+ Customer Care
+ 
+ Contentstack Experience Awards
+ 
+ Customer support
+
+ Partners keyboard_arrow_down Overview
+ 
+ Find a partner
+ 
+ Login
+
+ Company keyboard_arrow_down About us
+ 
+ News
+ 
+ Customer support portal
+ 
+ Contact
+
+ Social keyboard_arrow_down Facebook
+ 
+ LinkedIn
+ 
+ Instagram
+ 
+ GitHub
+ 
+ YouTube
+ 
+ Discord
+ 
+ X
+
+ Platform
+ Solution Center 
+ Marketplace 
+ Changelog 
+ Developers & IT 
+ Business users 
+ Digital leaders 
+ Developer Fast Track 
+ Plans & Pricing 
+ 
+ Solutions
+ Retail 
+ Travel and tourism 
+ Financial services 
+ Technology 
+ Manufacturing 
+ E-commerce 
+ Localization 
+ Personalization 
+ Portals and knowledge bases 
+ 
+ Resources
+ Academy 
+ Docs 
+ Product updates 
+ Contentstack on Contentstack 
+ Blog 
+ Insights and analyst reports 
+ Webinars 
+ Podcasts 
+ Glossary 
+ Content generative library 
+ Community 
+ Headless CMS 
+ Composable AXP 
+ Personalization 
+ CDP 
+ 
+ Customers
+ Case Studies 
+ Customer Care 
+ Contentstack Experience Awards 
+ Customer support 
+ 
+ Partners
+ Overview 
+ Find a partner 
+ Login 
+
+ Company
+ About us 
+ News 
+ Customer support portal 
+ Contact 
+ 
+ Social
+ Facebook 
+ LinkedIn 
+ Instagram 
+ GitHub 
+ YouTube 
+ Discord 
+ X 
+
+ arrow_outward Full AXP by Contentstack Legal Terms Privacy Trust Center Cookies Settings
+
+ Copyright © 2026 Contentstack Inc. All rights reserved.
+
+ AI Assistant
+
+ Ask a question below...
+
+ info AI responses may contain mistakes. 
+
+ Ask AI
+
+ Catalog 
+ Learning Paths 
+ Training Instance 
+
+ Ask AI
+
+ search close 
+ menu 
+
+ Login 
+ 
+ Catalog Learning Paths Training Instance 
+ Explore by product chevron_right 
+ Contentstack.com Docs Theme Settings 
+
+ Login 
+
+ chevron_left Back 
+ No products available

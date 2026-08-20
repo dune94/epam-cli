@@ -65,6 +65,11 @@ source "$SCRIPT_DIR/lib/project-tools.sh"
 source "$SCRIPT_DIR/lib/git-ops.sh"
 # shellcheck source=lib/story-retry-state.sh
 source "$SCRIPT_DIR/lib/story-retry-state.sh"
+# jq_vals — prompt values files whose content never becomes an argv entry.
+# Placed with the other library sources, NOT beside SCRIPT_DIR: the path-resolution
+# block is lifted verbatim by tests that build a minimal script tree, and a source
+# line inside it makes those probes fail on a library they have no reason to carry.
+source "$SCRIPT_DIR/lib/jq-vals.sh"
 . "$SCRIPT_DIR/lib/agent-io.sh"
 . "$SCRIPT_DIR/lib/agent-ladder.sh"
 PROGRESS_LOG="$LOG_DIR/progress.txt"
@@ -259,6 +264,13 @@ load_llm_settings_json() {
     _v=$(_get '.timeouts.storyTimeoutMaxSecs'); [ -z "${EPAM_STORY_TIMEOUT_MAX_SECS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_TIMEOUT_MAX_SECS="$_v"
     _v=$(_get '.timeouts.storyTimeoutSecs'); [ -z "${EPAM_STORY_TIMEOUT_SECS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_TIMEOUT_SECS="$_v"
     _v=$(_get '.timeouts.gateTimeoutSecs'); [ -z "${EPAM_GATE_TIMEOUT_SECS:-}" ] && [ -n "$_v" ] && export EPAM_GATE_TIMEOUT_SECS="$_v"
+    # The test timeout belongs with the other timeouts, not in config.env. It was the only one a
+    # project could not declare: six call sites read a bare ${EPAM_TEST_TIMEOUT_SECS:-300} with no
+    # declared source, so raising it meant reintroducing the duplication that consolidating
+    # timeouts into this file removed (EPAM_STORY_TIMEOUT_SECS had already drifted 690 vs 600).
+    # 300s is a real constraint on a large suite, and when `timeout` kills it the run reports
+    # FAILING TESTS rather than a timeout.
+    _v=$(_get '.timeouts.testTimeoutSecs'); [ -z "${EPAM_TEST_TIMEOUT_SECS:-}" ] && [ -n "$_v" ] && export EPAM_TEST_TIMEOUT_SECS="$_v"
 
     _v=$(_get '.brownfield.minOutputTokens'); [ -z "${EPAM_BROWNFIELD_MIN_OUTPUT_TOKENS:-}" ] && [ -n "$_v" ] && export EPAM_BROWNFIELD_MIN_OUTPUT_TOKENS="$_v"
     _v=$(_get '.brownfield.maxScaledIterations'); [ -z "${EPAM_BROWNFIELD_MAX_SCALED_ITERATIONS:-}" ] && [ -n "$_v" ] && export EPAM_BROWNFIELD_MAX_SCALED_ITERATIONS="$_v"
@@ -1086,6 +1098,60 @@ _coupled_pair_gate_for_story() {
 #
 # Same filter as the write-time guard, deliberately — one definition of "required helper".
 # No symbol, path or project vocabulary appears here.
+# ── Does the change DUPLICATE a format the prescribed helper already owns? ───────────────────
+#
+# Helper-ABSENCE was the wrong signal. It holds only for defect stories, where the prescribed
+# helper sits on the changed line by construction (mock3 MOCK3-1: the fix IS `age >= 65` on the
+# line returning CONCESSION_FARE_CENTS, so the helper cannot be absent). For a feature it is a
+# design choice: gotransit SHIPPED AMSD-2041 working, 9 files, with ContentstackFactory and
+# getSinglePageEntry absent — and the absence rule rejects that.
+#
+# The 2026-07-26 defect was never about absence. It was DUPLICATION: the change hand-rolled a
+# format the repository already parses — `startsWith(id + '-')` while
+# dispatch-line-item-key.ts declares `const DIVIDER = '#'`. So the fix could never match.
+#
+# The rule: if the helper's own module declares a separator-like literal, and the change performs
+# format surgery with a DIFFERENT one, the change is re-creating knowledge the helper owns.
+# Absence alone proves nothing and is never rejected.
+
+# _helper_module_separators <repo> <helper> — separator-like literals declared by the module that
+# defines <helper>. Empty when the helper owns no format, which is why a feature helper like
+# ContentstackFactory (zero such literals) can never trigger a rejection.
+_helper_module_separators() {
+    local _repo="$1" _helper="$2" _mod
+    _mod=$(grep -rlE "(export +)?(function|const|class|let) +${_helper}\b" "$_repo/src" 2>/dev/null | head -1)
+    [ -n "$_mod" ] || return 0
+    grep -oE "(const|let|var) +[A-Za-z_][A-Za-z0-9_]* *= *'[^a-zA-Z0-9 ]{1,3}'|(const|let|var) +[A-Za-z_][A-Za-z0-9_]* *= *\"[^a-zA-Z0-9 ]{1,3}\"" "$_mod" 2>/dev/null \
+        | grep -oE "'[^']{1,3}'|\"[^\"]{1,3}\"" | tr -d "\"'" | sort -u
+}
+
+# _change_duplicates_owned_format <repo> <helper> <diff>
+# 1 when the change invents its own separator for a format the helper owns. 0 otherwise.
+_change_duplicates_owned_format() {
+    local _repo="$1" _helper="$2" _diff="$3"
+    # Already uses the helper — nothing is being re-created.
+    printf '%s' "$_diff" | grep -q -- "$_helper" && return 0
+    local _owned; _owned=$(_helper_module_separators "$_repo" "$_helper")
+    [ -n "$_owned" ] || return 0          # the helper owns no format: absence proves nothing
+    # Separator-like literals the ADDED lines introduce inside format surgery: concatenation, or a
+    # prefix/suffix/split/replace comparison. A literal in an import or a message is not surgery.
+    local _used
+    _used=$(printf '%s\n' "$_diff" | grep '^+' | grep -v '^+++' \
+        | grep -oE "(\+ *'[^a-zA-Z0-9 ]{1,3}'|\+ *\"[^a-zA-Z0-9 ]{1,3}\"|(startsWith|endsWith|split|replace|includes)\( *'[^a-zA-Z0-9 ]{1,3}'|(startsWith|endsWith|split|replace|includes)\( *\"[^a-zA-Z0-9 ]{1,3}\")" \
+        | grep -oE "'[^']{1,3}'|\"[^\"]{1,3}\"" | tr -d "\"'" | sort -u)
+    [ -n "$_used" ] || return 0
+    local _u _o
+    while IFS= read -r _u; do
+        [ -n "$_u" ] || continue
+        while IFS= read -r _o; do
+            [ -n "$_o" ] || continue
+            [ "$_u" = "$_o" ] && continue           # same separator: not a duplication
+            return 1
+        done <<< "$_owned"
+    done <<< "$_used"
+    return 0
+}
+
 _committed_change_uses_helpers() {
     local story_id="$1"
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
@@ -1112,7 +1178,18 @@ _committed_change_uses_helpers() {
     local _missing=() _h
     while IFS= read -r _h; do
         [ -n "$_h" ] || continue
-        printf '%s' "$_diff" | grep -q -- "$_h" || _missing+=("$_h")
+        # ABSENCE IS NOT THE SIGNAL — DUPLICATION IS. This demanded every fixVerified helper
+        # appear in the committed diff. That premise holds only for a DEFECT, where the helper
+        # sits on the changed line by construction (mock3 MOCK3-1: the fix IS `age >= 65` on the
+        # line returning CONCESSION_FARE_CENTS). For a FEATURE it is a design choice and it
+        # rejects working code: gotransit SHIPPED AMSD-2041 (e780a8b7, 9 files, +379) with
+        # ContentstackFactory and getSinglePageEntry absent. Live 2026-08-19 this failed a story
+        # whose commit succeeded and whose type check passed, and halted the codeline.
+        #
+        # The 2026-07-26 defect was never absence: it hand-rolled a format the repo already
+        # parses — startsWith(id + '-') while dispatch-line-item-key.ts declares DIVIDER='#'.
+        # A helper whose module owns no format can never trigger a rejection.
+        _change_duplicates_owned_format "$PROJECT_ROOT" "$_h" "$_diff" || _missing+=("$_h")
     done <<< "$_helpers"
     [ ${#_missing[@]} -eq 0 ] && return 0
 
@@ -1144,6 +1221,24 @@ _brownfield_rung_bump() {
 # resolve_model_from_story <story_id>
 # For epam-run providers (copilot/openai/qwen/cursor), the prd.json story carries
 # a .model field directly.  If set, it overrides the effort-based STORY_MODEL.
+# _tc_writer_phase — which phase the TC writer is generating for.
+#
+# CURRENT_PHASE is a claude.sh-internal global: declared empty at the top of this file and assigned
+# in exactly ONE place, the phase-filter path. PHASE is what run-agent-orchestration.sh exports and
+# passes per invocation. Reading only CURRENT_PHASE and falling back to the literal 'unknown' meant
+# that on every ordinary run the writer was asked for a phase no story is in — live metrolinx
+# AMSD-2041, 2026-08-18:
+#   [tc-writer] Generating TCs for phase 'unknown' (post-impl, pre-test)...
+#   [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+#   [tc-writer] TC generation complete — test stories have testCriteria
+# and the story's testCriteria stayed empty while the log reported completion.
+#
+# Emits EMPTY when neither is set, never a literal that looks like an answer: the caller can detect
+# an absent phase, but 'unknown' is indistinguishable from a phase that simply has no test stories.
+_tc_writer_phase() {
+    printf '%s' "${CURRENT_PHASE:-${PHASE:-}}"
+}
+
 resolve_model_from_story() {
     local story_id="$1"
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
@@ -1151,6 +1246,13 @@ resolve_model_from_story() {
     story_model=$(jq -r --arg id "$story_id" \
         '.stories[] | select(.id == $id) | .model // ""' \
         "$prd_target" 2>/dev/null || echo "")
+    # A ladder position restored for THIS story outranks the PRD's base model: the PRD says where
+    # the story STARTS, the persisted rung says where it got to. Matched by VALUE, so a stale
+    # marker from a previous story cannot suppress this story's own PRD model.
+    if [ -n "${STORY_MODEL_LADDER_RESUMED:-}" ] && [ "${STORY_MODEL:-}" = "${STORY_MODEL_LADDER_RESUMED}" ]; then
+        log "  Model[prd.json] -> keeping resumed ladder position $STORY_MODEL (PRD declares ${story_model:-none})"
+        return 0
+    fi
     if [ -n "$story_model" ]; then
         STORY_MODEL="$story_model"
         log "  Model[prd.json] -> $STORY_MODEL (overrides effort default)"
@@ -1795,7 +1897,7 @@ run_plan_mode() {
     # they carried separate copies that had already drifted, and the copy here had the
     # messages path written into the prompt text rather than passed as data.
     _pp_vals=$(mktemp "${TMPDIR:-/tmp}/story-plan-agent-vals-XXXXXX.json")
-    jq -n --arg story_id "$story_id" \
+    jq_vals --arg story_id "$story_id" \
           --arg messages_jsonl "$messages_jsonl" \
           --arg agent_role "$agent_role" \
           --arg current_phase "${CURRENT_PHASE:-unknown}" \
@@ -2422,7 +2524,7 @@ build_implementation_prompt() {
     string_invariants=$(printf '%s' "$acceptance_criteria" | grep -oE '"[^"]{3,}"' | sort -u)
     if [ -n "$string_invariants" ]; then
         _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-string-invariants-vals-XXXXXX.json")
-        jq -n \
+        jq_vals \
               --arg string_list "$(printf '%s\n' "$string_invariants" | sed 's/^/- /')" \
               '{"__STRING_LIST__":$string_list}' > "$_cp_vals"
         string_invariants_block="$(render_engine_prompt writer-string-invariants "$_cp_vals")"
@@ -2646,14 +2748,14 @@ Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:"
         _uncovered_list=$(echo "$story_json" | jq -r '(.fixSiteAnalysisCoverage.uncoveredVerificationCriteria // []) | map("- " + .) | join("\n")' 2>/dev/null)
         if [ -n "$_prescribed_helper" ] && [ "$_cov_incomplete" != "true" ]; then
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-codegraph-block-vals-XXXXXX.json")
-            jq -n \
+            jq_vals \
                   --arg prescribed_helper "${_prescribed_helper}" \
                   '{"__PRESCRIBED_HELPER__":$prescribed_helper}' > "$_cp_vals"
             codegraph_tool_block="$(render_engine_prompt writer-codegraph-block "$_cp_vals" helper_identified)"
             rm -f "$_cp_vals"
         elif [ -n "$_prescribed_helper" ] && [ "$_cov_incomplete" = "true" ]; then
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-codegraph-block-vals-XXXXXX.json")
-            jq -n \
+            jq_vals \
                   --arg prescribed_helper "${_prescribed_helper}" \
                   --arg uncovered_list "${_uncovered_list}" \
                   '{"__PRESCRIBED_HELPER__":$prescribed_helper,"__UNCOVERED_LIST__":$uncovered_list}' > "$_cp_vals"
@@ -2699,10 +2801,49 @@ Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:"
     # Generic on purpose: no package name, language, or install command
     # appears here, the same way dependency-check.json's own installCommand
     # is config-supplied rather than hardcoded to npm/pip/cargo.
+    #
+    # THE DIRECTIVE IS A TEMPLATE, and its three facts come from the codeline. The prose used to
+    # live here as a shell string that promised the install happened by itself; AMSD-2041 followed
+    # it, and the lockfile never moved. See prompts/templates/new-dependency-directive.json.
+    # GATED ON WHAT IT NEEDS, which is a known ecosystem — not on .epam/dependency-check.json.
+    #
+    # That file gated the ORIGINAL text, correctly: it promised "missing imports are detected and
+    # installed automatically", true only where the project declares autoInstall. The replacement
+    # promises nothing and tells the writer to run the add-command itself, so what it requires is a
+    # manifest, a lockfile and an add-command — all from lib/ecosystem-registry.js.
+    #
+    # Live metrolinx AMSD-2041, 2026-08-19: that file was absent from the codeline, so lockfile-sync
+    # blocked four times while the one instruction that makes the block actionable was switched off.
+    # The writer was told what was wrong and never how to fix it.
     local new_dependency_directive=""
-    if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -f "$PROJECT_ROOT/.epam/dependency-check.json" ]; then
-        new_dependency_directive="## Adding a New Dependency
-If the fix genuinely requires a package this project does not yet declare, import it directly and continue — do not stop to ask whether this is possible or search for an alternative that avoids it. Missing imports are detected and installed automatically after your change; this does not need your permission or a separate step. Proceed with the real fix."
+    if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
+        local _nd_facts _nd_install _nd_manifest _nd_lock
+        _nd_facts=$("${NODE_CMD:-node}" "$SCRIPT_DIR/lib/handlers/codeline-ecosystem.js" "$PROJECT_ROOT" 2>/dev/null || echo '{}')
+        # The PROJECT's own per-package install command wins when it declares one; the ecosystem
+        # answers otherwise. `{package}` is the placeholder both use.
+        _nd_install="$(_project_install_command 2>/dev/null || true)"
+        [ -n "$_nd_install" ] || _nd_install=$(printf '%s' "$_nd_facts" | jq -r '.addCommand // ""')
+        _nd_install="${_nd_install//\{package\}/<package>}"
+        _nd_manifest=$(printf '%s' "$_nd_facts" | jq -r '.manifest // ""')
+        _nd_lock=$(printf '%s' "$_nd_facts" | jq -r '.lockfile // ""')
+        # THE INSTALL COMMAND IS THE ONLY HARD REQUIREMENT. A directive that tells an agent to run
+        # "" is worse than none. The lockfile half is separate and conditional: a codeline with no
+        # lockfile still needs the half that stops it stalling, which is why this directive exists.
+        if [ -n "$_nd_install" ]; then
+            local _nd_note=""
+            if [ -n "$_nd_manifest" ] && [ -n "$_nd_lock" ]; then
+                local _nd_nvals; _nd_nvals=$(mktemp "${TMPDIR:-/tmp}/new-dep-note-XXXXXX")
+                jq_vals --arg manifest "$_nd_manifest" --arg lock "$_nd_lock" \
+                  '{"__MANIFEST_FILE__":$manifest,"__LOCKFILE__":$lock}' > "$_nd_nvals"
+                _nd_note="$(render_engine_prompt new-dependency-lockfile-note "$_nd_nvals" 2>/dev/null || true)"
+                rm -f "$_nd_nvals"
+            fi
+            local _nd_vals; _nd_vals=$(mktemp "${TMPDIR:-/tmp}/new-dep-vals-XXXXXX")
+            jq_vals --arg install "$_nd_install" --arg note "$_nd_note" \
+              '{"__INSTALL_COMMAND__":$install,"__LOCKFILE_NOTE__":$note}' > "$_nd_vals"
+            new_dependency_directive="$(render_engine_prompt new-dependency-directive "$_nd_vals" 2>/dev/null || true)"
+            rm -f "$_nd_vals"
+        fi
     fi
 
     # Deterministic contract injection — root cause of a recurring live-run
@@ -2863,7 +3004,7 @@ build_generator_prompt() {
     fi
 
     _hd_vals=$(mktemp "${TMPDIR:-/tmp}/story-file-generation-vals-XXXXXX.json")
-    jq -n \
+    jq_vals \
           --arg technical_notes "$(_render_technical_notes "$technical_notes" "$_lane")" \
           --arg dependencies "${dependencies:-None}" \
           --arg acceptance_criteria "$acceptance_criteria" \
@@ -3037,10 +3178,13 @@ verify_prescribed_helper_used() {
     # Collect every verified helper the change does NOT use. Reporting only the first would
     # make the writer fix them one attempt at a time, which is the retry ladder spent on
     # information the guard already had.
+    # Duplication, not absence — see _change_duplicates_owned_format. A helper whose module owns
+    # no format can never trigger a rejection, so a feature that legitimately does not need it
+    # passes, while a change that re-creates a format the helper owns is still caught.
     local _missing=() _h
     while IFS= read -r _h; do
         [ -n "$_h" ] || continue
-        printf '%s' "$_diff" | grep -q -- "$_h" || _missing+=("$_h")
+        _change_duplicates_owned_format "$PROJECT_ROOT" "$_h" "$_diff" || _missing+=("$_h")
     done <<< "$_helpers"
     [ ${#_missing[@]} -eq 0 ] && return 0
     local _helper="${_missing[0]}"
@@ -3055,23 +3199,24 @@ verify_prescribed_helper_used() {
             _note=" [attempt $((retry_count + 1))/$((MAX_RETRIES + 1)) — no retries remain]"
         fi
     fi
-    STORY_REJECTION_KEY="helper:${_helper}"
-    # STORY_REJECTION_KEY is NOT feedback. _rejection_repeat_check reads it to notice an
-    # identical rejection twice and advance the model ladder — so the loop escalates to a
-    # stronger model and asks it to guess again, with the reason still withheld. Live
-    # 2026-08-09 attempts 1 and 2 produced the identical violation for exactly that reason,
-    # and all eight would have. VERIFICATION_FAILURE is the channel the failure analyst reads
-    # and turns into the next attempt's prompt.
-    # THE FLAG IS WHAT DELIVERS IT. VERIFICATION_FAILURE alone goes nowhere: the retry loop
-    # routes it into COORDINATOR_PROMPT_AMENDMENT — the text the next attempt actually reads —
-    # only when DETERMINISTIC_CHECK_FAILURE=1. Setting the variable without the flag is what
-    # made attempts 2 and 5 byte-identical live on 2026-08-09: the finding was assigned and
-    # dropped, and the writer was never told. This IS a deterministic check — the helper either
-    # appears in the diff or it does not — so it belongs in that class.
+    # IT BLOCKS AGAIN, ON A SIGNAL THAT CANNOT REJECT WORKING CODE.
+    #
+    # It used to veto on helper ABSENCE. Proven against run artefacts: gotransit shipped
+    # AMSD-2041 (e780a8b7, 9 files, +379) with two of metrolinx's fixVerified helpers absent, so
+    # absence rejects working code — and each false rejection cost a whole writer attempt
+    # (7.3M tokens, $2.25) before escalating the ladder to ask for something worse.
+    #
+    # The 2026-07-26 defect it exists for was DUPLICATION: startsWith(id + '-') while
+    # dispatch-line-item-key.ts declares DIVIDER='#', so the fix could never match. That is what
+    # is checked now. mock3's defect fixes still pass (the helper is on the changed line by
+    # construction); gotransit's feature still passes (its helper module owns no format).
+    STORY_REJECTION_KEY="helper-duplication:${_helper}"
     DETERMINISTIC_CHECK_FAILURE=1
     export DETERMINISTIC_CHECK_FAILURE
-    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\n%d prescribed helper(s) EXIST in this repository and your change does not use them: %s\n\nEach was VERIFIED by the spec as owning part of this fix, so re-implementing that logic is how a fix comes to match on the wrong format and silently never work. Import and use every one of them, then make the change again. Using only some of them leaves the story incomplete.\n' "${#_missing[@]}" "$_missing_list")
-    warning "Story $story_id: the prescribed helper \`${_helper}\` EXISTS in this repository but does NOT appear in the change. The agent hand-rolled the logic instead of reusing it — live 2026-07-26 that produced a fix matching on '-' when the repository's own separator is '#', so the fix could never work. Import and use ${_helper}, which owns that format, rather than re-implementing it.${_note}"
+    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\n%d prescribed helper(s) OWN a format your change re-creates with its own literal: %s\n\nThe repository already parses this format. Hand-rolling it is how a fix comes to match on the wrong separator and silently never work. Import and use the helper instead of inventing the format.\n' "${#_missing[@]}" "$_missing_list")
+    # WARNING, not ERROR: this is a RETRYABLE verdict and the writer gets another attempt. An
+    # existing test asserts this, because an ERROR line reads as a dead run to anyone watching.
+    warning "Story $story_id: the change re-creates a format owned by ${_missing_list} — import the helper rather than inventing the separator (${_helper} owns it; hand-rolling is how a fix matches on the wrong separator and silently never works)"
     return 1
 }
 
@@ -3968,6 +4113,93 @@ _generate_vendor_contract() {
 # THE ENGINE NO LONGER DECIDES. An unresolvable import is a FINDING. Installing happens only
 # when the PROJECT declares autoInstall, using the installCommand the project declares — never
 # on this script's own verdict.
+# run_lockfile_sync_check <project_root>
+#
+# THE MANIFEST AND THE LOCKFILE DRIFTED APART AND EVERY CHECK PASSED ANYWAY.
+#
+# Live metrolinx AMSD-2041, approved commit af1d6b99. package.json gained
+# "@contentstack/live-preview-utils" and package-lock.json -- tracked, not ignored, clean in the
+# worktree -- was never touched; the package is absent from it entirely. tsc, ESLint and the build
+# passed and the reviewer APPROVED, because node_modules already held the package from a run five
+# days earlier that survived the codeline reset. `npm install` appears zero times in the run log.
+# `npm ci` on that branch fails outright.
+#
+# run_dependency_check answers the neighbouring question -- does the manifest declare what the code
+# imports -- and cannot see this one, because the manifest DID declare it. Only the lockfile
+# records what a clean checkout installs.
+#
+# IT DOES NOT BLOCK ON DRIFT THE STORY DID NOT CAUSE. That is 665f1a5's lesson: pre-existing desync
+# is repository debt, and hard-stopping on debt no writer output can repair burns the story budget
+# in a loop with no exit. The discriminator is EPAM_STORY_INTRODUCED_DEPS, the same manifest-delta
+# the SAST gate uses.
+run_lockfile_sync_check() {
+    local project_root="$1"
+    local _handler="${SCRIPT_DIR}/lib/handlers/lockfile-sync.js"
+    local _node="${NODE_CMD:-node}"
+
+    [ -n "$project_root" ] && [ -d "$project_root" ] || return 0
+    [ -f "$_handler" ] || { warning "  [lockfile-sync] handler missing — cannot prove the lockfile is in sync"; return 0; }
+
+    local _out
+    _out=$("$_node" "$_handler" "$project_root" 2>/dev/null) || {
+        warning "  [lockfile-sync] check did not run — cannot prove the lockfile is in sync"
+        return 0
+    }
+
+    local _unprovable
+    _unprovable=$(printf '%s\n' "$_out" | awk -F'\t' '$1=="unprovable"{print $2}')
+    if [ -n "$_unprovable" ]; then
+        # NOT a pass. Said out loud, because a check reporting success from absent evidence is the
+        # class of defect this gate exists to remove.
+        info "  [lockfile-sync] cannot prove: ${_unprovable}"
+        return 0
+    fi
+
+    local _missing=()
+    while IFS= read -r _line; do
+        [ -n "$_line" ] || continue
+        case "$_line" in missing*) ;; *) continue ;; esac
+        _missing+=("$_line")
+    done <<< "$_out"
+    [ ${#_missing[@]} -gt 0 ] || return 0
+
+    # Which of them did THIS story introduce? Everything else is pre-existing debt.
+    #
+    # The producer may have exported the answer already (the SAST gate needs the same one). An
+    # EMPTY export is a real answer -- "this story added nothing" -- so only an UNSET variable
+    # sends us to compute it.
+    local _intro_list="${EPAM_STORY_INTRODUCED_DEPS-}"
+    if [ -z "${EPAM_STORY_INTRODUCED_DEPS+x}" ] && command -v story_introduced_deps >/dev/null 2>&1; then
+        _intro_list="$(story_introduced_deps "$project_root")"
+    fi
+    local _introduced=",${_intro_list},"
+    local _blocking=() _preexisting=() _pkg _lock
+    for _line in "${_missing[@]}"; do
+        _pkg=$(printf '%s' "$_line" | cut -f2)
+        _lock=$(printf '%s' "$_line" | cut -f3)
+        case "$_introduced" in
+            *",${_pkg},"*) _blocking+=("$_pkg") ;;
+            *) _preexisting+=("$_pkg") ;;
+        esac
+    done
+
+    if [ ${#_preexisting[@]} -gt 0 ]; then
+        warning "  [lockfile-sync] ${#_preexisting[@]} pre-existing dependency(ies) absent from ${_lock} — advisory, not introduced by this story: $(printf '%s ' "${_preexisting[@]}")"
+    fi
+
+    [ ${#_blocking[@]} -gt 0 ] || return 0
+
+    local _specs
+    _specs=$(printf '  - %s\n' "${_blocking[@]}")
+    DETERMINISTIC_CHECK_FAILURE=1
+    export DETERMINISTIC_CHECK_FAILURE
+    STORY_REJECTION_KEY="lockfile:${_blocking[0]}"
+    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nYour change added dependency(ies) to the manifest that %s does not resolve:\n\n%s\nA lockfile is the only record of what a clean checkout installs. They resolve here because a vendor directory happens to already contain them, so the type check, the tests and the build all pass on this machine and the branch is BROKEN for anyone installing from the lockfile.\n\nInstall each one with this project'"'"'s package manager so the manifest and %s are written together. Do not hand-edit %s, and do not remove the dependency.\n' \
+        "$_lock" "$_specs" "$_lock" "$_lock")
+    error "  [lockfile-sync] ${#_blocking[@]} dependency(ies) this story added are absent from ${_lock} — the change cannot be installed from a clean checkout"
+    return 1
+}
+
 run_dependency_check() {
     local project_root="$1"
     local _plugin="${AUTOMATION_DIR}/plugins/dependency-scan-plugin.js"
@@ -4027,6 +4259,7 @@ run_dependency_check() {
     [ -z "$_out" ] && return 0
 
     local _line _kind _rest
+    local _undeclared=()
     while IFS= read -r _line; do
         [ -z "$_line" ] && continue
         _kind="${_line%%	*}"; _rest="${_line#*	}"
@@ -4040,9 +4273,11 @@ run_dependency_check() {
                 warning "  [dependency-scan] malformed import capture (NOT a package): ${_rest}"
                 ;;
             unknown_external)
+                _undeclared+=("${_rest}")
                 warning "  [dependency-scan] undeclared import: ${_rest}"
                 ;;
             installed_undeclared)
+                _undeclared+=("${_rest}")
                 # Present in a vendor directory, absent from the manifest, and imported by a file
                 # THIS story changed. It builds here and breaks from a clean checkout — live
                 # 2026-08-09 the first story ever committed to a client codeline was undeliverable
@@ -4059,6 +4294,37 @@ run_dependency_check() {
     # Only when the PROJECT asks for it, and only with the command the PROJECT declares.
     local _auto _install_tpl
     _auto=$(_project_dep_config_value "$project_root" autoInstall)
+
+    # AN IMPORT THE MANIFEST CANNOT REPRODUCE FAILS THE ATTEMPT, AND THE WRITER IS TOLD.
+    #
+    # This scan warned and returned 0. Live metrolinx AMSD-2041, 2026-08-18: the writer imported
+    # @contentstack/live-preview-utils in src/pages/_app.tsx without declaring it. The package sat
+    # in node_modules from an earlier run, so the import RESOLVED -- tsc passed, every gate passed,
+    # and the branch would have been broken for anyone running a clean install. The scan caught it
+    # on all six attempts and package.json was never touched, because the finding went to the
+    # terminal and nowhere else: no VERIFICATION_FAILURE for the retry prompt, and no
+    # STORY_REJECTION_KEY for the ladder's repeat detector. Same defect as repo-lint, and as the
+    # 2026-08-09 incident this file already documents.
+    #
+    # Deterministic by definition -- the specifier is either in the manifest or it is not.
+    #
+    # Only when autoInstall will NOT resolve it: a project that installs the package itself is
+    # already fixing the problem, and failing it would reject work that is about to become correct.
+    if [ ${#_undeclared[@]} -gt 0 ] && [ "$_auto" != "true" ]; then
+        local _manifest _specs _first
+        _manifest=$(_project_dep_config_value "$project_root" manifestFile)
+        [ -n "$_manifest" ] || _manifest="the project manifest"
+        _specs=$(printf '  - %s\n' "${_undeclared[@]}")
+        _first="${_undeclared[0]%%	*}"
+        DETERMINISTIC_CHECK_FAILURE=1
+        export DETERMINISTIC_CHECK_FAILURE
+        STORY_REJECTION_KEY="dependency:${_first}"
+        VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nYour change imports package(s) that %s does not declare. They resolve here only because a vendor directory happens to contain them, so this builds on this machine and is BROKEN from a clean checkout -- and every type check and test passes either way, which is why nothing else will catch it.\n\n%s\nAdd each one to %s with a version, in the same section its siblings use. Do not remove the import and do not work around it.\n' \
+            "$_manifest" "$_specs" "$_manifest")
+        error "  [dependency-scan] ${#_undeclared[@]} import(s) not declared in ${_manifest} — the change cannot be reproduced from a clean checkout"
+        return 1
+    fi
+
     [ "$_auto" = "true" ] || return 0
     _install_tpl=$(_project_install_command "$project_root")
     [ -n "$_install_tpl" ] || { warning "  [dependency-scan] autoInstall declared but no installCommand — nothing installed"; return 0; }
@@ -4708,7 +4974,20 @@ run_external_verification() {
         fi
     fi
 
-    run_dependency_check "$PROJECT_ROOT"
+    # THE VERDICT IS READ. Both of these were called bare until 2026-08-19, so their `return 1`
+    # was discarded: they set VERIFICATION_FAILURE and DETERMINISTIC_CHECK_FAILURE (which is why
+    # their findings still reached the retry prompt) and then verification carried on to the test
+    # suite and could return 0. Live AMSD-2041: lockfile-sync blocked FOUR times and the story
+    # completed anyway, with a manifest the lockfile does not resolve. The four sibling checks
+    # below have always been guarded; these two were the exception.
+    #
+    # Each check sets the failure text and the flag itself, so the caller only reads the verdict.
+    if ! run_dependency_check "$PROJECT_ROOT"; then
+        return 1
+    fi
+    if ! run_lockfile_sync_check "$PROJECT_ROOT"; then
+        return 1
+    fi
 
     # Fail fast on a broken relative import BEFORE running the (often
     # multi-minute) test command — this recurring failure class was
@@ -4928,6 +5207,66 @@ _attempt_change_summary() {
 #
 # Runs only where the repo ENFORCES lint at commit time. A repo with no pre-commit hook is held
 # to its own standard, not ours.
+# THE DECLARED-LINT PATH -- for a codeline whose linter is not eslint.
+#
+# Separate from run_repo_lint_verification on purpose: the eslint path below it resolves its files
+# through lint-staged routing and an eslint --print-config probe, both of which are questions only
+# eslint can answer. This one asks the codeline which of its changed files are source, runs the
+# command the codeline declares, and reads the exit status.
+#
+# 127 -- the declared command cannot be run here -- is a FAILURE of a project that lints, never the
+# same thing as a project that does not lint. The old probe could not express that difference.
+_run_declared_lint_gate() {
+    local story_id="$1" output_file="${2:-/dev/null}" _cmd="$3"
+    local _dl_changed _dl_testable="" _dl_files=() _dl_f
+
+    _dl_changed=$( { git -C "$PROJECT_ROOT" diff --name-only --diff-filter=d 2>/dev/null
+                     git -C "$PROJECT_ROOT" diff --cached --name-only --diff-filter=d 2>/dev/null
+                     git -C "$PROJECT_ROOT" ls-files --others --exclude-standard 2>/dev/null; } \
+                   | sort -u | engine_paths_filter)
+    if [ -n "$_dl_changed" ]; then
+        # shellcheck disable=SC2086
+        _dl_testable=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/testable-source.js" \
+            "$PROJECT_ROOT" $_dl_changed 2>/dev/null || echo "")
+    fi
+    while IFS= read -r _dl_f; do
+        [ -n "$_dl_f" ] || continue
+        [ -f "$PROJECT_ROOT/$_dl_f" ] || continue
+        _dl_files+=("$_dl_f")
+    done <<< "$_dl_testable"
+
+    if [ ${#_dl_files[@]} -eq 0 ]; then
+        log "  [repo-lint] $story_id: no changed file is source this codeline declares — nothing was linted"
+        return 0
+    fi
+
+    local _dl_out _dl_rc=0
+    _dl_out=$(cd "$PROJECT_ROOT" && eval "$_cmd" "${_dl_files[@]}" 2>&1) || _dl_rc=$?
+
+    if [ "$_dl_rc" -eq 127 ]; then
+        error "  [repo-lint] $story_id: this codeline declares [$_cmd] and it could not be run — lint NOT PERFORMED"
+        printf '%s\n' "$_dl_out" | head -10 >&2
+        return 1
+    fi
+    if [ "$_dl_rc" -eq 0 ]; then
+        success "  [repo-lint] $story_id: the repository lint [$_cmd] accepts ${#_dl_files[@]} changed file(s)"
+        return 0
+    fi
+
+    error "  [repo-lint] $story_id: the repository lint [$_cmd] rejects ${#_dl_files[@]} changed file(s) —"
+    error "  [repo-lint]   the pre-commit hook will refuse this commit and may REVERT the work."
+    printf '%s\n' "$_dl_out" | head -40 >&2
+
+    DETERMINISTIC_CHECK_FAILURE=1
+    export DETERMINISTIC_CHECK_FAILURE
+    STORY_REJECTION_KEY="lint:${story_id}"
+    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe repository lints with `%s` and it rejects your change:\n\n```\n%s\n```\n\nFix these before the change can be committed.\n' \
+        "$_cmd" "$(printf '%s' "$_dl_out" | head -40)")
+    export VERIFICATION_FAILURE
+    printf '%s\n' "$_dl_out" >> "$output_file" 2>/dev/null || true
+    return 1
+}
+
 run_repo_lint_verification() {
     local story_id="$1"
     local output_file="${2:-/dev/null}"
@@ -4953,10 +5292,43 @@ run_repo_lint_verification() {
         return 0
     fi
 
+    # WHAT THIS CODELINE LINTS WITH, ASKED OF THE CODELINE FIRST.
+    #
+    # This probed for eslint and nothing else. On a codeline that lints with biome, oxlint, ruff or
+    # a Makefile target it found none, said in its own words that nothing proved the change clean,
+    # and returned 0 -- the only one of this engine's seventeen delivery-contract gates that was
+    # coupled to a stack.
+    #
+    # .epam/verification.json already declares typecheck and test; lint is the third of the same
+    # shape, detected by the plugin that owns detection. The eslint probe below is KEPT as the
+    # fallback, so every repo that lints with eslint behaves exactly as before -- including the
+    # lint-staged routing and the --print-config coverage probe, which are questions only eslint
+    # can answer.
+    local _declared_lint=""
+    _declared_lint=$("${NODE_BIN:-node}" -e '
+      const fs = require("fs"), path = require("path");
+      let cmd = "";
+      try {
+        const j = JSON.parse(fs.readFileSync(path.join(process.argv[2], ".epam", "verification.json"), "utf8"));
+        cmd = ((j.lint || {}).command) || "";
+      } catch (e) { /* not declared on disk */ }
+      if (!cmd) {
+        try {
+          const p = require(process.argv[1]);
+          cmd = (((p.detectLint(process.argv[2]) || {}).lint) || {}).command || "";
+        } catch (e) { cmd = ""; }
+      }
+      process.stdout.write(cmd);
+    ' "${AUTOMATION_DIR:-$(dirname "$SCRIPT_DIR")}/plugins/verification-plugin.js" "$PROJECT_ROOT" 2>/dev/null || echo "")
+
     local _eslint_bin=""
     for _candidate in "$PROJECT_ROOT/node_modules/.bin/eslint" "$(command -v eslint 2>/dev/null)"; do
         [ -x "$_candidate" ] && { _eslint_bin="$_candidate"; break; }
     done
+    if [ -z "$_eslint_bin" ] && [ -n "$_declared_lint" ]; then
+        _run_declared_lint_gate "$story_id" "$output_file" "$_declared_lint"
+        return $?
+    fi
     if [ -z "$_eslint_bin" ]; then
         warning "  [repo-lint] $story_id: no eslint binary in $PROJECT_ROOT or on PATH — lint was NOT run; nothing here proves the change is clean"
         return 0
@@ -5020,11 +5392,28 @@ run_repo_lint_verification() {
             _files+=("$_f")
         done <<< "$_changed"
     fi
-    [ ${#_files[@]} -eq 0 ] && return 0
+    # Same principle as the pass below: a run that examined NOTHING must not read as a clean lint.
+    # Changed files existed, but none survived the project's own `eslint --print-config` filter.
+    if [ ${#_files[@]} -eq 0 ]; then
+        log "  [repo-lint] $story_id: no changed file is covered by this project's eslint config — nothing was linted"
+        return 0
+    fi
 
     local _lint_output _lint_exit=0
     _lint_output=$(cd "$PROJECT_ROOT" && "$_eslint_bin" "${_files[@]}" 2>&1) || _lint_exit=$?
-    [ "$_lint_exit" -eq 0 ] && return 0
+    # A PASS SAYS SO. The three absent-check exits above were made loud under the comment "AN
+    # ABSENT CHECK IS NOT A PASS" — and this, the PASS itself, was left silent. So of the gate's
+    # outcomes only two of three were legible: failure loud, absence loud, success mute. A run
+    # where lint passed produced ZERO repo-lint lines and was therefore indistinguishable from a
+    # run where the gate never executed.
+    #
+    # Live 2026-08-19: a whole metrolinx writer run emitted no repo-lint output. It was read as
+    # "the gate never ran", which produced a false suppression hypothesis, hours of investigation,
+    # and an open defect reported to the operator that did not exist. Lint had run and passed.
+    if [ "$_lint_exit" -eq 0 ]; then
+        success "  [repo-lint] $story_id: the repository's own lint accepts ${#_files[@]} changed file(s)"
+        return 0
+    fi
 
     error "  [repo-lint] $story_id: the repository's own eslint rejects ${#_files[@]} changed file(s) —"
     error "  [repo-lint]   the pre-commit hook will refuse this commit and lint-staged will REVERT the work."
@@ -5045,6 +5434,30 @@ run_repo_lint_verification() {
     # [HealingBroken]. The self-heal detector was right that healing was broken; it was broken
     # because this gate fed it nothing.
     #
+    # THE FLAG IS WHAT DELIVERS IT.
+    #
+    # This gate set VERIFICATION_FAILURE and returned 1 WITHOUT the flag, so the retry loop never
+    # routed the text into COORDINATOR_PROMPT_AMENDMENT -- the text the next attempt actually
+    # reads. Delivery fell to the failure-analyst's discretionary target, and live on 2026-08-18
+    # (AMSD-2041) it chose "kb": the knowledge base, which later runs inherit and THIS retry never
+    # sees. Attempt 6 was launched on the top model of the ladder with no idea which lint errors
+    # to fix, ran 22 minutes, and was killed. Exactly the failure the prescribed-helper check
+    # documents from 2026-08-09 -- "the finding was assigned and dropped, and the writer was never
+    # told" -- recurring at this site.
+    #
+    # Lint belongs in the deterministic class by this file's own definition: eslint either passes
+    # or it does not, and its message already names the rule and the line, so a gate-model call to
+    # restate it is waste.
+    DETERMINISTIC_CHECK_FAILURE=1
+    export DETERMINISTIC_CHECK_FAILURE
+    # Keyed so an identical lint rejection twice escalates the ladder instead of looking novel on
+    # every attempt. Keyed on the RULE IDS (eslint prints them as the last field), which are the
+    # stable part: the file list changes as the writer works, so keying on it would make every
+    # attempt look like a brand new problem.
+    local _lint_rules
+    _lint_rules=$(printf '%s\n' "$_lint_output" | awk 'NF{print $NF}' | grep -E '^[a-z@]' | sort -u | head -5 | tr '\n' ',')
+    STORY_REJECTION_KEY="lint:${_lint_rules}"
+
     # Same '## Verification Failure' heading as the others so the analyst parses it identically.
     VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe repository'"'"'s own lint rejects file(s) THIS story changed. This is not advisory: the pre-commit hook runs these checks, refuses the commit, and lint-staged then REVERTS your work — the story cannot be delivered until every one is fixed. Fix these before anything else:\n\n%s\n' "$_lint_output")
 
@@ -5414,7 +5827,7 @@ $(cat "$_cf")
     done < <(echo "$_dep_ids_json" | jq -r '.[]?' 2>/dev/null)
 
     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/plan-producer-vals-XXXXXX.json")
-    jq -n \
+    jq_vals \
           --arg declared_paths "$(_classify_declared_paths "${declared_files_raw}")" \
           --arg dependency_contracts "$([ -n "$plan_dep_contracts" ] && printf '\n## Dependency Contracts (ground-truth import paths and signatures — use these verbatim in read/import steps)\n%s\n' "$plan_dep_contracts" || true)" \
           --arg cross_codeline_contract "$([ -n "${CROSS_CODELINE_CONTRACT:-}" ] && [ -f "${CROSS_CODELINE_CONTRACT}" ] && printf '\n## Cross-Codeline API Contract (upstream codeline exports — use these types and endpoints verbatim when integrating)\n%s\n' "$(cat "${CROSS_CODELINE_CONTRACT}")" || true)" \
@@ -5525,7 +5938,7 @@ $(cat "$_contract_file")
     [ -z "$_orch_provider" ] && { echo "$plan_text"; return; }
 
     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/plan-reviewer-vals-XXXXXX.json")
-    jq -n \
+    jq_vals \
           --arg declared_output_files "$([ -n "$_review_declared_files" ] && printf '\n## Declared Output Files (EXACT paths the plan MUST write to)\n%s\n' "$_review_declared_files" || true)" \
           --arg dependency_contracts "${dependency_contracts}" \
           --arg plan_text "${plan_text}" \
@@ -5583,7 +5996,7 @@ $(cat "$_contract_file")
     warning "  PlanReview: mismatch detected for $story_id against dependency contracts — one corrective re-plan"
 
     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/plan-corrective-vals-XXXXXX.json")
-    jq -n \
+    jq_vals \
           --arg corrections "${corrections}" \
           --arg plan_text "${plan_text}" \
           --arg story_id "${story_id}" \
@@ -5721,13 +6134,13 @@ classify_failure_class() {
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/coordinator-amendment-vals-XXXXXX.json")
             jq -n \
                   '{}' > "$_cp_vals"
-            COORDINATOR_PROMPT_AMENDMENT="$(render_engine_prompt coordinator-amendment "$_cp_vals" turns_exhausted_files_exist)"
+            _render_out="$(render_or_keep coordinator-amendment "$_cp_vals" turns_exhausted_files_exist)" && COORDINATOR_PROMPT_AMENDMENT="$_render_out"
             rm -f "$_cp_vals"
         else
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/coordinator-amendment-vals-XXXXXX.json")
             jq -n \
                   '{}' > "$_cp_vals"
-            COORDINATOR_PROMPT_AMENDMENT="$(render_engine_prompt coordinator-amendment "$_cp_vals" turns_exhausted_nothing_written)"
+            _render_out="$(render_or_keep coordinator-amendment "$_cp_vals" turns_exhausted_nothing_written)" && COORDINATOR_PROMPT_AMENDMENT="$_render_out"
             rm -f "$_cp_vals"
         fi
         log "  Coordinator[L1]: capability failure (max iterations) — escalation approved, write-first amendment injected"
@@ -6286,7 +6699,7 @@ assess_model_escalation() {
     printf '%s' "${test_failure_snippet:-"(no test failure output)"}" > "$_ilc_tf_file"
     printf '%s' "${prior_failure_summary:-"(no prior failures recorded for this story)"}" > "$_ilc_prior_file"
     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/inference-ladder-coordinator-vals-XXXXXX.json")
-    jq -n \
+    jq_vals \
           --rawfile result_text "$_ilc_result_file" \
           --rawfile log_tail "$_ilc_log_file" \
           --rawfile test_failure_snippet "$_ilc_tf_file" \
@@ -6380,7 +6793,7 @@ run_prd_change_reviewer() {
     # whole PRD fragments, and a value past ARG_MAX exits 126 with an empty result — which is
     # how the FailureAnalyst died silently earlier today.
     local _rv_vals; _rv_vals=$(mktemp "${TMPDIR:-/tmp}/prd-review-vals-XXXXXX.json")
-    jq -n --arg profile "$reviewer_profile" --arg story "$story_id" --arg ct "$change_type" \
+    jq_vals --arg profile "$reviewer_profile" --arg story "$story_id" --arg ct "$change_type" \
           --rawfile before <(printf '%s' "$before_json") --rawfile after <(printf '%s' "$after_json") \
           '{"__REVIEWER_PROFILE__":$profile,"__STORY_ID__":$story,"__CHANGE_TYPE__":$ct,"__BEFORE__":$before,"__AFTER__":$after}' \
           > "$_rv_vals" 2>/dev/null
@@ -6501,13 +6914,13 @@ run_prd_change_summarizer() {
     # the prompt never mentions, which is the same defect as a missing one seen from the other
     # side. The tool variant carries no change type — a bash script is a bash script.
     if [ "$_sum_template" = "prd-change-summarizer-tool" ]; then
-        jq -n --arg story "$story_id" \
+        jq_vals --arg story "$story_id" \
               --rawfile issues <(printf '%s' "${issues:-no details}") \
               --rawfile rejected <(printf '%s' "$rejected_text") \
               '{"__STORY_ID__":$story,"__ISSUES__":$issues,"__REJECTED_TEXT__":$rejected}' \
               > "$_sum_vals" 2>/dev/null
     else
-        jq -n --arg story "$story_id" --arg ct "$change_type" \
+        jq_vals --arg story "$story_id" --arg ct "$change_type" \
               --rawfile issues <(printf '%s' "${issues:-no details}") \
               --rawfile rejected <(printf '%s' "$rejected_text") \
               '{"__STORY_ID__":$story,"__CHANGE_TYPE__":$ct,"__ISSUES__":$issues,"__REJECTED_TEXT__":$rejected}' \
@@ -7886,13 +8299,13 @@ resolve_escalation() {
     local _saved_amendment="${COORDINATOR_PROMPT_AMENDMENT:-}"
     local _saved_max_retries="$MAX_RETRIES"
     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/coordinator-amendment-vals-XXXXXX.json")
-    jq -n \
+    jq_vals \
           --arg escalating_story_id "${escalating_story_id}" \
           --arg required_fix "${required_fix}" \
           --arg target_file "${target_file}" \
           --arg diagnosis "${diagnosis}" \
           '{"__ESCALATING_STORY_ID__":$escalating_story_id,"__REQUIRED_FIX__":$required_fix,"__TARGET_FILE__":$target_file,"__DIAGNOSIS__":$diagnosis}' > "$_cp_vals"
-    COORDINATOR_PROMPT_AMENDMENT="$(render_engine_prompt coordinator-amendment "$_cp_vals" sibling_escalation)"
+    _render_out="$(render_or_keep coordinator-amendment "$_cp_vals" sibling_escalation)" && COORDINATOR_PROMPT_AMENDMENT="$_render_out"
     rm -f "$_cp_vals"
     export COORDINATOR_PROMPT_AMENDMENT
     MAX_RETRIES="${ESCALATION_FIX_MAX_RETRIES:-1}"
@@ -8396,7 +8809,7 @@ run_retry_extension_coordinator() {
 
     local coord_prompt
     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-extension-coordinator-vals-XXXXXX.json")
-    jq -n \
+    jq_vals \
           --arg retry_count "${retry_count:-unknown}" \
           --arg max_retries "${MAX_RETRIES:-unknown}" \
           --arg coordinator_profile "${coordinator_profile}" \
@@ -8622,6 +9035,21 @@ implement_story() {
     if [ -n "$_persisted_model" ] && [ "$_persisted_model" != "${STORY_MODEL:-}" ]; then
         log "  [InferenceLadder] $story_id resuming on '$_persisted_model' (escalated in an earlier invocation; PRD model is '${STORY_MODEL:-}')"
         STORY_MODEL="$_persisted_model"
+        # A RESTORED RUNG IS NOT A DEFAULT TO BE RE-DERIVED.
+        #
+        # resolve_model_from_story() runs further down this same function and assigns STORY_MODEL
+        # straight from prd.json whenever the story declares one — it cannot know a ladder position
+        # was just restored. Live 2026-08-19 (AMSD-2041): the ladder reached moonshotai/kimi-k3,
+        # produced the story's best attempt and committed it; the next re-implementation cycle
+        # resumed on kimi-k3, was silently re-derived back to MiniMax-M3, and escalated from THERE
+        # to z-ai/glm-5.2 — a step DOWN, immediately after reaching the top. Every re-implementation
+        # crosses an invocation boundary, so the ladder could climb within an invocation and never
+        # hold ground across one.
+        #
+        # This is the same defect the comment above already fixed for resolve_provider_settings,
+        # recurring at the SECOND re-derivation below it.
+        STORY_MODEL_LADDER_RESUMED="$_persisted_model"
+        export STORY_MODEL_LADDER_RESUMED
         local _resumed_provider
         _resumed_provider=$(resolve_model_provider "$_persisted_model")
         [ -n "$_resumed_provider" ] && STORY_PROVIDER="$_resumed_provider"
@@ -9110,11 +9538,11 @@ $_kb_section"
         # Inject execution plan when planner/executor split is active
         if [ -n "${story_plan:-}" ]; then
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-plan-section-vals-XXXXXX.json")
-            jq -n \
+            jq_vals \
                   --arg story_plan "$story_plan" \
                   --arg prompt "$prompt" \
                   '{"__STORY_PLAN__":$story_plan,"__PROMPT__":$prompt}' > "$_cp_vals"
-            prompt="$(render_engine_prompt writer-plan-section "$_cp_vals" execution_plan)"
+            _render_out="$(render_or_keep writer-plan-section "$_cp_vals" execution_plan)" && prompt="$_render_out"
             rm -f "$_cp_vals"
         fi
 
@@ -9157,12 +9585,12 @@ $_kb_section"
 
         if [ "$_total_attempts" -gt 1 ] && [ -n "${COORDINATOR_PROMPT_AMENDMENT:-}" ]; then
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-plan-section-vals-XXXXXX.json")
-            jq -n \
+            jq_vals \
                   --arg coordinator_prompt_amendment "${COORDINATOR_PROMPT_AMENDMENT}" \
                   --arg retry_count "${retry_count}" \
                   --arg prompt "$prompt" \
                   '{"__COORDINATOR_PROMPT_AMENDMENT__":$coordinator_prompt_amendment,"__RETRY_COUNT__":$retry_count,"__PROMPT__":$prompt}' > "$_cp_vals"
-            prompt="$(render_engine_prompt writer-plan-section "$_cp_vals" coordinator_guidance_full)"
+            _render_out="$(render_or_keep writer-plan-section "$_cp_vals" coordinator_guidance_full)" && prompt="$_render_out"
             rm -f "$_cp_vals"
         fi
 
@@ -9247,21 +9675,21 @@ $_kb_section"
                 fi
                 if [ -n "${story_plan:-}" ]; then
                     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-plan-section-vals-XXXXXX.json")
-                    jq -n \
+                    jq_vals \
                           --arg story_plan "$story_plan" \
                           --arg prompt "$prompt" \
                           '{"__STORY_PLAN__":$story_plan,"__PROMPT__":$prompt}' > "$_cp_vals"
-                    prompt="$(render_engine_prompt writer-plan-section "$_cp_vals" execution_plan)"
+                    _render_out="$(render_or_keep writer-plan-section "$_cp_vals" execution_plan)" && prompt="$_render_out"
                     rm -f "$_cp_vals"
                 fi
                 _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-plan-section-vals-XXXXXX.json")
-                jq -n \
+                jq_vals \
                       --arg trimmed_amendment "${_trimmed_amendment}" \
                       --arg scratchpad_file "${_scratchpad_file}" \
                       --arg retry_count "${retry_count}" \
                       --arg prompt "$prompt" \
                       '{"__TRIMMED_AMENDMENT__":$trimmed_amendment,"__SCRATCHPAD_FILE__":$scratchpad_file,"__RETRY_COUNT__":$retry_count,"__PROMPT__":$prompt}' > "$_cp_vals"
-                prompt="$(render_engine_prompt writer-plan-section "$_cp_vals" coordinator_guidance_trimmed)"
+                _render_out="$(render_or_keep writer-plan-section "$_cp_vals" coordinator_guidance_trimmed)" && prompt="$_render_out"
                 rm -f "$_cp_vals"
             fi
         fi
@@ -9290,6 +9718,7 @@ $_kb_section"
         # dependency is already satisfied by the time the agent's turn
         # starts, so there's nothing left for the agent to (mis)fix itself.
         run_dependency_check "$PROJECT_ROOT"
+        run_lockfile_sync_check "$PROJECT_ROOT"
 
         # Vendor-dir guard: lock configured vendored-dependency directories
         # (e.g. node_modules) read-only — no story ever legitimately writes
@@ -9805,13 +10234,17 @@ $_kb_section"
                 "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null \
                 | { grep -cE '(\.|_)(spec|test)\.[A-Za-z0-9]+$|/__tests__/|(^|/)test_[^/]+$' || true; })
             if [ "${_story_files_are_tests:-0}" -eq 0 ]; then
-                log "  [tc-writer] Generating TCs for phase '${CURRENT_PHASE:-unknown}' (post-impl, pre-test)..."
+                local _tcw_phase; _tcw_phase="$(_tc_writer_phase)"
+                if [ -z "$_tcw_phase" ]; then
+                    warning "  [tc-writer] no phase is set (CURRENT_PHASE and PHASE both empty) — TCs NOT generated"
+                fi
+                log "  [tc-writer] Generating TCs for phase '${_tcw_phase:-<unset>}' (post-impl, pre-test)..."
                 # `if CMD | tee ...; then` TESTS TEE, which exits 0 essentially always — so this
                 # reported "TC generation complete" whatever the writer did, including refusing to
                 # run at all. No pipefail here; PIPESTATUS[0] is the writer's own code.
                 if { bash "$SCRIPT_DIR/post-impl-tc-writer.sh" \
                     --prd "${MAIN_PRD_FILE:-$PRD_FILE}" \
-                    --phase "${CURRENT_PHASE:-unknown}" \
+                    --phase "$_tcw_phase" \
                     --output-dir "$PROJECT_ROOT" \
                     2>&1 | tee -a "$output_file"; [ "${PIPESTATUS[0]}" -eq 0 ]; }; then
                     log "  [tc-writer] TC generation complete — test stories have testCriteria"
@@ -10023,7 +10456,7 @@ $(echo "$LAST_VERIFIED_UNCHANGED_FILES" | sed 's/^/- /')"
                     _last_fa_diagnosis=$(python3 "$SCRIPT_DIR/lib/handlers/last-fa-diagnosis.py" "$_heal_log" "$story_id" 2>/dev/null || echo "")
                 fi
                 _cp_vals=$(mktemp "${TMPDIR:-/tmp}/coordinator-amendment-vals-XXXXXX.json")
-                jq -n \
+                jq_vals \
                       --arg prior_diagnosis_section "${_last_fa_diagnosis:+
 
 ## Prior failure-analyst diagnosis (re-injected for context)
@@ -10032,7 +10465,7 @@ Apply the above diagnosis AND fix the deterministic check violation — both mus
                       --arg verification_failure "${VERIFICATION_FAILURE}" \
                       --arg existing_amendment "${_existing_amendment}" \
                       '{"__PRIOR_DIAGNOSIS_SECTION__":$prior_diagnosis_section,"__VERIFICATION_FAILURE__":$verification_failure,"__EXISTING_AMENDMENT__":$existing_amendment}' > "$_cp_vals"
-                COORDINATOR_PROMPT_AMENDMENT="$(render_engine_prompt coordinator-amendment "$_cp_vals" deterministic_check)"
+                _render_out="$(render_or_keep coordinator-amendment "$_cp_vals" deterministic_check)" && COORDINATOR_PROMPT_AMENDMENT="$_render_out"
                 rm -f "$_cp_vals"
 
                 # A deterministic-check violation repeating IDENTICALLY across attempts
@@ -11375,10 +11808,22 @@ run_pre_phase_assessment() {
 
     local assessment_prompt
     _ap_vals=$(mktemp "${TMPDIR:-/tmp}/skill-assessment-prephase-vals-XXXXXX.json")
-    jq -n \
+    # WHAT THIS PROJECT ACTUALLY IS — the template's own words. lib/handlers/agent-skills.js
+    # derives it from the codeline's ecosystem and the KB the pipeline wrote while working on it
+    # ("DERIVED, NEVER TYPED"). It existed with NO CALLERS, so this placeholder was never supplied
+    # and the render threw. Absent is absent: an unresolvable project reports that, never a guess.
+    local _ap_skills_file; _ap_skills_file=$(mktemp "${TMPDIR:-/tmp}/project-skills-XXXXXX.json")
+    "${NODE_CMD:-node}" "$SCRIPT_DIR/lib/handlers/agent-skills.js" "${PROJECT_ROOT:-}" \
+        "$AUTOMATION_DIR/agents" > "$_ap_skills_file" 2>/dev/null \
+        || printf '%s' '(this project could not be resolved — do not infer skills from role names)' > "$_ap_skills_file"
+    jq_vals \
           --arg phase_id "$phase_id" \
           --arg prd_rel "$prd_rel" \
-          '{"__PHASE_ID__":$phase_id,"__PRD_REL__":$prd_rel}' > "$_ap_vals"
+          --rawfile project_skills "$_ap_skills_file" \
+          '{"__PHASE_ID__":$phase_id,"__PRD_REL__":$prd_rel,"__PROJECT_SKILLS__":$project_skills}' > "$_ap_vals"
+    rm -f "$_ap_skills_file"
+    # The codeline's own facts — this template declares them and nothing supplied them.
+    merge_stack_facts "$_ap_vals" "${PROJECT_ROOT:-}"
     assessment_prompt="$(render_engine_prompt skill-assessment-prephase "$_ap_vals" with_prd_structure)"
     rm -f "$_ap_vals"
 

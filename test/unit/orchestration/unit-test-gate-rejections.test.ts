@@ -54,7 +54,7 @@ function project(opts: {
   mkdirSync(join(dir, 'logs'), { recursive: true });
   // A REAL PROJECT DECLARES HOW ITS TESTS RUN. This wrote `{ name: 'x' }` — no test script —
   // which only worked because the gate ignored the declaration and exec'd node_modules/.bin/vitest
-  // by path. The gate now asks lib/ecosystems.js what THIS codeline's test command is, so the
+  // by path. The gate now asks lib/ecosystem-registry.js what THIS codeline's test command is, so the
   // fixture declares one, as every project that has unit tests does. The runner stays a stub.
   writeFileSync(join(dir, 'package.json'), JSON.stringify({
     name: 'x', scripts: { test: './node_modules/.bin/vitest run' },

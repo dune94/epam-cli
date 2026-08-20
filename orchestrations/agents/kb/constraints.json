@@ -1,1 +1,42 @@
-[]
+[
+  {
+    "id": "repro-test-writer-class-max-iterations",
+    "scope": {
+      "agent_role": "repro-test-writer"
+    },
+    "trigger": {
+      "signature": "class:max_iterations"
+    },
+    "enforcement": {
+      "kind": "effort_tier",
+      "tier": "high"
+    },
+    "reason": "Agent exhausted its iteration budget; raising the tier grants more iterations via the fixed pipeline table.",
+    "origin_episodes": [
+      "evt-1787240907591-654610"
+    ],
+    "ttl_cycles": 20,
+    "status": "active",
+    "cycles_idle": 3
+  },
+  {
+    "id": "repro-test-writer-class-no-file",
+    "scope": {
+      "agent_role": "repro-test-writer"
+    },
+    "trigger": {
+      "signature": "class:no_file"
+    },
+    "enforcement": {
+      "kind": "gate",
+      "check": "repro-test-file-written"
+    },
+    "reason": "Deterministically verifies the test file exists after agent runs; fails closed when no file was written, forcing retry instead of silent abandonment.",
+    "origin_episodes": [
+      "evt-1787241093799-981508"
+    ],
+    "ttl_cycles": 20,
+    "status": "active",
+    "cycles_idle": 3
+  }
+]

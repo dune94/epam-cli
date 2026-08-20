@@ -1,0 +1,6 @@
+{"event_id":"evt-1787159852130-72c3d549","timestamp":"2026-08-19T17:17:32.130Z","agent":"ac-classification:plan","story_id":null,"phase":null,"type":"tool_run","detail":{"tool":"search","args":{"pattern":"codeline|alpha","path":"verdict.json"}}}
+{"event_id":"evt-1787159852130-23102791","timestamp":"2026-08-19T17:17:32.130Z","agent":"ac-classification:plan","story_id":null,"phase":null,"type":"tool_run","detail":{"tool":"read_file","args":{"path":"validation-report.jsonl"}}}
+{"event_id":"evt-1787159852130-11d1beac","timestamp":"2026-08-19T17:17:32.130Z","agent":"ac-classification:plan","story_id":null,"phase":null,"type":"tool_run","detail":{"tool":"list_files","args":{"pattern":"src/hello*"}}}
+{"event_id":"evt-1787159852219-1aaa828f","timestamp":"2026-08-19T17:17:32.219Z","agent":"ac-classification:plan","story_id":null,"phase":null,"type":"tool_result","detail":{"tool":"search","ok":true,"ms":86,"bytes":18}}
+{"event_id":"evt-1787159852219-a890d663","timestamp":"2026-08-19T17:17:32.219Z","agent":"ac-classification:plan","story_id":null,"phase":null,"type":"tool_result","detail":{"tool":"read_file","ok":true,"ms":37,"bytes":6095}}
+{"event_id":"evt-1787159852219-dd1edf4a","timestamp":"2026-08-19T17:17:32.219Z","agent":"ac-classification:plan","story_id":null,"phase":null,"type":"tool_result","detail":{"tool":"list_files","ok":true,"ms":20,"bytes":16}}

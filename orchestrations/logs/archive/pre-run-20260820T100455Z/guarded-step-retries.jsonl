@@ -1,0 +1,2 @@
+{"timestamp":"2026-08-20T03:14:55Z","step":"tc-writer-batch","phaseId":"core","attempts":3,"outcome":"blocked","violationTypes":["empty_facts"],"runId":"20260818T203628Z","promptVersion":"1f24c70"}
+{"timestamp":"2026-08-20T03:32:43Z","step":"tc-writer-batch","phaseId":"core","attempts":3,"outcome":"blocked","violationTypes":["empty_facts"],"runId":"20260818T203628Z","promptVersion":"1f24c70"}

@@ -1,0 +1,540 @@
+SOURCE: https://www.contentstack.com/academy/courses/implementing-live-preview/live-edit-tags
+
+HTTP 200
+
+Live Edit Tags - Implementing Live Preview | Contentstack Academy 
+ Get inspired at ContentCon. Learn more and register today 
+ 
+ Login Login 
+
+ Get inspired at ContentCon. Learn more and register today 
+
+ Contentstack.com Docs Login 
+
+ Live Edit Tags
+ Text Lesson 
+ 10m 12s 
+ Released: March 24, 2025 
+ copy_all Copy for LLM 
+ code_blocks View as Markdown 
+
+ Overview Text Lesson Feedback 
+ Live Edit Tags 
+Live edit tags enable you to quickly navigate to the field that holds the website content shown in the Live Preview pane. By clicking the "Edit" button next to a content block in the preview pane, you'll be taken to the corresponding field within the entry. If the field contains a reference to another entry, you will be directed to the editor page of that referenced entry.
+The Live Preview Utils SDK searches for the elements which contain the edit tags referred to as data-cslp.
+Edit tags contain the information about where your field exists in the entry. The structure of the edit tag (field location in the entry) you can pass against the data-cslp attribute is as follows: {content_type_uid}.{entry_uid}.{locale}.{field_uid}
+Here's a sample field path home.blt80654132ff521599.en-us.modular_blocks[0].teaser.heading
+ 
+ Note : If the field is nested within another complex field, such as Modular Blocks, provide the field path as follows: {modular_block_field_UID}.{block_UID}.{field_UID}. 
+
+For a website built using Contentstack's JavaScript Delivery SDK , you can use the addEditableTags() method to automatically generate the edit tag for you. 
+
+ Import the addEditableTags() method 
+ 
+Install Contentstack Utils from npm using the following command:
+ npm i @contentstack/utils
+ 
+ import addEditableTags using the following commands: 
+ // utils.js
+import {addEditableTags} from "@contentstack/utils”
+
+ Generate edit tags for entry content 
+ To generate entry content, navigate to the code responsible for delivering the entry content. After retrieving data from Contentstack, the resulting entry object is passed to the addEditableTags() method to add edit tags to the previewed entry content.
+ addEditableTags(entry, content_type_uid, tagsAsObject, locale)
+ 
+ here , 
+ entry: entry object you fetched from Contentstack SDK/API call
+ content_type_uid : is the unique ID of the current entry’s content type
+ tagsAsObject: By default, tagsAsObject is set to false, and it appends data-cslp in the form of a string cause as follows:
+ 'data-cslp=path.to.field'
+ 
+ If tagsAsObject is set to true, the data-cslp attribute is returned in object format as follows
+ {'data-cslp: path.to.field'}
+ 
+ locale : The locale code used to fetch entry.
+
+ The addEditableTags() method adds a new key-value pair at every level of your entry result object. where,
+ Key is denoted by $ sign
+ Value is an object which contains the field name and data-cslp details.
+ For example, if you pass the following object to the addEditableTags method
+ {
+ "heading": "Exploring the Vineyards: A Journey through Wine Country",
+ "description": "As a seasoned traveler, you understand the allure of exploring new destinations. One such destination that has been gaining popularity is the wine country.",
+
+ "cta": {
+ "text": "Learn More",
+ "url": "/explore-the-vineyards"
+ },
+}
+ 
+The result returned will look like:
+ {
+ "heading": "Exploring the Vineyards: A Journey through Wine Country",
+
+ "description": "As a seasoned traveler, you understand the allure of exploring new destinations. One such destination that has been gaining popularity is the wine country.",
+
+ "cta": {
+ "text": "Learn More",
+ "url": "/explore-the-vineyards",
+ "$": {
+ "text": {
+ "data-cslp": "text_banner.blt6fb37c46b9d17365.cta.text"
+ },
+ "url": {
+ "data-cslp": "text_banner.blt6fb37c46b9d17365.cta.url"
+ }
+ }
+ },
+
+ "$": {
+ "heading": {
+ "data-cslp": "text_banner.blt6fb37c46b9d17365.heading"
+ },
+ "description": {
+ "data-cslp": "text_banner.blt6fb37c46b9d17365.description"
+ },
+ "cta": {
+ "data-cslp": "text_banner.blt6fb37c46b9d17365.cta"
+ },
+ }
+
+}
+
+ Generate Edit tags example - REST 
+ Once you have retrieved data using the Contentstack, utilize the addEditableTags() function. Pass the retrieved entry into this function to incorporate edit tags into the draft entry content effectively. The following example is using JavaScript Delivery SDK to fetch content.
+ // utils.js
+export const getEntryByUrl = async (contentTypeUid, locale, entryUrl) => {
+ try {
+ const result = Stack.ContentType(contentTypeUid)
+ .Query()
+ .language(locale)
+ .where('url', `${entryUrl}`)
+ .toJSON()
+ .find()
+
+ addEditableTags(result[0][0], contentTypeUid, true, locale)
+ const data = result[0][0]
+ return data
+
+ } catch (error) {
+ throw error
+ }
+}
+ 
+ Generate Edit tags example - Graph QL 
+ Locate the section of your website's code responsible for fetching content from Contentstack. To ensure proper functionality of live editing, it's crucial to retrieve system system {uid} from GraphQL at the root of the query and system {uid, content_type_uid} for all references.
+ 
+ Here is an example of the gqlRequest() method for your reference:
+
+ export const getHeaderRes = async (): Promise => {
+ const gql = `
+query HeaderQuery {
+ all_header {
+ total
+ items {
+ title
+ logoConnection {
+ edges {
+ node {
+ url
+ filename
+ }
+ }
+ }
+ navigation_menu {
+ label
+ page_referenceConnection {
+ totalCount
+ edges {
+ node {
+ ... on Page {
+ title
+ url
+ system {
+ uid
+ content_type_uid
+ }
+ }
+ }
+ }
+ }
+ }
+ notification_bar {
+ show_announcement
+ announcement_text {
+ json
+ }
+ }
+ system {
+ uid
+ }
+ }
+ }
+}
+`;
+
+ Next, include _content_type_uid and uid alongside system, and assign the values from system.content_type_uid to _content_type_uid and system.uid to uid :
+ const transformed = {
+ ...header,
+ logo: header.logoConnection.edges[0].node,
+ navigation_menu: header.navigation_menu.map((item: any) => ({
+ ...item,
+ page_reference: item.page_referenceConnection.edges.map((edge: any) => ({
+ ...edge.node,
+ uid: edge.node.system.uid,
+ _content_type_uid: edge.node.system.content_type_uid,
+ })),
+ })),
+ uid: header.system.uid,
+ notification_bar: {
+ ...header.notification_bar,
+ },
+};
+
+ Include data-cslp parameters in transformed response by using addEditableTags() method from @contentstack/utils
+ addEditableTags(transformed, "header", true);
+
+ Set up the Live Preview Utils SDK 
+ To navigate to the correct stack it is required to provide the stackDetails object parameter to the live preview initialization method.
+ ContentstackLivePreview.init({
+ ...
+ stackDetails: {
+ apiKey: "your api key",
+ environment: "your environment",
+ branch: "your branch"
+ },
+ clientUrlParams: {
+ host: "app.contentstack.com",// NA region host
+ },
+})
+
+ Note: The host value is based on the region where your stack is located US (NA) region host: app.contentstack.com 
+ EU region host: eu-app.contentstack.com 
+ Azure NA region host: azure-na-app.contentstack.com 
+ Azure EU region host: azure-eu-app.contentstack.com 
+ GCP NA region host: gcp-na-app.contentstack.com 
+
+ Configure live edit tags across webpages 
+ For pure HTML tags (tagsAsObject:false) example: 
+ To add edit tags to your website's HTML:
+ Find the HTML Section: Locate the part of your HTML code where you want to include edit tags.
+ Add Edit Tags: To access an edit tag, fetch the path to the field in your entry data and add a dollar sign ( $ ) before the last field in the path. For instance, if the path to your data is data.description.height , the edit tag should be data.description.$.height .
+ 
+ Example snippet:
+
+ React-based Components (tagsAsObject:true) example: 
+For React-based Applications you can set tagsAsObject to true, by enabling this you will receive edit tag details in object format. You need to destructure the object while passing it within the JSX element.Let's add edit tags to following JSX snippet: 
+
+ After adding edit tags the above JSX will be:
+
+ Course
+ Implementing Live Preview
+
+ How to Complete the Live Preview Course
+ Text Lesson
+ 
+ 0m 35s
+
+ Introduction to Live Preview
+ Text Lesson
+ 
+ 2m 40s
+
+ Basic implementation
+ Text Lesson
+ 
+ 0m 35s
+
+ How Live Preview works
+ Text Lesson
+ 
+ 5m 3s
+
+ Live preview: REST Delivery SDK
+ Text Lesson
+ 
+ 8m 32s
+
+ Live Preview - GraphQL API
+ Text Lesson
+ 
+ 13m 14s
+
+ Live Edit Tags
+ Text Lesson
+ 
+ 10m 12s
+
+ Chrome Extension
+ Text Lesson
+ 
+ 1m 47s
+
+ Comprehensive guide to setting up CSR and SSR for Live Preview
+ Text Lesson
+ 
+ 2m 30s
+
+ Limitations of Live Preview
+ Text Lesson
+ 
+ 0m 20s
+
+ Additional Resources and References
+ Text Lesson
+
+ Previous Live Preview - GraphQL API 
+ 
+ Next Chrome Extension 
+
+ Course
+ Implementing Live Preview
+
+ How to Complete the Live Preview Course
+ Text Lesson
+ 
+ 0m 35s
+
+ Introduction to Live Preview
+ Text Lesson
+ 
+ 2m 40s
+
+ Basic implementation
+ Text Lesson
+ 
+ 0m 35s
+
+ How Live Preview works
+ Text Lesson
+ 
+ 5m 3s
+
+ Live preview: REST Delivery SDK
+ Text Lesson
+ 
+ 8m 32s
+
+ Live Preview - GraphQL API
+ Text Lesson
+ 
+ 13m 14s
+
+ Live Edit Tags
+ Text Lesson
+ 
+ 10m 12s
+
+ Chrome Extension
+ Text Lesson
+ 
+ 1m 47s
+
+ Comprehensive guide to setting up CSR and SSR for Live Preview
+ Text Lesson
+ 
+ 2m 30s
+
+ Limitations of Live Preview
+ Text Lesson
+ 
+ 0m 20s
+
+ Additional Resources and References
+ Text Lesson
+
+ Platform keyboard_arrow_down Solution Center
+ 
+ Marketplace
+ 
+ Changelog
+ 
+ Developers & IT
+ 
+ Business users
+ 
+ Digital leaders
+ 
+ Developer Fast Track
+ 
+ Plans & Pricing
+
+ Solutions keyboard_arrow_down Retail
+ 
+ Travel and tourism
+ 
+ Financial services
+ 
+ Technology
+ 
+ Manufacturing
+ 
+ E-commerce
+ 
+ Localization
+ 
+ Personalization
+ 
+ Portals and knowledge bases
+
+ Resources keyboard_arrow_down Academy
+ 
+ Docs
+ 
+ Product updates
+ 
+ Contentstack on Contentstack
+ 
+ Blog
+ 
+ Insights and analyst reports
+ 
+ Webinars
+ 
+ Podcasts
+ 
+ Glossary
+ 
+ Content generative library
+ 
+ Community
+ 
+ Headless CMS
+ 
+ Composable AXP
+ 
+ Personalization
+ 
+ CDP
+
+ Customers keyboard_arrow_down Case Studies
+ 
+ Customer Care
+ 
+ Contentstack Experience Awards
+ 
+ Customer support
+
+ Partners keyboard_arrow_down Overview
+ 
+ Find a partner
+ 
+ Login
+
+ Company keyboard_arrow_down About us
+ 
+ News
+ 
+ Customer support portal
+ 
+ Contact
+
+ Social keyboard_arrow_down Facebook
+ 
+ LinkedIn
+ 
+ Instagram
+ 
+ GitHub
+ 
+ YouTube
+ 
+ Discord
+ 
+ X
+
+ Platform
+ Solution Center 
+ Marketplace 
+ Changelog 
+ Developers & IT 
+ Business users 
+ Digital leaders 
+ Developer Fast Track 
+ Plans & Pricing 
+ 
+ Solutions
+ Retail 
+ Travel and tourism 
+ Financial services 
+ Technology 
+ Manufacturing 
+ E-commerce 
+ Localization 
+ Personalization 
+ Portals and knowledge bases 
+ 
+ Resources
+ Academy 
+ Docs 
+ Product updates 
+ Contentstack on Contentstack 
+ Blog 
+ Insights and analyst reports 
+ Webinars 
+ Podcasts 
+ Glossary 
+ Content generative library 
+ Community 
+ Headless CMS 
+ Composable AXP 
+ Personalization 
+ CDP 
+ 
+ Customers
+ Case Studies 
+ Customer Care 
+ Contentstack Experience Awards 
+ Customer support 
+ 
+ Partners
+ Overview 
+ Find a partner 
+ Login 
+
+ Company
+ About us 
+ News 
+ Customer support portal 
+ Contact 
+ 
+ Social
+ Facebook 
+ LinkedIn 
+ Instagram 
+ GitHub 
+ YouTube 
+ Discord 
+ X 
+
+ arrow_outward Full AXP by Contentstack Legal Terms Privacy Trust Center Cookies Settings
+
+ Copyright © 2026 Contentstack Inc. All rights reserved.
+
+ AI Assistant
+
+ Ask a question below...
+
+ info AI responses may contain mistakes. 
+
+ Ask AI
+
+ Catalog 
+ Learning Paths 
+ Training Instance 
+
+ Ask AI
+
+ search close 
+ menu 
+
+ Login 
+ 
+ Catalog Learning Paths Training Instance 
+ Explore by product chevron_right 
+ Contentstack.com Docs Theme Settings 
+
+ Login 
+
+ chevron_left Back 
+ No products available

@@ -1,0 +1,1 @@
+{"ts":"2026-08-18T23:15:23Z","story_id":"AMSD-2041","retry":0,"rung":0,"target":"skill","diagnosis":"`onEntryChange` is a static method on ContentstackLivePreview, not an IInitData config property; `preview_token` doesn't exist in contentstack SDK's LivePreview type.","patches_applied":0,"profile_updated":true}

@@ -15,7 +15,7 @@
  *
  * So the gate was simultaneously too permissive (silent pass off-stack) and too strict (hard fail
  * on-stack), and neither verdict was about the code under test. All three answers now come from
- * lib/ecosystems.js, which already knew them for six ecosystems.
+ * lib/ecosystem-registry.js, which already knew them for six ecosystems.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { spawnSync } from 'node:child_process';
@@ -98,7 +98,7 @@ describe('the unit test gate runs the project’s tests', () => {
     const r = spawnSync(NODE, ['-e',
       'const {allManifests}=require(process.argv[1]);'
       + 'process.stdout.write(allManifests().filter(e=>typeof e.installCommand!=="function").map(e=>e.file).join(","))',
-      join(SCRIPTS, 'lib/ecosystems.js'),
+      join(SCRIPTS, 'lib/ecosystem-registry.js'),
     ], { encoding: 'utf8' });
     expect(r.stdout.trim(), 'an ecosystem cannot install, so its tests can never run').toBe('');
   });

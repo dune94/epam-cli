@@ -22,7 +22,7 @@
  * (run_implementation(), primary/independent worktree lanes).
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -54,7 +54,11 @@ describe('Inline TC writer gate — single shared implementation (lib/tc-writer-
   it('only fires for a story that itself needs TCs (test file owner, empty facts, not deprecated)', () => {
     expect(gateSrc).toMatch(/endswith\(".test.ts"\)/);
     expect(gateSrc).toMatch(/testCriteria\.facts/);
-    expect(gateSrc).toContain('status != "deprecated"');
+    // The deprecated check moved with the selection into lib/handlers/tc-story-is-pure-test.py --
+    // together with the test-file convention, which as an inline `endswith(".test.ts")` made this
+    // gate a silent no-op on every codeline that is not Node. The requirement is unchanged and is
+    // asserted behaviourally in the-tc-gate-recognised-one-test-convention.test.ts.
+    expect(gateSrc).toContain('tc-story-is-pure-test.py');
   });
 
   it('does NOT exit 1 on exhaustion — blocks the story instead', () => {
@@ -201,7 +205,17 @@ describe('Inline TC writer gate — REAL execution (shared lib, exercised standa
     );
     execFileSync('chmod', ['+x', fakeWriter]);
 
-    const gateBody = extractFunctionBody(gateSrc, 'run_inline_tc_writer_gate');
+    // THE GATE'S OWN DEPENDENCIES, or the harness tests a function with its legs cut off.
+    //
+    // run_inline_tc_writer_gate asks _tc_story_needs_criteria which stories need criteria, and that
+    // shells out to lib/handlers/tc-story-is-pure-test.py through $SCRIPT_DIR. Extracting only the
+    // gate left the helper undefined and SCRIPT_DIR pointing at a temp dir with no handlers, so the
+    // gate selected nothing and returned 0 -- the harness reporting a pass the real script does not.
+    symlinkSync(join(REPO_ROOT, 'orchestrations/scripts/lib'), join(dir, 'lib'), 'dir');
+    const gateBody = [
+      extractFunctionBody(gateSrc, '_tc_story_needs_criteria'),
+      extractFunctionBody(gateSrc, 'run_inline_tc_writer_gate'),
+    ].join('\n');
     const upgradeBody = extractFunctionBody(gateSrc, '_tc_writer_gate_maybe_upgrade_model');
     const loggerBody = extractFunctionBody(gateSrc, '_tc_writer_gate_log_retry').replace(
       /\$SCRIPT_DIR\/\.\.\/logs/g,

@@ -36,6 +36,11 @@ FAILURE_CLASS="${1:-}"
 FAILED_OUTPUT_FILE="${2:-/dev/null}"
 CONTEXT_FILE="${3:-/dev/null}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# jq_vals — prompt values files whose content never becomes an argv entry.
+# Placed with the other library sources, NOT beside SCRIPT_DIR: the path-resolution
+# block is lifted verbatim by tests that build a minimal script tree, and a source
+# line inside it makes those probes fail on a library they have no reason to carry.
+source "$SCRIPT_DIR/lib/jq-vals.sh"
 
 # THIS SEAM ASKS FOR ITS LADDER.
 #
@@ -74,6 +79,8 @@ export EPAM_AGENT_NAME="$_SEAM_NAME"
 command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "$_SEAM_NAME"
 
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
+# shellcheck source=lib/agent-invoke.sh
+source "$SCRIPT_DIR/lib/agent-invoke.sh"
 
 log() { echo "[agent-attempt-analyst] $*" >&2; }
 
@@ -131,7 +138,7 @@ esac
 # Values via a FILE, never argv: a failed agent's output is routinely megabytes and argv is
 # capped at ARG_MAX. This is the same crash that took out the failure analyst on 2026-08-15.
 _aa_vals=$(mktemp "${TMPDIR:-/tmp}/agent-failure-analyst-vals-XXXXXX.json")
-jq -n --arg profile "$_profile" \
+jq_vals --arg profile "$_profile" \
       --arg class_hint "$_class_hint" \
       --arg failure_class "$FAILURE_CLASS" \
       --arg failed_output "${_failed_output:-(empty — it produced nothing)}" \
@@ -155,12 +162,23 @@ log "diagnosing ${FAILURE_CLASS} via ${_model}"
 # Keep the runner's stderr: it is the only evidence of WHY self-heal failed, and
 # both call sites used to discard it along with everything else.
 _analyst_err="$(mktemp 2>/dev/null || echo /tmp/agent-analyst-err.$$)"
-_note=$(echo "$_prompt" | \
-    EPAM_MAX_ITERATIONS=1 \
-    EPAM_REASONING_EFFORT="${AGENT_ANALYST_REASONING_EFFORT:-high}" \
-    EPAM_MAX_OUTPUT_TOKENS="${AGENT_ANALYST_MAX_OUTPUT_TOKENS:-32768}" \
-    AI_MODEL="$_model" \
-    bash "$AI_RUNNER_CMD" --provider "$_provider" --model "$_model" 2>"$_analyst_err")
+# THROUGH THE ONE DOOR -- AND THE ANALYST CAN FINALLY LOOK AT SOMETHING.
+#
+# This granted NO TOOLS. Not a restricted set: none. EPAM_ALLOWED_TOOLS was never set and the tool
+# gate was never opened, so the agent asked to work out WHY an attempt failed could not read the
+# file that failed, search for the symbol, or run the check that reported it. It diagnosed from a
+# description of the evidence.
+#
+# Its profile has declared "toolGrant": "execute" the whole time. Nothing read it, because nothing
+# went through lib/agent-invoke.sh -- so the declaration and the invocation disagreed and the
+# invocation won silently.
+#
+# The budget was the same story one field over: three ${VAR:-default} literals duplicating a
+# profile that already states them.
+_note=$(echo "$_prompt" | invoke_agent agent-failure-analyst \
+    --model "$_model" --provider "$_provider" \
+    --codeline "${PROJECT_ROOT:-}" \
+    2>"$_analyst_err")
 _analyst_rc=$?
 
 # Trim to a bounded directive; never emit a huge blob.

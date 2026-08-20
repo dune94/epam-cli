@@ -1,10 +1,10 @@
 {
   "minted": [
     {
-      "name": "typescript-logic-fixer",
+      "name": "contentstack-live-preview-engineer",
       "kind": "implementer",
       "codeline": "",
-      "rationale": "Both mocka and mockb declare vitest and typescript and need small logic fixes in TypeScript source files, so one implementer spanning the project can author both fixes without minting near-duplicate roles per codeline.",
+      "rationale": "The metrolinx codeline declares contentstack and @contentstack/utils but not @contentstack/live-preview-utils, and its Stack config at src/services/contentstack.ts has no live_preview block; this role installs and wires the three missing integration points the ticket requires.",
       "surfaces": [
         "profiles.json",
         "kb",
@@ -13,22 +13,10 @@
       ]
     },
     {
-      "name": "fares-investigator",
+      "name": "metrolinx-contentstack-detective",
       "kind": "investigator",
-      "codeline": "mocka",
-      "rationale": "mocka's fare boundary bug sits in a single module whose comparison operator and callers must be read in-repo before any fix is written, so this codeline needs its own reader.",
-      "surfaces": [
-        "profiles.json",
-        "kb",
-        "project-investigators",
-        "project-profiles"
-      ]
-    },
-    {
-      "name": "schedule-investigator",
-      "kind": "investigator",
-      "codeline": "mockb",
-      "rationale": "mockb's departure-board bug hinges on a loop bound in formatStops whose callers and display paths must be read in-repo before any fix is written, so this codeline needs its own reader.",
+      "codeline": "metrolinx",
+      "rationale": "The metrolinx codeline's data-fetch architecture (ContentstackFactory → pageService functions → useContent hook → page components) must be fully mapped before the implementer can wire onEntryChange without breaking SSR/SSG flows, and the survey's claim that live_preview is absent everywhere needs confirmation against the actual source.",
       "surfaces": [
         "profiles.json",
         "kb",
@@ -40,14 +28,22 @@
   "rejected": [],
   "unchanged": [],
   "projectRoles": [
-    "typescript-logic-fixer"
+    "contentstack-live-preview-engineer"
   ],
   "projectInvestigators": [
-    "fares-investigator",
-    "schedule-investigator"
+    "metrolinx-contentstack-detective"
   ],
-  "proposed": 3,
-  "rejectedAcrossAttempts": [],
-  "attempts": 1,
+  "rejectedAcrossAttempts": [
+    {
+      "name": "contentstack-live-preview-engineer",
+      "reason": "brief names 1 path(s) that do not exist in any codeline: src/services/livePreview.ts"
+    },
+    {
+      "name": "metrolinx-contentstack-detective",
+      "reason": "brief names 1 path(s) that do not exist in codeline 'metrolinx': src/app/"
+    }
+  ],
+  "proposed": 4,
+  "attempts": 2,
   "protectedRoles": 21
 }

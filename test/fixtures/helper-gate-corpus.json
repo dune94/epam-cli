@@ -1,0 +1,56 @@
+{
+  "_why": [
+    "THE JUDGED CORPUS FOR THE HELPER-DUPLICATION RULE — data, not code.",
+    "",
+    "Each entry names a real change and the verdict a human confirmed for it. That verdict cannot be discovered: whether a shipped diff was CORRECT is a judgement, which is exactly why the rule is replayed against it rather than against fixtures. What does not belong in the engine's test code is the estate the corpus happens to come from — repository names, branches and SHAs are one client's facts on one day.",
+    "",
+    "The test reads this file, resolves each repository through the roots the project configs declare, and SKIPS any entry whose repository or refs are unavailable — saying so, rather than passing silently. Extending the corpus is an edit here; the test never changes.",
+    "",
+    "verdict: 'accept' means the rule must NOT reject this change. 'reject' means it must."
+  ],
+  "entries": [
+    {
+      "repo": "next.gotransit.com",
+      "range": "70df4ea2..e780a8b7",
+      "helper": "ContentstackFactory",
+      "paths": "src",
+      "verdict": "accept",
+      "minDiffBytes": 1000,
+      "helperAbsentFromDiff": true,
+      "why": "A shipped, working implementation: 9 files, in production. The helper is absent from the diff, and the earlier version of the gate rejected it for that alone."
+    },
+    {
+      "repo": "mock-a",
+      "range": "HEAD~1..HEAD",
+      "helper": "CONCESSION_FARE_CENTS",
+      "paths": "src",
+      "verdict": "accept",
+      "minDiffBytes": 50,
+      "why": "The defect fix from the first fully green mock3 run — the baseline a correct change must keep passing."
+    },
+    {
+      "repo": "next.gotransit.com",
+      "range": "70df4ea2..e780a8b7",
+      "helper": "ContentstackFactory",
+      "helpers": [
+        "ContentstackFactory",
+        "getSinglePageEntry"
+      ],
+      "paths": "src",
+      "verdict": "accept",
+      "minDiffBytes": 1000,
+      "helperAbsentFromDiff": true,
+      "why": "The same shipped range judged against a second helper name: absence of either must not reject working code."
+    },
+    {
+      "repo": "azure.commerce.cdts",
+      "helper": "getDispatchLineItemKey",
+      "verdict": "reject",
+      "inlineDiff": [
+        "+      (lineItem) => lineItem.id === discount.lineItemId",
+        "+        || lineItem.id.startsWith(discount.lineItemId + '-'),"
+      ],
+      "why": "The 2026-07-26 hand-rolled separator: the change invents '-' while the helper's module owns the format. This is the defect the rule exists for, so it must stay rejected."
+    }
+  ]
+}

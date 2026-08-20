@@ -1,6 +1,10 @@
 {
   "$why": [
-    "Moved out of claude.sh on 2026-08-16."
+    "Moved out of claude.sh on 2026-08-16.",
+    "",
+    "RECOVERED 2026-08-20. The migration in b8e1e62 captured the WRONG LINES: this template's entire body was 69 characters of leaked shell — `_cp_vals=$(mktemp \"__TMPDIR__/plan-corrective-vals-XXXXXX.json` — and the prompt itself was lost. The renderer's strict placeholder check was the only thing standing between a model and a shell fragment presented as a corrective-plan instruction: __TMPDIR__ was never supplied, so it threw instead of sending it (live, run of 2026-08-19).",
+    "",
+    "The text below is the original, recovered verbatim from claude.sh at b8e1e62^."
   ],
   "description": "Asks the planner to correct a plan the reviewer rejected.",
   "seams": [
@@ -8,8 +12,10 @@
   ],
   "id": "plan-corrective",
   "version": 1,
-  "body": "       _cp_vals=$(mktemp \"__TMPDIR__/plan-corrective-vals-XXXXXX.json",
+  "body": "You previously produced this plan for story __STORY_ID__:\n\n__PLAN_TEXT__\n\nA review found it inconsistent with the real dependency contracts. Specific correction needed:\n__CORRECTIONS__\n\nProduce the CORRECTED numbered execution plan only — no prose, no code, same format as before.\n",
   "placeholders": [
-    "__TMPDIR__"
+    "__STORY_ID__",
+    "__PLAN_TEXT__",
+    "__CORRECTIONS__"
   ]
 }

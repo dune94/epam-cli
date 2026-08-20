@@ -62,11 +62,12 @@ agent_profile_validate() {
 }
 
 # invoke_agent <role> [--model M] [--provider P] [--json-result FILE]
-#              [--write-paths PATHS] [--runner CMD]
+#              [--write-paths PATHS] [--tools LIST] [--codeline PATH] [--runner CMD]
 # Prompt on stdin, agent text on stdout. Exit code is the runner's.
 invoke_agent() {
     local role="${1:?invoke_agent: role required}"; shift
-    local _model="" _provider="" _json_result="" _write_paths="" _runner=""
+    local _model="" _provider="" _json_result="" _write_paths="" _runner="" _tools_override=""
+    local _codeline="${PROJECT_ROOT:-}"
 
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -74,6 +75,14 @@ invoke_agent() {
             --provider)    _provider="${2:-}"; shift 2 ;;
             --json-result) _json_result="${2:-}"; shift 2 ;;
             --write-paths) _write_paths="${2:-}"; shift 2 ;;
+            # A TOOL GRANT COMPUTED AT THE CALL SITE. The registry cannot know which plugin tools a
+            # given codeline provisioned, and team-lead-review appends exactly those. Dynamic
+            # per-site values belong to the caller by design -- the same reasoning that keeps model
+            # and provider here; only the execution budget is centralised.
+            --tools)       _tools_override="${2:-}"; shift 2 ;;
+            # WHICH CODELINE the grant is resolved against: the plugin tools a grant includes are
+            # whatever THAT repository provisioned, so the answer is per-codeline.
+            --codeline)    _codeline="${2:-}"; shift 2 ;;
             --runner)      _runner="${2:-}"; shift 2 ;;
             *) echo "[agent-invoke] unknown option '$1'" >&2; return 2 ;;
         esac
@@ -97,6 +106,35 @@ invoke_agent() {
     # to the project — neither is a change to this script, and no seam, ladder or model
     # name appears here.
     _ladder=$(agent_profile_get   "$role" ladder        || echo "")
+    # THE TOOL-CALL BUDGET IS PART OF THE EXECUTION BUDGET, and was the one piece of it still
+    # written at a call site. team-lead-review.sh set EPAM_MAX_TOOL_CALLS itself, with the comment
+    # that it and the iteration cap "bound different failures, so both are set" -- which is exactly
+    # the argument for the registry owning both.
+    local _tool_calls
+    _tool_calls=$(agent_profile_get "$role" maxToolCalls || echo "")
+    # THE TOOL GRANT THE PROFILE DECLARES, resolved for this codeline.
+    #
+    # Profiles have carried "toolGrant" all along and this read only "allowedTools", which they do
+    # not set -- so the declared grant reached nothing and every call site wrote its own literal
+    # list instead. lib/agent-tools.js already turns a grant kind into the read-only floor plus the
+    # plugin tools that codeline provisioned plus what the kind adds, and THROWS on a kind the
+    # engine does not define. An explicit --tools still wins, for a grant only the caller can know.
+    local _grant
+    _grant=$(agent_profile_get "$role" toolGrant || echo "")
+    if [ -z "$_tools_override" ] && [ -n "$_grant" ]; then
+        local _grant_tools _grant_rc=0
+        _grant_tools=$("${NODE_BIN:-node}" -e '
+          const { toolGrantFor } = require(process.argv[1]);
+          process.stdout.write(toolGrantFor(process.argv[2], process.argv[3] || []) || "");
+        ' "$_AGENT_INVOKE_DIR/agent-tools.js" "$_grant" "$_codeline" 2>&1) || _grant_rc=$?
+        if [ "$_grant_rc" -ne 0 ]; then
+            echo "[agent-invoke] FATAL: role '$role' declares toolGrant '$_grant' and it could not be resolved:" >&2
+            printf '%s\n' "$_grant_tools" | sed 's/^/[agent-invoke]        /' >&2
+            return 2
+        fi
+        _tools="$_grant_tools"
+    fi
+    [ -n "$_tools_override" ] && _tools="$_tools_override"
 
     # Per-role env override, for one-off tuning without editing the registry:
     #   AGENT_INVOKE_<ROLE>_MAX_OUTPUT_TOKENS   (role upper-cased, - → _)
@@ -173,6 +211,7 @@ invoke_agent() {
         "EPAM_REASONING_EFFORT=$_effort"
     )
     [ -n "$_temp" ]        && _env+=("EPAM_TEMPERATURE=$_temp")
+    [ -n "$_tool_calls" ]  && _env+=("EPAM_MAX_TOOL_CALLS=$_tool_calls")
     # Resolve the named ladder from the project's config. Absent or unset: this seam simply
     # climbs whatever ladder the run already provides — never a silent fallback to something
     # this script chose.

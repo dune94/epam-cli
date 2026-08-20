@@ -1,0 +1,179 @@
+SOURCE: https://can01.safelinks.protection.outlook.com/?url=https%3A%2F%2Fwww.contentstack.com%2Fdocs%2Fdevelopers%2Fset-up-visual-builder%2Fset-up-visual-builder-for-your-website&data=05%7C02%7CIshdeep.Kohli%40metrolinx.com%7Cbfb0e182cfb843152e0708def3c0c6d9%7C191b00eaedcc406c8456dc29abc0f10f%7C0%7C0%7C639216206475850505%7CUnknown%7CTWFpbGZsb3d8eyJFbXB0eU1hcGkiOnRydWUsIlYiOiIwLjAuMDAwMCIsIlAiOiJXaW4zMiIsIkFOIjoiTWFpbCIsIldUIjoyfQ%3D%3D%7C0%7C%7C%7C&sdata=DTiktSyb3c%2FSnY%2BnQjMAysGjePYVyxhFvFZH5c0AUmM%3D&reserved=0
+
+HTTP 200
+
+Set Up Visual Editor for Your Website | Contentstack 
+ Get inspired at ContentCon. Learn more and register today 
+
+ Get inspired at ContentCon. Learn more and register today 
+
+ Contentstack.com Academy Login 
+
+ Changelog 
+ APIs 
+ SDKs 
+ menu 
+
+ Home 
+ Headless CMS 
+ Set Up Visual Editor for Your Website
+ content_copy Copy for LLM Copy for LLM markdown View as Markdown 
+ signal_cellular_alt Intermediate schedule 3 min read update Last updated August 13, 2026 
+
+ Contentstack’s Visual Editor transforms the content management experience, enabling content managers to edit and preview website content in real time. Unlike the standard Live Preview feature, which only allows previews within entries, the Visual Editor offers advanced capabilities—letting you modify the website’s structure and design from the same interface. This feature provides an intuitive and interactive environment for updating content, ensuring greater control over the final published result.
+ This guide outlines the steps to set up and configure Visual Editor for your website. Follow these instructions to enable Live Preview, upgrade SDKs, and set up the Visual Editor for an optimized editing experience.
+ Prerequisites
+ link 
+
+ Contentstack account 
+ Access to stack settings 
+ Live Preview must be set up for your website
+ Preview token 
+ IFrame-compatible website to avoid CORS errors
+ Upgrade Delivery and Live Preview SDKs
+ link 
+
+ The Visual Editor requires Live Preview Utils version 3.0 or above and delivery SDK version 3.20.3 or above. To update to the latest versions, run the following command:
+ 
+ 1 
+ npm install contentstack@latest @contentstack/live-preview-utils@latest
+
+ Configure Visual Editor
+ link 
+
+ Pass the following config to the Live Preview init method:
+ 
+ 1 2 3 4 5 6 7 8 9 10 11 
+ ...
+import ContentstackLivePreview from "@contentstack/live-preview-utils"
+ContentstackLivePreview.init({
+ stackDetails: {
+ apiKey: "your-stack-api-key",
+ environment: "your-environment",
+ },
+ mode: "editor",
+ ...
+});
+...
+
+ Note To explore the different configuration properties, refer to the config section.
+Ensure Live Preview is set up for your website. Refer Set Up Live Preview for Your Website for more information.
+ Click to enlarge 
+ 
+ Set Up Edit Tags
+ link 
+
+ Once you’ve set up Live Preview, you should be able to see your website in Visual Editor.
+ Click to enlarge 
+ Edit tags contain the location where the corresponding field lies within the entry. The Live Preview Utils SDK searches for the elements which contain the edit tags referred to as  data-cslp .
+Setting up edit tags will enable edit functionalities within your website.
+ 
+ 1 2 3 4 5 
+ <main>
+ <h1 {...(post.$?.title ?? {})}>{post.title}</h1>
+ <div {...(post.$?.author.$?.name ?? {})}>{post.author.name}</div>
+ <div {...(post.$?.body ?? {})}>{post.body}</div>
+</main>
+
+ When your website runs in production, you should remove the edit tags. This will throw an error when you try to destructure an  undefined  value. Hence, we use the Nullish coalescing and pass an empty object value.Refer to Set Up Live Edit Tags for Entries with REST to configure your tags. To enable actions like adding, deleting, and ordering an instance of a multiple field type, add live edit tags for each instance of the field. Refer to the Enable Support for Multiple Field Actions in Visual Editor section for more information. Click to enlarge 
+ By following these steps, you can fully configure the Visual Editor for your website, allowing seamless content management and live preview capabilities.
+
+ Set the Page Context for Custom URL Entries
+ link 
+
+ If your stack uses custom URL patterns, entries are not tied to a single URL field, so Visual Editor needs the entry UID and content type UID to open the correct entry from the Start editing button. Set the page context with the setPageContext method from the Live Preview Utils SDK (4.4.4 or later).
+ For the method signature, parameters, and CSR, SSR, and meta-tag examples, refer to setPageContext(context) in the Live Preview Utils SDK config reference.
+
+ [Optional] Enable Empty Placeholder for Multiple Fields
+ link 
+
+ Additionally, to display an empty placeholder when a modular blocks field is not populated, import the VB_EmptyBlockParentClass from Live Preview Utils:
+ 
+ 1 
+ import { VB_EmptyBlockParentClass } from '@contentstack/live-preview-utils'
+
+ Add it as a class to the parent HTML element of all the block components:
+ 
+ 1 2 3 4 5 6 
+ <div
+ {...(entry.$?.page_components || {})}
+ className={pageComponents?.length ? undefined : VB_EmptyBlockParentClass}
+>
+{/* Block components */}
+</div>
+
+ Once added, you should see a empty placeholder for multiple fields.
+
+ Tutorial Video
+ link 
+
+ expand_less 
+ Platform
+ Solution Center 
+ Marketplace 
+ Changelog 
+ Developers & IT 
+ Business users 
+ Digital leaders 
+ Developer Fast Track 
+ Plans & Pricing 
+ 
+ Solutions
+ Retail 
+ Travel and tourism 
+ Financial services 
+ Technology 
+ Manufacturing 
+ E-commerce 
+ Localization 
+ Personalization 
+ Portals and knowledge bases 
+ 
+ Resources
+ Academy 
+ Docs 
+ Product updates 
+ Contentstack on Contentstack 
+ Blog 
+ Insights and analyst reports 
+ Webinars 
+ Podcasts 
+ Glossary 
+ Content generative library 
+ Community 
+ Headless CMS 
+ Composable AXP 
+ Personalization 
+ CDP 
+ 
+ Customers
+ Case Studies 
+ Customer Care 
+ Contentstack Experience Awards 
+ Customer support 
+ 
+ Partners
+ Overview 
+ Find a partner 
+ Login 
+
+ Company
+ About us 
+ News 
+ Customer support portal 
+ Contact 
+ 
+ Social
+ Facebook 
+ LinkedIn 
+ Instagram 
+ GitHub 
+ YouTube 
+ Discord 
+ X 
+
+ arrow_outward Full AXP by Contentstack Legal Terms Privacy Trust Center Cookie settings
+
+ Copyright © 2026 Contentstack Inc. All rights reserved.
+
+ /

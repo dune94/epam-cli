@@ -59,6 +59,11 @@ MAX_ITERATIONS=3
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/render-engine-prompt.sh
 source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
+# jq_vals — prompt values files whose content never becomes an argv entry.
+# Placed with the other library sources, NOT beside SCRIPT_DIR: the path-resolution
+# block is lifted verbatim by tests that build a minimal script tree, and a source
+# line inside it makes those probes fail on a library they have no reason to carry.
+source "$SCRIPT_DIR/lib/jq-vals.sh"
 
 # THIS SEAM ASKS FOR ITS LADDER.
 #
@@ -243,7 +248,7 @@ fi
 
 # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
 _tpl_vals=$(mktemp "${TMPDIR:-/tmp}/code-review-cycle-vals-XXXXXX.json")
-jq -n --arg iteration "$ITERATION" \
+jq_vals --arg iteration "$ITERATION" \
       --arg prior_context "$_PRIOR_CONTEXT" \
       --arg project_root "$PROJECT_ROOT" \
       --arg review_profile "$_REVIEW_PROFILE" \

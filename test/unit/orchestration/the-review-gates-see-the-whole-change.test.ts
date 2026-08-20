@@ -12,7 +12,7 @@
  * diff" failure, sitting in the code as a pathspec.
  *
  * The right axis is artefacts: exclude node_modules, target/, .venv, build output — which
- * lib/ecosystems.js and config/repo-artifacts.json already answer for every ecosystem — and show
+ * lib/ecosystem-registry.js and config/repo-artifacts.json already answer for every ecosystem — and show
  * the agent everything else, whatever language the customer writes.
  *
  * Lockfiles are the one asymmetry. They must still be STAGED (a real dependency change belongs in

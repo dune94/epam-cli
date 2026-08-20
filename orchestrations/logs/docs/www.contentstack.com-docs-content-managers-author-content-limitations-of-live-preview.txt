@@ -1,0 +1,98 @@
+SOURCE: https://www.contentstack.com/docs/content-managers/author-content/limitations-of-live-preview
+
+HTTP 200
+
+Limitations of Live Preview | Contentstack 
+ Get inspired at ContentCon. Learn more and register today 
+
+ Get inspired at ContentCon. Learn more and register today 
+
+ Contentstack.com Academy Login 
+
+ Changelog 
+ APIs 
+ SDKs 
+ menu 
+
+ Home 
+ Content Managers 
+ Author Content 
+ Limitations of Live Preview
+ content_copy Copy for LLM Copy for LLM markdown View as Markdown 
+ update Last updated June 17, 2026 
+
+ The Live Preview feature is not compatible with websites that use a third-party website builder or CMS to generate HTML.
+ The Live Preview feature does not support native mobile applications, as these do not rely on standard HTML rendering mechanisms.
+ You cannot preview entry content if your user role does not have the permissions required to access an entry, specific environment and language in which the entry has been published.
+ To avoid Cross-Origin Resource Sharing (CORS) errors, confirm that the website you wish to preview supports iFrame embedding. Adjust your website&#x27;s settings as needed to enable this functionality
+
+ expand_less 
+ Platform
+ Solution Center 
+ Marketplace 
+ Changelog 
+ Developers & IT 
+ Business users 
+ Digital leaders 
+ Developer Fast Track 
+ Plans & Pricing 
+ 
+ Solutions
+ Retail 
+ Travel and tourism 
+ Financial services 
+ Technology 
+ Manufacturing 
+ E-commerce 
+ Localization 
+ Personalization 
+ Portals and knowledge bases 
+ 
+ Resources
+ Academy 
+ Docs 
+ Product updates 
+ Contentstack on Contentstack 
+ Blog 
+ Insights and analyst reports 
+ Webinars 
+ Podcasts 
+ Glossary 
+ Content generative library 
+ Community 
+ Headless CMS 
+ Composable AXP 
+ Personalization 
+ CDP 
+ 
+ Customers
+ Case Studies 
+ Customer Care 
+ Contentstack Experience Awards 
+ Customer support 
+ 
+ Partners
+ Overview 
+ Find a partner 
+ Login 
+
+ Company
+ About us 
+ News 
+ Customer support portal 
+ Contact 
+ 
+ Social
+ Facebook 
+ LinkedIn 
+ Instagram 
+ GitHub 
+ YouTube 
+ Discord 
+ X 
+
+ arrow_outward Full AXP by Contentstack Legal Terms Privacy Trust Center Cookie settings
+
+ Copyright © 2026 Contentstack Inc. All rights reserved.
+
+ /

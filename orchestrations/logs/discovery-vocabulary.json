@@ -3,202 +3,272 @@
   "vocabulary": {
     "blacklist": [
       {
-        "term": "charged",
-        "reason": "Verb describing the observed billing behaviour, not any identifier; carries no signal separating mock-a from mock-b."
+        "term": "part",
+        "reason": "Indicates this is part 1 of a series; carries no signal about which repo to modify"
       },
       {
-        "term": "correct",
-        "reason": "Judgement word about behaviour, names nothing in either candidate's code."
+        "term": "see",
+        "reason": "Generic verb in acceptance criteria; appears in neither repo as an identifier"
       },
       {
-        "term": "wrong",
-        "reason": "Judgement word describing the bug, not a software artefact in either repo."
+        "term": "how",
+        "reason": "Grammatical filler describing the request, not software"
       },
       {
-        "term": "unnoticed",
-        "reason": "Process narrative about why the bug persisted; no selection signal."
+        "term": "will",
+        "reason": "Auxiliary verb with no discriminating value"
       },
       {
-        "term": "omits",
-        "reason": "Verb describing the rendering defect; not an identifier in either candidate."
+        "term": "be",
+        "reason": "Used as auxiliary verb in the ticket; no selection signal"
       },
       {
-        "term": "renders",
-        "reason": "Generic verb describing what formatStops does; appears only in a comment, not as code, and cannot discriminate between repos."
+        "term": "shown",
+        "reason": "Generic verb describing display, not a component or identifier in either candidate"
       },
       {
-        "term": "boundary",
-        "reason": "Describes the nature of the defect rather than naming anything in the software."
+        "term": "original",
+        "reason": "Process/workflow label for estimates; not a software term in either repo"
       },
       {
-        "term": "exactly",
-        "reason": "Grammatical filler emphasising the age value; no discriminative value."
+        "term": "requirements",
+        "reason": "Process/workflow section header; not a software identifier"
       },
       {
-        "term": "reported",
-        "reason": "Process verb about output, names nothing in either candidate."
+        "term": "bullet",
+        "reason": "Formatting descriptor; no discriminating value"
       },
       {
-        "term": "rather",
-        "reason": "Grammatical connective, pure filler."
+        "term": "points",
+        "reason": "Formatting descriptor; no discriminating value"
       },
       {
-        "term": "except",
-        "reason": "Grammatical filler describing the off-by-one behaviour, not software."
+        "term": "notes",
+        "reason": "Process/workflow section header; not a software identifier"
       },
       {
-        "term": "gone",
-        "reason": "Grammatical filler from 'gone unnoticed'; no signal."
+        "term": "assumptions",
+        "reason": "Process/workflow section header; not a software identifier"
+      },
+      {
+        "term": "limitation",
+        "reason": "Process/workflow word describing a constraint on the request, not a software component"
+      },
+      {
+        "term": "might",
+        "reason": "Modal verb with no selection signal"
+      },
+      {
+        "term": "not",
+        "reason": "Negation filler"
+      },
+      {
+        "term": "possible",
+        "reason": "Generic descriptor of feasibility; not a software term"
+      },
+      {
+        "term": "total",
+        "reason": "Process/workflow label for estimates; not a software identifier"
+      },
+      {
+        "term": "estimate",
+        "reason": "Process/workflow word for project planning; not a software term in either candidate"
+      },
+      {
+        "term": "ability",
+        "reason": "Generic noun describing a capability request; not a software identifier"
+      },
+      {
+        "term": "website",
+        "reason": "Generic descriptor; both candidates serve a website and the word names nothing specific in either repo"
+      },
+      {
+        "term": "entries",
+        "reason": "Generic content term; does not name a component, file, or feature in either candidate"
+      },
+      {
+        "term": "author",
+        "reason": "Generic role name; not a software identifier in either repo"
+      },
+      {
+        "term": "pages",
+        "reason": "Generic noun; while both repos may have pages, the word itself does not discriminate between them"
+      },
+      {
+        "term": "content",
+        "reason": "Generic term appearing in both candidate contexts (cx-azure has 'Customer Experience', metrolinx-starter is a content site); carries no separating signal"
+      },
+      {
+        "term": "so",
+        "reason": "Conjunction filler"
+      },
+      {
+        "term": "that",
+        "reason": "Grammatical filler"
+      },
+      {
+        "term": "want",
+        "reason": "User-story verb with no discriminating value"
+      },
+      {
+        "term": "can",
+        "reason": "Modal verb with no selection signal"
+      },
+      {
+        "term": "as",
+        "reason": "User-story filler word"
       }
     ],
     "whitelist": [
       {
-        "term": "fare",
-        "reason": "Core domain concept of mock-a, which defines fareFor, BASE_FARE_CENTS and CONCESSION_FARE_CENTS in src/fares.ts."
+        "term": "mx",
+        "reason": "Component tag and product abbreviation in the ticket; could name a feature or module in the software"
       },
       {
-        "term": "concession",
-        "reason": "Names CONCESSION_FARE_CENTS in mock-a; a real domain identifier fragment."
+        "term": "cms",
+        "reason": "Names the system being targeted for modification; could be a real component or integration in either candidate"
       },
       {
-        "term": "adult",
-        "reason": "Names the fare category (BASE_FARE_CENTS path) implemented in mock-a's fareFor."
+        "term": "preview",
+        "reason": "Next.js (metrolinx-starter) has a built-in preview/draft mode; strong discriminator for the Next.js candidate"
       },
       {
-        "term": "riders",
-        "reason": "Matches the Rider type and fareFor(rider) parameter in mock-a."
+        "term": "draft",
+        "reason": "Relates to Next.js preview/draft mode; could name a feature or state in the software"
       },
       {
-        "term": "cents",
-        "reason": "Matches the *_CENTS constants in mock-a; part of the domain vocabulary."
+        "term": "live",
+        "reason": "'Live Preview' is a feature name in the ticket; could correspond to a feature or component in the software"
       },
       {
-        "term": "350",
-        "reason": "Literal value of BASE_FARE_CENTS in mock-a; a concrete code constant."
+        "term": "homepage",
+        "reason": "Page name that may exist as a route or component in the Next.js source"
       },
       {
-        "term": "175",
-        "reason": "Literal value of CONCESSION_FARE_CENTS in mock-a; a concrete code constant."
+        "term": "discover",
+        "reason": "Page name that may exist as a route or component in the Next.js source"
       },
       {
-        "term": "65",
-        "reason": "The boundary constant compared against rider.age in mock-a's fareFor."
+        "term": "article",
+        "reason": "Content-type name that may exist as a model or component in the software"
       },
       {
-        "term": "formatstops",
-        "reason": "Exported function in mock-b/src/schedule.ts; the exact identifier cited by the ticket."
+        "term": "fe",
+        "reason": "Abbreviation for Frontend in estimates; abbreviations are protected per the rules"
       },
       {
-        "term": "totalminutes",
-        "reason": "Exported function in mock-b/src/schedule.ts; the exact identifier cited by the ticket."
+        "term": "be",
+        "reason": "Abbreviation for Backend in estimates; abbreviations are protected per the rules"
       },
       {
-        "term": "stop",
-        "reason": "Matches the Stop type and stops parameters in mock-b."
+        "term": "dam",
+        "reason": "Abbreviation for Digital Asset Management in estimates; abbreviations are protected per the rules"
       },
       {
-        "term": "departure",
-        "reason": "Domain term from mock-b's purpose (departure board rendering in schedule.ts)."
-      },
-      {
-        "term": "journey",
-        "reason": "Domain term for the schedule data totalMinutes computes over in mock-b."
-      },
-      {
-        "term": "line",
-        "reason": "Domain term for a transit line, used in mock-a's fare rules and mock-b's stop sequences."
-      },
-      {
-        "term": "mocka",
-        "reason": "Component label naming candidate mock-a; a component name is never filler."
-      },
-      {
-        "term": "mockb",
-        "reason": "Component label naming candidate mock-b; a component name is never filler."
+        "term": "protected",
+        "reason": "Technical term for page access control; could name an access-control feature or flag in the software"
       }
     ]
   },
   "termsDropped": [
     {
-      "term": "exactly",
-      "reason": "Grammatical filler emphasising the age value; no discriminative value."
+      "term": "content",
+      "reason": "Generic term appearing in both candidate contexts (cx-azure has 'Customer Experience', metrolinx-starter is a content site); carries no separating signal"
     },
     {
-      "term": "charged",
-      "reason": "Verb describing the observed billing behaviour, not any identifier; carries no signal separating mock-a from mock-b."
+      "term": "part",
+      "reason": "Indicates this is part 1 of a series; carries no signal about which repo to modify"
     },
     {
-      "term": "boundary",
-      "reason": "Describes the nature of the defect rather than naming anything in the software."
+      "term": "author",
+      "reason": "Generic role name; not a software identifier in either repo"
     },
     {
-      "term": "wrong",
-      "reason": "Judgement word describing the bug, not a software artefact in either repo."
+      "term": "want",
+      "reason": "User-story verb with no discriminating value"
     },
     {
-      "term": "rather",
-      "reason": "Grammatical connective, pure filler."
+      "term": "entries",
+      "reason": "Generic content term; does not name a component, file, or feature in either candidate"
     },
     {
-      "term": "omits",
-      "reason": "Verb describing the rendering defect; not an identifier in either candidate."
+      "term": "pages",
+      "reason": "Generic noun; while both repos may have pages, the word itself does not discriminate between them"
     },
     {
-      "term": "renders",
-      "reason": "Generic verb describing what formatStops does; appears only in a comment, not as code, and cannot discriminate between repos."
+      "term": "that",
+      "reason": "Grammatical filler"
     },
     {
-      "term": "except",
-      "reason": "Grammatical filler describing the off-by-one behaviour, not software."
+      "term": "will",
+      "reason": "Auxiliary verb with no discriminating value"
     },
     {
-      "term": "reported",
-      "reason": "Process verb about output, names nothing in either candidate."
+      "term": "shown",
+      "reason": "Generic verb describing display, not a component or identifier in either candidate"
     },
     {
-      "term": "correct",
-      "reason": "Judgement word about behaviour, names nothing in either candidate's code."
+      "term": "website",
+      "reason": "Generic descriptor; both candidates serve a website and the word names nothing specific in either repo"
     },
     {
-      "term": "gone",
-      "reason": "Grammatical filler from 'gone unnoticed'; no signal."
+      "term": "original",
+      "reason": "Process/workflow label for estimates; not a software term in either repo"
     },
     {
-      "term": "unnoticed",
-      "reason": "Process narrative about why the bug persisted; no selection signal."
+      "term": "requirements",
+      "reason": "Process/workflow section header; not a software identifier"
+    },
+    {
+      "term": "bullet",
+      "reason": "Formatting descriptor; no discriminating value"
+    },
+    {
+      "term": "points",
+      "reason": "Formatting descriptor; no discriminating value"
+    },
+    {
+      "term": "ability",
+      "reason": "Generic noun describing a capability request; not a software identifier"
+    },
+    {
+      "term": "notes",
+      "reason": "Process/workflow section header; not a software identifier"
+    },
+    {
+      "term": "assumptions",
+      "reason": "Process/workflow section header; not a software identifier"
+    },
+    {
+      "term": "limitation",
+      "reason": "Process/workflow word describing a constraint on the request, not a software component"
+    },
+    {
+      "term": "might",
+      "reason": "Modal verb with no selection signal"
+    },
+    {
+      "term": "possible",
+      "reason": "Generic descriptor of feasibility; not a software term"
+    },
+    {
+      "term": "total",
+      "reason": "Process/workflow label for estimates; not a software identifier"
+    },
+    {
+      "term": "estimate",
+      "reason": "Process/workflow word for project planning; not a software term in either candidate"
     }
   ],
   "termsUsed": [
-    "riders",
-    "aged",
-    "adult",
-    "fare",
-    "rules",
-    "over",
-    "concession",
-    "rider",
-    "full",
-    "cents",
-    "instead",
-    "above",
-    "correctly",
-    "itself",
-    "than",
-    "rule",
-    "departure",
-    "board",
-    "final",
-    "stop",
-    "formatstops",
-    "every",
-    "last",
-    "three",
-    "line",
-    "shows",
-    "journey",
-    "length",
-    "totalminutes",
-    "which",
-    "omission"
+    "live",
+    "preview",
+    "draft",
+    "homepage",
+    "discover",
+    "article",
+    "acceptance",
+    "criteria",
+    "protected"
   ]
 }

@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # gate-tools — what tools a read-only gate agent may call.
 #
 # WHY THIS EXISTS. Four sites hardcoded the same literal:

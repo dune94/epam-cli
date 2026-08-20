@@ -1,5 +1,6 @@
 {
   "id": "team-lead-review",
+  "layer": "project",
   "version": 2,
   "description": "The code reviewer: judges a story change against its criteria and emits a verdict.",
   "$why": [

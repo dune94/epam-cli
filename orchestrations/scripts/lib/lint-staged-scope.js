@@ -66,7 +66,11 @@ function loadDeclaration(projectRoot, toolName) {
           const raw = fs.readFileSync(p, 'utf8');
           try { return JSON.parse(raw); } catch { /* not JSON — try require below */ }
         }
-        // eslint-disable-next-line import/no-dynamic-require, global-require
+        // The config file is resolved at run time, so this require is dynamic by design.
+        // The disable named `import/no-dynamic-require` too — a rule from a plugin this repo does
+        // not install, which eslint reports as an ERROR for the rule not existing. A disable
+        // comment for a rule nobody loaded silences nothing and fails the lint gate itself.
+        // eslint-disable-next-line global-require
         const mod = require(p);
         if (mod && typeof mod === 'object') return mod.default && typeof mod.default === 'object' ? mod.default : mod;
       } catch { /* unreadable — keep looking, then report UNKNOWN */ }

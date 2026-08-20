@@ -1,42 +1,32 @@
 {
-  "_comment": "Codeline-specific gotchas, injected verbatim into agent prompts as authoritative. Every fact carries a `source`: where in that codeline the claim is OBSERVABLE, so it can be re-checked and expired. A fact whose source cannot be named does not belong here. On 2026-08-03 an unverified third-party API claim was written into this file by an assistant session; it reached three writers and the reviewer as fact and caused correct work to be rejected across all three codelines. Fact text is unchanged from the entries that survived that audit.",
-  "gotransit": {
-    "facts": [
-      {
-        "text": "Local dev/pre-commit hooks require real Contentstack env vars (CONTENTSTACK_API_KEY, CONTENTSTACK_DELIVERY_TOKEN, CONTENTSTACK_ENVIRONMENT, CONTENTSTACK_BRANCH) to be set — next.config.js throws 'Missing required environment variables' at import time if they're absent, which breaks tsc/next-lint inside the husky pre-commit hook even when the source change itself is correct.",
-        "source": "next.gotransit.com/next.config.js — the import-time env assertion; observed breaking the husky pre-commit hook during a run"
-      },
-      {
-        "text": "Date/locale tests assert UTC-rendered dates (this project's CI runs in UTC) — running with a non-UTC TZ produces off-by-one-day test failures unrelated to any real code change.",
-        "source": "next.gotransit.com — the codeline's own date assertions plus its CI TZ setting"
-      }
-    ]
-  },
-  "upexpress": {
-    "facts": [
-      {
-        "text": "Local dev/pre-commit hooks require real Contentstack env vars (CONTENTSTACK_API_KEY, CONTENTSTACK_DELIVERY_TOKEN, CONTENTSTACK_ENVIRONMENT, CONTENTSTACK_BRANCH) to be set — next.config.js throws 'Missing required environment variables' at import time if they're absent, which breaks tsc/next-lint inside the husky pre-commit hook even when the source change itself is correct.",
-        "source": "next.upexpress.com/next.config.js — the import-time env assertion; observed breaking the husky pre-commit hook during a run"
-      },
-      {
-        "text": "Date/locale tests assert UTC-rendered dates (this project's CI runs in UTC) — running with a non-UTC TZ produces off-by-one-day test failures unrelated to any real code change.",
-        "source": "next.upexpress.com — the codeline's own date assertions plus its CI TZ setting"
-      },
-      {
-        "text": "@metrolinx/cx-shared is resolved from a local override (npm pack + file: install) when the GitHub Packages registry is unreachable — a direct directory reference instead of a packed tarball pulls in cx-shared's own node_modules and causes a dual-React 'Invalid hook call' failure.",
-        "source": "next.upexpress.com/package.json — the file: dependency reference for @metrolinx/cx-shared; the dual-React failure was observed directly"
-      }
-    ]
-  },
+  "_what": "What each codeline IS and what an agent working inside it needs to know that the source does not say. Produced by the codeline-discovery agent during THIS run and rewritten every run — never accumulated, so nothing here is older than the run that wrote it. The engine splits this per codeline into each worktree's .epam/.",
+  "_shape": "Codeline names are TOP-LEVEL keys, because the engine extracts one with jq '.[$cl]'. Nesting them under another key parses fine and yields nothing for every codeline.",
   "metrolinx": {
+    "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com",
     "facts": [
       {
-        "text": "Local dev/pre-commit hooks require real Contentstack env vars (CONTENTSTACK_API_KEY, CONTENTSTACK_DELIVERY_TOKEN, CONTENTSTACK_ENVIRONMENT, CONTENTSTACK_BRANCH) to be set — next.config.js throws 'Missing required environment variables' at import time if they're absent, which breaks tsc/next-lint inside the husky pre-commit hook even when the source change itself is correct.",
-        "source": "next.metrolinx.com/next.config.js — the import-time env assertion; observed breaking the husky pre-commit hook during a run"
+        "text": "The pretest script runs 'npm run build:config' which uses esbuild to compile next.config.source.ts into next.config.js; tests will fail if this step hasn't run because next/jest loads next.config.js.",
+        "source": "package.json scripts: \"pretest\": \"npm run build:config\", \"build:config\": \"esbuild next.config.source.ts --bundle --outfile=next.config.js --platform=node --external:./node_modules/* --target=es2020 --minify\""
       },
       {
-        "text": "Date/locale tests assert UTC-rendered dates (this project's CI runs in UTC) — running with a non-UTC TZ produces off-by-one-day test failures unrelated to any real code change.",
-        "source": "next.metrolinx.com — the codeline's own date assertions plus its CI TZ setting"
+        "text": "The build throws an error and aborts if CLOUDINARY_DOMAIN or CLOUDINARY_CLOUDNAME environment variables are not set (except in test env).",
+        "source": "next.config.source.ts: if (!CLOUDINARY_DOMAIN || !CLOUDINARY_CLOUDNAME) { throw new Error(\"Missing required environment variables\"); }"
+      },
+      {
+        "text": "Jest enforces a global coverage threshold of 60% for branches, functions, lines, and statements; 'npm run test:coverage-check' will fail if any metric drops below 60%.",
+        "source": "jest.config.js: coverageThreshold: { global: { branches: 60, functions: 60, lines: 60, statements: 60 } }"
+      },
+      {
+        "text": "Commit messages must follow Jira-style conventions enforced by commitlint-plugin-jira-rules with extends 'jira'; non-conforming commits are rejected by the husky hook.",
+        "source": "commitlint.config.js: module.exports = { plugins: [\"commitlint-plugin-jira-rules\"], extends: [\"jira\"] }"
+      },
+      {
+        "text": "lint-staged runs 'npm run check-types' (tsc), eslint, prettier, and stylelint on staged files before a commit is allowed through.",
+        "source": ".lintstagedrc.js"
+      },
+      {
+        "text": "Node 22.x is required; other versions may not work.",
+        "source": "package.json: engines: { node: \"22.x\" }"
       }
     ]
   }

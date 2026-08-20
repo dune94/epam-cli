@@ -236,9 +236,12 @@ const ALLOW: Record<string, string> = {
   'orchestrations/scripts/claude.sh#15f48a1c6038':
     'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
     + 'prompt text; it is not prompt text, and no model receives it.',
-  'orchestrations/scripts/claude.sh#225a59b88db5':
-    'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
-    + 'prompt text; it is not prompt text, and no model receives it.',
+  'orchestrations/scripts/claude.sh#f9b33d43266b':
+    'The shell pipeline that EXTRACTS quoted string invariants from the acceptance criteria and '
+    + 'formats them as a list. Its output becomes a template value (__STRING_LIST__); the pipeline '
+    + 'itself is text processing, not prompt text. Re-keyed 2026-08-19: the block changed when its '
+    + 'values file moved to jq_vals, and the key is a content hash, which is the point — an edited '
+    + 'block loses its exemption and has to be re-explained rather than silently keeping it.',
   'orchestrations/scripts/claude.sh#29cd61ddd376':
     'A python pipeline that TRIMS an amendment to its most recent entries. It processes '
     + 'prompt text; it is not prompt text, and no model receives it.',
@@ -281,30 +284,15 @@ const ALLOW: Record<string, string> = {
   'orchestrations/scripts/run-agent-orchestration.sh#0df4a51b79cf':
     'Usage text printed to a human operator on a bad invocation. It reaches a terminal, '
     + 'never a model.',
-  'orchestrations/scripts/run-agent-orchestration.sh#3604cccfdc29':
-    'A JSON config file written to disk for a codeline. Data the engine reads back, not '
-    + 'instructions given to an agent.',
-  'orchestrations/scripts/run-agent-orchestration.sh#531a929bc126':
-    'A JSON config file written to disk for a codeline. Data the engine reads back, not '
-    + 'instructions given to an agent.',
+  'orchestrations/scripts/preflight-static.sh#6a43ac38a0ba':
+    'A node -e scanner program the pre-flight runs over engine source. It is executed by '
+    + 'node and its output is read by the shell; no model ever sees it.',
   'orchestrations/scripts/test/test-epam-providers.sh#5304c244046b':
     'A test fixture: a stub script written to disk so a test runs without the real binary. '
     + 'Executed, never sent to a model.',
   'orchestrations/scripts/test/test-epam-providers.sh#d8a768c48c03':
     'A test fixture: a stub script written to disk so a test runs without the real binary. '
     + 'Executed, never sent to a model.',
-  'orchestrations/scripts/tier3-skyscanner-app-run.sh#3604cccfdc29':
-    'A JSON config file written to disk for a codeline. Data the engine reads back, not '
-    + 'instructions given to an agent.',
-  'orchestrations/scripts/tier3-skyscanner-app-run.sh#531a929bc126':
-    'A JSON config file written to disk for a codeline. Data the engine reads back, not '
-    + 'instructions given to an agent.',
-  'orchestrations/scripts/tier3-travel-app-run.sh#531a929bc126':
-    'A JSON config file written to disk for a codeline. Data the engine reads back, not '
-    + 'instructions given to an agent.',
-  'orchestrations/scripts/tier3-travel-app-run.sh#ff1b10a652fb':
-    'A JSON config file written to disk for a codeline. Data the engine reads back, not '
-    + 'instructions given to an agent.',
   'orchestrations/scripts/update-cost-forecasts.sh#a1a0b8b48d07':
     'Usage text printed to a human operator on a bad invocation. It reaches a terminal, '
     + 'never a model.',

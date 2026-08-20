@@ -60,7 +60,7 @@ set -e
 _render_change_reviewer() {
     local _story="$1" _change_type="$2" _evidence="$3"
     local _cr_vals; _cr_vals=$(mktemp "${TMPDIR:-/tmp}/change-reviewer-vals-XXXXXX.json")
-    jq -n --arg story "$_story" --arg ct "$_change_type" \
+    jq_vals --arg story "$_story" --arg ct "$_change_type" \
           --rawfile ev <(printf '%s' "$_evidence") \
           '{"__STORY__":$story,"__CHANGE_TYPE__":$ct,"__EVIDENCE__":$ev}' > "$_cr_vals" 2>/dev/null
     local _out
@@ -76,6 +76,67 @@ _render_change_reviewer() {
 # Runs the project's declared check (.epam/verification.json) via the verification plugin.
 # The engine names no tool, extension, directory or runtime path. Undeclared -> non-zero with a
 # reason, never a silent pass.
+# ── The codeline's OWN test runner ────────────────────────────────────────────
+#
+# This file carried 40 executable `vitest` references and zero `jest` ones. metrolinx runs jest, so
+# on that codeline the post-repair re-verification skipped silently, the review oracle skipped, and
+# Step 19 executed a binary that does not exist and reported "vitest: FAIL — fix test failures
+# before review proceeds": a missing binary reported as failing tests.
+#
+# codeline-ecosystem.js already answers this from the repository itself. The runner is a fact of
+# the codeline, never of the engine.
+_codeline_test_command() {
+    local _root="${1:-$PROJECT_ROOT}"
+    [ -n "$_root" ] || return 0
+    local _facts
+    _facts=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/codeline-ecosystem.js" "$_root" 2>/dev/null) || return 0
+    [ -n "$_facts" ] || return 0
+    printf '%s' "$_facts" | python3 "$SCRIPT_DIR/lib/handlers/json-field.py" testCommand 2>/dev/null || true
+}
+
+# ── Failing test files, whatever printed them ─────────────────────────────────
+#
+# The COMMAND at Step 4.5 was genericised to the codeline's declared testCommand; the PARSER was
+# left in vitest's output format (`^ FAIL `, `^ ❯ `, `^ +→ `). On a jest repo nothing matched, so
+# no failing file was ever named, no bug-fix story could be created, and the run reported
+# "Could not parse failing test files". Half the fix is not the fix.
+#
+# Both runners print FAIL followed by the path; jest indents differently and uses ● for the
+# assertion. Matching on the FAIL line alone covers both without encoding either as the truth.
+_parse_failing_test_files() {
+    printf '%s\n' "$1" \
+        | grep -aE '^[[:space:]]*(FAIL|✕|×)[[:space:]]+' \
+        | sed -E 's/^[[:space:]]*(FAIL|✕|×)[[:space:]]+//' \
+        | awk '{print $1}' \
+        | grep -aE '\.[A-Za-z0-9]+$' \
+        | sort -u
+}
+
+# _halt_recovery_state <story_id> — report the recovery state ACTUALLY observed for this story.
+#
+# The halt used to assert "failed after its retries and self-heal completed" and "recovery is
+# exhausted" unconditionally. Live metrolinx AMSD-2041, 2026-08-19: a gate failed one story at
+# attempt 2 of 12, the ladder had not left its first rung, and the writer was mid-way through
+# addressing the reviewer's findings — and the run reported exhaustion. That message is the
+# evidence an operator reads when deciding whether to retry, and it said the opposite of the truth.
+#
+# HALTING IS STILL THE MANDATE: let recovery run, then stop. What must not happen is CLAIMING
+# exhaustion without checking. story_ladder_exhausted() already existed and was already used
+# elsewhere in this file; the halt simply never asked it.
+_halt_recovery_state() {
+    local _story="${1:-}"
+    local _used _max="${MAX_RETRIES:-11}"
+    _used="$(read_story_retry_count "${LOG_DIR:-}" "$_story" 2>/dev/null || echo 0)"
+    case "$_used" in (''|*[!0-9]*) _used=0 ;; esac
+    if story_ladder_exhausted "${LOG_DIR:-}" "$_story" "$_max" 2>/dev/null; then
+        error "[orch]   recovery is exhausted for '${_story}' — ${_used} of $((_max + 1)) attempt(s) used and the model ladder reached its top rung."
+        error "[orch]   Another lane would reproduce the same failure at full ladder price."
+    else
+        error "[orch]   recovery was NOT exhausted for '${_story}': ${_used} of $((_max + 1)) attempt(s) used, ladder still below its top rung."
+        error "[orch]   The story failed on a gate verdict, not on running out of attempts — read the last gate message before assuming the work cannot converge."
+    fi
+}
+
 _run_project_verification() {
     local _root="${1:-$PROJECT_ROOT}"
     local _auto="${AUTOMATION_DIR:-$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")}"
@@ -182,6 +243,11 @@ source "$SCRIPT_DIR/lib/run-checkpoint.sh"
 # shellcheck source=lib/git-ops.sh
 source "$SCRIPT_DIR/lib/git-ops.sh"
 source "$SCRIPT_DIR/lib/story-retry-state.sh"
+# jq_vals — prompt values files whose content never becomes an argv entry.
+# Placed with the other library sources, NOT beside SCRIPT_DIR: the path-resolution
+# block is lifted verbatim by tests that build a minimal script tree, and a source
+# line inside it makes those probes fail on a library they have no reason to carry.
+source "$SCRIPT_DIR/lib/jq-vals.sh"
 
 # Load timeout config from EPAM_PROJECT_CONFIG_DIR/llm-settings.json BEFORE
 # any call to the watchdog wrapper defined further below — its `timeout`
@@ -706,6 +772,7 @@ print_step_checklist() {
     _checklist_row "22d" "Mutant hunter"            "$(is_truthy "${SKIP_TESTING_GATES:-}" && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
     _checklist_row "22e" "Fuzz-weaver"              "$(is_truthy "${SKIP_TESTING_GATES:-}" && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
     _checklist_row "22f" "Perf sentinel"            "$(is_truthy "${SKIP_TESTING_GATES:-}" && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
+    _checklist_row "22g" "Runtime boundary"         "$(is_truthy "${SKIP_TESTING_GATES:-}" && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
     _checklist_row "23"  "Browser E2E routing"     "$([ "${SKIP_BROWSER_E2E_ROUTING:-false}" = "true" ] && echo SKIP || echo COND)" "SKIP_BROWSER_E2E_ROUTING=true"
 
     local skips=0
@@ -737,18 +804,86 @@ seed_runtime_logs() {
 }
 
 # Detect the Node.js binary — checks fnm, nvm, and PATH in order.
+# ── Which Node the CODELINE requires, and which one is installed ─────────────
+#
+# detect_node() listed four literal paths (v20.20.2 / v20.20.0 under fnm and nvm) and checked them
+# BEFORE whatever `node` is on PATH. next.metrolinx.com declares Node 22 in three places — .nvmrc,
+# package.json engines, and the .epam/codeline-facts.json this pipeline generated itself, which
+# says "Node 22.x is required; other versions may not work" — and the engine ran its 245-file jest
+# suite under 20 anyway. Any failure then reads as a defect in the story's code, and no env var
+# existed to correct it.
+#
+# The requirement is a fact of the CODELINE. The runtime is DISCOVERED from what is installed.
+# Neither is a literal here: replacing the v20 list with a v22 list would just move the defect.
+_codeline_node_requirement() {
+    local _root="${1:-${PROJECT_ROOT:-}}"
+    [ -n "$_root" ] || return 0
+    # .nvmrc exists for exactly this purpose, so it is asked first.
+    if [ -f "$_root/.nvmrc" ]; then
+        head -1 "$_root/.nvmrc" | sed -E 's/^[[:space:]]*v?//; s/[^0-9].*$//' | tr -d '[:space:]'
+        return 0
+    fi
+    # Otherwise the manifest's own engines field. Major only: a codeline pinning a patch is
+    # pinning its own business, and the engine matches what it can actually satisfy.
+    if [ -f "$_root/package.json" ] && command -v jq >/dev/null 2>&1; then
+        jq -r '.engines.node // ""' "$_root/package.json" 2>/dev/null \
+            | sed -E 's/[^0-9]*([0-9]+).*/\1/' | tr -d '[:space:]'
+        return 0
+    fi
+    printf ''
+}
+
+# detect_node [codeline_root]
+#
+# Install ROOTS are locations of standard version managers, overridable with
+# EPAM_NODE_INSTALL_ROOTS (colon-separated). Paths, not versions — adding a Node release requires
+# no edit here.
 detect_node() {
-    local candidates=(
-        "$HOME/.local/share/fnm/node-versions/v20.20.2/installation/bin/node"
-        "$HOME/.local/share/fnm/node-versions/v20.20.0/installation/bin/node"
-        "$HOME/.nvm/versions/node/v20.20.2/bin/node"
-        "$HOME/.nvm/versions/node/v20.20.0/bin/node"
-        "$(command -v node 2>/dev/null || true)"
-    )
-    local c
-    for c in "${candidates[@]}"; do
-        [ -n "$c" ] && [ -x "$c" ] && echo "$c" && return 0
+    local _root="${1:-${PROJECT_ROOT:-}}"
+    local _want; _want="$(_codeline_node_requirement "$_root" 2>/dev/null)"
+    # A codeline that declares nothing inherits the ENGINE's own declaration — this repo states it
+    # in .nvmrc and package.json engines, so it is read the same way rather than written here.
+    # Without this, "declares nothing" would mean "highest installed", silently moving a green
+    # codeline (mock3 declares neither) onto a major nobody chose.
+    if [ -z "$_want" ]; then
+        _want="$(_codeline_node_requirement "${EPAM_ENGINE_ROOT:-$SCRIPT_DIR/../..}" 2>/dev/null)"
+    fi
+    local _roots="${EPAM_NODE_INSTALL_ROOTS:-$HOME/.local/share/fnm/node-versions:$HOME/.nvm/versions/node}"
+
+    local _cands="" _d _vd _ver _bin _major
+    local _oifs="$IFS"; IFS=':'
+    for _d in $_roots; do
+        IFS="$_oifs"
+        [ -d "$_d" ] || continue
+        for _vd in "$_d"/v*; do
+            [ -d "$_vd" ] || continue
+            _ver="$(basename "$_vd")"
+            _bin=""
+            [ -x "$_vd/bin/node" ] && _bin="$_vd/bin/node"
+            [ -z "$_bin" ] && [ -x "$_vd/installation/bin/node" ] && _bin="$_vd/installation/bin/node"
+            [ -n "$_bin" ] || continue
+            _major="${_ver#v}"; _major="${_major%%.*}"
+            if [ -n "$_want" ] && [ "$_major" != "$_want" ]; then continue; fi
+            _cands="${_cands}${_ver}\t${_bin}\n"
+        done
+        IFS=':'
     done
+    IFS="$_oifs"
+
+    # Highest version wins within whatever survived the requirement filter.
+    if [ -n "$_cands" ]; then
+        printf '%b' "$_cands" | sort -V | tail -1 | cut -f2
+        return 0
+    fi
+
+    # PATH node only when it SATISFIES the requirement. Handing back a runtime the codeline said
+    # will not work is how a green suite stops meaning anything.
+    local _p; _p="$(command -v node 2>/dev/null || true)"
+    if [ -n "$_p" ] && [ -x "$_p" ]; then
+        if [ -z "$_want" ]; then echo "$_p"; return 0; fi
+        local _pv; _pv="$("$_p" --version 2>/dev/null)"; _pv="${_pv#v}"; _pv="${_pv%%.*}"
+        [ "$_pv" = "$_want" ] && { echo "$_p"; return 0; }
+    fi
     echo ""
     return 1
 }
@@ -865,144 +1000,15 @@ resolve_codeline_node() {
 # block every other stack's install). Returns 0 if at least one recognized
 # manifest was found and its handler didn't hard-fail; 1 if no manifest was
 # recognized, or the one that WAS found failed outright.
-detect_and_install_dependencies() {
-    local codeline_root="$1"
-    local node_bin="$2"
-    local ran_any=0
-    local ok=1
-
-    if [ -f "$codeline_root/package.json" ]; then
-        ran_any=1
-        local npm_bin
-        npm_bin="$(dirname "$node_bin")/npm"
-        if [ ! -x "$npm_bin" ]; then
-            warning "  [deps-install] npm not found alongside $node_bin"
-            ok=0
-        else
-            # WHICH package manager is the PROJECT's answer. Its `packageManager`
-            # field first (the standard corepack declaration), then the lockfile
-            # it committed. Read, never assumed.
-            local pm_name=""
-            pm_name="$("$node_bin" -e '
-              try {
-                const p = JSON.parse(require("fs").readFileSync(process.argv[1] + "/package.json", "utf8"));
-                process.stdout.write(String(p.packageManager || "").split("@")[0]);
-              } catch (e) { /* no declaration */ }
-            ' "$codeline_root" 2>/dev/null)"
-            if [ -z "$pm_name" ]; then
-                [ -f "$codeline_root/pnpm-lock.yaml" ] && pm_name="pnpm"
-                [ -z "$pm_name" ] && [ -f "$codeline_root/yarn.lock" ] && pm_name="yarn"
-            fi
-
-            local pm_bin="$npm_bin"
-            if [ -n "$pm_name" ] && [ "$pm_name" != "npm" ] && command -v "$pm_name" &>/dev/null; then
-                pm_bin="$(command -v "$pm_name")"
-            fi
-
-            # DESTRUCTIVE OR NOT is OUR policy, and the default is: never.
-            #
-            # This used to select `ci` whenever a lockfile existed. `npm ci`
-            # DELETES node_modules before installing, so on 2026-07-28 a repair
-            # wiped a working 1,530-package install, hit a 401 on a private
-            # dependency, aborted, and left the codeline with an EMPTY
-            # node_modules — strictly worse than it found it. The warning below
-            # already said "often a private-registry auth wall": the failure was
-            # anticipated and the destructive command ran first anyway.
-            #
-            # We did not create these repositories and cannot restore what we
-            # remove. A caller that owns its tree can opt in.
-            local pm_cmd="install"
-            [ "${DEPS_CLEAN_INSTALL:-0}" = "1" ] && [ -f "$codeline_root/package-lock.json" ] && pm_cmd="ci"
-
-            # What was there before, so the repair can be judged rather than
-            # trusted. A repair that reduces the tree must not be handed on as a
-            # working install.
-            local _deps_before=0
-            [ -d "$codeline_root/node_modules" ] && _deps_before=$(find "$codeline_root/node_modules" -maxdepth 1 -mindepth 1 2>/dev/null | wc -l)
-
-            local repair_log; repair_log=$(mktemp)
-            if [ "$pm_bin" = "$npm_bin" ]; then
-                (cd "$codeline_root" && "$node_bin" "$npm_bin" "$pm_cmd" --no-audit --no-fund) > "$repair_log" 2>&1
-            else
-                (cd "$codeline_root" && "$pm_bin" "$pm_cmd") > "$repair_log" 2>&1
-            fi
-            local _install_rc=$?
-            local _deps_after=0
-            [ -d "$codeline_root/node_modules" ] && _deps_after=$(find "$codeline_root/node_modules" -maxdepth 1 -mindepth 1 2>/dev/null | wc -l)
-
-            if [ "$_install_rc" -eq 0 ]; then
-                success "  [deps-install] install ($pm_cmd via $(basename "$pm_bin")) succeeded in $codeline_root"
-            else
-                warning "  [deps-install] install FAILED in $codeline_root — tail below (often a private-registry auth wall):"
-                tail -10 "$repair_log" >&2
-                ok=0
-            fi
-
-            # Did the repair leave LESS than it found? Silence here is how a
-            # working codeline became an empty one and the next gate was handed
-            # the wreckage as if it were a tree.
-            if [ "$_deps_after" -lt "$_deps_before" ]; then
-                error "  [deps-install] REPAIR DESTROYED WHAT IT FOUND in $codeline_root: $_deps_before entries -> $_deps_after"
-                error "    The codeline is now in a worse state than before this ran, and its gates cannot run."
-                error "    Reinstall its dependencies before relying on any result from this run."
-                ok=0
-            fi
-            rm -f "$repair_log"
-        fi
-    fi
-
-    if [ -f "$codeline_root/Pipfile" ] && command -v pipenv &>/dev/null; then
-        ran_any=1
-        (cd "$codeline_root" && pipenv install --dev --quiet) 2>&1 || { warning "  [deps-install] pipenv install failed in $codeline_root"; ok=0; }
-    elif { [ -f "$codeline_root/requirements.txt" ] || [ -f "$codeline_root/pyproject.toml" ]; } \
-         && { command -v pip3 &>/dev/null || command -v pip &>/dev/null; }; then
-        ran_any=1
-        local pip_bin; pip_bin=$(command -v pip3 || command -v pip)
-        if [ -f "$codeline_root/requirements.txt" ]; then
-            (cd "$codeline_root" && "$pip_bin" install --quiet -r requirements.txt) 2>&1 \
-              || { warning "  [deps-install] pip install failed in $codeline_root"; ok=0; }
-        else
-            (cd "$codeline_root" && "$pip_bin" install --quiet -e .) 2>&1 \
-              || { warning "  [deps-install] pip install (pyproject) failed in $codeline_root"; ok=0; }
-        fi
-    fi
-
-    if [ -f "$codeline_root/Cargo.toml" ] && command -v cargo &>/dev/null; then
-        ran_any=1
-        (cd "$codeline_root" && cargo fetch --quiet) 2>&1 || { warning "  [deps-install] cargo fetch failed in $codeline_root"; ok=0; }
-    fi
-
-    if [ -f "$codeline_root/go.mod" ] && command -v go &>/dev/null; then
-        ran_any=1
-        (cd "$codeline_root" && go mod download) 2>&1 || { warning "  [deps-install] go mod download failed in $codeline_root"; ok=0; }
-    fi
-
-    if [ -f "$codeline_root/pom.xml" ] && command -v mvn &>/dev/null; then
-        ran_any=1
-        (cd "$codeline_root" && mvn -q dependency:resolve) 2>&1 || { warning "  [deps-install] mvn dependency:resolve failed in $codeline_root"; ok=0; }
-    fi
-
-    if { [ -f "$codeline_root/build.gradle" ] || [ -f "$codeline_root/build.gradle.kts" ]; } && command -v gradle &>/dev/null; then
-        ran_any=1
-        (cd "$codeline_root" && ./gradlew dependencies --quiet) 2>&1 || { warning "  [deps-install] gradle dependencies failed in $codeline_root"; ok=0; }
-    fi
-
-    if [ -f "$codeline_root/Gemfile" ] && command -v bundle &>/dev/null; then
-        ran_any=1
-        (cd "$codeline_root" && bundle install --quiet) 2>&1 || { warning "  [deps-install] bundle install failed in $codeline_root"; ok=0; }
-    fi
-
-    if [ -f "$codeline_root/composer.json" ] && command -v composer &>/dev/null; then
-        ran_any=1
-        (cd "$codeline_root" && composer install --quiet --no-interaction) 2>&1 || { warning "  [deps-install] composer install failed in $codeline_root"; ok=0; }
-    fi
-
-    if [ "$ran_any" -eq 0 ]; then
-        warning "  [deps-install] no recognized manifest found in $codeline_root — nothing to install"
-        return 1
-    fi
-    [ "$ok" -eq 1 ]
-}
+# DEPENDENCY PROVISIONING LIVES IN lib/deps-install.sh.
+#
+# It was 138 lines here: nine `if` branches, one per ecosystem the engine happened to know, each
+# with a hardcoded package-manager command. A tenth ecosystem meant a tenth branch inside this
+# file. The ecosystem facts now come from the providers via lib/handlers/install-plan.js; the
+# policy that is ours — clean installs are opt-in, and a repair that leaves less than it found is
+# destruction — stayed, in the library, where it can be tested without sourcing 11,000 lines.
+# shellcheck source=lib/deps-install.sh
+. "$SCRIPT_DIR/lib/deps-install.sh"
 
 # ensure_node_modules_healthy <codeline_root> <node_bin> <test_bin>
 # Detects a missing or CORRUPTED dependency install (not just "missing") and
@@ -1392,7 +1398,7 @@ _brownfield_gate_scope() {
     # RENDERED FROM THE TEMPLATE LAYER. Values through a FILE, never argv: the file list is
     # unbounded and argv is capped at ARG_MAX.
     local _bs_vals; _bs_vals=$(mktemp "${TMPDIR:-/tmp}/qa-brownfield-scope-XXXXXX.json")
-    jq -n --arg gate "$_gate" \
+    jq_vals --arg gate "$_gate" \
           --arg files "${_files:-  (none recorded — fall back to the injected diff)}" \
           '{"__GATE__":$gate,"__FILES__":$files}' > "$_bs_vals"
     render_engine_prompt qa-brownfield-scope "$_bs_vals" || true
@@ -1458,7 +1464,7 @@ _lint_fix_findings_directly() {
         info "  [lint-fix] repairing ${_lf_findings_count:-$(printf '%s\n' "$_lf_findings" | wc -l | tr -d ' ')} finding(s) in place (attempt ${_lf_attempt}/${_lf_max})"
 
         _cp_vals=$(mktemp "${TMPDIR:-/tmp}/lint-fixer-vals-XXXXXX.json")
-        jq -n \
+        jq_vals \
               --arg lf_findings "${_lf_findings}" \
               --arg project_root "${PROJECT_ROOT}" \
               --arg lf_files "${_lf_files}" \
@@ -1488,9 +1494,14 @@ _lint_fix_findings_directly() {
         fi
 
         # 3. the tests still pass — a repair must never weaken the proof
-        if [ "$_lf_ok" = "1" ] && [ -n "${_node_bin:-}" ] && [ -x "$PROJECT_ROOT/node_modules/.bin/vitest" ]; then
-            ( cd "$PROJECT_ROOT" && timeout 600 "$_node_bin" ./node_modules/.bin/vitest run ) \
-                >/dev/null 2>&1 || _lf_ok=0
+        # The codeline's own command — a `-x .bin/vitest` guard skipped this entirely on a jest
+        # repo and left _lf_ok=1, accepting a repair without re-running its proof.
+        local _lf_test_cmd; _lf_test_cmd="$(_codeline_test_command "$PROJECT_ROOT")"
+        if [ "$_lf_ok" = "1" ] && [ -n "$_lf_test_cmd" ]; then
+            ( cd "$PROJECT_ROOT" && timeout 600 sh -c "$_lf_test_cmd" ) >/dev/null 2>&1 || _lf_ok=0
+        elif [ "$_lf_ok" = "1" ]; then
+            warning "  loop-fix: ${PROJECT_ROOT} declares no test command — repair NOT re-verified"
+            _lf_ok=0
         fi
 
         if [ "$_lf_ok" = "1" ]; then
@@ -2020,7 +2031,7 @@ run_story_recovery_analyst() {
     _log_tail=$(cat "$log_file" 2>/dev/null || echo "")
 
     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/story-recovery-analyst-vals-XXXXXX.json")
-    jq -n \
+    jq_vals \
           --arg story_json "${_story_json}" \
           --arg log_tail "${_log_tail}" \
           --arg story_id "${story_id}" \
@@ -2033,7 +2044,7 @@ run_story_recovery_analyst() {
         local _sra_prompt="$_prompt"
         if [ "$_sra_attempt" -ge 1 ]; then
           _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
-          jq -n \
+          jq_vals \
                 --arg prompt "$_prompt" \
                 '{"__PROMPT__":$prompt}' > "$_rp_vals"
           _sra_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" story_recovery_analyst)"
@@ -2898,7 +2909,7 @@ _run_codeline_bridge() {
   fi
 
   _cp_vals=$(mktemp "${TMPDIR:-/tmp}/codeline-bridge-vals-XXXXXX.json")
-  jq -n \
+  jq_vals \
         --arg bridge_profile "${_bridge_profile}" \
         --arg bridge_out "${_bridge_out}" \
         --arg bprd "${_bprd}" \
@@ -3176,62 +3187,33 @@ _run_codeline_loop() {
         warning "[orch] Could not resolve baseline branch '${_baseline_branch}' — gate diffs will use HEAD"
       fi
     fi
-    # Write .epam/ manifests if absent — these are consumed by run_dependency_check(),
-    # generate_story_contract(), and apply_known_fix() in claude.sh. The tier3 launcher
-    # writes them for canonical runs; the Jira codeline path must do the same so every
-    # codeline worktree gets the manifests regardless of how many codelines exist.
+    # THE CODELINE'S DECLARATION IS DETECTED, NEVER AUTHORED HERE.
+    #
+    # This wrote three .epam/ manifests from heredocs -- 80 lines asserting, of a repository the
+    # engine had never inspected, that its manifest is package.json, its sources are .ts/.tsx/.js,
+    # its vendor directory is node_modules, and that it must carry typescript, @types/node, vitest
+    # and tsx. Seventeen scripts read dependency-check.json as the codeline's OWN declaration, so
+    # fabricating it defeated every generic component downstream at the source: a non-Node codeline
+    # was handed a document saying it is TypeScript, in client-repo space, with facts nobody
+    # detected.
+    #
+    # lib/handlers/codeline-manifests.js assembles them from the provider whose manifest the
+    # repository actually carries. A codeline no provider recognises gets NOTHING and is reported
+    # -- an undeclared codeline is a state to surface, never one to invent an answer for.
     if [ ! -f "$_wt/.epam/dependency-check.json" ]; then
-      mkdir -p "$_wt/.epam"
-      cat > "$_wt/.epam/dependency-check.json" << 'DEPCHECK_EOF'
-{
-  "manifestFile": "package.json",
-  "manifestKeys": ["dependencies", "devDependencies"],
-  "scanFileExtensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
-  "importPattern": "from\\s+['\"]([^./][^'\"]*)['\"]|require\\(\\s*['\"]([^./][^'\"]*)['\"]\\s*\\)",
-  "installCommand": "npm install --save-dev {package}",
-  "ignorePackages": ["assert","buffer","child_process","cluster","crypto","dgram","dns","domain","events","fs","http","http2","https","net","os","path","perf_hooks","process","punycode","querystring","readline","repl","stream","string_decoder","timers","tls","tty","url","util","v8","vm","worker_threads","zlib","node:assert","node:buffer","node:child_process","node:crypto","node:events","node:fs","node:http","node:https","node:net","node:os","node:path","node:process","node:stream","node:url","node:util","node:vm","node:zlib"],
-  "requiredDevDependencies": ["typescript", "@types/node", "vitest", "tsx"],
-  "vendorDirs": ["node_modules"]
-}
-DEPCHECK_EOF
-      cat > "$_wt/.epam/contract-generation.json" << 'CONTRACTGEN_EOF'
-{
-  "language": "typescript",
-  "sourceExtensions": [".ts"],
-  "excludePattern": "\\.(test|spec)\\.ts$",
-  "interfacePattern": "export\\s+interface\\s+(\\w+)\\s*\\{([^}]*)\\}",
-  "classPattern": "export\\s+class\\s+(\\w+)\\s*(?:extends\\s+\\w+\\s*)?\\{",
-  "ctorPattern": "constructor\\s*\\(([^)]*)\\)",
-  "methodPattern": "^\\s*(?:public\\s+|private\\s+|protected\\s+)?(async\\s+)?(\\w+)\\s*\\(([^)]*)\\)\\s*(?::\\s*([^{;]+))?\\s*\\{",
-  "interfaceRenderTemplate": "export interface {{name}} {{{body}}}",
-  "classDeclarationTemplate": "export class {{className}} {\n  constructor({{ctorParams}});\n{{methodSignatures}}\n}",
-  "methodSignatureTemplate": "  {{asyncPrefix}}{{methodName}}({{params}}){{returnAnnotation}};",
-  "asyncPrefixKeyword": "async ",
-  "returnAnnotationPrefix": ": ",
-  "mockFactoryTemplate": "vi.mock('<import-path-to-{{className}}>', () => ({\n  {{className}}: vi.fn().mockImplementation(() => ({\n{{methodMocks}}\n  })),\n}));",
-  "mockMethodTemplateSync": "    {{methodName}}: vi.fn(),",
-  "mockMethodTemplateAsync": "    {{methodName}}: vi.fn().mockResolvedValue(undefined),",
-  "testFileExtensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
-  "testFilePattern": "\\.(test|spec)\\.[a-zA-Z0-9]+$",
-  "mockFactoryStartPattern": "vi\\.mock\\(\\s*['\"](\\.[^'\"]+)['\"]\\s*,\\s*\\(\\)\\s*=>\\s*\\(\\{",
-  "mockClassPattern": "(\\w+)\\s*:\\s*vi\\.fn\\(\\)\\.mockImplementation\\(\\(\\)\\s*=>\\s*\\(\\{",
-  "mockedMethodPattern": "^\\s*(\\w+)\\s*:",
-  "testFileAgentRole": "test-engineer"
-}
-CONTRACTGEN_EOF
-      cat > "$_wt/.epam/known-fixes.json" << 'KNOWNFIXES_EOF'
-[
-  {
-    "id": "vitest-pass-with-no-tests",
-    "symptomPattern": "(?:vitest|test).*(?:no test files|zero test files).*exit|exit.*1.*(?:no|zero) test files|passWithNoTests",
-    "targetFile": "vitest.config.ts",
-    "checkPattern": "passWithNoTests",
-    "insertAfterPattern": "test:\\s*\\{",
-    "insertText": "\n    passWithNoTests: true,"
-  }
-]
-KNOWNFIXES_EOF
-      log "[orch] Wrote .epam/ manifests to ${_wt} (dependency-check, contract-generation, known-fixes)"
+      local _clm _clm_rc=0
+      _clm=$("$NODE_BIN" "$SCRIPT_DIR/lib/handlers/codeline-manifests.js" "$_wt" 2>&1) || _clm_rc=$?
+      if [ "$_clm_rc" -ne 0 ]; then
+        warning "[orch] ${_wt}: no provider declares how this codeline is checked — .epam/ manifests NOT written"
+        printf '%s\n' "$_clm" | sed 's/^/    /' >&2
+      else
+        mkdir -p "$_wt/.epam"
+        printf '%s' "$_clm" | jq -r 'keys[]' | while IFS= read -r _mf; do
+          [ -z "$_mf" ] && continue
+          printf '%s' "$_clm" | jq --arg k "$_mf" '.[$k]' > "$_wt/.epam/$_mf"
+        done
+        log "[orch] Wrote .epam/ manifests to ${_wt} from the resolved ecosystem provider"
+      fi
     fi
 
     # ── Plugin provisioning: config-driven, zero project-specific hardcoding ──
@@ -3730,9 +3712,9 @@ KNOWNFIXES_EOF
     # run died. Nothing is guessed about WHY it failed: a lane that reached here
     # exhausted every recovery the pipeline has.
     if [ "$_cl_failed" = "1" ]; then
-      error "[orch] HALT: codeline '${_cl}' failed after its retries and self-heal completed."
-      error "[orch]   Not starting the remaining codeline(s) — recovery is exhausted, so"
-      error "[orch]   another lane would reproduce the same failure at full ladder price."
+      error "[orch] HALT: codeline '${_cl}' failed."
+      _halt_recovery_state "${_cl_failed_story:-}"
+      error "[orch]   Not starting the remaining codeline(s)."
       break
     fi
   done
@@ -5131,20 +5113,22 @@ run_pre_phase_assessment() {
     local _pfa_facts_file; _pfa_facts_file=$(mktemp "${TMPDIR:-/tmp}/pfa-facts-XXXXXX.txt")
     printf '%s' "${_pfa_facts:-}" > "$_pfa_facts_file"
     _ap_vals=$(mktemp "${TMPDIR:-/tmp}/post-failure-analyst-vals-XXXXXX.json")
-    jq -n \
+    jq_vals \
           --rawfile pfa_facts "$_pfa_facts_file" \
           --arg pfa_tool_budget "$_pfa_tool_budget" \
           --arg phase_id "$phase_id" \
           --arg prd_rel "$prd_rel" \
           --arg profiles_rel "$profiles_rel" \
           '{"__PFA_FACTS__":$pfa_facts,"__PFA_TOOL_BUDGET__":$pfa_tool_budget,"__PHASE_ID__":$phase_id,"__PRD_REL__":$prd_rel,"__PROFILES_REL__":$profiles_rel}' > "$_ap_vals"
+    # The codeline's own facts — this template declares them and nothing supplied them.
+    merge_stack_facts "$_pfa_facts_file" "${PROJECT_ROOT:-}"
     assessment_prompt="$(render_engine_prompt post-failure-analyst "$_ap_vals")"
     rm -f "$_ap_vals"
     rm -f "$_pfa_facts_file"
 
     # Append the phase-specific context
     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/phase-assessment-header-vals-XXXXXX.json")
-    jq -n \
+    jq_vals \
           --arg assessment_prompt "${assessment_prompt}" \
           --arg phase_id "${phase_id}" \
           --arg prd_rel "${PRD_REL}" \
@@ -5186,7 +5170,7 @@ run_pre_phase_assessment() {
         local _pfa_prompt_this_attempt="$assessment_prompt"
         if [ -n "$_pfa_corrective_note" ]; then
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/corrective-note-vals-XXXXXX.json")
-            jq -n \
+            jq_vals \
                   --arg pfa_prompt_this_attempt "${_pfa_prompt_this_attempt}" \
                   --arg pfa_corrective_note "${_pfa_corrective_note}" \
                   '{"__PFA_PROMPT_THIS_ATTEMPT__":$pfa_prompt_this_attempt,"__PFA_CORRECTIVE_NOTE__":$pfa_corrective_note}' > "$_cp_vals"
@@ -5438,7 +5422,7 @@ run_hybrid_precoordination() {
     touch "$MESSAGES_JSONL"
 
     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/hybrid-prephase-coordinator-vals-XXXXXX.json")
-    jq -n \
+    jq_vals \
           --arg phase_id "$phase_id" \
           --arg prd_rel "$prd_rel" \
           '{"__PHASE_ID__":$phase_id,"__PRD_REL__":$prd_rel}' > "$_cp_vals"
@@ -5454,7 +5438,7 @@ run_hybrid_precoordination() {
         local _hpc_prompt="$coord_prompt"
         if [ "$_hpc_attempt" -ge 1 ]; then
           _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
-          jq -n \
+          jq_vals \
                 --arg coord_prompt "$coord_prompt" \
                 '{"__COORD_PROMPT__":$coord_prompt}' > "$_rp_vals"
           _hpc_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" hybrid_prephase_coordinator)"
@@ -5827,7 +5811,7 @@ else
         _mc_role_file=$(mktemp "${TMPDIR:-/tmp}/mc-role-XXXXXX.txt")
         jq -r '.["prd-model-coordinator"] // ""' "$_mc_profiles_file" > "$_mc_role_file" 2>/dev/null || : > "$_mc_role_file"
         _cp_vals=$(mktemp "${TMPDIR:-/tmp}/prd-model-coordinator-vals-XXXXXX.json")
-        jq -n \
+        jq_vals \
               --rawfile profile "$_mc_role_file" \
               --arg mc_prd_target "$_mc_prd_target" \
               --arg mc_phase "$_mc_phase" \
@@ -5837,7 +5821,7 @@ else
         rm -f "$_mc_role_file"
         if [ -n "$_mc_corrective_note" ]; then
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/corrective-note-vals-XXXXXX.json")
-            jq -n \
+            jq_vals \
                   --arg mc_corrective_note "${_mc_corrective_note}" \
                   --arg mc_prompt "${_mc_prompt}" \
                   '{"__MC_CORRECTIVE_NOTE__":$mc_corrective_note,"__MC_PROMPT__":$mc_prompt}' > "$_cp_vals"
@@ -6246,10 +6230,11 @@ if [ -n "$main_stories" ]; then
             record_story_actual_cost "$story" "$LOG_DIR/main-${story}.log"
             if [ "$_story_exit" -ne 0 ]; then
                 _phase_story_failures=$((_phase_story_failures+1))
+                _phase_failed_stories="${_phase_failed_stories:-} $story"
                 "$SCRIPT_DIR/update-monitor.sh" story_fail "$story" "main" "exit $_story_exit" 2>/dev/null || true
             else
                 # Story reported success — verify TypeScript still compiles before moving on
-                story_tsc_gate "$story" || _phase_story_failures=$((_phase_story_failures+1))
+                story_tsc_gate "$story" || { _phase_story_failures=$((_phase_story_failures+1)); _phase_failed_stories="${_phase_failed_stories:-} $story"; }
                 "$SCRIPT_DIR/update-monitor.sh" story_complete "$story" "main" "" "${STORY_MODEL:-}" "${STORY_PROVIDER:-}" 2>/dev/null || true
             fi
             checkpoint_complete "$story"
@@ -6257,6 +6242,7 @@ if [ -n "$main_stories" ]; then
             validate_mid_execution_splits "$PHASE"
         }
         _phase_story_failures=0
+        _phase_failed_stories=""
         while IFS= read -r story; do
             [ -z "$story" ] && continue
             _run_one_main_story "$story"
@@ -6297,6 +6283,14 @@ if [ -n "$main_stories" ]; then
         if [ "$_phase_story_failures" -gt 0 ]; then
             step_emit "8" "fail" "Step 8: Main-branch stories"
             error "Phase '$PHASE': $_phase_story_failures story/stories failed — aborting phase"
+            # WHY it failed, not just that it did. Aborting is correct — the mandate is let
+            # recovery run, then halt — but a bare count cannot distinguish "the ladder is spent"
+            # from "a gate returned a verdict on attempt 2 of 12". Live metrolinx 2026-08-19 was
+            # the latter and was reported as the former, which is what stopped a converging run.
+            for _psf in $_phase_failed_stories; do
+                [ -n "$_psf" ] || continue
+                _halt_recovery_state "$_psf"
+            done
             exit 1
         fi
         step_emit "8" "pass" "Step 8: Main-branch stories"
@@ -6885,7 +6879,7 @@ else
             _sc_role=$(echo "$_sc_row" | jq -r '.role')
             _sc_note=$(echo "$_sc_row" | jq -r '.note')
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/skills-coordinator-vals-XXXXXX.json")
-            jq -n \
+            jq_vals \
                   --arg agent_profiles_file "${AGENT_PROFILES_FILE}" \
                   --arg sc_role "${_sc_role}" \
                   --arg sc_note "${_sc_note}" \
@@ -6906,7 +6900,7 @@ else
                 _sc_run_prompt="$_sc_prompt"
                 if [ "$_sc_attempt" -ge 1 ]; then
                   _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
-                  jq -n \
+                  jq_vals \
                         --arg agent_profiles_file "${AGENT_PROFILES_FILE}" \
                         --arg sc_prompt "$_sc_prompt" \
                         '{"__AGENT_PROFILES_FILE__":$agent_profiles_file,"__SC_PROMPT__":$sc_prompt}' > "$_rp_vals"
@@ -7011,7 +7005,7 @@ else
             _tc_before=""
             _tc_before=$(cat "$_tc_path" 2>/dev/null || true)
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/tools-coordinator-vals-XXXXXX.json")
-            jq -n \
+            jq_vals \
                   --arg tc_reason "${_tc_reason}" \
                   --arg tc_path "${_tc_path}" \
                   '{"__TC_REASON__":$tc_reason,"__TC_PATH__":$tc_path}' > "$_cp_vals"
@@ -7031,7 +7025,7 @@ else
                     _tc_bn_err=""
                     _tc_bn_err=$(bash -n "$_tc_path" 2>&1 || true)
                     _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
-                    jq -n \
+                    jq_vals \
                           --arg tc_bn_err "${_tc_bn_err}" \
                           --arg tc_tool "${_tc_tool}" \
                           --arg tc_prompt "$_tc_prompt" \
@@ -7212,10 +7206,18 @@ run_phase_assessment() {
     local _sap_guidance_file; _sap_guidance_file=$(mktemp "${TMPDIR:-/tmp}/sap-guidance-XXXXXX.txt")
     printf '%s' "${_skill_domain_guidance:-}" > "$_sap_guidance_file"
     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/skill-assessment-postphase-vals-XXXXXX.json")
-    jq -n \
+    # __PA_SUMMARY__ is the assessor's ONLY evidence — the template calls it "Pre-computed
+    # assessment data", and the code above refuses to continue without it ("there is nothing for
+    # the assessor to read"). It was computed, validated, and then never passed, so the render threw
+    # "missing values for: __PA_SUMMARY__" on the runs of 2026-08-19 and -20.
+    local _pa_summary_val_file; _pa_summary_val_file=$(mktemp "${TMPDIR:-/tmp}/pa-summary-XXXXXX.txt")
+    printf '%s' "${_pa_summary}" > "$_pa_summary_val_file"
+    jq_vals \
           --rawfile skill_domain_guidance "$_sap_guidance_file" \
+          --rawfile pa_summary "$_pa_summary_val_file" \
           --arg phase_id "$phase_id" \
-          '{"__SKILL_DOMAIN_GUIDANCE__":$skill_domain_guidance,"__PHASE_ID__":$phase_id}' > "$_cp_vals"
+          '{"__SKILL_DOMAIN_GUIDANCE__":$skill_domain_guidance,"__PA_SUMMARY__":$pa_summary,"__PHASE_ID__":$phase_id}' > "$_cp_vals"
+    rm -f "$_pa_summary_val_file"
     # EXIT STATUS IS THE CONTRACT — a failed render sends the assessor an empty prompt, and its
     # output feeds a PRD mutation.
     if ! assessment_prompt="$(render_engine_prompt skill-assessment-postphase "$_cp_vals")" \
@@ -7246,7 +7248,7 @@ run_phase_assessment() {
             ORCH_AGENT_MODEL_CLIMB=$(seam_next_model "team-lead-agent" "$(seam_model_or_fail "team-lead-agent" 2>/dev/null)")
             export ORCH_AGENT_MODEL_CLIMB
             _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
-            jq -n \
+            jq_vals \
                   --arg assessment_prompt "$assessment_prompt" \
                   '{"__ASSESSMENT_PROMPT__":$assessment_prompt}' > "$_rp_vals"
             if ! _pa_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" phase_assessment)" \
@@ -7898,9 +7900,19 @@ while true; do
             error "Step 3.6: review APPROVED after a blocker-level rejection, with the codeline UNCHANGED since that rejection."
             error "Step 3.6: the verdict changed and the code did not — the blocker was never resolved. Escalating instead of approving."
             _emit_agent complete "review-agent" "Code review escalated (approval after unresolved blocker)"
-            for _entry in "${_review_climbable_stories[@]:-}"; do
-                [ -n "$_entry" ] && _escalate_story_review "${_entry%%:*}" || true
-            done
+            # NO REMEDY IS CLAIMED HERE. This called `_escalate_story_review`, which is defined
+            # nowhere in the engine, wrapped in `|| true` so its absence could not even fail the
+            # line. Live 2026-08-20: "Escalating instead of approving." followed immediately by
+            # "_escalate_story_review: command not found", and the story carried on. The array it
+            # iterated is not assigned until further below, so on this path it was empty anyway.
+            #
+            # The REFUSAL below is what actually took effect and is what matters: the loop exits
+            # without recording the approval. Announcing an action the engine cannot take is worse
+            # than announcing none — an operator reads the log and believes it was handled.
+            #
+            # The flip-flop this tried to compensate for is now prevented at its source: the
+            # reviewer receives its own prior verdicts and is told an unresolved blocker still
+            # stands (1f24c70).
             break
         fi
         success "Team Lead code review APPROVED for phase '$PHASE' (cycle $_review_cycle)"
@@ -8097,7 +8109,13 @@ if ! is_truthy "${SKIP_PRE_REVIEW_GATE:-}" && [ -f "$PROJECT_ROOT/package.json" 
         # npm install, or a test that leaves a server/resource open) with zero
         # diagnostic signal about which command was actually stuck. Same fix
         # applied consistently across every instance in this file.
-        if timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" "$_node_bin" ./node_modules/.bin/vitest run \
+        _pr_test_cmd="$(_codeline_test_command "$PROJECT_ROOT")"
+        if [ -z "$_pr_test_cmd" ]; then
+            # An absent declaration is not a failure of the code under review. Reporting it as
+            # "tests failed" blamed the story for the engine being unable to ask.
+            warning "  Step 19: ${PROJECT_ROOT} declares no test command — pre-review tests NOT run"
+            _pre_review_failed=1
+        elif timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" sh -c "$_pr_test_cmd" \
                 2>&1 | tee -a "$_pre_review_log"; then
             success "  vitest: PASS"
             "$SCRIPT_DIR/update-monitor.sh" event "pre_review_test_pass" \
@@ -8324,12 +8342,14 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
             _lp_vals=$(mktemp "${TMPDIR:-/tmp}/lint-finding-analyst-vals-XXXXXX.json")
             _lp_role_file=$(mktemp "${TMPDIR:-/tmp}/lint-finding-analyst-role-XXXXXX.txt")
             jq -r --arg r "gate-finding-analyst" '.[$r] // ""' "$_profiles_file" > "$_lp_role_file" 2>/dev/null || : > "$_lp_role_file"
-            jq -n --rawfile profile "$_lp_role_file" \
+            jq_vals --rawfile profile "$_lp_role_file" \
                   --rawfile lint_log "$_lint_log" \
                   --rawfile writer_outputs "$_lf_outputs_file" \
                   --rawfile active_stories "$_lf_stories_file" \
                   --arg phase "$PHASE" \
                   '{"__PROFILE__":$profile,"__LINT_LOG__":$lint_log,"__WRITER_OUTPUTS__":$writer_outputs,"__ACTIVE_STORIES__":$active_stories,"__PHASE__":$phase}' > "$_lp_vals"
+            # The codeline's own facts — this template declares them and nothing supplied them.
+            merge_stack_facts "$_lf_outputs_file" "${PROJECT_ROOT:-}"
             _lint_finding_prompt="$(render_engine_prompt lint-finding-analyst "$_lp_vals")"
             rm -f "$_lp_vals" "$_lp_role_file"
             rm -f "$_lf_outputs_file" "$_lf_stories_file"
@@ -8341,7 +8361,7 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
                 if [ "$_lga_attempt" -ge 1 ]; then
                     [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _lga_model="${ESCALATION_MODEL_HIGH}"
                     _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
-                    jq -n \
+                    jq_vals \
                           --arg lint_finding_prompt "$_lint_finding_prompt" \
                           --arg lint_log "${_lint_log}" \
                           '{"__LINT_FINDING_PROMPT__":$lint_finding_prompt,"__LINT_LOG__":$lint_log}' > "$_rp_vals"
@@ -8391,7 +8411,7 @@ if m:
                 _lp_vals=$(mktemp "${TMPDIR:-/tmp}/lint-ac-remediator-vals-XXXXXX.json")
                 _lp_role_file=$(mktemp "${TMPDIR:-/tmp}/lint-ac-remediator-role-XXXXXX.txt")
                 jq -r --arg r "story-ac-remediator" '.[$r] // ""' "$_profiles_file" > "$_lp_role_file" 2>/dev/null || : > "$_lp_role_file"
-                jq -n --rawfile profile "$_lp_role_file" \
+                jq_vals --rawfile profile "$_lp_role_file" \
                       --rawfile current_acs "$_lac_acs_file" \
                       --arg story_id "$_lint_story_id" \
                       --arg finding "$_lint_finding_raw" \
@@ -8407,7 +8427,7 @@ if m:
                     if [ "$_lrem_attempt" -ge 1 ]; then
                         [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _lrem_model="${ESCALATION_MODEL_HIGH}"
                         _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
-                        jq -n \
+                        jq_vals \
                               --arg lint_ac_prompt "$_lint_ac_prompt" \
                               '{"__LINT_AC_PROMPT__":$lint_ac_prompt}' > "$_rp_vals"
                         _lrem_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" lint_remediator)"
@@ -8718,7 +8738,7 @@ step_emit "23"  "skip" "Step 23: Browser E2E" "SKIP_TESTING_GATES=true"
 
             story_log="$LOG_DIR/${route}-${phase_id}-${story_id}.log"
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/e2e-route-check-vals-XXXXXX.json")
-            jq -n \
+            jq_vals \
                   --arg agent_profile "$agent_profile" \
                   --arg route_reason "$route_reason" \
                   --arg story_title "$story_title" \
@@ -8790,10 +8810,15 @@ step_emit "23"  "skip" "Step 23: Browser E2E" "SKIP_TESTING_GATES=true"
     {
         # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
         local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-sast-sentinel-vals-XXXXXX.json")
-        jq -n --arg gate_scope "$(_brownfield_gate_scope sast-sentinel)" \
+        # The rule vocabulary comes from the one declaration the gate also reads, so the prompt
+        # cannot ask for a name the gate does not recognise (config/sast-vocabulary.json).
+        local _dep_cve_prefix
+        _dep_cve_prefix=$(jq -r '.dependencyCveRulePrefix // ""' "$AUTOMATION_DIR/config/sast-vocabulary.json" 2>/dev/null)
+        jq_vals --arg gate_scope "$(_brownfield_gate_scope sast-sentinel)" \
               --arg phase_id "$phase_id" \
               --arg project_root "$PROJECT_ROOT" \
-              '{"__GATE_SCOPE__":$gate_scope,"__PHASE_ID__":$phase_id,"__PROJECT_ROOT__":$project_root}' > "$_qa_vals" 2>/dev/null
+              --arg dependency_cve_rule_prefix "$_dep_cve_prefix" \
+              '{"__GATE_SCOPE__":$gate_scope,"__PHASE_ID__":$phase_id,"__PROJECT_ROOT__":$project_root,"__DEPENDENCY_CVE_RULE_PREFIX__":$dependency_cve_rule_prefix}' > "$_qa_vals" 2>/dev/null
         local sast_prompt
         if ! sast_prompt=$(render_engine_prompt qa-sast-sentinel "$_qa_vals"); then
             error "  [sast-sentinel] cannot render its prompt — refusing to gate with no instructions" >&2
@@ -8837,7 +8862,7 @@ $sast_prompt"
         fi
 
         _oe_vals=$(mktemp "${TMPDIR:-/tmp}/qa-oracle-vals-XXXXXX.json")
-        jq -n \
+        jq_vals \
               --arg semgrep_summary "$semgrep_summary" \
               --arg sast_prompt "$sast_prompt" \
               '{"__SEMGREP_SUMMARY__":$semgrep_summary,"__SAST_PROMPT__":$sast_prompt}' > "$_oe_vals"
@@ -8870,7 +8895,7 @@ $sast_prompt"
         fi
 
         _oe_vals=$(mktemp "${TMPDIR:-/tmp}/qa-oracle-vals-XXXXXX.json")
-        jq -n \
+        jq_vals \
               --arg audit_summary "$audit_summary" \
               --arg sast_prompt "$sast_prompt" \
               '{"__AUDIT_SUMMARY__":$audit_summary,"__SAST_PROMPT__":$sast_prompt}' > "$_oe_vals"
@@ -8937,7 +8962,7 @@ $(echo "$_tsc_out" | head -40)"
         fi
 
         _oe_vals=$(mktemp "${TMPDIR:-/tmp}/qa-oracle-vals-XXXXXX.json")
-        jq -n \
+        jq_vals \
               --arg tsc_summary "$tsc_summary" \
               --arg sast_prompt "$sast_prompt" \
               '{"__TSC_SUMMARY__":$tsc_summary,"__SAST_PROMPT__":$sast_prompt}' > "$_oe_vals"
@@ -8995,7 +9020,7 @@ $_spec_file_excerpts"
 
         # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
         local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-spec-validator-vals-XXXXXX.json")
-        jq -n --arg force_lightpanda "$force_lightpanda" \
+        jq_vals --arg force_lightpanda "$force_lightpanda" \
               --arg force_playwright "$force_playwright" \
               --arg gate_scope "$(_brownfield_gate_scope spec-validator)" \
               --arg phase_id "$phase_id" \
@@ -9021,13 +9046,19 @@ $spec_prompt"
         local _node_bin
         _node_bin=$(detect_node 2>/dev/null || true)
         if [ -n "$_node_bin" ] && [ -f "$PROJECT_ROOT/package.json" ] && \
-           [ -f "$PROJECT_ROOT/node_modules/.bin/vitest" ]; then
+           [ -n "$(_codeline_test_command "$PROJECT_ROOT")" ]; then
             set +e
-            "$_node_bin" "$PROJECT_ROOT/node_modules/.bin/vitest" run \
-                --reporter=json \
-                --outputFile="$oracle_json" \
-                --root "$PROJECT_ROOT" \
-                > /dev/null 2>&1
+            # The oracle wants machine-readable output; only vitest is asked for --reporter=json,
+            # and any other runner falls back to its plain output, which _parse_failing_test_files
+            # understands. Previously a non-vitest codeline got no oracle at all.
+            if [ -x "$PROJECT_ROOT/node_modules/.bin/vitest" ]; then
+                "$_node_bin" "$PROJECT_ROOT/node_modules/.bin/vitest" run \
+                    --reporter=json --outputFile="$oracle_json" --root "$PROJECT_ROOT" \
+                    > /dev/null 2>&1
+            else
+                ( cd "$PROJECT_ROOT" && timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" \
+                    sh -c "$(_codeline_test_command "$PROJECT_ROOT")" ) > "${oracle_json}.txt" 2>&1
+            fi
             local _oracle_rc=$?
             set -e
             if [ -f "$oracle_json" ]; then
@@ -9041,7 +9072,7 @@ $spec_prompt"
         fi
 
         _oe_vals=$(mktemp "${TMPDIR:-/tmp}/qa-oracle-vals-XXXXXX.json")
-        jq -n \
+        jq_vals \
               --arg oracle_summary "$oracle_summary" \
               --arg spec_prompt "$spec_prompt" \
               '{"__ORACLE_SUMMARY__":$oracle_summary,"__SPEC_PROMPT__":$spec_prompt}' > "$_oe_vals"
@@ -9086,7 +9117,21 @@ $spec_prompt"
         # Trust blockerCount from the oracle-injected evidence, not the LLM's self-reported verdict
         # field — the LLM defaults to "fail" when it can't run tools, even with 0 blockers.
         local _sast_blockers
-        _sast_blockers=$(python3 "$SCRIPT_DIR/lib/handlers/sast-blockers.py" "$sast_log" 2>/dev/null || echo "-1")
+        # WHICH DEPENDENCIES DID THIS STORY ADD?
+        #
+        # On brownfield the blocker counter treats a dependency CVE the story did not introduce as
+        # advisory — pre-existing repository debt is not a defect in the work under review, and no
+        # writer output can change `npm audit`. It still blocks for a package the story ADDS. That
+        # distinction needs the manifest delta, computed here from the phase baseline: every
+        # dependency line the change ADDS, name only.
+        local _introduced_deps=""
+        if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -n "${PROJECT_ROOT:-}" ]; then
+            _introduced_deps="$(story_introduced_deps "$PROJECT_ROOT")"
+            [ -n "$_introduced_deps" ] && \
+                log "  [sast] dependencies introduced by this story: ${_introduced_deps}"
+        fi
+        _sast_blockers=$(EPAM_STORY_INTRODUCED_DEPS="$_introduced_deps" \
+            python3 "$SCRIPT_DIR/lib/handlers/sast-blockers.py" "$sast_log" 2>/dev/null || echo "-1")
         if [ "$_sast_blockers" = "-1" ]; then
             # Fallback: no parseable JSON — check raw verdict string
             if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$sast_log" 2>/dev/null; then
@@ -9210,7 +9255,7 @@ $spec_prompt"
                 _diff_patch=$(cd "$PROJECT_ROOT" && "$_git_bin" diff -U3 "$_diff_ref" -- . ${_rr_ex[0]+"${_rr_ex[@]}"} 2>/dev/null | head -300 || echo "")
                 set -e
                 _cp_vals=$(mktemp "${TMPDIR:-/tmp}/qa-evidence-labels-vals-XXXXXX.json")
-                jq -n \
+                jq_vals \
                       --arg diff_patch "$_diff_patch" \
                       --arg diff_stat "$_diff_stat" \
                       '{"__DIFF_PATCH__":$diff_patch,"__DIFF_STAT__":$diff_stat}' > "$_cp_vals"
@@ -9222,7 +9267,7 @@ $spec_prompt"
 
             # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
             local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-review-ranger-vals-XXXXXX.json")
-            jq -n --arg gate_scope "$(_brownfield_gate_scope review-ranger)" \
+            jq_vals --arg gate_scope "$(_brownfield_gate_scope review-ranger)" \
                   --arg phase_id "$phase_id" \
                   --arg project_root "$PROJECT_ROOT" \
                   --arg review_diff_summary "$review_diff_summary" \
@@ -9294,7 +9339,7 @@ $review_prompt"
                         # against a partial file and never know it.
                         if [ "${_mut_src_total_lines:-0}" -gt 100 ]; then
                             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/qa-evidence-labels-vals-XXXXXX.json")
-                            jq -n \
+                            jq_vals \
                                   --arg mut_src_total_lines "${_mut_src_total_lines}" \
                                   '{"__MUT_SRC_TOTAL_LINES__":$mut_src_total_lines}' > "$_cp_vals"
                             _mut_src_marker="$(render_engine_prompt qa-evidence-labels "$_cp_vals" truncation_notice_source)"
@@ -9325,7 +9370,7 @@ $(head -100 "$PROJECT_ROOT/$_f" 2>/dev/null || echo '(unreadable)')${_mut_src_ma
                     _mut_test_total_lines=$(wc -l < "$_tf" 2>/dev/null || echo 0)
                     if [ "${_mut_test_total_lines:-0}" -gt 60 ]; then
                         _cp_vals=$(mktemp "${TMPDIR:-/tmp}/qa-evidence-labels-vals-XXXXXX.json")
-                        jq -n \
+                        jq_vals \
                               --arg mut_test_total_lines "${_mut_test_total_lines}" \
                               '{"__MUT_TEST_TOTAL_LINES__":$mut_test_total_lines}' > "$_cp_vals"
                         _mut_test_marker="$(render_engine_prompt qa-evidence-labels "$_cp_vals" truncation_notice_test)"
@@ -9336,7 +9381,7 @@ $(head -100 "$PROJECT_ROOT/$_f" 2>/dev/null || echo '(unreadable)')${_mut_src_ma
 $(head -60 "$_tf" 2>/dev/null || echo '(unreadable)')${_mut_test_marker}"
                 done <<< "$_test_files"
                 _cp_vals=$(mktemp "${TMPDIR:-/tmp}/qa-evidence-labels-vals-XXXXXX.json")
-                jq -n \
+                jq_vals \
                       --arg src_content "${_src_content:-  (none — no TypeScript source changes in this phase)}" \
                       --arg test_content "${_test_content:-  (no test files found)}" \
                       '{"__SRC_CONTENT__":$src_content,"__TEST_CONTENT__":$test_content}' > "$_cp_vals"
@@ -9348,7 +9393,7 @@ $(head -60 "$_tf" 2>/dev/null || echo '(unreadable)')${_mut_test_marker}"
 
             # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
             local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-mutant-hunter-vals-XXXXXX.json")
-            jq -n --arg gate_scope "$(_brownfield_gate_scope mutant-hunter)" \
+            jq_vals --arg gate_scope "$(_brownfield_gate_scope mutant-hunter)" \
                   --arg mutant_oracle_summary "$mutant_oracle_summary" \
                   --arg phase_id "$phase_id" \
                   --arg project_root "$PROJECT_ROOT" \
@@ -9481,7 +9526,7 @@ $mutant_prompt"
         {
             # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
             local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-fuzz-weaver-vals-XXXXXX.json")
-            jq -n --arg force_lightpanda "$force_lightpanda" \
+            jq_vals --arg force_lightpanda "$force_lightpanda" \
                   --arg force_playwright "$force_playwright" \
                   --arg gate_scope "$(_brownfield_gate_scope fuzz-weaver)" \
                   --arg phase_id "$phase_id" \
@@ -9489,6 +9534,8 @@ $mutant_prompt"
                   --arg routing_decision "$routing_decision" \
                   '{"__FORCE_LIGHTPANDA__":$force_lightpanda,"__FORCE_PLAYWRIGHT__":$force_playwright,"__GATE_SCOPE__":$gate_scope,"__PHASE_ID__":$phase_id,"__PROJECT_ROOT__":$project_root,"__ROUTING_DECISION__":$routing_decision}' > "$_qa_vals" 2>/dev/null
             local fuzz_prompt
+            # The codeline's own facts — this template declares them and nothing supplied them.
+            merge_stack_facts "$_qa_vals" "${PROJECT_ROOT:-}"
             if ! fuzz_prompt=$(render_engine_prompt qa-fuzz-weaver "$_qa_vals"); then
                 error "  [fuzz-weaver] cannot render its prompt — refusing to gate with no instructions" >&2
                 rm -f "$_qa_vals"; return 1
@@ -9512,7 +9559,7 @@ $fuzz_prompt"
         {
             # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
             local _qa_vals; _qa_vals=$(mktemp "${TMPDIR:-/tmp}/qa-perf-sentinel-vals-XXXXXX.json")
-            jq -n --arg force_lightpanda "$force_lightpanda" \
+            jq_vals --arg force_lightpanda "$force_lightpanda" \
                   --arg force_playwright "$force_playwright" \
                   --arg gate_scope "$(_brownfield_gate_scope perf-sentinel)" \
                   --arg phase_id "$phase_id" \
@@ -9537,11 +9584,65 @@ $perf_prompt"
         local perf_pid=$!
         _emit_agent start "perf-sentinel" "Perf Sentinel"
 
+        # ── Runtime Boundary ──
+        #
+        # THE QUESTION NO OTHER GATE ASKS: can this change execute, where it will execute, as this
+        # codeline is configured? Live metrolinx AMSD-2041 shipped three implementations in three
+        # runs; two defects survived all of them — a page-level module importing a service that
+        # throws at load in a context where its credentials are absent, and configuration that
+        # forbade the embedding the feature required. SAST judges vulnerabilities, review-ranger
+        # judges the diff, and the client/server scanner reads changed files only.
+        step_emit "22g" "running" "Step 22g: Runtime boundary"
+        log "  Step 4.4c: Running runtime-boundary review..."
+        {
+            local _rb_log="$LOG_DIR/runtime-boundary-${phase_id}.log"
+            local _rb_profile=""
+            [ -f "$profiles_file" ] && _rb_profile=$(jq -r '.["runtime-boundary"] // ""' "$profiles_file")
+            # The configuration this codeline carries, resolved from its OWN manifest by the
+            # adapter that already knows the stack. Empty for a stack no adapter recognises.
+            local _rb_config
+            _rb_config=$("${NODE_CMD:-node}" -e '
+              try {
+                const p = require(process.argv[1]);
+                const f = p.configSurface(process.argv[2]) || [];
+                process.stdout.write(f.length ? f.map((x) => "- " + x).join("\n")
+                                              : "(this codeline declares no configuration this engine recognises)");
+              } catch { process.stdout.write("(configuration could not be resolved)"); }
+            ' "$AUTOMATION_DIR/plugins/client-env-boundary-plugin.js" "$PROJECT_ROOT" 2>/dev/null || echo "")
+            local _rb_vals; _rb_vals=$(mktemp "${TMPDIR:-/tmp}/qa-runtime-boundary-vals-XXXXXX.json")
+            jq_vals --arg story_id "${phase_id}" \
+                  --arg story_title "$(_brownfield_gate_scope runtime-boundary)" \
+                  --arg story_diff "$(git -C "$PROJECT_ROOT" diff "${_rev_base:-HEAD~1}" HEAD 2>/dev/null | head -2000)" \
+                  --arg config_surface "$_rb_config" \
+                  --arg project_root "$PROJECT_ROOT" \
+                  --arg review_profile "$_rb_profile" \
+                  '{"__STORY_ID__":$story_id,"__STORY_TITLE__":$story_title,"__STORY_DIFF__":$story_diff,"__CONFIG_SURFACE__":$config_surface,"__PROJECT_ROOT__":$project_root,"__REVIEW_PROFILE__":$review_profile}' > "$_rb_vals" 2>/dev/null
+            local _rb_prompt
+            if ! _rb_prompt=$(render_engine_prompt runtime-boundary-review "$_rb_vals"); then
+                error "  [runtime-boundary] cannot render its prompt — refusing to gate with no instructions" >&2
+                rm -f "$_rb_vals"; return 1
+            fi
+            rm -f "$_rb_vals"
+            _run_qa_gate_with_retry "$_rb_prompt" "qa-gate:runtime-boundary" "${PHASE:-unknown}" "$_rb_log"
+        } &
+        local _rb_pid=$!
+        _emit_agent start "runtime-boundary" "Runtime Boundary"
+
         # Wait for both Phase C agents
         wait $fuzz_pid || fuzz_exit=$?
         { [ $fuzz_exit -eq 0 ] && _emit_agent complete "fuzz-weaver"; } || _emit_agent fail "fuzz-weaver" "exit $fuzz_exit"
         wait $perf_pid || perf_exit=$?
         { [ $perf_exit -eq 0 ] && _emit_agent complete "perf-sentinel"; } || _emit_agent fail "perf-sentinel" "exit $perf_exit"
+        # An unwaited background job is a gate that reports nothing: the phase moves on while it is
+        # still running, and its verdict lands after anyone could act on it.
+        local _rb_exit=0
+        wait $_rb_pid || _rb_exit=$?
+        { [ $_rb_exit -eq 0 ] && _emit_agent complete "runtime-boundary"; } || _emit_agent fail "runtime-boundary" "exit $_rb_exit"
+        if [ $_rb_exit -eq 0 ]; then
+            step_emit "22g" "pass" "Step 22g: Runtime boundary"
+        else
+            step_emit "22g" "fail" "Step 22g: Runtime boundary" "exit ${_rb_exit}"
+        fi
 
         # Evaluate Phase C results
         # Fuzz-weaver: validate that any "fail" verdict is grounded in real files.
@@ -9719,7 +9820,7 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                 # silence, so the agent could be given no role at all and nothing would say so.
                 local _fp_vals; _fp_vals=$(mktemp "${TMPDIR:-/tmp}/gate-finding-analyst-vals-XXXXXX.json")
                 local _fp_role; _fp_role=$(jq -r --arg r "gate-finding-analyst" '.[$r] // ""' "$_profiles_file" 2>/dev/null || echo "")
-                jq -n --arg profile "$_fp_role" \
+                jq_vals --arg profile "$_fp_role" \
                       --arg gate_label "$_glabel" \
                       --arg gate_log "$_glog" \
                       --arg prd_file "$PRD_FILE" \
@@ -9734,7 +9835,7 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                     if [ "$_gfa_attempt" -ge 1 ]; then
                         [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _gfa_model="${ESCALATION_MODEL_HIGH}"
                         _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
-                        jq -n \
+                        jq_vals \
                               --arg finding_prompt "$_finding_prompt" \
                               --arg glog "${_glog}" \
                               '{"__FINDING_PROMPT__":$finding_prompt,"__GLOG__":$glog}' > "$_rp_vals"
@@ -9835,7 +9936,7 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                 # silence, so the agent could be given no role at all and nothing would say so.
                 local _fp_vals; _fp_vals=$(mktemp "${TMPDIR:-/tmp}/story-ac-remediator-vals-XXXXXX.json")
                 local _fp_role; _fp_role=$(jq -r --arg r "story-ac-remediator" '.[$r] // ""' "$_profiles_file" 2>/dev/null || echo "")
-                jq -n --arg profile "$_fp_role" \
+                jq_vals --arg profile "$_fp_role" \
                       --arg finding_json "$_finding_json" \
                       --arg story_id "$_story_id" \
                       --arg existing_acs "$(jq -c --arg id "$_story_id" '.stories[] | select(.id == $id) | (.acceptanceCriteria // []) | map(.)' "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "[]")" \
@@ -9849,7 +9950,7 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                     if [ "$_acr_attempt" -ge 1 ]; then
                         [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _acr_model="${ESCALATION_MODEL_HIGH}"
                         _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
-                        jq -n \
+                        jq_vals \
                               --arg ac_prompt "$_ac_prompt" \
                               '{"__AC_PROMPT__":$ac_prompt}' > "$_rp_vals"
                         _acr_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" ac_remediator)"
@@ -9929,7 +10030,7 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                 # silence, so the agent could be given no role at all and nothing would say so.
                 local _fp_vals; _fp_vals=$(mktemp "${TMPDIR:-/tmp}/profile-augmentor-vals-XXXXXX.json")
                 local _fp_role; _fp_role=$(jq -r --arg r "profile-augmentor" '.[$r] // ""' "$_profiles_file" 2>/dev/null || echo "")
-                jq -n --arg profile "$_fp_role" \
+                jq_vals --arg profile "$_fp_role" \
                       --arg finding_json "$_finding_json" \
                       --arg profiles_file "$_profiles_file" \
                       --arg story_id "$_story_id" \
@@ -10131,7 +10232,7 @@ _failure_is_tolerated() {
 }
 
     local failing_files
-    failing_files=$(echo "$vitest_output" | grep -E '^ FAIL ' | awk '{print $2}' | sort -u)
+    failing_files=$(_parse_failing_test_files "$vitest_output")
     if [ -z "$failing_files" ]; then
         error "  Could not parse failing test files from vitest output"
         return 1
@@ -10224,9 +10325,9 @@ _failure_is_tolerated() {
         # title uses only the filename.
         _bug_vals=$(mktemp "${TMPDIR:-/tmp}/bug-story-vals-XXXXXX.json")
         _bug_vals_t=$(mktemp "${TMPDIR:-/tmp}/bug-story-title-XXXXXX.json")
-        jq -n --arg f "$failing_file" --arg tc "$_bug_test_cmd" --arg ex "$failure_excerpt" \
+        jq_vals --arg f "$failing_file" --arg tc "$_bug_test_cmd" --arg ex "$failure_excerpt" \
             '{__FAILING_FILE__: $f, __TEST_COMMAND__: $tc, __FAILING_TESTS__: $ex}' > "$_bug_vals"
-        jq -n --arg f "$failing_file" '{__FAILING_FILE__: $f}' > "$_bug_vals_t"
+        jq_vals --arg f "$failing_file" '{__FAILING_FILE__: $f}' > "$_bug_vals_t"
 
         # Exit status is the contract: an unrendered story would be appended to the PRD with an
         # empty description, and the writer would answer from nothing.
@@ -10291,7 +10392,7 @@ _emit_unfixed_bug_list() {
     echo "╚══════════════════════════════════════════════════════════╝"
     echo ""
     # Failing test files
-    echo "$vitest_output" | grep -E '^ FAIL ' | while read -r line; do
+    _parse_failing_test_files "$vitest_output" | while read -r line; do
         echo "  FILE  $line"
     done
     echo ""

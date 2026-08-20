@@ -10,7 +10,7 @@
  * So nothing here is declared per seam. Everything is resolved at invocation from what the project
  * already has:
  *
- *   ecosystem   lib/ecosystems.js — the stack, its manifest, how it installs and runs tests
+ *   ecosystem   lib/ecosystem-registry.js — the stack, its manifest, how it installs and runs tests
  *   learned     the KB the pipeline itself wrote while working on this codeline, plus the shared
  *               KB for lessons belonging to no single codeline. This is the one store meant to
  *               survive between runs, and an agent that cannot see it repeats what was learned

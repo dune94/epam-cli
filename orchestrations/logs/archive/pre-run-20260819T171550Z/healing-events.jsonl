@@ -1,0 +1,1 @@
+{"ts":"2026-08-19T16:31:16Z","story_id":"AMSD-2041","retry":2,"rung":1,"target":"kb","diagnosis":"Importing @contentstack/live-preview-utils pulls ESM lodash-es, excluded from Jest transform by transformIgnorePatterns allowlist, breaking 52 suites.","patches_applied":0,"profile_updated":true}

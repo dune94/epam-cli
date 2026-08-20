@@ -37,10 +37,12 @@ const path = require('path');
  * `installDir: null` means the ecosystem vendors nothing locally, so a missing
  * directory is not evidence of an unbuildable repo.
  */
-// THE ONE TABLE lives in ecosystems.js. This file used to carry its own copy, and the repo
+// THE PROVIDERS ARE DISCOVERED by lib/ecosystem-registry.js. This file used to carry its own copy of
+// the manifest list, and the repo
 // scan in codeline-discovery.js carried a smaller one; they had already drifted by three
 // ecosystems. Re-exported here so existing importers of MANIFESTS keep working.
-const { MANIFESTS, extraManifests, allManifests } = require('./ecosystems.js');
+const _registry = require('./ecosystem-registry.js');
+const { extraManifests, allManifests } = _registry;
 
 /**
  * declaredDependencies(repoPath) -> Set<string>
@@ -150,5 +152,9 @@ module.exports = {
   canRunItsOwnGates,
   lexicalMentionCount,
   rankByStructure,
-  MANIFESTS,
+  // A GETTER, not a snapshot. Destructuring the registry's MANIFESTS at require() time froze the
+  // provider set as it stood when this module first loaded — which is exactly the static table the
+  // registry replaced, reintroduced by the re-export. Resolved on access instead, so a provider
+  // injected for this run is visible to every importer.
+  get MANIFESTS() { return _registry.MANIFESTS; },
 };

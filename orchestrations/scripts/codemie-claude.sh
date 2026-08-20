@@ -30,6 +30,11 @@ PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
 LOG_DIR="$AUTOMATION_DIR/logs"
 # shellcheck source=lib/git-ops.sh
 source "$SCRIPT_DIR/lib/git-ops.sh"
+# jq_vals — prompt values files whose content never becomes an argv entry.
+# Placed with the other library sources, NOT beside SCRIPT_DIR: the path-resolution
+# block is lifted verbatim by tests that build a minimal script tree, and a source
+# line inside it makes those probes fail on a library they have no reason to carry.
+source "$SCRIPT_DIR/lib/jq-vals.sh"
 PROGRESS_LOG="$LOG_DIR/progress.txt"
 AGENTS_FILE="$AUTOMATION_DIR/agents/AGENTS.md"
 CLAUDE_OUTPUT_DIR="$LOG_DIR/claude_outputs"
@@ -377,7 +382,7 @@ run_plan_mode() {
     # they carried separate copies that had already drifted, and the copy here had the
     # messages path written into the prompt text rather than passed as data.
     _pp_vals=$(mktemp "${TMPDIR:-/tmp}/story-plan-agent-vals-XXXXXX.json")
-    jq -n --arg story_id "$story_id" \
+    jq_vals --arg story_id "$story_id" \
           --arg messages_jsonl "${messages_jsonl:-orchestrations/logs/agent-messages.jsonl}" \
           --arg agent_role "$agent_role" \
           --arg current_phase "${CURRENT_PHASE:-unknown}" \
@@ -637,7 +642,7 @@ build_implementation_prompt() {
     local dependencies=$(echo "$story_json" | jq -r '.dependencies | join(", ")')
 
     _hd_vals=$(mktemp "${TMPDIR:-/tmp}/story-implementation-vals-XXXXXX.json")
-    jq -n \
+    jq_vals \
           --arg technical_notes "$([ -n "$technical_notes" ] && echo "$technical_notes" | jq -r 'to_entries | map("- \(.key): \(.value)") | join("\n")' 2>/dev/null || echo "None specified")" \
           --arg dependencies "${dependencies:-None}" \
           --arg acceptance_criteria "$acceptance_criteria" \
@@ -1553,10 +1558,22 @@ run_pre_phase_assessment() {
 
     local assessment_prompt
     _ap_vals=$(mktemp "${TMPDIR:-/tmp}/skill-assessment-prephase-vals-XXXXXX.json")
-    jq -n \
+    # WHAT THIS PROJECT ACTUALLY IS — the template's own words. lib/handlers/agent-skills.js
+    # derives it from the codeline's ecosystem and the KB the pipeline wrote while working on it
+    # ("DERIVED, NEVER TYPED"). It existed with NO CALLERS, so this placeholder was never supplied
+    # and the render threw. Absent is absent: an unresolvable project reports that, never a guess.
+    local _ap_skills_file; _ap_skills_file=$(mktemp "${TMPDIR:-/tmp}/project-skills-XXXXXX.json")
+    "${NODE_CMD:-node}" "$SCRIPT_DIR/lib/handlers/agent-skills.js" "${PROJECT_ROOT:-}" \
+        "$AUTOMATION_DIR/agents" > "$_ap_skills_file" 2>/dev/null \
+        || printf '%s' '(this project could not be resolved — do not infer skills from role names)' > "$_ap_skills_file"
+    jq_vals \
           --arg prd_rel "$prd_rel" \
           --arg phase_id "$phase_id" \
-          '{"__PRD_REL__":$prd_rel,"__PHASE_ID__":$phase_id}' > "$_ap_vals"
+          --rawfile project_skills "$_ap_skills_file" \
+          '{"__PRD_REL__":$prd_rel,"__PHASE_ID__":$phase_id,"__PROJECT_SKILLS__":$project_skills}' > "$_ap_vals"
+    rm -f "$_ap_skills_file"
+    # The codeline's own facts — this template declares them and nothing supplied them.
+    merge_stack_facts "$_ap_vals" "${PROJECT_ROOT:-}"
     assessment_prompt="$(render_engine_prompt skill-assessment-prephase "$_ap_vals" basic)"
     rm -f "$_ap_vals"
 

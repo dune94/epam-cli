@@ -1,0 +1,1 @@
+{"ts":"2026-08-19T01:37:54Z","story_id":"AMSD-2041","retry":0,"rung":0,"target":"skill","diagnosis":"Agent reimplemented live preview using getSingleEntry and raw useState instead of prescribed helpers ContentstackFactory, getSinglePageEntry, and useContent.","patches_applied":0,"profile_updated":true}

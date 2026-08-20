@@ -34,6 +34,11 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/render-engine-prompt.sh
 source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
+# jq_vals — prompt values files whose content never becomes an argv entry.
+# Placed with the other library sources, NOT beside SCRIPT_DIR: the path-resolution
+# block is lifted verbatim by tests that build a minimal script tree, and a source
+# line inside it makes those probes fail on a library they have no reason to carry.
+source "$SCRIPT_DIR/lib/jq-vals.sh"
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
 
 PRD_FILE=""; STORY_ID=""; TEST_FILE=""; OUT_FILE=""
@@ -77,7 +82,7 @@ for _i in $(seq 0 $(( _vc_count - 1 ))); do
 
     # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
     _tpl_vals=$(mktemp "${TMPDIR:-/tmp}/vc-coverage-vals-XXXXXX.json")
-    jq -n --arg test_source "$_test_src" \
+    jq_vals --arg test_source "$_test_src" \
           --arg verification_criterion "$_vc" \
           '{"__TEST_SOURCE__":$test_source,"__VERIFICATION_CRITERION__":$verification_criterion}' > "$_tpl_vals" 2>/dev/null
     if ! _prompt=$(render_engine_prompt vc-coverage "$_tpl_vals"); then

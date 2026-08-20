@@ -1,21 +1,16 @@
 {
   "canonicalFile": "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/agents/profiles.canonical.json",
   "canonicalRoles": 57,
-  "liveRoles": 60,
+  "liveRoles": 59,
   "generated": [
     {
-      "role": "typescript-logic-fixer",
-      "briefChars": 3177,
+      "role": "contentstack-live-preview-engineer",
+      "briefChars": 2270,
       "mintedThisRun": true
     },
     {
-      "role": "fares-investigator",
-      "briefChars": 1747,
-      "mintedThisRun": true
-    },
-    {
-      "role": "schedule-investigator",
-      "briefChars": 1973,
+      "role": "metrolinx-contentstack-detective",
+      "briefChars": 2078,
       "mintedThisRun": true
     }
   ],

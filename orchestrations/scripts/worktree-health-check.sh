@@ -22,6 +22,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/git-ops.sh
 source "$SCRIPT_DIR/lib/git-ops.sh"
 source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
+# jq_vals — prompt values files whose content never becomes an argv entry.
+# Placed with the other library sources, NOT beside SCRIPT_DIR: the path-resolution
+# block is lifted verbatim by tests that build a minimal script tree, and a source
+# line inside it makes those probes fail on a library they have no reason to carry.
+source "$SCRIPT_DIR/lib/jq-vals.sh"
 PROJECT_ROOT="${GIT_WORK_ROOT:-${PROJECT_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}}"
 PROJECT_ROOT="$(cd "$PROJECT_ROOT" && pwd)"
 
@@ -169,7 +174,7 @@ _auto_commit_worktree() {
     # engine says, and its attribution line had gone stale where nobody would see it.
     local commit_msg _wt_vals
     _wt_vals=$(mktemp "${TMPDIR:-/tmp}/wt-autocommit-vals-XXXXXX.json")
-    jq -n --arg lane "$lane" \
+    jq_vals --arg lane "$lane" \
           --arg phase "$PHASE" \
           --arg changed_count "$changed_count" \
           --arg timestamp "$timestamp" \

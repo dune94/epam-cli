@@ -1,5 +1,6 @@
 {
   "id": "test-ownership",
+  "layer": "project",
   "version": 1,
   "description": "Who owns the test for a brownfield fix. ONE policy, rendered into BOTH the writer and the reviewer, so neither can hold a belief the other contradicts.",
   "$why": [

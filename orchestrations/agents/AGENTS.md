@@ -14442,3 +14442,111 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/MOCK3-1_*.log
 
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-18 23:19:02
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-18 23:52:26
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-19 03:08:43
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-19 03:08:49
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-19 12:24:47
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-19 13:10:32
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-19 16:31:43
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-19 18:07:12
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-19 18:40:35
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-19 23:04:23
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-20 00:12:45
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-20 00:27:08
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-20 03:13:57
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-20 03:31:44
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-20 15:28:22
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-20 15:44:21
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-20 16:04:47
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-20 16:23:34
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+

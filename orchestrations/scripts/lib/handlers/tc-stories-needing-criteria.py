@@ -83,9 +83,28 @@ for sid in phase_ids:
     if s.get('status') == 'deprecated':
         continue
     files = _files_for(s)
+    already_has_tc = bool((s.get('testCriteria') or {}).get('facts'))
+
+    # WHAT NEEDS TEST CRITERIA IS A STORY WITH VERIFICATION CRITERIA AND NONE YET.
+    #
+    # This used to require `any(_is_test_file(f) for f in files)` — a story qualified only if its
+    # OWN file list contained a test file. That is the greenfield shape, where the spec pass splits
+    # work into an implementation story and a paired test story. A brownfield ticket arrives as ONE
+    # story with implementation files and can never qualify.
+    #
+    # Live metrolinx AMSD-2041, 2026-08-19, all three runs: the story carried SIX verification
+    # criteria — its only real specification, since its single acceptance criterion was the Jira
+    # placeholder "See in:" — finished with testCriteria: null, and the seam reported "TC generation
+    # complete". Two of those criteria say the page must render published content with no regression
+    # when no preview signal is active; run 3 shipped `enable: true` unconditionally, the exact
+    # regression they describe, because nothing had turned them into an assertion.
+    #
+    # Test criteria exist to make verification criteria EXECUTABLE, so that is the qualification.
+    # A story with no VCs is still skipped: there is nothing to make executable, and inventing
+    # criteria from the implementation is how a test comes to ratify whatever was built.
+    has_vcs = bool(s.get('verificationCriteria'))
     is_test_story = any(_is_test_file(f) for f in files)
-    already_has_tc = bool(s.get('testCriteria', {}).get('facts'))
-    if is_test_story and not already_has_tc:
+    if (is_test_story or has_vcs) and not already_has_tc:
         results.append(sid)
 
 print('\n'.join(results))

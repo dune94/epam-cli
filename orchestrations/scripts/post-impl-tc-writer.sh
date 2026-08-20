@@ -51,6 +51,11 @@ fi
 command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "tc-writer"
 
 source "$SCRIPT_DIR/lib/flags.sh"
+# jq_vals — prompt values files whose content never becomes an argv entry.
+# Placed with the other library sources, NOT beside SCRIPT_DIR: the path-resolution
+# block is lifted verbatim by tests that build a minimal script tree, and a source
+# line inside it makes those probes fail on a library they have no reason to carry.
+source "$SCRIPT_DIR/lib/jq-vals.sh"
 
 # Files this run PRODUCED supersede the files it DECLARED.
 #
@@ -142,12 +147,25 @@ mkdir -p "$(dirname "$TC_OUT_FILE")"
 STORY_CONTEXT=$(python3 "$SCRIPT_DIR/lib/handlers/tc-story-context.py" "$OUTPUT_DIR" "$PRD_FILE" "$PHASE" "$STORY"
 )
 
+# THIS CODELINE'S TEST CONVENTIONS, from the codeline itself.
+#
+# The prompt used to prescribe one framework's idioms (vi.mock, vi.hoisted, clearAllMocks) to every
+# project. Which framework a repository uses is a fact about the repository, and stack-facts.js
+# already answers it from that repository's own manifest — it just was never asked here.
+_tc_facts_json=$("${NODE_CMD:-node}" "$SCRIPT_DIR/lib/handlers/stack-facts.js" "$PROJECT_ROOT" 2>/dev/null || echo '{}')
+_tc_conventions=$(printf '%s' "$_tc_facts_json" | jq -r '.__TEST_FILE_CONVENTIONS__ // ""')
+_tc_command=$(printf '%s' "$_tc_facts_json" | jq -r '.__TEST_COMMAND__ // ""')
+# Absent is absent: a codeline that declares no convention is told so, never handed a guess.
+[ -n "$_tc_conventions" ] || _tc_conventions="(this codeline declares no test-file convention — read an existing test and follow what you find)"
+[ -n "$_tc_command" ] || _tc_command="(this codeline declares no test command)"
+
 # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
 _tpl_vals=$(mktemp "${TMPDIR:-/tmp}/tc-writer-vals-XXXXXX.json")
-jq -n --arg story_context "$STORY_CONTEXT" \
-      --arg tc_out_file "$TC_OUT_FILE" \
+jq_vals --arg story_context "$STORY_CONTEXT" \
       --arg tc_writer_profile "$TC_WRITER_PROFILE" \
-      '{"__STORY_CONTEXT__":$story_context,"__TC_OUT_FILE__":$tc_out_file,"__TC_WRITER_PROFILE__":$tc_writer_profile}' > "$_tpl_vals" 2>/dev/null
+      --arg test_file_conventions "$_tc_conventions" \
+      --arg test_command "$_tc_command" \
+      '{"__STORY_CONTEXT__":$story_context,"__TC_WRITER_PROFILE__":$tc_writer_profile,"__TEST_FILE_CONVENTIONS__":$test_file_conventions,"__TEST_COMMAND__":$test_command}' > "$_tpl_vals" 2>/dev/null
 if ! TC_PROMPT=$(render_engine_prompt tc-writer "$_tpl_vals"); then
     echo "[tc-writer] cannot render its prompt — refusing to run with no instructions" >&2
     rm -f "$_tpl_vals"; exit 1
@@ -185,6 +203,14 @@ set +e
 ) 2>&1 | tee "$LOG_FILE"
 TC_EXIT=${PIPESTATUS[0]}
 set -e
+
+# THE ENGINE WRITES THE ANSWER. The agent is read-only and has no tool that can write; it returns
+# the object and this turns it into the file the applier reads. On no JSON the destination is
+# REMOVED, so a previous run's file can never stand in for this run's answer — which is exactly
+# what happened on 2026-08-20, when a tc-core.json from 31 July was applied instead.
+python3 "$SCRIPT_DIR/lib/handlers/tc-extract-output.py" "$TC_OUT_FILE" < "$LOG_FILE" \
+    || echo "  [tc-writer] no criteria extracted from the agent's answer"
+
 
 # ── Validate and apply TCs to prd.json ─────────────────────────────────────────
 python3 "$SCRIPT_DIR/lib/handlers/tc-apply-to-prd.py" "$TC_OUT_FILE" "$OUTPUT_DIR" "$PRD_FILE" "$TC_EXIT" "$PHASE" "$STORY"

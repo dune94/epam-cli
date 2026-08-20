@@ -241,6 +241,46 @@ function detectTests(projectRoot) {
 }
 
 
+/**
+ * Detect how THIS repo lints, from its own scripts. Same rule as detectVerification and
+ * detectTests: prefer a script the project already defines, and return null rather than guess.
+ *
+ * run_repo_lint_verification resolves its linter by probing for eslint. That is right for a repo
+ * that lints with eslint and wrong for every other one: on finding none it warns "lint was NOT run;
+ * nothing here proves the change is clean" and returns 0 -- a Tier-A gate carrying the delivery
+ * contract, passing on a state it describes in its own words as unproven.
+ *
+ * Nothing here names eslint. A project that lints with biome, oxlint, ruff or a Makefile target
+ * says so in its own scripts, and that is what runs.
+ */
+function detectLint(projectRoot) {
+  const pkgPath = join(projectRoot, 'package.json');
+  if (existsSync(pkgPath)) {
+    let pkg = null;
+    try { pkg = JSON.parse(readFileSync(pkgPath, 'utf8')); } catch { pkg = null; }
+    const scripts = (pkg && pkg.scripts) || {};
+    const named = ['lint', 'lint:js', 'lint:src', 'eslint']
+      .find((s) => typeof scripts[s] === 'string' && scripts[s].trim() !== '');
+    if (named) {
+      const runner = existsSync(join(projectRoot, 'pnpm-lock.yaml')) ? 'pnpm'
+        : existsSync(join(projectRoot, 'yarn.lock')) ? 'yarn'
+          : 'npm run';
+      return {
+        lint: {
+          command: `${runner} ${named}`,
+          // A lint diagnostic names the FILE it is about; rule ids churn between versions and
+          // configs, so the file is the stable identity for a baseline subtraction.
+          failurePattern: '^\\s*(\\S+\\.[A-Za-z0-9]+)',
+          failureIdentity: '{1}',
+          detected: `package.json scripts.${named}`,
+        },
+      };
+    }
+  }
+  return null;
+}
+
+
 /* ── FAILURE IDENTITY ─────────────────────────────────────────────────────────
  *
  * The baseline-delta gate — run the check, and if RED, run it again at the baseline SHA and
@@ -314,7 +354,15 @@ function newFailures(current, baseline) {
   return current.filter((f) => !before.has(f));
 }
 
+// THE LOADER READS name/execute FROM THE TOOL, NOT FROM ITS DEFINITION.
+// src/tools/PluginLoader.ts:79-80 requires both on the tool object. Every other plugin hoists
+// them (see scan_secrets); this one nested them inside `definition`, so the loader rejected it
+// with "plugin missing required field: name" — a WARNING, not an error, so nothing surfaced it and
+// the verification tools silently never reached any agent. 15 such warnings across the runs of
+// 2026-08-19/20. Hoisted here to match the shape the loader and every sibling plugin use.
 const verifyTypecheckTool = {
+  name: 'verify_typecheck',
+  pluginApiVersion: PLUGIN_API_VERSION,
   definition: {
     name: 'verify_typecheck',
     pluginApiVersion: PLUGIN_API_VERSION,
@@ -367,6 +415,7 @@ module.exports = {
   readManifest,
   runVerification,
   detectTests,
+  detectLint,
   readTestManifest,
   runTests,
   parseFailures,

@@ -32,7 +32,7 @@ const { execSync } = require('child_process');
 const { crossRepoTermScores, applyRecency, repoRecency, orderCodelines, rankingConfidence } = require('./codeline-score');
 const { rankByStructure } = require('./codeline-structure');
 // THE ONE ECOSYSTEM TABLE. This file used to carry a three-branch stack ladder of its own.
-const { allManifests } = require('./ecosystems.js');
+const { allManifests } = require('./ecosystem-registry.js');
 
 /**
  * Append this call's spend to the activity log. Best-effort by design: a cost record that fails
@@ -599,6 +599,33 @@ function scoreRepos(issues, manifest, topN = 8, vocabulary = null) {
 // Never selects by alphabetical position — that was the bug that caused wrong
 // codeline selection when the LLM timed out.
 
+// THE OPERATOR'S SCOPE BOUNDS THE PRODUCER, NOT JUST THE PRODUCT.
+//
+// EPAM_ONLY_CODELINES used to be applied only by the lane loop, long after discovery had already
+// decided which repository the work belonged to. Live metrolinx AMSD-2041, 2026-08-18: launched
+// with the scope naming one codeline, the discovery call exhausted its iterations, the scored
+// fallback picked a DIFFERENT codeline on lexical word count, and the lane filter then matched
+// nothing. The operator had named the answer before launch and the only component able to get it
+// wrong never saw it.
+//
+// Filtering the manifest HERE bounds everything downstream from one place — the derived
+// vocabulary, the scoring, the candidate list handed to the model, and the fallback. A fallback
+// that can only choose among repositories the operator named cannot choose one they did not.
+//
+// Matched on the DERIVED codeline name, which is the same identity the lane selector compares by
+// exact equality — never on the directory string. Substring matching on directories is what let
+// one selection sweep six unrelated repositories in the launcher's preflight reset.
+function constrainToRequestedCodelines(manifest, only, derive) {
+  const raw = only === undefined ? process.env.EPAM_ONLY_CODELINES : only;
+  const wanted = String(raw || '').split(/[|,\s]+/).filter(Boolean);
+  if (wanted.length === 0) return manifest;               // unset means all, unchanged
+  const name = typeof derive === 'function' ? derive : deriveCodelineName;
+  return (manifest || []).filter((r) => {
+    const dir = String(r && (r.name || r.path) || '').replace(/[/\\]+$/, '').split(/[/\\]/).pop();
+    return wanted.includes(name(dir));
+  });
+}
+
 function selectBestCandidate(scored, issues) {
   if (scored.length === 0) {
     throw new Error('No git repositories found under JIRA_CODELINE_ROOT — cannot discover codelines.');
@@ -837,15 +864,31 @@ function callLlm(prompt, opts = {}) {
 // Requirable without running. The prompt below is migrating into the template layer, and a
 // migration has to be provable byte-for-byte — which means a test must be able to call the
 // builder. An unguarded IIFE runs a whole discovery pass the moment anything requires this.
-module.exports = { buildDiscoveryPrompt, buildRepoManifest };
+module.exports = {
+  constrainToRequestedCodelines, buildDiscoveryPrompt, buildRepoManifest };
 
 if (require.main !== module) return;
 
 (async () => {
   const issues = JSON.parse(fs.readFileSync(ISSUES_PATH, 'utf8'));
   log(`Scanning ${ROOT_DIR} for git repositories...`);
-  const manifest = buildRepoManifest(ROOT_DIR);
+  let manifest = buildRepoManifest(ROOT_DIR);
   log(`Found ${manifest.length} git repo(s) in codeline root.`);
+
+  // Bound by the operator's declared scope BEFORE anything is derived, scored or guessed.
+  const _requested = process.env.EPAM_ONLY_CODELINES || '';
+  if (_requested) {
+    const _before = manifest.length;
+    manifest = constrainToRequestedCodelines(manifest, _requested);
+    log(`Codeline scope active (EPAM_ONLY_CODELINES=${_requested}): ${manifest.length} of ${_before} repo(s) eligible.`);
+    if (manifest.length === 0) {
+      process.stderr.write(
+        `[codeline-discovery] ERROR: EPAM_ONLY_CODELINES='${_requested}' matched no repository under ` +
+        `${ROOT_DIR}. Names are the DERIVED codeline name (the lane selector compares the same way). ` +
+        `Refusing to discover outside the scope that was asked for.\n`);
+      process.exit(1);
+    }
+  }
 
   if (manifest.length === 0) {
     process.stderr.write('[codeline-discovery] ERROR: No git repositories found in JIRA_CODELINE_ROOT.\n');

@@ -1,18 +1,13 @@
 {
   "codelines": [
     {
-      "name": "mocka",
-      "path": "/home/bradleyjerome/projects/mock3/mock-a",
-      "declaredDependencies": 2
-    },
-    {
-      "name": "mockb",
-      "path": "/home/bradleyjerome/projects/mock3/mock-b",
-      "declaredDependencies": 2
+      "name": "metrolinx",
+      "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com",
+      "declaredDependencies": 103
     }
   ],
-  "codelineRepo": "/home/bradleyjerome/projects/mock3/mock-a",
-  "declaredDependencies": 2,
+  "codelineRepo": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com",
+  "declaredDependencies": 103,
   "documentsLinked": 2,
   "documentsFetched": 2,
   "documentsUnfetched": []

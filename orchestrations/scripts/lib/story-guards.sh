@@ -934,3 +934,31 @@ assert_phase_stories_have_roles() {
     printf '[story-guards] a story with no role runs with an empty system prompt and is read as "unknown" by every consumer downstream. Refusing to run the phase.\n' >&2
     return 1
 }
+
+# story_introduced_deps <repo>
+#
+# The dependency names this story ADDED to the manifest, comma-separated, or empty when it added
+# none. Two gates depend on this answer -- SAST (a CVE in pre-existing debt is advisory, in a
+# package the story added it blocks) and lockfile-sync (drift the story caused blocks; drift it
+# inherited does not) -- so it is computed ONCE, here, and read from here.
+#
+# It names no manifest file: the handler asks lib/ecosystem-registry.js. The first version was an inline
+# `grep` over package.json that returned the empty answer on every non-Node codeline, and the empty
+# answer disarms both gates silently.
+story_introduced_deps() {
+    local _repo="${1:-}"
+    local _handler="${SCRIPT_DIR:-}/lib/handlers/introduced-deps.js"
+    local _node="${NODE_CMD:-node}"
+    local _ref=""
+
+    [ -n "$_repo" ] && [ -d "$_repo" ] && [ -f "$_handler" ] || return 0
+
+    # The phase baseline is where the story's own change begins.
+    [ -f "${LOG_DIR:-}/phase-baseline-sha.txt" ] && \
+        _ref=$(tr -d '[:space:]' < "${LOG_DIR}/phase-baseline-sha.txt" 2>/dev/null)
+    [ -n "$_ref" ] || _ref="$(_resolved_baseline_ref 2>/dev/null || echo '')"
+    [ -n "$_ref" ] || return 0
+    git -C "$_repo" rev-parse --verify "$_ref" >/dev/null 2>&1 || return 0
+
+    "$_node" "$_handler" "$_repo" "$_ref" 2>/dev/null || return 0
+}

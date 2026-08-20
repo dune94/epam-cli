@@ -1,0 +1,4 @@
+{"event_id":"evt-1787160555914-2e9cf501","timestamp":"2026-08-19T17:29:15.914Z","agent":"ac-classification","story_id":null,"phase":null,"type":"tool_run","detail":{"tool":"read_file","args":{"path":"orchestrations/projects/hello-dolly/codeline-facts.json"}}}
+{"event_id":"evt-1787160555914-d10d1da7","timestamp":"2026-08-19T17:29:15.914Z","agent":"ac-classification","story_id":null,"phase":null,"type":"tool_run","detail":{"tool":"search","args":{"path":"orchestrations/projects/hello-dolly","pattern":"hello"}}}
+{"event_id":"evt-1787160556008-eafb1b09","timestamp":"2026-08-19T17:29:16.008Z","agent":"ac-classification","story_id":null,"phase":null,"type":"tool_result","detail":{"tool":"search","ok":true,"ms":94,"bytes":786}}
+{"event_id":"evt-1787160556008-dec2ffe6","timestamp":"2026-08-19T17:29:16.008Z","agent":"ac-classification","story_id":null,"phase":null,"type":"tool_result","detail":{"tool":"read_file","ok":true,"ms":94,"bytes":717}}

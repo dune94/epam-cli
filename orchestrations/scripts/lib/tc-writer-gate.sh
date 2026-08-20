@@ -47,17 +47,38 @@ _ladder_skip_reason() {
     fi
 }
 
+
+# DOES THIS STORY STILL NEED TEST CRITERIA — the CONVENTION asked of the one place that knows.
+#
+# This was an inline jq: `($f | map(endswith(".test.ts")) | all)`. On a codeline using .spec.ts,
+# test_*.py, __tests__/ or _test.go that predicate is false for every story, so the gate returned 0
+# and reported that all test stories already had criteria — having examined none. The same defect
+# was already fixed in three other places; this copy was missed.
+#
+# The `all` half is KEPT. This gate runs before execution and requiring every file to be a test
+# file is what stops a combo story being force-gated (the SKY-004 finding). The batch gate's
+# handler deliberately uses `any(...) or has_vcs` because it answers a different question after
+# execution — so the CONVENTION is shared via _testfile.py and the POLICY stays per-caller.
+#
+# Exit 2 (could not read the PRD) is NOT "no": it is reported and treated as needing the writer,
+# because a gate that cannot see the story must never answer "nothing to do".
+_tc_story_needs_criteria() {
+    local _sid="$1" _rc=0
+    python3 "$SCRIPT_DIR/lib/handlers/tc-story-is-pure-test.py" "$PRD_FILE" "$_sid" || _rc=$?
+    case "$_rc" in
+        0) return 0 ;;
+        1) return 1 ;;
+        *) warning "  [tc-writer] $_sid: could not determine whether test criteria are needed — treating as needed" >&2
+           return 0 ;;
+    esac
+}
+
 run_inline_tc_writer_gate() {
     local story_id="$1"
     local phase="$2"
 
-    local _needs_tc
-    _needs_tc=$(jq -r --arg id "$story_id" \
-        '.stories[] | select(.id == $id) | select(.status != "deprecated") |
-         select((.technicalNotes.files // []) as $f |
-                ($f | length > 0) and ($f | map(endswith(".test.ts")) | all)) |
-         select((.testCriteria.facts // []) | length == 0) | .id' \
-        "$PRD_FILE" 2>/dev/null || echo "")
+    local _needs_tc=""
+    _tc_story_needs_criteria "$story_id" && _needs_tc="$story_id"
     [ -z "$_needs_tc" ] && return 0
 
     local _tc_gate_attempt=0

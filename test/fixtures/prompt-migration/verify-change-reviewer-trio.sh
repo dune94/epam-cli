@@ -1,6 +1,10 @@
 set -uo pipefail
 SCRIPT_DIR="$1"; OUT="$2"
 source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
+# The blocks lifted below build their values file with jq_vals (values reach jq through
+# files, never argv). Without this the lifted code is command-not-found and writes an EMPTY
+# values file, which the renderer then rejects as invalid JSON.
+source "$SCRIPT_DIR/lib/jq-vals.sh"
 eval "$(awk '/^_render_change_reviewer\(\) \{/{f=1} f{print} f&&/^\}$/{exit}' "$SCRIPT_DIR/run-agent-orchestration.sh")"
 story_id="STORYID_S"; phase_id="PHASEID_S"
 _before_acs="BEFOREACS_S"; _candidate="CANDIDATE_S"; _pfa_diff="PFADIFF_S"; _profiles_change="PROFCHANGE_S"

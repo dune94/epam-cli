@@ -69,6 +69,7 @@
       "_what": "Reviews the story's code change AND its test; emits a verdict.",
       "maxOutputTokens": 32768,
       "maxIterations": 25,
+      "maxToolCalls": 8,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
       "ladder": "top",
@@ -306,6 +307,8 @@
       "_what": "Picks which local codeline a Jira ticket belongs to.",
       "maxOutputTokens": 16384,
       "reasoningEffort": "high",
+      "maxIterations": 40,
+      "_maxIterationsWhy": "It is handed up to 8 candidate repositories (scoreRepos(..., 8, ...)) and must examine each with read_file/list_files/search before it can answer. Unset, it inherited AgentRunner’s `?? 20`: llm-settings.json modelOverrides (glm-5.2 -> 120) is applied in claude.sh’s story-invocation path, and this seam spawns ai-run.sh directly, so it never saw that budget either. Live 2026-08-18: the call died at 20 with “reached maximum iterations”, which AgentRunner returns as a NORMAL result, so the caller parsed no JSON, fell back to the highest lexically-scored repo, and the run proceeded against a codeline the operator had not named.",
       "timeoutSecs": 300,
       "ladder": "top",
       "produces": "codeline-selection",
@@ -802,6 +805,23 @@
         }
       ],
       "template": "survey-review"
+    },
+    "qa-gate:runtime-boundary": {
+      "_what": "Asks whether a change can execute in the runtime it targets, given the codeline's own configuration.",
+      "_why": "Live metrolinx AMSD-2041: two defects survived three runs and three implementations because no seam owned execution. A page-level module imported a service that throws at load in a context where its credentials are absent, and the codeline's configuration forbade the embedding the feature required. The code reviewer judges the diff; SAST judges vulnerabilities; the client/server scanner reads changed files only. This asks the question none of them asks.",
+      "maxOutputTokens": 32768,
+      "reasoningEffort": "high",
+      "timeoutSecs": 600,
+      "ladder": "top",
+      "produces": "runtime-boundary-findings",
+      "consumes": [
+        {
+          "kind": "implementation",
+          "required": true
+        }
+      ],
+      "template": "runtime-boundary-review",
+      "toolGrant": "read-only"
     }
   },
   "_seamResolution": [
@@ -978,9 +998,8 @@
     "ticket-link-agent": "cpa-inference",
     "discovery-vocabulary-agent": "cpa-inference",
     "roster-reviewer": "code-review-cycle",
-    "typescript-logic-fixer": "story-writer",
-    "fares-investigator": "code-graph-detective",
-    "schedule-investigator": "code-graph-detective"
+    "contentstack-live-preview-engineer": "story-writer",
+    "metrolinx-contentstack-detective": "code-graph-detective"
   },
   "engineProduces": [
     "ticket",
@@ -1048,9 +1067,8 @@
     "ticket-link-agent": "derived",
     "discovery-vocabulary-agent": "derived",
     "roster-reviewer": "derived",
-    "typescript-logic-fixer": "derived",
-    "fares-investigator": "derived",
-    "schedule-investigator": "derived"
+    "contentstack-live-preview-engineer": "derived",
+    "metrolinx-contentstack-detective": "derived"
   },
   "_ladderPositions": "A seam declares a POSITION in the project’s ladderTierOrder (base|mid|top), never a tier NAME. The project owns its tier vocabulary; the engine owns none. Converted 2026-08-15 after twenty seams asking for a literal HIGHEST ran unladdered on a project that declared only high and medium.",
   "_defaultSeam": "REMOVED 2026-08-16. A project may declare EPAM_DEFAULT_SEAM in its config if it wants unmatched agents absorbed; the engine declares none, so an unmatched agent fails the mint loudly and is fixed with one line rather than discovered mid-run.",

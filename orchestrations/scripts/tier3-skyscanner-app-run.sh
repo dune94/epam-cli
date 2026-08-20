@@ -140,69 +140,26 @@ info "Output directory clean (deleted and reinitialised)"
 # right place to declare it. claude.sh's run_dependency_check() itself knows
 # nothing about npm — it just reads whatever manifest is here. A Python or
 # Rust orchestration would supply its own manifest with the same shape.
+# THE SAMPLE APP'S DECLARATION LIVES WITH THE PROJECT, NOT IN THIS SCRIPT.
+#
+# This was three heredocs, and tier3-skyscanner-app-run.sh carried its own copy of the same three
+# for the same app -- both launchers target it, and this file's own header says so. The copies had
+# already drifted: one declared vendorCacheExcludePatterns and the other did not. The third copy
+# settled it, being byte-identical to a known-fixes.json that already sat in the project directory.
+#
+# Unlike the client-codeline case, declaring this app is Node with vitest is legitimate: these
+# launchers CREATE it. What was not legitimate is saying so twice.
+_epam_project_cfg="${EPAM_PROJECT_CONFIG_DIR:-$REPO_ROOT/orchestrations/projects/skyscanner}"
 mkdir -p "$OUTPUT_DIR/.epam"
-cat > "$OUTPUT_DIR/.epam/dependency-check.json" << 'DEPCHECK_EOF'
-{
-  "manifestFile": "package.json",
-  "manifestKeys": ["dependencies", "devDependencies"],
-  "scanFileExtensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
-  "importPattern": "from\\s+['\"]([^./][^'\"]*)['\"]|require\\(\\s*['\"]([^./][^'\"]*)['\"]\\s*\\)",
-  "installCommand": "npm install --save-dev {package}",
-  "ignorePackages": ["assert","buffer","child_process","cluster","crypto","dgram","dns","domain","events","fs","http","http2","https","net","os","path","perf_hooks","process","punycode","querystring","readline","repl","stream","string_decoder","timers","tls","tty","url","util","v8","vm","worker_threads","zlib","node:assert","node:buffer","node:child_process","node:crypto","node:events","node:fs","node:http","node:https","node:net","node:os","node:path","node:process","node:stream","node:url","node:util","node:vm","node:zlib"],
-  "requiredDevDependencies": ["typescript", "@types/node", "vitest", "tsx"],
-  "vendorDirs": ["node_modules"]
-}
-DEPCHECK_EOF
-
-# Contract-generation manifest — same "engine knows nothing about the stack,
-# manifest supplies all the syntax/regex knowledge" pattern as dependency-check.json
-# above. claude.sh's generate_story_contract() parses this project's source with
-# whatever regex/templates are declared here; a Python or Go orchestration would
-# supply its own manifest with the same shape (different regexes, different mock
-# templates) and the engine function would not need to change at all.
-cat > "$OUTPUT_DIR/.epam/contract-generation.json" << 'CONTRACTGEN_EOF'
-{
-  "language": "typescript",
-  "sourceExtensions": [".ts"],
-  "excludePattern": "\\.(test|spec)\\.ts$",
-  "interfacePattern": "export\\s+interface\\s+(\\w+)\\s*\\{([^}]*)\\}",
-  "classPattern": "export\\s+class\\s+(\\w+)\\s*(?:extends\\s+\\w+\\s*)?\\{",
-  "ctorPattern": "constructor\\s*\\(([^)]*)\\)",
-  "methodPattern": "^\\s*(?:public\\s+|private\\s+|protected\\s+)?(async\\s+)?(\\w+)\\s*\\(([^)]*)\\)\\s*(?::\\s*([^{;]+))?\\s*\\{",
-  "interfaceRenderTemplate": "export interface {{name}} {{{body}}}",
-  "classDeclarationTemplate": "export class {{className}} {\n  constructor({{ctorParams}});\n{{methodSignatures}}\n}",
-  "methodSignatureTemplate": "  {{asyncPrefix}}{{methodName}}({{params}}){{returnAnnotation}};",
-  "asyncPrefixKeyword": "async ",
-  "returnAnnotationPrefix": ": ",
-  "mockFactoryTemplate": "vi.mock('<import-path-to-{{className}}>', () => ({\n  {{className}}: vi.fn().mockImplementation(() => ({\n{{methodMocks}}\n  })),\n}));",
-  "mockMethodTemplateSync": "    {{methodName}}: vi.fn(),",
-  "mockMethodTemplateAsync": "    {{methodName}}: vi.fn().mockResolvedValue(undefined),",
-  "testFileExtensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
-  "testFilePattern": "\\.(test|spec)\\.[a-zA-Z0-9]+$",
-  "mockFactoryStartPattern": "vi\\.mock\\(\\s*['\"](\\.[^'\"]+)['\"]\\s*,\\s*\\(\\)\\s*=>\\s*\\(\\{",
-  "mockClassPattern": "(\\w+)\\s*:\\s*vi\\.fn\\(\\)\\.mockImplementation\\(\\(\\)\\s*=>\\s*\\(\\{",
-  "mockedMethodPattern": "^\\s*(\\w+)\\s*:",
-  "testFileAgentRole": "test-engineer"
-}
-CONTRACTGEN_EOF
-
-# Known-fixes registry — deterministic second-line safety net for self-heal
-# (see apply_known_fix() in claude.sh). Each entry maps a recurring failure
-# SYMPTOM (regex against the FailureAnalyst's diagnosis text) to a mechanical,
-# one-line patch on an already-scaffolded file. Only engages after the same
-# diagnosis has recurred 2+ times with no LLM-routed fix able to touch it.
-cat > "$OUTPUT_DIR/.epam/known-fixes.json" << 'KNOWNFIXES_EOF'
-[
-  {
-    "id": "vitest-pass-with-no-tests",
-    "symptomPattern": "(?:vitest|test).*(?:no test files|zero test files).*exit|exit.*1.*(?:no|zero) test files|passWithNoTests",
-    "targetFile": "vitest.config.ts",
-    "checkPattern": "passWithNoTests",
-    "insertAfterPattern": "test:\\s*\\{",
-    "insertText": "\n    passWithNoTests: true,"
-  }
-]
-KNOWNFIXES_EOF
+for _m in dependency-check.json contract-generation.json known-fixes.json; do
+  if [ -f "$_epam_project_cfg/$_m" ]; then
+    cp "$_epam_project_cfg/$_m" "$OUTPUT_DIR/.epam/$_m"
+  else
+    # Absent is reported, never silently skipped: a gate that reads a manifest which was never
+    # written fails for a reason that looks unrelated to the manifest being missing.
+    echo "[tier3] WARNING: $_m not found in $_epam_project_cfg — .epam/$_m NOT written" >&2
+  fi
+done
 
 # Export all required env vars directly so subprocesses inherit them without
 # an `env` wrapper array (which caused silent exit due to empty-var expansion).

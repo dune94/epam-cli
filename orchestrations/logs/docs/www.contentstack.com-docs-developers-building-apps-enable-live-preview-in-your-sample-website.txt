@@ -1,0 +1,510 @@
+SOURCE: https://www.contentstack.com/docs/developers/building-apps/enable-live-preview-in-your-sample-website
+
+HTTP 200
+
+Enable Live Preview in Your Website with Contentstack | Contentstack 
+ Get inspired at ContentCon. Learn more and register today 
+
+ Get inspired at ContentCon. Learn more and register today 
+
+ Contentstack.com Academy Login 
+
+ Changelog 
+ APIs 
+ SDKs 
+ menu 
+
+ Home 
+ Developers 
+ Building Websites 
+ Enable Live Preview in Your Sample Website
+ content_copy Copy for LLM Copy for LLM markdown View as Markdown 
+ update Last updated July 22, 2026 
+
+ After learning how to add a new page to our Getting Started website, this guide will help you set up a Live Preview allowing you to see your website in action.
+ Live Preview lets users preview entry content across multiple channels before saving or publishing it to a live website. You can edit an entry and preview the content changes side by side in real-time.
+ Steps to Follow
+ link 
+
+ To enable live preview in our website you need to perform the following steps:
+ Generate preview token in the already created delivery token
+ Enable Live Preview in the Stack
+ Update the code with the Live Preview Changes
+ Pushing the Live Preview changes to Git repository
+ Deploy new changes using Launch
+ Generate Preview Token In Existing Delivery Token
+ link 
+
+ Click on the Stack Settings icon and click on Tokens .
+ Open the previously generated delivery token (PlateStack)
+ Click on + Create Preview Token 
+ Click to enlarge 
+ 
+ Copy the Generated Preview token and save it in the .env file as: 
+ 1 
+ REACT_APP_CONTENTSTACK_PREVIEW_TOKEN=<YOUR_PREVIEW_TOKEN>
+
+ Click on Save to save the Preview token.
+ Enable Live Preview in the Stack
+ link 
+
+ Click on the Stack Settings icon and click on Live Preview .
+ Tick the checkbox of Enable Live Preview .
+ Select the Default Preview Environment i.e., Development .
+ Click to enlarge 
+ 
+ Click on Save .
+ Update the code with the Live Preview Changes
+ link 
+
+ Follow these steps to set up live preview through the code:
+ Go to src/sdk/utils.ts file. This file has all the SDK initialization logic. Add the following two methods at the top of the file: 
+ 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 
+ const getLivePreviewHostByRegion = (region: string) => {
+
+ switch (region) {
+
+ case "US":
+
+ return "rest-preview.contentstack.com";
+
+ case "EU":
+
+ return "eu-rest-preview.contentstack.com";
+
+ case "AZURE_NA":
+
+ return "azure-na-rest-preview.contentstack.com";
+
+ case "AZURE_EU":
+
+ return "azure-eu-rest-preview.contentstack.com";
+
+ default:
+
+ return "rest-preview.contentstack.com";
+
+ }
+
+ };
+
+const getHostByRegion = (region: string) => {
+
+ switch (region) {
+
+ case "US":
+
+ return "app.contentstack.com";
+
+ case "EU":
+
+ return "eu-app.contentstack.com";
+
+ case "AZURE_NA":
+
+ return "azure-na-app.contentstack.com";
+
+ case "AZURE_EU":
+
+ return "azure-eu-app.contentstack.com";
+
+ case "GCP_NA":
+
+ return "gcp-na-api.contentstack.com";
+
+ default:
+
+ return "app.contentstack.com";
+
+ }
+
+ };
+
+ Update the Environment Variable with REACT_APP_CONTENTSTACK_PREVIEW_TOKEN at the top of initializeContentstackSdk 
+ 1 2 3 4 5 6 7 8 9 10 11 12 13 
+ const {
+
+ REACT_APP_CONTENTSTACK_API_KEY,
+
+ REACT_APP_CONTENTSTACK_DELIVERY_TOKEN,
+
+ REACT_APP_CONTENTSTACK_ENVIRONMENT,
+
+ REACT_APP_CONTENTSTACK_REGION,
+
+ REACT_APP_CONTENTSTACK_PREVIEW_TOKEN
+
+ } = process.env;
+
+ Update the Contentstack.Stack method within the initializeContentstackSdk with the below code: 
+ 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 
+ const Stack = Contentstack.Stack({
+
+ api_key: REACT_APP_CONTENTSTACK_API_KEY as string,
+
+ delivery_token: REACT_APP_CONTENTSTACK_DELIVERY_TOKEN as string,
+
+ environment: REACT_APP_CONTENTSTACK_ENVIRONMENT as string,
+
+ region: region,
+
+ live_preview: {
+
+ enable: true,
+
+ host: getLivePreviewHostByRegion(REACT_APP_CONTENTSTACK_REGION as string),
+
+ preview_token: REACT_APP_CONTENTSTACK_PREVIEW_TOKEN as string
+
+ }
+
+ });
+
+ Install Live Preview Utils SDK package via npm using the following command: 
+ 1 
+ npm install @contentstack/live-preview-utils
+
+ Import ContentstackLivePreview along with other imports at the top of the file: 
+ 1 
+ import ContentstackLivePreview from "@contentstack/live-preview-utils";
+
+ Initialize the Live Preview SDK below the Contentstack.Stack method and before return stack: 
+ 1 2 3 4 5 
+ ContentstackLivePreview.init({
+
+ stackSdk: Stack
+
+});
+
+ Finally, at the end of the file export the onEntryChange method: 
+ 1 
+ export const onEntryChange = ContentstackLivePreview.onEntryChange;
+
+ Finally, save the file.
+ Here’s what you did above:
+ Added getLivePreviewHostByRegion and getHostByRegion to the top of the file
+ Updated the Environment Variable import for REACT_APP_CONTENTSTACK_PREVIEW_TOKEN 
+ Updated Stack Initialization with the live_preview parameter
+ Installed Live Preview SDK via npm
+ Imported ContentstackLivePreview along with other imports
+ Initialized the Live Preview SDK by passing stack information
+ Added onEntryChange to the exports at the end of file
+ 
+ Go to src/routes/index.ts file. This is the file that maintains the routing logic of our application. Import onEntryChange from src/sdk/utils at the top of the file: 
+ 1 
+ import { onEntryChange } from "../sdk/utils";
+
+ In the useEffect function, wrap the fetchInitialData method within the onEntryChange handler before invoking it: 
+ 1 2 3 4 5 6 7 8 9 
+ useEffect(() => {
+
+ onEntryChange(() => {
+
+ fetchInitialData(dispatch, setLoading);
+
+ });
+
+ }, [dispatch]);
+
+ Save the file.
+ Here&#x27;s what you did above:
+ Added onEntryChange to the import statement
+ Wrapped fetchInitialData function with onEntryChange 
+ 
+ Go to src/components/menu/Menu.tsx file. This file consists of the Rendering Logic of the Menu Page of our Restaurant Menu Website. Import onEntryChange from src/sdk/utils at the top of the file: 
+ 1 
+ import { onEntryChange } from "../../sdk/utils";
+
+ In the useEffect function, wrap the fetchMenuPageData method within the onEntryChange handler before invoking it: 
+ 1 2 3 4 5 6 7 8 9 
+ useEffect(() => {
+
+ onEntryChange(() => {
+
+ fetchMenuPageData(dispatch, setLoading);
+
+ });
+
+ }, [dispatch]);
+
+ Save the file.
+ Here&#x27;s what you did above:
+ Added onEntryChange to the import statement.
+ Wrapped fetchMenuPageData Function with onEntryChange 
+ 
+ Pushing the Live Preview Changes to Git Repository
+ link 
+
+ The changes done above are in your local machine. Let’s see how to deploy this using Launch to take it live.
+ Open a new Terminal in VS code (press control + shift + ` or click on Terminal > New Terminal ).
+ With multiple files modified, it is essential to commit and push them to Git to facilitate a successful deployment.
+ Now, let’s stage all the files that you need to commit. Run the below command in the terminal. You will see the list of files staged. 
+ 1 
+ git add . -v
+
+ Click to enlarge 
+ 
+ After the changes are staged, commit the staged files to the repository. Run the below command in the terminal. You will see the number of files changed.: 
+ 1 
+ git commit -m "Add Live Preview changes"
+
+ Click to enlarge 
+ Note Let’s give a commit message “Add Live Preview changes” with -m flag. It’s a good practice to provide a commit message whenever you add new changes to the repository.
+ Insertions and deletions count may differ for you.
+
+ After committing the changes, push the changes to the repository. Run the below command in the terminal: 
+ 1 
+ git push origin main
+
+ Click to enlarge 
+ 
+ You have successfully pushed your changes to Git. Now let’s deploy the new changes using Launch.
+ Deploy New Changes Using Launch
+ link 
+
+ To deploy the changes you added to your application, perform the following set of steps:
+ Go to Launch and click the contentstack-getting-started-react-app project
+ By default, Launch will auto deploy new changes whenever you push code to the main branch of our repository. You would see a status of Deploying in the default environment as soon as the code is pushed. Click to enlarge 
+ 
+ Click on the “Settings” icon (press “S”) on the left navigation panel, and click on Environments .
+ Select the development environment and navigate to Environment Variables .
+ Scroll down and under the Environment Variables section, click on + Add Environment Variable .
+ Now, to run our application with Live Preview , we need to add following environment variable from your .env file: 
+ 1 
+ REACT_APP_CONTENTSTACK_PREVIEW_TOKEN=YOUR_PREVIEW_TOKEN
+
+ Finally, click Save Environment Variables .
+ Click on the “Environments” icon (press “E”) on the left navigation panel, and click the Default environment.
+ Finally, click on Redeploy .
+ Once the deployment is completed, the status will be Live , click on the Environment URL to view the website.
+ View Live Preview of Your Webpage
+ link 
+
+ To start viewing your website in the Live Preview panel, perform the following steps:
+ Log in to your Contentstack account and navigate to the organization in which you have your “Getting Started” stack.
+ Click on the “Settings” icon (press “S”) on the left navigation panel, and click on the Environments .
+ Click the development environment and update the base URL with the Launch Environment URL where your website is deployed and click Save .
+ Click on the “Entries” icon (or press “E”) on the left navigation panel.
+ Go into any of the entry (say, “Footer”) and open the “Live Preview” tab from the right sidebar Click to enlarge 
+ 
+ Modify any value of a field and see it updated in the Live Preview panel instantly Click to enlarge 
+ 
+ Live Edit Tags (optional)
+ link 
+
+ Live edit tags allow you to navigate to the field that contains the website content being previewed within the Live Preview pane. When you click on the “Edit” button beside a content block in the preview pane, you will be redirected to the corresponding field within the entry. If the field holds reference to another entry, you will be redirected to the referenced entry&#x27;s editor page.
+ For example of Live Edit Tags let us consider the header entry and the Respective code changes to Enable Live edit Tag
+ To enable the Live Edit Tag buttons, add addEditableTags from @contentstack/utils 
+ When making API calls to retrieve an entry, pass that entry to the following function. This function modifies the entry and adds additional data, as discussed below.
+ For example, in the header entry you have the following data: 
+ 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 
+ {
+
+ "logo": {
+
+ "title": "Header Logo.png",
+
+ "url": "https://images.contentstack.io/v3/assets/Header_Logo.png"
+
+ },
+
+ "navigation_links": {
+
+ "link": [
+
+ { "title": "Home", "href": "/" },
+
+ { "title": "Menu", "href": "/menu" },
+
+ { "title": "About Us", "href": "/about-us" },
+
+ { "title": "Contact", "href": "/contact" }
+
+ ]
+
+ }
+
+}
+
+ Once it is passed to the addEditableTags , the entry is modified as follows: 
+ 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81 82 83 84 85 86 87 88 89 90 91 
+ {
+
+ "logo": {
+
+ "title": "Header Logo.png",
+
+ "url": "https://images.contentstack.io/v3/assets/Header_Logo.png",
+
+ "$": {
+
+ "url": "header.blt8tvsk328dbw258.en-us.logo",
+
+ "title": "header.blt8tvsk328dbw258.en-us.logo.title"
+
+ }
+
+ },
+
+ "navigation_links": {
+
+ "link": [
+
+ {
+
+ "title": "Home",
+
+ "href": "/",
+
+ "$": {
+
+ "title": "header.blt8tvsk328dbw258.en-us.navigation_links.link.0.title",
+
+ "href": "header.blt8tvsk328dbw258.en-us.navigation_links.link.0.href"
+
+ }
+
+ },
+
+ {
+
+ "title": "Menu",
+
+ "href": "/menu",
+
+ "$": {
+
+ "title": "header.blt8tvsk328dbw258.en-us.navigation_links.link.1.title",
+
+ "href": "header.blt8tvsk328dbw258.en-us.navigation_links.link.1.href"
+
+ }
+
+ },
+
+ {
+
+ "title": "About Us",
+
+ "href": "/about-us",
+
+ "$": {
+
+ "title": "header.blt8tvsk328dbw258.en-us.navigation_links.link.2.title",
+
+ "href": "header.blt8tvsk328dbw258.en-us.navigation_links.link.2.href"
+
+ }
+
+ },
+
+ {
+
+ "title": "Contact",
+
+ "href": "/contact",
+
+ "$": {
+
+ "title": "header.blt8tvsk328dbw258.en-us.navigation_links.link.3.title",
+
+ "href": "header.blt8tvsk328dbw258.en-us.navigation_links.link.3.href"
+
+ }
+
+ }
+
+ ]
+
+ }
+
+}
+
+ The “$” object consists of a key called data-cslp which follows a specific syntax that enables the live preview SDK to map fields within the entry page. 
+ 1 
+ {content_type_uid}.{entry_uid}.{locale}.{field_uid}
+
+ By using the “$” object, you need to map each and every element in the frontend code that needs to have a live edit button. For example the logo of header 
+ 1 
+ <img {...logo.$.url}="" src="{logo?.url}" alt="Logo">
+
+ For complete Live Preview code with Live Edit tags, please check out the livePreview Branch by executing the below command:
+ 
+ 1 
+ git checkout live-preview
+
+ Next Steps
+ link 
+
+ Starters and Samples 
+
+ expand_less 
+ Platform
+ Solution Center 
+ Marketplace 
+ Changelog 
+ Developers & IT 
+ Business users 
+ Digital leaders 
+ Developer Fast Track 
+ Plans & Pricing 
+ 
+ Solutions
+ Retail 
+ Travel and tourism 
+ Financial services 
+ Technology 
+ Manufacturing 
+ E-commerce 
+ Localization 
+ Personalization 
+ Portals and knowledge bases 
+ 
+ Resources
+ Academy 
+ Docs 
+ Product updates 
+ Contentstack on Contentstack 
+ Blog 
+ Insights and analyst reports 
+ Webinars 
+ Podcasts 
+ Glossary 
+ Content generative library 
+ Community 
+ Headless CMS 
+ Composable AXP 
+ Personalization 
+ CDP 
+ 
+ Customers
+ Case Studies 
+ Customer Care 
+ Contentstack Experience Awards 
+ Customer support 
+ 
+ Partners
+ Overview 
+ Find a partner 
+ Login 
+
+ Company
+ About us 
+ News 
+ Customer support portal 
+ Contact 
+ 
+ Social
+ Facebook 
+ LinkedIn 
+ Instagram 
+ GitHub 
+ YouTube 
+ Discord 
+ X 
+
+ arrow_outward Full AXP by Contentstack Legal Terms Privacy Trust Center Cookie settings
+
+ Copyright © 2026 Contentstack Inc. All rights reserved.
+
+ /

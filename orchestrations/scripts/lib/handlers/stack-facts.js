@@ -12,7 +12,7 @@
  * configuration — which is what this emits.
  *
  * Everything comes from somewhere that already owns it:
- *   - the ecosystem (test command, manifest, protected files) from lib/ecosystems.js
+ *   - the ecosystem (test command, manifest, protected files) from lib/ecosystem-registry.js
  *   - the test-file convention from the same broad regex story-outputs.sh uses
  *   - the ROLES from the project's own minted roster, never from a name written here
  *
@@ -29,7 +29,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const { allManifests } = require('../ecosystems.js');
+const { allManifests } = require('../ecosystem-registry.js');
 
 const repo = process.argv[2];
 if (!repo) {

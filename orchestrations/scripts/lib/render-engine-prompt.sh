@@ -56,3 +56,34 @@ render_engine_prompt() {
     rm -f "$_err"
     printf '%s' "$_out"
 }
+
+# render_or_keep <template-id> <values-json-file> [<body-key>]
+#
+# Renders, or prints NOTHING and returns non-zero — so the caller's variable keeps whatever it
+# already held instead of being blanked:
+#
+#     _r="$(render_or_keep writer-plan-section "$_vals" execution_plan)" && prompt="$_r"
+#
+# WHY. `prompt="$(render_engine_prompt ...)"` discards the exit status, so a dead render assigns
+# the empty string. Live metrolinx AMSD-2041, 2026-08-19: jq hit the 128KB argv cap, both the
+# writer prompt and the retry amendment silently became empty, and the run climbed the entire model
+# ladder invoking agents with nothing in hand — visible as attempts returning in 0.01 min having
+# consumed zero tokens. The header of this file already stated the rule the callers broke: exit
+# status is the contract, and a caller must refuse rather than send an empty prompt.
+#
+# AN EMPTY SUCCESSFUL RENDER IS ALSO A FAILURE here. At the call site the two are the same event —
+# an agent handed nothing — and only one of them was ever going to be noticed.
+render_or_keep() {
+    local _out _rc
+    _out=$(render_engine_prompt "$@")
+    _rc=$?
+    if [ "$_rc" -ne 0 ] || [ -z "$_out" ]; then
+        if command -v warning >/dev/null 2>&1; then
+            warning "  [render] '${1:-?}' produced nothing (exit ${_rc}) — keeping the previous value rather than blanking it"
+        else
+            echo "[render-engine-prompt] '${1:-?}' produced nothing (exit ${_rc}) — caller keeps its previous value" >&2
+        fi
+        return 1
+    fi
+    printf '%s' "$_out"
+}

@@ -35,7 +35,10 @@ export function createTools(): Tool[] {
   const registry = new ToolRegistry();
   registry.registerMany(builtins);
 
-  const loader = new PluginLoader({ projectRoot: process.cwd() });
+  // STRICT: every entry here was listed in this project's .epam/settings.json, so each one is a
+  // capability the project asked for. The result of loadAll used to be discarded entirely, which is
+  // how a plugin rejected on every single invocation still produced a tool set that looked complete.
+  const loader = new PluginLoader({ projectRoot: process.cwd(), failOnError: true });
   loader.loadAll(pluginEntries, registry);
 
   return registry.getAll();

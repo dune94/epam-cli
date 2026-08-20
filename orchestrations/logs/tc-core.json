@@ -1,19 +1,51 @@
 {
-  "MOCK-HW-1-test": {
-    "verifiedAt": "2025-01-01T00:00:00Z",
-    "sourceFiles": ["src/hello.ts"],
-    "facts": [
-      "getGreeting is exported from src/hello.ts as a named export",
-      "getGreeting takes no parameters and returns the string 'hello dolly'",
-      "The return value is exactly the string literal 'hello dolly' (all lowercase, single space)"
+  "AMSD-2041": {
+    "verifiedAt": "2025-01-24T00:00:00Z",
+    "sourceFiles": [
+      "src/services/contentstack.ts",
+      "src/pages/_app.tsx",
+      "src/context/contentstackContext.tsx",
+      "src/services/pageService.ts",
+      "src/components/pages/Homepage.tsx",
+      "src/hooks/useContent.ts",
+      "src/api/utils/_contentstack_getNewsArticles.ts",
+      "src/interface/content/page.ts"
     ],
-    "mockStrategy": "No mocks needed — getGreeting has no external dependencies; import directly from '../src/hello'",
+    "facts": [
+      "src/pages/_app.tsx imports ContentstackLivePreview from '@contentstack/live-preview-utils' and calls ContentstackLivePreview.init({ stackSdk: Stack as any, enable: true, ssr: false }) inside a useEffect that returns early when typeof window === 'undefined'.",
+      "src/pages/_app.tsx registers ContentstackLivePreview.onEntryChange(handleEntryChange) where handleEntryChange is a useCallback that calls setLivePreviewEntry({ __livePreviewUpdatedAt: Date.now() }).",
+      "The livePreviewEntry state object set by handleEntryChange contains only the key __livePreviewUpdatedAt with a numeric timestamp \u2014 it contains NO entry content, NO entry UID, and NO content type identifier.",
+      "src/pages/_app.tsx constructs contentstackContextValue as { ...pageProps, livePreviewEntry, setLivePreviewEntry } and passes it to <ContentstackContext.Provider value={contentstackContextValue}>.",
+      "src/context/contentstackContext.tsx exports interface IContentstackContext with fields livePreviewEntry?: any and setLivePreviewEntry?: (entry: any) => void, plus optional header, footer, onboarding, page, pagesBaseURLs, directories, and languageAlternativePageSlug.",
+      "src/context/contentstackContext.tsx exports ContentstackContext = createContext<IContentstackContext>({}).",
+      "src/hooks/useContent.ts exports useContent which calls useContext(ContentstackContext) and returns { getContentByKey } where getContentByKey is a useCallback that calls getValue<T>(content, path, defaultValue) on the context value.",
+      "src/hooks/useContent.ts does NOT reference livePreviewEntry or setLivePreviewEntry \u2014 the useContent hook does not expose live preview state to callers.",
+      "src/components/pages/Homepage.tsx exports interface IHomepageProps with a single field: page: [IContentstackPage].",
+      "src/components/pages/Homepage.tsx Homepage component receives { page } via props and does NOT call useContent, does NOT read livePreviewEntry from ContentstackContext, and does NOT import ContentstackContext.",
+      "src/components/pages/Homepage.tsx extracts pageComponents via getValue<PageComponents>(page, '0.modular_blocks', []) and recentNews via getValue<IRecentNews>(page, '0.recent_news', {} as IRecentNews).",
+      "src/services/pageService.ts PageService.getPageEntry returns { header, footer, cookiesBanner, onboarding, page } \u2014 there is no livePreviewEntry, no draft content, and no preview-related field in the return value.",
+      "src/services/pageService.ts has no reference to livePreviewEntry, livePreview, ContentstackLivePreview, draft, or preview anywhere in the file.",
+      "src/services/contentstack.ts exports Stack = contentstack.Stack(options) where options includes live_preview: { enable: true, host: CONTENTSTACK_PREVIEW_HOST, management_token: CONTENTSTACK_MANAGEMENT_TOKEN }.",
+      "src/services/contentstack.ts ContentstackFactory has methods createContentTypeQuery and createContentTypeEntryQuery \u2014 neither accepts a live preview, draft, or preview-related parameter.",
+      "No function in any source file fetches draft or preview entry content from Contentstack in response to an onEntryChange signal \u2014 the handleEntryChange callback only bumps a timestamp.",
+      "IMPLEMENTATION CONFLICT: Verification criterion 1 requires that 'the rendered Homepage shows the draft entry content instead of the previously published content' \u2014 Homepage.tsx does not consume livePreviewEntry from context and has no mechanism to display draft content; it reads page data exclusively from props.",
+      "IMPLEMENTATION CONFLICT: Verification criterion 2 requires that 'the rendered Discover Article page shows the draft entry content instead of the previously published content' \u2014 there is no Discover Article-specific or any page-type-specific live preview handling in any source file; pageService.ts has no live preview awareness.",
+      "IMPLEMENTATION CONFLICT: Verification criterion 5 requires that 'multiple successive draft entry changes' update the rendered Homepage in sequence \u2014 handleEntryChange only sets a timestamp and Homepage.tsx does not subscribe to ContentstackContext changes.",
+      "IMPLEMENTATION CONFLICT: Verification criterion 6 requires that 'the page does not render the draft content and continues to show the published content unchanged' when in a 'protected or gated state' \u2014 there is no gated or protected state check anywhere in the live preview flow; handleEntryChange unconditionally calls setLivePreviewEntry regardless of page state.",
+      "Existing test convention in this repo uses jest.mock() at module level (e.g., jest.mock('contentstack', () => ({ Stack: () => ({ ... }) })) in src/services/__tests__/contentstack.spec.ts), jest.spyOn() for method-level spies, jest.resetModules() in beforeEach, and jest.clearAllMocks() in afterEach, as seen in src/services/__tests__/contentstack.spec.ts and src/services/__tests__/pageService.spec.ts."
+    ],
+    "mockStrategy": "Following the convention in src/services/__tests__/contentstack.spec.ts, use jest.mock('@contentstack/live-preview-utils', () => ({ init: jest.fn().mockResolvedValue(undefined), onEntryChange: jest.fn() })) to mock the Live Preview SDK; use jest.mock('contentstack', () => ({ Stack: () => ({ ContentType: jest.fn().mockReturnThis(), Query: jest.fn().mockReturnThis(), Entry: jest.fn().mockReturnThis(), language: jest.fn().mockReturnThis(), toJSON: jest.fn().mockReturnThis(), find: jest.fn().mockResolvedValue([[], 0]), fetch: jest.fn().mockResolvedValue({}), ... })) to mock the contentstack SDK; for component tests, wrap in a test ContentstackContext.Provider value shaped as { ...pageProps, livePreviewEntry, setLivePreviewEntry } to simulate the context from _app.tsx; capture the onEntryChange callback via jest.mocked(ContentstackLivePreview.onEntryChange).mockImplementation(cb => { storedCallback = cb }) and invoke it manually to simulate draft entry signals.",
     "bannedPatterns": [
-      "@jest/globals",
-      "getGreeting('",
-      "hello world",
-      "Hello Dolly",
-      "vi.mock"
+      "livePreviewEntry contains entry content or a UID",
+      "handleEntryChange fetches draft content from Contentstack",
+      "there is a gated state check for live preview",
+      "ContentstackFactory accepts a draft or preview parameter",
+      "getPageEntry returns livePreviewEntry or draft content",
+      "Homepage calls useContent",
+      "Homepage imports ContentstackContext",
+      "getContentStackNewsArticles handles live preview",
+      "useContent exposes livePreviewEntry or setLivePreviewEntry",
+      "import from absolute 'src/' paths instead of relative paths"
     ]
   }
 }

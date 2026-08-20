@@ -48,6 +48,8 @@ AUTO_APPROVE="${AUTO_APPROVE:-false}"
 REVIEW_LOG="${REVIEW_LOG:-$AUTOMATION_DIR/logs/code-reviews.jsonl}"
 AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$AUTOMATION_DIR/agents/profiles.json}"
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
+# shellcheck source=lib/agent-invoke.sh
+source "$SCRIPT_DIR/lib/agent-invoke.sh"
 
 # The model settings this seam is configured to run with — ladder, effort, temperature — read
 # from the registry by name. This seam decides whether code is accepted, and it fails silently
@@ -114,6 +116,11 @@ if [ -z "$(printf '%s' "$TEST_OWNERSHIP_BLOCK" | tr -d '[:space:]')" ]; then
 fi
 source "$SCRIPT_DIR/lib/project-tools.sh"
 source "$SCRIPT_DIR/lib/story-retry-state.sh"
+# jq_vals — prompt values files whose content never becomes an argv entry.
+# Placed with the other library sources, NOT beside SCRIPT_DIR: the path-resolution
+# block is lifted verbatim by tests that build a minimal script tree, and a source
+# line inside it makes those probes fail on a library they have no reason to carry.
+source "$SCRIPT_DIR/lib/jq-vals.sh"
 # THE SEAM DECIDES. seam_ladder_export (above) sets EPAM_MODEL to the first rung of the chain this
 # seam's ARCHETYPE declares. The literal that stood here overrode that silently — the reviewer asked
 # for its tier and then ignored the answer, so the declaration selected nothing. An operator value
@@ -236,20 +243,29 @@ run_review_prompt() {
     # evidence already gathered. The iteration cap stays as the guard against a
     # reviewer that stalls WITHOUT calling tools — the two bound different
     # failures, so both are set.
-    _review_out=$(echo "$prompt_text" | \
-        AI_MODEL="$_model" \
-        CLAUDE_CMD="${CLAUDE_CMD:-claude}" \
-        EPAM_CLI="${EPAM_CLI:-epam}" \
-        ORCH_JSON_RESULT="$_review_json_result" \
-        AI_GATE_ALLOW_TOOLS=1 \
-        EPAM_ALLOWED_TOOLS="bash,read_file,list_files,search${_review_plugin_tools:+,${_review_plugin_tools}}" \
-        EPAM_MAX_TOOL_CALLS="${REVIEW_MAX_TOOL_CALLS:-8}" \
-        EPAM_MAX_ITERATIONS="${REVIEW_MAX_ITERATIONS:-25}" \
-        EPAM_REASONING_EFFORT="${REVIEW_REASONING_EFFORT:-high}" \
-        EPAM_MAX_OUTPUT_TOKENS="${REVIEW_MAX_OUTPUT_TOKENS:-32768}" \
-        PROJECT_ROOT="$PROJECT_ROOT" \
-        "$AI_RUNNER_CMD" --provider "$_provider" \
-            --model "$_model" 2>&1)
+    # THROUGH THE ONE DOOR.
+    #
+    # This set the execution budget itself -- output tokens, iterations, tool calls and reasoning
+    # effort, each as ${REVIEW_*:-default}. lib/agent-invoke.sh was built to end exactly that, and
+    # had no call sites at all: "silently falling back to a default is what let a reviewer run at
+    # 4096 tokens for months without anyone noticing." A default written here is a value nobody
+    # chose, and it is invisible on the day it is wrong.
+    #
+    # The budget AND the tool grant now come from the team-lead-review profile in
+    # agents/invocation-profiles.json. The profile has declared "toolGrant": "execute" all along and
+    # nothing read it, so this wrote its own list -- bash,read_file,list_files,search plus plugin
+    # tools discovered separately -- four tool names hardcoded beside a declaration that already
+    # said it. lib/agent-tools.js resolves the kind into the read-only floor, the plugin tools THIS
+    # codeline provisioned, and whatever the kind adds.
+    #
+    # Model and provider stay here: routing is per-site and dynamic, which the gateway says is the
+    # caller's to own.
+    export PROJECT_ROOT
+    _review_out=$(echo "$prompt_text" | invoke_agent team-lead-review \
+        --model "$_model" --provider "$_provider" \
+        --json-result "$_review_json_result" \
+        --codeline "$PROJECT_ROOT" \
+        2>&1)
     # Emit cost_snapshot so agent-activity dashboard shows review-agent cost
     if [ -f "$_review_json_result" ] && [ -s "$_review_json_result" ]; then
         local _rc _tin _tout _cost _turns _phase_id
@@ -538,12 +554,17 @@ while IFS= read -r story_id; do
     fi
 
     # The plugin tools THIS codeline registered — discovered, never listed inline.
-    # Both halves are required: the BLOCK tells the reviewer the tools exist, and the
-    # NAMES extend EPAM_ALLOWED_TOOLS so applyToolAllowlist() does not filter them out
-    # before the model sees them. Advertising without permitting (or permitting without
-    # advertising) leaves the tool exactly as dead as it was.
+    #
+    # Both halves are still required, but only one of them is computed here now. The BLOCK tells the
+    # reviewer the tools exist; PERMITTING them is the grant's job, and the grant is declared on the
+    # profile ("toolGrant": "execute") and resolved by lib/agent-tools.js, which discovers the same
+    # plugin tools itself. project_tool_names() was the second half, and keeping it would be a second
+    # answer to a question already answered — the shape that drifts.
+    #
+    # Advertising without permitting (or permitting without advertising) leaves the tool exactly as
+    # dead as it was, so if the grant ever stops including plugin tools, this block is the thing
+    # that becomes a lie.
     _review_project_tools_block="$(build_project_tools_block "$PROJECT_ROOT")"
-    _review_plugin_tools="$(project_tool_names "$PROJECT_ROOT")"
 
     # Build review prompt
     # THE CONDITIONAL BLOCKS, COMPUTED HERE INSTEAD OF INSIDE THE PROMPT.
@@ -572,8 +593,21 @@ while IFS= read -r story_id; do
     # Values to a FILE, filter in SINGLE quotes. The first version inlined the jq filter inside
     # a process substitution with nested quoting, and bash expanded $profile before jq ever saw
     # it: "line 571: profile: unbound variable". This is the same shape the analyst render uses.
+    # WHAT THIS REVIEWER ALREADY SAID ABOUT THIS STORY.
+    #
+    # Until 2026-08-19 it received nothing: no prior verdict, no iteration number. So every cycle
+    # judged as if for the first time, and on AMSD-2041 run 2 it approved a story whose blocker it
+    # had itself raised and which had not changed since. It did not change its mind — it never knew.
+    # The record was already append-only in code-reviews.jsonl; it simply was never read back.
+    # Absent is absent: no prior review renders no section.
+    # NOT `local`: this runs at top level inside the per-story while-loop, not in a function.
+    # `local` here is a RUNTIME error bash -n cannot see (SC2168) — it aborted the reviewer on
+    # every cycle, produced NO VERDICT eight times, and halted the run of 2026-08-20.
+    _review_prior_block=""
+    _review_prior_block=$(python3 "$SCRIPT_DIR/lib/handlers/prior-reviews.py" "$REVIEW_LOG" "$story_id" 2>/dev/null || true)
+
     _review_vals=$(mktemp)
-    jq -n \
+    jq_vals \
         --arg profile "${REVIEW_PROFILE:-}" \
         --arg blocker "${BLOCKER_DISCIPLINE_BLOCK:-}" \
         --arg ownership "${TEST_OWNERSHIP_BLOCK:-}" \
@@ -591,13 +625,15 @@ while IFS= read -r story_id; do
         --arg codegraph "${_review_codegraph_block:-}" \
         --arg learned "${_review_learned_block:-}" \
         --arg tools "${_review_project_tools_block:-}" \
+        --arg prior_review "${_review_prior_block:-}" \
         '{"__REVIEW_PROFILE__":$profile,"__BLOCKER_DISCIPLINE__":$blocker,
           "__TEST_OWNERSHIP__":$ownership,"__STORY_ID__":$story_id,"__STORY_TITLE__":$title,
           "__STORY_DESC__":$desc,"__STORY_ACS__":$acs,"__STORY_DIFF__":$diff,
           "__STORY_FILES__":$files,"__TEST_FILES__":$test_files,"__PROJECT_ROOT__":$project_root,
           "__FIX_ANALYSIS_BLOCK__":$fix_analysis,"__UNCOVERED_VC_BLOCK__":$uncovered,
           "__VC_BLOCK__":$vc,"__CODEGRAPH_TOOL_BLOCK__":$codegraph,
-          "__LEARNED_RULES_BLOCK__":$learned,"__PROJECT_TOOLS_BLOCK__":$tools}' > "$_review_vals"
+          "__LEARNED_RULES_BLOCK__":$learned,"__PROJECT_TOOLS_BLOCK__":$tools,
+          "__PRIOR_REVIEW__":$prior_review}' > "$_review_vals"
     if ! REVIEW_PROMPT=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/prompt-library.js" \
             render team-lead-review "${EPAM_PROJECT_CONFIG_DIR:-}" "$_review_vals"); then
         rm -f "$_review_vals"
@@ -655,7 +691,17 @@ while IFS= read -r story_id; do
         # loop can hand it to the impl agent (build_implementation_prompt reads
         # this) and to the failure-analyst (self-heal → agent-KB). Consumed +
         # deleted by claude.sh once applied.
-        echo "$REVIEW_JSON" | jq -c '{verdict, summary, issues}' \
+        # reviewIncomplete IS PART OF THE FEEDBACK, not decoration.
+        #
+        # This projected {verdict, summary, issues} and dropped it. team-lead-review-json.py sets it
+        # when the reviewer returned nothing parseable -- live run 4: 292 output tokens, an empty
+        # string -- and run-agent-orchestration.sh's review_feedback_is_incomplete() reads it from
+        # THIS file to re-run the REVIEW instead of re-implementing a story nobody looked at.
+        #
+        # Deleting it between the component that sets it and the one that depends on it made that
+        # guard evaluate false on every review that has ever run. The writer was sent to fix
+        # feedback that did not exist.
+        echo "$REVIEW_JSON" | jq -c '{verdict, summary, issues, reviewIncomplete}' \
             > "${LOG_DIR:-$AUTOMATION_DIR/logs}/review-feedback-${story_id}.json" 2>/dev/null || true
     else
         success "  Review: approved — ${STORY_SUMMARY:-no issues found}"

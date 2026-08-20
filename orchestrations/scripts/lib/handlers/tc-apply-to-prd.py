@@ -52,7 +52,20 @@ if tc_exit != 0:
     sys.exit(1)
 
 if not os.path.exists(tc_file):
-    print("  [tc-writer] WARNING: Agent succeeded but wrote no TC file — treating as no-op")
+    # A STORY THAT NEEDED TEST CRITERIA AND GOT NONE IS A FAILURE, NOT A NO-OP.
+    #
+    # This exited 0, and the gate then reported "PASSED — all test stories have verified TCs" over
+    # a story with none. Live 2026-08-20: the agent could not write (read-only grant against a
+    # "Use WriteFile" instruction), the applier called it a no-op, and the step passed three times.
+    #
+    # "No-op" is only honest when nothing was ASKED FOR. When a specific story was targeted, its
+    # criteria are the reason this step ran, and their absence is the outcome that must be reported.
+    _target = story_filter if 'story_filter' in dir() else (sys.argv[6] if len(sys.argv) > 6 else '')
+    if _target:
+        print("  [tc-writer] ERROR: %s needed test criteria and none were produced — "
+              "its verification criteria remain unexecutable" % _target, file=sys.stderr)
+        sys.exit(1)
+    print("  [tc-writer] no TC file and no story targeted — nothing was asked for")
     sys.exit(0)
 
 with open(tc_file) as f:

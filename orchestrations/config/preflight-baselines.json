@@ -1,0 +1,15 @@
+{
+  "_": [
+    "RATCHET BASELINES. These numbers may only go DOWN.",
+    "",
+    "preflight-static.sh fails when a count exceeds its baseline, and lowers the baseline in place",
+    "when a count improves — so today's number becomes tomorrow's ceiling and the debt cannot",
+    "quietly grow back. Raising a number by hand is an operator decision, not a fix.",
+    "",
+    "Seeded 2026-08-20 from the first clean run of each scanner.",
+    "  duplicatedLiterals — handlers/scan-duplicated-literals.js  (code restating a data-layer value)",
+    "  uncalibratedGuards — handlers/scan-uncalibrated-guards.js  (blocking function no test names)"
+  ],
+  "duplicatedLiterals": 10,
+  "uncalibratedGuards": 37
+}

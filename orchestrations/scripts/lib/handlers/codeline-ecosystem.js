@@ -8,7 +8,7 @@
  * had nothing checked, and was reported HEALTHY without ever being assessed. A free pass from the
  * one gate that exists to stop a run before it pays for an unusable baseline.
  *
- * Every answer here comes from lib/ecosystems.js, the one table. This file names no manifest, no
+ * Every answer here comes from lib/ecosystem-registry.js, the one table. This file names no manifest, no
  * lockfile and no package manager.
  *
  *   argv[2]  the repository
@@ -35,7 +35,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const { allManifests } = require('../ecosystems.js');
+const { allManifests, lockfileFor } = require('../ecosystem-registry.js');
 
 const repo = process.argv[2];
 if (!repo) {
@@ -58,7 +58,8 @@ function ecosystemOf(root) {
 const eco = ecosystemOf(repo);
 const out = {
   stack: '', manifest: '', installDir: null, packageManager: '', testCommand: '', testFileCommand: '',
-  installCommand: '',
+  installCommand: '', addCommand: '',
+  lockfile: '',
   declaredBins: [], declaredDeps: [], missingBins: [], providers: {},
 };
 
@@ -69,9 +70,12 @@ if (eco) {
 
   // The package manager is what the LOCKFILE says. Unknown means we do not know how to install,
   // so we do not pretend to — the caller declines rather than guessing a command.
-  for (const [lock, manager] of Object.entries(eco.lockfiles || {})) {
-    if (fs.existsSync(path.join(repo, lock))) { out.packageManager = manager; break; }
+  out.lockfile = lockfileFor(eco, (f) => fs.existsSync(path.join(repo, f)));
+  out.packageManager = out.lockfile ? eco.lockfiles[out.lockfile] : '';
+  if (typeof eco.addCommand === 'function') {
+    try { out.addCommand = eco.addCommand(out.packageManager) || ''; } catch { out.addCommand = ''; }
   }
+
 
   const text = read(path.join(repo, eco.file));
   if (text !== null) {

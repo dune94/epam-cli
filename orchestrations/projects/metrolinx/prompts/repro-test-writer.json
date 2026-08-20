@@ -1,5 +1,6 @@
 {
   "id": "repro-test-writer",
+  "layer": "project",
   "version": 3,
   "description": "The dedicated test-writer turn. The implementer is forbidden to write tests; this agent owns them.",
   "$why": [

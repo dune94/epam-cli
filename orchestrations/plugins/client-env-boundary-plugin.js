@@ -67,6 +67,11 @@ const ADAPTERS = [
     serverOnlyPaths: ['/pages/api/', '/app/api/', '/middleware.', '.server.',
       '.test.', '.spec.', '/__tests__/', '/__mocks__/', '.mock.'],
     exposureConfig: ['next.config.js', 'next.config.mjs', 'next.config.ts'],
+    // THE CONFIGURATION THAT GOVERNS WHETHER BEHAVIOUR IS PERMITTED TO HAPPEN — build settings,
+    // security headers, framing, what reaches the browser. A change can be perfectly written and
+    // still impossible because of what is declared here. Superset of exposureConfig: env exposure
+    // is one of the things this file decides.
+    configFiles: ['next.config.js', 'next.config.mjs', 'next.config.ts'],
   },
   {
     id: 'vite',
@@ -76,6 +81,7 @@ const ADAPTERS = [
     serverOnly: [],
     serverOnlyPaths: ['.server.', '/server/', '.test.', '.spec.', '/__tests__/', '/__mocks__/', '.mock.'],
     exposureConfig: ['vite.config.js', 'vite.config.ts'],
+    configFiles: ['vite.config.js', 'vite.config.ts'],
   },
   {
     id: 'create-react-app',
@@ -85,6 +91,7 @@ const ADAPTERS = [
     serverOnly: [],
     serverOnlyPaths: ['.test.', '.spec.', '/__tests__/', '/__mocks__/', '.mock.'],
     exposureConfig: [],
+    configFiles: [],
   },
 ];
 
@@ -221,8 +228,25 @@ function scanClientEnvBoundary(projectRoot, changedFiles) {
   return { findings, filesScanned, exposureDeclared: true, adapter: adapter.id };
 }
 
+/**
+ * configSurface — the configuration files this codeline actually carries that govern how its code
+ * is permitted to behave. Resolved from the repository's OWN manifest through the adapters above,
+ * so no caller needs to know a framework's name.
+ *
+ * Live metrolinx AMSD-2041: the story's fix sites listed only the source files implementing live
+ * preview. The codeline's next.config.js forbids the iframe the feature requires, and appeared
+ * nowhere in the story — so no agent could act on it. Returns [] for a stack no adapter knows and
+ * for a declared file that is not present: absent is absent, never a guess.
+ */
+function configSurface(projectRoot) {
+  const adapter = resolveAdapter(projectRoot);
+  if (!adapter) return [];
+  return (adapter.configFiles || []).filter((f) => existsSync(join(projectRoot, f)));
+}
+
 module.exports = {
   pluginApiVersion: PLUGIN_API_VERSION,
+  configSurface,
   scanClientEnvBoundary,
   resolveAdapter,
   additionalExposed,

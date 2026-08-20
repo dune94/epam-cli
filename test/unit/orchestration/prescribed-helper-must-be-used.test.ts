@@ -101,26 +101,51 @@ function run(fx: { repo: string; logDir: string; prd: string }) {
     'warning() { echo "WARNING: $*"; }',
     'error()   { echo "ERROR: $*"; }',
     'success() { echo "SUCCESS: $*"; }',
+    // All three, not just the gate: it delegates to _change_duplicates_owned_format, and an
+    // unlifted dependency is command-not-found (127) — non-zero — so every helper reads as
+    // "missing" and the suite silently tests the wrong thing.
+    extractFunctionBody('_helper_module_separators'),
+    extractFunctionBody('_change_duplicates_owned_format'),
     extractFunctionBody('verify_prescribed_helper_used'),
     'verify_prescribed_helper_used "S-1"',
     'echo "RC=$?"',
+    'echo "FLAG=${DETERMINISTIC_CHECK_FAILURE:-0}"',
+    'echo "KEY=${STORY_REJECTION_KEY:-}"',
   ].join('\n'));
   const r = spawnSync('bash', [script], { encoding: 'utf8', timeout: 30000 });
   const out = (r.stdout || '') + (r.stderr || '');
-  return { rc: parseInt((out.match(/RC=(\d+)/) || [, '-1'])[1], 10), out };
+  return {
+    rc: parseInt((out.match(/RC=(\d+)/) || [, '-1'])[1], 10),
+    flag: parseInt((out.match(/FLAG=(\d+)/) || [, '-1'])[1], 10),
+    key: (out.match(/KEY=(.*)/) || [, ''])[1],
+    out,
+  };
 }
 
 describe('a prescribed, existing helper must appear in the change', () => {
-  it('rejects the live run-5 change — hand-rolled matching, helper unused', () => {
+  it('ADVISES on the live run-5 change — hand-rolled matching, helper unused', () => {
     const fx = fixture({
       helper: 'getDispatchLineItemKey',
       change: "export const m = (a: string, b: string) => a === b || a.startsWith(b + '-');\n",
     });
-    const { rc, out } = run(fx);
-    expect(rc,
-      'the change invents its own separator instead of using the prescribed helper, ' +
-      'and shipped a fix that cannot work').toBe(1);
-    expect(out).toMatch(/getDispatchLineItemKey/);
+    const { rc, flag, key, out } = run(fx);
+    // THE REQUIREMENT CHANGED, 2026-08-19. This gate used to veto. Proven against run artefacts:
+    // gotransit shipped AMSD-2041 successfully (e780a8b7, 9 files, +379) with ZERO occurrences of
+    // two helpers metrolinx's prd.json marks fixVerified for the SAME ticket — so the veto rejects
+    // working code. Worse, verify_story_deliverables sets invoke_success=false on its failure,
+    // which SILENTLY short-circuits the repo's own lint gate at the next call site: the veto
+    // suppressed lint on every attempt it fired.
+    //
+    // It must still SAY the helper is unused — that information is worth having — and decide
+    // nothing.
+    // The fixture reproduces run-5 exactly: keys.ts declares DIVIDER='#' and the change invents
+    // '-'. That is DUPLICATION of a format the helper owns, so it must be rejected — this is the
+    // defect the gate exists for. Absence alone is NOT rejected; see the sibling test below and
+    // helper-gate-judged-by-real-diffs.test.ts, which replays gotransit's shipped code.
+    expect(out, 'the rejection must name the helper that owns the format').toMatch(/getDispatchLineItemKey/);
+    expect(rc, 'the hand-rolled separator went unchallenged').toBe(1);
+    expect(flag, 'a retryable finding must reach the next attempt').toBe(1);
+    expect(key, 'no rejection key — an identical repeat cannot escalate').toMatch(/helper-duplication/);
   });
 
   it('accepts a change that uses the helper', () => {
@@ -184,6 +209,11 @@ describe('a prescribed, existing helper must appear in the change', () => {
       'warning() { echo "WARNING: $*"; }',
       'error()   { echo "ERROR: $*"; }',
       'success() { echo "SUCCESS: $*"; }',
+      // All three, not just the gate: it delegates to _change_duplicates_owned_format, and an
+      // unlifted dependency is command-not-found (127) — non-zero — so every helper reads as
+      // "missing" and the suite silently tests the wrong thing.
+      extractFunctionBody('_helper_module_separators'),
+      extractFunctionBody('_change_duplicates_owned_format'),
       extractFunctionBody('verify_prescribed_helper_used'),
       'verify_prescribed_helper_used "S-1"',
       'echo "RC=$?"',

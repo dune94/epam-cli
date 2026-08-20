@@ -30,46 +30,69 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const ORCH = readFileSync(
-  join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+const ROOT = join(__dirname, '../../..');
+const ORCH = readFileSync(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
 
-/** The gate-finding-analyst prompt for the LINT gate. */
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { renderEngineTemplate } = require(join(ROOT, 'orchestrations/scripts/lib/engine-prompt.js'));
+
+/**
+ * THE RENDERED PROMPT, not the script that renders it.
+ *
+ * This used to slice a heredoc out of run-agent-orchestration.sh between `_lint_finding_prompt=`
+ * and `LINT_FIND_EOF`. The prompt has since moved into the template layer, where prompts belong —
+ * so the slice returned one line of shell and both assertions went red while the requirement they
+ * describe was being met. Rendering the real template with real values tests the artifact the
+ * agent actually receives, and survives the prompt moving again.
+ */
 function lintAnalystPrompt(): string {
-  const start = ORCH.indexOf('_lint_finding_prompt=');
-  expect(start, 'lint analyst prompt not found').toBeGreaterThan(-1);
-  // The FIRST 'LINT_FIND_EOF' is the heredoc opener on the anchor line itself;
-  // the prompt body ends at the CLOSING delimiter.
-  const opener = ORCH.indexOf('LINT_FIND_EOF', start);
-  const end = ORCH.indexOf('LINT_FIND_EOF', opener + 1);
-  return ORCH.slice(start, end > start ? end : start + 4000);
+  return renderEngineTemplate('lint-finding-analyst', {
+    __PHASE__: 'core',
+    __LINT_LOG__: 'src/a.spec.ts:100:48  sonarjs/no-duplicate-string',
+    __WRITER_OUTPUTS__: 'src/a.ts\nsrc/a.spec.ts',
+    __TEST_FILE_CONVENTIONS__: '.spec.ts',
+    __ACTIVE_STORIES__: 'AMSD-1820 — technicalNotes.files: src/a.ts',
+    __PROFILE__: 'lint-analyst',
+  });
 }
+
+describe('the prompt really rendered', () => {
+  it('is not empty and did not fall through to a stub', () => {
+    // Without this every not/toMatch below passes on an empty string.
+    expect(lintAnalystPrompt().length).toBeGreaterThan(200);
+  });
+});
 
 describe('the lint analyst can see the files the run actually wrote', () => {
   it('is given the writer-output manifest', () => {
     expect(lintAnalystPrompt(),
-      'the analyst maps findings using declared files only, so a finding in a ' +
-      'test file the repro-test-writer created is unmappable')
-      .toMatch(/story_outputs_files|writer output|story-outputs/);
+      'the analyst maps findings using declared files only, so a finding in a '
+      + 'test file the repro-test-writer created is unmappable')
+      .toMatch(/src\/a\.spec\.ts/);
   });
 
   it('still shows the stories, so a file can be attributed to one', () => {
-    // The manifest says WHICH files; the stories say WHOSE they are. Both needed.
-    expect(lintAnalystPrompt()).toMatch(/PRD Stories|stories/i);
+    expect(lintAnalystPrompt()).toMatch(/AMSD-1820/);
   });
 
   it('does not rely on technicalNotes.files alone', () => {
     const prompt = lintAnalystPrompt();
     const usesDeclared = /technicalNotes/.test(prompt);
-    const usesProduced = /story_outputs_files|story-outputs/.test(prompt);
+    const usesProduced = /src\/a\.spec\.ts/.test(prompt);
     expect(!usesDeclared || usesProduced,
-      'declared files are still the only source of truth for the mapping')
-      .toBe(true);
+      'declared files are still the only source of truth for the mapping').toBe(true);
   });
 
   it('tells the analyst a test file belongs to the story that produced it', () => {
-    // Otherwise it sees an undeclared .spec.ts and reasonably concludes "not mine".
     expect(lintAnalystPrompt(),
       'nothing explains that undeclared files produced by this run are still in scope')
       .toMatch(/produced by this run|written by this run|even if.*not declared/i);
+  });
+
+  it('and the caller actually supplies the manifest value', () => {
+    // The template declaring __WRITER_OUTPUTS__ proves nothing if no producer fills it.
+    const i = ORCH.indexOf('render_engine_prompt lint-finding-analyst');
+    expect(i, 'the lint analyst prompt is no longer rendered here').toBeGreaterThan(-1);
+    expect(ORCH.slice(Math.max(0, i - 2000), i)).toMatch(/__WRITER_OUTPUTS__/);
   });
 });

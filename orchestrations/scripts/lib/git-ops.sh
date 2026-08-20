@@ -206,7 +206,7 @@ git_add_client_outputs() {
     # Build artefacts are not engine state, but staging them is never right either. This named
     # node_modules, build and .next — one ecosystem — so a Rust codeline whose target/ was not
     # gitignored had its whole build tree staged into the CUSTOMER'S repository. The list now
-    # comes from lib/ecosystems.js (ecosystem artefacts) and config/repo-artifacts.json (editor
+    # comes from lib/ecosystem-registry.js (ecosystem artefacts) and config/repo-artifacts.json (editor
     # and OS droppings), which is also where worktree-health-check.sh reads it — they were two
     # hand-written lists that had drifted apart.
     #

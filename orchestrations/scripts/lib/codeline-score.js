@@ -190,20 +190,38 @@ function applyRecency(scored, ages = {}, opts = {}) {
  * falls back to input order rather than dropping a codeline, because a silently
  * skipped repository is a repository whose work never happens.
  */
-function orderCodelines(repos, readPkg = null) {
+function orderCodelines(repos, readIdentity = null) {
   const fs = require('fs');
   const path = require('path');
-  const read = readPkg || ((repoPath) => {
-    try { return JSON.parse(fs.readFileSync(path.join(repoPath, 'package.json'), 'utf8')); }
-    catch { return null; }
+
+  // WHAT A REPOSITORY CALLS ITSELF, AND WHAT IT DEPENDS ON — asked of the ecosystem, not assumed.
+  //
+  // This read `package.json` directly and took `dependencies`/`devDependencies` from it. On any
+  // codeline that is not Node it returned null, so `pkgName` was null, nothing was ever entered
+  // into the owned-name map, every indegree stayed 0, and the producers-before-consumers ordering
+  // silently degraded to input order. A wrong order that looks exactly like a right one.
+  //
+  // Each provider already answers both questions for its own ecosystem (`selfName`, `deps`), so
+  // the first manifest the repository actually carries decides how it is read.
+  const read = readIdentity || ((repoPath) => {
+    const { allManifests } = require('./ecosystem-registry.js');
+    for (const eco of allManifests()) {
+      let text;
+      try { text = fs.readFileSync(path.join(repoPath, eco.file), 'utf8'); } catch { continue; }
+      return {
+        name: typeof eco.selfName === 'function' ? (eco.selfName(text) || null) : null,
+        deps: typeof eco.deps === 'function' ? (eco.deps(text) || []) : [],
+      };
+    }
+    return null;
   });
 
   const meta = repos.map((r) => {
-    const pkg = read(r.path) || {};
+    const id = read(r.path) || {};
     return {
       repo: r,
-      pkgName: pkg.name || null,
-      deps: Object.keys({ ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) }),
+      pkgName: id.name || null,
+      deps: Array.isArray(id.deps) ? id.deps : [],
     };
   });
 

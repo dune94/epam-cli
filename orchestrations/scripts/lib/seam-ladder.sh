@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # seam-ladder — export the model settings a seam is configured to run with.
 #
 # The shell counterpart of lib/seam-invocation.js, reading the same registry so a seam's

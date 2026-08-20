@@ -1,0 +1,167 @@
+SOURCE: https://can01.safelinks.protection.outlook.com/?url=https%3A%2F%2Fwww.contentstack.com%2Fdocs%2Fdevelopers%2Fset-up-live-preview%2Fset-up-live-preview-for-your-website&data=05%7C02%7CIshdeep.Kohli%40metrolinx.com%7Cbfb0e182cfb843152e0708def3c0c6d9%7C191b00eaedcc406c8456dc29abc0f10f%7C0%7C0%7C639216206475946432%7CUnknown%7CTWFpbGZsb3d8eyJFbXB0eU1hcGkiOnRydWUsIlYiOiIwLjAuMDAwMCIsIlAiOiJXaW4zMiIsIkFOIjoiTWFpbCIsIldUIjoyfQ%3D%3D%7C0%7C%7C%7C&sdata=s4T8wMY5DF8i8d%2FmD5BNd%2F7C8BpiR13dnT20dhyLuEI%3D&reserved=0
+
+HTTP 200
+
+Set Up Live Preview for your Website | Contentstack 
+ Get inspired at ContentCon. Learn more and register today 
+
+ Get inspired at ContentCon. Learn more and register today 
+
+ Contentstack.com Academy Login 
+
+ Changelog 
+ APIs 
+ SDKs 
+ menu 
+
+ Home 
+ Developers 
+ Set Up Live Preview 
+ Set Up Live Preview for your Website
+ content_copy Copy for LLM Copy for LLM markdown View as Markdown 
+ update Last updated July 22, 2026 
+
+ Live Preview allows content managers to see real-time updates to their content before publishing. It ensures a seamless content editing experience by enabling draft previews across multiple digital channels.
+ Note Live Preview currently supports only web-based applications. Support for mobile applications will be available in the future.
+ Live Preview seamlessly connects your Contentstack entry editor with your website, allowing instant previews of content updates. The setup varies based on the rendering technique your website uses.
+ Additional Resource You can also open Live Preview in a new browser tab for an iframe-free experience.
+ GraphQL-based Live Preview
+ link 
+
+ For websites using GraphQL APIs to fetch and display content dynamically.
+ Client-Side Rendering (CSR) with GraphQL
+ link 
+
+ In Client-side Rendering (CSR) , content is fetched dynamically using JavaScript in the browser. The page structure loads first, and the content is rendered asynchronously, reducing server load.
+ It is best to use CSR with GraphQL for:
+ Instant updates: View content changes in real-time without reloading the page.
+ Reduced server load: No need to regenerate the entire page when content updates.
+ Headless frontends: Works seamlessly with frontend frameworks like React, Vue.js, or Angular.
+ Best suited for Single Page Applications (SPAs) built with React , Vue.js , Angular , or other JavaScript frameworks .
+ To learn how to configure Live Preview for CSR with GraphQL, refer to the setup guide .
+ Server-Side Rendering (SSR) with GraphQL
+ link 
+
+ In Server-side Rendering (SSR) , pages are pre-rendered on the server before being sent to the browser. This improves SEO, performance, and initial load speed, as search engines and users receive fully rendered content on the first request.
+ It is best to use SSR with GraphQL for:
+ Pre-generated pages: Load pages faster compared to CSR.
+ Improved SEO: Search engines can index content more effectively.
+ Optimized performance: Reduces client-side processing load.
+ Best suited for SEO-focused websites , Next.js applications , and performance-first projects .
+ To learn how to configure Live Preview for SSR with GraphQL, refer to the setup guide .
+ Gatsby-powered Sites
+ link 
+
+ Gatsby is a React-based static site generator (SSG) that pre-builds pages for faster performance. Since Gatsby sites do not update content dynamically, Live Preview runs in Client-side Rendering (CSR) mode, allowing real-time content previews without rebuilding the site.
+ It is best to use Live Preview with Gatsby for:
+ High-performance static sites: Pre-rendered pages ensure fast loading speeds.
+ Dynamic content previews: CSR mode allows real-time content updates before publishing.
+ Seamless JAMstack integration: Works well with headless CMS architectures.
+ Best suited for blogs , documentation , and marketing pages .
+ To learn how to configure Live Preview for Gatsby, follow the setup guide .
+ REST-based Live Preview
+ link 
+
+ REST-Based Live Preview allows websites that use REST APIs to fetch and display content dynamically to see real-time content updates before publishing.
+ Client-Side Rendering (CSR) with REST
+ link 
+
+In  Client-side Rendering (CSR) , content is fetched dynamically through JavaScript calls to REST APIs and injected into the page without requiring a full reload.  
+ It is best to use CSR with REST for:
+ Real-time updates: Content refreshes dynamically without a full-page reload.
+ Efficient content fetching : The browser pulls only the necessary data instead of rendering entire pages.
+ Scalability: Suitable for JavaScript-heavy frontends powered by React, Vue.js, or Angular.
+ Best suited for REST API-driven SPAs and dynamic websites using React , Vue.js , or Angular .
+ To learn how to configure Live Preview for CSR with REST, refer to the setup guide .
+ Server-Side Rendering (SSR) with REST
+ link 
+
+ In Server-side Rendering (SSR), pages are pre-rendered on the server before being sent to the client, improving SEO and load times. Live Preview ensures that real-time updates are reflected without delay.
+ It is best to use SSR with REST for:
+ Better SEO & performance: Pre-rendered pages load faster and rank better in search engines.
+ Enhanced user experience: Faster page loads improve accessibility and engagement.
+ Ideal for structured content: Ideal for blogs, news websites, and sites with frequently updated content.
+ Best suited for SEO-focused websites , Next.js/Nuxt.js apps , performance-first sites .
+ To learn how to configure Live Preview for SSR with REST, refer to the setup guide .
+ Static Site Generator (SSG)
+ link 
+
+ Static Site Generators (SSGs) generate HTML pages during the build process, which optimizes website performance and minimizes load times. Since SSG-based websites do not dynamically up date content, Live Preview operates in Client-side Rendering (CSR) mode , allowing content teams to see changes before deployment. This ensures accurate content validation without triggering a full rebuild.
+ It is best to use Live Preview with SSG for:
+ Lightning-fast websites: Pre-rendered HTML ensures quick load times.
+ Live previews in CSR mode: Even though content is static, Live Preview fetches updates dynamically.
+ Optimized for JAMstack: Works seamlessly with headless CMS setups.
+ Best suited for blogs , documentation sites , and marketing landing pages .
+ To learn how to configure Live Preview for SSG, refer to the setup guide .
+ Live Preview is easy to implement and works across various tech stacks. Choose a setup that fits your needs and start previewing content instantly.
+
+ expand_less 
+ Platform
+ Solution Center 
+ Marketplace 
+ Changelog 
+ Developers & IT 
+ Business users 
+ Digital leaders 
+ Developer Fast Track 
+ Plans & Pricing 
+ 
+ Solutions
+ Retail 
+ Travel and tourism 
+ Financial services 
+ Technology 
+ Manufacturing 
+ E-commerce 
+ Localization 
+ Personalization 
+ Portals and knowledge bases 
+ 
+ Resources
+ Academy 
+ Docs 
+ Product updates 
+ Contentstack on Contentstack 
+ Blog 
+ Insights and analyst reports 
+ Webinars 
+ Podcasts 
+ Glossary 
+ Content generative library 
+ Community 
+ Headless CMS 
+ Composable AXP 
+ Personalization 
+ CDP 
+ 
+ Customers
+ Case Studies 
+ Customer Care 
+ Contentstack Experience Awards 
+ Customer support 
+ 
+ Partners
+ Overview 
+ Find a partner 
+ Login 
+
+ Company
+ About us 
+ News 
+ Customer support portal 
+ Contact 
+ 
+ Social
+ Facebook 
+ LinkedIn 
+ Instagram 
+ GitHub 
+ YouTube 
+ Discord 
+ X 
+
+ arrow_outward Full AXP by Contentstack Legal Terms Privacy Trust Center Cookie settings
+
+ Copyright © 2026 Contentstack Inc. All rights reserved.
+
+ /

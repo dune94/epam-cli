@@ -1,0 +1,10 @@
+{"storyId":"AMSD-2041","phase":"core","status":"attempt","elapsedMinutes":11.31,"costUsd":2.5649,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-19T23:01:28Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"attempt","elapsedMinutes":1.80,"costUsd":0.3122,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-19T23:03:52Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"completed","elapsedMinutes":15.15,"costUsd":0.3122,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-19T23:04:23Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"attempt","elapsedMinutes":30.01,"costUsd":0,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-19T23:55:13Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"attempt","elapsedMinutes":5.41,"costUsd":0,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-20T00:01:00Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"attempt","elapsedMinutes":10.85,"costUsd":0.9477,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-20T00:12:12Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"completed","elapsedMinutes":49.21,"costUsd":0.9477,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-20T00:12:45Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"attempt","elapsedMinutes":3.48,"costUsd":0,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-20T00:21:07Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"attempt","elapsedMinutes":5.15,"costUsd":0.4465,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-20T00:26:37Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"completed","elapsedMinutes":11.41,"costUsd":0.4465,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-20T00:27:08Z"}

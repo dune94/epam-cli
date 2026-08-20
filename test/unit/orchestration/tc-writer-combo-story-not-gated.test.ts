@@ -44,19 +44,54 @@ const gateSrc = readFileSync(GATE_LIB, 'utf8');
 const TC_WRITER_SH = join(REPO_ROOT, 'orchestrations/scripts/post-impl-tc-writer.sh');
 const tcWriterSrc = readFileSync(TC_WRITER_SH, 'utf8');
 
+/**
+ * Ask the GATE ITSELF whether a story needs test criteria — sourced and called for real.
+ * Module scope so both the requirement tests and the live-defect reproductions use one path.
+ */
+function checkNeedsTC(storyFiles: string[], facts: unknown[] = [], status = 'pending'): boolean {
+  const dir = mkdtempSync(join(tmpdir(), 'tc-combo-gate-'));
+  const prdPath = join(dir, 'prd.json');
+  writeFileSync(prdPath, JSON.stringify({
+    stories: [{ id: 'SKY-002', status, technicalNotes: { files: storyFiles }, testCriteria: { facts } }],
+  }));
+  // CALLS THE GATE. This used to cut the jq expression out of the script's source and run that
+  // text standalone — so it tested a copy of the implementation, and went red the moment the
+  // implementation moved while the behaviour stayed identical.
+  const script = [
+    `set -uo pipefail`,
+    `SCRIPT_DIR=${JSON.stringify(join(REPO_ROOT, 'orchestrations/scripts'))}`,
+    `PRD_FILE=${JSON.stringify(prdPath)}`,
+    `LOG_DIR=$(mktemp -d)`,
+    `source ${JSON.stringify(join(REPO_ROOT, 'orchestrations/scripts/lib/tc-writer-gate.sh'))}`,
+    '_tc_story_needs_criteria "SKY-002" && echo "RESULT=[yes]" || echo "RESULT=[]"',
+  ].join('\n');
+  try {
+    const out = execFileSync('bash', ['-c', script], { encoding: 'utf8' });
+    const m = out.match(/RESULT=\[(.*)\]/);
+    rmSync(dir, { recursive: true, force: true });
+    return !!(m && m[1].trim());
+  } catch (e: any) {
+    rmSync(dir, { recursive: true, force: true });
+    throw e;
+  }
+}
+
+const needsTC = checkNeedsTC;
+
 describe('TC-writer gating — combo-story scoping (static)', () => {
   it('the shared INLINE gate requires ALL files to be test files, not any', () => {
-    const idx = gateSrc.indexOf('_needs_tc=$(jq -r --arg id "$story_id"');
-    const block = gateSrc.slice(idx, idx + 700);
-    expect(block).toMatch(/\| map\(endswith\(".test.ts"\)\) \| all\)/);
-    expect(block).not.toMatch(/\| map\(endswith\(".test.ts"\)\) \| any\)/);
-    expect(block).toMatch(/length > 0/);
+    // ASSERTED AS BEHAVIOUR. This read the jq source text for `map(endswith(".test.ts")) | all`,
+    // which pinned the REQUIREMENT (all, not any) to one IMPLEMENTATION of it — and to a hardcoded
+    // convention that made the gate a silent no-op on every non-.test.ts codeline. The requirement
+    // is unchanged; where it lives is not the test's business.
+    expect(needsTC(['src/a.ts', 'src/a.test.ts']), 'a combo story was force-gated').toBe(false);
+    expect(needsTC(['src/a.test.ts']), 'a pure test story was not gated').toBe(true);
+    expect(needsTC([]), 'a story with no files was gated').toBe(false);
   });
 
   it('the shared INLINE gate also skips deprecated stories (a legitimately-abandoned rejected split child)', () => {
-    const idx = gateSrc.indexOf('_needs_tc=$(jq -r --arg id "$story_id"');
-    const block = gateSrc.slice(idx, idx + 700);
-    expect(block).toMatch(/select\(\.status != "deprecated"\)/);
+    expect(needsTC(['src/server.test.ts'], [], 'deprecated'),
+      'a deprecated story was gated — this hard-aborted the pipeline live').toBe(false);
   });
 
   it('the Step 1.6 POST-LOOP gate still treats a combo story as needing TCs ("any", not "all")', () => {
@@ -110,35 +145,6 @@ describe('TC-writer gating — combo-story scoping (static)', () => {
 });
 
 describe('TC-writer gating — REAL execution: combo story is no longer force-gated by the INLINE (pre-execution) check', () => {
-  function extractInlineGateQuery(): string {
-    const idx = gateSrc.indexOf('_needs_tc=$(jq -r --arg id "$story_id"');
-    const endIdx = gateSrc.indexOf(')', gateSrc.indexOf("2>/dev/null || echo \"\")", idx));
-    return gateSrc.slice(idx, endIdx + 1);
-  }
-
-  function checkNeedsTC(storyFiles: string[], facts: unknown[] = [], status = 'pending'): boolean {
-    const dir = mkdtempSync(join(tmpdir(), 'tc-combo-gate-'));
-    const prdPath = join(dir, 'prd.json');
-    writeFileSync(prdPath, JSON.stringify({
-      stories: [{ id: 'SKY-002', status, technicalNotes: { files: storyFiles }, testCriteria: { facts } }],
-    }));
-    const query = extractInlineGateQuery();
-    const script = [
-      `PRD_FILE=${JSON.stringify(prdPath)}`,
-      `story_id="SKY-002"`,
-      query,
-      'echo "RESULT=[$_needs_tc]"',
-    ].join('\n');
-    try {
-      const out = execFileSync('bash', ['-c', script], { encoding: 'utf8' });
-      const m = out.match(/RESULT=\[(.*)\]/);
-      rmSync(dir, { recursive: true, force: true });
-      return !!(m && m[1].trim());
-    } catch (e: any) {
-      rmSync(dir, { recursive: true, force: true });
-      throw e;
-    }
-  }
 
   it('REPRODUCES the exact live defect and proves the fix: a combo story (impl + test files together) is NOT gated', () => {
     const needsTC = checkNeedsTC(['src/skyscanner/client.ts', 'src/skyscanner/client.test.ts']);

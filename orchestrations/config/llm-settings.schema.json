@@ -202,6 +202,11 @@
           "type": "number",
           "minimum": 1,
           "description": "Upper bound on a derived story timeout, so a large iteration budget cannot produce an unbounded wall."
+        },
+        "testTimeoutSecs": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Wall clock for ONE test-suite invocation, in seconds. Read by claude.sh's load_llm_settings_json into EPAM_TEST_TIMEOUT_SECS. Unset falls back to the call-site default. A suite the clock cannot finish is reported as failing tests, not as a timeout, so this must cover the codeline's real suite: 245 jest files plus a pretest build needs far more than the 300s default."
         }
       }
     },

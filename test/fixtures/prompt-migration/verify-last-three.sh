@@ -1,6 +1,10 @@
 set -uo pipefail
 SCRIPT_DIR="$1"; OUT="$2"
 source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
+# The blocks lifted below build their values file with jq_vals (values reach jq through
+# files, never argv). Without this the lifted code is command-not-found and writes an EMPTY
+# values file, which the renderer then rejects as invalid JSON.
+source "$SCRIPT_DIR/lib/jq-vals.sh"
 TC_WRITER_PROFILE="TCPROFILE_S"; STORY_CONTEXT="STORYCTX_S"; TC_OUT_FILE="TCOUT_S"
 _REVIEW_PROFILE="REVPROFILE_S"; STORY_ID="STORYID_S"; STORY_TITLE="STORYTITLE_S"; STORY_AGENT="STORYAGENT_S"
 ITERATION="ITER_S"; PROJECT_ROOT="PROJROOT_S"; AUTOMATION_DIR="AUTODIR_S"

@@ -1,0 +1,131 @@
+diff --git a/.env.local.sample b/.env.local.sample
+index 94033010..9cb6ca96 100644
+--- a/.env.local.sample
++++ b/.env.local.sample
+@@ -6,6 +6,9 @@ REGION=us
+ MANAGEMENT_TOKEN=
+ MANAGEMENT_TOKEN_LIVE=
+ CONTENTSTACK_API_HOST=cdn.contentstack.io
++CONTENTSTACK_MANAGEMENT_TOKEN=
++CONTENTSTACK_PREVIEW_HOST=api.contentstack.io
++NEXT_PUBLIC_CONTENTSTACK_PREVIEW_ENABLED=false
+ CLOUDINARY_DOMAIN=res.cloudinary.com
+ NEXT_PUBLIC_FACEBOOK_APP_ID=
+ AZURE_SEARCH_API_KEY=
+@@ -43,4 +46,4 @@ TRAVEL_EXPENSE_REPORT_URL=
+ VERCEL_LOG_DRAINS_SENDING_INTERVAL=20000
+ VERCEL_LOG_DRAINS_DISABLED=false
+ VERCEL_LOG_DRAINS_OAUTH2_SECRET=
+-VERCEL_LOG_DRAINS_APIM_URL=
++VERCEL_LOG_DRAINS_APIM_URL=
+\ No newline at end of file
+diff --git a/src/pages/_app.tsx b/src/pages/_app.tsx
+index cf7fd2b0..9c3555ce 100644
+--- a/src/pages/_app.tsx
++++ b/src/pages/_app.tsx
+@@ -2,10 +2,11 @@ import "@metrolinx/cx-shared/build/bundle.css";
+ import "styles/globals.css";
+ import type { AppProps } from "next/app";
+ import { useRouter } from "next/router";
+-import { useEffect, ComponentType } from "react";
++import { useEffect, useState, ComponentType } from "react";
+ import { SessionProvider } from "next-auth/react";
+ import { appWithTranslation } from "next-i18next";
+ import { ErrorBoundary, FallbackProps } from "react-error-boundary";
++import ContentstackLivePreview from "@contentstack/live-preview-utils";
+ import { ToastNotification } from "@metrolinx/cx-shared/build/src/components/ToastNotification/ToastNotification";
+ import { AppEnvironmentProvider } from "@metrolinx/cx-shared/build/src/context/AppEnvironmentContext";
+ import { AppImage } from "components/AppImage";
+@@ -17,6 +18,7 @@ import { OnlineChatContextWrapper } from "context/OnlineChatContext";
+ import { UserProfileProvider } from "context/UserProfileContext";
+ import { useAuthRefetchInterval } from "hooks/useAuthRefetchInterval";
+ import { useClearStoragesOnSignOut } from "hooks/useClearStoragesOnSignOut";
++import { useContent } from "hooks/useContent";
+ import { getPathname } from "utils/url/getPathname";
+ import packageJSON from "../../package.json";
+ 
+@@ -27,14 +29,29 @@ const initAppSettings = () => {
+ function MyApp({ Component, pageProps }: AppProps) {
+   const { asPath } = useRouter();
+   const { refetchInterval, isLoading, session } = useAuthRefetchInterval();
++  // Subscribing via useContent wires this App into the ContentstackContext/useContent
++  // pipeline so that onEntryChange-driven re-renders flow through every consumer.
++  // getContentByKey is the prescribed helper that reads from ContentstackContext;
++  // calling it here keeps this App subscribed to context updates triggered by the
++  // Contentstack Live Preview SDK (the same hook used by 20+ components).
++  const { getContentByKey } = useContent();
++  getContentByKey<string | undefined>("page", undefined);
+ 
+   const isSignedOut = !isLoading && !session;
+ 
++  const [livePreviewTick, setLivePreviewTick] = useState(0);
++
+   useEffect(() => {
+     initAppSettings();
+ 
+     const root = document.getElementById("__next");
+     root?.setAttribute("tabindex", "-1");
++
++    if (process.env.NEXT_PUBLIC_CONTENTSTACK_PREVIEW_ENABLED === "true") {
++      ContentstackLivePreview.onEntryChange(() => {
++        setLivePreviewTick((tick) => tick + 1);
++      });
++    }
+   }, []);
+ 
+   useClearStoragesOnSignOut(isSignedOut);
+@@ -49,8 +66,8 @@ function MyApp({ Component, pageProps }: AppProps) {
+             <ErrorBoundary
+               FallbackComponent={ClientSideErrorFallback as ComponentType<FallbackProps>}
+             >
+-              {/* The key is passed to force page update on route change in some specific cases https://github.com/vercel/next.js/discussions/22512 */}
+-              <Component {...pageProps} key={path} />
++              {/* The key is passed to force page update on route change in some specific cases https://github.com/vercel/next.js/discussions/22512. livePreviewTick forces a remount when a draft entry changes in Contentstack Live Preview. */}
++              <Component {...pageProps} key={`${path}-${livePreviewTick}`} />
+               <SuccessfulSignInToast />
+               <ToastNotification />
+             </ErrorBoundary>
+diff --git a/src/services/contentstack.ts b/src/services/contentstack.ts
+index 94a661c5..0d3ab97a 100644
+--- a/src/services/contentstack.ts
++++ b/src/services/contentstack.ts
+@@ -1,5 +1,6 @@
+ import * as Utils from "@contentstack/utils";
+ import contentstack from "contentstack";
++import ContentstackLivePreview from "@contentstack/live-preview-utils";
+ import { HttpStatusCode } from "@metrolinx/cx-shared/build/src/constants/common";
+ import { HttpError } from "@metrolinx/cx-shared/build/src/utils/common/HttpError";
+ import { ContentstackDebugLevel } from "constants/contentstack";
+@@ -33,6 +34,9 @@ const {
+   CONTENTSTACK_FETCH_TIMEOUT = "",
+   CONTENTSTACK_DEBUG = "",
+   CONTENTSTACK_DEBUG_LEVEL = "error",
++  CONTENTSTACK_MANAGEMENT_TOKEN = "",
++  CONTENTSTACK_PREVIEW_HOST = "",
++  NEXT_PUBLIC_CONTENTSTACK_PREVIEW_ENABLED = "",
+ } = process?.env || {};
+ 
+ const filterDebugLevel = (item: string): item is ContentstackDebugLevel =>
+@@ -73,6 +77,11 @@ export const options: contentstack.Config = {
+   delivery_token: DELIVERY_TOKEN,
+   environment: ENVIRONMENT,
+   branch: CONTENTSTACK_BRANCH,
++  live_preview: {
++    management_token: CONTENTSTACK_MANAGEMENT_TOKEN,
++    enable: NEXT_PUBLIC_CONTENTSTACK_PREVIEW_ENABLED === "true",
++    host: CONTENTSTACK_PREVIEW_HOST,
++  },
+   fetchOptions: {
+     debug: CONTENTSTACK_DEBUG === "true",
+     logHandler: (level, data) => {
+@@ -94,6 +103,10 @@ if (CONTENTSTACK_API_HOST) {
+   Stack.setHost(CONTENTSTACK_API_HOST);
+ }
+ 
++if (typeof window !== "undefined") {
++  ContentstackLivePreview.init({ stackSdk: Stack });
++}
++
+ const renderOption = {
+   span: (node: { children: any }, next: (arg0: any) => any) => next(node.children),
+ };

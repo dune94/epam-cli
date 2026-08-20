@@ -58,8 +58,15 @@ function handlerRefs(): Ref[] {
       // that is EXECUTED resolves them from its own BASH_SOURCE, because $SCRIPT_DIR may not be set
       // at all. lib/codeline-health.sh is executed, and reporting its handler as unreached was the
       // guard not knowing the second shape.
+      // THE SHAPES THAT ACTUALLY OCCUR, not the two this started with.
+      //
+      // It matched `${SCRIPT_DIR}/lib/handlers/X` and a BASH_SOURCE form, and nothing else — so
+      // `${SCRIPT_DIR:-}/lib/handlers/X` (the `:-` default breaks `\}?`) and a repo-relative
+      // `orchestrations/scripts/lib/handlers/X` both read as "nothing reaches this handler". Four
+      // live, working call sites were reported as orphans. A scan scoped to one spelling of a path
+      // finds exactly the call sites written in that spelling.
       const matches = [
-        ...line.matchAll(/\$\{?SCRIPT_DIR\}?\/((?:\.\.\/)*lib\/handlers\/[\w.-]+\.(?:py|js))/g),
+        ...line.matchAll(/(?:\$\{?SCRIPT_DIR[^}\/]*\}?|orchestrations\/scripts)\/((?:\.\.\/)*lib\/handlers\/[\w.-]+\.(?:py|js))/g),
         ...line.matchAll(/dirname "\$\{BASH_SOURCE\[0\]\}"\)\/(handlers\/[\w.-]+\.(?:py|js))/g),
       ];
       for (const m of matches) {
@@ -100,6 +107,16 @@ describe('every handler call resolves to a file', () => {
     const dir = join(SCRIPTS, 'lib/handlers');
     const onDisk = readdirSync(dir).filter((f) => /\.(py|js)$/.test(f));
     const named = new Set(refs.map((r) => r.resolved.split('/').pop()!));
+
+    // A handler passed BY NAME to a caller that builds the path itself — preflight-static.sh's
+    // ratchet takes the scanner filename as an argument — is named at its call site even though no
+    // path literal appears there. This direction of the check asks "does anything reach it", and a
+    // bare filename in an engine script is a reference.
+    for (const f of shellFiles(SCRIPTS)) {
+      let src = '';
+      try { src = readFileSync(f, 'utf8'); } catch { continue; }
+      for (const h of onDisk) if (src.includes(`"${h}"`) || src.includes(`'${h}'`)) named.add(h);
+    }
 
     for (const h of onDisk) {
       const src = readFileSync(join(dir, h), 'utf8');

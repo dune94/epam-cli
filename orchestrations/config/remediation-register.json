@@ -1,0 +1,126 @@
+{
+  "_": [
+    "OPERATOR-OWNED DECISIONS. This file is DATA. Adding, removing or escalating a decision",
+    "must never require a code change — preflight-static.sh reads this file and enforces what",
+    "it finds here.",
+    "",
+    "enforce:false = catalogued, reported, NOT fatal. enforce:true = pre-flight FAILS while it",
+    "still matches. Flip to true when you want it fixed before the next launch.",
+    "",
+    "bannedLiterals[].pattern is a JS regex tested against the named file.",
+    "uselessGuards[].symbol is a shell function name, a JS identifier, or a test `describe` title.",
+    "Seeded 2026-08-20 from the ten confirmed defects. Every entry starts enforce:false so nothing",
+    "changes behaviour until you decide it does."
+  ],
+
+  "bannedLiterals": [
+    {
+      "id": "L-001",
+      "file": "src/agent/AgentRunner.ts",
+      "pattern": "I\\('ll\\| will\\)\\|Let me\\|Now I",
+      "reason": "English phrase list decides whether a model was 'only planning'. Language-specific judgement baked into the agent loop.",
+      "enforce": false
+    },
+    {
+      "id": "L-002",
+      "file": "src/agent/AgentRunner.ts",
+      "pattern": "Please call your WriteFile tool now",
+      "reason": "Nudge text names one specific tool; any seam whose grant lacks WriteFile is told to call something it does not have.",
+      "enforce": false
+    },
+    {
+      "id": "L-003",
+      "file": "orchestrations/scripts/team-lead-review.sh",
+      "pattern": "\\{verdict, summary, issues\\}",
+      "reason": "Hand-written field allowlist at a write seam. Silently drops reviewIncomplete, which the downstream guard depends on.",
+      "enforce": false
+    },
+    {
+      "id": "L-004",
+      "file": "orchestrations/scripts/lib/handlers/team-lead-review-json.py",
+      "pattern": "'verdict': 'changes_requested'",
+      "reason": "A parse failure is synthesised into a literal verdict object with a fabricated blocker issue.",
+      "enforce": false
+    },
+    {
+      "id": "L-005",
+      "file": "orchestrations/scripts/lib/engine-prompt.js",
+      "pattern": "__\\[A-Z\\]\\[A-Z0-9_\\]\\*\\?__",
+      "reason": "Placeholder convention hardcoded as a regex and applied to rendered CONTENT; the template's own declared key set is in scope and unused.",
+      "enforce": false
+    },
+    {
+      "id": "L-006",
+      "file": "orchestrations/scripts/brownfield-repro-test-writer.sh",
+      "pattern": "this codeline declares no typecheck command",
+      "reason": "Literal fallback message asserts a fact about the codeline that was never checked — it fires when resolution merely failed.",
+      "enforce": false
+    },
+    {
+      "id": "L-007",
+      "file": "orchestrations/scripts/brownfield-repro-test-writer.sh",
+      "pattern": "\\$AUTOMATION_DIR/plugins/verification-plugin\\.js",
+      "reason": "Hardcoded plugin path, and AUTOMATION_DIR is never assigned in this script.",
+      "enforce": false
+    },
+    {
+      "id": "L-008",
+      "file": "orchestrations/scripts/brownfield-repro-test-writer.sh",
+      "pattern": "repro-gate will BLOCK",
+      "reason": "Component predicts a downstream verdict it cannot know; false for novel stories, which the gate excludes.",
+      "enforce": false
+    },
+    {
+      "id": "L-009",
+      "file": "orchestrations/scripts/lib/story-guards.sh",
+      "pattern": "\\.storyKind // \"\"\\) != \"novel\"",
+      "reason": "Story-kind taxonomy hardcoded in the gate selector instead of read from the schema.",
+      "enforce": false
+    },
+    {
+      "id": "L-010",
+      "file": "orchestrations/scripts/team-lead-review.sh",
+      "pattern": "reviewer: \"team-lead-agent\"",
+      "reason": "Fixed six-field review record plus a literal reviewer identity; the raw agent output is discarded entirely.",
+      "enforce": false
+    },
+    {
+      "id": "L-011",
+      "file": "test/unit/orchestration/the-remedy-was-a-function-that-does-not-exist.test.ts",
+      "pattern": "\\(_\\[a-z0-9_\\]\\+\\)",
+      "reason": "Guard scoped to an underscore naming convention, so it cannot see the class member that was actually failing.",
+      "enforce": false
+    }
+  ],
+
+  "uselessGuards": [
+    {
+      "id": "G-001",
+      "file": "orchestrations/scripts/run-agent-orchestration.sh",
+      "symbol": "review_feedback_is_incomplete",
+      "reason": "Reads .reviewIncomplete from a file whose writer projects that field away, so it always evaluates false. Masks the empty-review defect instead of surfacing it.",
+      "enforce": false
+    },
+    {
+      "id": "G-002",
+      "file": "src/agent/AgentRunner.ts",
+      "symbol": "isThinkingOnly",
+      "reason": "Requires responseText.trim().length > 0, so it is skipped exactly when output is empty — the case it exists to catch.",
+      "enforce": false
+    },
+    {
+      "id": "G-003",
+      "file": "test/unit/orchestration/the-remedy-was-a-function-that-does-not-exist.test.ts",
+      "symbol": "undefinedCalls",
+      "reason": "Convention-scoped scan that stayed green while render_engine_prompt failed 21 times across runs.",
+      "enforce": false
+    },
+    {
+      "id": "G-004",
+      "file": "orchestrations/scripts/lib/handlers/team-lead-review-json.py",
+      "symbol": "review output unparseable",
+      "reason": "Converts DID-NOT-RUN into a changes_requested verdict, which the re-implementation loop then acts on as real feedback.",
+      "enforce": false
+    }
+  ]
+}

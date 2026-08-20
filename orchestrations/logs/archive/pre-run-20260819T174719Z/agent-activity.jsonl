@@ -1,0 +1,2 @@
+{"event_id":"evt-1787161639079-7fe4567b","timestamp":"2026-08-19T17:47:19.079Z","agent":"ac-classification","story_id":null,"phase":null,"type":"tool_result","detail":{"tool":"search","ok":true,"ms":459,"bytes":2896}}
+{"event_id":"evt-1787161639080-d8c2e08b","timestamp":"2026-08-19T17:47:19.080Z","agent":"ac-classification","story_id":null,"phase":null,"type":"tool_result","detail":{"tool":"search","ok":true,"ms":479,"bytes":168}}

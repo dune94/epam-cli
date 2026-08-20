@@ -772,6 +772,7 @@ print_step_checklist() {
     _checklist_row "22d" "Mutant hunter"            "$(is_truthy "${SKIP_TESTING_GATES:-}" && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
     _checklist_row "22e" "Fuzz-weaver"              "$(is_truthy "${SKIP_TESTING_GATES:-}" && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
     _checklist_row "22f" "Perf sentinel"            "$(is_truthy "${SKIP_TESTING_GATES:-}" && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
+    _checklist_row "22g" "Runtime boundary"         "$(is_truthy "${SKIP_TESTING_GATES:-}" && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
     _checklist_row "23"  "Browser E2E routing"     "$([ "${SKIP_BROWSER_E2E_ROUTING:-false}" = "true" ] && echo SKIP || echo COND)" "SKIP_BROWSER_E2E_ROUTING=true"
 
     local skips=0
@@ -9717,11 +9718,65 @@ $perf_prompt"
         local perf_pid=$!
         _emit_agent start "perf-sentinel" "Perf Sentinel"
 
+        # ── Runtime Boundary ──
+        #
+        # THE QUESTION NO OTHER GATE ASKS: can this change execute, where it will execute, as this
+        # codeline is configured? Live metrolinx AMSD-2041 shipped three implementations in three
+        # runs; two defects survived all of them — a page-level module importing a service that
+        # throws at load in a context where its credentials are absent, and configuration that
+        # forbade the embedding the feature required. SAST judges vulnerabilities, review-ranger
+        # judges the diff, and the client/server scanner reads changed files only.
+        step_emit "22g" "running" "Step 22g: Runtime boundary"
+        log "  Step 4.4c: Running runtime-boundary review..."
+        {
+            local _rb_log="$LOG_DIR/runtime-boundary-${phase_id}.log"
+            local _rb_profile=""
+            [ -f "$profiles_file" ] && _rb_profile=$(jq -r '.["runtime-boundary"] // ""' "$profiles_file")
+            # The configuration this codeline carries, resolved from its OWN manifest by the
+            # adapter that already knows the stack. Empty for a stack no adapter recognises.
+            local _rb_config
+            _rb_config=$("${NODE_CMD:-node}" -e '
+              try {
+                const p = require(process.argv[1]);
+                const f = p.configSurface(process.argv[2]) || [];
+                process.stdout.write(f.length ? f.map((x) => "- " + x).join("\n")
+                                              : "(this codeline declares no configuration this engine recognises)");
+              } catch { process.stdout.write("(configuration could not be resolved)"); }
+            ' "$AUTOMATION_DIR/plugins/client-env-boundary-plugin.js" "$PROJECT_ROOT" 2>/dev/null || echo "")
+            local _rb_vals; _rb_vals=$(mktemp "${TMPDIR:-/tmp}/qa-runtime-boundary-vals-XXXXXX.json")
+            jq_vals --arg story_id "${phase_id}" \
+                  --arg story_title "$(_brownfield_gate_scope runtime-boundary)" \
+                  --arg story_diff "$(git -C "$PROJECT_ROOT" diff "${_rev_base:-HEAD~1}" HEAD 2>/dev/null | head -2000)" \
+                  --arg config_surface "$_rb_config" \
+                  --arg project_root "$PROJECT_ROOT" \
+                  --arg review_profile "$_rb_profile" \
+                  '{"__STORY_ID__":$story_id,"__STORY_TITLE__":$story_title,"__STORY_DIFF__":$story_diff,"__CONFIG_SURFACE__":$config_surface,"__PROJECT_ROOT__":$project_root,"__REVIEW_PROFILE__":$review_profile}' > "$_rb_vals" 2>/dev/null
+            local _rb_prompt
+            if ! _rb_prompt=$(render_engine_prompt runtime-boundary-review "$_rb_vals"); then
+                error "  [runtime-boundary] cannot render its prompt — refusing to gate with no instructions" >&2
+                rm -f "$_rb_vals"; return 1
+            fi
+            rm -f "$_rb_vals"
+            _run_qa_gate_with_retry "$_rb_prompt" "qa-gate:runtime-boundary" "${PHASE:-unknown}" "$_rb_log"
+        } &
+        local _rb_pid=$!
+        _emit_agent start "runtime-boundary" "Runtime Boundary"
+
         # Wait for both Phase C agents
         wait $fuzz_pid || fuzz_exit=$?
         { [ $fuzz_exit -eq 0 ] && _emit_agent complete "fuzz-weaver"; } || _emit_agent fail "fuzz-weaver" "exit $fuzz_exit"
         wait $perf_pid || perf_exit=$?
         { [ $perf_exit -eq 0 ] && _emit_agent complete "perf-sentinel"; } || _emit_agent fail "perf-sentinel" "exit $perf_exit"
+        # An unwaited background job is a gate that reports nothing: the phase moves on while it is
+        # still running, and its verdict lands after anyone could act on it.
+        local _rb_exit=0
+        wait $_rb_pid || _rb_exit=$?
+        { [ $_rb_exit -eq 0 ] && _emit_agent complete "runtime-boundary"; } || _emit_agent fail "runtime-boundary" "exit $_rb_exit"
+        if [ $_rb_exit -eq 0 ]; then
+            step_emit "22g" "pass" "Step 22g: Runtime boundary"
+        else
+            step_emit "22g" "fail" "Step 22g: Runtime boundary" "exit ${_rb_exit}"
+        fi
 
         # Evaluate Phase C results
         # Fuzz-weaver: validate that any "fail" verdict is grounded in real files.

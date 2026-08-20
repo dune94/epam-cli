@@ -577,6 +577,16 @@ while IFS= read -r story_id; do
     # Values to a FILE, filter in SINGLE quotes. The first version inlined the jq filter inside
     # a process substitution with nested quoting, and bash expanded $profile before jq ever saw
     # it: "line 571: profile: unbound variable". This is the same shape the analyst render uses.
+    # WHAT THIS REVIEWER ALREADY SAID ABOUT THIS STORY.
+    #
+    # Until 2026-08-19 it received nothing: no prior verdict, no iteration number. So every cycle
+    # judged as if for the first time, and on AMSD-2041 run 2 it approved a story whose blocker it
+    # had itself raised and which had not changed since. It did not change its mind — it never knew.
+    # The record was already append-only in code-reviews.jsonl; it simply was never read back.
+    # Absent is absent: no prior review renders no section.
+    local _review_prior_block=""
+    _review_prior_block=$(python3 "$SCRIPT_DIR/lib/handlers/prior-reviews.py" "$REVIEW_LOG" "$story_id" 2>/dev/null || true)
+
     _review_vals=$(mktemp)
     jq_vals \
         --arg profile "${REVIEW_PROFILE:-}" \
@@ -596,13 +606,15 @@ while IFS= read -r story_id; do
         --arg codegraph "${_review_codegraph_block:-}" \
         --arg learned "${_review_learned_block:-}" \
         --arg tools "${_review_project_tools_block:-}" \
+        --arg prior_review "${_review_prior_block:-}" \
         '{"__REVIEW_PROFILE__":$profile,"__BLOCKER_DISCIPLINE__":$blocker,
           "__TEST_OWNERSHIP__":$ownership,"__STORY_ID__":$story_id,"__STORY_TITLE__":$title,
           "__STORY_DESC__":$desc,"__STORY_ACS__":$acs,"__STORY_DIFF__":$diff,
           "__STORY_FILES__":$files,"__TEST_FILES__":$test_files,"__PROJECT_ROOT__":$project_root,
           "__FIX_ANALYSIS_BLOCK__":$fix_analysis,"__UNCOVERED_VC_BLOCK__":$uncovered,
           "__VC_BLOCK__":$vc,"__CODEGRAPH_TOOL_BLOCK__":$codegraph,
-          "__LEARNED_RULES_BLOCK__":$learned,"__PROJECT_TOOLS_BLOCK__":$tools}' > "$_review_vals"
+          "__LEARNED_RULES_BLOCK__":$learned,"__PROJECT_TOOLS_BLOCK__":$tools,
+          "__PRIOR_REVIEW__":$prior_review}' > "$_review_vals"
     if ! REVIEW_PROMPT=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/prompt-library.js" \
             render team-lead-review "${EPAM_PROJECT_CONFIG_DIR:-}" "$_review_vals"); then
         rm -f "$_review_vals"

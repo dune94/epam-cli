@@ -804,6 +804,23 @@
         }
       ],
       "template": "survey-review"
+    },
+    "qa-gate:runtime-boundary": {
+      "_what": "Asks whether a change can execute in the runtime it targets, given the codeline's own configuration.",
+      "_why": "Live metrolinx AMSD-2041: two defects survived three runs and three implementations because no seam owned execution. A page-level module imported a service that throws at load in a context where its credentials are absent, and the codeline's configuration forbade the embedding the feature required. The code reviewer judges the diff; SAST judges vulnerabilities; the client/server scanner reads changed files only. This asks the question none of them asks.",
+      "maxOutputTokens": 32768,
+      "reasoningEffort": "high",
+      "timeoutSecs": 600,
+      "ladder": "top",
+      "produces": "runtime-boundary-findings",
+      "consumes": [
+        {
+          "kind": "implementation",
+          "required": true
+        }
+      ],
+      "template": "runtime-boundary-review",
+      "toolGrant": "read-only"
     }
   },
   "_seamResolution": [

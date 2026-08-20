@@ -1,0 +1,415 @@
+SOURCE: https://can01.safelinks.protection.outlook.com/?url=https%3A%2F%2Fus-36154.email-composer-webhooks.gong.io%2Femail-tracking%2Fclicked%3Femail-info-token%3DeyJhbGciOiJIUzI1NiJ9.eyJjb21wYW55SWQiOiIyODY3NzU3MTMwNjk1NDI3ODk4IiwiZHJhZnRJZCI6InItNjYyNDE5Mzc2Mjg5NTkyNDI4OSIsImxpbmtVcmwiOiJodHRwczovL2dpdGh1Yi5jb20vY29udGVudHN0YWNrL2NvbXBhc3Mtc3RhcnRlci1hcHAiLCJsaW5rVGV4dCI6Imh0dHBzOi8vZ2l0aHViLmNvbS9jb250ZW50c3RhY2svY29tcGFzcy1zdGFydGVyLWFwcCIsInRlbXBsYXRlSWQiOiIiLCJleHAiOjE3ODc4MzgyMTMsImlhdCI6MTc4NjAyMzgxMywianRpIjoiTk13NFA5V0xjTnZPIn0.wvYZqPbxrYPSfr0wv8j5luH64PyURKHgs-rZxqIIcxw&data=05%7C02%7CIshdeep.Kohli%40metrolinx.com%7Cbfb0e182cfb843152e0708def3c0c6d9%7C191b00eaedcc406c8456dc29abc0f10f%7C0%7C0%7C639216206476376978%7CUnknown%7CTWFpbGZsb3d8eyJFbXB0eU1hcGkiOnRydWUsIlYiOiIwLjAuMDAwMCIsIlAiOiJXaW4zMiIsIkFOIjoiTWFpbCIsIldUIjoyfQ%3D%3D%7C0%7C%7C%7C&sdata=9pQgZoUUFZ61SZ3QgwyUx5iP31Qqr5mtUpGf5Y79cA0%3D&reserved=0
+
+HTTP 200
+
+GitHub - contentstack/compass-starter-app: Build a Compass Starter Website with NextJS and Contentstack · GitHub 
+
+ Skip to content 
+
+ Navigation Menu
+ 
+ Sign in Appearance settings
+
+ Platform AI CODE CREATION GitHub Copilot Write better code with AI 
+ GitHub Copilot app Direct agents from issue to merge 
+ MCP Registry Integrate external tools 
+
+ DEVELOPER WORKFLOWS Actions Automate any workflow 
+ Codespaces Instant dev environments 
+ Issues Plan and track work 
+ Code Review Manage code changes 
+ Code Quality Enforce quality at merge 
+
+ APPLICATION SECURITY GitHub Advanced Security Find and fix vulnerabilities 
+ Code security Secure your code as you build 
+ Secret protection Stop leaks before they start 
+
+ EXPLORE Why GitHub 
+ Documentation 
+ Blog 
+ Changelog 
+ Marketplace 
+
+ View all features 
+
+ Solutions BY COMPANY SIZE Enterprises 
+ Small and medium teams 
+ Startups 
+ Nonprofits 
+
+ BY USE CASE App Modernization 
+ DevSecOps 
+ DevOps 
+ CI/CD 
+ View all use cases 
+
+ BY INDUSTRY Healthcare 
+ Financial services 
+ Manufacturing 
+ Government 
+ View all industries 
+
+ View all solutions 
+
+ Resources EXPLORE BY TOPIC AI 
+ Software Development 
+ DevOps 
+ Security 
+ View all topics 
+
+ EXPLORE BY TYPE Customer stories 
+ Events & webinars 
+ Ebooks & reports 
+ Business insights 
+ GitHub Skills 
+
+ SUPPORT & SERVICES Documentation 
+ Customer support 
+ Community forum 
+ Trust center 
+ Partners 
+
+ View all resources 
+
+ Open Source COMMUNITY GitHub Sponsors Fund open source developers 
+
+ PROGRAMS Security Lab 
+ Maintainer Community 
+ Accelerator 
+ GitHub Stars 
+ Archive Program 
+
+ REPOSITORIES Topics 
+ Trending 
+ Collections 
+
+ Enterprise ENTERPRISE SOLUTIONS Enterprise platform AI-powered developer platform 
+
+ AVAILABLE ADD-ONS GitHub Advanced Security Enterprise-grade security features 
+ Copilot for Business Enterprise-grade AI features 
+ Premium Support Enterprise-grade 24/7 support 
+
+ Pricing 
+ Search / 
+
+ Sign in 
+ Sign up Appearance settings
+
+ You signed in with another tab or window. Reload to refresh your session. 
+ You signed out in another tab or window. Reload to refresh your session. 
+ You switched accounts on another tab or window. Reload to refresh your session. 
+
+ Dismiss alert 
+
+ Uh oh!
+
+ There was an error while loading. Please reload this page .
+
+ contentstack
+ 
+ / 
+ 
+ compass-starter-app 
+
+ Public 
+
+ Notifications
+ You must be signed in to change notification settings 
+
+ Fork
+ 16 
+
+ Star
+ 3 
+
+ Code 
+
+ Issues 
+ 0 
+
+ Pull requests 
+ 6 
+
+ Actions 
+
+ Projects 
+
+ Security and quality 
+ 0 
+
+ Insights 
+
+ Additional navigation options 
+
+ Code
+
+ Issues
+
+ Pull requests
+
+ Actions
+
+ Projects
+
+ Security and quality
+
+ Insights
+
+ main 
+
+ Branches Tags 
+
+ Go to file 
+
+ Code Open more actions menu 
+
+ Latest commit
+
+ History
+ 83 Commits 
+ 83 Commits 
+
+ Folders and files
+ Name Name Last commit message 
+ Last commit date 
+ 
+ .github/ workflows 
+
+ .github/ workflows 
+
+ MainLayout 
+
+ MainLayout 
+
+ app 
+
+ app 
+
+ components 
+
+ components 
+
+ config 
+
+ config 
+
+ context 
+
+ context 
+
+ hooks 
+
+ hooks 
+
+ services 
+
+ services 
+
+ types 
+
+ types 
+
+ utils 
+
+ utils 
+
+ .env.sample 
+
+ .env.sample 
+
+ .gitignore 
+
+ .gitignore 
+
+ .nvmrc 
+
+ .nvmrc 
+
+ .talismanrc 
+
+ .talismanrc 
+
+ CODEOWNERS 
+
+ CODEOWNERS 
+
+ LICENSE 
+
+ LICENSE 
+
+ README.md 
+
+ README.md 
+
+ SECURITY.md 
+
+ SECURITY.md 
+
+ eslint.config.mjs 
+
+ eslint.config.mjs 
+
+ middleware.ts 
+
+ middleware.ts 
+
+ next.config.mjs 
+
+ next.config.mjs 
+
+ package-lock.json 
+
+ package-lock.json 
+
+ package.json 
+
+ package.json 
+
+ postcss.config.cjs 
+
+ postcss.config.cjs 
+
+ tailwind.config.js 
+
+ tailwind.config.js 
+
+ tailwind.default.config.js 
+
+ tailwind.default.config.js 
+
+ tsconfig.json 
+
+ tsconfig.json 
+
+ View all files 
+
+ Repository files navigation
+ 
+ README 
+ MIT license 
+ Security 
+ 
+ More items 
+
+ Compass Starter App
+
+ About Contentstack: Contentstack is a headless CMS with an API-first approach that puts content at the centre. It is designed to simplify the process of publication by separating code from content.
+
+ About this project: This is a Next.js project bootstrapped with create-next-app used to build modern web applications.
+
+ Recommended Node version: v18.17.0 and App Supported till v24.3.0
+
+ Getting Started
+
+ Refer .env.sample to set up your .env.local file in root directory
+
+ First, run the development server:
+
+ npm run dev
+
+ Open http://localhost:3000 with your browser to see the result.
+
+ Note: The url : http://localhost:3000 will have en attached to it resulting http://localhost:3000/en , set this url in Contentstack Stack Environment.
+
+ You can start editing the page by modifying app/[locale]/page.tsx . The page auto-updates as you edit the file.
+
+ Compass Starter Stack Content Repo
+
+ Compass Starter Stack Content Repo 
+
+ Note : Contentstack stack must have English as Master Language
+
+ To import this content to your stack, perform the following steps:
+
+ Install the CLI by running the following command in your terminal:
+
+ npm i -g @contentstack/cli@1.32.1 
+
+ By default, CLI uses the North America region. To use the Europe region, run this command in your terminal:
+
+ csdx config:set:region EU 
+
+ Next, log in to your Contentstack account via CLI:
+
+ csdx auth:login 
+
+ Create Compass Starter stack using CLI bootstrap command
+
+ csdx cm:bootstrap --app-name compass-app --project-dir <project-dir> --org <org-uid> -n <stack-name> 
+
+ Refer to the Bootstrap command documentation to learn more.
+
+ Documentation
+
+ Contentstack documentation 
+
+ Region support documentation 
+
+ Contentstack Typescript SDK 
+
+ Contentstack Personalize SDK , Personalize Overview 
+
+ Visual Experince :
+
+ Live Preview 
+
+ Timeline 
+
+ Visual Builder 
+
+ Preview Sharing 
+
+ Next.js 
+
+ About 
+ Build a Compass Starter Website with NextJS and Contentstack
+ Resources 
+ Readme 
+ MIT license 
+ Security policy 
+ Security policy 
+ Activity 
+ Custom properties 
+ Stars 
+ 3 stars 
+ Watchers 
+ 5 watching 
+ Forks 
+ 16 forks 
+ Report repository 
+
+ Releases 
+
+ Packages 
+
+ Used by 
+
+ Contributors 
+
+ Languages 
+
+ Footer
+
+ &copy; 2026 GitHub, Inc.
+
+ Footer navigation
+
+ Terms 
+
+ Privacy 
+
+ Security 
+
+ Status 
+
+ Community 
+
+ Docs 
+
+ Contact 
+
+ Manage cookies
+
+ Do not share my personal information
+
+ You can’t perform that action at this time.

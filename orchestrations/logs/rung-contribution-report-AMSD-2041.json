@@ -3,7 +3,6 @@
     "rung": "0",
     "model": "MiniMax-M3",
     "files": [
-      ".epam/codeline-facts.json",
       ".epam/settings.json",
       ".epam/verification.json"
     ]
@@ -12,24 +11,24 @@
     "rung": "1",
     "model": "z-ai/glm-5.2",
     "files": [
-      ".deepeval/.deepeval_telemetry.txt"
+      "src/services/contentstack.ts"
     ]
   },
   {
     "rung": "2",
-    "model": "z-ai/glm-5.2",
+    "model": "moonshotai/kimi-k3",
     "files": [
-      "orchestrations/logs/agent-activity.jsonl"
+      ".epam/codeline-facts.json",
+      "package-lock.json",
+      "package.json",
+      "src/pages/_app.tsx"
     ]
   },
   {
     "rung": "3",
-    "model": "z-ai/glm-5.2",
+    "model": "moonshotai/kimi-k3",
     "files": [
-      ".env.local.sample",
-      "package.json",
-      "src/pages/_app.tsx",
-      "src/services/contentstack.ts"
+      "src/context/contentstackContext.tsx"
     ]
   }
 ]

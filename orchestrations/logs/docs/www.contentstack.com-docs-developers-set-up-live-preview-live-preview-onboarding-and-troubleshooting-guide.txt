@@ -1,0 +1,140 @@
+SOURCE: https://www.contentstack.com/docs/developers/set-up-live-preview/live-preview-onboarding-and-troubleshooting-guide
+
+HTTP 200
+
+Live Preview Onboarding and Troubleshooting Guide | Contentstack 
+ Get inspired at ContentCon. Learn more and register today 
+
+ Get inspired at ContentCon. Learn more and register today 
+
+ Contentstack.com Academy Login 
+
+ Changelog 
+ APIs 
+ SDKs 
+ menu 
+
+ Home 
+ Developers 
+ Set Up Live Preview 
+ Live Preview Onboarding and Troubleshooting Guide
+ content_copy Copy for LLM Copy for LLM markdown View as Markdown 
+ update Last updated July 22, 2026 
+
+ The Live Preview Onboarding Experience is a structured, interactive guide designed to streamline the integration of Live Preview into your website. It simplifies setup, resolves common configuration issues, and ensures real-time content updates function smoothly.
+ Setting up Live Preview can be challenging, especially when dealing with multiple environments, complex caching layers, or restricted access settings. The onboarding experience simplifies this with guided steps tailored for different website architectures. Whether you are a developer or a content creator, this feature ensures that your real-time content changes are accurately reflected without unnecessary technical roadblocks.
+ To confirm that your Live Preview setup is working, go to Settings in your stack. Within the Live Preview tab, enable the Display Setup Status toggle. This displays configuration details in real time during setup.
+ Key Benefits
+ link 
+
+ Effortless Integration: Step-by-step guidance simplifies the Live Preview setup.
+ Immediate Issue Resolution: Real-time feedback helps identify and fix setup errors instantly.
+ Optimized Productivity: Minimize troubleshooting time and focus on content creation.
+ Adaptive Implementation: Works seamlessly with diverse website architectures and environments.
+ Comprehensive Support: Access relevant documentation, FAQs, and support within the onboarding interface.
+ Troubleshooting Errors
+ link 
+
+ If the Live Preview Onboarding UI displays errors, the setup may be incomplete or misconfigured. Below are common errors, their causes, and resolutions.
+ Error 
+ Possible Causes 
+ Resolution 
+ 
+ Could Not Connect to Website 
+ Incorrect environment or base URL in the Live Preview settings.
+ Website restrictions due to CORS policy or X-Frame-Options settings.
+ Verify that the correct environment and base URL are selected in Live Preview settings.
+ Check if a CORS policy or X-Frame-Options is blocking access. Add https://*.contentstack.com  as an allowed origin in your CORS policy.
+ Use the Always Open in New Tab feature to avoid iFrame limitations. Starting with Live Preview SDK v4.0.0 , this feature opens your site in a standalone browser tab, outside the Contentstack iFrame.
+
+ Live Preview SDK Not Initialized 
+ The SDK is not properly initialized on the client side.
+ If using a post message instead of the SDK, the website did not send the init post message correctly.
+ Ensure the Live Preview SDK is correctly initialized on the client side. Refer to the Live Preview SDK setup guide for implementation details.
+ If using post messages , verify that the website sends the init post message with all required details. Refer to the Live Preview SDK documentation.
+ 
+ Outdated Live Preview SDK Version 
+ The Live Preview SDK version in use is outdated.
+ Update your Live Preview SDK to the latest version to ensure compatibility and access to new features.
+ If your plan includes this feature but you use an SDK earlier than v4.0.0, selecting Open in New Tab still opens the site inside the Contentstack iFrame.
+
+ If you are using a post message instead of the Live Preview SDK, set the sdkVersion value to 1.4.5 in your init post message configuration. Refer to the Live Preview SDK document for more details.
+ 
+ Preview Service Not Enabled 
+ The Preview service is not utilized to fetch Live Preview data.
+ Migration to the Preview Service is required. Refer to the Live Preview setup guides for details and follow the Migrate to New Preview Service to upgrade the SDK or use the Preview API to fetch data.
+ 
+ Default Environment Not Set 
+ The default environment for Live Preview is not configured.
+ Configure the default environment by following the Live Preview setup document. Verify that you have the required permissions to modify environment settings. Check your user role settings in the Contentstack dashboard.
+
+ expand_less 
+ Platform
+ Solution Center 
+ Marketplace 
+ Changelog 
+ Developers & IT 
+ Business users 
+ Digital leaders 
+ Developer Fast Track 
+ Plans & Pricing 
+ 
+ Solutions
+ Retail 
+ Travel and tourism 
+ Financial services 
+ Technology 
+ Manufacturing 
+ E-commerce 
+ Localization 
+ Personalization 
+ Portals and knowledge bases 
+ 
+ Resources
+ Academy 
+ Docs 
+ Product updates 
+ Contentstack on Contentstack 
+ Blog 
+ Insights and analyst reports 
+ Webinars 
+ Podcasts 
+ Glossary 
+ Content generative library 
+ Community 
+ Headless CMS 
+ Composable AXP 
+ Personalization 
+ CDP 
+ 
+ Customers
+ Case Studies 
+ Customer Care 
+ Contentstack Experience Awards 
+ Customer support 
+ 
+ Partners
+ Overview 
+ Find a partner 
+ Login 
+
+ Company
+ About us 
+ News 
+ Customer support portal 
+ Contact 
+ 
+ Social
+ Facebook 
+ LinkedIn 
+ Instagram 
+ GitHub 
+ YouTube 
+ Discord 
+ X 
+
+ arrow_outward Full AXP by Contentstack Legal Terms Privacy Trust Center Cookie settings
+
+ Copyright © 2026 Contentstack Inc. All rights reserved.
+
+ /

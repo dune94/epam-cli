@@ -19,7 +19,7 @@ Live preview Implementation for NextJS CSR App router | Contentstack
  Set Up Live Preview 
  Live Preview Implementation for NextJS CSR App Router
  content_copy Copy for LLM Copy for LLM markdown View as Markdown 
- update Last updated July 22, 2026 
+ update Last updated August 13, 2026 
 
  Client-side rendering (CSR) means your website loads data and builds pages directly inside the browser using JavaScript. This guide walks you through setting up Contentstack Live Preview for CSR websites using REST APIs.
  Prerequisites

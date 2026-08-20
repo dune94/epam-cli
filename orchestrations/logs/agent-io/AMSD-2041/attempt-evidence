@@ -1,0 +1,11 @@
+The previous attempt changed these files (diffstat against origin/develop):
+
+ .epam/codeline-facts.json           |  29 +++
+ .epam/settings.json                 |   9 +
+ .epam/verification.json             |  15 ++
+ package-lock.json                   | 394 +++++++++++++++++++++++++++++-------
+ package.json                        |   1 +
+ src/context/contentstackContext.tsx |   4 +
+ src/pages/_app.tsx                  |  48 ++++-
+ src/services/contentstack.ts        |   7 +
+ 8 files changed, 423 insertions(+), 84 deletions(-)

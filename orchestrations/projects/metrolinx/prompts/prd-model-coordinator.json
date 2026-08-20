@@ -1,0 +1,23 @@
+{
+  "$why": [
+    "Moved out of run-agent-orchestration.sh on 2026-08-16.",
+    "",
+    "Its role instructions were a command substitution piping profiles.json through python",
+    "inside the heredoc — a shell pipeline assembling the prompt, failing to an empty string in",
+    "silence, so the coordinator could run with no role at all and nothing would say so."
+  ],
+  "description": "Assigns models to stories from the PRD, under the project's own coordinator profile.",
+  "id": "prd-model-coordinator",
+  "seams": [
+    "prd-model-coordinator"
+  ],
+  "placeholders": [
+    "__PROFILE__",
+    "__MC_PRD_TARGET__",
+    "__MC_PHASE__"
+  ],
+  "version": 1,
+  "body": "__PROFILE__\n\nPRD file: __MC_PRD_TARGET__\nPhase: __MC_PHASE__\n\nAssign model, aiProvider, and reasoningEffort to every pending story in this phase that is missing one or more of these fields. Write the updated PRD back to the file, then emit the JSON summary.",
+  "derivedFromSha256": "d67a6f2721838d1c9f925c633f2f06620fbcdba3a4401f43a1bf86c28c375e9c",
+  "authority": "project"
+}

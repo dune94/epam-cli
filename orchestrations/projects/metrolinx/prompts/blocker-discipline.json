@@ -1,5 +1,6 @@
 {
   "id": "blocker-discipline",
+  "layer": "project",
   "version": 2,
   "description": "What a reviewer may and may not raise as a BLOCKER. Bounds a rejection to the plan of record and to what the implementer can actually do.",
   "$why": [

@@ -1,5 +1,6 @@
 {
   "id": "story-writer",
+  "layer": "project",
   "version": 1,
   "description": "The story writer prompt. Its INPUT FRAMINGS live here: the authority under which each declared input is read.",
   "$why": [

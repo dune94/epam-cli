@@ -1,0 +1,110 @@
+SOURCE: https://can01.safelinks.protection.outlook.com/?url=https%3A%2F%2Fwww.contentstack.com%2Fdocs%2Fdevelopers%2Fset-up-live-preview%2Fset-up-live-preview-for-your-stack&data=05%7C02%7CIshdeep.Kohli%40metrolinx.com%7Cbfb0e182cfb843152e0708def3c0c6d9%7C191b00eaedcc406c8456dc29abc0f10f%7C0%7C0%7C639216206475909033%7CUnknown%7CTWFpbGZsb3d8eyJFbXB0eU1hcGkiOnRydWUsIlYiOiIwLjAuMDAwMCIsIlAiOiJXaW4zMiIsIkFOIjoiTWFpbCIsIldUIjoyfQ%3D%3D%7C0%7C%7C%7C&sdata=xWJQaBJrFLhh7nRZDZfpjlQ2tBgzgrFZYiTTdLxqmZA%3D&reserved=0
+
+HTTP 200
+
+Set Up Live Preview for your Stack | Contentstack 
+ Get inspired at ContentCon. Learn more and register today 
+
+ Get inspired at ContentCon. Learn more and register today 
+
+ Contentstack.com Academy Login 
+
+ Changelog 
+ APIs 
+ SDKs 
+ menu 
+
+ Home 
+ Developers 
+ Set Up Live Preview 
+ Set Up Live Preview for Your Stack
+ content_copy Copy for LLM Copy for LLM markdown View as Markdown 
+ update Last updated July 24, 2026 
+
+ Contentstack&#x27;s Live Preview feature allows you to view real-time content updates while editing entries, ensuring a smooth editing experience and reducing publishing errors.
+ To enable Live Preview for your stack, log in to your Contentstack Account and perform the following steps:
+ Go to your stack and click the “Settings” icon l. 
+ Navigate to Environments and select an existing environment or create a new one.
+ Add the Base URL for each locale to ensure accurate content previews, then Save your changes.
+ Next, navigate to Visual Experience from the Settings menu and select the Enable Live Preview checkbox.
+ Select the Default Preview Environment . Additional Resource By default, Live Preview generates preview URLs using the Base URL configured for an environment and the URL value defined in an entry. This approach works well for simple routing setups. For more complex website structures, use Custom Preview URLs to define dynamic, pattern-based preview URLs.
+
+ Enable the Display Setup Status toggle to display the configuration status.
+
+ Enable the Always Open in New Tab toggle to preview your website in a new browser tab. Note With the latest Live Preview SDK ( v4.0.0 or later ), the website opens outside the Contentstack iFrame. This feature is available on select plans. Contact our support team to enable it for your organization.
+ Click to enlarge 
+ 
+ Once enabled, the Live Preview icon appears in the right panel of your entry editor. Clicking this icon opens a side-by-side view, allowing you to edit content while viewing real-time updates.
+ Note If real-time updates do not appear in the preview panel, check the following: Ensure the correct preview environment is selected.
+ Verify the Base URL settings in Environments .
+
+ expand_less 
+ Platform
+ Solution Center 
+ Marketplace 
+ Changelog 
+ Developers & IT 
+ Business users 
+ Digital leaders 
+ Developer Fast Track 
+ Plans & Pricing 
+ 
+ Solutions
+ Retail 
+ Travel and tourism 
+ Financial services 
+ Technology 
+ Manufacturing 
+ E-commerce 
+ Localization 
+ Personalization 
+ Portals and knowledge bases 
+ 
+ Resources
+ Academy 
+ Docs 
+ Product updates 
+ Contentstack on Contentstack 
+ Blog 
+ Insights and analyst reports 
+ Webinars 
+ Podcasts 
+ Glossary 
+ Content generative library 
+ Community 
+ Headless CMS 
+ Composable AXP 
+ Personalization 
+ CDP 
+ 
+ Customers
+ Case Studies 
+ Customer Care 
+ Contentstack Experience Awards 
+ Customer support 
+ 
+ Partners
+ Overview 
+ Find a partner 
+ Login 
+
+ Company
+ About us 
+ News 
+ Customer support portal 
+ Contact 
+ 
+ Social
+ Facebook 
+ LinkedIn 
+ Instagram 
+ GitHub 
+ YouTube 
+ Discord 
+ X 
+
+ arrow_outward Full AXP by Contentstack Legal Terms Privacy Trust Center Cookie settings
+
+ Copyright © 2026 Contentstack Inc. All rights reserved.
+
+ /

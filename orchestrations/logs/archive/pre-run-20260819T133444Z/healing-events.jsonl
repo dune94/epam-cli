@@ -1,0 +1,1 @@
+{"ts":"2026-08-19T12:23:37Z","story_id":"AMSD-2041","retry":0,"rung":0,"target":"skill","diagnosis":"404.tsx supplies I404-typed callbacks where PageSetter/setPage require (page: IContentstackPage) => void; strict variance rejects it.","patches_applied":0,"profile_updated":true}

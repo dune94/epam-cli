@@ -1,0 +1,15 @@
+.env.local.sample
+package-lock.json
+package.json
+src/api/utils/_contentstack_getNewsArticles.ts
+src/constants/contentstack.ts
+src/context/contentstackContext.tsx
+src/hooks/useContent.ts
+src/interface/contentstack.ts
+src/pages/404.tsx
+src/pages/[[...slug]].tsx
+src/pages/_app.tsx
+src/services/__tests__/pageService.spec.ts
+src/services/contentstack.spec.ts
+src/services/contentstack.ts
+src/services/pageService.ts

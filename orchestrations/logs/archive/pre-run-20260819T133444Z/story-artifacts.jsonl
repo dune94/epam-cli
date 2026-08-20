@@ -1,0 +1,5 @@
+{"storyId":"AMSD-2041","phase":"core","status":"attempt","elapsedMinutes":16.35,"costUsd":2.8064,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-19T12:18:11Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"attempt","elapsedMinutes":0.30,"costUsd":0.0249,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-19T12:24:16Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"completed","elapsedMinutes":25.13,"costUsd":0.0249,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-19T12:24:47Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"attempt","elapsedMinutes":3.66,"costUsd":0.3061,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-19T13:10:00Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"completed","elapsedMinutes":5.30,"costUsd":0.3061,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-19T13:10:32Z"}

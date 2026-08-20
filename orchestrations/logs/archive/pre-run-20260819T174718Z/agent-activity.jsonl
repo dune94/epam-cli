@@ -1,0 +1,2 @@
+{"event_id":"evt-1787161638546-3bd72cfb","timestamp":"2026-08-19T17:47:18.546Z","agent":"ac-classification","story_id":null,"phase":null,"type":"tool_run","detail":{"tool":"search","args":{"pattern":"hello\\.ts returns the wrong greeting"}}}
+{"event_id":"evt-1787161638543-cbb1ceb5","timestamp":"2026-08-19T17:47:18.543Z","agent":"ac-classification","story_id":null,"phase":null,"type":"tool_run","detail":{"tool":"search","args":{"pattern":"greeting is wrong"}}}

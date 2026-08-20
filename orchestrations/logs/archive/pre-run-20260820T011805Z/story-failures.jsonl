@@ -1,0 +1,4 @@
+{"storyId":"AMSD-2041","failureClass":"quality","model":"MiniMax-M3","attempt":0,"exitCode":1,"rawBytes":31026,"outputTokens":39061,"maxIterations":32,"timestamp":"2026-08-19T23:01:46Z"}
+{"storyId":"AMSD-2041","failureClass":"env","model":"z-ai/glm-5.2","attempt":2,"exitCode":1,"rawBytes":0,"outputTokens":0,"maxIterations":97,"timestamp":"2026-08-19T23:55:13Z"}
+{"storyId":"AMSD-2041","failureClass":"env","model":"z-ai/glm-5.2","attempt":3,"exitCode":1,"rawBytes":0,"outputTokens":0,"maxIterations":97,"timestamp":"2026-08-20T00:01:00Z"}
+{"storyId":"AMSD-2041","failureClass":"env","model":"moonshotai/kimi-k3","attempt":6,"exitCode":1,"rawBytes":0,"outputTokens":0,"maxIterations":97,"timestamp":"2026-08-20T00:21:07Z"}

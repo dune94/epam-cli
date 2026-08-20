@@ -96,15 +96,30 @@ console.log(bad.join("\n"));' 2>&1)
 [ -z "$out" ] && pass "template values supplied" "all" || { fail "template values supplied" "$(echo "$out"|wc -l) mismatched"; echo "$out" | sed 's/^/    /'; }
 
 # ── 5. HANDLERS PRODUCE OUTPUT FOR THE REAL STORY ────────────────────────────
-# tc-story-context.py returns EMPTY for a brownfield story, so the TC writer is invoked three times
-# per run with an empty brief and writes nothing — while its gate reports PASSED.
+# tc-story-context.py returned EMPTY for a brownfield story, so the TC writer was invoked three
+# times per run with an empty brief and wrote nothing — while its gate reported PASSED.
+#
+# THE CHECK ITSELF HAD THE SAME DEFECT IT WAS WRITTEN TO CATCH. It took stories[0], ran the handler
+# and called an empty answer a failure. But the handler SKIPS a story that already has
+# testCriteria.facts — correctly, there is nothing to brief — so once AMSD-2041 had its 21 facts
+# the check failed on the handler doing exactly the right thing. A check whose scope does not match
+# its claim reports the wrong thing in both directions.
+#
+# It now asks the handler about a story that ACTUALLY needs context, and says so when none does.
 PRD=$(ls -t orchestrations/projects/*/runs/*/work/*-prd.json 2>/dev/null | head -1)
 if [ -n "$PRD" ]; then
-  SID=$("$NODE" -e 'const fs=require("fs");const j=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));console.log((j.stories&&j.stories[0]&&j.stories[0].id)||"")' "$PRD")
+  # The selector is a handler, not an inline program, so the same question this check asks can be
+  # asked by a test — a check that can only ever be exercised by running the whole pre-flight
+  # against whatever PRD happens to be on disk is a check nobody can prove.
+  SID=$("$NODE" "orchestrations/scripts/lib/handlers/tc-story-needing-context.js" "$PRD" core 2>/dev/null || echo "")
   OUT_DIR=$(dirname "$(dirname "$PRD")")
-  ctx=$(python3 orchestrations/scripts/lib/handlers/tc-story-context.py "$OUT_DIR" "$PRD" core "$SID" 2>/dev/null | wc -c)
-  [ "${ctx:-0}" -gt 20 ] && pass "tc story context ($SID)" "${ctx} bytes" \
-    || fail "tc story context ($SID)" "EMPTY — the TC writer would be given nothing"
+  if [ -z "$SID" ]; then
+    report "tc story context" "skip  (no story in this PRD needs criteria — nothing to brief)"
+  else
+    ctx=$(python3 orchestrations/scripts/lib/handlers/tc-story-context.py "$OUT_DIR" "$PRD" core "$SID" 2>/dev/null | wc -c)
+    [ "${ctx:-0}" -gt 20 ] && pass "tc story context ($SID)" "${ctx} bytes" \
+      || fail "tc story context ($SID)" "EMPTY — the TC writer would be given nothing"
+  fi
 else
   report "tc story context" "skip  (no run PRD on disk)"
 fi

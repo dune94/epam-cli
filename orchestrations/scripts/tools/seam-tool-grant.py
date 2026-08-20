@@ -1,5 +1,15 @@
 #!/usr/bin/env python3
 """
+A ONE-OFF MIGRATION AUDIT TOOL, NOT A PIPELINE HANDLER.
+
+It lived in lib/handlers/ and nothing in the engine called it — reported for nine days as a
+handler nothing reaches, which for a real handler would mean the code it replaced is still what
+runs. This one has no call site BY DESIGN: it was written for the tool-grant migration (ea9a14e)
+and run by hand to produce the audit trail that migration needed.
+
+Moved here so the classification matches what it is. Everything in lib/handlers/ is something the
+pipeline invokes; a tool an operator runs once belongs beside the other tools.
+
 WHICH TOOL-GRANT KIND EACH SEAM RUNS WITH — READ OFF ITS CALL SITE, NOT CHOSEN.
 
 Every seam already runs with a grant today; it is just resolved at the call site instead of

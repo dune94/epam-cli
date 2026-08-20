@@ -383,10 +383,67 @@ export class AgentRunner {
         // nudge it to actually call the tool rather than exiting the loop.
         // M3 often emits <think>...</think> as its first response then stops.
         const responseText = textParts.map(p => p.text ?? '').join('') || accumulatedText;
+
+        // AN ANSWER OF NOTHING IS NOT AN ANSWER.
+        //
+        // Live metrolinx run 4, 2026-08-20. The reviewer's final turn: `{"text": "",
+        // "toolCalls": [], "stopReason": "end_turn", "outputTokens": 292}`. Tokens were BILLED and
+        // no text was captured — a reasoning model spent them in a channel this adapter discards.
+        // The loop returned "" and everything downstream took it as the review: the parser turned
+        // it into a changes_requested verdict and the writer was sent to fix feedback nobody wrote.
+        //
+        // The nudge below already exists for "the model talked but did nothing". It required
+        // `responseText.trim().length > 0`, so it was skipped EXACTLY when the output was empty —
+        // the worst case was the one case it would not handle.
+        //
+        // NARROWLY: tokens were BILLED and nothing was captured.
+        //
+        // An empty end_turn with outputTokens 0 is a model CHOOSING to stop, and a file-writing
+        // agent legitimately ends that way after its tool calls — truncated-reasoning-is-hard-
+        // failure.test.ts says it in one line: "Empty is only a failure when the model was CUT OFF,
+        // not when it chose to stop." Treating both as failures would break agents that work
+        // correctly and say nothing about it.
+        //
+        // The live signature is the other one: outputTokens 292, textLength 0. Something was
+        // generated and this adapter did not receive it. No language heuristics needed.
+        // AND the run must have accomplished NOTHING. An agent that made its tool calls and then
+        // ends with no text has done its work and simply has nothing to say about it — that is the
+        // normal shape for a file-writing agent, and agent-runner-file-write-summary.test.ts
+        // summarises what it wrote. The defect is a run that produced no tool calls, no text, and
+        // a bill.
+        const spentTokens = (response.usage?.outputTokens ?? 0) > 0;
+        const producedNothing = toolUses.length === 0
+          && this.totalToolCalls === 0
+          && responseText.trim().length === 0
+          && spentTokens;
+
         const isThinkingOnly = toolUses.length === 0 &&
           nudgeCount < 2 &&
           responseText.trim().length > 0 &&
           (/<think>/i.test(responseText) || /^(I('ll| will)|Let me|Now I|First,|To (implement|write|create)|I need to)/i.test(responseText.trim()));
+
+        if (producedNothing && nudgeCount < 2) {
+          // Ask again for the ANSWER — not for a specific tool. This turn produced no text, so
+          // there is nothing to infer about what it was trying to do.
+          this.recordTiming(modelLatencyMs, 0, []);
+          nudgeCount++;
+          messages.push({ role: 'assistant', content: response.content });
+          messages.push({
+            role: 'user',
+            content: 'Your last turn returned no text at all. Reply with your answer as plain text now.',
+          });
+          continue;
+        }
+
+        if (producedNothing) {
+          // Out of retries and still nothing. FAIL rather than return "": an empty string is
+          // indistinguishable from a real answer to every caller, and that is how a verdict nobody
+          // wrote reached the re-implementation loop.
+          throw new Error(
+            '[agent] the model returned no text after ' + nudgeCount + ' retries '
+            + '(outputTokens=' + (response.usage?.outputTokens ?? 'unknown') + '). '
+            + 'Tokens were spent and nothing was captured — refusing to return an empty answer.');
+        }
 
         if (isThinkingOnly) {
           // Model is planning but hasn't acted — nudge it to call the tool.

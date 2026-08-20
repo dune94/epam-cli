@@ -75,14 +75,21 @@ describe('AgentRunner — file-writing agents report what they wrote', () => {
   });
 
   it('does NOT invent a summary when nothing was written', async () => {
-    const r = await new AgentRunner({
+    // THE REMEDY CHANGED; THE REQUIREMENT DID NOT.
+    //
+    // This asserted `''` on the reasoning that an empty answer is a DETECTABLE failure, and that
+    // inventing a summary would turn it into a plausible one. The first half is still right — no
+    // summary is fabricated. The second half was disproved live on 2026-08-20: the reviewer
+    // returned 292 output tokens as an empty string, `''` reached team-lead-review-json.py, became
+    // a changes_requested verdict, and the writer was sent to cycle 4 to fix feedback nobody wrote.
+    //
+    // `''` is indistinguishable from a real answer to every caller. A run that made no tool calls,
+    // produced no text, and still spent tokens now THROWS — which is what "detectable" was
+    // supposed to mean.
+    await expect(new AgentRunner({
       userMessage: 'do nothing', provider: silentProvider, tools: [],
       model: 'm', dangerousSkipApproval: true,
-    } as any).run();
-
-    expect(r.finalResponse,
-      'an agent that produced NOTHING was given a fake success summary — that ' +
-      'converts a detectable failure into a plausible one').toBe('');
+    } as any).run()).rejects.toThrow(/no text|nothing was captured/i);
   });
 
   it('does NOT summarise a FAILED write', async () => {

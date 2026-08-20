@@ -691,7 +691,17 @@ while IFS= read -r story_id; do
         # loop can hand it to the impl agent (build_implementation_prompt reads
         # this) and to the failure-analyst (self-heal → agent-KB). Consumed +
         # deleted by claude.sh once applied.
-        echo "$REVIEW_JSON" | jq -c '{verdict, summary, issues}' \
+        # reviewIncomplete IS PART OF THE FEEDBACK, not decoration.
+        #
+        # This projected {verdict, summary, issues} and dropped it. team-lead-review-json.py sets it
+        # when the reviewer returned nothing parseable -- live run 4: 292 output tokens, an empty
+        # string -- and run-agent-orchestration.sh's review_feedback_is_incomplete() reads it from
+        # THIS file to re-run the REVIEW instead of re-implementing a story nobody looked at.
+        #
+        # Deleting it between the component that sets it and the one that depends on it made that
+        # guard evaluate false on every review that has ever run. The writer was sent to fix
+        # feedback that did not exist.
+        echo "$REVIEW_JSON" | jq -c '{verdict, summary, issues, reviewIncomplete}' \
             > "${LOG_DIR:-$AUTOMATION_DIR/logs}/review-feedback-${story_id}.json" 2>/dev/null || true
     else
         success "  Review: approved — ${STORY_SUMMARY:-no issues found}"

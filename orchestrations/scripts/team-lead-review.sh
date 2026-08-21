@@ -512,18 +512,43 @@ while IFS= read -r story_id; do
         if command -v engine_paths_pathspec >/dev/null 2>&1; then
             mapfile -t _diff_excludes < <(engine_paths_pathspec)
         fi
+        # GENERATED FILES ARE NOT THE CHANGE UNDER REVIEW.
+        #
+        # The excludes were engine artefacts only, so a regenerated lockfile went into the diff --
+        # and `git diff` sorts alphabetically, so package-lock.json came FIRST. Live run 5: 8,056
+        # lines, and at line 2,000 (where the old cap fell) the content was still lockfile version
+        # bumps. The reviewer's whole window was machine output and none of the source it was asked
+        # to judge. Lockfiles have their own gate (lockfile-sync); they are not review material.
+        _diff_excludes+=(":(exclude)*.lock" ":(exclude)*-lock.json" ":(exclude)go.sum" ":(exclude)*.snap")
         _diff_full=$(git -C "$PROJECT_ROOT" diff "$_rev_base" HEAD -- . \
             "${_diff_excludes[@]+"${_diff_excludes[@]}"}" 2>/dev/null || true)
         if [ -z "$_diff_full" ]; then
             _diff_full=$(git -C "$PROJECT_ROOT" diff "$_rev_base" HEAD 2>/dev/null || true)
         fi
         if [ -n "$_diff_full" ]; then
-            _diff_total_lines=$(printf '%s\n' "$_diff_full" | wc -l)
-            if [ "$_diff_total_lines" -gt 2000 ]; then
-                STORY_DIFF=$(printf '%s\n' "$_diff_full" | head -2000)
-                STORY_DIFF="${STORY_DIFF}
+            _diff_bytes=$(printf '%s' "$_diff_full" | wc -c)
+            if [ "$_diff_bytes" -gt "${REVIEW_DIFF_MAX_BYTES:-120000}" ]; then
+                # THE REVIEWER HAS TOOLS; IT DOES NOT NEED THE WHOLE CHANGE INLINED.
+                #
+                # The old cap was `printf ... | head -2000`: head takes its lines and exits, printf
+                # gets SIGPIPE and dies 141, and `set -euo pipefail` kills this script -- silently,
+                # because SIGPIPE prints nothing. That produced NO VERDICT eight times in a row
+                # while never invoking a model once, and killed the run of 2026-08-20.
+                #
+                # It also cut mid-hunk, severing a change halfway through. What replaces it is a
+                # per-file summary -- whole units, nothing severed -- and an instruction to read
+                # what it needs. The execute grant includes bash, read_file and search precisely so
+                # it can, and asking is better evidence than a window someone else chose.
+                _diff_stat=$(git -C "$PROJECT_ROOT" diff --stat "$_rev_base" HEAD -- . \
+                    "${_diff_excludes[@]+"${_diff_excludes[@]}"}" 2>/dev/null || true)
+                STORY_DIFF="${_diff_stat}
 
-[TRUNCATED — ${_diff_total_lines} total lines, only the first 2000 shown. Do not assume the omitted tail is defect-free.]"
+[The change is ${_diff_bytes} bytes and is NOT inlined here. Generated files (lockfiles, snapshots)
+are excluded above and gated separately -- they are not review material. Read what you need:
+
+    git -C ${PROJECT_ROOT} diff ${_rev_base} HEAD -- <path>
+
+Review every file listed. Do not assume a file you did not read is defect-free.]"
             else
                 STORY_DIFF="$_diff_full"
             fi

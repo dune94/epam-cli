@@ -35,6 +35,7 @@ seam_ladder_export() {
     # Bash and WriteFile and rewrite engine state. An agentSeams entry is an EXACT, deliberate,
     # per-agent declaration — it is not the seamPattern/defaultSeam fallback this guard exists to
     # keep out, and that distinction is the whole reason the two live in separate keys.
+    local _seam_err; _seam_err=$(mktemp "${TMPDIR:-/tmp}/seam-err-XXXXXX")
     _exports=$("$_node" -e '
       const { seamInvocationEnv, resolveSeam } = require(process.argv[1]);
       // APPLY USES THE SAME RESOLUTION AS RESOLVE.
@@ -59,7 +60,7 @@ seam_ladder_export() {
       try { resolveSeam(process.argv[2]); } catch { process.exit(3); }
       const env = seamInvocationEnv(process.argv[2]);
       for (const [k, v] of Object.entries(env)) process.stdout.write(`export ${k}=${JSON.stringify(v)}\n`);
-    ' "${_dir}/seam-invocation.js" "$_seam" "$_reg" 2>&1) || {
+    ' "${_dir}/seam-invocation.js" "$_seam" "$_reg" 2>"$_seam_err") || {
         # 3 is the registry saying it does not know this agent — pass that up so the caller can
         # say so. Anything else is a genuine fault reading the registry, and is also worth saying.
         local _rc=$?
@@ -67,6 +68,24 @@ seam_ladder_export() {
         printf '%s\n' "$_exports" >&2
         return "$_rc"
     }
+    # WHAT IS EVAL'D MUST BE ASSIGNMENTS, AND ONLY ASSIGNMENTS.
+    #
+    # The capture above ended in `2>&1`, so anything the resolver wrote to STDERR landed in
+    # $_exports -- and this line eval'd it. A diagnostic beginning "[seam-invocation] ..." became a
+    # COMMAND, bash reported `[seam-invocation]: command not found`, and the 127 killed every caller
+    # running under `set -e`. An error message was executed as code.
+    #
+    # stderr now goes to its own file and is reported, never evaluated. This filter is the second
+    # half: a producer that ever writes prose to stdout gets it REPORTED rather than run.
+    local _bad
+    _bad=$(printf '%s\n' "$_exports" | grep -vE '^\s*$|^export [A-Za-z_][A-Za-z0-9_]*=' || true)
+    if [ -n "$_bad" ]; then
+        printf '[seam-ladder] refusing to evaluate non-assignment output from seam-invocation.js:\n%s\n' "$_bad" >&2
+        rm -f "$_seam_err"
+        return 1
+    fi
+    [ -s "$_seam_err" ] && printf '%s\n' "$(cat "$_seam_err")" >&2
+    rm -f "$_seam_err"
     [ -n "$_exports" ] && eval "$_exports"
     return 0
 }

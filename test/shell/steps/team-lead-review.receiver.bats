@@ -1,0 +1,105 @@
+#!/usr/bin/env bats
+# ─────────────────────────────────────────────────────────────────────────────
+# team-lead-review.sh — RECEIVER tests: run the real script, under its real shell flags.
+#
+# 2026-08-20, run 5 was killed after this script produced NO VERDICT eight times in a row. It never
+# called a model once — `Invoking review-agent` appears 0 times in the whole log. It died right
+# after logging the story, because the day's gateway wiring calls invoke_agent as a FUNCTION and the
+# script runs under `set -euo pipefail`, so a non-zero return terminates it.
+#
+# Seventy test files read this script's source. Three execute it, none reaching the invocation. The
+# change was "covered" by:
+#
+#     expect(src).toMatch(/invoke_agent\s+team-lead-review/)
+#
+# which proves a string is in a file and nothing about the script running.
+#
+# These tests run the REAL script with a stubbed runner and assert on what it PRODUCES. If the
+# script cannot reach its invocation, they fail — which is the whole point.
+# ─────────────────────────────────────────────────────────────────────────────
+
+setup() {
+    REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
+    REVIEW="$REPO_ROOT/orchestrations/scripts/team-lead-review.sh"
+    WORK="$(mktemp -d)"
+    export LOG_DIR="$WORK/logs"; mkdir -p "$LOG_DIR"
+    export PROJECT_ROOT="$WORK/codeline"
+    mkdir -p "$PROJECT_ROOT/.epam" "$PROJECT_ROOT/src"
+
+    git -C "$PROJECT_ROOT" init -q 2>/dev/null || true
+    git -C "$PROJECT_ROOT" config user.email t@t 2>/dev/null || true
+    git -C "$PROJECT_ROOT" config user.name t 2>/dev/null || true
+    echo 'export const a = 1;' > "$PROJECT_ROOT/src/a.ts"
+    printf '{"name":"fixture"}\n' > "$PROJECT_ROOT/package.json"
+    git -C "$PROJECT_ROOT" add -A 2>/dev/null || true
+    git -C "$PROJECT_ROOT" commit -qm base 2>/dev/null || true
+    git -C "$PROJECT_ROOT" branch -f develop HEAD 2>/dev/null || true
+
+    # A PRD with one story to review.
+    export PRD_FILE="$WORK/prd.json"
+    cat > "$PRD_FILE" <<'PRD'
+{
+  "implementationOrder": { "core": ["S-1"] },
+  "stories": [{
+    "id": "S-1", "title": "a story", "status": "completed", "completed": true,
+    "agentRole": "impl-agent",
+    "technicalNotes": { "files": ["src/a.ts"] },
+    "acceptanceCriteria": ["it works"],
+    "verificationCriteria": ["the page renders"]
+  }]
+}
+PRD
+
+    # The runner the reviewer invokes. Returns a well-formed verdict.
+    export AI_RUNNER_CMD="$WORK/runner.sh"
+    cat > "$AI_RUNNER_CMD" <<'RUNNER'
+#!/usr/bin/env bash
+cat >/dev/null
+echo '{"verdict":"approved","summary":"looks fine","issues":[]}'
+RUNNER
+    chmod +x "$AI_RUNNER_CMD"
+
+    # THE REVIEW BASELINE, the way the pipeline supplies it.
+    #
+    # Without this _rev_base falls back to origin/<branch> (no remote here) and then to HEAD~5 — a
+    # guessed base that does not exist in a small fixture, so `git diff` fails, `|| true` swallows
+    # it, and STORY_DIFF comes back EMPTY. Every assertion about the diff then passes while the
+    # block under test never ran.
+    git -C "$PROJECT_ROOT" rev-parse develop > "$LOG_DIR/phase-baseline-sha.txt"
+
+    export EPAM_PROJECT_CONFIG_DIR="$REPO_ROOT/orchestrations/projects/metrolinx"
+    export PHASE=core
+    export EPAM_MODEL=test-model
+    export ORCH_GATE_MODEL=test-model
+}
+
+teardown() { rm -rf "$WORK"; }
+
+@test "the fixture is real — the script and a runner both exist" {
+    [ -f "$REVIEW" ]
+    [ -x "$AI_RUNNER_CMD" ]
+}
+
+@test "REPRODUCES run 5: the reviewer reaches its model invocation" {
+    run bash "$REVIEW" core
+    # The decisive signal from the live failure: `Invoking review-agent` appeared 0 times.
+    [[ "$output" == *"Invoking review-agent"* ]]
+}
+
+@test "and it produces a verdict rather than dying silently" {
+    run bash "$REVIEW" core
+    [ -n "$output" ]
+    [[ "$output" == *"Review"* ]]
+}
+
+@test "a runner that returns NOTHING is reported as incomplete, not as a verdict" {
+    cat > "$AI_RUNNER_CMD" <<'RUNNER'
+#!/usr/bin/env bash
+cat >/dev/null
+RUNNER
+    chmod +x "$AI_RUNNER_CMD"
+    run bash "$REVIEW" core
+    # It must not silently approve. Either it says so, or it writes reviewIncomplete.
+    [[ "$output" == *"unparseable"* ]] || [[ "$output" == *"NO VERDICT"* ]] \
+      || grep -q reviewIncomplete "$LOG_DIR"/review-feedback-*.json 2>/dev/null
+}

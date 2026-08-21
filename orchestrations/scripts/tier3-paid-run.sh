@@ -76,6 +76,14 @@ if [ -n "$HW_REPO" ] && [ -d "$HW_REPO" ]; then
   git -C "$HW_REPO" clean -fd --quiet 2>/dev/null || true
 fi
 
+# THE CONTAMINATION GATE. Without it this launcher started a run on the PREVIOUS run's
+# state: retry counts, ladder position, agent KB, agent-io, review feedback. `--reset`
+# below is NOT this gate — it rewrites PRD story flags and clears checkpoints, nothing
+# else. Six launchers gated and these did not; see lib/pre-run-reset-gate.sh.
+# shellcheck source=lib/pre-run-reset-gate.sh
+. "$SCRIPT_DIR/lib/pre-run-reset-gate.sh"
+pre_run_reset_or_abort --prd "$PRD_FILE"
+
 OPENROUTER_API_KEY="$OPENROUTER_API_KEY" \
 EPAM_API_KEY_OPENROUTER="$OPENROUTER_API_KEY" \
 OPENAI_API_KEY="${OPENAI_API_KEY:-}" \

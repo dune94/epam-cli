@@ -1074,6 +1074,72 @@ _coupled_pair_gate_for_story() {
     return 1
 }
 
+# _plan_fidelity_gate_for_story <story_id> <output_file>
+# SCOPE IS ARITHMETIC AGAINST THE PLAN, NOT AN OPINION.
+#
+# lib/plan-fidelity-gate.sh was written for run 20260814T213253Z (AMSD-2041): the plan named
+# FIVE sites, the implementer changed exactly those five, and the reviewer rejected it for
+# modifying "6 files when the prescribed minimal fix requires only 2" — a number appearing
+# nowhere in the plan it was handed. Obeying the plan was the thing being rejected, so no
+# attempt could pass; four review cycles later the ladder was exhausted and the retry
+# hard-reset the branch, destroying work that had passed the suite and tsc.
+#
+# The library shipped and NOTHING CALLED IT. This is that call site. Placed beside the
+# coupled-pair gate for the same reason that one is here: the writer gets the finding back as
+# an ordinary verification failure with rungs still available, instead of the reviewer forming
+# an opinion about scope with none left.
+#
+# The gate returns 0 for a story with no prescription — UNCHECKED is not a failure — so this
+# is inert on any story nobody planned.
+_plan_fidelity_gate_for_story() {
+    local story_id="$1" output_file="${2:-/dev/null}"
+    [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
+    local _gate_lib="${SCRIPT_DIR}/lib/plan-fidelity-gate.sh"
+    [ -f "$_gate_lib" ] || return 0
+    # shellcheck source=lib/plan-fidelity-gate.sh
+    . "$_gate_lib"
+    command -v plan_fidelity_check >/dev/null 2>&1 || return 0
+    [ -d "${PROJECT_ROOT:-}/.git" ] || return 0
+
+    # THE COMMIT IS THE ARTIFACT, and the baseline is resolved the way every other consumer
+    # in this file resolves it — the phase baseline if one was recorded, else the run's.
+    local _ref=""
+    [ -f "${LOG_DIR:-}/phase-baseline-sha.txt" ] && \
+        _ref=$(tr -d '[:space:]' < "$LOG_DIR/phase-baseline-sha.txt" 2>/dev/null)
+    [ -n "$_ref" ] || _ref="$(_resolved_baseline_ref)"
+    git -C "$PROJECT_ROOT" rev-parse --verify "$_ref" >/dev/null 2>&1 || return 0
+
+    local _changed_list
+    _changed_list=$(mktemp)
+    git -C "$PROJECT_ROOT" diff --name-only "$_ref" HEAD > "$_changed_list" 2>/dev/null
+    if [ ! -s "$_changed_list" ]; then rm -f "$_changed_list"; return 0; fi
+
+    # Two candidates, same order as the dependency plugin and the coupled-pair gate.
+    local _manifest="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+    [ -f "$_manifest" ] || _manifest="${PROJECT_ROOT}/.epam/dependency-check.json"
+
+    local _gate_out _gate_rc=0
+    _gate_out=$(plan_fidelity_check "${MAIN_PRD_FILE:-$PRD_FILE}" "$story_id" "$_changed_list" "$_manifest" 2>&1) \
+        || _gate_rc=$?
+    rm -f "$_changed_list"
+
+    if [ "$_gate_rc" -eq 0 ]; then
+        [ -n "$_gate_out" ] && log "  $_gate_out"
+        return 0
+    fi
+
+    error "  [plan-fidelity] $story_id: the change went outside the plan of record — feeding into retry loop"
+    while IFS= read -r _line; do [ -n "$_line" ] && log "  $_line"; done <<< "$_gate_out"
+    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe change went outside the plan of record:\n\n```\n%s\n```\n\nChange only the files the plan prescribes. A site the plan marks changeRequired:false is part of the fix and is correctly left untouched — revert it. Every other changed file is prescribed and is not a finding.\n' \
+        "$_gate_out")
+    {
+        echo ""
+        echo "=== the change went outside the plan of record ==="
+        echo "$_gate_out"
+    } >> "$output_file"
+    return 1
+}
+
 # _committed_change_uses_helpers <story_id>
 # THE COMMIT IS THE ARTIFACT. MEASURE THAT.
 #
@@ -10337,6 +10403,14 @@ $_kb_section"
             # duplicated into this branch deliberately: a story that fails here has
             # still BURNED this rung, and dropping out without persisting the count
             # and model is what makes a ladder restart its climb from rung 0.
+            if ! _plan_fidelity_gate_for_story "$story_id" "$output_file"; then
+                write_story_retry_count "$LOG_DIR" "$story_id" "$retry_count"
+                write_story_retry_model "$LOG_DIR" "$story_id" "${STORY_MODEL:-}"
+                write_story_iteration_bump "$LOG_DIR" "$story_id" "${STORY_ITERATION_BUMP_TOTAL:-0}"
+                rm -f "$(_rung_snapshot_path "$story_id")" 2>/dev/null || true
+                update_monitor_status "retry" "$story_id" "The change went outside the plan of record"
+                return 1
+            fi
             if ! _coupled_pair_gate_for_story "$story_id" "$output_file"; then
                 write_story_retry_count "$LOG_DIR" "$story_id" "$retry_count"
                 write_story_retry_model "$LOG_DIR" "$story_id" "${STORY_MODEL:-}"

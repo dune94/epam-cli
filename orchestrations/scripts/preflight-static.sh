@@ -6,8 +6,22 @@
 #
 # Exit 0 = safe to launch. Non-zero = a defect that WILL surface in a run.
 set -uo pipefail
-ROOT="${1:-/home/bradleyjerome/projects/ai/epam-cli}"
-NODE="$HOME/.nvm/versions/node/v20.20.0/bin/node"
+# NEITHER OF THESE IS WRITTEN DOWN.
+#
+# This defaulted to one developer's absolute home path, and pinned node to one nvm install of
+# one version. On any other machine — CI, a second checkout, a colleague — the default ROOT
+# pointed at a directory that does not exist, and $NODE at an interpreter that does not exist,
+# so a pre-flight whose entire purpose is "catch it before spending a run" could not run at all.
+#
+# The repo root is where this script lives, two levels up. The interpreter is resolved by
+# lib/node-bin.sh, which reads the requirement from package.json engines.node and finds an
+# interpreter that satisfies it — the library that exists for exactly this, and that ten other
+# sites already use.
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="${1:-$(cd "$_SCRIPT_DIR/../.." && pwd)}"
+# shellcheck source=lib/node-bin.sh
+. "$_SCRIPT_DIR/lib/node-bin.sh"
+NODE="$(resolve_node_bin "$ROOT")" || { echo "[preflight] no usable node interpreter" >&2; exit 2; }
 cd "$ROOT" || exit 2
 FAILED=0
 report() { printf '%-34s %s\n' "$1" "$2"; }
@@ -106,7 +120,9 @@ console.log(bad.join("\n"));' 2>&1)
 # its claim reports the wrong thing in both directions.
 #
 # It now asks the handler about a story that ACTUALLY needs context, and says so when none does.
-PRD=$(ls -t orchestrations/projects/*/runs/*/work/*-prd.json 2>/dev/null | head -1)
+# shellcheck source=lib/project-config.sh
+. "$ROOT/orchestrations/scripts/lib/project-config.sh"
+PRD=$(ls -t "$(projects_root "$ROOT")"/*/runs/*/work/*-prd.json 2>/dev/null | head -1)
 if [ -n "$PRD" ]; then
   # The selector is a handler, not an inline program, so the same question this check asks can be
   # asked by a test — a check that can only ever be exercised by running the whole pre-flight

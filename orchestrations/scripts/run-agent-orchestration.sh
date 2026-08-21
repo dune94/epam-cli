@@ -273,10 +273,20 @@ _load_timeout_config
 # The literals are now gone, which turns that silence into a refusal — a seam with no resolvable
 # model declines rather than guessing. Correct, and useless if the chains never arrive. They must
 # be exported HERE, once, before any seam is invoked, the same reason _load_timeout_config is.
+# shellcheck source=lib/project-config.sh
+[ -f "$SCRIPT_DIR/lib/project-config.sh" ] && source "$SCRIPT_DIR/lib/project-config.sh"
 # shellcheck source=lib/model-ladders.sh
 [ -f "$SCRIPT_DIR/lib/model-ladders.sh" ] && source "$SCRIPT_DIR/lib/model-ladders.sh"
 if command -v export_model_ladders >/dev/null 2>&1; then
-    export_model_ladders "${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json" || true
+    # THE VERDICT IS READ. This was `|| true`, which made the loader's return value decorative and
+    # meant the else-branch below was the only way this could ever warn — a branch that fires when
+    # the loader is MISSING, never when it is present and found no project. Those two have the same
+    # outcome: no chains, and every seam declining or falling back.
+    if ! export_model_ladders "$(command -v project_settings_file >/dev/null 2>&1 \
+            && project_settings_file "${EPAM_PROJECT_CONFIG_DIR:-}" \
+            || echo "${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json")"; then
+        echo "[orch] WARNING: no ladder chains exported (see [model-ladders] above) — seams will have no resolvable model" >&2
+    fi
 else
     # NOT SILENT. A missing loader here means every seam runs with no resolvable model and, now
     # that the literals are gone, declines to run at all — the test-writer and the analyst would

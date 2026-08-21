@@ -42,6 +42,8 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# shellcheck source=lib/project-config.sh
+. "$SCRIPT_DIR/lib/project-config.sh"
 # Config files are DATA: load them without executing them. See lib/env-file.sh.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/env-file.sh"
 LOG_FILE="/tmp/tier3-skyscanner-app-run-$(date +%Y%m%dT%H%M%S).log"
@@ -90,7 +92,7 @@ for arg in "$@"; do [[ "$arg" == "--yes" || "$arg" == "-y" ]] && AUTO_YES=true; 
 
 # PER-PROJECT — see the note in tier3-metrolinx-run.sh; these three runners used
 # to share one PRD path and silently overwrite each other.
-PRD_FILE="${EPAM_PROJECT_CONFIG_DIR:-$REPO_ROOT/orchestrations/projects/skyscanner}/prd.json"
+PRD_FILE="$(project_config_dir skyscanner "$REPO_ROOT")/prd.json" || exit 1
 OUTPUT_DIR="${OUTPUT_DIR:-/home/bradleyjerome/projects/skyscanner-app}"
 
 info "Tier 3 travel app run — MiniMax + GLM + Kimi multi-model pipeline (USES CREDITS)"
@@ -162,7 +164,7 @@ info "Output directory clean (deleted and reinitialised)"
 #
 # Unlike the client-codeline case, declaring this app is Node with vitest is legitimate: these
 # launchers CREATE it. What was not legitimate is saying so twice.
-_epam_project_cfg="${EPAM_PROJECT_CONFIG_DIR:-$REPO_ROOT/orchestrations/projects/skyscanner}"
+_epam_project_cfg="$(project_config_dir skyscanner "$REPO_ROOT")" || exit 1
 mkdir -p "$OUTPUT_DIR/.epam"
 for _m in dependency-check.json contract-generation.json known-fixes.json; do
   if [ -f "$_epam_project_cfg/$_m" ]; then

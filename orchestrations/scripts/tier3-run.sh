@@ -26,9 +26,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# shellcheck source=lib/project-config.sh
+. "$SCRIPT_DIR/lib/project-config.sh"
 
 # Overridable so a test can point at a disposable estate instead of the real one.
-PROJECTS_DIR="${EPAM_PROJECTS_DIR:-$REPO_ROOT/orchestrations/projects}"
+PROJECTS_DIR="$(projects_root "$REPO_ROOT")" || exit 1
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 info()    { echo -e "${YELLOW}[tier3]${NC} $*"; }
@@ -55,8 +57,8 @@ done
 # Two ways in, and no third. A default here would launch a project nobody asked for, against a
 # client codeline, which is the one mistake this file must never make.
 if [ -n "$PROJECT_NAME" ]; then
-  PROJECT_DIR="$PROJECTS_DIR/$PROJECT_NAME"
-  [ -d "$PROJECT_DIR" ] || fail "no project '$PROJECT_NAME' — looked in $PROJECTS_DIR"
+  PROJECT_DIR="$(project_config_dir "$PROJECT_NAME" "$REPO_ROOT")" \
+    || fail "no project '$PROJECT_NAME' — looked in $PROJECTS_DIR"
 elif [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ]; then
   PROJECT_DIR="$EPAM_PROJECT_CONFIG_DIR"
   [ -d "$PROJECT_DIR" ] || fail "EPAM_PROJECT_CONFIG_DIR does not exist: $PROJECT_DIR"

@@ -42,6 +42,8 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# shellcheck source=lib/project-config.sh
+. "$SCRIPT_DIR/lib/project-config.sh"
 # Config files are DATA: load them without executing them. See lib/env-file.sh.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/env-file.sh"
 LOG_FILE="/tmp/tier3-travel-app-run-$(date +%Y%m%dT%H%M%S).log"
@@ -159,7 +161,7 @@ info "Output directory clean (deleted and reinitialised)"
 #
 # Unlike the client-codeline case, declaring this app is Node with vitest is legitimate: these
 # launchers CREATE it. What was not legitimate is saying so twice.
-_epam_project_cfg="${EPAM_PROJECT_CONFIG_DIR:-$REPO_ROOT/orchestrations/projects/skyscanner}"
+_epam_project_cfg="$(project_config_dir skyscanner "$REPO_ROOT")" || exit 1
 mkdir -p "$OUTPUT_DIR/.epam"
 for _m in dependency-check.json contract-generation.json known-fixes.json; do
   if [ -f "$_epam_project_cfg/$_m" ]; then

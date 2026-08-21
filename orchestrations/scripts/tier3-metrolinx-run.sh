@@ -34,6 +34,8 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# shellcheck source=lib/project-config.sh
+. "$SCRIPT_DIR/lib/project-config.sh"
 # Config files are DATA: load them without executing them. See lib/env-file.sh.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/env-file.sh"
 LOG_FILE="/tmp/tier3-metrolinx-jira-$(date +%Y%m%dT%H%M%S)-$$.log"
@@ -63,7 +65,11 @@ error()   { echo -e "${RED}[tier3-metrolinx] ✗${NC} $*" >&2; }
 # original exit status is preserved.
 _archive_run_artifacts() {
   local outcome="$1"
-  local dir="${EPAM_PROJECT_CONFIG_DIR:-$REPO_ROOT/orchestrations/projects/metrolinx}/runs/${ORCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
+  # Assigned separately: `local dir="$(...)"` makes the exit status local's, always 0,
+  # which would swallow the resolver's refusal — the very shape this file was fixed for.
+  local _cfg dir
+  _cfg="$(project_config_dir metrolinx "$REPO_ROOT")" || return 1
+  dir="$_cfg/runs/${ORCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
   mkdir -p "$dir" 2>/dev/null || return 0
   AUTOMATION_DIR="$REPO_ROOT/orchestrations" \
   LOG_DIR="$REPO_ROOT/orchestrations/logs" \
@@ -141,7 +147,7 @@ for arg in "$@"; do [[ "$arg" == "--yes" || "$arg" == "-y" ]] && AUTO_YES=true; 
 # orchestrations/travel-app-prd.json, so a metrolinx run's Jira ingest overwrote
 # the travel-app PRD outright (4 SKY stories -> 1 AMSD story, 2026-07-25). The
 # path now derives from the project identity that already exists a few lines up.
-PRD_FILE="${EPAM_PROJECT_CONFIG_DIR:-$REPO_ROOT/orchestrations/projects/metrolinx}/prd.json"
+PRD_FILE="$(project_config_dir metrolinx "$REPO_ROOT")/prd.json" || exit 1
 
 info "Tier 3 Metrolinx brownfield run — GLM + Kimi multi-model pipeline (USES CREDITS)"
 info "  Jira:    ${JIRA_URL} / project ${JIRA_PROJECT_KEY}"

@@ -23,10 +23,41 @@
 # Exports EPAM_MODEL_LADDER_<TIER> for every tier the file declares. An ALREADY-SET value is
 # left alone: an operator override at launch outranks the project declaration, and that
 # precedence is the same one load_env_file_safe ... preserve uses for the rest of the config.
+# ABSENT IS NOT SUCCESS.
+#
+# Every guard below used to `return 0`. So on the orchestrate.sh path, where EPAM_PROJECT_CONFIG_DIR
+# was never exported, the engine called this with "/llm-settings.json", got rc=0, and exported
+# nothing:
+#
+#     $ export_model_ladders "/llm-settings.json"; echo $?
+#     0
+#     EPAM_MODEL_LADDER_TIER_ORDER=[UNSET]
+#
+# The engine has a loud warning for the case where this loader is missing entirely — it prints
+# "seams will have no resolvable model". That branch could not fire, because the loader was present
+# and reporting success about a project it had never found. The outcome is identical and the run
+# said nothing: the ingest run died at discovery-vocabulary-agent with "failed" and no cause.
+#
+# A caller that genuinely does not care still writes `|| true`, and all eight already do. What it
+# can no longer do is mistake "no project" for "no ladders declared".
 export_model_ladders() {
     local _settings="${1:-${EPAM_LLM_SETTINGS_FILE:-}}"
-    [ -n "$_settings" ] && [ -f "$_settings" ] || return 0
-    command -v jq >/dev/null 2>&1 || return 0
+    [ -n "$_settings" ] || {
+        echo "[model-ladders] no settings file given — no ladder chains exported" >&2
+        return 1
+    }
+    [ -f "$_settings" ] || {
+        echo "[model-ladders] settings file not found: $_settings — no ladder chains exported" >&2
+        return 1
+    }
+    command -v jq >/dev/null 2>&1 || {
+        echo "[model-ladders] jq not on PATH — cannot read $_settings, no ladder chains exported" >&2
+        return 1
+    }
+    jq -e . "$_settings" >/dev/null 2>&1 || {
+        echo "[model-ladders] settings file is not valid JSON: $_settings — no ladder chains exported" >&2
+        return 1
+    }
 
     local _tier _var _chain
     # The tiers come from the FILE, not from a list here: a project adding a tier must not have
@@ -94,5 +125,15 @@ export_model_ladders() {
     _effort=$(jq -r '(.effortLadder // []) | join("|")' "$_settings" 2>/dev/null)
     [ -n "$_effort" ] && [ -z "${EPAM_EFFORT_LADDER:-}" ] \
         && export "EPAM_EFFORT_LADDER=$_effort"
+
+    # A READABLE FILE THAT DECLARES NO LADDER IS ALSO A FAILURE.
+    #
+    # Not pedantry: the seams no longer carry hardcoded model literals, so a run with no chains
+    # does not run degraded, it declines seam by seam. Reporting success here would put us back
+    # where we started with the file merely present instead of merely named.
+    if [ -z "${EPAM_MODEL_LADDER_TIER_ORDER:-}" ]; then
+        echo "[model-ladders] $_settings declares no ladderTierOrder — no positions can be resolved" >&2
+        return 1
+    fi
     return 0
 }

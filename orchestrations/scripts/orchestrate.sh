@@ -47,7 +47,36 @@ done
 
 [ -z "$PROJECT" ] && { echo "Usage: orchestrate.sh --project <name> [--yes] [--phase <phase>]" >&2; exit 1; }
 
-PROJECT_DIR="$REPO_ROOT/orchestrations/projects/$PROJECT"
+# THE PROJECT'S CONFIG DIRECTORY — resolved once, and EXPORTED.
+#
+# The path was assembled here and never exported, so run-agent-orchestration.sh read
+#
+#     export_model_ladders "${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json"
+#
+# as "/llm-settings.json" on every run started from this launcher: no chains exported, and every
+# seam left with no resolvable model. The ingest run died at discovery-vocabulary-agent and the log
+# said only "failed". The three tier3 launchers each export it — with three different resolutions —
+# which is exactly why this path was the one that broke.
+#
+# The resolution is lib/project-config.sh so this file holds no copy of it. It also VALIDATES,
+# which the assembly here did not: a mistyped --project produced a plausible path to nothing and
+# was caught two lines later only because config.env happened to be missing from it.
+# shellcheck source=lib/project-config.sh
+[ -f "$SCRIPT_DIR/lib/project-config.sh" ] && . "$SCRIPT_DIR/lib/project-config.sh"
+command -v project_config_dir >/dev/null 2>&1 || {
+  # NOT SILENT, and not a guess: launching without the project's config means the ladders never
+  # arrive and the run dies at its first agent.
+  echo "[orchestrate] lib/project-config.sh did not provide project_config_dir — refusing to launch" >&2
+  exit 1
+}
+# The library says WHERE it looked; this line says WHAT the caller wanted. Both are kept:
+# resolving the directory earlier moved the refusal ahead of the `[ -f "$CONFIG" ]` check
+# below, and that check's wording is the contract callers and tests already rely on.
+PROJECT_DIR="$(project_config_dir "$PROJECT" "$REPO_ROOT")" || {
+  echo "Project config not found for --project '$PROJECT'" >&2
+  exit 1
+}
+export EPAM_PROJECT_CONFIG_DIR="$PROJECT_DIR"
 CONFIG="$PROJECT_DIR/config.env"
 [ -f "$CONFIG" ] || { echo "Project config not found: $CONFIG" >&2; exit 1; }
 
@@ -116,7 +145,7 @@ export NODE_BIN
 # PER-PROJECT. This defaulted to travel-app-prd.json, so `orchestrate.sh --project
 # metrolinx` (PRD_FILE unset in its config.env) synthesized the AMSD PRD straight
 # into the travel-app PRD — the same clobber the tier3 runner was fixed for.
-PRD_FILE="${PRD_FILE:-${REPO_ROOT}/orchestrations/projects/${PROJECT}/prd.json}"
+PRD_FILE="${PRD_FILE:-$PROJECT_DIR/prd.json}"
 export PRD_FILE
 
 # ── Required key validation ───────────────────────────────────────────────────

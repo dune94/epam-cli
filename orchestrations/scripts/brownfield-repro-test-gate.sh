@@ -143,8 +143,21 @@ _test_never_ran() {
         local total
         total=$(printf '%s' "$_LAST_TEST_JSON" | "${NODE_BIN:-node}" -e '
             let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
-              try{ const j=JSON.parse(s.slice(s.indexOf("{")));
-                   process.stdout.write(String(j.numTotalTests ?? 0)); }
+              // -1 means "this output is not a test report" -> fall back to the pattern
+              // check. The old form sliced from indexOf("{"), which is -1 when there is no
+              // brace at all, so `s.slice(-1)` handed JSON.parse the LAST CHARACTER: any
+              // runner output ending in a digit parsed cleanly, `numTotalTests` was
+              // undefined, and 0 tests read as "the test never ran". An ordinary
+              // "AssertionError: expected 1 to be 2" — the normal result for a reproducing
+              // test — was reported as a malformed test. Same defect the pattern check was
+              // replaced to fix, one layer down.
+              const i = s.indexOf("{");
+              if (i < 0) { process.stdout.write("-1"); return; }
+              try { const j = JSON.parse(s.slice(i));
+                    if (!j || typeof j !== "object" || typeof j.numTotalTests !== "number") {
+                      process.stdout.write("-1"); return;
+                    }
+                    process.stdout.write(String(j.numTotalTests)); }
               catch { process.stdout.write("-1"); }
             });' 2>/dev/null || echo "-1")
         [ "$total" != "-1" ] && { [ "${total:-0}" -eq 0 ]; return; }
@@ -157,8 +170,14 @@ _test_never_ran() {
 # 3. The new test(s) must PASS with the fix in place.
 # Resolve the runner while the tree still carries the fix — see _REPRO_TEST_CMD above.
 _REPRO_TEST_CMD="$(_repro_file_command "${TEST_FILES[@]}")"
-if ! run_new_tests "${TEST_FILES[@]}"; then
-    _rc=$?
+# `if ! run_new_tests ...; then _rc=$?` captured the status of the NEGATION, which is
+# always 0 — so _rc was never 3 and the "declares no way to run its tests" branch below
+# could not fire. The gate still blocked, but reported "the test(s) FAIL with the fix in
+# place": it blamed the fix on a codeline that had never run a test at all, which is the
+# wrong investigation. Captured before the test, the way the baseline call already does it.
+_rc=0
+run_new_tests "${TEST_FILES[@]}" || _rc=$?
+if [ "$_rc" -ne 0 ]; then
     # "CANNOT PROVE" IS NOT "PROVED". This exited 0 — so on every codeline whose ecosystem was not
     # Node, the HARD gate that blocks a change shipping no working reproducing test passed
     # vacuously, silently. Steps 3.54 and 3.545 both defer their findings here, so the entire

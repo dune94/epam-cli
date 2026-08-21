@@ -37,6 +37,8 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# shellcheck source=lib/project-config.sh
+. "$SCRIPT_DIR/lib/project-config.sh"
 
 # One identifier for the whole run, so the run folder, traces and archive agree.
 export ORCH_RUN_ID="${ORCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
@@ -94,7 +96,8 @@ LOG_FILE="/tmp/tier3-mock-run-$(date +%Y%m%dT%H%M%S)-$$.log"
 # project-tool advertisement, or per-model iteration budgets AT ALL — every one
 # of which is real pipeline behaviour a real run depends on. Points at the
 # MOCK's own project dir, never a client's.
-export EPAM_PROJECT_CONFIG_DIR="${EPAM_PROJECT_CONFIG_DIR:-$REPO_ROOT/orchestrations/projects/hello-dolly}"
+EPAM_PROJECT_CONFIG_DIR="$(project_config_dir hello-dolly "$REPO_ROOT")" || exit 1
+export EPAM_PROJECT_CONFIG_DIR
 info "Project config: $EPAM_PROJECT_CONFIG_DIR"
 
 # ── THE TEST PERIMETER ───────────────────────────────────────────────────────

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# PRE_RUN_RESET_GATE: exempt — replays ONE step against the inputs a previous run
+#   already produced. Clearing that state is the opposite of this script's purpose.
 # ──────────────────────────────────────────────────────────────────────────────
 # WRITER RETEST — replay just the story-writer step against KNOWN inputs.
 #
@@ -61,6 +63,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# shellcheck source=lib/project-config.sh
+. "$SCRIPT_DIR/lib/project-config.sh"
 
 PRD_FILE="${1:?Usage: writer-retest.sh <PRD_FILE> [--project NAME]}"
 shift || true
@@ -92,7 +96,8 @@ if ! python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$PRD_FILE" 2>/d
   exit 1
 fi
 
-export EPAM_PROJECT_CONFIG_DIR="${EPAM_PROJECT_CONFIG_DIR:-$REPO_ROOT/orchestrations/projects/$PROJECT_NAME}"
+EPAM_PROJECT_CONFIG_DIR="$(project_config_dir "$PROJECT_NAME" "$REPO_ROOT")" || exit 1
+export EPAM_PROJECT_CONFIG_DIR
 
 # Auto-source the project's own config.env (real settings: TZ, SEMBLE_ENABLED,
 # JIRA_BASELINE_BRANCH, model routing, etc.) — found live 2026-08-01: relying on

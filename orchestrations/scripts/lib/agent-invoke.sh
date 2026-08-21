@@ -64,6 +64,44 @@ agent_profile_validate() {
 # invoke_agent <role> [--model M] [--provider P] [--json-result FILE]
 #              [--write-paths PATHS] [--tools LIST] [--codeline PATH] [--runner CMD]
 # Prompt on stdin, agent text on stdout. Exit code is the runner's.
+# ladder_chain_for_position <base|mid|top> — the project's chain for that RUNG.
+#
+# A seam declares a POSITION, never a tier name; agents/invocation-profiles.json says so in its own
+# _ladderPositions note, and it is right: metrolinx calls its tiers medium/high/highest and another
+# project may call them anything. The engine must know neither vocabulary.
+#
+# This did a NAME lookup -- position "top" became EPAM_MODEL_LADDER_TOP -- while the project exports
+# EPAM_MODEL_LADDER_HIGHEST. It never matched, so all 38 profiles that declare a ladder fell through
+# to the run default and said so quietly in every log:
+#
+#   [agent-invoke] role 'team-lead-review' asks for ladder 'top' but EPAM_MODEL_LADDER_TOP is not
+#                  set -- using the run's default ladder
+#
+# THE POSITION->TIER RULE IS NOT REIMPLEMENTED HERE. seam-invocation.js::resolveTierPosition already
+# owns it and three other callers go through it; a second copy in bash is a second thing to keep
+# right, and the copy this replaced had already drifted -- it read `mid` as len/2 where the JS reads
+# floor((len-1)/2), so the two disagreed for any project declaring an even number of tiers.
+#
+# An empty answer stays empty: the caller reports the gap rather than guessing a chain.
+ladder_chain_for_position() {
+    local _pos="${1:-}"
+    [ -n "$_pos" ] || return 1
+
+    local _lib_dir _tier
+    _lib_dir="${_AGENT_INVOKE_LIB_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+    _tier=$("${NODE_BIN:-node}" -e '
+      try {
+        const { resolveTierPosition } = require(process.argv[1]);
+        process.stdout.write(resolveTierPosition(process.argv[2], process.env));
+      } catch (_) { process.stdout.write(""); }
+    ' "$_lib_dir/seam-invocation.js" "$_pos" 2>/dev/null || printf '')
+    [ -n "$_tier" ] || return 1
+
+    local _var="EPAM_MODEL_LADDER_$(printf '%s' "$_tier" | tr '[:lower:]-' '[:upper:]_')"
+    printf '%s' "${!_var:-}"
+    [ -n "${!_var:-}" ]
+}
+
 invoke_agent() {
     local role="${1:?invoke_agent: role required}"; shift
     local _model="" _provider="" _json_result="" _write_paths="" _runner="" _tools_override=""
@@ -216,11 +254,12 @@ invoke_agent() {
     # climbs whatever ladder the run already provides — never a silent fallback to something
     # this script chose.
     if [ -n "$_ladder" ]; then
-        local _ladder_var="EPAM_MODEL_LADDER_$(printf '%s' "$_ladder" | tr '[:lower:]-' '[:upper:]_')"
-        if [ -n "${!_ladder_var:-}" ]; then
-            _env+=("EPAM_MODEL_LADDER_HIGH=${!_ladder_var}" "EPAM_MODEL_LADDER=${!_ladder_var}")
+        local _ladder_chain
+        _ladder_chain=$(ladder_chain_for_position "$_ladder" 2>/dev/null || true)
+        if [ -n "$_ladder_chain" ]; then
+            _env+=("EPAM_MODEL_LADDER_HIGH=$_ladder_chain" "EPAM_MODEL_LADDER=$_ladder_chain")
         else
-            echo "[agent-invoke] role '$role' asks for ladder '$_ladder' but $_ladder_var is not set — using the run's default ladder" >&2
+            echo "[agent-invoke] role '$role' asks for ladder position '$_ladder' but the project's ladderTierOrder does not supply it — using the run's default ladder" >&2
         fi
     fi
     [ -n "$_tools" ]       && _env+=("EPAM_ALLOWED_TOOLS=$_tools" "AI_GATE_ALLOW_TOOLS=1")

@@ -73,7 +73,20 @@ fi
 AUTO_YES=false
 for arg in "$@"; do [[ "$arg" == "--yes" || "$arg" == "-y" ]] && AUTO_YES=true; done
 [[ "${CI:-}" == "true" || "${AUTO_YES_TIER3:-}" == "1" ]] && AUTO_YES=true
-[[ ! -t 0 ]] && AUTO_YES=true
+# NOT `[[ ! -t 0 ]] && AUTO_YES=true`.
+#
+# That line skipped the spend confirmation for ANY invocation without a terminal: a cron, a CI step,
+# a script, an agent, a mis-pasted command. Its plausible purpose was background launches, but those
+# pass --yes explicitly -- what it actually covered was launching non-interactively WITHOUT --yes,
+# which is precisely the case where nobody is watching.
+#
+# Demonstrated twice on 2026-08-21, minutes apart. A TEST asserting "a non-interactive launch does
+# not auto-confirm" ran this script with stdin from /dev/null and LAUNCHED A RUN -- and then
+# mutation-testing that same test launched a second one. Both locked 33 codelines read-only and
+# reached Jira ingest before dying; no credits were spent only because they failed early.
+#
+# The line above already covers legitimate automation: CI=true and AUTO_YES_TIER3=1 are explicit
+# opt-ins somebody chose. Absence of a terminal is not consent.
 
 # PER-PROJECT — see the note in tier3-metrolinx-run.sh; these three runners used
 # to share one PRD path and silently overwrite each other.

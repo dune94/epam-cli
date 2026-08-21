@@ -215,7 +215,7 @@ if [ -d "$PROJECT_ROOT/.git" ]; then
     if [ -n "$_diff_full" ]; then
         _diff_total_lines=$(printf '%s\n' "$_diff_full" | wc -l)
         if [ "$_diff_total_lines" -gt 2000 ]; then
-            _STORY_DIFF=$(printf '%s\n' "$_diff_full" | head -2000)
+            _STORY_DIFF=$(head -2000 <<< "$_diff_full")
             _STORY_DIFF="${_STORY_DIFF}
 
 [TRUNCATED — ${_diff_total_lines} total lines, only the first 2000 shown. Do not assume the omitted tail is defect-free.]"

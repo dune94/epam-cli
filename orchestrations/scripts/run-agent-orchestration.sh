@@ -1440,7 +1440,10 @@ _lint_fix_findings_directly() {
 
     # Findings as the gate reported them: "path:line:col  rule  message".
     local _lf_findings
-    _lf_findings=$(grep -oE '^[^ ]+\.[A-Za-z]+:[0-9]+:[0-9]+ +[^ ]+ +.*' "$_lf_log" 2>/dev/null | head -25)
+    # grep reading a FILE still dies on SIGPIPE when head exits after 25 lines: a lint log with
+    # more than 25 findings killed the caller. Collect first, take second.
+    _lf_all=$(grep -oE '^[^ ]+\.[A-Za-z]+:[0-9]+:[0-9]+ +[^ ]+ +.*' "$_lf_log" 2>/dev/null || true)
+    _lf_findings=$(head -25 <<< "$_lf_all")
     [ -n "$_lf_findings" ] || return 1
 
     # Scope: ONLY the files the gate flagged. Nothing else is touched.
@@ -9884,7 +9887,10 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                     # step). Ask git who last touched the finding's file
                     # instead of asking the LLM to guess.
                     local _gf_file
-                    _gf_file=$(grep -o '"file"[[:space:]]*:[[:space:]]*"[^"]*"' "$_glog" 2>/dev/null | head -1 | sed -E 's/.*:[[:space:]]*"([^"]*)"/\1/')
+                    # A gate log with more than one "file" match SIGPIPEs grep when head -1 exits.
+                    local _gf_matches
+                    _gf_matches=$(grep -o '"file"[[:space:]]*:[[:space:]]*"[^"]*"' "$_glog" 2>/dev/null || true)
+                    _gf_file=$(head -1 <<< "$_gf_matches" | sed -E 's/.*:[[:space:]]*"([^"]*)"/\1/')
                     if [ -n "$_gf_file" ] && [ -f "$_gf_file" ]; then
                         local _gf_commit_subject
                         _gf_commit_subject=$(git -C "$PROJECT_ROOT" log --follow -1 --format=%s -- "$_gf_file" 2>/dev/null || echo "")
@@ -10278,7 +10284,10 @@ _failure_is_tolerated() {
         _failure_excerpt_full=$(echo "$vitest_output" | grep -A 150 "$failing_file")
         _failure_excerpt_lines=$(printf '%s\n' "$_failure_excerpt_full" | wc -l)
         if [ "$_failure_excerpt_lines" -gt 150 ]; then
-            failure_excerpt=$(printf '%s\n' "$_failure_excerpt_full" | head -150)
+            # HERESTRING, NOT A PIPE. `printf ... | head -150` kills this script: head takes its
+            # lines and exits, printf gets SIGPIPE and dies 141, pipefail promotes it and set -e
+            # ends the run -- silently. Measured at 141; it is what killed run 5 in the reviewer.
+            failure_excerpt=$(head -150 <<< "$_failure_excerpt_full")
             failure_excerpt="${failure_excerpt}
 [TRUNCATED — ${_failure_excerpt_lines} total lines, only the first 150 shown.]"
         else

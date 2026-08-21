@@ -3125,7 +3125,7 @@ verify_client_env_boundary() {
 
     local _count _first_var
     _count=$(printf '%s\n' "$_out" | grep -c .)
-    _first_var=$(printf '%s\n' "$_out" | head -1 | cut -f2)
+    _first_var=$(head -1 <<< "$_out" | cut -f2)
 
     # Same rejection-key discipline as the reuse guard: an identical rejection twice advances the
     # ladder rather than re-asking the same model the same question.
@@ -3967,7 +3967,7 @@ run_vendor_integrity_check() {
     [ "${#tampered[@]}" -eq 0 ] && return 0
 
     local details
-    details=$(printf '%s\n' "${tampered[@]}" | head -20)
+    details=$(head -20 <<< "$(printf '%s\n' "${tampered[@]}")")
     VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nFile(s) inside a vendored/third-party dependency directory were modified — this is never legitimate (only NEW dependencies should be added via the manifest, never an existing installed package edited directly). Revert this change and fix the ACTUAL problem (e.g. wrong package.json config, missing devDependency) instead:\n\n%s\n' "$details")
     {
         echo ""
@@ -4574,7 +4574,7 @@ run_relative_import_check() {
 
         if [ -n "$story_id" ]; then
             local _first_oos_file
-            _first_oos_file=$(echo "$out_of_scope_lines" | head -1 | sed -E 's/^OUT_OF_SCOPE:([^:]+):.*/\1/')
+            _first_oos_file=$(head -1 <<< "$out_of_scope_lines" | sed -E 's/^OUT_OF_SCOPE:([^:]+):.*/\1/')
             if [ -n "$_first_oos_file" ]; then
                 # BUG B FIX (found live, 2026-07-12, tier3-travel-app run): this
                 # lookup used to scan ALL stories with no deprecated-status
@@ -4601,7 +4601,7 @@ run_relative_import_check() {
                     "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null)
                 if [ -n "$_owner_id" ]; then
                     local _first_oos_detail
-                    _first_oos_detail=$(echo "$out_of_scope_lines" | head -1 | sed 's/^OUT_OF_SCOPE://')
+                    _first_oos_detail=$(head -1 <<< "$out_of_scope_lines" | sed 's/^OUT_OF_SCOPE://')
                     mkdir -p "${PROJECT_ROOT}/.epam/escalations"
                     jq -n --arg tf "$_first_oos_file" \
                         --arg diag "Relative import in ${_first_oos_file} does not resolve to a real file (detected by deterministic check while implementing ${story_id})." \
@@ -5454,8 +5454,12 @@ run_repo_lint_verification() {
     # every attempt. Keyed on the RULE IDS (eslint prints them as the last field), which are the
     # stable part: the file list changes as the writer works, so keying on it would make every
     # attempt look like a brand new problem.
-    local _lint_rules
-    _lint_rules=$(printf '%s\n' "$_lint_output" | awk 'NF{print $NF}' | grep -E '^[a-z@]' | sort -u | head -5 | tr '\n' ',')
+    local _lint_rules _lint_sorted
+    # HERESTRING, NOT A PIPE. In this shape it is SORT that takes SIGPIPE, not printf: sort buffers
+    # everything and only then writes, so when `head -5` exits after five lines sort dies 141,
+    # pipefail promotes it, and set -e ends the run on a lint output that was merely large.
+    _lint_sorted=$(awk 'NF{print $NF}' <<< "$_lint_output" | grep -E '^[a-z@]' | sort -u)
+    _lint_rules=$(head -5 <<< "$_lint_sorted" | tr '\n' ',')
     STORY_REJECTION_KEY="lint:${_lint_rules}"
 
     # Same '## Verification Failure' heading as the others so the analyst parses it identically.

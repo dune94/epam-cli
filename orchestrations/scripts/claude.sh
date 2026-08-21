@@ -2922,13 +2922,28 @@ Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:"
                 local _nd_nvals; _nd_nvals=$(mktemp "${TMPDIR:-/tmp}/new-dep-note-XXXXXX")
                 jq_vals --arg manifest "$_nd_manifest" --arg lock "$_nd_lock" \
                   '{"__MANIFEST_FILE__":$manifest,"__LOCKFILE__":$lock}' > "$_nd_nvals"
-                _nd_note="$(render_engine_prompt new-dependency-lockfile-note "$_nd_nvals" 2>/dev/null || true)"
+                # The library's contract: non-zero means NOTHING was rendered. `|| true` turned
+                # that into an empty note, and 2>/dev/null hid the reason — "a template value
+                # no producer supplies" is a real, recurring live failure, and this made it
+                # silent. The note is genuinely optional, so a failure is not fatal, but it is
+                # never invisible.
+                if ! _nd_note="$(render_engine_prompt new-dependency-lockfile-note "$_nd_nvals")"; then
+                    warning "  [prompt] new-dependency-lockfile-note did not render — the writer gets no lockfile note"
+                    _nd_note=""
+                fi
                 rm -f "$_nd_nvals"
             fi
             local _nd_vals; _nd_vals=$(mktemp "${TMPDIR:-/tmp}/new-dep-vals-XXXXXX")
             jq_vals --arg install "$_nd_install" --arg note "$_nd_note" \
               '{"__INSTALL_COMMAND__":$install,"__LOCKFILE_NOTE__":$note}' > "$_nd_vals"
-            new_dependency_directive="$(render_engine_prompt new-dependency-directive "$_nd_vals" 2>/dev/null || true)"
+            # NOT OPTIONAL. This directive is how the writer is told to install a new
+            # dependency at all; empty, the agent is invoked knowing nothing about it and
+            # invents an install step or skips one. Rendered or refused, never blank.
+            if ! new_dependency_directive="$(render_engine_prompt new-dependency-directive "$_nd_vals")"; then
+                error "  [prompt] new-dependency-directive did not render — refusing to invoke the writer without it"
+                rm -f "$_nd_vals"
+                return 1
+            fi
             rm -f "$_nd_vals"
         fi
     fi

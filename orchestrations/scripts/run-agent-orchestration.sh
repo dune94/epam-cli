@@ -1411,7 +1411,13 @@ _brownfield_gate_scope() {
     jq_vals --arg gate "$_gate" \
           --arg files "${_files:-  (none recorded — fall back to the injected diff)}" \
           '{"__GATE__":$gate,"__FILES__":$files}' > "$_bs_vals"
-    render_engine_prompt qa-brownfield-scope "$_bs_vals" || true
+    # This function's STDOUT is the prompt section its caller injects. `|| true` meant a
+    # failed render emitted nothing and the gate ran without its scope section, with no trace.
+    if ! render_engine_prompt qa-brownfield-scope "$_bs_vals"; then
+        echo "[prompt] qa-brownfield-scope did not render — the QA gate has no scope section" >&2
+        rm -f "$_bs_vals"
+        return 1
+    fi
     rm -f "$_bs_vals"
 }
 

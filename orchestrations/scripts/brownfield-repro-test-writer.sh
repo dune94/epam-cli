@@ -365,24 +365,36 @@ if [ -z "$_typecheck_cmd" ]; then
 fi
 
 _prompt_values=$(mktemp)
-"${NODE_BIN:-node}" -e '
-  const fs = require("fs");
-  const [out, ...pairs] = process.argv.slice(1);
-  const v = {};
-  for (let i = 0; i < pairs.length; i += 2) v[pairs[i]] = pairs[i + 1] ?? "";
-  fs.writeFileSync(out, JSON.stringify(v));
-' "$_prompt_values" \
-  __PROJECT_ROOT__ "$PROJECT_ROOT" \
-  __SCRIPT_DIR__ "$SCRIPT_DIR" \
-  __DIFF_HEADING__ "$_diff_heading" \
-  __EXAMPLE_BLOCK__ "$_example_block" \
-  __EXT__ "$_ext" \
-  __FIX_DIFF__ "$_fix_diff" \
-  __PROMPT_ROLE__ "$_prompt_role" \
-  __REQ_PROOF__ "$_req_proof" \
-  __TARGET_REL__ "$_target_rel" \
-  __TYPECHECK_COMMAND__ "$_typecheck_cmd" \
-  __VCS__ "${_vcs:-- The behavior described in the ticket is now correct, and related behavior did not regress.}"
+# VALUES REACH THE FILE WITHOUT BECOMING ARGV.
+#
+# This handed each value to `node -e` as a positional argument. MAX_ARG_STRLEN caps ONE argv entry
+# at 128KB, and __FIX_DIFF__ is a real diff -- live run 5, 2026-08-20:
+#
+#   brownfield-repro-test-writer.sh: line 368: node: Argument list too long
+#   FATAL: the repro-test-writer prompt did not render
+#
+# It refused rather than briefing an agent with an empty prompt, which is the discipline working --
+# and the story still shipped with no reproducing test. lib/jq-vals.sh already solves exactly this
+# for jq, by moving values through --rawfile written by printf, a shell builtin. The migration
+# covered jq and missed node; this is that site.
+jq_vals \
+  --arg project_root "$PROJECT_ROOT" \
+  --arg script_dir "$SCRIPT_DIR" \
+  --arg diff_heading "$_diff_heading" \
+  --arg example_block "$_example_block" \
+  --arg ext "$_ext" \
+  --arg fix_diff "$_fix_diff" \
+  --arg prompt_role "$_prompt_role" \
+  --arg req_proof "$_req_proof" \
+  --arg target_rel "$_target_rel" \
+  --arg typecheck_command "$_typecheck_cmd" \
+  --arg vcs "${_vcs:-- The behavior described in the ticket is now correct, and related behavior did not regress}" \
+  '{"__PROJECT_ROOT__":$project_root,"__SCRIPT_DIR__":$script_dir,
+    "__DIFF_HEADING__":$diff_heading,"__EXAMPLE_BLOCK__":$example_block,
+    "__EXT__":$ext,"__FIX_DIFF__":$fix_diff,"__PROMPT_ROLE__":$prompt_role,
+    "__REQ_PROOF__":$req_proof,"__TARGET_REL__":$target_rel,
+    "__TYPECHECK_COMMAND__":$typecheck_command,"__VCS__":$vcs}' > "$_prompt_values"
+
 _prompt=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/prompt-library.js" \
     render repro-test-writer "${EPAM_PROJECT_CONFIG_DIR:-}" "$_prompt_values") || {
     rm -f "$_prompt_values"

@@ -41,7 +41,25 @@ if PATH="/usr/bin:/bin:$PATH" bash "$BATS_BIN" "$_probe" >/dev/null 2>&1; then
 fi
 rm -f "$_probe"
 
-# NOT `exec env PATH=... bash ...`. The first version of this line did exactly that and produced
-# no output at all — because `env` is the very thing that is shadowed. A wrapper written to work
-# around a broken `env` must not call `env`. An assignment prefix needs no external binary.
-PATH="/usr/bin:/bin:$PATH" exec bash "$BATS_BIN" "$@"
+# A RUN THAT EXECUTED NOTHING IS NOT A PASS.
+#
+# `bats test/shell/` reports `1..0` and exits 0: bats does not recurse without -r, and a directory
+# with no .bats at its top level is simply "no tests". That is the same shape as the broken `env`
+# this wrapper already guards against — a runner reporting success for zero work — so -r is always
+# passed and an empty plan is refused.
+#
+# NOT `exec env PATH=... bash ...`. The first version of this line did exactly that and produced no
+# output at all, because `env` is the very thing that is shadowed. A wrapper written to work around
+# a broken `env` must not call `env`; an assignment prefix needs no external binary.
+_out=$(mktemp "${TMPDIR:-/tmp}/bats-out-XXXXXX")
+PATH="/usr/bin:/bin:$PATH" bash "$BATS_BIN" -r "$@" | tee "$_out"
+_rc=${PIPESTATUS[0]}
+
+if grep -qE '^1\.\.0$' "$_out"; then
+    rm -f "$_out"
+    echo "[shell-suite] FATAL: the run executed ZERO tests and would have reported success." >&2
+    echo "[shell-suite]        Check the path given: $*" >&2
+    exit 2
+fi
+rm -f "$_out"
+exit "$_rc"

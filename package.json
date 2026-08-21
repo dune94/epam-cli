@@ -44,7 +44,8 @@
     "specification:run": "node orchestrations/scripts/spec-mode-runner.js",
     "lint:orchestrations": "eslint -c eslint.orchestrations.config.mjs \"orchestrations/scripts/**/*.js\" --ignore-pattern \"**/.venv-*/**\"",
     "test:guard": "vitest run --config vitest.guard.config.ts && npm run lint:pipeline",
-    "lint:pipeline": "eslint --config orchestrations/eslint.pipeline.config.mjs orchestrations/scripts orchestrations/plugins"
+    "lint:pipeline": "eslint --config orchestrations/eslint.pipeline.config.mjs orchestrations/scripts orchestrations/plugins",
+    "test:shell": "bash test/shell/helpers/run-bats.sh test/shell/"
   },
   "keywords": [
     "ai",

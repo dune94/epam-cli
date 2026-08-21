@@ -290,6 +290,16 @@ function seamInvocationEnv(agent, agentsDir, opts) {
     env.EPAM_AGENT_SKILLS_FILE = skillsFile;
   } catch { /* no skills resolved — the agent runs as it did before this existed */ }
 
+  // THE LADDER DEFINES ITERATIONS — set below, from the rung this seam resolves to.
+  //
+  // This read `profile.maxIterations`: a per-agent literal, declared 22 times, absent 16
+  // times, and overriding the ladder wherever present. The budget belongs to the RUNG — a
+  // stronger rung is given more room, which is the whole point of escalating (live run
+  // 20260821T112857Z: 120 -> 185 -> 280 as the ladder climbed). A literal freezes that.
+  //
+  // A profile that still carries one is honoured here only so a project mid-migration is
+  // not left with none; the invocation-profiles contract forbids it and a test enforces
+  // that. See lib/model-settings.js.
   if (profile.maxIterations !== undefined) env.EPAM_MAX_ITERATIONS = String(profile.maxIterations);
   if (profile.maxOutputTokens !== undefined) env.EPAM_MAX_OUTPUT_TOKENS = String(profile.maxOutputTokens);
   if (profile.timeoutSecs !== undefined) env.EPAM_TIMEOUT_SECS = String(profile.timeoutSecs);
@@ -336,6 +346,32 @@ function seamInvocationEnv(agent, agentsDir, opts) {
       const declaredStart = (sourceEnv[key + '_START'] || '').trim();
       if (declaredStart) {
         env.EPAM_MODEL = declaredStart;
+        // THE BUDGET COMES FROM THE RUNG, resolved from the model this seam actually starts
+        // on. EPAM_MODEL_ITERATIONS is emitted by lib/model-ladders.sh from the project's
+        // own modelOverrides, so the number is the ladder's and is declared once.
+        //
+        // Absent stays absent, exactly as the start model does: a rung the project declares
+        // no budget for is a gap to state, never one to fill with someone else's number.
+        const itMap = String(sourceEnv.EPAM_MODEL_ITERATIONS || '');
+        if (itMap) {
+          let resolved = '';
+          for (const pair of itMap.split('|')) {
+            const eq = pair.lastIndexOf('=');
+            if (eq < 1) continue;
+            const match = pair.slice(0, eq);
+            const budget = pair.slice(eq + 1);
+            if (match.startsWith('provider:')) continue; // provider rules need the provider, not the model
+            if (declaredStart.includes(match)) { resolved = budget; break; } // declaration order, first match wins
+          }
+          if (resolved) {
+            env.EPAM_MAX_ITERATIONS = resolved;
+          } else {
+            process.stderr.write(
+              "[seam-invocation] seam '" + seam + "' starts on '" + declaredStart +
+              "' but the project declares no iteration budget for it — the seam will run on " +
+              "the engine default, which is nobody's choice\n");
+          }
+        }
       } else {
         // Absent stays absent: the seam keeps whatever model it would otherwise resolve, and the
         // gap is stated rather than filled with a root chosen by accident.

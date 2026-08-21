@@ -57,7 +57,6 @@
   ],
   "defaults": {
     "maxOutputTokens": 32768,
-    "maxIterations": 1,
     "reasoningEffort": "medium",
     "timeoutSecs": 300,
     "captureCost": true,
@@ -68,7 +67,6 @@
     "team-lead-review": {
       "_what": "Reviews the story's code change AND its test; emits a verdict.",
       "maxOutputTokens": 32768,
-      "maxIterations": 25,
       "maxToolCalls": 8,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
@@ -115,7 +113,6 @@
     "agent-failure-analyst": {
       "_what": "Diagnoses a no-output/failed agent attempt, prescribes a corrective directive.",
       "maxOutputTokens": 32768,
-      "maxIterations": 1,
       "reasoningEffort": "high",
       "timeoutSecs": 360,
       "ladder": "top",
@@ -135,7 +132,6 @@
     "repro-test-writer": {
       "_what": "Writes the bug-reproducing test for a brownfield fix.",
       "maxOutputTokens": 32768,
-      "maxIterations": 15,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
       "ladder": "top",
@@ -159,7 +155,6 @@
     "tc-writer": {
       "_what": "Writes post-implementation test criteria into the PRD.",
       "maxOutputTokens": 32768,
-      "maxIterations": 6,
       "reasoningEffort": "medium",
       "timeoutSecs": 600,
       "ladder": "top",
@@ -174,22 +169,6 @@
         }
       ],
       "template": "tc-writer",
-      "toolGrant": "read-only"
-    },
-    "cpa-gate": {
-      "_what": "Judges a CPA estimate rewrite: pass/fail.",
-      "maxOutputTokens": 16384,
-      "reasoningEffort": "low",
-      "timeoutSecs": 180,
-      "ladder": "top",
-      "produces": "estimate-verdict",
-      "consumes": [
-        {
-          "kind": "estimate",
-          "required": true
-        }
-      ],
-      "_orphaned": "2026-08-16: no caller names this seam, and its template (cpa-system) belongs to cpa-inference, which declares it. Left in place rather than deleted because removing a seam is a decision, not a tidy-up — but nothing reaches it, and three templates had been pointing here as a dumping ground.",
       "toolGrant": "read-only"
     },
     "cpa-inference": {
@@ -307,8 +286,6 @@
       "_what": "Picks which local codeline a Jira ticket belongs to.",
       "maxOutputTokens": 16384,
       "reasoningEffort": "high",
-      "maxIterations": 40,
-      "_maxIterationsWhy": "It is handed up to 8 candidate repositories (scoreRepos(..., 8, ...)) and must examine each with read_file/list_files/search before it can answer. Unset, it inherited AgentRunner’s `?? 20`: llm-settings.json modelOverrides (glm-5.2 -> 120) is applied in claude.sh’s story-invocation path, and this seam spawns ai-run.sh directly, so it never saw that budget either. Live 2026-08-18: the call died at 20 with “reached maximum iterations”, which AgentRunner returns as a NORMAL result, so the caller parsed no JSON, fell back to the highest lexically-scored repo, and the run proceeded against a codeline the operator had not named.",
       "timeoutSecs": 300,
       "ladder": "top",
       "produces": "codeline-selection",
@@ -327,7 +304,6 @@
       "reasoningEffort": "high",
       "temperature": "0.1",
       "maxOutputTokens": 32768,
-      "maxIterations": 25,
       "timeoutSecs": 900,
       "produces": "roster-verdict",
       "consumes": [
@@ -345,7 +321,6 @@
       "reasoningEffort": "high",
       "temperature": "0.7",
       "maxOutputTokens": 32768,
-      "maxIterations": 25,
       "timeoutSecs": 900,
       "produces": "fix-plan",
       "template": "code-graph-detective",
@@ -370,7 +345,6 @@
       "reasoningEffort": "high",
       "temperature": "0.1",
       "maxOutputTokens": 32768,
-      "maxIterations": 6,
       "timeoutSecs": 900,
       "produces": "guard-vocabulary",
       "consumes": [
@@ -388,7 +362,6 @@
       "reasoningEffort": "high",
       "temperature": "0.7",
       "maxOutputTokens": 32768,
-      "maxIterations": 25,
       "timeoutSecs": 900,
       "produces": "estate-survey",
       "consumes": [
@@ -406,7 +379,6 @@
       "reasoningEffort": "high",
       "temperature": "0.2",
       "maxOutputTokens": 32768,
-      "maxIterations": 120,
       "timeoutSecs": 900,
       "_note": "The writer is invoked today through claude.sh own rung ladder, not through this seam, so these settings are not yet the live invocation path. The record exists because an instance must inherit from the archetype it IS: -engineer resolved to impl-failure-analyst purely because that ladder matched the tier wanted, which makes an implementer an instance of a diagnostician.",
       "produces": "implementation",
@@ -452,7 +424,6 @@
     "vc-coverage": {
       "_what": "Judges whether the written tests cover each verification criterion.",
       "maxOutputTokens": 16384,
-      "maxIterations": 25,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
       "ladder": "top",
@@ -471,7 +442,6 @@
     "qa-gate:sast": {
       "_what": "Static application security scan over the change.",
       "maxOutputTokens": 16384,
-      "maxIterations": 25,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
       "ladder": "top",
@@ -487,7 +457,6 @@
     "qa-gate:spec-validator": {
       "_what": "Checks the change satisfies the story’s acceptance criteria.",
       "maxOutputTokens": 16384,
-      "maxIterations": 25,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
       "ladder": "top",
@@ -506,7 +475,6 @@
     "qa-gate:review-ranger": {
       "_what": "Reviews the change for defects the team-lead review may not reach.",
       "maxOutputTokens": 16384,
-      "maxIterations": 25,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
       "ladder": "top",
@@ -522,7 +490,6 @@
     "qa-gate:mutant-hunter": {
       "_what": "Assesses whether the tests would fail if the change were broken.",
       "maxOutputTokens": 16384,
-      "maxIterations": 25,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
       "ladder": "top",
@@ -541,7 +508,6 @@
     "qa-gate:fuzz-weaver": {
       "_what": "Probes the change with adversarial inputs.",
       "maxOutputTokens": 16384,
-      "maxIterations": 25,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
       "ladder": "top",
@@ -557,7 +523,6 @@
     "qa-gate:perf-sentinel": {
       "_what": "Assesses the change for runtime and startup cost.",
       "maxOutputTokens": 16384,
-      "maxIterations": 25,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
       "ladder": "top",
@@ -576,7 +541,6 @@
       "reasoningEffort": "high",
       "temperature": "0.2",
       "maxOutputTokens": 32768,
-      "maxIterations": 25,
       "timeoutSecs": 900,
       "_toolNote": "READ ONLY, deliberately. The job is to read a template and decorate it; the template zone is the one immutable thing in this design, and an agent granted bash could rewrite the very files it is reading from. The engine performs the write, after the contract check — so a prompt that fails its contract is never installed.",
       "produces": "project-prompts",
@@ -601,7 +565,6 @@
       "reasoningEffort": "high",
       "temperature": "0.1",
       "maxOutputTokens": 32768,
-      "maxIterations": 25,
       "timeoutSecs": 900,
       "_toolNote": "READ ONLY. It reports what a codeline exports; it has no reason to change one, and a bridge that can write could rewrite the lane it is describing.",
       "produces": "dependency-contracts",
@@ -620,7 +583,6 @@
       "reasoningEffort": "high",
       "temperature": "0.1",
       "maxOutputTokens": 32768,
-      "maxIterations": 25,
       "timeoutSecs": 900,
       "produces": "gate-verdict",
       "consumes": [
@@ -753,7 +715,6 @@
       "reasoningEffort": "high",
       "temperature": "0.1",
       "maxOutputTokens": 32768,
-      "maxIterations": 25,
       "timeoutSecs": 900,
       "toolGrant": "read-only",
       "produces": "prompt-verdict",
@@ -783,7 +744,6 @@
       "reasoningEffort": "high",
       "temperature": "0.1",
       "maxOutputTokens": 32768,
-      "maxIterations": 25,
       "timeoutSecs": 900,
       "toolGrant": "read-only",
       "produces": "survey-verdict",

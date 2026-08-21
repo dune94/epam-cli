@@ -62,8 +62,19 @@ function invoke(role: string, extraArgs = '', env: Record<string, string> = {}) 
   if (existsSync(envDump)) rmSync(envDump);
   let stdout = '', code = 0;
   try {
+    // THE LADDER IS LOADED FIRST, exactly as a run loads it.
+    //
+    // This sourced only the gateway. That was fine while maxIterations was a per-agent
+    // literal, and stopped being fine the moment the LADDER became its source (operator rule,
+    // 2026-08-21): the budget then came from nowhere, and the test asserted a shape no run
+    // has. The requirement below is unchanged — every role still receives a complete
+    // execution budget, nothing runs at provider defaults — only where one field comes from.
+    const LADDERS = GATEWAY.replace(/agent-invoke\.sh$/, 'model-ladders.sh');
+    const SETTINGS = GATEWAY.replace(/scripts\/lib\/agent-invoke\.sh$/, 'projects/metrolinx/llm-settings.json');
     stdout = execFileSync('bash', ['-c',
       `set -uo pipefail
+       source ${JSON.stringify(LADDERS)}
+       export_model_ladders ${JSON.stringify(SETTINGS)} >/dev/null 2>&1 || true
        source ${JSON.stringify(GATEWAY)}
        printf 'a prompt' | invoke_agent ${role} --runner ${JSON.stringify(stub)} ${extraArgs}`,
     ], { encoding: 'utf8', env: { ...process.env, ...env } });
@@ -148,14 +159,18 @@ describe('Gateway — routing stays with the caller', () => {
   });
 
   it('tags the invocation with its role so logs can attribute it', () => {
-    const { seen } = invoke('cpa-gate');
-    expect(seen.AGENT_INVOKE_ROLE).toBe('cpa-gate');
+    // Was demonstrated on cpa-gate, which is deleted: its own profile had documented it as
+    // orphaned on 2026-08-16 ("no caller names this seam"), and an audit of all declared
+    // agents confirmed nothing could invoke it. The requirement is unchanged — only the
+    // vehicle. cpa-inference is the live seam that owns the template cpa-gate was holding.
+    const { seen } = invoke('cpa-inference');
+    expect(seen.AGENT_INVOKE_ROLE).toBe('cpa-inference');
   });
 });
 
 describe('Gateway — per-role override without editing the registry', () => {
   it('AGENT_INVOKE_<ROLE>_MAX_OUTPUT_TOKENS wins', () => {
-    const { seen } = invoke('cpa-gate', '', { AGENT_INVOKE_CPA_GATE_MAX_OUTPUT_TOKENS: '31337' });
+    const { seen } = invoke('cpa-inference', '', { AGENT_INVOKE_CPA_INFERENCE_MAX_OUTPUT_TOKENS: '31337' });
     expect(seen.EPAM_MAX_OUTPUT_TOKENS).toBe('31337');
   });
 });
@@ -163,9 +178,18 @@ describe('Gateway — per-role override without editing the registry', () => {
 describe('Registry — hygiene', () => {
   it('is valid JSON with defaults covering every required key', () => {
     const r = registry();
-    for (const k of ['maxOutputTokens', 'maxIterations', 'reasoningEffort', 'timeoutSecs', 'captureCost']) {
+    for (const k of ['maxOutputTokens', 'reasoningEffort', 'timeoutSecs', 'captureCost']) {
       expect(r.defaults[k], `defaults.${k} missing`).toBeDefined();
     }
+  });
+
+  it('and defaults declares NO maxIterations — the ladder owns that number', () => {
+    // Operator rule, 2026-08-21: an agent is assigned to a ladder and the ladder defines its
+    // iterations. defaults carried 1, so the 16 profiles that declared none inherited a
+    // budget of ONE — worse than the engine default they were assumed to be getting. A
+    // number here is a per-registry literal shadowing the rung, which is the whole defect.
+    expect(registry().defaults.maxIterations,
+      'defaults.maxIterations reinstates a literal the ladder already owns').toBeUndefined();
   });
 
   it('every profile documents what its agent does', () => {

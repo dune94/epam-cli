@@ -14,7 +14,8 @@
 // every agent, derived from the declaration rather than a hand-written list — so agent 39 is
 // covered without editing this file.
 import { describe, it, expect } from 'vitest';
-import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 
 const ROOT = join(__dirname, '../../..');
@@ -36,15 +37,46 @@ function declaredAgents(): string[] {
   return [...new Set(names)].filter((n) => n !== 'defaults').sort();
 }
 
-/** The invocation gateway, under a realistic three-tier project. */
+/**
+ * The ladder env a REAL run has, produced by the real loader.
+ *
+ * This used to assemble EPAM_MODEL_LADDER_<TIER> by hand and set no _START variables, so it
+ * exercised a shape no run ever has: every agent emitted "declares no startModel", and the
+ * ladder-derived iteration budget could not resolve at all. A fixture that invents its own
+ * preconditions confirms the code rather than checking it — the same error that made two of
+ * this session's fixes inert.
+ */
+function ladderEnv(): Record<string, string> {
+  const settings = join(ROOT, 'orchestrations/projects/metrolinx/llm-settings.json');
+  if (!existsSync(settings)) return {};
+  // NAMED VARIABLES ONLY — never `env | grep EPAM`. That pattern also matches
+  // EPAM_API_KEY_ANTHROPIC/OPENAI/GEMINI and would print live credentials into test output
+  // and CI logs. The tier names come from the ladder itself, so nothing here is hardcoded.
+  const out = spawnSync('bash', ['-c',
+    `. "${join(ROOT, 'orchestrations/scripts/lib/model-ladders.sh')}" \
+     && export_model_ladders "${settings}" >/dev/null 2>&1; \
+     printf 'EPAM_MODEL_LADDER_TIER_ORDER=%s\\n' "\${EPAM_MODEL_LADDER_TIER_ORDER}"; \
+     printf 'EPAM_EFFORT_LADDER=%s\\n' "\${EPAM_EFFORT_LADDER}"; \
+     printf 'EPAM_MODEL_ITERATIONS=%s\\n' "\${EPAM_MODEL_ITERATIONS}"; \
+     for t in \${EPAM_MODEL_LADDER_TIER_ORDER}; do \
+       u=\$(printf '%s' "\$t" | tr '[:lower:]-' '[:upper:]_'); \
+       eval "printf 'EPAM_MODEL_LADDER_%s=%s\\n' \\"\$u\\" \\"\\\${EPAM_MODEL_LADDER_\$u}\\""; \
+       eval "printf 'EPAM_MODEL_LADDER_%s_START=%s\\n' \\"\$u\\" \\"\\\${EPAM_MODEL_LADDER_\${u}_START}\\""; \
+     done`,
+  ], { encoding: 'utf8' });
+  const env: Record<string, string> = {};
+  for (const line of (out.stdout || '').split('\n')) {
+    const eq = line.indexOf('=');
+    if (eq > 0 && line.slice(eq + 1).trim()) env[line.slice(0, eq)] = line.slice(eq + 1);
+  }
+  return env;
+}
+const LADDER = ladderEnv();
+
+/** The invocation gateway, under the ladder a real run loads. */
 function seamEnv(agent: string): Record<string, string> {
   const prev = { ...process.env };
-  Object.assign(process.env, {
-    EPAM_MODEL_LADDER_TIER_ORDER: 'medium high highest',
-    EPAM_MODEL_LADDER_MEDIUM: 'm1,m2',
-    EPAM_MODEL_LADDER_HIGH: 'h1,h2',
-    EPAM_MODEL_LADDER_HIGHEST: 'x1,x2',
-  });
+  Object.assign(process.env, LADDER);
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { seamInvocationEnv } = require(join(ROOT, 'orchestrations/scripts/lib/seam-invocation.js'));
@@ -79,6 +111,14 @@ function corpus(): string {
 const AGENTS = declaredAgents();
 
 describe('the declaration itself', () => {
+  it('the LADDER fixture is real — the loader produced one, not this test', () => {
+    // Guards the whole file: with an empty ladder every seam assertion below would pass
+    // against nothing, which is precisely how a fixture stops testing anything.
+    expect(Object.keys(LADDER).length, 'export_model_ladders produced no env').toBeGreaterThan(3);
+    expect(LADDER.EPAM_MODEL_LADDER_TIER_ORDER, 'no tier order from the real loader').toBeTruthy();
+    expect(LADDER.EPAM_MODEL_ITERATIONS, 'the ladder declares no iteration budgets').toBeTruthy();
+  });
+
   it('is not vacuous — the pipeline really declares a fleet of agents', () => {
     expect(AGENTS.length).toBeGreaterThan(30);
     expect(AGENTS).toContain('story-writer');
@@ -142,7 +182,7 @@ describe('every agent has a bounded iteration budget', () => {
     // selected the wrong repository for an entire run. The budget must be declared, per
     // agent, because 20 is right for none of them by design and for some by accident.
     const missing = AGENTS.filter((a) => !seamEnv(a).EPAM_MAX_ITERATIONS);
-    expect(missing, `${missing.length} agent(s) inherit AgentRunner's default of 20: ${missing.join(', ')}`).toEqual([]);
+    expect(missing, `${missing.length} agent(s) get no budget from the ladder: ${missing.join(', ')}`).toEqual([]);
   });
 
   it('and an output-token budget', () => {

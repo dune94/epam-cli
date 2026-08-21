@@ -126,6 +126,26 @@ export_model_ladders() {
     [ -n "$_effort" ] && [ -z "${EPAM_EFFORT_LADDER:-}" ] \
         && export "EPAM_EFFORT_LADDER=$_effort"
 
+    # THE ITERATION BUDGET IS PART OF THE LADDER TOO, and for the same reason as effort: a
+    # rung is (model, effort, room to work). The project declares it per model in
+    # modelOverrides; this exports it so a seam can resolve its own rung's budget without
+    # re-reading the settings file or re-implementing the match.
+    #
+    # Until now the ONLY implementation of that match was ~20 lines of inline jq inside
+    # claude.sh's per-attempt STORY path, so no seam could reach it: seam-invocation.js used a
+    # per-agent literal instead — 22 profiles carried one, 16 carried none and fell through to
+    # defaults.maxIterations of 1. lib/model-settings.js is now the single implementation and
+    # this line is its shell edge.
+    #
+    # Absent means absent, as everywhere else in this loader.
+    local _itermap
+    _itermap=$("${NODE_BIN:-node}" -e '
+        const { iterationMap } = require(process.argv[1] + "/model-settings.js");
+        process.stdout.write(iterationMap(process.argv[2]) || "");
+      ' "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" "$_settings" 2>/dev/null || printf '')
+    [ -n "$_itermap" ] && [ -z "${EPAM_MODEL_ITERATIONS:-}" ] \
+        && export "EPAM_MODEL_ITERATIONS=$_itermap"
+
     # A READABLE FILE THAT DECLARES NO LADDER IS ALSO A FAILURE.
     #
     # Not pedantry: the seams no longer carry hardcoded model literals, so a run with no chains

@@ -5203,7 +5203,15 @@ run_pre_phase_assessment() {
         EPAM_ALLOWED_WRITE_PATHS="" \
         EPAM_MAX_TOOL_CALLS="${_pfa_tool_budget}" \
         EPAM_RESPONSE_SCHEMA="${_pfa_schema:-}" \
-        run_orch_prompt_with_tools "$_pfa_prompt_this_attempt" "team-lead-agent" 2>&1 | tee "$assessment_log"
+        # ITS OWN IDENTITY. This passed "team-lead-agent", so the pre-phase skill assessment
+        # resolved the REVIEWER's seam: the reviewer's tool grant, effort and timeout, not its
+        # own. agents/invocation-profiles.json declares phase-assessment with toolGrant "write"
+        # and timeoutSecs 900 precisely because this step WRITES profiles.json — and the comment
+        # above records what the wrong identity cost: "It got read tools ... upexpress exhausted".
+        #
+        # The second argument to run_orch_prompt is the seam name (`local agent_type="${2:-...}"`),
+        # so this line is the whole of the wiring. A profile nothing names cannot be applied.
+        run_orch_prompt_with_tools "$_pfa_prompt_this_attempt" "phase-assessment" 2>&1 | tee "$assessment_log"
         # PIPESTATUS, not `|| _pfa_call_ok=0`: this is a PIPELINE, and its exit
         # status is tee's — always 0. The `||` branch could never fire on an agent
         # failure, so every failure here reported success. `set -e` does not save

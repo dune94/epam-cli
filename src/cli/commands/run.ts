@@ -177,6 +177,7 @@ export function buildRunResultJson(
     toolCallCount: number;
     iterations: number;
     timings?: unknown;
+    stopReason?: string;
   },
   config: { model: string; provider: string },
 ): Record<string, unknown> {
@@ -209,6 +210,10 @@ export function buildRunResultJson(
     : result.usage.costUsd!;
   return {
     result: result.finalResponse,
+    // OMITTED when the agent finished, present when it was cut off — the same "absent is not
+    // zero" convention as cached_input_tokens above. A consumer that never looks is unaffected;
+    // one that must not act on a truncated answer can refuse it without matching on prose.
+    ...(result.stopReason ? { stop_reason: result.stopReason } : {}),
     model: config.model,
     provider: config.provider,
     usage: {

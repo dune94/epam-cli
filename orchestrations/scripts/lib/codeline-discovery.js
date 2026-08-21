@@ -827,6 +827,33 @@ function callLlm(prompt, opts = {}) {
       },
     }).trim();
 
+    // AN EXHAUSTED CALL IS NOT AN ANSWER.
+    //
+    // Discovery decides which codelines the whole run touches. On 2026-08-18 the agent ran out
+    // of iterations, AgentRunner returned the exhaustion text with exit 0, and this function
+    // handed that text on as the model's reply — the fallback then picked the highest-scored
+    // repo and the run proceeded against the wrong codeline until it was killed.
+    //
+    // The engine now records the condition structurally (AgentRunResult.stopReason ->
+    // stop_reason in the result JSON this call already writes for cost tracking), so this reads
+    // a field rather than matching an English sentence that may be reworded. Throwing puts it
+    // through the same retry-and-escalate path as any other failed call, which is what should
+    // have happened the first time.
+    try {
+      const _r = JSON.parse(fs.readFileSync(_costFile, 'utf8'));
+      if (_r && _r.stop_reason === 'max_iterations') {
+        throw new Error(
+          'the discovery agent ran out of iterations before answering — its reply is truncated, '
+          + 'not a selection. Raise maxIterations on the codeline-discovery profile if this recurs.'
+        );
+      }
+    } catch (e) {
+      // Only the refusal above propagates. An unreadable or absent cost file means the call
+      // simply did not report — it is not evidence that the agent was cut off, and inventing a
+      // failure from a missing observability file would block runs that were fine.
+      if (/ran out of iterations/.test(e.message)) throw e;
+    }
+
     if (debug) log(`DEBUG raw LLM response:\n${raw}`);
 
     if (!raw) {

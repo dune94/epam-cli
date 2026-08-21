@@ -96,8 +96,13 @@ if ! python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$PRD_FILE" 2>/d
   exit 1
 fi
 
-EPAM_PROJECT_CONFIG_DIR="$(project_config_dir "$PROJECT_NAME" "$REPO_ROOT")" || exit 1
-export EPAM_PROJECT_CONFIG_DIR
+# Resolved on its own line so the resolver's refusal is read, then exported in one
+# statement: `export VAR="$(cmd)"` would make the status export's (always 0), and the
+# two-line form hid the export from the launcher-parity detector, which looks for
+# `export EPAM_PROJECT_CONFIG_DIR=` — a capability present but unrecognisable is the
+# same as absent to anything auditing the launchers.
+_epam_cfg_dir="$(project_config_dir "$PROJECT_NAME" "$REPO_ROOT")" || exit 1
+export EPAM_PROJECT_CONFIG_DIR="$_epam_cfg_dir"
 
 # Auto-source the project's own config.env (real settings: TZ, SEMBLE_ENABLED,
 # JIRA_BASELINE_BRANCH, model routing, etc.) — found live 2026-08-01: relying on

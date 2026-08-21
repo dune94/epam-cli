@@ -96,8 +96,13 @@ LOG_FILE="/tmp/tier3-mock-run-$(date +%Y%m%dT%H%M%S)-$$.log"
 # project-tool advertisement, or per-model iteration budgets AT ALL — every one
 # of which is real pipeline behaviour a real run depends on. Points at the
 # MOCK's own project dir, never a client's.
-EPAM_PROJECT_CONFIG_DIR="$(project_config_dir hello-dolly "$REPO_ROOT")" || exit 1
-export EPAM_PROJECT_CONFIG_DIR
+# Resolved on its own line so the resolver's refusal is read, then exported in one
+# statement: `export VAR="$(cmd)"` would make the status export's (always 0), and the
+# two-line form hid the export from the launcher-parity detector, which looks for
+# `export EPAM_PROJECT_CONFIG_DIR=` — a capability present but unrecognisable is the
+# same as absent to anything auditing the launchers.
+_epam_cfg_dir="$(project_config_dir hello-dolly "$REPO_ROOT")" || exit 1
+export EPAM_PROJECT_CONFIG_DIR="$_epam_cfg_dir"
 info "Project config: $EPAM_PROJECT_CONFIG_DIR"
 
 # ── THE TEST PERIMETER ───────────────────────────────────────────────────────

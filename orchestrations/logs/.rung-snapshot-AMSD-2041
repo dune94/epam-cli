@@ -1,8 +1,0 @@
-.epam/codeline-facts.json f902aae299563ff9b65466fd15be9232bac85faa
-.epam/settings.json f8ec274d88f9c705d09435303a0afc84e5d4477a
-.epam/verification.json f7e0fc40352769b586b50c561d37fb701b999bc9
-package-lock.json a8f307a3ea99dbcdba53e20fd1fc28b18c8c72e6
-package.json cfff552fe218379e54427d9d02eca60eac19f865
-src/context/contentstackContext.tsx 4c9ccf7fd2d7f7e1ed414d5d4df5f3c3367697fe
-src/pages/_app.tsx 230ea97f6c55facc92a0ab5f2b5c002a5f5261a5
-src/services/contentstack.ts ebfeb15c227fa31c908b0b8b54a37ccd42337925

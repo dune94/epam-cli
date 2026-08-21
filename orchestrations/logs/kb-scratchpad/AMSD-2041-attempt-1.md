@@ -66,10 +66,12 @@ _(attempt-evidence, from: engine)_
 The previous attempt changed these files (diffstat against origin/develop):
 
  package.json                        |  1 +
- src/context/contentstackContext.tsx | 13 ++++++
- src/pages/_app.tsx                  | 84 +++++++++++++++++++++++++++++--------
+ src/context/contentstackContext.tsx |  1 +
+ src/pages/404.tsx                   |  4 ++-
+ src/pages/[[...slug]].tsx           |  4 ++-
+ src/pages/_app.tsx                  | 65 ++++++++++++++++++++++++++++++++++---
  src/services/contentstack.ts        |  7 ++++
- 4 files changed, 87 insertions(+), 18 deletions(-)
+ 6 files changed, 75 insertions(+), 7 deletions(-)
  .epam/codeline-facts.json | new file
  .epam/settings.json | new file
  .epam/verification.json | new file
@@ -131,33 +133,35 @@ Run that command rather than editing package.json by hand. package.json states a
 Do not edit package-lock.json yourself.
 
 ## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)
-- src/pages/_app.tsx imports ContentstackLivePreview from '@contentstack/live-preview-utils' and calls ContentstackLivePreview.init({ stackSdk: Stack as any, enable: true, ssr: false }) inside a useEffect that returns early when typeof window === 'undefined'.
-- src/pages/_app.tsx registers ContentstackLivePreview.onEntryChange(handleEntryChange) where handleEntryChange is a useCallback that calls setLivePreviewEntry({ __livePreviewUpdatedAt: Date.now() }).
-- The livePreviewEntry state object set by handleEntryChange contains only the key __livePreviewUpdatedAt with a numeric timestamp — it contains NO entry content, NO entry UID, and NO content type identifier.
-- src/pages/_app.tsx constructs contentstackContextValue as { ...pageProps, livePreviewEntry, setLivePreviewEntry } and passes it to <ContentstackContext.Provider value={contentstackContextValue}>.
-- src/context/contentstackContext.tsx exports interface IContentstackContext with fields livePreviewEntry?: any and setLivePreviewEntry?: (entry: any) => void, plus optional header, footer, onboarding, page, pagesBaseURLs, directories, and languageAlternativePageSlug.
-- src/context/contentstackContext.tsx exports ContentstackContext = createContext<IContentstackContext>({}).
-- src/hooks/useContent.ts exports useContent which calls useContext(ContentstackContext) and returns { getContentByKey } where getContentByKey is a useCallback that calls getValue<T>(content, path, defaultValue) on the context value.
-- src/hooks/useContent.ts does NOT reference livePreviewEntry or setLivePreviewEntry — the useContent hook does not expose live preview state to callers.
-- src/components/pages/Homepage.tsx exports interface IHomepageProps with a single field: page: [IContentstackPage].
-- src/components/pages/Homepage.tsx Homepage component receives { page } via props and does NOT call useContent, does NOT read livePreviewEntry from ContentstackContext, and does NOT import ContentstackContext.
-- src/components/pages/Homepage.tsx extracts pageComponents via getValue<PageComponents>(page, '0.modular_blocks', []) and recentNews via getValue<IRecentNews>(page, '0.recent_news', {} as IRecentNews).
-- src/services/pageService.ts PageService.getPageEntry returns { header, footer, cookiesBanner, onboarding, page } — there is no livePreviewEntry, no draft content, and no preview-related field in the return value.
-- src/services/pageService.ts has no reference to livePreviewEntry, livePreview, ContentstackLivePreview, draft, or preview anywhere in the file.
-- src/services/contentstack.ts exports Stack = contentstack.Stack(options) where options includes live_preview: { enable: true, host: CONTENTSTACK_PREVIEW_HOST, management_token: CONTENTSTACK_MANAGEMENT_TOKEN }.
-- src/services/contentstack.ts ContentstackFactory has methods createContentTypeQuery and createContentTypeEntryQuery — neither accepts a live preview, draft, or preview-related parameter.
-- No function in any source file fetches draft or preview entry content from Contentstack in response to an onEntryChange signal — the handleEntryChange callback only bumps a timestamp.
-- IMPLEMENTATION CONFLICT: Verification criterion 1 requires that 'the rendered Homepage shows the draft entry content instead of the previously published content' — Homepage.tsx does not consume livePreviewEntry from context and has no mechanism to display draft content; it reads page data exclusively from props.
-- IMPLEMENTATION CONFLICT: Verification criterion 2 requires that 'the rendered Discover Article page shows the draft entry content instead of the previously published content' — there is no Discover Article-specific or any page-type-specific live preview handling in any source file; pageService.ts has no live preview awareness.
-- IMPLEMENTATION CONFLICT: Verification criterion 5 requires that 'multiple successive draft entry changes' update the rendered Homepage in sequence — handleEntryChange only sets a timestamp and Homepage.tsx does not subscribe to ContentstackContext changes.
-- IMPLEMENTATION CONFLICT: Verification criterion 6 requires that 'the page does not render the draft content and continues to show the published content unchanged' when in a 'protected or gated state' — there is no gated or protected state check anywhere in the live preview flow; handleEntryChange unconditionally calls setLivePreviewEntry regardless of page state.
-- Existing test convention in this repo uses jest.mock() at module level (e.g., jest.mock('contentstack', () => ({ Stack: () => ({ ... }) })) in src/services/__tests__/contentstack.spec.ts), jest.spyOn() for method-level spies, jest.resetModules() in beforeEach, and jest.clearAllMocks() in afterEach, as seen in src/services/__tests__/contentstack.spec.ts and src/services/__tests__/pageService.spec.ts.
+- src/pages/_app.tsx imports ContentstackLivePreview from "@contentstack/live-preview-utils" and calls ContentstackLivePreview.init({ stackSdk: Stack, enable: true }) inside a useEffect that runs once on mount.
+- src/pages/_app.tsx registers ContentstackLivePreview.onEntryChange(async () => { ... }) inside the .then() callback of init; the onEntryChange callback is async.
+- Inside onEntryChange, the callback reads pagePropsRef.current (a ref holding the latest pageProps) and extracts currentPage = currentProps?.content?.page?.[0], then contentTypeUid = currentPage?.content_type_uid || currentProps?.contentTypeUid, and entryUid = currentPage?.uid.
+- The onEntryChange callback returns early if (!contentTypeUid || !entryUid) — no preview fetch occurs when either identifier is absent.
+- The onEntryChange callback calls getSingleEntry({ contentTypeUid, entryUid, lang, ...config }) where config = contentstackConfig[contentTypeUid] and lang = (currentProps?.locale || "en") as ContentstackLocales.
+- On successful getSingleEntry result, the callback calls setPreviewPage([updated]) — wrapping the result in an array.
+- On error in the onEntryChange callback, the catch block is empty (silently ignores); published content remains visible because previewPage state is unchanged.
+- previewPage state is initialized as useState<IContentstackContext["page"]>(pageProps?.content?.page).
+- The ContentstackContext.Provider value is: { ...(pageProps?.content || {}), page: previewPage || pageProps?.content?.page, setPage: setPreviewPage }.
+- The rendered component is <Component {...pageProps} key={path} /> — pageProps are spread directly; previewPage is NOT passed as a prop to Component.
+- IMPLEMENTATION CONFLICT: Verification criterion requires 'rendered Homepage shows the draft entry content' but Homepage (src/components/pages/Homepage.tsx) receives `page` via props (IHomepageProps { page: [IContentstackPage] }) from pageProps.content.page, NOT from ContentstackContext; setPreviewPage updates context state but does NOT update pageProps passed to <Component>, so Homepage will not re-render with draft content unless it reads from context.
+- Homepage component (src/components/pages/Homepage.tsx) does NOT call useContent() or useContext(ContentstackContext); it reads page exclusively from props.
+- useContent hook (src/hooks/useContent.ts) calls useContext(ContentstackContext) and exposes getContentByKey<T>(path, defaultValue) which delegates to getValue<T>(content, path, defaultValue); content is the full IContentstackContext object.
+- IMPLEMENTATION CONFLICT: Verification criterion requires 'page does not render draft content and continues to show published content unchanged' when in a protected or gated state, but src/pages/_app.tsx onEntryChange callback has NO check for protected/gated state before calling setPreviewPage; there is no gating logic whatsoever in the preview flow.
+- src/services/contentstack.ts exports `options` with live_preview: { enable: true, host: CONTENTSTACK_PREVIEW_HOST || "api.contentstack.io", management_token: CONTENTSTACK_MANAGEMENT_TOKEN }.
+- src/services/contentstack.ts exports `Stack = contentstack.Stack(options)` — the same Stack instance passed to ContentstackLivePreview.init as stackSdk.
+- getSingleEntry signature in src/services/contentstack.ts: export const getSingleEntry = async ({ contentTypeUid, entryUid, lang, referenceFieldPath, jsonRtePath, only, except, cachePolicy }: IContentstackGetSingleEntry): Promise<IContentstackPage>.
+- IContentstackContext (src/context/contentstackContext.tsx) has page?: [IContentstackPage] and setPage?: (page: [IContentstackPage]) => void.
+- IContentstackPage (src/interface/content/page.ts) has uid: string, title: string, url: string, _content_type_uid?: string, among other fields.
+- src/api/utils/_contentstack_getNewsArticles.ts exports getContentStackNewsArticles which uses Stack.ContentType(ContentTypes.NewsArticle).Query() — this is a separate code path from the preview flow and does not participate in onEntryChange.
+- When no preview signal is active, ContentstackLivePreview.onEntryChange callback is never invoked, previewPage remains equal to pageProps?.content?.page, and the context value's page field is pageProps?.content?.page — identical to behavior without live preview.
+- The useEffect in _app.tsx that sets up ContentstackLivePreview has an empty dependency array [], so init and onEntryChange registration happen exactly once per client-side mount.
+- pagePropsRef is a useRef updated on every render via `pagePropsRef.current = pageProps` (a render-phase assignment), so onEntryChange always reads the most recent pageProps.
 
 ## Mock Strategy
-Following the convention in src/services/__tests__/contentstack.spec.ts, use jest.mock('@contentstack/live-preview-utils', () => ({ init: jest.fn().mockResolvedValue(undefined), onEntryChange: jest.fn() })) to mock the Live Preview SDK; use jest.mock('contentstack', () => ({ Stack: () => ({ ContentType: jest.fn().mockReturnThis(), Query: jest.fn().mockReturnThis(), Entry: jest.fn().mockReturnThis(), language: jest.fn().mockReturnThis(), toJSON: jest.fn().mockReturnThis(), find: jest.fn().mockResolvedValue([[], 0]), fetch: jest.fn().mockResolvedValue({}), ... })) to mock the contentstack SDK; for component tests, wrap in a test ContentstackContext.Provider value shaped as { ...pageProps, livePreviewEntry, setLivePreviewEntry } to simulate the context from _app.tsx; capture the onEntryChange callback via jest.mocked(ContentstackLivePreview.onEntryChange).mockImplementation(cb => { storedCallback = cb }) and invoke it manually to simulate draft entry signals.
+Mock "@contentstack/live-preview-utils" with jest.fn() for init (returning a resolved promise) and onEntryChange (capturing the callback to invoke it manually), mock "services/contentstack" to provide a controlled Stack object and a jest.fn for getSingleEntry returning a predictable IContentstackPage, and render _app.tsx via @testing-library/react with a mock Component that reads from ContentstackContext — following the jest.mock factory pattern used in src/services/__tests__/contentstack.spec.ts.
 
 ## Banned Patterns (must NOT appear in your file)
-livePreviewEntry contains entry content or a UID, handleEntryChange fetches draft content from Contentstack, there is a gated state check for live preview, ContentstackFactory accepts a draft or preview parameter, getPageEntry returns livePreviewEntry or draft content, Homepage calls useContent, Homepage imports ContentstackContext, getContentStackNewsArticles handles live preview, useContent exposes livePreviewEntry or setLivePreviewEntry, import from absolute 'src/' paths instead of relative paths
+import ContentstackLivePreview from "contentstack", ContentstackLivePreview.onContentChange, ContentstackLivePreview.subscribe, previewPage prop, pageProps.content.draftPage, setPage([updated]), mockContentstackLivePreview.init.mockResolvedValue, live_preview: { enable: false, getSingleEntry({ contentTypeUid, entryUid }), ContentstackContext.Consumer, Homepage reads from context, useContent() in Homepage
 
 ## Technical Notes
 - files: ["src/services/contentstack.ts","src/pages/_app.tsx","src/context/contentstackContext.tsx","src/services/pageService.ts","src/components/pages/Homepage.tsx","src/hooks/useContent.ts","src/api/utils/_contentstack_getNewsArticles.ts","src/interface/content/page.ts"]
@@ -1191,20 +1195,20 @@ Do NOT read orchestrations/agents/KB.md before writing implementation files. The
 
 ## Execution Plan
 Follow this plan step by step:
-1. In `src/interface/content/page.ts`, add a `PreviewConfig` interface (`isPreview: boolean`, `previewToken?: string`, `previewEnvironment?: string`, `livePreviewId?: string`) and an optional `preview?: PreviewConfig` field on the main page content interface.
+1. Modify `src/services/contentstack.ts` to initialize Contentstack SDK with `live_preview` configuration (enable flag and `host` for preview environment); export a helper `getLivePreviewConfig()` that returns `{ preview, live_preview_hash }` from the current SDK state or URL params.
 
-2. In `src/services/contentstack.ts`, add a `PreviewConfig` parameter to the Stack/client initialization and to the exported fetch wrapper; when `isPreview` is true, set the Contentstack SDK `live_preview` options (`enable`, `preview_token`, `host`) and/or append the preview token to API requests so draft content is returned.
+2. Modify `src/interface/content/page.ts` to add a `LivePreviewConfig` interface (`{ preview?: boolean; live_preview_hash?: string }`) and extend existing page-fetch interfaces to accept an optional `livePreview?: LivePreviewConfig` parameter.
 
-3. In `src/context/contentstackContext.tsx`, extend the context value to expose `previewConfig: PreviewConfig | null` and a `setPreviewConfig` setter; initialize state from `window.location` query params on mount.
+3. Modify `src/context/contentstackContext.tsx` to add `livePreviewConfig` state (`LivePreviewConfig | null`) and a `setLivePreviewConfig` setter to the context value and provider.
 
-4. In `src/pages/_app.tsx`, parse `live_preview`, `preview_token`, and `preview_environment` from the URL query string (via `useRouter` or `App.getInitialProps`), build a `PreviewConfig`, and pass it into the `ContentstackProvider` value so all descendants can read it.
+4. Modify `src/pages/_app.tsx` to parse `live_preview` and `preview` URL query parameters on mount and route changes, call `setLivePreviewConfig` with the extracted values, and wrap the app tree with the updated `ContentstackProvider`.
 
-5. In `src/hooks/useContent.ts`, read `previewConfig` from the context and pass it through to every `pageService` / Contentstack service call invoked by the hook.
+5. Modify `src/hooks/useContent.ts` to read `livePreviewConfig` from `ContentstackContext` and pass it as an argument to the `pageService` fetch function it calls.
 
-6. In `src/services/pageService.ts`, thread an optional `PreviewConfig` parameter through the primary content-fetch functions (e.g., `getPage`, `getHomepage`, etc.) and forward it to the Contentstack SDK calls so preview-mode requests hit the preview endpoint.
+6. Modify `src/services/pageService.ts` to accept an optional `livePreview?: LivePreviewConfig` parameter in its fetch functions (e.g., `getPageContent(path, livePreview?)`) and forward it to the API utility calls (e.g., `_contentstack_getNewsArticles`).
 
-7. In `src/api/utils/_contentstack_getNewsArticles.ts`, add an optional `PreviewConfig` parameter to the exported function signature and forward it to the underlying Contentstack query so news-article fetches also respect preview state.
+7. Modify `src/api/utils/_contentstack_getNewsArticles.ts` to accept an optional `livePreview?: LivePreviewConfig` parameter and include `live_preview` and `preview` fields in the Contentstack SDK query call when present.
 
-8. In `src/components/pages/Homepage.tsx`, render a lightweight preview-indicator banner (e.g., "Live Preview" label) when `previewConfig?.isPreview` is true, sourced from the context.
+8. Modify `src/components/pages/Homepage.tsx` to consume the updated `useContent` hook (which now passes preview tokens) so that when live preview state changes, the component re-fetches and re-renders with previewed content.
 
-9. Run `tsc`/type-check and a dev-server smoke test: load the page with a valid `?live_preview=…&preview_token=…` URL and confirm draft/unsaved content renders; confirm normal loads still return published content.
+9. Verify end-to-end: with `?live_preview=<hash>` in the URL, the app parses the token, stores it in context, passes it through the hook → service → API util, and the Homepage renders draft content from Contentstack.

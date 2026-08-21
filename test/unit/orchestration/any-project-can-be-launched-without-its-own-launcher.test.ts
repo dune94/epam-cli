@@ -63,7 +63,6 @@ describe('any project can be launched without its own launcher', () => {
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, 'config.env'), [
       'JIRA_CODELINE_ROOT=/somewhere/demo',
-      'EPAM_ONLY_CODELINES="one,two"',
       'EPAM_PROMPT_PROVISION_MODE=generate',
     ].join('\n'));
 
@@ -74,8 +73,6 @@ describe('any project can be launched without its own launcher', () => {
       .toContain(dir);
     expect(r.stdout, 'the codeline root the project declares was not loaded — scope resolution '
       + 'would no-op and the run would collapse to one lane').toContain('/somewhere/demo');
-    expect(r.stdout, 'the scope bound was not loaded, so the destructive reset has no bound')
-      .toContain('one,two');
     expect(r.stdout, 'the provisioning mode was not loaded, and the mint refuses to default it')
       .toContain('generate');
   });
@@ -86,11 +83,14 @@ describe('any project can be launched without its own launcher', () => {
     const projects = join(work, 'projects');
     const dir = join(projects, 'demo-project');
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'config.env'), 'EPAM_ONLY_CODELINES="one,two"\n');
+    // Demonstrated on the provisioning mode. It used to be demonstrated on
+    // EPAM_ONLY_CODELINES, which is deleted — the run's codeline scope is read from the PRD
+    // now, not declared by hand — but `preserve` semantics are not about that variable.
+    writeFileSync(join(dir, 'config.env'), 'EPAM_PROMPT_PROVISION_MODE=generate\n');
 
     const r = describeRun(['--project', 'demo-project'],
-      { EPAM_PROJECTS_DIR: projects, EPAM_ONLY_CODELINES: 'only-this-one' });
-    expect(r.stdout, 'the project file overwrote an explicit caller override').toContain('only-this-one');
+      { EPAM_PROJECTS_DIR: projects, EPAM_PROMPT_PROVISION_MODE: 'reuse' });
+    expect(r.stdout, 'the project file overwrote an explicit caller override').toContain('reuse');
   });
 
   it('refuses a project that does not exist, naming what it looked for', () => {

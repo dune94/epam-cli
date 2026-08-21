@@ -100,7 +100,6 @@ if [ "$DESCRIBE" = "1" ]; then
   echo "config dir:         $EPAM_PROJECT_CONFIG_DIR"
   echo "prd:                $PRD_FILE"
   echo "codeline root:      ${JIRA_CODELINE_ROOT:-<none declared>}"
-  echo "codeline scope:     ${EPAM_ONLY_CODELINES:-<all>}"
   echo "provisioning mode:  ${EPAM_PROMPT_PROVISION_MODE:-<none declared>}"
   echo "brownfield:         ${EPAM_BROWNFIELD:-0}"
   echo "jira pipeline:      ${JIRA_PIPELINE:-0}"
@@ -133,7 +132,7 @@ bash "$SCRIPT_DIR/preflight-check.sh" \
 if [ "$ASSUME_YES" != "1" ]; then
   echo
   echo "  project:   $PROJECT_NAME"
-  echo "  codelines: ${EPAM_ONLY_CODELINES:-<all discovered>}"
+  echo "  codelines: declared by the PRD (project.outputDirs), resolved during the run"
   echo "  root:      ${JIRA_CODELINE_ROOT:-<none>}"
   echo "  phase:     ${PHASE_ARG:-<all>}"
   echo

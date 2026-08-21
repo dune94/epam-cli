@@ -31,12 +31,28 @@ const projectDirs = () => readdirSync(PROJECTS)
   .map((n) => join(PROJECTS, n))
   .filter((p) => statSync(p).isDirectory());
 
-/** EPAM_ONLY_CODELINES as the launcher would read it — the run's scope bound. */
+/**
+ * The run's declared scope, as the launcher now reads it: project.outputDirs in the PRD.
+ *
+ * This used to read EPAM_ONLY_CODELINES out of config.env — an operator restating, by hand,
+ * a fact resolve-codeline-scope.sh already writes into the PRD for every project. That
+ * variable is deleted; the requirement it was tested for is not. A project's declared
+ * codeline names must still be in the form the engine derives, or the lane loop matches
+ * nothing and the run stops at launch.
+ */
 function declaredScope(dir: string): string[] {
-  const cfg = join(dir, 'config.env');
-  if (!existsSync(cfg)) return [];
-  const m = readFileSync(cfg, 'utf8').match(/^EPAM_ONLY_CODELINES=["']?([^"'\n#]*)/m);
-  return m ? m[1].split(/[|,]/).map((s) => s.trim()).filter(Boolean) : [];
+  const names: string[] = [];
+  for (const f of ['prd.json', 'prd.canonical.json']) {
+    const p = join(dir, f);
+    if (!existsSync(p)) continue;
+    try {
+      const j = JSON.parse(readFileSync(p, 'utf8'));
+      for (const d of (j?.project?.outputDirs ?? [])) {
+        if (typeof d?.codeline === 'string' && d.codeline) names.push(d.codeline);
+      }
+    } catch { /* a malformed PRD is another test's subject */ }
+  }
+  return [...new Set(names)];
 }
 
 /** Every codeline any story in a project's PRDs claims to touch. */

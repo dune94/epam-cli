@@ -3076,26 +3076,10 @@ _run_codeline_loop() {
   #
   # Matching is on the codeline NAME (the part before the colon), never the path, so a selection
   # cannot accidentally match a directory that merely contains the same text.
-  if [ -n "${EPAM_ONLY_CODELINES:-}" ]; then
-    local _sel_entries=() _sel _e
-    local _orig_ifs="$IFS"
-    while IFS= read -r _e; do
-      [ -n "$_e" ] || continue
-      # IFS is established for THIS split only. A pipe-delimited value iterated without it is one
-      # token containing the whole string, silently, which is how a config split has broken here
-      # before.
-      IFS='|,'
-      for _sel in ${EPAM_ONLY_CODELINES}; do
-        if [ "${_e%%:*}" = "$_sel" ]; then _sel_entries+=("$_e"); break; fi
-      done
-      IFS="$_orig_ifs"
-    done < <(printf '%s\n' "${_cl_entries[@]}")
-    IFS="$_orig_ifs"
-    # Declared order is preserved: the merges run in declared order, and a reordered run is a
-    # different run. The loop walks _cl_entries, not the selection, precisely for that reason.
-    log "[orch] Codeline selection active (EPAM_ONLY_CODELINES=${EPAM_ONLY_CODELINES}): ${#_sel_entries[@]} of ${#_cl_entries[@]} codeline(s)"
-    _cl_entries=("${_sel_entries[@]+"${_sel_entries[@]}"}")
-  fi
+  # NO OPERATOR FILTER HERE. The lane list already IS the run's scope: it is built from the
+  # PRD's project.outputDirs, which resolve-codeline-scope.sh writes for every project however
+  # its PRD arrived. Filtering it again with a hand-typed EPAM_ONLY_CODELINES asked a human to
+  # restate a fact the PRD already carried, and could only ever disagree with it.
 
   if [ ${#_cl_entries[@]} -eq 0 ]; then
     error "[orch] No codeline/worktree entries found in PRD: ${_prd_path}"

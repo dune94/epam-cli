@@ -52,6 +52,8 @@ def main():
     path, story = sys.argv[1], sys.argv[2]
 
     records = []
+    malformed = 0
+    parsed = 0
     try:
         with open(path, 'r', encoding='utf-8') as fh:
             for line in fh:
@@ -61,11 +63,25 @@ def main():
                 try:
                     rec = json.loads(line)
                 except ValueError:
-                    continue                      # one bad line must not cost the history
+                    # ONE bad line must not cost the history. ALL of them is a broken log,
+                    # not an absence of history — and reporting that as "no previous reviews"
+                    # is what let the reviewer approve code carrying its own prior findings
+                    # (live 2026-08-21). Counted, and refused below if nothing parsed at all.
+                    malformed += 1
+                    continue
+                parsed += 1
                 if isinstance(rec, dict) and str(rec.get('story', '')) == story:
                     records.append(rec)
     except OSError:
         return 0                                  # no log yet — nothing to say
+
+    # A log that exists but yielded NOT ONE parseable record is a defect in the producer,
+    # never evidence that this is the first review. Say so, loudly, and fail.
+    if malformed and not parsed:
+        sys.stderr.write(
+            '[prior-reviews] %s: %d line(s), none parseable as JSON — the review log is not '
+            'JSONL. The reviewer would silently lose its own history.\n' % (path, malformed))
+        return 1
 
     if not records:
         return 0

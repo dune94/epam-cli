@@ -629,7 +629,15 @@ Review every file listed. Do not assume a file you did not read is defect-free.]
     # `local` here is a RUNTIME error bash -n cannot see (SC2168) — it aborted the reviewer on
     # every cycle, produced NO VERDICT eight times, and halted the run of 2026-08-20.
     _review_prior_block=""
-    _review_prior_block=$(python3 "$SCRIPT_DIR/lib/handlers/prior-reviews.py" "$REVIEW_LOG" "$story_id" 2>/dev/null || true)
+    # NOT `2>/dev/null || true`. That made an UNREADABLE log indistinguishable from a first
+    # review — which is exactly how this defect survived: the reviewer was handed an empty
+    # prior-review block on every cycle and nothing anywhere said so.
+    _review_prior_block=""
+    if ! _review_prior_block=$(python3 "$SCRIPT_DIR/lib/handlers/prior-reviews.py" "$REVIEW_LOG" "$story_id" 2>&1); then
+        warning "  [prior-reviews] could not read $REVIEW_LOG — the reviewer will not see its own earlier findings"
+        [ -n "$_review_prior_block" ] && log "  [prior-reviews] $_review_prior_block"
+        _review_prior_block=""
+    fi
 
     _review_vals=$(mktemp)
     jq_vals \
@@ -734,6 +742,27 @@ Review every file listed. Do not assume a file you did not read is defect-free.]
         rm -f "${LOG_DIR:-$AUTOMATION_DIR/logs}/review-feedback-${story_id}.json" 2>/dev/null || true
     fi
 
+    # THE REVIEWER'S MEMORY OF THIS STORY. Written HERE, inside the loop, because this is
+    # the only place story_id, the verdict and the issues all exist — the phase summary at
+    # the end of this file has none of them, which is why lib/handlers/prior-reviews.py
+    # (which filters on `story` and renders `issues`) got nothing back and the reviewer
+    # approved code carrying its own prior `major` findings. Live 2026-08-21, AMSD-2041.
+    #
+    # -c: the file is .jsonl and BOTH readers are line-based — prior-reviews.py parses per
+    # line, and run-agent-orchestration.sh greps the compact '"phase_id":"<phase>"'.
+    mkdir -p "$(dirname "$REVIEW_LOG")" 2>/dev/null || true
+    if ! jq -cn \
+            --arg phase "$PHASE_ID" \
+            --arg ts "$(date -Iseconds)" \
+            --arg story "$story_id" \
+            --arg verdict "$STORY_VERDICT" \
+            --argjson issues "$(printf '%s' "$REVIEW_JSON" | jq -c '.issues // []' 2>/dev/null || echo '[]')" \
+            '{phase_id:$phase, timestamp:$ts, story:$story, verdict:$verdict,
+              review_status:$verdict, issues:$issues, issues_found:($issues|length),
+              reviewer:"team-lead-agent"}' >> "$REVIEW_LOG"; then
+        warning "  could not record this review for $story_id — the NEXT cycle will not see these findings"
+    fi
+
 done <<< "$PHASE_STORIES"
 
 echo ""
@@ -817,7 +846,24 @@ fi
 mkdir -p "$(dirname "$REVIEW_LOG")"
 TIMESTAMP=$(date -Iseconds)
 
-REVIEW_RECORD=$(jq -n \
+# ONE LINE, AND IN THE SHAPE ITS READERS ACTUALLY EXPECT.
+#
+# `jq -n` without -c pretty-printed this into a .jsonl file. Two consumers broke on that
+# alone: lib/handlers/prior-reviews.py parses line-by-line and skipped every line as
+# malformed (silently — "a malformed line is skipped, never fatal"), and
+# run-agent-orchestration.sh:10837 greps the COMPACT form '"phase_id":"<phase>"', which a
+# space after the colon never matches.
+#
+# The record was also a PHASE summary — no `story`, no `verdict`, no `issues` — while
+# prior-reviews.py filters on `story` and renders `issues`. So even parsed, it carried
+# nothing to feed back. Live 2026-08-21: the reviewer raised a hardcoded endpoint and a
+# wrong SDK config key as `major` in cycle 2, then APPROVED the same code in cycle 3 with
+# both still present. It could not remember what it had demanded.
+#
+# This record stays a PHASE summary — it genuinely has no single story or issue list, and
+# inventing empty ones here is what made the first version of this fix inert. The per-story
+# records prior-reviews.py needs are written inside the story loop above.
+REVIEW_RECORD=$(jq -cn \
     --arg phase "$PHASE_ID" \
     --arg ts "$TIMESTAMP" \
     --arg status "$REVIEW_STATUS" \
@@ -827,6 +873,7 @@ REVIEW_RECORD=$(jq -n \
         phase_id: $phase,
         timestamp: $ts,
         review_status: $status,
+        verdict: $status,
         issues_found: $issue_count,
         stories_reviewed: $story_count,
         reviewer: "team-lead-agent"

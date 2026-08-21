@@ -225,16 +225,28 @@ run_inline_tc_writer_gate() {
             >> "$LOG_DIR/blocked-stories.jsonl" 2>/dev/null || true
         return 1
     fi
-    # Emit cost_snapshot with model info (cost not tracked since post-impl-tc-writer
-    # uses `epam run` directly without ORCH_JSON_RESULT support)
+    # Emit cost_snapshot naming THE MODEL THAT RAN.
+    #
+    # This recorded `${TC_WRITER_MODEL:-z-ai/glm-5.2}`, and TC_WRITER_MODEL is set nowhere in
+    # the repo — so the literal always won. Every TC-writer call on every project was recorded
+    # as z-ai/glm-5.2 whatever it ran on, including after the ladder escalation above moved
+    # _tc_model to a different, differently-priced model. The invocation at the top of this
+    # function uses _tc_model; so does this now, which is the only way the two can agree.
+    #
+    # The provider is read the same way, from what the run declares, and is left EMPTY rather
+    # than defaulted: a ledger that invents "qwen" for a run on another provider is worse than
+    # one that admits it does not know.
+    #
+    # (cost not tracked since post-impl-tc-writer uses `epam run` directly without
+    # ORCH_JSON_RESULT support)
     local _tc_phase
     _tc_phase=$(jq -r '.phase // empty' "${MONITOR_FILE:-$SCRIPT_DIR/../logs/agent-status.json}" 2>/dev/null || true)
     jq -cn \
         --arg ts "$(date -Iseconds)" \
         --arg story "$story_id" \
         --arg phase "${_tc_phase:-}" \
-        --arg model "${TC_WRITER_MODEL:-z-ai/glm-5.2}" \
-        --arg provider "${TC_WRITER_PROVIDER:-qwen}" \
+        --arg model "$_tc_model" \
+        --arg provider "${_tc_provider:-${ORCH_GATE_PROVIDER:-}}" \
         '{
           event_id: ("evt-cost-" + ($ts | gsub("[^0-9]";""))),
           timestamp: $ts,

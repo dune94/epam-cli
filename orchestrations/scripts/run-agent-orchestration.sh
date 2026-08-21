@@ -10646,12 +10646,17 @@ run_interstitial_e2e_phase() {
         "Starting E2E phase $e2e_phase" "" "main" "qa-engineer" 2>/dev/null || true
 
     local e2e_log="$LOG_DIR/e2e-phase-${e2e_phase}.log"
-    if bash "$0" --phase "$e2e_phase" 2>&1 | tee "$e2e_log"; then
+    # PIPESTATUS[0], NOT THE `if`. Without pipefail -- and this script sets none -- `if cmd | tee`
+    # tests TEE's status, which is always 0. So this phase reported PASSED unconditionally and the
+    # else branch below, which fails the run, was unreachable. Same defect as the phase gate.
+    bash "$0" --phase "$e2e_phase" 2>&1 | tee "$e2e_log"
+    local _e2e_rc=${PIPESTATUS[0]}
+    if [ "$_e2e_rc" -eq 0 ]; then
         success "Interstitial E2E phase '$e2e_phase' PASSED"
         "$SCRIPT_DIR/update-monitor.sh" event "e2e_gate_pass" \
             "E2E phase $e2e_phase passed" "" "main" "qa-engineer" 2>/dev/null || true
     else
-        local e2e_exit=$?
+        local e2e_exit=$_e2e_rc
         error "Interstitial E2E phase '$e2e_phase' FAILED (exit $e2e_exit)"
         error "Fix E2E failures then re-run: $0 --phase $e2e_phase"
         error "Log: $e2e_log"
@@ -10683,8 +10688,18 @@ log "Step 5: Checking phase gate..."
 "$SCRIPT_DIR/update-monitor.sh" event "phase_gate_check" "Checking phase gate for $PHASE" "" "main" "team-lead-agent" 2>/dev/null || true
 
 # Run phase gate check (skip tests for now - future enhancement)
+# PIPESTATUS[0], NOT THE PIPELINE STATUS.
+#
+# This read `| tee ... || gate_result=$?`. There is no `set -e` and no `pipefail` in this script --
+# it says so in three other comments -- so a pipeline's status is the LAST command's, which is tee,
+# which is always 0. The gate exits 1 to ask for a retry and 2 to escalate, and BOTH were read as
+# GO. Its five checks -- review status, story completion, deliverables, unit tests, cost variance --
+# could not stop a phase between them.
+#
+# Three other call sites in this file already recover the verdict this way. This one did not.
 gate_result=0
-SKIP_TESTS=true "$SCRIPT_DIR/check-phase-gate.sh" "$PHASE" 2>&1 | tee "$LOG_DIR/phase-gate-${PHASE}.log" || gate_result=$?
+SKIP_TESTS=true "$SCRIPT_DIR/check-phase-gate.sh" "$PHASE" 2>&1 | tee "$LOG_DIR/phase-gate-${PHASE}.log"
+gate_result=${PIPESTATUS[0]}
 
 case $gate_result in
     0)

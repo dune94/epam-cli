@@ -1578,7 +1578,12 @@ run_pre_phase_assessment() {
     rm -f "$_ap_vals"
 
     cd "$PROJECT_ROOT"
-    if echo "$assessment_prompt" | "$CLAUDE_CMD" --print --output-format text --dangerously-skip-permissions 2>&1 | tee "$assessment_log"; then
+    # PIPESTATUS, NOT THE `if`. Without pipefail, `if cmd | tee` tests TEE's status, which is always
+    # 0 -- so a failed assessment reported "completed". Same defect as the phase gate and the
+    # interstitial E2E phase in run-agent-orchestration.sh.
+    echo "$assessment_prompt" | "$CLAUDE_CMD" --print --output-format text --dangerously-skip-permissions 2>&1 | tee "$assessment_log"
+    _ap_rc=${PIPESTATUS[1]}
+    if [ "$_ap_rc" -eq 0 ]; then
         success "Pre-phase assessment completed for '$phase_id'"
         if ! jq empty "$profiles_file" 2>/dev/null; then
             warning "Pre-phase assessment may have corrupted profiles.json! Restoring backup."

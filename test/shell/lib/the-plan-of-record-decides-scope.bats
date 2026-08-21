@@ -11,9 +11,15 @@
 # tsc was destroyed.
 #
 # WIRING: the library shipped and nothing called it — it was reachable only from a vitest
-# file. claude.sh now calls it via _plan_fidelity_gate_for_story, beside the coupled-pair
-# gate, so the writer gets a scope finding back as an ordinary verification failure with
-# rungs still available. The last tests in this file EXECUTE that call site.
+# file. claude.sh now calls it via _plan_fidelity_gate_for_story, and the call is ADVISORY.
+#
+# It is advisory because blocking on this signal rejects working code, which is proven, not
+# argued: gotransit SHIPPED AMSD-2041 as e780a8b7 — nine files, +379 — against a prescription
+# naming six sites, three of them changeRequired:false. And the writer is told the list is
+# "a STARTING POINT, not a fence ... if your change genuinely requires another file, write
+# it", so a blocking gate is unwinnable by construction. The tests below EXECUTE the call
+# site and pin it to advisory; the LIBRARY still returns 1, because the finding is real —
+# what changed is who decides what to do about it.
 #
 # The no-hardcoding requirement is part of the contract, not a side note: the gate must
 # name no file, extension, directory or count, so a project on an entirely different
@@ -213,23 +219,38 @@ run_callsite() {
     [[ "$output" == *"every changed file is prescribed"* ]]
 }
 
-@test "EXECUTED: the call site BLOCKS a change that went outside the plan" {
+@test "EXECUTED: the call site REPORTS an out-of-plan change and lets the story proceed" {
     prd S-1 '[{"file":"a.ts","changeRequired":true}]'
     setup_callsite
     run_callsite a.ts sneaky.ts
-    [[ "$output" == *"GATE_RC=1"* ]]
-    [[ "$output" == *"sneaky.ts"* ]]
+    [[ "$output" == *"GATE_RC=0"* ]]      # advisory
+    [[ "$output" == *"sneaky.ts"* ]]      # but the finding is not swallowed
+    [[ "$output" == *advisory* ]]
 }
 
-@test "and it hands the writer a VERIFICATION_FAILURE naming the offending file" {
-    # The finding has to reach the next attempt's prompt. A gate that blocks without
-    # saying why produces a retry that changes nothing.
+@test "THE PROOF IT MUST NOT BLOCK: the real AMSD-2041 shape passes the call site" {
+    # The shipped fix was nine files against a six-site plan. A blocking gate rejects it on
+    # every attempt until the ladder exhausts. This pins the shape, not just the flag.
+    prd S-1 '[{"file":"src/services/contentstack.ts","changeRequired":true},
+              {"file":"src/pages/_app.tsx","changeRequired":true},
+              {"file":"src/context/contentstackContext.tsx","changeRequired":true},
+              {"file":"src/components/pages/Homepage.tsx","changeRequired":false},
+              {"file":"src/services/pageService.ts","changeRequired":false},
+              {"file":"src/hooks/useContent.ts","changeRequired":false}]'
+    setup_callsite
+    run_callsite src/services/contentstack.ts src/pages/_app.tsx \
+                 src/context/contentstackContext.tsx src/components/pages/Homepage.tsx \
+                 src/lib/unplanned-one.ts src/lib/unplanned-two.ts src/lib/unplanned-three.ts
+    [[ "$output" == *"GATE_RC=0"* ]]
+}
+
+@test "it never sets VERIFICATION_FAILURE — that is what feeds the retry loop" {
+    # The finding goes to the log and the attempt output, never to the next prompt as a
+    # failure the writer must resolve. Setting it here is what would make it blocking.
     prd S-1 '[{"file":"a.ts","changeRequired":true}]'
     setup_callsite
     run_callsite a.ts sneaky.ts
-    [[ "$output" != *"FAILURE=[]"* ]]
-    [[ "$output" == *"Verification Failure"* ]]
-    [[ "$output" == *"changeRequired:false"* ]]
+    [[ "$output" == *"FAILURE=[]"* ]]
 }
 
 @test "a story with no prescription is not blocked by the call site" {
@@ -246,15 +267,16 @@ run_callsite() {
     [[ "$output" == *"GATE_RC=0"* ]]
 }
 
-@test "the engine really invokes it, in the branch that still owns the ladder rung" {
-    # The function existing is not the fix; being called is. It must sit where a failure
-    # can be fed back into the retry loop — beside the coupled-pair gate, before the review.
+@test "the engine really invokes it, before the review" {
     cd "$REPO_ROOT"
-    run grep -n 'if ! _plan_fidelity_gate_for_story' orchestrations/scripts/claude.sh
-    [ "$status" -eq 0 ]
-    pf=$(grep -n 'if ! _plan_fidelity_gate_for_story' orchestrations/scripts/claude.sh | cut -d: -f1)
+    pf=$(grep -n '^ *_plan_fidelity_gate_for_story "\$story_id"' orchestrations/scripts/claude.sh | cut -d: -f1)
     cp=$(grep -n 'if ! _coupled_pair_gate_for_story' orchestrations/scripts/claude.sh | cut -d: -f1)
+    [ -n "$pf" ] && [ -n "$cp" ]
     [ "$pf" -lt "$cp" ]
-    run sed -n "$((pf)),$((pf+7))p" orchestrations/scripts/claude.sh
-    [[ "$output" == *"write_story_retry_count"* ]]
+}
+
+@test "no dead retry branch guards it — a branch that cannot be taken reads as enforcement" {
+    cd "$REPO_ROOT"
+    run grep -c 'if ! _plan_fidelity_gate_for_story' orchestrations/scripts/claude.sh
+    [ "$output" -eq 0 ]
 }

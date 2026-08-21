@@ -1128,16 +1128,37 @@ _plan_fidelity_gate_for_story() {
         return 0
     fi
 
-    error "  [plan-fidelity] $story_id: the change went outside the plan of record — feeding into retry loop"
+    # ADVISORY. IT MUST NOT REJECT WORKING CODE.
+    #
+    # This returned 1 and fed the retry loop. Two things disprove that, both from this repo's
+    # own record rather than from reasoning:
+    #
+    #   1. gotransit SHIPPED AMSD-2041 as e780a8b7 — NINE files, +379. The prescription names
+    #      six sites, three of them changeRequired:false. The real, working, merged fix was
+    #      therefore out of plan, and a blocking gate would have rejected it on every attempt
+    #      until the ladder exhausted — the exact outcome this gate exists to prevent, inverted.
+    #
+    #   2. The writer is TOLD the list is not binding. prompts/templates/story-implementation
+    #      .json: "The list is a STARTING POINT, not a fence ... If your change genuinely
+    #      requires another file in this repository, write it." A gate that blocks what the
+    #      prompt instructs is unwinnable by construction — the writer cannot satisfy both.
+    #
+    # The same file already carries this lesson twice: the helper-ABSENCE veto rejected working
+    # code at 7.3M tokens and $2.25 per false rejection before it was narrowed to duplication.
+    # A false-positive gate is worse than the silence it replaced.
+    #
+    # So the finding is RECORDED, in the log and in the attempt output where the reviewer and
+    # the operator both see it, and the story proceeds. Making it blocking is a decision for
+    # after a run has shown what it actually flags — not before.
+    error "  [plan-fidelity] $story_id: the change went outside the plan of record (advisory — not blocking)"
     while IFS= read -r _line; do [ -n "$_line" ] && log "  $_line"; done <<< "$_gate_out"
-    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe change went outside the plan of record:\n\n```\n%s\n```\n\nChange only the files the plan prescribes. A site the plan marks changeRequired:false is part of the fix and is correctly left untouched — revert it. Every other changed file is prescribed and is not a finding.\n' \
-        "$_gate_out")
     {
         echo ""
-        echo "=== the change went outside the plan of record ==="
+        echo "=== ADVISORY: the change went outside the plan of record ==="
         echo "$_gate_out"
+        echo "This is recorded, not enforced. The prescribed file list is a starting point, not a fence."
     } >> "$output_file"
-    return 1
+    return 0
 }
 
 # _committed_change_uses_helpers <story_id>
@@ -10403,14 +10424,11 @@ $_kb_section"
             # duplicated into this branch deliberately: a story that fails here has
             # still BURNED this rung, and dropping out without persisting the count
             # and model is what makes a ladder restart its climb from rung 0.
-            if ! _plan_fidelity_gate_for_story "$story_id" "$output_file"; then
-                write_story_retry_count "$LOG_DIR" "$story_id" "$retry_count"
-                write_story_retry_model "$LOG_DIR" "$story_id" "${STORY_MODEL:-}"
-                write_story_iteration_bump "$LOG_DIR" "$story_id" "${STORY_ITERATION_BUMP_TOTAL:-0}"
-                rm -f "$(_rung_snapshot_path "$story_id")" 2>/dev/null || true
-                update_monitor_status "retry" "$story_id" "The change went outside the plan of record"
-                return 1
-            fi
+            # ADVISORY, so no retry branch: it records a scope finding and always returns 0.
+            # A `if ! ...; then <retry>` here would be a branch that can never be taken, which
+            # reads to the next person as enforcement that exists. See the function's header
+            # for why blocking on this signal rejects working code.
+            _plan_fidelity_gate_for_story "$story_id" "$output_file"
             if ! _coupled_pair_gate_for_story "$story_id" "$output_file"; then
                 write_story_retry_count "$LOG_DIR" "$story_id" "$retry_count"
                 write_story_retry_model "$LOG_DIR" "$story_id" "${STORY_MODEL:-}"

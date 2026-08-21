@@ -34,15 +34,52 @@ const fs = require('fs');
 const dir = process.argv[1];
 const bodyOf = (j) => typeof j.body === 'string' ? j.body
                     : (j.bodies ? Object.values(j.bodies).join('\n') : '');
-const skeletons = (t) => String(t).split('\n').map((l) => l.trim())
-  .filter((l) => /^\{".{5,}\}$/.test(l) && /"[a-zA-Z_]+"\s*:/.test(l));
+// SINGLE-LINE AND MULTI-LINE. The first version took only one-line skeletons and missed
+// every prompt that declares its shape as a pretty-printed block — cpa-system.json states
+// its whole schema that way under "Output schema:", so cpa-inference looked shapeless and
+// its round trip was skipped. A test that cannot see half the declarations under-reports
+// coverage and calls it a gap in the prompt.
+const skeletons = (t) => {
+  const text = String(t);
+  const out = [];
+  for (const line of text.split('\n').map((l) => l.trim())) {
+    if (/^\{".{5,}\}$/.test(line) && /"[a-zA-Z_]+"\s*:/.test(line)) out.push(line);
+  }
+  // balanced multi-line blocks that open a line with '{' and contain a quoted key
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== '{') continue;
+    let depth = 0, j = i;
+    for (; j < text.length; j++) {
+      if (text[j] === '{') depth++;
+      else if (text[j] === '}') { depth--; if (depth === 0) break; }
+    }
+    if (depth !== 0) continue;
+    const block = text.slice(i, j + 1);
+    if (!block.includes('\n')) continue;                 // single-line handled above
+    if (!/"[a-zA-Z_]+"\s*:/.test(block)) continue;        // must look like an object
+    if (/__[A-Z_]+__/.test(block) && !/"/.test(block)) continue;
+    out.push(block);
+    i = j;
+  }
+  return out;
+};
+// EVERY placeholder convention the prompts actually use. Each was added only after being
+// found in a real template — never invented to make a test pass. Extending this list is how
+// a "broken shape" count of 8 came down to the ones that are genuinely broken.
 const concrete = (s) => s
-  .replace(/"<[^">]*>"/g, '"x"')
-  .replace(/<[^<>]*>/g, '0')
-  .replace(/"[a-z_]+\|[a-z_|]+"/g, '"x"')
+  .replace(/"<[^">]*>"/g, '"x"')                     // "<a path>"
+  .replace(/"[a-zA-Z_]+"(\s*\|\s*"[a-zA-Z_]+")+/g, '"x"') // "a" | "b" | "c"
+  .replace(/"[a-z_]+\|[a-z_|]+"/g, '"x"')             // "a|b"
+  .replace(/__[A-Z_]+__/g, '')                       // schema-line inserts: nothing here
+  .replace(/<[^<>]*>/g, '0')                         // <n>
   .replace(/\btrue\|false\b/g, 'true')
   .replace(/"\.\.\."/g, '"x"')
-  .replace(/__[A-Z_]+__/g, '0');
+  .replace(/:\s*N\b/g, ': 0')                        // bare N as a number placeholder
+  .replace(/\btrue\/false\b/g, 'true')               // slash union
+  .replace(/,\s*\.\.\./g, '')                        // ["a", ...]
+  .replace(/:\s*\|\s*/g, ': ')                       // ": | \"both\"" left by a removed insert
+  .replace(/,(\s*[}\]])/g, '$1')                     // trailing comma left by an insert
+  .replace(/""\s*:/g, '"x":');
 const out = [];
 for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.json'))) {
   let j; try { j = JSON.parse(fs.readFileSync(dir + '/' + f, 'utf8')); } catch { continue; }

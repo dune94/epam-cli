@@ -675,6 +675,31 @@ Review every file listed. Do not assume a file you did not read is defect-free.]
     fi
     rm -f "$_review_vals"
 
+    # JUDGE ON THE RUNG THAT PRODUCED THE WORK.
+    #
+    # Operator rule, 2026-08-22. This ran on the reviewer seam's own model regardless of what
+    # the writer climbed to. Live 20260821T212250Z: the writer went
+    # MiniMax-M3 -> z-ai/glm-5.2 -> moonshotai/kimi-k3 over five attempts while all three
+    # review cycles ran z-ai/glm-5.2 — so the approval came from a weaker model than the one
+    # being judged, and it approved a diff that had dropped a cleanup its own earlier cycle
+    # had produced. A reviewer below the writer's rung cannot see what that rung can do wrong.
+    #
+    # The story's model is already persisted by the ladder so a resume does not restart its
+    # climb; nothing was reading it for this. Absent — a first attempt, nothing recorded yet —
+    # leaves the seam's own model alone rather than inventing one.
+    # NOT `local` — this loop runs at TOP LEVEL, not inside a function. `local` here is
+    # SC2168, which bash -n cannot see (it is a scope error, not syntax) and which halted
+    # run 3 with NO VERDICT eight times. preflight-static.sh checks for exactly this.
+    _story_model=""
+    if command -v read_story_retry_model >/dev/null 2>&1; then
+        _story_model=$(read_story_retry_model "${LOG_DIR:-$AUTOMATION_DIR/logs}" "$story_id" 2>/dev/null || true)
+    fi
+    if [ -n "$_story_model" ]; then
+        [ "$_story_model" != "${ORCH_GATE_MODEL:-}" ] && \
+            log "  review-agent follows the story to '${_story_model}' (seam default was '${ORCH_GATE_MODEL:-?}')"
+        ORCH_GATE_MODEL="$_story_model"
+    fi
+
     log "  Invoking review-agent for $story_id... (model=${ORCH_GATE_MODEL:-?} provider=${EPAM_ORCHESTRATION_PROVIDER:-?})"
     REVIEW_OUTPUT_FILE="$AUTOMATION_DIR/logs/review-agent-${story_id}.log"
     # B25 — the reviewer used to fail leaving NO evidence: `$(... | tee FILE)` never

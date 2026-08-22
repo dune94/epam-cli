@@ -95,7 +95,27 @@ _provider="${AGENT_ANALYST_PROVIDER:-${ORCH_GATE_PROVIDER:-${EPAM_ORCHESTRATION_
 # last in this chain overrode that silently: the seam asked for its tier and the answer was
 # discarded, so editing the declaration moved no model. Operator overrides still win; what is gone
 # is the hardcoded final fallback, which no configuration could remove.
-_model="${AGENT_ANALYST_MODEL:-${ESCALATION_MODEL:-${ORCH_GATE_MODEL:-${EPAM_MODEL:-}}}}"
+# HEAL ON THE RUNG THAT FAILED.
+#
+# Operator rule, 2026-08-22: "the analyst model must also match the model it is trying to self
+# heal". Diagnosing a stronger model's attempt from a weaker one is guesswork about reasoning
+# the analyst cannot reproduce — and the diagnosis then reads as authoritative anyway.
+#
+# The attempt's model is already persisted by the ladder (lib/story-retry-state.sh), because a
+# resume needs it to avoid restarting its climb. Nothing was reading it here.
+#
+# An explicit operator override still wins, and a story with nothing recorded — a first attempt
+# — leaves the seam's own declared rung alone rather than inventing one.
+_attempt_model=""
+if [ -n "${AGENT_ANALYST_STORY_ID:-}" ] && [ -f "$SCRIPT_DIR/lib/story-retry-state.sh" ]; then
+    # shellcheck source=lib/story-retry-state.sh
+    . "$SCRIPT_DIR/lib/story-retry-state.sh" 2>/dev/null || true
+    command -v read_story_retry_model >/dev/null 2>&1 && \
+        _attempt_model=$(read_story_retry_model "${LOG_DIR:-}" "$AGENT_ANALYST_STORY_ID" 2>/dev/null || true)
+fi
+_model="${AGENT_ANALYST_MODEL:-${_attempt_model:-${ESCALATION_MODEL:-${ORCH_GATE_MODEL:-${EPAM_MODEL:-}}}}}"
+[ -n "$_attempt_model" ] && [ -z "${AGENT_ANALYST_MODEL:-}" ] && \
+    warning "analyst follows the attempt to '${_attempt_model}'"
 if [ -z "$_model" ]; then
     # A diagnosis produced by a guessed model is worse than an honest absence: it reads as
     # authoritative and nothing downstream can tell it was never grounded in a declared tier.

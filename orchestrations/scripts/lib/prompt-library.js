@@ -157,6 +157,45 @@ function render(doc, values) {
   }
 
   const supplied = values && typeof values === 'object' ? values : {};
+
+  // A VALUE NOTHING CONSUMES IS EVIDENCE THROWN AWAY.
+  //
+  // This checked three things and not this one, so a value supplied to a prompt with no
+  // matching placeholder was silently dropped. engine-prompt.js has always rejected exactly
+  // that — "was given values it does not use" — so the two renderers disagreed on the same
+  // class, and the lenient one lost evidence without a trace.
+  //
+  // Live 20260821T212250Z: prior-reviews.py produced the reviewer's history correctly and it
+  // was supplied as __PRIOR_REVIEW__. The project's prompt declares no such placeholder, so
+  // it went nowhere. All three review cycles ran with no memory of each other and the
+  // approval missed a regression the earlier cycle had caught. The run log mentions prior
+  // review zero times: a whole feedback loop absent, with nothing to show it.
+  //
+  // Loud, because the caller believed it sent something. A stale project prompt is now a
+  // failure at render rather than a quiet degrade — which is the same rule the rest of this
+  // file already applies in the other direction.
+  const unconsumed = Object.keys(supplied).filter((k) => /^__[A-Z0-9_]+__$/.test(k) && !present.includes(k));
+  if (unconsumed.length) {
+    // LOUD, NOT FATAL — and that asymmetry is deliberate.
+    //
+    // Throwing here kills the seam outright: the reviewer supplies __PRIOR_REVIEW__ to project
+    // prompts minted before that placeholder existed, so a hard failure would take the reviewer
+    // out of every such run. Losing one block of context is bad; losing the whole review is
+    // worse, and the operator has not asked for a re-mint.
+    //
+    // engine-prompt.js DOES throw on this, correctly: it renders templates, which are the
+    // in-repo source and can always be corrected. A project prompt is generated, may lag the
+    // template, and cannot be corrected from here.
+    //
+    // What was unacceptable was silence. This is the trace that was missing when the reviewer's
+    // entire prior-review history was dropped on 20260821T212250Z and the run log mentioned it
+    // zero times.
+    process.stderr.write(
+      `[prompt-library] '${doc.id}' was given values it does not use: ${unconsumed.join(', ')}. `
+      + 'That evidence is being DROPPED — the prompt has no placeholder for it. '
+      + 'Add the placeholder to this project prompt, or stop supplying the value.\n');
+  }
+
   const missing = present.filter((p) => !(p in supplied));
   if (missing.length) {
     // An empty string is a legitimate value and must be passed explicitly. Absent is not

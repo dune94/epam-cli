@@ -75,21 +75,58 @@ template_rendered_seams() {
     [[ "$output" == *"roster-specialisation"* ]]
 }
 
-@test "NO seam-declared prompt executes from the template layer, except the bootstrap set" {
-    boot="$(bootstrap_templates)"
-    offenders=""
-    while IFS= read -r id; do
-        [ -n "$id" ] || continue
-        printf '%s\n' "$boot" | grep -qx "$id" && continue
-        offenders="$offenders $id"
-    done < <(template_rendered_seams)
-    [ -z "$offenders" ] || {
-        echo "these agents execute a TEMPLATE, not this project's prompt:"
-        for o in $offenders; do echo "    $o"; done
-        echo "A template is generic by construction — an agent running one has none of this"
-        echo "project's facts, and self-heal has nothing to correct."
-        false
-    }
+@test "A SEAM PROMPT RENDERS FROM THE PROJECT COPY — executed, not grepped" {
+    # BEHAVIOURAL. The first version scanned call sites for render_engine_prompt <id> and would
+    # now report every one of them, because the enforcement moved INTO the renderer: a caller asks
+    # for a prompt and gets the one an agent may execute. Scanning callers tests where the rule
+    # used to be.
+    #
+    # Proven by content: the project copy is edited in a scratch dir, and the render must show
+    # that edit. Reading the template while the renderer reads the project copy is exactly how a
+    # fixture comes to assert against bytes nobody executes.
+    proj="$BATS_TEST_TMPDIR/proj"; mkdir -p "$proj/prompts"
+    id=qa-sast-sentinel
+    "$NODE" -e '
+      const fs = require("fs");
+      const src = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+      src.body = "PROJECT-COPY-MARKER\n" + src.body;
+      src.authority = "project";
+      fs.writeFileSync(process.argv[2], JSON.stringify(src, null, 2));
+    ' "$REPO_ROOT/orchestrations/projects/metrolinx/prompts/$id.json" "$proj/prompts/$id.json"
+
+    run env EPAM_PROJECT_CONFIG_DIR="$proj" "$NODE" -e '
+      const lib = require(process.argv[1]);
+      const ep = require(process.argv[2]);
+      const d = lib.loadProjectPrompt(process.argv[3], process.env.EPAM_PROJECT_CONFIG_DIR);
+      const vals = {};
+      [...new Set(lib.placeholdersIn(d.body))].forEach((p) => { vals[p] = "x"; });
+      process.stdout.write(ep.renderEngineTemplate(process.argv[3], vals).slice(0, 40));
+    ' "$SCRIPTS/lib/prompt-library.js" "$SCRIPTS/lib/engine-prompt.js" "$id"
+
+    [ "$status" -eq 0 ] || { echo "$output"; false; }
+    [[ "$output" == PROJECT-COPY-MARKER* ]] || {
+        echo "the renderer returned the TEMPLATE, not this project's copy: $output"; false; }
+}
+
+@test "a BOOTSTRAP prompt still renders from the template — it runs before any copy exists" {
+    run env EPAM_PROJECT_CONFIG_DIR="$BATS_TEST_TMPDIR/empty" "$NODE" -e '
+      const ep = require(process.argv[1]);
+      try { ep.renderEngineTemplate("roster-specialisation", {}); process.stdout.write("rendered"); }
+      catch (e) { process.stdout.write(e.message); }
+    ' "$SCRIPTS/lib/engine-prompt.js"
+    # It fails for MISSING VALUES — meaning it reached the template — not for a missing copy.
+    [[ "$output" == *"missing values"* ]] || {
+        echo "a bootstrap prompt did not render from the template: $output"; false; }
+}
+
+@test "a seam prompt with NO project declared refuses — it never falls back to the template" {
+    run env -u EPAM_PROJECT_CONFIG_DIR "$NODE" -e '
+      const ep = require(process.argv[1]);
+      try { ep.renderEngineTemplate("qa-sast-sentinel", {}); process.stdout.write("RENDERED"); }
+      catch (e) { process.stdout.write(e.message); }
+    ' "$SCRIPTS/lib/engine-prompt.js"
+    [[ "$output" != RENDERED* ]] || { echo "a template was executed for an agent"; false; }
+    [[ "$output" == *"EPAM_PROJECT_CONFIG_DIR"* ]]
 }
 
 @test "and the check is not vacuous — it can see a seam that renders a template" {

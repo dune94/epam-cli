@@ -122,7 +122,94 @@ function placeholdersIn(body) {
  * @param {Object} values  every placeholder the body uses, exactly — no more, no fewer
  * @returns {string}
  */
+/**
+ * Which layer owns a prompt, resolved from the SEAM REGISTRY rather than a list.
+ *
+ * A template is immutable and generic and is never executed directly — an agent runs THIS
+ * PROJECT's prompt, which the template generated. The exception is the bootstrap set: seams that
+ * run inside the mint, before the project prompt layer exists. A prompt that generates prompts
+ * cannot itself be generated, which is why bootstrap.copyVerbatim exists for the same reason.
+ *
+ * Declared on the seam as `layer: "bootstrap"`, so adding or moving a stage changes one datum and
+ * not a list in code — a hand-kept copy of a derivable fact only ever drifts.
+ *
+ * An id NO seam declares is a fragment composed into another prompt, not something an agent
+ * executes. Those stay generic and take their project content from the prompt they land in.
+ */
+function templateLayerOf(id) {
+  // __dirname, like templatesDir() beside it. The first version called repoRoot(), which this
+  // file does not define — and the ReferenceError landed in the catch below, which returned
+  // 'engine' and let every seam-declared prompt render from the template exactly as before. A
+  // catch that turns a programming error into a permissive default is the fail-open shape this
+  // whole layer exists to remove, and it hid its own bug for one test cycle.
+  const registryPath = path.join(__dirname, '..', '..', 'agents', 'invocation-profiles.json');
+  let reg;
+  try {
+    reg = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+  } catch (e) {
+    // An unreadable registry means the layer of every prompt is unknown. Guessing 'engine' would
+    // render templates for agents; guessing 'project' would halt every seam. Say so instead.
+    throw new Error(
+      `[engine-prompt] cannot read the seam registry at ${registryPath}: ${e && e.message}. `
+      + 'Which layer owns a prompt is undecidable without it.');
+  }
+  const profiles = (reg && reg.profiles) || {};
+  let found = null;
+  (function walk(o) {
+    for (const k in o) {
+      const v = o[k];
+      if (v && typeof v === 'object') { if (v.template === id) found = v; walk(v); }
+    }
+  }(profiles));
+  if (!found) return 'engine';                       // a fragment: no agent executes it
+  return found.layer === 'bootstrap' ? 'bootstrap' : 'project';
+}
+
 function renderEngineTemplate(id, values, bodyKey) {
+  // A SEAM-DECLARED PROMPT IS NOT THIS RENDERER'S TO EXECUTE.
+  //
+  // 89 template ids were rendered straight from the template layer, 29 of them declared by a
+  // seam — so an agent ran generic text with none of this project's facts in it, and self-heal
+  // had nothing to correct. Enforced here rather than at 25 call sites, because a rule applied
+  // at call sites is a rule the 26th call site does not have.
+  if (templateLayerOf(id) === 'project') {
+    // ROUTED, not refused. Refusing would be correct about the rule and useless in practice: 25
+    // call sites render these, and a rule enforced by breaking every caller is a rule that gets
+    // reverted. The callers were never choosing a LAYER — they were asking for a prompt — so the
+    // renderer answers with the one an agent may actually execute.
+    //
+    // prompt-library refuses to fall back to the template, which is the point: if this project
+    // has no copy, that is a provisioning defect and it surfaces here by name.
+    //
+    // Required lazily: prompt-library imports placeholdersIn from this module, and requiring it
+    // at load time would give one of them a half-initialised copy of the other.
+    // eslint-disable-next-line global-require
+    const lib = require('./prompt-library.js');
+    const projectDir = process.env.EPAM_PROJECT_CONFIG_DIR || '';
+    if (!projectDir) {
+      throw new Error(
+        `[engine-prompt] '${id}' is a seam-declared prompt — an agent executes it, so it renders `
+        + 'from THIS PROJECT\'s copy. EPAM_PROJECT_CONFIG_DIR is unset, so there is no project '
+        + 'to render for, and the template is never executed directly.');
+    }
+    const doc = lib.loadProjectPrompt(id, projectDir, bodyKey ? { part: bodyKey } : undefined);
+
+    // STACK FACTS REACH THIS PATH TOO. The injection below happens after this return, so routing
+    // skipped it and every project prompt declaring __TEST_COMMAND__ failed for a missing value
+    // — a defect introduced by the routing itself, caught because the stack-fact tests render
+    // exactly these ids.
+    //
+    // Same rule as below: only the keys the document DECLARES, and only where the caller has not
+    // supplied one. Merging all of them is what killed four seams in 8f52dab.
+    const merged = { ...(values || {}) };
+    const declaredHere = new Set(placeholdersIn(doc.body));
+    const needStack = STACK_FACT_KEYS.filter((k) => declaredHere.has(k) && !(k in merged));
+    if (needStack.length) {
+      const facts = stackFacts();
+      for (const k of needStack) if (facts[k] !== undefined) merged[k] = facts[k];
+    }
+    return lib.render(doc, merged);
+  }
   const file = templatePath(id);
   let doc;
   try {

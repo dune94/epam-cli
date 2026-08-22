@@ -317,7 +317,9 @@
         }
       ],
       "template": "roster-review",
-      "toolGrant": "read-only"
+      "toolGrant": "read-only",
+      "layer": "bootstrap",
+      "_why_bootstrap": "certifies newly minted agents, inside the mint. A prompt that runs before the project prompt layer exists cannot be a project prompt."
     },
     "code-graph-detective": {
       "_what": "Investigates one codeline and reports where the work actually lands.",
@@ -375,7 +377,9 @@
         }
       ],
       "template": "estate-survey",
-      "toolGrant": "read-only"
+      "toolGrant": "read-only",
+      "layer": "bootstrap",
+      "_why_bootstrap": "surveys the codelines before anything is minted. A prompt that runs before the project prompt layer exists cannot be a project prompt."
     },
     "story-writer": {
       "_what": "Implements a story: writes the code that satisfies its criteria. The archetype every minted -engineer is an instance of.",
@@ -631,7 +635,9 @@
         }
       ],
       "template": "assign-agent-roles",
-      "toolGrant": "read-only"
+      "toolGrant": "read-only",
+      "layer": "bootstrap",
+      "_why_bootstrap": "assigns minted roles to stories, before prompt generation. A prompt that runs before the project prompt layer exists cannot be a project prompt."
     },
     "spec-coordinator": {
       "_what": "Assigns the spec work for a phase, then reviews the specs and the model choices it produced.",
@@ -809,7 +815,9 @@
       ],
       "template": "roster-specialisation",
       "_outputIsArtefact": "Writes projects/<project>/roster.json with its tools. The deliverable is the file; there is no response payload to shape, and the pipeline validates the artefact it finds.",
-      "_why_grant": "Reads the codeline to learn what each agent must know, and writes ONE file: the project roster. read-only cannot deliver the artefact, and the artefact is the deliverable."
+      "_why_grant": "Reads the codeline to learn what each agent must know, and writes ONE file: the project roster. read-only cannot deliver the artefact, and the artefact is the deliverable.",
+      "layer": "bootstrap",
+      "_why_bootstrap": "produces the project roster; runs before the project has prompts. A prompt that runs before the project prompt layer exists cannot be a project prompt."
     },
     "project-roster-review": {
       "_what": "Falsifies the project roster against canonical before any agent is invoked from it.",
@@ -826,7 +834,9 @@
           "required": true
         }
       ],
-      "template": "project-roster-review"
+      "template": "project-roster-review",
+      "layer": "bootstrap",
+      "_why_bootstrap": "reviews that roster, in the same stage. A prompt that runs before the project prompt layer exists cannot be a project prompt."
     }
   },
   "_seamResolution": [

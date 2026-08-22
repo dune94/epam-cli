@@ -117,7 +117,21 @@ function loadProjectPrompt(id, projectConfigDir, opts) {
       throw new Error(
         `prompt '${id}' has no part '${part}' (declares: ${Object.keys(doc.bodies).join(', ')})`);
     }
-    return { ...doc, body: doc.bodies[part] };
+    // THE PART'S CONTRACT IS THE PART'S PLACEHOLDERS. `placeholders` on a multi-part document
+    // is the UNION across parts — that is what the whole document declares. render() then
+    // compares it against ONE part's body and refuses it for "declaring placeholders it never
+    // uses", so every multi-part project prompt was unrenderable through this path.
+    //
+    // Surfaced when seam prompts started routing here instead of to the template renderer, which
+    // computes its declared set per body already. Narrowed rather than relaxing render(): a
+    // prompt that declares a placeholder its body never uses is still a real defect, and the
+    // check that catches it is worth keeping.
+    const used = new Set(placeholdersIn(doc.bodies[part]));
+    return {
+      ...doc,
+      body: doc.bodies[part],
+      placeholders: (doc.placeholders || []).filter((x) => used.has(x)),
+    };
   }
 
   if (!doc || typeof doc.body !== 'string' || !doc.body.trim()) {

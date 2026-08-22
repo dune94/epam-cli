@@ -27,11 +27,23 @@ setup() {
     NODE="${NODE_BIN:-$HOME/.nvm/versions/node/v20.20.0/bin/node}"
     command -v "$NODE" >/dev/null 2>&1 || NODE=node
     export NODE_BIN="$NODE" NODE_CMD="$NODE"
+    # A SEAM PROMPT NOW RENDERS FROM THE PROJECT LAYER. render_engine_prompt routes any
+    # seam-declared id to this project's copy — the template is never executed directly — so a
+    # render with no project declared correctly refuses, and this test needs one.
+    export EPAM_PROJECT_CONFIG_DIR="$REPO_ROOT/orchestrations/projects/metrolinx"
     WORK="$(mktemp -d)"
 }
 teardown() { rm -rf "$WORK"; }
 
 # The seven keys, from the renderer itself — never a list written out here.
+# The document the renderer will USE: this project's copy for a seam prompt, the template for a
+# bootstrap one. Reading the template while the renderer reads the project copy is how a fixture
+# comes to assert against bytes nobody executes.
+prompt_source() {
+    local _p="$EPAM_PROJECT_CONFIG_DIR/prompts/$1.json"
+    [ -f "$_p" ] && printf '%s' "$_p" || printf '%s' "$REPO_ROOT/orchestrations/prompts/templates/$1.json"
+}
+
 stack_keys() {
     "$NODE" -e '
       const src = require("fs").readFileSync(process.argv[1], "utf8");
@@ -73,7 +85,7 @@ stack_keys() {
           const {placeholdersIn}=require(process.argv[2]);
           const o={}; [...placeholdersIn(body)].forEach(p=>{ if(!stack.has(p)) o[p]="x"; });
           fs.writeFileSync(process.argv[3], JSON.stringify(o));' \
-          "$REPO_ROOT/orchestrations/prompts/templates/$t.json" "$SCRIPTS/lib/engine-prompt.js" "$v" "$key"
+          "$(prompt_source "$t")" "$SCRIPTS/lib/engine-prompt.js" "$v" "$key"
         if ! render_engine_prompt "$t" "$v" $key >/dev/null 2>"$WORK/err"; then
             failed="$failed
   $t${key:+ ($key)}: $(head -c 200 "$WORK/err" | tr '\n' ' ')"
@@ -104,7 +116,7 @@ stack_keys() {
       const d=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
       const o={}; (d.placeholders||[]).forEach(p=>{ if(p!=="__TEST_COMMAND__") o[p]="x"; });
       fs.writeFileSync(process.argv[2], JSON.stringify(o));' \
-      "$REPO_ROOT/orchestrations/prompts/templates/qa-fuzz-weaver.json" "$v"
+      "$(prompt_source qa-fuzz-weaver)" "$v"
     run render_engine_prompt qa-fuzz-weaver "$v"
     [ "$status" -eq 0 ] || { echo "$output"; false; }
     [[ "$output" != *"__TEST_COMMAND__"* ]] || {

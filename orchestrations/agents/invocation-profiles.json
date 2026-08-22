@@ -225,7 +225,8 @@
         }
       ],
       "template": "prd-change-summarizer-text",
-      "toolGrant": "read-only"
+      "toolGrant": "read-only",
+      "_outputIsArtefact": "Produces PROSE. Its template is prd-change-summarizer-text and the caller caps it with head -c and prints it verbatim into the rejection text — a JSON envelope would have to be stripped before use."
     },
     "impl-failure-analyst": {
       "_what": "Diagnoses why an implementation attempt failed.",
@@ -561,7 +562,8 @@
         }
       ],
       "template": "project-prompt-generation",
-      "toolGrant": "read-only"
+      "toolGrant": "read-only",
+      "_outputIsArtefact": "Writes the project prompt FILES themselves (produces=project-prompts, via project-prompt-builder.js). Its output IS the minted prompt layer on disk, so the artefact is the deliverable."
     },
     "codeline-bridge-agent": {
       "_what": "Extracts the exported surface of a completed codeline so a later lane's detective can read it. Producers run before consumers precisely so this exists when it is needed.",
@@ -579,7 +581,8 @@
         }
       ],
       "template": "codeline-bridge",
-      "toolGrant": "read-only"
+      "toolGrant": "read-only",
+      "_outputIsArtefact": "Delivers a FILE, not a payload: run-agent-orchestration.sh requires it to call WriteFile and then checks the contract file exists and is non-empty, correcting the agent by name when it does not. There is no response body to shape."
     },
     "qa-gate:e2e": {
       "_what": "Browser end-to-end routing check for one route.",

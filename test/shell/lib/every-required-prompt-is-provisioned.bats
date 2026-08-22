@@ -96,23 +96,36 @@ projects() { ls -1 "$REPO_ROOT/orchestrations/projects" 2>/dev/null; }
     }
 }
 
-@test "EVERY seam-declared template has a project copy — that layer IS project-authority" {
-    # Seam templates are rendered by prompt-library.js, which refuses to fall back. A missing
-    # one here really is a hard failure at that seam. This is the check the old test should
-    # have been: scoped to the layer where absence is a defect.
+@test "EVERY PROJECT-LAYER seam template has a project copy — that layer IS project-authority" {
+    # SCOPED TO THE LAYER WHERE ABSENCE IS A DEFECT, which is the same correction this file's
+    # header records for the 17-prompt claim. A seam template is project-authority only when
+    # prompt-library.js renders it; prompt-library refuses to fall back, so a missing copy there
+    # really is a hard failure at that seam.
+    #
+    # 28 of the 36 seam templates are read by render_engine_prompt instead — the engine reads
+    # the TEMPLATE directly, so a project copy of one can never be executed. runtime-boundary-
+    # review is the case that exposed this: rendered at exactly one site,
+    # run-agent-orchestration.sh:9632, engine-layer, and no project has a copy. Demanding one
+    # would have provisioned a file nothing can read, which is what dc7fb20 removed 39 of.
     reg="$REPO_ROOT/orchestrations/agents/invocation-profiles.json"
+    scoped=0
     for proj in $(projects); do
         dir="$REPO_ROOT/orchestrations/projects/$proj/prompts"
         [ -d "$dir" ] || continue
-        miss=$("$NODE" -e '
-          const fs=require("fs"),path=require("path");
-          const reg=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
-          const dir=process.argv[2];
-          const seam=[...new Set(Object.values(reg.profiles||{}).map(p=>p&&p.template).filter(Boolean))];
-          process.stdout.write(seam.filter(t=>!fs.existsSync(path.join(dir,t+".json"))).join(" "));
-        ' "$reg" "$dir")
-        [ -z "$miss" ] || { echo "$proj is missing seam prompt(s):$miss"; false; }
+        while IFS= read -r t; do
+            [ -n "$t" ] || continue
+            # engine-rendered ids are out of scope for this layer
+            grep -rq "render_engine_prompt \"\?$t\b\|renderEngineTemplate('$t'" \
+                "$REPO_ROOT/orchestrations/scripts" 2>/dev/null && continue
+            scoped=$((scoped+1))
+            [ -f "$dir/$t.json" ] || { echo "$proj is missing PROJECT-LAYER seam prompt: $t"; false; }
+        done < <("$NODE" -e '
+              const reg=require(process.argv[1]);
+              [...new Set(Object.values(reg.profiles||{}).map(p=>p&&p.template).filter(Boolean))]
+                .forEach(t=>console.log(t));' "$reg")
     done
+    # Non-vacuous: if the engine-layer filter swallowed everything, the loop above proves nothing.
+    [ "$scoped" -ge 1 ] || { echo "no project-layer seam templates were checked at all"; false; }
 }
 
 @test "the check is not vacuous — it really inspects projects" {

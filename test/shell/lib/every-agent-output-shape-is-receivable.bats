@@ -42,9 +42,14 @@ const bodyOf = (j) => typeof j.body === 'string' ? j.body
 const skeletons = (t) => {
   const text = String(t);
   const out = [];
-  for (const line of text.split('\n').map((l) => l.trim())) {
-    if (/^\{".{5,}\}$/.test(line) && /"[a-zA-Z_]+"\s*:/.test(line)) out.push(line);
-  }
+  // ONE SCANNER, NOT TWO. There used to be a line-anchored regex for single-line skeletons
+  // beside the balanced scanner below, and it demanded the line BE the object: `^\{"..."\}$`.
+  // Three real declarations failed that anchor and read as prompts with no contract at all —
+  // `{ "enrichedAcs": [...] }` (whitespace after the brace), `[{"file":...}]` (an array of
+  // objects), and `Emit ONLY: {"verdict":...}` (prose before the JSON). Widening the regex
+  // instead made it greedy enough to capture unbalanced fragments. The scanner below already
+  // answers all four cases correctly, because it balances braces rather than trusting line
+  // boundaries — it was simply told to skip anything without a newline.
   // balanced multi-line blocks that open a line with '{' and contain a quoted key
   for (let i = 0; i < text.length; i++) {
     if (text[i] !== '{') continue;
@@ -55,7 +60,7 @@ const skeletons = (t) => {
     }
     if (depth !== 0) continue;
     const block = text.slice(i, j + 1);
-    if (!block.includes('\n')) continue;                 // single-line handled above
+
     if (!/"[a-zA-Z_]+"\s*:/.test(block)) continue;        // must look like an object
     if (/__[A-Z_]+__/.test(block) && !/"/.test(block)) continue;
     out.push(block);
@@ -77,6 +82,12 @@ const concrete = (s) => s
   .replace(/:\s*N\b/g, ': 0')                        // bare N as a number placeholder
   .replace(/\btrue\/false\b/g, 'true')               // slash union
   .replace(/,\s*\.\.\./g, '')                        // ["a", ...]
+  // BARE ELLIPSIS AS A WHOLE VALUE — `[...]`, `{...}`, `: ...`. The prompts have always used
+  // it; these declarations were simply invisible until the scanner stopped skipping
+  // single-line blocks, so this is newly VISIBLE shorthand, not newly broken output.
+  .replace(/\[\s*\.\.\.\s*\]/g, '[]')
+  .replace(/\{\s*\.\.\.\s*\}/g, '{}')
+  .replace(/:\s*\.\.\.(\s*[,}\]])/g, ': "x"$1')
   .replace(/:\s*\|\s*/g, ': ')                       // ": | \"both\"" left by a removed insert
   .replace(/,(\s*[}\]])/g, '$1')                     // trailing comma left by an insert
   .replace(/""\s*:/g, '"x":');
@@ -218,6 +229,21 @@ agent_shape_layers() {
       const shapes = require(process.argv[3]);
       const p = require(process.argv[4]);
       const declared = new Set(shapes.map((s) => s.template.toLowerCase()));
+      // Agents whose invocation binds a response schema, read from the runner source itself.
+      const boundSchemas = new Set();
+      {
+        const src = require("fs").readFileSync(process.argv[5], "utf8");
+        const lines = src.split("\n");
+        lines.forEach((l, i) => {
+          // \x27 not a literal quote: this JS lives inside a single-quoted shell string.
+          const m = l.match(/EPAM_AGENT_NAME:\s*\x27([a-z0-9-]+)\x27/);
+          if (m && lines.slice(Math.max(0, i - 8), i + 8).some((x) => /schemaEnv\(|TOOL_[A-Z_]+/.test(x)))
+            boundSchemas.add(m[1]);
+        });
+        // runAgentForJson(prompt, TOOL_X, 'TAG', ...) reached through a `what:` label
+        for (const m of src.matchAll(/what:\s*\x27([a-z0-9-]+)\x27[\s\S]{0,900}?TOOL_[A-Z_]+/g))
+          boundSchemas.add(m[1]);
+      }
       const agents = []; const meta = {};
       (function w(o){ for (const k in o) { const v = o[k];
         if (v && typeof v === "object") {
@@ -236,11 +262,19 @@ agent_shape_layers() {
           for (const d of declared) { if (norm(d) === norm(c)) return true; } }
         // a schema tag whose name matches the agent loosely (GUARD_VOCABULARY <- guard-vocabulary)
         for (const d of declared) { if (norm(d) === norm(a)) return true; }
+        // THE FOURTH LAYER: a JSON Schema BOUND AT THE INVOCATION. spec-mode-runner.js binds
+        // EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_*) beside EPAM_AGENT_NAME, and passes a TOOL_*
+        // constant straight into runAgentForJson. That is a stronger declaration than an
+        // illustrative example in a prompt — the seam validates against it and retries on a
+        // mismatch — and reading only the other three layers reported role-assigner,
+        // roster-review and survey-review as shapeless when each is schema-bound.
+        if (boundSchemas.has(a)) return true;
         return false;
       };
       const missing = [...new Set(agents)].sort().filter((a) => !has(a) && !meta[a]._outputIsArtefact);
       process.stdout.write(missing.join(" "));
-    ' "$TEMPLATES" "$SCRIPTS" "$tmp" "$REPO_ROOT/orchestrations/agents/invocation-profiles.json"
+    ' "$TEMPLATES" "$SCRIPTS" "$tmp" "$REPO_ROOT/orchestrations/agents/invocation-profiles.json" \
+      "$SCRIPTS/spec-mode-runner.js"
 }
 
 @test "EVERY agent's output shape is declared in one of the three layers" {

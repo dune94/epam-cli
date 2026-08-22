@@ -227,8 +227,74 @@ async function buildProjectRoster({
   throw new Error(`[roster] could not produce an accepted roster in ${attempts} attempt(s). Last: ${lastReason}`);
 }
 
+/**
+ * Load a project's roster. REFUSES when it is not there.
+ *
+ * There is no fallback to the engine layer, deliberately. That default existed at six call sites
+ * and is the path that gave a client-codeline review a persona describing this repository — and
+ * it would survive every test written about the roster, because it only fires when resolution
+ * fails, which is exactly the case the design exists to prevent.
+ *
+ * The error names the project dir and does NOT name the shared file: an error message that
+ * suggests a workaround gets taken.
+ */
+function loadRoster(projectConfigDir) {
+  if (!projectConfigDir) {
+    throw new Error('[roster] no project config dir given — an agent\'s identity has one source and this is not it');
+  }
+  const file = projectRosterPath(projectConfigDir);
+  let raw;
+  try { raw = fs.readFileSync(file, 'utf8'); } catch {
+    throw new Error(
+      `[roster] no project roster at ${file}. It is produced by the roster-specialiser every run; `
+      + 'a run without one has no agent identities, and there is nothing to fall back to.');
+  }
+  let doc;
+  try { doc = JSON.parse(raw); } catch (e) {
+    throw new Error(`[roster] project roster is not valid JSON (${file}): ${e && e.message}`);
+  }
+  if (!doc || typeof doc.agents !== 'object' || !doc.agents) {
+    throw new Error(`[roster] project roster declares no agents (${file})`);
+  }
+  return doc;
+}
+
+/**
+ * One agent's persona. REFUSES for an agent the roster does not carry.
+ *
+ * Returning '' here would be the defect this replaces: the consumers all read
+ * `jq -r '.["review-agent"] // ""'`, so a missing entry became an empty system prompt and an
+ * agent answered from nothing. An empty persona is indistinguishable from a terse one.
+ */
+function personaFor(agentName, projectConfigDir) {
+  const doc = loadRoster(projectConfigDir);
+  const entry = doc.agents[agentName];
+  if (!entry || typeof entry.persona !== 'string' || !entry.persona.trim()) {
+    throw new Error(
+      `[roster] '${agentName}' has no persona in this project's roster. Every canonical agent is `
+      + 'specialised into it, so an absence here is a defect in the roster, not a reason to guess.');
+  }
+  return entry.persona;
+}
+
+/**
+ * Every agent of a kind — 'implementer', 'investigator', 'seam'.
+ *
+ * This answers the write perimeter's question, which used to need its own registry file. It
+ * refuses on a missing roster like everything else: a perimeter reading an empty implementer list
+ * would lock the codeline, and one reading a defaulted list would open it. Neither silently.
+ */
+function agentsOfKind(kind, projectConfigDir) {
+  if (!KINDS.includes(kind)) throw new Error(`[roster] unknown kind '${kind}' (expected ${KINDS.join('|')})`);
+  const doc = loadRoster(projectConfigDir);
+  return Object.keys(doc.agents).filter((n) => doc.agents[n] && doc.agents[n].kind === kind).sort();
+}
+
 module.exports = {
   buildProjectRoster,
+  loadRoster,
+  personaFor,
+  agentsOfKind,
   copyCanonicalForRun,
   canonicalCopyPath,
   projectRosterPath,

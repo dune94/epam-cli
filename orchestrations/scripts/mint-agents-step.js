@@ -605,7 +605,11 @@ if (require.main !== module) return;
     // REVIEWED AGAINST BOTH. With only the roster a reviewer can judge plausibility; falsifying
     // "is this ancestor close" and "was inherited structure quietly changed" needs the source.
     const review = async ({ rosterPath, canonicalPath: copyPath }) => {
-      process.env.EPAM_AGENT_NAME = 'roster-review';
+      // The SEAM's own name. This announced 'roster-review' — a different seam, with a different
+      // template and a different job (certifying newly minted agents). The two would have
+      // resolved different ladders and filed their cost and KB under the wrong agent, which is
+      // the drift this file already warns about where roster-review is invoked properly.
+      process.env.EPAM_AGENT_NAME = 'project-roster-review';
       try {
         return await spec.reviewProjectRoster({
           promptExec, rosterPath, canonicalPath: copyPath,

@@ -96,13 +96,18 @@ for(const f of SH){const L=fs.readFileSync(f,"utf8").split("\n");
  for(let i=0;i<L.length;i++){const m=/render_(?:engine_prompt|or_keep)\s+([a-z0-9-]+)\s+"?\$?\{?([A-Za-z_]*)\}?"?\s*("?([a-z_]+)"?)?/.exec(L[i]);
   if(!m)continue;const j=T[m[1]];if(!j)continue;const key=m[4];let body;
   if(j.bodies){body=key&&j.bodies[key]!==undefined?j.bodies[key]:null;if(body===null)continue;}else body=j.body||"";
-  // Values arrive two ways: named in the jq_vals block, or merged from the codeline by
-  // merge_stack_facts (lib/jq-vals.sh), which supplies the stack-facts keys. A checker that
-  // modelled only the first would report a site as broken while it works — silencing it by
+  // Values arrive two ways: named in the jq_vals block, or supplied by THE RENDERER. A checker
+  // that modelled only the first would report a site as broken while it works — silencing it by
   // "fixing" working code is worse than the miss.
+  //
+  // The renderer is the supplier now, unconditionally. engine-prompt.js adds exactly the stack
+  // placeholders a template DECLARES (`stackDeclared`). This used to credit merge_stack_facts
+  // instead, and only when that call appeared near the jq_vals block — a second implementation
+  // of the same idea that merged ALL SEVEN keys, so the renderer threw "was given values it does
+  // not use" on every template declaring fewer, and four seams could not render at all.
   const STACK_FACT_KEYS=["__STACK__","__MANIFEST_FILE__","__TEST_COMMAND__","__TEST_FILE_CONVENTIONS__","__PROTECTED_FILES__","__IMPL_ROLE__","__TEST_ROLE__"];
   let sup=null;for(let k=i;k>=0&&k>i-30;k--){if(/jq_vals|jq -n/.test(L[k])){sup=ph(L.slice(k,i).join("\n"));
-    if(/merge_stack_facts/.test(L.slice(k,i).join("\n"))) sup=sup.concat(STACK_FACT_KEYS);
+    sup=sup.concat(STACK_FACT_KEYS);
     break;}}
   if(!sup)continue;const miss=ph(body).filter(p=>!sup.includes(p));
   if(miss.length)bad.push(f.replace("orchestrations/scripts/","")+":"+(i+1)+"  "+m[1]+"  MISSING "+miss.join(", "));}}

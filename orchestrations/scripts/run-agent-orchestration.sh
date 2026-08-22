@@ -5124,7 +5124,11 @@ run_pre_phase_assessment() {
           --arg profiles_rel "$profiles_rel" \
           '{"__PFA_FACTS__":$pfa_facts,"__PFA_TOOL_BUDGET__":$pfa_tool_budget,"__PHASE_ID__":$phase_id,"__PRD_REL__":$prd_rel,"__PROFILES_REL__":$profiles_rel}' > "$_ap_vals"
     # The codeline's own facts — this template declares them and nothing supplied them.
-    merge_stack_facts "$_pfa_facts_file" "${PROJECT_ROOT:-}"
+    # Stack facts are the RENDERER's job — engine-prompt.js adds exactly the stack
+    # placeholders this template DECLARES. Pre-merging all seven here made the
+    # renderer throw "was given values it does not use" on every template that
+    # declares fewer, and the caller reported "cannot render its prompt". Four
+    # seams could not run at all, the fuzz-weaver among them.
     assessment_prompt="$(render_engine_prompt post-failure-analyst "$_ap_vals")"
     rm -f "$_ap_vals"
     rm -f "$_pfa_facts_file"
@@ -8360,7 +8364,11 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
                   --arg phase "$PHASE" \
                   '{"__PROFILE__":$profile,"__LINT_LOG__":$lint_log,"__WRITER_OUTPUTS__":$writer_outputs,"__ACTIVE_STORIES__":$active_stories,"__PHASE__":$phase}' > "$_lp_vals"
             # The codeline's own facts — this template declares them and nothing supplied them.
-            merge_stack_facts "$_lf_outputs_file" "${PROJECT_ROOT:-}"
+            # Stack facts are the RENDERER's job — engine-prompt.js adds exactly the stack
+            # placeholders this template DECLARES. Pre-merging all seven here made the
+            # renderer throw "was given values it does not use" on every template that
+            # declares fewer, and the caller reported "cannot render its prompt". Four
+            # seams could not run at all, the fuzz-weaver among them.
             _lint_finding_prompt="$(render_engine_prompt lint-finding-analyst "$_lp_vals")"
             rm -f "$_lp_vals" "$_lp_role_file"
             rm -f "$_lf_outputs_file" "$_lf_stories_file"
@@ -9546,7 +9554,11 @@ $mutant_prompt"
                   '{"__FORCE_LIGHTPANDA__":$force_lightpanda,"__FORCE_PLAYWRIGHT__":$force_playwright,"__GATE_SCOPE__":$gate_scope,"__PHASE_ID__":$phase_id,"__PROJECT_ROOT__":$project_root,"__ROUTING_DECISION__":$routing_decision}' > "$_qa_vals" 2>/dev/null
             local fuzz_prompt
             # The codeline's own facts — this template declares them and nothing supplied them.
-            merge_stack_facts "$_qa_vals" "${PROJECT_ROOT:-}"
+            # Stack facts are the RENDERER's job — engine-prompt.js adds exactly the stack
+            # placeholders this template DECLARES. Pre-merging all seven here made the
+            # renderer throw "was given values it does not use" on every template that
+            # declares fewer, and the caller reported "cannot render its prompt". Four
+            # seams could not run at all, the fuzz-weaver among them.
             if ! fuzz_prompt=$(render_engine_prompt qa-fuzz-weaver "$_qa_vals"); then
                 error "  [fuzz-weaver] cannot render its prompt — refusing to gate with no instructions" >&2
                 rm -f "$_qa_vals"; return 1

@@ -19,11 +19,8 @@
     "assertions": "\n\n## YOUR TEST FAILED AGAINST THE FIX THAT IS ALREADY COMMITTED\nThe change for this story is ALREADY in the working tree. Your test ran but __FAILED__ of __TOTAL__ assertion(s) FAILED, which means your test contradicts the implemented change.\nRead the diff above again and assert the behaviour it ACTUALLY produces.\n```\n__FAILURE_JSON__\n```"
   },
   "placeholders": [
-    "__REL__",
-    "__OUT__",
     "__FAILED__",
     "__TOTAL__",
-    "__JSON__",
     "__COMPILER_ERRORS__",
     "__FAILURE_JSON__"
   ]

@@ -11953,7 +11953,11 @@ run_pre_phase_assessment() {
           '{"__PHASE_ID__":$phase_id,"__PRD_REL__":$prd_rel,"__PROJECT_SKILLS__":$project_skills}' > "$_ap_vals"
     rm -f "$_ap_skills_file"
     # The codeline's own facts — this template declares them and nothing supplied them.
-    merge_stack_facts "$_ap_vals" "${PROJECT_ROOT:-}"
+    # Stack facts are the RENDERER's job — engine-prompt.js adds exactly the stack
+    # placeholders this template DECLARES. Pre-merging all seven here made the
+    # renderer throw "was given values it does not use" on every template that
+    # declares fewer, and the caller reported "cannot render its prompt". Four
+    # seams could not run at all, the fuzz-weaver among them.
     assessment_prompt="$(render_engine_prompt skill-assessment-prephase "$_ap_vals" with_prd_structure)"
     rm -f "$_ap_vals"
 

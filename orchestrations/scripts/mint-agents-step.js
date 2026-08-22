@@ -1053,6 +1053,10 @@ if (require.main !== module) return;
         + 'picking one silently is how a project ends up running prompts nobody chose.');
     }
 
+    // Resolved by the generator below, consumed by its reviewer. Declared here so the two
+    // cannot be reordered without the reviewer losing it.
+    let _promptGeneratorModel = '';
+
     process.env.EPAM_AGENT_NAME = 'prompt-builder';
     // Opt-in per project; the registry's prompt-review.enabledBy names this variable.
     const _promptReviewEnabled = String(process.env.EPAM_PROMPT_REVIEW_ENABLED || '') === '1';
@@ -1092,6 +1096,13 @@ if (require.main !== module) return;
       runText: (prompt, meta) => {
         const seamEnv = seamInvocationEnv('prompt-builder', path.join(engineRoot, 'orchestrations', 'agents'));
         if (seamEnv.EPAM_ALLOWED_TOOLS) seamEnv.AI_GATE_ALLOW_TOOLS = '1';
+        // THE REVIEWER WILL RUN THIS MODEL. Captured at the moment the generator resolves it,
+        // because a DECLARED tier and a RESOLVED model are not the same fact: both seams declare
+        // ladder=top today, so they match by coincidence, and change either declaration — or let
+        // the runner escalate one on an empty response — and they diverge with nothing to say so.
+        // A prompt is the contract every agent in the run executes against; a reviewer that
+        // cannot reproduce the generator's reasoning is reviewing text it could not have written.
+        _promptGeneratorModel = seamEnv.EPAM_MODEL || '';
         // The identity travels WITH the seam. It was set on process.env far above, so the two could
         // drift apart without either looking wrong — and elsewhere in this stage they already had.
         seamEnv.EPAM_AGENT_NAME = 'prompt-builder';
@@ -1124,6 +1135,15 @@ if (require.main !== module) return;
           const seamEnv = seamInvocationEnv('prompt-review', path.join(engineRoot, 'orchestrations', 'agents'));
           if (seamEnv.EPAM_ALLOWED_TOOLS) seamEnv.AI_GATE_ALLOW_TOOLS = '1';
           seamEnv.EPAM_AGENT_NAME = 'prompt-review';
+          // THE GENERATOR'S RUNG, not this seam's. No fallback: if the generator never resolved a
+          // model there is nothing to review against, and quietly using the reviewer's own is how
+          // a code reviewer judged kimi-k3's work from glm-5.2 for three cycles.
+          if (!_promptGeneratorModel) {
+            throw new Error(
+              '[prompt-review] the generator resolved no model, so there is no rung to review on. '
+              + 'Refusing to judge a prompt from a model that did not write it.');
+          }
+          seamEnv.EPAM_MODEL = _promptGeneratorModel;
           return spec.runClaude(promptExec, prompt, logPath, seamEnv, { costAgent: 'prompt-review' });
         },
         values: ({ id, template, generated }) => ({

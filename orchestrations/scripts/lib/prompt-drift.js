@@ -93,6 +93,48 @@ function patchBody(tBody, pBody, missing) {
   return { body: out, unanchored };
 }
 
+/**
+ * Blocks of TEMPLATE prose the project copy does not carry at all.
+ *
+ * WHOLLY ABSENT, not merely different. A project prompt is a specialisation — it is supposed to
+ * differ, and a rule the project reworded is not a rule it lost. Comparing line by line would
+ * report every legitimately rephrased sentence and porting on that basis would duplicate them.
+ * So a block counts as missing only when NONE of its substantial lines appears in the project
+ * body, which is the difference between "this was changed" and "this was dropped".
+ *
+ * This is the drift that cost an approval: the reviewer template says a finding must carry
+ * evidence, and that a blocker raised on an earlier iteration still stands unless the code has
+ * changed. Neither sentence was in the copy that ran, and the placeholder check could not see it
+ * because no placeholder was involved.
+ */
+function proseDriftFor({ tf, pf }) {
+  const t = readJson(tf);
+  const p = readJson(pf);
+  const tBody = typeof t.body === 'string' ? t.body : '';
+  const pBody = typeof p.body === 'string' ? p.body : '';
+  if (!tBody || !pBody) return [];                 // multi-part prompts are compared per part
+  const present = new Set(pBody.split('\n').map((l) => l.trim()).filter(Boolean));
+  const substantial = (l) => l.trim().length > 40;
+  return tBody.split('\n\n').filter((block) => {
+    const lines = block.split('\n').filter(substantial);
+    if (!lines.length) return false;
+    return !lines.some((l) => present.has(l.trim()));
+  });
+}
+
+/** Insert a block where its author put it: after the nearest preceding block still present. */
+function insertBlock(tBody, pBody, block) {
+  const tBlocks = tBody.split('\n\n');
+  const idx = tBlocks.indexOf(block);
+  for (let j = idx - 1; j >= 0; j--) {
+    const anchorBlock = tBlocks[j];
+    if (anchorBlock.trim() && pBody.includes(anchorBlock)) {
+      return pBody.replace(anchorBlock, `${anchorBlock}\n\n${block}`);
+    }
+  }
+  return `${pBody}\n\n${block}`;                    // no anchor: appended, and the caller reports it
+}
+
 function main() {
   const cmd = process.argv[2] || 'report';
   const dry = process.argv.includes('--dry-run');
@@ -106,7 +148,48 @@ function main() {
     console.log(`${rows.length} drifted project prompt(s)`);
     process.exit(rows.length ? 1 : 0);
   }
-  if (cmd !== 'patch') { console.error(`unknown command '${cmd}' (report|patch)`); process.exit(2); }
+  if (cmd === 'prose' || cmd === 'patch-prose') {
+    let n = 0;
+    let unanchored = 0;
+    for (const pair of pairs()) {
+      const blocks = proseDriftFor(pair);
+      if (!blocks.length) continue;
+      const rel = `${path.basename(path.dirname(path.dirname(pair.pf)))}/${path.basename(pair.pf, '.json')}`;
+      if (cmd === 'prose') {
+        console.log(`${rel}: ${blocks.length} block(s) the template states and this copy does not`);
+        n += blocks.length;
+        continue;
+      }
+      const t = readJson(pair.tf);
+      const p = readJson(pair.pf);
+      let body = p.body;
+      for (const b of blocks) {
+        const before = body;
+        body = insertBlock(t.body, body, b);
+        if (body === `${before}\n\n${b}`) unanchored++;
+      }
+      // Verify before writing, exactly as the placeholder patch does: a copy that gained a
+      // placeholder it does not declare fails render, mid-run, at whichever seam needed it.
+      const used = new Set(placeholdersIn(body));
+      const declared = [...new Set([...(p.placeholders || []), ...used])].sort();
+      const orphan = declared.filter((x) => !used.has(x));
+      if (orphan.length) {
+        console.error(`REFUSED ${rel}: would declare unused ${orphan.join(', ')}`);
+        process.exitCode = 1;
+        continue;
+      }
+      fs.writeFileSync(pair.pf, `${JSON.stringify({ ...p, placeholders: declared, body }, null, 2)}\n`);
+      console.log(`patched ${rel}: +${blocks.length} block(s)`);
+      n += blocks.length;
+    }
+    if (unanchored) console.error(`  ${unanchored} block(s) appended with no anchor — check placement`);
+    if (cmd === 'prose') {
+      console.log(`${n} block(s) of template prose missing from project copies`);
+      process.exit(n ? 1 : 0);
+    }
+    return;
+  }
+  if (cmd !== 'patch') { console.error(`unknown command '${cmd}' (report|patch|prose|patch-prose)`); process.exit(2); }
 
   for (const r of rows) {
     const t = readJson(r.tf);
@@ -131,4 +214,4 @@ function main() {
 }
 
 if (require.main === module) main();
-module.exports = { pairs, driftFor, patchBody };
+module.exports = { pairs, driftFor, patchBody, proseDriftFor, insertBlock };

@@ -101,3 +101,37 @@ setup() {
     [[ "$output" != *"would patch"* ]] || {
         echo "the tree is not settled — drift remains after patching: $output"; false; }
 }
+
+@test "NO project prompt is missing a RULE its template states" {
+    # Placeholder drift was closed first; this is prose drift, and it is what actually cost the
+    # approval on 20260821T212250Z. The template says a finding must carry evidence, and that a
+    # blocker raised on an earlier iteration still stands unless the code changed. Neither
+    # sentence was in the copy that ran.
+    #
+    # WHOLLY-ABSENT BLOCKS ONLY. A project prompt is a specialisation — it is SUPPOSED to differ,
+    # and a reworded rule is not a missing one. Porting on a line diff would duplicate every
+    # sentence a project legitimately rephrased.
+    run "$NODE" "$DRIFT" prose
+    [ "$status" -eq 0 ] || {
+        echo "$output"
+        echo "Each line is a rule the template states and the executed prompt does not carry."
+        echo "Port it: node orchestrations/scripts/lib/prompt-drift.js patch-prose"
+        false
+    }
+}
+
+@test "the reviewer's evidence and anti-decay rules specifically reach its prompt" {
+    # Named on their own because these two cost an approval, and because a generic count is easy
+    # to look at without noticing which rule is behind it.
+    for proj in metrolinx mock3; do
+        f="$PROJECTS/$proj/prompts/team-lead-review.json"
+        [ -f "$f" ] || continue
+        run "$NODE" -e '
+          const d = require(process.argv[1]);
+          const miss = [];
+          if (!/evidence. field/i.test(d.body)) miss.push("the evidence requirement");
+          if (!/blocker still stands/i.test(d.body)) miss.push("the anti-decay rule");
+          process.stdout.write(miss.join(", "));' "$f"
+        [ -z "$output" ] || { echo "$proj reviewer is missing: $output"; false; }
+    done
+}

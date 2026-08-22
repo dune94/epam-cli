@@ -27,6 +27,6 @@
   "seams": [
     "qa-gate:sast"
   ],
-  "derivedFromSha256": "f739921a92ade4c47631e3f3b3f54bf0d823e11f5a2cd89fa2c3d9bcee6399e2",
+  "derivedFromSha256": "51ee583aa30b6d0f2f226e200cf30ebf4957ad23a9fbbefee445686b6f4b4566",
   "authority": "project"
 }

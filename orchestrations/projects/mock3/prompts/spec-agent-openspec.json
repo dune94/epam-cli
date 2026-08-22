@@ -33,5 +33,6 @@
   "version": 1,
   "seams": [
     "spec-agent"
-  ]
+  ],
+  "derivedFromSha256": "c3ce0355799388af9c5a40e045a6495ac36b4c02b28976f1710971b0373c7dbb"
 }

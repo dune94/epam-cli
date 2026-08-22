@@ -135,3 +135,34 @@ setup() {
         [ -z "$output" ] || { echo "$proj reviewer is missing: $output"; false; }
     done
 }
+
+@test "NO project prompt is STALE against the template it records deriving from" {
+    # derivedFromSha256 has been written on every project prompt since it was introduced, and read
+    # by nothing at runtime — ten test files assert the field EXISTS, none compares it to the
+    # template. So the layer has known, in a machine-readable field, exactly which copies were out
+    # of date, and never been asked.
+    #
+    # This is the same arithmetic the roster uses for agent identity: no prose comparison, no
+    # heuristic about which differences matter. A digest that no longer matches means the copy was
+    # derived from a template revision that has since moved.
+    run "$NODE" "$DRIFT" stale
+    [ "$status" -eq 0 ] || {
+        echo "$output"
+        echo "Re-derive them, or port what moved: node .../prompt-drift.js patch && patch-prose"
+        false
+    }
+}
+
+@test "the staleness check is not vacuous — it sees a template that moved" {
+    # Guards the assertion above: if the digest convention were wrong, every copy would read as
+    # current and the check would pass while proving nothing.
+    run "$NODE" -e '
+      const fs = require("fs"), path = require("path"), crypto = require("crypto");
+      const t = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+      const body = String(t.body) + " AND ONE MORE RULE.";
+      const moved = crypto.createHash("sha256").update(body).digest("hex");
+      const asIs  = crypto.createHash("sha256").update(String(t.body)).digest("hex");
+      process.stdout.write(moved === asIs ? "blind" : "sees");
+    ' "$TEMPLATES/team-lead-review.json"
+    [ "$output" = "sees" ]
+}

@@ -148,6 +148,62 @@ function main() {
     console.log(`${rows.length} drifted project prompt(s)`);
     process.exit(rows.length ? 1 : 0);
   }
+  if (cmd === 'patch-stale') {
+    // A DIGEST REFRESH MUST BE EARNED. It records what a copy was derived FROM, so stamping it
+    // without re-deriving asserts a derivation that did not happen — and the next reader would
+    // trust it. Refreshed only where this copy already carries everything the template states:
+    // no placeholder missing, no wholly-absent block. Anything else needs a real re-mint, and
+    // says so by name rather than being quietly stamped current.
+    const crypto = require('crypto');
+    const digestOf = (doc) => (doc.bodies !== undefined
+      ? crypto.createHash('sha256').update(JSON.stringify(doc.bodies, null, 0)).digest('hex')
+      : crypto.createHash('sha256').update(String(doc.body)).digest('hex'));
+    let done = 0;
+    const needsMint = [];
+    for (const pair of pairs()) {
+      const t = readJson(pair.tf);
+      const p = readJson(pair.pf);
+      const rel = `${path.basename(path.dirname(path.dirname(pair.pf)))}/${path.basename(pair.pf, '.json')}`;
+      const cur = digestOf(t);
+      if (p.derivedFromSha256 === cur) continue;
+      if (driftFor(pair).length || proseDriftFor(pair).length) { needsMint.push(rel); continue; }
+      fs.writeFileSync(pair.pf, `${JSON.stringify({ ...p, derivedFromSha256: cur }, null, 2)}\n`);
+      done++;
+      console.log(`current ${rel}`);
+    }
+    if (needsMint.length) {
+      console.error(`  ${needsMint.length} copy/copies still differ in substance and need a re-mint:`);
+      needsMint.forEach((r) => console.error(`    ${r}`));
+    }
+    console.log(`${done} provenance record(s) brought current`);
+    return;
+  }
+  if (cmd === 'stale') {
+    // PROVENANCE, NOT INSPECTION. Every project copy records the digest of the template text it
+    // was derived from. A copy whose template has since moved is stale by subtraction — the same
+    // arithmetic the roster uses for agent identity, and the reason that layer cannot drift
+    // unnoticed the way this one did.
+    //
+    // The digest convention is matched, not unified: a MULTI-PART prompt hashes its bodies
+    // object, a single-body prompt hashes the raw string. Both are load-bearing, and picking one
+    // would silently invalidate every copy of the other shape.
+    const crypto = require('crypto');
+    const digestOf = (doc) => (doc.bodies !== undefined
+      ? crypto.createHash('sha256').update(JSON.stringify(doc.bodies, null, 0)).digest('hex')
+      : crypto.createHash('sha256').update(String(doc.body)).digest('hex'));
+    let n = 0;
+    let unrecorded = 0;
+    for (const pair of pairs()) {
+      const t = readJson(pair.tf);
+      const p = readJson(pair.pf);
+      const rel = `${path.basename(path.dirname(path.dirname(pair.pf)))}/${path.basename(pair.pf, '.json')}`;
+      if (!p.derivedFromSha256) { unrecorded++; console.log(`${rel}: no provenance recorded`); n++; continue; }
+      if (p.derivedFromSha256 !== digestOf(t)) { console.log(`${rel}: stale`); n++; }
+    }
+    if (unrecorded) console.error(`  ${unrecorded} copy/copies record no provenance at all`);
+    console.log(`${n} project prompt(s) stale or unprovenanced`);
+    process.exit(n ? 1 : 0);
+  }
   if (cmd === 'prose' || cmd === 'patch-prose') {
     let n = 0;
     let unanchored = 0;

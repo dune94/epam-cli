@@ -3143,6 +3143,13 @@ build_generator_prompt() {
 # Delegates to lib/story-outputs.sh, which owns the one implementation: there
 # is more than one producer (this loop, and the repro-test-writer, which commits
 # LATER), and a second copy of this logic is how they would drift apart.
+# The rung record and the output manifest come from the same library, loaded once at start-up
+# rather than per-call: story_rung_record runs on every attempt of every story.
+if [ -f "${SCRIPT_DIR:-$(dirname "${BASH_SOURCE[0]}")}/lib/story-outputs.sh" ]; then
+    # shellcheck disable=SC1090
+    . "${SCRIPT_DIR:-$(dirname "${BASH_SOURCE[0]}")}/lib/story-outputs.sh"
+fi
+
 record_story_outputs() {
     local story_id="$1"
     [ -n "${LOG_DIR:-}" ] || return 0
@@ -3151,11 +3158,6 @@ record_story_outputs() {
     # shellcheck disable=SC1090
     . "$_so_lib"
     story_outputs_record "${PROJECT_ROOT:-}" "$LOG_DIR"
-    # HAND THE MODEL FORWARD WITH THE ARTIFACT. The reviewer used to infer it from ladder
-    # resume state, which is a different contract and goes silent when it is empty. STORY_MODEL
-    # is the model this story was actually invoked with; stating it here means no judge has to
-    # guess, and an unstated one is reported instead of falling through to a launcher literal.
-    story_outputs_record_model "$LOG_DIR" "$story_id" "${STORY_MODEL:-}"
 }
 
 # verify_prescribed_helper_used <story_id>
@@ -9609,6 +9611,18 @@ implement_story() {
                 fi
             fi
         fi
+
+        # ── PERSIST THE RUNG THE WRITER IS ABOUT TO RUN ──────────────────────
+        # Here, and not on a success path, because this is the point the rung is SETTLED:
+        # the escalation block above has just finished moving model/provider/effort/temperature
+        # for this attempt, and the invocation is below. Every attempt overwrites, so the record
+        # always describes the setup that produced the newest output — which is the one the
+        # reviewer is about to judge.
+        #
+        # The writer is a child process per story; the reviewer is a separate process. This file
+        # is how the rung crosses, and it is the ONLY thing the reviewer consults.
+        story_rung_record "$LOG_DIR" "$story_id"
+
         # Rebuild prompt each attempt: retry_count and KB ID must reflect current state
         local next_kb_id
         next_kb_id=$(get_next_kb_id)

@@ -71,6 +71,15 @@ RUNNER
     export PHASE=core
     export EPAM_MODEL=test-model
     export ORCH_GATE_MODEL=test-model
+
+    # THE ENGINE ALWAYS PERSISTS A RUNG BEFORE REVIEW. claude.sh writes it on every attempt
+    # before invoking the writer, so a story that reached review HAS one, and the reviewer
+    # deliberately refuses to judge without it rather than falling back to a seam default.
+    # A fixture with no rung reproduces a state the pipeline cannot be in.
+    ( . "$REPO_ROOT/orchestrations/scripts/lib/story-outputs.sh"
+      STORY_MODEL=test-model STORY_PROVIDER=test-provider \
+      EPAM_REASONING_EFFORT=medium EPAM_TEMPERATURE=0 \
+      story_rung_record "$LOG_DIR" S-1 )
 }
 
 teardown() { rm -rf "$WORK"; }

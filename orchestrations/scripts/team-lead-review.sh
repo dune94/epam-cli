@@ -185,13 +185,15 @@ _provider_for_model() {
 # invents one.
 run_review_prompt() {
     local prompt_text="$1"
-    local writer_model="${2:-}"
+    local writer_model="$2"
+    local writer_provider="$3"
     if [ ! -x "$AI_RUNNER_CMD" ]; then
         warning "ai-run.sh not executable — cannot review (NOT auto-approving)"
         echo '{"verdict":"changes_requested","issues":[{"severity":"blocker","description":"review-agent unavailable (ai-run.sh not executable) — the change was NOT reviewed; blocking rather than auto-approving"}],"summary":"reviewer unavailable"}'
         return 0
     fi
-    local _base_model="${writer_model:-$ORCH_GATE_MODEL}"
+    local _base_model="$writer_model"
+    local _base_provider="$writer_provider"
     # Cross-process ladder resume (2026-08-06): team-lead-review.sh is
     # invoked as a BRAND-NEW subprocess every Step 3.6 review cycle, so this
     # function's own 2-attempt ladder used to silently reset to
@@ -225,7 +227,11 @@ run_review_prompt() {
             warning "  review-agent ladder escalation (attempt $_attempt/$_max_attempts) — model $_base_model → $_model"
             [ -n "${LOG_DIR:-}" ] && advance_ladder_escalation "$LOG_DIR" "$_review_ladder_key" >/dev/null
         else
-            _model="$_base_model"; _provider="${EPAM_ORCHESTRATION_PROVIDER:-claude}"
+            # The writer's own provider, not the orchestration default: a rung is a
+            # model/provider pair, and routing the same model through a different provider is a
+            # different setup (see project_caching_is_routing_not_model — MiniMax direct vs via
+            # a gateway differed by 99.8% on cache hits alone).
+            _model="$_base_model"; _provider="$_base_provider"
         fi
     local _review_json_result
     _review_json_result=$(mktemp /tmp/review-result-XXXXXX.json)
@@ -700,20 +706,41 @@ Review every file listed. Do not assume a file you did not read is defect-free.]
     # NOT `local` — this loop runs at TOP LEVEL, not inside a function. `local` here is
     # SC2168, which bash -n cannot see (it is a scope error, not syntax) and which halted
     # run 3 with NO VERDICT eight times. preflight-static.sh checks for exactly this.
-    # THE WRITER'S OWN STATEMENT FIRST, ladder state only as a fallback. On a
-    # re-implementation these differ: retry state holds the rung the ladder REACHED, while the
-    # diff in front of the reviewer was produced by whatever ran. Judge the artifact's producer.
-    _story_model=""
-    if command -v story_outputs_model >/dev/null 2>&1; then
-        _story_model=$(story_outputs_model "${LOG_DIR:-$AUTOMATION_DIR/logs}" "$story_id" 2>/dev/null || true)
-    fi
-    if [ -z "$_story_model" ] && command -v read_story_retry_model >/dev/null 2>&1; then
-        _story_model=$(read_story_retry_model "${LOG_DIR:-$AUTOMATION_DIR/logs}" "$story_id" 2>/dev/null || true)
-    fi
-    [ -n "$_story_model" ] && [ "$_story_model" != "${ORCH_GATE_MODEL:-}" ] && \
-        log "  review-agent follows the story to '${_story_model}' (seam default was '${ORCH_GATE_MODEL:-?}')"
+    # ── THE REVIEWER RUNS THE WRITER'S RUNG. NOT ITS MODEL — ITS RUNG. ──────────────────
+    #
+    # Operator, 2026-08-22: "if writer's model moves up ladder, the reviewer must follow along
+    # and use the same rung EXACT setup the writer used to converge."
+    #
+    # The ladder moves model, provider, reasoning effort and temperature TOGETHER (rung 1:
+    # effort medium, temp 0; rung 2: model escalates; rung 3: effort high, temp 0.7). Taking
+    # only the model would put the reviewer on a configuration the writer never ran.
+    #
+    # There is no fallback here and no `command -v` guard. The rung is written by claude.sh on
+    # every attempt before the writer is invoked, so for any story that has been implemented it
+    # EXISTS. Guarding the read would only convert a missing record — a real defect — into a
+    # silent review on the seam default, which is the exact failure this replaces.
+    _rung_model=$(story_rung_get "$LOG_DIR" "$story_id" model)
+    _rung_provider=$(story_rung_get "$LOG_DIR" "$story_id" provider)
+    _rung_effort=$(story_rung_get "$LOG_DIR" "$story_id" reasoningEffort)
+    _rung_temperature=$(story_rung_get "$LOG_DIR" "$story_id" temperature)
 
-    log "  Invoking review-agent for $story_id... (model=${_story_model:-${ORCH_GATE_MODEL:-?}} provider=${EPAM_ORCHESTRATION_PROVIDER:-?})"
+    if [ -z "$_rung_model" ]; then
+        # NOT approved, and not quietly reviewed on something else. A review whose setup does
+        # not match the work is not a review, and saying so is the only honest outcome.
+        error "  no rung on record for $story_id — the writer never persisted one, so there is"
+        error "  no setup to review it on. Refusing to judge converged work on a guessed rung."
+        echo '{"verdict":"changes_requested","reviewIncomplete":true,"issues":[{"severity":"blocker","description":"no writer rung on record for this story — the reviewer cannot reproduce the setup that produced the work"}]}' \
+            > "$AUTOMATION_DIR/logs/review-feedback-${story_id}.json"
+        continue
+    fi
+
+    # Applied, not merely logged. Effort and temperature are exported because that is how the
+    # writer's own ladder sets them and how ai-run.sh reads them.
+    export EPAM_REASONING_EFFORT="$_rung_effort"
+    export EPAM_TEMPERATURE="$_rung_temperature"
+    log "  review-agent takes the writer's rung for $story_id: model=$_rung_model provider=$_rung_provider effort=${_rung_effort:-unset} temp=${_rung_temperature:-unset}"
+
+    log "  Invoking review-agent for $story_id... (model=$_rung_model provider=$_rung_provider)"
     REVIEW_OUTPUT_FILE="$AUTOMATION_DIR/logs/review-agent-${story_id}.log"
     # B25 — the reviewer used to fail leaving NO evidence: `$(... | tee FILE)` never
     # creates FILE when the pipeline dies before producing stdout, so a filesystem
@@ -722,7 +749,7 @@ Review every file listed. Do not assume a file you did not read is defect-free.]
     # SOMETHING — a step that cannot explain its own failure gets re-diagnosed by
     # guesswork every time (three wrong mechanism guesses on 2026-07-24 alone).
     : > "$REVIEW_OUTPUT_FILE" 2>/dev/null || true
-    REVIEW_OUTPUT=$(run_review_prompt "$REVIEW_PROMPT" "$_story_model" 2>&1 | tee -a "$REVIEW_OUTPUT_FILE")
+    REVIEW_OUTPUT=$(run_review_prompt "$REVIEW_PROMPT" "$_rung_model" "$_rung_provider" 2>&1 | tee -a "$REVIEW_OUTPUT_FILE")
     _review_rc=${PIPESTATUS[0]}
     if [ -z "$(printf '%s' "$REVIEW_OUTPUT" | tr -d '[:space:]')" ]; then
         warning "  review-agent produced NO OUTPUT AT ALL (rc=${_review_rc}, model=${ORCH_GATE_MODEL:-?}, provider=${EPAM_ORCHESTRATION_PROVIDER:-?})"

@@ -77,6 +77,16 @@ RUNNER
     export EPAM_PROJECT_CONFIG_DIR="$REPO_ROOT/orchestrations/projects/metrolinx"
     export PHASE=core EPAM_MODEL=test-model ORCH_GATE_MODEL=test-model
     export JIRA_BASELINE_BRANCH=develop
+
+    # THE ENGINE ALWAYS PERSISTS A RUNG BEFORE REVIEW. claude.sh writes it on every attempt,
+    # before the writer is invoked, so a story that reached review HAS one — and the reviewer
+    # deliberately refuses to judge without it rather than falling back to a seam default. A
+    # fixture without a rung reproduces a state the pipeline cannot be in, and would only prove
+    # that the refusal works.
+    ( . "$REPO_ROOT/orchestrations/scripts/lib/story-outputs.sh"
+      STORY_MODEL=test-model STORY_PROVIDER=test-provider \
+      EPAM_REASONING_EFFORT=medium EPAM_TEMPERATURE=0 \
+      story_rung_record "$LOG_DIR" "S-1" )
 }
 
 teardown() { rm -rf "$WORK"; }

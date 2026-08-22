@@ -91,3 +91,21 @@ resolve() {  # $1 = agent
     bad=$(grep -n 'writeFileSync(registryPath' "$SCRIPTS/mint-agents-step.js" || true)
     [ -z "$bad" ] || { echo "the mint still writes the engine registry: $bad"; false; }
 }
+
+@test "a bogus seam binding is refused WHERE THE ROSTER IS WRITTEN, not at first use" {
+    # It would otherwise pass review, land on disk, and throw at whichever invocation happened to
+    # reach that agent — mid-run, after the roster looked accepted.
+    run "$NODE" -e '
+      const m = require(process.argv[1]);
+      const canonical = { "typescript-engineer": "impl" };
+      const base = { persona: "p", kind: "implementer", ancestor: "typescript-engineer",
+                     derivedFromSha256: m.personaDigest("impl") };
+      const out = [];
+      out.push("none:"  + m.checkEntry("a", base, canonical).ok);
+      out.push("valid:" + m.checkEntry("a", { ...base, seam: "story-writer" }, canonical).ok);
+      out.push("bogus:" + m.checkEntry("a", { ...base, seam: "no-such-seam" }, canonical).ok);
+      out.push("empty:" + m.checkEntry("a", { ...base, seam: "  " }, canonical).ok);
+      process.stdout.write(out.join(" "));' "$SCRIPTS/lib/project-roster.js"
+    [ "$output" = "none:true valid:true bogus:false empty:false" ] || {
+        echo "seam validation is wrong: $output"; false; }
+}

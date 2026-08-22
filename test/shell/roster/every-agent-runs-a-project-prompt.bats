@@ -135,3 +135,34 @@ template_rendered_seams() {
     # return something, or the assertion above passes by finding nothing to test.
     [ -n "$output" ] || { echo "the scan found no template-rendered seam at all"; false; }
 }
+
+@test "a project that runs agents DECLARES generate, not copy" {
+    # copy installs each prompt byte-identical to its generic template, so an agent executes text
+    # with none of this codeline's facts in it and self-heal has nothing project-specific to
+    # correct. The whole point of a project prompt layer is that its prompts are the project's.
+    #
+    # Checked per project rather than globally: a fixture project with no agents has nothing to
+    # specialise, and demanding generation from it would be cost for no reader.
+    for cfg in "$REPO_ROOT"/orchestrations/projects/*/config.env; do
+        [ -f "$cfg" ] || continue
+        proj="$(basename "$(dirname "$cfg")")"
+        grep -q 'EPAM_PROMPT_PROVISION_MODE' "$cfg" || continue
+        mode=$(grep -E '^EPAM_PROMPT_PROVISION_MODE=' "$cfg" | tail -1 | cut -d= -f2)
+        [ "$mode" != "copy" ] || {
+            echo "$proj declares EPAM_PROMPT_PROVISION_MODE=copy —"
+            echo "its agents execute generic templates, not this project's prompts."
+            false
+        }
+    done
+}
+
+@test "the specialisation contract asks each ADDED agent which seam it enters by" {
+    # Without it the name is matched against patterns, and a pattern is a guess about what an
+    # agent does from how it is spelled — which is how an agent named for review came to enter
+    # through an inference seam, with another seam's budget and tools.
+    run "$NODE" -e '
+      const d = require(process.argv[1]);
+      process.stdout.write(/"seam":/.test(d.body) && /which seam an agent enters by/i.test(d.body)
+        ? "asks" : "silent");' "$REPO_ROOT/orchestrations/prompts/templates/roster-specialisation.json"
+    [ "$output" = "asks" ] || { echo "the specialiser is not asked for a seam binding"; false; }
+}

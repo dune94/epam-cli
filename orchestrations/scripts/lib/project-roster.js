@@ -73,6 +73,27 @@ function copyCanonicalForRun(canonicalPath, logDir) {
 
 const KINDS = ['implementer', 'investigator', 'seam'];
 
+/** Seam names the registry declares. Read once — this is asked for every entry in the roster. */
+let _declaredSeams;
+function declaredSeams() {
+  if (_declaredSeams) return _declaredSeams;
+  _declaredSeams = new Set();
+  try {
+    const reg = JSON.parse(fs.readFileSync(
+      path.join(__dirname, '..', '..', 'agents', 'invocation-profiles.json'), 'utf8'));
+    (function walk(o) {
+      for (const k in o) {
+        const v = o[k];
+        if (v && typeof v === 'object') {
+          if (v.ladder || v.reasoningEffort || v._what) _declaredSeams.add(k);
+          walk(v);
+        }
+      }
+    }((reg && reg.profiles) || {}));
+  } catch { /* an unreadable registry declares nothing, and every binding then fails by name */ }
+  return _declaredSeams;
+}
+
 /**
  * Check ONE produced entry against the ancestry contract.
  *
@@ -101,6 +122,17 @@ function checkEntry(name, entry, canonical) {
   }
   if (entry.derivedFromSha256 !== personaDigest(canonical[entry.ancestor])) {
     return { ok: false, reason: `provenance digest does not match ancestor '${entry.ancestor}'` };
+  }
+  // A SEAM BINDING IS CHECKED WHERE THE ROSTER IS WRITTEN, not where it is first used. A seam the
+  // registry does not declare would otherwise pass review, land on disk, and throw at whichever
+  // invocation happened to reach that agent — mid-run, after the roster looked accepted.
+  if (entry.seam !== undefined) {
+    if (typeof entry.seam !== 'string' || !entry.seam.trim()) {
+      return { ok: false, reason: 'seam is present but empty — omit it, or name one' };
+    }
+    if (!declaredSeams().has(entry.seam)) {
+      return { ok: false, reason: `seam '${entry.seam}' is not declared in the registry` };
+    }
   }
   return { ok: true, reason: '' };
 }

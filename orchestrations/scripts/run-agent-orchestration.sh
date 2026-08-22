@@ -3823,6 +3823,25 @@ _run_agent_mint() {
       return 1
     fi
     log "[mint] Agent mint skipped (EPAM_SKIP_AGENT_MINT=1) — using the roster on disk (${_roster_n} agent(s))"
+
+    # BUT THE PROJECT ROSTER IS STILL DERIVED. Skipping the mint means "invent no new agents"; it
+    # has never meant "run with no identities". Every launch resets, and a writer-style resume
+    # skips the mint on purpose, so without this a resumed run would reach its first seam with no
+    # persona for it — and there is no engine roster to fall back to any more.
+    #
+    # Roster-only: no survey, no proposals, no role assignment. Just canonical -> this project.
+    log "[mint] Deriving this project's roster (roster-only — nothing is minted)..."
+    EPAM_ROSTER_ONLY=1 "$NODE_BIN" "$SCRIPT_DIR/mint-agents-step.js" \
+        --prd "$_prd" \
+        --agents-dir "$EPAM_AGENTS_DIR" \
+        --log-dir "$LOG_DIR" \
+        --codeline-root "${PROJECT_ROOT:-}" 2>&1 | tee -a "$_log"
+    # PIPESTATUS[0], not the pipeline status: without pipefail this reads tee's, and a roster the
+    # agent never produced would pass as one it did.
+    if [ "${PIPESTATUS[0]}" -ne 0 ]; then
+        error "[mint] roster derivation FAILED — refusing to continue with agents that have no identity."
+        return 1
+    fi
   fi
   [ "${EPAM_SKIP_AGENT_MINT:-0}" = "1" ] || {
     log "[mint] Minting project agents and assigning roles..."

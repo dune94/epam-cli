@@ -164,3 +164,36 @@ build() {
     [[ "$output" == REFUSED* ]]
     [ ! -f "$WORK/project/roster.json" ]
 }
+
+@test "SKIPPING THE MINT still derives the roster — a resume is not identity-less" {
+    # EPAM_SKIP_AGENT_MINT is honoured on every writer-style resume, deliberately: the merge is
+    # additive and re-minting accumulated duplicate roles. Deriving the roster is not minting.
+    # Without this a resumed run reaches its first seam with no persona for it, and there is no
+    # engine roster to fall back to any more.
+    blk=$(awk '/Agent mint skipped \(EPAM_SKIP_AGENT_MINT=1\)/{f=1} f{print; if(/^  fi$/) exit}' \
+          "$SCRIPTS/run-agent-orchestration.sh")
+    [ -n "$blk" ] || { echo "the skip branch is gone — this test is stale"; false; }
+    [[ "$blk" == *"EPAM_ROSTER_ONLY=1"* ]] || {
+        echo "the skip path does not derive a roster; a resumed run would have no identities"; false; }
+    [[ "$blk" == *"PIPESTATUS[0]"* ]] || {
+        echo "the status is read from the pipeline, so tee's success would mask a failed derivation"; false; }
+}
+
+@test "the roster-only path EXECUTES — it is not merely parseable" {
+    # `node --check` cannot see a temporal dead zone, and the first version of this had one: the
+    # stage was defined below the guard that calls it, which parses and then throws at runtime.
+    run env EPAM_ROSTER_ONLY=1 EPAM_PROJECT_CONFIG_DIR="$WORK/proj" LOG_DIR="$WORK/logs" \
+        "$NODE" "$SCRIPTS/mint-agents-step.js"
+    [[ "$output" != *"ReferenceError"* ]] || { echo "reference error on the roster-only path: $output"; false; }
+    [[ "$output" != *"Cannot access"* ]] || { echo "temporal dead zone: $output"; false; }
+    # it must fail on a missing prerequisite, which is the correct outcome for an empty fixture
+    [ "$status" -ne 0 ]
+}
+
+@test "the roster stage is defined BEFORE both of its call sites" {
+    def=$(grep -n 'const runRosterStage' "$SCRIPTS/mint-agents-step.js" | head -1 | cut -d: -f1)
+    [ -n "$def" ]
+    for line in $(grep -n 'await runRosterStage' "$SCRIPTS/mint-agents-step.js" | cut -d: -f1); do
+        [ "$line" -gt "$def" ] || { echo "call at $line precedes the definition at $def"; false; }
+    done
+}

@@ -1,24 +1,29 @@
 #!/usr/bin/env bats
 # ─────────────────────────────────────────────────────────────────────────────
-# A SEAM WITH NO PROJECT PROMPT CANNOT RUN, AND FINDS OUT MID-RUN.
+# A PROJECT COPY IS FOR THE PROJECT LAYER ONLY.
 #
-# lib/prompt-library.js renders ONLY the project-authority copy and refuses to fall back to
-# the generic template — deliberately: "a silent degrade is how an engine default runs a
-# whole campaign without anyone noticing". So a missing project prompt is a hard failure,
-# thrown at whichever seam needed it, after the roster is minted and the run is spending.
+# THIS FILE PREVIOUSLY ASSERTED THE WRONG THING. It compared provisioningList() against the
+# files on disk and called 17 absent prompts a defect — "a hard failure waiting mid-run" —
+# and recommended re-minting them. They had been deliberately DELETED on 2026-08-16 by
+# dc7fb20, which explains exactly why:
 #
-# lib/project-prompt-builder.js says the same about its own failure mode: "the builder
-# throws rather than leaving a project half-provisioned."
+#   "There are two prompt renderers and the split is deliberate: prompt-library.js reads the
+#    PROJECT copy and treats a missing one as a hard failure; engine-prompt.js reads the
+#    TEMPLATE, for prompts the engine assembles before any project agent exists. So a project
+#    copy of an engine-layer prompt can never be executed. Under 'generate' an agent WRITES
+#    each one: paid work producing files that read as live, that self-heal corrections land in
+#    and do nothing, and that go stale invisibly."
 #
-# Found 2026-08-21: metrolinx is half-provisioned anyway. provisioningList() requires 53
-# prompts; 37 exist. The 18 missing include cpa-system (where cpa-inference's whole output
-# schema lives), spec-coordinator-review, spec-model-review, spec-agent-speckit and
-# runtime-boundary-review. None surfaced in the run that completed that day because the
-# resume skipped the spec pass — so the gap is invisible exactly until a full run reaches it.
+# Re-minting them would have reintroduced the defect that commit removed, and paid for it.
+# The absence was the fix.
 #
-# The required set is DERIVED, never listed: the seam registry is the source (a profile
-# declaring `template: X` IS the statement that X needs a project copy), plus the auxiliary
-# sub-prompts bootstrap.json declares. This test therefore covers a seam added tomorrow.
+# THE RULE IT SHOULD HAVE ASSERTED: bootstrap.generated is the list of AUXILIARY prompts that
+# need a PROJECT copy. An id read through render_engine_prompt / renderEngineTemplate is
+# engine-layer and must NOT be on it — the engine reads the template directly, and a project
+# copy is dead weight that goes stale unseen.
+#
+# Verified per id rather than assumed: 14 of the 17 have an engine-layer reader and are
+# correctly absent; 2 (manifest-analysis, prd-generation) are read by nothing at all.
 # ─────────────────────────────────────────────────────────────────────────────
 
 setup() {
@@ -72,31 +77,42 @@ projects() { ls -1 "$REPO_ROOT/orchestrations/projects" 2>/dev/null; }
     [ -z "$missing" ] || { echo "required but no template to mint from:$missing"; false; }
 }
 
-@test "EVERY project is fully provisioned — no seam can hard-fail mid-run for a missing prompt" {
-    total_missing=0
-    report=""
-    while IFS= read -r p; do
-        [ -n "$p" ] || continue
-        dir="$REPO_ROOT/orchestrations/projects/$p/prompts"
-        [ -d "$dir" ] || { report="${report}
-  $p: no prompts/ directory at all"; total_missing=$((total_missing+1)); continue; }
-        miss=""
-        while IFS= read -r id; do
-            [ -n "$id" ] || continue
-            [ -f "$dir/$id.json" ] || miss="$miss $id"
-        done < <(required_for)
-        if [ -n "$miss" ]; then
-            n=$(printf '%s' "$miss" | wc -w)
-            total_missing=$((total_missing + n))
-            report="${report}
-  $p is missing $n required prompt(s):$miss"
+@test "bootstrap.generated lists ONLY project-layer prompts" {
+    # An id the engine renders from the template must not be here: provisioning a project copy
+    # of it produces a file nothing can read. That is what dc7fb20 removed 39 of.
+    engine=""
+    while IFS= read -r id; do
+        [ -n "$id" ] || continue
+        if grep -rq "render_engine_prompt \"\?$id\b\|renderEngineTemplate('$id'" \
+             "$REPO_ROOT/orchestrations/scripts" 2>/dev/null; then
+            engine="$engine $id"
         fi
-    done < <(projects)
-    [ "$total_missing" -eq 0 ] || {
-        echo "half-provisioned project(s) — each missing prompt is a hard failure at the seam that needs it:"
-        echo "$report"
+    done < <("$NODE" -e 'const b=require(process.argv[1]);(b.generated||[]).forEach(x=>console.log(x))' \
+             "$REPO_ROOT/orchestrations/prompts/bootstrap.json")
+    [ -z "$engine" ] || {
+        echo "engine-layer prompts listed as needing a PROJECT copy:$engine"
+        echo "the engine renders these from the template; a project copy can never be executed."
         false
     }
+}
+
+@test "EVERY seam-declared template has a project copy — that layer IS project-authority" {
+    # Seam templates are rendered by prompt-library.js, which refuses to fall back. A missing
+    # one here really is a hard failure at that seam. This is the check the old test should
+    # have been: scoped to the layer where absence is a defect.
+    reg="$REPO_ROOT/orchestrations/agents/invocation-profiles.json"
+    for proj in $(projects); do
+        dir="$REPO_ROOT/orchestrations/projects/$proj/prompts"
+        [ -d "$dir" ] || continue
+        miss=$("$NODE" -e '
+          const fs=require("fs"),path=require("path");
+          const reg=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+          const dir=process.argv[2];
+          const seam=[...new Set(Object.values(reg.profiles||{}).map(p=>p&&p.template).filter(Boolean))];
+          process.stdout.write(seam.filter(t=>!fs.existsSync(path.join(dir,t+".json"))).join(" "));
+        ' "$reg" "$dir")
+        [ -z "$miss" ] || { echo "$proj is missing seam prompt(s):$miss"; false; }
+    done
 }
 
 @test "the check is not vacuous — it really inspects projects" {

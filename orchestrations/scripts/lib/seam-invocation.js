@@ -97,13 +97,33 @@ function resolveSeam(agent, file, opts) {
   // 2. The explicit cross-reference: this agent enters by this seam. Named agents that are
   //    not themselves profiles live here, and an entry always beats a pattern — a family rule
   //    must never override a decision someone made deliberately about one agent.
-  const xref = _ignoreXref ? {} : (reg.agentSeams || {});
-  if (Object.prototype.hasOwnProperty.call(xref, agent)) {
-    const seam = xref[agent];
-    if (!profiles[seam]) {
-      throw new Error(`agentSeams maps '${agent}' to profile '${seam}', which the registry does not define`);
+  // THE AGENT'S OWN ENTRY SAYS WHICH SEAM IT ENTERS BY.
+  //
+  // This read `reg.agentSeams` — a PER-PROJECT cross-reference stored in the file the ENGINE
+  // owns, so one project's minted agents were mapped in a registry every other project reads,
+  // and the mint rewrote the engine layer on every run to maintain it.
+  //
+  // All 55 entries were recorded with origin 'derived': the map was a CACHE of what the patterns
+  // below already answer, holding no decision anyone made. What the patterns cannot reach is a
+  // minted agent whose name the engine cannot know — and that agent's roster entry names its
+  // seam, beside its persona, its kind and what it derives from. One agent, one place.
+  if (!_ignoreXref) {
+    const projectDir = process.env.EPAM_PROJECT_CONFIG_DIR || '';
+    if (projectDir) {
+      let entry = null;
+      try {
+        // eslint-disable-next-line global-require
+        const roster = require('./project-roster.js').loadRoster(projectDir);
+        entry = (roster.agents || {})[agent] || null;
+      } catch { entry = null; }   // no roster yet: the patterns below still answer
+      if (entry && typeof entry.seam === 'string' && entry.seam.trim()) {
+        if (!profiles[entry.seam]) {
+          throw new Error(
+            `the roster binds '${agent}' to seam '${entry.seam}', which the registry does not define`);
+        }
+        return entry.seam;
+      }
     }
-    return seam;
   }
 
   // 2. Declared patterns. The registry owns the shapes; this file owns none of them.
@@ -179,7 +199,7 @@ function resolveSeam(agent, file, opts) {
   // 4. Never {}, and never a guess.
   throw new Error(
     `agent '${agent}' resolves to no seam: it is not a named profile and no seamPattern matches ` +
-    'it. Add a seamPattern for its family, or an agentSeams entry for this one agent, or set ' +
+    'it. Add a seamPattern for its family, or name the seam on this agent\'s roster entry. Or set ' +
     'EPAM_DEFAULT_SEAM in the project config if unmatched agents should share one seam. Leaving ' +
     'it unconfigured would run it with no ladder, no effort and no tool grants.');
 }

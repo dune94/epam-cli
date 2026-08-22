@@ -394,7 +394,9 @@ function writeAgentSeamCrossReference(profilesPath, registryPath) {
   const roster = rosterAgents(profilesPath);
   const registry = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
   const profiles = registry.profiles || {};
-  const previous = registry.agentSeams || {};
+  // Nothing is carried forward: the roster is derived every run, so a previous run's mapping is
+  // not this run's fact.
+  const previous = {};
   // Provenance lives BESIDE the map, not inside it: agentSeams stays a plain
   // agent -> seam string, so seam-invocation.js and every other reader is untouched.
   const origin = {};
@@ -440,9 +442,15 @@ function writeAgentSeamCrossReference(profilesPath, registryPath) {
       + `Add a seamPattern or a defaultSeam to ${registryPath}:\n  ` + unresolved.join('\n  '));
   }
 
-  registry.agentSeams = next;
-  registry.agentSeamOrigin = origin;
-  fs.writeFileSync(registryPath, `${JSON.stringify(registry, null, 2)}\n`);
+  // NEITHER RECORDED NOR WRITTEN BACK. `agentSeams` was a per-project cross-reference kept in
+  // the file the ENGINE owns, and every one of its 55 entries had origin 'derived' — a cache of
+  // what the seam patterns already answer, holding no decision anyone had made. Maintaining it
+  // was the last thing making a run write the engine layer.
+  //
+  // What the patterns cannot reach is a minted agent whose name the engine cannot know, and that
+  // agent's roster entry names its seam beside its persona and its kind. The resolution above
+  // still runs: it is what proves every minted agent HAS a seam, and it throws by name when one
+  // does not.
   return next;
 }
 

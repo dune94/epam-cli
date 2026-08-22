@@ -357,9 +357,7 @@
         }
       ],
       "template": "guard-vocabulary",
-      "toolGrant": "read-only",
-      "_outputShapeIn": "GUARD_VOCABULARY",
-      "_outputShapeInWhy": "Declared as a JSON Schema in lib/agent-output-schema.js (required: blacklist, whitelist) and enforced by validateTaggedOutput — stronger than a prompt example."
+      "toolGrant": "read-only"
     },
     "estate-survey": {
       "_what": "Surveys every codeline BEFORE the roster is minted: which ones the work actually reaches, and which need their own investigator. Breadth, never fix sites.",
@@ -678,9 +676,7 @@
         }
       ],
       "template": "spec-story-block",
-      "toolGrant": "read-network",
-      "_outputShapeIn": "TICKET_LINKS",
-      "_outputShapeInWhy": "JSON Schema in lib/agent-output-schema.js (required: url, classification, relevant, fetchStatus, quotes)."
+      "toolGrant": "read-network"
     },
     "phase-assessment": {
       "_what": "Augments every agent profile with this project's skills before a phase runs. Writes profiles.json.",
@@ -714,7 +710,7 @@
       "template": "prd-model-coordinator",
       "toolGrant": "write",
       "_outputShapeIn": "MODEL_REVIEW",
-      "_outputShapeInWhy": "JSON Schema in lib/agent-output-schema.js (required: storyId, finalModel), emitted via the spec-model-review template."
+      "_outputShapeInWhy": "JSON Schema in lib/agent-output-schema.js (required: storyId, finalModel). The tag name matches no name rule, so the link cannot be derived — guard-vocabulary and ticket-links CAN be derived from their tags and carry no such note."
     },
     "prompt-review": {
       "_what": "Falsifies what a generated project prompt claims about this project, before any agent inherits it.",

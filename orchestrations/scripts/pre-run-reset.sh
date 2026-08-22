@@ -446,6 +446,23 @@ if [ "$_VCC_CLEARED" -gt 0 ]; then
     info "  Cleared $_VCC_CLEARED VC-coverage verdict(s) — no prior run's coverage findings reach this writer"
 fi
 
+# THE PRODUCING MODEL IS PER-RUN STATE TOO, and it is caught by the SAME trap that caught
+# story-retry-state above: the archive sweep matches `story-outputs-*.txt`, and this is a
+# DIRECTORY of extensionless per-story files, so it sails straight past. A survivor makes the
+# next run's reviewer judge story S on the rung last run's writer happened to reach — a wrong
+# model chosen by nothing, which is exactly what the block below exists to stop.
+_PRODUCER_MODEL_DIR="$LOG_DIR/story-outputs-model"
+if [ -d "$_PRODUCER_MODEL_DIR" ]; then
+    _PM_CLEARED=$(find "$_PRODUCER_MODEL_DIR" -maxdepth 1 -type f 2>/dev/null | wc -l)
+    find "$_PRODUCER_MODEL_DIR" -maxdepth 1 -type f -delete 2>/dev/null || true
+    _PM_LEFT=$(find "$_PRODUCER_MODEL_DIR" -maxdepth 1 -type f 2>/dev/null | wc -l)
+    if [ "$_PM_LEFT" -gt 0 ]; then
+        fail_contamination "$_PM_LEFT producing-model record(s) could NOT be cleared in $_PRODUCER_MODEL_DIR — this run's reviewer would judge on a model the PREVIOUS run's writer reached"
+    elif [ "$_PM_CLEARED" -gt 0 ]; then
+        info "  Cleared $_PM_CLEARED producing-model record(s) — no reviewer inherits a prior run's rung"
+    fi
+fi
+
 _RETRY_STATE_DIR="$LOG_DIR/story-retry-state"
 if [ -d "$_RETRY_STATE_DIR" ]; then
     _RETRY_CLEARED=$(find "$_RETRY_STATE_DIR" -maxdepth 1 -type f 2>/dev/null | wc -l)

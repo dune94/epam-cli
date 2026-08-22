@@ -3151,6 +3151,11 @@ record_story_outputs() {
     # shellcheck disable=SC1090
     . "$_so_lib"
     story_outputs_record "${PROJECT_ROOT:-}" "$LOG_DIR"
+    # HAND THE MODEL FORWARD WITH THE ARTIFACT. The reviewer used to infer it from ladder
+    # resume state, which is a different contract and goes silent when it is empty. STORY_MODEL
+    # is the model this story was actually invoked with; stating it here means no judge has to
+    # guess, and an unstated one is reported instead of falling through to a launcher literal.
+    story_outputs_record_model "$LOG_DIR" "$story_id" "${STORY_MODEL:-}"
 }
 
 # verify_prescribed_helper_used <story_id>

@@ -64,7 +64,7 @@ extract() {  # $1 = script, $2 = first line of the block, $3 = how many lines
         log(){ :; }; story_id=S-1
         ORCH_GATE_MODEL="z-ai/glm-5.2"       # the seam default that judged kimi-k3 work live
         '"$block"'
-        echo "$ORCH_GATE_MODEL"'
+        echo "${_story_model:-$ORCH_GATE_MODEL}"'
     [ "$status" -eq 0 ] || { echo "$output"; false; }
     [ "$output" = "moonshotai/kimi-k3" ] || {
         echo "reviewer judged on '$output' while the story is on moonshotai/kimi-k3"; false; }
@@ -107,7 +107,7 @@ extract() {  # $1 = script, $2 = first line of the block, $3 = how many lines
         . '"$SCRIPTS"'/lib/story-retry-state.sh
         log(){ :; }; story_id=NEVER-RAN; ORCH_GATE_MODEL="seam/default"
         '"$block"'
-        echo "$ORCH_GATE_MODEL"'
+        echo "${_story_model:-$ORCH_GATE_MODEL}"'
     [ "$output" = "seam/default" ]
     block=$(extract "$SCRIPTS/agent-attempt-analyst.sh" '_attempt_model=""' 10)
     run bash -c '
@@ -126,4 +126,33 @@ extract() {  # $1 = script, $2 = first line of the block, $3 = how many lines
     [ "$output" -ge 1 ]
     run grep -c 'seam_ladder_export' "$SCRIPTS/team-lead-review.sh"
     [ "$output" -ge 1 ]
+}
+
+@test "the model reaches the seam AS A PARAMETER, not via a process-wide global" {
+    # It used to arrive by reassigning ORCH_GATE_MODEL — a per-story value written into
+    # something six other readers in this file and every seam spawned after it also see, so
+    # story N+1 inherits story N's rung unless the caller overwrites it again.
+    run bash -c "grep -n 'run_review_prompt \"\$REVIEW_PROMPT\"' '$SCRIPTS/team-lead-review.sh'"
+    [[ "$output" == *'"$_story_model"'* ]] || {
+        echo "the call site does not pass the story's model as an argument: $output"; false; }
+    # and the function must actually prefer its parameter over the global
+    sig=$(awk '/^run_review_prompt\(\) \{/{f=1} f{print; if(/_base_model=/) exit}' \
+          "$SCRIPTS/team-lead-review.sh")
+    [[ "$sig" == *'writer_model'* && "$sig" == *'_base_model="${writer_model:-'* ]] || {
+        echo "run_review_prompt still takes its model from the global only"; false; }
+}
+
+@test "one story's model does NOT leak into the next" {
+    # The concrete failure the parameter prevents: two stories on different rungs reviewed in
+    # one process. With a global, the second inherits the first whenever its own lookup is empty.
+    persist_model A-1 'moonshotai/kimi-k3'
+    block=$(extract "$SCRIPTS/team-lead-review.sh" '_story_model=""' 12)
+    run bash -c '
+        . '"$SCRIPTS"'/lib/story-retry-state.sh; . '"$SCRIPTS"'/lib/story-outputs.sh
+        log(){ :; }; LOG_DIR='"$LOG_DIR"'; ORCH_GATE_MODEL="seam/default"
+        story_id=A-1; '"$block"'; first="${_story_model:-$ORCH_GATE_MODEL}"
+        story_id=A-2; '"$block"'; second="${_story_model:-$ORCH_GATE_MODEL}"
+        echo "$first|$second"'
+    [ "$output" = "moonshotai/kimi-k3|seam/default" ] || {
+        echo "story A-2 was reviewed on '$output' — A-1's rung leaked"; false; }
 }

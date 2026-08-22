@@ -192,3 +192,47 @@ story_outputs_tests_for() {
 story_outputs_sources() {
     story_outputs_files "$1" "$2" | grep -v -E "$_STORY_OUTPUTS_TEST_RE" || true
 }
+
+# ── WHAT PRODUCED IT, not just what it is ────────────────────────────────────
+#
+# A reviewer below the writer's rung cannot see what that rung can do wrong. Live
+# 20260821T212250Z: the writer climbed MiniMax-M3 -> glm-5.2 -> kimi-k3 across five attempts
+# while all three review cycles ran glm-5.2, the approval included.
+#
+# 7edf627 made the reviewer follow the story by reading lib/story-retry-state.sh. That file's
+# contract is ladder RESUME bookkeeping — it deliberately refuses to persist an empty model,
+# because on resume an empty value must read as "no state". Correct for its own purpose, and
+# wrong to lean a judge on: an unset STORY_MODEL there means the reviewer falls through to the
+# launcher's hardcoded ORCH_GATE_MODEL with nothing in the log to say so.
+#
+# This is the writer STATING what produced the artifact, recorded where the rest of "what this
+# story produced" already lives. Story-scoped, not phase-scoped: two stories in one phase can
+# sit on different rungs, and the reviewer judges one story at a time.
+_story_outputs_model_file() {
+    echo "$1/story-outputs-model/$2"
+}
+
+# story_outputs_record_model <log_dir> <story_id> <model>
+# An empty model is REFUSED AND SAID SO — the opposite of story-retry-state, on purpose. Here
+# it means the writer could not name what it ran, and the next person must be able to see that
+# rather than find a judge quietly running the launcher default.
+story_outputs_record_model() {
+    local log_dir="$1" story_id="$2" model="$3"
+    [ -n "$log_dir" ] && [ -n "$story_id" ] || return 0
+    if [ -z "$model" ]; then
+        printf '[story-outputs] story %s produced output but named NO model. The reviewer will\n' \
+            "$story_id" >&2
+        printf '[story-outputs] fall back to the seam default and judge on a rung it was not told.\n' >&2
+        return 0
+    fi
+    mkdir -p "$log_dir/story-outputs-model" 2>/dev/null || true
+    printf '%s' "$model" > "$(_story_outputs_model_file "$log_dir" "$story_id")" 2>/dev/null || true
+}
+
+# story_outputs_model <log_dir> <story_id> — empty when the writer said nothing.
+# ABSENT IS NOT A DEFAULT. Substituting a model here would make a judge authoritative about
+# work whose producer it never saw.
+story_outputs_model() {
+    local f; f="$(_story_outputs_model_file "$1" "$2")"
+    [ -f "$f" ] && tr -d '\n' < "$f" 2>/dev/null || true
+}

@@ -154,8 +154,14 @@ describe('the class, not the site', () => {
 });
 
 describe('wired, not merely written', () => {
+  // EXECUTABLE LINES ONLY. A comment mentioning jq_vals is not a call to it, and
+  // preflight-static.sh documents the pattern it scans FOR — which this reported as an unsourced
+  // caller. A guard that reads prose flags documentation as the defect, which is how the same
+  // scan-your-own-comment mistake cost three separate corrections in one session.
   const callers = () => bash(
-    "grep -rln 'jq_vals ' orchestrations/scripts/*.sh | grep -v 'lib/jq-vals.sh'",
+    "grep -rn 'jq_vals ' orchestrations/scripts/*.sh"
+    + " | grep -vE '^[^:]+:[0-9]+:[[:space:]]*(#|//|\\*)'"
+    + " | cut -d: -f1 | sort -u | grep -v 'lib/jq-vals.sh'",
   ).stdout.trim().split('\n').filter(Boolean);
 
   it('found the callers at all', () => {

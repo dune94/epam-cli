@@ -398,7 +398,17 @@ function mergeProjectAgents(opts) {
     });
   }
 
-  fs.writeFileSync(profilesPath, JSON.stringify(profiles, null, 2), 'utf8');
+  // THE ENGINE ROSTER IS NOT WRITTEN. It used to be: this merged proposals into
+  // orchestrations/agents/profiles.json, which every project shares, so one project's agents
+  // reached another's roster and a client codeline ran with this repository's own.
+  //
+  // The proposals still go through the whole adversarial cycle — proposed, reviewed, corrected —
+  // and the result is returned to the caller, which hands it to the roster-specialiser as the
+  // agents THIS project needs. What changed is where they land: projects/<project>/roster.json,
+  // derived from canonical and reviewed against it, instead of a file the engine owns.
+  //
+  // `profiles` is still built above because the merge validates against it: a proposal that
+  // collides with a canonical name, or with another proposal, is caught by building the set.
 
   // Register the minted roles. Downstream needs to know which roles are THIS PROJECT'S
   // implementation roles, and "everything in the roster that isn't canonical" cannot
@@ -635,7 +645,13 @@ function applyProjectProfiles(profilesPath, agentsDir) {
   for (const n of names) {
     if (!Object.prototype.hasOwnProperty.call(profiles, n)) { profiles[n] = store[n]; applied.push(n); }
   }
-  if (applied.length) fs.writeFileSync(profilesPath, JSON.stringify(profiles, null, 2), 'utf8');
+  // NOT WRITTEN BACK. This existed because pre-run-reset restores the engine roster from
+  // canonical, which deleted the briefs a project had minted — so they were re-applied here on
+  // every run. The roster is derived from canonical every launch now and carries them itself,
+  // so re-applying them to the engine's file would only put one project's agents where the next
+  // project reads.
+  //
+  // The list is still returned: callers report what this project contributed.
   return applied;
 }
 
@@ -718,7 +734,10 @@ function clearProjectRoster(agentsDir, profilesPath, names) {
     for (const r of registered) {
       if (Object.prototype.hasOwnProperty.call(profiles, r)) { delete profiles[r]; changed = true; }
     }
-    if (changed) fs.writeFileSync(profilesPath, JSON.stringify(profiles, null, 2), 'utf8');
+    // Not written back, for the same reason as applyProjectProfiles: the engine roster is not
+    // this run's to edit. A rejected agent is absent from the roster the specialiser writes,
+    // which is the only roster anything reads.
+    void changed;
   } catch { /* live roster unreadable — registry and store are cleared regardless */ }
 
   return registered;

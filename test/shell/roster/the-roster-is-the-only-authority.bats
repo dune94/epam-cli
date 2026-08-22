@@ -241,3 +241,28 @@ load_helper() {
             echo "$f sources the roster helper and never calls it"; false; }
     done
 }
+
+# ── lifecycle ────────────────────────────────────────────────────────────────
+
+@test "the pre-run reset CLEARS the project roster — it is a run output" {
+    # Regenerated every launch. A roster that survives is a stored artefact with a lifetime, and
+    # the next run's agents would be whoever the last run happened to derive — the two-clock
+    # problem that left 40 project prompts stale against their templates.
+    blk=$(awk 'index($0,"_ROSTER_FILE=")||f{f=1;print; if(f&&/^fi$/) exit}' "$SCRIPTS/pre-run-reset.sh")
+    [ -n "$blk" ] || { echo "pre-run-reset.sh does not clear the project roster"; false; }
+
+    d="$WORK/lifecycle"; mkdir -p "$d"
+    echo '{"agents":{"x":{"persona":"p","kind":"seam","ancestor":"x","derivedFromSha256":"d"}}}' > "$d/roster.json"
+    run bash -c '
+        EPAM_PROJECT_CONFIG_DIR='"$d"'; info(){ :; }; fail_contamination(){ echo "CONTAMINATED"; exit 1; }
+        '"$blk"'
+        [ -f '"$d"'/roster.json ] && echo "SURVIVED" || echo "CLEARED"'
+    [ "$status" -eq 0 ] || { echo "$output"; false; }
+    [[ "$output" == *"CLEARED"* ]] || { echo "a prior run's roster survived the reset: $output"; false; }
+}
+
+@test "and clearing it is not silent — the next reader must know it went" {
+    blk=$(awk 'index($0,"_ROSTER_FILE=")||f{f=1;print; if(f&&/^fi$/) exit}' "$SCRIPTS/pre-run-reset.sh")
+    [[ "$blk" == *"info"* || "$blk" == *"log"* ]] || {
+        echo "the roster is deleted with no trace in the run log"; false; }
+}

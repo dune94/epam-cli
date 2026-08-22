@@ -29,7 +29,15 @@ const sanity = require('./constraint-sanity.js');
 const SCRIPT_DIR = __dirname;
 const SCHEMA_PY = path.join(SCRIPT_DIR, 'kb_schema.py');
 
-let ROOT = path.join(SCRIPT_DIR, '..', '..', 'agents', 'kb');
+// Defaults to THIS PROJECT's kb when one is declared — a codeline's knowledge in the engine's
+// folder is read by whichever project runs next. configure({root}) still overrides.
+let ROOT = process.env.EPAM_PROJECT_CONFIG_DIR
+  ? path.join(process.env.EPAM_PROJECT_CONFIG_DIR, 'kb')
+  : path.join(SCRIPT_DIR, '..', '..', 'agents', 'kb');
+
+/** Where this store is currently rooted. Exported so a caller — or a test — can ASK rather than
+ *  reconstruct the rule, which is how two answers to one question start. */
+function rootPath() { return ROOT; }
 
 /** Point the store at a different root (tests, or a per-project KB). */
 function configure({ root } = {}) {
@@ -232,6 +240,7 @@ const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-')
   .replace(/^-+|-+$/g, '').slice(0, 60) || 'constraint';
 
 module.exports = {
+  rootPath,
   configure, recordEpisode, episodes, quarantine, quarantined,
   putConstraint, readConstraints, writeConstraints, lookup, synthesize,
   validate, slug,

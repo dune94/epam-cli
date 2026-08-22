@@ -115,10 +115,39 @@ JS
     }
 }
 
-@test "the codeline KB belongs to the PROJECT, not the engine folder" {
-    # A client codeline's accumulated knowledge in orchestrations/agents/kb/ is the same category
-    # error as the roster: the next project reads the folder.
-    bad=$(grep -rnE "agents.*['\"/]kb['\"/]" "$SCRIPTS" --include=*.js --include=*.sh 2>/dev/null \
-          | grep -vE '^[^:]+:[0-9]+:[[:space:]]*(#|//|\*)' || true)
-    [ -z "$bad" ] || { echo "the KB still resolves under the engine's agents dir:"; echo "$bad"; false; }
+@test "the codeline KB RESOLVES under the project, not the engine folder" {
+    # BEHAVIOURAL, not a grep. The first version scanned for the string "agents/kb" and reported
+    # kb-canonical.sh — which manages the ENGINE's canonical seed and is the one caller for which
+    # that path is right. What matters is where a RUN's knowledge lands, so this executes the
+    # resolver instead of reading it.
+    # -u before the assignments: env rejects it after one, and the failure surfaced as the
+    # resolver returning an error string rather than a path.
+    run env -u KB_ROOT EPAM_PROJECT_CONFIG_DIR="$BATS_TEST_TMPDIR/proj" "$NODE" -e '
+      const path = require("path");
+      const store = require(process.argv[1]);
+      process.stdout.write(store.rootPath ? store.rootPath() : "");
+    ' "$SCRIPTS/lib/kb-store.js"
+    [[ "$output" == *"$BATS_TEST_TMPDIR/proj/kb"* ]] || {
+        echo "a run's KB resolves outside the project: $output"; false; }
+    [[ "$output" != *"orchestrations/agents/kb"* ]] || {
+        echo "a run's KB still lands in the engine folder: $output"; false; }
+}
+
+@test "KB_ROOT still overrides — it is the deliberate escape hatch" {
+    run env EPAM_PROJECT_CONFIG_DIR="$BATS_TEST_TMPDIR/proj" KB_ROOT="$BATS_TEST_TMPDIR/explicit" \
+        "$NODE" -e '
+      const store = require(process.argv[1]);
+      store.configure({ root: process.env.KB_ROOT });
+      process.stdout.write(store.rootPath ? store.rootPath() : "");
+    ' "$SCRIPTS/lib/kb-store.js"
+    [[ "$output" == *"explicit"* ]] || { echo "the override was ignored: $output"; false; }
+}
+
+@test "with NO project declared the engine path remains — engine-side tooling has no project" {
+    run env -u EPAM_PROJECT_CONFIG_DIR -u KB_ROOT "$NODE" -e '
+      const store = require(process.argv[1]);
+      process.stdout.write(store.rootPath ? store.rootPath() : "");
+    ' "$SCRIPTS/lib/kb-store.js"
+    [[ "$output" == *"orchestrations/agents/kb"* ]] || {
+        echo "engine-side tooling lost its KB: $output"; false; }
 }

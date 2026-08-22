@@ -451,6 +451,25 @@ fi
 # `story-outputs-*.txt`, and this is a DIRECTORY of .json files, so it sails straight past. A survivor makes the
 # next run's reviewer judge story S on the rung last run's writer happened to reach — a wrong
 # model chosen by nothing, which is exactly what the block below exists to stop.
+# THE PROJECT ROSTER IS A RUN OUTPUT, so it does not survive into the next run.
+#
+# It is derived from canonical on every launch — resume included — by the roster-specialiser, and
+# reviewed before anything reads it. A roster that survives is a stored artefact with a lifetime:
+# the next run's agents would be whoever the LAST run happened to derive, and nothing would ever
+# ask whether canonical had moved since. That is the two-clock problem that left 40 project
+# prompts stale against their templates while every test stayed green.
+#
+# Absence is the correct state at this point in a run. The seams refuse until the roster exists,
+# which is what makes "derived every launch" enforceable rather than aspirational.
+_ROSTER_FILE="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/roster.json}"
+if [ -n "$_ROSTER_FILE" ] && [ -f "$_ROSTER_FILE" ]; then
+    if rm -f "$_ROSTER_FILE" 2>/dev/null && [ ! -f "$_ROSTER_FILE" ]; then
+        info "  Cleared the project roster — this run derives its own from canonical"
+    else
+        fail_contamination "the project roster at $_ROSTER_FILE could NOT be cleared — this run would inherit the agents the PREVIOUS run derived"
+    fi
+fi
+
 _RUNG_STATE_DIR="$LOG_DIR/story-rung"
 if [ -d "$_RUNG_STATE_DIR" ]; then
     _RUNG_REC_CLEARED=$(find "$_RUNG_STATE_DIR" -maxdepth 1 -type f 2>/dev/null | wc -l)

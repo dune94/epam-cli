@@ -39,8 +39,17 @@ const readStdin = () => {
 };
 
 function configure() {
-  const root = process.env.KB_ROOT ||
-    path.join(__dirname, '..', '..', 'agents', 'kb');
+  // THE KB BELONGS TO THE PROJECT. A codeline's accumulated knowledge under
+  // orchestrations/agents/kb/ is the same category error the roster was: the engine's folder,
+  // read by whichever project runs next. When a project is declared, its KB is its own.
+  //
+  // KB_ROOT still wins — it is the explicit override, used by tests and by anything pointing the
+  // store somewhere deliberately. The engine path remains only for engine-side tooling invoked
+  // with no project, which is the one caller for which it is the right answer.
+  const root = process.env.KB_ROOT
+    || (process.env.EPAM_PROJECT_CONFIG_DIR
+      ? path.join(process.env.EPAM_PROJECT_CONFIG_DIR, 'kb')
+      : path.join(__dirname, '..', '..', 'agents', 'kb'));
   store.configure({ root });
 }
 

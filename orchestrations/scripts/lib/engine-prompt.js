@@ -54,7 +54,13 @@ function stackFacts() {
   try {
     const { execFileSync } = require('child_process');
     const repo = process.env.PROJECT_ROOT || process.env.EPAM_CODELINE_PATH || process.cwd();
-    const roles = path.join(__dirname, '..', '..', 'agents', 'project-roles.json');
+    // THIS PROJECT's roster, not the engine's roles file. This read
+    // agents/project-roles.json — the ENGINE's copy — whatever project was running, so a client
+    // codeline's stack facts named epam-cli's own roles. The roster carries `kind` per agent and
+    // is derived per project every run.
+    const roles = process.env.EPAM_PROJECT_CONFIG_DIR
+      ? path.join(process.env.EPAM_PROJECT_CONFIG_DIR, 'roster.json')
+      : '';
     const out = execFileSync(process.execPath, [
       path.join(__dirname, 'handlers', 'stack-facts.js'), repo, roles,
     ], { encoding: 'utf8', timeout: 15000 });

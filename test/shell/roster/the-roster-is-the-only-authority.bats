@@ -266,3 +266,30 @@ load_helper() {
     [[ "$blk" == *"info"* || "$blk" == *"log"* ]] || {
         echo "the roster is deleted with no trace in the run log"; false; }
 }
+
+@test "the launcher's write-perimeter preflight reads the ROSTER, with no engine fallback" {
+    # It tried EPAM_PROJECT_ROLES_FILE, then the project's project-roles.json, then the ENGINE's
+    # copy — and that last branch verifies epam-cli's own roles against a client codeline's
+    # stories. The file's own comment says it: verifying the wrong registry is the same as not
+    # verifying. The perimeter asks the roster; the pre-flight that PREDICTS the perimeter must
+    # ask the same thing, or the two can disagree.
+    blk=$(awk '/THE SAME SOURCE THE PERIMETER READS/{f=1} f{print; if(/nothing to verify/) exit}' \
+          "$SCRIPTS/../tier3-metrolinx-run.sh" 2>/dev/null \
+          || awk '/THE SAME SOURCE THE PERIMETER READS/{f=1} f{print; if(/nothing to verify/) exit}' \
+             "$REPO_ROOT/orchestrations/scripts/tier3-metrolinx-run.sh")
+    [ -n "$blk" ] || { echo "the pre-flight block is gone — this test is stale"; false; }
+    [[ "$blk" == *"roster_agents_of_kind implementer"* ]] || {
+        echo "the pre-flight does not ask the roster"; false; }
+    [[ "$blk" != *"orchestrations/agents/project-roles.json"* ]] || {
+        echo "the engine-level fallback is still there"; false; }
+}
+
+@test "stack facts derive the implementer from the roster, not a separate registry" {
+    d="$WORK/sf"; mkdir -p "$d"
+    printf '%s' '{"agents":{"acme-engineer":{"kind":"implementer"},"acme-detective":{"kind":"investigator"}}}' \
+        > "$d/roster.json"
+    run "$NODE" "$SCRIPTS/lib/handlers/stack-facts.js" "$REPO_ROOT" "$d/roster.json"
+    [ "$status" -eq 0 ] || { echo "$output"; false; }
+    [[ "$output" == *"acme-engineer"* ]] || {
+        echo "the roster's implementer did not reach the stack facts: $output"; false; }
+}

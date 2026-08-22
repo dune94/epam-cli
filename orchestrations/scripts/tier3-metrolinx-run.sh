@@ -36,6 +36,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # shellcheck source=lib/project-config.sh
 . "$SCRIPT_DIR/lib/project-config.sh"
+# The roster answers who may author code — the perimeter reads the same file, so the pre-flight
+# and the thing it predicts cannot disagree.
+# shellcheck source=lib/roster-read.sh
+. "$SCRIPT_DIR/lib/roster-read.sh"
 # Config files are DATA: load them without executing them. See lib/env-file.sh.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/env-file.sh"
 LOG_FILE="/tmp/tier3-metrolinx-jira-$(date +%Y%m%dT%H%M%S)-$$.log"
@@ -248,21 +252,36 @@ fi
     # profiles.json, this check passed, and the run was refused three minutes later —
     # "not permitted to author code" — because the per-project file held roles: []. Verifying the
     # wrong registry is the same as not verifying.
-    _perim_registry="${EPAM_PROJECT_ROLES_FILE:-}"
-    if [ -z "$_perim_registry" ] && [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] && [ -f "${EPAM_PROJECT_CONFIG_DIR}/project-roles.json" ]; then
-      _perim_registry="${EPAM_PROJECT_CONFIG_DIR}/project-roles.json"
-    fi
-    [ -n "$_perim_registry" ] || _perim_registry="$REPO_ROOT/orchestrations/agents/project-roles.json"
-    if [ -f "$_perim_registry" ]; then
-      _unpermitted=$(jq -r --slurpfile reg "$_perim_registry" '[.stories[]? | select((.agentRole // "") != "") | select((.agentRole) as $r | (($reg[0].roles // []) | index($r)) == null) | .id + " -> " + .agentRole] | join("; ")' "$PRD_FILE" 2>/dev/null)
+    # THE SAME SOURCE THE PERIMETER READS — the project roster, and no fallback.
+    #
+    # This tried EPAM_PROJECT_ROLES_FILE, then the project's project-roles.json, then the ENGINE's
+    # copy. That last branch is why the comment above exists: verifying the wrong registry is the
+    # same as not verifying, and an engine fallback verifies epam-cli's own roles against a client
+    # codeline's stories. The perimeter itself now asks the roster; so does this.
+    #
+    # ABSENT means the roster has not been derived yet — a first run, before the mint. Nothing to
+    # verify, and refusing here would block the very run that produces it.
+    if roster_exists 2>/dev/null; then
+      _perim_impl=$(roster_agents_of_kind implementer 2>/dev/null | tr '\n' ' ')
+      _unpermitted=$("$NODE_BIN" -e '
+        const fs = require("fs");
+        const prd = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+        const ok = new Set(String(process.argv[2] || "").trim().split(/\s+/).filter(Boolean));
+        const bad = (prd.stories || [])
+          .filter((s) => s && s.agentRole && !ok.has(s.agentRole))
+          .map((s) => `${s.id}:${s.agentRole}`);
+        process.stdout.write(bad.join(" "));
+      ' "$PRD_FILE" "$_perim_impl" 2>/dev/null || echo "")
       if [ -n "$_unpermitted" ]; then
-        error "[preflight] agentRole is not a registered implementer: $_unpermitted"
-        error "[preflight]   The write perimeter reads: $_perim_registry"
-        error "[preflight]   It will refuse the writer with 'not permitted to author code'."
-        error "[preflight]   Add the role to .roles there, or run the mint so it is registered."
+        error "[preflight] agentRole is not an implementer in this project's roster: $_unpermitted"
+        error "[preflight]   The write perimeter reads the same roster and will refuse the writer"
+        error "[preflight]   with 'not permitted to author code'."
+        error "[preflight]   Registered implementers: ${_perim_impl:-(none)}"
         exit 1
       fi
-      info "Pre-flight: every agentRole is a registered implementer in $(basename "$_perim_registry")"
+      info "Pre-flight: every agentRole is an implementer in this project's roster"
+    else
+      info "Pre-flight: no roster yet — it is derived by this run, so there is nothing to verify"
     fi
     info "Pre-flight: every story declares an agentRole the roster holds"
   fi

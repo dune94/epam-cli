@@ -131,3 +131,71 @@ setup() {
       process.stdout.write(String(bad.length));' "$tmp"
     [ "$output" -ge 1 ] || { echo "the check cannot see a planted claim — it proves nothing"; false; }
 }
+
+@test "NO REACHABLE canonical entry names this repository's own identifiers" {
+    # DERIVED, not a symbol list: identifiers declared in this engine's own src/ are, by
+    # construction, this repository's vocabulary. Filtered structurally to COMPOUND identifiers
+    # (two capitals, or SCREAMING_CASE) so that ordinary words which happen to be declared
+    # types — Decision, Profile, Message — are not counted. No stopword list is consulted.
+    #
+    # SCOPED TO REACHABLE AGENTS, deliberately. The documentation cluster (doc-coordinator and
+    # its delegates) is a built-but-unwired capability: Stage 6 never invokes it. Its entries
+    # still describe this repository, and they stay until the phase is wired and they can be
+    # rewritten against a real codeline — removing them would disable a capability rather than
+    # neutralise it. Nothing that CAN run may carry this repo's vocabulary.
+    run "$NODE" -e '
+      const fs = require("fs"), { execFileSync } = require("child_process");
+      const declared = new Set();
+      for (const f of execFileSync("find", ["src", "-type", "f", "-name", "*.ts"],
+             { encoding: "utf8" }).split("\n").filter(Boolean)) {
+        const t = fs.readFileSync(f, "utf8");
+        for (const m of t.matchAll(/\b(?:class|interface|type|enum|const|function)\s+([A-Z][A-Za-z0-9_]{4,})/g))
+          declared.add(m[1]);
+      }
+      const compound = (x) => /_/.test(x) || (x.match(/[A-Z]/g) || []).length >= 2;
+
+      const inv = require(process.argv[2]).profiles || {};
+      const invocable = new Set();
+      (function w(o) { for (const k in o) { const v = o[k];
+        if (v && typeof v === "object") {
+          if ((v.ladder || v.reasoningEffort || v._what) && k !== "defaults") invocable.add(k);
+          w(v); } } }(inv));
+      const psrc = execFileSync("find", [process.argv[3], "-type", "f",
+        "(", "-name", "*.sh", "-o", "-name", "*.js", "-o", "-name", "*.py", ")",
+        "-not", "-path", "*/.venv*"], { encoding: "utf8" })
+        .split("\n").filter(Boolean)
+        .map((f) => { try { return fs.readFileSync(f, "utf8"); } catch { return ""; } }).join("\n");
+
+      const d = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+      const bad = [];
+      for (const [n, t] of Object.entries(d)) {
+        if (typeof t !== "string") continue;
+        const reachable = invocable.has(n) || psrc.includes(`"${n}"`) || psrc.includes(`\x27${n}\x27`);
+        if (!reachable) continue;
+        const hits = [...new Set([...t.matchAll(/\b([A-Z][A-Za-z0-9_]{4,})\b/g)].map((m) => m[1]))]
+          .filter((x) => declared.has(x) && compound(x));
+        if (hits.length) bad.push(`${n}: ${hits.join(", ")}`);
+      }
+      process.stdout.write(bad.join("\n"));' \
+      "$CANONICAL" "$REPO_ROOT/orchestrations/agents/invocation-profiles.json" "$SCRIPTS"
+    [ -z "$output" ] || {
+        echo "reachable canonical entries naming this repository's identifiers:"
+        echo "$output"
+        echo "every project derives from these — an agent that can run must not."
+        false
+    }
+}
+
+@test "the vocabulary check is not vacuous — it sees a planted identifier" {
+    tmp="$BATS_TEST_TMPDIR/planted-sym.json"
+    "$NODE" -e '
+      const fs = require("fs");
+      const d = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+      d["review-agent"] += " You know the ProviderChain failover mechanism.";
+      fs.writeFileSync(process.argv[2], JSON.stringify(d));' "$CANONICAL" "$tmp"
+    run "$NODE" -e '
+      const fs = require("fs");
+      const d = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+      process.stdout.write(/ProviderChain/.test(d["review-agent"]) ? "seen" : "blind");' "$tmp"
+    [ "$output" = "seen" ]
+}

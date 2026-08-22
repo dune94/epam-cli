@@ -26,6 +26,11 @@ import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import { mkdtempSync, writeFileSync, chmodSync, mkdirSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+// A SEAM PROMPT RENDERS FROM THIS PROJECT'S COPY. The template is never executed directly for an
+// agent, so a render with no project declared correctly refuses — and this suite renders exactly
+// such prompts. metrolinx is used because its copies exist; nothing here writes to it.
+process.env.EPAM_PROJECT_CONFIG_DIR = process.env.EPAM_PROJECT_CONFIG_DIR
+  || join(__dirname, '..', '..', '..', 'orchestrations', 'projects', 'metrolinx');
 
 const ROOT = join(__dirname, '../../..');
 // eslint-disable-next-line @typescript-eslint/no-var-requires

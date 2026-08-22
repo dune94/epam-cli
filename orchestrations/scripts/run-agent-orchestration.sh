@@ -370,7 +370,10 @@ fi
 # "unchanged", minted nothing, and the run died at assignment — while also writing into the
 # client's own agents directory. Unset, this is exactly the previous path.
 EPAM_AGENTS_DIR="${EPAM_AGENTS_DIR:-$AUTOMATION_DIR/agents}"
-AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$EPAM_AGENTS_DIR/profiles.json}"
+# The roster is the only source of an agent's identity — lib/roster-read.sh. The default this
+# replaces named the engine's own roster, which is what a client codeline's reviewer inherited.
+# shellcheck source=lib/roster-read.sh
+. "$SCRIPT_DIR/lib/roster-read.sh"
 # Compute PRD path relative to PROJECT_ROOT for injecting into agent prompts.
 # In the codeline-loop path, PRD_FILE is a per-codeline temp copy under /tmp/
 # (e.g. /tmp/orch-<cl>-prd-$$.json) that lives nowhere near PROJECT_ROOT (a
@@ -2119,8 +2122,18 @@ run_story_recovery_analyst() {
     # never available in this script.
     local _verdict="pass"  # fail-safe only when reviewer is not configured
     if [ -n "${ORCH_GATE_PROVIDER:-}" ]; then
+        # FROM THE ROSTER, and its absence is not a pass.
+        #
+        # This jq-ed the shared profiles file and, on an empty result, fell through with
+        # _verdict still "pass" — so a PRD change was certified by a reviewer that never ran,
+        # and the only trace was a profile that happened to be missing. Every canonical agent is
+        # specialised into the roster, so an absence here is a defect in the roster.
         local _src_reviewer_profile
-        _src_reviewer_profile=$(jq -r '."prd-change-reviewer" // ""' "$AGENT_PROFILES_FILE" 2>/dev/null || echo "")
+        if ! _src_reviewer_profile=$(roster_persona prd-change-reviewer 2>&1); then
+            error "  [prd-change-review] cannot resolve the reviewer's persona: ${_src_reviewer_profile}"
+            error "  [prd-change-review] Refusing to certify a PRD change with no reviewer."
+            return 1
+        fi
         if [ -n "$_src_reviewer_profile" ]; then
             local _rev_raw="" _rev_attempt=0
             while [ "$_rev_attempt" -lt 2 ] && [ -z "$_rev_raw" ]; do

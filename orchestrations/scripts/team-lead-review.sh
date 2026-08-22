@@ -46,7 +46,10 @@ PROJECT_ROOT="${PROJECT_ROOT:-$(dirname "$AUTOMATION_DIR")}"
 PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
 AUTO_APPROVE="${AUTO_APPROVE:-false}"
 REVIEW_LOG="${REVIEW_LOG:-$AUTOMATION_DIR/logs/code-reviews.jsonl}"
-AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$AUTOMATION_DIR/agents/profiles.json}"
+# The roster is the only source of an agent's identity — see lib/roster-read.sh. No
+# AGENT_PROFILES_FILE default any more: that default named the engine's own roster.
+# shellcheck source=lib/roster-read.sh
+. "$SCRIPT_DIR/lib/roster-read.sh"
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
 # shellcheck source=lib/agent-invoke.sh
 source "$SCRIPT_DIR/lib/agent-invoke.sh"
@@ -572,12 +575,23 @@ Review every file listed. Do not assume a file you did not read is defect-free.]
     fi
     [ -z "$STORY_DIFF" ] && STORY_DIFF="(no diff available — review source files directly)"
 
-    # Load review-agent profile
+    # THE REVIEWER'S IDENTITY COMES FROM THE PROJECT ROSTER.
+    #
+    # This read `jq -r '.["review-agent"] // ""' "$AGENT_PROFILES_FILE"` and, when that came back
+    # empty, substituted a one-line reviewer written here in code. Three defects in four lines:
+    # the file defaulted to the roster SHARED WITH THE ENGINE, `// ""` made a missing entry
+    # indistinguishable from a terse one, and the literal below meant neither failure was ever
+    # visible. Live 20260821T212250Z the reviewer ran with a persona describing epam-cli.
+    #
+    # No fallback now. A reviewer with no identity is not a reviewer, and inventing one in code
+    # is how a client codeline came to be judged by this repository's reviewer.
     REVIEW_PROFILE=""
-    if [ -f "$AGENT_PROFILES_FILE" ]; then
-        REVIEW_PROFILE=$(jq -r '.["review-agent"] // ""' "$AGENT_PROFILES_FILE" 2>/dev/null)
+    if ! REVIEW_PROFILE=$(roster_persona review-agent 2>&1); then
+        error "  cannot resolve the review-agent persona from this project's roster:"
+        error "  ${REVIEW_PROFILE}"
+        error "  Refusing to review with an identity nobody chose."
+        exit 1
     fi
-    [ -z "$REVIEW_PROFILE" ] && REVIEW_PROFILE="You are a senior code reviewer. Review the implementation against the acceptance criteria."
 
     # Agent-level KB (self-heal for the reviewer): reusable review lessons that
     # ALL past review-agent runs learned (e.g. "reject a fix that adds new code

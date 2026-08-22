@@ -132,7 +132,10 @@ else
   echo "[writer-retest] WARNING: profiles.json.original not found — skipping profiles restore" >&2
 fi
 
-export AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$REPO_ROOT/orchestrations/agents/profiles.json}"
+# NO AGENT_PROFILES_FILE. Identity comes from the project roster (lib/roster-read.sh), and the
+# default this replaces named the engine's own roster — which is exactly what a client codeline
+# must never inherit. A retest that reaches a seam with no roster refuses, and that is correct:
+# the roster is derived on every launch, this one included.
 export PRD_FILE
 export EPAM_BROWNFIELD=1
 export JIRA_PIPELINE=0          # use PRD_FILE as-is — no Jira re-ingest, no codeline re-discovery

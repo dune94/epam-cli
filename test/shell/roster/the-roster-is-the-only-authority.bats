@@ -85,7 +85,11 @@ make_roster() {  # $1 = dir
 @test "NO CONSUMER falls back to the engine roster" {
     # The shape that matters is `:-.../agents/profiles.json` — a default that only fires when
     # resolution fails, and therefore only in the case the design exists to prevent.
-    bad=$(grep -rnE 'AGENT_PROFILES_FILE:?-[^}]*agents/profiles\.json' "$SCRIPTS" --include=*.sh 2>/dev/null || true)
+    # Executable lines only. Both scans matched their own documentation once the comments
+    # explaining what was removed quoted the removed shape — a scanner that reads prose reports
+    # the fix as the defect.
+    bad=$(grep -rnE 'AGENT_PROFILES_FILE:?-[^}]*agents/profiles\.json' "$SCRIPTS" --include=*.sh 2>/dev/null \
+          | grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' || true)
     [ -z "$bad" ] || {
         echo "consumers still default to the shared engine roster:"
         echo "$bad"
@@ -199,4 +203,41 @@ load_helper() {
     run env EPAM_PROJECT_CONFIG_DIR="$WORK/nowhere" \
         bash -c ". '$SCRIPTS/lib/roster-read.sh'; roster_exists"
     [ "$status" -ne 0 ]
+}
+
+# ── the consumers ────────────────────────────────────────────────────────────
+
+@test "EVERY persona read goes through the roster helper, not a jq into the shared file" {
+    # The old shape was `jq -r '.["review-agent"] // ""' "$AGENT_PROFILES_FILE"` — a default
+    # naming the engine roster, and `// ""` turning a missing entry into an empty system prompt.
+    bad=$(grep -rn "jq -r .*AGENT_PROFILES_FILE" "$SCRIPTS" --include=*.sh 2>/dev/null \
+          | grep -v 'lib/roster-read.sh' \
+          | grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' || true)
+    [ -z "$bad" ] || {
+        echo "consumers still read a persona by jq-ing the shared profiles file:"
+        echo "$bad"
+        false
+    }
+}
+
+@test "the reviewer's persona comes from the roster, and a missing one STOPS it" {
+    # team-lead-review.sh ran with an empty __REVIEW_PROFILE__ and said nothing. An empty persona
+    # must be a refusal, because it is indistinguishable from a terse one once rendered.
+    blk=$(grep -n 'roster_persona' "$SCRIPTS/team-lead-review.sh" | head -1)
+    [ -n "$blk" ] || { echo "team-lead-review.sh does not read the roster"; false; }
+    ctx=$(awk '/roster_persona/{f=1} f{print; if(++n>=8) exit}' "$SCRIPTS/team-lead-review.sh")
+    [[ "$ctx" == *"error"* || "$ctx" == *"exit"* || "$ctx" == *"return 1"* ]] || {
+        echo "a failed persona read does not stop the reviewer:"; echo "$ctx"; false; }
+}
+
+@test "no consumer sources the roster helper without using it" {
+    # A library sourced and never called LOOKS wired. plan-fidelity-gate.sh sat that way for weeks.
+    # An actual source line, not a mention: writer-retest.sh names the helper in a comment
+    # explaining why it no longer sets AGENT_PROFILES_FILE, and a scan for the string reported
+    # that comment as a file that sources and ignores it.
+    for f in $(grep -rlE '^[[:space:]]*(\.|source)[[:space:]]+.*roster-read\.sh' "$SCRIPTS" --include=*.sh \
+               | grep -v 'lib/roster-read.sh'); do
+        grep -qE 'roster_persona|roster_agents_of_kind|roster_file|roster_exists' "$f" || {
+            echo "$f sources the roster helper and never calls it"; false; }
+    done
 }

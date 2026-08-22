@@ -75,7 +75,8 @@ source "$SCRIPT_DIR/lib/jq-vals.sh"
 PROGRESS_LOG="$LOG_DIR/progress.txt"
 AGENTS_FILE="$AUTOMATION_DIR/agents/AGENTS.md"
 CLAUDE_OUTPUT_DIR="$LOG_DIR/claude_outputs"
-AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$AUTOMATION_DIR/agents/profiles.json}"
+# shellcheck source=lib/roster-read.sh
+. "$SCRIPT_DIR/lib/roster-read.sh"
 
 # KB IS KEYED BY CODELINE, NOT BY AGENT ROLE.
 #
@@ -2584,7 +2585,10 @@ build_implementation_prompt() {
         # a multi-line note, silently truncating the actual diagnosis
         # (e.g. the specific functions/ACs a real persisted note names).
         # Paragraph-mode awk (RS="") keeps each whole note intact.
-        _persisted_skill_notes=$(jq -r --arg role "$story_role" '.[$role] // ""' "$AGENT_PROFILES_FILE" 2>/dev/null | \
+        # Notes are appended into the agent's persona, so they come from wherever the persona
+        # does — the roster. `|| true`: an agent with no notes is the normal case, and this is
+        # context for the writer rather than a gate, so absence must not stop a story.
+        _persisted_skill_notes=$(roster_persona "$story_role" 2>/dev/null | \
             awk -v RS='' -v ORS='\n\n' '/\[Self-Heal\]/' || true)
         if [ -n "$_persisted_skill_notes" ]; then
             skill_note_block=$(printf '\n## Lessons From Prior Runs (persisted — a previous attempt at this or a similar story already hit these problems)\n%s\n' "$_persisted_skill_notes")

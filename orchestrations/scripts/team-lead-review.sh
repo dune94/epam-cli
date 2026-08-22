@@ -775,6 +775,26 @@ Review every file listed. Do not assume a file you did not read is defect-free.]
     # rather than pattern-matching text.
     REVIEW_JSON=$(echo "$REVIEW_OUTPUT" | python3 "$SCRIPT_DIR/lib/handlers/team-lead-review-json.py" 2>/dev/null || echo '{"verdict":"changes_requested","issues":[{"severity":"blocker","description":"review verdict could not be parsed — not auto-approving"}],"summary":"review parse failure"}')
 
+    # ACCOUNT FOR EVERY VERIFICATION CRITERION — BEFORE the verdict is read.
+    #
+    # Placed here, not after, because everything below acts on STORY_VERDICT: reading it first
+    # and gating afterwards is the shape that made three earlier gates log a block and enforce
+    # nothing. The gate rejects only a SELF-CONTRADICTION — approved while the reviewer's own
+    # assessment marks a criterion unmet — which the model can always satisfy by being
+    # consistent, so it can never become unwinnable. Unassessed criteria are recorded on the
+    # verdict, not blocked.
+    #
+    # No `command -v` guard and no `|| true` swallow: a missing gate must be visible. Malformed
+    # input passes through the gate unchanged, so the no-verdict handling below still sees it.
+    REVIEW_JSON=$(printf '%s' "$REVIEW_JSON" \
+        | "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/vc-assessment-gate.js" "${STORY_VC:-}")
+    if [ "$(printf '%s' "$REVIEW_JSON" | jq -r '.vcAssessmentContradiction // empty' 2>/dev/null)" = "true" ]; then
+        warning "  review-agent APPROVED while marking a verification criterion unmet — rejected as incoherent"
+    fi
+    _vc_unassessed=$(printf '%s' "$REVIEW_JSON" | jq -r '(.vcAssessmentUnassessed // []) | join("; ")' 2>/dev/null || true)
+    [ -n "$_vc_unassessed" ] && \
+        warning "  review-agent left verification criteria unassessed: $_vc_unassessed"
+
     STORY_VERDICT=$(echo "$REVIEW_JSON" | jq -r '.verdict // "changes_requested"' 2>/dev/null || echo "changes_requested")
     STORY_ISSUE_COUNT=$(echo "$REVIEW_JSON" | jq '.issues | length' 2>/dev/null || echo "0")
     STORY_SUMMARY=$(echo "$REVIEW_JSON" | jq -r '.summary // ""' 2>/dev/null || true)

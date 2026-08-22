@@ -150,7 +150,8 @@
         }
       ],
       "template": "repro-test-writer",
-      "toolGrant": "write"
+      "toolGrant": "write",
+      "_outputIsArtefact": "Writes a test FILE (toolGrant write, produces \"repro-test\"). Its success is the file existing and failing on the pre-fix baseline, which the repro gate checks — not a parsed response."
     },
     "tc-writer": {
       "_what": "Writes post-implementation test criteria into the PRD.",
@@ -188,7 +189,9 @@
         }
       ],
       "template": "cpa-inference",
-      "toolGrant": "read-only"
+      "toolGrant": "read-only",
+      "_outputShapeIn": "cpa-system",
+      "_outputShapeInWhy": "Its own template defers: \"the JSON object as specified in your instructions\". contextualize-stories.sh renders cpa-system into __SYSTEM_PROMPT__, and that is where the Output schema block lives."
     },
     "prd-change-reviewer": {
       "_what": "Reviews a proposed PRD mutation before it is applied.",
@@ -354,7 +357,9 @@
         }
       ],
       "template": "guard-vocabulary",
-      "toolGrant": "read-only"
+      "toolGrant": "read-only",
+      "_outputShapeIn": "GUARD_VOCABULARY",
+      "_outputShapeInWhy": "Declared as a JSON Schema in lib/agent-output-schema.js (required: blacklist, whitelist) and enforced by validateTaggedOutput — stronger than a prompt example."
     },
     "estate-survey": {
       "_what": "Surveys every codeline BEFORE the roster is minted: which ones the work actually reaches, and which need their own investigator. Breadth, never fix sites.",
@@ -419,7 +424,8 @@
         }
       ],
       "template": "story-writer",
-      "toolGrant": "execute"
+      "toolGrant": "execute",
+      "_outputIsArtefact": "Delivers the implementation through the filesystem (toolGrant execute, produces \"implementation\"). Nothing parses its stdout as a payload, so there is no shape to declare and a declared one would be fiction."
     },
     "vc-coverage": {
       "_what": "Judges whether the written tests cover each verification criterion.",
@@ -672,7 +678,9 @@
         }
       ],
       "template": "spec-story-block",
-      "toolGrant": "read-network"
+      "toolGrant": "read-network",
+      "_outputShapeIn": "TICKET_LINKS",
+      "_outputShapeInWhy": "JSON Schema in lib/agent-output-schema.js (required: url, classification, relevant, fetchStatus, quotes)."
     },
     "phase-assessment": {
       "_what": "Augments every agent profile with this project's skills before a phase runs. Writes profiles.json.",
@@ -704,7 +712,9 @@
         }
       ],
       "template": "prd-model-coordinator",
-      "toolGrant": "write"
+      "toolGrant": "write",
+      "_outputShapeIn": "MODEL_REVIEW",
+      "_outputShapeInWhy": "JSON Schema in lib/agent-output-schema.js (required: storyId, finalModel), emitted via the spec-model-review template."
     },
     "prompt-review": {
       "_what": "Falsifies what a generated project prompt claims about this project, before any agent inherits it.",

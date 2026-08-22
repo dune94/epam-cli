@@ -83,8 +83,21 @@ const concrete = (s) => s
 const out = [];
 for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.json'))) {
   let j; try { j = JSON.parse(fs.readFileSync(dir + '/' + f, 'utf8')); } catch { continue; }
-  for (const s of skeletons(bodyOf(j))) out.push({ template: f.replace('.json', ''), raw: s, concrete: concrete(s) });
+  for (const s of skeletons(bodyOf(j))) out.push({ template: f.replace('.json', ''), raw: s, concrete: concrete(s), layer: 'prompt' });
 }
+// THE THIRD LAYER. Shapes are declared in three places, and reading only the prompt bodies
+// under-counted coverage badly: agent-output-schema.js carries real JSON Schemas with
+// `required` fields, validated at the seam by validateTaggedOutput — a stronger declaration
+// than an illustrative example. guard-vocabulary, ticket-links and the spec agents all live
+// here, and every one of them looked shapeless until this was added.
+try {
+  const mod = require(process.argv[2] + '/lib/agent-output-schema.js');
+  for (const tag of Object.keys(mod.TAG_TO_TOOL || {})) {
+    const sc = mod.itemSchemaFor ? mod.itemSchemaFor(tag) : null;
+    out.push({ template: tag, raw: JSON.stringify(sc || {}), concrete: '{}', layer: 'schema',
+               required: (sc && sc.required) || [] });
+  }
+} catch (_) { /* the module is its own test's subject */ }
 module.exports = out;
 JS
 }
@@ -92,7 +105,7 @@ JS
 with_shapes() {  # $1 = js body receiving `shapes`
     local tmp="$BATS_TEST_TMPDIR/shapes.js"
     shapes_js > "$tmp"
-    "$NODE" -e "const shapes = require('$tmp'); $1" "$TEMPLATES"
+    "$NODE" -e "const shapes = require('$tmp'); $1" "$TEMPLATES" "$SCRIPTS"
 }
 
 @test "the extraction is real — prompts do declare output shapes" {
@@ -104,7 +117,8 @@ with_shapes() {  # $1 = js body receiving `shapes`
     # A prompt that says "respond with ONLY a JSON object" and then shows something that
     # cannot be emitted verbatim is teaching the agent to produce what its consumer rejects.
     run with_shapes '
-      const bad = shapes.filter((s) => { try { JSON.parse(s.concrete); return false; } catch { return true; } })
+      const bad = shapes.filter((s) => s.layer === "prompt")
+                        .filter((s) => { try { JSON.parse(s.concrete); return false; } catch { return true; } })
                         .map((s) => s.template + " :: " + s.concrete.slice(0, 70));
       process.stdout.write(bad.join("\n"));'
     [ -z "$output" ] || { echo "declared shapes that are not valid JSON:"; echo "$output"; false; }
@@ -114,7 +128,7 @@ with_shapes() {  # $1 = js body receiving `shapes`
     # team-lead-review-json and its siblings raw_decode from the first '{'. A shape declared
     # as a bare array or scalar would not be found by any of them.
     run with_shapes '
-      const bad = shapes.filter((s) => { try { const v = JSON.parse(s.concrete);
+      const bad = shapes.filter((s) => s.layer === "prompt").filter((s) => { try { const v = JSON.parse(s.concrete);
           return !v || typeof v !== "object" || Array.isArray(v); } catch { return false; } })
         .map((s) => s.template);
       process.stdout.write(bad.join(", "));'
@@ -188,4 +202,66 @@ with_shapes() {  # $1 = js body receiving `shapes`
     out=$(printf 'Here is my review:\n%s\nThat is all.' "$raw" \
           | python3 "$SCRIPTS/lib/handlers/team-lead-review-json.py")
     [ "$(printf '%s' "$out" | jq -r '.verdict')" = "approved" ]
+}
+
+# ── per-agent coverage, across ALL THREE declaration layers ──────────────────
+
+# An agent's shape may be declared in its own prompt, in a related prompt (a system prompt
+# or a differently-named template it points at), or as a JSON Schema in
+# agent-output-schema.js. Reading only the first under-counted coverage badly enough that I
+# reported 15 agents as shapeless when most of them were better declared than the ones I
+# had counted.
+agent_shape_layers() {
+    local tmp="$BATS_TEST_TMPDIR/cover.js"
+    shapes_js > "$tmp"
+    "$NODE" -e '
+      const shapes = require(process.argv[3]);
+      const p = require(process.argv[4]);
+      const declared = new Set(shapes.map((s) => s.template.toLowerCase()));
+      const agents = []; const meta = {};
+      (function w(o){ for (const k in o) { const v = o[k];
+        if (v && typeof v === "object") {
+          if ((v.ladder || v.reasoningEffort || v._what) && k !== "defaults") {
+            agents.push(k); meta[k] = v; }
+          w(v); } } })(p);
+      const norm = (x) => String(x || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const has = (a) => {
+        const m = meta[a] || {};
+        // _outputShapeIn is the DECLARED link, used where the real one lives in code and no
+        // name rule could find it: contextualize-stories.sh renders cpa-system into
+        // __SYSTEM_PROMPT__, and three agents are schema-declared rather than prompt-declared.
+        const cands = [a, m.template, m._outputShapeIn, a + "-system", a + "-main",
+                       (m.produces || "").replace(/-/g, "_").toUpperCase()];
+        for (const c of cands) { if (!c) continue;
+          for (const d of declared) { if (norm(d) === norm(c)) return true; } }
+        // a schema tag whose name matches the agent loosely (GUARD_VOCABULARY <- guard-vocabulary)
+        for (const d of declared) { if (norm(d) === norm(a)) return true; }
+        return false;
+      };
+      const missing = [...new Set(agents)].sort().filter((a) => !has(a) && !meta[a]._outputIsArtefact);
+      process.stdout.write(missing.join(" "));
+    ' "$TEMPLATES" "$SCRIPTS" "$tmp" "$REPO_ROOT/orchestrations/agents/invocation-profiles.json"
+}
+
+@test "EVERY agent's output shape is declared in one of the three layers" {
+    # An agent that delivers FILES rather than a payload has nothing to declare, and says so
+    # in its own profile via _outputIsArtefact — declared, never inferred. toolGrant cannot
+    # stand in for it: team-lead-review is `execute` and absolutely needs a shape.
+    run agent_shape_layers
+    [ -z "$output" ] || {
+        echo "agents with no declared output shape and no _outputIsArtefact note:"
+        echo "  $output"
+        false
+    }
+}
+
+@test "every artefact exemption states WHY, in the profile" {
+    run "$NODE" -e '
+      const p = require(process.argv[1]); const bad = [];
+      (function w(o){ for (const k in o) { const v = o[k];
+        if (v && typeof v === "object") {
+          if (v._outputIsArtefact && String(v._outputIsArtefact).trim().length < 25) bad.push(k);
+          w(v); } } })(p);
+      process.stdout.write(bad.join(", "));' "$REPO_ROOT/orchestrations/agents/invocation-profiles.json"
+    [ -z "$output" ] || { echo "exemptions with no real reason: $output"; false; }
 }

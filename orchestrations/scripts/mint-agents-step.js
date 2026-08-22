@@ -863,6 +863,89 @@ if (require.main !== module) return;
   // wired, assigned a story — and then unable to write a byte" failure the perimeter exists to
   // make impossible.
   //
+  // ── THE PROJECT ROSTER ──────────────────────────────────────────────────────
+  //
+  // Canonical belongs to no project. Running it unchanged gave every project the same personas,
+  // which is how a review of a client codeline ran five times with a persona describing this
+  // repository. So: canonical is copied into the run, an agent specialises it for THIS project
+  // with its own tools, and the result is reviewed against BOTH itself and the source before
+  // anything reads it.
+  //
+  // Placed here deliberately — after the mint has proposed this project's own agents, so they
+  // can be in the roster, and before role assignment, which needs a roster to assign from.
+  //
+  // Regenerated every run. A stored roster that only refreshes when something happens to
+  // refresh it is the two-clock problem that left 40 project prompts stale.
+  {
+    const { buildProjectRoster } = require('./lib/project-roster.js');
+    const { seamInvocationEnv } = require('./lib/seam-invocation.js');
+    const projectConfigDir = process.env.EPAM_PROJECT_CONFIG_DIR || '';
+    if (!projectConfigDir) {
+      throw new Error(
+        'cannot build the project roster: EPAM_PROJECT_CONFIG_DIR is unset. The roster is the '
+        + 'only place an agent\'s identity comes from, and there is no engine fallback to read.');
+    }
+    const canonicalPath = path.join(AGENTS_DIR, 'profiles.canonical.json');
+
+    const renderSpecialisation = (vals) => renderEngineTemplate('roster-specialisation', vals);
+
+    // THE AGENT WRITES THE FILE. The pipeline hands it the canonical copy and a destination,
+    // then judges the artefact — it does not compose personas itself, because deciding what an
+    // agent must know about a codeline is judgement, not substitution.
+    const produce = async ({ canonicalCopyPath, outPath, refusal }) => {
+      process.env.EPAM_AGENT_NAME = 'roster-specialiser';
+      // The SAME context the prompt builder is given, computed the same way — a derivation that
+      // sees different facts than its sibling stage is two projects, not one.
+      const prompt = renderSpecialisation({
+        __CANONICAL_COPY_PATH__: canonicalCopyPath,
+        __OUT_PATH__: outPath,
+        __PROJECT_CONTEXT__: [
+          `Project config: ${projectConfigDir}`,
+          `Tickets in scope: ${stories.map((t) => `${t.jiraKey || t.id}: ${t.title || ''}`).join(' | ')}`,
+          _mintedDetail.length
+            ? `Agents this project minted: ${_mintedDetail.map((mm) => `${mm.name} [${mm.kind}]`).join(', ')}`
+            : 'Agents this project minted: (none this run)',
+        ].join('\n'),
+        __CODELINE_CONTEXT__: codelines
+          .map((c) => `- ${c.name} (${c.path})${c.dependencies && c.dependencies.length ? ` deps: ${c.dependencies.join(', ')}` : ''}`)
+          .join('\n'),
+        // __STACK__ is deliberately ABSENT. It is a stack-fact key, and engine-prompt.js injects
+        // the ones a template declares — but only when the caller has not supplied them. Passing
+        // an empty string here would win, and starve the agent of the codeline's real facts.
+        __PREVIOUS_REFUSAL__: refusal
+          ? `\n\n## Your previous attempt was REFUSED\n\n${refusal}\n\nProduce the roster again, correcting exactly this.`
+          : '',
+      });
+      await promptExec(prompt, {
+        ...seamInvocationEnv('roster-specialiser', LOG_DIR),
+        EPAM_AGENT_NAME: 'roster-specialiser',
+      });
+    };
+
+    // REVIEWED AGAINST BOTH. With only the roster a reviewer can judge plausibility; falsifying
+    // "is this ancestor close" and "was inherited structure quietly changed" needs the source.
+    const review = async ({ rosterPath, canonicalPath: copyPath }) => {
+      process.env.EPAM_AGENT_NAME = 'roster-review';
+      try {
+        return await spec.reviewProjectRoster({
+          promptExec, rosterPath, canonicalPath: copyPath,
+          codelines, tickets: stories, logDir: LOG_DIR, repoPath: REPO_PATH, toolGrant,
+        });
+      } catch (err) {
+        // A review that cannot run must not read as "no defects".
+        process.stderr.write(`[mint-step] roster review FAILED: ${err && err.message}\n`);
+        return { verdict: 'review_failed', reason: String(err && err.message) };
+      }
+    };
+
+    const roster = await buildProjectRoster({
+      canonicalPath, logDir: LOG_DIR, projectConfigDir, produce, review,
+      attempts: Number(process.env.EPAM_ROSTER_ATTEMPTS || 3),
+      log: (m2) => process.stderr.write(`[mint-step] ${m2}\n`),
+    });
+    process.stderr.write(`[mint-step] project roster: ${Object.keys(roster.agents).length} agent(s)\n`);
+  }
+
   // Targeted correction (ARCH-7) is what made this reachable: a wholesale re-mint would have
   // failed loudly and obviously. A surgical replacement leaves the roster looking healthy and
   // only the assignments stale, which is quieter and worse.

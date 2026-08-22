@@ -791,6 +791,42 @@
       ],
       "template": "runtime-boundary-review",
       "toolGrant": "read-only"
+    },
+    "roster-specialiser": {
+      "_what": "Specialises the canonical roster into this project's own roster, writing it with its tools.",
+      "_why": "The canonical roster belongs to no project, so running it unchanged gave every project the same personas — a reviewer judged one codeline while describing another. This is the derivation step, and it is agentic because deciding what an agent must know about a codeline is judgement, not substitution.",
+      "ladder": "top",
+      "reasoningEffort": "high",
+      "timeoutSecs": 1800,
+      "maxOutputTokens": 32768,
+      "toolGrant": "write",
+      "produces": "project-roster",
+      "consumes": [
+        {
+          "kind": "canonical-roster",
+          "required": true
+        }
+      ],
+      "template": "roster-specialisation",
+      "_outputIsArtefact": "Writes projects/<project>/roster.json with its tools. The deliverable is the file; there is no response payload to shape, and the pipeline validates the artefact it finds.",
+      "_why_grant": "Reads the codeline to learn what each agent must know, and writes ONE file: the project roster. read-only cannot deliver the artefact, and the artefact is the deliverable."
+    },
+    "project-roster-review": {
+      "_what": "Falsifies the project roster against canonical before any agent is invoked from it.",
+      "_why": "An unreviewed roster is a run whose agent identities nobody vouched for. Given BOTH the derivation and its source, so it can check that a rule was not weakened rather than that the text reads well.",
+      "ladder": "top",
+      "reasoningEffort": "high",
+      "timeoutSecs": 1800,
+      "maxOutputTokens": 32768,
+      "toolGrant": "read-only",
+      "produces": "roster-verdict",
+      "consumes": [
+        {
+          "kind": "project-roster",
+          "required": true
+        }
+      ],
+      "template": "project-roster-review"
     }
   },
   "_seamResolution": [

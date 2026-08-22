@@ -36,46 +36,45 @@ JSON
 }
 teardown() { rm -rf "$WORK"; }
 
-# Drive the REAL builder with a stub specialiser. `mode` shapes what the stub returns.
+# Drive the REAL builder with a stubbed AGENT — one that writes the file, as the seam does.
+# `mode` shapes what it writes, so each contract clause is exercised rather than described.
 build() {  # $1 = mode
     "$NODE" -e '
+      const fs = require("fs"), path = require("path");
       const m = require(process.argv[1]);
       const mode = process.argv[4];
-      const specialise = async ({ name, canonicalPersona }) => {
-        if (mode === "no-ancestor" && name === "review-agent")
-          return { persona: "P", kind: "seam", ancestor: "" };
-        if (mode === "bad-ancestor" && name === "review-agent")
-          return { persona: "P", kind: "seam", ancestor: "no-such-agent" };
-        if (mode === "bad-kind" && name === "review-agent")
-          return { persona: "P", kind: "wizard", ancestor: "review-agent" };
-        if (mode === "empty-persona" && name === "review-agent")
-          return { persona: "   ", kind: "seam", ancestor: "review-agent" };
-        // The normal case: content diverges freely from the ancestor.
-        return { persona: `[project] ${canonicalPersona} Codeline specifics here.`,
-                 kind: name.includes("engineer") ? "implementer"
-                     : name.includes("detective") ? "investigator" : "seam",
-                 ancestor: name };
+      const produce = async ({ canonicalCopyPath, outPath }) => {
+        const canonical = JSON.parse(fs.readFileSync(canonicalCopyPath, "utf8"));
+        const agents = {};
+        for (const [n, persona] of Object.entries(canonical)) {
+          agents[n] = {
+            persona: `[project] ${persona} Codeline specifics here.`,
+            kind: n.includes("engineer") ? "implementer" : n.includes("detective") ? "investigator" : "seam",
+            ancestor: n,
+            derivedFromSha256: m.personaDigest(persona),
+          };
+        }
+        if (mode === "bad-kind") agents["review-agent"].kind = "wizard";
+        if (mode === "empty-persona") agents["review-agent"].persona = "   ";
+        if (mode === "no-ancestor") agents["review-agent"].ancestor = "";
+        if (mode === "minted" || mode === "minted-no-ancestor" || mode === "minted-bad-ancestor") {
+          const anc = mode === "minted-no-ancestor" ? ""
+                    : mode === "minted-bad-ancestor" ? "no-such-agent" : "typescript-engineer";
+          agents[mode === "minted" ? "acme-payments-engineer" : mode === "minted-bad-ancestor" ? "impostor-agent" : "orphan-agent"] = {
+            persona: "You implement payments on this codeline.", kind: "implementer",
+            ancestor: anc, derivedFromSha256: m.personaDigest(canonical[anc] || ""),
+          };
+        }
+        fs.mkdirSync(path.dirname(outPath), { recursive: true });
+        fs.writeFileSync(outPath, JSON.stringify({ agents }, null, 2));
       };
-      if (mode === "minted") {
-        specialise.minted = async () => ({
-          "acme-payments-engineer": { persona: "You implement payments on this codeline.",
-                                      kind: "implementer", ancestor: "typescript-engineer" } });
-      }
-      if (mode === "minted-no-ancestor") {
-        specialise.minted = async () => ({
-          "orphan-agent": { persona: "I came from nowhere.", kind: "implementer", ancestor: "" } });
-      }
-      if (mode === "minted-bad-ancestor") {
-        specialise.minted = async () => ({
-          "impostor-agent": { persona: "P", kind: "implementer", ancestor: "no-such-agent" } });
-      }
       const review = mode === "rejected"
         ? async () => ({ verdict: "changes_requested", reason: "personas do not match the codeline" })
         : async () => ({ verdict: "approved", findings: [] });
       m.buildProjectRoster({
         canonicalPath: process.argv[2], logDir: process.argv[3] + "/logs",
         projectConfigDir: process.argv[3] + "/project",
-        specialise, review, attempts: 2, log: () => {},
+        produce, review, attempts: 1, log: () => {},
       }).then(() => process.stdout.write("BUILT"))
         .catch((e) => { process.stdout.write("REFUSED: " + e.message); });
     ' "$LIB" "$CANON" "$WORK" "$1"
@@ -113,15 +112,12 @@ roster() { cat "$WORK/project/roster.json"; }
     [[ "$p" == *"Codeline specifics here."* ]]
 }
 
-@test "a canonical-derived entry's ancestor is the BUILDER's fact, not the agent's claim" {
-    # The specialiser returns ancestor:"" for review-agent. It is derived from canonical
-    # review-agent — that is what happened, whatever it says. Taking the agent's word here let an
-    # empty value fall through a `||` to the same answer, so failing to name one was
-    # indistinguishable from not being asked. Provenance an agent can edit is not provenance.
+@test "an entry that names NO ancestor is refused" {
+    # Ancestry is what supplies structure. An entry without it has no ladder and no tool grant,
+    # and something downstream has to invent them.
     run build no-ancestor
-    [ "$output" = "BUILT" ] || { echo "$output"; false; }
-    [ "$(jq -r '.agents["review-agent"].ancestor' "$WORK/project/roster.json")" = "review-agent" ]
-    [ "$(jq -r '.agents["review-agent"].derivedFromSha256 | length' "$WORK/project/roster.json")" -eq 64 ]
+    [[ "$output" == REFUSED* ]] || { echo "an unancestred entry was accepted: $output"; false; }
+    [ ! -f "$WORK/project/roster.json" ]
 }
 
 @test "an ancestor that is not in canonical is refused" {

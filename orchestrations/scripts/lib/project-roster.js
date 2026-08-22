@@ -111,6 +111,14 @@ function checkRoster(roster, canonical) {
   const names = Object.keys(entries);
   if (!names.length) return { ok: false, reason: 'roster declares no agents', bad: [] };
   const bad = [];
+  // THE SET MUST BE COMPLETE. Whatever canonical holds, the roster holds — no subset logic
+  // anywhere. The moment a subset is allowed something must decide which agents matter, and a
+  // fallback to the engine layer has to exist for the rest; that fallback is what gave a
+  // metrolinx review a persona describing this repository.
+  for (const n of Object.keys(canonical)) {
+    if (typeof canonical[n] !== 'string' || !canonical[n].trim()) continue;
+    if (!Object.prototype.hasOwnProperty.call(entries, n)) bad.push(`${n}: in canonical, absent from the roster`);
+  }
   for (const n of names) {
     const v = checkEntry(n, entries[n], canonical);
     if (!v.ok) bad.push(`${n}: ${v.reason}`);
@@ -161,76 +169,62 @@ function structureFor(name, roster, registry) {
  * a run whose agents are partly nobody.
  */
 async function buildProjectRoster({
-  canonicalPath, logDir, projectConfigDir, specialise, review, attempts = 3, log = () => {},
+  canonicalPath, logDir, projectConfigDir, produce, review, attempts = 3, log = () => {},
 }) {
-  if (typeof specialise !== 'function') throw new Error('[roster] specialise is required');
+  if (typeof produce !== 'function') throw new Error('[roster] produce is required');
   const copyPath = copyCanonicalForRun(canonicalPath, logDir);
   const canonical = JSON.parse(fs.readFileSync(copyPath, 'utf8'));
-  const names = Object.keys(canonical).filter((k) => typeof canonical[k] === 'string' && canonical[k].trim());
+  const outPath = projectRosterPath(projectConfigDir);
 
   let lastReason = '';
   for (let attempt = 1; attempt <= attempts; attempt++) {
-    const agents = {};
-    for (const name of names) {
-      const produced = await specialise({
-        name, canonicalPersona: canonical[name], attempt, refusal: lastReason,
-      });
-      if (!produced) continue;
-      // PROVENANCE IS THE BUILDER'S FACT, NOT THE AGENT'S CLAIM. This entry was derived from
-      // canonical[name] — that is what happened, whatever the specialiser says about it. Taking
-      // the agent's word here let an empty ancestor fall through a `||` to the same value, so a
-      // failure to name one was indistinguishable from not being asked.
-      //
-      // A MINTED agent is the opposite case: nothing derived it, so it MUST name an ancestor and
-      // there is no default to fall back on. That is where the contract does its work.
-      agents[name] = {
-        persona: produced.persona,
-        kind: produced.kind,
-        ancestor: name,
-        derivedFromSha256: personaDigest(canonical[name]),
-      };
+    // A fresh start each attempt: a retry must not inherit half of the previous answer, or a
+    // roster that failed once can pass by accumulation.
+    try { fs.unlinkSync(outPath); } catch { /* absent is the normal case */ }
+
+    // THE AGENT WRITES THE FILE, with its own tools. The pipeline hands it the canonical copy
+    // and a destination and then judges the artefact — it does not compose the roster itself,
+    // because deciding each persona's shape is the agent's work, not the pipeline's.
+    await produce({ canonicalCopyPath: copyPath, outPath, attempt, refusal: lastReason });
+
+    if (!fs.existsSync(outPath)) {
+      lastReason = `the agent wrote no roster at ${outPath}`;
+      log(`[roster] attempt ${attempt}/${attempts} REFUSED: ${lastReason}`);
+      continue;
     }
-    for (const [name, extra] of Object.entries((await specialiseMinted(specialise, canonical)) || {})) {
-      agents[name] = extra;
+    let roster;
+    try { roster = JSON.parse(fs.readFileSync(outPath, 'utf8')); }
+    catch (e) {
+      lastReason = `the roster is not valid JSON: ${e && e.message}`;
+      log(`[roster] attempt ${attempt}/${attempts} REFUSED: ${lastReason}`);
+      try { fs.unlinkSync(outPath); } catch { /* nothing to remove */ }
+      continue;
     }
 
-    const roster = { _what: "This project's agents. Derived from canonical, reviewed, regenerated every run.", agents };
     const contract = checkRoster(roster, canonical);
     if (!contract.ok) {
       lastReason = contract.reason;
       log(`[roster] attempt ${attempt}/${attempts} REFUSED: ${contract.reason}`);
+      try { fs.unlinkSync(outPath); } catch { /* nothing to remove */ }
       continue;
     }
+
+    // REVIEWED AGAINST BOTH. With only the roster a reviewer can judge plausibility; falsifying
+    // "is this ancestor close" and "was inherited structure quietly changed" needs the source.
     if (typeof review === 'function') {
-      const verdict = await review({ roster, canonical });
+      const verdict = await review({ roster, canonical, rosterPath: outPath, canonicalPath: copyPath });
       if (!verdict || verdict.verdict !== 'approved') {
-        lastReason = (verdict && (verdict.reason || (verdict.findings || []).join('; '))) || 'review returned no verdict';
+        lastReason = (verdict && (verdict.reason || (verdict.findings || []).join('; ')))
+          || 'review returned no verdict';
         log(`[roster] attempt ${attempt}/${attempts} REJECTED by review: ${lastReason}`);
+        try { fs.unlinkSync(outPath); } catch { /* nothing to remove */ }
         continue;
       }
     }
-    fs.mkdirSync(projectConfigDir, { recursive: true });
-    fs.writeFileSync(projectRosterPath(projectConfigDir), `${JSON.stringify(roster, null, 2)}\n`, 'utf8');
-    log(`[roster] wrote ${Object.keys(agents).length} agent(s)`);
+    log(`[roster] accepted ${Object.keys(roster.agents).length} agent(s)`);
     return roster;
   }
   throw new Error(`[roster] could not produce an accepted roster in ${attempts} attempt(s). Last: ${lastReason}`);
-}
-
-/** Hook for agents this project invents. Returns {} unless the specialiser offers them. */
-async function specialiseMinted(specialise, canonical) {
-  if (typeof specialise.minted !== 'function') return {};
-  const extra = await specialise.minted({ canonical });
-  const out = {};
-  for (const [name, e] of Object.entries(extra || {})) {
-    out[name] = {
-      persona: e.persona,
-      kind: e.kind,
-      ancestor: e.ancestor,
-      derivedFromSha256: personaDigest(canonical[e.ancestor] || ''),
-    };
-  }
-  return out;
 }
 
 module.exports = {

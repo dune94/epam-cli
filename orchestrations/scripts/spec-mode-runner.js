@@ -4296,6 +4296,65 @@ const TOOL_SURVEY_REVIEW = {
   },
 };
 
+/**
+ * Falsify a PROJECT ROSTER against the canonical roster it derives from.
+ *
+ * Distinct from reviewRoster, which certifies newly MINTED agents. This judges a whole derivation:
+ * every canonical agent specialised for one project. It is handed BOTH paths, because with only
+ * the derived roster a reviewer can check that the text reads well and nothing else — and "reads
+ * well" is what let a plan-conformance opinion become a merge decision on 2026-08-21.
+ *
+ * Returns the library's vocabulary ({verdict: 'approved' | ...}), translated from the seam's own
+ * ('sound' | 'defects_found'). Two vocabularies for one idea is how a caller ends up treating an
+ * unrecognised verdict as success; the translation lives here, at the boundary, once.
+ */
+async function reviewProjectRoster({
+  promptExec, rosterPath, canonicalPath, codelines, logDir, repoPath, toolGrant,
+}) {
+  const prompt = renderEngineTemplate('project-roster-review', {
+    __ROSTER_PATH__: String(rosterPath || ''),
+    __CANONICAL_PATH__: String(canonicalPath || ''),
+    __CODELINE_CONTEXT__: (Array.isArray(codelines) ? codelines : [])
+      .map((c) => `- ${(c && c.name) || c}${c && c.path ? ` (${c.path})` : ''}`).join('\n'),
+  });
+
+  const env = {
+    ...seamInvocationEnv('project-roster-review', logDir),
+    EPAM_AGENT_NAME: 'project-roster-review',
+    EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_ROSTER_REVIEW),
+  };
+
+  const payload = await runAgentForJson(
+    promptExec, prompt, TOOL_ROSTER_REVIEW, 'ROSTER_REVIEW',
+    logDir ? path.join(logDir, 'project-roster-review.log') : null,
+    null, toolGrant || '', repoPath || '', env,
+  );
+
+  // A review that produced nothing is NOT a sound roster. Unparseable output means the check did
+  // not happen, and reading that as approval is the fail-open shape these gates exist to prevent.
+  if (!payload || typeof payload !== 'object') {
+    return { verdict: 'review_failed', reason: 'the review produced no usable verdict', findings: [] };
+  }
+  const findings = Array.isArray(payload.findings) ? payload.findings : [];
+  const blocking = findings.filter((f) => f && f.severity === 'blocking');
+  if (logDir) {
+    try {
+      fs.writeFileSync(path.join(logDir, 'project-roster-review.json'),
+        `${JSON.stringify({ ...payload, findings }, null, 2)}\n`);
+    } catch { /* the verdict still reaches the caller */ }
+  }
+  if (payload.verdict === 'sound' && !blocking.length) {
+    return { verdict: 'approved', findings };
+  }
+  return {
+    verdict: 'changes_requested',
+    findings,
+    reason: blocking.length
+      ? blocking.map((f) => `${f.agent || '?'}: ${f.finding || f.description || ''}`).join('; ')
+      : `roster review returned '${payload.verdict}'`,
+  };
+}
+
 async function reviewRoster({
   promptExec, minted, profiles, codelines, tickets, referencedDocs, logDir, repoPath, toolGrant,
 }) {
@@ -9165,6 +9224,7 @@ module.exports = {
   buildAssignmentPrompt,
   TOOL_ROLE_ASSIGNMENTS,
   reviewRoster,
+  reviewProjectRoster,
   detectivePrescription,
   surveyEstate,
   sanitizeSurvey,

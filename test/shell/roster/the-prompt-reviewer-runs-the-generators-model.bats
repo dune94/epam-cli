@@ -70,3 +70,30 @@ setup() {
     [[ "$src" != *"_promptGeneratorModel ||"* ]] || {
         echo "the generator's model falls back to something else when unset"; false; }
 }
+
+@test "generator and reviewer sit on the SAME ladder — they move together or not at all" {
+    # The resolved model is passed from one to the other, so a divergence here would be caught at
+    # runtime. This catches it earlier and states the intent: dropping the generator a tier must
+    # drop its reviewer too, or a weaker prompt is judged by a stronger model and the mismatch is
+    # invisible until someone reads two profiles side by side.
+    run "$NODE" -e '
+      const p = require(process.argv[1]).profiles || {};
+      const a = p["prompt-builder"] || {};
+      const b = p["prompt-review"] || {};
+      process.stdout.write(`${a.ladder}|${b.ladder}`);' "$REGISTRY"
+    [ -n "$output" ]
+    gen="${output%%|*}"; rev="${output##*|}"
+    [ "$gen" = "$rev" ] || {
+        echo "the generator is on '$gen' and its reviewer on '$rev'"; false; }
+}
+
+@test "and neither is pinned to the ceiling by default" {
+    # Specialising a prompt is largely restatement, and the ceiling rung buys nothing for that —
+    # the same argument that put the TC writer on medium. Recorded so a future change to `top`
+    # has to say why.
+    run "$NODE" -e '
+      const p = require(process.argv[1]).profiles || {};
+      process.stdout.write(String((p["prompt-builder"] || {}).ladder));' "$REGISTRY"
+    [ "$output" != "top" ] || {
+        echo "prompt generation is back on the ceiling rung with no stated reason"; false; }
+}

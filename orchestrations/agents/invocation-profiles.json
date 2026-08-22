@@ -546,7 +546,7 @@
     },
     "prompt-builder": {
       "_what": "Provisions this project's prompt library: reads the generic templates and decorates each one for the project and the roster just minted. Runs at mint time, as part of the same stage that creates the agents the prompts are for — the only stage that knows both what the project is and who will work on it.",
-      "ladder": "top",
+      "ladder": "mid",
       "reasoningEffort": "high",
       "temperature": "0.2",
       "maxOutputTokens": 32768,
@@ -567,7 +567,8 @@
       ],
       "template": "project-prompt-generation",
       "toolGrant": "read-only",
-      "_outputIsArtefact": "Writes the project prompt FILES themselves (produces=project-prompts, via project-prompt-builder.js). Its output IS the minted prompt layer on disk, so the artefact is the deliverable."
+      "_outputIsArtefact": "Writes the project prompt FILES themselves (produces=project-prompts, via project-prompt-builder.js). Its output IS the minted prompt layer on disk, so the artefact is the deliverable.",
+      "_why_ladder": "Operator decision 2026-08-22. Specialising a prompt is largely RESTATEMENT — keep the rule, replace the generic noun with this project's — and the ceiling rung buys nothing for that, the same argument that put the TC writer on medium. The judgement half (what an agent must know about this codeline) is covered by the review pass, which runs on the generator's own rung."
     },
     "codeline-bridge-agent": {
       "_what": "Extracts the exported surface of a completed codeline so a later lane's detective can read it. Producers run before consumers precisely so this exists when it is needed.",
@@ -726,7 +727,7 @@
       "optIn": true,
       "enabledBy": "EPAM_PROMPT_REVIEW_ENABLED",
       "_optInNote": "DECLARED, BUILT, AND NOT INVOKED BY DEFAULT. project-prompt-builder.js calls this behind an optional `reviewPrompt` parameter; a project turns it on by setting EPAM_PROMPT_REVIEW_ENABLED=1 in its config.env. Marked here because without the mark this seam is indistinguishable from one that always runs — it carries a template, a produces and three required inputs like any other — and an audit had to read the call site to discover that no project had ever switched it on.",
-      "ladder": "top",
+      "ladder": "mid",
       "reasoningEffort": "high",
       "temperature": "0.1",
       "maxOutputTokens": 32768,
@@ -750,7 +751,8 @@
           "authority": "the ground truth its claims are checked against"
         }
       ],
-      "template": "prompt-review"
+      "template": "prompt-review",
+      "_why_ladder": "Operator decision 2026-08-22. Specialising a prompt is largely RESTATEMENT — keep the rule, replace the generic noun with this project's — and the ceiling rung buys nothing for that, the same argument that put the TC writer on medium. The judgement half (what an agent must know about this codeline) is covered by the review pass, which runs on the generator's own rung."
     },
     "survey-review": {
       "_what": "Falsifies what the estate survey claims about the codelines, before a roster is minted from it.",

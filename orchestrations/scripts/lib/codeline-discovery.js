@@ -96,7 +96,11 @@ const DRY_RUN = argv.includes('--dry-run') || process.env.CODELINE_DISCOVERY_DRY
 // Explicit provider. These called ai-run.sh with --model but NO --provider, so
 // provider came only from ambient env — e.g. `--provider qwen --model claude-haiku`.
 const PROVIDER = getArg('--provider', process.env.ORCH_GATE_PROVIDER || process.env.EPAM_ORCHESTRATION_PROVIDER || 'qwen');
-const MODEL   = getArg('--model', process.env.ORCH_GATE_MODEL || process.env.EPAM_MODEL || 'z-ai/glm-5.2');
+// No literal fallback: see lib/seam-model.js. Discovery picking the wrong codeline is already
+// a known failure chain; doing it on an unchosen model makes the cause untraceable.
+const { resolveOrRefuse } = require('./seam-model.js');
+const MODEL   = resolveOrRefuse({ seam: 'codeline-discovery',
+  sources: [getArg('--model', ''), process.env.ORCH_GATE_MODEL, process.env.EPAM_MODEL] });
 
 const ISSUES_PATH = getArg('--issues');
 const ROOT_DIR    = getArg('--root', process.env.JIRA_CODELINE_ROOT || '');

@@ -165,6 +165,17 @@ info "Output directory clean (deleted and reinitialised)"
 # Unlike the client-codeline case, declaring this app is Node with vitest is legitimate: these
 # launchers CREATE it. What was not legitimate is saying so twice.
 _epam_project_cfg="$(project_config_dir skyscanner "$REPO_ROOT")" || exit 1
+
+# THE PROJECT DECLARES ITS MODELS. This launcher resolved the project config dir and then never
+# read its config.env, so every model it uses was written out again inline — a second copy of
+# data that already exists in orchestrations/projects/skyscanner/config.env, drifting the moment
+# either side changes. Loading it here makes the project DATA, which is the whole point of the
+# config layer, and lets the literals below go.
+#
+# `preserve`: anything already exported (an operator override, the outer .env) still wins.
+if [ -f "$_epam_project_cfg/config.env" ]; then
+    load_env_file_safe "$_epam_project_cfg/config.env" preserve
+fi
 mkdir -p "$OUTPUT_DIR/.epam"
 for _m in dependency-check.json contract-generation.json known-fixes.json; do
   if [ -f "$_epam_project_cfg/$_m" ]; then
@@ -195,14 +206,11 @@ export EPAM_API_KEY_OPENROUTER="$OPENROUTER_API_KEY"
 # failure-analyst ran on MiniMax-M3 and misdiagnosed SKY-002-test-1's casing bug.
 export ORCH_GATE_PROVIDER="qwen"
 export EPAM_ORCHESTRATION_PROVIDER="qwen"
-export ORCH_GATE_MODEL="z-ai/glm-5.2"
 # Escalation model: GLM 5.2 for Rung 2/3 (reasoning model, 1M ctx; routes via OpenRouter/qwen provider)
-export ESCALATION_MODEL="${ESCALATION_MODEL:-z-ai/glm-5.2}"
 # HIGH tier: stronger/pricier model than the medium-tier ESCALATION_MODEL.
 # claude.sh's classify_ladder_tier() dynamically decides medium vs high per
 # story from its own recorded failure history (story-failures.jsonl) — never
 # hardcoded per story ID.
-export ESCALATION_MODEL_HIGH="${ESCALATION_MODEL_HIGH:-z-ai/glm-5.1}"
 # Temperature pin, ALL models (2026-07-10, reversing the 2026-07-07 GLM-only
 # scoping per explicit user directive). Root cause this fixes: claude.sh's
 # FailureDiversity mechanism (claude.sh:~5076-5085) detects a story retrying
@@ -268,7 +276,6 @@ export EPAM_MODEL_LADDER_HIGH="${EPAM_MODEL_LADDER_HIGH:-MiniMax-M2.5=MiniMax-M3
 # medium/high split.
 export EPAM_MODEL_LADDER="${EPAM_MODEL_LADDER:-}"
 # Final fallback: used at R3 when the story model was never escalated at R2
-export EPAM_FINAL_FALLBACK_MODEL="${EPAM_FINAL_FALLBACK_MODEL:-moonshotai/kimi-k3}"
 export EPAM_FINAL_FALLBACK_PROVIDER="${EPAM_FINAL_FALLBACK_PROVIDER:-qwen}"
 # Dynamic retry-extension coordinator (2026-07-12): ships DISABLED by
 # default, same rollout discipline as the DeepEval groundedness check --
@@ -287,8 +294,6 @@ export EPAM_RETRY_EXTENSION_MAX="${EPAM_RETRY_EXTENSION_MAX:-2}"
 export EPAM_MODEL_PROVIDER_MAP="${EPAM_MODEL_PROVIDER_MAP:-zhipuai/*=qwen|moonshotai/*=qwen|z-ai/*=qwen|glm-*=qwen|kimi-*=qwen|deepseek/*=qwen|MiniMax-*=minimax}"
 # MiniMax runtime settings
 export MINIMAX_TOOL_TIMEOUT_MS="${MINIMAX_TOOL_TIMEOUT_MS:-15000}"
-export ORCH_MINI_MODEL="${ORCH_MINI_MODEL:-MiniMax-M2.5}"
-export ORCH_UPGRADE_MODEL="${ORCH_UPGRADE_MODEL:-MiniMax-M3}"
 export PRD_FILE
 export SKIP_REGRESSION_GUARD=true
 export EPAM_RALPH_WIGGUM_ENABLED=0

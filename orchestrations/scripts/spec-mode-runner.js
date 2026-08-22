@@ -8580,7 +8580,11 @@ function isValidModelString(model, currentModel, knownValidModels) {
 // use the gate model, defaulting to minimax/MiniMax-M3 like claude.sh's
 // run_prd_change_reviewer.
 function buildGateExec(aiRunnerCmd, env = process.env) {
-  const provider = env.ORCH_GATE_PROVIDER || 'minimax';
+  // NO PROVIDER DEFAULT. `|| 'minimax'` named a provider no configuration asks for — every
+  // project config.env and every launcher sets qwen — so it was unreachable in practice and
+  // wrong when reached. Routing the same model through a different provider is a different
+  // setup, not a detail. Unset now fails at the call instead of routing somewhere unchosen.
+  const provider = env.ORCH_GATE_PROVIDER || '';
   // Persistent writes (PRD/profiles.json) get the highest-quality model
   // available, matching claude.sh's run_prd_change_reviewer precedence
   // (`${ESCALATION_MODEL_HIGH:-${ORCH_GATE_MODEL:-MiniMax-M3}}`). Full agent

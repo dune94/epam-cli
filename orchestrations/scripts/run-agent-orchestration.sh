@@ -9856,13 +9856,19 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                     local _gfa_raw
                     _gfa_raw=$(echo "$_gfa_prompt" | \
                         AI_GATE_ALLOW_TOOLS=1 \
-                        AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
+                        # NO PROVIDER DEFAULT. This read `:-minimax`, which no configuration
+                        # asks for — every project config.env and every launcher sets qwen. So
+                        # the literal was both unreachable in practice and wrong when reached,
+                        # and routing the same model through another provider is a different
+                        # setup, not a detail (MiniMax direct vs via a gateway differed 99.8%
+                        # on cache hits alone). Unset now fails loudly in ai-run.sh instead.
+                        AI_PROVIDER="${ORCH_GATE_PROVIDER:-}" \
                         AI_MODEL="${_gfa_model}" \
                         EPAM_DANGEROUS_SKIP_APPROVAL=1 \
                         CLAUDE_CMD="$CLAUDE_CMD" \
                         EPAM_CLI="${EPAM_CLI:-epam}" \
                         "$AI_RUNNER_CMD" \
-                            --provider "${ORCH_GATE_PROVIDER:-minimax}" \
+                            --provider "${ORCH_GATE_PROVIDER:-}" \
                             --model    "${_gfa_model}" \
                         2>&1 | tee -a "$_rem_log")
                     if [ -n "$_gfa_raw" ]; then
@@ -9972,11 +9978,11 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                     fi
                     local _acr_raw
                     _acr_raw=$(echo "$_acr_prompt" | \
-                        AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
+                        AI_PROVIDER="${ORCH_GATE_PROVIDER:-}" \
                         AI_MODEL="${_acr_model}" \
                         EPAM_CLI="${EPAM_CLI:-epam}" \
                         "$AI_RUNNER_CMD" \
-                            --provider "${ORCH_GATE_PROVIDER:-minimax}" \
+                            --provider "${ORCH_GATE_PROVIDER:-}" \
                             --model    "${_acr_model}" \
                         2>&1 | tee -a "$_rem_log")
                     if [ -n "$_acr_raw" ]; then
@@ -10068,7 +10074,7 @@ $_prof_prompt"
                         CLAUDE_CMD="$CLAUDE_CMD" \
                         EPAM_CLI="${EPAM_CLI:-epam}" \
                         "$AI_RUNNER_CMD" \
-                            --provider "${ORCH_GATE_PROVIDER:-minimax}" \
+                            --provider "${ORCH_GATE_PROVIDER:-}" \
                             --model    "$(seam_model_or_fail "profile-augmentor")" \
                         2>&1 | tee -a "$_rem_log")
                     if echo "$_prof_result" | grep -q '"profile_updated"[[:space:]]*:[[:space:]]*true'; then
@@ -10150,11 +10156,11 @@ $_prof_prompt"
                             _pa_rev_raw=$(echo "${_pa_corrective}${_reviewer_profile}
 
                             $(_render_change_reviewer "gate-remediation" "profile_addendum" "THE CHANGE ITSELF (unified diff of the roster before and after):\n${_profiles_change}")" | \
-                                AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
+                                AI_PROVIDER="${ORCH_GATE_PROVIDER:-}" \
                                 AI_MODEL="${_pa_model}" \
                                 EPAM_CLI="${EPAM_CLI:-epam}" \
                                 "$AI_RUNNER_CMD" \
-                                    --provider "${ORCH_GATE_PROVIDER:-minimax}" \
+                                    --provider "${ORCH_GATE_PROVIDER:-}" \
                                     --model    "${_pa_model}" \
                                 2>/dev/null | \
                                 python3 "$SCRIPT_DIR/lib/handlers/run-testing-gates.py" 2>/dev/null || true)

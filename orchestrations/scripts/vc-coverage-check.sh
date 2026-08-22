@@ -91,12 +91,27 @@ for _i in $(seq 0 $(( _vc_count - 1 ))); do
     fi
     rm -f "$_tpl_vals"
 
+    # NO SUBSTITUTED MODEL. This ended `:-z-ai/glm-5.2`, so a broken ladder produced a coverage
+    # verdict on a model the run never chose — and a coverage verdict is acted on. Refusing is
+    # loud and fixable; substituting is silent and only visible in a bill.
+    #
+    # This runs at TOP LEVEL and the gate is ADVISORY (`exit 0` at the end, never fails a run),
+    # so refusing means producing NO verdict — not a non-zero exit, which would change the
+    # gate's contract, and not a substituted model, which would produce a verdict that looks
+    # real. An absent coverage finding is honest; a fabricated one is acted on.
+    _vcc_model="${VC_COVERAGE_MODEL:-${ORCH_GATE_MODEL:-}}"
+    if [ -z "$_vcc_model" ]; then
+        log "no model resolved for this seam — its ladder declares none, or the tier's chain is unset."
+        log "Refusing to substitute one: NO coverage verdict this run, rather than a guessed model's."
+        _raw=""
+    else
     _raw=$(printf '%s' "$_prompt" | \
         EPAM_ALLOWED_TOOLS="${VC_COVERAGE_ALLOWED_TOOLS:-}" \
         EPAM_AGENT_NAME="vc-coverage" EPAM_STORY_ID="$STORY_ID" \
         timeout "${VC_COVERAGE_TIMEOUT_SECS:-300}" \
-        bash "$AI_RUNNER_CMD" --provider "${ORCH_GATE_PROVIDER:-qwen}" \
-             --model "${VC_COVERAGE_MODEL:-${ORCH_GATE_MODEL:-z-ai/glm-5.2}}" 2>/dev/null || echo "")
+        bash "$AI_RUNNER_CMD" --provider "${ORCH_GATE_PROVIDER:-}" \
+             --model "$_vcc_model" 2>/dev/null || echo "")
+    fi
 
     _verdict=$(printf '%s' "$_raw" | python3 -c '
 import json, sys

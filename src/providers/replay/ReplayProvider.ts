@@ -23,6 +23,7 @@
  * event into a green run.
  */
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { agentLabel } from '../../observability/agentLabel.js';
 import type {
@@ -41,8 +42,16 @@ interface RecordedTurn {
  * same rule: see orchestrations/scripts/lib/cassette-store.js.
  */
 function seamFile(seam: string): string {
-  return seam.replace(/[^A-Za-z0-9._-]/g,
+  const encoded = seam.replace(/[^A-Za-z0-9._-]/g,
     (c) => `~${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+
+  // A NAME LONGER THAN THE FILESYSTEM ALLOWS. Trace names come from the running pipeline — one
+  // real session labelled a seam with an entire tool grant — so the length is not this module's
+  // to assume. The kept prefix is paired with a digest of the WHOLE name, because truncating
+  // alone would collide two long names onto one file and hand one seam another's answers.
+  if (Buffer.byteLength(encoded) <= 200) return encoded;
+  const digest = createHash('sha256').update(seam).digest('hex').slice(0, 16);
+  return `${encoded.slice(0, 180)}--${digest}`;
 }
 
 export class ReplayProvider implements LLMProvider {

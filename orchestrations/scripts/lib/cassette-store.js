@@ -29,6 +29,7 @@
  * recorded run did not — which is a finding, and is reported as one rather than being papered
  * over with an invented answer.
  */
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
@@ -91,8 +92,20 @@ function safeSeamFile(seam) {
   // FIXED WIDTH — '~' plus exactly four hex digits. A variable-width escape is ambiguous: a seam
   // whose name contains "~ab" followed by literal hex characters decodes to something other than
   // what was encoded, and the collision hands one seam another's recorded answers.
-  return String(seam).replace(/[^A-Za-z0-9._-]/g,
+  const encoded = String(seam).replace(/[^A-Za-z0-9._-]/g,
     (c) => `~${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+
+  // A NAME LONGER THAN THE FILESYSTEM ALLOWS. Trace names come from the running pipeline, so
+  // their length is not this module's to assume: one real session labelled a seam with an entire
+  // tool grant and the export died with ENAMETOOLONG partway through, leaving a half-written
+  // cassette that looked like a cassette.
+  //
+  // Truncating alone would collide two long names onto one file and silently hand one seam
+  // another's answers, so the kept prefix is paired with a digest of the WHOLE name. 200 bytes
+  // leaves room for the digest and the extension inside the usual 255-byte limit.
+  if (Buffer.byteLength(encoded) <= 200) return encoded;
+  const digest = crypto.createHash('sha256').update(String(seam)).digest('hex').slice(0, 16);
+  return `${encoded.slice(0, 180)}--${digest}`;
 }
 
 /** Which seams a cassette holds — for reporting what a rehearsal can and cannot cover. */
@@ -109,7 +122,13 @@ function seamsIn(cassetteDir) {
 }
 
 function decodeSeamFile(name) {
-  return String(name).replace(/~([0-9a-f]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+  // A truncated name cannot be reversed — the digest suffix marks it, and what is returned is the
+  // readable prefix. Reporting it as if it were the full seam name would be a quiet lie in the
+  // one place an operator looks to see what a cassette covers.
+  const truncated = /--[0-9a-f]{16}$/.test(String(name));
+  const body = truncated ? String(name).replace(/--[0-9a-f]{16}$/, '') : String(name);
+  const decoded = body.replace(/~([0-9a-f]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+  return truncated ? `${decoded}…` : decoded;
 }
 
 /** Write one seam's turns. Used by the exporter; kept here so the format has ONE definition. */

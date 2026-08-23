@@ -1253,6 +1253,28 @@ function _validatedOrNull(parsed, tag) {
   return v.fatal ? null : parsed;
 }
 
+/**
+ * A TOOL GRANT REACHES AN AGENT THROUGH ITS ENVIRONMENT — one definition of how.
+ *
+ * Two exports carry a grant and they must travel together: the tool list itself, and the flag
+ * that tells the runner tools are permitted at all. Written out by hand at four call sites, and
+ * the fourth got it wrong in the way a duplicated convention always eventually is — the grant was
+ * passed as a positional argument instead, into the slot that holds the STORY ID. So the roster
+ * reviewer ran with no tools while its trace was labelled with the tool list, and it reported
+ * that it had nothing to review: a gate structurally unable to examine the thing it gates.
+ *
+ * Returns the same object, mutated, so it composes with the `{...seamInvocationEnv(), ...}` shape
+ * every call site already uses. An absent grant is left absent: a seam that was given no tools
+ * must not be handed an empty allow-list, which reads as "tools are on, and none are permitted".
+ */
+function withToolGrant(env, toolGrant) {
+  if (toolGrant) {
+    env.AI_GATE_ALLOW_TOOLS = '1';
+    env.EPAM_ALLOWED_TOOLS = toolGrant;
+  }
+  return env;
+}
+
 async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey, storyId = '', repoPath = '', envOverride = null) {
   // envOverride: per-agent tool grant. Most spec-mode agents share specAgentEnv's
   // read-only set; an agent with a different need (the ticket-link agent must FETCH a
@@ -3277,11 +3299,8 @@ async function surveyEstate({
   // and EPAM_SEAM is written here and read NOWHERE — resolution goes through EPAM_AGENT_NAME
   // alone. So the seam looked declared while the agent resolved to nothing and ran with no
   // ladder and no budget, against a profile that had been written for it all along.
-  const _env = { ...seamInvocationEnv('estate-survey', logDir), EPAM_AGENT_NAME: 'estate-survey' };
-  if (toolGrant) {
-    _env.AI_GATE_ALLOW_TOOLS = '1';
-    _env.EPAM_ALLOWED_TOOLS = toolGrant;
-  }
+  const _env = withToolGrant(
+    { ...seamInvocationEnv('estate-survey', logDir), EPAM_AGENT_NAME: 'estate-survey' }, toolGrant);
   // Scaled to the number of codelines this survey must open. specAgentEnv's flat ceiling of 8
   // is a single-codeline budget; applied to an estate it produced a "greenfield" verdict about
   // a brownfield estate because the sweep could not finish. See surveyToolBudget.
@@ -3805,10 +3824,7 @@ Do not propose a role that duplicates one of the canonical roles already listed 
     EPAM_AGENT_NAME: 'agent-mint',
     EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_PROJECT_AGENTS),
   };
-  if (toolGrant) {
-    _mintEnv.AI_GATE_ALLOW_TOOLS = '1';
-    _mintEnv.EPAM_ALLOWED_TOOLS = toolGrant;
-  }
+  withToolGrant(_mintEnv, toolGrant);
   // AN UNPARSEABLE ANSWER IS NOT A DEAD RUN — AND THE RETRY BELOW CANNOT SEE ONE.
   //
   // The correction loop further down fires on `result.rejected.length`: proposals that PARSED and
@@ -4226,7 +4242,7 @@ async function reviewSurvey({
     ...seamInvocationEnv('survey-review', logDir),
     EPAM_AGENT_NAME: 'survey-review',
   };
-  if (toolGrant) { env.AI_GATE_ALLOW_TOOLS = '1'; env.EPAM_ALLOWED_TOOLS = toolGrant; }
+  withToolGrant(env, toolGrant);
 
   try {
     // AN ANSWER THAT DOES NOT PARSE IS NOT A CLEAN REVIEW.
@@ -4318,16 +4334,21 @@ async function reviewProjectRoster({
       .map((c) => `- ${(c && c.name) || c}${c && c.path ? ` (${c.path})` : ''}`).join('\n'),
   });
 
-  const env = {
+  const env = withToolGrant({
     ...seamInvocationEnv('project-roster-review', logDir),
     EPAM_AGENT_NAME: 'project-roster-review',
     EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_ROSTER_REVIEW),
-  };
+  }, toolGrant);
 
+  // THE SEVENTH ARGUMENT IS THE STORY ID, NOT THE TOOL GRANT. Passing the grant here left the
+  // reviewer with no tools — it could not open the roster it was asked to judge, which is why it
+  // answered that there was nothing to review — and put the whole tool list where the story id
+  // belongs, so cost was attributed to a story named after an allow-list. The roster review is
+  // not a story's work, so it carries no story id.
   const payload = await runAgentForJson(
     promptExec, prompt, TOOL_ROSTER_REVIEW, 'ROSTER_REVIEW',
     logDir ? path.join(logDir, 'project-roster-review.log') : null,
-    null, toolGrant || '', repoPath || '', env,
+    null, '', repoPath || '', env,
   );
 
   // A review that produced nothing is NOT a sound roster. Unparseable output means the check did
@@ -9260,6 +9281,7 @@ module.exports = {
   SURVEY_STATES,
   TOOL_ROSTER_REVIEW,
   seamInvocationEnv,
+  withToolGrant,
   schemaEnv,
   referencedDocsBlock,
   advanceAgentLadderEscalation,

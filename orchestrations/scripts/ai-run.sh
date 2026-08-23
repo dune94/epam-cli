@@ -205,7 +205,16 @@ run_provider_once() {
       rm -f "$raw_file"
       return 1
       ;;
-    openai|qwen|cursor|copilot|minimax)
+    # `replay` DISPATCHES HERE because this is the arm that runs the epam CLI, and the CLI is
+    # where the replay provider lives — so the agent loop runs for real and the recorded tool
+    # calls really execute. Selecting a provider and being able to RUN one are different things:
+    # replay was selected while this case statement had no arm for it, so every rehearsal fell to
+    # the default and failed without invoking anything.
+    #
+    # The tool posture is NOT special-cased. A replayed call carries the same env the recorded
+    # call did, so a seam that had tools then has them now — which is what makes the recorded
+    # tool calls executable rather than refused.
+    openai|qwen|cursor|copilot|minimax|replay)
       # Capture to temp file so pino JSON lines on stdout don't corrupt jq parsing
       local _epam_out
       _epam_out="$(mktemp)"

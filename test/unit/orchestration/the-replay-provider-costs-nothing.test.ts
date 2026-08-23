@@ -161,6 +161,10 @@ describe('the recorder and the replay cannot drift apart', () => {
       'SPEC_AGENT:plan · AMSD-2041',
       'chain call',
       'a/b',
+      // LONG ENOUGH TO CROSS THE FILESYSTEM BOUND. The first version of this guard used only
+      // short names, so the two encoders drifted a second time — over the truncation rule — and
+      // the guard stayed green while doing so.
+      `project-roster-review:plan · ${'read_file,list_files,search,codegraph_query,'.repeat(6)}`,
     ];
     for (const n of names) {
       // The provider's encoder is private, so it is exercised the way the pipeline exercises it:
@@ -180,5 +184,36 @@ describe('the recorder and the replay cannot drift apart', () => {
         rmSync(d, { recursive: true, force: true });
       }
     }
+  });
+});
+
+describe('a seam name the pipeline really produced', () => {
+  // Trace names come from the running pipeline, so their length is not the cassette's to assume.
+  // One real session labelled a seam with an entire tool grant; the export died with ENAMETOOLONG
+  // partway through and left a half-written directory that still looked like a cassette.
+  const LONG = `project-roster-review:plan · ${
+    'read_file,list_files,search,codegraph_query,resolve_test_file,codeline_facts,git_state,'
+    + 'check_anti_patterns,resolve_package_symbol,dependency_contract,dependency_available,scan_secrets'}`;
+
+  it('a name far past the filesystem limit still writes and reads back', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'long-'));
+    writeFileSync(join(dir, 'manifest.json'), JSON.stringify({ session: 'TEST' }));
+    const file = `${safeSeamFile(LONG)}.json`;
+    expect(Buffer.byteLength(file), 'the file name would be rejected by the filesystem')
+      .toBeLessThanOrEqual(255);
+    writeFileSync(join(dir, file), JSON.stringify([{ text: 'recorded', toolCalls: [] }]));
+
+    process.env.EPAM_AGENT_NAME = LONG;
+    delete process.env.EPAM_STORY_ID;
+    const res = await new ReplayProvider(dir).complete(REQ);
+    expect(res.content.map((c) => c.text).join('')).toBe('recorded');
+  });
+
+  it('two different long names do NOT collide onto one file', () => {
+    // Truncation alone would hand one seam another's recorded answers — silently, and only for
+    // the seams whose names happen to share a prefix, which is exactly the hard case to notice.
+    const a = safeSeamFile(`${LONG}-alpha`);
+    const b = safeSeamFile(`${LONG}-beta`);
+    expect(a).not.toBe(b);
   });
 });

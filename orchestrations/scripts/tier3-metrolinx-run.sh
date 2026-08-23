@@ -263,7 +263,11 @@ fi
     # verify, and refusing here would block the very run that produces it.
     if roster_exists 2>/dev/null; then
       _perim_impl=$(roster_agents_of_kind implementer 2>/dev/null | tr '\n' ' ')
-      _unpermitted=$("$NODE_BIN" -e '
+      # ${NODE_BIN:-node}, not "$NODE_BIN". This launcher never sets NODE_BIN and runs under
+      # `set -u`, so the bare reference was an unbound-variable abort on line 274 — the run died
+      # 39 seconds in, before ingest. bash -n cannot see it: it is a runtime error, not syntax.
+      # lib/roster-read.sh already uses the defaulted form; so does every other node call here.
+      _unpermitted=$("${NODE_BIN:-node}" -e '
         const fs = require("fs");
         const prd = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
         const ok = new Set(String(process.argv[2] || "").trim().split(/\s+/).filter(Boolean));

@@ -52,18 +52,33 @@ run_stage() {
 
 @test "NO undefined identifier — the renderer and its helpers are all imported" {
     run run_stage
+    # STANDS ALONE. A sibling test guards that the fixture enters the stage, but a test that
+    # depends on a sibling to be meaningful is one deletion away from vacuous — so each asserts
+    # the stage was entered before asserting what its output lacks.
+    [[ "$output" == *"roster-only: deriving"* ]] || {
+        echo "the stage was never entered — this assertion proves nothing"; false; }
     [[ "$output" != *"is not defined"* ]] || {
         echo "an identifier the stage uses is not imported:"; echo "$output" | grep 'is not defined'; false; }
 }
 
 @test "NO wrong call shape — promptExec is handed to the runner, not invoked" {
     run run_stage
+    # STANDS ALONE. A sibling test guards that the fixture enters the stage, but a test that
+    # depends on a sibling to be meaningful is one deletion away from vacuous — so each asserts
+    # the stage was entered before asserting what its output lacks.
+    [[ "$output" == *"roster-only: deriving"* ]] || {
+        echo "the stage was never entered — this assertion proves nothing"; false; }
     [[ "$output" != *"is not a function"* ]] || {
         echo "the stage calls something that is not callable:"; echo "$output" | grep 'is not a function'; false; }
 }
 
 @test "the seam resolves its registry — the agents dir, not the log dir" {
     run run_stage
+    # STANDS ALONE. A sibling test guards that the fixture enters the stage, but a test that
+    # depends on a sibling to be meaningful is one deletion away from vacuous — so each asserts
+    # the stage was entered before asserting what its output lacks.
+    [[ "$output" == *"roster-only: deriving"* ]] || {
+        echo "the stage was never entered — this assertion proves nothing"; false; }
     [[ "$output" != *"invocation registry unreadable"* ]] || {
         echo "seamInvocationEnv was given the wrong directory:"; echo "$output" | grep -i 'registry'; false; }
 }

@@ -179,16 +179,11 @@ build() {
         echo "the status is read from the pipeline, so tee's success would mask a failed derivation"; false; }
 }
 
-@test "the roster-only path EXECUTES — it is not merely parseable" {
-    # `node --check` cannot see a temporal dead zone, and the first version of this had one: the
-    # stage was defined below the guard that calls it, which parses and then throws at runtime.
-    run env EPAM_ROSTER_ONLY=1 EPAM_PROJECT_CONFIG_DIR="$WORK/proj" LOG_DIR="$WORK/logs" \
-        "$NODE" "$SCRIPTS/mint-agents-step.js"
-    [[ "$output" != *"ReferenceError"* ]] || { echo "reference error on the roster-only path: $output"; false; }
-    [[ "$output" != *"Cannot access"* ]] || { echo "temporal dead zone: $output"; false; }
-    # it must fail on a missing prerequisite, which is the correct outcome for an empty fixture
-    [ "$status" -ne 0 ]
-}
+# The roster-only EXECUTION test lived here and was VACUOUS: it ran the step with no --prd, so it
+# returned at the argument check and never reached the stage, while asserting the absence of a
+# ReferenceError on output that had none because nothing ran. Three runtime bugs shipped behind it.
+# Replaced by the-roster-stage-actually-executes.bats, which supplies enough fixture to enter the
+# stage and asserts a POSITIVE — that it reaches the model call.
 
 @test "the roster stage is defined BEFORE both of its call sites" {
     def=$(grep -n 'const runRosterStage' "$SCRIPTS/mint-agents-step.js" | head -1 | cut -d: -f1)

@@ -174,7 +174,8 @@ load_helper() {
     run env NODE_BIN="$NODE" EPAM_PROJECT_CONFIG_DIR="$WORK/nowhere" \
         bash -c ". '$SCRIPTS/lib/roster-read.sh'; roster_persona review-agent"
     [ "$status" -ne 0 ]
-    [ -z "$(printf '%s' "$output" | grep -v '^\[roster\]')" ] || true
+    # (a `[ ... ] || true` line stood here and asserted nothing — removed rather than left to
+    #  read as a check)
     [[ "$output" != *"agents/profiles.json"* ]] || { echo "the refusal points at the engine roster"; false; }
 }
 

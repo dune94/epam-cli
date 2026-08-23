@@ -575,6 +575,11 @@ if (require.main !== module) return;
     }
     const canonicalPath = path.join(AGENTS_DIR, 'profiles.canonical.json');
 
+    // Required HERE, not at module load: engine-prompt routes seam prompts through
+    // prompt-library, and pulling that chain in at load time would give one of them a
+    // half-initialised copy of the other. Every other seam in this file renders the same way.
+    // eslint-disable-next-line global-require
+    const { renderEngineTemplate } = require('./lib/engine-prompt.js');
     const renderSpecialisation = (vals) => renderEngineTemplate('roster-specialisation', vals);
 
     // THE AGENT WRITES THE FILE. The pipeline hands it the canonical copy and a destination,
@@ -604,10 +609,25 @@ if (require.main !== module) return;
           ? `\n\n## Your previous attempt was REFUSED\n\n${refusal}\n\nProduce the roster again, correcting exactly this.`
           : '',
       });
-      await promptExec(prompt, {
-        ...seamInvocationEnv('roster-specialiser', LOG_DIR),
+      // spec.runClaude, like every other seam in this file. promptExec is the RUNNER handed to
+      // it, not something to call — invoking it directly threw "promptExec is not a function".
+      // I invented a call shape instead of matching the one already here, which is the third bug
+      // in this stage from that same habit.
+      //
+      // AGENTS_DIR, not LOG_DIR: seamInvocationEnv reads the invocation registry from the
+      // directory it is given, and handed the log folder it found none and resolved no ladder.
+      const seamEnv = {
+        ...seamInvocationEnv('roster-specialiser', AGENTS_DIR),
         EPAM_AGENT_NAME: 'roster-specialiser',
-      });
+      };
+      // The tool CHANNEL and the tool LIST travel together: granting one without the other gives
+      // an agent that quietly has nothing, and this one's whole job is to read the codeline and
+      // write a file.
+      if (seamEnv.EPAM_ALLOWED_TOOLS) seamEnv.AI_GATE_ALLOW_TOOLS = '1';
+      await spec.runClaude(
+        promptExec, prompt,
+        path.join(LOG_DIR, 'roster-specialiser.log'),
+        seamEnv, { costAgent: 'roster-specialiser' });
     };
 
     // REVIEWED AGAINST BOTH. With only the roster a reviewer can judge plausibility; falsifying

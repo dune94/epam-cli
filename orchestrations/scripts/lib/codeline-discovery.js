@@ -494,32 +494,51 @@ if (require.main !== module) return;
   // against a repository nothing had reasoned about. The call is retried and escalated at the seam
   // (ai-run.sh, with ladder escalation); when that is exhausted the honest answer is that the
   // codelines are unknown, and a run must not start on a scope nobody chose.
-  const result = callLlm(prompt, { manifest });
+  // A MALFORMED ANSWER IS CORRECTED BY THE AGENT, not replaced by the engine.
+  //
+  // ai-run.sh retries a FAILED CALL and escalates the ladder. This is the other failure: the call
+  // succeeds and the CONTENT breaks its contract — no JSON, a path that does not exist, a
+  // selection with no evidence. The old code answered that by substituting the highest-scored
+  // repository, so a discovery that never happened was indistinguishable from one that did.
+  //
+  // The agent is told WHICH contract it broke and answers again, exactly as the mint's refused
+  // proposals are re-proposed. That is self-correction, not a deterministic workaround: nothing
+  // here invents a selection, and when the attempts are exhausted the run stops.
+  // eslint-disable-next-line global-require
+  const { retryUntilParsed } = require('./content-retry.js');
+  const result = retryUntilParsed({
+    what: 'codeline-discovery',
+    attempts: Number(process.env.EPAM_CONTENT_RETRY_ATTEMPTS || 3),
+    log,
+    call: (note) => callLlm(note ? `${note}${prompt}` : prompt, { manifest }),
+    parse: (answer) => {
+      const picked = (answer && answer.codelines) || [];
+      if (!picked.length) {
+        return { ok: false,
+          reason: 'you selected no codeline. You have tools and every repository was listed: '
+            + 'search for what the ticket names, then select what you can ground. If a part of '
+            + 'the ticket genuinely cannot be placed, put THAT part in "unsure" — but a run '
+            + 'cannot start with no scope at all.' };
+      }
+      for (const cl of picked) {
+        const why = !path.isAbsolute(cl.path) ? 'that path is not absolute'
+          : !fs.existsSync(cl.path) ? 'that path does not exist'
+            : !fs.existsSync(path.join(cl.path, '.git')) ? 'that path is not a git repository'
+              : null;
+        if (why) {
+          return { ok: false,
+            reason: `you selected '${cl.name}' at ${cl.path}, but ${why}. Every candidate was `
+              + 'listed with its real path — copy the path of the repository you mean.' };
+        }
+      }
+      return { ok: true, value: answer };
+    },
+  });
 
-  // THE CONTRACT, ENFORCED — which is not the same as substituting an answer. A path that is not
-  // absolute, does not exist, or is not a git repository is not a codeline; the reply did not meet
-  // its contract, so the CALL failed and goes back through the seam's own retry. Dropping the bad
-  // entries and continuing would quietly narrow the scope of the run instead.
-  for (const cl of (result.codelines || [])) {
-    const why = !path.isAbsolute(cl.path) ? 'the path is not absolute'
-      : !fs.existsSync(cl.path) ? 'the path does not exist'
-        : !fs.existsSync(path.join(cl.path, '.git')) ? 'the path is not a git repository'
-          : null;
-    if (why) {
-      throw new Error(
-        `[codeline-discovery] the agent selected '${cl.name}' at ${cl.path}, but ${why}. `
-        + 'Every candidate was listed with its real path, so this reply does not meet its '
-        + 'contract. Failing the call rather than dropping the entry, which would silently '
-        + 'shrink the scope of the run.');
-    }
-  }
-
+  // Everything the contract requires was checked by the parser above, and a reply that still
+  // broke it exhausted its corrections — retryUntilParsed threw rather than returning. So what
+  // reaches here is a selection whose every path exists and is a repository.
   const validated = result.codelines || [];
-  if (validated.length === 0) {
-    throw new Error(
-      '[codeline-discovery] the agent selected no codeline. The run has no scope, and choosing '
-      + 'one here would be this step guessing at the answer it exists to derive.');
-  }
 
   // Producers before consumers. Lanes run sequentially and a completed lane
   // publishes its exported surface for later lanes' detectives to read — which

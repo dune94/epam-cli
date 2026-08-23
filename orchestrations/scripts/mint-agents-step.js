@@ -283,7 +283,19 @@ async function referencedDocs(logDir, stories) {
 function writeRosterDiff(profilesPath, agentsDir, logDir, mintedThisRun, mintedDetail) {
   const minted = new Set(Array.isArray(mintedThisRun) ? mintedThisRun : []);
   const detail = new Map((Array.isArray(mintedDetail) ? mintedDetail : []).map((m) => [m.name, m]));
-  const kindOf = (n) => (detail.get(n) || {}).kind || 'implementer';
+  // SILENCE IS NOT A KIND. This ended `|| 'implementer'`, so an agent whose kind the mint never
+  // stated was reported under "IMPLEMENTERS, may author code" — a default resolving the unknown
+  // toward the more powerful answer, in the one artefact whose job is to show an operator what
+  // this run created. It grants nothing (permission is membership in project-roles.json, and
+  // project-roster.js refuses an entry whose kind is not declared), which is exactly why the
+  // report must not imply otherwise.
+  const kindOf = (n) => {
+    const k = (detail.get(n) || {}).kind;
+    return (typeof k === 'string' && k.trim()) ? k.trim() : '';
+  };
+  const isImplementer = (n) => kindOf(n) === 'implementer';
+  const isInvestigator = (n) => kindOf(n) === 'investigator';
+  const kindUnstated = (n) => !kindOf(n);
   const codelineOf = (n) => (detail.get(n) || {}).codeline || '';
   const canonicalPath = path.join(agentsDir, 'profiles.canonical.json');
   let live = {}, canonical = {};
@@ -317,15 +329,24 @@ function writeRosterDiff(profilesPath, agentsDir, logDir, mintedThisRun, mintedD
     `canonical: ${canonicalPath} (${canonKeys.length} roles)`,
     `live:      ${profilesPath} (${liveKeys.length} roles)`,
     ``,
-    `## MINTED BY THIS RUN — IMPLEMENTERS, may author code (${added.filter((k) => minted.has(k) && kindOf(k) !== 'investigator').length})`,
-    ...(added.filter((k) => minted.has(k) && kindOf(k) !== 'investigator').length
-      ? added.filter((k) => minted.has(k) && kindOf(k) !== 'investigator').map((k) => `- ${k}  [${String(live[k] || '').length} chars]`)
+    `## MINTED BY THIS RUN — IMPLEMENTERS, may author code (${added.filter((k) => minted.has(k) && isImplementer(k)).length})`,
+    ...(added.filter((k) => minted.has(k) && isImplementer(k)).length
+      ? added.filter((k) => minted.has(k) && isImplementer(k)).map((k) => `- ${k}  [${String(live[k] || '').length} chars]`)
       : ['- (none)']),
     ``,
-    `## MINTED BY THIS RUN — INVESTIGATORS, read-only, never own a story (${added.filter((k) => minted.has(k) && kindOf(k) === 'investigator').length})`,
-    ...(added.filter((k) => minted.has(k) && kindOf(k) === 'investigator').length
-      ? added.filter((k) => minted.has(k) && kindOf(k) === 'investigator')
+    `## MINTED BY THIS RUN — INVESTIGATORS, read-only, never own a story (${added.filter((k) => minted.has(k) && isInvestigator(k)).length})`,
+    ...(added.filter((k) => minted.has(k) && isInvestigator(k)).length
+      ? added.filter((k) => minted.has(k) && isInvestigator(k))
           .map((k) => `- ${k}  [codeline: ${codelineOf(k) || '(none)'}]  [${String(live[k] || '').length} chars]`)
+      : ['- (none)']),
+    ``,
+    // REPORTED, NOT ABSORBED. An agent the mint produced without saying what it is belongs in
+    // neither column: putting it in one asserts something the roster never said. Its own section
+    // makes the roster's gap visible at the pause, which is where it can still be fixed.
+    `## MINTED BY THIS RUN — KIND NOT STATED (${added.filter((k) => minted.has(k) && kindUnstated(k)).length})`,
+    ...(added.filter((k) => minted.has(k) && kindUnstated(k)).length
+      ? added.filter((k) => minted.has(k) && kindUnstated(k))
+          .map((k) => `- ${k}  [the roster declared no kind for this agent]`)
       : ['- (none)']),
     ``,
     `## In live but not canonical, NOT minted this run (pre-existing drift) (${added.filter((k) => !minted.has(k)).length})`,

@@ -57,6 +57,60 @@ function readRegistry(file) {
  * @param {string} [file]     registry path; defaults to the shipped one
  */
 /**
+ * THE PROJECT'S OWN LADDER DECLARATION, read from disk.
+ *
+ * The tier order and each tier's chain are declared in the project's llm-settings.json, and
+ * model-ladders.sh exports them as EPAM_MODEL_LADDER_TIER_ORDER and EPAM_MODEL_LADDER_<TIER>.
+ * Reading ONLY those exports made a seam's ladder depend on whether its caller happened to source
+ * one shell library: resolve-codeline-scope.sh and ingest-jira-tickets.sh do not, and
+ * codeline-discovery runs under both — so it resolved to no ladder, no chain and no iteration
+ * budget, while the declaration sat correct on disk and every audit of the declaration passed.
+ *
+ * This is the same file model-ladders.sh reads, in the same shapes, so the two cannot disagree.
+ * The environment still WINS where it is set: an exported chain is an operator override and this
+ * is only the fallback for a caller that exported nothing.
+ */
+const _ladderDeclCache = new Map();
+function projectLadderDecl(sourceEnv) {
+  const dir = (sourceEnv && sourceEnv.EPAM_PROJECT_CONFIG_DIR) || '';
+  if (!dir) return null;
+  if (_ladderDeclCache.has(dir)) return _ladderDeclCache.get(dir);
+  let decl = null;
+  try {
+    decl = JSON.parse(fs.readFileSync(path.join(dir, 'llm-settings.json'), 'utf8'));
+  } catch {
+    decl = null;                    // a project that declares none gets none, and says so above
+  }
+  _ladderDeclCache.set(dir, decl);
+  return decl;
+}
+
+/** The tier order this project declares, from the environment first, then from its own file. */
+function declaredTierOrder(sourceEnv) {
+  const fromEnv = String((sourceEnv && sourceEnv.EPAM_MODEL_LADDER_TIER_ORDER) || '')
+    .split(/[\s,]+/).filter(Boolean);
+  if (fromEnv.length) return fromEnv;
+  const decl = projectLadderDecl(sourceEnv);
+  const order = decl && Array.isArray(decl.ladderTierOrder) ? decl.ladderTierOrder : [];
+  return order.map(String).filter(Boolean);
+}
+
+/**
+ * A tier's chain in the form every consumer already parses: "from=to|from=to", plus its declared
+ * start model. Built from the same declaration model-ladders.sh builds it from.
+ */
+function declaredTierChain(sourceEnv, tierName) {
+  const decl = projectLadderDecl(sourceEnv);
+  const tier = decl && decl.ladders && decl.ladders[tierName];
+  if (!tier) return null;
+  const hops = Array.isArray(tier.modelLadder) ? tier.modelLadder : [];
+  const chain = hops.filter((h) => h && h.from && h.to)
+    .map((h) => `${h.from}=${h.to}`).join('|');
+  if (!chain) return null;
+  return { chain, start: tier.startModel || '' };
+}
+
+/**
  * Resolve a POSITION in the project's declared tier order to that project's own tier name.
  *
  * The order is lowest → highest, so:
@@ -68,8 +122,7 @@ function readRegistry(file) {
  * Returns '' when no order is available; the caller reports that rather than guessing a name.
  */
 function resolveTierPosition(position, sourceEnv) {
-  const order = String((sourceEnv && sourceEnv.EPAM_MODEL_LADDER_TIER_ORDER) || '')
-    .split(/[\s,]+/).filter(Boolean);
+  const order = declaredTierOrder(sourceEnv);
   if (!order.length) return '';
   const p = String(position || '').trim().toLowerCase();
   if (p === 'base') return order[0];
@@ -352,7 +405,12 @@ function seamInvocationEnv(agent, agentsDir, opts) {
         "order, so no position can be resolved\n");
     }
     const key = 'EPAM_MODEL_LADDER_' + String(tierName || profile.ladder).toUpperCase().replace(/[^A-Z0-9]/g, '_');
-    const rungs = sourceEnv[key];
+    // ENVIRONMENT FIRST — an exported chain is an operator override and outranks the file, the
+    // same precedence model-ladders.sh applies. Then the project's own declaration, so a caller
+    // that never sourced that library still gets the ladder its project declares rather than
+    // none. `_declared` also supplies the start model for the same reason.
+    const _declared = sourceEnv[key] ? null : declaredTierChain(sourceEnv, tierName || profile.ladder);
+    const rungs = sourceEnv[key] || (_declared && _declared.chain) || '';
     if (rungs) {
       // The ladder this seam climbs, under the generic name every consumer reads.
       env.EPAM_MODEL_LADDER = rungs;
@@ -363,7 +421,7 @@ function seamInvocationEnv(agent, agentsDir, opts) {
       // picked whichever root was listed first in the JSON and made every seam's opening model a
       // property of text ordering. Reordering the file changed which model every agent began on,
       // with nothing to indicate it had.
-      const declaredStart = (sourceEnv[key + '_START'] || '').trim();
+      const declaredStart = (sourceEnv[key + '_START'] || (_declared && _declared.start) || '').trim();
       if (declaredStart) {
         env.EPAM_MODEL = declaredStart;
         // THE BUDGET COMES FROM THE RUNG, resolved from the model this seam actually starts
@@ -372,7 +430,19 @@ function seamInvocationEnv(agent, agentsDir, opts) {
         //
         // Absent stays absent, exactly as the start model does: a rung the project declares
         // no budget for is a gap to state, never one to fill with someone else's number.
-        const itMap = String(sourceEnv.EPAM_MODEL_ITERATIONS || '');
+        // SAME FALLBACK AS THE CHAIN. The map is emitted by model-ladders.sh from the project's
+        // own modelOverrides via lib/model-settings.js; a caller that never sourced that library
+        // had no map, so the rung's budget was absent for reasons that had nothing to do with the
+        // project declaring one. Built here from the same function, so the two cannot disagree.
+        const itMap = String(sourceEnv.EPAM_MODEL_ITERATIONS || (() => {
+          const dir = (sourceEnv && sourceEnv.EPAM_PROJECT_CONFIG_DIR) || '';
+          if (!dir) return '';
+          try {
+            // eslint-disable-next-line global-require
+            const { iterationMap } = require('./model-settings.js');
+            return iterationMap(path.join(dir, 'llm-settings.json')) || '';
+          } catch { return ''; }
+        })());
         if (itMap) {
           let resolved = '';
           for (const pair of itMap.split('|')) {

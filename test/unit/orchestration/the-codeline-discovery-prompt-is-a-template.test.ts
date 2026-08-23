@@ -63,12 +63,19 @@ describe('the prompt lives in the template layer', () => {
   });
 });
 
-describe('the migration changed no bytes', () => {
-  it('reproduces the captured prompt exactly', () => {
-    const g = golden();
-    const { buildDiscoveryPrompt } = require(MODULE);
-    expect(buildDiscoveryPrompt(g.fixtures.ISSUES, g.fixtures.MANIFEST)).toBe(g.output);
-  });
+describe('the prompt is built from the template, and the module is requirable', () => {
+  // REMOVED: 'reproduces the captured prompt exactly'.
+  //
+  // The golden was captured to prove one thing — that MOVING the prompt into the template layer
+  // changed no bytes. That migration is done and the guarantee held. The prompt has since changed
+  // deliberately: it no longer tells the model the candidate list is "PRE-SCORED and pre-filtered
+  // ... in descending order of match confidence", because it is not, and it no longer instructs
+  // the model to fall back to the first entry when unsure, because there is no ranking to fall
+  // back to. Both statements had become false, and the model was acting on them.
+  //
+  // Re-capturing the golden would leave an assertion that the current prompt equals itself.
+  // The invariant worth keeping is below and in the sibling test: the template carries no project
+  // facts, and every placeholder it declares is supplied.
 
   it('the module can be required without running a discovery pass', () => {
     // Unscoped, its argument check exited the requiring process.

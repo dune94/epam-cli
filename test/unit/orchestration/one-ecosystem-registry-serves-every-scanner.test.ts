@@ -54,19 +54,17 @@ describe('one ecosystem registry serves every scanner', () => {
     }
   });
 
-  it('the repo scan labels an ecosystem the registry knows and its own code does not name', () => {
-    // MUTATION, in the only direction that matters: Cargo.toml is in the registry and appears
-    // nowhere in codeline-discovery.js. A scanner with its own table reports `unknown` here.
-    const { buildRepoManifest } = require(join(LIB, 'codeline-discovery.js'));
-    repoWith('cargo-repo', 'Cargo.toml', '[package]\nname = "cargo-repo"\n');
+  // REMOVED: 'the repo scan labels an ecosystem the registry knows and its own code does not name'.
+  //
+  // codeline-discovery.js no longer labels a repository's stack. It reported one by matching the
+  // FIRST manifest file it found in registry order, so a repository with two ecosystems was
+  // labelled by the order of a list — and that label went into the one decision that picks which
+  // client repository gets modified. The discovery agent has read_file and dependency_contract
+  // and establishes this itself, for the repositories it actually cares about.
+  //
+  // The registry still serves every OTHER scanner, which is this file's subject; the remaining
+  // tests cover that.
 
-    const entry = buildRepoManifest(work).find((e: { name: string }) => e.name === 'cargo-repo');
-    expect(entry, 'the scan did not see the repository at all').toBeTruthy();
-
-    const expected = ecosystems().MANIFESTS.find((m: { file: string }) => m.file === 'Cargo.toml').stack;
-    expect(entry.stack, 'the repo scan carries its own table and does not know this ecosystem')
-      .toBe(expected);
-  });
 
   it('neither scanner writes a manifest filename of its own', () => {
     // A second table is how the first drift happened. Any manifest filename appearing as a literal
@@ -90,43 +88,13 @@ describe('one ecosystem registry serves every scanner', () => {
  * project whose documentation repos are named otherwise got no exclusion, and a project with an
  * in-scope repo matching the pattern could not opt out without editing the engine.
  */
-describe('what the repo scan skips is data', () => {
-  const scan = (root: string) => {
-    delete require.cache[require.resolve(join(LIB, 'codeline-discovery.js'))];
-    return require(join(LIB, 'codeline-discovery.js')).buildRepoManifest(root)
-      .map((e: { name: string }) => e.name);
-  };
-
-  it('excludes by the shipped patterns when nothing overrides them', () => {
-    repoWith('docs.portal', 'README.md', '# docs\n');
-    repoWith('alpha-service', 'package.json', '{"name":"alpha"}');
-    delete process.env.EPAM_CODELINE_EXCLUDE;
-    const seen = scan(work);
-    expect(seen, 'a documentation repo reached the candidate list').not.toContain('docs.portal');
-    expect(seen).toContain('alpha-service');
-  });
-
-  it('follows an override rather than the shipped pattern', () => {
-    // MUTATION in both directions at once: the repo the default excludes comes BACK, and one it
-    // keeps is dropped. A literal in the scanner can do neither.
-    repoWith('docs.portal', 'README.md', '# docs\n');
-    repoWith('alpha-service', 'package.json', '{"name":"alpha"}');
-    process.env.EPAM_CODELINE_EXCLUDE = '^alpha';
-    try {
-      const seen = scan(work);
-      expect(seen, 'the override did not bring the default-excluded repo back').toContain('docs.portal');
-      expect(seen, 'the override did not exclude what it named').not.toContain('alpha-service');
-    } finally {
-      delete process.env.EPAM_CODELINE_EXCLUDE;
-    }
-  });
-
-  it('names no exclusion pattern in the scanner itself', () => {
-    const src = readFileSync(join(LIB, 'codeline-discovery.js'), 'utf8')
-      .split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
-    for (const p of JSON.parse(readFileSync(
-      join(ROOT, 'orchestrations/config/codeline-scan.json'), 'utf8')).exclude) {
-      expect(src, `the scanner writes the pattern ${p} in its own code`).not.toContain(p);
-    }
-  });
-});
+// REMOVED: the suite holding the repo scan to declared exclusion patterns.
+//
+// The scan excluded repositories whose directory name matched a regex — /^docs\./i, then that
+// same pattern relocated to config/codeline-scan.json. Moving the literal out of the scanner did
+// not make it project data: it stayed an engine default asserting one client's naming habit over
+// every project, and it failed in the direction of doing LESS, silently, on a project whose
+// product is a documentation platform.
+//
+// Nothing is excluded now. The agent sees every repository and can rule one out with a reason,
+// which a regex cannot.

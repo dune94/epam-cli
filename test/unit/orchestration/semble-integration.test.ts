@@ -60,42 +60,15 @@ describe('semble-context.js: module API', () => {
 // All 31 Metrolinx repos are now CodeGraph-indexed — Semble removed from scoring.
 // Semble remains in spec-mode-runner.js as brownfield context fallback only.
 
-describe('codeline-discovery.js: discovery scoring uses CodeGraph, not grep or Semble', () => {
-  it('defines scoreRepos() with CodeGraph tier', () => {
-    expect(DISCOVERY_SRC).toMatch(/function scoreRepos\s*\(/);
-    expect(DISCOVERY_SRC).toMatch(/queryCodeGraph/);
-  });
-
-  it('does NOT use grep -ril for source scanning', () => {
-    expect(DISCOVERY_SRC).not.toContain('grep -ril');
-  });
-
-  it('does NOT use Semble in scoring (all repos indexed; removed as noise)', () => {
-    const scoreIdx = DISCOVERY_SRC.indexOf('function scoreRepos');
-    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 2000);
-    expect(scoreFn).not.toMatch(/sembleSearch|SEMBLE_ENABLED/);
-  });
-
-  it('calls scoreRepos before DRY_RUN branch', () => {
-    // Both indexes must be taken WITHIN main. The vocabulary deriver also branches on
-    // DRY_RUN (it runs no agent in the model-free mode) earlier in the file, so searching the
-    // whole source compares two unrelated positions. Same correction already applied in
-    // codeline-discovery.test.ts.
-    const MAIN = DISCOVERY_SRC.slice(DISCOVERY_SRC.indexOf('\u2500\u2500 Main'));
-    const scoringCallIdx  = MAIN.indexOf('const candidates = scoreRepos');
-    const dryRunBranchIdx = MAIN.indexOf('if (DRY_RUN)');
-    expect(scoringCallIdx).toBeGreaterThan(-1);
-    expect(scoringCallIdx).toBeLessThan(dryRunBranchIdx);
-  });
-
-  it('does NOT import semble-context (removed from discovery)', () => {
-    expect(DISCOVERY_SRC).not.toContain("require('./semble-context')");
-  });
-
-  it('logs repo scoring results', () => {
-    expect(DISCOVERY_SRC).toContain('Repo scoring: top');
-  });
-});
+// REMOVED: the scoring block this file used to assert on.
+//
+// It held codeline-discovery.js to "defines scoreRepos() with a CodeGraph tier" — an assertion
+// that a specific ranking function exists. That function is gone: the engine no longer ranks
+// candidate repositories at all, because the agent has codegraph_query and can search them
+// itself. A test demanding the mechanism's continued existence would forbid the fix.
+//
+// What Semble's removal from that path meant is preserved by the file's remaining tests, and what
+// discovery must now do is in discovery-is-agentic-and-uncontaminated.test.ts.
 
 // ── spec-mode-runner.js: semble context injection ─────────────────────────
 

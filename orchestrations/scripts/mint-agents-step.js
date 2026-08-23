@@ -28,6 +28,7 @@ const path = require('path');
 const { execFileSync, spawnSync } = require('child_process');
 
 const spec = require('./spec-mode-runner.js');
+const { refusalBlock } = require('./lib/refusal-block.js');
 
 const argv = process.argv.slice(2);
 const getArg = (flag, def = '') => {
@@ -626,9 +627,9 @@ if (require.main !== module) return;
         // __STACK__ is deliberately ABSENT. It is a stack-fact key, and engine-prompt.js injects
         // the ones a template declares — but only when the caller has not supplied them. Passing
         // an empty string here would win, and starve the agent of the codeline's real facts.
-        __PREVIOUS_REFUSAL__: refusal
-          ? `\n\n## Your previous attempt was REFUSED\n\n${refusal}\n\nProduce the roster again, correcting exactly this.`
-          : '',
+        // RENDERED FROM THE PROMPT LAYER, not written here. See lib/refusal-block.js: this text
+        // existed at three call sites in three wordings, none of them reviewable as a prompt.
+        __PREVIOUS_REFUSAL__: refusalBlock(refusal, 'roster'),
       });
       // spec.runClaude, like every other seam in this file. promptExec is the RUNNER handed to
       // it, not something to call — invoking it directly threw "promptExec is not a function".

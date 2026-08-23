@@ -82,7 +82,10 @@ function copyCanonicalForRun(canonicalPath, logDir) {
   return canonicalCopyPath(logDir);
 }
 
-const KINDS = ['implementer', 'investigator', 'seam'];
+// DECLARED IN THE REGISTRY, not here. This and agent-roster.js each held the list and they
+// disagreed — 'seam' validated in one and was an unrecognised kind in the other. See
+// lib/agent-kinds.js.
+const { agentKinds } = require('./agent-kinds.js');
 
 /** Seam names the registry declares. Read once — this is asked for every entry in the roster. */
 let _declaredSeams;
@@ -119,8 +122,8 @@ function checkEntry(name, entry, canonical) {
   if (typeof entry.persona !== 'string' || !entry.persona.trim()) {
     return { ok: false, reason: 'no persona' };
   }
-  if (!KINDS.includes(entry.kind)) {
-    return { ok: false, reason: `kind must be one of ${KINDS.join('|')} (got ${JSON.stringify(entry.kind)})` };
+  if (!agentKinds().includes(entry.kind)) {
+    return { ok: false, reason: `kind must be one of ${agentKinds().join('|')} (got ${JSON.stringify(entry.kind)})` };
   }
   // ANCESTRY IS MANDATORY, minted agents included. Without it an agent has no ladder, no tool
   // grant and no output contract, and something has to invent them — which is how the engine
@@ -376,7 +379,7 @@ function personaFor(agentName, projectConfigDir) {
  * would lock the codeline, and one reading a defaulted list would open it. Neither silently.
  */
 function agentsOfKind(kind, projectConfigDir) {
-  if (!KINDS.includes(kind)) throw new Error(`[roster] unknown kind '${kind}' (expected ${KINDS.join('|')})`);
+  if (!agentKinds().includes(kind)) throw new Error(`[roster] unknown kind '${kind}' (expected ${agentKinds().join('|')})`);
   const doc = loadRoster(projectConfigDir);
   return Object.keys(doc.agents).filter((n) => doc.agents[n] && doc.agents[n].kind === kind).sort();
 }
@@ -393,5 +396,5 @@ module.exports = {
   checkEntry,
   checkRoster,
   structureFor,
-  KINDS,
+  agentKinds,
 };

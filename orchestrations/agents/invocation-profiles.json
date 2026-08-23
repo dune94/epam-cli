@@ -55,6 +55,17 @@
     "agentSeams and seamPatterns map a MINTED AGENT to its ARCHETYPE — the base agent it is an instance of.",
     "It is not a bag of invocation settings that happen to suit. The distinction matters because an archetype carries what an instance INHERITS; an implementer pointed at a diagnostician would inherit the wrong prompt, the wrong output kind and the wrong inputs."
   ],
+  "$agentKindsWhy": "WHAT KINDS OF AGENT EXIST, declared once. Two engine modules held this as a literal and disagreed — project-roster.js allowed 'seam' and agent-roster.js called it an unrecognised kind — so whether a roster entry validated depended on which module looked. A kind decides whether an agent may own a story and author code, which is not a fact the engine may hold two opinions about. Adding one is an edit here.",
+  "agentKinds": [
+    "implementer",
+    "investigator",
+    "seam"
+  ],
+  "$agentKindMembershipWhy": "WHICH FILE'S MEMBERSHIP MAKES AN AGENT WHICH KIND. kindOfAgent resolved this POSITIONALLY — AGENT_KINDS[0] for project-roles, [1] for project-investigators — so reordering the kind list silently changed what every registered agent IS. Stated here instead, because the mapping is a fact and not an ordering.",
+  "agentKindMembership": {
+    "implementer": "project-roles.json",
+    "investigator": "project-investigators.json"
+  },
   "defaults": {
     "maxOutputTokens": 32768,
     "reasoningEffort": "medium",

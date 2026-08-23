@@ -289,6 +289,19 @@ function renderEngineTemplate(id, values, bodyKey) {
   if (missing.length) {
     throw new Error(`[engine-prompt] '${id}' is missing values for: ${missing.join(', ')}`);
   }
+  // AN EMPTY VALUE IS SILENCE. Same rule as prompt-library: the renderer refused a MISSING key and
+  // accepted a present-but-empty one, so `|| ''` produced a prompt that looked complete and said
+  // nothing. A placeholder that may legitimately be empty declares it in the template.
+  const _mayBeEmpty = new Set(Array.isArray(doc.mayBeEmpty) ? doc.mayBeEmpty : []);
+  const _blank = declared.filter((p) => !_mayBeEmpty.has(p)
+    && typeof values[p] === 'string' && !values[p].trim());
+  if (_blank.length) {
+    throw new Error(
+      `[engine-prompt] '${id}' was given EMPTY values for: ${_blank.join(', ')}. An empty payload `
+      + 'renders as a blank section and the agent answers about silence. Supply it, or declare the '
+      + "placeholder in the template's `mayBeEmpty` if absent is a real state for it.");
+  }
+
   const unused = supplied.filter((p) => !declared.includes(p));
   if (unused.length) {
     throw new Error(`[engine-prompt] '${id}' was given values it does not use: ${unused.join(', ')}`);

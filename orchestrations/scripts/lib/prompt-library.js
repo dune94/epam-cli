@@ -230,6 +230,28 @@ function render(doc, values) {
   //
   // Replacer FUNCTION, not a string, so a `$&` or `$1` inside a diff, a log or a JSON example
   // is inserted literally instead of being read as a replacement pattern.
+  // AN EMPTY VALUE IS SILENCE, AND SILENCE REACHES THE MODEL AS A BLANK SECTION.
+  //
+  // The renderer refused a MISSING key and accepted a present-but-empty one, so `|| ''` — which
+  // fifteen call sites use — turned a failed lookup into a prompt that looked complete and said
+  // nothing. Live 2026-08-23: the roster reviewer was handed a header with a blank line under it
+  // for every agent, reported the briefs "entirely empty", and blocked the roster twice. The
+  // briefs existed; the lookup read the wrong map.
+  //
+  // A placeholder that may legitimately be empty says so IN THE TEMPLATE, as `mayBeEmpty`. A retry
+  // note absent on a first attempt is a real state; a brief is not. That distinction belongs with
+  // the prompt, which is reviewable, rather than in the producer, which is where it got lost.
+  const mayBeEmpty = new Set(Array.isArray(doc.mayBeEmpty) ? doc.mayBeEmpty : []);
+  const blank = present.filter((p) => !mayBeEmpty.has(p)
+    && typeof supplied[p] === 'string' && !supplied[p].trim());
+  if (blank.length) {
+    throw new Error(
+      `prompt '${doc.id}' was given EMPTY values for: ${blank.join(', ')}. An empty payload renders `
+      + 'as a blank section and the agent answers about silence — it cannot tell a failed lookup '
+      + 'from a genuinely absent one. Supply the value, or declare the placeholder in the '
+      + "template's `mayBeEmpty` if absent is a real state for it.");
+  }
+
   const out = substituteOnce(body, present, supplied);
 
   // The check that means something is on the BODY: a placeholder this pass did not cover.

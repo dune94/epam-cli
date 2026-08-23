@@ -126,11 +126,31 @@ describe('RENDERING IS TOTAL — no placeholder ever reaches a model', () => {
         .toThrow(/missing values for.*__VERIFICATION_FAILURE__/);
     });
 
-  it('an EMPTY STRING is still a legitimate value and renders', () => {
-    const out = lib.buildPrompt('failure-analyst', PROJECT_DIR,
-      { ...VALUES, __VERIFICATION_FAILURE__: '' });
-    expect(out.length, 'the prompt rendered to nothing').toBeGreaterThan(200);
-    expect(out).not.toContain('undefined');
+  it('an EMPTY STRING is REFUSED unless the template says absent is a real state', () => {
+    // THIS ASSERTED THE OPPOSITE, and the opposite is what let a blank section reach three agents
+    // on 2026-08-23. `|| ''` at fifteen call sites turns a failed lookup into a present-but-empty
+    // value; the renderer accepted it, and the prompt looked complete while saying nothing. The
+    // roster reviewer read a header with a blank line under it and blocked a roster twice.
+    //
+    // A failure analyst invoked with NO verification failure has nothing to analyse, so empty here
+    // is a plumbing fault rather than a state. The requirement the old test protected — that
+    // absent and empty are different, and neither may be defaulted — is stronger now: both are
+    // refused, and a placeholder for which absent IS real declares it in its template.
+    expect(() => lib.buildPrompt('failure-analyst', PROJECT_DIR,
+      { ...VALUES, __VERIFICATION_FAILURE__: '' }))
+      .toThrow(/EMPTY values for.*__VERIFICATION_FAILURE__/);
+  });
+
+  it('and a declared mayBeEmpty placeholder still renders when absent', () => {
+    // The escape hatch is real and lives with the prompt: estate-survey declares __DOC_SECTION__
+    // and __DEP_SECTION__, because a survey with no referenced documents is a true state.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+    const { renderEngineTemplate } = require(
+      join(__dirname, '../../../orchestrations/scripts/lib/engine-prompt.js'));
+    const doc = JSON.parse(readFileSync(
+      join(__dirname, '../../../orchestrations/prompts/templates/estate-survey.json'), 'utf8'));
+    expect(doc.mayBeEmpty).toContain('__DOC_SECTION__');
+    void renderEngineTemplate;
   });
 
   it('a MISSING value is a hard failure — a prompt without its evidence is worse than none', () => {
@@ -139,10 +159,15 @@ describe('RENDERING IS TOTAL — no placeholder ever reaches a model', () => {
       .toThrow(/missing values for.*__VERIFICATION_FAILURE__/);
   });
 
-  it('an EMPTY value is legitimate and must be passed explicitly', () => {
-    // Empty is a value. Absent is not. Collapsing the two is how evidence goes missing.
-    const out = lib.buildPrompt('failure-analyst', PROJECT_DIR, { ...VALUES, __SKILL_ADDENDUM__: '' });
-    expect(lib.placeholdersIn(out)).toEqual([]);
+  it('an EMPTY value is refused by NAME, so the producer that lost it is findable', () => {
+    // Empty and absent are still different things — and now BOTH are refused, because a producer
+    // cannot tell you which one it meant and the agent cannot tell them apart at all.
+    let msg = '';
+    try {
+      lib.buildPrompt('failure-analyst', PROJECT_DIR, { ...VALUES, __SKILL_ADDENDUM__: '' });
+    } catch (e) { msg = (e as Error).message; }
+    expect(msg).toContain('__SKILL_ADDENDUM__');
+    expect(msg).toMatch(/EMPTY/);
   });
 
   it('values containing $& and $1 are inserted LITERALLY', () => {

@@ -192,3 +192,70 @@ build() {
         [ "$line" -gt "$def" ] || { echo "call at $line precedes the definition at $def"; false; }
     done
 }
+
+@test "A FAILED REVIEW does not discard a roster that passed its contract" {
+    # Live 2026-08-23: the reviewer returned its own PLAN as a blocking finding, with verdict
+    # 'nothing_to_review'. That was translated to changes_requested, so a roster that had SATISFIED
+    # its contract was deleted and regenerated — paying for new work and blaming the artefact for
+    # the judge's failure. The schema draws three states on purpose: examined-and-sound,
+    # examined-and-defective, did-not-examine. All three must survive the translation.
+    "$NODE" -e '
+      const fs = require("fs"), path = require("path");
+      const m = require(process.argv[1]);
+      const canonicalPath = process.argv[2], work = process.argv[3];
+      let produced = 0;
+      const produce = async ({ canonicalCopyPath, outPath }) => {
+        produced += 1;
+        const c = JSON.parse(fs.readFileSync(canonicalCopyPath, "utf8"));
+        const agents = {};
+        for (const [n, p] of Object.entries(c))
+          agents[n] = { persona: "[p] " + p, kind: "seam", ancestor: n,
+                        derivedFromSha256: m.personaDigest(p) };
+        fs.mkdirSync(path.dirname(outPath), { recursive: true });
+        fs.writeFileSync(outPath, JSON.stringify({ agents }, null, 2));
+      };
+      let reviews = 0;
+      const review = async () => {
+        reviews += 1;
+        // Fails to examine twice, then works — the shape actually observed.
+        if (reviews < 3) return { verdict: "review_failed", reason: "returned a plan, not a review" };
+        return { verdict: "approved", findings: [] };
+      };
+      m.buildProjectRoster({ canonicalPath, logDir: work + "/logs",
+        projectConfigDir: work + "/project", produce, review, attempts: 3, log: () => {} })
+        .then(() => process.stdout.write(`BUILT produced=${produced} reviews=${reviews}`))
+        .catch((e) => process.stdout.write("REFUSED: " + e.message));
+    ' "$LIB" "$CANON" "$WORK" > "$WORK/out.txt"
+    out=$(cat "$WORK/out.txt")
+
+    [[ "$out" == BUILT* ]] || { echo "a recoverable review failure sank the run: $out"; false; }
+    # THE POINT: the specialiser ran ONCE. Two review failures cost the reviewer, not the roster.
+    [[ "$out" == *"produced=1"* ]] || {
+        echo "the roster was regenerated for a failure that was not its own: $out"; false; }
+    [[ "$out" == *"reviews=3"* ]] || { echo "the review was not retried: $out"; false; }
+}
+
+@test "a review that NEVER examines the roster halts, and says the roster is not implicated" {
+    "$NODE" -e '
+      const fs = require("fs"), path = require("path");
+      const m = require(process.argv[1]);
+      const produce = async ({ canonicalCopyPath, outPath }) => {
+        const c = JSON.parse(fs.readFileSync(canonicalCopyPath, "utf8"));
+        const agents = {};
+        for (const [n, p] of Object.entries(c))
+          agents[n] = { persona: "[p] " + p, kind: "seam", ancestor: n,
+                        derivedFromSha256: m.personaDigest(p) };
+        fs.mkdirSync(path.dirname(outPath), { recursive: true });
+        fs.writeFileSync(outPath, JSON.stringify({ agents }, null, 2));
+      };
+      const review = async () => ({ verdict: "review_failed", reason: "returned a plan" });
+      m.buildProjectRoster({ canonicalPath: process.argv[2], logDir: process.argv[3] + "/logs",
+        projectConfigDir: process.argv[3] + "/project", produce, review, attempts: 2, log: () => {} })
+        .then(() => process.stdout.write("BUILT"))
+        .catch((e) => process.stdout.write("REFUSED: " + e.message));
+    ' "$LIB" "$CANON" "$WORK" > "$WORK/out2.txt"
+    out=$(cat "$WORK/out2.txt")
+    [[ "$out" == REFUSED* ]] || { echo "an unreviewed roster was accepted: $out"; false; }
+    [[ "$out" == *"review is what failed"* ]] || {
+        echo "the halt blames the roster instead of the review: $out"; false; }
+}

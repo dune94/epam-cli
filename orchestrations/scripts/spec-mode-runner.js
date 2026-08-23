@@ -4346,11 +4346,36 @@ async function reviewProjectRoster({
   if (payload.verdict === 'sound' && !blocking.length) {
     return { verdict: 'approved', findings };
   }
+
+  // A REVIEW THAT EXAMINED NOTHING IS NOT A DEFECTIVE ROSTER.
+  //
+  // 'nothing_to_review' means the reviewer did not look — live 2026-08-23 it returned its own
+  // PLAN as a blocking finding ("PLAN: I will read both roster files...") and that verdict.
+  // Treating it as changes_requested threw away a roster that had PASSED its contract and paid to
+  // generate another, blaming the artefact for the judge's failure. The distinction the schema
+  // draws deliberately — examined-and-sound, examined-and-defective, did-not-examine — has to
+  // survive the translation, or the caller cannot tell which happened.
+  if (payload.verdict === 'nothing_to_review' || !payload.verdict) {
+    return {
+      verdict: 'review_failed',
+      findings,
+      reason: 'the roster review did not examine anything — it returned '
+        + `'${payload.verdict || 'no verdict'}'. The roster is not implicated.`,
+    };
+  }
+
+  // The schema's finding fields are claim/found/checked — NOT finding/description, which is what
+  // this read and why the operator saw "roster-review: " with nothing after it. A rejection whose
+  // reason is empty is a rejection nobody can act on.
+  const describe = (f) => [f.claim, f.found, f.checked]
+    .map((x) => String(x || '').trim())
+    .filter((x) => x && x !== 'N/A')
+    .join(' — ') || '(the finding carried no text)';
   return {
     verdict: 'changes_requested',
     findings,
     reason: blocking.length
-      ? blocking.map((f) => `${f.agent || '?'}: ${f.finding || f.description || ''}`).join('; ')
+      ? blocking.map((f) => `${f.agent || '?'}: ${describe(f)}`).join('; ')
       : `roster review returned '${payload.verdict}'`,
   };
 }

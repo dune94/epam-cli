@@ -244,12 +244,40 @@ async function buildProjectRoster({
     // REVIEWED AGAINST BOTH. With only the roster a reviewer can judge plausibility; falsifying
     // "is this ancestor close" and "was inherited structure quietly changed" needs the source.
     if (typeof review === 'function') {
-      const verdict = await review({ roster, canonical, rosterPath: outPath, canonicalPath: copyPath });
-      if (!verdict || verdict.verdict !== 'approved') {
+      // THE REVIEW RETRIES AGAINST THE SAME ROSTER. An inner loop, because `continue` on the outer
+      // one re-runs the producer — which is the very thing that must not happen when the artefact
+      // is not implicated. Live 2026-08-23 that cost three specialisations for one bad reviewer.
+      let approved = false;
+      let reviewReason = '';
+      for (let r = 1; r <= attempts; r++) {
+        const verdict = await review({ roster, canonical, rosterPath: outPath, canonicalPath: copyPath });
+
+        if (verdict && verdict.verdict === 'approved') { approved = true; break; }
+
+        // A REVIEW THAT FAILED IS NOT A ROSTER THAT FAILED. 'nothing_to_review' means the reviewer
+        // did not look — it returned its own plan, once — and the schema distinguishes that from
+        // examined-and-defective on purpose. Retry the judge; leave the artefact alone.
+        if (verdict && verdict.verdict === 'review_failed') {
+          reviewReason = verdict.reason || 'the review did not examine the roster';
+          log(`[roster] review did not examine the roster (${r}/${attempts}): ${reviewReason}`);
+          continue;
+        }
+
+        // Examined, and found wanting. THAT implicates the roster.
         lastReason = (verdict && (verdict.reason || (verdict.findings || []).join('; ')))
           || 'review returned no verdict';
         log(`[roster] attempt ${attempt}/${attempts} REJECTED by review: ${lastReason}`);
+        break;
+      }
+
+      if (!approved) {
         try { fs.unlinkSync(outPath); } catch { /* nothing to remove */ }
+        if (reviewReason && !lastReason) {
+          throw new Error(
+            `[roster] the roster review never examined the roster in ${attempts} attempt(s): `
+            + `${reviewReason}. The roster satisfied its contract; the review is what failed, and `
+            + 'an unreviewed roster is not one to run agents from.');
+        }
         continue;
       }
     }

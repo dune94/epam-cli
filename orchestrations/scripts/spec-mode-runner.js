@@ -4401,8 +4401,56 @@ async function reviewProjectRoster({
   };
 }
 
+/**
+ * THE BLOCK THE ROSTER REVIEWER READS — one agent per entry, header then brief.
+ *
+ * Live 2026-08-23: this looked the brief up as `profiles[m.name] || ''` in the CANONICAL profiles
+ * map, which holds the engine's own agents and none of the ones just minted — their briefs are
+ * written to the PROJECT's agent-profiles.json. Every lookup missed, `|| ''` turned the miss into
+ * an empty string, and the reviewer was handed a header with a blank line under it. It reported
+ * "the brief body is entirely empty" for all three agents and blocked the roster twice. It was
+ * right about the text and wrong about the roster, and the run spent two top-rung correction
+ * cycles on a defect that was not there.
+ *
+ * BOTH MAPS ARE READ, because a brief may legitimately live in either: canonical agents carry
+ * theirs in the engine's profiles, minted ones in the project's.
+ *
+ * AND A MISSING BRIEF SAYS SO. `|| ''` could not distinguish "this agent has no brief" from "this
+ * agent is not in this map", so a plumbing failure and a real roster defect rendered identically
+ * and the reviewer could only blame the roster. The reviewer must be able to tell them apart.
+ */
+function buildRosterBriefBlock(minted, profiles, projectProfiles) {
+  // THE MAP MAY BE NESTED. The engine's profiles.json is a flat {name: brief}; the project's
+  // agent-profiles.json is {runId, _what, profiles: {name: brief}}. Reading only the top level
+  // missed every minted brief a second time — the same failure one layer down, found by running
+  // this against the artefacts a real run had just written rather than against a fixture I wrote
+  // to match my own assumption.
+  const unwrap = (map) => ((map && typeof map === 'object' && map.profiles
+    && typeof map.profiles === 'object') ? map.profiles : map);
+  const look = (rawMap, name) => {
+    const map = unwrap(rawMap);
+    if (!map || typeof map !== 'object') return '';
+    const v = map[name];
+    if (typeof v === 'string') return v;
+    // A project map may hold an object per agent; the brief is its text.
+    if (v && typeof v === 'object') return String(v.brief || v.persona || v.systemPrompt || '');
+    return '';
+  };
+  return (Array.isArray(minted) ? minted : []).map((m) => {
+    const brief = look(profiles, m.name) || look(projectProfiles, m.name);
+    const tag = m.kind + (m.codeline ? ': ' + m.codeline : '');
+    const body = brief.trim()
+      ? brief
+      : '(NO BRIEF FOUND for this agent in either the engine or the project profiles — this is a '
+        + 'missing brief, which is a defect in what produced the roster, not an agent that was '
+        + 'given an empty one.)';
+    return ['--- ' + m.name + '  [' + tag + ']', body].join('\n');
+  }).join('\n\n');
+}
+
 async function reviewRoster({
-  promptExec, minted, profiles, codelines, tickets, referencedDocs, logDir, repoPath, toolGrant,
+  promptExec, minted, profiles, projectProfiles, codelines, tickets, referencedDocs, logDir,
+  repoPath, toolGrant,
 }) {
   const _minted = Array.isArray(minted) ? minted : [];
   // AN EMPTY SET IS NOT SOUND — IT IS UNREVIEWED. Returning 'sound' here reported a clean bill of
@@ -4411,11 +4459,7 @@ async function reviewRoster({
   // review said "sound" — true of the empty set, and the run died at assignment.
   if (!_minted.length) return { verdict: 'nothing_to_review', findings: [], reviewed: 0 };
 
-  const briefBlock = _minted.map((m) => {
-    const brief = (profiles && profiles[m.name]) || '';
-    const tag = m.kind + (m.codeline ? ': ' + m.codeline : '');
-    return ['--- ' + m.name + '  [' + tag + ']', brief].join('\n');
-  }).join('\n\n');
+  const briefBlock = buildRosterBriefBlock(_minted, profiles, projectProfiles);
 
   const clBlock = (Array.isArray(codelines) ? codelines : []).map((c) => {
     const d = Array.isArray(c.dependencies) ? c.dependencies : [];
@@ -9282,6 +9326,7 @@ module.exports = {
   TOOL_ROSTER_REVIEW,
   seamInvocationEnv,
   withToolGrant,
+  buildRosterBriefBlock,
   schemaEnv,
   referencedDocsBlock,
   advanceAgentLadderEscalation,

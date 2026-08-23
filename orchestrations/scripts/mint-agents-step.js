@@ -877,8 +877,17 @@ if (require.main !== module) return;
     process.env.EPAM_AGENT_NAME = 'roster-review';
     try {
       const liveProfiles = JSON.parse(fs.readFileSync(PROFILES_PATH, 'utf8'));
+      // THE PROJECT'S OWN PROFILES TOO. The minted agents' briefs are written here, not into the
+      // engine's canonical profiles — so passing only the latter handed the reviewer a header with
+      // a blank line under it for every agent it was asked to judge. It reported them all "empty"
+      // and blocked the roster twice, correctly about the text and wrongly about the roster.
+      let projectProfiles = {};
+      try {
+        const _pp = path.join(process.env.EPAM_PROJECT_CONFIG_DIR || '', 'agent-profiles.json');
+        projectProfiles = JSON.parse(fs.readFileSync(_pp, 'utf8'));
+      } catch { /* a project with no minted profiles yet has none to add */ }
       return await spec.reviewRoster({
-        promptExec, minted: _mintedDetail, profiles: liveProfiles,
+        promptExec, minted: _mintedDetail, profiles: liveProfiles, projectProfiles,
         codelines, tickets: stories, referencedDocs: docs,
         logDir: LOG_DIR, repoPath: REPO_PATH, toolGrant,
       });

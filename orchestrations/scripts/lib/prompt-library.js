@@ -43,7 +43,7 @@ const PROJECT_PROMPT_SUBDIR = 'prompts';
 // unfixed copies then disagreed with the fixed one about what a template declares, so a valid
 // generated prompt was refused as "dropping placeholders" and a valid template was refused as
 // "using undeclared placeholders". Three copies of a rule is three rules.
-const { placeholdersIn: _placeholdersIn } = require('./engine-prompt.js');
+const { placeholdersIn: _placeholdersIn, substituteOnce } = require('./engine-prompt.js');
 
 /** Repo root, derived from this file's location — never an env guess. */
 function repoRoot() {
@@ -210,22 +210,33 @@ function render(doc, values) {
       + 'Add the placeholder to this project prompt, or stop supplying the value.\n');
   }
 
-  const missing = present.filter((p) => !(p in supplied));
+  // A LOOKUP THAT FOUND NOTHING IS ABSENCE, NOT A VALUE. `p in supplied` is true for a key whose
+  // value is undefined, so the rule stated below — absent is not empty — was defeated by the one
+  // shape absence actually takes in JavaScript, and the prompt rendered with the literal word
+  // "undefined" where the evidence belonged. null is the same thing arriving from JSON.
+  const missing = present.filter((p) => !(p in supplied) || supplied[p] === undefined || supplied[p] === null);
   if (missing.length) {
     // An empty string is a legitimate value and must be passed explicitly. Absent is not
     // empty: a prompt rendered without its evidence is worse than one that fails loudly.
     throw new Error(`prompt '${doc.id}' is missing values for: ${missing.join(', ')}`);
   }
 
-  let out = body;
-  for (const key of present) {
-    const value = String(supplied[key]);
-    out = out.replace(new RegExp(key, 'g'), () => value);
-  }
+  // ONE PASS OVER THE BODY. Replacing each key in turn over the accumulating output meant every
+  // value was re-read by every later key: a diff that mentioned __B__ had __B__'s content
+  // spliced into it, and a diff carrying any double-underscore token — a Python dunder, a C
+  // macro — tripped the leftover check below and killed the render of a complete prompt. A
+  // single alternation pass inserts each value exactly where the BODY asked for it and never
+  // looks at what was inserted.
+  //
+  // Replacer FUNCTION, not a string, so a `$&` or `$1` inside a diff, a log or a JSON example
+  // is inserted literally instead of being read as a replacement pattern.
+  const out = substituteOnce(body, present, supplied);
 
-  const leftover = placeholdersIn(out);
-  if (leftover.length) {
-    throw new Error(`prompt '${doc.id}' still contains placeholders after rendering: ${leftover.join(', ')}`);
+  // The check that means something is on the BODY: a placeholder this pass did not cover.
+  // Scanning the OUTPUT could only ever find tokens that arrived as evidence.
+  const uncovered = placeholdersIn(body).filter((p) => !present.includes(p));
+  if (uncovered.length) {
+    throw new Error(`prompt '${doc.id}' has placeholders no value covered: ${uncovered.join(', ')}`);
   }
   return out;
 }

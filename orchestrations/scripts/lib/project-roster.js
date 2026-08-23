@@ -66,6 +66,17 @@ function copyCanonicalForRun(canonicalPath, logDir) {
   const parsed = JSON.parse(raw);
   const names = Object.keys(parsed).filter((k) => typeof parsed[k] === 'string' && parsed[k].trim());
   if (!names.length) throw new Error(`[roster] canonical has no usable entries: ${canonicalPath}`);
+  // AN UNUSABLE ENTRY IS REFUSED, NOT SKIPPED. The completeness check ignores non-strings, so a
+  // canonical entry that is an object or empty would be dropped from the roster in silence — and
+  // the agent it names would throw at whichever invocation first reached for it, mid-run, long
+  // after the roster was accepted. Canonical is all strings today; this is what keeps it so.
+  const unusable = Object.keys(parsed).filter((k) => !names.includes(k));
+  if (unusable.length) {
+    throw new Error(
+      `[roster] canonical entries are not usable personas: ${unusable.join(', ')}. Every entry is `
+      + 'an agent\'s persona text; one that is empty or not a string would be dropped from the '
+      + 'roster silently and fail at the invocation that needed it.');
+  }
   fs.mkdirSync(path.dirname(canonicalCopyPath(logDir)), { recursive: true });
   fs.writeFileSync(canonicalCopyPath(logDir), raw, 'utf8');
   return canonicalCopyPath(logDir);
@@ -217,7 +228,19 @@ async function buildProjectRoster({
     // THE AGENT WRITES THE FILE, with its own tools. The pipeline hands it the canonical copy
     // and a destination and then judges the artefact — it does not compose the roster itself,
     // because deciding each persona's shape is the agent's work, not the pipeline's.
-    await produce({ canonicalCopyPath: copyPath, outPath, attempt, refusal: lastReason });
+    // A RUNNER FAILURE IS AN ATTEMPT, NOT THE END. Unguarded, a throw here propagated straight
+    // out and killed the stage having used NONE of its three attempts — which is what
+    // "prompt runner exited with code 1" did on 2026-08-23, after the previous attempt had already
+    // produced a contract-passing roster. Declaring `attempts: 3` and spending one on a transient
+    // is the same as declaring one.
+    try {
+      await produce({ canonicalCopyPath: copyPath, outPath, attempt, refusal: lastReason });
+    } catch (e) {
+      lastReason = `the specialiser call failed: ${(e && e.message) || e}`;
+      log(`[roster] attempt ${attempt}/${attempts} CALL FAILED: ${lastReason}`);
+      try { fs.unlinkSync(outPath); } catch { /* nothing to remove */ }
+      continue;
+    }
 
     if (!fs.existsSync(outPath)) {
       lastReason = `the agent wrote no roster at ${outPath}`;
@@ -250,7 +273,15 @@ async function buildProjectRoster({
       let approved = false;
       let reviewReason = '';
       for (let r = 1; r <= attempts; r++) {
-        const verdict = await review({ roster, canonical, rosterPath: outPath, canonicalPath: copyPath });
+        // A THROWING REVIEWER IS A FAILED REVIEW, not a failed roster and not a dead stage. The
+        // mint's own wrapper catches this today, but a library that depends on its caller to be
+        // careful is one caller away from the bug it was written to prevent.
+        let verdict;
+        try {
+          verdict = await review({ roster, canonical, rosterPath: outPath, canonicalPath: copyPath });
+        } catch (e) {
+          verdict = { verdict: 'review_failed', reason: `the review call failed: ${(e && e.message) || e}` };
+        }
 
         if (verdict && verdict.verdict === 'approved') { approved = true; break; }
 

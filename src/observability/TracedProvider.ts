@@ -13,6 +13,7 @@ import type {
   ContentPart,
 } from '../providers/types.js';
 import { getLangfuse, isLangfuseEnabled } from './LangfuseTracer.js';
+import { agentLabel } from './agentLabel.js';
 import { emitLlmSpan, isOtelEnabled } from './OtelTracer.js';
 import { calculateCost } from '../billing/pricing.js';
 import { logger } from '../utils/logger.js';
@@ -51,10 +52,9 @@ export class TracedProvider implements LLMProvider {
    * ORCH_RUN_ID.
    */
   private get agentLabel(): string {
-    const agent = process.env.EPAM_AGENT_NAME?.trim();
-    const story = process.env.EPAM_STORY_ID?.trim();
-    if (agent && story) return `${agent} · ${story}`;
-    return agent || story || `${this.name} call`;
+    // ONE DEFINITION, shared with the replay provider: this label is the key a recorded run is
+    // replayed by, and a second copy of the rule would drift silently.
+    return agentLabel(`${this.name} call`);
   }
 
   /**

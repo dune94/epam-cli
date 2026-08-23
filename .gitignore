@@ -93,3 +93,12 @@ __pycache__/
 
 # CodeGraph index — a 63MB local cache, rebuilt on demand by lib/codegraph-context.js
 .codegraph/
+
+# RECORDED RUNS (cassettes) ARE NOT COMMITTED BY DEFAULT.
+#
+# A cassette is every turn of a real run, which means it contains whatever the agents read —
+# client source among it. Regenerating one costs nothing and takes about a minute:
+#   orchestrations/scripts/cassette-export.js --session <id> --out orchestrations/cassettes/<name>
+# so the recording is reproducible from Langfuse rather than carried in this repo. Tracking a
+# specific cassette is a deliberate decision about client content, not a default.
+orchestrations/cassettes/

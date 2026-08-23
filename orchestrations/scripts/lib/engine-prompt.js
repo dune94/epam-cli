@@ -171,6 +171,19 @@ function templateLayerOf(id) {
   return found.layer === 'bootstrap' ? 'bootstrap' : 'project';
 }
 
+/**
+ * Substitute every declared placeholder in ONE pass, so an inserted value is never rescanned.
+ *
+ * Keys are placeholder tokens (`__LIKE_THIS__`) — no regex metacharacters — but they are escaped
+ * anyway, because the day one is not is the day this corrupts something quietly.
+ */
+function substituteOnce(body, keys, values) {
+  if (!keys.length) return body;
+  const esc = (k) => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(keys.map(esc).join('|'), 'g');
+  return body.replace(re, (m) => String(values[m]));
+}
+
 function renderEngineTemplate(id, values, bodyKey) {
   // A SEAM-DECLARED PROMPT IS NOT THIS RENDERER'S TO EXECUTE.
   //
@@ -269,7 +282,10 @@ function renderEngineTemplate(id, values, bodyKey) {
     }
   }
 
-  const missing = declared.filter((p) => !supplied.includes(p));
+  // Absence in JavaScript is `undefined`, and a key holding it is still a key: Object.keys lists
+  // it, so a failed lookup passed this check and rendered the word "undefined" into the prompt.
+  const missing = declared.filter((p) => !supplied.includes(p)
+    || values[p] === undefined || values[p] === null);
   if (missing.length) {
     throw new Error(`[engine-prompt] '${id}' is missing values for: ${missing.join(', ')}`);
   }
@@ -278,19 +294,27 @@ function renderEngineTemplate(id, values, bodyKey) {
     throw new Error(`[engine-prompt] '${id}' was given values it does not use: ${unused.join(', ')}`);
   }
 
-  // Replacer FUNCTION, not a string. A `$&` or `$1` inside a diff, a log, a regex or a JSON
-  // example — all routine in these values — would otherwise be read as a replacement pattern
-  // and corrupt the evidence silently. This bit me while writing this very module: inserting
-  // it with String.replace expanded the `$&` in the comment above.
-  for (const key of declared) {
-    out = out.replace(new RegExp(key, 'g'), () => String(values[key]));
-  }
+  // ONE PASS OVER THE BODY. Replacing each key in turn over the accumulating output meant every
+  // value was re-read by every later key: a diff that mentioned __B__ had __B__'s content
+  // spliced into it, and a diff carrying any double-underscore token — a Python dunder, a C
+  // macro — tripped the leftover check below and killed the render of a complete prompt. A
+  // single alternation pass inserts each value exactly where the BODY asked for it and never
+  // looks at what was inserted.
+  //
+  // Replacer FUNCTION, not a string, so a `$&` or `$1` inside a diff, a log or a JSON example
+  // is inserted literally instead of being read as a replacement pattern.
+  out = substituteOnce(out, declared, values);
 
-  const leftover = placeholdersIn(out);
-  if (leftover.length) {
-    throw new Error(`[engine-prompt] '${id}' still contains placeholders after rendering: ${leftover.join(', ')}`);
+  // The check that means something is on the BODY, not on the result: a body placeholder this
+  // pass did not cover. Scanning the OUTPUT could only ever find tokens that arrived as
+  // evidence, because every body placeholder is in `declared` and every one of them is
+  // replaced.
+  const uncovered = placeholdersIn(String(doc.bodies ? doc.bodies[bodyKey || 'prompt'] : (doc.body || '')))
+    .filter((p) => !declared.includes(p));
+  if (uncovered.length) {
+    throw new Error(`[engine-prompt] '${id}' has placeholders no value covered: ${uncovered.join(', ')}`);
   }
   return out;
 }
 
-module.exports = { renderEngineTemplate, placeholdersIn, templatePath, templatesDir };
+module.exports = { renderEngineTemplate, placeholdersIn, templatePath, templatesDir, substituteOnce };

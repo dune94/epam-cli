@@ -90,6 +90,13 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# A REHEARSAL BRINGS ITS OWN PROVIDER. The cassette directory names it; this refusal is about a
+# run that has no provider at all, and would otherwise reject a replay before the substitution
+# below is ever reached.
+if [ -z "$PRIMARY_PROVIDER" ] && [ -n "${EPAM_REPLAY_CASSETTE_DIR:-}" ]; then
+  PRIMARY_PROVIDER="replay"
+fi
+
 if [ -z "$PRIMARY_PROVIDER" ]; then
   cmd_base="$(basename "$CLAUDE_CMD")"
   case "$cmd_base" in
@@ -272,13 +279,37 @@ run_provider_once() {
   esac
 }
 
-providers=("$PRIMARY_PROVIDER")
-if [ -n "$FALLBACKS_RAW" ]; then
-  IFS=',' read -r -a _fallbacks <<< "$FALLBACKS_RAW"
-  for p in "${_fallbacks[@]}"; do
-    p="$(echo "$p" | xargs)"
-    [ -n "$p" ] && providers+=("$p")
-  done
+# A REHEARSAL REPLACES EVERY PROVIDER, AT ONE PLACE.
+#
+# Each seam names its own provider through project config, so rehearsing a run by editing them
+# would mean touching dozens of declarations and putting them all back afterwards -- and the one
+# left behind would spend real money in the mode whose whole purpose is not to. Every model call
+# in the pipeline, from bash and from JS alike, execs THIS script, so the substitution belongs
+# here and nowhere else.
+#
+# The cassette directory IS the switch. There is no separate "replay mode" flag that could be set
+# without a recording, or a recording present with the flag forgotten.
+if [ -n "${EPAM_REPLAY_CASSETTE_DIR:-}" ]; then
+  if [ ! -d "$EPAM_REPLAY_CASSETTE_DIR" ]; then
+    echo "[ai-run] EPAM_REPLAY_CASSETTE_DIR is set to '$EPAM_REPLAY_CASSETTE_DIR', which is not a directory." >&2
+    echo "[ai-run] A rehearsal replays a recorded run; it does not fall back to a paid provider." >&2
+    exit 1
+  fi
+  providers=("replay")
+  AI_PROVIDER="replay"; export AI_PROVIDER
+  # The FALLBACK CHAIN IS DROPPED DELIBERATELY. A fallback exists so a failing provider is retried
+  # on a paid one, which is exactly what must not happen here: a replay that diverges from its
+  # recording is a finding, and falling back would convert that finding into a bill.
+  echo "[ai-run] REHEARSAL: replaying $EPAM_REPLAY_CASSETTE_DIR -- no provider is called and nothing is spent" >&2
+else
+  providers=("$PRIMARY_PROVIDER")
+  if [ -n "$FALLBACKS_RAW" ]; then
+    IFS=',' read -r -a _fallbacks <<< "$FALLBACKS_RAW"
+    for p in "${_fallbacks[@]}"; do
+      p="$(echo "$p" | xargs)"
+      [ -n "$p" ] && providers+=("$p")
+    done
+  fi
 fi
 
 # ── Plan-execute ────────────────────────────────────────────────────────────

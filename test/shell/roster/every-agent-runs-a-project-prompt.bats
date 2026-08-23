@@ -166,3 +166,26 @@ template_rendered_seams() {
         ? "asks" : "silent");' "$REPO_ROOT/orchestrations/prompts/templates/roster-specialisation.json"
     [ "$output" = "asks" ] || { echo "the specialiser is not asked for a seam binding"; false; }
 }
+
+@test "NO PROJECT FORCES one timeout over every seam's declaration" {
+    # RUNCLAUDE_TIMEOUT_MS is the operator's debugging lever and wins over everything. Set in a
+    # project's config it holds ONE number over all 36 seams, each of which declares the budget its
+    # own work needs — so 76031b1 ("36 seams declared one, nothing read it") made those
+    # declarations live everywhere except the projects that force a value.
+    #
+    # The cost is not theoretical: that commit records prompt-builder declaring 900s and being cut
+    # off at 360s, taking a survey, a roster, an assignment and 12 generated prompts with it. The
+    # roster specialiser hit the same cap while escalating to kimi-k3 and doing real work.
+    forced=""
+    for cfg in "$REPO_ROOT"/orchestrations/projects/*/config.env; do
+        [ -f "$cfg" ] || continue
+        grep -qE '^[[:space:]]*RUNCLAUDE_TIMEOUT_MS=' "$cfg" || continue
+        forced="$forced $(basename "$(dirname "$cfg")")"
+    done
+    [ -z "$forced" ] || {
+        echo "project(s) forcing one timeout over every seam:$forced"
+        echo "Set it temporarily to debug a hang — leaving it set makes every declaration"
+        echo "documentation."
+        false
+    }
+}

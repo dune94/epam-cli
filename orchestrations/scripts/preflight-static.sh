@@ -191,6 +191,25 @@ ratchet() {
 ratchet "literal ratchet" "duplicatedLiterals" "scan-duplicated-literals.js"
 ratchet "guard calibration" "uncalibratedGuards" "scan-uncalibrated-guards.js"
 
+# ── THE HARDCODING AUDIT CAN STILL SEE ───────────────────────────────────────
+# Not its count — that is a research number nobody should gate on, and the file says so itself.
+# This asks the prior question: does each category still detect the defect it claims to cover?
+#
+# Every hardcoding defect found on 2026-08-23 was invisible to that audit — it scanned .sh/.js/.ts
+# and declared config exempt, so RELOCATING a literal into orchestrations/config counted as
+# repair; its numeric category needed a named knob, so topN = 8 matched nothing. And nothing ran
+# it, so the blindness was never observed. --calibrate runs every pattern against a fixture of
+# known-bad lines and fails on any that has gone blind. It found a real gap on its first run: the
+# branch pattern required a character AFTER the branch name, so `git checkout develop` at the end
+# of a line matched nothing.
+_hc_out=$(bash orchestrations/scripts/hardcoding-audit.sh --calibrate 2>&1); _hc_rc=$?
+if [ "$_hc_rc" -eq 0 ]; then
+  pass "hardcoding audit sees" "$(printf '%s' "$_hc_out" | grep -c 'sees its example') categories"
+else
+  fail "hardcoding audit sees" "a category has gone BLIND"
+  printf '%s\n' "$_hc_out" | grep -E 'BLIND' | sed 's/^/    /'
+fi
+
 # ── 8. THE OPERATOR'S OWN DECISIONS ──────────────────────────────────────────
 # orchestrations/config/remediation-register.json is DATA the operator owns: literals that must be
 # gone, and guards judged useless. Marking one enforce:true makes it fatal here — no code change,

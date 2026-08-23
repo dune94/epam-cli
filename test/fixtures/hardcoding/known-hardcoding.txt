@@ -1,0 +1,31 @@
+# KNOWN HARDCODING — one real example per category the audit claims to cover.
+#
+# Every line below was taken from this repository, at the moment it was a live defect. The audit
+# runs its patterns against this file on --calibrate and FAILS if a category no longer sees its
+# own example. Silence from a detector is only meaningful once it has proved it can still see.
+#
+# Add a line here when a new class is found in a run. A class with no example here is a class the
+# audit cannot demonstrate it covers.
+#
+# [absolute machine paths]
+JIRA_CODELINE_ROOT=/home/someuser/projects/estate
+# [git branch literals]
+git checkout develop
+# [model identifiers]
+const ESCALATION = 'z-ai/glm-5.2';
+# [urls and ports]
+const BASE = 'http://localhost:3100';
+# [numeric thresholds]
+const SOCKET_TIMEOUT_MS = 30000;
+# [truncations]
+const head = text.slice(0, 200);
+# [foreign schema]
+effort: pointsToEffort(f.customfield_10016) || 'medium',
+# [domain vocabularies]
+const supportedTypes = ['story', 'task', 'bug', 'sub-task', 'subtask'];
+# [unnamed numeric decisions]
+function scoreRepos(issues, manifest, topN = 8, vocabulary = null) {
+# [model-facing prose]
+out += 'Produce the prompt again, correcting exactly this. Change nothing else.';
+# [naming conventions in engine data]
+  "exclude": ["^docs\\."]

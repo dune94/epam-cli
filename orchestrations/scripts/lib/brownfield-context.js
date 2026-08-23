@@ -172,7 +172,13 @@ async function fetchLiveIssue(key) {
   const urlMod = require('url');
   return new Promise((resolve) => {
     const auth    = Buffer.from(`${JIRA_EMAIL}:${JIRA_TOKEN}`).toString('base64');
-    const apiPath = `/rest/api/3/issue/${key}?fields=summary,description,labels,customfield_10016`;
+    // THE ESTIMATE FIELD IS THE PROJECT'S. customfield_10016 was written here as it was in
+    // jira-client.js — one other tenant's id, which on this instance names nothing, so the field
+    // was requested and came back empty on every call. Asked for only when the project says which
+    // one it is; absent simply means the request does not ask.
+    const _points = String(process.env.JIRA_FIELD_STORY_POINTS || '').trim();
+    const _fields = ['summary', 'description', 'labels'].concat(_points ? [_points] : []).join(',');
+    const apiPath = `/rest/api/3/issue/${key}?fields=${encodeURIComponent(_fields)}`;
     const parsed  = urlMod.parse(`${JIRA_URL}${apiPath}`);
     const req     = https.request({
       hostname: parsed.hostname, port: parsed.port || 443, path: parsed.path, method: 'GET',

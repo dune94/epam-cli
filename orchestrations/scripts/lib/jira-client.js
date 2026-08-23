@@ -143,16 +143,34 @@ async function getIssue(issueKey) {
  * Search issues via JQL. Returns { issues: [...], total, maxResults }.
  * Each issue has fields: summary, description, status, labels, issuetype, assignee, priority.
  */
+/**
+ * THE FIELDS EVERY QUERY ASKS FOR — one list, and the tenant's own field ids come from the project.
+ *
+ * There were two lists: this one, and a second written inline on the board path that omitted
+ * `components` entirely — the one STRUCTURED field stating which product areas a ticket touches.
+ * A project ingesting through a board therefore lost it before anything downstream could read it,
+ * and codeline discovery was left inferring product scope from prose.
+ *
+ * customfield_10016 sat in both. A Jira custom field id is per-TENANT, so on any other instance
+ * that asked for a field which does not exist and silently returned nothing.
+ */
+function issueFields() {
+  const base = [
+    'summary', 'description', 'status', 'labels', 'issuetype', 'components',
+    'assignee', 'priority', 'comment', 'parent',
+  ];
+  // Whatever THIS project calls its estimate and its epic link. Absent means the query simply
+  // does not ask for them, which is what the adapter already treats as an absent estimate.
+  for (const v of ['JIRA_FIELD_STORY_POINTS', 'JIRA_FIELD_EPIC_LINK']) {
+    const id = String(process.env[v] || '').trim();
+    if (id && !base.includes(id)) base.push(id);
+  }
+  return base;
+}
+
 async function searchIssues(jql, maxResults = 50, fields = []) {
   if (!CONFIGURED) return { issues: [], total: 0 };
-  const defaultFields = [
-    // components: the one STRUCTURED field stating which product areas a
-    // ticket touches. Without it the pipeline infers product scope from prose
-    // and converges on a single repository for work that spans several.
-    'summary', 'description', 'status', 'labels', 'issuetype', 'components',
-    'assignee', 'priority', 'customfield_10016', 'comment', 'parent',
-  ].join(',');
-  const f = fields.length > 0 ? fields.join(',') : defaultFields;
+  const f = fields.length > 0 ? fields.join(',') : issueFields().join(',');
   const qs = `jql=${encodeURIComponent(jql)}&maxResults=${maxResults}&fields=${encodeURIComponent(f)}`;
   return request(`/rest/api/3/search/jql?${qs}`);
 }
@@ -164,7 +182,11 @@ async function searchIssues(jql, maxResults = 50, fields = []) {
  */
 async function getBoardIssues(boardId, status = null) {
   if (!CONFIGURED) return [];
-  let path = `/rest/agile/1.0/board/${boardId}/issue?maxResults=100&fields=summary,description,status,labels,issuetype,assignee,priority,customfield_10016`;
+  // THE SAME FIELD LIST AS EVERY OTHER QUERY. This was written out separately and omitted
+  // `components`, so a project ingesting through a board lost the field that says which product
+  // areas its work touches — before discovery, the mint or any gate could read it.
+  let path = `/rest/agile/1.0/board/${boardId}/issue?maxResults=100`
+    + `&fields=${encodeURIComponent(issueFields().join(','))}`;
   if (status) path += `&jql=${encodeURIComponent(`status = "${status}"`)}`;
   const result = await request(path);
   return (result.issues || []).map(normalizeIssue);
@@ -298,7 +320,8 @@ function normalizeIssue(issue) {
     title:              f.summary || '',
     description:        descText,
     acceptanceCriteria,
-    status:             (f.status && f.status.name) || 'To Do',
+    // Absent stays absent: a ticket with no status must not acquire one that exists in no workflow.
+    status:             (f.status && f.status.name) || '',
     labels,
     // The product areas this ticket touches, as the tracker records them. A
     // ticket naming several is the tracker stating the work spans several parts
@@ -308,7 +331,8 @@ function normalizeIssue(issue) {
     codeline,
     // Story points, then a t-shirt-size label if set, then the neutral default.
     // Never a fabricated 'low' for an unestimated ticket.
-    effort:             pointsToEffort(f.customfield_10016) || sizeLabelToEffort(labels) || 'medium',
+    effort:             pointsToEffort(f[String(process.env.JIRA_FIELD_STORY_POINTS || '').trim()])
+                        || sizeLabelToEffort(labels) || 'medium',
     // Ground-truth ticket type ("Bug", "Story", "Task"). Used downstream to
     // anchor the brownfield defect/novel classification so a bug ticket is
     // treated as a defect regardless of the spec model's own judgment.
@@ -341,7 +365,13 @@ async function getProjectIssues(projectKey, status = null) {
   }
 
   // Default: JQL search by project key + status (company-managed projects)
-  let jql = `project = "${projectKey}" AND issuetype in (Story, Task, Bug)`;
+  // WHICH TYPES, IF THE PROJECT SAYS. This named three English types, so a tracker whose work is
+  // "Defect" or "Änderungsantrag" returned nothing from its own default query. Undeclared asks
+  // for every type: an unexpected ticket is visible and correctable, an empty backlog is not.
+  const _types = String(process.env.JIRA_ISSUE_TYPES || '')
+    .split(',').map((t) => t.trim()).filter(Boolean);
+  let jql = `project = "${projectKey}"`;
+  if (_types.length) jql += ` AND issuetype in (${_types.map((t) => `"${t}"`).join(', ')})`;
   if (status) jql += ` AND status = "${status}"`;
   jql += ' ORDER BY created ASC';
 

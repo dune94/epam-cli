@@ -6,7 +6,7 @@
  * HTTP-mocked getIssue() call is how that duplication went unnoticed — this now shares
  * jira-adapter.js's implementation, tested directly here rather than only through mocks.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 const { normalizeIssue } = require('../../../orchestrations/scripts/lib/jira-client.js');
 
@@ -23,6 +23,14 @@ function makeIssue(overrides: Record<string, unknown> = {}) {
     },
   };
 }
+
+// THE FIELD ID IS THE PROJECT'S. customfield_10016 was written into the engine and is not even
+// this tenant's story-points field, so on the live instance it read as absent on every ticket.
+// These declare it exactly as a project's config.env does; the requirement they assert —
+// unestimated means "medium", 0 points means "low", 8 means "high" — is unchanged.
+const POINTS_FIELD = 'customfield_10016';
+beforeEach(() => { process.env.JIRA_FIELD_STORY_POINTS = POINTS_FIELD; });
+afterEach(() => { delete process.env.JIRA_FIELD_STORY_POINTS; });
 
 describe('normalizeIssue — effort defaults to medium, never a fabricated low', () => {
   it('THE BUG, fixed 2026-08-06: an unestimated ticket (no customfield_10016) gets "medium"', () => {

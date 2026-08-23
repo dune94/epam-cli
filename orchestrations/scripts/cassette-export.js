@@ -13,6 +13,7 @@
  * and carries the assistant turn in `output` as {text, toolCalls}. Ordered by their timestamp,
  * they are the sequence a replay hands back.
  */
+const fs = require('fs');
 const path = require('path');
 const store = require(path.join(__dirname, 'lib', 'cassette-store.js'));
 
@@ -70,6 +71,44 @@ function turnOf(trace) {
   return { text: '', toolCalls: [] };
 }
 
+/**
+ * WHICH TREES A REHEARSAL WILL WRITE INTO — derived from the recording, never named here.
+ *
+ * Replay executes the recorded tool calls for real, so a rehearsal touches whatever the recorded
+ * run touched. Isolating it means knowing which trees those are, and the only honest source for
+ * that is the recording itself: a list written into this script would be a guess about one
+ * machine's layout and would silently under-cover the moment a project moved.
+ *
+ * A "root" here is a git repository: the recorded paths are collected, and each is walked up to
+ * the nearest directory containing .git. That is the unit a codeline is checked out as, the unit
+ * a reset operates on, and the unit an overlay can discard whole.
+ *
+ * A path under no repository is reported separately rather than dropped -- an unisolated write is
+ * exactly what the operator needs told about, and silence would read as "nothing to isolate".
+ */
+function rootsTouchedBy(traces) {
+  const paths = new Set();
+  const ABSOLUTE = /(\/(?:[A-Za-z0-9._-]+\/)+[A-Za-z0-9._-]+)/g;
+  for (const t of traces) {
+    const blob = JSON.stringify((t && t.output) || '');
+    for (const m of blob.matchAll(ABSOLUTE)) paths.add(m[1]);
+  }
+
+  const roots = new Set();
+  const outside = new Set();
+  for (const p of paths) {
+    let dir = path.dirname(p);
+    let found = null;
+    // Bounded walk: up to the filesystem root, and never past it.
+    for (let i = 0; i < 64 && dir && dir !== '/' && dir !== path.dirname(dir); i += 1) {
+      if (fs.existsSync(path.join(dir, '.git'))) { found = dir; break; }
+      dir = path.dirname(dir);
+    }
+    if (found) roots.add(found); else outside.add(p);
+  }
+  return { roots: [...roots].sort(), pathsOutsideAnyRepo: outside.size };
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   const arg = (name) => {
@@ -114,8 +153,13 @@ async function main() {
   const unnamed = traces.filter((t) => !String(t.name || '').trim()).length;
   for (const [seam, turns] of bySeam) store.writeSeam(out, seam, turns);
 
+  const touched = rootsTouchedBy(traces);
+
   store.writeManifest(out, {
     session,
+    // What a rehearsal of this cassette will write into. rehearse.sh isolates exactly these.
+    roots: touched.roots,
+    pathsOutsideAnyRepo: touched.pathsOutsideAnyRepo,
     exportedFrom: BASE(),
     traceCount: traces.length,
     unattributableTraces: unnamed,
@@ -127,6 +171,10 @@ async function main() {
   });
 
   process.stdout.write(`${bySeam.size} seam(s), ${traces.length} turn(s) -> ${out}\n`);
+  process.stdout.write(`  rehearsing this writes into: ${touched.roots.join(', ') || '(no repository)'}\n`);
+  if (touched.pathsOutsideAnyRepo) {
+    process.stdout.write(`  ${touched.pathsOutsideAnyRepo} recorded path(s) lie under no repository\n`);
+  }
   if (unnamed) process.stdout.write(`  ${unnamed} trace(s) carried no seam name and were not recorded\n`);
 }
 

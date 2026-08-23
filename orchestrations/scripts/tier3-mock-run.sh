@@ -101,7 +101,23 @@ LOG_FILE="/tmp/tier3-mock-run-$(date +%Y%m%dT%H%M%S)-$$.log"
 # two-line form hid the export from the launcher-parity detector, which looks for
 # `export EPAM_PROJECT_CONFIG_DIR=` — a capability present but unrecognisable is the
 # same as absent to anything auditing the launchers.
-_epam_cfg_dir="$(project_config_dir hello-dolly "$REPO_ROOT")" || exit 1
+# THE PROJECT IS THE ONE THE PRD NAMES.
+#
+# This launcher parameterizes the PRD and the project root and then named ONE project in code for
+# the config dir, so a run launched with another project's PRD was configured from that fixed
+# project's settings -- its ladders, its plugin list, its per-model budgets -- and said so in a
+# single line of output nobody reads twice. A PRD already carries `project.name`, and the PRD is
+# already a parameter, so there was never anything to configure here.
+#
+# A PRD that names no project is refused rather than guessed: guessing is precisely how a run ends
+# up configured from a project nobody chose.
+_prd_project="$("${NODE_BIN:-node}" -e '
+  const prd = require(process.argv[1]);
+  const name = prd && prd.project && prd.project.name;
+  process.stdout.write(typeof name === "string" ? name.trim() : "");
+' "$PRD_ARG" 2>/dev/null || printf '')"
+[ -z "$_prd_project" ] && fail "the PRD at $PRD_ARG names no project (project.name), so there is no configuration to load for it"
+_epam_cfg_dir="$(project_config_dir "$_prd_project" "$REPO_ROOT")" || exit 1
 export EPAM_PROJECT_CONFIG_DIR="$_epam_cfg_dir"
 info "Project config: $EPAM_PROJECT_CONFIG_DIR"
 

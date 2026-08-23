@@ -259,3 +259,49 @@ build() {
     [[ "$out" == *"review is what failed"* ]] || {
         echo "the halt blames the roster instead of the review: $out"; false; }
 }
+
+@test "a RUNNER FAILURE costs one attempt, not the whole stage" {
+    # Live 2026-08-23: "prompt runner exited with code 1" propagated straight out of an unguarded
+    # await and ended the stage having used NONE of its three attempts — after a previous attempt
+    # had already produced a contract-passing roster. Declaring attempts:3 and spending zero of
+    # them on a transient is the same as declaring one.
+    "$NODE" -e '
+      const fs = require("fs"), path = require("path");
+      const m = require(process.argv[1]);
+      let calls = 0;
+      const produce = async ({ canonicalCopyPath, outPath }) => {
+        calls += 1;
+        if (calls === 1) throw new Error("prompt runner exited with code 1");
+        const c = JSON.parse(fs.readFileSync(canonicalCopyPath, "utf8"));
+        const agents = {};
+        for (const [n, p] of Object.entries(c))
+          agents[n] = { persona: "[p] " + p, kind: "seam", ancestor: n,
+                        derivedFromSha256: m.personaDigest(p) };
+        fs.mkdirSync(path.dirname(outPath), { recursive: true });
+        fs.writeFileSync(outPath, JSON.stringify({ agents }, null, 2));
+      };
+      m.buildProjectRoster({ canonicalPath: process.argv[2], logDir: process.argv[3] + "/logs",
+        projectConfigDir: process.argv[3] + "/project", produce,
+        review: async () => ({ verdict: "approved" }), attempts: 3, log: () => {} })
+        .then(() => process.stdout.write("BUILT calls=" + calls))
+        .catch((e) => process.stdout.write("REFUSED: " + e.message));
+    ' "$LIB" "$CANON" "$WORK" > "$WORK/out3.txt"
+    out=$(cat "$WORK/out3.txt")
+    [[ "$out" == BUILT* ]] || { echo "a transient runner failure sank the stage: $out"; false; }
+    [[ "$out" == *"calls=2"* ]] || { echo "the retry did not happen: $out"; false; }
+}
+
+@test "and a runner that ALWAYS fails exhausts its attempts and says so" {
+    "$NODE" -e '
+      const m = require(process.argv[1]);
+      const produce = async () => { throw new Error("prompt runner exited with code 1"); };
+      m.buildProjectRoster({ canonicalPath: process.argv[2], logDir: process.argv[3] + "/logs",
+        projectConfigDir: process.argv[3] + "/project", produce,
+        review: async () => ({ verdict: "approved" }), attempts: 2, log: () => {} })
+        .then(() => process.stdout.write("BUILT"))
+        .catch((e) => process.stdout.write("REFUSED: " + e.message));
+    ' "$LIB" "$CANON" "$WORK" > "$WORK/out4.txt"
+    out=$(cat "$WORK/out4.txt")
+    [[ "$out" == REFUSED* ]]
+    [[ "$out" == *"specialiser call failed"* ]] || { echo "the reason does not name the cause: $out"; false; }
+}

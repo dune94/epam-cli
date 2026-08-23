@@ -112,22 +112,14 @@
    ],
    "purpose": "Per-codeline facts. One of only three files provisioned into a client repo."
   },
-  "prdCanonical": {
-   "path": "prd.canonical.json",
-   "role": "canonical",
-   "required": true,
-   "deployTo": "main-only",
-   "writtenBy": "synthesize-prd-from-jira.js (Jira ingest)",
-   "purpose": "The restore source. Every run copies FROM this; nothing writes back to it."
-  },
   "prdRuntime": {
    "path": "prd.json",
    "role": "generated",
    "required": false,
    "resetEachRun": true,
    "deployTo": "main-only",
-   "restoredFrom": "prdCanonical",
-   "purpose": "The PRD a run executes. Regenerated every run; never hand-edited."
+   "ingestedFrom": "the tracker (JIRA_JQL) plus this project's own config.env",
+   "purpose": "The PRD a run executes. INGESTED every run and never restored from a stored file: a template made one run's output the next run's premise, and its frozen codeline scope stopped discovery running at all."
   },
   "prdBackups": {
    "pattern": "prd.json.pre-*",

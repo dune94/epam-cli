@@ -665,20 +665,33 @@ fi
 #
 # Restores the WHOLE file rather than stripping known fields: the canonical is the base state, and a
 # subtractive list would silently miss the next per-run field somebody adds.
+# NOTHING TO RESTORE. This copied prd.canonical.json over the runtime PRD, which made that stored
+# file the base state of every run — and it was hand-edited to unblock launches, so runs inherited
+# a previous run's conclusions as premises.
+#
+# The PRD is ingested: the tracker supplies the work and the project's config supplies the
+# identity, both re-read every run. A run that ingests cannot inherit, and a run that does not
+# ingest has no PRD to restore from a template either.
 if [ "$_IS_RESUME" = "1" ]; then
-    info "  Resume — keeping the runtime PRD as the run left it; not restoring from canonical"
-elif [ -n "${PRD_FILE:-}" ] && [ -f "$(dirname "$PRD_FILE")/prd.canonical.json" ]; then
-    _PRD_CANON="$(dirname "$PRD_FILE")/prd.canonical.json"
-    # VALIDATED BEFORE IT REPLACES ANYTHING. Copying a corrupt canonical over the runtime PRD
-    # would destroy the only other copy and fail much later, somewhere that reads as a PRD defect.
-    if ! jq -e . "$_PRD_CANON" >/dev/null 2>&1; then
-        fail "$_PRD_CANON is not valid JSON. The runtime PRD is NOT restored and still carries the
-  previous run's assignments, so this run cannot start clean. Repair the canonical before running."
+    info "  Resume — keeping the runtime PRD as the run left it"
+elif [ "${JIRA_PIPELINE:-0}" = "1" ]; then
+    # AN INGESTING PROJECT REBUILDS ITS PRD FROM THE TRACKER, so there is nothing to restore and
+    # nothing stored that could carry a previous run's conclusions into this one.
+    info "  PRD comes from the tracker this run — nothing stored to restore"
+elif [ -n "${PRD_FILE:-}" ] && [ -f "$(dirname "$PRD_FILE")/prd.authored.json" ]; then
+    # A PROJECT THAT AUTHORS ITS PRD has no tracker to rebuild from, so its authored input IS the
+    # base state and restoring it is what makes the slate clean — the run's own writes to prd.json
+    # are discarded rather than accumulating. Named for what it is: an authored input, not a
+    # "canonical" template that synthesis fills.
+    _PRD_AUTHORED="$(dirname "$PRD_FILE")/prd.authored.json"
+    if ! jq -e . "$_PRD_AUTHORED" >/dev/null 2>&1; then
+        fail "$_PRD_AUTHORED is not valid JSON. The runtime PRD is NOT restored and still carries the
+  previous run's assignments, so this run cannot start clean. Repair it before running."
     fi
-    cp "$_PRD_CANON" "$PRD_FILE" \
-        || fail "could not restore the PRD from $_PRD_CANON — refusing to start a run that would
+    cp "$_PRD_AUTHORED" "$PRD_FILE" \
+        || fail "could not restore the PRD from $_PRD_AUTHORED — refusing to start a run that would
   inherit the previous run's agent assignments."
-    info "  PRD restored from canonical — prior run's agent assignments and resolved codelines are gone"
+    info "  PRD restored from the project's authored input — prior run's assignments are gone"
 fi
 
 # Clear stale lock files

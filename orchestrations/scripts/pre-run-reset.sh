@@ -569,6 +569,13 @@ for _rf in "${_PROJECT_CFG_DIR:+$_PROJECT_CFG_DIR/project-roles.json}" \
            "${_PROJECT_CFG_DIR:+$_PROJECT_CFG_DIR/agent-profiles.json}" \
            "${_ASSIGN_DIR:+$_ASSIGN_DIR/role-assignments.json}"; do
     [ -n "$_rf" ] && [ -f "$_rf" ] || continue
+    # COPIED BEFORE IT IS DELETED. These are what the last run actually produced — the roster it
+    # minted, the briefs it wrote, the assignments it made. Deleting them outright meant a killed
+    # run left nothing to diagnose from and nothing to build a test fixture out of, so the only way
+    # to see a real artefact was to pay for another run. The archive already exists for logs; this
+    # is the same idea applied to the artefacts that actually decide a run's behaviour.
+    mkdir -p "$ARCHIVE_DIR/generated" 2>/dev/null || true
+    cp -p "$_rf" "$ARCHIVE_DIR/generated/$(basename "$_rf")" 2>/dev/null || true
     rm -f "$_rf" 2>/dev/null && _ROSTER_CLEARED=$((_ROSTER_CLEARED+1)) || true
 done
 if [ "$_ROSTER_CLEARED" -gt 0 ]; then
@@ -605,6 +612,8 @@ for _gf in "${_PROJECT_CFG_DIR:+$_PROJECT_CFG_DIR/codeline-facts.json}" \
            "${_PROJECT_CFG_DIR:+$_PROJECT_CFG_DIR/estate-survey.md}" \
            "${_PROJECT_CFG_DIR:+$_PROJECT_CFG_DIR/prompt-agent-link.json}"; do
     [ -n "$_gf" ] && [ -f "$_gf" ] || continue
+    mkdir -p "$ARCHIVE_DIR/generated" 2>/dev/null || true
+    cp -p "$_gf" "$ARCHIVE_DIR/generated/$(basename "$_gf")" 2>/dev/null || true
     rm -f "$_gf" 2>/dev/null && _GEN_CLEARED=$((_GEN_CLEARED+1)) || true
 done
 if [ "$_GEN_CLEARED" -gt 0 ]; then
@@ -617,6 +626,13 @@ fi
 # over a mixture of this run's output and some earlier run's.
 if [ -n "${_PROJECT_CFG_DIR:-}" ] && [ -d "$_PROJECT_CFG_DIR/prompts" ]; then
     _PROMPTS_N=$(find "$_PROJECT_CFG_DIR/prompts" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l | tr -d '[:space:]')
+    # COPIED BEFORE THE WIPE, for the same reason as the roster above: these are the prompts the
+    # last run's agents actually executed, and they are the only record of what each agent was
+    # told. rm -rf destroyed them, so reproducing a prompt defect required another paid run.
+    if [ "${_PROMPTS_N:-0}" -gt 0 ]; then
+        mkdir -p "$ARCHIVE_DIR/prompts" 2>/dev/null || true
+        cp -p "$_PROJECT_CFG_DIR/prompts/"*.json "$ARCHIVE_DIR/prompts/" 2>/dev/null || true
+    fi
     rm -rf "$_PROJECT_CFG_DIR/prompts" && mkdir -p "$_PROJECT_CFG_DIR/prompts"
     [ "${_PROMPTS_N:-0}" -gt 0 ] \
         && info "  Cleared ${_PROMPTS_N} project prompt(s) — each was specialised for a roster this run has not minted"

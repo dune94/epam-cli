@@ -268,7 +268,9 @@
         }
       ],
       "template": "ac-classification",
-      "toolGrant": "read-only"
+      "toolGrant": "read-only",
+      "layer": "bootstrap",
+      "_why_bootstrap": "renders during Jira ingest, from lib/ac-gate.js, for the same reason."
     },
     "ac-elaboration": {
       "_what": "Elaborates an acceptance criterion into verification criteria.",
@@ -284,7 +286,9 @@
         }
       ],
       "template": "ac-elaboration",
-      "toolGrant": "read-only"
+      "toolGrant": "read-only",
+      "layer": "bootstrap",
+      "_why_bootstrap": "renders during Jira ingest, from lib/ac-gate.js, for the same reason."
     },
     "codeline-discovery": {
       "_what": "Picks which local codeline a Jira ticket belongs to.",
@@ -300,7 +304,9 @@
         }
       ],
       "template": "codeline-discovery",
-      "toolGrant": "read-only"
+      "toolGrant": "read-only",
+      "layer": "bootstrap",
+      "_why_bootstrap": "renders during Jira ingest, from lib/codeline-discovery.js — before the mint provisions any project prompt, and after pre-run-reset has removed the previous run's."
     },
     "roster-review": {
       "_what": "Falsifies the claims in a generated agent roster before any implementer inherits them.",

@@ -21,10 +21,13 @@ setup() {
   COUNT="${REPO_ROOT}/orchestrations/scripts/lib/handlers/cl-count.js"
 }
 
-@test "no canonical PRD declares a codeline scope, so discovery is never pre-empted" {
+@test "no stored PRD declares a codeline scope, so discovery is never pre-empted" {
   bad=""
   checked=0
-  for prd in "${REPO_ROOT}"/orchestrations/projects/*/prd.canonical.json; do
+  # BOTH SHAPES. metrolinx's stored template is gone (its PRD is ingested); mock3 and hello-dolly
+  # author theirs, and an authored PRD can pre-empt discovery in exactly the same way.
+  for prd in "${REPO_ROOT}"/orchestrations/projects/*/prd.authored.json \
+             "${REPO_ROOT}"/orchestrations/projects/*/prd.canonical.json; do
     [ -f "$prd" ] || continue
     checked=$(( checked + 1 ))
     n=$("$NODE_BIN" "$COUNT" "$prd" 2>/dev/null || echo 0)

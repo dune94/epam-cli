@@ -575,7 +575,13 @@ last_err=""
 # a child that ignores a TERM sent only to its parent, and this comment says so
 # rather than claiming a load-bearing role the tests do not demonstrate.
 _ai_attempt_timeout() {
-  local _secs="${EPAM_CALL_ATTEMPT_TIMEOUT_SECS:-240}" _rc=0
+  # THE SEAM'S DECLARED BUDGET, THEN THE OPERATOR OVERRIDE, THEN THE FLOOR.
+  # invocation-profiles.json gives each seam a timeoutSecs and seam-invocation exports it as
+  # EPAM_TIMEOUT_SECS. This watchdog read only EPAM_CALL_ATTEMPT_TIMEOUT_SECS, which nothing sets,
+  # so 36 of 39 seams declared more than 240s and every one of them was killed at 240 — by SIGTERM,
+  # which emits no stderr, so it surfaced as "failed with no error output" and burned all three
+  # ladder attempts on the same silent kill.
+  local _secs="${EPAM_CALL_ATTEMPT_TIMEOUT_SECS:-${EPAM_TIMEOUT_SECS:-240}}" _rc=0
   local _o _e
   _o="$(mktemp)"; _e="$(mktemp)"
   set -m

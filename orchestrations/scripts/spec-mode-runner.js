@@ -4324,14 +4324,71 @@ const TOOL_SURVEY_REVIEW = {
  * ('sound' | 'defects_found'). Two vocabularies for one idea is how a caller ends up treating an
  * unrecognised verdict as success; the translation lives here, at the boundary, once.
  */
+/** Parse a JSON file, or null. A reviewer that cannot read its inputs must say so, not throw. */
+function _readJsonOrNull(f) {
+  try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; }
+}
+
 async function reviewProjectRoster({
   promptExec, rosterPath, canonicalPath, codelines, logDir, repoPath, toolGrant,
 }) {
-  const prompt = renderEngineTemplate('project-roster-review', {
+  // THE REVIEWER IS HANDED THE TEXT IT MUST COMPARE, IN BATCHES.
+  //
+  // It used to receive two paths and be told to read both. A canonical roster and its derived
+  // copy are ~270KB together — roughly 74k tokens of tool output before a single judgement — so
+  // the seam could not actually perform the comparison it was asked for, and answered
+  // 'nothing_to_review'. That verdict was read (correctly) as "the judge did not look", the judge
+  // was retried, and every retry hit the same wall.
+  //
+  // No amount of prompt wording fixes an input that does not fit. The pairs are built here and
+  // reviewed in batches whose size is declared, not guessed, and each batch is a whole number of
+  // agents — an agent's two personas are one unit of meaning and are never split across batches.
+  const _rosterDoc = _readJsonOrNull(rosterPath);
+  const _canonDoc = _readJsonOrNull(canonicalPath);
+  const _entries = (_rosterDoc && _rosterDoc.agents) || {};
+  const _canon = (_canonDoc && _canonDoc.agents && typeof _canonDoc.agents === 'object')
+    ? _canonDoc.agents : (_canonDoc || {});
+  const _personaOf = (v) => (typeof v === 'string' ? v : String((v && v.persona) || ''));
+
+  const _pairs = Object.keys(_entries).map((name) => ({
+    name,
+    derived: _personaOf(_entries[name]),
+    canonical: _personaOf(_canon[(_entries[name] && _entries[name].ancestor) || name]),
+  })).filter((x) => x.derived.trim());
+
+  if (!_pairs.length) {
+    return {
+      verdict: 'review_failed',
+      findings: [],
+      reason: `the roster at ${rosterPath} held no readable entries, so there was nothing to hand a reviewer`,
+    };
+  }
+
+  const _budget = Math.max(4000, Number(process.env.EPAM_ROSTER_REVIEW_BATCH_CHARS || '60000'));
+  const _batches = [];
+  let _cur = [];
+  let _size = 0;
+  for (const pr of _pairs) {
+    const cost = pr.derived.length + pr.canonical.length + pr.name.length + 200;
+    // A single oversized agent still gets its own batch rather than being dropped or cut.
+    if (_cur.length && _size + cost > _budget) { _batches.push(_cur); _cur = []; _size = 0; }
+    _cur.push(pr);
+    _size += cost;
+  }
+  if (_cur.length) _batches.push(_cur);
+
+  const _renderBatch = (batch) => renderEngineTemplate('project-roster-review', {
     __ROSTER_PATH__: String(rosterPath || ''),
     __CANONICAL_PATH__: String(canonicalPath || ''),
     __CODELINE_CONTEXT__: (Array.isArray(codelines) ? codelines : [])
       .map((c) => `- ${(c && c.name) || c}${c && c.path ? ` (${c.path})` : ''}`).join('\n'),
+    __PAIR_BLOCK__: batch.map((pr) => [
+      `--- AGENT: ${pr.name}`,
+      'CANONICAL:',
+      pr.canonical || '(this agent has no canonical ancestor text)',
+      'DERIVED:',
+      pr.derived,
+    ].join('\n')).join('\n\n'),
   });
 
   const env = withToolGrant({
@@ -4345,11 +4402,36 @@ async function reviewProjectRoster({
   // answered that there was nothing to review — and put the whole tool list where the story id
   // belongs, so cost was attributed to a story named after an allow-list. The roster review is
   // not a story's work, so it carries no story id.
-  const payload = await runAgentForJson(
-    promptExec, prompt, TOOL_ROSTER_REVIEW, 'ROSTER_REVIEW',
-    logDir ? path.join(logDir, 'project-roster-review.log') : null,
-    null, '', repoPath || '', env,
-  );
+  // EVERY BATCH IS JUDGED, AND ONE BATCH THAT DID NOT LOOK DOES NOT PASS FOR THE REST.
+  const _results = [];
+  for (let bi = 0; bi < _batches.length; bi += 1) {
+    // eslint-disable-next-line no-await-in-loop
+    const part = await runAgentForJson(
+      promptExec, _renderBatch(_batches[bi]), TOOL_ROSTER_REVIEW, 'ROSTER_REVIEW',
+      logDir ? path.join(logDir, `project-roster-review.batch${bi + 1}.log`) : null,
+      null, '', repoPath || '', env,
+    );
+    _results.push({ part, agents: _batches[bi].map((x) => x.name) });
+  }
+
+  // A batch that produced nothing means those agents were NOT reviewed. Saying so keeps the
+  // three-way distinction the schema draws — examined-and-sound, examined-and-defective,
+  // did-not-examine — true of the whole roster and not just of the last batch to answer.
+  const _unexamined = _results.filter((r) => !r.part || typeof r.part !== 'object'
+    || r.part.verdict === 'nothing_to_review' || !r.part.verdict);
+  if (_unexamined.length) {
+    return {
+      verdict: 'review_failed',
+      findings: _results.flatMap((r) => (r.part && Array.isArray(r.part.findings) ? r.part.findings : [])),
+      reason: `${_unexamined.length} of ${_batches.length} batch(es) were not examined `
+        + `(${_unexamined.flatMap((r) => r.agents).slice(0, 6).join(', ')}...). The roster is not implicated.`,
+    };
+  }
+
+  const payload = {
+    verdict: _results.some((r) => r.part.verdict === 'defects_found') ? 'defects_found' : 'sound',
+    findings: _results.flatMap((r) => (Array.isArray(r.part.findings) ? r.part.findings : [])),
+  };
 
   // A review that produced nothing is NOT a sound roster. Unparseable output means the check did
   // not happen, and reading that as approval is the fail-open shape these gates exist to prevent.
@@ -4364,6 +4446,25 @@ async function reviewProjectRoster({
         `${JSON.stringify({ ...payload, findings }, null, 2)}\n`);
     } catch { /* the verdict still reaches the caller */ }
   }
+  // 'defects_found' WITH NOTHING FOUND IS NOT A DEFECTIVE ROSTER.
+  //
+  // The two fields have to agree. A verdict of defects_found carrying an empty finding list
+  // condemns the artefact while naming nothing that is wrong with it, and the caller can only
+  // read that as "rejected": it deletes a roster that PASSED its mechanical contract and pays to
+  // generate another, with no evidence anyone could act on or falsify. Live 2026-08-23, this seam
+  // returned exactly {"findings": [], "verdict": "defects_found"}.
+  //
+  // The judge failing to substantiate is a failure OF THE JUDGE. Same treatment as
+  // 'nothing_to_review': retry the judge, leave the artefact alone.
+  if (payload.verdict === 'defects_found' && !findings.length) {
+    return {
+      verdict: 'review_failed',
+      findings,
+      reason: 'the review answered defects_found but listed no findings, so nothing about the '
+        + 'roster was actually contradicted. The roster is not implicated.',
+    };
+  }
+
   if (payload.verdict === 'sound' && !blocking.length) {
     return { verdict: 'approved', findings };
   }
@@ -9324,6 +9425,9 @@ module.exports = {
   reconcileMintTally,
   SURVEY_STATES,
   TOOL_ROSTER_REVIEW,
+  // Exported for the same reason as its siblings: the per-agent harness binds a seam's declared
+  // output schema by reading it from here, and an unexported def reads as 'this seam has none'.
+  TOOL_SURVEY_REVIEW,
   seamInvocationEnv,
   withToolGrant,
   buildRosterBriefBlock,

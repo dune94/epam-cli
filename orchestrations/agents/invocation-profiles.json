@@ -823,8 +823,8 @@
       "ladder": "top",
       "reasoningEffort": "high",
       "timeoutSecs": 1800,
-      "maxOutputTokens": 32768,
-      "toolGrant": "write",
+      "maxOutputTokens": 65536,
+    "_why_maxOutputTokens": "THE WHOLE CANONICAL ROSTER IS ONE ARTEFACT. This seam must emit every canonical agent in a single file — the contract in project-roster.js refuses a subset — and 57 specialised personas measure ~51k tokens. At the 32768 every other seam uses it produced 38 of 57 and stopped, which the roster contract then refused, so the stage burned its attempts on a budget that could not hold the answer.",      "toolGrant": "write",
       "produces": "project-roster",
       "consumes": [
         {

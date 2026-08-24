@@ -81,7 +81,8 @@ export function createRunCommand(): Command {
         ? applyToolAllowlist([...createTools()], process.env.EPAM_ALLOWED_TOOLS)
         : [];
 
-      const systemPrompt = await buildSessionSystemPrompt(config, authManager);
+      const systemPrompt = await buildSessionSystemPrompt(config, authManager,
+        tools.map(t => t.name));
       const userMessage = config.projectRoot
         ? await consumeConsultationContext(prompt, config.projectRoot)
         : prompt;

@@ -11,7 +11,10 @@ export function getProjectId(projectRoot: string): string {
 
 export async function buildSessionSystemPrompt(
   config: Pick<ResolvedConfig, 'backendUrl' | 'contextFile' | 'systemPromptFile' | 'projectRoot'>,
-  authManager: AuthManager
+  authManager: AuthManager,
+  // The tools this session will actually offer. Forwarded so the prompt's capability sentence
+  // describes the real grant instead of asserting one over it.
+  toolNames?: string[]
 ): Promise<string> {
   let blockConstraints: Constraint[] = [];
   let warnConstraints: Constraint[] = [];
@@ -31,5 +34,6 @@ export async function buildSessionSystemPrompt(
     projectRoot: config.projectRoot,
     blockConstraints,
     warnConstraints,
+    toolNames,
   });
 }

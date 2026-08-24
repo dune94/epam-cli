@@ -273,10 +273,20 @@ _load_timeout_config
 # The literals are now gone, which turns that silence into a refusal — a seam with no resolvable
 # model declines rather than guessing. Correct, and useless if the chains never arrive. They must
 # be exported HERE, once, before any seam is invoked, the same reason _load_timeout_config is.
+# shellcheck source=lib/project-config.sh
+[ -f "$SCRIPT_DIR/lib/project-config.sh" ] && source "$SCRIPT_DIR/lib/project-config.sh"
 # shellcheck source=lib/model-ladders.sh
 [ -f "$SCRIPT_DIR/lib/model-ladders.sh" ] && source "$SCRIPT_DIR/lib/model-ladders.sh"
 if command -v export_model_ladders >/dev/null 2>&1; then
-    export_model_ladders "${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json" || true
+    # THE VERDICT IS READ. This was `|| true`, which made the loader's return value decorative and
+    # meant the else-branch below was the only way this could ever warn — a branch that fires when
+    # the loader is MISSING, never when it is present and found no project. Those two have the same
+    # outcome: no chains, and every seam declining or falling back.
+    if ! export_model_ladders "$(command -v project_settings_file >/dev/null 2>&1 \
+            && project_settings_file "${EPAM_PROJECT_CONFIG_DIR:-}" \
+            || echo "${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json")"; then
+        echo "[orch] WARNING: no ladder chains exported (see [model-ladders] above) — seams will have no resolvable model" >&2
+    fi
 else
     # NOT SILENT. A missing loader here means every seam runs with no resolvable model and, now
     # that the literals are gone, declines to run at all — the test-writer and the analyst would
@@ -360,7 +370,10 @@ fi
 # "unchanged", minted nothing, and the run died at assignment — while also writing into the
 # client's own agents directory. Unset, this is exactly the previous path.
 EPAM_AGENTS_DIR="${EPAM_AGENTS_DIR:-$AUTOMATION_DIR/agents}"
-AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$EPAM_AGENTS_DIR/profiles.json}"
+# The roster is the only source of an agent's identity — lib/roster-read.sh. The default this
+# replaces named the engine's own roster, which is what a client codeline's reviewer inherited.
+# shellcheck source=lib/roster-read.sh
+. "$SCRIPT_DIR/lib/roster-read.sh"
 # Compute PRD path relative to PROJECT_ROOT for injecting into agent prompts.
 # In the codeline-loop path, PRD_FILE is a per-codeline temp copy under /tmp/
 # (e.g. /tmp/orch-<cl>-prd-$$.json) that lives nowhere near PROJECT_ROOT (a
@@ -1401,7 +1414,13 @@ _brownfield_gate_scope() {
     jq_vals --arg gate "$_gate" \
           --arg files "${_files:-  (none recorded — fall back to the injected diff)}" \
           '{"__GATE__":$gate,"__FILES__":$files}' > "$_bs_vals"
-    render_engine_prompt qa-brownfield-scope "$_bs_vals" || true
+    # This function's STDOUT is the prompt section its caller injects. `|| true` meant a
+    # failed render emitted nothing and the gate ran without its scope section, with no trace.
+    if ! render_engine_prompt qa-brownfield-scope "$_bs_vals"; then
+        echo "[prompt] qa-brownfield-scope did not render — the QA gate has no scope section" >&2
+        rm -f "$_bs_vals"
+        return 1
+    fi
     rm -f "$_bs_vals"
 }
 
@@ -2103,8 +2122,18 @@ run_story_recovery_analyst() {
     # never available in this script.
     local _verdict="pass"  # fail-safe only when reviewer is not configured
     if [ -n "${ORCH_GATE_PROVIDER:-}" ]; then
+        # FROM THE ROSTER, and its absence is not a pass.
+        #
+        # This jq-ed the shared profiles file and, on an empty result, fell through with
+        # _verdict still "pass" — so a PRD change was certified by a reviewer that never ran,
+        # and the only trace was a profile that happened to be missing. Every canonical agent is
+        # specialised into the roster, so an absence here is a defect in the roster.
         local _src_reviewer_profile
-        _src_reviewer_profile=$(jq -r '."prd-change-reviewer" // ""' "$AGENT_PROFILES_FILE" 2>/dev/null || echo "")
+        if ! _src_reviewer_profile=$(roster_persona prd-change-reviewer 2>&1); then
+            error "  [prd-change-review] cannot resolve the reviewer's persona: ${_src_reviewer_profile}"
+            error "  [prd-change-review] Refusing to certify a PRD change with no reviewer."
+            return 1
+        fi
         if [ -n "$_src_reviewer_profile" ]; then
             local _rev_raw="" _rev_attempt=0
             while [ "$_rev_attempt" -lt 2 ] && [ -z "$_rev_raw" ]; do
@@ -3066,26 +3095,10 @@ _run_codeline_loop() {
   #
   # Matching is on the codeline NAME (the part before the colon), never the path, so a selection
   # cannot accidentally match a directory that merely contains the same text.
-  if [ -n "${EPAM_ONLY_CODELINES:-}" ]; then
-    local _sel_entries=() _sel _e
-    local _orig_ifs="$IFS"
-    while IFS= read -r _e; do
-      [ -n "$_e" ] || continue
-      # IFS is established for THIS split only. A pipe-delimited value iterated without it is one
-      # token containing the whole string, silently, which is how a config split has broken here
-      # before.
-      IFS='|,'
-      for _sel in ${EPAM_ONLY_CODELINES}; do
-        if [ "${_e%%:*}" = "$_sel" ]; then _sel_entries+=("$_e"); break; fi
-      done
-      IFS="$_orig_ifs"
-    done < <(printf '%s\n' "${_cl_entries[@]}")
-    IFS="$_orig_ifs"
-    # Declared order is preserved: the merges run in declared order, and a reordered run is a
-    # different run. The loop walks _cl_entries, not the selection, precisely for that reason.
-    log "[orch] Codeline selection active (EPAM_ONLY_CODELINES=${EPAM_ONLY_CODELINES}): ${#_sel_entries[@]} of ${#_cl_entries[@]} codeline(s)"
-    _cl_entries=("${_sel_entries[@]+"${_sel_entries[@]}"}")
-  fi
+  # NO OPERATOR FILTER HERE. The lane list already IS the run's scope: it is built from the
+  # PRD's project.outputDirs, which resolve-codeline-scope.sh writes for every project however
+  # its PRD arrived. Filtering it again with a hand-typed EPAM_ONLY_CODELINES asked a human to
+  # restate a fact the PRD already carried, and could only ever disagree with it.
 
   if [ ${#_cl_entries[@]} -eq 0 ]; then
     error "[orch] No codeline/worktree entries found in PRD: ${_prd_path}"
@@ -3823,6 +3836,25 @@ _run_agent_mint() {
       return 1
     fi
     log "[mint] Agent mint skipped (EPAM_SKIP_AGENT_MINT=1) — using the roster on disk (${_roster_n} agent(s))"
+
+    # BUT THE PROJECT ROSTER IS STILL DERIVED. Skipping the mint means "invent no new agents"; it
+    # has never meant "run with no identities". Every launch resets, and a writer-style resume
+    # skips the mint on purpose, so without this a resumed run would reach its first seam with no
+    # persona for it — and there is no engine roster to fall back to any more.
+    #
+    # Roster-only: no survey, no proposals, no role assignment. Just canonical -> this project.
+    log "[mint] Deriving this project's roster (roster-only — nothing is minted)..."
+    EPAM_ROSTER_ONLY=1 "$NODE_BIN" "$SCRIPT_DIR/mint-agents-step.js" \
+        --prd "$_prd" \
+        --agents-dir "$EPAM_AGENTS_DIR" \
+        --log-dir "$LOG_DIR" \
+        --codeline-root "${PROJECT_ROOT:-}" 2>&1 | tee -a "$_log"
+    # PIPESTATUS[0], not the pipeline status: without pipefail this reads tee's, and a roster the
+    # agent never produced would pass as one it did.
+    if [ "${PIPESTATUS[0]}" -ne 0 ]; then
+        error "[mint] roster derivation FAILED — refusing to continue with agents that have no identity."
+        return 1
+    fi
   fi
   [ "${EPAM_SKIP_AGENT_MINT:-0}" = "1" ] || {
     log "[mint] Minting project agents and assigning roles..."
@@ -5124,7 +5156,11 @@ run_pre_phase_assessment() {
           --arg profiles_rel "$profiles_rel" \
           '{"__PFA_FACTS__":$pfa_facts,"__PFA_TOOL_BUDGET__":$pfa_tool_budget,"__PHASE_ID__":$phase_id,"__PRD_REL__":$prd_rel,"__PROFILES_REL__":$profiles_rel}' > "$_ap_vals"
     # The codeline's own facts — this template declares them and nothing supplied them.
-    merge_stack_facts "$_pfa_facts_file" "${PROJECT_ROOT:-}"
+    # Stack facts are the RENDERER's job — engine-prompt.js adds exactly the stack
+    # placeholders this template DECLARES. Pre-merging all seven here made the
+    # renderer throw "was given values it does not use" on every template that
+    # declares fewer, and the caller reported "cannot render its prompt". Four
+    # seams could not run at all, the fuzz-weaver among them.
     assessment_prompt="$(render_engine_prompt post-failure-analyst "$_ap_vals")"
     rm -f "$_ap_vals"
     rm -f "$_pfa_facts_file"
@@ -5203,7 +5239,15 @@ run_pre_phase_assessment() {
         EPAM_ALLOWED_WRITE_PATHS="" \
         EPAM_MAX_TOOL_CALLS="${_pfa_tool_budget}" \
         EPAM_RESPONSE_SCHEMA="${_pfa_schema:-}" \
-        run_orch_prompt_with_tools "$_pfa_prompt_this_attempt" "team-lead-agent" 2>&1 | tee "$assessment_log"
+        # ITS OWN IDENTITY. This passed "team-lead-agent", so the pre-phase skill assessment
+        # resolved the REVIEWER's seam: the reviewer's tool grant, effort and timeout, not its
+        # own. agents/invocation-profiles.json declares phase-assessment with toolGrant "write"
+        # and timeoutSecs 900 precisely because this step WRITES profiles.json — and the comment
+        # above records what the wrong identity cost: "It got read tools ... upexpress exhausted".
+        #
+        # The second argument to run_orch_prompt is the seam name (`local agent_type="${2:-...}"`),
+        # so this line is the whole of the wiring. A profile nothing names cannot be applied.
+        run_orch_prompt_with_tools "$_pfa_prompt_this_attempt" "phase-assessment" 2>&1 | tee "$assessment_log"
         # PIPESTATUS, not `|| _pfa_call_ok=0`: this is a PIPELINE, and its exit
         # status is tee's — always 0. The `||` branch could never fire on an agent
         # failure, so every failure here reported success. `set -e` does not save
@@ -8352,7 +8396,11 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
                   --arg phase "$PHASE" \
                   '{"__PROFILE__":$profile,"__LINT_LOG__":$lint_log,"__WRITER_OUTPUTS__":$writer_outputs,"__ACTIVE_STORIES__":$active_stories,"__PHASE__":$phase}' > "$_lp_vals"
             # The codeline's own facts — this template declares them and nothing supplied them.
-            merge_stack_facts "$_lf_outputs_file" "${PROJECT_ROOT:-}"
+            # Stack facts are the RENDERER's job — engine-prompt.js adds exactly the stack
+            # placeholders this template DECLARES. Pre-merging all seven here made the
+            # renderer throw "was given values it does not use" on every template that
+            # declares fewer, and the caller reported "cannot render its prompt". Four
+            # seams could not run at all, the fuzz-weaver among them.
             _lint_finding_prompt="$(render_engine_prompt lint-finding-analyst "$_lp_vals")"
             rm -f "$_lp_vals" "$_lp_role_file"
             rm -f "$_lf_outputs_file" "$_lf_stories_file"
@@ -9538,7 +9586,11 @@ $mutant_prompt"
                   '{"__FORCE_LIGHTPANDA__":$force_lightpanda,"__FORCE_PLAYWRIGHT__":$force_playwright,"__GATE_SCOPE__":$gate_scope,"__PHASE_ID__":$phase_id,"__PROJECT_ROOT__":$project_root,"__ROUTING_DECISION__":$routing_decision}' > "$_qa_vals" 2>/dev/null
             local fuzz_prompt
             # The codeline's own facts — this template declares them and nothing supplied them.
-            merge_stack_facts "$_qa_vals" "${PROJECT_ROOT:-}"
+            # Stack facts are the RENDERER's job — engine-prompt.js adds exactly the stack
+            # placeholders this template DECLARES. Pre-merging all seven here made the
+            # renderer throw "was given values it does not use" on every template that
+            # declares fewer, and the caller reported "cannot render its prompt". Four
+            # seams could not run at all, the fuzz-weaver among them.
             if ! fuzz_prompt=$(render_engine_prompt qa-fuzz-weaver "$_qa_vals"); then
                 error "  [fuzz-weaver] cannot render its prompt — refusing to gate with no instructions" >&2
                 rm -f "$_qa_vals"; return 1
@@ -9848,13 +9900,19 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                     local _gfa_raw
                     _gfa_raw=$(echo "$_gfa_prompt" | \
                         AI_GATE_ALLOW_TOOLS=1 \
-                        AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
+                        # NO PROVIDER DEFAULT. This read `:-minimax`, which no configuration
+                        # asks for — every project config.env and every launcher sets qwen. So
+                        # the literal was both unreachable in practice and wrong when reached,
+                        # and routing the same model through another provider is a different
+                        # setup, not a detail (MiniMax direct vs via a gateway differed 99.8%
+                        # on cache hits alone). Unset now fails loudly in ai-run.sh instead.
+                        AI_PROVIDER="${ORCH_GATE_PROVIDER:-}" \
                         AI_MODEL="${_gfa_model}" \
                         EPAM_DANGEROUS_SKIP_APPROVAL=1 \
                         CLAUDE_CMD="$CLAUDE_CMD" \
                         EPAM_CLI="${EPAM_CLI:-epam}" \
                         "$AI_RUNNER_CMD" \
-                            --provider "${ORCH_GATE_PROVIDER:-minimax}" \
+                            --provider "${ORCH_GATE_PROVIDER:-}" \
                             --model    "${_gfa_model}" \
                         2>&1 | tee -a "$_rem_log")
                     if [ -n "$_gfa_raw" ]; then
@@ -9964,11 +10022,11 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                     fi
                     local _acr_raw
                     _acr_raw=$(echo "$_acr_prompt" | \
-                        AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
+                        AI_PROVIDER="${ORCH_GATE_PROVIDER:-}" \
                         AI_MODEL="${_acr_model}" \
                         EPAM_CLI="${EPAM_CLI:-epam}" \
                         "$AI_RUNNER_CMD" \
-                            --provider "${ORCH_GATE_PROVIDER:-minimax}" \
+                            --provider "${ORCH_GATE_PROVIDER:-}" \
                             --model    "${_acr_model}" \
                         2>&1 | tee -a "$_rem_log")
                     if [ -n "$_acr_raw" ]; then
@@ -10060,7 +10118,7 @@ $_prof_prompt"
                         CLAUDE_CMD="$CLAUDE_CMD" \
                         EPAM_CLI="${EPAM_CLI:-epam}" \
                         "$AI_RUNNER_CMD" \
-                            --provider "${ORCH_GATE_PROVIDER:-minimax}" \
+                            --provider "${ORCH_GATE_PROVIDER:-}" \
                             --model    "$(seam_model_or_fail "profile-augmentor")" \
                         2>&1 | tee -a "$_rem_log")
                     if echo "$_prof_result" | grep -q '"profile_updated"[[:space:]]*:[[:space:]]*true'; then
@@ -10142,11 +10200,11 @@ $_prof_prompt"
                             _pa_rev_raw=$(echo "${_pa_corrective}${_reviewer_profile}
 
                             $(_render_change_reviewer "gate-remediation" "profile_addendum" "THE CHANGE ITSELF (unified diff of the roster before and after):\n${_profiles_change}")" | \
-                                AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
+                                AI_PROVIDER="${ORCH_GATE_PROVIDER:-}" \
                                 AI_MODEL="${_pa_model}" \
                                 EPAM_CLI="${EPAM_CLI:-epam}" \
                                 "$AI_RUNNER_CMD" \
-                                    --provider "${ORCH_GATE_PROVIDER:-minimax}" \
+                                    --provider "${ORCH_GATE_PROVIDER:-}" \
                                     --model    "${_pa_model}" \
                                 2>/dev/null | \
                                 python3 "$SCRIPT_DIR/lib/handlers/run-testing-gates.py" 2>/dev/null || true)

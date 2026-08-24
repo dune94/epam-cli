@@ -67,10 +67,40 @@ RUNNER
     # block under test never ran.
     git -C "$PROJECT_ROOT" rev-parse develop > "$LOG_DIR/phase-baseline-sha.txt"
 
-    export EPAM_PROJECT_CONFIG_DIR="$REPO_ROOT/orchestrations/projects/metrolinx"
+    # THE ENGINE REQUIRES A ROSTER. An agent's identity comes only from
+    # projects/<project>/roster.json now — there is no engine-roster fallback — so a fixture
+    # without one exercises the refusal rather than the reviewer. A private project dir is used
+    # rather than the real one: the prompts are read from it too, so it is linked in, and the
+    # repo is never written to by a test.
+    export EPAM_PROJECT_CONFIG_DIR="$WORK/projectcfg"
+    mkdir -p "$EPAM_PROJECT_CONFIG_DIR"
+    ln -sfn "$REPO_ROOT/orchestrations/projects/metrolinx/prompts" "$EPAM_PROJECT_CONFIG_DIR/prompts"
+    "${NODE_BIN:-$HOME/.nvm/versions/node/v20.20.0/bin/node}" -e '
+      const fs = require("fs");
+      const canonical = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+      const { personaDigest } = require(process.argv[3]);
+      const agents = {};
+      for (const [n, p] of Object.entries(canonical)) {
+        if (typeof p !== "string" || !p.trim()) continue;
+        agents[n] = { persona: "[fixture] " + p, kind: "seam", ancestor: n,
+                      derivedFromSha256: personaDigest(p) };
+      }
+      fs.writeFileSync(process.argv[1], JSON.stringify({ agents }, null, 2));
+    ' "$EPAM_PROJECT_CONFIG_DIR/roster.json" \
+      "$REPO_ROOT/orchestrations/agents/profiles.canonical.json" \
+      "$REPO_ROOT/orchestrations/scripts/lib/project-roster.js"
     export PHASE=core
     export EPAM_MODEL=test-model
     export ORCH_GATE_MODEL=test-model
+
+    # THE ENGINE ALWAYS PERSISTS A RUNG BEFORE REVIEW. claude.sh writes it on every attempt
+    # before invoking the writer, so a story that reached review HAS one, and the reviewer
+    # deliberately refuses to judge without it rather than falling back to a seam default.
+    # A fixture with no rung reproduces a state the pipeline cannot be in.
+    ( . "$REPO_ROOT/orchestrations/scripts/lib/story-outputs.sh"
+      STORY_MODEL=test-model STORY_PROVIDER=test-provider \
+      EPAM_REASONING_EFFORT=medium EPAM_TEMPERATURE=0 \
+      story_rung_record "$LOG_DIR" S-1 )
 }
 
 teardown() { rm -rf "$WORK"; }

@@ -129,7 +129,7 @@ seam_model_or_fail() {
     _rc="${_model%%|*}"; _model="${_model#*|}"
 
     if [ "$_rc" = "3" ]; then
-        echo "[seam-model] '${_ctx}' is not declared in invocation-profiles.json — add it to profiles or agentSeams. Until then it has no ladder position, so no model can be resolved for it." >&2
+        echo "[seam-model] '${_ctx}' is not declared in invocation-profiles.json — add it to profiles, or name its seam on this agent's roster entry. Until then it has no ladder position, so no model can be resolved for it." >&2
         return 1
     fi
     if [ -z "$_model" ]; then

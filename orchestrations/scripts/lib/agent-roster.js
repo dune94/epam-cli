@@ -64,7 +64,9 @@ const ROLE_NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
  * write access to client source. That is the exact incident the perimeter was built for,
  * where ~1050 lines were rewritten during a spec pass by agents that only needed to read.
  */
-const AGENT_KINDS = ['implementer', 'investigator'];
+// DECLARED IN THE REGISTRY, not here. See lib/agent-kinds.js: this list and project-roster.js's
+// were two definitions of one concept, and they had already drifted apart on 'seam'.
+const { agentKinds, kindMembership } = require('./agent-kinds.js');
 
 // What an implementer writes in `codeline` to mean "the whole project". A sentinel rather than
 // an omission: a missing field cannot be told apart from a model that skipped it.
@@ -75,7 +77,7 @@ function proposalKind(p) {
   // Defaults to implementer ONLY when unstated — an unrecognised value is refused rather
   // than coerced, because coercing "detective" to implementer grants write access silently.
   if (!k) return 'implementer';
-  return AGENT_KINDS.includes(k) ? k : '';
+  return agentKinds().includes(k) ? k : '';
 }
 
 /**
@@ -215,7 +217,7 @@ function isUsableProposal(p) {
   if (typeof p.name !== 'string' || !p.name.trim()) return 'no name';
   if (!ROLE_NAME_RE.test(p.name)) return 'name is not a plain kebab-case identifier';
   if (typeof p.systemPrompt !== 'string' || !p.systemPrompt.trim()) return 'no systemPrompt';
-  if (!proposalKind(p)) return `unrecognised kind "${p.kind}" (expected one of: ${AGENT_KINDS.join(', ')})`;
+  if (!proposalKind(p)) return `unrecognised kind "${p.kind}" (expected one of: ${agentKinds().join(', ')})`;
   // AN INVESTIGATOR WITHOUT A CODELINE CANNOT BE BOUND TO ANYTHING.
   //
   // The lane resolves its investigator BY CODELINE. One minted without that field is registered,
@@ -308,14 +310,22 @@ function permittedShapes(kind) {
     // no new dependency, and a reason without shapes is still better than a crash.
     vocab = require(path.join(__dirname, '..', '..', '..', 'dist', 'sdk.js')).mintNameVocabulary();
   } catch (_) { /* fall through to the shapeless form */ }
-  const allowed = vocab && vocab[kind];
-  if (!allowed || !allowed.length) {
-    return 'Rename it with the ending this pipeline requires for its kind.';
-  }
+  // THE WORDS COME FROM THE PROMPT LAYER; only the shapes are derived here. Both sentences used
+  // to be written in this file — model-facing prose in engine code, which the prompt reviewers
+  // never see and no project can change. templates/agent-name-refusal.json holds them.
+  //
   // No article before the kind: kind names come from the registry, so "a"/"an" cannot be chosen
   // here without writing a rule about words the registry is free to change.
-  return `An agent of kind "${kind}" must be named ending in `
-    + `${allowed.map((sx) => `"-${sx}"`).join(' or ')}.`;
+  // eslint-disable-next-line global-require
+  const { renderEngineTemplate } = require('./engine-prompt.js');
+  const allowed = vocab && vocab[kind];
+  if (!allowed || !allowed.length) {
+    return renderEngineTemplate('agent-name-refusal', {}, 'unknown');
+  }
+  return renderEngineTemplate('agent-name-refusal', {
+    __KIND__: kind,
+    __SHAPES__: allowed.map((sx) => `"-${sx}"`).join(' or '),
+  }, 'shapes');
 }
 
 /**
@@ -398,7 +408,17 @@ function mergeProjectAgents(opts) {
     });
   }
 
-  fs.writeFileSync(profilesPath, JSON.stringify(profiles, null, 2), 'utf8');
+  // THE ENGINE ROSTER IS NOT WRITTEN. It used to be: this merged proposals into
+  // orchestrations/agents/profiles.json, which every project shares, so one project's agents
+  // reached another's roster and a client codeline ran with this repository's own.
+  //
+  // The proposals still go through the whole adversarial cycle — proposed, reviewed, corrected —
+  // and the result is returned to the caller, which hands it to the roster-specialiser as the
+  // agents THIS project needs. What changed is where they land: projects/<project>/roster.json,
+  // derived from canonical and reviewed against it, instead of a file the engine owns.
+  //
+  // `profiles` is still built above because the merge validates against it: a proposal that
+  // collides with a canonical name, or with another proposal, is caught by building the set.
 
   // Register the minted roles. Downstream needs to know which roles are THIS PROJECT'S
   // implementation roles, and "everything in the roster that isn't canonical" cannot
@@ -635,7 +655,13 @@ function applyProjectProfiles(profilesPath, agentsDir) {
   for (const n of names) {
     if (!Object.prototype.hasOwnProperty.call(profiles, n)) { profiles[n] = store[n]; applied.push(n); }
   }
-  if (applied.length) fs.writeFileSync(profilesPath, JSON.stringify(profiles, null, 2), 'utf8');
+  // NOT WRITTEN BACK. This existed because pre-run-reset restores the engine roster from
+  // canonical, which deleted the briefs a project had minted — so they were re-applied here on
+  // every run. The roster is derived from canonical every launch now and carries them itself,
+  // so re-applying them to the engine's file would only put one project's agents where the next
+  // project reads.
+  //
+  // The list is still returned: callers report what this project contributed.
   return applied;
 }
 
@@ -718,7 +744,10 @@ function clearProjectRoster(agentsDir, profilesPath, names) {
     for (const r of registered) {
       if (Object.prototype.hasOwnProperty.call(profiles, r)) { delete profiles[r]; changed = true; }
     }
-    if (changed) fs.writeFileSync(profilesPath, JSON.stringify(profiles, null, 2), 'utf8');
+    // Not written back, for the same reason as applyProjectProfiles: the engine roster is not
+    // this run's to edit. A rejected agent is absent from the roster the specialiser writes,
+    // which is the only roster anything reads.
+    void changed;
   } catch { /* live roster unreadable — registry and store are cleared regardless */ }
 
   return registered;
@@ -812,8 +841,16 @@ function rosterReviewIsRequired({ verdict, mintSkipped, pauseConfigured } = {}) 
 function kindOfAgent(agent, agentsDir) {
   if (!agent) return '';
   const inList = (names) => Array.isArray(names) && names.includes(agent);
-  try { if (inList(projectRoles(agentsDir))) return AGENT_KINDS[0]; } catch { /* not registered */ }
-  try { if (inList(projectInvestigators(agentsDir))) return AGENT_KINDS[1]; } catch { /* not registered */ }
+  // WHICH LIST MEANS WHICH KIND IS DECLARED, not positional. This read AGENT_KINDS[0] and [1],
+  // so reordering the kind vocabulary would silently change what every registered agent IS —
+  // an ordering carrying a meaning nobody assigned it. See agentKindMembership in the registry.
+  const membership = kindMembership();
+  const readers = { [PROJECT_ROLES_FILE]: projectRoles, [PROJECT_INVESTIGATORS_FILE]: projectInvestigators };
+  for (const kind of Object.keys(membership)) {
+    const read = readers[membership[kind]];
+    if (!read) continue;                      // a kind whose list this module cannot read yet
+    try { if (inList(read(agentsDir))) return kind; } catch { /* not registered */ }
+  }
   return '';
 }
 
@@ -828,5 +865,5 @@ module.exports = {
   saveProjectProfiles, applyProjectProfiles, projectProfilesPath, PROJECT_PROFILES_FILE,
   clearProjectRoster, rosterRunId, PROJECT_WIDE,
   registerProjectInvestigators, projectInvestigators, projectInvestigatorsPath, investigatorForCodeline,
-  proposalKind, AGENT_KINDS, PROJECT_INVESTIGATORS_FILE,
+  proposalKind, agentKinds, PROJECT_INVESTIGATORS_FILE,
 };

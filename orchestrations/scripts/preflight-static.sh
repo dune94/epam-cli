@@ -6,8 +6,22 @@
 #
 # Exit 0 = safe to launch. Non-zero = a defect that WILL surface in a run.
 set -uo pipefail
-ROOT="${1:-/home/bradleyjerome/projects/ai/epam-cli}"
-NODE="$HOME/.nvm/versions/node/v20.20.0/bin/node"
+# NEITHER OF THESE IS WRITTEN DOWN.
+#
+# This defaulted to one developer's absolute home path, and pinned node to one nvm install of
+# one version. On any other machine — CI, a second checkout, a colleague — the default ROOT
+# pointed at a directory that does not exist, and $NODE at an interpreter that does not exist,
+# so a pre-flight whose entire purpose is "catch it before spending a run" could not run at all.
+#
+# The repo root is where this script lives, two levels up. The interpreter is resolved by
+# lib/node-bin.sh, which reads the requirement from package.json engines.node and finds an
+# interpreter that satisfies it — the library that exists for exactly this, and that ten other
+# sites already use.
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="${1:-$(cd "$_SCRIPT_DIR/../.." && pwd)}"
+# shellcheck source=lib/node-bin.sh
+. "$_SCRIPT_DIR/lib/node-bin.sh"
+NODE="$(resolve_node_bin "$ROOT")" || { echo "[preflight] no usable node interpreter" >&2; exit 2; }
 cd "$ROOT" || exit 2
 FAILED=0
 report() { printf '%-34s %s\n' "$1" "$2"; }
@@ -82,13 +96,18 @@ for(const f of SH){const L=fs.readFileSync(f,"utf8").split("\n");
  for(let i=0;i<L.length;i++){const m=/render_(?:engine_prompt|or_keep)\s+([a-z0-9-]+)\s+"?\$?\{?([A-Za-z_]*)\}?"?\s*("?([a-z_]+)"?)?/.exec(L[i]);
   if(!m)continue;const j=T[m[1]];if(!j)continue;const key=m[4];let body;
   if(j.bodies){body=key&&j.bodies[key]!==undefined?j.bodies[key]:null;if(body===null)continue;}else body=j.body||"";
-  // Values arrive two ways: named in the jq_vals block, or merged from the codeline by
-  // merge_stack_facts (lib/jq-vals.sh), which supplies the stack-facts keys. A checker that
-  // modelled only the first would report a site as broken while it works — silencing it by
+  // Values arrive two ways: named in the jq_vals block, or supplied by THE RENDERER. A checker
+  // that modelled only the first would report a site as broken while it works — silencing it by
   // "fixing" working code is worse than the miss.
+  //
+  // The renderer is the supplier now, unconditionally. engine-prompt.js adds exactly the stack
+  // placeholders a template DECLARES (`stackDeclared`). This used to credit merge_stack_facts
+  // instead, and only when that call appeared near the jq_vals block — a second implementation
+  // of the same idea that merged ALL SEVEN keys, so the renderer threw "was given values it does
+  // not use" on every template declaring fewer, and four seams could not render at all.
   const STACK_FACT_KEYS=["__STACK__","__MANIFEST_FILE__","__TEST_COMMAND__","__TEST_FILE_CONVENTIONS__","__PROTECTED_FILES__","__IMPL_ROLE__","__TEST_ROLE__"];
   let sup=null;for(let k=i;k>=0&&k>i-30;k--){if(/jq_vals|jq -n/.test(L[k])){sup=ph(L.slice(k,i).join("\n"));
-    if(/merge_stack_facts/.test(L.slice(k,i).join("\n"))) sup=sup.concat(STACK_FACT_KEYS);
+    sup=sup.concat(STACK_FACT_KEYS);
     break;}}
   if(!sup)continue;const miss=ph(body).filter(p=>!sup.includes(p));
   if(miss.length)bad.push(f.replace("orchestrations/scripts/","")+":"+(i+1)+"  "+m[1]+"  MISSING "+miss.join(", "));}}
@@ -106,7 +125,9 @@ console.log(bad.join("\n"));' 2>&1)
 # its claim reports the wrong thing in both directions.
 #
 # It now asks the handler about a story that ACTUALLY needs context, and says so when none does.
-PRD=$(ls -t orchestrations/projects/*/runs/*/work/*-prd.json 2>/dev/null | head -1)
+# shellcheck source=lib/project-config.sh
+. "$ROOT/orchestrations/scripts/lib/project-config.sh"
+PRD=$(ls -t "$(projects_root "$ROOT")"/*/runs/*/work/*-prd.json 2>/dev/null | head -1)
 if [ -n "$PRD" ]; then
   # The selector is a handler, not an inline program, so the same question this check asks can be
   # asked by a test — a check that can only ever be exercised by running the whole pre-flight
@@ -169,6 +190,25 @@ ratchet() {
 }
 ratchet "literal ratchet" "duplicatedLiterals" "scan-duplicated-literals.js"
 ratchet "guard calibration" "uncalibratedGuards" "scan-uncalibrated-guards.js"
+
+# ── THE HARDCODING AUDIT CAN STILL SEE ───────────────────────────────────────
+# Not its count — that is a research number nobody should gate on, and the file says so itself.
+# This asks the prior question: does each category still detect the defect it claims to cover?
+#
+# Every hardcoding defect found on 2026-08-23 was invisible to that audit — it scanned .sh/.js/.ts
+# and declared config exempt, so RELOCATING a literal into orchestrations/config counted as
+# repair; its numeric category needed a named knob, so topN = 8 matched nothing. And nothing ran
+# it, so the blindness was never observed. --calibrate runs every pattern against a fixture of
+# known-bad lines and fails on any that has gone blind. It found a real gap on its first run: the
+# branch pattern required a character AFTER the branch name, so `git checkout develop` at the end
+# of a line matched nothing.
+_hc_out=$(bash orchestrations/scripts/hardcoding-audit.sh --calibrate 2>&1); _hc_rc=$?
+if [ "$_hc_rc" -eq 0 ]; then
+  pass "hardcoding audit sees" "$(printf '%s' "$_hc_out" | grep -c 'sees its example') categories"
+else
+  fail "hardcoding audit sees" "a category has gone BLIND"
+  printf '%s\n' "$_hc_out" | grep -E 'BLIND' | sed 's/^/    /'
+fi
 
 # ── 8. THE OPERATOR'S OWN DECISIONS ──────────────────────────────────────────
 # orchestrations/config/remediation-register.json is DATA the operator owns: literals that must be

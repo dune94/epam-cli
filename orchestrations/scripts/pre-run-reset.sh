@@ -446,6 +446,42 @@ if [ "$_VCC_CLEARED" -gt 0 ]; then
     info "  Cleared $_VCC_CLEARED VC-coverage verdict(s) — no prior run's coverage findings reach this writer"
 fi
 
+# THE PRODUCING MODEL IS PER-RUN STATE TOO, and it is caught by the SAME trap that caught
+# story-retry-state above: the archive sweep matches `*.log` and
+# `story-outputs-*.txt`, and this is a DIRECTORY of .json files, so it sails straight past. A survivor makes the
+# next run's reviewer judge story S on the rung last run's writer happened to reach — a wrong
+# model chosen by nothing, which is exactly what the block below exists to stop.
+# THE PROJECT ROSTER IS A RUN OUTPUT, so it does not survive into the next run.
+#
+# It is derived from canonical on every launch — resume included — by the roster-specialiser, and
+# reviewed before anything reads it. A roster that survives is a stored artefact with a lifetime:
+# the next run's agents would be whoever the LAST run happened to derive, and nothing would ever
+# ask whether canonical had moved since. That is the two-clock problem that left 40 project
+# prompts stale against their templates while every test stayed green.
+#
+# Absence is the correct state at this point in a run. The seams refuse until the roster exists,
+# which is what makes "derived every launch" enforceable rather than aspirational.
+_ROSTER_FILE="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/roster.json}"
+if [ -n "$_ROSTER_FILE" ] && [ -f "$_ROSTER_FILE" ]; then
+    if rm -f "$_ROSTER_FILE" 2>/dev/null && [ ! -f "$_ROSTER_FILE" ]; then
+        info "  Cleared the project roster — this run derives its own from canonical"
+    else
+        fail_contamination "the project roster at $_ROSTER_FILE could NOT be cleared — this run would inherit the agents the PREVIOUS run derived"
+    fi
+fi
+
+_RUNG_STATE_DIR="$LOG_DIR/story-rung"
+if [ -d "$_RUNG_STATE_DIR" ]; then
+    _RUNG_REC_CLEARED=$(find "$_RUNG_STATE_DIR" -maxdepth 1 -type f 2>/dev/null | wc -l)
+    find "$_RUNG_STATE_DIR" -maxdepth 1 -type f -delete 2>/dev/null || true
+    _RUNG_REC_LEFT=$(find "$_RUNG_STATE_DIR" -maxdepth 1 -type f 2>/dev/null | wc -l)
+    if [ "$_RUNG_REC_LEFT" -gt 0 ]; then
+        fail_contamination "$_RUNG_REC_LEFT writer-rung record(s) could NOT be cleared in $_RUNG_STATE_DIR — this run's judges would inherit the rung the PREVIOUS run's writer reached"
+    elif [ "$_RUNG_REC_CLEARED" -gt 0 ]; then
+        info "  Cleared $_RUNG_REC_CLEARED writer-rung record(s) — no judge inherits a prior run's rung"
+    fi
+fi
+
 _RETRY_STATE_DIR="$LOG_DIR/story-retry-state"
 if [ -d "$_RETRY_STATE_DIR" ]; then
     _RETRY_CLEARED=$(find "$_RETRY_STATE_DIR" -maxdepth 1 -type f 2>/dev/null | wc -l)
@@ -533,6 +569,13 @@ for _rf in "${_PROJECT_CFG_DIR:+$_PROJECT_CFG_DIR/project-roles.json}" \
            "${_PROJECT_CFG_DIR:+$_PROJECT_CFG_DIR/agent-profiles.json}" \
            "${_ASSIGN_DIR:+$_ASSIGN_DIR/role-assignments.json}"; do
     [ -n "$_rf" ] && [ -f "$_rf" ] || continue
+    # COPIED BEFORE IT IS DELETED. These are what the last run actually produced — the roster it
+    # minted, the briefs it wrote, the assignments it made. Deleting them outright meant a killed
+    # run left nothing to diagnose from and nothing to build a test fixture out of, so the only way
+    # to see a real artefact was to pay for another run. The archive already exists for logs; this
+    # is the same idea applied to the artefacts that actually decide a run's behaviour.
+    mkdir -p "$ARCHIVE_DIR/generated" 2>/dev/null || true
+    cp -p "$_rf" "$ARCHIVE_DIR/generated/$(basename "$_rf")" 2>/dev/null || true
     rm -f "$_rf" 2>/dev/null && _ROSTER_CLEARED=$((_ROSTER_CLEARED+1)) || true
 done
 if [ "$_ROSTER_CLEARED" -gt 0 ]; then
@@ -569,6 +612,8 @@ for _gf in "${_PROJECT_CFG_DIR:+$_PROJECT_CFG_DIR/codeline-facts.json}" \
            "${_PROJECT_CFG_DIR:+$_PROJECT_CFG_DIR/estate-survey.md}" \
            "${_PROJECT_CFG_DIR:+$_PROJECT_CFG_DIR/prompt-agent-link.json}"; do
     [ -n "$_gf" ] && [ -f "$_gf" ] || continue
+    mkdir -p "$ARCHIVE_DIR/generated" 2>/dev/null || true
+    cp -p "$_gf" "$ARCHIVE_DIR/generated/$(basename "$_gf")" 2>/dev/null || true
     rm -f "$_gf" 2>/dev/null && _GEN_CLEARED=$((_GEN_CLEARED+1)) || true
 done
 if [ "$_GEN_CLEARED" -gt 0 ]; then
@@ -581,6 +626,13 @@ fi
 # over a mixture of this run's output and some earlier run's.
 if [ -n "${_PROJECT_CFG_DIR:-}" ] && [ -d "$_PROJECT_CFG_DIR/prompts" ]; then
     _PROMPTS_N=$(find "$_PROJECT_CFG_DIR/prompts" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l | tr -d '[:space:]')
+    # COPIED BEFORE THE WIPE, for the same reason as the roster above: these are the prompts the
+    # last run's agents actually executed, and they are the only record of what each agent was
+    # told. rm -rf destroyed them, so reproducing a prompt defect required another paid run.
+    if [ "${_PROMPTS_N:-0}" -gt 0 ]; then
+        mkdir -p "$ARCHIVE_DIR/prompts" 2>/dev/null || true
+        cp -p "$_PROJECT_CFG_DIR/prompts/"*.json "$ARCHIVE_DIR/prompts/" 2>/dev/null || true
+    fi
     rm -rf "$_PROJECT_CFG_DIR/prompts" && mkdir -p "$_PROJECT_CFG_DIR/prompts"
     [ "${_PROMPTS_N:-0}" -gt 0 ] \
         && info "  Cleared ${_PROMPTS_N} project prompt(s) — each was specialised for a roster this run has not minted"
@@ -629,20 +681,33 @@ fi
 #
 # Restores the WHOLE file rather than stripping known fields: the canonical is the base state, and a
 # subtractive list would silently miss the next per-run field somebody adds.
+# NOTHING TO RESTORE. This copied prd.canonical.json over the runtime PRD, which made that stored
+# file the base state of every run — and it was hand-edited to unblock launches, so runs inherited
+# a previous run's conclusions as premises.
+#
+# The PRD is ingested: the tracker supplies the work and the project's config supplies the
+# identity, both re-read every run. A run that ingests cannot inherit, and a run that does not
+# ingest has no PRD to restore from a template either.
 if [ "$_IS_RESUME" = "1" ]; then
-    info "  Resume — keeping the runtime PRD as the run left it; not restoring from canonical"
-elif [ -n "${PRD_FILE:-}" ] && [ -f "$(dirname "$PRD_FILE")/prd.canonical.json" ]; then
-    _PRD_CANON="$(dirname "$PRD_FILE")/prd.canonical.json"
-    # VALIDATED BEFORE IT REPLACES ANYTHING. Copying a corrupt canonical over the runtime PRD
-    # would destroy the only other copy and fail much later, somewhere that reads as a PRD defect.
-    if ! jq -e . "$_PRD_CANON" >/dev/null 2>&1; then
-        fail "$_PRD_CANON is not valid JSON. The runtime PRD is NOT restored and still carries the
-  previous run's assignments, so this run cannot start clean. Repair the canonical before running."
+    info "  Resume — keeping the runtime PRD as the run left it"
+elif [ "${JIRA_PIPELINE:-0}" = "1" ]; then
+    # AN INGESTING PROJECT REBUILDS ITS PRD FROM THE TRACKER, so there is nothing to restore and
+    # nothing stored that could carry a previous run's conclusions into this one.
+    info "  PRD comes from the tracker this run — nothing stored to restore"
+elif [ -n "${PRD_FILE:-}" ] && [ -f "$(dirname "$PRD_FILE")/prd.authored.json" ]; then
+    # A PROJECT THAT AUTHORS ITS PRD has no tracker to rebuild from, so its authored input IS the
+    # base state and restoring it is what makes the slate clean — the run's own writes to prd.json
+    # are discarded rather than accumulating. Named for what it is: an authored input, not a
+    # "canonical" template that synthesis fills.
+    _PRD_AUTHORED="$(dirname "$PRD_FILE")/prd.authored.json"
+    if ! jq -e . "$_PRD_AUTHORED" >/dev/null 2>&1; then
+        fail "$_PRD_AUTHORED is not valid JSON. The runtime PRD is NOT restored and still carries the
+  previous run's assignments, so this run cannot start clean. Repair it before running."
     fi
-    cp "$_PRD_CANON" "$PRD_FILE" \
-        || fail "could not restore the PRD from $_PRD_CANON — refusing to start a run that would
+    cp "$_PRD_AUTHORED" "$PRD_FILE" \
+        || fail "could not restore the PRD from $_PRD_AUTHORED — refusing to start a run that would
   inherit the previous run's agent assignments."
-    info "  PRD restored from canonical — prior run's agent assignments and resolved codelines are gone"
+    info "  PRD restored from the project's authored input — prior run's assignments are gone"
 fi
 
 # Clear stale lock files

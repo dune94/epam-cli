@@ -45,6 +45,8 @@ const readJson = (p) => JSON.parse(fs.readFileSync(p, 'utf8'));
  * through the same library as everything else rather than assembled here — an engine-side
  * copy of its text is precisely the thing this whole design removes.
  */
+const { refusalBlock } = require('./refusal-block.js');
+
 function renderGeneratorPrompt({ generatorBody, template, projectContext, codelineContext, mintedRoles, refusal }) {
   let out = generatorBody
     .split('__TEMPLATE_ID__').join(template.id)
@@ -53,13 +55,16 @@ function renderGeneratorPrompt({ generatorBody, template, projectContext, codeli
     .split('__TEMPLATE_PLACEHOLDERS__').join((template.placeholders || []).join(', ') || '(none)')
     .split('__PROJECT_CONTEXT__').join(projectContext || '')
     .split('__CODELINE_CONTEXT__').join(codelineContext || '')
-    .split('__MINTED_ROLES__').join(mintedRoles || '');
-  if (refusal) {
-    // THE RETRY MUST BE TOLD WHY. Re-sending an identical instruction gets an identical
-    // answer; the refusal is the only new information the next attempt has.
-    out += `\n\n## Your previous attempt was REFUSED\n\n${refusal}\n\n`
-      + 'Produce the prompt again, correcting exactly this. Change nothing else.';
-  }
+    .split('__MINTED_ROLES__').join(mintedRoles || '')
+    // THE RETRY MUST BE TOLD WHY — re-sending an identical instruction gets an identical answer,
+    // and the refusal is the only new information the next attempt has. The words that carry it
+    // are the GENERATOR PROMPT'S, not this file's: they used to be appended here in JavaScript,
+    // where the prompt layer could not review them, the drift checks could not see them, and no
+    // project could change them. roster-specialisation.json has always done it this way.
+    //
+    // An absent refusal substitutes empty, so a first attempt carries no heading for a refusal
+    // that never happened.
+    .split('__PREVIOUS_REFUSAL__').join(refusalBlock(refusal, 'prompt'));
   return out;
 }
 

@@ -10,6 +10,7 @@ import { ProxyProvider } from './proxy/ProxyProvider.js';
 import { CodexProvider } from './codex/CodexProvider.js';
 import { QwenProvider, createQwenProvider } from './qwen/QwenProvider.js';
 import { MiniMaxProvider, createMiniMaxProvider } from './minimax/MiniMaxProvider.js';
+import { createReplayProvider } from './replay/ReplayProvider.js';
 import { CursorProvider, createCursorProvider } from './cursor/CursorProvider.js';
 import { CopilotProvider, createCopilotProvider } from './copilot/CopilotProvider.js';
 import { createCodemieProvider } from './codemie/CodemieProvider.js';
@@ -375,6 +376,14 @@ export class ProviderChain implements LLMProvider {
     }
 
     // API key providers - check for BYOK key BEFORE proxy fallback
+    // REPLAY NEEDS NO CREDENTIAL AND MUST NOT ACQUIRE ONE.
+    //
+    // Resolved before anything reaches for a key or a proxy: a rehearsal answers from a recorded
+    // run, so a replay that could fall through to a real provider would spend money in the one
+    // mode whose entire purpose is not to. Placed first so that is structural rather than a
+    // property of the order of the branches below.
+    if (slot.provider === 'replay') return createReplayProvider();
+
     const apiKey = await this.options.resolveApiKey(slot.provider);
 
     // If no BYOK key, fall back to proxy tier (if configured)

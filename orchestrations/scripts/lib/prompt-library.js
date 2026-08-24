@@ -43,7 +43,7 @@ const PROJECT_PROMPT_SUBDIR = 'prompts';
 // unfixed copies then disagreed with the fixed one about what a template declares, so a valid
 // generated prompt was refused as "dropping placeholders" and a valid template was refused as
 // "using undeclared placeholders". Three copies of a rule is three rules.
-const { placeholdersIn: _placeholdersIn } = require('./engine-prompt.js');
+const { placeholdersIn: _placeholdersIn, substituteOnce } = require('./engine-prompt.js');
 
 /** Repo root, derived from this file's location — never an env guess. */
 function repoRoot() {
@@ -117,7 +117,21 @@ function loadProjectPrompt(id, projectConfigDir, opts) {
       throw new Error(
         `prompt '${id}' has no part '${part}' (declares: ${Object.keys(doc.bodies).join(', ')})`);
     }
-    return { ...doc, body: doc.bodies[part] };
+    // THE PART'S CONTRACT IS THE PART'S PLACEHOLDERS. `placeholders` on a multi-part document
+    // is the UNION across parts — that is what the whole document declares. render() then
+    // compares it against ONE part's body and refuses it for "declaring placeholders it never
+    // uses", so every multi-part project prompt was unrenderable through this path.
+    //
+    // Surfaced when seam prompts started routing here instead of to the template renderer, which
+    // computes its declared set per body already. Narrowed rather than relaxing render(): a
+    // prompt that declares a placeholder its body never uses is still a real defect, and the
+    // check that catches it is worth keeping.
+    const used = new Set(placeholdersIn(doc.bodies[part]));
+    return {
+      ...doc,
+      body: doc.bodies[part],
+      placeholders: (doc.placeholders || []).filter((x) => used.has(x)),
+    };
   }
 
   if (!doc || typeof doc.body !== 'string' || !doc.body.trim()) {
@@ -157,22 +171,94 @@ function render(doc, values) {
   }
 
   const supplied = values && typeof values === 'object' ? values : {};
-  const missing = present.filter((p) => !(p in supplied));
+
+  // A VALUE NOTHING CONSUMES IS EVIDENCE THROWN AWAY.
+  //
+  // This checked three things and not this one, so a value supplied to a prompt with no
+  // matching placeholder was silently dropped. engine-prompt.js has always rejected exactly
+  // that — "was given values it does not use" — so the two renderers disagreed on the same
+  // class, and the lenient one lost evidence without a trace.
+  //
+  // Live 20260821T212250Z: prior-reviews.py produced the reviewer's history correctly and it
+  // was supplied as __PRIOR_REVIEW__. The project's prompt declares no such placeholder, so
+  // it went nowhere. All three review cycles ran with no memory of each other and the
+  // approval missed a regression the earlier cycle had caught. The run log mentions prior
+  // review zero times: a whole feedback loop absent, with nothing to show it.
+  //
+  // Loud, because the caller believed it sent something. A stale project prompt is now a
+  // failure at render rather than a quiet degrade — which is the same rule the rest of this
+  // file already applies in the other direction.
+  const unconsumed = Object.keys(supplied).filter((k) => /^__[A-Z0-9_]+__$/.test(k) && !present.includes(k));
+  if (unconsumed.length) {
+    // LOUD, NOT FATAL — and that asymmetry is deliberate.
+    //
+    // Throwing here kills the seam outright: the reviewer supplies __PRIOR_REVIEW__ to project
+    // prompts minted before that placeholder existed, so a hard failure would take the reviewer
+    // out of every such run. Losing one block of context is bad; losing the whole review is
+    // worse, and the operator has not asked for a re-mint.
+    //
+    // engine-prompt.js DOES throw on this, correctly: it renders templates, which are the
+    // in-repo source and can always be corrected. A project prompt is generated, may lag the
+    // template, and cannot be corrected from here.
+    //
+    // What was unacceptable was silence. This is the trace that was missing when the reviewer's
+    // entire prior-review history was dropped on 20260821T212250Z and the run log mentioned it
+    // zero times.
+    process.stderr.write(
+      `[prompt-library] '${doc.id}' was given values it does not use: ${unconsumed.join(', ')}. `
+      + 'That evidence is being DROPPED — the prompt has no placeholder for it. '
+      + 'Add the placeholder to this project prompt, or stop supplying the value.\n');
+  }
+
+  // A LOOKUP THAT FOUND NOTHING IS ABSENCE, NOT A VALUE. `p in supplied` is true for a key whose
+  // value is undefined, so the rule stated below — absent is not empty — was defeated by the one
+  // shape absence actually takes in JavaScript, and the prompt rendered with the literal word
+  // "undefined" where the evidence belonged. null is the same thing arriving from JSON.
+  const missing = present.filter((p) => !(p in supplied) || supplied[p] === undefined || supplied[p] === null);
   if (missing.length) {
     // An empty string is a legitimate value and must be passed explicitly. Absent is not
     // empty: a prompt rendered without its evidence is worse than one that fails loudly.
     throw new Error(`prompt '${doc.id}' is missing values for: ${missing.join(', ')}`);
   }
 
-  let out = body;
-  for (const key of present) {
-    const value = String(supplied[key]);
-    out = out.replace(new RegExp(key, 'g'), () => value);
+  // ONE PASS OVER THE BODY. Replacing each key in turn over the accumulating output meant every
+  // value was re-read by every later key: a diff that mentioned __B__ had __B__'s content
+  // spliced into it, and a diff carrying any double-underscore token — a Python dunder, a C
+  // macro — tripped the leftover check below and killed the render of a complete prompt. A
+  // single alternation pass inserts each value exactly where the BODY asked for it and never
+  // looks at what was inserted.
+  //
+  // Replacer FUNCTION, not a string, so a `$&` or `$1` inside a diff, a log or a JSON example
+  // is inserted literally instead of being read as a replacement pattern.
+  // AN EMPTY VALUE IS SILENCE, AND SILENCE REACHES THE MODEL AS A BLANK SECTION.
+  //
+  // The renderer refused a MISSING key and accepted a present-but-empty one, so `|| ''` — which
+  // fifteen call sites use — turned a failed lookup into a prompt that looked complete and said
+  // nothing. Live 2026-08-23: the roster reviewer was handed a header with a blank line under it
+  // for every agent, reported the briefs "entirely empty", and blocked the roster twice. The
+  // briefs existed; the lookup read the wrong map.
+  //
+  // A placeholder that may legitimately be empty says so IN THE TEMPLATE, as `mayBeEmpty`. A retry
+  // note absent on a first attempt is a real state; a brief is not. That distinction belongs with
+  // the prompt, which is reviewable, rather than in the producer, which is where it got lost.
+  const mayBeEmpty = new Set(Array.isArray(doc.mayBeEmpty) ? doc.mayBeEmpty : []);
+  const blank = present.filter((p) => !mayBeEmpty.has(p)
+    && typeof supplied[p] === 'string' && !supplied[p].trim());
+  if (blank.length) {
+    throw new Error(
+      `prompt '${doc.id}' was given EMPTY values for: ${blank.join(', ')}. An empty payload renders `
+      + 'as a blank section and the agent answers about silence — it cannot tell a failed lookup '
+      + 'from a genuinely absent one. Supply the value, or declare the placeholder in the '
+      + "template's `mayBeEmpty` if absent is a real state for it.");
   }
 
-  const leftover = placeholdersIn(out);
-  if (leftover.length) {
-    throw new Error(`prompt '${doc.id}' still contains placeholders after rendering: ${leftover.join(', ')}`);
+  const out = substituteOnce(body, present, supplied);
+
+  // The check that means something is on the BODY: a placeholder this pass did not cover.
+  // Scanning the OUTPUT could only ever find tokens that arrived as evidence.
+  const uncovered = placeholdersIn(body).filter((p) => !present.includes(p));
+  if (uncovered.length) {
+    throw new Error(`prompt '${doc.id}' has placeholders no value covered: ${uncovered.join(', ')}`);
   }
   return out;
 }

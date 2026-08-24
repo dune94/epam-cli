@@ -118,6 +118,19 @@ export interface AgentRunResult {
   messages: Message[];
   /** Per-iteration model/tool timing split — see IterationTiming. */
   timings: IterationTiming[];
+  /**
+   * Why the loop ended, when it did NOT end because the agent finished.
+   *
+   * Absent means the agent completed its turn. 'max_iterations' means it was cut off with
+   * work outstanding — the run is INCOMPLETE, and its finalResponse is whatever it happened
+   * to have said, not an answer. Live 2026-08-18: codeline-discovery exhausted its budget,
+   * the exhaustion text was returned with exit 0, and the caller — which checked only "did I
+   * get output?" — accepted it and selected the wrong repository for the entire run.
+   *
+   * Optional so no existing caller breaks; the callers that must not accept a truncated
+   * answer read it (see buildRunResultJson and lib/codeline-discovery.js).
+   */
+  stopReason?: 'max_iterations';
 }
 
 export interface PlanStep {

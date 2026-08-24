@@ -26,7 +26,10 @@
 'use strict';
 
 const TIMEOUT_MS = 12000;
-const MODEL      = process.env.ORCH_GATE_MODEL || 'z-ai/glm-5.2';
+// No literal fallback: see lib/seam-model.js.
+const { resolveOrRefuse } = require('./seam-model.js');
+const MODEL      = resolveOrRefuse({ seam: 'topology-router',
+  sources: [process.env.ORCH_GATE_MODEL] });
 
 // ── Tool schema ──────────────────────────────────────────────────────────────
 const TOPOLOGY_TOOL = {

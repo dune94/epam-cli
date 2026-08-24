@@ -74,10 +74,55 @@ function sizeLabelToEffort(labels) {
 
 // ── Status mapping from Jira status category ──────────────────────────────
 
+/**
+ * WHAT THIS PROJECT'S TRACKER CALLS THINGS — declared by the project, never by this file.
+ *
+ * A Jira custom field id is per-TENANT: customfield_10016 is story points on one instance and
+ * something else, or nothing, on the next. Type and status names are per-WORKFLOW. Carrying any
+ * of them here made the generic ingest a reader of exactly one tenant's schema, and the failure
+ * was silent — points and epic link read as absent, and a type outside a five-word English list
+ * dropped the ticket entirely with `return null`.
+ *
+ * A declaration that is ABSENT filters nothing. That is the opposite of the old default: an
+ * undeclared vocabulary must not mean "ingest nothing", because nothing is what a project gets
+ * before it knows the declaration exists.
+ */
+function declaredList(name) {
+  return String(process.env[name] || '')
+    .split(',').map((x) => x.trim()).filter(Boolean);
+}
+
+/** The value of a project-declared field, by whichever names the tracker may present it under. */
+function declaredField(fields, envName, ...fallbackKeys) {
+  const declared = String(process.env[envName] || '').trim();
+  if (declared && fields[declared] !== undefined) return fields[declared];
+  for (const k of fallbackKeys) if (fields[k] !== undefined) return fields[k];
+  return undefined;
+}
+
+/**
+ * A TRACKER STATUS, CLASSIFIED BY THE PROJECT'S OWN WORKFLOW.
+ *
+ * This matched English substrings — done/closed/resolved meant completed, progress/review/testing
+ * meant in-progress — so a workflow in any other language classified everything as pending, and
+ * `completed` gates whether a story is skipped. This project's own board carries "BA ACCEPTANCE",
+ * "READY FOR DEV" and "Pending I&IT Approval"; none of them matched either list.
+ *
+ * The vocabularies are declared per project (JIRA_STATUS_COMPLETED, JIRA_STATUS_IN_PROGRESS), as
+ * comma-separated substrings matched case-insensitively — substrings because a workflow names
+ * states like "Done (verified)".
+ *
+ * UNDECLARED CLASSIFIES NOTHING, and pending is where that lands. Pending is the absence of
+ * evidence that work started or finished, not an invented fact — and it is the safe direction: a
+ * story wrongly pending is attempted again, while one wrongly completed is silently skipped.
+ */
 function mapStatus(statusName) {
-  const s = (statusName || '').toLowerCase();
-  if (s.includes('done') || s.includes('closed') || s.includes('resolved')) return 'completed';
-  if (s.includes('progress') || s.includes('review') || s.includes('testing')) return 'in-progress';
+  const s = String(statusName || '').toLowerCase();
+  if (!s) return 'pending';
+  const any = (name) => declaredList(name)
+    .some((term) => s.includes(String(term).toLowerCase()));
+  if (any('JIRA_STATUS_COMPLETED')) return 'completed';
+  if (any('JIRA_STATUS_IN_PROGRESS')) return 'in-progress';
   return 'pending';
 }
 
@@ -91,7 +136,7 @@ function extractAC(description, customFields) {
     for (const [, v] of Object.entries(customFields)) {
       if (v && typeof v === 'object' && v.type === 'doc') continue; // ADF — skip
       if (typeof v === 'string' && v.length > 0 &&
-          customFields['customfield_10016'] === undefined) { /* heuristic */ }
+          declaredField(customFields, 'JIRA_FIELD_STORY_POINTS') === undefined) { /* heuristic */ }
     }
   }
 
@@ -139,30 +184,40 @@ function adapt(payload) {
   const projectKey  = (fields.project && fields.project.key) || key.split('-')[0] || '';
   const summary     = fields.summary || fields.title || '';
   const description = fields.description || '';
-  const status      = (fields.status && fields.status.name) || 'To Do';
+  // ABSENT STAYS ABSENT. `|| 'To Do'` gave a ticket with no status one that may exist in no
+  // workflow anywhere, and a reader downstream cannot tell an invented status from a real one.
+  const status      = (fields.status && fields.status.name) || '';
   const labels      = Array.isArray(fields.labels) ? fields.labels : [];
   // No `|| 0` default here — an absent estimate must reach pointsToEffort as absent,
   // not as a fabricated verified-zero. See pointsToEffort's own comment.
-  const points      = fields.story_points ?? fields.customfield_10016 ??
-                      fields.storyPoints ?? undefined;
-  const epicLink    = fields.epic || fields['customfield_10014'] ||
-                      (fields.parent && fields.parent.key) || null;
-  const issueType   = (fields.issuetype && fields.issuetype.name) || 'Story';
+  const points      = declaredField(fields, 'JIRA_FIELD_STORY_POINTS', 'story_points', 'storyPoints');
+  const epicLink    = declaredField(fields, 'JIRA_FIELD_EPIC_LINK', 'epic')
+                      || (fields.parent && fields.parent.key) || null;
+  // And an unknown type does not become a Story: the type decides whether the ticket is ingested
+  // at all, so inventing one decides that question by assumption.
+  const issueType   = (fields.issuetype && fields.issuetype.name) || '';
 
   if (!key || !projectKey || !summary) return null;
 
-  // Only process Story, Task, Bug, Sub-task types
-  const supportedTypes = ['story', 'task', 'bug', 'sub-task', 'subtask'];
-  if (!supportedTypes.includes(issueType.toLowerCase())) return null;
+  // WHICH TYPES THIS PROJECT INGESTS. This was a five-word English list, and a ticket outside it
+  // was dropped by `return null` — no message, no count, no way to tell "no tickets matched" from
+  // "your tracker does not speak English". A project whose work is "Defect" or "Change Request"
+  // ingested nothing.
+  //
+  // Undeclared means UNFILTERED. Ingesting a type nobody expected is visible and correctable; an
+  // empty backlog is neither.
+  const wanted = declaredList('JIRA_ISSUE_TYPES').map((t) => t.toLowerCase());
+  if (wanted.length && !wanted.includes(issueType.toLowerCase())) return null;
 
   const descText = typeof description === 'string'
     ? description
     : extractPlainText(description);
 
-  const agentRole = issueType.toLowerCase().includes('test') ||
-                    issueType.toLowerCase().includes('qa')
-    ? 'qa-engineer'
-    : 'engineer';
+  // WHICH TYPES GO TO THE QA ROLE — declared, not matched on English substrings. Deciding this by
+  // whether a type name contains "test" or "qa" routes "Änderungsantrag" and "Prüfung" to the
+  // wrong role, and routes an English "Latest changes" to QA by accident.
+  const qaTypes = declaredList('JIRA_QA_ISSUE_TYPES').map((t) => t.toLowerCase());
+  const agentRole = qaTypes.includes(issueType.toLowerCase()) ? 'qa-engineer' : 'engineer';
 
   return {
     projectKey,

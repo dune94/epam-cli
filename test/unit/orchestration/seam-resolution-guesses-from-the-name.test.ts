@@ -62,8 +62,23 @@ afterEach(() => {
  * 'typescript-vitest-implementer' still resolved to no seam because entry.kind on a string is
  * undefined. A fixture that does not match production tests nothing.
  */
-function roster(name: string, kind: string) {
+function roster(name: string, kind: string, seam?: string) {
   writeFileSync(profilesFile, JSON.stringify({ [name]: `brief for ${name}` }));
+  // The project roster is where an agent's kind and its seam binding live now. The two older
+  // registries are still written beside it; this keeps the fixture matching production while
+  // that is true, because a fixture that does not match production tests nothing — which is the
+  // lesson recorded in this file's own header.
+  writeFileSync(join(dir, 'roster.json'), JSON.stringify({
+    agents: {
+      [name]: {
+        persona: `brief for ${name}`,
+        kind: kind || 'seam',
+        ancestor: name,
+        derivedFromSha256: 'x'.repeat(64),
+        ...(seam ? { seam } : {}),
+      },
+    },
+  }));
   const kinds = registry().seamPatterns.filter((p: any) => p.kind).map((p: any) => p.kind);
   writeFileSync(join(dir, 'project-roles.json'),
     JSON.stringify({ roles: kind === kinds.find((k: string) => k !== 'investigator') ? [name] : [] }));
@@ -99,11 +114,12 @@ describe('seam resolution guesses from the name', () => {
     expect(resolveSeam('mocka-fare-reader', registryFile, { profilesFile })).toBe(expected);
   });
 
-  it('AN EXACT agentSeams ENTRY STILL WINS — the most specific statement about one agent', () => {
-    const reg = registry();
-    reg.agentSeams = { ...(reg.agentSeams || {}), 'odd-implementer': 'roster-review' };
-    writeFileSync(registryFile, JSON.stringify(reg));
-    roster('odd-implementer', 'implementer');
+  it('AN EXACT BINDING ON THE AGENT STILL WINS — the most specific statement about one agent', () => {
+    // Was an `agentSeams` entry in the engine registry: a per-project cross-reference stored in
+    // the file every project shares, and a cache of what the patterns already answered — all 55
+    // of its entries had origin 'derived'. The statement it recorded is still honoured, from the
+    // one place that is about this agent.
+    roster('odd-implementer', 'implementer', 'roster-review');
     expect(resolveSeam('odd-implementer', registryFile, { profilesFile })).toBe('roster-review');
   });
 

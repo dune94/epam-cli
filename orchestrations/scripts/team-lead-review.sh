@@ -46,7 +46,10 @@ PROJECT_ROOT="${PROJECT_ROOT:-$(dirname "$AUTOMATION_DIR")}"
 PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
 AUTO_APPROVE="${AUTO_APPROVE:-false}"
 REVIEW_LOG="${REVIEW_LOG:-$AUTOMATION_DIR/logs/code-reviews.jsonl}"
-AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$AUTOMATION_DIR/agents/profiles.json}"
+# The roster is the only source of an agent's identity — see lib/roster-read.sh. No
+# AGENT_PROFILES_FILE default any more: that default named the engine's own roster.
+# shellcheck source=lib/roster-read.sh
+. "$SCRIPT_DIR/lib/roster-read.sh"
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
 # shellcheck source=lib/agent-invoke.sh
 source "$SCRIPT_DIR/lib/agent-invoke.sh"
@@ -174,14 +177,26 @@ _provider_for_model() {
 # Outputs raw LLM text; caller extracts verdict JSON. On total failure it emits
 # an explicit changes_requested (NOT approved) so a broken review can never
 # silently pass the change.
+# $2 — THE MODEL THAT PRODUCED THE WORK, passed in. Not read from a global.
+#
+# This used to arrive by the caller reassigning ORCH_GATE_MODEL, which is read by six other
+# things in this file and by every seam this process later spawns: a per-story value written
+# into a process-wide one, where the next story inherits the previous story's rung unless the
+# caller happens to overwrite it again. A parameter cannot leak that way.
+#
+# Absent means the writer named no model, and the seam's own declared rung stands. Nothing here
+# invents one.
 run_review_prompt() {
     local prompt_text="$1"
+    local writer_model="$2"
+    local writer_provider="$3"
     if [ ! -x "$AI_RUNNER_CMD" ]; then
         warning "ai-run.sh not executable — cannot review (NOT auto-approving)"
         echo '{"verdict":"changes_requested","issues":[{"severity":"blocker","description":"review-agent unavailable (ai-run.sh not executable) — the change was NOT reviewed; blocking rather than auto-approving"}],"summary":"reviewer unavailable"}'
         return 0
     fi
-    local _base_model="$ORCH_GATE_MODEL"
+    local _base_model="$writer_model"
+    local _base_provider="$writer_provider"
     # Cross-process ladder resume (2026-08-06): team-lead-review.sh is
     # invoked as a BRAND-NEW subprocess every Step 3.6 review cycle, so this
     # function's own 2-attempt ladder used to silently reset to
@@ -215,7 +230,11 @@ run_review_prompt() {
             warning "  review-agent ladder escalation (attempt $_attempt/$_max_attempts) — model $_base_model → $_model"
             [ -n "${LOG_DIR:-}" ] && advance_ladder_escalation "$LOG_DIR" "$_review_ladder_key" >/dev/null
         else
-            _model="$_base_model"; _provider="${EPAM_ORCHESTRATION_PROVIDER:-claude}"
+            # The writer's own provider, not the orchestration default: a rung is a
+            # model/provider pair, and routing the same model through a different provider is a
+            # different setup (see project_caching_is_routing_not_model — MiniMax direct vs via
+            # a gateway differed by 99.8% on cache hits alone).
+            _model="$_base_model"; _provider="$_base_provider"
         fi
     local _review_json_result
     _review_json_result=$(mktemp /tmp/review-result-XXXXXX.json)
@@ -556,12 +575,23 @@ Review every file listed. Do not assume a file you did not read is defect-free.]
     fi
     [ -z "$STORY_DIFF" ] && STORY_DIFF="(no diff available — review source files directly)"
 
-    # Load review-agent profile
+    # THE REVIEWER'S IDENTITY COMES FROM THE PROJECT ROSTER.
+    #
+    # This read `jq -r '.["review-agent"] // ""' "$AGENT_PROFILES_FILE"` and, when that came back
+    # empty, substituted a one-line reviewer written here in code. Three defects in four lines:
+    # the file defaulted to the roster SHARED WITH THE ENGINE, `// ""` made a missing entry
+    # indistinguishable from a terse one, and the literal below meant neither failure was ever
+    # visible. Live 20260821T212250Z the reviewer ran with a persona describing epam-cli.
+    #
+    # No fallback now. A reviewer with no identity is not a reviewer, and inventing one in code
+    # is how a client codeline came to be judged by this repository's reviewer.
     REVIEW_PROFILE=""
-    if [ -f "$AGENT_PROFILES_FILE" ]; then
-        REVIEW_PROFILE=$(jq -r '.["review-agent"] // ""' "$AGENT_PROFILES_FILE" 2>/dev/null)
+    if ! REVIEW_PROFILE=$(roster_persona review-agent 2>&1); then
+        error "  cannot resolve the review-agent persona from this project's roster:"
+        error "  ${REVIEW_PROFILE}"
+        error "  Refusing to review with an identity nobody chose."
+        exit 1
     fi
-    [ -z "$REVIEW_PROFILE" ] && REVIEW_PROFILE="You are a senior code reviewer. Review the implementation against the acceptance criteria."
 
     # Agent-level KB (self-heal for the reviewer): reusable review lessons that
     # ALL past review-agent runs learned (e.g. "reject a fix that adds new code
@@ -629,7 +659,15 @@ Review every file listed. Do not assume a file you did not read is defect-free.]
     # `local` here is a RUNTIME error bash -n cannot see (SC2168) — it aborted the reviewer on
     # every cycle, produced NO VERDICT eight times, and halted the run of 2026-08-20.
     _review_prior_block=""
-    _review_prior_block=$(python3 "$SCRIPT_DIR/lib/handlers/prior-reviews.py" "$REVIEW_LOG" "$story_id" 2>/dev/null || true)
+    # NOT `2>/dev/null || true`. That made an UNREADABLE log indistinguishable from a first
+    # review — which is exactly how this defect survived: the reviewer was handed an empty
+    # prior-review block on every cycle and nothing anywhere said so.
+    _review_prior_block=""
+    if ! _review_prior_block=$(python3 "$SCRIPT_DIR/lib/handlers/prior-reviews.py" "$REVIEW_LOG" "$story_id" 2>&1); then
+        warning "  [prior-reviews] could not read $REVIEW_LOG — the reviewer will not see its own earlier findings"
+        [ -n "$_review_prior_block" ] && log "  [prior-reviews] $_review_prior_block"
+        _review_prior_block=""
+    fi
 
     _review_vals=$(mktemp)
     jq_vals \
@@ -667,7 +705,56 @@ Review every file listed. Do not assume a file you did not read is defect-free.]
     fi
     rm -f "$_review_vals"
 
-    log "  Invoking review-agent for $story_id... (model=${ORCH_GATE_MODEL:-?} provider=${EPAM_ORCHESTRATION_PROVIDER:-?})"
+    # JUDGE ON THE RUNG THAT PRODUCED THE WORK.
+    #
+    # Operator rule, 2026-08-22. This ran on the reviewer seam's own model regardless of what
+    # the writer climbed to. Live 20260821T212250Z: the writer went
+    # MiniMax-M3 -> z-ai/glm-5.2 -> moonshotai/kimi-k3 over five attempts while all three
+    # review cycles ran z-ai/glm-5.2 — so the approval came from a weaker model than the one
+    # being judged, and it approved a diff that had dropped a cleanup its own earlier cycle
+    # had produced. A reviewer below the writer's rung cannot see what that rung can do wrong.
+    #
+    # The story's model is already persisted by the ladder so a resume does not restart its
+    # climb; nothing was reading it for this. Absent — a first attempt, nothing recorded yet —
+    # leaves the seam's own model alone rather than inventing one.
+    # NOT `local` — this loop runs at TOP LEVEL, not inside a function. `local` here is
+    # SC2168, which bash -n cannot see (it is a scope error, not syntax) and which halted
+    # run 3 with NO VERDICT eight times. preflight-static.sh checks for exactly this.
+    # ── THE REVIEWER RUNS THE WRITER'S RUNG. NOT ITS MODEL — ITS RUNG. ──────────────────
+    #
+    # Operator, 2026-08-22: "if writer's model moves up ladder, the reviewer must follow along
+    # and use the same rung EXACT setup the writer used to converge."
+    #
+    # The ladder moves model, provider, reasoning effort and temperature TOGETHER (rung 1:
+    # effort medium, temp 0; rung 2: model escalates; rung 3: effort high, temp 0.7). Taking
+    # only the model would put the reviewer on a configuration the writer never ran.
+    #
+    # There is no fallback here and no `command -v` guard. The rung is written by claude.sh on
+    # every attempt before the writer is invoked, so for any story that has been implemented it
+    # EXISTS. Guarding the read would only convert a missing record — a real defect — into a
+    # silent review on the seam default, which is the exact failure this replaces.
+    _rung_model=$(story_rung_get "$LOG_DIR" "$story_id" model)
+    _rung_provider=$(story_rung_get "$LOG_DIR" "$story_id" provider)
+    _rung_effort=$(story_rung_get "$LOG_DIR" "$story_id" reasoningEffort)
+    _rung_temperature=$(story_rung_get "$LOG_DIR" "$story_id" temperature)
+
+    if [ -z "$_rung_model" ]; then
+        # NOT approved, and not quietly reviewed on something else. A review whose setup does
+        # not match the work is not a review, and saying so is the only honest outcome.
+        error "  no rung on record for $story_id — the writer never persisted one, so there is"
+        error "  no setup to review it on. Refusing to judge converged work on a guessed rung."
+        echo '{"verdict":"changes_requested","reviewIncomplete":true,"issues":[{"severity":"blocker","description":"no writer rung on record for this story — the reviewer cannot reproduce the setup that produced the work"}]}' \
+            > "$AUTOMATION_DIR/logs/review-feedback-${story_id}.json"
+        continue
+    fi
+
+    # Applied, not merely logged. Effort and temperature are exported because that is how the
+    # writer's own ladder sets them and how ai-run.sh reads them.
+    export EPAM_REASONING_EFFORT="$_rung_effort"
+    export EPAM_TEMPERATURE="$_rung_temperature"
+    log "  review-agent takes the writer's rung for $story_id: model=$_rung_model provider=$_rung_provider effort=${_rung_effort:-unset} temp=${_rung_temperature:-unset}"
+
+    log "  Invoking review-agent for $story_id... (model=$_rung_model provider=$_rung_provider)"
     REVIEW_OUTPUT_FILE="$AUTOMATION_DIR/logs/review-agent-${story_id}.log"
     # B25 — the reviewer used to fail leaving NO evidence: `$(... | tee FILE)` never
     # creates FILE when the pipeline dies before producing stdout, so a filesystem
@@ -676,7 +763,7 @@ Review every file listed. Do not assume a file you did not read is defect-free.]
     # SOMETHING — a step that cannot explain its own failure gets re-diagnosed by
     # guesswork every time (three wrong mechanism guesses on 2026-07-24 alone).
     : > "$REVIEW_OUTPUT_FILE" 2>/dev/null || true
-    REVIEW_OUTPUT=$(run_review_prompt "$REVIEW_PROMPT" 2>&1 | tee -a "$REVIEW_OUTPUT_FILE")
+    REVIEW_OUTPUT=$(run_review_prompt "$REVIEW_PROMPT" "$_rung_model" "$_rung_provider" 2>&1 | tee -a "$REVIEW_OUTPUT_FILE")
     _review_rc=${PIPESTATUS[0]}
     if [ -z "$(printf '%s' "$REVIEW_OUTPUT" | tr -d '[:space:]')" ]; then
         warning "  review-agent produced NO OUTPUT AT ALL (rc=${_review_rc}, model=${ORCH_GATE_MODEL:-?}, provider=${EPAM_ORCHESTRATION_PROVIDER:-?})"
@@ -701,6 +788,26 @@ Review every file listed. Do not assume a file you did not read is defect-free.]
     # — correctly parses a nested JSON object regardless of formatting/whitespace,
     # rather than pattern-matching text.
     REVIEW_JSON=$(echo "$REVIEW_OUTPUT" | python3 "$SCRIPT_DIR/lib/handlers/team-lead-review-json.py" 2>/dev/null || echo '{"verdict":"changes_requested","issues":[{"severity":"blocker","description":"review verdict could not be parsed — not auto-approving"}],"summary":"review parse failure"}')
+
+    # ACCOUNT FOR EVERY VERIFICATION CRITERION — BEFORE the verdict is read.
+    #
+    # Placed here, not after, because everything below acts on STORY_VERDICT: reading it first
+    # and gating afterwards is the shape that made three earlier gates log a block and enforce
+    # nothing. The gate rejects only a SELF-CONTRADICTION — approved while the reviewer's own
+    # assessment marks a criterion unmet — which the model can always satisfy by being
+    # consistent, so it can never become unwinnable. Unassessed criteria are recorded on the
+    # verdict, not blocked.
+    #
+    # No `command -v` guard and no `|| true` swallow: a missing gate must be visible. Malformed
+    # input passes through the gate unchanged, so the no-verdict handling below still sees it.
+    REVIEW_JSON=$(printf '%s' "$REVIEW_JSON" \
+        | "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/vc-assessment-gate.js" "${STORY_VC:-}")
+    if [ "$(printf '%s' "$REVIEW_JSON" | jq -r '.vcAssessmentContradiction // empty' 2>/dev/null)" = "true" ]; then
+        warning "  review-agent APPROVED while marking a verification criterion unmet — rejected as incoherent"
+    fi
+    _vc_unassessed=$(printf '%s' "$REVIEW_JSON" | jq -r '(.vcAssessmentUnassessed // []) | join("; ")' 2>/dev/null || true)
+    [ -n "$_vc_unassessed" ] && \
+        warning "  review-agent left verification criteria unassessed: $_vc_unassessed"
 
     STORY_VERDICT=$(echo "$REVIEW_JSON" | jq -r '.verdict // "changes_requested"' 2>/dev/null || echo "changes_requested")
     STORY_ISSUE_COUNT=$(echo "$REVIEW_JSON" | jq '.issues | length' 2>/dev/null || echo "0")
@@ -732,6 +839,27 @@ Review every file listed. Do not assume a file you did not read is defect-free.]
         success "  Review: approved — ${STORY_SUMMARY:-no issues found}"
         # Clear any stale feedback from a prior cycle now that this story passed.
         rm -f "${LOG_DIR:-$AUTOMATION_DIR/logs}/review-feedback-${story_id}.json" 2>/dev/null || true
+    fi
+
+    # THE REVIEWER'S MEMORY OF THIS STORY. Written HERE, inside the loop, because this is
+    # the only place story_id, the verdict and the issues all exist — the phase summary at
+    # the end of this file has none of them, which is why lib/handlers/prior-reviews.py
+    # (which filters on `story` and renders `issues`) got nothing back and the reviewer
+    # approved code carrying its own prior `major` findings. Live 2026-08-21, AMSD-2041.
+    #
+    # -c: the file is .jsonl and BOTH readers are line-based — prior-reviews.py parses per
+    # line, and run-agent-orchestration.sh greps the compact '"phase_id":"<phase>"'.
+    mkdir -p "$(dirname "$REVIEW_LOG")" 2>/dev/null || true
+    if ! jq -cn \
+            --arg phase "$PHASE_ID" \
+            --arg ts "$(date -Iseconds)" \
+            --arg story "$story_id" \
+            --arg verdict "$STORY_VERDICT" \
+            --argjson issues "$(printf '%s' "$REVIEW_JSON" | jq -c '.issues // []' 2>/dev/null || echo '[]')" \
+            '{phase_id:$phase, timestamp:$ts, story:$story, verdict:$verdict,
+              review_status:$verdict, issues:$issues, issues_found:($issues|length),
+              reviewer:"team-lead-agent"}' >> "$REVIEW_LOG"; then
+        warning "  could not record this review for $story_id — the NEXT cycle will not see these findings"
     fi
 
 done <<< "$PHASE_STORIES"
@@ -817,7 +945,24 @@ fi
 mkdir -p "$(dirname "$REVIEW_LOG")"
 TIMESTAMP=$(date -Iseconds)
 
-REVIEW_RECORD=$(jq -n \
+# ONE LINE, AND IN THE SHAPE ITS READERS ACTUALLY EXPECT.
+#
+# `jq -n` without -c pretty-printed this into a .jsonl file. Two consumers broke on that
+# alone: lib/handlers/prior-reviews.py parses line-by-line and skipped every line as
+# malformed (silently — "a malformed line is skipped, never fatal"), and
+# run-agent-orchestration.sh:10837 greps the COMPACT form '"phase_id":"<phase>"', which a
+# space after the colon never matches.
+#
+# The record was also a PHASE summary — no `story`, no `verdict`, no `issues` — while
+# prior-reviews.py filters on `story` and renders `issues`. So even parsed, it carried
+# nothing to feed back. Live 2026-08-21: the reviewer raised a hardcoded endpoint and a
+# wrong SDK config key as `major` in cycle 2, then APPROVED the same code in cycle 3 with
+# both still present. It could not remember what it had demanded.
+#
+# This record stays a PHASE summary — it genuinely has no single story or issue list, and
+# inventing empty ones here is what made the first version of this fix inert. The per-story
+# records prior-reviews.py needs are written inside the story loop above.
+REVIEW_RECORD=$(jq -cn \
     --arg phase "$PHASE_ID" \
     --arg ts "$TIMESTAMP" \
     --arg status "$REVIEW_STATUS" \
@@ -827,6 +972,7 @@ REVIEW_RECORD=$(jq -n \
         phase_id: $phase,
         timestamp: $ts,
         review_status: $status,
+        verdict: $status,
         issues_found: $issue_count,
         stories_reviewed: $story_count,
         reviewer: "team-lead-agent"

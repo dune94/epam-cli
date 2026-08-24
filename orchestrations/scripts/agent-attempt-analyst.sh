@@ -89,13 +89,38 @@ case "$FAILURE_CLASS" in
     provider|infra|timeout) exit 0 ;;
 esac
 
-_provider="${AGENT_ANALYST_PROVIDER:-${ORCH_GATE_PROVIDER:-${EPAM_ORCHESTRATION_PROVIDER:-qwen}}}"
 # THE SEAM DECIDES. seam_ladder_export (above) sets EPAM_MODEL to the first rung of the chain this
 # seam's ARCHETYPE declares, which is the whole point of declaring a ladder. The literal that stood
 # last in this chain overrode that silently: the seam asked for its tier and the answer was
 # discarded, so editing the declaration moved no model. Operator overrides still win; what is gone
 # is the hardcoded final fallback, which no configuration could remove.
-_model="${AGENT_ANALYST_MODEL:-${ESCALATION_MODEL:-${ORCH_GATE_MODEL:-${EPAM_MODEL:-}}}}"
+# HEAL ON THE RUNG THAT FAILED — the whole rung, not its model.
+#
+# Operator, 2026-08-22: "if analyst is used in a retry the self-heal ladder rung must be
+# inherited by the analyst."
+#
+# Diagnosing a stronger rung's attempt from a weaker one is guesswork about reasoning the
+# analyst cannot reproduce, and the diagnosis reads as authoritative anyway. Model alone is not
+# enough: claude.sh's ladder moves provider, reasoning effort and temperature with it, so an
+# analyst on the right model at the wrong effort is still analysing a setup that never ran.
+#
+# The rung is persisted by the writer on every attempt (lib/story-outputs.sh). No guard and no
+# fallback: for a story that has been attempted it EXISTS, and defending against its absence
+# would restore the silent seam-default diagnosis this replaces. An operator override still
+# wins — a deliberate cross-rung diagnosis stays possible.
+# shellcheck source=lib/story-outputs.sh
+. "$SCRIPT_DIR/lib/story-outputs.sh"
+_rung_model=$(story_rung_get "${LOG_DIR:-}" "${AGENT_ANALYST_STORY_ID:-}" model)
+_rung_provider=$(story_rung_get "${LOG_DIR:-}" "${AGENT_ANALYST_STORY_ID:-}" provider)
+_rung_effort=$(story_rung_get "${LOG_DIR:-}" "${AGENT_ANALYST_STORY_ID:-}" reasoningEffort)
+_rung_temperature=$(story_rung_get "${LOG_DIR:-}" "${AGENT_ANALYST_STORY_ID:-}" temperature)
+if [ -n "$_rung_model" ]; then
+    export EPAM_REASONING_EFFORT="$_rung_effort"
+    export EPAM_TEMPERATURE="$_rung_temperature"
+    warning "analyst inherits the failing rung: model=$_rung_model provider=$_rung_provider effort=${_rung_effort:-unset} temp=${_rung_temperature:-unset}"
+fi
+_model="${AGENT_ANALYST_MODEL:-${_rung_model:-${ESCALATION_MODEL:-${ORCH_GATE_MODEL:-${EPAM_MODEL:-}}}}}"
+_provider="${AGENT_ANALYST_PROVIDER:-${_rung_provider:-${ORCH_GATE_PROVIDER:-${EPAM_ORCHESTRATION_PROVIDER:-}}}}"
 if [ -z "$_model" ]; then
     # A diagnosis produced by a guessed model is worse than an honest absence: it reads as
     # authoritative and nothing downstream can tell it was never grounded in a declared tier.

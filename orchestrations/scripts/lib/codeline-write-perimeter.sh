@@ -171,35 +171,35 @@ _PERIMETER_AUTHORING_SEAMS="writer,repro-test-writer,lint-fix"
 # that set handed write access to the DETECTIVE, the exact agent whose lack of it is why this
 # perimeter exists. The existing perimeter suite caught it.
 #
-# So the mint states what it created, in agents/project-roles.json, and this reads that.
+# So the roster states what each agent IS, and this reads the `kind` field. One fact, one place:
+# authorship is a property of an agent, not a separate registry that can disagree with it.
 #
-# Fails CLOSED. Registry missing or unreadable → contributes nothing, and only the authoring
-# seams may write. A perimeter that fails open is not a perimeter.
+# THE ENGINE-LEVEL FALLBACK IS GONE. The previous resolver tried EPAM_PROJECT_ROLES_FILE, then the
+# project's own project-roles.json, then agents/project-roles.json — so a client codeline whose
+# project registry was missing inherited THIS repository's implementation roles.
+#
+# Fails CLOSED. No roster, unreadable roster, no project declared → contributes nothing, and only
+# the authoring seams may write. A perimeter that fails open is not a perimeter; one that fails
+# open quietly is worse, so the refusal is stated on stderr.
 _perimeter_project_roles() {
     if [ -n "${_PERIM_PROJECT_ROLES_CACHE+x}" ]; then
         printf '%s' "$_PERIM_PROJECT_ROLES_CACHE"
         return 0
     fi
-    local _lib_dir _agents_dir _registry _out
+    local _lib_dir _out
     _lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
-    if [ -n "${AGENT_PROFILES_FILE:-}" ]; then
-        _agents_dir="$(cd "$(dirname "$AGENT_PROFILES_FILE")" 2>/dev/null && pwd)"
-    else
-        _agents_dir="${_lib_dir}/../../agents"
-    fi
-    # Per project when the project declares a config dir — a client codeline must not
-    # inherit the engine's own implementation roles.
-    if [ -n "${EPAM_PROJECT_ROLES_FILE:-}" ]; then
-        _registry="$EPAM_PROJECT_ROLES_FILE"
-    elif [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] && [ -f "${EPAM_PROJECT_CONFIG_DIR}/project-roles.json" ]; then
-        _registry="${EPAM_PROJECT_CONFIG_DIR}/project-roles.json"
-    else
-        _registry="${_agents_dir}/project-roles.json"
-    fi
     _out=""
-    if [ -f "$_registry" ]; then
-        _out=$(jq -r '[.roles[]? | select(type == "string")] | join(",")' "$_registry" 2>/dev/null) || _out=""
-        [ "$_out" = "null" ] && _out=""
+    if [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ]; then
+        # Through the library, so "which agents may author" has ONE definition — the same one the
+        # producer validates against. A jq reimplementation here is a second answer to the
+        # question, and the two drift the first time the roster's shape moves.
+        _out=$("${NODE_BIN:-node}" -e '
+          const m = require(process.argv[1]);
+          try { process.stdout.write(m.agentsOfKind("implementer", process.argv[2]).join(",")); }
+          catch (e) { process.stderr.write("[perimeter] " + (e && e.message) + "\n"); process.exit(1); }
+        ' "${_lib_dir}/project-roster.js" "$EPAM_PROJECT_CONFIG_DIR" 2>/dev/null) || _out=""
+    else
+        echo "[perimeter] no project declared — no agent may author, only the authoring seams." >&2
     fi
     _PERIM_PROJECT_ROLES_CACHE="$_out"
     printf '%s' "$_out"

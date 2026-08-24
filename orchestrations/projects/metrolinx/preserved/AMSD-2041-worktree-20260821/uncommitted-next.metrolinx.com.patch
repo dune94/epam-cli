@@ -1,0 +1,147 @@
+diff --git a/package.json b/package.json
+index fbf22ba5..3bd5aad2 100644
+--- a/package.json
++++ b/package.json
+@@ -81,7 +81,8 @@
+     "swiper": "^12.1.2",
+     "swr": "^2.2.5",
+     "tailwind-merge": "^1.14.0",
+-    "uuid": "^11.1.1"
++    "uuid": "^11.1.1",
++    "@contentstack/live-preview-utils": "^4.4.5"
+   },
+   "devDependencies": {
+     "@commitlint/cli": "^17.0.3",
+diff --git a/src/context/contentstackContext.tsx b/src/context/contentstackContext.tsx
+index 4eb44d06..1557bd03 100644
+--- a/src/context/contentstackContext.tsx
++++ b/src/context/contentstackContext.tsx
+@@ -15,6 +15,7 @@ export interface IContentstackContext {
+   };
+   directories?: IDirectoryData;
+   languageAlternativePageSlug?: string[];
++  setPage?: (page: [IContentstackPage]) => void;
+ }
+ 
+ export const ContentstackContext = createContext<IContentstackContext>({});
+diff --git a/src/pages/_app.tsx b/src/pages/_app.tsx
+index cf7fd2b0..1681cd39 100644
+--- a/src/pages/_app.tsx
++++ b/src/pages/_app.tsx
+@@ -2,10 +2,13 @@ import "@metrolinx/cx-shared/build/bundle.css";
+ import "styles/globals.css";
+ import type { AppProps } from "next/app";
+ import { useRouter } from "next/router";
+-import { useEffect, ComponentType } from "react";
++import { useEffect, useRef, useState, ComponentType } from "react";
+ import { SessionProvider } from "next-auth/react";
+ import { appWithTranslation } from "next-i18next";
+ import { ErrorBoundary, FallbackProps } from "react-error-boundary";
++import ContentstackLivePreview from "@contentstack/live-preview-utils";
++import { ContentstackContext, IContentstackContext } from "context/contentstackContext";
++import { ContentstackLocales, contentstackConfig } from "constants/contentstack";
+ import { ToastNotification } from "@metrolinx/cx-shared/build/src/components/ToastNotification/ToastNotification";
+ import { AppEnvironmentProvider } from "@metrolinx/cx-shared/build/src/context/AppEnvironmentContext";
+ import { AppImage } from "components/AppImage";
+@@ -17,6 +20,7 @@ import { OnlineChatContextWrapper } from "context/OnlineChatContext";
+ import { UserProfileProvider } from "context/UserProfileContext";
+ import { useAuthRefetchInterval } from "hooks/useAuthRefetchInterval";
+ import { useClearStoragesOnSignOut } from "hooks/useClearStoragesOnSignOut";
++import { getSingleEntry, Stack } from "services/contentstack";
+ import { getPathname } from "utils/url/getPathname";
+ import packageJSON from "../../package.json";
+ 
+@@ -41,6 +45,51 @@ function MyApp({ Component, pageProps }: AppProps) {
+ 
+   const path = getPathname(asPath);
+ 
++  const pagePropsRef = useRef(pageProps);
++  pagePropsRef.current = pageProps;
++
++  const [previewPage, setPreviewPage] = useState<IContentstackContext["page"]>(
++    pageProps?.content?.page,
++  );
++
++  useEffect(() => {
++    ContentstackLivePreview.init({ stackSdk: Stack, enable: true }).then(() => {
++      ContentstackLivePreview.onEntryChange(async () => {
++        try {
++          const currentProps = pagePropsRef.current as any;
++          const currentPage = currentProps?.content?.page?.[0];
++          const contentTypeUid =
++            currentPage?.content_type_uid || currentProps?.contentTypeUid;
++          const entryUid = currentPage?.uid;
++
++          if (!contentTypeUid || !entryUid) {
++            return;
++          }
++
++          const config = contentstackConfig[contentTypeUid];
++          const lang = (currentProps?.locale || "en") as ContentstackLocales;
++
++          const updated = await getSingleEntry({
++            contentTypeUid,
++            entryUid,
++            lang,
++            ...config,
++          });
++
++          setPreviewPage([updated]);
++        } catch {
++          // Preview errors are silent; published content remains visible.
++        }
++      });
++    });
++  }, []);
++
++  const contextValue: IContentstackContext = {
++    ...(pageProps?.content || {}),
++    page: previewPage || pageProps?.content?.page,
++    setPage: setPreviewPage,
++  };
++
+   return (
+     <AppEnvironmentProvider linkAs={AppLink} imageAs={AppImage}>
+       <UserProfileProvider>
+@@ -49,10 +98,12 @@ function MyApp({ Component, pageProps }: AppProps) {
+             <ErrorBoundary
+               FallbackComponent={ClientSideErrorFallback as ComponentType<FallbackProps>}
+             >
+-              {/* The key is passed to force page update on route change in some specific cases https://github.com/vercel/next.js/discussions/22512 */}
+-              <Component {...pageProps} key={path} />
+-              <SuccessfulSignInToast />
+-              <ToastNotification />
++              <ContentstackContext.Provider value={contextValue}>
++                {/* The key is passed to force page update on route change in some specific cases https://github.com/vercel/next.js/discussions/22512 */}
++                <Component {...pageProps} key={path} />
++                <SuccessfulSignInToast />
++                <ToastNotification />
++              </ContentstackContext.Provider>
+             </ErrorBoundary>
+             <CommonAnalytics contentTypeUid={pageProps.contentTypeUid} />
+           </OnlineChatContextWrapper>
+diff --git a/src/services/contentstack.ts b/src/services/contentstack.ts
+index 94a661c5..935d755d 100644
+--- a/src/services/contentstack.ts
++++ b/src/services/contentstack.ts
+@@ -33,6 +33,8 @@ const {
+   CONTENTSTACK_FETCH_TIMEOUT = "",
+   CONTENTSTACK_DEBUG = "",
+   CONTENTSTACK_DEBUG_LEVEL = "error",
++  CONTENTSTACK_PREVIEW_HOST = "",
++  CONTENTSTACK_MANAGEMENT_TOKEN = "",
+ } = process?.env || {};
+ 
+ const filterDebugLevel = (item: string): item is ContentstackDebugLevel =>
+@@ -73,6 +75,11 @@ export const options: contentstack.Config = {
+   delivery_token: DELIVERY_TOKEN,
+   environment: ENVIRONMENT,
+   branch: CONTENTSTACK_BRANCH,
++  live_preview: {
++    enable: true,
++    host: CONTENTSTACK_PREVIEW_HOST || "api.contentstack.io",
++    management_token: CONTENTSTACK_MANAGEMENT_TOKEN,
++  },
+   fetchOptions: {
+     debug: CONTENTSTACK_DEBUG === "true",
+     logHandler: (level, data) => {

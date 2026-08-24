@@ -81,6 +81,14 @@ trap restore_prd EXIT
 
 python3 "$SCRIPT_DIR/lib/handlers/prd-set-model-for-provider.py" "$PRD_FILE" "$FREE_PROVIDER" "$FREE_MODEL"
 
+# THE CONTAMINATION GATE. Without it this launcher started a run on the PREVIOUS run's
+# state: retry counts, ladder position, agent KB, agent-io, review feedback. `--reset`
+# below is NOT this gate — it rewrites PRD story flags and clears checkpoints, nothing
+# else. Six launchers gated and these did not; see lib/pre-run-reset-gate.sh.
+# shellcheck source=lib/pre-run-reset-gate.sh
+. "$SCRIPT_DIR/lib/pre-run-reset-gate.sh"
+pre_run_reset_or_abort --prd "$PRD_FILE"
+
 OPENROUTER_API_KEY="$OPENROUTER_API_KEY" \
 EPAM_API_KEY_OPENROUTER="$OPENROUTER_API_KEY" \
 PRD_FILE="$PRD_FILE" \

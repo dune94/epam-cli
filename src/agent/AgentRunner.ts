@@ -576,8 +576,22 @@ export class AgentRunner {
       });
     }
 
-    if (this.iterationCount >= maxIterations && !finalResponse) {
-      finalResponse = `Agent reached maximum iterations (${maxIterations}) without completing.`;
+    // AN EXHAUSTED RUN IS NOT A COMPLETED RUN.
+    //
+    // This set the message and returned it through buildResult with no error, no stopReason
+    // and exit 0, so every caller that checks only "did I get output?" saw success. Live
+    // 2026-08-18: codeline-discovery ran out of iterations, its caller accepted the exhaustion
+    // text as the model's answer, and the run proceeded against the wrong codeline until it was
+    // killed. The condition is recorded structurally now, so a caller can refuse it without
+    // pattern-matching an English sentence that may be reworded.
+    //
+    // Set whenever the budget was reached, not only when finalResponse is empty: an agent that
+    // was cut off mid-work having said something is still cut off.
+    if (this.iterationCount >= maxIterations) {
+      this.stopReason = 'max_iterations';
+      if (!finalResponse) {
+        finalResponse = `Agent reached maximum iterations (${maxIterations}) without completing.`;
+      }
     }
 
     // A file-writing agent often ends its turn with no text, making finalResponse
@@ -712,6 +726,9 @@ export class AgentRunner {
   /** Paths successfully written this run, used to summarise an otherwise-empty reply. */
   private writtenPaths: string[] = [];
 
+  /** Set only when the loop was cut short — see AgentRunResult.stopReason. */
+  private stopReason?: 'max_iterations';
+
   private buildResult(finalResponse: string, messages: Message[]): AgentRunResult {
     // Only expose a summed costUsd when EVERY turn reported real cost — a
     // partial sum (some turns real, some missing) would silently understate
@@ -733,6 +750,7 @@ export class AgentRunner {
       },
       messages,
       timings: this.timings,
+      ...(this.stopReason ? { stopReason: this.stopReason } : {}),
     };
   }
 

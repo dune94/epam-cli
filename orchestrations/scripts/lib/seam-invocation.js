@@ -57,6 +57,60 @@ function readRegistry(file) {
  * @param {string} [file]     registry path; defaults to the shipped one
  */
 /**
+ * THE PROJECT'S OWN LADDER DECLARATION, read from disk.
+ *
+ * The tier order and each tier's chain are declared in the project's llm-settings.json, and
+ * model-ladders.sh exports them as EPAM_MODEL_LADDER_TIER_ORDER and EPAM_MODEL_LADDER_<TIER>.
+ * Reading ONLY those exports made a seam's ladder depend on whether its caller happened to source
+ * one shell library: resolve-codeline-scope.sh and ingest-jira-tickets.sh do not, and
+ * codeline-discovery runs under both — so it resolved to no ladder, no chain and no iteration
+ * budget, while the declaration sat correct on disk and every audit of the declaration passed.
+ *
+ * This is the same file model-ladders.sh reads, in the same shapes, so the two cannot disagree.
+ * The environment still WINS where it is set: an exported chain is an operator override and this
+ * is only the fallback for a caller that exported nothing.
+ */
+const _ladderDeclCache = new Map();
+function projectLadderDecl(sourceEnv) {
+  const dir = (sourceEnv && sourceEnv.EPAM_PROJECT_CONFIG_DIR) || '';
+  if (!dir) return null;
+  if (_ladderDeclCache.has(dir)) return _ladderDeclCache.get(dir);
+  let decl = null;
+  try {
+    decl = JSON.parse(fs.readFileSync(path.join(dir, 'llm-settings.json'), 'utf8'));
+  } catch {
+    decl = null;                    // a project that declares none gets none, and says so above
+  }
+  _ladderDeclCache.set(dir, decl);
+  return decl;
+}
+
+/** The tier order this project declares, from the environment first, then from its own file. */
+function declaredTierOrder(sourceEnv) {
+  const fromEnv = String((sourceEnv && sourceEnv.EPAM_MODEL_LADDER_TIER_ORDER) || '')
+    .split(/[\s,]+/).filter(Boolean);
+  if (fromEnv.length) return fromEnv;
+  const decl = projectLadderDecl(sourceEnv);
+  const order = decl && Array.isArray(decl.ladderTierOrder) ? decl.ladderTierOrder : [];
+  return order.map(String).filter(Boolean);
+}
+
+/**
+ * A tier's chain in the form every consumer already parses: "from=to|from=to", plus its declared
+ * start model. Built from the same declaration model-ladders.sh builds it from.
+ */
+function declaredTierChain(sourceEnv, tierName) {
+  const decl = projectLadderDecl(sourceEnv);
+  const tier = decl && decl.ladders && decl.ladders[tierName];
+  if (!tier) return null;
+  const hops = Array.isArray(tier.modelLadder) ? tier.modelLadder : [];
+  const chain = hops.filter((h) => h && h.from && h.to)
+    .map((h) => `${h.from}=${h.to}`).join('|');
+  if (!chain) return null;
+  return { chain, start: tier.startModel || '' };
+}
+
+/**
  * Resolve a POSITION in the project's declared tier order to that project's own tier name.
  *
  * The order is lowest → highest, so:
@@ -68,8 +122,7 @@ function readRegistry(file) {
  * Returns '' when no order is available; the caller reports that rather than guessing a name.
  */
 function resolveTierPosition(position, sourceEnv) {
-  const order = String((sourceEnv && sourceEnv.EPAM_MODEL_LADDER_TIER_ORDER) || '')
-    .split(/[\s,]+/).filter(Boolean);
+  const order = declaredTierOrder(sourceEnv);
   if (!order.length) return '';
   const p = String(position || '').trim().toLowerCase();
   if (p === 'base') return order[0];
@@ -97,13 +150,33 @@ function resolveSeam(agent, file, opts) {
   // 2. The explicit cross-reference: this agent enters by this seam. Named agents that are
   //    not themselves profiles live here, and an entry always beats a pattern — a family rule
   //    must never override a decision someone made deliberately about one agent.
-  const xref = _ignoreXref ? {} : (reg.agentSeams || {});
-  if (Object.prototype.hasOwnProperty.call(xref, agent)) {
-    const seam = xref[agent];
-    if (!profiles[seam]) {
-      throw new Error(`agentSeams maps '${agent}' to profile '${seam}', which the registry does not define`);
+  // THE AGENT'S OWN ENTRY SAYS WHICH SEAM IT ENTERS BY.
+  //
+  // This read `reg.agentSeams` — a PER-PROJECT cross-reference stored in the file the ENGINE
+  // owns, so one project's minted agents were mapped in a registry every other project reads,
+  // and the mint rewrote the engine layer on every run to maintain it.
+  //
+  // All 55 entries were recorded with origin 'derived': the map was a CACHE of what the patterns
+  // below already answer, holding no decision anyone made. What the patterns cannot reach is a
+  // minted agent whose name the engine cannot know — and that agent's roster entry names its
+  // seam, beside its persona, its kind and what it derives from. One agent, one place.
+  if (!_ignoreXref) {
+    const projectDir = process.env.EPAM_PROJECT_CONFIG_DIR || '';
+    if (projectDir) {
+      let entry = null;
+      try {
+        // eslint-disable-next-line global-require
+        const roster = require('./project-roster.js').loadRoster(projectDir);
+        entry = (roster.agents || {})[agent] || null;
+      } catch { entry = null; }   // no roster yet: the patterns below still answer
+      if (entry && typeof entry.seam === 'string' && entry.seam.trim()) {
+        if (!profiles[entry.seam]) {
+          throw new Error(
+            `the roster binds '${agent}' to seam '${entry.seam}', which the registry does not define`);
+        }
+        return entry.seam;
+      }
     }
-    return seam;
   }
 
   // 2. Declared patterns. The registry owns the shapes; this file owns none of them.
@@ -179,7 +252,7 @@ function resolveSeam(agent, file, opts) {
   // 4. Never {}, and never a guess.
   throw new Error(
     `agent '${agent}' resolves to no seam: it is not a named profile and no seamPattern matches ` +
-    'it. Add a seamPattern for its family, or an agentSeams entry for this one agent, or set ' +
+    'it. Add a seamPattern for its family, or name the seam on this agent\'s roster entry. Or set ' +
     'EPAM_DEFAULT_SEAM in the project config if unmatched agents should share one seam. Leaving ' +
     'it unconfigured would run it with no ladder, no effort and no tool grants.');
 }
@@ -290,6 +363,16 @@ function seamInvocationEnv(agent, agentsDir, opts) {
     env.EPAM_AGENT_SKILLS_FILE = skillsFile;
   } catch { /* no skills resolved — the agent runs as it did before this existed */ }
 
+  // THE LADDER DEFINES ITERATIONS — set below, from the rung this seam resolves to.
+  //
+  // This read `profile.maxIterations`: a per-agent literal, declared 22 times, absent 16
+  // times, and overriding the ladder wherever present. The budget belongs to the RUNG — a
+  // stronger rung is given more room, which is the whole point of escalating (live run
+  // 20260821T112857Z: 120 -> 185 -> 280 as the ladder climbed). A literal freezes that.
+  //
+  // A profile that still carries one is honoured here only so a project mid-migration is
+  // not left with none; the invocation-profiles contract forbids it and a test enforces
+  // that. See lib/model-settings.js.
   if (profile.maxIterations !== undefined) env.EPAM_MAX_ITERATIONS = String(profile.maxIterations);
   if (profile.maxOutputTokens !== undefined) env.EPAM_MAX_OUTPUT_TOKENS = String(profile.maxOutputTokens);
   if (profile.timeoutSecs !== undefined) env.EPAM_TIMEOUT_SECS = String(profile.timeoutSecs);
@@ -322,7 +405,12 @@ function seamInvocationEnv(agent, agentsDir, opts) {
         "order, so no position can be resolved\n");
     }
     const key = 'EPAM_MODEL_LADDER_' + String(tierName || profile.ladder).toUpperCase().replace(/[^A-Z0-9]/g, '_');
-    const rungs = sourceEnv[key];
+    // ENVIRONMENT FIRST — an exported chain is an operator override and outranks the file, the
+    // same precedence model-ladders.sh applies. Then the project's own declaration, so a caller
+    // that never sourced that library still gets the ladder its project declares rather than
+    // none. `_declared` also supplies the start model for the same reason.
+    const _declared = sourceEnv[key] ? null : declaredTierChain(sourceEnv, tierName || profile.ladder);
+    const rungs = sourceEnv[key] || (_declared && _declared.chain) || '';
     if (rungs) {
       // The ladder this seam climbs, under the generic name every consumer reads.
       env.EPAM_MODEL_LADDER = rungs;
@@ -333,9 +421,47 @@ function seamInvocationEnv(agent, agentsDir, opts) {
       // picked whichever root was listed first in the JSON and made every seam's opening model a
       // property of text ordering. Reordering the file changed which model every agent began on,
       // with nothing to indicate it had.
-      const declaredStart = (sourceEnv[key + '_START'] || '').trim();
+      const declaredStart = (sourceEnv[key + '_START'] || (_declared && _declared.start) || '').trim();
       if (declaredStart) {
         env.EPAM_MODEL = declaredStart;
+        // THE BUDGET COMES FROM THE RUNG, resolved from the model this seam actually starts
+        // on. EPAM_MODEL_ITERATIONS is emitted by lib/model-ladders.sh from the project's
+        // own modelOverrides, so the number is the ladder's and is declared once.
+        //
+        // Absent stays absent, exactly as the start model does: a rung the project declares
+        // no budget for is a gap to state, never one to fill with someone else's number.
+        // SAME FALLBACK AS THE CHAIN. The map is emitted by model-ladders.sh from the project's
+        // own modelOverrides via lib/model-settings.js; a caller that never sourced that library
+        // had no map, so the rung's budget was absent for reasons that had nothing to do with the
+        // project declaring one. Built here from the same function, so the two cannot disagree.
+        const itMap = String(sourceEnv.EPAM_MODEL_ITERATIONS || (() => {
+          const dir = (sourceEnv && sourceEnv.EPAM_PROJECT_CONFIG_DIR) || '';
+          if (!dir) return '';
+          try {
+            // eslint-disable-next-line global-require
+            const { iterationMap } = require('./model-settings.js');
+            return iterationMap(path.join(dir, 'llm-settings.json')) || '';
+          } catch { return ''; }
+        })());
+        if (itMap) {
+          let resolved = '';
+          for (const pair of itMap.split('|')) {
+            const eq = pair.lastIndexOf('=');
+            if (eq < 1) continue;
+            const match = pair.slice(0, eq);
+            const budget = pair.slice(eq + 1);
+            if (match.startsWith('provider:')) continue; // provider rules need the provider, not the model
+            if (declaredStart.includes(match)) { resolved = budget; break; } // declaration order, first match wins
+          }
+          if (resolved) {
+            env.EPAM_MAX_ITERATIONS = resolved;
+          } else {
+            process.stderr.write(
+              "[seam-invocation] seam '" + seam + "' starts on '" + declaredStart +
+              "' but the project declares no iteration budget for it — the seam will run on " +
+              "the engine default, which is nobody's choice\n");
+          }
+        }
       } else {
         // Absent stays absent: the seam keeps whatever model it would otherwise resolve, and the
         // gap is stated rather than filled with a root chosen by accident.

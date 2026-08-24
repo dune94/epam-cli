@@ -88,6 +88,14 @@ info "  ORCH_GATE_PROVIDER=qwen (coordinator calls → mock, all skipped anyway)
 require_preflight || fail "Pre-flight assessment failed"
 echo ""
 
+# THE CONTAMINATION GATE. Without it this launcher started a run on the PREVIOUS run's
+# state: retry counts, ladder position, agent KB, agent-io, review feedback. `--reset`
+# below is NOT this gate — it rewrites PRD story flags and clears checkpoints, nothing
+# else. Six launchers gated and these did not; see lib/pre-run-reset-gate.sh.
+# shellcheck source=lib/pre-run-reset-gate.sh
+. "$SCRIPT_DIR/lib/pre-run-reset-gate.sh"
+pre_run_reset_or_abort --prd "$PRD_FILE"
+
 cd "$REPO_ROOT"
 OPENROUTER_API_KEY="mock-key" \
 OPENROUTER_BASE_URL="$MOCK_URL" \

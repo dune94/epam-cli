@@ -29,6 +29,8 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# shellcheck source=lib/project-config.sh
+. "$SCRIPT_DIR/lib/project-config.sh"
 
 # Config files are DATA: load them without executing them. See lib/env-file.sh.
 . "$SCRIPT_DIR/lib/env-file.sh"
@@ -49,7 +51,7 @@ done
 
 [ -z "$PROJECT" ] && { echo "Usage: detective-rerun.sh --project <name> [--codelines a,b] [--story ID] [--report] [--derive-config-candidates]" >&2; exit 1; }
 
-PROJECT_DIR="$REPO_ROOT/orchestrations/projects/$PROJECT"
+PROJECT_DIR="$(project_config_dir "$PROJECT" "$REPO_ROOT")" || exit 1
 CONFIG="$PROJECT_DIR/config.env"
 [ -f "$CONFIG" ] || { echo "Project config not found: $CONFIG" >&2; exit 1; }
 

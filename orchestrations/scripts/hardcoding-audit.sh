@@ -1,6 +1,25 @@
 #!/usr/bin/env bash
-# hardcoding-audit.sh — inventory of values baked into PIPELINE CODE that belong in
-# configuration. A .sh/.js/.ts file is not a config file.
+# hardcoding-audit.sh — inventory of decisions baked into the ENGINE that belong to a project.
+#
+# NOT ONLY CODE. This once scanned .sh/.js/.ts and declared "a .sh/.js/.ts file is not a config
+# file", which made RELOCATION look like repair: /^docs\./i moved out of codeline-discovery.js
+# into orchestrations/config/codeline-scan.json and stopped being counted, while it went on
+# deciding which client repository was excluded from every project. The engine's own data files
+# are engine facts wherever they sit, so they are scanned too. A PROJECT's config is different —
+# that is where a project's facts belong — and is not scanned.
+#
+# AND IT CALIBRATES. Every defect found on 2026-08-23 was invisible here: the numeric category
+# needed a NAMED knob so topN = 8 and w.length >= 4 matched nothing, the truncation category
+# required two digits so slice(0, 3) was invisible, and there was no category at all for another
+# tenant's schema, a fixed vocabulary of domain values, or prose addressed to a model. `--calibrate`
+# runs every pattern against test/fixtures/hardcoding/known-hardcoding.txt and FAILS on any
+# category that cannot see its own example. A detector that finds only what its author already
+# knew reports clean, and clean is what everyone remembers.
+#
+# NOTHING RAN THIS. preflight-static.sh ratchets on scan-duplicated-literals.js, a different tool;
+# this audit was invoked by hand, when someone thought to. So its blindness was never even
+# observed. --calibrate is now a pre-flight check: not the COUNT, which is a research number that
+# needs reading, but the question of whether this tool can still see at all.
 #
 # Why this exists: a coarse sweep on 2026-08-05 reported 436 sites. Hand-checking the
 # largest category showed almost every "branch name" hit was the LANE called "main"
@@ -22,10 +41,19 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
 # Pipeline code only. Tests are excluded: a fixture naming a client is not a shipped fact.
-mapfile -t FILES < <(find orchestrations/scripts orchestrations/plugins src \
-  -type f \( -name '*.sh' -o -name '*.js' -o -name '*.ts' \) 2>/dev/null \
-  | grep -vE 'node_modules|\.venv|/dist/|\.test\.|\.spec\.' \
+mapfile -t FILES < <({
+  find orchestrations/scripts orchestrations/plugins src \
+    -type f \( -name '*.sh' -o -name '*.js' -o -name '*.ts' \) 2>/dev/null
+  # THE ENGINE'S OWN DATA. Not a project's config — orchestrations/projects/* is where a
+  # project's facts belong and is deliberately absent. These are shipped defaults that apply to
+  # every project, which is exactly what an engine fact is.
+  find orchestrations/config orchestrations/agents \
+    -type f -name '*.json' 2>/dev/null
+} | grep -vE 'node_modules|\.venv|/dist/|\.test\.|\.spec\.' \
   | grep -vE '/(tier[0-9]+-[a-z0-9-]+-run|mock[0-9]*-[a-z-]*run)\.sh$')
+
+SCOPE_DIRS="orchestrations/scripts orchestrations/plugins src orchestrations/config orchestrations/agents"
+CALIBRATION="test/fixtures/hardcoding/known-hardcoding.txt"
 # Per-project LAUNCHERS are exempt, exactly as test/unit/orchestration/engine-is-generic.test.ts
 # exempts them: a launcher exists to declare ONE project's facts — its branch, its codeline
 # root, its models. That is configuration living in the file that owns it, not a fact baked
@@ -46,13 +74,17 @@ add "absolute machine paths" \
 # 2. A GIT BRANCH used as a literal. Narrow on purpose: only where the value is being
 #    used AS a branch (origin/x, checkout x, a *BRANCH* variable). Excludes the lane
 #    called "main", which is the mistake that inflated the first count.
+# The branch alternative ends in ([[:space:]]|$), not [[:space:]]: it required a character AFTER
+# the branch name, so `git checkout develop` at the end of a line matched nothing. Found by
+# --calibrate on its first run, which is the entire argument for having it.
+#
 # A `${JIRA_BASELINE_BRANCH:-develop}` default is NOT counted: the value is read from
 # configuration and the literal is only the fallback. Widening the pattern to catch those
 # also caught `${WORKTREE_MODE:-main}` — the LANE again — and took a verified count of 3 to
 # a noisy 31. Whether those defaults should exist at all is a separate, deliberate call;
 # see the backlog. This pattern stays narrow enough that every hit is real.
 add "git branch literals" \
-    "(origin/(main|master|develop)[^\"'}]|checkout[[:space:]]+(-B[[:space:]]+)?[\"']?(main|master|develop)[\"']?[[:space:]]|[A-Za-z_]*BRANCH[A-Za-z_]*=[\"']?(main|master|develop)[\"']?[[:space:]]*$|(echo|initial-branch=)[[:space:]]*[\"']?(main|master|develop)[\"']?[[:space:]]*(\\)|\\}|$))"
+    "(origin/(main|master|develop)[^\"'}]|checkout[[:space:]]+(-B[[:space:]]+)?[\"']?(main|master|develop)[\"']?([[:space:]]|$)|[A-Za-z_]*BRANCH[A-Za-z_]*=[\"']?(main|master|develop)[\"']?[[:space:]]*$|(echo|initial-branch=)[[:space:]]*[\"']?(main|master|develop)[\"']?[[:space:]]*(\\)|\\}|$))"
 
 # 3. Model identifiers in code — model choice is llm-settings.json's job.
 add "model identifiers" \
@@ -75,13 +107,90 @@ add "urls and ports" \
 add "numeric thresholds" \
     "[A-Za-z_]*(TIMEOUT|Timeout|timeout|LIMIT|Limit|limit|MAX|Max|max|MIN_|Min|RETRIES|Retries|retries|BUDGET|budget|THRESHOLD|threshold|_SECS|_MS|Secs|Ms)[A-Za-z_]*[[:space:]]*[:=][[:space:]]*[0-9]{2,}"
 
-# 7. Truncations that decide how much a model sees.
+# 7. Truncations that decide how much a model sees. ANY length: this required two digits, so
+#    slice(0, 3) — which cut the ranked evidence a discovery decision was explained by — was
+#    invisible. A single-digit cut is a smaller window, not a lesser decision.
 add "truncations" \
-    '(\.slice\(0, ?[0-9]{2,}\)|head -c ?[0-9]{2,}|head -[0-9]{2,})'
+    '(\.slice\(0, ?[0-9]+\)|head -c ?[0-9]{2,}|head -[0-9]{2,})'
 
-hits_for() { grep -rnE "${PATTERNS[$1]}" "${FILES[@]}" 2>/dev/null | drop_narration; }
+# 8. ANOTHER SYSTEM'S PRIVATE SCHEMA. A tracker custom-field id is per-tenant: customfield_10016
+#    is story points on one Jira instance and nothing on the next. Compiled into the engine it
+#    reads as absent everywhere else, silently — and on 2026-08-23 the ids in this repo turned out
+#    to be wrong for its own tenant.
+add "foreign schema" \
+    'customfield_[0-9]+'
+
+# 9. A FIXED VOCABULARY OF DOMAIN VALUES used in logic — issue types, workflow states, kinds.
+#    supportedTypes = ['story','task','bug'] dropped every ticket outside it with `return null`,
+#    and KINDS/AGENT_KINDS were two copies of one vocabulary that had already drifted apart.
+add "domain vocabularies" \
+    "=[[:space:]]*\\[[[:space:]]*['\"][a-z][a-z-]{2,}['\"][[:space:]]*,[[:space:]]*['\"][a-z][a-z-]{2,}['\"]"
+
+# 10. A NUMBER DECIDING SOMETHING, with no name to configure it by. Category 6 needs a knob
+#     (TIMEOUT, MAX, LIMIT); these have none, which is precisely why nobody could change them:
+#     topN = 8, w.length >= 4, score += 3, tier2 * 10. Every one chose a client repository.
+#     NARROWED after its first run reported 304. `x += 1` is a COUNTER, not a decision, and it
+#     was most of them — the same inflation this file was written to avoid, reintroduced by me in
+#     the pattern meant to catch it. What remains is a value that sets a bound: a parameter
+#     default, a comparison against a length, or a scaling factor. Length comparisons against 0
+#     and 1 are excluded: those ask "is it empty" and "is there more than one", which are
+#     structural questions with no other possible answer. `w.length >= 4` — the filter that
+#     discarded every product identifier — is kept, because 4 is a choice.
+add "unnamed numeric decisions" \
+    '([a-zA-Z_][a-zA-Z0-9_]*[[:space:]]*=[[:space:]]*[0-9]+[,)]|\.length[[:space:]]*[<>]=?[[:space:]]*([2-9]|[0-9]{2,})|[[:space:]]\*[[:space:]]*[0-9]{2,}[[:space:]]*[;)])'
+
+# 11. PROSE ADDRESSED TO A MODEL, living in code. One prompt, one file: text in .js cannot be
+#     reviewed in the prompt layer, is invisible to the drift checks that hold every project copy
+#     to its template, and cannot be changed per project.
+add "model-facing prose" \
+    "['\"\`](Produce|Rename|Return only|You are|You MUST|Your task|Do not) [a-z][^'\"\`]{20,}['\"\`]"
+
+# 12. A NAMING CONVENTION ASSERTED BY THE ENGINE — a regex over names, shipped as a default that
+#     every project inherits. /^docs\./i excluded two repositories from every estate.
+add "naming conventions in engine data" \
+    '\^[a-z][a-z0-9]*\\\\?\.'
+
+# NO MATCHES IS AN ANSWER, NOT A FAILURE. grep exits 1 when it finds nothing, and that status
+# propagated out of --verify, so inspecting a clean category looked like the audit had broken.
+# A caller wiring this into a gate would have read "this class is clear" as "the tool failed".
+hits_for() { grep -rnE "${PATTERNS[$1]}" "${FILES[@]}" 2>/dev/null | drop_narration || true; }
 
 case "${1:-}" in
+  --scope)
+    echo "### what this audit covers"
+    echo
+    for d in $SCOPE_DIRS; do echo "  $d"; done
+    echo
+    echo "  ${#FILES[@]} file(s). A PROJECT's own config is deliberately absent: that is where a"
+    echo "  project's facts belong. These are the engine's, and apply to every project."
+    ;;
+  --calibrate)
+    # EVERY CATEGORY MUST STILL SEE ITS OWN EXAMPLE. Without this, a pattern that stops matching
+    # — a widened exclusion, a refactor, a typo — turns into a silent zero, and the ratchet
+    # records the improvement.
+    if [ ! -s "$CALIBRATION" ]; then
+      echo "BLIND: no calibration fixture at $CALIBRATION — the audit cannot demonstrate it sees anything." >&2
+      exit 1
+    fi
+    echo "### calibration — ${#NAMES[@]} categories against $CALIBRATION"
+    echo
+    blind=0
+    for i in "${!NAMES[@]}"; do
+      if grep -qE "${PATTERNS[$i]}" "$CALIBRATION" 2>/dev/null; then
+        printf "  %-3s %-34s sees its example\n" "$(( i + 1 ))" "${NAMES[$i]}"
+      else
+        printf "  %-3s %-34s BLIND — no line in the fixture matches\n" "$(( i + 1 ))" "${NAMES[$i]}"
+        blind=$(( blind + 1 ))
+      fi
+    done
+    echo
+    if [ "$blind" -gt 0 ]; then
+      echo "BLIND: $blind categor(y/ies) can no longer see the defect they claim to cover." >&2
+      echo "A count from this audit is worth nothing until every category demonstrates it sees." >&2
+      exit 1
+    fi
+    echo "  every category demonstrates it can still see."
+    ;;
   --verify)
     i=$(( ${2:?category number required} - 1 ))
     echo "### ${NAMES[$i]} — every matching line"; echo
@@ -93,7 +202,7 @@ case "${1:-}" in
     hits_for "$i" | awk -F: '{print $1}' | sort | uniq -c | sort -rn
     ;;
   *)
-    echo "hardcoding audit — ${#FILES[@]} pipeline files (tests and config excluded)"; echo
+    echo "hardcoding audit — ${#FILES[@]} engine files (tests and PROJECT config excluded)"; echo
     printf "  %-3s %-28s %s\n" "#" "CATEGORY" "SITES"
     total=0
     for i in "${!NAMES[@]}"; do

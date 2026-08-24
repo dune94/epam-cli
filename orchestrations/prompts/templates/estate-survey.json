@@ -23,5 +23,10 @@
   "version": 1,
   "seams": [
     "estate-survey"
+  ],
+  "$mayBeEmptyWhy": "A survey may run with no referenced documents and against a codeline whose manifest declares nothing. Both are real states, and the section reads correctly as absent — unlike a brief or a tool grant, where empty means the value never arrived.",
+  "mayBeEmpty": [
+    "__DOC_SECTION__",
+    "__DEP_SECTION__"
   ]
 }

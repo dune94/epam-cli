@@ -29,6 +29,14 @@ echo ""
 
 export RESET_STORIES=true
 export PRD_FILE="$PRD_FILE"
+# THE CONTAMINATION GATE. Without it this launcher started a run on the PREVIOUS run's
+# state: retry counts, ladder position, agent KB, agent-io, review feedback. `--reset`
+# below is NOT this gate — it rewrites PRD story flags and clears checkpoints, nothing
+# else. Six launchers gated and these did not; see lib/pre-run-reset-gate.sh.
+# shellcheck source=lib/pre-run-reset-gate.sh
+. "$SCRIPT_DIR/lib/pre-run-reset-gate.sh"
+pre_run_reset_or_abort --prd "$PRD_FILE"
+
 exec "$SCRIPT_DIR/run-agent-orchestration.sh" \
      --phase hello_world_test \
      "$@"

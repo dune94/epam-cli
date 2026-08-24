@@ -28,6 +28,7 @@ const path = require('path');
 const { execFileSync, spawnSync } = require('child_process');
 
 const spec = require('./spec-mode-runner.js');
+const { refusalBlock } = require('./lib/refusal-block.js');
 
 const argv = process.argv.slice(2);
 const getArg = (flag, def = '') => {
@@ -283,7 +284,19 @@ async function referencedDocs(logDir, stories) {
 function writeRosterDiff(profilesPath, agentsDir, logDir, mintedThisRun, mintedDetail) {
   const minted = new Set(Array.isArray(mintedThisRun) ? mintedThisRun : []);
   const detail = new Map((Array.isArray(mintedDetail) ? mintedDetail : []).map((m) => [m.name, m]));
-  const kindOf = (n) => (detail.get(n) || {}).kind || 'implementer';
+  // SILENCE IS NOT A KIND. This ended `|| 'implementer'`, so an agent whose kind the mint never
+  // stated was reported under "IMPLEMENTERS, may author code" — a default resolving the unknown
+  // toward the more powerful answer, in the one artefact whose job is to show an operator what
+  // this run created. It grants nothing (permission is membership in project-roles.json, and
+  // project-roster.js refuses an entry whose kind is not declared), which is exactly why the
+  // report must not imply otherwise.
+  const kindOf = (n) => {
+    const k = (detail.get(n) || {}).kind;
+    return (typeof k === 'string' && k.trim()) ? k.trim() : '';
+  };
+  const isImplementer = (n) => kindOf(n) === 'implementer';
+  const isInvestigator = (n) => kindOf(n) === 'investigator';
+  const kindUnstated = (n) => !kindOf(n);
   const codelineOf = (n) => (detail.get(n) || {}).codeline || '';
   const canonicalPath = path.join(agentsDir, 'profiles.canonical.json');
   let live = {}, canonical = {};
@@ -317,15 +330,24 @@ function writeRosterDiff(profilesPath, agentsDir, logDir, mintedThisRun, mintedD
     `canonical: ${canonicalPath} (${canonKeys.length} roles)`,
     `live:      ${profilesPath} (${liveKeys.length} roles)`,
     ``,
-    `## MINTED BY THIS RUN — IMPLEMENTERS, may author code (${added.filter((k) => minted.has(k) && kindOf(k) !== 'investigator').length})`,
-    ...(added.filter((k) => minted.has(k) && kindOf(k) !== 'investigator').length
-      ? added.filter((k) => minted.has(k) && kindOf(k) !== 'investigator').map((k) => `- ${k}  [${String(live[k] || '').length} chars]`)
+    `## MINTED BY THIS RUN — IMPLEMENTERS, may author code (${added.filter((k) => minted.has(k) && isImplementer(k)).length})`,
+    ...(added.filter((k) => minted.has(k) && isImplementer(k)).length
+      ? added.filter((k) => minted.has(k) && isImplementer(k)).map((k) => `- ${k}  [${String(live[k] || '').length} chars]`)
       : ['- (none)']),
     ``,
-    `## MINTED BY THIS RUN — INVESTIGATORS, read-only, never own a story (${added.filter((k) => minted.has(k) && kindOf(k) === 'investigator').length})`,
-    ...(added.filter((k) => minted.has(k) && kindOf(k) === 'investigator').length
-      ? added.filter((k) => minted.has(k) && kindOf(k) === 'investigator')
+    `## MINTED BY THIS RUN — INVESTIGATORS, read-only, never own a story (${added.filter((k) => minted.has(k) && isInvestigator(k)).length})`,
+    ...(added.filter((k) => minted.has(k) && isInvestigator(k)).length
+      ? added.filter((k) => minted.has(k) && isInvestigator(k))
           .map((k) => `- ${k}  [codeline: ${codelineOf(k) || '(none)'}]  [${String(live[k] || '').length} chars]`)
+      : ['- (none)']),
+    ``,
+    // REPORTED, NOT ABSORBED. An agent the mint produced without saying what it is belongs in
+    // neither column: putting it in one asserts something the roster never said. Its own section
+    // makes the roster's gap visible at the pause, which is where it can still be fixed.
+    `## MINTED BY THIS RUN — KIND NOT STATED (${added.filter((k) => minted.has(k) && kindUnstated(k)).length})`,
+    ...(added.filter((k) => minted.has(k) && kindUnstated(k)).length
+      ? added.filter((k) => minted.has(k) && kindUnstated(k))
+          .map((k) => `- ${k}  [the roster declared no kind for this agent]`)
       : ['- (none)']),
     ``,
     `## In live but not canonical, NOT minted this run (pre-existing drift) (${added.filter((k) => !minted.has(k)).length})`,
@@ -394,7 +416,9 @@ function writeAgentSeamCrossReference(profilesPath, registryPath) {
   const roster = rosterAgents(profilesPath);
   const registry = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
   const profiles = registry.profiles || {};
-  const previous = registry.agentSeams || {};
+  // Nothing is carried forward: the roster is derived every run, so a previous run's mapping is
+  // not this run's fact.
+  const previous = {};
   // Provenance lives BESIDE the map, not inside it: agentSeams stays a plain
   // agent -> seam string, so seam-invocation.js and every other reader is untouched.
   const origin = {};
@@ -440,9 +464,15 @@ function writeAgentSeamCrossReference(profilesPath, registryPath) {
       + `Add a seamPattern or a defaultSeam to ${registryPath}:\n  ` + unresolved.join('\n  '));
   }
 
-  registry.agentSeams = next;
-  registry.agentSeamOrigin = origin;
-  fs.writeFileSync(registryPath, `${JSON.stringify(registry, null, 2)}\n`);
+  // NEITHER RECORDED NOR WRITTEN BACK. `agentSeams` was a per-project cross-reference kept in
+  // the file the ENGINE owns, and every one of its 55 entries had origin 'derived' — a cache of
+  // what the seam patterns already answer, holding no decision anyone had made. Maintaining it
+  // was the last thing making a run write the engine layer.
+  //
+  // What the patterns cannot reach is a minted agent whose name the engine cannot know, and that
+  // agent's roster entry names its seam beside its persona and its kind. The resolution above
+  // still runs: it is what proves every minted agent HAS a seam, and it throws by name when one
+  // does not.
   return next;
 }
 
@@ -542,6 +572,127 @@ if (require.main !== module) return;
   const provisioned = provisionPlugins(codelines);
   const toolGrant = mintTools(codelines);
   process.stderr.write(`[mint-step] plugins provisioned: ${provisioned.length} · mint tools: ${toolGrant}\n`);
+  // ── THE PROJECT ROSTER ──────────────────────────────────────────────────────
+  //
+  // Canonical belongs to no project. Running it unchanged gave every project the same personas,
+  // which is how a review of a client codeline ran five times with a persona describing this
+  // repository. So: canonical is copied into the run, an agent specialises it for THIS project
+  // with its own tools, and the result is reviewed against BOTH itself and the source.
+  //
+  // A FUNCTION, AND NOT PART OF THE MINT. EPAM_SKIP_AGENT_MINT is honoured on every
+  // writer-style resume, deliberately: the merge is additive and re-minting accumulated
+  // duplicate roles. But deriving the roster is not minting. Skipping the mint means "invent no
+  // new agents"; it must never mean "run with no identities", which is what leaving this inside
+  // the skipped block would cause the moment consumers stop falling back to the engine roster.
+  //
+  // Regenerated every launch, resume included.
+  const runRosterStage = async (mintedDetail) => {
+    const { buildProjectRoster } = require('./lib/project-roster.js');
+    const { seamInvocationEnv } = require('./lib/seam-invocation.js');
+    const projectConfigDir = process.env.EPAM_PROJECT_CONFIG_DIR || '';
+    if (!projectConfigDir) {
+      throw new Error(
+        'cannot build the project roster: EPAM_PROJECT_CONFIG_DIR is unset. The roster is the '
+        + 'only place an agent\'s identity comes from, and there is no engine fallback to read.');
+    }
+    const canonicalPath = path.join(AGENTS_DIR, 'profiles.canonical.json');
+
+    // Required HERE, not at module load: engine-prompt routes seam prompts through
+    // prompt-library, and pulling that chain in at load time would give one of them a
+    // half-initialised copy of the other. Every other seam in this file renders the same way.
+    // eslint-disable-next-line global-require
+    const { renderEngineTemplate } = require('./lib/engine-prompt.js');
+    const renderSpecialisation = (vals) => renderEngineTemplate('roster-specialisation', vals);
+
+    // THE AGENT WRITES THE FILE. The pipeline hands it the canonical copy and a destination,
+    // then judges the artefact — it does not compose personas itself, because deciding what an
+    // agent must know about a codeline is judgement, not substitution.
+    const produce = async ({ canonicalCopyPath, outPath, refusal }) => {
+      process.env.EPAM_AGENT_NAME = 'roster-specialiser';
+      // The SAME context the prompt builder is given, computed the same way — a derivation that
+      // sees different facts than its sibling stage is two projects, not one.
+      const prompt = renderSpecialisation({
+        __CANONICAL_COPY_PATH__: canonicalCopyPath,
+        __OUT_PATH__: outPath,
+        __PROJECT_CONTEXT__: [
+          `Project config: ${projectConfigDir}`,
+          `Tickets in scope: ${stories.map((t) => `${t.jiraKey || t.id}: ${t.title || ''}`).join(' | ')}`,
+          mintedDetail.length
+            ? `Agents this project minted: ${mintedDetail.map((mm) => `${mm.name} [${mm.kind}]`).join(', ')}`
+            : 'Agents this project minted: (none this run)',
+        ].join('\n'),
+        __CODELINE_CONTEXT__: codelines
+          .map((c) => `- ${c.name} (${c.path})${c.dependencies && c.dependencies.length ? ` deps: ${c.dependencies.join(', ')}` : ''}`)
+          .join('\n'),
+        // __STACK__ is deliberately ABSENT. It is a stack-fact key, and engine-prompt.js injects
+        // the ones a template declares — but only when the caller has not supplied them. Passing
+        // an empty string here would win, and starve the agent of the codeline's real facts.
+        // RENDERED FROM THE PROMPT LAYER, not written here. See lib/refusal-block.js: this text
+        // existed at three call sites in three wordings, none of them reviewable as a prompt.
+        __PREVIOUS_REFUSAL__: refusalBlock(refusal, 'roster'),
+      });
+      // spec.runClaude, like every other seam in this file. promptExec is the RUNNER handed to
+      // it, not something to call — invoking it directly threw "promptExec is not a function".
+      // I invented a call shape instead of matching the one already here, which is the third bug
+      // in this stage from that same habit.
+      //
+      // AGENTS_DIR, not LOG_DIR: seamInvocationEnv reads the invocation registry from the
+      // directory it is given, and handed the log folder it found none and resolved no ladder.
+      const seamEnv = {
+        ...seamInvocationEnv('roster-specialiser', AGENTS_DIR),
+        EPAM_AGENT_NAME: 'roster-specialiser',
+      };
+      // The tool CHANNEL and the tool LIST travel together: granting one without the other gives
+      // an agent that quietly has nothing, and this one's whole job is to read the codeline and
+      // write a file.
+      if (seamEnv.EPAM_ALLOWED_TOOLS) seamEnv.AI_GATE_ALLOW_TOOLS = '1';
+      await spec.runClaude(
+        promptExec, prompt,
+        path.join(LOG_DIR, 'roster-specialiser.log'),
+        seamEnv, { costAgent: 'roster-specialiser' });
+    };
+
+    // REVIEWED AGAINST BOTH. With only the roster a reviewer can judge plausibility; falsifying
+    // "is this ancestor close" and "was inherited structure quietly changed" needs the source.
+    const review = async ({ rosterPath, canonicalPath: copyPath }) => {
+      // The SEAM's own name. This announced 'roster-review' — a different seam, with a different
+      // template and a different job (certifying newly minted agents). The two would have
+      // resolved different ladders and filed their cost and KB under the wrong agent, which is
+      // the drift this file already warns about where roster-review is invoked properly.
+      process.env.EPAM_AGENT_NAME = 'project-roster-review';
+      try {
+        return await spec.reviewProjectRoster({
+          promptExec, rosterPath, canonicalPath: copyPath,
+          codelines, tickets: stories, logDir: LOG_DIR, repoPath: REPO_PATH, toolGrant,
+        });
+      } catch (err) {
+        // A review that cannot run must not read as "no defects".
+        process.stderr.write(`[mint-step] roster review FAILED: ${err && err.message}\n`);
+        return { verdict: 'review_failed', reason: String(err && err.message) };
+      }
+    };
+
+    const roster = await buildProjectRoster({
+      canonicalPath, logDir: LOG_DIR, projectConfigDir, produce, review,
+      attempts: Number(process.env.EPAM_ROSTER_ATTEMPTS || 3),
+      log: (m2) => process.stderr.write(`[mint-step] ${m2}\n`),
+    });
+    process.stderr.write(`[mint-step] project roster: ${Object.keys(roster.agents).length} agent(s)\n`);
+  };
+
+  // ROSTER-ONLY: derive the roster and stop.
+  //
+  // A writer-style resume skips the mint on purpose, and every launch runs the pre-run reset.
+  // The launcher calls this step in roster-only mode on those paths: identities are derived,
+  // nothing is re-minted, and no role accumulates a near-duplicate. Placed here because
+  // everything the stage needs is already resolved, and everything below costs model time this
+  // path is explicitly avoiding.
+  if (String(process.env.EPAM_ROSTER_ONLY || '') === '1') {
+    process.stderr.write('[mint-step] roster-only: deriving this project\'s roster, minting nothing\n');
+    await runRosterStage([]);
+    return { rosterOnly: true };
+  }
+
   const docs = await referencedDocs(LOG_DIR, stories);
   const fetchedDocs = docs.filter((d) => d && d.fetchStatus === 'fetched').length;
 
@@ -726,8 +877,17 @@ if (require.main !== module) return;
     process.env.EPAM_AGENT_NAME = 'roster-review';
     try {
       const liveProfiles = JSON.parse(fs.readFileSync(PROFILES_PATH, 'utf8'));
+      // THE PROJECT'S OWN PROFILES TOO. The minted agents' briefs are written here, not into the
+      // engine's canonical profiles — so passing only the latter handed the reviewer a header with
+      // a blank line under it for every agent it was asked to judge. It reported them all "empty"
+      // and blocked the roster twice, correctly about the text and wrongly about the roster.
+      let projectProfiles = {};
+      try {
+        const _pp = path.join(process.env.EPAM_PROJECT_CONFIG_DIR || '', 'agent-profiles.json');
+        projectProfiles = JSON.parse(fs.readFileSync(_pp, 'utf8'));
+      } catch { /* a project with no minted profiles yet has none to add */ }
       return await spec.reviewRoster({
-        promptExec, minted: _mintedDetail, profiles: liveProfiles,
+        promptExec, minted: _mintedDetail, profiles: liveProfiles, projectProfiles,
         codelines, tickets: stories, referencedDocs: docs,
         logDir: LOG_DIR, repoPath: REPO_PATH, toolGrant,
       });
@@ -863,6 +1023,9 @@ if (require.main !== module) return;
   // wired, assigned a story — and then unable to write a byte" failure the perimeter exists to
   // make impossible.
   //
+  await runRosterStage(_mintedDetail);
+
+
   // Targeted correction (ARCH-7) is what made this reachable: a wholesale re-mint would have
   // failed loudly and obviously. A surgical replacement leaves the roster looking healthy and
   // only the assignments stale, which is quieter and worse.
@@ -953,6 +1116,10 @@ if (require.main !== module) return;
         + 'picking one silently is how a project ends up running prompts nobody chose.');
     }
 
+    // Resolved by the generator below, consumed by its reviewer. Declared here so the two
+    // cannot be reordered without the reviewer losing it.
+    let _promptGeneratorModel = '';
+
     process.env.EPAM_AGENT_NAME = 'prompt-builder';
     // Opt-in per project; the registry's prompt-review.enabledBy names this variable.
     const _promptReviewEnabled = String(process.env.EPAM_PROMPT_REVIEW_ENABLED || '') === '1';
@@ -992,6 +1159,13 @@ if (require.main !== module) return;
       runText: (prompt, meta) => {
         const seamEnv = seamInvocationEnv('prompt-builder', path.join(engineRoot, 'orchestrations', 'agents'));
         if (seamEnv.EPAM_ALLOWED_TOOLS) seamEnv.AI_GATE_ALLOW_TOOLS = '1';
+        // THE REVIEWER WILL RUN THIS MODEL. Captured at the moment the generator resolves it,
+        // because a DECLARED tier and a RESOLVED model are not the same fact: both seams declare
+        // ladder=top today, so they match by coincidence, and change either declaration — or let
+        // the runner escalate one on an empty response — and they diverge with nothing to say so.
+        // A prompt is the contract every agent in the run executes against; a reviewer that
+        // cannot reproduce the generator's reasoning is reviewing text it could not have written.
+        _promptGeneratorModel = seamEnv.EPAM_MODEL || '';
         // The identity travels WITH the seam. It was set on process.env far above, so the two could
         // drift apart without either looking wrong — and elsewhere in this stage they already had.
         seamEnv.EPAM_AGENT_NAME = 'prompt-builder';
@@ -1024,6 +1198,15 @@ if (require.main !== module) return;
           const seamEnv = seamInvocationEnv('prompt-review', path.join(engineRoot, 'orchestrations', 'agents'));
           if (seamEnv.EPAM_ALLOWED_TOOLS) seamEnv.AI_GATE_ALLOW_TOOLS = '1';
           seamEnv.EPAM_AGENT_NAME = 'prompt-review';
+          // THE GENERATOR'S RUNG, not this seam's. No fallback: if the generator never resolved a
+          // model there is nothing to review against, and quietly using the reviewer's own is how
+          // a code reviewer judged kimi-k3's work from glm-5.2 for three cycles.
+          if (!_promptGeneratorModel) {
+            throw new Error(
+              '[prompt-review] the generator resolved no model, so there is no rung to review on. '
+              + 'Refusing to judge a prompt from a model that did not write it.');
+          }
+          seamEnv.EPAM_MODEL = _promptGeneratorModel;
           return spec.runClaude(promptExec, prompt, logPath, seamEnv, { costAgent: 'prompt-review' });
         },
         values: ({ id, template, generated }) => ({

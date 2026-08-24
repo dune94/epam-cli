@@ -104,7 +104,11 @@ const DEFAULT_CODELINE   = process.env.JIRA_DEFAULT_CODELINE || '';
 // Explicit provider. These called ai-run.sh with --model but NO --provider, so
 // provider came only from ambient env — e.g. `--provider qwen --model claude-haiku`.
 const PROVIDER = getArg('--provider', process.env.ORCH_GATE_PROVIDER || process.env.EPAM_ORCHESTRATION_PROVIDER || 'qwen');
-const MODEL   = getArg('--model', process.env.ORCH_GATE_MODEL || process.env.EPAM_MODEL || 'z-ai/glm-5.2');
+// No literal fallback: see lib/seam-model.js. An AC classification produced by a model the
+// run never chose still reads as authoritative.
+const { resolveOrRefuse } = require('./seam-model.js');
+const MODEL   = resolveOrRefuse({ seam: 'ac-gate',
+  sources: [getArg('--model', ''), process.env.ORCH_GATE_MODEL, process.env.EPAM_MODEL] });
 
 const ISSUES_PATH = getArg('--issues');
 const OUT_PATH    = getArg('--out', '');   // write JSON results to file instead of stdout

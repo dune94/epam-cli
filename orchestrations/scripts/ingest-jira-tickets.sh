@@ -212,22 +212,15 @@ log "Synthesizing PRD from classified tickets..."
 # project.name "skyscanner-app". Giving hello-dolly its own prd.canonical.json changed
 # nothing, because nothing read it. A project's identity now comes from the directory that
 # holds the project's facts, which every run already exports.
+# NO PRD TEMPLATE. Synthesis used to fill a stored prd.canonical.json and spread the whole file
+# into the result, so every value in it governed every run: metrolinx's carried a codeline scope
+# frozen in by hand to unblock a launch, and because a declared scope makes discovery stand aside,
+# discovery never ran. The same file had already been cleaned twice — another project's stack, and
+# eight fabricated acceptance criteria.
+#
+# The PRD is INGESTED. Its work comes from the tracker and its identity from the project's own
+# config; a stored third source is where one run's output becomes the next run's premise.
 _synth_template_args=()
-if [ -n "${JIRA_PRD_TEMPLATE:-}" ]; then
-  if [ -f "$JIRA_PRD_TEMPLATE" ]; then
-    _synth_template_args=(--template "$JIRA_PRD_TEMPLATE")
-    log "Using PRD template: ${JIRA_PRD_TEMPLATE}"
-  else
-    # Deliberately NOT falling through to the derived template: that would hide the typo
-    # behind a run that looks fine until its project block is read.
-    log "WARN: JIRA_PRD_TEMPLATE set but not found: ${JIRA_PRD_TEMPLATE} — synthesis will fail; there is no built-in default"
-  fi
-elif [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] && [ -f "${EPAM_PROJECT_CONFIG_DIR}/prd.canonical.json" ]; then
-  _synth_template_args=(--template "${EPAM_PROJECT_CONFIG_DIR}/prd.canonical.json")
-  log "Using PRD template: ${EPAM_PROJECT_CONFIG_DIR}/prd.canonical.json (this project's own canonical)"
-elif [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ]; then
-  log "WARN: no prd.canonical.json in ${EPAM_PROJECT_CONFIG_DIR} — synthesis requires a template and will fail"
-fi
 
 _out_prd_required
 # PIPESTATUS[0], not the pipeline status. Without pipefail the status here is sed's —

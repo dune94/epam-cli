@@ -55,7 +55,16 @@ teardown() { rm -rf "$WORK"; }
     # The line is gone, so this now blocks on `read` and the timeout ends it. Neither outcome
     # launches anything, and "Auto-confirmed" must not appear either way.
     run timeout 20 bash "$ORCH" --project metrolinx < /dev/null
-    [[ "$output" != *"Auto-confirmed"* ]]
+    # A POSITIVE FIRST. This asserted ONLY the absence of "Auto-confirmed", so the launcher failing
+    # instantly — a missing binary, an unset variable, a typo in $ORCH — satisfied it completely
+    # while proving nothing. Hollow anywhere is bad; hollow here is worst, because this test is
+    # what stands between a stray non-interactive invocation and spend.
+    [[ "$output" == *"Project:"*"metrolinx"* ]] || {
+        echo "the launcher never reached the point where it would confirm — this proves nothing:"
+        echo "$output" | tail -5
+        false
+    }
+    [[ "$output" != *"Auto-confirmed"* ]] || { echo "a non-interactive launch auto-confirmed"; false; }
 }
 
 @test "no launcher treats a missing terminal as consent" {

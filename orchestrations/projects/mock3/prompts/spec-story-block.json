@@ -6,7 +6,7 @@
   ],
   "authority": "project",
   "body": "You are __PERSONA__.\n\n## Story\n\n**Title:** __TITLE__\n\n**Description:** __DESCRIPTION__\n\n## Scope\n\n**Components:**\n\n__COMPONENTS__\n\n**Declared files:**\n\n__DECLARED_FILES__\n\n## Links\n\n__LINK_BLOCK__\n\n## Comments\n\n__COMMENT_BLOCK__\n\n## Project notes\n\nBoth codelines in scope (mocka, mockb) use vitest and typescript. The tickets in scope are boundary / off-by-one bugs in pure TypeScript modules with no external dependencies. Pay attention to comparison operators (`>` vs `>=`) and loop bounds that skip the final element. Rely on the investigators' findings rather than re-deriving them.\n\n## Retrieved documents\n\n__RETRIEVED_DOCS__\n\n__DOC_PATHS__",
-  "derivedFromSha256": "41b6c41e78b4fc06be6b740b6110f0fa2010ba754f4f9639fc3df7228b2e7b19",
+  "derivedFromSha256": "372ceec07f5d6c695b43581ceea5399ba5e650a4a58d3dfca5e1fc088bf64b9e",
   "derivedFromVersion": 1,
   "id": "spec-story-block",
   "placeholders": [

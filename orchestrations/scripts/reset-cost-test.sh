@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# PRE_RUN_RESET_GATE: exempt — a state-reset utility, not a launcher. It starts no run.
 # Reset cost test phases for re-running
 # EPAM CLI orchestration cost test reset
 # Usage: ./orchestrations/scripts/reset-cost-test.sh

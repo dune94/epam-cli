@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# PRE_RUN_RESET_GATE: exempt — replays ONE step against the inputs a previous run
+#   already produced. Clearing that state is the opposite of this script's purpose.
 # ──────────────────────────────────────────────────────────────────────────────
 # WRITER RETEST — replay just the story-writer step against KNOWN inputs.
 #
@@ -61,6 +63,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# shellcheck source=lib/project-config.sh
+. "$SCRIPT_DIR/lib/project-config.sh"
 
 PRD_FILE="${1:?Usage: writer-retest.sh <PRD_FILE> [--project NAME]}"
 shift || true
@@ -92,7 +96,13 @@ if ! python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$PRD_FILE" 2>/d
   exit 1
 fi
 
-export EPAM_PROJECT_CONFIG_DIR="${EPAM_PROJECT_CONFIG_DIR:-$REPO_ROOT/orchestrations/projects/$PROJECT_NAME}"
+# Resolved on its own line so the resolver's refusal is read, then exported in one
+# statement: `export VAR="$(cmd)"` would make the status export's (always 0), and the
+# two-line form hid the export from the launcher-parity detector, which looks for
+# `export EPAM_PROJECT_CONFIG_DIR=` — a capability present but unrecognisable is the
+# same as absent to anything auditing the launchers.
+_epam_cfg_dir="$(project_config_dir "$PROJECT_NAME" "$REPO_ROOT")" || exit 1
+export EPAM_PROJECT_CONFIG_DIR="$_epam_cfg_dir"
 
 # Auto-source the project's own config.env (real settings: TZ, SEMBLE_ENABLED,
 # JIRA_BASELINE_BRANCH, model routing, etc.) — found live 2026-08-01: relying on
@@ -122,7 +132,10 @@ else
   echo "[writer-retest] WARNING: profiles.json.original not found — skipping profiles restore" >&2
 fi
 
-export AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$REPO_ROOT/orchestrations/agents/profiles.json}"
+# NO AGENT_PROFILES_FILE. Identity comes from the project roster (lib/roster-read.sh), and the
+# default this replaces named the engine's own roster — which is exactly what a client codeline
+# must never inherit. A retest that reaches a seam with no roster refuses, and that is correct:
+# the roster is derived on every launch, this one included.
 export PRD_FILE
 export EPAM_BROWNFIELD=1
 export JIRA_PIPELINE=0          # use PRD_FILE as-is — no Jira re-ingest, no codeline re-discovery

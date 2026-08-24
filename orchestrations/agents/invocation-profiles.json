@@ -55,9 +55,19 @@
     "agentSeams and seamPatterns map a MINTED AGENT to its ARCHETYPE — the base agent it is an instance of.",
     "It is not a bag of invocation settings that happen to suit. The distinction matters because an archetype carries what an instance INHERITS; an implementer pointed at a diagnostician would inherit the wrong prompt, the wrong output kind and the wrong inputs."
   ],
+  "$agentKindsWhy": "WHAT KINDS OF AGENT EXIST, declared once. Two engine modules held this as a literal and disagreed — project-roster.js allowed 'seam' and agent-roster.js called it an unrecognised kind — so whether a roster entry validated depended on which module looked. A kind decides whether an agent may own a story and author code, which is not a fact the engine may hold two opinions about. Adding one is an edit here.",
+  "agentKinds": [
+    "implementer",
+    "investigator",
+    "seam"
+  ],
+  "$agentKindMembershipWhy": "WHICH FILE'S MEMBERSHIP MAKES AN AGENT WHICH KIND. kindOfAgent resolved this POSITIONALLY — AGENT_KINDS[0] for project-roles, [1] for project-investigators — so reordering the kind list silently changed what every registered agent IS. Stated here instead, because the mapping is a fact and not an ordering.",
+  "agentKindMembership": {
+    "implementer": "project-roles.json",
+    "investigator": "project-investigators.json"
+  },
   "defaults": {
     "maxOutputTokens": 32768,
-    "maxIterations": 1,
     "reasoningEffort": "medium",
     "timeoutSecs": 300,
     "captureCost": true,
@@ -68,7 +78,6 @@
     "team-lead-review": {
       "_what": "Reviews the story's code change AND its test; emits a verdict.",
       "maxOutputTokens": 32768,
-      "maxIterations": 25,
       "maxToolCalls": 8,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
@@ -115,7 +124,6 @@
     "agent-failure-analyst": {
       "_what": "Diagnoses a no-output/failed agent attempt, prescribes a corrective directive.",
       "maxOutputTokens": 32768,
-      "maxIterations": 1,
       "reasoningEffort": "high",
       "timeoutSecs": 360,
       "ladder": "top",
@@ -135,7 +143,6 @@
     "repro-test-writer": {
       "_what": "Writes the bug-reproducing test for a brownfield fix.",
       "maxOutputTokens": 32768,
-      "maxIterations": 15,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
       "ladder": "top",
@@ -154,12 +161,12 @@
         }
       ],
       "template": "repro-test-writer",
-      "toolGrant": "write"
+      "toolGrant": "write",
+      "_outputIsArtefact": "Writes a test FILE (toolGrant write, produces \"repro-test\"). Its success is the file existing and failing on the pre-fix baseline, which the repro gate checks — not a parsed response."
     },
     "tc-writer": {
       "_what": "Writes post-implementation test criteria into the PRD.",
       "maxOutputTokens": 32768,
-      "maxIterations": 6,
       "reasoningEffort": "medium",
       "timeoutSecs": 600,
       "ladder": "top",
@@ -174,22 +181,6 @@
         }
       ],
       "template": "tc-writer",
-      "toolGrant": "read-only"
-    },
-    "cpa-gate": {
-      "_what": "Judges a CPA estimate rewrite: pass/fail.",
-      "maxOutputTokens": 16384,
-      "reasoningEffort": "low",
-      "timeoutSecs": 180,
-      "ladder": "top",
-      "produces": "estimate-verdict",
-      "consumes": [
-        {
-          "kind": "estimate",
-          "required": true
-        }
-      ],
-      "_orphaned": "2026-08-16: no caller names this seam, and its template (cpa-system) belongs to cpa-inference, which declares it. Left in place rather than deleted because removing a seam is a decision, not a tidy-up — but nothing reaches it, and three templates had been pointing here as a dumping ground.",
       "toolGrant": "read-only"
     },
     "cpa-inference": {
@@ -209,7 +200,9 @@
         }
       ],
       "template": "cpa-inference",
-      "toolGrant": "read-only"
+      "toolGrant": "read-only",
+      "_outputShapeIn": "cpa-system",
+      "_outputShapeInWhy": "Its own template defers: \"the JSON object as specified in your instructions\". contextualize-stories.sh renders cpa-system into __SYSTEM_PROMPT__, and that is where the Output schema block lives."
     },
     "prd-change-reviewer": {
       "_what": "Reviews a proposed PRD mutation before it is applied.",
@@ -243,7 +236,8 @@
         }
       ],
       "template": "prd-change-summarizer-text",
-      "toolGrant": "read-only"
+      "toolGrant": "read-only",
+      "_outputIsArtefact": "Produces PROSE. Its template is prd-change-summarizer-text and the caller caps it with head -c and prints it verbatim into the rejection text — a JSON envelope would have to be stripped before use."
     },
     "impl-failure-analyst": {
       "_what": "Diagnoses why an implementation attempt failed.",
@@ -285,7 +279,9 @@
         }
       ],
       "template": "ac-classification",
-      "toolGrant": "read-only"
+      "toolGrant": "read-only",
+      "layer": "bootstrap",
+      "_why_bootstrap": "renders during Jira ingest, from lib/ac-gate.js, for the same reason."
     },
     "ac-elaboration": {
       "_what": "Elaborates an acceptance criterion into verification criteria.",
@@ -301,14 +297,14 @@
         }
       ],
       "template": "ac-elaboration",
-      "toolGrant": "read-only"
+      "toolGrant": "read-only",
+      "layer": "bootstrap",
+      "_why_bootstrap": "renders during Jira ingest, from lib/ac-gate.js, for the same reason."
     },
     "codeline-discovery": {
       "_what": "Picks which local codeline a Jira ticket belongs to.",
       "maxOutputTokens": 16384,
       "reasoningEffort": "high",
-      "maxIterations": 40,
-      "_maxIterationsWhy": "It is handed up to 8 candidate repositories (scoreRepos(..., 8, ...)) and must examine each with read_file/list_files/search before it can answer. Unset, it inherited AgentRunner’s `?? 20`: llm-settings.json modelOverrides (glm-5.2 -> 120) is applied in claude.sh’s story-invocation path, and this seam spawns ai-run.sh directly, so it never saw that budget either. Live 2026-08-18: the call died at 20 with “reached maximum iterations”, which AgentRunner returns as a NORMAL result, so the caller parsed no JSON, fell back to the highest lexically-scored repo, and the run proceeded against a codeline the operator had not named.",
       "timeoutSecs": 300,
       "ladder": "top",
       "produces": "codeline-selection",
@@ -319,7 +315,9 @@
         }
       ],
       "template": "codeline-discovery",
-      "toolGrant": "read-only"
+      "toolGrant": "read-only",
+      "layer": "bootstrap",
+      "_why_bootstrap": "renders during Jira ingest, from lib/codeline-discovery.js — before the mint provisions any project prompt, and after pre-run-reset has removed the previous run's."
     },
     "roster-review": {
       "_what": "Falsifies the claims in a generated agent roster before any implementer inherits them.",
@@ -327,7 +325,6 @@
       "reasoningEffort": "high",
       "temperature": "0.1",
       "maxOutputTokens": 32768,
-      "maxIterations": 25,
       "timeoutSecs": 900,
       "produces": "roster-verdict",
       "consumes": [
@@ -337,7 +334,9 @@
         }
       ],
       "template": "roster-review",
-      "toolGrant": "read-only"
+      "toolGrant": "read-only",
+      "layer": "bootstrap",
+      "_why_bootstrap": "certifies newly minted agents, inside the mint. A prompt that runs before the project prompt layer exists cannot be a project prompt."
     },
     "code-graph-detective": {
       "_what": "Investigates one codeline and reports where the work actually lands.",
@@ -345,7 +344,6 @@
       "reasoningEffort": "high",
       "temperature": "0.7",
       "maxOutputTokens": 32768,
-      "maxIterations": 25,
       "timeoutSecs": 900,
       "produces": "fix-plan",
       "template": "code-graph-detective",
@@ -370,7 +368,6 @@
       "reasoningEffort": "high",
       "temperature": "0.1",
       "maxOutputTokens": 32768,
-      "maxIterations": 6,
       "timeoutSecs": 900,
       "produces": "guard-vocabulary",
       "consumes": [
@@ -388,7 +385,6 @@
       "reasoningEffort": "high",
       "temperature": "0.7",
       "maxOutputTokens": 32768,
-      "maxIterations": 25,
       "timeoutSecs": 900,
       "produces": "estate-survey",
       "consumes": [
@@ -398,7 +394,9 @@
         }
       ],
       "template": "estate-survey",
-      "toolGrant": "read-only"
+      "toolGrant": "read-only",
+      "layer": "bootstrap",
+      "_why_bootstrap": "surveys the codelines before anything is minted. A prompt that runs before the project prompt layer exists cannot be a project prompt."
     },
     "story-writer": {
       "_what": "Implements a story: writes the code that satisfies its criteria. The archetype every minted -engineer is an instance of.",
@@ -406,7 +404,6 @@
       "reasoningEffort": "high",
       "temperature": "0.2",
       "maxOutputTokens": 32768,
-      "maxIterations": 120,
       "timeoutSecs": 900,
       "_note": "The writer is invoked today through claude.sh own rung ladder, not through this seam, so these settings are not yet the live invocation path. The record exists because an instance must inherit from the archetype it IS: -engineer resolved to impl-failure-analyst purely because that ladder matched the tier wanted, which makes an implementer an instance of a diagnostician.",
       "produces": "implementation",
@@ -447,12 +444,12 @@
         }
       ],
       "template": "story-writer",
-      "toolGrant": "execute"
+      "toolGrant": "execute",
+      "_outputIsArtefact": "Delivers the implementation through the filesystem (toolGrant execute, produces \"implementation\"). Nothing parses its stdout as a payload, so there is no shape to declare and a declared one would be fiction."
     },
     "vc-coverage": {
       "_what": "Judges whether the written tests cover each verification criterion.",
       "maxOutputTokens": 16384,
-      "maxIterations": 25,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
       "ladder": "top",
@@ -471,7 +468,6 @@
     "qa-gate:sast": {
       "_what": "Static application security scan over the change.",
       "maxOutputTokens": 16384,
-      "maxIterations": 25,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
       "ladder": "top",
@@ -487,7 +483,6 @@
     "qa-gate:spec-validator": {
       "_what": "Checks the change satisfies the story’s acceptance criteria.",
       "maxOutputTokens": 16384,
-      "maxIterations": 25,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
       "ladder": "top",
@@ -506,7 +501,6 @@
     "qa-gate:review-ranger": {
       "_what": "Reviews the change for defects the team-lead review may not reach.",
       "maxOutputTokens": 16384,
-      "maxIterations": 25,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
       "ladder": "top",
@@ -522,7 +516,6 @@
     "qa-gate:mutant-hunter": {
       "_what": "Assesses whether the tests would fail if the change were broken.",
       "maxOutputTokens": 16384,
-      "maxIterations": 25,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
       "ladder": "top",
@@ -541,7 +534,6 @@
     "qa-gate:fuzz-weaver": {
       "_what": "Probes the change with adversarial inputs.",
       "maxOutputTokens": 16384,
-      "maxIterations": 25,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
       "ladder": "top",
@@ -557,7 +549,6 @@
     "qa-gate:perf-sentinel": {
       "_what": "Assesses the change for runtime and startup cost.",
       "maxOutputTokens": 16384,
-      "maxIterations": 25,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
       "ladder": "top",
@@ -572,11 +563,10 @@
     },
     "prompt-builder": {
       "_what": "Provisions this project's prompt library: reads the generic templates and decorates each one for the project and the roster just minted. Runs at mint time, as part of the same stage that creates the agents the prompts are for — the only stage that knows both what the project is and who will work on it.",
-      "ladder": "top",
+      "ladder": "mid",
       "reasoningEffort": "high",
       "temperature": "0.2",
       "maxOutputTokens": 32768,
-      "maxIterations": 25,
       "timeoutSecs": 900,
       "_toolNote": "READ ONLY, deliberately. The job is to read a template and decorate it; the template zone is the one immutable thing in this design, and an agent granted bash could rewrite the very files it is reading from. The engine performs the write, after the contract check — so a prompt that fails its contract is never installed.",
       "produces": "project-prompts",
@@ -593,7 +583,9 @@
         }
       ],
       "template": "project-prompt-generation",
-      "toolGrant": "read-only"
+      "toolGrant": "read-only",
+      "_outputIsArtefact": "Writes the project prompt FILES themselves (produces=project-prompts, via project-prompt-builder.js). Its output IS the minted prompt layer on disk, so the artefact is the deliverable.",
+      "_why_ladder": "Operator decision 2026-08-22. Specialising a prompt is largely RESTATEMENT — keep the rule, replace the generic noun with this project's — and the ceiling rung buys nothing for that, the same argument that put the TC writer on medium. The judgement half (what an agent must know about this codeline) is covered by the review pass, which runs on the generator's own rung."
     },
     "codeline-bridge-agent": {
       "_what": "Extracts the exported surface of a completed codeline so a later lane's detective can read it. Producers run before consumers precisely so this exists when it is needed.",
@@ -601,7 +593,6 @@
       "reasoningEffort": "high",
       "temperature": "0.1",
       "maxOutputTokens": 32768,
-      "maxIterations": 25,
       "timeoutSecs": 900,
       "_toolNote": "READ ONLY. It reports what a codeline exports; it has no reason to change one, and a bridge that can write could rewrite the lane it is describing.",
       "produces": "dependency-contracts",
@@ -612,7 +603,8 @@
         }
       ],
       "template": "codeline-bridge",
-      "toolGrant": "read-only"
+      "toolGrant": "read-only",
+      "_outputIsArtefact": "Delivers a FILE, not a payload: run-agent-orchestration.sh requires it to call WriteFile and then checks the contract file exists and is non-empty, correcting the agent by name when it does not. There is no response body to shape."
     },
     "qa-gate:e2e": {
       "_what": "Browser end-to-end routing check for one route.",
@@ -620,7 +612,6 @@
       "reasoningEffort": "high",
       "temperature": "0.1",
       "maxOutputTokens": 32768,
-      "maxIterations": 25,
       "timeoutSecs": 900,
       "produces": "gate-verdict",
       "consumes": [
@@ -662,7 +653,9 @@
         }
       ],
       "template": "assign-agent-roles",
-      "toolGrant": "read-only"
+      "toolGrant": "read-only",
+      "layer": "bootstrap",
+      "_why_bootstrap": "assigns minted roles to stories, before prompt generation. A prompt that runs before the project prompt layer exists cannot be a project prompt."
     },
     "spec-coordinator": {
       "_what": "Assigns the spec work for a phase, then reviews the specs and the model choices it produced.",
@@ -742,18 +735,19 @@
         }
       ],
       "template": "prd-model-coordinator",
-      "toolGrant": "write"
+      "toolGrant": "write",
+      "_outputShapeIn": "MODEL_REVIEW",
+      "_outputShapeInWhy": "JSON Schema in lib/agent-output-schema.js (required: storyId, finalModel). The tag name matches no name rule, so the link cannot be derived — guard-vocabulary and ticket-links CAN be derived from their tags and carry no such note."
     },
     "prompt-review": {
       "_what": "Falsifies what a generated project prompt claims about this project, before any agent inherits it.",
       "optIn": true,
       "enabledBy": "EPAM_PROMPT_REVIEW_ENABLED",
       "_optInNote": "DECLARED, BUILT, AND NOT INVOKED BY DEFAULT. project-prompt-builder.js calls this behind an optional `reviewPrompt` parameter; a project turns it on by setting EPAM_PROMPT_REVIEW_ENABLED=1 in its config.env. Marked here because without the mark this seam is indistinguishable from one that always runs — it carries a template, a produces and three required inputs like any other — and an audit had to read the call site to discover that no project had ever switched it on.",
-      "ladder": "top",
+      "ladder": "mid",
       "reasoningEffort": "high",
       "temperature": "0.1",
       "maxOutputTokens": 32768,
-      "maxIterations": 25,
       "timeoutSecs": 900,
       "toolGrant": "read-only",
       "produces": "prompt-verdict",
@@ -774,7 +768,8 @@
           "authority": "the ground truth its claims are checked against"
         }
       ],
-      "template": "prompt-review"
+      "template": "prompt-review",
+      "_why_ladder": "Operator decision 2026-08-22. Specialising a prompt is largely RESTATEMENT — keep the rule, replace the generic noun with this project's — and the ceiling rung buys nothing for that, the same argument that put the TC writer on medium. The judgement half (what an agent must know about this codeline) is covered by the review pass, which runs on the generator's own rung."
     },
     "survey-review": {
       "_what": "Falsifies what the estate survey claims about the codelines, before a roster is minted from it.",
@@ -783,7 +778,6 @@
       "reasoningEffort": "high",
       "temperature": "0.1",
       "maxOutputTokens": 32768,
-      "maxIterations": 25,
       "timeoutSecs": 900,
       "toolGrant": "read-only",
       "produces": "survey-verdict",
@@ -822,6 +816,46 @@
       ],
       "template": "runtime-boundary-review",
       "toolGrant": "read-only"
+    },
+    "roster-specialiser": {
+      "_what": "Specialises the canonical roster into this project's own roster, writing it with its tools.",
+      "_why": "The canonical roster belongs to no project, so running it unchanged gave every project the same personas — a reviewer judged one codeline while describing another. This is the derivation step, and it is agentic because deciding what an agent must know about a codeline is judgement, not substitution.",
+      "ladder": "top",
+      "reasoningEffort": "high",
+      "timeoutSecs": 1800,
+      "maxOutputTokens": 65536,
+    "_why_maxOutputTokens": "THE WHOLE CANONICAL ROSTER IS ONE ARTEFACT. This seam must emit every canonical agent in a single file — the contract in project-roster.js refuses a subset — and 57 specialised personas measure ~51k tokens. At the 32768 every other seam uses it produced 38 of 57 and stopped, which the roster contract then refused, so the stage burned its attempts on a budget that could not hold the answer.",      "toolGrant": "write",
+      "produces": "project-roster",
+      "consumes": [
+        {
+          "kind": "canonical-roster",
+          "required": true
+        }
+      ],
+      "template": "roster-specialisation",
+      "_outputIsArtefact": "Writes projects/<project>/roster.json with its tools. The deliverable is the file; there is no response payload to shape, and the pipeline validates the artefact it finds.",
+      "_why_grant": "Reads the codeline to learn what each agent must know, and writes ONE file: the project roster. read-only cannot deliver the artefact, and the artefact is the deliverable.",
+      "layer": "bootstrap",
+      "_why_bootstrap": "produces the project roster; runs before the project has prompts. A prompt that runs before the project prompt layer exists cannot be a project prompt."
+    },
+    "project-roster-review": {
+      "_what": "Falsifies the project roster against canonical before any agent is invoked from it.",
+      "_why": "An unreviewed roster is a run whose agent identities nobody vouched for. Given BOTH the derivation and its source, so it can check that a rule was not weakened rather than that the text reads well.",
+      "ladder": "top",
+      "reasoningEffort": "high",
+      "timeoutSecs": 1800,
+      "maxOutputTokens": 32768,
+      "toolGrant": "read-only",
+      "produces": "roster-verdict",
+      "consumes": [
+        {
+          "kind": "project-roster",
+          "required": true
+        }
+      ],
+      "template": "project-roster-review",
+      "layer": "bootstrap",
+      "_why_bootstrap": "reviews that roster, in the same stage. A prompt that runs before the project prompt layer exists cannot be a project prompt."
     }
   },
   "_seamResolution": [

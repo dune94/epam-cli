@@ -29,7 +29,13 @@ AGENT_PROFILES_REGISTRY="${AGENT_PROFILES_REGISTRY:-$(cd "$_AGENT_INVOKE_DIR/../
 
 # Keys every resolved profile must have. Adding one here forces every profile to
 # declare it — the registry test fails until they all do.
-AGENT_INVOKE_REQUIRED_KEYS="maxOutputTokens maxIterations reasoningEffort timeoutSecs captureCost"
+# maxIterations is NOT here: the LADDER defines it, not the profile. Operator rule,
+# 2026-08-21 — a rung is (model, effort, room to work), and a stronger rung is given more
+# room, which a per-agent literal freezes. It is still REQUIRED; it is required of the
+# ladder instead, and checked below against the resolved value rather than the declaration.
+# Dropping it from this list without that check would reinstate exactly what this file
+# exists to prevent: "a reviewer running at 4096 tokens for months without anyone noticing".
+AGENT_INVOKE_REQUIRED_KEYS="maxOutputTokens reasoningEffort timeoutSecs captureCost"
 
 # agent_profile_get <role> <key> — resolved value (profile overrides defaults).
 # Prints nothing and returns 1 if the role is unknown.
@@ -53,6 +59,30 @@ agent_profile_validate() {
         v=$(agent_profile_get "$role" "$k") || v=""
         [ -n "$v" ] || missing="${missing:+$missing }$k"
     done
+    # THE EXECUTION BUDGET IS STILL REQUIRED — of the ladder now, not the profile.
+    #
+    # Resolved through the same gateway the seam itself uses, so this check cannot drift from
+    # what the agent will actually run with. Empty means neither the profile nor the rung
+    # declares one, and the agent would fall through to the engine's own default — a number
+    # nobody chose, which is the condition this whole file refuses to start on.
+    #
+    # Gated on a ladder actually being loaded. With no EPAM_MODEL_ITERATIONS in the process
+    # there is no ladder to ask, and that is model-ladders.sh's failure to report — it already
+    # refuses loudly on an unreadable or ladder-less settings file. Making it fatal a second
+    # time here would refuse every caller that invokes an agent before loading a project,
+    # which is a different fault with a much wider blast radius.
+    if [ -n "${EPAM_MODEL_ITERATIONS:-}" ] \
+       && [ -z "$(agent_profile_get "$role" maxIterations 2>/dev/null || true)" ]; then
+        local _lad_iters
+        _lad_iters=$("${NODE_BIN:-node}" -e '
+            try {
+              const { seamInvocationEnv } = require(process.argv[1] + "/seam-invocation.js");
+              process.stdout.write(String((seamInvocationEnv(process.argv[2]) || {}).EPAM_MAX_ITERATIONS || ""));
+            } catch (_) { process.stdout.write(""); }
+          ' "$_AGENT_INVOKE_DIR" "$role" 2>/dev/null || printf '')
+        [ -n "$_lad_iters" ] || missing="${missing:+$missing }maxIterations(from the ladder)"
+    fi
+
     if [ -n "$missing" ]; then
         echo "[agent-invoke] FATAL: role '$role' is missing required parameter(s): $missing" >&2
         echo "[agent-invoke]        an incomplete profile would run at provider defaults — refusing." >&2
@@ -64,6 +94,49 @@ agent_profile_validate() {
 # invoke_agent <role> [--model M] [--provider P] [--json-result FILE]
 #              [--write-paths PATHS] [--tools LIST] [--codeline PATH] [--runner CMD]
 # Prompt on stdin, agent text on stdout. Exit code is the runner's.
+# ladder_chain_for_position <base|mid|top> — the project's chain for that RUNG.
+#
+# A seam declares a POSITION, never a tier name; agents/invocation-profiles.json says so in its own
+# _ladderPositions note, and it is right: metrolinx calls its tiers medium/high/highest and another
+# project may call them anything. The engine must know neither vocabulary.
+#
+# This did a NAME lookup -- position "top" became EPAM_MODEL_LADDER_TOP -- while the project exports
+# EPAM_MODEL_LADDER_HIGHEST. It never matched, so all 38 profiles that declare a ladder fell through
+# to the run default and said so quietly in every log:
+#
+#   [agent-invoke] role 'team-lead-review' asks for ladder 'top' but EPAM_MODEL_LADDER_TOP is not
+#                  set -- using the run's default ladder
+#
+# THE POSITION->TIER RULE IS NOT REIMPLEMENTED HERE. seam-invocation.js::resolveTierPosition already
+# owns it and three other callers go through it; a second copy in bash is a second thing to keep
+# right, and the copy this replaced had already drifted -- it read `mid` as len/2 where the JS reads
+# floor((len-1)/2), so the two disagreed for any project declaring an even number of tiers.
+#
+# An empty answer stays empty: the caller reports the gap rather than guessing a chain.
+ladder_chain_for_position() {
+    local _pos="${1:-}"
+    [ -n "$_pos" ] || return 1
+
+    local _lib_dir _tier
+    _lib_dir="${_AGENT_INVOKE_LIB_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+    _tier=$("${NODE_BIN:-node}" -e '
+      try {
+        const { resolveTierPosition } = require(process.argv[1]);
+        process.stdout.write(resolveTierPosition(process.argv[2], process.env));
+      } catch (_) { process.stdout.write(""); }
+    ' "$_lib_dir/seam-invocation.js" "$_pos" 2>/dev/null || printf '')
+    [ -n "$_tier" ] || return 1
+
+    # Same sanitisation as the per-role override below, and for the same reason: '[:lower:]-'
+    # leaves every other invalid character in place, and a tier name carrying one would build
+    # a variable bash refuses. Assigned separately so the pipeline's status is not masked.
+    local _tvar _var
+    _tvar=$(printf '%s' "$_tier" | tr '[:lower:]' '[:upper:]' | tr -c '[:alnum:]\n' '_')
+    _var="EPAM_MODEL_LADDER_${_tvar}"
+    printf '%s' "${!_var:-}"
+    [ -n "${!_var:-}" ]
+}
+
 invoke_agent() {
     local role="${1:?invoke_agent: role required}"; shift
     local _model="" _provider="" _json_result="" _write_paths="" _runner="" _tools_override=""
@@ -92,7 +165,19 @@ invoke_agent() {
 
     local _out_tok _max_iter _effort _timeout _capture _tools _temp _ladder
     _out_tok=$(agent_profile_get  "$role" maxOutputTokens)
-    _max_iter=$(agent_profile_get "$role" maxIterations)
+    # THE LADDER DEFINES ITERATIONS. The profile is consulted first only so a project
+    # mid-migration is not left with none; where it is silent — which is now every profile —
+    # the budget comes from the rung this role resolves to, through the same gateway the seam
+    # itself uses, so the two cannot disagree. See lib/model-settings.js.
+    _max_iter=$(agent_profile_get "$role" maxIterations 2>/dev/null || true)
+    if [ -z "$_max_iter" ]; then
+        _max_iter=$("${NODE_BIN:-node}" -e '
+            try {
+              const { seamInvocationEnv } = require(process.argv[1] + "/seam-invocation.js");
+              process.stdout.write(String((seamInvocationEnv(process.argv[2]) || {}).EPAM_MAX_ITERATIONS || ""));
+            } catch (_) { process.stdout.write(""); }
+          ' "$_AGENT_INVOKE_DIR" "$role" 2>/dev/null || printf '')
+    fi
     _effort=$(agent_profile_get   "$role" reasoningEffort)
     _timeout=$(agent_profile_get  "$role" timeoutSecs)
     _capture=$(agent_profile_get  "$role" captureCost)
@@ -137,8 +222,15 @@ invoke_agent() {
     [ -n "$_tools_override" ] && _tools="$_tools_override"
 
     # Per-role env override, for one-off tuning without editing the registry:
-    #   AGENT_INVOKE_<ROLE>_MAX_OUTPUT_TOKENS   (role upper-cased, - → _)
-    local _rk; _rk=$(printf '%s' "$role" | tr '[:lower:]-' '[:upper:]_')
+    #   AGENT_INVOKE_<ROLE>_MAX_OUTPUT_TOKENS   (role upper-cased, non-alphanumerics → _)
+    #
+    # EVERY invalid character, not just the hyphen. This mapped '[:lower:]-' only, so a role
+    # with a colon in its name built the variable AGENT_INVOKE_QA_GATE:SAST_MAX_OUTPUT_TOKENS
+    # and bash aborted the invocation with "invalid variable name" — which took out all seven
+    # qa-gate:* seams, every one of them a QA sentinel, through this gateway. Found 2026-08-21
+    # while auditing agent wiring; the seams ran only because their other call path builds no
+    # such name.
+    local _rk; _rk=$(printf '%s' "$role" | tr '[:lower:]' '[:upper:]' | tr -c '[:alnum:]\n' '_')
     local _ov
     _ov="AGENT_INVOKE_${_rk}_MAX_OUTPUT_TOKENS"; [ -n "${!_ov:-}" ] && _out_tok="${!_ov}"
     _ov="AGENT_INVOKE_${_rk}_TIMEOUT_SECS";      [ -n "${!_ov:-}" ] && _timeout="${!_ov}"
@@ -216,11 +308,12 @@ invoke_agent() {
     # climbs whatever ladder the run already provides — never a silent fallback to something
     # this script chose.
     if [ -n "$_ladder" ]; then
-        local _ladder_var="EPAM_MODEL_LADDER_$(printf '%s' "$_ladder" | tr '[:lower:]-' '[:upper:]_')"
-        if [ -n "${!_ladder_var:-}" ]; then
-            _env+=("EPAM_MODEL_LADDER_HIGH=${!_ladder_var}" "EPAM_MODEL_LADDER=${!_ladder_var}")
+        local _ladder_chain
+        _ladder_chain=$(ladder_chain_for_position "$_ladder" 2>/dev/null || true)
+        if [ -n "$_ladder_chain" ]; then
+            _env+=("EPAM_MODEL_LADDER_HIGH=$_ladder_chain" "EPAM_MODEL_LADDER=$_ladder_chain")
         else
-            echo "[agent-invoke] role '$role' asks for ladder '$_ladder' but $_ladder_var is not set — using the run's default ladder" >&2
+            echo "[agent-invoke] role '$role' asks for ladder position '$_ladder' but the project's ladderTierOrder does not supply it — using the run's default ladder" >&2
         fi
     fi
     [ -n "$_tools" ]       && _env+=("EPAM_ALLOWED_TOOLS=$_tools" "AI_GATE_ALLOW_TOOLS=1")

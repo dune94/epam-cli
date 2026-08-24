@@ -427,14 +427,18 @@ fi
 # The project must own its synthesis template. Without one, synthesize-prd-from-jira.js
 # falls back to another project's canonical and inherits ITS project block — observed
 # 2026-08-05: hello-dolly runs were labelled project.name: skyscanner-app.
+# THE CHECK IS GONE BECAUSE THE TEMPLATE IS. It required every project to ship its own stored PRD
+# template, because synthesis filled one and would otherwise borrow another project's identity.
+# Synthesis now builds the PRD from the tracker and the project's own config, so there is no
+# template to own and no identity to borrow.
 if [ -n "${PROJECT_CONFIG_DIR:-}" ]; then
-  if [ -f "${PROJECT_CONFIG_DIR}/prd.canonical.json" ]; then
-    ok "project has its own prd.canonical.json (no borrowed identity)"
+  if [ -n "${PROJECT_NAME:-}" ]; then
+    ok "project declares its own name (${PROJECT_NAME}) — synthesis has an identity of its own"
   else
-    fail "no prd.canonical.json in ${PROJECT_CONFIG_DIR} — synthesis will fall back to ANOTHER project's template and this run will be labelled with that project's name"
+    fail "PROJECT_NAME is not set — the synthesised PRD would carry no project identity at all"
   fi
 else
-  echo "  – project config dir not given (--project-config); skipping template check"
+  echo "  – project config dir not given (--project-config); skipping identity check"
 fi
 
 # Observability: a run aborts at the tier launcher's own preflight when these are down, so

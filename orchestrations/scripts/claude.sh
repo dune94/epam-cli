@@ -75,7 +75,8 @@ source "$SCRIPT_DIR/lib/jq-vals.sh"
 PROGRESS_LOG="$LOG_DIR/progress.txt"
 AGENTS_FILE="$AUTOMATION_DIR/agents/AGENTS.md"
 CLAUDE_OUTPUT_DIR="$LOG_DIR/claude_outputs"
-AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$AUTOMATION_DIR/agents/profiles.json}"
+# shellcheck source=lib/roster-read.sh
+. "$SCRIPT_DIR/lib/roster-read.sh"
 
 # KB IS KEYED BY CODELINE, NOT BY AGENT ROLE.
 #
@@ -1072,6 +1073,93 @@ _coupled_pair_gate_for_story() {
         echo "$_gate_out"
     } >> "$output_file"
     return 1
+}
+
+# _plan_fidelity_gate_for_story <story_id> <output_file>
+# SCOPE IS ARITHMETIC AGAINST THE PLAN, NOT AN OPINION.
+#
+# lib/plan-fidelity-gate.sh was written for run 20260814T213253Z (AMSD-2041): the plan named
+# FIVE sites, the implementer changed exactly those five, and the reviewer rejected it for
+# modifying "6 files when the prescribed minimal fix requires only 2" — a number appearing
+# nowhere in the plan it was handed. Obeying the plan was the thing being rejected, so no
+# attempt could pass; four review cycles later the ladder was exhausted and the retry
+# hard-reset the branch, destroying work that had passed the suite and tsc.
+#
+# The library shipped and NOTHING CALLED IT. This is that call site. Placed beside the
+# coupled-pair gate for the same reason that one is here: the writer gets the finding back as
+# an ordinary verification failure with rungs still available, instead of the reviewer forming
+# an opinion about scope with none left.
+#
+# The gate returns 0 for a story with no prescription — UNCHECKED is not a failure — so this
+# is inert on any story nobody planned.
+_plan_fidelity_gate_for_story() {
+    local story_id="$1" output_file="${2:-/dev/null}"
+    [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
+    local _gate_lib="${SCRIPT_DIR}/lib/plan-fidelity-gate.sh"
+    [ -f "$_gate_lib" ] || return 0
+    # shellcheck source=lib/plan-fidelity-gate.sh
+    . "$_gate_lib"
+    command -v plan_fidelity_check >/dev/null 2>&1 || return 0
+    [ -d "${PROJECT_ROOT:-}/.git" ] || return 0
+
+    # THE COMMIT IS THE ARTIFACT, and the baseline is resolved the way every other consumer
+    # in this file resolves it — the phase baseline if one was recorded, else the run's.
+    local _ref=""
+    [ -f "${LOG_DIR:-}/phase-baseline-sha.txt" ] && \
+        _ref=$(tr -d '[:space:]' < "$LOG_DIR/phase-baseline-sha.txt" 2>/dev/null)
+    [ -n "$_ref" ] || _ref="$(_resolved_baseline_ref)"
+    git -C "$PROJECT_ROOT" rev-parse --verify "$_ref" >/dev/null 2>&1 || return 0
+
+    local _changed_list
+    _changed_list=$(mktemp)
+    git -C "$PROJECT_ROOT" diff --name-only "$_ref" HEAD > "$_changed_list" 2>/dev/null
+    if [ ! -s "$_changed_list" ]; then rm -f "$_changed_list"; return 0; fi
+
+    # Two candidates, same order as the dependency plugin and the coupled-pair gate.
+    local _manifest="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+    [ -f "$_manifest" ] || _manifest="${PROJECT_ROOT}/.epam/dependency-check.json"
+
+    local _gate_out _gate_rc=0
+    _gate_out=$(plan_fidelity_check "${MAIN_PRD_FILE:-$PRD_FILE}" "$story_id" "$_changed_list" "$_manifest" 2>&1) \
+        || _gate_rc=$?
+    rm -f "$_changed_list"
+
+    if [ "$_gate_rc" -eq 0 ]; then
+        [ -n "$_gate_out" ] && log "  $_gate_out"
+        return 0
+    fi
+
+    # ADVISORY. IT MUST NOT REJECT WORKING CODE.
+    #
+    # This returned 1 and fed the retry loop. Two things disprove that, both from this repo's
+    # own record rather than from reasoning:
+    #
+    #   1. gotransit SHIPPED AMSD-2041 as e780a8b7 — NINE files, +379. The prescription names
+    #      six sites, three of them changeRequired:false. The real, working, merged fix was
+    #      therefore out of plan, and a blocking gate would have rejected it on every attempt
+    #      until the ladder exhausted — the exact outcome this gate exists to prevent, inverted.
+    #
+    #   2. The writer is TOLD the list is not binding. prompts/templates/story-implementation
+    #      .json: "The list is a STARTING POINT, not a fence ... If your change genuinely
+    #      requires another file in this repository, write it." A gate that blocks what the
+    #      prompt instructs is unwinnable by construction — the writer cannot satisfy both.
+    #
+    # The same file already carries this lesson twice: the helper-ABSENCE veto rejected working
+    # code at 7.3M tokens and $2.25 per false rejection before it was narrowed to duplication.
+    # A false-positive gate is worse than the silence it replaced.
+    #
+    # So the finding is RECORDED, in the log and in the attempt output where the reviewer and
+    # the operator both see it, and the story proceeds. Making it blocking is a decision for
+    # after a run has shown what it actually flags — not before.
+    error "  [plan-fidelity] $story_id: the change went outside the plan of record (advisory — not blocking)"
+    while IFS= read -r _line; do [ -n "$_line" ] && log "  $_line"; done <<< "$_gate_out"
+    {
+        echo ""
+        echo "=== ADVISORY: the change went outside the plan of record ==="
+        echo "$_gate_out"
+        echo "This is recorded, not enforced. The prescribed file list is a starting point, not a fence."
+    } >> "$output_file"
+    return 0
 }
 
 # _committed_change_uses_helpers <story_id>
@@ -2497,7 +2585,10 @@ build_implementation_prompt() {
         # a multi-line note, silently truncating the actual diagnosis
         # (e.g. the specific functions/ACs a real persisted note names).
         # Paragraph-mode awk (RS="") keeps each whole note intact.
-        _persisted_skill_notes=$(jq -r --arg role "$story_role" '.[$role] // ""' "$AGENT_PROFILES_FILE" 2>/dev/null | \
+        # Notes are appended into the agent's persona, so they come from wherever the persona
+        # does — the roster. `|| true`: an agent with no notes is the normal case, and this is
+        # context for the writer rather than a gate, so absence must not stop a story.
+        _persisted_skill_notes=$(roster_persona "$story_role" 2>/dev/null | \
             awk -v RS='' -v ORS='\n\n' '/\[Self-Heal\]/' || true)
         if [ -n "$_persisted_skill_notes" ]; then
             skill_note_block=$(printf '\n## Lessons From Prior Runs (persisted — a previous attempt at this or a similar story already hit these problems)\n%s\n' "$_persisted_skill_notes")
@@ -2835,13 +2926,28 @@ Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:"
                 local _nd_nvals; _nd_nvals=$(mktemp "${TMPDIR:-/tmp}/new-dep-note-XXXXXX")
                 jq_vals --arg manifest "$_nd_manifest" --arg lock "$_nd_lock" \
                   '{"__MANIFEST_FILE__":$manifest,"__LOCKFILE__":$lock}' > "$_nd_nvals"
-                _nd_note="$(render_engine_prompt new-dependency-lockfile-note "$_nd_nvals" 2>/dev/null || true)"
+                # The library's contract: non-zero means NOTHING was rendered. `|| true` turned
+                # that into an empty note, and 2>/dev/null hid the reason — "a template value
+                # no producer supplies" is a real, recurring live failure, and this made it
+                # silent. The note is genuinely optional, so a failure is not fatal, but it is
+                # never invisible.
+                if ! _nd_note="$(render_engine_prompt new-dependency-lockfile-note "$_nd_nvals")"; then
+                    warning "  [prompt] new-dependency-lockfile-note did not render — the writer gets no lockfile note"
+                    _nd_note=""
+                fi
                 rm -f "$_nd_nvals"
             fi
             local _nd_vals; _nd_vals=$(mktemp "${TMPDIR:-/tmp}/new-dep-vals-XXXXXX")
             jq_vals --arg install "$_nd_install" --arg note "$_nd_note" \
               '{"__INSTALL_COMMAND__":$install,"__LOCKFILE_NOTE__":$note}' > "$_nd_vals"
-            new_dependency_directive="$(render_engine_prompt new-dependency-directive "$_nd_vals" 2>/dev/null || true)"
+            # NOT OPTIONAL. This directive is how the writer is told to install a new
+            # dependency at all; empty, the agent is invoked knowing nothing about it and
+            # invents an install step or skips one. Rendered or refused, never blank.
+            if ! new_dependency_directive="$(render_engine_prompt new-dependency-directive "$_nd_vals")"; then
+                error "  [prompt] new-dependency-directive did not render — refusing to invoke the writer without it"
+                rm -f "$_nd_vals"
+                return 1
+            fi
             rm -f "$_nd_vals"
         fi
     fi
@@ -3041,6 +3147,13 @@ build_generator_prompt() {
 # Delegates to lib/story-outputs.sh, which owns the one implementation: there
 # is more than one producer (this loop, and the repro-test-writer, which commits
 # LATER), and a second copy of this logic is how they would drift apart.
+# The rung record and the output manifest come from the same library, loaded once at start-up
+# rather than per-call: story_rung_record runs on every attempt of every story.
+if [ -f "${SCRIPT_DIR:-$(dirname "${BASH_SOURCE[0]}")}/lib/story-outputs.sh" ]; then
+    # shellcheck disable=SC1090
+    . "${SCRIPT_DIR:-$(dirname "${BASH_SOURCE[0]}")}/lib/story-outputs.sh"
+fi
+
 record_story_outputs() {
     local story_id="$1"
     [ -n "${LOG_DIR:-}" ] || return 0
@@ -9502,6 +9615,18 @@ implement_story() {
                 fi
             fi
         fi
+
+        # ── PERSIST THE RUNG THE WRITER IS ABOUT TO RUN ──────────────────────
+        # Here, and not on a success path, because this is the point the rung is SETTLED:
+        # the escalation block above has just finished moving model/provider/effort/temperature
+        # for this attempt, and the invocation is below. Every attempt overwrites, so the record
+        # always describes the setup that produced the newest output — which is the one the
+        # reviewer is about to judge.
+        #
+        # The writer is a child process per story; the reviewer is a separate process. This file
+        # is how the rung crosses, and it is the ONLY thing the reviewer consults.
+        story_rung_record "$LOG_DIR" "$story_id"
+
         # Rebuild prompt each attempt: retry_count and KB ID must reflect current state
         local next_kb_id
         next_kb_id=$(get_next_kb_id)
@@ -10337,6 +10462,11 @@ $_kb_section"
             # duplicated into this branch deliberately: a story that fails here has
             # still BURNED this rung, and dropping out without persisting the count
             # and model is what makes a ladder restart its climb from rung 0.
+            # ADVISORY, so no retry branch: it records a scope finding and always returns 0.
+            # A `if ! ...; then <retry>` here would be a branch that can never be taken, which
+            # reads to the next person as enforcement that exists. See the function's header
+            # for why blocking on this signal rejects working code.
+            _plan_fidelity_gate_for_story "$story_id" "$output_file"
             if ! _coupled_pair_gate_for_story "$story_id" "$output_file"; then
                 write_story_retry_count "$LOG_DIR" "$story_id" "$retry_count"
                 write_story_retry_model "$LOG_DIR" "$story_id" "${STORY_MODEL:-}"
@@ -11827,7 +11957,11 @@ run_pre_phase_assessment() {
           '{"__PHASE_ID__":$phase_id,"__PRD_REL__":$prd_rel,"__PROJECT_SKILLS__":$project_skills}' > "$_ap_vals"
     rm -f "$_ap_skills_file"
     # The codeline's own facts — this template declares them and nothing supplied them.
-    merge_stack_facts "$_ap_vals" "${PROJECT_ROOT:-}"
+    # Stack facts are the RENDERER's job — engine-prompt.js adds exactly the stack
+    # placeholders this template DECLARES. Pre-merging all seven here made the
+    # renderer throw "was given values it does not use" on every template that
+    # declares fewer, and the caller reported "cannot render its prompt". Four
+    # seams could not run at all, the fuzz-weaver among them.
     assessment_prompt="$(render_engine_prompt skill-assessment-prephase "$_ap_vals" with_prd_structure)"
     rm -f "$_ap_vals"
 

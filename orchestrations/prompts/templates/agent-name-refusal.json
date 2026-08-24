@@ -1,0 +1,15 @@
+{
+  "id": "agent-name-refusal",
+  "authority": "template",
+  "_what": "What the mint is told when a proposed agent name does not carry the ending its kind requires.",
+  "_why": "Both sentences were written in JavaScript inside agent-roster.js — model-facing prose in engine code, unreviewable in the prompt layer and unchangeable per project. The shapes themselves are derived from the registry and arrive as a value; only the words live here.",
+  "_bodies": "shapes — the shapes for this kind resolved. unknown — the registry could not be read, so the requirement can be stated but not the endings; saying so beats inventing them.",
+  "placeholders": [
+    "__KIND__",
+    "__SHAPES__"
+  ],
+  "bodies": {
+    "shapes": "An agent of kind \"__KIND__\" must be named ending in __SHAPES__.",
+    "unknown": "Rename it with the ending this pipeline requires for its kind."
+  }
+}

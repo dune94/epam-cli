@@ -82,7 +82,16 @@ function rolesFromRoster() {
 
   // The file wraps the list under `roles` and carries `_what`/`_why` documentation keys alongside
   // it. Reading Object.entries of the whole document picked up "roles" itself as a role name.
-  const list = Array.isArray(doc) ? doc : (Array.isArray(doc.roles) ? doc.roles : []);
+  // THREE SHAPES, because this file is handed whichever one the caller has. The roster is the
+  // authority now — { agents: { name: { kind } } } — and an implementer is a KIND, not membership
+  // of a separate registry. The older { roles: [...] } and bare-array forms are still read while
+  // anything still writes them.
+  const list = Array.isArray(doc) ? doc
+    : (doc && doc.agents && typeof doc.agents === 'object')
+      ? Object.entries(doc.agents)
+        .filter(([, e]) => e && (e.kind === 'implementer' || e.kind === 'investigator'))
+        .map(([name, e]) => ({ id: name, kind: e.kind }))
+      : (Array.isArray(doc.roles) ? doc.roles : []);
 
   for (const entry of list) {
     const id = typeof entry === 'string' ? entry : String(entry && (entry.id || entry.role || entry.name) || '');

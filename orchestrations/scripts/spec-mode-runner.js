@@ -1253,6 +1253,28 @@ function _validatedOrNull(parsed, tag) {
   return v.fatal ? null : parsed;
 }
 
+/**
+ * A TOOL GRANT REACHES AN AGENT THROUGH ITS ENVIRONMENT — one definition of how.
+ *
+ * Two exports carry a grant and they must travel together: the tool list itself, and the flag
+ * that tells the runner tools are permitted at all. Written out by hand at four call sites, and
+ * the fourth got it wrong in the way a duplicated convention always eventually is — the grant was
+ * passed as a positional argument instead, into the slot that holds the STORY ID. So the roster
+ * reviewer ran with no tools while its trace was labelled with the tool list, and it reported
+ * that it had nothing to review: a gate structurally unable to examine the thing it gates.
+ *
+ * Returns the same object, mutated, so it composes with the `{...seamInvocationEnv(), ...}` shape
+ * every call site already uses. An absent grant is left absent: a seam that was given no tools
+ * must not be handed an empty allow-list, which reads as "tools are on, and none are permitted".
+ */
+function withToolGrant(env, toolGrant) {
+  if (toolGrant) {
+    env.AI_GATE_ALLOW_TOOLS = '1';
+    env.EPAM_ALLOWED_TOOLS = toolGrant;
+  }
+  return env;
+}
+
 async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey, storyId = '', repoPath = '', envOverride = null) {
   // envOverride: per-agent tool grant. Most spec-mode agents share specAgentEnv's
   // read-only set; an agent with a different need (the ticket-link agent must FETCH a
@@ -3277,11 +3299,8 @@ async function surveyEstate({
   // and EPAM_SEAM is written here and read NOWHERE — resolution goes through EPAM_AGENT_NAME
   // alone. So the seam looked declared while the agent resolved to nothing and ran with no
   // ladder and no budget, against a profile that had been written for it all along.
-  const _env = { ...seamInvocationEnv('estate-survey', logDir), EPAM_AGENT_NAME: 'estate-survey' };
-  if (toolGrant) {
-    _env.AI_GATE_ALLOW_TOOLS = '1';
-    _env.EPAM_ALLOWED_TOOLS = toolGrant;
-  }
+  const _env = withToolGrant(
+    { ...seamInvocationEnv('estate-survey', logDir), EPAM_AGENT_NAME: 'estate-survey' }, toolGrant);
   // Scaled to the number of codelines this survey must open. specAgentEnv's flat ceiling of 8
   // is a single-codeline budget; applied to an estate it produced a "greenfield" verdict about
   // a brownfield estate because the sweep could not finish. See surveyToolBudget.
@@ -3805,10 +3824,7 @@ Do not propose a role that duplicates one of the canonical roles already listed 
     EPAM_AGENT_NAME: 'agent-mint',
     EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_PROJECT_AGENTS),
   };
-  if (toolGrant) {
-    _mintEnv.AI_GATE_ALLOW_TOOLS = '1';
-    _mintEnv.EPAM_ALLOWED_TOOLS = toolGrant;
-  }
+  withToolGrant(_mintEnv, toolGrant);
   // AN UNPARSEABLE ANSWER IS NOT A DEAD RUN — AND THE RETRY BELOW CANNOT SEE ONE.
   //
   // The correction loop further down fires on `result.rejected.length`: proposals that PARSED and
@@ -4226,7 +4242,7 @@ async function reviewSurvey({
     ...seamInvocationEnv('survey-review', logDir),
     EPAM_AGENT_NAME: 'survey-review',
   };
-  if (toolGrant) { env.AI_GATE_ALLOW_TOOLS = '1'; env.EPAM_ALLOWED_TOOLS = toolGrant; }
+  withToolGrant(env, toolGrant);
 
   try {
     // AN ANSWER THAT DOES NOT PARSE IS NOT A CLEAN REVIEW.
@@ -4296,8 +4312,246 @@ const TOOL_SURVEY_REVIEW = {
   },
 };
 
+/**
+ * Falsify a PROJECT ROSTER against the canonical roster it derives from.
+ *
+ * Distinct from reviewRoster, which certifies newly MINTED agents. This judges a whole derivation:
+ * every canonical agent specialised for one project. It is handed BOTH paths, because with only
+ * the derived roster a reviewer can check that the text reads well and nothing else — and "reads
+ * well" is what let a plan-conformance opinion become a merge decision on 2026-08-21.
+ *
+ * Returns the library's vocabulary ({verdict: 'approved' | ...}), translated from the seam's own
+ * ('sound' | 'defects_found'). Two vocabularies for one idea is how a caller ends up treating an
+ * unrecognised verdict as success; the translation lives here, at the boundary, once.
+ */
+/** Parse a JSON file, or null. A reviewer that cannot read its inputs must say so, not throw. */
+function _readJsonOrNull(f) {
+  try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; }
+}
+
+async function reviewProjectRoster({
+  promptExec, rosterPath, canonicalPath, codelines, logDir, repoPath, toolGrant,
+}) {
+  // THE REVIEWER IS HANDED THE TEXT IT MUST COMPARE, IN BATCHES.
+  //
+  // It used to receive two paths and be told to read both. A canonical roster and its derived
+  // copy are ~270KB together — roughly 74k tokens of tool output before a single judgement — so
+  // the seam could not actually perform the comparison it was asked for, and answered
+  // 'nothing_to_review'. That verdict was read (correctly) as "the judge did not look", the judge
+  // was retried, and every retry hit the same wall.
+  //
+  // No amount of prompt wording fixes an input that does not fit. The pairs are built here and
+  // reviewed in batches whose size is declared, not guessed, and each batch is a whole number of
+  // agents — an agent's two personas are one unit of meaning and are never split across batches.
+  const _rosterDoc = _readJsonOrNull(rosterPath);
+  const _canonDoc = _readJsonOrNull(canonicalPath);
+  const _entries = (_rosterDoc && _rosterDoc.agents) || {};
+  const _canon = (_canonDoc && _canonDoc.agents && typeof _canonDoc.agents === 'object')
+    ? _canonDoc.agents : (_canonDoc || {});
+  const _personaOf = (v) => (typeof v === 'string' ? v : String((v && v.persona) || ''));
+
+  const _pairs = Object.keys(_entries).map((name) => ({
+    name,
+    derived: _personaOf(_entries[name]),
+    canonical: _personaOf(_canon[(_entries[name] && _entries[name].ancestor) || name]),
+  })).filter((x) => x.derived.trim());
+
+  if (!_pairs.length) {
+    return {
+      verdict: 'review_failed',
+      findings: [],
+      reason: `the roster at ${rosterPath} held no readable entries, so there was nothing to hand a reviewer`,
+    };
+  }
+
+  const _budget = Math.max(4000, Number(process.env.EPAM_ROSTER_REVIEW_BATCH_CHARS || '60000'));
+  const _batches = [];
+  let _cur = [];
+  let _size = 0;
+  for (const pr of _pairs) {
+    const cost = pr.derived.length + pr.canonical.length + pr.name.length + 200;
+    // A single oversized agent still gets its own batch rather than being dropped or cut.
+    if (_cur.length && _size + cost > _budget) { _batches.push(_cur); _cur = []; _size = 0; }
+    _cur.push(pr);
+    _size += cost;
+  }
+  if (_cur.length) _batches.push(_cur);
+
+  const _renderBatch = (batch) => renderEngineTemplate('project-roster-review', {
+    __ROSTER_PATH__: String(rosterPath || ''),
+    __CANONICAL_PATH__: String(canonicalPath || ''),
+    __CODELINE_CONTEXT__: (Array.isArray(codelines) ? codelines : [])
+      .map((c) => `- ${(c && c.name) || c}${c && c.path ? ` (${c.path})` : ''}`).join('\n'),
+    __PAIR_BLOCK__: batch.map((pr) => [
+      `--- AGENT: ${pr.name}`,
+      'CANONICAL:',
+      pr.canonical || '(this agent has no canonical ancestor text)',
+      'DERIVED:',
+      pr.derived,
+    ].join('\n')).join('\n\n'),
+  });
+
+  const env = withToolGrant({
+    ...seamInvocationEnv('project-roster-review', logDir),
+    EPAM_AGENT_NAME: 'project-roster-review',
+    EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_ROSTER_REVIEW),
+  }, toolGrant);
+
+  // THE SEVENTH ARGUMENT IS THE STORY ID, NOT THE TOOL GRANT. Passing the grant here left the
+  // reviewer with no tools — it could not open the roster it was asked to judge, which is why it
+  // answered that there was nothing to review — and put the whole tool list where the story id
+  // belongs, so cost was attributed to a story named after an allow-list. The roster review is
+  // not a story's work, so it carries no story id.
+  // EVERY BATCH IS JUDGED, AND ONE BATCH THAT DID NOT LOOK DOES NOT PASS FOR THE REST.
+  const _results = [];
+  for (let bi = 0; bi < _batches.length; bi += 1) {
+    // eslint-disable-next-line no-await-in-loop
+    const part = await runAgentForJson(
+      promptExec, _renderBatch(_batches[bi]), TOOL_ROSTER_REVIEW, 'ROSTER_REVIEW',
+      logDir ? path.join(logDir, `project-roster-review.batch${bi + 1}.log`) : null,
+      null, '', repoPath || '', env,
+    );
+    _results.push({ part, agents: _batches[bi].map((x) => x.name) });
+  }
+
+  // A batch that produced nothing means those agents were NOT reviewed. Saying so keeps the
+  // three-way distinction the schema draws — examined-and-sound, examined-and-defective,
+  // did-not-examine — true of the whole roster and not just of the last batch to answer.
+  const _unexamined = _results.filter((r) => !r.part || typeof r.part !== 'object'
+    || r.part.verdict === 'nothing_to_review' || !r.part.verdict);
+  if (_unexamined.length) {
+    return {
+      verdict: 'review_failed',
+      findings: _results.flatMap((r) => (r.part && Array.isArray(r.part.findings) ? r.part.findings : [])),
+      reason: `${_unexamined.length} of ${_batches.length} batch(es) were not examined `
+        + `(${_unexamined.flatMap((r) => r.agents).slice(0, 6).join(', ')}...). The roster is not implicated.`,
+    };
+  }
+
+  const payload = {
+    verdict: _results.some((r) => r.part.verdict === 'defects_found') ? 'defects_found' : 'sound',
+    findings: _results.flatMap((r) => (Array.isArray(r.part.findings) ? r.part.findings : [])),
+  };
+
+  // A review that produced nothing is NOT a sound roster. Unparseable output means the check did
+  // not happen, and reading that as approval is the fail-open shape these gates exist to prevent.
+  if (!payload || typeof payload !== 'object') {
+    return { verdict: 'review_failed', reason: 'the review produced no usable verdict', findings: [] };
+  }
+  const findings = Array.isArray(payload.findings) ? payload.findings : [];
+  const blocking = findings.filter((f) => f && f.severity === 'blocking');
+  if (logDir) {
+    try {
+      fs.writeFileSync(path.join(logDir, 'project-roster-review.json'),
+        `${JSON.stringify({ ...payload, findings }, null, 2)}\n`);
+    } catch { /* the verdict still reaches the caller */ }
+  }
+  // 'defects_found' WITH NOTHING FOUND IS NOT A DEFECTIVE ROSTER.
+  //
+  // The two fields have to agree. A verdict of defects_found carrying an empty finding list
+  // condemns the artefact while naming nothing that is wrong with it, and the caller can only
+  // read that as "rejected": it deletes a roster that PASSED its mechanical contract and pays to
+  // generate another, with no evidence anyone could act on or falsify. Live 2026-08-23, this seam
+  // returned exactly {"findings": [], "verdict": "defects_found"}.
+  //
+  // The judge failing to substantiate is a failure OF THE JUDGE. Same treatment as
+  // 'nothing_to_review': retry the judge, leave the artefact alone.
+  if (payload.verdict === 'defects_found' && !findings.length) {
+    return {
+      verdict: 'review_failed',
+      findings,
+      reason: 'the review answered defects_found but listed no findings, so nothing about the '
+        + 'roster was actually contradicted. The roster is not implicated.',
+    };
+  }
+
+  if (payload.verdict === 'sound' && !blocking.length) {
+    return { verdict: 'approved', findings };
+  }
+
+  // A REVIEW THAT EXAMINED NOTHING IS NOT A DEFECTIVE ROSTER.
+  //
+  // 'nothing_to_review' means the reviewer did not look — live 2026-08-23 it returned its own
+  // PLAN as a blocking finding ("PLAN: I will read both roster files...") and that verdict.
+  // Treating it as changes_requested threw away a roster that had PASSED its contract and paid to
+  // generate another, blaming the artefact for the judge's failure. The distinction the schema
+  // draws deliberately — examined-and-sound, examined-and-defective, did-not-examine — has to
+  // survive the translation, or the caller cannot tell which happened.
+  if (payload.verdict === 'nothing_to_review' || !payload.verdict) {
+    return {
+      verdict: 'review_failed',
+      findings,
+      reason: 'the roster review did not examine anything — it returned '
+        + `'${payload.verdict || 'no verdict'}'. The roster is not implicated.`,
+    };
+  }
+
+  // The schema's finding fields are claim/found/checked — NOT finding/description, which is what
+  // this read and why the operator saw "roster-review: " with nothing after it. A rejection whose
+  // reason is empty is a rejection nobody can act on.
+  const describe = (f) => [f.claim, f.found, f.checked]
+    .map((x) => String(x || '').trim())
+    .filter((x) => x && x !== 'N/A')
+    .join(' — ') || '(the finding carried no text)';
+  return {
+    verdict: 'changes_requested',
+    findings,
+    reason: blocking.length
+      ? blocking.map((f) => `${f.agent || '?'}: ${describe(f)}`).join('; ')
+      : `roster review returned '${payload.verdict}'`,
+  };
+}
+
+/**
+ * THE BLOCK THE ROSTER REVIEWER READS — one agent per entry, header then brief.
+ *
+ * Live 2026-08-23: this looked the brief up as `profiles[m.name] || ''` in the CANONICAL profiles
+ * map, which holds the engine's own agents and none of the ones just minted — their briefs are
+ * written to the PROJECT's agent-profiles.json. Every lookup missed, `|| ''` turned the miss into
+ * an empty string, and the reviewer was handed a header with a blank line under it. It reported
+ * "the brief body is entirely empty" for all three agents and blocked the roster twice. It was
+ * right about the text and wrong about the roster, and the run spent two top-rung correction
+ * cycles on a defect that was not there.
+ *
+ * BOTH MAPS ARE READ, because a brief may legitimately live in either: canonical agents carry
+ * theirs in the engine's profiles, minted ones in the project's.
+ *
+ * AND A MISSING BRIEF SAYS SO. `|| ''` could not distinguish "this agent has no brief" from "this
+ * agent is not in this map", so a plumbing failure and a real roster defect rendered identically
+ * and the reviewer could only blame the roster. The reviewer must be able to tell them apart.
+ */
+function buildRosterBriefBlock(minted, profiles, projectProfiles) {
+  // THE MAP MAY BE NESTED. The engine's profiles.json is a flat {name: brief}; the project's
+  // agent-profiles.json is {runId, _what, profiles: {name: brief}}. Reading only the top level
+  // missed every minted brief a second time — the same failure one layer down, found by running
+  // this against the artefacts a real run had just written rather than against a fixture I wrote
+  // to match my own assumption.
+  const unwrap = (map) => ((map && typeof map === 'object' && map.profiles
+    && typeof map.profiles === 'object') ? map.profiles : map);
+  const look = (rawMap, name) => {
+    const map = unwrap(rawMap);
+    if (!map || typeof map !== 'object') return '';
+    const v = map[name];
+    if (typeof v === 'string') return v;
+    // A project map may hold an object per agent; the brief is its text.
+    if (v && typeof v === 'object') return String(v.brief || v.persona || v.systemPrompt || '');
+    return '';
+  };
+  return (Array.isArray(minted) ? minted : []).map((m) => {
+    const brief = look(profiles, m.name) || look(projectProfiles, m.name);
+    const tag = m.kind + (m.codeline ? ': ' + m.codeline : '');
+    const body = brief.trim()
+      ? brief
+      : '(NO BRIEF FOUND for this agent in either the engine or the project profiles — this is a '
+        + 'missing brief, which is a defect in what produced the roster, not an agent that was '
+        + 'given an empty one.)';
+    return ['--- ' + m.name + '  [' + tag + ']', body].join('\n');
+  }).join('\n\n');
+}
+
 async function reviewRoster({
-  promptExec, minted, profiles, codelines, tickets, referencedDocs, logDir, repoPath, toolGrant,
+  promptExec, minted, profiles, projectProfiles, codelines, tickets, referencedDocs, logDir,
+  repoPath, toolGrant,
 }) {
   const _minted = Array.isArray(minted) ? minted : [];
   // AN EMPTY SET IS NOT SOUND — IT IS UNREVIEWED. Returning 'sound' here reported a clean bill of
@@ -4306,11 +4560,7 @@ async function reviewRoster({
   // review said "sound" — true of the empty set, and the run died at assignment.
   if (!_minted.length) return { verdict: 'nothing_to_review', findings: [], reviewed: 0 };
 
-  const briefBlock = _minted.map((m) => {
-    const brief = (profiles && profiles[m.name]) || '';
-    const tag = m.kind + (m.codeline ? ': ' + m.codeline : '');
-    return ['--- ' + m.name + '  [' + tag + ']', brief].join('\n');
-  }).join('\n\n');
+  const briefBlock = buildRosterBriefBlock(_minted, profiles, projectProfiles);
 
   const clBlock = (Array.isArray(codelines) ? codelines : []).map((c) => {
     const d = Array.isArray(c.dependencies) ? c.dependencies : [];
@@ -8580,7 +8830,11 @@ function isValidModelString(model, currentModel, knownValidModels) {
 // use the gate model, defaulting to minimax/MiniMax-M3 like claude.sh's
 // run_prd_change_reviewer.
 function buildGateExec(aiRunnerCmd, env = process.env) {
-  const provider = env.ORCH_GATE_PROVIDER || 'minimax';
+  // NO PROVIDER DEFAULT. `|| 'minimax'` named a provider no configuration asks for — every
+  // project config.env and every launcher sets qwen — so it was unreachable in practice and
+  // wrong when reached. Routing the same model through a different provider is a different
+  // setup, not a detail. Unset now fails at the call instead of routing somewhere unchosen.
+  const provider = env.ORCH_GATE_PROVIDER || '';
   // Persistent writes (PRD/profiles.json) get the highest-quality model
   // available, matching claude.sh's run_prd_change_reviewer precedence
   // (`${ESCALATION_MODEL_HIGH:-${ORCH_GATE_MODEL:-MiniMax-M3}}`). Full agent
@@ -9161,6 +9415,7 @@ module.exports = {
   buildAssignmentPrompt,
   TOOL_ROLE_ASSIGNMENTS,
   reviewRoster,
+  reviewProjectRoster,
   detectivePrescription,
   surveyEstate,
   sanitizeSurvey,
@@ -9170,7 +9425,12 @@ module.exports = {
   reconcileMintTally,
   SURVEY_STATES,
   TOOL_ROSTER_REVIEW,
+  // Exported for the same reason as its siblings: the per-agent harness binds a seam's declared
+  // output schema by reading it from here, and an unexported def reads as 'this seam has none'.
+  TOOL_SURVEY_REVIEW,
   seamInvocationEnv,
+  withToolGrant,
+  buildRosterBriefBlock,
   schemaEnv,
   referencedDocsBlock,
   advanceAgentLadderEscalation,

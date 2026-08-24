@@ -106,7 +106,8 @@ PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
 PRD_FILE="$AUTOMATION_DIR/prd.json"
 REVIEW_LOG="${REVIEW_LOG:-$AUTOMATION_DIR/logs/code-reviews.jsonl}"
 MESSAGES_DIR="${MESSAGES_DIR:-$AUTOMATION_DIR/logs/messages}"
-AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$AUTOMATION_DIR/agents/profiles.json}"
+# shellcheck source=lib/roster-read.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/roster-read.sh"
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
 # THE SEAM DECIDES. seam_ladder_export set EPAM_MODEL to the first rung of the chain this
 # seam's archetype declares; the literal that stood here overrode it silently, so editing the
@@ -226,11 +227,15 @@ if [ -d "$PROJECT_ROOT/.git" ]; then
 fi
 [ -z "$_STORY_DIFF" ] && _STORY_DIFF="(no diff available)"
 
-# Load review-agent profile
+# THE REVIEWER'S IDENTITY COMES FROM THE PROJECT ROSTER. See team-lead-review.sh for the same
+# correction and why: a default naming the engine roster, `// ""` hiding a missing entry, and a
+# one-line reviewer written in code that fired whenever either failed.
 _REVIEW_PROFILE=""
-[ -f "$AGENT_PROFILES_FILE" ] && \
-    _REVIEW_PROFILE=$(jq -r '.["review-agent"] // ""' "$AGENT_PROFILES_FILE" 2>/dev/null)
-[ -z "$_REVIEW_PROFILE" ] && _REVIEW_PROFILE="You are a senior code reviewer."
+if ! _REVIEW_PROFILE=$(roster_persona review-agent 2>&1); then
+    echo "[code-review-cycle] cannot resolve the review-agent persona: ${_REVIEW_PROFILE}" >&2
+    echo "[code-review-cycle] Refusing to review with an identity nobody chose." >&2
+    exit 1
+fi
 
 # Inject previous iteration failure context as anti-context when iteration > 1
 _PRIOR_CONTEXT=""

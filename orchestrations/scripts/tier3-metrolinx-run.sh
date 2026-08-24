@@ -34,6 +34,12 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# shellcheck source=lib/project-config.sh
+. "$SCRIPT_DIR/lib/project-config.sh"
+# The roster answers who may author code — the perimeter reads the same file, so the pre-flight
+# and the thing it predicts cannot disagree.
+# shellcheck source=lib/roster-read.sh
+. "$SCRIPT_DIR/lib/roster-read.sh"
 # Config files are DATA: load them without executing them. See lib/env-file.sh.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/env-file.sh"
 LOG_FILE="/tmp/tier3-metrolinx-jira-$(date +%Y%m%dT%H%M%S)-$$.log"
@@ -63,7 +69,11 @@ error()   { echo -e "${RED}[tier3-metrolinx] ✗${NC} $*" >&2; }
 # original exit status is preserved.
 _archive_run_artifacts() {
   local outcome="$1"
-  local dir="${EPAM_PROJECT_CONFIG_DIR:-$REPO_ROOT/orchestrations/projects/metrolinx}/runs/${ORCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
+  # Assigned separately: `local dir="$(...)"` makes the exit status local's, always 0,
+  # which would swallow the resolver's refusal — the very shape this file was fixed for.
+  local _cfg dir
+  _cfg="$(project_config_dir metrolinx "$REPO_ROOT")" || return 1
+  dir="$_cfg/runs/${ORCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
   mkdir -p "$dir" 2>/dev/null || return 0
   AUTOMATION_DIR="$REPO_ROOT/orchestrations" \
   LOG_DIR="$REPO_ROOT/orchestrations/logs" \
@@ -141,7 +151,7 @@ for arg in "$@"; do [[ "$arg" == "--yes" || "$arg" == "-y" ]] && AUTO_YES=true; 
 # orchestrations/travel-app-prd.json, so a metrolinx run's Jira ingest overwrote
 # the travel-app PRD outright (4 SKY stories -> 1 AMSD story, 2026-07-25). The
 # path now derives from the project identity that already exists a few lines up.
-PRD_FILE="${EPAM_PROJECT_CONFIG_DIR:-$REPO_ROOT/orchestrations/projects/metrolinx}/prd.json"
+PRD_FILE="$(project_config_dir metrolinx "$REPO_ROOT")/prd.json" || exit 1
 
 info "Tier 3 Metrolinx brownfield run — GLM + Kimi multi-model pipeline (USES CREDITS)"
 info "  Jira:    ${JIRA_URL} / project ${JIRA_PROJECT_KEY}"
@@ -242,21 +252,40 @@ fi
     # profiles.json, this check passed, and the run was refused three minutes later —
     # "not permitted to author code" — because the per-project file held roles: []. Verifying the
     # wrong registry is the same as not verifying.
-    _perim_registry="${EPAM_PROJECT_ROLES_FILE:-}"
-    if [ -z "$_perim_registry" ] && [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] && [ -f "${EPAM_PROJECT_CONFIG_DIR}/project-roles.json" ]; then
-      _perim_registry="${EPAM_PROJECT_CONFIG_DIR}/project-roles.json"
-    fi
-    [ -n "$_perim_registry" ] || _perim_registry="$REPO_ROOT/orchestrations/agents/project-roles.json"
-    if [ -f "$_perim_registry" ]; then
-      _unpermitted=$(jq -r --slurpfile reg "$_perim_registry" '[.stories[]? | select((.agentRole // "") != "") | select((.agentRole) as $r | (($reg[0].roles // []) | index($r)) == null) | .id + " -> " + .agentRole] | join("; ")' "$PRD_FILE" 2>/dev/null)
+    # THE SAME SOURCE THE PERIMETER READS — the project roster, and no fallback.
+    #
+    # This tried EPAM_PROJECT_ROLES_FILE, then the project's project-roles.json, then the ENGINE's
+    # copy. That last branch is why the comment above exists: verifying the wrong registry is the
+    # same as not verifying, and an engine fallback verifies epam-cli's own roles against a client
+    # codeline's stories. The perimeter itself now asks the roster; so does this.
+    #
+    # ABSENT means the roster has not been derived yet — a first run, before the mint. Nothing to
+    # verify, and refusing here would block the very run that produces it.
+    if roster_exists 2>/dev/null; then
+      _perim_impl=$(roster_agents_of_kind implementer 2>/dev/null | tr '\n' ' ')
+      # ${NODE_BIN:-node}, not "$NODE_BIN". This launcher never sets NODE_BIN and runs under
+      # `set -u`, so the bare reference was an unbound-variable abort on line 274 — the run died
+      # 39 seconds in, before ingest. bash -n cannot see it: it is a runtime error, not syntax.
+      # lib/roster-read.sh already uses the defaulted form; so does every other node call here.
+      _unpermitted=$("${NODE_BIN:-node}" -e '
+        const fs = require("fs");
+        const prd = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+        const ok = new Set(String(process.argv[2] || "").trim().split(/\s+/).filter(Boolean));
+        const bad = (prd.stories || [])
+          .filter((s) => s && s.agentRole && !ok.has(s.agentRole))
+          .map((s) => `${s.id}:${s.agentRole}`);
+        process.stdout.write(bad.join(" "));
+      ' "$PRD_FILE" "$_perim_impl" 2>/dev/null || echo "")
       if [ -n "$_unpermitted" ]; then
-        error "[preflight] agentRole is not a registered implementer: $_unpermitted"
-        error "[preflight]   The write perimeter reads: $_perim_registry"
-        error "[preflight]   It will refuse the writer with 'not permitted to author code'."
-        error "[preflight]   Add the role to .roles there, or run the mint so it is registered."
+        error "[preflight] agentRole is not an implementer in this project's roster: $_unpermitted"
+        error "[preflight]   The write perimeter reads the same roster and will refuse the writer"
+        error "[preflight]   with 'not permitted to author code'."
+        error "[preflight]   Registered implementers: ${_perim_impl:-(none)}"
         exit 1
       fi
-      info "Pre-flight: every agentRole is a registered implementer in $(basename "$_perim_registry")"
+      info "Pre-flight: every agentRole is an implementer in this project's roster"
+    else
+      info "Pre-flight: no roster yet — it is derived by this run, so there is nothing to verify"
     fi
     info "Pre-flight: every story declares an agentRole the roster holds"
   fi
@@ -333,41 +362,35 @@ echo ""
 # already at its verified baseline.
 info "Predictable teardown: resetting codelines to last verified baseline..."
 #
-# WITH A CODELINE SELECTION, RESET ONLY WHAT THIS LAUNCH WILL RUN.
+# RESET ONLY THE CODELINES THIS RUN DECLARES.
 #
-# The sweep above is correct when the target is discovered: every candidate must be clean because
-# any of them might be chosen. When EPAM_ONLY_CODELINES names the codelines, nothing is being
-# discovered, and the sweep becomes actively destructive — brownfield-preflight-reset.sh runs
-# `git reset --hard <baseline>` plus `clean -fd`, and `reset --hard` MOVES THE BRANCH POINTER.
-# It discards commits, not merely working-tree edits.
+# brownfield-preflight-reset.sh runs `git reset --hard <baseline>` plus `clean -fd`, and
+# `reset --hard` MOVES THE BRANCH POINTER: it discards commits, not merely working-tree edits.
+# So the set it is applied to is the set of repositories this launch may destroy, and that set
+# must never be wider than the run.
 #
-# So without this guard, the intended workflow — finish gotransit, pause, launch metrolinx —
-# would silently destroy the finished codeline, commits included, and the second launch's log
-# would look entirely normal. Losing a completed lane is worse than any state this reset prevents.
+# It used to be scoped by EPAM_ONLY_CODELINES — an operator typing the repository name at
+# launch, matched by substring in both directions. That is deleted. See lib/codeline-scope.sh
+# for why none of its three problems were fixable by choosing a better value.
 #
-# Same variable as the lane selection in run-agent-orchestration.sh, deliberately: two independent
-# selection mechanisms would drift, and here the drift only ever shows up as destroyed work.
-# Matching is on the codeline name, which is the directory name under the codeline root.
+# The scope comes from the PRD this launcher was already handed, and an EMPTY scope resets
+# NOTHING: a run that has not resolved which codeline it belongs to cannot have dirtied one,
+# and sweeping every repository under the root is exactly how a finished codeline gets
+# destroyed by the next launch.
+# shellcheck source=lib/codeline-scope.sh
+. "$SCRIPT_DIR/lib/codeline-scope.sh"
+_scoped=0
 for _cl_dir in "$JIRA_CODELINE_ROOT"/*/; do
   [ -d "${_cl_dir}.git" ] || continue
-  if [ -n "${EPAM_ONLY_CODELINES:-}" ]; then
-    _cl_name="$(basename "${_cl_dir%/}")"
-    _cl_selected=0
-    _orig_ifs="$IFS"
-    IFS='|,'
-    for _sel in ${EPAM_ONLY_CODELINES}; do
-      # The lane list keys on the PRD's codeline name while the reset walks directories, and the
-      # two are not always spelled identically. A containment test in either direction keeps a
-      # selected codeline from being skipped — the safe failure here is resetting one repo too
-      # many, never one too few, because an unreset selected repo starts from unknown state.
-      case "$_cl_name" in *"$_sel"*) _cl_selected=1 ;; esac
-      case "$_sel" in *"$_cl_name"*) _cl_selected=1 ;; esac
-    done
-    IFS="$_orig_ifs"
-    [ "$_cl_selected" = "1" ] || continue
-  fi
+  codeline_in_scope "${_cl_dir%/}" "$PRD_FILE" || continue
+  _scoped=$((_scoped + 1))
   bash "$SCRIPT_DIR/brownfield-preflight-reset.sh" "${_cl_dir%/}" || true
 done
+if [ "$_scoped" -eq 0 ]; then
+  info "  no codeline declared by $PRD_FILE — nothing reset (scope is resolved during the run)"
+else
+  info "  reset $_scoped codeline(s) declared by the PRD"
+fi
 echo ""
 
 # ── Write perimeter: client source is READ-ONLY until a story branch exists ──

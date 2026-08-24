@@ -59,6 +59,14 @@ export OUTPUT_LOGS="$AUTOMATION_DIR/logs/${APP_NAME}"
 # Autonomous test run — never pause indefinitely waiting for operator intervention.
 # A timed-out story is skipped and logged; the run continues.
 export EPAM_PAUSE_ON_TIMEOUT=false
+# THE CONTAMINATION GATE. Without it this launcher started a run on the PREVIOUS run's
+# state: retry counts, ladder position, agent KB, agent-io, review feedback. `--reset`
+# below is NOT this gate — it rewrites PRD story flags and clears checkpoints, nothing
+# else. Six launchers gated and these did not; see lib/pre-run-reset-gate.sh.
+# shellcheck source=lib/pre-run-reset-gate.sh
+. "$SCRIPT_DIR/lib/pre-run-reset-gate.sh"
+pre_run_reset_or_abort --prd "$PRD_FILE"
+
 exec "$SCRIPT_DIR/run-agent-orchestration.sh" \
      --phase "$PHASE" \
      "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}"

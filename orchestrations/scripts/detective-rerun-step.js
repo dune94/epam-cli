@@ -502,7 +502,7 @@ if (require.main !== module) return;
     process.exit(2);
   }
   const LOG_DIR = getArg('--log-dir', process.env.OUTPUT_DIR || path.join(__dirname, '..', 'logs'));
-  const only = getArg('--codelines', process.env.EPAM_ONLY_CODELINES || '')
+  const only = getArg('--codelines', '')
     .split(',').map((x) => x.trim()).filter(Boolean);
   const storyIds = getArg('--story', '').split(',').map((x) => x.trim()).filter(Boolean);
 

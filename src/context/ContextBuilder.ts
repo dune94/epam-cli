@@ -6,6 +6,12 @@ import { getAssetStore, type AssetMatch } from '../assets/AssetStore.js';
 
 interface ContextBuildOptions {
   contextFilePath: string;
+  /**
+   * The tools this agent is actually being given. The capability sentence is derived from it, so
+   * a grant and the prompt describing that grant cannot disagree. Omitted by callers that do not
+   * constrain tools (chat, repl), which then get a line promising nothing specific.
+   */
+  toolNames?: string[];
   systemPromptFile?: string | null;
   projectRoot?: string | null;
   blockConstraints?: Constraint[];
@@ -28,7 +34,32 @@ export interface ConsultationContext {
   }>;
 }
 
-const DEFAULT_SYSTEM_PROMPT = `You are EPAM CLI, an AI coding assistant running in the terminal. You have access to tools to read files, write files, search code, and execute commands. Be concise and helpful. When asked to perform tasks, prefer using tools over explaining what to do.`;
+const PROMPT_IDENTITY = 'You are EPAM CLI, an AI coding assistant running in the terminal.';
+const PROMPT_MANNER = 'Be concise and helpful. When asked to perform tasks, prefer using tools '
+  + 'over explaining what to do.';
+
+/**
+ * THE CAPABILITY SENTENCE IS DERIVED FROM THE GRANT, NEVER ASSERTED OVER IT.
+ *
+ * This used to be one fixed line promising every agent that it could "read files, write files,
+ * search code, and execute commands". Most orchestration seams hold a read-only grant, so the
+ * sentence was false for them, and agents acted on it: two read-only seams spent a full run
+ * planning to write a file, discovering no WriteFile tool, and returning an apology instead of
+ * their verdict — for prompts that never mentioned writing at all.
+ */
+function capabilitySentence(toolNames?: string[]): string {
+  if (!toolNames) {
+    return 'You have access to tools. Use the ones offered to you in this session.';
+  }
+  if (!toolNames.length) {
+    return 'You have NO tools in this session. Answer from what you are given in the prompt.';
+  }
+  return `You have access to exactly these tools, and no others: ${toolNames.join(', ')}. `
+    + 'If a task seems to need a tool that is not in that list, say so in your answer rather '
+    + 'than asking for it — the list is the whole of what you can do.';
+}
+
+const DEFAULT_SYSTEM_PROMPT = `${PROMPT_IDENTITY} ${capabilitySentence(undefined)} ${PROMPT_MANNER}`;
 
 const PENDING_CONSULTATION_FILE = '.epam/pending-consultation.json';
 
@@ -41,16 +72,13 @@ export async function buildSystemPrompt(opts: ContextBuildOptions): Promise<stri
     parts.push(`[CONSTRAINTS — MUST FOLLOW]\n${rules}`);
   }
 
-  // Base system prompt
+  // Base system prompt. The capability sentence reflects THIS agent's tools.
+  const basePrompt = `${PROMPT_IDENTITY} ${capabilitySentence(opts.toolNames)} ${PROMPT_MANNER}`;
   if (opts.systemPromptFile) {
     const custom = await loadContextFile(opts.systemPromptFile);
-    if (custom) {
-      parts.push(custom);
-    } else {
-      parts.push(DEFAULT_SYSTEM_PROMPT);
-    }
+    parts.push(custom || basePrompt);
   } else {
-    parts.push(DEFAULT_SYSTEM_PROMPT);
+    parts.push(basePrompt);
   }
 
   // Project context

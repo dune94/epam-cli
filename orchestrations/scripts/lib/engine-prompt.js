@@ -54,7 +54,13 @@ function stackFacts() {
   try {
     const { execFileSync } = require('child_process');
     const repo = process.env.PROJECT_ROOT || process.env.EPAM_CODELINE_PATH || process.cwd();
-    const roles = path.join(__dirname, '..', '..', 'agents', 'project-roles.json');
+    // THIS PROJECT's roster, not the engine's roles file. This read
+    // agents/project-roles.json — the ENGINE's copy — whatever project was running, so a client
+    // codeline's stack facts named epam-cli's own roles. The roster carries `kind` per agent and
+    // is derived per project every run.
+    const roles = process.env.EPAM_PROJECT_CONFIG_DIR
+      ? path.join(process.env.EPAM_PROJECT_CONFIG_DIR, 'roster.json')
+      : '';
     const out = execFileSync(process.execPath, [
       path.join(__dirname, 'handlers', 'stack-facts.js'), repo, roles,
     ], { encoding: 'utf8', timeout: 15000 });
@@ -122,7 +128,107 @@ function placeholdersIn(body) {
  * @param {Object} values  every placeholder the body uses, exactly — no more, no fewer
  * @returns {string}
  */
+/**
+ * Which layer owns a prompt, resolved from the SEAM REGISTRY rather than a list.
+ *
+ * A template is immutable and generic and is never executed directly — an agent runs THIS
+ * PROJECT's prompt, which the template generated. The exception is the bootstrap set: seams that
+ * run inside the mint, before the project prompt layer exists. A prompt that generates prompts
+ * cannot itself be generated, which is why bootstrap.copyVerbatim exists for the same reason.
+ *
+ * Declared on the seam as `layer: "bootstrap"`, so adding or moving a stage changes one datum and
+ * not a list in code — a hand-kept copy of a derivable fact only ever drifts.
+ *
+ * An id NO seam declares is a fragment composed into another prompt, not something an agent
+ * executes. Those stay generic and take their project content from the prompt they land in.
+ */
+function templateLayerOf(id) {
+  // __dirname, like templatesDir() beside it. The first version called repoRoot(), which this
+  // file does not define — and the ReferenceError landed in the catch below, which returned
+  // 'engine' and let every seam-declared prompt render from the template exactly as before. A
+  // catch that turns a programming error into a permissive default is the fail-open shape this
+  // whole layer exists to remove, and it hid its own bug for one test cycle.
+  const registryPath = path.join(__dirname, '..', '..', 'agents', 'invocation-profiles.json');
+  let reg;
+  try {
+    reg = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+  } catch (e) {
+    // An unreadable registry means the layer of every prompt is unknown. Guessing 'engine' would
+    // render templates for agents; guessing 'project' would halt every seam. Say so instead.
+    throw new Error(
+      `[engine-prompt] cannot read the seam registry at ${registryPath}: ${e && e.message}. `
+      + 'Which layer owns a prompt is undecidable without it.');
+  }
+  const profiles = (reg && reg.profiles) || {};
+  let found = null;
+  (function walk(o) {
+    for (const k in o) {
+      const v = o[k];
+      if (v && typeof v === 'object') { if (v.template === id) found = v; walk(v); }
+    }
+  }(profiles));
+  if (!found) return 'engine';                       // a fragment: no agent executes it
+  return found.layer === 'bootstrap' ? 'bootstrap' : 'project';
+}
+
+/**
+ * Substitute every declared placeholder in ONE pass, so an inserted value is never rescanned.
+ *
+ * Keys are placeholder tokens (`__LIKE_THIS__`) — no regex metacharacters — but they are escaped
+ * anyway, because the day one is not is the day this corrupts something quietly.
+ */
+function substituteOnce(body, keys, values) {
+  if (!keys.length) return body;
+  const esc = (k) => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(keys.map(esc).join('|'), 'g');
+  return body.replace(re, (m) => String(values[m]));
+}
+
 function renderEngineTemplate(id, values, bodyKey) {
+  // A SEAM-DECLARED PROMPT IS NOT THIS RENDERER'S TO EXECUTE.
+  //
+  // 89 template ids were rendered straight from the template layer, 29 of them declared by a
+  // seam — so an agent ran generic text with none of this project's facts in it, and self-heal
+  // had nothing to correct. Enforced here rather than at 25 call sites, because a rule applied
+  // at call sites is a rule the 26th call site does not have.
+  if (templateLayerOf(id) === 'project') {
+    // ROUTED, not refused. Refusing would be correct about the rule and useless in practice: 25
+    // call sites render these, and a rule enforced by breaking every caller is a rule that gets
+    // reverted. The callers were never choosing a LAYER — they were asking for a prompt — so the
+    // renderer answers with the one an agent may actually execute.
+    //
+    // prompt-library refuses to fall back to the template, which is the point: if this project
+    // has no copy, that is a provisioning defect and it surfaces here by name.
+    //
+    // Required lazily: prompt-library imports placeholdersIn from this module, and requiring it
+    // at load time would give one of them a half-initialised copy of the other.
+    // eslint-disable-next-line global-require
+    const lib = require('./prompt-library.js');
+    const projectDir = process.env.EPAM_PROJECT_CONFIG_DIR || '';
+    if (!projectDir) {
+      throw new Error(
+        `[engine-prompt] '${id}' is a seam-declared prompt — an agent executes it, so it renders `
+        + 'from THIS PROJECT\'s copy. EPAM_PROJECT_CONFIG_DIR is unset, so there is no project '
+        + 'to render for, and the template is never executed directly.');
+    }
+    const doc = lib.loadProjectPrompt(id, projectDir, bodyKey ? { part: bodyKey } : undefined);
+
+    // STACK FACTS REACH THIS PATH TOO. The injection below happens after this return, so routing
+    // skipped it and every project prompt declaring __TEST_COMMAND__ failed for a missing value
+    // — a defect introduced by the routing itself, caught because the stack-fact tests render
+    // exactly these ids.
+    //
+    // Same rule as below: only the keys the document DECLARES, and only where the caller has not
+    // supplied one. Merging all of them is what killed four seams in 8f52dab.
+    const merged = { ...(values || {}) };
+    const declaredHere = new Set(placeholdersIn(doc.body));
+    const needStack = STACK_FACT_KEYS.filter((k) => declaredHere.has(k) && !(k in merged));
+    if (needStack.length) {
+      const facts = stackFacts();
+      for (const k of needStack) if (facts[k] !== undefined) merged[k] = facts[k];
+    }
+    return lib.render(doc, merged);
+  }
   const file = templatePath(id);
   let doc;
   try {
@@ -176,28 +282,52 @@ function renderEngineTemplate(id, values, bodyKey) {
     }
   }
 
-  const missing = declared.filter((p) => !supplied.includes(p));
+  // Absence in JavaScript is `undefined`, and a key holding it is still a key: Object.keys lists
+  // it, so a failed lookup passed this check and rendered the word "undefined" into the prompt.
+  const missing = declared.filter((p) => !supplied.includes(p)
+    || values[p] === undefined || values[p] === null);
   if (missing.length) {
     throw new Error(`[engine-prompt] '${id}' is missing values for: ${missing.join(', ')}`);
   }
+  // AN EMPTY VALUE IS SILENCE. Same rule as prompt-library: the renderer refused a MISSING key and
+  // accepted a present-but-empty one, so `|| ''` produced a prompt that looked complete and said
+  // nothing. A placeholder that may legitimately be empty declares it in the template.
+  const _mayBeEmpty = new Set(Array.isArray(doc.mayBeEmpty) ? doc.mayBeEmpty : []);
+  const _blank = declared.filter((p) => !_mayBeEmpty.has(p)
+    && typeof values[p] === 'string' && !values[p].trim());
+  if (_blank.length) {
+    throw new Error(
+      `[engine-prompt] '${id}' was given EMPTY values for: ${_blank.join(', ')}. An empty payload `
+      + 'renders as a blank section and the agent answers about silence. Supply it, or declare the '
+      + "placeholder in the template's `mayBeEmpty` if absent is a real state for it.");
+  }
+
   const unused = supplied.filter((p) => !declared.includes(p));
   if (unused.length) {
     throw new Error(`[engine-prompt] '${id}' was given values it does not use: ${unused.join(', ')}`);
   }
 
-  // Replacer FUNCTION, not a string. A `$&` or `$1` inside a diff, a log, a regex or a JSON
-  // example — all routine in these values — would otherwise be read as a replacement pattern
-  // and corrupt the evidence silently. This bit me while writing this very module: inserting
-  // it with String.replace expanded the `$&` in the comment above.
-  for (const key of declared) {
-    out = out.replace(new RegExp(key, 'g'), () => String(values[key]));
-  }
+  // ONE PASS OVER THE BODY. Replacing each key in turn over the accumulating output meant every
+  // value was re-read by every later key: a diff that mentioned __B__ had __B__'s content
+  // spliced into it, and a diff carrying any double-underscore token — a Python dunder, a C
+  // macro — tripped the leftover check below and killed the render of a complete prompt. A
+  // single alternation pass inserts each value exactly where the BODY asked for it and never
+  // looks at what was inserted.
+  //
+  // Replacer FUNCTION, not a string, so a `$&` or `$1` inside a diff, a log or a JSON example
+  // is inserted literally instead of being read as a replacement pattern.
+  out = substituteOnce(out, declared, values);
 
-  const leftover = placeholdersIn(out);
-  if (leftover.length) {
-    throw new Error(`[engine-prompt] '${id}' still contains placeholders after rendering: ${leftover.join(', ')}`);
+  // The check that means something is on the BODY, not on the result: a body placeholder this
+  // pass did not cover. Scanning the OUTPUT could only ever find tokens that arrived as
+  // evidence, because every body placeholder is in `declared` and every one of them is
+  // replaced.
+  const uncovered = placeholdersIn(String(doc.bodies ? doc.bodies[bodyKey || 'prompt'] : (doc.body || '')))
+    .filter((p) => !declared.includes(p));
+  if (uncovered.length) {
+    throw new Error(`[engine-prompt] '${id}' has placeholders no value covered: ${uncovered.join(', ')}`);
   }
   return out;
 }
 
-module.exports = { renderEngineTemplate, placeholdersIn, templatePath, templatesDir };
+module.exports = { renderEngineTemplate, placeholdersIn, templatePath, templatesDir, substituteOnce };

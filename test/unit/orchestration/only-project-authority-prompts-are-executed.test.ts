@@ -30,7 +30,13 @@ const PROJECT_DIR = join(ROOT, 'orchestrations/projects/metrolinx');
 // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
 const lib = require(LIB);
 
-const VALUES = {
+// EVERY PLACEHOLDER THE PROMPT ACTUALLY DECLARES, filled from the prompt itself. Hand-listing
+// them coupled this suite to a GENERATED artefact: the project prompt gained __MANIFEST_FILE__
+// and __SKILL_NOTE_MAX__ and six tests went red for a reason that had nothing to do with what
+// they assert. The values below that carry meaning are named explicitly and still override;
+// anything else the prompt declares is filled with a marker, because what is under test here is
+// rendering, not the vocabulary of one project's prompt on one day.
+const NAMED: Record<string, string> = {
   __ANALYST_PROFILE__: 'PROFILE',
   __STORY_ID__: 'AMSD-2041',
   __STORY_ROLE__: 'implementation-engineer',
@@ -38,11 +44,15 @@ const VALUES = {
   __SKILL_ADDENDUM__: '(none)',
   __DEPENDENCY_CONTRACTS__: '(none)',
   __VERIFICATION_FAILURE__: 'SyntaxError: Unexpected token export',
-  // Added 2026-08-12 with the analyst's attempt-evidence. Rendering FAILS CLOSED on a missing
-  // value, which is why this test caught the new placeholder immediately — the analyst would
-  // have aborted rather than silently losing the evidence.
   __ATTEMPT_CHANGES__: 'The previous attempt changed NO files — nothing was written.',
 };
+const valuesFor = (id: string, extra: Record<string, unknown> = {}) => {
+  const doc = lib.loadProjectPrompt(id, PROJECT_DIR);
+  const out: Record<string, unknown> = {};
+  for (const ph of lib.placeholdersIn(doc.body)) out[ph] = NAMED[ph] ?? `value for ${ph.replace(/_/g, ' ').trim()}`;
+  return { ...out, ...extra };
+};
+const VALUES = valuesFor('failure-analyst');
 
 describe('the prompt exists as FILES, not as code', () => {
   it('the immutable generic template exists', () => {
@@ -105,16 +115,59 @@ describe('RENDERING IS TOTAL — no placeholder ever reaches a model', () => {
     expect(lib.placeholdersIn(out), 'a placeholder survived into the rendered prompt').toEqual([]);
   });
 
+  // A LOOKUP THAT FOUND NOTHING IS ABSENCE, NOT A VALUE. `p in supplied` is true for a key whose
+  // value is undefined, so the missing-value guard below was defeated by the one shape absence
+  // actually takes in JavaScript: the prompt rendered with the literal word "undefined" where
+  // the evidence belonged, and the agent read it as text. Null is the same shape from JSON.
+  it.each([['undefined', undefined], ['null', null]])(
+    'a value that is %s is ABSENT, not the word — it fails like a missing key', (_label, v) => {
+      const poisoned = { ...VALUES, __VERIFICATION_FAILURE__: v };
+      expect(() => lib.buildPrompt('failure-analyst', PROJECT_DIR, poisoned))
+        .toThrow(/missing values for.*__VERIFICATION_FAILURE__/);
+    });
+
+  it('an EMPTY STRING is REFUSED unless the template says absent is a real state', () => {
+    // THIS ASSERTED THE OPPOSITE, and the opposite is what let a blank section reach three agents
+    // on 2026-08-23. `|| ''` at fifteen call sites turns a failed lookup into a present-but-empty
+    // value; the renderer accepted it, and the prompt looked complete while saying nothing. The
+    // roster reviewer read a header with a blank line under it and blocked a roster twice.
+    //
+    // A failure analyst invoked with NO verification failure has nothing to analyse, so empty here
+    // is a plumbing fault rather than a state. The requirement the old test protected — that
+    // absent and empty are different, and neither may be defaulted — is stronger now: both are
+    // refused, and a placeholder for which absent IS real declares it in its template.
+    expect(() => lib.buildPrompt('failure-analyst', PROJECT_DIR,
+      { ...VALUES, __VERIFICATION_FAILURE__: '' }))
+      .toThrow(/EMPTY values for.*__VERIFICATION_FAILURE__/);
+  });
+
+  it('and a declared mayBeEmpty placeholder still renders when absent', () => {
+    // The escape hatch is real and lives with the prompt: estate-survey declares __DOC_SECTION__
+    // and __DEP_SECTION__, because a survey with no referenced documents is a true state.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+    const { renderEngineTemplate } = require(
+      join(__dirname, '../../../orchestrations/scripts/lib/engine-prompt.js'));
+    const doc = JSON.parse(readFileSync(
+      join(__dirname, '../../../orchestrations/prompts/templates/estate-survey.json'), 'utf8'));
+    expect(doc.mayBeEmpty).toContain('__DOC_SECTION__');
+    void renderEngineTemplate;
+  });
+
   it('a MISSING value is a hard failure — a prompt without its evidence is worse than none', () => {
     const { __VERIFICATION_FAILURE__, ...partial } = VALUES;
     expect(() => lib.buildPrompt('failure-analyst', PROJECT_DIR, partial))
       .toThrow(/missing values for.*__VERIFICATION_FAILURE__/);
   });
 
-  it('an EMPTY value is legitimate and must be passed explicitly', () => {
-    // Empty is a value. Absent is not. Collapsing the two is how evidence goes missing.
-    const out = lib.buildPrompt('failure-analyst', PROJECT_DIR, { ...VALUES, __SKILL_ADDENDUM__: '' });
-    expect(lib.placeholdersIn(out)).toEqual([]);
+  it('an EMPTY value is refused by NAME, so the producer that lost it is findable', () => {
+    // Empty and absent are still different things — and now BOTH are refused, because a producer
+    // cannot tell you which one it meant and the agent cannot tell them apart at all.
+    let msg = '';
+    try {
+      lib.buildPrompt('failure-analyst', PROJECT_DIR, { ...VALUES, __SKILL_ADDENDUM__: '' });
+    } catch (e) { msg = (e as Error).message; }
+    expect(msg).toContain('__SKILL_ADDENDUM__');
+    expect(msg).toMatch(/EMPTY/);
   });
 
   it('values containing $& and $1 are inserted LITERALLY', () => {

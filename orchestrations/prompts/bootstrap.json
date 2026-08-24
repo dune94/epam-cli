@@ -11,24 +11,8 @@
   },
   "generated": [
     "blocker-discipline",
-    "change-reviewer",
-    "cpa-system",
-    "detective-retry-note",
-    "guard-vocabulary-codegraph",
-    "guard-vocabulary-documentation",
-    "manifest-analysis",
-    "prd-change-reviewer-spec",
-    "prd-change-summarizer-tool",
-    "prd-generation",
-    "spec-agent-speckit",
-    "spec-agent-speckit-refine",
-    "spec-coordinator-review",
-    "spec-model-review",
-    "story-kind-hint-defect",
-    "story-kind-hint-other",
-    "test-ownership",
-    "vc-regenerate",
-    "vc-review"
+    "test-ownership"
   ],
-  "_maintenance": "generated[] is derived from the template directory. It fell 35 entries behind during the 2026-08-15/16 migration and the test that exists to catch exactly that was not being run — which is why the guard now runs as part of the full orchestration suite, not beside the file it guards."
+  "_maintenance": "generated[] is derived from the template directory. It fell 35 entries behind during the 2026-08-15/16 migration and the test that exists to catch exactly that was not being run — which is why the guard now runs as part of the full orchestration suite, not beside the file it guards.",
+  "_why_generated_shrank": "2026-08-21: 13 engine-layer ids removed. dc7fb20 deleted their project copies on 2026-08-16 (\"a project copy of an engine-layer prompt can never be executed\") but left them listed here, so the next mint would have regenerated every one — paid work producing files nothing can read. engine-prompt.js renders these from the template. Removed: change-reviewer, detective-retry-note, guard-vocabulary-codegraph, guard-vocabulary-documentation, prd-change-reviewer-spec, spec-agent-speckit, spec-agent-speckit-refine, spec-coordinator-review, spec-model-review, story-kind-hint-defect, story-kind-hint-other, vc-regenerate, vc-review A further 4 removed after reading their call sites: cpa-system and prd-change-summarizer-tool are engine-layer (one uses double quotes, the other renders through a variable, so neither is greppable by id); manifest-analysis and prd-generation are referenced by nothing at all."
 }

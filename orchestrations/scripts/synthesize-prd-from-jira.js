@@ -31,14 +31,16 @@ const argv   = process.argv.slice(2);
 const getArg = (flag, def = '') => { const i = argv.indexOf(flag); return i !== -1 ? argv[i + 1] : def; };
 
 const CLASSIFICATIONS_PATH = getArg('--classifications');
-// NO default, for the same reason as --out below: a built-in template names one project,
-// so a run whose project has no canonical of its own silently inherits that project's
-// identity — its name, its metadata — and looks like a successful synthesis.
-const TEMPLATE_PATH        = getArg('--template', '');
-if (!TEMPLATE_PATH) {
-  console.error('[synthesize-prd] --template is required (no default: a built-in one lends this run another project\'s identity)');
-  process.exit(2);
-}
+// NO TEMPLATE. This read a stored prd.canonical.json and spread the WHOLE FILE into the result,
+// so every value in it governed every run. metrolinx's carried outputDirs:[cdts] — one codeline,
+// frozen in by hand to unblock a failing launch — and resolve-codeline-scope.sh stands aside when
+// a scope is already declared, so discovery never ran and every run was scoped to one repository
+// whatever the ticket said. The same file had already been cleaned twice for the same class: it
+// once described another project's stack, and once carried eight fabricated acceptance criteria.
+//
+// A stored file that survives runs and shapes them is a run inheriting a previous run's
+// conclusions. The tracker is the source of the work; the project's config is the source of its
+// identity; there is no third source.
 // NO default. This defaulted to travel-app-prd.json, so omitting --out silently
 // overwrote the travel-app PRD with whatever project was being synthesized.
 const OUT_PATH             = getArg('--out', '');
@@ -46,7 +48,10 @@ if (!OUT_PATH) {
   console.error('[synthesize-prd] --out is required (no default: it used to overwrite whichever PRD the built-in default named)');
   process.exit(2);
 }
-const PROJECT_NAME         = getArg('--project-name', '');
+// THE PROJECT'S OWN NAME, from the flag or from the environment the run already carries. It came
+// only from --project-name, and the identity otherwise fell back to a stored template's `title`
+// and `project.name` — which is how a run could be labelled with another project's name.
+const PROJECT_NAME         = getArg('--project-name', process.env.PROJECT_NAME || '');
 
 // Configurable: the codeline value that means "spans all codelines, split me"
 // Keep a spanning story WHOLE (one story, N executions) instead of minting
@@ -64,7 +69,7 @@ if (!CLASSIFICATIONS_PATH) {
 // ── Load inputs ────────────────────────────────────────────────────────────
 
 let classifications = JSON.parse(fs.readFileSync(CLASSIFICATIONS_PATH, 'utf8'));
-const template        = JSON.parse(fs.readFileSync(TEMPLATE_PATH, 'utf8'));
+
 
 // ── Codeline discovery ─────────────────────────────────────────────────────
 // Derive codelines from the data — no names hardcoded in this script.
@@ -153,10 +158,7 @@ function getWorktreePath(codeline) {
 
 // ── Template story map ─────────────────────────────────────────────────────
 
-const templateStoryMap = {};
-for (const s of template.stories || []) {
-  templateStoryMap[s.id] = s;
-}
+
 
 // ── Map classification → story ─────────────────────────────────────────────
 
@@ -169,7 +171,8 @@ for (const s of template.stories || []) {
 // story; multi-story runs keep the previous "primary" default so real
 // parallel work still gets worktree lanes.
 function classificationToStory(c, totalStoryCount) {
-  const tmpl = templateStoryMap[c.storyId] || {};
+  // NO STORED STORY. This read a template story with the same id and used it for any field the
+  // ticket left blank — a second, older answer that won by default.
   // AC IMMUTABILITY (AC/VC/TC design, 2026-07-24): for brownfield the story's
   // acceptanceCriteria are the ticket's ORIGINAL ACs — never the ac-gate's
   // description-fabricated enrichedAcs. When a ticket has no ACs, that's fine:
@@ -186,7 +189,6 @@ function classificationToStory(c, totalStoryCount) {
   const defaultGroup = totalStoryCount <= 1 ? 'main' : 'primary';
 
   return {
-    ...tmpl,
     id:                 c.storyId || c.jiraKey,
     jiraKey:            c.jiraKey,
     title:              c.title,
@@ -197,7 +199,7 @@ function classificationToStory(c, totalStoryCount) {
     // "VCs are derived from the description"), so every story reached the spec pass
     // described by its own one-line summary. Live 2026-08-06: 43 characters instead of 395.
     // The template is a fallback for a ticket with no description, never a replacement.
-    description:        c.description || tmpl.description || c.title,
+    description:        c.description || c.title,
     acceptanceCriteria: acs,
     codeline:           c.codeline || DEFAULT_CODELINE,
     status:             'pending',
@@ -212,10 +214,10 @@ function classificationToStory(c, totalStoryCount) {
     // was just always wrong. null means DEFERRED — assignment happens after the project's
     // roles are minted, against the live roster. Downstream must fail loudly on an
     // unassigned role rather than substitute another literal.
-    agentRole:          tmpl.agentRole || null,
-    agentGroup:         tmpl.agentGroup || defaultGroup,
-    effort:             tmpl.effort || c.effort || 'medium',
-    estimate:           tmpl.estimate || 10,
+    agentRole:          null,
+    agentGroup:         defaultGroup,
+    effort:             c.effort || 'medium',
+    estimate:           c.estimate || null,
     acGateVerdict:      c.verdict,
     acGateReason:       c.reason,
     // Carry the Jira ticket type through to the PRD story so the spec pass can
@@ -308,28 +310,28 @@ const stories = classifications.flatMap(c =>
 
 // ── Build implementation order ─────────────────────────────────────────────
 
-function buildImplementationOrder(stories, template) {
-  if (template.implementationOrder) {
-    const knownIds = new Set(stories.map(s => s.id));
-    const result   = {};
-    for (const [phase, ids] of Object.entries(template.implementationOrder)) {
-      result[phase] = ids.filter(id => knownIds.has(id));
-    }
-    const placed   = new Set(Object.values(result).flat());
-    const unplaced = stories.filter(s => !placed.has(s.id));
-    if (unplaced.length > 0) {
-      const lastPhase = Object.keys(result).pop() || 'core';
-      result[lastPhase] = [...(result[lastPhase] || []), ...unplaced.map(s => s.id)];
-    }
-    return result;
-  }
-  return { core: stories.map(s => s.id) };
+// THE ORDER IS THE TICKETS'. It used to come from a stored template's implementationOrder, which
+// listed story ids from an earlier run; ids that no longer existed were filtered out and whatever
+// remained decided the order of work.
+function buildImplementationOrder(stories) {
+  return { core: stories.map((s) => s.id) };
 }
 
 // ── Build project config ───────────────────────────────────────────────────
 
-const project = { ...template.project };
+// IDENTITY FROM THE PROJECT'S OWN CONFIG. Not a stored file: PROJECT_NAME and JIRA_PROJECT_KEY
+// are what the project declares about itself, and they are already required for the run to
+// address the right tracker and the right estate.
+//
+// NO STACK. It used to arrive from the template — one language, runtime, framework and test
+// runner asserted for a whole estate, and get_project_context() flattens it into every agent's
+// prompt. metrolinx is 33 repositories, including .NET ones. Stack is a per-codeline fact and the
+// engine already derives it per codeline (codeline-facts.json, lib/handlers/stack-facts.js).
+//
+// NO SCOPE. outputDirs below is written only from codelines this run actually resolved.
+const project = {};
 if (PROJECT_NAME) project.name = PROJECT_NAME;
+if (process.env.PROJECT_DESCRIPTION) project.description = process.env.PROJECT_DESCRIPTION;
 
 const outputDirs = allCodelines
   .map(cl => ({ codeline: cl, path: getWorktreePath(cl) }))
@@ -350,16 +352,19 @@ if (outputDirs.length > 0) {
 // ── Assemble PRD ───────────────────────────────────────────────────────────
 
 const synthesizedPrd = {
-  ...template,
   id:            `jira-sourced-${Date.now()}`,
-  title:         PROJECT_NAME || template.title,
+  title:         PROJECT_NAME || '',
+  version:       '1.0.0',
   lastUpdated:   new Date().toISOString().slice(0, 10),
   source:        'jira',
   sourceProject: process.env.JIRA_PROJECT_KEY || '',
   project,
-  implementationOrder: buildImplementationOrder(stories, template),
+  implementationOrder: buildImplementationOrder(stories),
   stories,
-  currentIteration: (template.currentIteration || 0) + 1,
+  // FRESH EVERY RUN. This was (template.currentIteration || 0) + 1, so the count advanced from
+  // whatever a stored file happened to hold — 7, when this was found. The PRD is ingested and
+  // does not survive the run, so its first iteration is its first.
+  currentIteration: 1,
 };
 
 // ── Write output ───────────────────────────────────────────────────────────

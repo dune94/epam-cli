@@ -4,7 +4,7 @@
  * it). Pure functions, no I/O — no mocking needed, real calls throughout.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 const {
   adapt,
@@ -90,6 +90,21 @@ describe('sizeLabelToEffort — a real Jira grooming signal, consulted before th
 });
 
 describe('mapStatus', () => {
+  // THE VOCABULARY IS THE PROJECT'S, so these declare it exactly as a project's config.env does.
+  // They used to pass with nothing declared, because the engine matched the English words
+  // itself — which meant a workflow in any other language classified everything as pending, and
+  // `completed` gates whether a story is skipped. The REQUIREMENT is unchanged: these words map
+  // this way. What moved is who says so.
+  const DECLARED = { completed: 'Done,Closed,Resolved', inProgress: 'In Progress,Review,Testing' };
+  beforeEach(() => {
+    process.env.JIRA_STATUS_COMPLETED = DECLARED.completed;
+    process.env.JIRA_STATUS_IN_PROGRESS = DECLARED.inProgress;
+  });
+  afterEach(() => {
+    delete process.env.JIRA_STATUS_COMPLETED;
+    delete process.env.JIRA_STATUS_IN_PROGRESS;
+  });
+
   it.each([
     ['Done', 'completed'],
     ['Closed', 'completed'],
@@ -103,6 +118,14 @@ describe('mapStatus', () => {
     ['', 'pending'],
   ])('maps status "%s" to "%s"', (input, expected) => {
     expect(mapStatus(input)).toBe(expected);
+  });
+
+  it('classifies NOTHING when the project declares nothing', () => {
+    // The half the old suite could not express: with no declaration the engine has no opinion,
+    // and a status it has not been told about must not be read as finished.
+    delete process.env.JIRA_STATUS_COMPLETED;
+    delete process.env.JIRA_STATUS_IN_PROGRESS;
+    expect(mapStatus('Done')).toBe('pending');
   });
 
   it('handles undefined/null gracefully as pending', () => {
@@ -223,25 +246,53 @@ describe('adapt — full payload normalization', () => {
     expect(adapt(noSummary)).toBeNull();
   });
 
-  it('returns null for unsupported issue types (e.g. Epic)', () => {
+  it('returns null for a type OUTSIDE the vocabulary the project declared', () => {
+    // The filter is the project's now. Undeclared it filters nothing, because an empty backlog
+    // is the least visible way for an ingest to fail — a project whose work is "Defect" used to
+    // get exactly that, silently.
+    process.env.JIRA_ISSUE_TYPES = 'Story,Task,Bug,Sub-task,Subtask';
     expect(adapt(makeIssuePayload({ issuetype: { name: 'Epic' } }))).toBeNull();
+    delete process.env.JIRA_ISSUE_TYPES;
   });
 
-  it('accepts all supported issue types: story, task, bug, sub-task, subtask', () => {
+  it('and ingests that same type when NOTHING is declared', () => {
+    delete process.env.JIRA_ISSUE_TYPES;
+    expect(adapt(makeIssuePayload({ issuetype: { name: 'Epic' } }))).not.toBeNull();
+  });
+
+  it('accepts every type the project declares', () => {
+    process.env.JIRA_ISSUE_TYPES = 'Story,Task,Bug,Sub-task,Subtask';
     for (const t of ['Story', 'Task', 'Bug', 'Sub-task', 'Subtask']) {
       const result = adapt(makeIssuePayload({ issuetype: { name: t } }));
       expect(result, `issue type ${t} should be accepted`).not.toBeNull();
     }
+    delete process.env.JIRA_ISSUE_TYPES;
   });
 
-  it('the "qa-engineer" agentRole branch is currently UNREACHABLE: none of the 5 allowed issue types (story/task/bug/sub-task/subtask) contain "test" or "qa" as a substring, so agentRole is always "engineer" in practice', () => {
-    for (const t of ['Story', 'Task', 'Bug', 'Sub-task', 'Subtask']) {
-      const result = adapt(makeIssuePayload({ issuetype: { name: t } }));
-      expect(result?.agentRole, `issue type ${t}`).toBe('engineer');
+  // WAS: 'the "qa-engineer" agentRole branch is currently UNREACHABLE'. It was unreachable because
+  // the role was decided by whether the type name contained "test" or "qa", and the five types the
+  // engine allowed contained neither — a branch that could only ever fire for a type the filter
+  // above it had already rejected. Both halves of that were the engine guessing at English.
+  //
+  // The routing is declared now, so the branch is reachable by saying so, in any language.
+  it('routes to the QA role for the types the project names, and not otherwise', () => {
+    process.env.JIRA_QA_ISSUE_TYPES = 'Test,Prüfung';
+
+    const qa = adapt(makeIssuePayload({ issuetype: { name: 'Test' } }));
+    expect(qa?.agentRole, 'a declared QA type did not route to the QA role').toBe('qa-engineer');
+
+    const nonLatin = adapt(makeIssuePayload({ issuetype: { name: 'Prüfung' } }));
+    expect(nonLatin?.agentRole).toBe('qa-engineer');
+
+    for (const t of ['Story', 'Task', 'Bug']) {
+      expect(adapt(makeIssuePayload({ issuetype: { name: t } }))?.agentRole, t).toBe('engineer');
     }
-    // An issue type that WOULD trigger qa-engineer ("Test") is rejected
-    // entirely by the supportedTypes filter before agentRole is ever computed.
-    expect(adapt(makeIssuePayload({ issuetype: { name: 'Test' } }))).toBeNull();
+    delete process.env.JIRA_QA_ISSUE_TYPES;
+  });
+
+  it('and an English type name is NOT special when nothing is declared', () => {
+    delete process.env.JIRA_QA_ISSUE_TYPES;
+    expect(adapt(makeIssuePayload({ issuetype: { name: 'Test' } }))?.agentRole).toBe('engineer');
   });
 
   it('detects the "urgent" label case-insensitively, including object-shaped labels', () => {
@@ -255,11 +306,16 @@ describe('adapt — full payload normalization', () => {
     expect(withoutUrgent?.urgent).toBe(false);
   });
 
-  it('extracts epicKey from fields.epic, customfield_10014, or parent.key, in that precedence', () => {
+  it('extracts epicKey from fields.epic, the DECLARED field, or parent.key, in that precedence', () => {
+    // customfield_10014 was written into the engine and is not this tenant's epic link at all —
+    // on the live instance it is customfield_10008, so the hardcoded id read as absent and the
+    // value survived only by falling through to parent.key.
+    process.env.JIRA_FIELD_EPIC_LINK = 'customfield_10008';
+
     const fromEpic = adapt(makeIssuePayload({ epic: 'AMSD-1' }));
     expect(fromEpic?.epicKey).toBe('AMSD-1');
 
-    const fromCustomField = adapt(makeIssuePayload({ customfield_10014: 'AMSD-2' }));
+    const fromCustomField = adapt(makeIssuePayload({ customfield_10008: 'AMSD-2' }));
     expect(fromCustomField?.epicKey).toBe('AMSD-2');
 
     const fromParent = adapt(makeIssuePayload({ parent: { key: 'AMSD-3' } }));
@@ -267,12 +323,23 @@ describe('adapt — full payload normalization', () => {
 
     const noEpic = adapt(makeIssuePayload());
     expect(noEpic?.epicKey).toBeNull();
+    delete process.env.JIRA_FIELD_EPIC_LINK;
   });
 
-  it('marks completed:true and status:"completed" when the Jira status is Done', () => {
+  it('marks completed:true when the status is one the project calls finished', () => {
+    process.env.JIRA_STATUS_COMPLETED = 'Done,Closed,Resolved';
     const result = adapt(makeIssuePayload({ status: { name: 'Done' } }));
     expect(result?.status).toBe('completed');
     expect(result?.completed).toBe(true);
+    delete process.env.JIRA_STATUS_COMPLETED;
+  });
+
+  it('and does NOT mark it finished when the project has said nothing', () => {
+    // `completed` decides whether a story is skipped. Reading an undeclared word as finished is
+    // the one error that loses work silently.
+    delete process.env.JIRA_STATUS_COMPLETED;
+    const result = adapt(makeIssuePayload({ status: { name: 'Done' } }));
+    expect(result?.completed).toBe(false);
   });
 
   /**

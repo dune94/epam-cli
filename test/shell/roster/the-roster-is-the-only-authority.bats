@@ -1,0 +1,296 @@
+#!/usr/bin/env bats
+# ─────────────────────────────────────────────────────────────────────────────
+# THE PROJECT ROSTER IS THE ONLY PLACE AN AGENT'S IDENTITY COMES FROM.
+#
+# AGENT_PROFILES_FILE defaulted to orchestrations/agents/profiles.json — the roster shared with
+# the engine — at six call sites. That default is not a safety net; it is the path that gave a
+# client-codeline review a persona describing this repository, and it would survive every test
+# written about the new roster because it only fires when resolution fails.
+#
+# So: no default, and a run that cannot resolve its roster refuses rather than reading the engine
+# layer. Absence is a defect to report, never a shape to degrade into.
+#
+# The three files that used to hold this between them — agent-profiles.json, project-roles.json,
+# project-investigators.json — collapse into roster.json, where `kind` is a field. Origin and
+# permission are properties of an entry, not reasons for another file.
+# ─────────────────────────────────────────────────────────────────────────────
+
+setup() {
+    REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
+    SCRIPTS="$REPO_ROOT/orchestrations/scripts"
+    LIB="$SCRIPTS/lib/project-roster.js"
+    NODE="${NODE_BIN:-$HOME/.nvm/versions/node/v20.20.0/bin/node}"
+    command -v "$NODE" >/dev/null 2>&1 || NODE=node
+    WORK="$(mktemp -d)"
+}
+teardown() { rm -rf "$WORK"; }
+
+# A roster on disk, built through the REAL library so its shape cannot drift from the producer's.
+make_roster() {  # $1 = dir
+    "$NODE" -e '
+      const fs = require("fs"), path = require("path");
+      const m = require(process.argv[1]);
+      const dir = process.argv[2];
+      const canonical = { "review-agent": "You review a change.", "typescript-engineer": "You implement." };
+      fs.mkdirSync(dir + "/logs", { recursive: true });
+      fs.writeFileSync(dir + "/canonical.json", JSON.stringify(canonical));
+      const produce = async ({ canonicalCopyPath, outPath }) => {
+        const c = JSON.parse(fs.readFileSync(canonicalCopyPath, "utf8"));
+        const agents = {};
+        for (const [n, p] of Object.entries(c))
+          agents[n] = { persona: "[project] " + p, kind: n.includes("engineer") ? "implementer" : "seam",
+                        ancestor: n, derivedFromSha256: m.personaDigest(p) };
+        agents["acme-detective"] = { persona: "You investigate this codeline.", kind: "investigator",
+                                     ancestor: "review-agent", derivedFromSha256: m.personaDigest(c["review-agent"]) };
+        fs.mkdirSync(path.dirname(outPath), { recursive: true });
+        fs.writeFileSync(outPath, JSON.stringify({ agents }, null, 2));
+      };
+      m.buildProjectRoster({ canonicalPath: dir + "/canonical.json", logDir: dir + "/logs",
+        projectConfigDir: dir + "/project", produce, review: async () => ({ verdict: "approved" }),
+        attempts: 1, log: () => {} }).then(() => process.stdout.write("ok"));
+    ' "$LIB" "$1"
+}
+
+# ── the read path ────────────────────────────────────────────────────────────
+
+@test "the library resolves an agent's persona FROM THE ROSTER" {
+    run make_roster "$WORK"
+    [ "$output" = "ok" ]
+    run "$NODE" -e '
+      const m = require(process.argv[1]);
+      process.stdout.write(m.personaFor("review-agent", process.argv[2]) || "");' "$LIB" "$WORK/project"
+    [[ "$output" == "[project]"* ]] || { echo "the roster's persona was not returned: $output"; false; }
+}
+
+@test "an ABSENT roster REFUSES — it never degrades to the engine layer" {
+    run "$NODE" -e '
+      const m = require(process.argv[1]);
+      try { m.personaFor("review-agent", process.argv[2]); process.stdout.write("RETURNED"); }
+      catch (e) { process.stdout.write("REFUSED: " + e.message); }' "$LIB" "$WORK/nonexistent"
+    [[ "$output" == REFUSED* ]] || { echo "a missing roster did not refuse: $output"; false; }
+    # and the refusal must not point anyone at the shared file as a workaround
+    [[ "$output" != *"agents/profiles.json"* ]] || { echo "the refusal suggests the engine layer"; false; }
+}
+
+@test "an agent ABSENT FROM the roster refuses too — silence is not a persona" {
+    run make_roster "$WORK"
+    run "$NODE" -e '
+      const m = require(process.argv[1]);
+      try { const p = m.personaFor("no-such-agent", process.argv[2]);
+            process.stdout.write("RETURNED:" + JSON.stringify(p)); }
+      catch (e) { process.stdout.write("REFUSED: " + e.message); }' "$LIB" "$WORK/project"
+    [[ "$output" == REFUSED* ]] || { echo "an unknown agent produced a value: $output"; false; }
+}
+
+@test "NO CONSUMER falls back to the engine roster" {
+    # The shape that matters is `:-.../agents/profiles.json` — a default that only fires when
+    # resolution fails, and therefore only in the case the design exists to prevent.
+    # Executable lines only. Both scans matched their own documentation once the comments
+    # explaining what was removed quoted the removed shape — a scanner that reads prose reports
+    # the fix as the defect.
+    bad=$(grep -rnE 'AGENT_PROFILES_FILE:?-[^}]*agents/profiles\.json' "$SCRIPTS" --include=*.sh 2>/dev/null \
+          | grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' || true)
+    [ -z "$bad" ] || {
+        echo "consumers still default to the shared engine roster:"
+        echo "$bad"
+        false
+    }
+}
+
+# ── one file ─────────────────────────────────────────────────────────────────
+
+@test "KIND is a field on the entry, not a separate registry" {
+    run make_roster "$WORK"
+    [ "$(jq -r '.agents["acme-detective"].kind' "$WORK/project/roster.json")" = "investigator" ]
+    [ "$(jq -r '.agents["typescript-engineer"].kind' "$WORK/project/roster.json")" = "implementer" ]
+}
+
+@test "the library answers WHO MAY AUTHOR CODE from the roster" {
+    # The write perimeter's question. It reads project-roles.json today; the roster must be able
+    # to answer it, or the perimeter cannot move.
+    run make_roster "$WORK"
+    run "$NODE" -e '
+      const m = require(process.argv[1]);
+      process.stdout.write(m.agentsOfKind("implementer", process.argv[2]).join(","));' "$LIB" "$WORK/project"
+    [ "$output" = "typescript-engineer" ] || { echo "implementers: $output"; false; }
+    run "$NODE" -e '
+      const m = require(process.argv[1]);
+      process.stdout.write(m.agentsOfKind("investigator", process.argv[2]).join(","));' "$LIB" "$WORK/project"
+    [ "$output" = "acme-detective" ] || { echo "investigators: $output"; false; }
+}
+
+@test "and it refuses that question too when there is no roster" {
+    # A perimeter that reads an empty implementer list would lock the codeline; one that reads a
+    # defaulted list would open it. Neither may happen silently.
+    run "$NODE" -e '
+      const m = require(process.argv[1]);
+      try { m.agentsOfKind("implementer", process.argv[2]); process.stdout.write("RETURNED"); }
+      catch (e) { process.stdout.write("REFUSED"); }' "$LIB" "$WORK/nonexistent"
+    [ "$output" = "REFUSED" ]
+}
+
+# ── the SHELL helper, executed — not the library behind it ───────────────────
+#
+# These functions can stop a run, so the guard ratchet requires a test that names them. They are
+# also the actual receivers: the consumers call roster_persona and roster_agents_of_kind, and a
+# library that behaves correctly behind a helper that swallows its exit code is still broken.
+
+load_helper() {
+    export NODE_BIN="$NODE"
+    # shellcheck disable=SC1090
+    . "$SCRIPTS/lib/roster-read.sh"
+}
+
+@test "roster_dir refuses when the project is not declared" {
+    load_helper
+    run env -u EPAM_PROJECT_CONFIG_DIR bash -c ". '$SCRIPTS/lib/roster-read.sh'; roster_dir"
+    [ "$status" -ne 0 ] || { echo "roster_dir returned success with no project: $output"; false; }
+    [[ "$output" == *"EPAM_PROJECT_CONFIG_DIR"* ]]
+}
+
+@test "roster_file names the roster inside the project dir" {
+    load_helper
+    run env EPAM_PROJECT_CONFIG_DIR="$WORK/project" bash -c ". '$SCRIPTS/lib/roster-read.sh'; roster_file"
+    [ "$output" = "$WORK/project/roster.json" ]
+}
+
+@test "roster_persona returns the persona, and FAILS for an unknown agent" {
+    run make_roster "$WORK"
+    load_helper
+    run env NODE_BIN="$NODE" EPAM_PROJECT_CONFIG_DIR="$WORK/project" \
+        bash -c ". '$SCRIPTS/lib/roster-read.sh'; roster_persona review-agent"
+    [ "$status" -eq 0 ] || { echo "$output"; false; }
+    [[ "$output" == "[project]"* ]]
+
+    run env NODE_BIN="$NODE" EPAM_PROJECT_CONFIG_DIR="$WORK/project" \
+        bash -c ". '$SCRIPTS/lib/roster-read.sh'; roster_persona no-such-agent"
+    [ "$status" -ne 0 ] || { echo "an unknown agent succeeded — that is an empty system prompt"; false; }
+    # a stack trace in a run log reads as a pipeline crash, not a stated defect
+    [[ "$output" != *"at Object."* ]] || { echo "the refusal is a node stack trace"; false; }
+}
+
+@test "roster_persona FAILS when the roster is absent — never an empty string" {
+    load_helper
+    run env NODE_BIN="$NODE" EPAM_PROJECT_CONFIG_DIR="$WORK/nowhere" \
+        bash -c ". '$SCRIPTS/lib/roster-read.sh'; roster_persona review-agent"
+    [ "$status" -ne 0 ]
+    # (a `[ ... ] || true` line stood here and asserted nothing — removed rather than left to
+    #  read as a check)
+    [[ "$output" != *"agents/profiles.json"* ]] || { echo "the refusal points at the engine roster"; false; }
+}
+
+@test "roster_agents_of_kind answers the write perimeter's question, and refuses without a roster" {
+    run make_roster "$WORK"
+    load_helper
+    run env NODE_BIN="$NODE" EPAM_PROJECT_CONFIG_DIR="$WORK/project" \
+        bash -c ". '$SCRIPTS/lib/roster-read.sh'; roster_agents_of_kind implementer"
+    [ "$status" -eq 0 ]
+    [ "$output" = "typescript-engineer" ]
+
+    run env NODE_BIN="$NODE" EPAM_PROJECT_CONFIG_DIR="$WORK/nowhere" \
+        bash -c ". '$SCRIPTS/lib/roster-read.sh'; roster_agents_of_kind implementer"
+    [ "$status" -ne 0 ] || {
+        echo "an absent roster produced an implementer list — that either locks or opens the codeline"
+        false
+    }
+}
+
+@test "roster_exists REPORTS absence and never chooses a fallback" {
+    run make_roster "$WORK"
+    load_helper
+    run env EPAM_PROJECT_CONFIG_DIR="$WORK/project" \
+        bash -c ". '$SCRIPTS/lib/roster-read.sh'; roster_exists"
+    [ "$status" -eq 0 ]
+    run env EPAM_PROJECT_CONFIG_DIR="$WORK/nowhere" \
+        bash -c ". '$SCRIPTS/lib/roster-read.sh'; roster_exists"
+    [ "$status" -ne 0 ]
+}
+
+# ── the consumers ────────────────────────────────────────────────────────────
+
+@test "EVERY persona read goes through the roster helper, not a jq into the shared file" {
+    # The old shape was `jq -r '.["review-agent"] // ""' "$AGENT_PROFILES_FILE"` — a default
+    # naming the engine roster, and `// ""` turning a missing entry into an empty system prompt.
+    bad=$(grep -rn "jq -r .*AGENT_PROFILES_FILE" "$SCRIPTS" --include=*.sh 2>/dev/null \
+          | grep -v 'lib/roster-read.sh' \
+          | grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' || true)
+    [ -z "$bad" ] || {
+        echo "consumers still read a persona by jq-ing the shared profiles file:"
+        echo "$bad"
+        false
+    }
+}
+
+@test "the reviewer's persona comes from the roster, and a missing one STOPS it" {
+    # team-lead-review.sh ran with an empty __REVIEW_PROFILE__ and said nothing. An empty persona
+    # must be a refusal, because it is indistinguishable from a terse one once rendered.
+    blk=$(grep -n 'roster_persona' "$SCRIPTS/team-lead-review.sh" | head -1)
+    [ -n "$blk" ] || { echo "team-lead-review.sh does not read the roster"; false; }
+    ctx=$(awk '/roster_persona/{f=1} f{print; if(++n>=8) exit}' "$SCRIPTS/team-lead-review.sh")
+    [[ "$ctx" == *"error"* || "$ctx" == *"exit"* || "$ctx" == *"return 1"* ]] || {
+        echo "a failed persona read does not stop the reviewer:"; echo "$ctx"; false; }
+}
+
+@test "no consumer sources the roster helper without using it" {
+    # A library sourced and never called LOOKS wired. plan-fidelity-gate.sh sat that way for weeks.
+    # An actual source line, not a mention: writer-retest.sh names the helper in a comment
+    # explaining why it no longer sets AGENT_PROFILES_FILE, and a scan for the string reported
+    # that comment as a file that sources and ignores it.
+    for f in $(grep -rlE '^[[:space:]]*(\.|source)[[:space:]]+.*roster-read\.sh' "$SCRIPTS" --include=*.sh \
+               | grep -v 'lib/roster-read.sh'); do
+        grep -qE 'roster_persona|roster_agents_of_kind|roster_file|roster_exists' "$f" || {
+            echo "$f sources the roster helper and never calls it"; false; }
+    done
+}
+
+# ── lifecycle ────────────────────────────────────────────────────────────────
+
+@test "the pre-run reset CLEARS the project roster — it is a run output" {
+    # Regenerated every launch. A roster that survives is a stored artefact with a lifetime, and
+    # the next run's agents would be whoever the last run happened to derive — the two-clock
+    # problem that left 40 project prompts stale against their templates.
+    blk=$(awk 'index($0,"_ROSTER_FILE=")||f{f=1;print; if(f&&/^fi$/) exit}' "$SCRIPTS/pre-run-reset.sh")
+    [ -n "$blk" ] || { echo "pre-run-reset.sh does not clear the project roster"; false; }
+
+    d="$WORK/lifecycle"; mkdir -p "$d"
+    echo '{"agents":{"x":{"persona":"p","kind":"seam","ancestor":"x","derivedFromSha256":"d"}}}' > "$d/roster.json"
+    run bash -c '
+        EPAM_PROJECT_CONFIG_DIR='"$d"'; info(){ :; }; fail_contamination(){ echo "CONTAMINATED"; exit 1; }
+        '"$blk"'
+        [ -f '"$d"'/roster.json ] && echo "SURVIVED" || echo "CLEARED"'
+    [ "$status" -eq 0 ] || { echo "$output"; false; }
+    [[ "$output" == *"CLEARED"* ]] || { echo "a prior run's roster survived the reset: $output"; false; }
+}
+
+@test "and clearing it is not silent — the next reader must know it went" {
+    blk=$(awk 'index($0,"_ROSTER_FILE=")||f{f=1;print; if(f&&/^fi$/) exit}' "$SCRIPTS/pre-run-reset.sh")
+    [[ "$blk" == *"info"* || "$blk" == *"log"* ]] || {
+        echo "the roster is deleted with no trace in the run log"; false; }
+}
+
+@test "the launcher's write-perimeter preflight reads the ROSTER, with no engine fallback" {
+    # It tried EPAM_PROJECT_ROLES_FILE, then the project's project-roles.json, then the ENGINE's
+    # copy — and that last branch verifies epam-cli's own roles against a client codeline's
+    # stories. The file's own comment says it: verifying the wrong registry is the same as not
+    # verifying. The perimeter asks the roster; the pre-flight that PREDICTS the perimeter must
+    # ask the same thing, or the two can disagree.
+    blk=$(awk '/THE SAME SOURCE THE PERIMETER READS/{f=1} f{print; if(/nothing to verify/) exit}' \
+          "$SCRIPTS/../tier3-metrolinx-run.sh" 2>/dev/null \
+          || awk '/THE SAME SOURCE THE PERIMETER READS/{f=1} f{print; if(/nothing to verify/) exit}' \
+             "$REPO_ROOT/orchestrations/scripts/tier3-metrolinx-run.sh")
+    [ -n "$blk" ] || { echo "the pre-flight block is gone — this test is stale"; false; }
+    [[ "$blk" == *"roster_agents_of_kind implementer"* ]] || {
+        echo "the pre-flight does not ask the roster"; false; }
+    [[ "$blk" != *"orchestrations/agents/project-roles.json"* ]] || {
+        echo "the engine-level fallback is still there"; false; }
+}
+
+@test "stack facts derive the implementer from the roster, not a separate registry" {
+    d="$WORK/sf"; mkdir -p "$d"
+    printf '%s' '{"agents":{"acme-engineer":{"kind":"implementer"},"acme-detective":{"kind":"investigator"}}}' \
+        > "$d/roster.json"
+    run "$NODE" "$SCRIPTS/lib/handlers/stack-facts.js" "$REPO_ROOT" "$d/roster.json"
+    [ "$status" -eq 0 ] || { echo "$output"; false; }
+    [[ "$output" == *"acme-engineer"* ]] || {
+        echo "the roster's implementer did not reach the stack facts: $output"; false; }
+}

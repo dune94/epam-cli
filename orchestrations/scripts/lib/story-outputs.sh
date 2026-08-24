@@ -192,3 +192,54 @@ story_outputs_tests_for() {
 story_outputs_sources() {
     story_outputs_files "$1" "$2" | grep -v -E "$_STORY_OUTPUTS_TEST_RE" || true
 }
+
+# ── THE RUNG THAT PRODUCED IT ────────────────────────────────────────────────
+#
+# Operator, 2026-08-22: "if writer's model moves up ladder, the reviewer must follow along and
+# use the same rung EXACT setup the writer used to converge. No hard coding. No guards.
+# Persistence."
+#
+# A RUNG IS NOT A MODEL. The writer's ladder moves model, provider, reasoning effort and
+# temperature together — rung 1 sets effort medium / temp 0, rung 2 escalates the model, rung 3
+# goes effort high / temp 0.7 — so a reviewer handed only the model still judges converged work
+# on a configuration the writer never ran.
+#
+# WRITTEN ON EVERY ATTEMPT, at the point the rung is settled and before the writer is invoked
+# (claude.sh, immediately after the escalation block closes). Deliberately not on a success
+# path: the last write is by definition the rung that produced the final output, whatever
+# happened on the way there, and a story that ends in rejection still has a real rung.
+#
+# Why persisted rather than passed in memory: run-agent-orchestration.sh spawns the writer as a
+# CHILD PROCESS per story (:2333) and the reviewer as a separate process per cycle (:7909). No
+# in-memory value crosses that. The reviewer's own ladder resume already works this way, for
+# this same reason.
+_story_rung_file() { echo "$1/story-rung/$2.json"; }
+
+# story_rung_record <log_dir> <story_id>
+# Captures the CURRENT rung from the writer's own variables. No arguments, on purpose: a
+# parameter list is a second definition of what a rung is, and it drifts the first time
+# claude.sh adds a knob to the ladder.
+story_rung_record() {
+    local log_dir="$1" story_id="$2"
+    [ -n "$log_dir" ] && [ -n "$story_id" ] || return 0
+    mkdir -p "$log_dir/story-rung" 2>/dev/null || true
+    jq -n \
+        --arg model       "${STORY_MODEL:-}" \
+        --arg provider    "${STORY_PROVIDER:-}" \
+        --arg effort      "${EPAM_REASONING_EFFORT:-}" \
+        --arg temperature "${EPAM_TEMPERATURE:-}" \
+        --arg iterations  "${STORY_MAX_ITERATIONS:-}" \
+        --arg outTokens   "${STORY_MAX_OUTPUT_TOKENS:-}" \
+        '{model:$model, provider:$provider, reasoningEffort:$effort,
+          temperature:$temperature, maxIterations:$iterations, maxOutputTokens:$outTokens}' \
+        > "$(_story_rung_file "$log_dir" "$story_id")" 2>/dev/null || true
+}
+
+# story_rung_get <log_dir> <story_id> <field>
+# Empty when the story has no rung on record. ABSENT IS NOT A DEFAULT: a caller that substitutes
+# something here makes a judge authoritative about work whose setup it never saw.
+story_rung_get() {
+    local f; f="$(_story_rung_file "$1" "$2")"
+    [ -f "$f" ] || return 0
+    jq -r --arg k "$3" '.[$k] // ""' "$f" 2>/dev/null || true
+}

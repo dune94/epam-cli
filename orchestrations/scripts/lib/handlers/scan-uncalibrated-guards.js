@@ -71,7 +71,12 @@ function testCorpus(root) {
     for (const e of names) {
       const p = path.join(dir, e.name);
       if (e.isDirectory()) walk(p);
-      else if (/\.(ts|js|sh)$/.test(e.name) && !seen.has(p)) {
+      // .bats INCLUDED. The corpus was ts|js|sh, so the entire shell suite under
+      // test/shell was invisible: a guard whose only coverage is a bats receiver test
+      // counted as uncalibrated, and every bats test added made this ratchet's number
+      // grow. A calibration check that cannot see one of the two test suites reports
+      // the opposite of the truth for everything that suite covers.
+      else if (/\.(ts|js|sh|bats)$/.test(e.name) && !seen.has(p)) {
         seen.add(p);
         try { all += fs.readFileSync(p, 'utf8') + '\n'; } catch { /* unreadable */ }
       }

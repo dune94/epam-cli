@@ -43,5 +43,8 @@
   "seams": [
     "prompt-builder"
   ],
-  "layer": "project"
+  "layer": "project",
+  "mayBeEmpty": [
+    "__PREVIOUS_REFUSAL__"
+  ]
 }

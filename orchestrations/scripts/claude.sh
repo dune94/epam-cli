@@ -382,9 +382,40 @@ INVOKE_PYTHON="${INVOKE_PYTHON:-$SCRIPT_DIR/.venv/bin/python3}"
 # (found live, 2026-08-01: the writer sandbox test's first run invoked codex
 # via this exact default, 4 straight zero-token failures, no OPENAI_API_KEY
 # in the environment — this project never uses codex at all).
-EFFORT_MODEL_LOW="${EPAM_EFFORT_MODEL_LOW:-gpt-5-codex}"
-EFFORT_MODEL_MEDIUM="${EPAM_EFFORT_MODEL_MEDIUM:-gpt-5-codex}"
-EFFORT_MODEL_HIGH="${EPAM_EFFORT_MODEL_HIGH:-gpt-5-codex}"
+# THE LADDERS DICTATE EVERY MODEL CALL — NO EXCEPTIONS.
+#
+# These three defaulted to the literal `gpt-5-codex`: one model for all three effort tiers, and one
+# with no entry in ANY ladder. So the effort axis collapsed to a constant — measured across 211
+# archived story records, 205 carry the same assigned model — and an unresolved effort silently
+# called a vendor this pipeline does not use.
+#
+# The tier START models are already exported by lib/model-ladders.sh from the project's own
+# llm-settings.json (EPAM_MODEL_LADDER_<TIER>_START). Effort maps onto the project's DECLARED tier
+# order, lowest to highest, so a project that names its tiers differently — or declares four of
+# them — still resolves without this file knowing any of their names.
+#
+# Unresolved stays EMPTY on purpose. A wrong model is more expensive than a stopped run and far
+# harder to notice; the caller checks and fails rather than substituting something plausible.
+_effort_model_for_position() {
+    local _pos="$1" _order _tier _var
+    # Declared lowest-to-highest. Env first (operator override), then whatever the project declared.
+    _order="${EPAM_MODEL_LADDER_TIER_ORDER:-}"
+    [ -n "$_order" ] || return 0
+    # shellcheck disable=SC2086
+    set -- $_order
+    case "$_pos" in
+        low)    _tier="${1:-}" ;;
+        medium) _tier="${2:-${1:-}}" ;;
+        high)   _tier="${3:-${2:-${1:-}}}" ;;
+        *)      return 0 ;;
+    esac
+    [ -n "$_tier" ] || return 0
+    _var="EPAM_MODEL_LADDER_$(printf '%s' "$_tier" | tr '[:lower:]' '[:upper:]' | tr -c 'A-Z0-9\n' '_')_START"
+    printf '%s' "${!_var:-}"
+}
+EFFORT_MODEL_LOW="${EPAM_EFFORT_MODEL_LOW:-$(_effort_model_for_position low)}"
+EFFORT_MODEL_MEDIUM="${EPAM_EFFORT_MODEL_MEDIUM:-$(_effort_model_for_position medium)}"
+EFFORT_MODEL_HIGH="${EPAM_EFFORT_MODEL_HIGH:-$(_effort_model_for_position high)}"
 # Set by resolve_planner_settings; empty means single-invocation mode (no split)
 STORY_PLANNER_MODEL=""
 # Set by resolve_effort_settings; controls EPAM_MAX_ITERATIONS for epam-run stories.
@@ -2001,7 +2032,7 @@ run_plan_mode() {
     if [ "${EPAM_SDK_INVOKE:-0}" = "1" ] && [ -f "$INVOKE_PY" ]; then
         # SDK path: extended thinking enabled for plan mode (high-complexity reasoning)
         if echo "$plan_prompt" | "$INVOKE_PYTHON" "$INVOKE_PY" \
-                --model "${STORY_MODEL:-gpt-5-codex}" \
+                --model "$STORY_MODEL" \
                 --thinking-budget 8000 \
                 --output "$plan_json" 2>/dev/null; then
             plan_ok=true

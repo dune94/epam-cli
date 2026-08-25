@@ -233,10 +233,10 @@ export AGENT_PROFILES_FILE="$REPO_ROOT/orchestrations/agents/profiles.json"
 export EPAM_DANGEROUS_SKIP_APPROVAL=1
 export ORCH_GATE_PROVIDER="qwen"
 export SPEC_MODE_PROVIDER="qwen"
-export SPEC_MODE_OPENSPEC_MODEL="z-ai/glm-5.2"
-export SPEC_MODE_SPECKIT_MODEL="z-ai/glm-5.1"
-export SPEC_MODE_MODEL="z-ai/glm-5.2"
-export ORCH_GATE_MODEL="z-ai/glm-5.1"
+# export SPEC_MODE_OPENSPEC_MODEL="z-ai/glm-5.2"   # removed 2026-08-25: the ladder decides
+# export SPEC_MODE_SPECKIT_MODEL="z-ai/glm-5.1"   # removed 2026-08-25: the ladder decides
+# export SPEC_MODE_MODEL="z-ai/glm-5.2"   # removed 2026-08-25: the ladder decides
+# export ORCH_GATE_MODEL="z-ai/glm-5.1"   # removed 2026-08-25: the ladder decides
 
 if [ -n "$RESUME_ID" ]; then
   export EPAM_RESUME_RUN="$ORCH_RUN_ID"

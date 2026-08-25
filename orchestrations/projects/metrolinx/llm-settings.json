@@ -84,12 +84,28 @@
     "medium": {
       "modelLadder": [
         {
+          "from": "MiniMax-M2.7-highspeed",
+          "to": "MiniMax-M3"
+        },
+        {
+          "from": "MiniMax-M2.7",
+          "to": "MiniMax-M3"
+        },
+        {
           "from": "MiniMax-M2.5",
           "to": "MiniMax-M3"
         },
         {
           "from": "MiniMax-M3",
-          "to": "z-ai/glm-5.2"
+          "to": "z-ai/glm-5.3"
+        },
+        {
+          "from": "z-ai/glm-5.1",
+          "to": "z-ai/glm-5.3"
+        },
+        {
+          "from": "z-ai/glm-5.2",
+          "to": "z-ai/glm-5.3"
         },
         {
           "from": "zhipuai/glm-z1-9b",
@@ -97,28 +113,41 @@
         },
         {
           "from": "zhipuai/glm-z1-32b",
-          "to": "z-ai/glm-5.2"
-        },
-        {
-          "from": "z-ai/glm-5.1",
-          "to": "z-ai/glm-5.2"
+          "to": "z-ai/glm-5.3"
         }
       ],
-      "startModel": "MiniMax-M2.5"
+      "startModel": "MiniMax-M2.7-highspeed",
+      "_why": "M2.5 is legacy. M2.7 scores materially higher on multi-file and long-horizon work (NL2Repo 26.6 -> 39.8, MLE Bench Lite +15pts) and the -highspeed variant is documented as producing IDENTICAL results, only faster — so it is a free latency win, not a quality trade. The chain ends at glm-5.3 rather than 5.2 because 5.3's gains concentrate in agent-shaped tasks, which is what a seam that has already escalated twice is struggling with."
     },
     "highest": {
       "modelLadder": [
         {
+          "from": "z-ai/glm-5.3",
+          "to": "moonshotai/kimi-k3"
+        },
+        {
+          "from": "z-ai/glm-5.2",
+          "to": "z-ai/glm-5.3"
+        },
+        {
+          "from": "z-ai/glm-5.1",
+          "to": "z-ai/glm-5.3"
+        },
+        {
+          "from": "MiniMax-M2.7-highspeed",
+          "to": "MiniMax-M3"
+        },
+        {
+          "from": "MiniMax-M2.7",
+          "to": "MiniMax-M3"
+        },
+        {
           "from": "MiniMax-M2.5",
           "to": "MiniMax-M3"
         },
         {
           "from": "MiniMax-M3",
-          "to": "z-ai/glm-5.2"
-        },
-        {
-          "from": "z-ai/glm-5.1",
-          "to": "z-ai/glm-5.2"
+          "to": "z-ai/glm-5.3"
         },
         {
           "from": "zhipuai/glm-z1-9b",
@@ -126,18 +155,15 @@
         },
         {
           "from": "zhipuai/glm-z1-32b",
-          "to": "z-ai/glm-5.2"
-        },
-        {
-          "from": "z-ai/glm-5.2",
-          "to": "moonshotai/kimi-k3"
+          "to": "z-ai/glm-5.3"
         },
         {
           "from": "moonshotai/kimi-k2.5",
           "to": "moonshotai/kimi-k3"
         }
       ],
-      "startModel": "z-ai/glm-5.2"
+      "startModel": "z-ai/glm-5.3",
+      "_why": "glm-5.3 shares 5.2's base model; every gain is post-training on executable environments and long-horizon tasks — Terminal-Bench 3.0 4.6 -> 28.3, DeepSWE 46.2 -> 66.9, SWE-Marathon 19.4 -> 42.5. It also reaches a higher score with ~22% FEWER output tokens on hard work, which offsets most of the 45% higher per-token price. All vendor-reported: no independent reproduction exists yet."
     }
   },
   "modelOverrides": {
@@ -195,6 +221,30 @@
       "providerOrder": [
         "Moonshot AI"
       ]
+    },
+    "minimax-m2.7": {
+      "matchOn": "model",
+      "matchSubstring": "MiniMax-M2.7",
+      "_why": "Replaces MiniMax-M2.5 as the medium tier's start. maxIterations is 90, not M2.5's 45: 45 was the outlier in this file (M3 120, glm 120, kimi-k3 150) and M2.7's advantage is precisely on the long-horizon work that needs room to converge — capping the stronger model at the weaker one's budget would throw the upgrade away. autoCompressAt is 150000 against a 204800 context: compaction destroys the cacheable prefix, so it must be an overflow guard near the ceiling, never a token-saving device. Substring is 'MiniMax-M2.7' so it matches the -highspeed variant too.",
+      "reasoningEffort": "medium",
+      "maxIterations": 90,
+      "autoCompressAt": 150000,
+      "autoCompressEveryNIterations": 15,
+      "topP": 0.85,
+      "temperature": 0.2
+    },
+    "glm-5.3": {
+      "matchOn": "model",
+      "matchSubstring": "glm-5.3",
+      "_why": "Mirrors glm-5.2's sampling (same base model, so temperature/topP carry over) with more iteration room at 150, because this is now the highest tier's start and has only ONE rung above it. autoCompressAt raised to 300000 against a 1048576 context — 5.2's 180000 was conservative and every compaction destroys the cache. providerOrder is Z.AI because OpenRouter lists exactly one endpoint for this model; copying 5.2's CoreWeave pin would have failed every call.",
+      "reasoningEffort": "high",
+      "maxIterations": 150,
+      "autoCompressAt": 300000,
+      "topP": 0.95,
+      "temperature": 0.9,
+      "providerOrder": [
+        "Z.AI"
+      ]
     }
   },
   "retries": {
@@ -214,7 +264,7 @@
     "_note": "storyTimeoutSecs is the FLOOR. The effective wall is derived from the attempt's own iteration budget (secondsPerIteration x maxIterations), capped at storyTimeoutMaxSecs. Measured 2026-08-10: kimi-k3 allows 150 iterations +30 rung bump = 180, against a fixed 1800s wall = 10s per turn including tool execution. 10 of 23 invocations were SIGKILLed mid-flight having produced nothing, and those were the most expensive attempts of the run. A budget the clock cannot honour is not a budget.",
     "perAttemptOverheadSecs": 180,
     "storyWallMaxSecs": 10800,
-    "_note2": "TWO SCOPES, TWO WALLS. storyTimeoutSecs/storyTimeoutMaxSecs bound ONE ATTEMPT: iterations x secondsPerIteration + perAttemptOverheadSecs. storyWallMaxSecs bounds the WHOLE STORY, which runs up to retries.maxRetries+1 attempts inside one watchdog window. Measured 2026-08-12: wall 1 ran 1780s for TWO attempts \u2014 writer 829s + 631s, planning 62s, analyst 120s, gates 111s, verification 27s \u2014 against an 1800s wall that also claimed to bound EIGHT. The iteration budget predicted the writer well (1440s vs 1460s actual); what it cannot express is the overhead per attempt and the number of attempts. perAttemptOverheadSecs=180 is the measured ~160s/attempt rounded up. storyWallMaxSecs is the operator ceiling on a single story."
+    "_note2": "TWO SCOPES, TWO WALLS. storyTimeoutSecs/storyTimeoutMaxSecs bound ONE ATTEMPT: iterations x secondsPerIteration + perAttemptOverheadSecs. storyWallMaxSecs bounds the WHOLE STORY, which runs up to retries.maxRetries+1 attempts inside one watchdog window. Measured 2026-08-12: wall 1 ran 1780s for TWO attempts — writer 829s + 631s, planning 62s, analyst 120s, gates 111s, verification 27s — against an 1800s wall that also claimed to bound EIGHT. The iteration budget predicted the writer well (1440s vs 1460s actual); what it cannot express is the overhead per attempt and the number of attempts. perAttemptOverheadSecs=180 is the measured ~160s/attempt rounded up. storyWallMaxSecs is the operator ceiling on a single story."
   },
   "brownfield": {
     "minOutputTokens": 24576,
@@ -223,19 +273,19 @@
   "compaction": {
     "defaultAutoCompressAt": 80000,
     "defaultAutoCompressEveryNIterations": null,
-    "_note": "Compaction is an OVERFLOW guard, not a token-saving device. compressHistory REPLACES the message array with a summary, which destroys the cacheable prefix \u2014 and a stable prefix is ~99% discounted on every route that caches (measured 2026-08-10: MiniMax-M3 99.8%, glm-5.2 99.6%, kimi-k3 98.2%). The every-N-iterations trigger fired regardless of context size, so a writer sitting at 40K tokens forfeited the discount on everything accumulated. Removed for caching models; autoCompressAt raised toward the real window. kimi-k2.5 keeps aggressive compaction because it caches 0% \u2014 there is nothing for it to lose."
+    "_note": "Compaction is an OVERFLOW guard, not a token-saving device. compressHistory REPLACES the message array with a summary, which destroys the cacheable prefix — and a stable prefix is ~99% discounted on every route that caches (measured 2026-08-10: MiniMax-M3 99.8%, glm-5.2 99.6%, kimi-k3 98.2%). The every-N-iterations trigger fired regardless of context size, so a writer sitting at 40K tokens forfeited the discount on everything accumulated. Removed for caching models; autoCompressAt raised toward the real window. kimi-k2.5 keeps aggressive compaction because it caches 0% — there is nothing for it to lose."
   },
   "costControls": {
     "maxToolCallsPerStory": 600,
     "storyBudgetWarningUsd": 3.5,
     "storyBudgetHardLimitUsd": 15,
-    "$maxToolCallsNote": "Raised 300 -> 600 on 2026-08-09. Measured live: one attempt recorded 318 tool_run events and read_file alone reached 202 in an earlier run, so 300 was being reached mid-attempt on a 12-file brownfield story. The budget bounds TOOL calls, not spend \u2014 storyBudgetHardLimitUsd ($15.00) is the actual cost stop, and it is unchanged."
+    "$maxToolCallsNote": "Raised 300 -> 600 on 2026-08-09. Measured live: one attempt recorded 318 tool_run events and read_file alone reached 202 in an earlier run, so 300 was being reached mid-attempt on a 12-file brownfield story. The budget bounds TOOL calls, not spend — storyBudgetHardLimitUsd ($15.00) is the actual cost stop, and it is unchanged."
   },
   "_cacheNotes": {
-    "measured_2026_08_10": "Prompt-cache utilisation measured per ROUTE (identical prefix, sticky session_id): MiniMax-M3 direct 99.8%; z-ai/glm-5.2 (CoreWeave) 99.6%; moonshotai/kimi-k3 (Moonshot AI) 98.2%; minimax/minimax-m2 (Novita) caches; moonshotai/kimi-k2.5 (Novita) 0%. glm-5.2 escalates straight to kimi-k3 because k2.5 is the one rung that repurchases the whole prefix every turn. Caching on OpenRouter requires session_id for sticky routing \u2014 without it consecutive turns can land on different upstream providers and no cache is reused."
+    "measured_2026_08_10": "Prompt-cache utilisation measured per ROUTE (identical prefix, sticky session_id): MiniMax-M3 direct 99.8%; z-ai/glm-5.2 (CoreWeave) 99.6%; moonshotai/kimi-k3 (Moonshot AI) 98.2%; minimax/minimax-m2 (Novita) caches; moonshotai/kimi-k2.5 (Novita) 0%. glm-5.2 escalates straight to kimi-k3 because k2.5 is the one rung that repurchases the whole prefix every turn. Caching on OpenRouter requires session_id for sticky routing — without it consecutive turns can land on different upstream providers and no cache is reused."
   },
   "_samplingNotes": {
-    "measured_2026_08_10": "Per-model sampling, not per-rung. MiniMax M3: low temperature + top_p 0.85 for code precision. GLM-5.2: lock top_p 0.95 and move temperature only (vendor: never tune both). Kimi K3: temperature fixed at 1.0 on Moonshot's platform (OpenRouter third-party hosts such as Chutes accept other values, so behaviour varies by upstream provider) \u2014 temperatureLocked marks it so the retry invariant escalates reasoningEffort instead. 'max' effort is supported by GLM-5.2 and Kimi K3 and is the rung above 'high'.",
+    "measured_2026_08_10": "Per-model sampling, not per-rung. MiniMax M3: low temperature + top_p 0.85 for code precision. GLM-5.2: lock top_p 0.95 and move temperature only (vendor: never tune both). Kimi K3: temperature fixed at 1.0 on Moonshot's platform (OpenRouter third-party hosts such as Chutes accept other values, so behaviour varies by upstream provider) — temperatureLocked marks it so the retry invariant escalates reasoningEffort instead. 'max' effort is supported by GLM-5.2 and Kimi K3 and is the rung above 'high'.",
     "provider_pinning_2026_08_10": "OpenRouter load-balances a slug across upstream hosts. session_id keeps ONE conversation on one host (caching works either way), but the host CHOSEN varies between sessions and hosts differ in price, cache size and parameter semantics. Measured kimi-k3, identical 2-turn prefix: unpinned -> DigitalOcean, cached 12,288, turn-2 $0.00747; pinned to Moonshot AI -> cached 13,568, turn-2 $0.00440 (41% cheaper). Moonshot fixes temperature at 1.0 while third-party hosts accept other values, so pinning is what makes temperatureLocked a fact rather than a hedge."
   },
   "effortLadder": [

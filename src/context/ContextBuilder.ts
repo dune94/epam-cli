@@ -54,9 +54,17 @@ function capabilitySentence(toolNames?: string[]): string {
   if (!toolNames.length) {
     return 'You have NO tools in this session. Answer from what you are given in the prompt.';
   }
-  return `You have access to exactly these tools, and no others: ${toolNames.join(', ')}. `
-    + 'If a task seems to need a tool that is not in that list, say so in your answer rather '
-    + 'than asking for it — the list is the whole of what you can do.';
+  // STATE WHAT EXISTS. SAY NOTHING ABOUT THE ANSWER.
+  //
+  // This used to continue: "If a task seems to need a tool that is not in that list, say so in
+  // your answer rather than asking for it." The model obeyed it — AMSD-1919 died at codeline
+  // discovery with `No JSON in LLM response: I don't have a WriteFile tool available...`, because
+  // that seam's own prompt ends "Respond with ONLY the JSON object. No prose."
+  //
+  // Response shape belongs to the seam. There are 39 of them, each declaring its own contract and
+  // several binding a strict output schema; one sentence here outranks all of them at once. The
+  // system prompt's job is to describe the session, never to shape what an agent returns.
+  return `You have access to exactly these tools, and no others: ${toolNames.join(', ')}.`;
 }
 
 const DEFAULT_SYSTEM_PROMPT = `${PROMPT_IDENTITY} ${capabilitySentence(undefined)} ${PROMPT_MANNER}`;

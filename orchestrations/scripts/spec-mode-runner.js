@@ -1786,6 +1786,26 @@ async function run() {
         // content — seeding both in the same test must show 2+1 attempts
         // total, not one shared counter.
         let acReviewAttempts = 1;
+        // 'unreviewed' means the GATE failed, not the content — so the retry re-runs the review
+        // rather than asking the author to fix something nobody has objected to. Without this the
+        // new verdict would simply be "not fail", which is the fail-open it replaces.
+        let acReviewUnjudged = 0;
+        while (reviewResult.verdict === 'unreviewed' && acReviewUnjudged < 2) {
+          acReviewUnjudged += 1;
+          console.warn(`spec-mode: prd-change-reviewer did not judge ${story.id} `
+            + `(${(reviewResult.issues || []).join('; ')}) — re-running the review `
+            + `(${acReviewUnjudged}/2)`);
+          // eslint-disable-next-line no-await-in-loop
+          reviewResult = await reviewPrdChange({
+            promptExec, story, changeType: 'ac-review', agent, runId, logDir, phase: opts.phase,
+          });
+        }
+        if (reviewResult.verdict === 'unreviewed') {
+          appendSpecPassEvent(logDir, {
+            storyId: story.id, phase: opts.phase, event: 'reviewer_unjudged', decision: 'unreviewed',
+            details: { agent, reasons: reviewResult.issues },
+          });
+        }
         while (reviewResult.verdict === 'fail' && acReviewAttempts < 3) {
           acReviewAttempts += 1;
           const correctiveNote =
@@ -1850,7 +1870,10 @@ async function run() {
           runId,
           agent,
           attempts: acReviewAttempts,
-          outcome: reviewResult.verdict === 'fail' ? 'reverted' : 'pass',
+          // Three outcomes, not two: an unjudged review is neither a revert nor a pass, and
+          // recording it as 'pass' made the one case worth investigating invisible in the log.
+          outcome: reviewResult.verdict === 'fail' ? 'reverted'
+            : (reviewResult.verdict === 'unreviewed' ? 'unreviewed' : 'pass'),
           reason: (reviewResult.issues || []).join('; '),
           // content_quality is the only vocabulary entry here — reviewPrdChange's
           // verdict is itself an LLM judgment call over free-text issues, not a
@@ -2180,7 +2203,12 @@ async function run() {
             checkedAt: new Date().toISOString()
           };
           story.specification.coordinatorReview = {
-            verdict: review.verdict || 'approved',
+            // A REVIEW THAT RETURNED NOTHING IS NOT AN APPROVAL. This read `|| 'approved'`, so a
+            // coordinator review that produced prose, failed, or never really ran was written to
+            // disk as approved — and that record is read back on later passes and summarised into
+            // the run report, where nothing can tell it from a real approval. 'unreviewed' names
+            // the absence instead of silently choosing the passing side.
+            verdict: review.verdict || 'unreviewed',
             reviewNotes: review.reviewNotes || '',
             qualityScore: typeof review.qualityScore === 'number' ? review.qualityScore : null,
             flags: Array.isArray(review.flags) ? review.flags : [],
@@ -3625,6 +3653,47 @@ async function mintProjectAgents({
        ''].join('\n')
     : '';
 
+  // THE ROSTER THE MINT IS ADDING TO — READ FROM THE ROSTER, NOT FROM A LIST IN CODE.
+  //
+  // The proposer used to be told which roles exist by FIXED_AGENT_ROLES: 21 hardcoded names in
+  // src/scaffold/prdTypes.ts, against a canonical roster of 57. So 39 canonical agents were
+  // invisible to it, test-engineer among them — and on 2026-08-23 the roster reviewer raised a
+  // BLOCKING finding that no test agent had been minted, while a canonical one existed the whole
+  // time. A proposer that cannot see the roster either duplicates a role under a new name or
+  // reports a gap that is already filled.
+  //
+  // Names only, deliberately: this block exists so the proposer knows what is COVERED, and 57
+  // full personas would crowd out the ticket it is supposed to be reasoning about.
+  const _existingRoster = (() => {
+    const names = new Set();
+    const addKeys = (obj) => {
+      const m = (obj && obj.agents && typeof obj.agents === 'object') ? obj.agents
+        : ((obj && obj.profiles && typeof obj.profiles === 'object') ? obj.profiles : obj);
+      for (const k of Object.keys(m || {})) if (k && typeof k === 'string') names.add(k);
+    };
+    const read = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } };
+    // The canonical roster this run restored, and whatever this project has already minted.
+    const canonical = read(profilesPath);
+    if (canonical) addKeys(canonical);
+    const cfg = process.env.EPAM_PROJECT_CONFIG_DIR;
+    if (cfg) {
+      const proj = read(path.join(cfg, 'agent-profiles.json'));
+      if (proj) addKeys(proj);
+      const roles = read(path.join(cfg, 'project-roles.json'));
+      for (const r of ((roles || {}).roles || [])) if (r) names.add(r);
+    }
+    // Anything the caller is explicitly keeping this cycle.
+    for (const a of _ra) if (a && a.name) names.add(a.name);
+    return [...names].filter((n) => !/^[_$]/.test(n)).sort();
+  })();
+
+  // PROSE LIVES IN THE PROMPT LAYER. The block is a template; only the list is computed here.
+  const existingRosterBlock = _existingRoster.length
+    ? `${renderEngineTemplate('mint-existing-roster', {
+      __ROSTER_LIST__: _existingRoster.map((n) => `- ${n}`).join('\n'),
+    })}\n`
+    : '';
+
   // WHAT THE SURVEY ACTUALLY FOUND IN THE CODE (DET-1).
   //
   // The two halves stay separated exactly as the surveyor emitted them: evidence about the
@@ -3739,7 +3808,7 @@ async function mintProjectAgents({
     '',
   ].join('\n');
 
-  const prompt = `${correctiveBlock}${retainedBlock}${surveyBlock}${vendorClaimRule}${testOwnershipRule}${basePrompt}
+  const prompt = `${correctiveBlock}${retainedBlock}${existingRosterBlock}${surveyBlock}${vendorClaimRule}${testOwnershipRule}${basePrompt}
 
 THE WORK THIS PROJECT HAS BEEN ASKED TO DO (real tickets from the tracker):
 ${ticketBlock || '- (no tickets available)'}
@@ -4417,14 +4486,36 @@ async function reviewProjectRoster({
   // A batch that produced nothing means those agents were NOT reviewed. Saying so keeps the
   // three-way distinction the schema draws — examined-and-sound, examined-and-defective,
   // did-not-examine — true of the whole roster and not just of the last batch to answer.
+  // WHAT THE CONTRACT ALLOWS, READ FROM THE CONTRACT. A hand-kept list of legal verdicts drifts
+  // from the schema; this is the schema. An empty enum means the tool declares none, and then no
+  // value can be judged illegal — so the check simply does not fire.
+  const _legalVerdicts = ((TOOL_ROSTER_REVIEW.parameters || {}).properties || {}).verdict || {};
+  const _legal = Array.isArray(_legalVerdicts.enum) ? _legalVerdicts.enum : [];
+
+  // A VERDICT OUTSIDE THE ENUM IS NOT A PASS.
+  //
+  // This filter caught 'nothing_to_review' and a missing verdict, and let everything else through
+  // to an aggregation that reads "not defects_found" as sound. Live 2026-08-24 batch 2 answered
+  // `"verdict": "warn"` — a value the schema does not permit — and it would have been counted as
+  // a clean pass. The schema's enum is also unenforced upstream (agent-output-schema.js validates
+  // types, never enums, and does not map this tag at all), so this is the only place the declared
+  // vocabulary is actually held to.
+  const _illegal = (v) => _legal.length > 0 && !_legal.includes(v);
   const _unexamined = _results.filter((r) => !r.part || typeof r.part !== 'object'
-    || r.part.verdict === 'nothing_to_review' || !r.part.verdict);
+    || r.part.verdict === 'nothing_to_review' || !r.part.verdict || _illegal(r.part.verdict));
   if (_unexamined.length) {
     return {
       verdict: 'review_failed',
       findings: _results.flatMap((r) => (r.part && Array.isArray(r.part.findings) ? r.part.findings : [])),
       reason: `${_unexamined.length} of ${_batches.length} batch(es) were not examined `
-        + `(${_unexamined.flatMap((r) => r.agents).slice(0, 6).join(', ')}...). The roster is not implicated.`,
+        + `(${_unexamined.flatMap((r) => r.agents).slice(0, 6).join(', ')}...)`
+        + `${_unexamined.filter((r) => r.part && _illegal(r.part.verdict)).length
+          ? `; verdict(s) outside the declared enum: `
+            + `${[...new Set(_unexamined.filter((r) => r.part && _illegal(r.part.verdict))
+              .map((r) => JSON.stringify(r.part.verdict)))].join(', ')} `
+            + `(legal: ${_legal.join(', ')})`
+          : ''}`
+        + `. The roster is not implicated.`,
     };
   }
 
@@ -8863,7 +8954,20 @@ function parseReviewVerdict(text) {
     }
   } catch { /* fall through to regex */ }
   const m = raw.match(/"verdict"\s*:\s*"(pass|fail)"/);
-  return { verdict: m ? m[1] : 'pass', issues: [] };
+  if (m) return { verdict: m[1], issues: [] };
+  // A GATE HAS THREE OUTCOMES: passed, failed, or DID NOT RUN.
+  //
+  // This returned 'pass' when it could not find a verdict at all — so unparseable output, prose,
+  // and silence all read as approval, and the consumer (which only ever tests for 'fail') let the
+  // change through. 'unreviewed' is its own outcome deliberately: reporting 'fail' would be safe
+  // but wrong, because it blames the artefact for the reviewer's failure — the same mistake the
+  // roster review made by treating 'nothing_to_review' as a defective roster.
+  return {
+    verdict: 'unreviewed',
+    issues: [`the reviewer produced no readable verdict (${
+      raw && String(raw).trim() ? `${String(raw).trim().length} chars of unusable output` : 'empty output'
+    })`],
+  };
 }
 
 // capReviewSnapshot(snapshot) — caps only acceptanceCriteria (the one field
@@ -8946,8 +9050,10 @@ async function reviewPrdChange({ aiRunnerCmd, profiles, storyId, changeType, bef
     }, { costAgent: 'prd-change-reviewer', costStoryId: storyId });
     return parseReviewVerdict(output);
   } catch (err) {
-    console.warn(`spec-mode: prd-change-reviewer call failed for ${storyId} (${err.message}) — defaulting to pass`);
-    return { verdict: 'pass', issues: [] };
+    // A FAILED CALL IS NOT AN APPROVAL. This defaulted to 'pass', so an exception in the gate
+    // was indistinguishable from the gate approving the change.
+    console.warn(`spec-mode: prd-change-reviewer call failed for ${storyId} (${err.message}) — reporting unreviewed`);
+    return { verdict: 'unreviewed', issues: [`the prd-change-reviewer call failed: ${err && err.message}`] };
   }
 }
 
@@ -9393,6 +9499,17 @@ module.exports = {
     TOOL_MODEL_REVIEW,
     TOOL_GUARD_VOCABULARY,
     TOOL_TICKET_LINKS,
+    // THE FOUR THAT WERE BOUND AT A CALL SITE AND ABSENT HERE.
+    //
+    // agent-output-schema.js looks a tag's tool up in THIS object, not in the module's exports.
+    // These four were exported individually — so they LOOKED available — while itemSchemaFor()
+    // returned null for them and validateTaggedOutput() passed any payload. Four seams, all
+    // before pause 1, bound a schema with nothing behind it. Found 2026-08-24 by replaying a
+    // killed run: ROSTER_REVIEW answered `"verdict": "warn"`, which its enum forbids.
+    TOOL_ESTATE_SURVEY,
+    TOOL_PROJECT_AGENTS,
+    TOOL_ROSTER_REVIEW,
+    TOOL_ROLE_ASSIGNMENTS,
   },
   specAgentEnv,
   surveyToolBudget,

@@ -1,0 +1,25 @@
+{
+  "$why": [
+    "Added 2026-08-24, after the second AMSD-1919 run.",
+    "",
+    "The mint was told which roles already exist by FIXED_AGENT_ROLES — a hardcoded list of 21",
+    "names in src/scaffold/prdTypes.ts — while the canonical roster holds 57 agents. So 39",
+    "canonical agents were invisible to the proposer, including test-engineer.",
+    "",
+    "That is not academic. On 2026-08-23 the roster reviewer raised a blocking finding that the",
+    "implementer's brief 'defers test ownership to a dedicated test agent, but no test agent was",
+    "minted in this roster' — while a canonical test-engineer existed the whole time and the mint",
+    "had never been shown it. A proposer that cannot see the roster it is adding to either",
+    "duplicates a role under a new name or reports a gap that is already filled.",
+    "",
+    "The list is READ FROM THE ROSTER at call time, never restated here: a hardcoded roster",
+    "drifts from the real one the moment either changes, which is the defect this replaces."
+  ],
+  "description": "Names the agents that already exist, so the mint proposes what is missing rather than what is already there.",
+  "id": "mint-existing-roster",
+  "authority": "template",
+  "seams": ["agent-mint"],
+  "body": "THESE AGENTS ALREADY EXIST AND WILL BE PART OF THIS TEAM. Do NOT propose any of them\nagain, and do not propose a role whose remit overlaps one of them under a different name.\nPropose only what is genuinely missing:\n\n__ROSTER_LIST__\n\nIf the work needs something one of these already covers, that need is MET — say nothing about\nit. A gap you report that one of these agents already fills is a false gap, and it costs the\nteam a role it does not need.\n",
+  "placeholders": ["__ROSTER_LIST__"],
+  "version": 1
+}

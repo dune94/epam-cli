@@ -69,14 +69,36 @@ describe('spec-mode-runner.js — parseReviewVerdict', () => {
     expect(result.verdict).toBe('fail');
   });
 
-  it('defaults to pass on totally unparseable output', () => {
+  // THESE TWO USED TO ASSERT `pass`.
+  //
+  // That was the defect, not the contract: prd-change-reviewer answered "pass" when it could not
+  // read a verdict, and again when its own call threw — and the consumer only ever tests for
+  // 'fail', so a review that never happened let the PRD change through. A gate has THREE outcomes,
+  // and the third kept collapsing into the first.
+  //
+  // The cases' INTENT — the gate is NON-BLOCKING, an unreadable answer must not throw or wedge the
+  // run — is unchanged and still asserted below. Only the expectation that silence means approval
+  // has moved: it is now its own outcome, and the caller re-runs the review.
+  it('does NOT report pass on totally unparseable output', () => {
     const result = parseReviewVerdict('no json here at all');
-    expect(result.verdict).toBe('pass');
+    expect(result.verdict, 'unparseable output was reported as a passing review').not.toBe('pass');
+    expect(result.verdict, 'and it must not blame the artefact either').not.toBe('fail');
+    expect(String((result.issues || []).join(' ')),
+      'a gate that could not judge left no explanation').not.toBe('');
   });
 
-  it('defaults to pass on empty/null input', () => {
-    expect(parseReviewVerdict('').verdict).toBe('pass');
-    expect(parseReviewVerdict(null).verdict).toBe('pass');
+  it('does NOT report pass on empty/null input', () => {
+    expect(parseReviewVerdict('').verdict, 'silence was reported as a pass').not.toBe('pass');
+    expect(parseReviewVerdict(null).verdict).not.toBe('pass');
+  });
+
+  it('still returns a usable object rather than throwing — the gate stays non-blocking', () => {
+    for (const input of ['no json here at all', '', null]) {
+      const r = parseReviewVerdict(input as string);
+      expect(r, `parseReviewVerdict(${JSON.stringify(input)}) returned nothing`).toBeTruthy();
+      expect(typeof r.verdict).toBe('string');
+      expect(Array.isArray(r.issues)).toBe(true);
+    }
   });
 });
 

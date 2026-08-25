@@ -67,3 +67,68 @@ describe('the capability sentence follows the grant', () => {
     expect(p).toMatch(/EPAM CLI/);
   });
 });
+
+describe('the system prompt does not tell the agent HOW to respond', () => {
+  /**
+   * THE REGRESSION THIS SUITE MISSED, AND WHY.
+   *
+   * Fixing the false-capability defect on 2026-08-23 I replaced the sentence and ADDED a second
+   * one: "If a task seems to need a tool that is not in that list, say so in your answer rather
+   * than asking for it." Every assertion above tests the text I REMOVED; none covered the text I
+   * added, because the red-first test was written to describe the BUG and the new sentence did
+   * not exist yet.
+   *
+   * Live 2026-08-25, AMSD-1919 died at codeline discovery:
+   *
+   *   No JSON in LLM response: I don't have a WriteFile tool available — my only tools are
+   *   read_file, list_files, and search. I cannot write files. Please copy t...
+   *
+   * The model obeyed me exactly. That instruction reached ALL 39 seams and competes with every
+   * one of their output contracts — codeline-discovery's own prompt ends "Respond with ONLY the
+   * JSON object. No prose, no markdown fences."
+   *
+   * THE RULE: response shape belongs to the seam, never to the system prompt. The system prompt
+   * may state what tools exist. It may not say what to put in the answer.
+   */
+  const RESPONSE_SHAPING = [
+    /say so in your answer/i,
+    /in your (answer|response|reply)/i,
+    /respond with/i,
+    /answer with/i,
+    /rather than asking/i,
+    /explain (why|that)/i,
+  ];
+
+  const assertNoShaping = (p: string, when: string) => {
+    for (const re of RESPONSE_SHAPING) {
+      expect(p, `${when}: the system prompt instructs the agent how to answer (${re}). `
+        + 'Response shape is each seam\'s contract — 39 of them — and an instruction here '
+        + 'overrides all of them. AMSD-1919 died at discovery because the model followed it '
+        + 'instead of returning JSON.').not.toMatch(re);
+    }
+  };
+
+  it('says nothing about the answer for a read-only agent', async () => {
+    assertNoShaping(await build(['read_file', 'list_files', 'search']), 'read-only');
+  });
+
+  it('says nothing about the answer for a write-granted agent', async () => {
+    assertNoShaping(await build(['read_file', 'WriteFile']), 'write-granted');
+  });
+
+  it('says nothing about the answer when no tool list is passed', async () => {
+    assertNoShaping(await build(undefined), 'no tool list');
+  });
+
+  it('says nothing about the answer when the agent has NO tools', async () => {
+    // This branch legitimately needs to say where the information comes from, but must still not
+    // dictate the shape of what the agent returns.
+    assertNoShaping(await build([]), 'no tools');
+  });
+
+  it('still states the tools — the fix must not empty the sentence', async () => {
+    const p = await build(['read_file', 'search']);
+    expect(p).toMatch(/read_file/);
+    expect(p).toMatch(/search/);
+  });
+});

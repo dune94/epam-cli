@@ -132,10 +132,20 @@ describe('mock1/mock2 flow parity with the real Metrolinx run', () => {
  * neighbouring one.
  */
 describe('agent routing parity — the mock must call the same providers', () => {
-  const ROUTING = [
-    'SPEC_MODE_PROVIDER',
-    'SPEC_MODE_OPENSPEC_MODEL',
-    'SPEC_MODE_SPECKIT_MODEL',
+  // PARITY IS THE RULE; WHAT IT COMPARES MOVED.
+  //
+  // This listed SPEC_MODE_OPENSPEC_MODEL and SPEC_MODE_SPECKIT_MODEL — model PINS. On 2026-08-25
+  // every model pin was removed from project config, because a pinned model outranked the seam's
+  // ladder for every consumer that read it (found on the wire: a request for glm-5.2 while the
+  // resolver had chosen glm-5.3). Production no longer sets them, so "mock1 sets it too" now
+  // enforces the defect rather than parity.
+  //
+  // The rule that mattered — the mock must route like production, which is what killed mock1 run 6
+  // at Step 1 — is unchanged, and is stronger stated as: whatever production sets, mock1 sets; and
+  // whatever production no longer pins, mock1 must not pin either.
+  const ROUTING = ['SPEC_MODE_PROVIDER'];
+  const MUST_NOT_PIN = [
+    'SPEC_MODE_OPENSPEC_MODEL', 'SPEC_MODE_SPECKIT_MODEL', 'SPEC_MODE_MODEL', 'ORCH_GATE_MODEL',
   ];
 
   for (const key of ROUTING) {
@@ -146,6 +156,18 @@ describe('agent routing parity — the mock must call the same providers', () =>
         `mock1 does not set ${key}, so its spec pass routes through a different ` +
         'provider than production. This is what killed mock1 run 6 at Step 1.')
         .toMatch(new RegExp(key));
+    });
+  }
+
+  for (const key of MUST_NOT_PIN) {
+    it(`neither production nor mock1 pins ${key} — the ladder decides`, () => {
+      expect(metrolinxValue(key),
+        `${key} is pinned in metrolinx config again; a fixed model outranks every seam ladder`)
+        .toBeFalsy();
+      expect(MOCK1,
+        `mock1 pins ${key} while production does not — the mock would route to a model the real ` +
+        'run never uses, which is exactly the divergence this suite exists to catch')
+        .not.toMatch(new RegExp(`^\\s*export\\s+${key}=`, 'm'));
     });
   }
 });

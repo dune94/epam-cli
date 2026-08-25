@@ -20,7 +20,7 @@
  * own ladders explicitly and are listed as out of scope rather than silently skipped.
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 const SCRIPTS = join(__dirname, '../../../orchestrations/scripts');
@@ -55,6 +55,62 @@ const substituted = (line: string): string | null => {
   }
   return null;
 };
+
+/**
+ * PROJECT CONFIG IS PART OF THE LIVE PATH.
+ *
+ * The first version of this guard scanned six shell scripts and stopped there — so it passed while
+ * `ORCH_GATE_MODEL=z-ai/glm-5.2` sat in every project's config.env, exported by the launcher, and
+ * winning over the seam's ladder for every gate agent that reads it.
+ *
+ * Found 2026-08-25 by a MOCKED run: the request on the wire asked for `z-ai/glm-5.2` while
+ * seamInvocationEnv resolved `z-ai/glm-5.3`. No unit test could have shown that, because every
+ * unit test asks the resolver, and the resolver was right — the literal won downstream of it.
+ *
+ * A guard whose scope stops short of where the value actually lives protects nothing.
+ */
+describe('no project config pins a model', () => {
+  const CONFIGS = join(__dirname, '../../../orchestrations/projects');
+
+  const configFiles = (): string[] => {
+    const out: string[] = [];
+    for (const p of readdirSync(CONFIGS)) {
+      const f = join(CONFIGS, p, 'config.env');
+      if (existsSync(f)) out.push(f);
+    }
+    return out;
+  };
+
+  it('there are project configs to check', () => {
+    expect(configFiles().length).toBeGreaterThan(0);
+  });
+
+  for (const f of configFiles()) {
+    const name = f.split('/').slice(-2).join('/');
+    it(`${name} declares no model literal`, () => {
+      const bad: string[] = [];
+      readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
+        const stripped = line.replace(/#.*$/, '').trim();
+        if (!stripped || !stripped.includes('=')) return;
+        const [k, ...rest] = stripped.split('=');
+        const v = rest.join('=').replace(/^["']|["']$/g, '');
+        // A ladder DECLARATION may name models — that is the ladder. A single-model assignment
+        // may not: it is a fixed answer to a question the ladder exists to decide per seam.
+        if (/LADDER/i.test(k)) return;
+        // THE ONE DECLARED EXCEPTION. EPAM_FINAL_FALLBACK_MODEL applies AFTER ladder exhaustion —
+        // the single point where the ladder has nothing left to say, so a named model there is a
+        // policy decision rather than an override of one.
+        if (k.trim() === 'EPAM_FINAL_FALLBACK_MODEL') return;
+        if (MODEL_LITERAL.test(v) && !v.includes('|') && !v.includes('=')) {
+          bad.push(`${name}:${i + 1}  ${k}=${v}`);
+        }
+      });
+      expect(bad,
+        `a model literal in project config overrides the ladder for every consumer that reads it:\n  ${bad.join('\n  ')}`)
+        .toEqual([]);
+    });
+  }
+});
 
 describe('no live-path script substitutes a model name', () => {
   it('the scan actually reads the scripts — otherwise it proves nothing', () => {

@@ -80,14 +80,35 @@ describe('the bridge actually resolves a real seam', () => {
     // Executed, not asserted from source: a bridge that silently returns nothing would pass
     // every source-text check while leaving every gate on the fixed model.
     const dir = mkdtempSync(join(tmpdir(), 'seam-ladder-'));
+    // DERIVED, NOT NAMED. This hardcoded `qa-gate:sast` as its example of a seam declaring `top`.
+    // That seam moved to `mid` on 2026-08-25 in a ladder redistribution, and the test failed for a
+    // reason with nothing to do with the bridge it exists to check. Any seam declaring `top` will
+    // do — so ask the registry which ones do.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const reg = JSON.parse(require('node:fs').readFileSync(
+      join(__dirname, '../../../orchestrations/agents/invocation-profiles.json'), 'utf8'));
+    const tops: string[] = [];
+    (function walk(o: Record<string, unknown>) {
+      for (const k of Object.keys(o)) {
+        const v = o[k] as Record<string, unknown>;
+        if (v && typeof v === 'object') {
+          if (typeof v.template === 'string' && v.ladder === 'top') tops.push(k);
+          walk(v);
+        }
+      }
+    }((reg.profiles || reg) as Record<string, unknown>));
+    expect(tops.length, 'no seam declares ladder `top` — this case would prove nothing')
+      .toBeGreaterThan(0);
+    const TOP_SEAM = tops[0];
     try {
       const res = spawnSync('bash', ['-c', `
         set -uo pipefail
+        export TOP_SEAM=${JSON.stringify(TOP_SEAM)}
         export NODE_BIN=${JSON.stringify(process.execPath)}
         export EPAM_MODEL_LADDER_HIGHEST="a->b"
         export EPAM_MODEL_LADDER_TIER_ORDER="medium high highest"
         source ${JSON.stringify(SEAM_LADDER)}
-        seam_ladder_export "qa-gate:sast"
+        seam_ladder_export "${TOP_SEAM}"
         echo "LADDER=\${EPAM_MODEL_LADDER:-<unset>}"
         echo "EFFORT=\${EPAM_REASONING_EFFORT:-<unset>}"
       `], { encoding: 'utf8' });

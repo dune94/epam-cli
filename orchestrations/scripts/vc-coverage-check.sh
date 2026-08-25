@@ -99,7 +99,9 @@ for _i in $(seq 0 $(( _vc_count - 1 ))); do
     # so refusing means producing NO verdict — not a non-zero exit, which would change the
     # gate's contract, and not a substituted model, which would produce a verdict that looks
     # real. An absent coverage finding is honest; a fabricated one is acted on.
-    _vcc_model="${VC_COVERAGE_MODEL:-${ORCH_GATE_MODEL:-}}"
+    # ORCH_GATE_MODEL removed 2026-08-25 — one pinned model outranked every seam ladder.
+    # EPAM_MODEL carries this seam's resolved rung, which is what the others already read.
+    _vcc_model="${VC_COVERAGE_MODEL:-${EPAM_MODEL:-}}"
     if [ -z "$_vcc_model" ]; then
         log "no model resolved for this seam — its ladder declares none, or the tier's chain is unset."
         log "Refusing to substitute one: NO coverage verdict this run, rather than a guessed model's."

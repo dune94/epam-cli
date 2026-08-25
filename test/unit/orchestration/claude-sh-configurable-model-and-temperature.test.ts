@@ -34,11 +34,22 @@ function runLine(line: string, env: NodeJS.ProcessEnv = {}): string {
 }
 
 describe('EFFORT_MODEL_LOW/MEDIUM/HIGH are env-overridable, not hardcoded', () => {
-  it('EFFORT_MODEL_LOW defaults to gpt-5-codex when unset (unchanged behavior)', () => {
+  it('EFFORT_MODEL_LOW resolves from the LADDER when unset — never a literal', () => {
+    // THIS CASE USED TO ASSERT `gpt-5-codex`, described as "unchanged behavior".
+    //
+    // That literal was the defect, not the contract: all three effort tiers defaulted to the SAME
+    // model, and one with no entry in any ladder — which is why 205 of 211 archived story records
+    // carry an identical assigned model. The ladders now decide every call, with no exceptions.
+    //
+    // The case's INTENT — these are resolved, not hardcoded — is unchanged and still asserted;
+    // only the stale expectation about what they resolve TO has moved. With no ladder exported
+    // the answer is EMPTY, because a wrong model costs more than a stopped run and the caller
+    // fails rather than substituting something plausible.
     const line = extractLine('EFFORT_MODEL_LOW=');
     const env = { ...process.env };
     delete env.EPAM_EFFORT_MODEL_LOW;
-    expect(runLine(line, env)).toBe('gpt-5-codex');
+    delete env.EPAM_MODEL_LADDER_TIER_ORDER;
+    expect(runLine(line, env), 'a model literal reappeared as the effort default').toBe('');
   });
 
   it('EFFORT_MODEL_LOW is overridden by EPAM_EFFORT_MODEL_LOW', () => {

@@ -21,5 +21,8 @@
     "__SPLIT_VALUE__"
   ],
   "version": 1,
-  "body": "Assign this Jira story to a codeline. Answer with JSON only — no prose, no markdown fences.\n\nSTORY: __JIRA_KEY__ — __TITLE__\n\nDESCRIPTION:\n__DESCRIPTION__\n\nCODELINES:\n__CODELINE_LIST__\n- \"__SPLIT_VALUE__\" — the work spans multiple codelines\n\nChoose exactly one. Answer:\n{\"codeline\": \"<one of the values above>\"}\n"
+  "body": "Assign this Jira story to a codeline. Answer with JSON only — no prose, no markdown fences.\n\nSTORY: __JIRA_KEY__ — __TITLE__\n\nDESCRIPTION:\n__DESCRIPTION__\n\nCODELINES:\n__CODELINE_LIST__\n- \"__SPLIT_VALUE__\" — the work spans multiple codelines\n\nChoose exactly one. Answer:\n{\"codeline\": \"<one of the values above>\"}\n",
+  "mayBeEmpty": [
+    "__DESCRIPTION__"
+  ]
 }

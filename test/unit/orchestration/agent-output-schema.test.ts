@@ -52,8 +52,16 @@ function validItem(tag: string): Record<string, unknown> {
   const schema = itemSchemaFor(tag);
   const item: Record<string, unknown> = {};
   for (const key of schema.required || []) {
-    const t = ((schema.properties || {})[key] || {}).type;
-    item[key] = t === 'array' ? ['x'] : t === 'number' ? 0.5 : t === 'boolean' ? true : 'x';
+    const declared = (schema.properties || {})[key] || {};
+    const t = declared.type;
+    // HONOUR A DECLARED ENUM. This used 'x' for every string, which stopped being a VALID item
+    // the moment the validator began enforcing enums (2026-08-24) — a tool declaring
+    // `verdict: {enum: [sound, ...]}` rightly refuses 'x'. The fixture, not the assertion, was
+    // wrong: "an item built from its declared schema" has to be built from ALL of the schema.
+    const firstLegal = Array.isArray(declared.enum) && declared.enum.length
+      ? declared.enum[0] : null;
+    item[key] = firstLegal !== null ? firstLegal
+      : (t === 'array' ? ['x'] : t === 'number' ? 0.5 : t === 'boolean' ? true : 'x');
   }
   return item;
 }
@@ -293,8 +301,16 @@ describe('the declared wrapper shape is accepted, not refused', () => {
       // One minimal item satisfying whatever that tag declares required.
       const item: Record<string, unknown> = {};
       for (const k of schema.required || []) {
-        const t = ((schema.properties || {})[k] || {}).type;
-        item[k] = t === 'boolean' ? true : t === 'number' ? 1 : t === 'array' ? ['x'] : t === 'object' ? { a: 1 } : 'x';
+        const prop = ((schema.properties || {})[k] || {}) as Record<string, unknown>;
+        const t = prop.type;
+        // A DECLARED ENUM WINS OVER THE TYPE DEFAULT. 'x' is a string, and it stopped being a
+        // valid value the moment the validator began enforcing enums — TICKET_LINKS.classification
+        // declares seven and 'x' is none of them. Same lesson as minimalTicketLink above: a
+        // fixture that ignores half the contract is not built "from the tool definition".
+        const legal = Array.isArray(prop.enum) && (prop.enum as unknown[]).length
+          ? (prop.enum as unknown[])[0] : undefined;
+        item[k] = legal !== undefined ? legal
+          : (t === 'boolean' ? true : t === 'number' ? 1 : t === 'array' ? ['x'] : t === 'object' ? { a: 1 } : 'x');
       }
       const r = validateTaggedOutput(tag, { [map.itemsKey]: [item] });
       expect(r.ok, `${tag} refused its own declared wrapper: ${r.reason}`).toBe(true);

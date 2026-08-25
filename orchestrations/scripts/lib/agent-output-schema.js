@@ -76,6 +76,21 @@ const TAG_TO_TOOL = {
   GUARD_VOCABULARY: { tool: 'TOOL_GUARD_VOCABULARY', itemsKey: null },
   // Ticket links enter an EVIDENCE path — a prose answer cannot be persisted or acted on.
   TICKET_LINKS: { tool: 'TOOL_TICKET_LINKS', itemsKey: 'links' },
+
+  // THE FOUR THAT WERE BOUND AND NEVER VALIDATED.
+  //
+  // The runner binds nine tags; this map held six. For the missing four, validateTaggedOutput()
+  // returned ok:true for ANY payload — so four seams that all run before pause 1 had a schema
+  // declared at the invocation and no check behind it. Found 2026-08-24 by replaying a killed
+  // run's own replies: ROSTER_REVIEW answered `"verdict": "warn"`, a value its enum forbids, and
+  // nothing objected.
+  //
+  // itemsKey names the ARRAY whose items are checked; null means the payload itself is the
+  // object. A verdict-carrying payload is the object, so its top-level fields are what matter.
+  ESTATE_SURVEY: { tool: 'TOOL_ESTATE_SURVEY', itemsKey: null },
+  PROJECT_AGENTS: { tool: 'TOOL_PROJECT_AGENTS', itemsKey: 'proposedAgents' },
+  ROSTER_REVIEW: { tool: 'TOOL_ROSTER_REVIEW', itemsKey: null },
+  ROLE_ASSIGNMENTS: { tool: 'TOOL_ROLE_ASSIGNMENTS', itemsKey: 'assignments' },
 };
 
 // Lazy + cached: this module is required BY spec-mode-runner.js, so the require must not
@@ -103,6 +118,17 @@ function itemSchemaFor(tag) {
   return (arr && arr.items) || null;
 }
 
+/**
+ * A DECLARED VOCABULARY IS PART OF THE CONTRACT.
+ *
+ * The type check accepted `verdict: "warn"` because `warn` is a string, and the tool's
+ * `enum: [sound, defects_found, nothing_to_review]` was never consulted. A gate that reads the
+ * verdict then has to guess what an unlisted value means, and every such guess so far has
+ * resolved toward "pass". Only fires where a schema actually states an enum.
+ */
+const enumOk = (v, schema) => !Array.isArray(schema && schema.enum) || !schema.enum.length
+  || schema.enum.includes(v);
+
 const typeOk = (v, t) => {
   switch (t) {
     case 'string': return typeof v === 'string';
@@ -127,11 +153,24 @@ function checkItem(item, schema, tag, index) {
     // moment EPAM_SCHEMA_STRICT=1 is switched on, which is the whole point of this file.
     if (key === 'acceptanceCriteria' && process.env.EPAM_BROWNFIELD === '1') continue;
     const v = item[key];
-    if (v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length)) {
+    // AN EMPTY ARRAY IS PRESENT, NOT MISSING.
+    //
+    // `required` means the key is there. This treated `findings: []` as absent, so the ONE answer
+    // a sound review is supposed to give — "I examined it and found nothing" — failed validation
+    // the moment ROSTER_REVIEW was actually mapped. The roster-review prompt says so in as many
+    // words: "An empty finding list from a review that RAN is the correct answer for a sound
+    // roster." Emptiness that genuinely means nothing-was-done is caught where it belongs: the
+    // top-level array branch above refuses an empty report outright, and the verdict rules in
+    // spec-mode-runner refuse defects_found with no findings.
+    if (v === undefined || v === null || v === '') {
       const id = item.storyId ? ` (story ${item.storyId})` : '';
       return fail(`${where}${id}: missing required field "${key}" — required by its own tool definition`);
     }
     const declared = (schema.properties || {})[key];
+    if (declared && !enumOk(v, declared)) {
+      return fail(`${where}: field "${key}" is ${JSON.stringify(v)}, which its tool definition `
+        + `does not allow — declared values are: ${declared.enum.join(', ')}`);
+    }
     if (declared && declared.type && !typeOk(v, declared.type)) {
       return fail(`${where}: field "${key}" should be ${declared.type}, got ${Array.isArray(v) ? 'array' : typeof v}`);
     }

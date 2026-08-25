@@ -50,6 +50,48 @@ function readStdin() {
 }
 
 // ── Build full prompt ──────────────────────────────────────────────────────
+/**
+ * THE ESTIMATE, AND WHETHER THE MODEL ACTUALLY GAVE ONE.
+ *
+ * The floor of 1 is deliberate — it overrides nothing, and must never inflate a story's budget
+ * from a value the model did not provide. But a bare 1 is indistinguishable from a genuine
+ * estimate of 1, and that is exactly how 1,817 unanswered CPA records read as answers while 211
+ * stories took budgets from them. `provided` keeps the two apart; the value keeps its floor and
+ * its 500 sanity ceiling.
+ */
+function normaliseIterationEstimate(raw) {
+  const n = parseFloat(raw);
+  return {
+    provided: Number.isFinite(n),
+    value: Math.round(Math.max(1, Math.min(500, Number.isFinite(n) ? n : 1))),
+  };
+}
+
+/**
+ * STATE THE CONDITION THE ESTIMATE DEPENDS ON.
+ *
+ * cpa-system.md asks for `iterationEstimate` "BROWNFIELD STORIES ONLY", and nothing ever told the
+ * model whether the story was brownfield — the word appeared once in this file, in a comment. So
+ * the model was asked for a field whose condition it could not evaluate. Measured across
+ * orchestrations/logs/cpa-review.jsonl: 1,817 records, iterationEstimate returned ZERO times.
+ *
+ * Caller first, environment second: a caller that knows beats an env var that might be stale, and
+ * a run that sets neither says nothing rather than guessing.
+ */
+function buildModeSection(input = {}) {
+  const declared = (input && input.brownfield !== undefined)
+    ? Boolean(input.brownfield)
+    : (String(process.env.EPAM_BROWNFIELD || '') === '1' ? true : null);
+  if (declared === true) {
+    return '## Delivery Mode\nThis is a BROWNFIELD story: it changes an existing codebase rather '
+      + 'than creating one. The iterationEstimate field applies to this story — supply it.';
+  }
+  if (declared === false) {
+    return '## Delivery Mode\nThis is a GREENFIELD story. Omit iterationEstimate.';
+  }
+  return '';
+}
+
 function buildPrompt(input) {
   const { story, kbChunks = [], codebaseSignals = {}, formulaEstimate = {},
           adjacentStories = [], systemPrompt = '', manifest } = input;
@@ -122,6 +164,7 @@ function buildPrompt(input) {
   // separator too, which a template cannot express without becoming a program. The envelope
   // and the closing instruction are the prompt, and they live in the template layer.
   const sections = [
+    buildModeSection(input),
     `## Story Under Review\n\`\`\`json\n${storyJson}\n\`\`\``,
     `## Formula Baseline Estimate\n\`\`\`json\n${JSON.stringify(formulaEstimate, null, 2)}\n\`\`\``,
     kbSection,
@@ -312,9 +355,9 @@ async function main() {
   // story's real budget from a value the model didn't actually provide. 500
   // is a sanity ceiling against a malformed/hallucinated value, not the real
   // engine-side iteration cap (that's enforced separately in claude.sh).
-  reviewData.iterationEstimate = Math.round(
-    Math.max(1, Math.min(500, parseFloat(reviewData.iterationEstimate) || 1))
-  );
+  const _est = normaliseIterationEstimate(reviewData.iterationEstimate);
+  reviewData.iterationEstimate = _est.value;
+  reviewData.iterationEstimateProvided = _est.provided;
 
   // ── Estimate token counts from text length (1 token ≈ 4 chars) ────────────
   // claude CLI does not expose usage data in --print mode
@@ -341,4 +384,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { extractJSON, buildPrompt, skippedReview, validateInput };
+module.exports = { extractJSON, buildPrompt, skippedReview, validateInput, buildModeSection, normaliseIterationEstimate };

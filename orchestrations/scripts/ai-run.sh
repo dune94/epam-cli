@@ -184,9 +184,22 @@ run_provider_once() {
         echo "ai-run.sh: provider 'codex' requires codex CLI" >&2
         return 127
       fi
-      local codex_model="${AI_MODEL:-gpt-5-codex}"
+      # THE LADDER DICTATES THE MODEL — NO EXCEPTIONS.
+      #
+      # This defaulted to a literal twice: once when AI_MODEL was unset, and again when the
+      # resolved model did not look codex-shaped. Either way a run that had resolved one model
+      # called a different one, chosen here, with nothing in the log to say so.
+      #
+      # A provider that cannot serve the model the ladder chose is a routing error, not a licence
+      # to pick another. Fail, and let the ladder escalate to a rung this provider can serve.
+      local codex_model="${AI_MODEL:-}"
+      if [ -z "$codex_model" ]; then
+        echo "ai-run.sh: provider 'codex' selected but no model resolved from the ladder" >&2
+        return 78
+      fi
       if ! echo "$codex_model" | grep -Eq '^(gpt-|o[0-9]|codex-)'; then
-        codex_model="gpt-5-codex"
+        echo "ai-run.sh: the ladder resolved '$codex_model', which provider 'codex' cannot serve" >&2
+        return 78
       fi
       local raw_file
       raw_file="$(mktemp)"

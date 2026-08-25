@@ -169,7 +169,7 @@
       "maxOutputTokens": 32768,
       "reasoningEffort": "medium",
       "timeoutSecs": 600,
-      "ladder": "top",
+      "ladder": "mid",
       "produces": "test-criteria",
       "consumes": [
         {
@@ -288,7 +288,7 @@
       "maxOutputTokens": 32768,
       "reasoningEffort": "medium",
       "timeoutSecs": 180,
-      "ladder": "top",
+      "ladder": "mid",
       "produces": "verification-criteria",
       "consumes": [
         {
@@ -324,7 +324,8 @@
       "ladder": "top",
       "reasoningEffort": "high",
       "temperature": "0.1",
-      "maxOutputTokens": 32768,
+      "maxOutputTokens": 65536,
+      "_why_maxOutputTokens": "DOUBLED WITH THE ARTEFACT IT HANDLES. roster-specialiser was raised to 65536 so it could emit all 57 canonical agents in one file; this seam handles that same artefact and was left at 32768. On 2026-08-24 two review batches were TRUNCATED mid-JSON (62,648 and 38,432 bytes) and reported as unexamined, which is indistinguishable from a malformed reply, so the judge was retried identically and failed the same way. A budget belongs to the artefact, not to one seam: a reviewer quotes canonical AND derived text, so it needs at least what the writer needs.",
       "timeoutSecs": 900,
       "produces": "roster-verdict",
       "consumes": [
@@ -470,7 +471,7 @@
       "maxOutputTokens": 16384,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "top",
+      "ladder": "mid",
       "produces": "qa-verdict",
       "consumes": [
         {
@@ -536,7 +537,7 @@
       "maxOutputTokens": 16384,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "top",
+      "ladder": "mid",
       "produces": "qa-verdict",
       "consumes": [
         {
@@ -551,7 +552,7 @@
       "maxOutputTokens": 16384,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "top",
+      "ladder": "mid",
       "produces": "qa-verdict",
       "consumes": [
         {
@@ -563,10 +564,11 @@
     },
     "prompt-builder": {
       "_what": "Provisions this project's prompt library: reads the generic templates and decorates each one for the project and the roster just minted. Runs at mint time, as part of the same stage that creates the agents the prompts are for — the only stage that knows both what the project is and who will work on it.",
-      "ladder": "mid",
+      "ladder": "top",
       "reasoningEffort": "high",
       "temperature": "0.2",
-      "maxOutputTokens": 32768,
+      "maxOutputTokens": 65536,
+      "_why_maxOutputTokens": "DOUBLED WITH THE ARTEFACT IT HANDLES. roster-specialiser was raised to 65536 so it could emit all 57 canonical agents in one file; this seam handles that same artefact and was left at 32768. On 2026-08-24 two review batches were TRUNCATED mid-JSON (62,648 and 38,432 bytes) and reported as unexamined, which is indistinguishable from a malformed reply, so the judge was retried identically and failed the same way. A budget belongs to the artefact, not to one seam: a reviewer quotes canonical AND derived text, so it needs at least what the writer needs.",
       "timeoutSecs": 900,
       "_toolNote": "READ ONLY, deliberately. The job is to read a template and decorate it; the template zone is the one immutable thing in this design, and an agent granted bash could rewrite the very files it is reading from. The engine performs the write, after the contract check — so a prompt that fails its contract is never installed.",
       "produces": "project-prompts",
@@ -589,7 +591,7 @@
     },
     "codeline-bridge-agent": {
       "_what": "Extracts the exported surface of a completed codeline so a later lane's detective can read it. Producers run before consumers precisely so this exists when it is needed.",
-      "ladder": "top",
+      "ladder": "mid",
       "reasoningEffort": "high",
       "temperature": "0.1",
       "maxOutputTokens": 32768,
@@ -625,7 +627,8 @@
     },
     "agent-mint": {
       "_what": "Proposes the roster of agents this project needs, from its tickets and its codelines.",
-      "maxOutputTokens": 32768,
+      "maxOutputTokens": 65536,
+      "_why_maxOutputTokens": "The mint now reads the roster it is adding to — all 57 canonical agents by name, plus whatever this project has minted — so its prompt and the reasoning it has to do both grew. It also emits a 150-300 word systemPrompt per proposed role. Raised with its siblings that handle the roster; a truncated proposal is refused by mergeProjectAgents and the attempt is spent either way.",
       "reasoningEffort": "high",
       "timeoutSecs": 900,
       "ladder": "top",
@@ -644,7 +647,7 @@
       "maxOutputTokens": 32768,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "top",
+      "ladder": "mid",
       "produces": "role-assignments",
       "consumes": [
         {
@@ -707,10 +710,11 @@
     },
     "phase-assessment": {
       "_what": "Augments every agent profile with this project's skills before a phase runs. Writes profiles.json.",
-      "maxOutputTokens": 32768,
+      "maxOutputTokens": 65536,
+      "_why_maxOutputTokens": "DOUBLED WITH THE ARTEFACT IT HANDLES. roster-specialiser was raised to 65536 so it could emit all 57 canonical agents in one file; this seam handles that same artefact and was left at 32768. On 2026-08-24 two review batches were TRUNCATED mid-JSON (62,648 and 38,432 bytes) and reported as unexamined, which is indistinguishable from a malformed reply, so the judge was retried identically and failed the same way. A budget belongs to the artefact, not to one seam: a reviewer quotes canonical AND derived text, so it needs at least what the writer needs.",
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "top",
+      "ladder": "mid",
       "produces": "agent-skill-augmentation",
       "consumes": [
         {
@@ -844,7 +848,8 @@
       "ladder": "top",
       "reasoningEffort": "high",
       "timeoutSecs": 1800,
-      "maxOutputTokens": 32768,
+      "maxOutputTokens": 65536,
+      "_why_maxOutputTokens": "DOUBLED WITH THE ARTEFACT IT HANDLES. roster-specialiser was raised to 65536 so it could emit all 57 canonical agents in one file; this seam handles that same artefact and was left at 32768. On 2026-08-24 two review batches were TRUNCATED mid-JSON (62,648 and 38,432 bytes) and reported as unexamined, which is indistinguishable from a malformed reply, so the judge was retried identically and failed the same way. A budget belongs to the artefact, not to one seam: a reviewer quotes canonical AND derived text, so it needs at least what the writer needs.",
       "toolGrant": "read-only",
       "produces": "roster-verdict",
       "consumes": [

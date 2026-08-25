@@ -160,14 +160,27 @@ describe('load_llm_settings_json() — applies JSON as fallback defaults', () =>
     expect(env.EPAM_RUNG1_TEMPERATURE).toBe('0.4');
     expect(env.EPAM_RUNG2_TEMPERATURE).toBe('0.6');
     expect(env.EPAM_RUNG3_TEMPERATURE).toBe('0.8');
-    expect(env.EPAM_MODEL_LADDER_HIGH).toBe(
-      // glm-5.2 now escalates straight to kimi-k3: kimi-k2.5 is the one route measured at 0%
-      // prompt-cache utilisation, so it repurchases the whole prefix every turn.
-      'MiniMax-M2.5=MiniMax-M3|MiniMax-M3=z-ai/glm-5.2|zhipuai/glm-z1-9b=zhipuai/glm-z1-32b|zhipuai/glm-z1-32b=z-ai/glm-5.2|z-ai/glm-5.1=z-ai/glm-5.2|z-ai/glm-5.2=moonshotai/kimi-k3|moonshotai/kimi-k2.5=moonshotai/kimi-k3',
-    );
-    expect(env.EPAM_MODEL_LADDER_MEDIUM).toBe(
-      'MiniMax-M2.5=MiniMax-M3|MiniMax-M3=z-ai/glm-5.2|zhipuai/glm-z1-9b=zhipuai/glm-z1-32b|zhipuai/glm-z1-32b=z-ai/glm-5.2|z-ai/glm-5.1=z-ai/glm-5.2'
-    );
+    // DERIVED FROM THE FILE, NOT RESTATED.
+    //
+    // These were two hardcoded copies of the ladder strings, so every model change broke this
+    // test for a reason that had nothing to do with what it tests — whether the SHELL loader
+    // exports what the JSON declares. A restated copy drifts exactly like a restated schema.
+    // Reading the declaration and asserting the loader reproduces it keeps the test meaningful
+    // when a project retunes its ladders, and still fails if the loader mangles one.
+    const chainOf = (tier: string) => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const decl = JSON.parse(require('node:fs').readFileSync(METROLINX_SETTINGS_FILE, 'utf8'));
+      return (decl.ladders[tier].modelLadder as Array<{ from: string; to: string }>)
+        .map((h) => `${h.from}=${h.to}`).join('|');
+    };
+    for (const tier of ['high', 'medium', 'highest']) {
+      const key = `EPAM_MODEL_LADDER_${tier.toUpperCase()}`;
+      expect(chainOf(tier).length, `${tier} declares no ladder — nothing to compare`)
+        .toBeGreaterThan(10);
+      expect((env as Record<string, string>)[key],
+        `${key} does not reproduce what llm-settings.json declares for the ${tier} tier`)
+        .toBe(chainOf(tier));
+    }
   });
 
   it('the loader no longer flattens modelOverrides into fixed minimax/kimi env vars — there can be any number of entries', () => {

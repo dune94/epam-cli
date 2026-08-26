@@ -25,6 +25,7 @@ INVOKE_PYTHON="${INVOKE_PYTHON:-$_SCRIPT_DIR_AIRUN/.venv/bin/python3}"
 
 
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/env-file.sh"
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/runner-settings.sh" 2>/dev/null || true
 . "$_SCRIPT_DIR_AIRUN/lib/story-retry-state.sh"
 # Delegates to lib/env-file.sh: loading configuration must not EXECUTE it. This function
 # used to `. "$env_file"`, and a bare `cd` on line 1 of the repo's .env sent this script —
@@ -154,44 +155,18 @@ run_provider_once() {
   local model_args=()
   [ -n "$AI_MODEL" ] && model_args=(--model "$AI_MODEL")
 
-  # WHAT THE STACK DECLARED FOR THIS RUNNER — the caller this layer never had.
+  # WHAT THE STACK DECLARED FOR THIS RUNNER — through the SHIM, not a second copy of it.
   #
-  # config/llm-defaults.<set>.json declares per-runner alwaysFlags, flags and env.
-  # resolveRunner()/runnerValues() implemented that and nothing called them, so every declared
-  # effort, compaction window and (on the mockserver stack) the ANTHROPIC_BASE_URL redirect
-  # reached nothing at all. An empty value is SKIPPED, never passed as an empty argument.
+  # lib/runner-settings.sh already resolves a runner declaration into exported env and a
+  # RUNNER_FLAGS array, and claude.sh has called it since it was written. The hub did not, so
+  # the two paths to the same runner disagreed: a story implemented through claude.sh got the
+  # declared flags and the same model called through the hub did not. This calls the same
+  # function rather than reimplementing it, so there is one place where the rule lives.
   local runner_args=()
-  local _rd_name; _rd_name="$(basename "$CLAUDE_CMD")"
-  local _rd
-  _rd=$("${NODE_BIN:-node}" -e '
-      try {
-        const { runnerValues } = require(process.argv[1] + "/lib/llm-settings-resolve.js");
-        const v = runnerValues(process.argv[2], {});
-        if (!v) { process.stdout.write(""); }
-        else {
-          const out = [];
-          for (const f of v.alwaysFlags || []) out.push(f);
-          for (const [flag, val] of Object.entries(v.flags || {})) {
-            if (val !== undefined && val !== null && String(val) !== "") { out.push(flag); out.push(String(val)); }
-          }
-          for (const [name, val] of Object.entries(v.env || {})) {
-            if (val !== undefined && val !== null && String(val) !== "") out.push("\u0000env:" + name + "=" + val);
-          }
-          process.stdout.write(out.join("\u0001"));
-        }
-      } catch (_) { process.stdout.write(""); }
-    ' "$_SCRIPT_DIR_AIRUN" "$_rd_name" 2>/dev/null || printf '')
-  if [ -n "$_rd" ]; then
-    local _old_ifs="$IFS"; IFS=$'\001'
-    local _item
-    for _item in $_rd; do
-      case "$_item" in
-        $'\000'env:*) export "${_item#$'\000'env:}" ;;
-        "") ;;
-        *) runner_args+=("$_item") ;;
-      esac
-    done
-    IFS="$_old_ifs"
+  RUNNER_FLAGS=()
+  if declare -F apply_runner_settings >/dev/null 2>&1; then
+    apply_runner_settings "$(basename "$CLAUDE_CMD")" "${EPAM_PROJECT_CONFIG_DIR:-}" || true
+    runner_args=(${RUNNER_FLAGS[@]+"${RUNNER_FLAGS[@]}"})
   fi
 
   case "$provider" in

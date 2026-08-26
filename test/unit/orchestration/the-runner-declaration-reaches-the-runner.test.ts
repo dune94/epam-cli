@@ -108,10 +108,21 @@ describe('the runner declaration reaches the runner', () => {
     expect(argv![argv!.length - 1], 'a flag was passed with no value at all').not.toMatch(/^--(effort|autocompact)$/);
   });
 
-  it('plain claude is never handed codemie-claude\'s -s', () => {
+  it('whatever alwaysFlags the stack declares, the runner receives', () => {
+    // NOT A JUDGEMENT ABOUT WHICH FLAGS ARE RIGHT — that belongs to the declaration.
+    //
+    // This asserted that plain claude never gets `-s`, on the reasoning that `-s` is
+    // codemie-claude's silent flag and absent from `claude --help`. That reasoning could not be
+    // checked: --help and --version short-circuit before option validation, so an invalid flag
+    // exits 0 too, and the green mock3 run used this runner WITH -s. The claim was retracted;
+    // what this file can honestly assert is that the declaration is HONOURED.
+    const declared = JSON.parse(
+      readFileSync(join(ROOT, 'orchestrations/config/llm-defaults.claude.json'), 'utf8'),
+    ).runners.claude.alwaysFlags || [];
     const { argv } = argvFor({ set: 'claude', runnerName: 'claude' });
-    expect(argv, 'the `claude` CLI has no -s; passing it fails the call on an unknown option')
-      .not.toContain('-s');
+    for (const f of declared) {
+      expect(argv, `${f} is declared as an alwaysFlag and never reached the runner`).toContain(f);
+    }
   });
 
   it('THE MONEY ONE: the mockserver stack\'s redirect is actually exported', () => {

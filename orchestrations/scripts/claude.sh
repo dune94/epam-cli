@@ -1913,17 +1913,6 @@ get_story_title() {
 }
 
 # Get story priority (high=1, medium=2, low=3)
-get_story_priority() {
-    local story_id=$1
-    local priority=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .priority // "medium"' "$PRD_FILE")
-    case $priority in
-        high) echo 1 ;;
-        medium) echo 2 ;;
-        low) echo 3 ;;
-        *) echo 2 ;;
-    esac
-}
-
 # Check if story exists
 story_exists() {
     local story_id=$1

@@ -142,7 +142,9 @@
     "claude": {
       "$why": "Plain Claude Code. No CodeMie, no SSO, no spend.",
       "$whyNoBaseUrlFlag": "--base-url is ABSENT on purpose: on the wrapper it means 'use this SSO profile'. The redirect is ANTHROPIC_BASE_URL, which plain claude honours.",
-      "alwaysFlags": [],
+      "alwaysFlags": [
+        "-s"
+      ],
       "env": {
         "ANTHROPIC_BASE_URL": "mockBaseUrl"
       },
@@ -153,8 +155,8 @@
       "$whyFlags": "Checked against the installed CLI's own --help, not assumed: --effort takes (low, medium, high, xhigh, max) and --autocompact takes auto or a token count. These were declared as CLAUDE_CODE_* env vars that the CLI does not document and that nothing exported.",
       "$whyNoTurnCap": "maxIterations is deliberately absent. It binds the ReAct loop in src/agent/AgentRunner.ts, which only the `epam run` arm enters; a --print call has no turn cap and the loop is Claude Code's own. Declaring one here would name a knob nothing can turn.",
       "$whyNoOutputCap": "maxOutputTokens is deliberately unmapped: the installed CLI documents no flag or env for it. It stays declared in modelOverrides so the intent is visible, and is not routed anywhere pretending to work.",
-      "$whyNoSilentFlag": "-s is codemie-claude's silent flag. Plain `claude` has no -s, so this stack carried a flag that would have failed every call on an unknown option the moment the layer was wired.",
-      "$whyEnvKept": "ANTHROPIC_BASE_URL is a real, load-bearing env var: it is the mock redirect. It was declared here and never exported, so a free run would have looked redirected and reached the paid endpoint."
+      "$whyEnvKept": "ANTHROPIC_BASE_URL is a real, load-bearing env var: it is the mock redirect. It was declared here and never exported, so a free run would have looked redirected and reached the paid endpoint.",
+      "$whySilentFlag": "-s is restored. It is undocumented in plain `claude --help`, but --help and --version short-circuit before option validation, so no local check can show whether it is rejected — and the green mock3 run used this runner WITH -s. Removing it changed a working baseline on an unproven claim."
     }
   },
   "mockBaseUrl": "http://localhost:1080",

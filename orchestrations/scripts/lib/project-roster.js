@@ -221,6 +221,22 @@ function declaredSeams() {
  *
  * @returns {{ok: boolean, reason: string}}
  */
+/**
+ * Is this agent registered as one of THIS PROJECT's own — an implementer or an investigator?
+ *
+ * Read from the kind registries the mint writes, which is the same source kindOfAgent uses. A
+ * name that is in none of them is not a minted agent, whatever its roster entry claims.
+ */
+function isRegisteredProjectAgent(name) {
+  if (!name) return false;
+  try {
+    // eslint-disable-next-line global-require
+    const { kindOfAgent } = require('./agent-roster.js');
+    const dir = process.env.EPAM_PROJECT_CONFIG_DIR || '';
+    return Boolean(dir && kindOfAgent(name, dir));
+  } catch { return false; }
+}
+
 function checkEntry(name, entry, canonical) {
   if (!entry || typeof entry !== 'object') return { ok: false, reason: 'not an object' };
   if (typeof entry.persona !== 'string' || !entry.persona.trim()) {
@@ -235,11 +251,35 @@ function checkEntry(name, entry, canonical) {
   if (typeof entry.ancestor !== 'string' || !entry.ancestor.trim()) {
     return { ok: false, reason: 'no canonical ancestor named' };
   }
-  if (!Object.prototype.hasOwnProperty.call(canonical, entry.ancestor)) {
-    return { ok: false, reason: `ancestor '${entry.ancestor}' is not in canonical` };
-  }
-  if (entry.derivedFromSha256 !== personaDigest(canonical[entry.ancestor])) {
-    return { ok: false, reason: `provenance digest does not match ancestor '${entry.ancestor}'` };
+  // AN AGENT THIS PROJECT MINTED DESCENDS FROM NOTHING IN CANONICAL, AND SAYS SO.
+  //
+  // The rule above is right for a DERIVED agent: it names the canonical role whose ladder, tool
+  // grant and output contract it inherits. A minted agent has no such ancestor — it is a role
+  // this project needed and canonical never had — so its honest provenance is itself.
+  //
+  // This used to pass by accident: until 2026-08-22 (ba9cee7) the mint wrote into the engine's
+  // profiles.json, so minted agents WERE in the canonical copy. Isolating that file — one
+  // project's agents were reaching another's roster — removed the accident and nothing replaced
+  // it, so every minted agent became a contract violation. mock3 run 7: "ancestor
+  // 'fare-rules-engineer' is not in canonical".
+  //
+  // Stated as an exemption rather than bypassed by adding these agents after the check: a
+  // contract that says every agent needs a canonical ancestor, while some quietly do not, is a
+  // contract nobody can rely on. Registration is what earns it — an agent claiming self-ancestry
+  // without being in a kind registry is still refused, so this cannot become "anything may skip
+  // the check".
+  const _selfMinted = entry.ancestor === name && isRegisteredProjectAgent(name);
+  if (!_selfMinted) {
+    if (!Object.prototype.hasOwnProperty.call(canonical, entry.ancestor)) {
+      return { ok: false, reason: `ancestor '${entry.ancestor}' is not in canonical` };
+    }
+    if (entry.derivedFromSha256 !== personaDigest(canonical[entry.ancestor])) {
+      return { ok: false, reason: `provenance digest does not match ancestor '${entry.ancestor}'` };
+    }
+  } else if (entry.derivedFromSha256 !== personaDigest(entry.persona)) {
+    // The digest still has to be real: self-ancestry means the digest is over its OWN brief, so a
+    // changed brief with a stale digest is caught exactly as it is for a derived agent.
+    return { ok: false, reason: `provenance digest does not match its own brief for minted '${name}'` };
   }
   // A SEAM BINDING IS CHECKED WHERE THE ROSTER IS WRITTEN, not where it is first used. A seam the
   // registry does not declare would otherwise pass review, land on disk, and throw at whichever

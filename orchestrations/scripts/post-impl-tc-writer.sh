@@ -48,7 +48,16 @@ fi
 # model rather than kill a run.
 # shellcheck source=lib/seam-ladder.sh
 . "$SCRIPT_DIR/lib/seam-ladder.sh" 2>/dev/null || true
-command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "tc-writer"
+_SEAM_NAME="tc-writer"
+command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "$_SEAM_NAME"
+
+# THE CALL MUST SAY WHO IS MAKING IT.
+#
+# This seam invoked the hub without EPAM_AGENT_NAME, so its cost row, its Langfuse trace and its
+# plan record were all attributed to a default. The seam name was already right there on the
+# line above — it asked the ladder for "tc-writer" and then called anonymously. Cost tracking is
+# the run's first question and an unattributed call cannot answer it.
+export EPAM_AGENT_NAME="$_SEAM_NAME"
 
 source "$SCRIPT_DIR/lib/flags.sh"
 # jq_vals — prompt values files whose content never becomes an argv entry.
@@ -178,28 +187,46 @@ mkdir -p "$(dirname "$LOG_FILE")"
 
 echo "  [tc-writer] Invoking TC writer agent..."
 
-# Resolve epam binary and keys
-EPAM_BIN="${EPAM_BIN:-epam}"
+# The epam binary is no longer invoked here: the handler dispatches to it when the resolved
+# provider is one the CLI serves. Resolving it here meant this seam decided the executable too.
 # TC_WRITER_MODEL is set nowhere, so this default was the model the TC writer
 # ACTUALLY ran on — the discontinued k2. Now the pipeline workhorse.
 # THE SEAM DECIDES — see seam_ladder_export above, which sets EPAM_MODEL from this seam's
 # declared tier. A literal here made that declaration decorative.
 TC_MODEL="${TC_WRITER_MODEL:-${EPAM_MODEL:-}}"
-TC_PROVIDER="${TC_WRITER_PROVIDER:-qwen}"
+# THE SET DECIDES THE VENDOR — NO LITERAL.
+#
+# This read `${TC_WRITER_PROVIDER:-qwen}`, and TC_WRITER_PROVIDER is set nowhere. So the TC
+# writer went to an OpenRouter-routed vendor on EVERY run, whatever provider set was active: a
+# codemie or mockserver run still paid OpenRouter here. A vendor named in code outranked the
+# stack the run had chosen.
+TC_PROVIDER="${TC_WRITER_PROVIDER:-${EPAM_ORCHESTRATION_PROVIDER:-${AI_PROVIDER:-}}}"
+if [ -z "$TC_PROVIDER" ]; then
+  echo "  [tc-writer] no provider configured — the provider set supplies EPAM_ORCHESTRATION_PROVIDER. Refusing to pick a vendor." >&2
+  exit 1
+fi
 
 set +e
 # `epam run` has no --cwd flag (Commander rejects it as unknown, always exit 1) —
 # it operates on process.cwd() for its file tools, so change directory in a
 # subshell instead of passing a nonexistent option.
+# THROUGH THE CENTRAL HANDLER, NOT AROUND IT.
+#
+# This called the epam CLI directly and hand-wired EPAM_API_KEY_OPENAI="$OPENROUTER_API_KEY" —
+# cross-wiring one vendor's credential into another's slot. That made it a second channel: it
+# read its own credential and chose its own vendor, so changing the provider set changed
+# everything except this call. The handler resolves vendor and credential; this seam supplies
+# only the prompt and its tool budget.
+#
+# AI_GATE_ALLOW_TOOLS=1: the TC writer must read source to write criteria against it, so it
+# needs the tool grant the handler otherwise withholds.
 (
   cd "$OUTPUT_DIR" && \
-  EPAM_API_KEY_OPENAI="${OPENROUTER_API_KEY:-}" \
-  EPAM_PROVIDER="$TC_PROVIDER" \
-  EPAM_MODEL="$TC_MODEL" \
+  AI_GATE_ALLOW_TOOLS=1 \
   EPAM_MAX_OUTPUT_TOKENS="${TC_WRITER_MAX_OUTPUT_TOKENS:-32768}" \
   EPAM_DANGEROUS_SKIP_APPROVAL=1 \
   EPAM_MAX_TOOL_CALLS="${TC_WRITER_MAX_TOOL_CALLS:-15}" \
-    "$EPAM_BIN" run "$TC_PROMPT"
+    bash "${EPAM_LLM_HUB:-$SCRIPT_DIR/llm-handler.sh}" --provider "$TC_PROVIDER" --model "$TC_MODEL" <<<"$TC_PROMPT"
 ) 2>&1 | tee "$LOG_FILE"
 TC_EXIT=${PIPESTATUS[0]}
 set -e

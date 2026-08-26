@@ -329,7 +329,7 @@ async function buildProjectRoster({
   // DECLARED MODE, DECIDED BEFORE ANY MODEL TIME IS SPENT.
   const mode = readRosterMode(projectConfigDir);
   if (mode === 'canonical') {
-    const roster = withMintedAgents(rosterFromCanonical(canonical), projectConfigDir);
+    const roster = rosterFromCanonical(canonical);
     // HELD TO THE SAME CONTRACT. A cheaper path that skipped the check would be a second,
     // unvalidated way for a roster to reach disk — which is the shape of every defect this
     // library exists to prevent.
@@ -337,6 +337,13 @@ async function buildProjectRoster({
     if (!contract.ok) {
       throw new Error(`[roster] canonical does not satisfy the roster contract: ${contract.reason}`);
     }
+    // AFTER THE CONTRACT, as on the specialiser path. checkRoster requires every ancestor to be a
+    // name in canonical — that is how an agent inherits a ladder, a tool grant and an output
+    // contract. A MINTED agent has no canonical ancestor: it is a role this project needed and
+    // canonical never had, so it is its own ancestor, and running it through that check would
+    // reject every project-specific role by construction. The specialiser path already adds them
+    // after its own check — metrolinx's roster carries exactly this shape — so the two agree.
+    withMintedAgents(roster, projectConfigDir);
     fs.writeFileSync(outPath, JSON.stringify(roster, null, 2));
     const _minted = Object.values(roster.agents).filter((a) => a.rationale && a.rationale.startsWith('minted')).length;
     log(`[roster] rosterMode=canonical — ${Object.keys(roster.agents).length} persona(s) adopted verbatim`

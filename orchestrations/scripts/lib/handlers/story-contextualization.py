@@ -56,12 +56,25 @@ except Exception:
     pricing = {}
 
 def get_price(model):
-    p = pricing.get(model, {})
+    # AN UNPRICED MODEL IS FREE, NOT A CRASH.
+    #
+    # Two ways this aborted the whole cost profile. An unresolved rung arrives as "", and
+    # `"" in anything` is True, so the fuzzy pass matched the FIRST key in the file. And the
+    # pricing map carries "_comment"-style documentation keys whose values are strings, so
+    # that match then called .get() on a str and raised AttributeError. The traceback went to
+    # stderr, the caller read empty stdout, and every story was contextualized with no model
+    # profile at all — silently, because a missing profile looks the same as a cheap one.
+    if not model:
+        return 0.0, 0.0
+    priced = {k: v for k, v in pricing.items() if isinstance(v, dict)}
+    p = priced.get(model)
     if not p:
         ml = model.lower()
-        for k, v in pricing.items():
+        for k, v in priced.items():
             if k.lower() == ml or k.lower() in ml or ml in k.lower():
                 p = v; break
+    if not isinstance(p, dict):
+        return 0.0, 0.0
     return float(p.get("input", 0)), float(p.get("output", 0))
 
 def rung_cost(model, tok_in, tok_out):

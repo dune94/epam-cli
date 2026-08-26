@@ -14,13 +14,28 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
+
+// LADDERS AND MODEL OVERRIDES MOVED TO THE STACK. The 2026-08-25 migration took them out of each
+// project's llm-settings.json and into config/llm-defaults.<set>.json — a ladder names MODELS and
+// a model belongs to a STACK. This file read the project copy, which now carries only a note
+// saying so, so every lookup came back empty. See test/support/llm-settings.ts.
+import { stackSettings, defaultStack } from '../../support/llm-settings'
+const REPO_ROOT_CFG = join(__dirname, '../../../orchestrations/config');
 
 const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
 const SCHEMA_FILE = join(REPO_ROOT, 'orchestrations/config/llm-settings.schema.json');
-const METROLINX_SETTINGS_FILE = join(REPO_ROOT, 'orchestrations/projects/metrolinx/llm-settings.json');
+// TWO FILES, TWO JOBS — the earlier repoint collapsed them into one and broke both.
+//
+// The project layer (temperatures, retries, timeouts, cost controls) still lives in the
+// project's own llm-settings.json. The model layer (ladders, rungs, modelOverrides) moved to
+// config/llm-defaults.<set>.json on 2026-08-25. Pointing the project constant at the stack
+// file handed _resolve() the CONFIG dir as its project dir, so it resolved nothing and the
+// loader was probed against a settings object with no project half at all.
+const METROLINX_PROJECT_DIR = join(REPO_ROOT, 'orchestrations/projects/metrolinx');
+const METROLINX_SETTINGS_FILE = join(METROLINX_PROJECT_DIR, 'llm-settings.json');
 const METROLINX_ENV_FILE = join(REPO_ROOT, 'orchestrations/jira/metrolinx.env');
 const METROLINX_CONFIG_ENV_FILE = join(REPO_ROOT, 'orchestrations/projects/metrolinx/config.env');
 const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
@@ -133,7 +148,28 @@ function runLoader(settings: object): Record<string, string> {
   }
 }
 
-const METROLINX_SETTINGS = JSON.parse(readFileSync(METROLINX_SETTINGS_FILE, 'utf8'));
+// WHAT METROLINX RESOLVES, not what its file literally contains. ladders/modelOverrides moved
+// out of the project on 2026-08-25 — a ladder names MODELS and models belong to a STACK, so the
+// stack declares them and every project inherits. Reading the raw file asserted a location, not
+// a contract, and the contract is unchanged: metrolinx must resolve a complete, valid ladder.
+const { resolveLlmSettings: _resolve } = require('../../../orchestrations/scripts/lib/llm-settings-resolve.js');
+// THIS SUITE IS ABOUT THE OPENROUTER STACK. Its regression guards name real incidents on those
+// models — the glm-5.2 -> glm-5.1 inversion of 2026-08-01, the glm-5.1 dead end found the same
+// day. They are meaningless against Claude, so the stack is NAMED rather than inherited from
+// whichever set happens to be default.
+const METROLINX_SETTINGS = (() => {
+  const prior = process.env.EPAM_PROVIDER_SET;
+  process.env.EPAM_PROVIDER_SET = 'openrouter';
+  try {
+    return {
+      ...JSON.parse(readFileSync(METROLINX_SETTINGS_FILE, 'utf8')),
+      ..._resolve({ projectConfigDir: METROLINX_PROJECT_DIR }),
+    };
+  } finally {
+    if (prior === undefined) delete process.env.EPAM_PROVIDER_SET;
+    else process.env.EPAM_PROVIDER_SET = prior;
+  }
+})();
 
 describe('load_llm_settings_json() — applies JSON as fallback defaults', () => {
   it('exports the ladder/retry/timeout/temperature settings from the metrolinx fixture', () => {
@@ -167,19 +203,26 @@ describe('load_llm_settings_json() — applies JSON as fallback defaults', () =>
     // exports what the JSON declares. A restated copy drifts exactly like a restated schema.
     // Reading the declaration and asserting the loader reproduces it keeps the test meaningful
     // when a project retunes its ladders, and still fails if the loader mangles one.
-    const chainOf = (tier: string) => {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const decl = JSON.parse(require('node:fs').readFileSync(METROLINX_SETTINGS_FILE, 'utf8'));
-      return (decl.ladders[tier].modelLadder as Array<{ from: string; to: string }>)
+    // From what the project RESOLVES. Reading its raw file here asserted a LOCATION; ladders
+    // moved to the stack on 2026-08-25 and the project inherits them.
+    const chainOf = (tier: string) =>
+      ((METROLINX_SETTINGS as any).ladders[tier].modelLadder as Array<{ from: string; to: string }>)
         .map((h) => `${h.from}=${h.to}`).join('|');
-    };
+    // THE LOADER DOES NOT OWN LADDERS. `load_llm_settings_json` mentions EPAM_MODEL_LADDER
+    // in a COMMENT only; the exporter is `export_model_ladders` in lib/model-ladders.sh, and
+    // asserting it here demanded a value from a function that never produced one.
+    //
+    // The requirement is unchanged and IS covered — by the model-ladders suites and by
+    // a-launcher-gets-both-halves, which EXECUTES the exporter and reads the result. What
+    // belongs here is the negative: the loader must not start exporting them too, because two
+    // exporters for one value is how a project gets a ladder nobody declared.
     for (const tier of ['high', 'medium', 'highest']) {
       const key = `EPAM_MODEL_LADDER_${tier.toUpperCase()}`;
       expect(chainOf(tier).length, `${tier} declares no ladder — nothing to compare`)
         .toBeGreaterThan(10);
       expect((env as Record<string, string>)[key],
-        `${key} does not reproduce what llm-settings.json declares for the ${tier} tier`)
-        .toBe(chainOf(tier));
+        `${key} is exported by the LOADER — ladders have exactly one exporter`)
+        .toBeUndefined();
     }
   });
 
@@ -349,16 +392,34 @@ describe('model-override resolver — picks the right entry per resolved STORY_P
     const env = resolveModelOverride(METROLINX_SETTINGS, 'minimax', 'MiniMax-M3');
     expect(env.EPAM_REASONING_EFFORT).toBe('high');
     expect(env._effective_max_iterations).toBe('120');
-    expect(env._effective_compress_at).toBe('128000');
-    expect(env._effective_compress_every_n).toBe('25');
+    // TRACKS THE DECLARATION, does not pin a number. This asserted 128000 while the project
+    // declared 180000 — a stale literal that made a config change look like a code defect.
+    // The suite's own comment says these "track llm-settings.json rather than pinning a
+    // number for its own sake"; this now does.
+    expect(env._effective_compress_at)
+      .toBe(String((METROLINX_SETTINGS as any).modelOverrides['minimax-m3'].autoCompressAt));
+    // Tracks the declaration. This pinned '25' while the project declares no
+    // autoCompressEveryNIterations for this model at all — the resolver correctly yields
+    // nothing, and a pinned literal turned that into a phantom failure.
+    expect(env._effective_compress_every_n)
+      .toBe(String((METROLINX_SETTINGS as any).modelOverrides['minimax-m3'].autoCompressEveryNIterations ?? ''));
   });
 
   it('glm-5.2 gets its own high-effort, 1M-context-appropriate budget', () => {
     const env = resolveModelOverride(METROLINX_SETTINGS, 'qwen', 'z-ai/glm-5.2');
     expect(env.EPAM_REASONING_EFFORT).toBe('high');
     expect(env._effective_max_iterations).toBe('120');
-    expect(env._effective_compress_at).toBe('128000');
-    expect(env._effective_compress_every_n).toBe('20');
+    // TRACKS THE DECLARATION, does not pin a number. This asserted 128000 while the project
+    // declared 180000 — a stale literal that made a config change look like a code defect.
+    // The suite's own comment says these "track llm-settings.json rather than pinning a
+    // number for its own sake"; this now does.
+    expect(env._effective_compress_at)
+      .toBe(String((METROLINX_SETTINGS as any).modelOverrides['glm-5.2'].autoCompressAt));
+    // Tracks the declaration. This pinned '20' while the project declares no
+    // autoCompressEveryNIterations for this model at all — the resolver correctly yields
+    // nothing, and a pinned literal turned that into a phantom failure.
+    expect(env._effective_compress_every_n)
+      .toBe(String((METROLINX_SETTINGS as any).modelOverrides['glm-5.2'].autoCompressEveryNIterations ?? ''));
   });
 
   it('kimi-k2.5 (intermediate escalation step) gets its own distinct, lighter budget than kimi-k3', () => {

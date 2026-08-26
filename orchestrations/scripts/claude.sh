@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# The run's spend figure comes from the ACTIVE SET, not a vendor hardcoded here.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/spend-probe.sh" 2>/dev/null || true
+
 # EPAM CLI Orchestration Script - AI-driven development loop
 # This script orchestrates Claude Code CLI for autonomous story implementation
 #
@@ -71,6 +74,8 @@ source "$SCRIPT_DIR/lib/story-retry-state.sh"
 # line inside it makes those probes fail on a library they have no reason to carry.
 source "$SCRIPT_DIR/lib/jq-vals.sh"
 . "$SCRIPT_DIR/lib/agent-io.sh"
+# shellcheck source=lib/runner-settings.sh
+. "$SCRIPT_DIR/lib/runner-settings.sh"
 . "$SCRIPT_DIR/lib/agent-ladder.sh"
 PROGRESS_LOG="$LOG_DIR/progress.txt"
 AGENTS_FILE="$AUTOMATION_DIR/agents/AGENTS.md"
@@ -178,7 +183,6 @@ load_env_file() {
 # Save caller-set gate overrides BEFORE loading .env so tier-script values survive.
 # .env contains stale defaults; the tier script intentionally overrides them at runtime.
 _claude_pre_gate_provider="${ORCH_GATE_PROVIDER:-}"
-_claude_pre_gate_model="${ORCH_GATE_MODEL:-}"
 _claude_pre_orch_provider="${EPAM_ORCHESTRATION_PROVIDER:-}"
 # Launcher-provided temperature floor (e.g. tier3-travel-app-run.sh's project-wide
 # GLM pin) — captured once here so the per-story reset below can restore it
@@ -191,10 +195,9 @@ load_env_file "$PROJECT_ROOT/.env"
 
 # Restore: tier-script values win over .env defaults
 [ -n "$_claude_pre_gate_provider" ] && ORCH_GATE_PROVIDER="$_claude_pre_gate_provider"
-[ -n "$_claude_pre_gate_model"    ] && ORCH_GATE_MODEL="$_claude_pre_gate_model"
 [ -n "$_claude_pre_orch_provider" ] && EPAM_ORCHESTRATION_PROVIDER="$_claude_pre_orch_provider"
-unset _claude_pre_gate_provider _claude_pre_gate_model _claude_pre_orch_provider
-export ORCH_GATE_PROVIDER ORCH_GATE_MODEL EPAM_ORCHESTRATION_PROVIDER
+unset _claude_pre_gate_provider _claude_pre_gate_model_REMOVED _claude_pre_orch_provider
+export ORCH_GATE_PROVIDER EPAM_ORCHESTRATION_PROVIDER
 
 # Load EPAM_PROJECT_CONFIG_DIR/llm-settings.json (schema:
 # orchestrations/config/llm-settings.schema.json) as FALLBACK DEFAULTS for the
@@ -527,19 +530,16 @@ resolve_effort_settings() {
     case "$effort" in
         low)
             STORY_MODEL="$EFFORT_MODEL_LOW"
-            STORY_MAX_TURNS=""
             STORY_MAX_ITERATIONS="${EPAM_EFFORT_LOW_MAX_ITERATIONS}"
             STORY_MAX_OUTPUT_TOKENS="${EPAM_EFFORT_LOW_MAX_OUTPUT_TOKENS}"
             ;;
         high)
             STORY_MODEL="$EFFORT_MODEL_HIGH"
-            STORY_MAX_TURNS=""
             STORY_MAX_ITERATIONS="${EPAM_EFFORT_HIGH_MAX_ITERATIONS}"
             STORY_MAX_OUTPUT_TOKENS="${EPAM_EFFORT_MEDIUM_MAX_OUTPUT_TOKENS}"
             ;;
         *)  # medium (default)
             STORY_MODEL="$EFFORT_MODEL_MEDIUM"
-            STORY_MAX_TURNS=""
             STORY_MAX_ITERATIONS="${EPAM_EFFORT_MEDIUM_MAX_ITERATIONS}"
             STORY_MAX_OUTPUT_TOKENS="${EPAM_EFFORT_MEDIUM_MAX_OUTPUT_TOKENS}"
             ;;
@@ -553,7 +553,7 @@ resolve_effort_settings() {
     # named it, but read at a glance mid-run it looked like a third model
     # was in rotation and costing money. resolve_model_from_story() now
     # always logs whichever model actually ends up used.
-    log "  Effort[$effort] -> turns=${STORY_MAX_TURNS:-unlimited} maxIter=${STORY_MAX_ITERATIONS} maxOutTok=${STORY_MAX_OUTPUT_TOKENS}"
+    log "  Effort[$effort] -> maxIter=${STORY_MAX_ITERATIONS} maxOutTok=${STORY_MAX_OUTPUT_TOKENS}"
 }
 
 # resolve_generator_settings <story_id>
@@ -1393,7 +1393,7 @@ resolve_model_from_story() {
             _rmfs_kind=$(jq -r --arg id "$story_id" \
                 '.stories[] | select(.id == $id) | .storyKind // ""' \
                 "$prd_target" 2>/dev/null || echo "")
-            _rmfs_high="${ESCALATION_MODEL_HIGH:-${ORCH_GATE_MODEL:-}}"
+            _rmfs_high="${ESCALATION_MODEL_HIGH:-${EPAM_MODEL:-}}"
             if [ "$_rmfs_kind" = "novel" ] && [ -n "$_rmfs_high" ] && [ "$_rmfs_high" != "$STORY_MODEL" ]; then
                 log "  Model[novel-brownfield] -> $_rmfs_high (was $STORY_MODEL; novel code does not start on the cheapest rung)"
                 STORY_MODEL="$_rmfs_high"
@@ -1546,7 +1546,7 @@ resolve_planner_settings() {
     done
     unset IFS
     if [ "$_auto_ok" = "1" ]; then
-        local _auto_planner="${EPAM_PLANNER_MODEL_HIGH_TIER:-${ORCH_GATE_MODEL:-}}"
+        local _auto_planner="${EPAM_PLANNER_MODEL_HIGH_TIER:-${EPAM_MODEL:-}}"
         if [ -n "$_auto_planner" ]; then
             STORY_PLANNER_MODEL="$_auto_planner"
             log "  PlannerModel[auto/high-tier: $STORY_PLANNER_MODEL] -> planning turn, then execution on $STORY_MODEL"
@@ -1640,10 +1640,15 @@ provider_to_cli() {
         opencode)                    echo "opencode" ;;
         codex)                       echo "codex" ;;
         codemie-claude)              echo "codemie-claude" ;;
+        # Plain Claude Code. Added 2026-08-25 for the mockserver set, which runs it
+        # redirected at MockServer via ANTHROPIC_BASE_URL. It was previously listed in
+        # providers.json with NO case arm — a PRD could name it, pass the gate, and die
+        # here at runtime. Now it is genuinely accepted, so the gate and the engine agree.
+        claude)                      echo "claude" ;;
         copilot|openai|qwen|cursor|minimax)  echo "$EPAM_CLI" ;;
         epam)                        echo "$EPAM_CLI" ;;
         *)
-            error "Unknown aiProvider '$1' — set aiProvider in prd.json to one of: opencode|codex|copilot|openai|qwen|cursor|minimax|codemie-claude"
+            error "Unknown aiProvider '$1' — set aiProvider in prd.json to one of: opencode|codex|copilot|openai|qwen|cursor|minimax|codemie-claude|claude"
             return 1
             ;;
     esac
@@ -2032,6 +2037,7 @@ run_plan_mode() {
     if [ "${EPAM_SDK_INVOKE:-0}" = "1" ] && [ -f "$INVOKE_PY" ]; then
         # SDK path: extended thinking enabled for plan mode (high-complexity reasoning)
         if echo "$plan_prompt" | "$INVOKE_PYTHON" "$INVOKE_PY" \
+                --cache-system \
                 --model "$STORY_MODEL" \
                 --thinking-budget 8000 \
                 --output "$plan_json" 2>/dev/null; then
@@ -2040,7 +2046,7 @@ run_plan_mode() {
     else
         # Route through ai-run.sh with the configured orchestration provider
         local _orch_provider="${EPAM_ORCHESTRATION_PROVIDER:-}"
-        local _orch_model="${ORCH_GATE_MODEL:-}"
+        local _orch_model="$(seam_model_or_fail "phase-assessment" 2>/dev/null || true)"
         if [ -z "$_orch_provider" ]; then
             warning "Plan mode: EPAM_ORCHESTRATION_PROVIDER not set — skipping plan"
         # AI_GATE_ALLOW_TOOLS=1: the plan_prompt below explicitly instructs the
@@ -5994,6 +6000,7 @@ $(cat "$_cf")
     local plan_permissions=("--dangerously-skip-permissions" "--append-system-prompt" "$plan_constitution")
     if [ "${EPAM_SDK_INVOKE:-0}" = "1" ] && [ -f "$INVOKE_PY" ]; then
         echo "$planning_prompt" | "$INVOKE_PYTHON" "$INVOKE_PY" \
+            --cache-system \
             --model "$planner_model" \
             --system-prompt "$plan_constitution" \
             --output "$plan_result_file" 2>/dev/null || true
@@ -6001,7 +6008,7 @@ $(cat "$_cf")
     else
         # Route through ai-run.sh with the configured orchestration provider
         local _orch_provider="${EPAM_ORCHESTRATION_PROVIDER:-}"
-        local _orch_model="${planner_model:-${ORCH_GATE_MODEL:-}}"
+        local _orch_model="${planner_model:-${EPAM_MODEL:-}}"
         if [ -n "$_orch_provider" ]; then
             # PLANNING SAMPLING, not the writer's. The planning turn wants determinism and
             # structure; execution sampling is per-model and, for some models, the opposite
@@ -6115,13 +6122,13 @@ $(cat "$_contract_file")
     # nothing on stdin — which is exactly how the writer burned 8 attempts at $0 cost.
     review_output=$(echo "$review_prompt" | \
         AI_PROVIDER="$_orch_provider" \
-        AI_MODEL="${ORCH_GATE_MODEL:-}" \
+        AI_MODEL="${EPAM_MODEL:-}" \
         EPAM_CLI="$EPAM_CLI" \
         AI_GATE_ALLOW_TOOLS=1 \
         EPAM_ALLOWED_TOOLS="$ORCH_GATE_ALLOWED_TOOLS" \
         EPAM_MAX_TOOL_CALLS="${PLAN_REVIEW_MAX_TOOL_CALLS:-24}" \
         bash "$SCRIPT_DIR/ai-run.sh" --provider "$_orch_provider" \
-        ${ORCH_GATE_MODEL:+--model "$ORCH_GATE_MODEL"} \
+        ${EPAM_MODEL:+--model "$EPAM_MODEL"} \
         2>/dev/null || echo "")
 
     # Robust JSON extraction (not a flat-object regex — see the identical bug
@@ -6155,7 +6162,7 @@ $(cat "$_contract_file")
     local corrected_plan
     corrected_plan=$(echo "$corrective_prompt" | \
         AI_PROVIDER="$_orch_provider" \
-        AI_MODEL="${STORY_PLANNER_MODEL:-${ORCH_GATE_MODEL:-}}" \
+        AI_MODEL="${STORY_PLANNER_MODEL:-${EPAM_MODEL:-}}" \
         EPAM_CLI="$EPAM_CLI" \
         bash "$SCRIPT_DIR/ai-run.sh" --provider "$_orch_provider" \
         ${STORY_PLANNER_MODEL:+--model "$STORY_PLANNER_MODEL"} \
@@ -6237,8 +6244,19 @@ classify_failure_class() {
             warning "  Coordinator[Diag]: epam binary not found on PATH — check EPAM_CLI or PATH"
             _diag_ok=false
         fi
-        # 2. Check OpenRouter key validity (fast: uses cached auth endpoint)
-        local _or_key="${OPENROUTER_API_KEY:-${EPAM_API_KEY_OPENROUTER:-}}"
+        # 2. Check the stack's credential, IF this stack has one to check.
+        #
+        # This curled a vendor auth endpoint unconditionally and, finding no key for that
+        # vendor, declared "provider will fail on any API call" — on a codemie or mockserver
+        # run, where that vendor is not used at all. A diagnostic that reports a healthy run as
+        # broken is worse than none. The set declares whether it has a checkable credential
+        # endpoint (provider-sets.json spendProbe); a set declaring none is skipped, not failed.
+        local _or_key=""
+        if [ -n "$(spend_probe_read)" ]; then
+            _or_key="${OPENROUTER_API_KEY:-${EPAM_API_KEY_OPENROUTER:-}}"
+        else
+            log "  Coordinator[Diag]: this provider set declares no credential endpoint — skipping the vendor key check"
+        fi
         if [ -n "$_or_key" ]; then
             local _key_status
             _key_status=$(curl -s --max-time 5 \
@@ -6809,7 +6827,7 @@ assess_model_escalation() {
     [ "${EPAM_MODEL_COORDINATOR_ENABLED:-0}" != "1" ] && return
 
     local gate_provider="${ORCH_GATE_PROVIDER:-}"
-    local gate_model="${ORCH_GATE_MODEL:-}"
+    local gate_model="${EPAM_MODEL:-}"
     [ -z "$gate_provider" ] && return
 
     # Read failure evidence (cap at 3000 chars to stay within gate model budget)
@@ -7387,7 +7405,10 @@ run_failure_analyst() {
     local gate_provider="${ORCH_GATE_PROVIDER:-}"
     # Failure analyst uses ESCALATION_MODEL (z-ai/glm-5.2) when set — never qwen chat models;
     # falls back to ORCH_GATE_MODEL only when no escalation model is configured.
-    local gate_model="${ESCALATION_MODEL:-${ORCH_GATE_MODEL:-}}"
+    # THE SEAM'S LADDER, not a run-wide pin. ORCH_GATE_MODEL reached every seam that could
+    # not resolve one itself; .env set it to z-ai/glm-5.2, so a mockserver run asked for an
+    # OpenRouter model. An unresolvable seam yields empty and the caller refuses, as before.
+    local gate_model="${ESCALATION_MODEL:-$(seam_model_or_fail "agent-failure-analyst" 2>/dev/null || true)}"
     if [ -z "$gate_provider" ]; then
         log "  [FailureAnalyst] No gate provider configured — skipping self-heal analysis"
         return 0
@@ -8938,7 +8959,7 @@ run_retry_extension_coordinator() {
     fi
 
     local gate_provider="${ORCH_GATE_PROVIDER:-}"
-    local gate_model="${ORCH_GATE_MODEL:-}"
+    local gate_model="${EPAM_MODEL:-}"
     if [ -z "$gate_provider" ]; then
         echo 0
         return 0
@@ -9285,9 +9306,19 @@ implement_story() {
         )
     fi
     local model_flag=()
-    local turns_flag=()
-    [ -n "${STORY_MODEL:-}" ]     && model_flag=(--model "$STORY_MODEL")
-    [ -n "${STORY_MAX_TURNS:-}" ] && turns_flag=(--max-turns "$STORY_MAX_TURNS")
+    [ -n "${STORY_MODEL:-}" ] && model_flag=(--model "$STORY_MODEL")
+
+    # THE CAPS THIS PATH NEVER HAD. `--max-turns` was built here from STORY_MAX_TURNS, and
+    # BOTH halves were dead: the flag no longer exists in Claude Code (the env var
+    # CLAUDE_CODE_MAX_TURNS replaced it), and STORY_MAX_TURNS was hardcoded "" in every effort
+    # branch so it was never emitted. A flag that cannot fire is not a cap — which is how one
+    # seam ran 1,486 generations in 44 minutes with nothing able to stop it.
+    #
+    # What replaces it names no knob: the runner's DECLARATION says which env vars and flags it
+    # takes, and apply_runner_settings passes exactly those. A runner that declares nothing
+    # gets nothing, so every other path behaves exactly as before.
+    RUNNER_FLAGS=()
+    apply_runner_settings "$(basename "${CLAUDE_CMD:-}")" "${EPAM_PROJECT_CONFIG_DIR:-}" || true
     local story_cli
     story_cli=$(provider_to_cli "${STORY_PROVIDER:-codex}")
 
@@ -9955,7 +9986,7 @@ $_kb_section"
             codemie-claude)
                 # codemie-claude: same invocation pattern as claude — --print --output-format json
                 if echo "$prompt" | "${_timeout_prefix[@]}" codemie-claude --print --output-format json \
-                        "${model_flag[@]}" "${turns_flag[@]}" "${effective_permissions[@]}" \
+                        "${model_flag[@]}" "${RUNNER_FLAGS[@]}" "${effective_permissions[@]}" \
                         2>>"$output_file" > "$json_result_file"; then
                     invoke_success=true
                 fi
@@ -10084,11 +10115,41 @@ $_kb_section"
                 local _effective_max_iterations="${STORY_MAX_ITERATIONS:-6}"
                 local _effective_compress_at="${EPAM_AUTO_COMPRESS_AT:-}"
                 local _effective_compress_every_n="${EPAM_AUTO_COMPRESS_EVERY_N_ITERATIONS:-}"
+                # THE OVERRIDES LIVE WITH THE MODELS — in the active STACK, not the project.
+                #
+                # This read only the project's llm-settings.json. The 2026-08-25 migration moved
+                # modelOverrides out of project files into config/llm-defaults.<set>.json, because
+                # a per-model setting belongs to the model and a model belongs to a stack. The
+                # reader was left behind, so effort, temperature and compaction overrides reached
+                # NOTHING on any run — the same defect seam-invocation.js had for iteration
+                # budgets, in a second reader.
+                #
+                # The project file is still preferred when it declares overrides: a project may
+                # legitimately override for its own reasons, and that is the layer where such a
+                # decision belongs.
                 local _model_override_settings_file="${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json"
+                if ! { [ -f "$_model_override_settings_file" ] \
+                       && "${NODE_BIN:-node}" -e 'const o=(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).modelOverrides)||{}; process.exit(Object.keys(o).filter(k=>!k.startsWith("$")).length?0:1)' \
+                            "$_model_override_settings_file" 2>/dev/null; }; then
+                    local _set_settings_file
+                    _set_settings_file="$("${NODE_BIN:-node}" -e '
+                        try {
+                          const { activeSetFile } = require(process.argv[1] + "/lib/llm-settings-resolve.js");
+                          process.stdout.write(activeSetFile() || "");
+                        } catch (_) { process.stdout.write(""); }
+                    ' "$SCRIPT_DIR" 2>/dev/null || printf '')"
+                    [ -n "$_set_settings_file" ] && [ -f "$_set_settings_file" ] \
+                        && _model_override_settings_file="$_set_settings_file"
+                fi
                 if [ -f "$_model_override_settings_file" ]; then
                     local _override_json
                     _override_json=$(jq -c --arg provider "${STORY_PROVIDER:-}" --arg model "${STORY_MODEL:-}" '
                         (.modelOverrides // {}) | to_entries
+                        # A "$"-prefixed key is a documentation note, not an override. Indexing
+                        # .value.matchOn on a string aborts the whole query, and the 2>/dev/null
+                        # below turns that into an empty result — every override on the file lost,
+                        # silently, because someone wrote a comment beside them.
+                        | map(select(.value | type == "object"))
                         | map(select(
                             (.value.matchOn == "provider" and .value.matchValue == $provider)
                             or (.value.matchOn == "model" and (.value.matchSubstring // null) != null
@@ -10264,6 +10325,7 @@ $_kb_section"
                         STORY_PRECOUNT_TOKENS="${precount:-0}"
                     fi
                     if echo "$prompt" | "${_timeout_prefix[@]}" "$INVOKE_PYTHON" "$INVOKE_PY" \
+                            --cache-system \
                             "${sdk_model_arg[@]}" "${sdk_think_arg[@]}" \
                             --system-prompt "$effective_constitution" \
                             --output "$json_result_file" 2>>"$output_file"; then
@@ -10271,7 +10333,7 @@ $_kb_section"
                     fi
                 else
                     if echo "$prompt" | "${_timeout_prefix[@]}" "$CLAUDE_CMD" --print --output-format json \
-                            "${model_flag[@]}" "${turns_flag[@]}" "${effective_permissions[@]}" \
+                            "${model_flag[@]}" "${RUNNER_FLAGS[@]}" "${effective_permissions[@]}" \
                             2>>"$output_file" > "$json_result_file"; then
                         invoke_success=true
                     fi
@@ -10293,6 +10355,7 @@ $_kb_section"
                         STORY_PRECOUNT_TOKENS="${precount:-0}"
                     fi
                     if echo "$prompt" | "${_timeout_prefix[@]}" "$INVOKE_PYTHON" "$INVOKE_PY" \
+                            --cache-system \
                             "${sdk_model_arg[@]}" \
                             --system-prompt "$effective_constitution" \
                             --output "$json_result_file" 2>>"$output_file"; then
@@ -10300,7 +10363,7 @@ $_kb_section"
                     fi
                 else
                     if echo "$prompt" | "${_timeout_prefix[@]}" "$CLAUDE_CMD" --print --output-format json \
-                            "${model_flag[@]}" "${turns_flag[@]}" "${effective_permissions[@]}" \
+                            "${model_flag[@]}" "${RUNNER_FLAGS[@]}" "${effective_permissions[@]}" \
                             2>>"$output_file" > "$json_result_file"; then
                         invoke_success=true
                     fi
@@ -11998,7 +12061,7 @@ run_pre_phase_assessment() {
 
     cd "$PROJECT_ROOT"
     local _orch_provider="${EPAM_ORCHESTRATION_PROVIDER:-}"
-    local _orch_model="${ORCH_GATE_MODEL:-}"
+    local _orch_model="$(seam_model_or_fail "phase-assessment" 2>/dev/null || true)"
     if [ -z "$_orch_provider" ]; then
         warning "Pre-phase assessment: EPAM_ORCHESTRATION_PROVIDER not set — skipping (non-critical)"
     # AI_GATE_ALLOW_TOOLS=1: the prompt above instructs the agent to run real

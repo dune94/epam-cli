@@ -25,11 +25,16 @@
  *      caching (usage reported input_tokens/output_tokens only, no cache_read), so growth
  *      is multiplied by iteration count and billed in full each time.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdtempSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { provisionProject, cleanupProvisioned } from '../../support/provisioned-project';
+
+let PROVISIONED = '';
+beforeAll(() => { PROVISIONED = provisionProject(); });
+afterAll(() => cleanupProvisioned());
 
 const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
@@ -119,6 +124,18 @@ function renderPrompt(story: Story, env: Record<string, string> = {}): string {
       '_generate_vendor_contract(){ :; }',
       '_module_resolution_context(){ echo "[[STUB_MODULE_RESOLUTION]]"; }',
       '_resolve_deliverable_path(){ echo "$1"; }',
+      // THE REAL LIBRARY, SOURCED THE WAY PRODUCTION SOURCES IT.
+      //
+      // build_implementation_prompt calls render_engine_prompt, which lives in
+      // lib/render-engine-prompt.sh — not in claude.sh, so extracting functions by name could
+      // never find it. Every render died with "render_engine_prompt: command not found", the
+      // builder returned empty, and the harness's vacuous-pass guard fired. That guard was
+      // doing its job; the dependency set had drifted again, which the note above this list
+      // already records happening five times.
+      //
+      // Sourced rather than stubbed: a stub would return text this file wrote, and the
+      // assertions below are about what the PROMPT LAYER produces.
+      `source ${JSON.stringify(join(REPO_ROOT, 'orchestrations/scripts/lib/render-engine-prompt.sh'))}`,
       `source ${JSON.stringify(join(dir, 'fn.sh'))}`,
       `build_implementation_prompt ${JSON.stringify(story.id)}`,
     ].join('\n'),
@@ -134,6 +151,14 @@ function renderPrompt(story: Story, env: Record<string, string> = {}): string {
       PROJECT_ROOT: dir,
       LOG_DIR: join(dir, 'logs'),
       SCRIPT_DIR: join(REPO_ROOT, 'orchestrations/scripts'),
+      // THE WRITER PROMPT RENDERS SEAM PROMPTS FROM THE PROJECT'S OWN COPIES.
+      //
+      // build_implementation_prompt renders test-ownership and the writer-* blocks through
+      // prompt-library, which refuses to execute a template — a project without a copy is a
+      // provisioning defect. With no EPAM_PROJECT_CONFIG_DIR the render collapsed to empty and
+      // the harness's own vacuous-pass guard fired, which is the guard working: every
+      // not.toContain below would have passed against an empty string.
+      EPAM_PROJECT_CONFIG_DIR: PROVISIONED,
       AGENT_PROFILES_FILE: '',
       ...env,
     },

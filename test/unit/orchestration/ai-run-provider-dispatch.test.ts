@@ -16,7 +16,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const REPO_ROOT = join(__dirname, '../../../');
-const AI_RUN_SH = join(REPO_ROOT, 'orchestrations/scripts/ai-run.sh');
+const AI_RUN_SH = join(REPO_ROOT, 'orchestrations/scripts/llm-handler.sh');
 const aiRunSrc = readFileSync(AI_RUN_SH, 'utf8');
 
 function extractFunctionByLineAnchor(name: string): string {
@@ -183,12 +183,22 @@ echo '{"type":"other.event"}'
 exit 0
 `,
         },
+        // THE LADDER RESOLVES THE MODEL; THIS ARM NO LONGER INVENTS ONE.
+        // With AI_MODEL unset the codex arm returns 78 ("no model resolved from the ladder")
+        // instead of defaulting to a literal, so a test that left it unset was exercising the
+        // refusal, not the success path it describes.
+        env: { AI_MODEL: 'gpt-5-codex' },
       });
       expect(rc).toBe(0);
       expect(stdout.trim()).toBe('Hello World');
     });
 
-    it('falls back to gpt-5-codex when AI_MODEL does not match the codex/gpt/o-series pattern', () => {
+    it('REFUSES a model it cannot serve, rather than substituting one of its own', () => {
+      // THE FALLBACK WAS THE DEFECT. This asserted the arm silently swaps in gpt-5-codex when
+      // the resolved model is not codex-shaped, so a run that had resolved one model called a
+      // different one chosen here, with nothing in the log to say so. A provider that cannot
+      // serve the ladder's model is a routing error, not a licence to pick another: it returns
+      // 78 and lets the ladder escalate to a rung this provider CAN serve.
       // run_provider_once's codex branch only surfaces stdout that survives its
       // own item.completed/jq post-processing, so args must be captured via a
       // side-channel file rather than echoed directly to stdout.
@@ -204,8 +214,9 @@ exit 0
         },
         env: { AI_MODEL: 'some-unrelated-model-name' },
       });
-      expect(rc).toBe(0);
-      expect(sideChannel).toContain('gpt-5-codex');
+      expect(rc, 'the codex arm accepted a model it cannot serve').toBe(78);
+      expect(sideChannel, 'codex was invoked — the refusal must happen BEFORE the call')
+        .not.toContain('gpt-5-codex');
     });
 
     it('keeps AI_MODEL as-is when it DOES match the codex/gpt/o-series pattern', () => {
@@ -231,6 +242,7 @@ exit 0
         stubs: {
           codex: `#!/usr/bin/env bash\ncat > /dev/null\necho "codex crashed: bad request"\nexit 1\n`,
         },
+        env: { AI_MODEL: 'gpt-5-codex' },
       });
       expect(rc).toBe(1);
       expect(stderr).toContain('codex crashed');

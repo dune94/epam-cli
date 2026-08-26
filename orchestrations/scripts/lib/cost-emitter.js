@@ -77,6 +77,18 @@ function parseCostRecord(text) {
     usage.cached_input_tokens ?? usage.cachedInputTokens
     ?? usage.cache_read_input_tokens ?? 0);
 
+  // CACHE CREATION IS BILLED, AND AT A PREMIUM. The argument the comment above makes for cache
+  // READS applies here, and this was hardcoded to 0 at the emitter so the ledger could not see it
+  // at all. A trivial "say ok" probe on 2026-08-26 reported cache_creation_input_tokens: 16827 —
+  // creation dwarfing a nine-token prompt — while every row of that day's mock3 ledger recorded
+  // cache_create_tokens: 0.
+  //
+  // Both TTL buckets are summed when the provider breaks them out: which bucket they land in
+  // changes the price, not whether it was paid.
+  const _cc = usage.cache_creation && typeof usage.cache_creation === 'object' ? usage.cache_creation : null;
+  const tokensCacheCreate = num(usage.cache_creation_input_tokens ?? usage.cacheCreationInputTokens)
+    || (_cc ? num(_cc.ephemeral_1h_input_tokens) + num(_cc.ephemeral_5m_input_tokens) : 0);
+
   // Says whether the number above is the provider's REAL billed cost or a local pricing-table
   // guess. Omitted by producers that do not distinguish the two, and null is not false — an
   // estimate presented as confirmed spend is the thing this field exists to prevent.
@@ -87,9 +99,10 @@ function parseCostRecord(text) {
   // $0.0000. Recording that as free under-reports exactly on the TOP ladder rung,
   // which is only reached when a story is already burning money. Flag it so a
   // dashboard can show "unknown", never a confident $0.00.
-  const costUnknown = costUsd === 0 && (tokensIn > 0 || tokensOut > 0 || tokensCached > 0);
+  const costUnknown = costUsd === 0
+    && (tokensIn > 0 || tokensOut > 0 || tokensCached > 0 || tokensCacheCreate > 0);
 
-  return { costUsd, tokensIn, tokensOut, tokensCached, costUnknown, costIsEstimate };
+  return { costUsd, tokensIn, tokensOut, tokensCached, tokensCacheCreate, costUnknown, costIsEstimate };
 }
 
 /** Build a cost_snapshot event identical in shape to the bash emitter's. */
@@ -109,6 +122,7 @@ function buildCostSnapshot({ agent, storyId, phase, model, provider, cost, turns
       tokensIn: cost.tokensIn,
       tokensOut: cost.tokensOut,
       tokensCached: cost.tokensCached || 0,
+      tokensCacheCreate: cost.tokensCacheCreate || 0,
       costUnknown: !!cost.costUnknown,
       // null when the producer did not say. Kept distinct from false so "we know this is billed"
       // never gets confused with "nobody told us".

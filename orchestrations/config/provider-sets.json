@@ -1,0 +1,53 @@
+{
+  "$comment": "THE PROVIDER SETS, AND WHICH ONE IS DEFAULT. Selecting a set is a LOOKUP, never a branch: an engine naming its sets in a case statement would make adding a third one an engine change — the same defect removed from ladders one layer down. EPAM_PROVIDER_SET picks a key from `sets`; unset picks `defaultSet`. An unknown name is an ERROR listing the declared sets, never a silent fall-through, because falling back would run a whole programme on the wrong stack while looking configured.",
+  "$hotSwap": "If one provider's tokens run out mid-programme, the other must be back on the air in SECONDS: one env var, no build, no test run, no git operation, no file copied over another. Both sets live on disk permanently and side by side, so an interrupted swap leaves no half-written state.",
+  "defaultSet": "claude",
+  "projectEnv": {
+    "$comment": "HOW A PROJECT'S ENV IS SPLIT. `base` holds what is true of the project whatever stack it runs on; `overlay` holds the provider-dependent half and is chosen by the active set — {set} is replaced by that set's projectEnvSuffix. Declared here so no script contains either filename as a literal: renaming them is a config edit.",
+    "base": "config.env",
+    "overlay": "config.{set}.env",
+    "$disjoint": "base and overlay MUST NOT declare the same key. Disjoint files make load order irrelevant, so no caller has to know which wins — and a test asserts it rather than a comment claiming it."
+  },
+  "sets": {
+    "openrouter": {
+      "settingsFile": "llm-defaults.openrouter.json",
+      "projectEnvSuffix": "openrouter",
+      "description": "The stack in production today: OpenRouter and MiniMax, through the ai-run/AgentRunner path.",
+      "spendProbe": {
+        "url": "https://openrouter.ai/api/v1/auth/key",
+        "keyEnv": "OPENROUTER_API_KEY",
+        "usagePath": "data.usage"
+      }
+    },
+    "codemie": {
+      "settingsFile": "llm-defaults.codemie.json",
+      "projectEnvSuffix": "codemie",
+      "description": "Claude via the CodeMie SSO proxy, through the codemie-claude wrapper. Declared 2026-08-25 once its ladders existed — an undeclared set fails loudly, an empty one silently."
+    },
+    "mockserver": {
+      "settingsFile": "llm-defaults.mockserver.json",
+      "projectEnvSuffix": "mockserver",
+      "description": "Claude Code answered by MockServer over HTTP. No credentials, no spend. Named for the MECHANISM: 'mock' collides with the ordinary word this repo uses throughout, and 'replay' is already a PROVIDER — the cassette rehearsal in ai-run.sh, which replays at the ai-run layer and therefore cannot reach Claude Code at all. Different mechanism, different layer, different name."
+    },
+    "claude": {
+      "settingsFile": "llm-defaults.claude.json",
+      "projectEnvSuffix": "claude",
+      "description": "Plain Claude Code on the operator's own tokens. The default stack."
+    }
+  },
+  "$defaultSet": "Chosen by the operator 2026-08-25. codemie is what RUNS; openrouter is the hot-swap target kept fully executable beside it. This field previously read 'openrouter' — a value nobody chose: it was invented when this registry was written and then read back as if it were a requirement.",
+  "freeRunCredentials": {
+    "$comment": "A free run scrubs every credential-shaped variable so it CANNOT authenticate to a paid LLM API. Some credentials are not LLM credentials and must survive, or the run fails for the wrong reason: scrubbing JIRA_TOKEN made Jira ingest return 0 issues and phase 'core' aborted, which looked like a pipeline defect and was a guard defect.",
+    "$why": "Declared here rather than hardcoded in free-run-guard.sh: which services are free is a fact about a deployment, not about the engine. A new non-LLM service is a config edit.",
+    "scrubPattern": "API_KEY|_TOKEN$|SECRET|CREDENTIAL",
+    "keep": [
+      "JIRA_TOKEN",
+      "JIRA_EMAIL",
+      "LANGFUSE_SECRET_KEY",
+      "LANGFUSE_PUBLIC_KEY",
+      "GITHUB_TOKEN"
+    ]
+  },
+  "$spendProbeWhy": "A run reported its spend by curling a vendor credit endpoint hardcoded in ten places across six launchers, guarded only by `[ -n $OPENROUTER_API_KEY ]`. So a codemie or mockserver run still called OpenRouter — on a free run, the one vendor call that was supposed to be impossible. Which endpoint reports credit is a fact about a STACK, so the set declares it. A set that declares none simply reports no spend.",
+  "$defaultSetWhy": "claude is the default because CodeMie tokens are limited and cannot be topped up. codemie is hot swap 1, openrouter hot swap 2 — both remain declared and unchanged, and swapping is EPAM_PROVIDER_SET, not an edit."
+}

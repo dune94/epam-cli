@@ -1,0 +1,236 @@
+{
+  "$comment": "WHAT EACH SEAM'S OUTPUT IS HELD TO. Every declared seam appears here exactly once. A seam whose output nothing validates is a seam whose bad answer flows onward looking authoritative — the roster stage proved it on 2026-08-25, when a model narrated ('I need to create a valid JSON file. Let me fix the formatting:') instead of answering.",
+  "$why": "Declared rather than inferred in the test: matching a seam's `produces` string against a schema tag name is a guess — `roster-review` produces `roster-verdict` but its tag is ROSTER_REVIEW, so a name-based map called it unvalidated while it was validated. The link is a fact about the pipeline and belongs in config.",
+  "$kinds": {
+    "schema": "validated by lib/agent-output-schema.js validateTaggedOutput(tag, parsed)",
+    "verdict": "validated by lib/gate_verdict_schema.py validate(gate, text)",
+    "artefact": "writes a file; the caller parses and contract-checks it",
+    "none": "NOTHING validates this seam's output — a declared gap, see $gapRatchet",
+    "declared": "required keys declared here, taken from the shape the seam PROMPT states; validated by lib/agent-output-schema.js validateDeclaredOutput(seam, parsed)"
+  },
+  "$gapRatchet": "The `none` list may only SHRINK. Adding a seam with no contract is adding a place a bad answer flows on unchecked.",
+  "seams": {
+    "estate-survey": {
+      "kind": "schema",
+      "tag": "ESTATE_SURVEY"
+    },
+    "guard-vocabulary": {
+      "kind": "schema",
+      "tag": "GUARD_VOCABULARY"
+    },
+    "role-assigner": {
+      "kind": "schema",
+      "tag": "ROLE_ASSIGNMENTS"
+    },
+    "spec-coordinator": {
+      "kind": "schema",
+      "tag": "SPEC_ASSIGNMENTS"
+    },
+    "spec-agent": {
+      "kind": "schema",
+      "tag": "SPEC_AGENT"
+    },
+    "ticket-links": {
+      "kind": "schema",
+      "tag": "TICKET_LINKS"
+    },
+    "agent-mint": {
+      "kind": "schema",
+      "tag": "PROJECT_AGENTS"
+    },
+    "prd-change-reviewer": {
+      "kind": "verdict"
+    },
+    "project-roster-review": {
+      "kind": "verdict"
+    },
+    "prompt-review": {
+      "kind": "verdict"
+    },
+    "roster-review": {
+      "kind": "verdict"
+    },
+    "survey-review": {
+      "kind": "verdict"
+    },
+    "vc-coverage": {
+      "kind": "verdict"
+    },
+    "qa-gate:e2e": {
+      "kind": "verdict"
+    },
+    "qa-gate:fuzz-weaver": {
+      "kind": "verdict"
+    },
+    "qa-gate:mutant-hunter": {
+      "kind": "verdict"
+    },
+    "qa-gate:perf-sentinel": {
+      "kind": "verdict"
+    },
+    "qa-gate:review-ranger": {
+      "kind": "verdict"
+    },
+    "qa-gate:runtime-boundary": {
+      "kind": "verdict"
+    },
+    "qa-gate:sast": {
+      "kind": "verdict"
+    },
+    "qa-gate:spec-validator": {
+      "kind": "verdict"
+    },
+    "roster-specialiser": {
+      "kind": "artefact",
+      "checkedBy": "lib/project-roster.js checkRoster"
+    },
+    "codeline-bridge-agent": {
+      "kind": "artefact"
+    },
+    "prd-change-summarizer": {
+      "kind": "artefact"
+    },
+    "prompt-builder": {
+      "kind": "artefact"
+    },
+    "repro-test-writer": {
+      "kind": "artefact"
+    },
+    "story-writer": {
+      "kind": "artefact"
+    },
+    "topology-router": {
+      "kind": "artefact",
+      "checkedBy": "lib/llm-call.js callLlmJson — refuses a reply with no JSON"
+    },
+    "cpa-inference": {
+      "kind": "artefact",
+      "checkedBy": "lib/cpa-inference.js — parses the estimate, refuses unparseable"
+    },
+    "ac-classification": {
+      "kind": "declared",
+      "requiredKeys": [
+        "verdict"
+      ],
+      "knownKeys": [
+        "verdict",
+        "reason",
+        "codeline",
+        "gaps",
+        "enrichedAcs"
+      ]
+    },
+    "ac-elaboration": {
+      "kind": "declared",
+      "requiredKeys": [
+        "enrichedAcs"
+      ],
+      "knownKeys": [
+        "enrichedAcs"
+      ]
+    },
+    "agent-failure-analyst": {
+      "kind": "declared",
+      "requiredKeys": [
+        "diagnosis"
+      ],
+      "knownKeys": [
+        "diagnosis",
+        "target",
+        "ac_patches",
+        "tc_patches",
+        "skill_note",
+        "tool_spec",
+        "reason"
+      ]
+    },
+    "code-graph-detective": {
+      "kind": "declared",
+      "requiredKeys": [
+        "file"
+      ],
+      "knownKeys": [
+        "file",
+        "function",
+        "reason",
+        "brokenLine",
+        "fix",
+        "helper",
+        "changeRequired",
+        "requiredPackages",
+        "deliveryRole",
+        "runsIn"
+      ]
+    },
+    "code-review-cycle": {
+      "kind": "declared",
+      "requiredKeys": [
+        "verdict"
+      ],
+      "knownKeys": [
+        "verdict",
+        "issues",
+        "summary"
+      ]
+    },
+    "codeline-discovery": {
+      "kind": "declared",
+      "requiredKeys": [
+        "codelines"
+      ],
+      "knownKeys": [
+        "codelines",
+        "unsure"
+      ]
+    },
+    "impl-failure-analyst": {
+      "kind": "declared",
+      "requiredKeys": [
+        "diagnosis"
+      ],
+      "knownKeys": [
+        "diagnosis",
+        "target",
+        "ac_patches",
+        "tc_patches",
+        "skill_note",
+        "tool_spec",
+        "reason"
+      ]
+    },
+    "phase-assessment": {
+      "kind": "declared",
+      "requiredKeys": [
+        "event"
+      ],
+      "knownKeys": [
+        "timestamp",
+        "phase_id",
+        "agent_role",
+        "event",
+        "skill",
+        "skill_category",
+        "context",
+        "added_by"
+      ]
+    },
+    "prd-model-coordinator": {
+      "kind": "none"
+    },
+    "tc-writer": {
+      "kind": "none"
+    },
+    "team-lead-review": {
+      "kind": "declared",
+      "requiredKeys": [
+        "verdict"
+      ],
+      "knownKeys": [
+        "verdict",
+        "issues",
+        "summary"
+      ]
+    }
+  },
+  "$declaredWhy": "A seam whose output nothing validates lets a bad answer flow on looking authoritative — the roster-specialiser answered with prose on a paid run and only its artefact check stopped that becoming the identity every downstream agent reads. requiredKeys is the key a CONSUMER cannot proceed without, taken from the shape the seam PROMPT already states, so the contract and the prompt cannot drift. knownKeys is the rest of that shape, reported but not enforced: requiring every optional field would reject valid answers, and the defect being caught is an answer that is not the artefact at all."
+}

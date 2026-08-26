@@ -1,0 +1,33 @@
+{
+  "$comment": "HOW LONG A LOCAL TOOL MAY TAKE, in milliseconds. Not model calls — those are bounded by the seam's declared timeoutSecs.",
+  "$why": "Thirteen of these were literals across seven libraries (5000, 10000, 15000, 20000, 30000, 60000, 180000). Each was an independent decision with no single home: a codeline big enough to need longer got a truncated answer from whichever tool hit its cap first, the caller could not tell a timeout from an empty result, and raising one meant finding all of them.",
+  "$naming": "Named for the WORK, not the caller, so two callers doing the same work share one answer.",
+  "tools": {
+    "$gitReadWhy": "Reading state from a git repository — log, status, rev-parse. Local and fast; a repo slow enough to exceed this is worth reporting rather than waiting on.",
+    "gitRead": 10000,
+
+    "$codegraphProbeWhy": "Checking whether the codegraph binary exists at all. A presence check that takes seconds is a broken PATH, not a slow tool.",
+    "codegraphProbe": 5000,
+
+    "$codegraphQueryWhy": "One codegraph query against an existing index.",
+    "codegraphQuery": 15000,
+
+    "$codegraphExploreWhy": "A broader codegraph traversal returning several files.",
+    "codegraphExplore": 30000,
+
+    "$codegraphIndexWhy": "Building the index over a whole codeline — the one genuinely long local operation here, and the reason a single shared timeout would not do.",
+    "codegraphIndex": 180000,
+
+    "$sembleWhy": "A semantic search pass over an indexed codeline.",
+    "semble": 60000,
+
+    "$promptRenderWhy": "Rendering a prompt through the template layer in a child process.",
+    "promptRender": 20000,
+
+    "$seamResolveWhy": "Resolving a seam's invocation environment in a child process.",
+    "seamResolve": 20000,
+
+    "$localToolWhy": "Anything else local and short — the ecosystem scan, a small helper script.",
+    "localTool": 20000
+  }
+}

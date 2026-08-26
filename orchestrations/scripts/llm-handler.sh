@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
-# ai-run.sh — provider-agnostic prompt runner for orchestration scripts.
+
+# WHAT A CALL COST, recorded where every call passes. See lib/cost-record.sh.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/cost-record.sh" 2>/dev/null || true
+# llm-handler.sh — THE CENTRAL LLM HANDLER.
+#
+# Every LLM call in the pipeline enters here and is dispatched to a vendor handler. Nothing
+# else may read a credential or call a vendor endpoint. Renamed from ai-run.sh on 2026-08-25:
+# the old name said nothing about what it does.
 # Reads prompt from stdin, executes with configured provider, prints text output.
 set -euo pipefail
 
@@ -34,7 +41,7 @@ load_env_file "${PROJECT_ROOT:-}/.env"
 # (src/agent/AgentRunner.ts). That is fine for a non-reasoning model, and far
 # too small for the glm-5.x / kimi models this pipeline actually routes: their
 # <think> blocks are billed against the SAME budget, so the model can exhaust
-# it reasoning and emit truncated intermediate text — which ai-run.sh then
+# it reasoning and emit truncated intermediate text — which this handler then
 # returns as "the result". Live 2026-07-25: the team-lead reviewer emitted 169
 # bytes ("Now let me verify the test actually covers...") with no verdict, and
 # the run blocked on "review output unparseable". A non-reasoning model fits
@@ -64,7 +71,7 @@ fi
 
 usage() {
   cat <<'EOF'
-Usage: ai-run.sh [--provider NAME] [--model NAME]
+Usage: llm-handler.sh [--provider NAME] [--model NAME]
 Reads prompt from stdin and writes provider output to stdout.
 EOF
 }
@@ -84,7 +91,7 @@ while [[ $# -gt 0 ]]; do
       exit 0
       ;;
     *)
-      echo "ai-run.sh: unknown option '$1'" >&2
+      echo "llm-handler.sh: unknown option '$1'" >&2
       exit 2
       ;;
   esac
@@ -102,7 +109,7 @@ if [ -z "$PRIMARY_PROVIDER" ]; then
   case "$cmd_base" in
     codex|openai|qwen|cursor|copilot|codemie-claude) PRIMARY_PROVIDER="$cmd_base" ;;
     *)
-      echo "ai-run.sh: no provider configured. Set AI_PROVIDER or EPAM_ORCHESTRATION_PROVIDER." >&2
+      echo "llm-handler.sh: no provider configured. Set AI_PROVIDER or EPAM_ORCHESTRATION_PROVIDER." >&2
       exit 1
       ;;
   esac
@@ -122,7 +129,7 @@ if [ -z "${EPAM_AGENT_NAME:-}" ] && [ -r "/proc/$PPID/cmdline" ]; then
   # matches nothing exits 1 — which killed every invocation whose caller was not
   # a .sh/.js file. A best-effort label must never be able to fail the call.
   # Match a script name ANYWHERE in the parent's argv, not only at line end:
-  # execSync wraps the command as `sh -c "bash /path/ai-run.sh ... 2>/dev/null"`,
+  # execSync wraps the command as `sh -c "bash /path/llm-handler.sh ... 2>/dev/null"`,
   # one argv element that does not end in .sh — so every lib/*.js agent stayed
   # anonymous. And skip ai-run.sh itself, or it names itself as the agent.
   _caller="$(tr '\0' '\n' < "/proc/$PPID/cmdline" 2>/dev/null \
@@ -147,6 +154,46 @@ run_provider_once() {
   local model_args=()
   [ -n "$AI_MODEL" ] && model_args=(--model "$AI_MODEL")
 
+  # WHAT THE STACK DECLARED FOR THIS RUNNER — the caller this layer never had.
+  #
+  # config/llm-defaults.<set>.json declares per-runner alwaysFlags, flags and env.
+  # resolveRunner()/runnerValues() implemented that and nothing called them, so every declared
+  # effort, compaction window and (on the mockserver stack) the ANTHROPIC_BASE_URL redirect
+  # reached nothing at all. An empty value is SKIPPED, never passed as an empty argument.
+  local runner_args=()
+  local _rd_name; _rd_name="$(basename "$CLAUDE_CMD")"
+  local _rd
+  _rd=$("${NODE_BIN:-node}" -e '
+      try {
+        const { runnerValues } = require(process.argv[1] + "/lib/llm-settings-resolve.js");
+        const v = runnerValues(process.argv[2], {});
+        if (!v) { process.stdout.write(""); }
+        else {
+          const out = [];
+          for (const f of v.alwaysFlags || []) out.push(f);
+          for (const [flag, val] of Object.entries(v.flags || {})) {
+            if (val !== undefined && val !== null && String(val) !== "") { out.push(flag); out.push(String(val)); }
+          }
+          for (const [name, val] of Object.entries(v.env || {})) {
+            if (val !== undefined && val !== null && String(val) !== "") out.push("\u0000env:" + name + "=" + val);
+          }
+          process.stdout.write(out.join("\u0001"));
+        }
+      } catch (_) { process.stdout.write(""); }
+    ' "$_SCRIPT_DIR_AIRUN" "$_rd_name" 2>/dev/null || printf '')
+  if [ -n "$_rd" ]; then
+    local _old_ifs="$IFS"; IFS=$'\001'
+    local _item
+    for _item in $_rd; do
+      case "$_item" in
+        $'\000'env:*) export "${_item#$'\000'env:}" ;;
+        "") ;;
+        *) runner_args+=("$_item") ;;
+      esac
+    done
+    IFS="$_old_ifs"
+  fi
+
   case "$provider" in
     claude)
       if [ "${EPAM_SDK_INVOKE:-0}" = "1" ] && [ -f "$INVOKE_PY" ]; then
@@ -166,22 +213,38 @@ run_provider_once() {
         if [ -n "${ORCH_JSON_RESULT:-}" ]; then
           local _json_out
           _json_out=$(mktemp)
-          "$CLAUDE_CMD" --print --output-format json --dangerously-skip-permissions "${model_args[@]}" \
+          "$CLAUDE_CMD" --print --output-format json --dangerously-skip-permissions "${model_args[@]}" ${runner_args[@]+"${runner_args[@]}"} \
               < "$PROMPT_FILE" > "$_json_out" 2>/dev/null
           jq -r '.result // empty' "$_json_out" 2>/dev/null
           cp "$_json_out" "$ORCH_JSON_RESULT" 2>/dev/null || true
           rm -f "$_json_out"
         else
-          "$CLAUDE_CMD" --print --output-format text --dangerously-skip-permissions "${model_args[@]}" < "$PROMPT_FILE"
+          "$CLAUDE_CMD" --print --output-format text --dangerously-skip-permissions "${model_args[@]}" ${runner_args[@]+"${runner_args[@]}"} < "$PROMPT_FILE"
         fi
       fi
       ;;
     codemie-claude)
-      codemie-claude --print --output-format text --dangerously-skip-permissions "${model_args[@]}" < "$PROMPT_FILE"
+      # THE SAME COST CAPTURE AS THE PLAIN CLAUDE ARM.
+      #
+      # This ran --output-format text and captured nothing, so swapping to this stack silently
+      # swapped cost visibility off with it — and a hot swap that loses cost tracking is not a hot
+      # swap. The wrapper runs Claude Code underneath and answers in the same JSON shape, so there
+      # was never a reason for the two arms to differ.
+      if [ -n "${ORCH_JSON_RESULT:-}" ]; then
+        local _cm_json
+        _cm_json=$(mktemp)
+        codemie-claude --print --output-format json --dangerously-skip-permissions "${model_args[@]}" ${runner_args[@]+"${runner_args[@]}"} \
+            < "$PROMPT_FILE" > "$_cm_json" 2>/dev/null
+        jq -r '.result // empty' "$_cm_json" 2>/dev/null
+        cp "$_cm_json" "$ORCH_JSON_RESULT" 2>/dev/null || true
+        rm -f "$_cm_json"
+      else
+        codemie-claude --print --output-format text --dangerously-skip-permissions "${model_args[@]}" ${runner_args[@]+"${runner_args[@]}"} < "$PROMPT_FILE"
+      fi
       ;;
     codex)
       if ! command -v codex >/dev/null 2>&1; then
-        echo "ai-run.sh: provider 'codex' requires codex CLI" >&2
+        echo "llm-handler.sh: provider 'codex' requires codex CLI" >&2
         return 127
       fi
       # THE LADDER DICTATES THE MODEL — NO EXCEPTIONS.
@@ -194,11 +257,11 @@ run_provider_once() {
       # to pick another. Fail, and let the ladder escalate to a rung this provider can serve.
       local codex_model="${AI_MODEL:-}"
       if [ -z "$codex_model" ]; then
-        echo "ai-run.sh: provider 'codex' selected but no model resolved from the ladder" >&2
+        echo "llm-handler.sh: provider 'codex' selected but no model resolved from the ladder" >&2
         return 78
       fi
       if ! echo "$codex_model" | grep -Eq '^(gpt-|o[0-9]|codex-)'; then
-        echo "ai-run.sh: the ladder resolved '$codex_model', which provider 'codex' cannot serve" >&2
+        echo "llm-handler.sh: the ladder resolved '$codex_model', which provider 'codex' cannot serve" >&2
         return 78
       fi
       local raw_file
@@ -295,7 +358,7 @@ run_provider_once() {
       return $_jq_rc
       ;;
     *)
-      echo "ai-run.sh: unsupported provider '$provider'" >&2
+      echo "llm-handler.sh: unsupported provider '$provider'" >&2
       return 2
       ;;
   esac
@@ -633,8 +696,21 @@ fi
 
 for provider in "${providers[@]}"; do
   err_file="$(mktemp)"
+  _call_started_at="$(date -Iseconds)"
   if out="$(_ai_attempt_timeout run_provider_once "$provider" 2>"$err_file")"; then
     _merge_plan_cost
+    # WHAT IT COST, RECORDED HERE — the one place every call in the pipeline passes through.
+    #
+    # The reply's cost was captured all along and only team-lead-review ever read it: 39 of 40
+    # seams produced the numbers and nothing recorded them. A 34-minute paid run logged zero
+    # entries and its spend still cannot be stated. Recording per seam is 40 places to forget.
+    # NOT IN THE PLAN PASS. A plan and its execute pass are ONE call from the ledger's point of
+    # view, and _merge_plan_cost above has already folded the plan's cost into this reply — so
+    # recording both counts the plan twice and makes every planned seam look ~2x its real spend.
+    if declare -f record_call_cost >/dev/null 2>&1 && [ "${_EPAM_IN_PLAN_PASS:-0}" != "1" ]; then
+      record_call_cost "${ORCH_JSON_RESULT:-}" "${EPAM_AGENT_NAME:-agent}" \
+          "${EPAM_STORY_ID:-pipeline}" "${AI_MODEL:-${EPAM_MODEL:-}}" "$_call_started_at" || true
+    fi
     [ -n "$out" ] && printf '%s\n' "$out"
     rm -f "$err_file"
     exit 0

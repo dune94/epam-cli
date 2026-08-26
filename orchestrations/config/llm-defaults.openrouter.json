@@ -1,0 +1,212 @@
+{
+  "$comment": "THE OPENROUTER/MINIMAX PROVIDER SET. Set-SPECIFIC declarations only — which models, which ladders, which runner. Set-INDEPENDENT budgets (effortTiers, roleOverrides, outputTokenFloors) stay in llm-defaults.json and are shared by every set, so swapping providers never changes how much budget a tier gets.",
+  "$provenance": "ladders, ladderTierOrder and modelOverrides were MOVED VERBATIM from projects/metrolinx/llm-settings.json on 2026-08-25 — generated from that file, not retyped. metrolinx is the live client codeline, so its chain is the one the openrouter stack keeps. mock3, hello-dolly and skyscanner previously topped out at glm-5.2/5.1 and now inherit glm-5.3: a deliberate convergence, recorded here rather than discovered later.",
+  "ladderTierOrder": [
+    "medium",
+    "high",
+    "highest"
+  ],
+  "ladders": {
+    "high": {
+      "modelLadder": [
+        {
+          "from": "MiniMax-M2.5",
+          "to": "MiniMax-M3"
+        },
+        {
+          "from": "MiniMax-M3",
+          "to": "z-ai/glm-5.2"
+        },
+        {
+          "from": "zhipuai/glm-z1-9b",
+          "to": "zhipuai/glm-z1-32b"
+        },
+        {
+          "from": "zhipuai/glm-z1-32b",
+          "to": "z-ai/glm-5.2"
+        },
+        {
+          "from": "z-ai/glm-5.1",
+          "to": "z-ai/glm-5.2"
+        },
+        {
+          "from": "z-ai/glm-5.2",
+          "to": "moonshotai/kimi-k3"
+        },
+        {
+          "from": "moonshotai/kimi-k2.5",
+          "to": "moonshotai/kimi-k3"
+        }
+      ],
+      "startModel": "MiniMax-M3"
+    },
+    "medium": {
+      "modelLadder": [
+        {
+          "from": "MiniMax-M2.7-highspeed",
+          "to": "MiniMax-M3"
+        },
+        {
+          "from": "MiniMax-M2.7",
+          "to": "MiniMax-M3"
+        },
+        {
+          "from": "MiniMax-M2.5",
+          "to": "MiniMax-M3"
+        },
+        {
+          "from": "MiniMax-M3",
+          "to": "z-ai/glm-5.3"
+        },
+        {
+          "from": "z-ai/glm-5.1",
+          "to": "z-ai/glm-5.3"
+        },
+        {
+          "from": "z-ai/glm-5.2",
+          "to": "z-ai/glm-5.3"
+        },
+        {
+          "from": "zhipuai/glm-z1-9b",
+          "to": "zhipuai/glm-z1-32b"
+        },
+        {
+          "from": "zhipuai/glm-z1-32b",
+          "to": "z-ai/glm-5.3"
+        }
+      ],
+      "startModel": "MiniMax-M2.7-highspeed",
+      "_why": "M2.5 is legacy. M2.7 scores materially higher on multi-file and long-horizon work (NL2Repo 26.6 -> 39.8, MLE Bench Lite +15pts) and the -highspeed variant is documented as producing IDENTICAL results, only faster — so it is a free latency win, not a quality trade. The chain ends at glm-5.3 rather than 5.2 because 5.3's gains concentrate in agent-shaped tasks, which is what a seam that has already escalated twice is struggling with."
+    },
+    "highest": {
+      "modelLadder": [
+        {
+          "from": "z-ai/glm-5.3",
+          "to": "moonshotai/kimi-k3"
+        },
+        {
+          "from": "z-ai/glm-5.2",
+          "to": "z-ai/glm-5.3"
+        },
+        {
+          "from": "z-ai/glm-5.1",
+          "to": "z-ai/glm-5.3"
+        },
+        {
+          "from": "MiniMax-M2.7-highspeed",
+          "to": "MiniMax-M3"
+        },
+        {
+          "from": "MiniMax-M2.7",
+          "to": "MiniMax-M3"
+        },
+        {
+          "from": "MiniMax-M2.5",
+          "to": "MiniMax-M3"
+        },
+        {
+          "from": "MiniMax-M3",
+          "to": "z-ai/glm-5.3"
+        },
+        {
+          "from": "zhipuai/glm-z1-9b",
+          "to": "zhipuai/glm-z1-32b"
+        },
+        {
+          "from": "zhipuai/glm-z1-32b",
+          "to": "z-ai/glm-5.3"
+        },
+        {
+          "from": "moonshotai/kimi-k2.5",
+          "to": "moonshotai/kimi-k3"
+        }
+      ],
+      "startModel": "z-ai/glm-5.3",
+      "_why": "glm-5.3 shares 5.2's base model; every gain is post-training on executable environments and long-horizon tasks — Terminal-Bench 3.0 4.6 -> 28.3, DeepSWE 46.2 -> 66.9, SWE-Marathon 19.4 -> 42.5. It also reaches a higher score with ~22% FEWER output tokens on hard work, which offsets most of the 45% higher per-token price. All vendor-reported: no independent reproduction exists yet."
+    }
+  },
+  "modelOverrides": {
+    "minimax-m2.5": {
+      "matchOn": "model",
+      "matchSubstring": "MiniMax-M2.5",
+      "reasoningEffort": "medium",
+      "maxIterations": 45,
+      "autoCompressAt": 64000,
+      "autoCompressEveryNIterations": 15,
+      "topP": 0.85,
+      "temperature": 0.2,
+      "miniTier": true
+    },
+    "minimax-m3": {
+      "matchOn": "model",
+      "matchSubstring": "MiniMax-M3",
+      "reasoningEffort": "high",
+      "maxIterations": 120,
+      "autoCompressAt": 180000,
+      "topP": 0.85,
+      "temperature": 0.2
+    },
+    "glm-5.2": {
+      "matchOn": "model",
+      "matchSubstring": "glm-5.2",
+      "reasoningEffort": "high",
+      "maxIterations": 120,
+      "autoCompressAt": 180000,
+      "topP": 0.95,
+      "temperature": 0.9,
+      "providerOrder": [
+        "CoreWeave"
+      ]
+    },
+    "kimi-k2.5": {
+      "matchOn": "model",
+      "matchSubstring": "kimi-k2.5",
+      "temperature": 1,
+      "reasoningEffort": "medium",
+      "maxIterations": 60,
+      "autoCompressAt": 128000,
+      "autoCompressEveryNIterations": 20,
+      "topP": 1,
+      "temperatureLocked": true
+    },
+    "kimi-k3": {
+      "matchOn": "model",
+      "matchSubstring": "kimi-k3",
+      "temperature": 1,
+      "reasoningEffort": "max",
+      "maxIterations": 150,
+      "autoCompressAt": 400000,
+      "topP": 1,
+      "temperatureLocked": true,
+      "providerOrder": [
+        "Moonshot AI"
+      ]
+    },
+    "minimax-m2.7": {
+      "matchOn": "model",
+      "matchSubstring": "MiniMax-M2.7",
+      "_why": "Replaces MiniMax-M2.5 as the medium tier's start. maxIterations is 90, not M2.5's 45: 45 was the outlier in this file (M3 120, glm 120, kimi-k3 150) and M2.7's advantage is precisely on the long-horizon work that needs room to converge — capping the stronger model at the weaker one's budget would throw the upgrade away. autoCompressAt is 150000 against a 204800 context: compaction destroys the cacheable prefix, so it must be an overflow guard near the ceiling, never a token-saving device. Substring is 'MiniMax-M2.7' so it matches the -highspeed variant too.",
+      "reasoningEffort": "medium",
+      "maxIterations": 90,
+      "autoCompressAt": 150000,
+      "autoCompressEveryNIterations": 15,
+      "topP": 0.85,
+      "temperature": 0.2,
+      "miniTier": true
+    },
+    "glm-5.3": {
+      "matchOn": "model",
+      "matchSubstring": "glm-5.3",
+      "_why": "Mirrors glm-5.2's sampling (same base model, so temperature/topP carry over) with more iteration room at 150, because this is now the highest tier's start and has only ONE rung above it. autoCompressAt raised to 300000 against a 1048576 context — 5.2's 180000 was conservative and every compaction destroys the cache. providerOrder is Z.AI because OpenRouter lists exactly one endpoint for this model; copying 5.2's CoreWeave pin would have failed every call.",
+      "reasoningEffort": "high",
+      "maxIterations": 150,
+      "autoCompressAt": 300000,
+      "topP": 0.95,
+      "temperature": 0.9,
+      "providerOrder": [
+        "Z.AI"
+      ]
+    },
+    "$miniTierWhy": "miniTier marks the cheap, fast rung — the models that are quick but limited in generation capacity. It was decided in engine code by sniffing vendor naming habits (-mini, -flash, -haiku, minimax-m2), which breaks in both directions: a cheap model named differently read as capable, and a capable model containing -flash read as cheap. The set that declares the model declares its tier."
+  }
+}

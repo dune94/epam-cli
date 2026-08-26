@@ -1,0 +1,21 @@
+{
+  "$comment": "WHAT THE HARDCODING AUDIT LOOKS AT. Declared here so narrowing or widening the scan is a config edit that shows up in review, rather than an edit inside the scanner that quietly changes what every count means.",
+  "$why": "The audit swept orchestrations/config and orchestrations/agents JSON, on the argument that a shipped default is an engine fact. That made the headline number unreadable: 205 of 658 sites were llm-defaults.*.json naming the models it exists to name, and profiles.json holding the personas it exists to hold. Those files ARE the configuration the engine reads — the opposite of a value baked into code. Operator decision 2026-08-26: json and config are not hardcoding.",
+  "$careful": "Narrowing a scanner is how a scanner comes to report clean while the defect it was written for is still there. The scope may only be narrowed to exclude DECLARATION files — never code. A test asserts the scanner still finds engine sites.",
+
+  "scan": [
+    { "path": "orchestrations/scripts", "types": ["sh", "js"] },
+    { "path": "orchestrations/plugins",  "types": ["sh", "js"] },
+    { "path": "src",                     "types": ["ts", "js"] }
+  ],
+
+  "$excludeWhy": "Tests are excluded because a fixture naming a client is not a shipped fact. Per-project launchers are excluded because a launcher exists to declare ONE project's facts — configuration living in the file that owns it. Vendored trees are not ours.",
+  "excludePatterns": [
+    "node_modules",
+    "\\.venv",
+    "/dist/",
+    "\\.test\\.",
+    "\\.spec\\.",
+    "/(tier[0-9]+-[a-z0-9-]+-run|mock[0-9]*-[a-z-]*run)\\.sh$"
+  ]
+}

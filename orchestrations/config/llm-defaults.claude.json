@@ -1,0 +1,157 @@
+{
+  "$comment": "THE CLAUDE PROVIDER SET — plain Claude Code on the operator's own tokens. The default stack.",
+  "$proven": "2026-08-25: plain `claude` honours ANTHROPIC_BASE_URL, reaches MockServer (POST /v1/messages in its request log) and PARSES the SSE it serves — is_error:false, result:'OK', stop_reason:'end_turn', RC=0.",
+  "$whyNotTheWrapper": "Plain `claude`, never codemie-claude. The wrapper authenticates through CodeMie SSO and spends CodeMie tokens; this set exists precisely because those are scarce and the operator has their own.",
+  "$whyTheSameLadders": "Deliberately identical to the codemie set. A rehearsal on different models proves the harness, not the run. Sharing the ladder means a mocked run climbs the chain a paid run would.",
+  "ladderTierOrder": [
+    "medium",
+    "high",
+    "highest"
+  ],
+  "ladders": {
+    "medium": {
+      "$why": "Enters cheap and tops out at Sonnet-5. A `mid` seam never reaches Opus: 14 seams resolve here, and measured turn counts are p50 4, p90 24 — work that does not need a frontier model.",
+      "startModel": "claude-haiku-4-5-20251001",
+      "modelLadder": [
+        {
+          "from": "claude-haiku-4-5-20251001",
+          "to": "claude-sonnet-5"
+        }
+      ],
+      "rungs": [
+        {
+          "rung": 0,
+          "maxIterations": 40,
+          "reasoningEffort": "medium"
+        },
+        {
+          "rung": 1,
+          "maxIterations": 120,
+          "reasoningEffort": "high"
+        }
+      ]
+    },
+    "high": {
+      "$why": "Same ENTRY as medium, higher CEILING. That is the 'different entry, same ceiling' rule applied between high and highest: what separates the tiers is how far they may climb, not where they start.",
+      "startModel": "claude-haiku-4-5-20251001",
+      "modelLadder": [
+        {
+          "from": "claude-haiku-4-5-20251001",
+          "to": "claude-sonnet-5"
+        },
+        {
+          "from": "claude-sonnet-5",
+          "to": "claude-opus-5"
+        }
+      ],
+      "rungs": [
+        {
+          "rung": 0,
+          "maxIterations": 40,
+          "reasoningEffort": "medium"
+        },
+        {
+          "rung": 1,
+          "maxIterations": 250,
+          "reasoningEffort": "high"
+        },
+        {
+          "rung": 2,
+          "maxIterations": 300,
+          "reasoningEffort": "high"
+        }
+      ]
+    },
+    "highest": {
+      "$why": "Skips Haiku. 25 seams resolve here and would waste a rung proving a small model cannot do the work. Same ceiling as high, entered two rungs up.",
+      "startModel": "claude-sonnet-5",
+      "modelLadder": [
+        {
+          "from": "claude-sonnet-5",
+          "to": "claude-opus-4-8"
+        },
+        {
+          "from": "claude-opus-4-8",
+          "to": "claude-opus-5"
+        }
+      ],
+      "rungs": [
+        {
+          "rung": 0,
+          "maxIterations": 250,
+          "reasoningEffort": "high"
+        },
+        {
+          "rung": 1,
+          "maxIterations": 250,
+          "reasoningEffort": "high"
+        },
+        {
+          "rung": 2,
+          "maxIterations": 300,
+          "reasoningEffort": "xhigh"
+        }
+      ]
+    }
+  },
+  "modelOverrides": {
+    "$whyAutoCompress": "150000 against a 200000 window is an OVERFLOW GUARD near the ceiling, never a token-saving device: compaction rewrites the prefix and destroys the prompt cache. Measured input is p50 13.3k, p90 19k, max 25.9k — about 13% of the window — so this should never fire. If it does, something has gone wrong upstream and that is worth knowing.",
+    "$whyNoTemperature": "codemie-claude exposes no temperature flag and Claude Code has no supported lever for it. Declaring one would be decoration. Deliberation is controlled by reasoningEffort and thinking instead.",
+    "$whyAdaptive": "Thinking is held STABLE per model. Anthropic's docs list effort and thinking-parameter changes as cache invalidators, so a config that changes between attempts discards the cache every retry — the opposite of what a 1h TTL is for.",
+    "claude-haiku-4-5": {
+      "matchOn": "model",
+      "matchSubstring": "claude-haiku-4-5",
+      "thinking": "adaptive",
+      "promptCacheTtl": "1h",
+      "autoCompressAt": 150000,
+      "maxOutputTokens": 32000,
+      "miniTier": true
+    },
+    "claude-sonnet-5": {
+      "matchOn": "model",
+      "matchSubstring": "claude-sonnet-5",
+      "thinking": "adaptive",
+      "promptCacheTtl": "1h",
+      "autoCompressAt": 150000,
+      "maxOutputTokens": 64000
+    },
+    "claude-opus-4-8": {
+      "matchOn": "model",
+      "matchSubstring": "claude-opus-4-8",
+      "thinking": "adaptive",
+      "promptCacheTtl": "1h",
+      "autoCompressAt": 150000,
+      "maxOutputTokens": 64000
+    },
+    "claude-opus-5": {
+      "matchOn": "model",
+      "matchSubstring": "claude-opus-5",
+      "thinking": "adaptive",
+      "promptCacheTtl": "1h",
+      "autoCompressAt": 150000,
+      "maxOutputTokens": 64000
+    },
+    "$miniTierWhy": "miniTier marks the cheap, fast rung — the models that are quick but limited in generation capacity. It was decided in engine code by sniffing vendor naming habits (-mini, -flash, -haiku, minimax-m2), which breaks in both directions: a cheap model named differently read as capable, and a capable model containing -flash read as cheap. The set that declares the model declares its tier."
+  },
+  "finalFallback": {
+    "$why": "Applies after ladder exhaustion — the one point where the ladder has nothing left to say. Sonnet-5 differs from the top rung on high and highest, so it is a real second answer rather than a retry of the model that just failed.",
+    "model": "claude-sonnet-5",
+    "provider": "claude"
+  },
+  "runners": {
+    "claude": {
+      "$why": "Plain Claude Code. No CodeMie, no SSO, no spend.",
+      "alwaysFlags": [],
+      "env": {},
+      "flags": {
+        "--effort": "reasoningEffort",
+        "--autocompact": "autoCompressAt"
+      },
+      "$whyFlags": "Checked against the installed CLI's own --help, not assumed: --effort takes (low, medium, high, xhigh, max) and --autocompact takes auto or a token count. These were declared as CLAUDE_CODE_* env vars that the CLI does not document and that nothing exported.",
+      "$whyNoTurnCap": "maxIterations is deliberately absent. It binds the ReAct loop in src/agent/AgentRunner.ts, which only the `epam run` arm enters; a --print call has no turn cap and the loop is Claude Code's own. Declaring one here would name a knob nothing can turn.",
+      "$whyNoOutputCap": "maxOutputTokens is deliberately unmapped: the installed CLI documents no flag or env for it. It stays declared in modelOverrides so the intent is visible, and is not routed anywhere pretending to work.",
+      "$whyNoSilentFlag": "-s is codemie-claude's silent flag. Plain `claude` has no -s, so this stack carried a flag that would have failed every call on an unknown option the moment the layer was wired."
+    }
+  },
+  "$why": "Built from the mockserver set by REMOVING the redirect, because that set was already a plain-`claude` stack pointed at localhost — same ladders, same budgets, same runner. Its header records the proof: plain `claude` honours ANTHROPIC_BASE_URL, reaches the endpoint it is given, and parses the SSE served back (is_error:false, RC=0). Taking the endpoint away is the whole difference between rehearsing and running."
+}

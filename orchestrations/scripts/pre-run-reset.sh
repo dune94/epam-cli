@@ -363,6 +363,34 @@ if [ -n "$_RUN_ARTIFACT_DIR" ] && [ -d "$_RUN_ARTIFACT_DIR" ]; then
     fi
 fi
 
+# FETCHED TICKET DOCUMENTS — one project's client documentation must never reach another's.
+#
+# mint-agents-step.js reads $LOG_DIR/referenced-docs.json (then ticket-documents.json) and hands
+# whatever it finds to the estate survey, the mint and the roster review. LOG_DIR is SHARED across
+# projects, and nothing cleared these files — so on 2026-08-26 a mock3 run opened its roster-review
+# prompt with two Contentstack pages fetched for METROLINX on 2026-08-07, nineteen days earlier.
+# Forty-one mentions of another client's CMS, paid for on every affected seam, in a project that
+# has nothing to do with it.
+#
+# Third time the reset has been caught missing shared state after review artefacts and the
+# published agent-input store. The rule that keeps being relearned: anything a later step READS
+# out of LOG_DIR is run state, and run state is cleared here.
+if [ -n "${_RUN_ARTIFACT_DIR:-}" ] && [ -d "$_RUN_ARTIFACT_DIR" ]; then
+    _TD_CLEARED=0
+    for _td in referenced-docs.json ticket-documents.json; do
+        while IFS= read -r _f; do
+            [ -n "$_f" ] || continue
+            rm -f "$_f" 2>/dev/null && _TD_CLEARED=$((_TD_CLEARED+1)) || true
+        done <<< "$(find "$_RUN_ARTIFACT_DIR" -type f -name "$_td" 2>/dev/null)"
+    done
+    _TD_LEFT=$(find "$_RUN_ARTIFACT_DIR" -type f \( -name 'referenced-docs.json' -o -name 'ticket-documents.json' \) 2>/dev/null | wc -l)
+    if [ "$_TD_LEFT" -gt 0 ]; then
+        fail_contamination "$_TD_LEFT fetched-document cache(s) could NOT be cleared in $_RUN_ARTIFACT_DIR — a run started now would put another project's documents in its prompts"
+    elif [ "$_TD_CLEARED" -gt 0 ]; then
+        info "  Cleared $_TD_CLEARED fetched-document cache(s) — no other project's documentation reaches this run's prompts"
+    fi
+fi
+
 # PUBLISHED AGENT INPUTS — the store agents read each other's outputs from.
 #
 # Same ruling as the review artefacts above, for the same reason and with a shorter fuse: the

@@ -692,7 +692,17 @@ for provider in "${providers[@]}"; do
     # NOT IN THE PLAN PASS. A plan and its execute pass are ONE call from the ledger's point of
     # view, and _merge_plan_cost above has already folded the plan's cost into this reply — so
     # recording both counts the plan twice and makes every planned seam look ~2x its real spend.
-    if declare -f record_call_cost >/dev/null 2>&1 && [ "${_EPAM_IN_PLAN_PASS:-0}" != "1" ]; then
+    # ONE ROW PER CALL. A caller that keeps its own ledger says so, and the hub stays quiet.
+    #
+    # spec-mode-runner records every call it makes (invokeMode "spec-mode-runner", 29 fields);
+    # this hub-level row (invokeMode "cli", 12 fields) exists for the callers that do NOT —
+    # claude.sh's writer invocations among them. For seams routed through the runner BOTH fired,
+    # so the 2026-08-26 mock3 ledger held 10 rows for 5 calls and a naive sum reported $2.57 of
+    # spend against $1.29 actually billed. A cost ledger that double-counts is worse than none:
+    # it is wrong in the direction that hides an underspend and invents an overspend.
+    if declare -f record_call_cost >/dev/null 2>&1 \
+       && [ "${_EPAM_IN_PLAN_PASS:-0}" != "1" ] \
+       && [ "${EPAM_COST_RECORDED_BY_CALLER:-0}" != "1" ]; then
       record_call_cost "${ORCH_JSON_RESULT:-}" "${EPAM_AGENT_NAME:-agent}" \
           "${EPAM_STORY_ID:-pipeline}" "${AI_MODEL:-${EPAM_MODEL:-}}" "$_call_started_at" || true
     fi

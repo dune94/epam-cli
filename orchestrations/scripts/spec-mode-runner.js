@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Local tool caps are DECLARED — config/tool-timeouts.json. A literal here would be a
+// second home for a decision that already has one.
+const { toolTimeoutMs } = require('./lib/tool-timeouts.js');
 // ─────────────────────────────────────────────────────────────────────────────
 // spec-mode-runner.js — Collaborative specification elaboration pipeline
 //
@@ -127,6 +130,70 @@ try {
 let _semble;
 let _codegraph;
 
+/**
+ * ONE PLACE A SEARCH QUERY IS BUILT FROM A STORY.
+ *
+ * Two functions did this with their own inline stopword regex and their own fixed prefix, and
+ * the copies had already drifted: one said "processes resolves", the other "processes
+ * calculates resolves". Retrieval quality therefore differed by which path reached it, and
+ * nothing said so.
+ *
+ * The vocabulary and the caps are DECLARED (config/spec-mode-defaults.json retrieval). A
+ * language's stopwords are an input: a ticket in another language keeps every filler word and
+ * loses nothing meaningful, which is a configuration problem, not an engine one.
+ */
+/**
+ * Numbers that decide behaviour, from the declaration. They were named constants here, which
+ * reads like configuration and is not: changing one meant a code edit and a rebuild, and no
+ * deployment could differ.
+ */
+function policyConfig() {
+  try {
+    const file = process.env.EPAM_SPEC_MODE_DEFAULTS
+      || path.join(__dirname, '..', 'config', 'spec-mode-defaults.json');
+    return JSON.parse(fs.readFileSync(file, 'utf8')).policy || {};
+  } catch { return {}; }
+}
+
+function retrievalConfig() {
+  try {
+    const file = process.env.EPAM_SPEC_MODE_DEFAULTS
+      || path.join(__dirname, '..', 'config', 'spec-mode-defaults.json');
+    return JSON.parse(fs.readFileSync(file, 'utf8')).retrieval || {};
+  } catch { return {}; }
+}
+
+/**
+ * NEVER MID-TERM. Slicing at a character count can cut a word in half, and half a word matches
+ * nothing — the query silently narrows and the caller sees a smaller result set, not an error.
+ */
+function capAtWord(text, limit) {
+  const s = String(text || '');
+  const n = Number(limit);
+  if (!Number.isFinite(n) || n <= 0 || s.length <= n) return s;
+  const cut = s.slice(0, n);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace > 0 ? cut.slice(0, lastSpace) : cut).trim();
+}
+
+/** Domain terms of a title: declared stopwords removed, capped at a word boundary. */
+function retrievalTerms(title) {
+  const r = retrievalConfig();
+  const words = Array.isArray(r.stopwords) ? r.stopwords : [];
+  let out = String(title || '');
+  if (words.length) {
+    const escaped = words.map((w) => String(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    out = out.replace(new RegExp(`\\b(${escaped})\\b`, 'gi'), '');
+  }
+  return capAtWord(out.replace(/\s+/g, ' ').trim(), r.termChars);
+}
+
+/** The declared prefix plus a story's domain terms, capped. */
+function buildRetrievalQuery(title) {
+  const r = retrievalConfig();
+  return capAtWord(`${String(r.queryPrefix || '').trim()} ${retrievalTerms(title)}`.trim(), r.queryChars);
+}
+
 function fetchCodeGraphContext(story) {
   if (process.env.CODEGRAPH_ENABLED !== '1') return null;
   try {
@@ -151,12 +218,10 @@ function fetchCodeGraphContext(story) {
       if (!_codegraph.isCodeGraphIndexed(repoPath)) return null;
     }
 
-    const domainTerms = story.title
-      .replace(/\b(the|a|an|is|not|for|in|of|and|or|to|as|at|by|be|was|are|it|its|that|this|with)\b/gi, '')
-      .trim()
-      .slice(0, 200);
-    const query = `applies handles processes resolves ${domainTerms}`.slice(0, 300);
-    const output = _codegraph.exploreCodeGraph(query, repoPath, { maxFiles: 4, maxChars: 12000 });
+    const query = buildRetrievalQuery(story.title);
+    const _rc = retrievalConfig();
+    const output = _codegraph.exploreCodeGraph(query, repoPath,
+      { maxFiles: _rc.maxFiles, maxChars: _rc.maxChars });
     return output || null;
   } catch { return null; }
 }
@@ -171,7 +236,10 @@ function fetchSembleContext(story) {
     const isBrownfield = process.env.EPAM_BROWNFIELD === '1';
 
     // Symptom query — same in both modes; finds code near the described behavior
-    const symptomQuery = [story.title, ...(story.acceptanceCriteria || []).slice(0, 3)].join(' ').slice(0, 400);
+    const _r = retrievalConfig();
+    const symptomQuery = capAtWord(
+      [story.title, ...(story.acceptanceCriteria || []).slice(0, _r.acsInSymptomQuery)].join(' '),
+      _r.symptomQueryChars);
     const symptomResult = _semble.sembleSearch(symptomQuery, repoPath, 8, 20);
 
     if (!isBrownfield) {
@@ -181,11 +249,7 @@ function fetchSembleContext(story) {
     }
 
     // Brownfield Semble fallback: two queries (symptom + service-boundary).
-    const domainTerms = story.title
-      .replace(/\b(the|a|an|is|not|for|in|of|and|or|to|as|at|by|be|was|are|it|its|that|this|with)\b/gi, '')
-      .trim()
-      .slice(0, 200);
-    const pathQuery = `applies handles processes calculates resolves ${domainTerms}`.slice(0, 400);
+    const pathQuery = buildRetrievalQuery(story.title);
     const pathResult = _semble.sembleSearch(pathQuery, repoPath, 5, 30);
 
     const seen = new Set();
@@ -546,7 +610,8 @@ function releaseFileLock(lockPath) {
 // Tool-use produces API-enforced valid JSON arguments — eliminates the M3
 // unescaped-char / truncation parse failures seen with raw JSON output.
 
-const MINIMAX_BASE_URL = 'https://api.minimaxi.chat/v1';
+// MINIMAX_BASE_URL removed with callMiniMaxWithTool: no vendor endpoint is named outside
+// the handler and the provider sets.
 
 const TOOL_SPEC_ASSIGNMENTS = {
   name: 'submit_assignments',
@@ -744,70 +809,11 @@ const TOOL_MODEL_REVIEW = {
 // itemsKey: if set, extracts result[itemsKey] (for array-returning tools); otherwise returns full args.
 const MINIMAX_TOOL_TIMEOUT_MS = parseInt(process.env.MINIMAX_TOOL_TIMEOUT_MS || '180000', 10);
 
-async function callMiniMaxWithTool(prompt, toolDef, logPath, itemsKey) {
-  const apiKey = process.env.MINIMAX_API_KEY || process.env.EPAM_API_KEY_MINIMAX;
-  if (!apiKey) throw new Error('callMiniMaxWithTool: no API key (MINIMAX_API_KEY / EPAM_API_KEY_MINIMAX)');
-  // The caller's explicit AI_MODEL, else this seam's ladder position. No vendor name here.
-  const model = process.env.AI_MODEL || seamStartModel('spec-coordinator');
-  if (!model) throw new Error('callMiniMaxWithTool: no model resolved from the spec-coordinator seam ladder');
-  const baseURL = process.env.MINIMAX_BASE_URL || MINIMAX_BASE_URL;
-
-  const body = {
-    model,
-    messages: [{ role: 'user', content: prompt }],
-    max_tokens: 4096,
-    temperature: 0.2,
-    tools: [{ type: 'function', function: toolDef }],
-    tool_choice: { type: 'function', function: { name: toolDef.name } },
-  };
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), MINIMAX_TOOL_TIMEOUT_MS);
-
-  let res;
-  try {
-    res = await fetch(`${baseURL}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timer);
-  }
-
-  if (!res.ok) throw new Error(`MiniMax API error: ${res.status} ${await res.text()}`);
-
-  const data = await res.json();
-  const rawText = data.choices?.[0]?.message?.content || '';
-  const tc = data.choices?.[0]?.message?.tool_calls?.[0];
-  const argsRaw = tc?.function?.arguments || '{}';
-
-  if (logPath) {
-    fs.writeFileSync(logPath, `# Prompt\n${prompt}\n\n# Tool call args (raw)\n${argsRaw}\n\n# Text output\n${rawText}\n`);
-  }
-
-  // Parse args — fall back to jsonrepair on truncated/malformed output from M3
-  let args;
-  try {
-    args = JSON.parse(argsRaw);
-  } catch (parseErr) {
-    if (_jsonrepair) {
-      try {
-        args = JSON.parse(_jsonrepair(argsRaw));
-        console.warn(`callMiniMaxWithTool: jsonrepair recovered truncated args for tool ${toolDef.name}`);
-      } catch {
-        console.warn(`callMiniMaxWithTool: failed to parse tool args even with jsonrepair (tool=${toolDef.name}): ${parseErr.message}`);
-        return null;
-      }
-    } else {
-      console.warn(`callMiniMaxWithTool: failed to parse tool args (tool=${toolDef.name}): ${parseErr.message}`);
-      return null;
-    }
-  }
-
-  return itemsKey ? (args[itemsKey] ?? null) : args;
-}
+// callMiniMaxWithTool DELETED 2026-08-25.
+//
+// It fetched the vendor's /chat/completions endpoint directly and read MINIMAX_API_KEY itself
+// — a second channel around the central handler. MiniMax still runs; it goes through the
+// handler like every other provider.
 
 // Unified agent runner: tool-use for MiniMax, raw JSON for all other providers.
 // Ladder: if minimax times out or returns null, escalates to SPEC_PASS_LADDER_PROVIDER
@@ -1235,7 +1241,32 @@ function specAgentEnv(env = process.env, repoPath = '') {
  * three retries reproduced it because nothing told the model it had failed. The reason
  * this returns is the only thing that makes attempt 2 different from attempt 1.
  */
-function _validatedOrNull(parsed, tag) {
+function _validatedOrNull(parsed, tag, seam) {
+  // THE SEAM'S DECLARED CONTRACT, FIRST.
+  //
+  // Nine seams declare the key their consumer cannot proceed without, taken from the shape their
+  // own prompt states. A breach DROPS the reply rather than logging and continuing: the tagged
+  // schema path below stays diagnostic because an unproven validator must not halt a run, but a
+  // declared contract is not unproven — it says the consumer has nothing to read.
+  //
+  // Wired here because a validator nobody calls is not a contract. validateDeclaredOutput shipped
+  // with fatal:true and no caller, which is the plan-fidelity-gate defect: a library with a test
+  // and no call site looks covered while the run behaves as though the check does not exist.
+  const _seam = seam || process.env.EPAM_AGENT_NAME || '';
+  if (_seam) {
+    try {
+      // eslint-disable-next-line global-require
+      const d = require('./lib/agent-output-schema.js').validateDeclaredOutput(_seam, parsed);
+      if (d.declared && !d.ok) {
+        console.warn(`spec-mode: ${d.reason}`);
+        return null;
+      }
+    } catch (e) {
+      // Say so loudly rather than treating an unavailable validator as a pass.
+      console.warn(`spec-mode: declared-contract validator unavailable (${e.message}) — ${_seam} NOT validated`);
+    }
+  }
+
   let v;
   try {
     // eslint-disable-next-line global-require
@@ -1281,7 +1312,8 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
   // document, not just read the repo) supplies its own here rather than widening the
   // shared grant for everyone.
   const provider = (process.env.AI_PROVIDER || process.env.EPAM_ORCHESTRATION_PROVIDER || '').toLowerCase();
-  const ladderProvider = (process.env.SPEC_PASS_LADDER_PROVIDER || 'qwen').toLowerCase();
+  // SPEC_PASS_LADDER_PROVIDER removed with the minimax branch: it defaulted to the literal
+  // 'qwen', so a failure on one vendor was answered by a vendor named in code.
 
   // Fast-path: bypass MiniMax entirely when SPEC_MODE_PROVIDER is set.
   // Detects openspec vs speckit from logPath to pick the right model.
@@ -1307,39 +1339,20 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
     // SPEC_MODE_MAX_OUTPUT_TOKENS is spec-only; it doesn't affect implementation runs.
     const specEnv = Object.assign(specAgentEnv(process.env, repoPath), envOverride || {});
     const output = await runClaude(directExec, prompt, logPath, specEnv, { costAgent: costLabelFor(tag, specEnv), costStoryId: storyId });
-    return _validatedOrNull(extractTaggedJson(output, tag), tag);
+    return _validatedOrNull(extractTaggedJson(output, tag), tag, specEnv && specEnv.EPAM_AGENT_NAME);
   }
 
-  if (provider === 'minimax') {
-    let result = null;
-    try {
-      result = await callMiniMaxWithTool(prompt, toolDef, logPath, itemsKey);
-    } catch (err) {
-      const isTimeout = err.name === 'AbortError' || /aborted/i.test(err.message);
-      console.warn(`spec-mode: minimax tool-use failed (${err.message})${isTimeout ? ' — laddering to ' + ladderProvider : ''}`);
-      if (!isTimeout) throw err; // hard failure (no API key etc.) — don't ladder, surface the error
-    }
-    if (result !== null) return result;
-    // null = parse failed or aborted — ladder to fallback provider only if fast
-    // NOTE: OpenAI ladder via epam CLI spawns detached grandchildren that survive
-    // the 120s SIGKILL, causing indefinite hangs. Skip ladder when disabled.
-    if (process.env.SPEC_PASS_SKIP_LADDER === '1') {
-      console.warn(`spec-mode: minimax returned null — ladder disabled, using fallback spec`);
-      return null;
-    }
-    console.warn(`spec-mode: minimax returned null — laddering to ${ladderProvider}`);
-    const ladderTimeout = parseInt(process.env.SPEC_PASS_LADDER_TIMEOUT_MS || String(runClaudeTimeoutMs()), 10);
-    // FIX: build a new execSpec for the ladder. The original execSpec has
-    // '--provider minimax' baked into its args. Passing AI_PROVIDER=openai via
-    // env overrides is insufficient — ai-run.sh reads the --provider CLI flag,
-    // which always wins. Without this fix the ladder calls MiniMax again.
-    const ladderExec = { cmd: execSpec.cmd, args: ['--provider', ladderProvider] };
-    const output = await Promise.race([
-      runClaude(ladderExec, prompt, logPath, envOverride || {}, { costAgent: costLabelFor(tag, envOverride), costStoryId: storyId }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error(`ladder hard-timeout after ${ladderTimeout}ms`)), ladderTimeout + 5000))
-    ]);
-    return _validatedOrNull(extractTaggedJson(output, tag), tag);
-  }
+  // THE MINIMAX SPECIAL CASE IS GONE.
+  //
+  // This branch fetched https://api.minimaxi.chat/v1/chat/completions directly, reading
+  // MINIMAX_API_KEY itself — a second channel that bypassed the central handler entirely, so a
+  // run that had chosen another provider set could still reach MiniMax from here. It existed
+  // for API-enforced tool JSON; the handler's minimax arm already sets EPAM_MINIMAX_JSON_MODE=1,
+  // which buys the same guarantee through the one channel.
+  //
+  // Its ladder-to-'qwen' fallback goes with it: a vendor named in code cannot be the answer to
+  // another vendor failing. MiniMax still runs — it falls through to the path below, which
+  // dispatches through the handler like every other provider.
 
   // Non-minimax: existing raw text path with tag extraction + jsonrepair
   //
@@ -2555,7 +2568,7 @@ function verifyDetectiveHelper(helper, repoPath) {
       ['-rEl', '--include=*.ts', '--include=*.tsx',
         '--exclude-dir=node_modules', '--exclude-dir=.git',
         `(function|const|class|type|interface|enum)[[:space:]]+${sym}\\b`, repoPath],
-      { encoding: 'utf8', timeout: 15000 }
+      { encoding: 'utf8', timeout: toolTimeoutMs('codegraphQuery') }
     );
     return res.status === 0 && String(res.stdout || '').trim().length > 0;
   } catch { return null; }
@@ -2576,7 +2589,7 @@ function verifyDetectiveHelper(helper, repoPath) {
 // part that actually needs a model. Best-effort by construction: a missing
 // tool, a broken index or a slow query degrades to "no pre-seed" and never
 // breaks the spec pass.
-const DETECTIVE_PRESEED_MAX_CHARS = 8000;
+// DECLARED — config/spec-mode-defaults.json policy.detectivePreseedMaxChars.
 function precomputeDetectiveExplore(repoPath, story, toolPath, env = process.env, vocabulary = null) {
   if (env.CODEGRAPH_DETECTIVE_PRESEED === '0') return '';
   if (!repoPath || !toolPath || !story) return '';
@@ -2597,12 +2610,13 @@ function precomputeDetectiveExplore(repoPath, story, toolPath, env = process.env
     if (res.status !== 0) return '';
     const out = String(res.stdout || '').trim();
     if (!out) return '';
-    if (out.length <= DETECTIVE_PRESEED_MAX_CHARS) return out;
+    const _preseedCap = policyConfig().detectivePreseedMaxChars;
+    if (!Number.isFinite(_preseedCap) || out.length <= _preseedCap) return out;
     // Say so — a silently truncated ranking reads as a complete one. The notice
     // counts against the cap: the point is a bounded block, not a bounded body
     // with an unbounded footer.
     const notice = '\n… (truncated — re-run explore yourself if you need the rest)';
-    return out.slice(0, DETECTIVE_PRESEED_MAX_CHARS - notice.length) + notice;
+    return out.slice(0, _preseedCap - notice.length) + notice;
   } catch { return ''; }
 }
 
@@ -6216,7 +6230,7 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
           const res = require('child_process').spawnSync('python3', [
             path.join(__dirname, 'lib', 'fix_prescription_check.py'),
             repoPath, f.helper || '', f.fix,
-          ], { encoding: 'utf8', timeout: 30000 });
+          ], { encoding: 'utf8', timeout: toolTimeoutMs('codegraphExplore') });
           f.prescriptionNote = String(res.stdout || '').trim();
           f.prescriptionUnderspecified = res.status === 1;
           if (f.prescriptionNote) {
@@ -7333,7 +7347,9 @@ function estimateStoryTokens(story, contractDir) {
 // deterministic post-hoc check below (checkSplitMandateViolation), so the two
 // can never drift apart. Fully generic: no project/domain names, just AC count
 // and impl/test file shape — applies identically to any project's stories.
-const SPLIT_MANDATE_AC_THRESHOLD = 12;
+// The split threshold is DECLARED — config/spec-mode-defaults.json policy.splitMandateAcThreshold.
+// Exposed as a getter on the exports below so a reader always sees the current declaration
+// rather than a value frozen at module load.
 
 function storyRequiresSplit(snapshot) {
   // Brownfield: a story IS the ticket, so there is nothing to subdivide.
@@ -7360,8 +7376,9 @@ function storyRequiresSplit(snapshot) {
   const files = snapshot.technicalNotes?.files || [];
   const testFiles = files.filter((f) => f.endsWith('.test.ts') || f.endsWith('.spec.ts'));
   const implFiles = files.filter((f) => !f.endsWith('.test.ts') && !f.endsWith('.spec.ts'));
-  if (acCount > SPLIT_MANDATE_AC_THRESHOLD) {
-    return { required: true, reason: `${acCount} acceptance criteria (> ${SPLIT_MANDATE_AC_THRESHOLD})` };
+  const _splitAt = policyConfig().splitMandateAcThreshold;
+  if (Number.isFinite(_splitAt) && acCount > _splitAt) {
+    return { required: true, reason: `${acCount} acceptance criteria (> ${_splitAt})` };
   }
   if (testFiles.length > 0 && implFiles.length > 0) {
     return { required: true, reason: `combines ${implFiles.length} implementation file(s) and ${testFiles.length} test file(s)` };
@@ -8665,6 +8682,11 @@ function runClaudeTimeoutMs(env) {
 function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
   return new Promise((resolve, reject) => {
     const env = { ...process.env, ...envOverrides };
+    // THIS RUNNER KEEPS ITS OWN COST LEDGER, so the hub must not write a second row for the same
+    // call. Both fired before, and the 2026-08-26 mock3 ledger held 10 rows for 5 calls — a naive
+    // sum reported $2.57 against $1.29 actually billed. The hub still records for every caller
+    // that does NOT set this.
+    env.EPAM_COST_RECORDED_BY_CALLER = '1';
     // Name the agent from the label it already declares for cost tracking.
     // Only the detective ever set EPAM_AGENT_NAME explicitly, so every other
     // spec-mode agent's plan record and Langfuse trace was anonymous — written
@@ -8815,7 +8837,7 @@ function resolvePromptProvider(env = process.env) {
 
 function resolvePromptExec(aiRunnerCmd, env = process.env) {
   const provider = resolvePromptProvider(env);
-  const gateModel = env.AI_MODEL || env.ORCH_GATE_MODEL || '';
+  const gateModel = env.AI_MODEL || env.EPAM_MODEL || '';
   const modelArgs = gateModel ? ['--model', gateModel] : [];
   return { cmd: aiRunnerCmd, args: ['--provider', provider, ...modelArgs] };
 }
@@ -9057,15 +9079,39 @@ async function reviewPrdChange({ aiRunnerCmd, profiles, storyId, changeType, bef
   }
 }
 
-// Returns true when a model string is mini/nano/flash/haiku tier — fast but limited generation capacity.
-function isMiniTierModel(model) {
+// A MODEL'S TIER IS DECLARED BY THE SET THAT DECLARES THE MODEL.
+//
+// This read the tier off the model's NAME — '-mini', '-nano', '-flash', '-haiku',
+// 'minimax-m2' — which is a vendor's naming habit encoded as engine logic. It broke silently
+// in both directions: a cheap model a vendor named differently read as capable, and a capable
+// model whose name happened to contain '-flash' read as cheap. The answer feeds story model
+// assignment, so a wrong tier sends work to the wrong rung and nothing says so.
+//
+// `miniTier: true` now sits beside the other per-model facts in the set's modelOverrides.
+// UNDECLARED IS NOT MINI: guessing is what this replaced, so an unknown model is treated as
+// capable rather than assumed cheap.
+function isMiniTierModel(model, setName) {
   if (!model || typeof model !== 'string') return false;
   const m = model.toLowerCase();
-  // Named mini model from env var always qualifies
+
+  // An operator naming the mini model explicitly still wins — unchanged.
   const miniModelEnv = (process.env.ORCH_MINI_MODEL || '').toLowerCase();
   if (miniModelEnv && m === miniModelEnv) return true;
-  return m.includes('-mini') || m.includes('-nano') || m.includes('-flash') || m.includes('-haiku')
-      || m.startsWith('minimax-m2') || m.startsWith('minimax/minimax-m2');
+
+  try {
+    // eslint-disable-next-line global-require
+    const { activeSet } = require('./lib/llm-settings-resolve.js');
+    const set = setName || (activeSet() && activeSet().name);
+    if (!set) return false;
+    const file = path.join(__dirname, '..', 'config', `llm-defaults.${set}.json`);
+    const declared = JSON.parse(fs.readFileSync(file, 'utf8')).modelOverrides || {};
+    for (const [key, v] of Object.entries(declared)) {
+      if (key.startsWith('$') || !v || v.miniTier !== true) continue;
+      const needle = String(v.matchSubstring || key).toLowerCase();
+      if (needle && m.includes(needle)) return true;
+    }
+  } catch { /* no readable declaration is not a licence to guess */ }
+  return false;
 }
 
 // VERY_HIGH_AC_THRESHOLD (2026-07-15): a story this far past the normal
@@ -9564,6 +9610,10 @@ module.exports = {
   capSplitACs,
   validateSplitFileCoherence,
   storyRequiresSplit,
+  splitIsMandated: storyRequiresSplit,
+  // A GETTER, not a copy: reading the declaration at access time means a test or a project that
+  // changes it is answered honestly, instead of by whatever was loaded first.
+  get SPLIT_MANDATE_AC_THRESHOLD() { return policyConfig().splitMandateAcThreshold; },
   checkSplitMandateViolation,
   isSplitDelegationAc,
   correctSplitChildAgentRoleIfTestOnly,
@@ -9572,7 +9622,6 @@ module.exports = {
   assertNoStoryIdsLost,
   resolveModelProvider,
   isSplitDelegationOnlyChange,
-  SPLIT_MANDATE_AC_THRESHOLD,
   applySpecChanges,
   mergeLocationHintFiles,
   buildPerCodelineManifest,
@@ -9630,6 +9679,14 @@ module.exports = {
   buildKnownValidModels,
   isValidModelString,
   isMiniTierModel,
+  // exported so the WIRING is testable, not just the validator it calls
+  _validatedOrNull,
+  // exported so the retrieval vocabulary is tested by EXECUTION, not by re-implementing it
+  // in a harness — a shim that strips its own stopwords proves only that the shim works.
+  retrievalConfig,
+  retrievalTerms,
+  buildRetrievalQuery,
+  capAtWord,
   modelComplexitySignals,
   MAX_ACS_PER_STORY,
   MAX_CHILDREN_PER_SPLIT,

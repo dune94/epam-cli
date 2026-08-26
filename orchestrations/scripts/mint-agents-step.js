@@ -23,6 +23,15 @@
 
 'use strict';
 
+// HOW LONG A LOCAL TOOL MAY TAKE IS DECLARED, not written here. This was the literal 20000 at
+// two call sites — one decision with two homes, so a codeline large enough to need longer got a
+// truncated scan in both, and raising it meant finding both.
+function localToolTimeoutMs(configPath) {
+  try {
+    return JSON.parse(require('fs').readFileSync(configPath, 'utf8')).timeouts.localToolMs;
+  } catch { return undefined; }
+}
+
 const fs = require('fs');
 const path = require('path');
 const { execFileSync, spawnSync } = require('child_process');
@@ -203,7 +212,7 @@ function declaredDependencies(repoPath) {
   try {
     const out = execFileSync(process.execPath, [
       path.join(__dirname, 'lib', 'handlers', 'codeline-ecosystem.js'), repoPath,
-    ], { encoding: 'utf8', timeout: 20000 });
+    ], { encoding: 'utf8', timeout: localToolTimeoutMs(path.join(__dirname, '..', 'config', 'spec-mode-defaults.json')) });
     const facts = JSON.parse(out);
     if (!facts.manifest) {
       process.stderr.write(
@@ -1042,7 +1051,30 @@ if (require.main !== module) return;
   //
   // Every assignment must name a role that exists in the settled roster. The check is cheap
   // and mechanical, and it fails the step rather than handing a lane a name with no brief.
-  const _finalRoles = new Set(Object.keys(JSON.parse(fs.readFileSync(PROFILES_PATH, 'utf8'))));
+  // THE SETTLED ROSTER IS roster.json, WHICH IS WHAT THIS MESSAGE HAS ALWAYS CLAIMED.
+  //
+  // This read the ENGINE's agents/profiles.json. ba9cee7 (2026-08-22) stopped the mint writing
+  // there — one project's agents were reaching another's roster — moving the briefs to
+  // <project>/agent-profiles.json and the settled roster to <project>/roster.json. This reader
+  // was left behind, so it checked assignments against a file the mint no longer touches and
+  // rejected every project role.
+  //
+  // mock3 run 8: the roster held fare-schedule-logic-engineer as an implementer,
+  // project-roles.json registered it, agent-profiles.json carried its brief — and this threw
+  // "names a role that is not in the settled roster" for the one agent the run had just minted.
+  // Second reader left behind by that move; candidateRoles in spec-mode-runner was the first.
+  //
+  // Falls back to the engine profiles when no project roster exists, so a run without one
+  // behaves exactly as it did before.
+  // eslint-disable-next-line global-require
+  const { projectRosterPath } = require('./lib/project-roster.js');
+  let _finalRoles;
+  try {
+    const _rosterFile = projectRosterPath(process.env.EPAM_PROJECT_CONFIG_DIR || '');
+    _finalRoles = new Set(Object.keys(JSON.parse(fs.readFileSync(_rosterFile, 'utf8')).agents || {}));
+  } catch {
+    _finalRoles = new Set(Object.keys(JSON.parse(fs.readFileSync(PROFILES_PATH, 'utf8'))));
+  }
   const _orphaned = assignment.assigned
     .filter((a) => a && a.agentRole && !_finalRoles.has(a.agentRole))
     .map((a) => `${a.storyId}${a.codeline ? `/${a.codeline}` : ''} -> ${a.agentRole}`);
@@ -1111,7 +1143,7 @@ if (require.main !== module) return;
     if (!promptMode) {
       throw new Error(
         'cannot build project prompts: EPAM_PROMPT_PROVISION_MODE is unset. Declare it in the '
-        + "project's config.env as 'copy' (install the generic templates as they are) or "
+        + "project's env as 'copy' (install the generic templates as they are) or "
         + "'generate' (specialise each one for this project). There is no engine default: "
         + 'picking one silently is how a project ends up running prompts nobody chose.');
     }

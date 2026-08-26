@@ -85,7 +85,111 @@ function copyCanonicalForRun(canonicalPath, logDir) {
 // DECLARED IN THE REGISTRY, not here. This and agent-roster.js each held the list and they
 // disagreed — 'seam' validated in one and was an unrecognised kind in the other. See
 // lib/agent-kinds.js.
-const { agentKinds } = require('./agent-kinds.js');
+const { agentKinds, kindMembership } = require('./agent-kinds.js');
+
+/**
+ * HOW THIS PROJECT GETS ITS ROSTER — DECLARED, NOT INFERRED.
+ *
+ *   derive     (default) an agent specialises canonical for this project, and it is reviewed.
+ *   canonical  canonical IS the roster: personas copied verbatim, provenance recorded, no
+ *              agent call and nothing to review.
+ *
+ * WHY THE SECOND MODE EXISTS. roster-specialiser is the most expensive seam in a run — top
+ * ladder, 65536 output tokens, up to 250 turns. A rehearsal project does not need specialised
+ * personas, and paying for them to rehearse plumbing pays for the wrong thing.
+ *
+ * WHAT IT IS NOT. 862ca17 stopped EPAM_SKIP_AGENT_MINT from silently ALSO skipping roster
+ * derivation, because skipping meant "run with no identities". This installs identities
+ * EXPLICITLY and holds them to the same contract; it only removes the model call. An unknown
+ * value is refused rather than treated as the default: a typo would quietly buy a full
+ * specialisation, or quietly stop buying one.
+ */
+function readRosterMode(projectConfigDir) {
+  const KNOWN = ['derive', 'canonical'];
+  let declared = '';
+  try {
+    const f = path.join(projectConfigDir || '', 'llm-settings.json');
+    if (fs.existsSync(f)) declared = String(JSON.parse(fs.readFileSync(f, 'utf8')).rosterMode || '').trim();
+  } catch { /* an unreadable settings file is not a declaration */ }
+  if (!declared) return 'derive';
+  if (!KNOWN.includes(declared)) {
+    throw new Error(
+      `[roster] rosterMode '${declared}' is not one of ${KNOWN.join('|')}. Refusing to guess: `
+      + 'treating an unknown value as the default would either buy a full specialisation nobody '
+      + 'asked for, or silently stop buying one that was wanted.');
+  }
+  return declared;
+}
+
+/** Canonical, in the shape the roster contract requires. Deterministic — no model involved. */
+function rosterFromCanonical(canonical) {
+  const membership = kindMembership();
+  const kindOf = (name) => {
+    for (const [kind, names] of Object.entries(membership || {})) {
+      if (Array.isArray(names) && names.includes(name)) return kind;
+    }
+    return 'seam';
+  };
+  const agents = {};
+  for (const [name, persona] of Object.entries(canonical)) {
+    if (typeof persona !== 'string' || !persona.trim()) continue;
+    agents[name] = {
+      persona,
+      kind: kindOf(name),
+      // ITS OWN ANCESTOR. Copying canonical means the ancestor IS the entry, and the digest
+      // records that nothing was changed — the same provenance a derived roster carries.
+      ancestor: name,
+      derivedFromSha256: personaDigest(persona),
+      rationale: 'canonical persona, adopted verbatim: this project declares rosterMode=canonical',
+    };
+  }
+  return { agents };
+}
+
+/**
+ * THE AGENTS THIS PROJECT MINTED, added to a canonical roster.
+ *
+ * rosterMode=canonical means "do not pay the SPECIALISER to rewrite canonical personas". It does
+ * not mean "throw away the mint": the mint is a separate, earlier, cheaper step, and what it
+ * produces — this project's implementers and per-codeline investigators — exists nowhere in
+ * canonical, because those roles are project-specific by nature.
+ *
+ * Discarding them made a project declaring this mode unrunnable. On 2026-08-26 mock3's mint
+ * created fare-schedule-engineer, registered it, role assignment gave it both stories, and the
+ * roster check refused every assignment: "2 assignment(s) name a role that is not in the settled
+ * roster". The roster held 54 agents, all kind "seam", and no implementer at all.
+ *
+ * A minted agent is its OWN ancestor with a digest over its own brief: it was not derived from a
+ * canonical persona, and recording one it never had would be a false provenance claim. Canonical
+ * wins a name collision — the mint must not shadow a process role.
+ */
+function withMintedAgents(roster, projectConfigDir) {
+  if (!projectConfigDir || !roster || !roster.agents) return roster;
+  let minted = {};
+  try {
+    const doc = JSON.parse(fs.readFileSync(path.join(projectConfigDir, 'agent-profiles.json'), 'utf8'));
+    minted = (doc && doc.profiles) || doc || {};
+  } catch { return roster; }              // a project with no minted briefs adds none
+
+  // eslint-disable-next-line global-require
+  const { kindOfAgent } = require('./agent-roster.js');
+  for (const [name, persona] of Object.entries(minted)) {
+    if (typeof persona !== 'string' || !persona.trim()) continue;
+    if (roster.agents[name]) continue;    // canonical wins; the mint never shadows a process role
+    let kind = '';
+    try { kind = kindOfAgent(name, projectConfigDir); } catch { kind = ''; }
+    if (!kind) continue;                  // an agent in no registry has no declared kind to record
+    roster.agents[name] = {
+      persona,
+      kind,
+      ancestor: name,
+      derivedFromSha256: personaDigest(persona),
+      rationale: 'minted for this project and adopted verbatim: this project declares '
+        + 'rosterMode=canonical, which skips the specialiser, not the mint',
+    };
+  }
+  return roster;
+}
 
 /** Seam names the registry declares. Read once — this is asked for every entry in the roster. */
 let _declaredSeams;
@@ -220,7 +324,25 @@ async function buildProjectRoster({
   if (typeof produce !== 'function') throw new Error('[roster] produce is required');
   const copyPath = copyCanonicalForRun(canonicalPath, logDir);
   const canonical = JSON.parse(fs.readFileSync(copyPath, 'utf8'));
+
   const outPath = projectRosterPath(projectConfigDir);
+  // DECLARED MODE, DECIDED BEFORE ANY MODEL TIME IS SPENT.
+  const mode = readRosterMode(projectConfigDir);
+  if (mode === 'canonical') {
+    const roster = withMintedAgents(rosterFromCanonical(canonical), projectConfigDir);
+    // HELD TO THE SAME CONTRACT. A cheaper path that skipped the check would be a second,
+    // unvalidated way for a roster to reach disk — which is the shape of every defect this
+    // library exists to prevent.
+    const contract = checkRoster(roster, canonical);
+    if (!contract.ok) {
+      throw new Error(`[roster] canonical does not satisfy the roster contract: ${contract.reason}`);
+    }
+    fs.writeFileSync(outPath, JSON.stringify(roster, null, 2));
+    const _minted = Object.values(roster.agents).filter((a) => a.rationale && a.rationale.startsWith('minted')).length;
+    log(`[roster] rosterMode=canonical — ${Object.keys(roster.agents).length} persona(s) adopted verbatim`
+        + `${_minted ? ` (${_minted} minted for this project)` : ''}, no specialiser call`);
+    return roster;
+  }
 
   let lastReason = '';
   for (let attempt = 1; attempt <= attempts; attempt++) {

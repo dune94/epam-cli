@@ -188,8 +188,18 @@ run_provider_once() {
         if [ -n "${ORCH_JSON_RESULT:-}" ]; then
           local _json_out
           _json_out=$(mktemp)
+          # STDERR IS KEPT. It was sent to /dev/null, so when the runner rejected a flag the arm
+          # produced an empty reply and NOTHING said why: codeline-discovery reported only
+          # "Empty response from ai-run.sh (no stderr captured)" and the 2026-08-26 mock3 run
+          # aborted three steps later on "codeline scope could not be resolved". The actual
+          # message was `error: unknown option '-s'`.
+          local _cc_err; _cc_err="$(mktemp "${TMPDIR:-/tmp}/claude-err-XXXXXX")"
           "$CLAUDE_CMD" --print --output-format json --dangerously-skip-permissions "${model_args[@]}" ${runner_args[@]+"${runner_args[@]}"} \
-              < "$PROMPT_FILE" > "$_json_out" 2>/dev/null
+              < "$PROMPT_FILE" > "$_json_out" 2>"$_cc_err"
+          if [ ! -s "$_json_out" ] && [ -s "$_cc_err" ]; then
+            echo "[llm-handler] $(basename "$CLAUDE_CMD") produced no output: $(head -c 400 "$_cc_err")" >&2
+          fi
+          rm -f "$_cc_err"
           jq -r '.result // empty' "$_json_out" 2>/dev/null
           cp "$_json_out" "$ORCH_JSON_RESULT" 2>/dev/null || true
           rm -f "$_json_out"

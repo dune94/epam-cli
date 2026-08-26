@@ -39,6 +39,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # shellcheck source=lib/project-config.sh
 . "$SCRIPT_DIR/lib/project-config.sh"
+# load_project_env lives here — the launcher resolved a project config dir and never read what
+# was inside it, so the active set's config.<set>.env never reached the run.
+. "$SCRIPT_DIR/lib/env-file.sh"
 
 # One identifier for the whole run, so the run folder, traces and archive agree.
 export ORCH_RUN_ID="${ORCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
@@ -120,6 +123,18 @@ _prd_project="$("${NODE_BIN:-node}" -e '
 _epam_cfg_dir="$(project_config_dir "$_prd_project" "$REPO_ROOT")" || exit 1
 export EPAM_PROJECT_CONFIG_DIR="$_epam_cfg_dir"
 info "Project config: $EPAM_PROJECT_CONFIG_DIR"
+
+# THE PROJECT'S OWN ENV — WITHOUT THIS THE STACK SELECTION NEVER REACHES THE RUN.
+#
+# This launcher resolved the project config DIR and then never loaded the env inside it, so
+# config.env and the active set's config.<set>.env were both ignored. run-agent-orchestration.sh
+# then loaded the repo .env in preserve mode, and because nothing had set the provider yet, that
+# file's stale EPAM_ORCHESTRATION_PROVIDER=qwen won. Launched with EPAM_PROVIDER_SET=claude, the
+# 2026-08-26 mock3 run reached estate-survey on provider 'qwen', failed three attempts on a
+# ladder it should never have been on, and aborted the mint.
+#
+# preserve, so an operator variable given on the command line still outranks the files.
+load_project_env "$_epam_cfg_dir" preserve || fail "project env for $_prd_project could not be loaded"
 
 # ── THE TEST PERIMETER ───────────────────────────────────────────────────────
 #

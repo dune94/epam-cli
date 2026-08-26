@@ -327,6 +327,18 @@ function seamInvocationEnv(agent, agentsDir, opts) {
         // The channel and the list are separate switches: granting one without the other
         // produces an agent that quietly has nothing.
         env.AI_GATE_ALLOW_TOOLS = '1';
+      } else {
+        // A DECLARED "none" IS A DECISION, NOT AN OMISSION.
+        //
+        // toolGrantFor('none') returns an empty list, which fell through here and left
+        // EPAM_ALLOWED_TOOLS unset — so the agent inherited whatever grant the run had last
+        // set. The one seam that declares "none" (topology-router) would have run with the
+        // preceding agent's tools, and the preceding agent may hold Bash and WriteFile.
+        //
+        // The absent-stays-absent rule above is about a profile that CONFIGURES NOTHING. This
+        // profile configures zero, and zero has to be enforced or it means nothing.
+        env.EPAM_ALLOWED_TOOLS = '';
+        env.AI_GATE_ALLOW_TOOLS = '0';
       }
     } catch (e) {
       // A seam asking for a grant this engine does not define is mis-declared. Say so rather

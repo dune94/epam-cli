@@ -21,20 +21,28 @@ import { join } from 'node:path';
 const ROOT = join(__dirname, '../../..');
 const PROFILES = join(ROOT, 'orchestrations/agents/invocation-profiles.json');
 
-/** Every agent the pipeline declares. Derived, never listed. */
+/**
+ * Every agent the pipeline declares. Derived, never listed.
+ *
+ * AN AGENT IS A KEY OF A CONTAINER, NOT ANY OBJECT THAT OWNS A BUDGET.
+ *
+ * This recursed the whole registry and claimed anything carrying ladder/maxIterations/
+ * reasoningEffort/_what. `profiles["repro-test-writer"].microQuestion` declares its own
+ * iteration and token budget — it is a SUB-BUDGET of one agent for one sub-call, not an agent
+ * — so the walk invented an agent named microQuestion and then reported it as having no
+ * purpose, no seam, and no call site. Three failures describing a thing that does not exist.
+ *
+ * The container is `profiles` — agents declared inline, each with its own seam, purpose and
+ * budgets, which is what every assertion below is about. `agentSeams` is a different thing: a
+ * MAPPING from an agent to a seam it shares with others, so its entries have no _what of their
+ * own and their EPAM_SEAM is deliberately not their own name. Enumerating those here reported
+ * 54 correctly-configured agents as unwired.
+ */
 function declaredAgents(): string[] {
   const doc = JSON.parse(readFileSync(PROFILES, 'utf8'));
-  const names: string[] = [];
-  (function walk(o: any) {
-    for (const k of Object.keys(o ?? {})) {
-      const v = o[k];
-      if (v && typeof v === 'object') {
-        if (v.ladder || v.maxIterations || v.reasoningEffort || v._what) names.push(k);
-        walk(v);
-      }
-    }
-  })(doc);
-  return [...new Set(names)].filter((n) => n !== 'defaults').sort();
+  return Object.keys(doc.profiles ?? {})
+    .filter((k) => !k.startsWith('$') && !k.startsWith('_') && k !== 'defaults')
+    .sort();
 }
 
 /**
@@ -146,8 +154,11 @@ describe('the invocation gateway answers for every agent', () => {
   });
 
   it.each(AGENTS)('%s — is granted a tool set', (agent) => {
-    // An agent with no declared tools silently inherits whatever the run last set.
-    expect(seamEnv(agent).EPAM_ALLOWED_TOOLS, `${agent}: no tool grant`).toBeTruthy();
+    // An agent with no declared tools silently inherits whatever the run last set. What must
+    // hold is that the gateway ANSWERS — not that the answer is a non-empty list. A seam may
+    // deliberately declare "none", and requiring a truthy value made the only correct way to
+    // express that indistinguishable from having forgotten to configure it.
+    expect(seamEnv(agent).EPAM_ALLOWED_TOOLS, `${agent}: no tool grant`).toBeDefined();
   });
 
   it.each(AGENTS)('%s — its ladder position resolves to a real tier', (agent) => {

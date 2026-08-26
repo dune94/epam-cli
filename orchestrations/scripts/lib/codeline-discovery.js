@@ -87,6 +87,25 @@ const PROVIDER = getArg('--provider',
 // No literal fallback: see lib/seam-model.js. Discovery picking the wrong codeline is already
 // a known failure chain; doing it on an unchosen model makes the cause untraceable.
 const { resolveOrRefuse } = require('./seam-model.js');
+
+/**
+ * THIS SEAM'S MODEL, FROM ITS OWN LADDER.
+ *
+ * Replaces process.env.ORCH_GATE_MODEL — a RUN-WIDE PIN that reached every seam unable to
+ * resolve one itself, which was all of them outside the story path. `.env` set it to
+ * z-ai/glm-5.2, so a mockserver run asked for an OpenRouter model and nothing else could
+ * supply a different answer.
+ *
+ * Returns '' when the ladder cannot answer, so resolveOrRefuse still REFUSES rather than
+ * substituting: "we could not tell" is never "it is fine".
+ */
+function seamLadderModel(seam) {
+  try {
+    const { seamInvocationEnv } = require('./seam-invocation.js');
+    const env = seamInvocationEnv(seam, undefined, { sourceEnv: process.env }) || {};
+    return env.EPAM_MODEL || '';
+  } catch { return ''; }
+}
 // RESOLVED WHERE IT IS USED, not at import. Resolving here ran the refusal the moment anything
 // required this module — so the prompt builder could not be exercised by a test without a full
 // project environment, and the one part of this file that decides which client repository gets
@@ -95,7 +114,7 @@ let _model = null;
 const MODEL = () => {
   if (_model) return _model;
   _model = resolveOrRefuse({ seam: 'codeline-discovery',
-    sources: [getArg('--model', ''), process.env.ORCH_GATE_MODEL, process.env.EPAM_MODEL] });
+    sources: [getArg('--model', ''), seamLadderModel('codeline-discovery'), process.env.EPAM_MODEL] });
   return _model;
 };
 
@@ -379,6 +398,11 @@ function callLlm(prompt, opts = {}) {
           ..._base,
           EPAM_AGENT_NAME: 'codeline-discovery',
           ORCH_JSON_RESULT: _costFile,
+          // THIS FILE EMITS ITS OWN COST ROW (_emitDiscoveryCost below), so the hub must not
+          // write a second one for the same call. Both fired: run 5 on 2026-08-26 recorded 5
+          // rows for 4 calls, and discovery was the one still doubled after spec-mode-runner
+          // was fixed. See lib/cost-record.sh and the same declaration in spec-mode-runner.js.
+          EPAM_COST_RECORDED_BY_CALLER: '1',
           ...(() => {
             try {
               // (agent, agentsDir, opts) — the options are the THIRD argument. Passing them

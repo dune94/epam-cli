@@ -1306,7 +1306,72 @@ function withToolGrant(env, toolGrant) {
   return env;
 }
 
+/**
+ * THE OUTPUT CONTRACT, IN THE PROMPT, DERIVED FROM THE DECLARED SCHEMA.
+ *
+ * These seams bind their output with EPAM_RESPONSE_SCHEMA. That variable is read in exactly one
+ * place — src/agent/AgentRunner.ts, the ReAct loop reached through the `epam run` arm — so on any
+ * stack whose runner is a one-shot (claude, codemie: `claude --print`) it binds NOTHING, and the
+ * prompt is then the only channel the contract has.
+ *
+ * On 2026-08-26 that cost a run: roster-review returned three correct, evidenced findings as
+ * markdown, the extractor found no <ROSTER_REVIEW> tag, and mint-agents-step refused to continue
+ * on an unreviewed roster. PROJECT_AGENTS failed the same way in the same run ("Unexpected token
+ * 'B', \"Both repos\"...") and only survived because its caller could recover. Nothing had asked
+ * the model for a tag; the schema's own description says "Do not answer in prose" and the model
+ * never saw it.
+ *
+ * Rendered FROM the tool definition rather than written beside it, so a schema change cannot
+ * leave the prompt describing the old shape. Appended on every stack: where the provider does
+ * bind the schema this is merely redundant, and redundant is the cheap side of this trade.
+ */
+function outputContractFor(toolDef, tag) {
+  if (!toolDef || !tag) return '';
+  const p = (toolDef.parameters && toolDef.parameters.properties) || {};
+  const required = (toolDef.parameters && toolDef.parameters.required) || [];
+  const field = (name, spec, indent, requiredHere) => {
+    const pad = ' '.repeat(indent);
+    // The REQUIRED list that governs THIS object. Array items carry their own; using the
+    // parent's marked every item field "(optional)" when five of them are mandatory, which
+    // reads as permission to omit exactly the evidence a finding is worthless without.
+    const req = (requiredHere || []).includes(name) ? '' : '   (optional)';
+    let line = `${pad}"${name}": <${spec.type || 'value'}>`;
+    if (Array.isArray(spec.enum)) line += ` one of ${spec.enum.map((e) => JSON.stringify(e)).join(' | ')}`;
+    if (spec.description) line += `\n${pad}   // ${spec.description}`;
+    return line + req;
+  };
+  const lines = [];
+  for (const [name, spec] of Object.entries(p)) {
+    if (spec && spec.type === 'array' && spec.items && spec.items.properties) {
+      lines.push(`  "${name}": [ {`);
+      const itemReq = spec.items.required || [];
+      for (const [k, v] of Object.entries(spec.items.properties)) lines.push(field(k, v, 6, itemReq) + ',');
+      lines.push('  } ]');
+    } else {
+      lines.push(field(name, spec || {}, 2, required) + ',');
+    }
+  }
+  return [
+    '',
+    '# Output — THIS IS A CONTRACT, NOT A PREFERENCE',
+    '',
+    `Emit EXACTLY one <${tag}> block and nothing else that matters. Prose outside it is DISCARDED`,
+    'unread, however correct it is — the pipeline parses the block and never the commentary.',
+    '',
+    `<${tag}>`,
+    '{',
+    ...lines,
+    '}',
+    `</${tag}>`,
+    '',
+    toolDef.description ? `${toolDef.description}` : '',
+    '',
+  ].join('\n');
+}
+
 async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey, storyId = '', repoPath = '', envOverride = null) {
+  // The contract travels with the prompt, for every stack. See outputContractFor above.
+  prompt = `${prompt}${outputContractFor(toolDef, tag)}`;
   // envOverride: per-agent tool grant. Most spec-mode agents share specAgentEnv's
   // read-only set; an agent with a different need (the ticket-link agent must FETCH a
   // document, not just read the repo) supplies its own here rather than widening the

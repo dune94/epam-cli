@@ -25,5 +25,10 @@
   "version": 1,
   "seams": [
     "guard-vocabulary"
-  ]
+  ],
+  "mayBeEmpty": [
+    "__CODEGRAPH_SECTION__",
+    "__DOC_SECTION__"
+  ],
+  "$mayBeEmptyWhy": "Both are REAL absent states, and production passes '' for them: spec-mode-runner supplies __CODEGRAPH_SECTION__ only when a codegraph tool AND a repo path are present, and __DOC_SECTION__ only when the story references documents. Without this declaration the prompt layer refuses to render for any project that has not provisioned the codegraph plugin — deriveGuardVocabulary then returns null, which its own callers must read as 'the guard could not be armed'. So the guard silently disarmed itself on exactly the projects least likely to notice. Unlike a brief or a tool grant, an absent section here reads correctly as absent."
 }

@@ -28,9 +28,21 @@
  * that feeds a guard the terms its own patterns were derived from proves only that the
  * incident is remembered — that is exactly the test that hid this for months.
  */
-import { describe, it, expect } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { provisionProject, cleanupProvisioned } from '../../support/provisioned-project';
+
+// A SEAM PROMPT RENDERS FROM THE PROJECT'S COPY, SO THIS FILE SUPPLIES A PROJECT.
+//
+// prompt-library takes a seam-declared prompt only from <project>/prompts and refuses to execute
+// a template — a project without a copy is a provisioning defect that must surface as one. No
+// project in a fresh checkout has generated prompts, so every case here failed on that refusal
+// rather than on what it asserts. The temp project is provisioned by COPYING the template, the
+// way topology-router's harness does: specialisation is the mint's job, not a test's.
+beforeAll(() => { process.env.EPAM_PROJECT_CONFIG_DIR = provisionProject(['guard-vocabulary']); });
+afterAll(() => { delete process.env.EPAM_PROJECT_CONFIG_DIR; cleanupProvisioned(); });
+
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const gv = require('../../../orchestrations/scripts/lib/guard-vocabulary.js');

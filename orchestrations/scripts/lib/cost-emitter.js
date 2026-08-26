@@ -187,7 +187,7 @@ function appendLedgerRecord({ ledgerFile, agent, storyId, phase, model, cost, tu
       task_tokens_out: cost.tokensOut,
       task_turns: turns || 1,
       cache_read_tokens: cost.tokensCached || 0,
-      cache_create_tokens: 0,
+      cache_create_tokens: cost.tokensCacheCreate || 0,
       // Distinguishable from a story's terminal states, so consumers filtering on
       // completed/failed are unaffected by these appearing in the same file.
       status: 'agent',

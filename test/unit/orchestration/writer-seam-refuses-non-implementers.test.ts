@@ -45,13 +45,27 @@ function runGuard(role: string, opts: { implementers: string[]; investigators: s
   writeFileSync(prd, JSON.stringify({ stories: [{ id: 'S-1', agentRole: role }] }));
   writeFileSync(join(dir, 'profiles.json'), JSON.stringify(
     Object.fromEntries([...opts.implementers, ...opts.investigators].map(n => [n, 'brief']))));
+  // THE PERIMETER READS THE PROJECT ROSTER, not the two split registries it used to consult.
+  // project-roles.json / project-investigators.json are written below for any consumer that
+  // still reads them, but the guard resolves kinds through project-roster.js from roster.json
+  // keyed on EPAM_PROJECT_CONFIG_DIR — unset, it returns nothing and refuses EVERY role, so a
+  // legitimate implementer read as blocked and the guard looked broken when it was correct.
   writeFileSync(join(dir, 'project-roles.json'), JSON.stringify({ roles: opts.implementers }));
   writeFileSync(join(dir, 'project-investigators.json'), JSON.stringify({ investigators: opts.investigators }));
+  writeFileSync(join(dir, 'roster.json'), JSON.stringify({
+    agents: Object.fromEntries([
+      ...opts.implementers.map((n) => [n, 'implementer'] as const),
+      ...opts.investigators.map((n) => [n, 'investigator'] as const),
+    ].map(([name, kind]) => [name, {
+      kind, persona: 'brief', ancestor: 'canonical', derivedFromSha256: '0'.repeat(64),
+    }])),
+  }, null, 2));
 
   const script =
     `set +e\n` +
     `error() { echo "ERR: $*"; }\n` +
     `export AGENT_PROFILES_FILE=${JSON.stringify(join(dir, 'profiles.json'))}\n` +
+    `export EPAM_PROJECT_CONFIG_DIR=${JSON.stringify(dir)}\n` +
     `MAIN_PRD_FILE=${JSON.stringify(prd)}\n` +
     `source ${JSON.stringify(PERIM)} >/dev/null 2>&1\n` +
     `implement_story() {\n  local story_id=$1\n` + guardBlock() + `\n  echo "WRITER_RAN"\n}\n` +

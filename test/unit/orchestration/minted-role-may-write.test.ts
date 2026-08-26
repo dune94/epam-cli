@@ -42,11 +42,27 @@ function mayWrite(role: string, roster: Record<string, string> = ROSTER) {
   const dir = mkdtempSync(join(tmpdir(), 'perim-roles-')); dirs.push(dir);
   const profiles = join(dir, 'profiles.json');
   writeFileSync(profiles, JSON.stringify(roster, null, 2));
-  writeFileSync(join(dir, 'project-roles.json'), JSON.stringify({
-    roles: ['some-domain-engineer', 'another-domain-specialist'],
-  }));
+  // THE PERIMETER READS THE PROJECT ROSTER.
+  //
+  // This wrote project-roles.json — the registry the perimeter used to consult. It now resolves
+  // implementers through project-roster.js from <project>/roster.json, keyed on
+  // EPAM_PROJECT_CONFIG_DIR, and with that unset it returns nothing and refuses every role. A
+  // minted role therefore read as "structurally unable to write" when the guard was correct and
+  // the harness was asking the question with no project.
+  const MINTED = ['some-domain-engineer', 'another-domain-specialist'];
+  writeFileSync(join(dir, 'roster.json'), JSON.stringify({
+    agents: Object.fromEntries(Object.keys(roster).map((name) => [name, {
+      // Only the minted domain roles implement; the canonical process role and the reviewer do
+      // not, which is the distinction the perimeter exists to enforce.
+      kind: MINTED.includes(name) ? 'implementer' : 'investigator',
+      persona: String(roster[name]),
+      ancestor: 'canonical',
+      derivedFromSha256: '0'.repeat(64),
+    }])),
+  }, null, 2));
   const res = spawnSync('bash', ['-c',
     `set +e; export AGENT_PROFILES_FILE=${JSON.stringify(profiles)}; ` +
+    `export EPAM_PROJECT_CONFIG_DIR=${JSON.stringify(dir)}; ` +
     `source ${JSON.stringify(PERIM)} >/dev/null 2>&1; ` +
     `perimeter_role_may_write ${JSON.stringify(role)}; echo "RC=$?"`,
   ], { encoding: 'utf8' });

@@ -4135,10 +4135,35 @@ const TOOL_ROLE_ASSIGNMENTS = {
  * not exist — and the identical mistake in the write perimeter handed the detective write
  * access, which the perimeter suite caught.
  */
+/**
+ * THE BRIEFS MOVED PER PROJECT; THIS FILTER DID NOT FOLLOW THEM.
+ *
+ * A registered role is only a candidate if its BRIEF exists — a role with no brief would run with
+ * an empty system prompt. That check read the ENGINE's agents/profiles.json. mergeProjectAgents
+ * deliberately stopped writing there ("every project shares it, so one project's agents were
+ * reaching another's roster") and now writes <project>/agent-profiles.json, so the filter matched
+ * nothing and every mint looked like no mint at all.
+ *
+ * Live 2026-08-26, mock3 run 5: the mint created transit-logic-engineer, wrote its brief to the
+ * project file and registered it in the project's project-roles.json — and assignAgentRoles threw
+ * "no project implementation roles are registered for this project — nothing was minted", after
+ * paying for the mint AND the roster review. projectRoles() already resolves per project; only
+ * this half was left behind.
+ *
+ * Both files are consulted: a project brief takes precedence, and the engine's own roles still
+ * resolve for a run that has them (epam-cli orchestrates itself).
+ */
 function candidateRoles(profiles, agentsDir) {
   let registered = [];
   try { registered = require('./lib/agent-roster.js').projectRoles(agentsDir); } catch { registered = []; }
-  return registered.filter((r) => Object.prototype.hasOwnProperty.call(profiles || {}, r));
+  const known = Object.assign({}, profiles || {});
+  try {
+    const _pp = path.join(process.env.EPAM_PROJECT_CONFIG_DIR || '', 'agent-profiles.json');
+    const _doc = JSON.parse(fs.readFileSync(_pp, 'utf8'));
+    // The file wraps its map: { _what, profiles, runId }. Older copies are the bare map.
+    Object.assign(known, (_doc && _doc.profiles) || _doc || {});
+  } catch { /* a project with no minted briefs yet has none to add */ }
+  return registered.filter((r) => Object.prototype.hasOwnProperty.call(known, r));
 }
 
 /**

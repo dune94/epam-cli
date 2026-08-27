@@ -616,7 +616,7 @@ if (require.main !== module) return;
     // THE AGENT WRITES THE FILE. The pipeline hands it the canonical copy and a destination,
     // then judges the artefact — it does not compose personas itself, because deciding what an
     // agent must know about a codeline is judgement, not substitution.
-    const produce = async ({ canonicalCopyPath, outPath, refusal }) => {
+    const produce = async ({ canonicalCopyPath, outPath, refusal, attempt }) => {
       process.env.EPAM_AGENT_NAME = 'roster-specialiser';
       // The SAME context the prompt builder is given, computed the same way — a derivation that
       // sees different facts than its sibling stage is two projects, not one.
@@ -648,7 +648,11 @@ if (require.main !== module) return;
       // AGENTS_DIR, not LOG_DIR: seamInvocationEnv reads the invocation registry from the
       // directory it is given, and handed the log folder it found none and resolved no ladder.
       const seamEnv = {
-        ...seamInvocationEnv('roster-specialiser', AGENTS_DIR),
+        // ATTEMPT N RUNS RUNG N-1. buildProjectRoster has always handed `attempt` to this producer
+        // and it was destructured away, so all three attempts re-ran the same model: the refusal
+        // was fed back to the one model that had just produced it. Fifth site of that same shape.
+        ...seamInvocationEnv('roster-specialiser', AGENTS_DIR,
+          { rung: Math.max(0, (Number(attempt) || 1) - 1) }),
         EPAM_AGENT_NAME: 'roster-specialiser',
       };
       // The tool CHANNEL and the tool LIST travel together: granting one without the other gives

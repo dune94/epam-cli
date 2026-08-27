@@ -15,7 +15,8 @@
 # never heard of — if the mechanism works for that, it works for any.
 #
 #   apply_runner_settings <runner-name> <project-config-dir>
-#     exports each declared env var, and appends declared flags to the RUNNER_FLAGS array.
+#     exports each declared env var, appends declared flags to the RUNNER_FLAGS array, and
+#     unsets each variable the runner declares it must not see.
 #
 # An UNDECLARED runner is a no-op returning 0: a path with no declaration must behave exactly
 # as it did before runners existed. That is what keeps the openrouter/minimax flow untouched.
@@ -46,6 +47,7 @@ apply_runner_settings() {
       const r = runnerValues(process.argv[2], { projectConfigDir: process.argv[3] || undefined });
       if (!r) process.exit(0);
       for (const f of r.alwaysFlags) process.stdout.write("A " + f + "\n");
+      for (const n of (r.unsetEnv || [])) process.stdout.write("U " + n + "\n");
       for (const [k, v] of Object.entries(r.env))   process.stdout.write("E " + k + " " + v + "\n");
       for (const [k, v] of Object.entries(r.flags)) process.stdout.write("F " + k + " " + v + "\n");
     ' "$_resolver" "$_runner" "$_projdir" 2>/dev/null) || return 0
@@ -55,6 +57,15 @@ apply_runner_settings() {
     while read -r _kind _a _b; do
         case "$_kind" in
             A)  RUNNER_FLAGS+=("$_a") ;;
+            # A CREDENTIAL THE RUNNER PREFERS IS NOT REMOVED BY SETTING ANYTHING.
+            # Claude Code picks ANTHROPIC_API_KEY over the OAuth credentials on disk, so with
+            # the key present the subscription never pays — which is the only reason this
+            # pipeline shells out to the CLI instead of calling the SDK. Seven runs billed the
+            # wrong account before the credits ran dry and said so out loud.
+            # Declared per runner, never global: the openrouter arm needs its key, and a MOCK
+            # run needs its fake one — take that away and the run falls back to OAuth and
+            # spends real money, the exact inversion this line must not cause.
+            U)  unset "$_a" ;;
             E)  _val="$_b"
                 # A SETTING WITH NO VALUE IS SKIPPED, NEVER EXPORTED EMPTY. A tool reading ""
                 # may treat it as zero or as invalid; either way the operator sees a cap that

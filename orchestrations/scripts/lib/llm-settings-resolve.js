@@ -223,6 +223,9 @@ function resolveRunner(runnerName, { projectConfigDir, defaultsFile } = {}) {
     alwaysFlags: Array.isArray(declared.alwaysFlags) ? declared.alwaysFlags : [],
     env: declared.env && typeof declared.env === 'object' ? declared.env : {},
     flags: declared.flags && typeof declared.flags === 'object' ? declared.flags : {},
+    // Variables this runner must NOT see. A credential the runner would PREFER over the one we
+    // intend it to use is not removed by setting anything — only by taking it away.
+    unsetEnv: Array.isArray(declared.unsetEnv) ? declared.unsetEnv : [],
   };
 }
 
@@ -278,7 +281,10 @@ function runnerValues(runnerName, { projectConfigDir, defaultsFile } = {}) {
   // resolver — the seam layer knows the tier and the model — must be able to fill a name this
   // one could not. Without it, every per-tier and per-model budget resolved empty and was
   // silently skipped, so the declaration named knobs nothing could fill.
-  const out = { env: {}, flags: {}, alwaysFlags: runner.alwaysFlags, envNames: {}, flagNames: {} };
+  // unsetEnv carries NAMES ONLY — there is no value to resolve, because the whole point is
+  // that the variable must not be there. It passes through untouched.
+  const out = { env: {}, flags: {}, alwaysFlags: runner.alwaysFlags, unsetEnv: runner.unsetEnv,
+                envNames: {}, flagNames: {} };
   for (const [k, name] of Object.entries(runner.env)) { out.env[k] = valueFor(name); out.envNames[k] = name; }
   for (const [k, name] of Object.entries(runner.flags)) { out.flags[k] = valueFor(name); out.flagNames[k] = name; }
   return out;

@@ -8965,7 +8965,15 @@ function resolvePromptProvider(env = process.env) {
 
 function resolvePromptExec(aiRunnerCmd, env = process.env) {
   const provider = resolvePromptProvider(env);
-  const gateModel = env.AI_MODEL || env.EPAM_MODEL || '';
+  // THREE SOURCES, MOST SPECIFIC FIRST — and none of them may displace another.
+  //   AI_MODEL        the model this one call was told to use
+  //   ORCH_GATE_MODEL the model the GATE declares for itself, independent of the writer's
+  //   EPAM_MODEL      the model the ladder resolved for the run
+  // The ladder bridge added EPAM_MODEL by REPLACING ORCH_GATE_MODEL rather than falling
+  // through to it, so a gate carrying only its own declared model emitted no --model at
+  // all and ran on whatever the runner defaults to. A gate judging on a model nobody chose
+  // is not the gate that was configured.
+  const gateModel = env.AI_MODEL || env.ORCH_GATE_MODEL || env.EPAM_MODEL || '';
   const modelArgs = gateModel ? ['--model', gateModel] : [];
   return { cmd: aiRunnerCmd, args: ['--provider', provider, ...modelArgs] };
 }

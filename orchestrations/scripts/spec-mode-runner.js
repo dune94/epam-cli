@@ -9673,6 +9673,13 @@ function costLabelFor(tag, env) {
 }
 
 module.exports = {
+  // Exported for orchestrations/scripts/agent-check.js. The harness must append the SAME output
+  // contract runAgentForJson appends, or it checks a different invocation than the one that runs:
+  // on a one-shot runner (claude, codemie) the prompt is the ONLY channel the contract has, so
+  // without this the model is never told its shape, answers in prose, and a healthy seam reports
+  // "it did not examine anything". Re-implementing it in the harness would be a second copy to
+  // keep right — the defect this file keeps meeting.
+  outputContractFor,
   reviewSurvey,
   rosterCoverageBlock,
   runClaudeTimeoutMs,

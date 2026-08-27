@@ -453,6 +453,47 @@ function budgetFor(profile, ctx) {
  * seam is matched to one by comparing what the seam declares it `produces` with the tool's own
  * name (submit_role_assignments -> role-assignments).
  */
+/**
+ * THE OUTPUT CONTRACT THE REAL CALL APPENDS.
+ *
+ * runAgentForJson appends outputContractFor(toolDef, tag) to every prompt it sends, because
+ * EPAM_RESPONSE_SCHEMA binds NOTHING on a one-shot runner — it is read only in
+ * src/agent/AgentRunner.ts, on the `epam` arm. This harness built the prompt from the stored
+ * library and called the hub directly, so it appended nothing: the model was never told what
+ * shape to answer in, replied in prose, and roster-review — which had read both codelines, run
+ * both suites and produced an evidenced blocking finding — was reported as
+ * "it did not examine anything".
+ *
+ * A harness that does not reproduce the real invocation manufactures failures, which is worse
+ * than no harness: it sends the reader to debug a healthy agent.
+ *
+ * The renderer is IMPORTED, never re-implemented, so a schema change cannot leave the harness
+ * describing the old shape.
+ */
+function outputContractForSeam(seamName) {
+  let defs; let src; let render;
+  try {
+    // eslint-disable-next-line global-require
+    defs = require(path.join(__dirname, 'spec-mode-runner.js'));
+    render = defs.outputContractFor;
+    src = fs.readFileSync(path.join(__dirname, 'spec-mode-runner.js'), 'utf8');
+  } catch { return ''; }
+  if (typeof render !== 'function') return '';
+
+  const re = new RegExp(`seamInvocationEnv\\(\\s*['"\`]${seamName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"\`]`, 'g');
+  let m;
+  while ((m = re.exec(src))) {
+    // The tag travels with the tool at the call site: runAgentForJson(..., TOOL_X, 'TAG', ...).
+    // Read as a pair so a seam cannot be given another seam's tag.
+    const window = src.slice(Math.max(0, m.index - 2000), m.index + 2000);
+    const pair = window.match(/(TOOL_[A-Z0-9_]+)\s*,\s*['"`]([A-Z0-9_]+)['"`]/);
+    if (pair && defs[pair[1]] && defs[pair[1]].parameters) {
+      try { return render(defs[pair[1]], pair[2]) || ''; } catch { return ''; }
+    }
+  }
+  return '';
+}
+
 function responseSchemaFor(profile, seamName) {
   let defs;
   let src;
@@ -570,6 +611,10 @@ function checkOne(s, ctx) {
   // Bind the seam's declared output shape, exactly as the runner does.
   const schema = responseSchemaFor(s.profile, s.seam);
   if (schema) env.EPAM_RESPONSE_SCHEMA = schema;
+
+  // Appended AFTER the schema is resolved and BEFORE the prompt is written, which is the order
+  // runAgentForJson uses.
+  prompt = `${prompt}${outputContractForSeam(s.seam)}`;
 
   const tmp = path.join(require('os').tmpdir(), `agent-check-${s.seam.replace(/\W/g, '_')}.txt`);
   fs.writeFileSync(tmp, prompt);

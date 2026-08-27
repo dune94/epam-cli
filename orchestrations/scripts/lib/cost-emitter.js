@@ -263,6 +263,22 @@ function emitCostSnapshot({
       } catch { /* diagnostics must never break a call */ }
     }
 
+    // OBSERVABILITY RIDES THE COST SEAM, because it is the one place every call already passes
+    // with its model, tokens, cost and timing resolved. Tracing used to live in the TypeScript
+    // provider decorator, which only the `epam` arm reaches — so a stack that executes a vendor
+    // binary directly traced nothing. Emitted here, it covers every arm without naming one.
+    // Fire-and-forget by contract: lib/langfuse-emit.js never throws and never fails a call.
+    try {
+      // eslint-disable-next-line global-require
+      require('./langfuse-emit.js').emitGeneration({
+        agent, storyId, phase, model, provider, turns, rung,
+        startedAt, endedAt,
+        costUsd: cost.costUsd, tokensIn: cost.tokensIn, tokensOut: cost.tokensOut,
+        cacheRead: cost.tokensCached, cacheCreate: cost.tokensCacheCreate,
+        costIsEstimate: cost.costIsEstimate,
+      });
+    } catch { /* observability must never break the call it observes */ }
+
     const evt = buildCostSnapshot({ agent, storyId, phase, model, provider, cost, turns });
     fs.appendFileSync(activityFile, JSON.stringify(evt) + '\n');
 

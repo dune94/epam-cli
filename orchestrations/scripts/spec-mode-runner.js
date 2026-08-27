@@ -3032,11 +3032,7 @@ async function deriveGuardVocabulary({ promptExec, rule, statements, story, find
     .map((d) => `- ${d.url}\n${d.quotes.map((q) => `    "${String(q).replace(/\s+/g, ' ')}"`).join('\n')}`)
     .join('\n');
 
-  const profiles = (() => {
-    try {
-      return JSON.parse(fs.readFileSync(path.join(automationDirFromLogDir(logDir), 'agents', 'profiles.json'), 'utf8'));
-    } catch { return {}; }
-  })();
+  const profiles = profilesWithProjectBriefs(logDir);
   const persona = profiles['guard-vocabulary-agent'] || '';
 
   const prompt = buildGuardVocabularyPrompt({ persona, seam, rule, _statements, manifest, docBlock, evidence, story, codegraphTool, repoPath });
@@ -4360,6 +4356,40 @@ function pipelineStagesBlock() {
   } catch {
     return unreadable;
   }
+}
+
+/**
+ * THE BRIEFS A LOOKUP SHOULD SEE: the canonical roster, with this project's minted briefs on top.
+ *
+ * Three call sites each read ONLY orchestrations/agents/profiles.json, which holds the canonical
+ * roles. A project's minted investigators are written to <project>/agent-profiles.json (moved there
+ * so one project's agents could not reach another's roster), so every one of them resolved the
+ * right NAME from the registry, found no brief, and fell through to
+ * "NO INVESTIGATOR ... none is bound to this codeline" — a message about binding, reporting a
+ * failure of location.
+ *
+ * Live 2026-08-27, run 20260827T125654Z: both lanes reported it while the project file held both
+ * briefs, written 27 minutes earlier. The generic detective ran in place of the one briefed on that
+ * repository's own layout, and because falling back is legitimate for a codeline that minted none,
+ * nothing looked wrong.
+ *
+ * One definition, because three copies is how the first fix reached one of them and not the others.
+ */
+function profilesWithProjectBriefs(logDir) {
+  let out = {};
+  try {
+    out = JSON.parse(fs.readFileSync(
+      path.join(automationDirFromLogDir(logDir), 'agents', 'profiles.json'), 'utf8'));
+  } catch { out = {}; }
+  try {
+    // eslint-disable-next-line global-require
+    const _r = require('./lib/agent-roster.js');
+    const pp = JSON.parse(fs.readFileSync(
+      _r.projectProfilesPath(path.join(automationDirFromLogDir(logDir), 'agents')), 'utf8'));
+    // The project's own briefs WIN: a name it minted is its own, whatever the canonical set says.
+    out = { ...out, ...(pp.profiles || pp) };
+  } catch { /* a project with no minted briefs keeps the canonical set, exactly as before */ }
+  return out;
 }
 
 function buildRosterReviewPrompt({ persona, briefBlock, clBlock, ticketBlock, docBlock, toolLine, coverageBlock }) {
@@ -5978,12 +6008,7 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
   // Ensure the index exists (and is git-clean-protected) before the agent queries it.
   try { if (!_codegraph) _codegraph = require('./lib/codegraph-context'); _codegraph.ensureIndexed(repoPath); } catch { /* tool self-heals too */ }
 
-  const profiles = (() => {
-    try {
-      const p = path.join(automationDirFromLogDir(logDir), 'agents', 'profiles.json');
-      return JSON.parse(fs.readFileSync(p, 'utf8'));
-    } catch { return {}; }
-  })();
+  const profiles = profilesWithProjectBriefs(logDir);
   // THE CODELINE'S OWN DETECTIVE, WHEN ONE WAS MINTED FOR IT.
   //
   // The roster mints one investigator per codeline, briefed on that repository's layout,
@@ -6664,11 +6689,7 @@ async function reviewTicketLinks({ promptExec, story, logDir, docPaths = [] }) {
   const links = Array.isArray(story && story.ticketLinks) && story.ticketLinks.length ? story.ticketLinks : [];
   if (!links.length) return [];
 
-  const profiles = (() => {
-    try {
-      return JSON.parse(fs.readFileSync(path.join(automationDirFromLogDir(logDir), 'agents', 'profiles.json'), 'utf8'));
-    } catch { return {}; }
-  })();
+  const profiles = profilesWithProjectBriefs(logDir);
   const persona = profiles['ticket-link-agent'] || '';
 
   const linkBlock = links.map((l, i) => {
@@ -9713,6 +9734,8 @@ function costLabelFor(tag, env) {
 }
 
 module.exports = {
+  // Exported so the brief lookup can be asserted without a run.
+  profilesWithProjectBriefs,
   // Exported for orchestrations/scripts/agent-check.js. The harness must append the SAME output
   // contract runAgentForJson appends, or it checks a different invocation than the one that runs:
   // on a one-shot runner (claude, codemie) the prompt is the ONLY channel the contract has, so

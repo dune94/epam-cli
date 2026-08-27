@@ -220,4 +220,57 @@ function validateTaggedOutput(tag, parsed) {
   return checkItem(parsed, schema, tag, null);
 }
 
-module.exports = { validateTaggedOutput, TAG_TO_TOOL, itemSchemaFor };
+
+/**
+ * validateDeclaredOutput(seam, parsed) — the contract for seams whose shape is DECLARED rather
+ * than bound to a tool schema.
+ *
+ * Eleven seams had nothing checking their output at all. A bad answer from any of them flowed
+ * on looking authoritative — the same class that let the roster-specialiser's prose ("I need to
+ * create a valid JSON file. Let me fix the formatting:") reach a contract check on a paid run.
+ *
+ * The required keys come from config/seam-output-contracts.json, which takes them from the shape
+ * the seam's PROMPT already states — so the contract and the prompt cannot drift apart. Only the
+ * key a consumer cannot proceed without is required: demanding every optional field would reject
+ * valid answers, and the defect being caught is an answer that is not the artefact at all.
+ *
+ * NOTE ON WHERE THE PROMPT LIVES. An agent runs its PROJECT's generated copy, not the template.
+ * A separate test holds the generator to the template's shape; this function validates the reply.
+ */
+function declaredContracts() {
+  const fs = require('fs');
+  const path = require('path');
+  const file = process.env.EPAM_SEAM_CONTRACTS
+    || path.join(__dirname, '..', '..', 'config', 'seam-output-contracts.json');
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')).seams || {}; } catch { return {}; }
+}
+
+function validateDeclaredOutput(seam, parsed) {
+  const c = declaredContracts()[seam];
+  if (!c || c.kind !== 'declared') {
+    return { ok: true, reason: '', declared: false };
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return {
+      ok: false,
+      declared: true,
+      fatal: true,
+      reason: `${seam}: expected a JSON object, got ${Array.isArray(parsed) ? 'an array' : typeof parsed}. `
+        + 'An answer that is not the artefact is not a partial answer.',
+    };
+  }
+  const missing = (c.requiredKeys || []).filter(
+    (k) => !Object.prototype.hasOwnProperty.call(parsed, k));
+  if (missing.length) {
+    return {
+      ok: false,
+      declared: true,
+      fatal: true,
+      reason: `${seam}: the reply is missing ${missing.join(', ')} — the field(s) its consumer `
+        + `reads. Its prompt states: ${(c.knownKeys || []).join(', ')}`,
+    };
+  }
+  return { ok: true, reason: '', declared: true };
+}
+
+module.exports = { validateTaggedOutput, validateDeclaredOutput, declaredContracts, TAG_TO_TOOL, itemSchemaFor };

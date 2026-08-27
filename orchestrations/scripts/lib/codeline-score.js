@@ -1,3 +1,7 @@
+
+// Local tool caps are DECLARED — config/tool-timeouts.json. A literal here would be a
+// second home for a decision that already has one.
+const { toolTimeoutMs } = require('./tool-timeouts.js');
 // ─────────────────────────────────────────────────────────────────────────────
 // codeline-score.js — Tier-2 relevance scoring for codeline discovery.
 //
@@ -117,7 +121,7 @@ function crossRepoTermScores(repos, terms, queryFn, opts = {}) {
  */
 function repoRecency(repoPath, execFileSync = require('child_process').execFileSync) {
   const git = (args) => execFileSync('git', ['-C', repoPath, ...args],
-    { encoding: 'utf8', timeout: 10000, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    { encoding: 'utf8', timeout: toolTimeoutMs('gitRead'), stdio: ['ignore', 'pipe', 'ignore'] }).trim();
   try {
     const iso = git(['log', '-1', '--format=%cI']);
     if (!iso) return null;

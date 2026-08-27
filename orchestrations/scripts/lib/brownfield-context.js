@@ -28,6 +28,10 @@
 
 'use strict';
 
+// Local tool caps are DECLARED — config/tool-timeouts.json. A literal here would be a
+// second home for a decision that already has one.
+const { toolTimeoutMs } = require('./tool-timeouts.js');
+
 const fs   = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
@@ -83,7 +87,7 @@ const SKIP_DIRS = new Set([
 function listFiles(repoRoot) {
   try {
     const out = execSync('git ls-files --cached', {
-      cwd: repoRoot, encoding: 'utf8', timeout: 10000,
+      cwd: repoRoot, encoding: 'utf8', timeout: toolTimeoutMs('gitRead'),
       stdio: ['pipe', 'pipe', 'ignore'],
     });
     return out.trim().split('\n').filter(Boolean);

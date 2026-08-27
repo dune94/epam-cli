@@ -2,7 +2,7 @@
   "$why": [
     "Moved out of claude.sh on 2026-08-19, and corrected in the same move.",
     "",
-    "The shell string it replaces told the writer: 'import it directly and continue -- missing imports are detected and installed automatically after your change; this does not need your permission or a separate step.' Live metrolinx AMSD-2041 followed that instruction exactly. Nothing installed anything: the automatic path fires only when the PROJECT declares autoInstall, and this one does not. The manifest gained a dependency, the lockfile never moved, and the branch cannot be installed from a clean checkout -- while the type check, the tests and the build all passed against a vendor directory left over from an earlier run.",
+    "The shell string it replaces told the writer: 'import it directly and continue -- missing imports are detected and installed automatically after your change; this does not need your permission or a separate step.' A live brownfield run followed that instruction exactly. Nothing installed anything: the automatic path fires only when the PROJECT declares autoInstall, and this one does not. The manifest gained a dependency, the lockfile never moved, and the branch cannot be installed from a clean checkout -- while the type check, the tests and the build all passed against a vendor directory left over from an earlier run.",
     "",
     "The directive exists because agents used to STALL, asking permission for a dependency in an unattended run. That problem is real, so this still says 'do not stop to ask'. What changed is the second half: the writer is told to run the install itself, and told why -- so the manifest and the lockfile are written together by the one tool that keeps them consistent.",
     "",

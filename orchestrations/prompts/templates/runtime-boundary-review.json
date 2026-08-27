@@ -2,7 +2,7 @@
   "$why": [
     "THE QUESTION NO SEAM OWNED: will this change actually run, as this codeline is configured?",
     "",
-    "Live metrolinx AMSD-2041, three runs and three different implementations. Two defects survived every one of them and were raised by nobody. A page-level module imported a service that reads credentials and THROWS at module scope; those credentials are not exposed to the browser bundle, and the import sat in a client-side effect so the build could not strip it. Separately, the codeline's own configuration forbade the embedding the feature requires, and named no host the page needed to contact — so the feature was impossible however well the source was written.",
+    "A live brownfield run, three runs and three different implementations. Two defects survived every one of them and were raised by nobody. A page-level module imported a service that reads credentials and THROWS at module scope; those credentials are not exposed to the browser bundle, and the import sat in a client-side effect so the build could not strip it. Separately, the codeline's own configuration forbade the embedding the feature requires, and named no host the page needed to contact — so the feature was impossible however well the source was written.",
     "",
     "Neither is style, coverage, or vulnerability. Both are execution. The code reviewer judges the diff; the SAST sentinel judges vulnerabilities; the client/server boundary scanner reads changed files for direct environment reads and is one import hop short of the first defect and an entire file away from the second.",
     "",

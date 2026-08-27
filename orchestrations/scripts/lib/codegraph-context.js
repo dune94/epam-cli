@@ -21,6 +21,10 @@
 
 'use strict';
 
+// Local tool caps are DECLARED — config/tool-timeouts.json. A literal here would be a
+// second home for a decision that already has one.
+const { toolTimeoutMs } = require('./tool-timeouts.js');
+
 const { execSync } = require('child_process');
 const fs           = require('fs');
 const path         = require('path');
@@ -33,7 +37,7 @@ const warn = msg => process.stderr.write(`[codegraph-context] WARN: ${msg}\n`);
 function resolveCodeGraphBin() {
   if (process.env.CODEGRAPH_BIN) return process.env.CODEGRAPH_BIN;
   try {
-    return execSync('which codegraph', { encoding: 'utf8', timeout: 5000 }).trim();
+    return execSync('which codegraph', { encoding: 'utf8', timeout: toolTimeoutMs('codegraphProbe') }).trim();
   } catch {
     return null;
   }
@@ -103,7 +107,7 @@ function initCodeGraph(repoPath, { quiet = false } = {}) {
   if (!quiet) log(`Initialising CodeGraph index for ${repoPath}...`);
   execSync(`"${bin}" init "${repoPath}"`, {
     encoding:  'utf8',
-    timeout:   180000,
+    timeout: toolTimeoutMs('codegraphIndex'),
     stdio:     quiet ? 'pipe' : 'inherit',
   });
   protectIndexFromGitClean(repoPath);
@@ -146,7 +150,7 @@ function queryCodeGraph(keywords, repoPath, limit = 10) {
   try {
     const raw = execSync(
       `"${bin}" query "${safeQuery}" --path "${repoPath}" --json -l ${limit}`,
-      { encoding: 'utf8', timeout: 15000, maxBuffer: 2 * 1024 * 1024 }
+      { encoding: 'utf8', timeout: toolTimeoutMs('codegraphQuery'), maxBuffer: 2 * 1024 * 1024 }
     ).trim();
     if (!raw) return [];
     return JSON.parse(raw);
@@ -168,7 +172,7 @@ function exploreCodeGraph(query, repoPath, { maxFiles = 4, maxChars = 12000 } = 
   try {
     const raw = execSync(
       `"${bin}" explore "${safeQuery}" --path "${repoPath}" --max-files ${maxFiles}`,
-      { encoding: 'utf8', timeout: 30000, maxBuffer: 8 * 1024 * 1024 }
+      { encoding: 'utf8', timeout: toolTimeoutMs('codegraphExplore'), maxBuffer: 8 * 1024 * 1024 }
     ).trim();
     // Trim to token budget — truncate at a line boundary to avoid mid-code cuts
     if (raw.length <= maxChars) return raw;
@@ -248,7 +252,7 @@ function affectedTestFiles(changedFile, repoPath) {
   try {
     const raw = execSync(
       `"${bin}" affected "${changedFile}" --path "${repoPath}"`,
-      { encoding: 'utf8', timeout: 30000, maxBuffer: 4 * 1024 * 1024 }
+      { encoding: 'utf8', timeout: toolTimeoutMs('codegraphExplore'), maxBuffer: 4 * 1024 * 1024 }
     );
     // "No test files affected..." → uncovered. Otherwise lines list test paths.
     if (/No test files affected/i.test(raw)) return [];

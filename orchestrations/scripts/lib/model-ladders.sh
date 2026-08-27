@@ -54,6 +54,36 @@ export_model_ladders() {
         echo "[model-ladders] jq not on PATH — cannot read $_settings, no ladder chains exported" >&2
         return 1
     }
+    # THE ENGINE BASE, MERGED IN BEFORE ANYTHING IS READ.
+    #
+    # A project states only what it changes — the rule config/llm-defaults.json already applies
+    # to budgets, and which ladders were left out of. Without this, the seam layer (which
+    # resolves through lib/llm-settings-resolve.js) and this reader would answer the same
+    # question differently, and a project inheriting a chain would get one here and none there.
+    #
+    # The merge is the resolver's, not a second copy of the rule: one place decides what a
+    # project actually runs with. If node or the resolver is unavailable the raw project file is
+    # used, which is exactly the behaviour before inheritance existed — additive, never a new
+    # way to fail.
+    local _merged=""
+    if [ -n "${NODE_BIN:-}" ] || command -v node >/dev/null 2>&1; then
+        local _resolver
+        _resolver="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/llm-settings-resolve.js"
+        if [ -f "$_resolver" ]; then
+            _merged="$(mktemp)"
+            if "${NODE_BIN:-node}" -e '
+              const { resolveLlmSettings } = require(process.argv[1]);
+              const path = require("path");
+              const out = resolveLlmSettings({ projectConfigDir: path.dirname(process.argv[2]) });
+              process.stdout.write(JSON.stringify(out));
+            ' "$_resolver" "$_settings" > "$_merged" 2>/dev/null && [ -s "$_merged" ]; then
+                _settings="$_merged"
+            else
+                rm -f "$_merged"; _merged=""
+            fi
+        fi
+    fi
+
     jq -e . "$_settings" >/dev/null 2>&1 || {
         echo "[model-ladders] settings file is not valid JSON: $_settings — no ladder chains exported" >&2
         return 1

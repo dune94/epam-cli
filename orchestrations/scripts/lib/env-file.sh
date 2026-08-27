@@ -68,8 +68,17 @@ load_env_file_safe() {
       \'*\') value="${value:1:${#value}-2}" ;;
     esac
 
-    # preserve mode: an already-set, non-empty value wins over the file's default.
-    if [ "$_mode" = "preserve" ] && [ -n "${!key:-}" ]; then
+    # An already-set, non-empty value wins over the file's default: a .env supplies
+    # DEFAULTS, it does not overwrite a decision the caller already made. This is the
+    # DEFAULT because the opposite default silently undid the free-run credential scrub.
+    # 14 call sites re-read .env; each one put the real key back, and a run labelled
+    # mockserver carried a live key to a paid API for 34 minutes. The parent process
+    # read as sealed because /proc/PID/environ shows the env a process was EXEC'd with,
+    # so only the child exposed it.
+    #
+    # `overwrite` is the explicit opt-in for a caller that genuinely means to clobber.
+    # `preserve` remains accepted and is now simply the default.
+    if [ "$_mode" != "overwrite" ] && [ -n "${!key:-}" ]; then
       continue
     fi
 
@@ -78,5 +87,63 @@ load_env_file_safe() {
     export "${key?}"
   done < "$env_file"
 
+  return 0
+}
+
+# load_project_env <project_config_dir> [preserve]
+#
+# A PROJECT'S ENV IS TWO FILES: the half that is true whatever stack it runs on, and the half
+# the active provider set decides. This loads whichever exist.
+#
+# NEITHER FILENAME APPEARS HERE. lib/llm-settings-resolve.js reads them from
+# config/provider-sets.json, so renaming them — or adding a set — stays a config edit. That
+# resolver is also the one place that refuses an unknown set, so the settings layer and the env
+# layer can never disagree about which stack is active.
+#
+# Order is not a policy: the two files must declare DISJOINT keys, which a test asserts. With
+# overlap the winner would depend on load order AND on `preserve` mode, and no caller should
+# have to know that.
+#
+# A missing overlay is NORMAL — a project that predates the split has only the base.
+# An unresolvable set is FATAL: returning quietly would run the project on whichever stack the
+# base happens to name, while every log line looked configured.
+load_project_env() {
+  local _dir="${1:-}" _mode="${2:-}"
+  [ -n "$_dir" ] || return 0
+
+  # require() needs an ABSOLUTE path: sourced by a relative path, ${BASH_SOURCE%/*} is
+  # relative too, and node resolves it against its own module paths rather than the cwd.
+  local _libdir _resolver
+  _libdir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd) || return 1
+  _resolver="$_libdir/llm-settings-resolve.js"
+  local _files=""
+  if [ -f "$_resolver" ] && { [ -n "${NODE_BIN:-}" ] || command -v node >/dev/null 2>&1; }; then
+    _files=$("${NODE_BIN:-node}" -e '
+      const { projectEnvFiles } = require(process.argv[1]);
+      const f = projectEnvFiles(process.argv[2]);
+      if (f) process.stdout.write(f.base + "\n" + f.overlay + "\n");
+    ' "$_resolver" "$_dir" 2>&1) || {
+      echo "[env-file] cannot resolve the env files for $_dir:" >&2
+      printf '%s\n' "$_files" >&2
+      return 1
+    }
+  fi
+
+  if [ -z "$_files" ]; then
+    # NO FILENAME IS SPELLED HERE. Writing the base name as a fallback would put it in code —
+    # the one thing the registry exists to prevent — and it would then be a SECOND home for the
+    # name, free to drift from the declared one without anything failing.
+    #
+    # If the resolver cannot answer, this cannot know which files a project has, so it says so
+    # and stops. Guessing would load a file that may no longer be the base and report success.
+    echo "[env-file] no provider-set registry resolved for $_dir — cannot know which env files" >&2
+    echo "[env-file] this project has. Check ${_resolver} and config/provider-sets.json." >&2
+    return 1
+  fi
+
+  local _f
+  while IFS= read -r _f; do
+    [ -n "$_f" ] && load_env_file_safe "$_f" "$_mode"
+  done <<< "$_files"
   return 0
 }

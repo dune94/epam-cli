@@ -231,8 +231,10 @@ export JIRA_CODELINE_ROOT="$CODELINE_ROOT"
 export JIRA_BASELINE_BRANCH="main"
 export AGENT_PROFILES_FILE="$REPO_ROOT/orchestrations/agents/profiles.json"
 export EPAM_DANGEROUS_SKIP_APPROVAL=1
-export ORCH_GATE_PROVIDER="qwen"
-export SPEC_MODE_PROVIDER="qwen"
+# PROVIDER PINS REMOVED 2026-08-25. These were exported here as "qwen", and a launcher export
+# is already-set, so it OUTRANKED anything hello-dolly declared — which is why the project had
+# no config.env at all. Both now come from its config.<set>.env, chosen by EPAM_PROVIDER_SET,
+# exactly as every other project resolves them.
 # export SPEC_MODE_OPENSPEC_MODEL="z-ai/glm-5.2"   # removed 2026-08-25: the ladder decides
 # export SPEC_MODE_SPECKIT_MODEL="z-ai/glm-5.1"   # removed 2026-08-25: the ladder decides
 # export SPEC_MODE_MODEL="z-ai/glm-5.2"   # removed 2026-08-25: the ladder decides

@@ -44,6 +44,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # shellcheck source=lib/project-config.sh
 . "$SCRIPT_DIR/lib/project-config.sh"
+# The run's spend figure comes from the ACTIVE SET, not a vendor hardcoded here.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/spend-probe.sh" 2>/dev/null || true
+
 # Config files are DATA: load them without executing them. See lib/env-file.sh.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/env-file.sh"
 LOG_FILE="/tmp/tier3-travel-app-run-$(date +%Y%m%dT%H%M%S).log"
@@ -109,9 +112,7 @@ fi
 cd "$REPO_ROOT"
 
 # Capture spend baseline
-_usage_before=$(curl -s "https://openrouter.ai/api/v1/auth/key" \
-  -H "Authorization: Bearer $OPENROUTER_API_KEY" 2>/dev/null | \
-  node -e "process.stdout.write(''+JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).data.usage)" 2>/dev/null || echo "0")
+_usage_before="$(spend_probe_read)"
 info "OpenRouter usage before: \$$_usage_before"
 # Also into $LOG_FILE: the line above goes to stdout, which is the launch log
 # that pre-run-reset deletes. The run report is generated from $LOG_FILE, so a
@@ -170,8 +171,8 @@ _epam_project_cfg="$(project_config_dir skyscanner "$REPO_ROOT")" || exit 1
 # config layer, and lets the literals below go.
 #
 # `preserve`: anything already exported (an operator override, the outer .env) still wins.
-if [ -f "$_epam_project_cfg/config.env" ]; then
-    load_env_file_safe "$_epam_project_cfg/config.env" preserve
+if [ -d "$_epam_project_cfg" ]; then
+    load_project_env "$_epam_project_cfg" preserve || exit 1
 fi
 mkdir -p "$OUTPUT_DIR/.epam"
 for _m in dependency-check.json contract-generation.json known-fixes.json; do
@@ -254,8 +255,15 @@ export SPEC_MODE_MODEL="${SPEC_MODE_MODEL:-${ESCALATION_MODEL_HIGH}}"
 # .js extension to a relative import) across every rung and exhausted all 8
 # attempts still on kimi-k2, then aborted — a mechanical, easily-fixed mistake
 # that likely would have resolved in 1-2 attempts on a stronger model.
-export EPAM_MODEL_LADDER_MEDIUM="${EPAM_MODEL_LADDER_MEDIUM:-MiniMax-M2.5=MiniMax-M3|MiniMax-M3=${ESCALATION_MODEL}|zhipuai/glm-z1-32b=${ESCALATION_MODEL}|zhipuai/glm-z1-9b=${ESCALATION_MODEL}|${ESCALATION_MODEL}=${ESCALATION_MODEL_HIGH}}"
-export EPAM_MODEL_LADDER_HIGH="${EPAM_MODEL_LADDER_HIGH:-MiniMax-M2.5=MiniMax-M3|MiniMax-M3=${ESCALATION_MODEL_HIGH}|zhipuai/glm-z1-32b=${ESCALATION_MODEL_HIGH}|zhipuai/glm-z1-9b=${ESCALATION_MODEL_HIGH}|${ESCALATION_MODEL}=${ESCALATION_MODEL_HIGH}|${ESCALATION_MODEL_HIGH}=moonshotai/kimi-k3}"
+# LADDER PINS REMOVED 2026-08-25. These outranked the project's own declaration:
+# model-ladders.sh treats an already-set chain as an operator override. They had also
+# rotted — they interpolate ${ESCALATION_MODEL}, which config stopped setting when the
+# ladder took over, so the chain resolved to hops with EMPTY destinations
+# ("MiniMax-M3=") and that malformed chain still won. The ladder is declared in the
+# project's llm-settings.json; a runtime override is still possible by exporting the
+# variable before launch.
+# export EPAM_MODEL_LADDER_MEDIUM="${EPAM_MODEL_LADDER_MEDIUM:-MiniMax-M2.5=MiniMax-M3|MiniMax-M3=${ESCALATION_MODEL}|zhipuai/glm-z1-32b=${ESCALATION_MODEL}|zhipuai/glm-z1-9b=${ESCALATION_MODEL}|${ESCALATION_MODEL}=${ESCALATION_MODEL_HIGH}}"
+# export EPAM_MODEL_LADDER_HIGH="${EPAM_MODEL_LADDER_HIGH:-MiniMax-M2.5=MiniMax-M3|MiniMax-M3=${ESCALATION_MODEL_HIGH}|zhipuai/glm-z1-32b=${ESCALATION_MODEL_HIGH}|zhipuai/glm-z1-9b=${ESCALATION_MODEL_HIGH}|${ESCALATION_MODEL}=${ESCALATION_MODEL_HIGH}|${ESCALATION_MODEL_HIGH}=moonshotai/kimi-k3}"
 # Back-compat: EPAM_MODEL_LADDER (no suffix) still works as an override that
 # forces BOTH tiers to the same ladder — set it explicitly to opt out of the
 # medium/high split.
@@ -443,9 +451,7 @@ run_phase "scaffold"
 run_phase "core"
 
 # Report spend
-_usage_after=$(curl -s "https://openrouter.ai/api/v1/auth/key" \
-  -H "Authorization: Bearer $OPENROUTER_API_KEY" 2>/dev/null | \
-  node -e "process.stdout.write(''+JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).data.usage)" 2>/dev/null || echo "0")
+_usage_after="$(spend_probe_read)"
 _spent=$(node -e "console.log(($_usage_after-$_usage_before).toFixed(4))" 2>/dev/null || echo "?")
 info "OpenRouter usage after: \$$_usage_after"
 # Also into $LOG_FILE: the line above goes to stdout, which is the launch log

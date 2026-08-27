@@ -54,6 +54,9 @@ read -rp "$(echo -e "${YELLOW}Confirm: spend OpenRouter credits? [yes/N]${NC} ")
 # were not among them — see lib/preflight.sh.
 # shellcheck source=lib/preflight.sh
 . "$SCRIPT_DIR/lib/preflight.sh"
+# The run's spend figure comes from the ACTIVE SET, not a vendor hardcoded here.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/spend-probe.sh" 2>/dev/null || true
+
 # Route through fail(), never a bare exit: fail() archives the run artefacts first.
 # A bare `exit 1` here made a pre-flight abort the ONE outcome that recorded nothing —
 # no run folder, no outcome.txt, no log — which is the outcome most worth keeping.
@@ -63,9 +66,7 @@ echo ""
 cd "$REPO_ROOT"
 
 # Record spend baseline
-_usage_before=$(curl -s "https://openrouter.ai/api/v1/auth/key" \
-  -H "Authorization: Bearer $OPENROUTER_API_KEY" 2>/dev/null | \
-  node -e "process.stdout.write(''+JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).data.usage)" 2>/dev/null || echo "0")
+_usage_before="$(spend_probe_read)"
 info "Usage before: \$$_usage_before"
 
 # Clean hello-world repo state before run
@@ -89,7 +90,7 @@ EPAM_API_KEY_OPENROUTER="$OPENROUTER_API_KEY" \
 OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
 EPAM_API_KEY_OPENAI="${OPENAI_API_KEY:-}" \
 ORCH_GATE_PROVIDER="openai" \
-ORCH_GATE_MODEL="gpt-4o" \
+# ORCH_GATE_MODEL removed: a run-wide pin. The seam ladder decides.
 PRD_FILE="$PRD_FILE" \
 SKIP_REGRESSION_GUARD=true \
 EPAM_RALPH_WIGGUM_ENABLED=0 \
@@ -104,9 +105,7 @@ SKIP_BROWSER_E2E_ROUTING=true \
 PIPELINE_EXIT=${PIPESTATUS[0]}
 
 # Report spend
-_usage_after=$(curl -s "https://openrouter.ai/api/v1/auth/key" \
-  -H "Authorization: Bearer $OPENROUTER_API_KEY" 2>/dev/null | \
-  node -e "process.stdout.write(''+JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).data.usage)" 2>/dev/null || echo "0")
+_usage_after="$(spend_probe_read)"
 _spent=$(node -e "console.log(($_usage_after-$_usage_before).toFixed(4))" 2>/dev/null || echo "?")
 info "Usage after: \$$_usage_after"
 info "Total spent this run: \$$_spent"

@@ -27,6 +27,18 @@ const arg = (n, d) => {
   const i = process.argv.indexOf(n);
   return i > -1 && process.argv[i + 1] ? process.argv[i + 1] : d;
 };
+
+// THE SERVICE'S URL HAS ONE HOME: config/services.json, which also names the override env var.
+// A literal fallback here was a second home — moving the service meant editing config AND
+// hunting for the literal, and wherever it was missed the literal won.
+function declaredServiceUrl(name) {
+  try {
+    const p = require('path').join(__dirname, '..', 'config', 'services.json');
+    const s = JSON.parse(require('fs').readFileSync(p, 'utf8')).services[name];
+    return (s.env && process.env[s.env]) || s.url;
+  } catch { return ''; }
+}
+
 const HOST = arg('--host', 'http://localhost:1080');
 const ROOT = path.join(__dirname, '..', '..');
 const REG = path.join(ROOT, 'orchestrations/agents/invocation-profiles.json');
@@ -95,7 +107,7 @@ function matchKey(template) {
  * ':plan' traces are the planning pass, not the answer, and are skipped.
  */
 async function langfuseReply(seam) {
-  const base = process.env.LANGFUSE_BASE_URL || 'http://localhost:3100';
+  const base = declaredServiceUrl('langfuse');
   const pub = process.env.LANGFUSE_PUBLIC_KEY;
   const sec = process.env.LANGFUSE_SECRET_KEY;
   if (!pub || !sec) return null;
@@ -303,6 +315,65 @@ function sseToolCalls(calls) {
     + chunk({}, 'tool_calls') + 'data: [DONE]\n\n';
 }
 
+/**
+ * ANTHROPIC MESSAGES STREAMING — a DIFFERENT protocol from the OpenAI shape above.
+ *
+ * Two framings, because two clients. The epam-run path speaks OpenAI chat-completions
+ * (`data: {...}` then `data: [DONE]`). Claude Code speaks Anthropic Messages: named EVENTS
+ * (`event: content_block_delta`) and a `message_stop` terminator, with NO [DONE] sentinel.
+ * Serving one to the other yields a client that connects, reads nothing usable and reports an
+ * empty turn — which looks like a model that said nothing rather than a framing mismatch.
+ *
+ * Proven 2026-08-25: this exact shape returns is_error:false, result:"OK",
+ * stop_reason:"end_turn" from Claude Code against MockServer.
+ */
+function anthropicSse(content, model) {
+  const ev = (type, obj) => `event: ${type}\ndata: ${JSON.stringify(obj)}\n\n`;
+  return ev('message_start', {
+      type: 'message_start',
+      message: { id: 'msg_replay', type: 'message', role: 'assistant',
+        model: model || 'replay', content: [], stop_reason: null, stop_sequence: null,
+        usage: { input_tokens: 1, output_tokens: 1 } },
+    })
+    + ev('content_block_start', { type: 'content_block_start', index: 0,
+        content_block: { type: 'text', text: '' } })
+    + ev('content_block_delta', { type: 'content_block_delta', index: 0,
+        delta: { type: 'text_delta', text: String(content == null ? '' : content) } })
+    + ev('content_block_stop', { type: 'content_block_stop', index: 0 })
+    + ev('message_delta', { type: 'message_delta',
+        delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: 1 } })
+    + ev('message_stop', { type: 'message_stop' });
+}
+
+/**
+ * A TOOL-CALL TURN in the Anthropic shape.
+ *
+ * The same reason as sseToolCalls: a seam that ACTS delivers through a call, and replaying its
+ * text alone leaves the work undone. Anthropic carries a call as a `tool_use` content block with
+ * its input streamed as `input_json_delta`, and the turn must stop with `tool_use`, not
+ * `end_turn` — a client told the turn ended will not execute the call it was just handed.
+ */
+function anthropicSseToolCalls(calls, model) {
+  const ev = (type, obj) => `event: ${type}\ndata: ${JSON.stringify(obj)}\n\n`;
+  let out = ev('message_start', {
+    type: 'message_start',
+    message: { id: 'msg_replay', type: 'message', role: 'assistant',
+      model: model || 'replay', content: [], stop_reason: null, stop_sequence: null,
+      usage: { input_tokens: 1, output_tokens: 1 } },
+  });
+  calls.forEach((c, i) => {
+    out += ev('content_block_start', { type: 'content_block_start', index: i,
+      content_block: { type: 'tool_use', id: `toolu_replay_${i}`, name: c.name, input: {} } });
+    out += ev('content_block_delta', { type: 'content_block_delta', index: i,
+      delta: { type: 'input_json_delta', partial_json: JSON.stringify(c.input || {}) } });
+    out += ev('content_block_stop', { type: 'content_block_stop', index: i });
+  });
+  out += ev('message_delta', { type: 'message_delta',
+    delta: { stop_reason: 'tool_use', stop_sequence: null }, usage: { output_tokens: 1 } });
+  out += ev('message_stop', { type: 'message_stop' });
+  return out;
+}
+
 function put(urlPath, payload) {
   return new Promise((resolve, reject) => {
     const u = new URL(HOST + urlPath);
@@ -314,6 +385,13 @@ function put(urlPath, payload) {
     req.end(payload === undefined ? undefined : JSON.stringify(payload));
   });
 }
+
+module.exports = { sse, sseToolCalls, anthropicSse, anthropicSseToolCalls };
+
+// RUNNING IS OPT-IN. Requiring this file used to EXECUTE the whole registration pass — which
+// meant a test that imported it hit MockServer, and the two SSE framings could not be unit
+// tested at all. Same guard agent-check.js carries, for the same reason.
+if (require.main !== module) return;
 
 (async () => {
   await put('/mockserver/reset');
@@ -329,39 +407,58 @@ function put(urlPath, payload) {
     const cap = (await langfuseReply(seam)) || cassetteReply(seam) || capturedReply(seam);
     if (!cap) { uncovered.push(`${seam} (no captured reply)`); continue; }
     seen.add(key);
-    const match = { method: 'POST', path: '/api/v1/chat/completions',
-      body: { type: 'STRING', string: key, subString: true } };
+    // TWO PROTOCOLS, REGISTERED TOGETHER.
+    //
+    // The epam-run path POSTs OpenAI chat-completions; Claude Code POSTs Anthropic Messages.
+    // Different PATHS, so both can be registered for the same seam and neither interferes —
+    // whichever client calls gets the framing it can parse. Registering only one leaves the
+    // other client reading a stream it cannot decode, which surfaces as an EMPTY TURN and
+    // reads as a model that said nothing rather than a protocol mismatch.
+    //
+    // The paths are API contracts, not configuration: /api/v1/chat/completions and
+    // /v1/messages are what those two APIs ARE.
+    const bodyMatch = { type: 'STRING', string: key, subString: true };
+    const PROTOCOLS = [
+      { path: '/api/v1/chat/completions', text: sse, calls: sseToolCalls },
+      { path: '/v1/messages', text: anthropicSse, calls: anthropicSseToolCalls },
+    ];
 
     if (cap.multi) {
       // ONE EXPECTATION PER TURN, each consumed once, so the conversation replays in the order it
       // actually happened: reads first, the write where it really occurred, the answer last.
       for (const turn of cap.turns) {
-        const body = (turn.calls && turn.calls.length)
-          ? sseToolCalls(turn.calls) : sse(turn.body);
-        await put('/mockserver/expectation', {
-          priority: 40, times: { remainingTimes: 1, unlimited: false },
-          httpRequest: match,
-          httpResponse: { statusCode: 200,
-            headers: { 'content-type': ['text/event-stream'] }, body },
-        });
+        for (const proto of PROTOCOLS) {
+          const body = (turn.calls && turn.calls.length)
+            ? proto.calls(turn.calls) : proto.text(turn.body);
+          await put('/mockserver/expectation', {
+            priority: 40, times: { remainingTimes: 1, unlimited: false },
+            httpRequest: { method: 'POST', path: proto.path, body: bodyMatch },
+            httpResponse: { statusCode: 200,
+              headers: { 'content-type': ['text/event-stream'] }, body },
+          });
+        }
       }
     } else if (cap.calls && cap.calls.length) {
       // TURN ONE: the calls, consumed once. MockServer serves expectations for the same matcher in
       // order, so the client executes the tools, comes back, and gets the answer below.
-      await put('/mockserver/expectation', {
-        priority: 40, times: { remainingTimes: 1, unlimited: false },
-        httpRequest: match,
-        httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream'] },
-          body: sseToolCalls(cap.calls) },
-      });
+      for (const proto of PROTOCOLS) {
+        await put('/mockserver/expectation', {
+          priority: 40, times: { remainingTimes: 1, unlimited: false },
+          httpRequest: { method: 'POST', path: proto.path, body: bodyMatch },
+          httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream'] },
+            body: proto.calls(cap.calls) },
+        });
+      }
     }
     // TURN TWO (or the only turn): what the model said once its work was done.
-    await put('/mockserver/expectation', {
-      priority: 30,
-      httpRequest: match,
-      httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream'] },
-        body: sse(cap.body) },
-    });
+    for (const proto of PROTOCOLS) {
+      await put('/mockserver/expectation', {
+        priority: 30,
+        httpRequest: { method: 'POST', path: proto.path, body: bodyMatch },
+        httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream'] },
+          body: proto.text(cap.body) },
+      });
+    }
     covered.push(`${seam}  <- ${cap.file}${cap.parsed ? '' : ' (prose)'}`);
   }
 
@@ -371,6 +468,16 @@ function put(urlPath, payload) {
     httpRequest: { method: 'POST', path: '/api/v1/.*' },
     httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream'] },
       body: sse('{}') },
+  });
+  // The Anthropic catch-all matters MORE than the other one: Claude Code makes AUXILIARY calls
+  // (measured: 4 POSTs where 2 were expected). Without this they would fall through to whatever
+  // matched loosest and consume a seam's single-use expectation — which is exactly how a
+  // tool-call replay was eaten by a background request.
+  await put('/mockserver/expectation', {
+    priority: 1,
+    httpRequest: { method: 'POST', path: '/v1/messages' },
+    httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream'] },
+      body: anthropicSse('{}') },
   });
 
   console.log(`covered ${covered.length} seam(s) from real captures:`);

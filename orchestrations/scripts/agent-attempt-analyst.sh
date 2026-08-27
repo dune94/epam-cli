@@ -119,7 +119,7 @@ if [ -n "$_rung_model" ]; then
     export EPAM_TEMPERATURE="$_rung_temperature"
     warning "analyst inherits the failing rung: model=$_rung_model provider=$_rung_provider effort=${_rung_effort:-unset} temp=${_rung_temperature:-unset}"
 fi
-_model="${AGENT_ANALYST_MODEL:-${_rung_model:-${ESCALATION_MODEL:-${ORCH_GATE_MODEL:-${EPAM_MODEL:-}}}}}"
+_model="${AGENT_ANALYST_MODEL:-${_rung_model:-${ESCALATION_MODEL:-${EPAM_MODEL:-${EPAM_MODEL:-}}}}}"
 _provider="${AGENT_ANALYST_PROVIDER:-${_rung_provider:-${ORCH_GATE_PROVIDER:-${EPAM_ORCHESTRATION_PROVIDER:-}}}}"
 if [ -z "$_model" ]; then
     # A diagnosis produced by a guessed model is worse than an honest absence: it reads as

@@ -22,6 +22,10 @@
 
 'use strict';
 
+// Local tool caps are DECLARED — config/tool-timeouts.json. A literal here would be a
+// second home for a decision that already has one.
+const { toolTimeoutMs } = require('./tool-timeouts.js');
+
 const { execSync } = require('child_process');
 const path         = require('path');
 
@@ -62,7 +66,7 @@ function sembleSearch(query, repoPath, limit, maxLines) {
   try {
     const raw = execSync(cmd, {
       encoding:  'utf8',
-      timeout:   60000,
+      timeout: toolTimeoutMs('semble'),
       maxBuffer: 2 * 1024 * 1024,
     }).trim();
 

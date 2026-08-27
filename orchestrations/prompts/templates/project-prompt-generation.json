@@ -11,7 +11,7 @@
     "also checked mechanically by lib/project-prompt-contract.js — the prompt asks, the contract",
     "enforces, because asking a model nicely is not a guarantee.",
     "",
-    "2026-08-15, found by mock3 on its first end-to-end run: __TEMPLATE_BODY__ was wrapped in a",
+    "2026-08-15, found by a rehearsal project on its first end-to-end run: __TEMPLATE_BODY__ was wrapped in a",
     "code fence, and templates that contain fences of their own (repro-test-writer, code-graph-",
     "detective) were truncated at their FIRST closing fence. The generated prompt then dropped",
     "every placeholder past that point and the contract refused it, three attempts running. An",

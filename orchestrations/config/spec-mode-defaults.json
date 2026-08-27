@@ -92,6 +92,53 @@
   "timeouts": {
     "$comment": "How long a model call may take, in SECONDS. Every seam in invocation-profiles.json declares its own timeoutSecs and seamInvocationEnv exports it as EPAM_TIMEOUT_SECS — but until 2026-08-17 no call site read it, so all 36 declarations were inert and every call was bounded by a literal in code instead. prompt-builder declared 900s, was cut off at 360s, and took a survey, a roster, an assignment and 12 generated prompts with it 30 minutes into a run. The writer, the reviewer and the repro-test writer all declare 900s and all got 360s, which is a plausible source of writer timeouts nobody could explain.",
     "$precedence": "RUNCLAUDE_TIMEOUT_MS (an operator forcing a number while debugging) beats the seam's own timeoutSecs, which beats this default. This default applies only to calls made at no seam.",
-    "defaultSecs": 360
+    "defaultSecs": 360,
+    "localToolMs": 20000,
+    "$localToolWhy": "How long a LOCAL tool subprocess may take — the ecosystem scan, not a model call. It was the literal 20000 at two call sites (mint-agents-step.js and lib/handlers/agent-skills.js), which is one decision with two homes: a codeline large enough to need longer got a truncated scan in both places, and raising it meant finding both."
+  },
+  "retrieval": {
+    "$why": "How a code-search query is built from a story. This lived as an inline regex and a fixed phrase inside two functions in spec-mode-runner.js, and the two copies had already drifted — one prefixed \"applies handles processes resolves\", the other \"applies handles processes calculates resolves\". A language's stopwords are an INPUT, not an engine fact: a ticket written in another language keeps every filler word while losing nothing meaningful, and nothing reports it.",
+    "$stopwordsWhy": "Removed from the story title before it becomes a search query, so the query carries domain terms rather than grammar. English only, because the tickets are English by operator decision — change this list, not the engine, when that stops being true.",
+    "stopwords": [
+      "the",
+      "a",
+      "an",
+      "is",
+      "not",
+      "for",
+      "in",
+      "of",
+      "and",
+      "or",
+      "to",
+      "as",
+      "at",
+      "by",
+      "be",
+      "was",
+      "are",
+      "it",
+      "its",
+      "that",
+      "this",
+      "with"
+    ],
+    "$queryPrefixWhy": "Verb terms that bias the search toward code that ACTS on the domain terms rather than merely mentioning them.",
+    "queryPrefix": "applies handles processes calculates resolves",
+    "$limitsWhy": "Caps on what is sent to the search index. They were magic numbers at four call sites (200/300/400). Truncation drops whole terms at a word boundary, never mid-term — a half word matches nothing and silently narrows the search.",
+    "termChars": 200,
+    "queryChars": 400,
+    "symptomQueryChars": 400,
+    "acsInSymptomQuery": 3,
+    "maxFiles": 4,
+    "maxChars": 12000,
+    "$readCapsWhy": "How much of the codebase one retrieval call may read. These were written at the call site as { maxFiles: 4, maxChars: 12000 } — an operating decision about a codeline, invisible to anyone reading configuration."
+  },
+  "policy": {
+    "$why": "Numbers that decide how the pipeline BEHAVES. They were named constants in spec-mode-runner.js, which reads like configuration and is not: changing one is a code edit, a rebuild and a review, and no deployment can differ. A codeline whose stories are routinely larger has a different right answer.",
+    "$splitMandateWhy": "Above this many acceptance criteria a story MUST be split. Greenfield only — the brownfield path returns early, deliberately, because a bug ticket is not made safer by being cut in half.",
+    "splitMandateAcThreshold": 12,
+    "$detectivePreseedWhy": "How much prior evidence the code-graph detective is pre-seeded with. Too little and it re-derives what is already known; too much and the useful part is buried. Truncation appends a notice so the agent knows it is reading an excerpt rather than the whole record.",
+    "detectivePreseedMaxChars": 8000
   }
 }

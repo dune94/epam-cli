@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+# pipeline — ONE COMMAND TO RUN A TICKET.
+#
+#   pipeline --jira AMSD-1234
+#
+# Everything else is derived. The ticket's prefix names the project (each project declares its own
+# JIRA_PROJECT_KEY), the project names its codelines, and the active provider set names the models.
+# Nothing about a project, a stack or a service is written in this file.
+#
+# It is a WRAPPER, not a second pipeline: it checks what a run needs, says plainly what is missing,
+# and then hands off to the tested launcher. A second implementation of the run is how two things
+# that must agree start to drift.
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECTS_DIR="$REPO_ROOT/orchestrations/projects"
+
+_red()   { printf '\033[0;31m%s\033[0m\n' "$*" >&2; }
+_green() { printf '\033[0;32m%s\033[0m\n' "$*"; }
+_dim()   { printf '\033[2m%s\033[0m\n' "$*"; }
+
+die() { _red "✗ $1"; [ $# -gt 1 ] && shift && printf '  %s\n' "$@" >&2; exit 1; }
+
+usage() {
+    cat <<USAGE
+pipeline — run one ticket through the orchestration pipeline
+
+  pipeline --jira TICKET-123      run that ticket
+  pipeline --jira TICKET-123 --dry-run   check everything, start nothing
+  pipeline --list                 show projects and which ticket prefix each owns
+  pipeline --help
+
+The provider stack comes from EPAM_PROVIDER_SET (default: whatever provider-sets.json declares).
+USAGE
+}
+
+TICKET=""; DRY_RUN=0; LIST=0
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --jira|-j)  TICKET="${2:-}"; shift 2 || die "--jira needs a ticket id" ;;
+        --dry-run)  DRY_RUN=1; shift ;;
+        --list)     LIST=1; shift ;;
+        --help|-h)  usage; exit 0 ;;
+        *)          die "unknown option '$1'" "run 'pipeline --help'" ;;
+    esac
+done
+
+# One place a value is read out of a project's config.env, so the quoting is written once.
+cfg_value() {
+    local file="$1" key="$2"
+    [ -f "$file" ] || return 0
+    sed -n "s/^${key}=//p" "$file" | head -1 | sed -e 's/^["'"'"']//' -e 's/["'"'"']$//'
+}
+
+# ── Which project owns this ticket? Declared, never mapped here. ──────────────
+project_for_prefix() {
+    local want="$1" dir key
+    for dir in "$PROJECTS_DIR"/*/; do
+        [ -f "$dir/config.env" ] || continue
+        key="$(cfg_value "$dir/config.env" JIRA_PROJECT_KEY)"
+        [ -n "$key" ] || continue
+        if [ "${key^^}" = "${want^^}" ]; then basename "$dir"; return 0; fi
+    done
+    return 1
+}
+
+if [ "$LIST" = "1" ]; then
+    printf '  %-16s %-12s %s\n' PROJECT PREFIX CODELINE
+    for dir in "$PROJECTS_DIR"/*/; do
+        [ -f "$dir/config.env" ] || continue
+        printf '  %-16s %-12s %s\n' "$(basename "$dir")" \
+            "$(cfg_value "$dir/config.env" JIRA_PROJECT_KEY)" \
+            "$(cfg_value "$dir/config.env" JIRA_CODELINE_ROOT)"
+    done
+    exit 0
+fi
+
+[ -n "$TICKET" ] || { usage; exit 1; }
+case "$TICKET" in
+    *-*) : ;;
+    *) die "'$TICKET' does not look like a ticket id" "expected something like ABC-1234" ;;
+esac
+PREFIX="${TICKET%%-*}"
+
+PROJECT="$(project_for_prefix "$PREFIX")" || die \
+    "no project declares the ticket prefix '$PREFIX'" \
+    "each project's config.env declares JIRA_PROJECT_KEY; run 'pipeline --list' to see them"
+
+# ── What this run needs, checked before anything starts ──────────────────────
+PROBLEMS=()
+note_problem() { PROBLEMS+=("$1"); }
+
+[ -f "$REPO_ROOT/.env" ] || note_problem ".env is missing at $REPO_ROOT/.env — copy .env.sample and fill it in"
+
+# The active set decides which credentials matter. A set that needs none needs none.
+SET_NAME="${EPAM_PROVIDER_SET:-$(
+    "${NODE_BIN:-node}" -e '
+      try { const j = require(process.argv[1]); process.stdout.write(j.defaultSet || ""); }
+      catch { process.stdout.write(""); }
+    ' "$REPO_ROOT/orchestrations/config/provider-sets.json" 2>/dev/null)}"
+[ -n "$SET_NAME" ] || note_problem "no provider set is active and none is declared as the default"
+
+OVERLAY="$PROJECTS_DIR/$PROJECT/config.$SET_NAME.env"
+[ -f "$OVERLAY" ] || note_problem "project '$PROJECT' has no overlay for the '$SET_NAME' stack ($OVERLAY)"
+
+# The runner the set declares must actually be on PATH — this is the commonest real failure.
+RUNNER="$("${NODE_BIN:-node}" -e '
+  try {
+    const fs = require("fs"), path = require("path");
+    const reg = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    const set = reg.sets[process.argv[2]];
+    const s = JSON.parse(fs.readFileSync(path.join(path.dirname(process.argv[1]), set.settingsFile), "utf8"));
+    process.stdout.write(Object.keys(s.runners || {})[0] || "");
+  } catch { process.stdout.write(""); }
+' "$REPO_ROOT/orchestrations/config/provider-sets.json" "$SET_NAME" 2>/dev/null)"
+if [ -n "$RUNNER" ] && ! command -v "$RUNNER" >/dev/null 2>&1; then
+    note_problem "the '$SET_NAME' stack runs '$RUNNER', which is not on PATH"
+fi
+
+command -v jq   >/dev/null 2>&1 || note_problem "jq is not installed (the pipeline parses JSON with it throughout)"
+command -v git  >/dev/null 2>&1 || note_problem "git is not installed"
+
+# ── Docker is OPTIONAL. Dashboards are observability, not the run. ───────────
+DOCKER_NOTE="dashboards unavailable (docker not running) — the run itself does not need them"
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+    DOCKER_NOTE="dashboards available"
+fi
+
+if [ ${#PROBLEMS[@]} -gt 0 ]; then
+    _red "✗ this run cannot start:"
+    printf '  • %s\n' "${PROBLEMS[@]}" >&2
+    exit 1
+fi
+
+_green "✓ ready"
+_dim   "  ticket    $TICKET"
+_dim   "  project   $PROJECT"
+_dim   "  stack     $SET_NAME (runner: ${RUNNER:-unknown})"
+_dim   "  docker    $DOCKER_NOTE"
+
+[ "$DRY_RUN" = "1" ] && { _dim "  --dry-run: nothing started"; exit 0; }
+
+# ── Hand off to the tested launcher. No second implementation of the run. ────
+export EPAM_PROVIDER_SET="$SET_NAME"
+export JIRA_TICKET="$TICKET"
+exec bash "$SCRIPT_DIR/orchestrate.sh" --project "$PROJECT" --yes

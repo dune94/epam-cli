@@ -28,32 +28,43 @@
 const TIMEOUT_MS = 12000;
 // No literal fallback: see lib/seam-model.js.
 const { resolveOrRefuse } = require('./seam-model.js');
-const MODEL      = resolveOrRefuse({ seam: 'topology-router',
-  sources: [process.env.ORCH_GATE_MODEL] });
 
-// ── Tool schema ──────────────────────────────────────────────────────────────
-const TOPOLOGY_TOOL = {
-  name: 'select_topology',
-  description: 'Select the execution topology for this orchestration phase based on story metadata.',
-  input_schema: {
-    type: 'object',
-    properties: {
-      topology: {
-        type: 'string',
-        enum: ['single', 'parallel', 'sequential'],
-        description:
-          'single: one story or tightly coupled stories — run on main branch, no worktrees. ' +
-          'parallel: independent stories — run in parallel worktrees. ' +
-          'sequential: stories with shared file overlap or ordering risk — run sequentially on main.',
-      },
-      reason: {
-        type: 'string',
-        description: 'One sentence explaining the topology choice citing the key signal.',
-      },
-    },
-    required: ['topology', 'reason'],
-  },
-};
+/**
+ * THIS SEAM'S MODEL, FROM ITS OWN LADDER.
+ *
+ * Replaces process.env.ORCH_GATE_MODEL — a RUN-WIDE PIN that reached every seam unable to
+ * resolve one itself, which was all of them outside the story path. `.env` set it to
+ * z-ai/glm-5.2, so a mockserver run asked for an OpenRouter model and nothing else could
+ * supply a different answer.
+ *
+ * Returns '' when the ladder cannot answer, so resolveOrRefuse still REFUSES rather than
+ * substituting: "we could not tell" is never "it is fine".
+ */
+function seamLadderModel(seam) {
+  try {
+    const { seamInvocationEnv } = require('./seam-invocation.js');
+    const env = seamInvocationEnv(seam, undefined, { sourceEnv: process.env }) || {};
+    return env.EPAM_MODEL || '';
+  } catch { return ''; }
+}
+// RESOLVED LAZILY, NOT AT MODULE LOAD.
+//
+// This ran at module scope, and `topology-router` is not one of the declared seams — so
+// resolveOrRefuse threw before main() existed to catch it. The module's own docblock
+// promises a heuristic fallback when no model resolves; instead the process died with a
+// stack trace, and the caller pre-set "heuristic" and swallowed it. The documented
+// behaviour and the real behaviour disagreed, silently, in every run.
+//
+// Refusing is still correct — it must never substitute an unchosen model. It simply has to
+// refuse where the fallback can see it.
+function resolveModel() {
+  return resolveOrRefuse({ seam: 'topology-router',
+    sources: [seamLadderModel('topology-router'), process.env.EPAM_MODEL] });
+}
+
+// The tool schema that used to live here is gone with the SDK client. The hub returns JSON
+// and the template states the shape, so a second copy of the contract here could only drift
+// from it. The enum it carried — single | parallel | sequential — is stated in the template.
 
 // ── Heuristic fallback ────────────────────────────────────────────────────────
 function heuristicTopology(stories) {
@@ -77,16 +88,23 @@ async function main() {
 
   const { phase = '', stories = [], cpaSignals = [] } = input;
 
-  // Fast path: no API key, or orchestration is using a non-Anthropic provider
-  const orchProvider = process.env.EPAM_ORCHESTRATION_PROVIDER || '';
-  const isNonAnthropic = orchProvider && orchProvider !== 'claude' && orchProvider !== 'codemie-claude';
-  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.EPAM_API_KEY_ANTHROPIC;
-  if (!apiKey || isNonAnthropic) {
-    process.stdout.write(JSON.stringify(heuristicTopology(stories)) + '\n');
-    return;
-  }
+  // NO CREDENTIAL IS READ HERE, AND NO VENDOR IS NAMED HERE.
+  //
+  // This built its own @anthropic-ai/sdk client from ANTHROPIC_API_KEY, guarded by
+  // `if (!apiKey) fall back to the heuristic`. The free-run scrub writes `sk-mock-not-real`
+  // — which is TRUTHY — so the guard passed and the vendor was called anyway. Scrubbing
+  // never bought silence, only a 401.
+  //
+  // The hub decides the vendor from the active provider set; this seam decides only WHAT to
+  // ask. The old non-Anthropic provider check is gone with it: which stack serves the call
+  // is the SET's decision, and asking here re-implemented one already made elsewhere.
 
   // Build prompt
+  // THE DATA IS BUILT HERE; THE INSTRUCTIONS ARE NOT.
+  //
+  // The prompt was concatenated in this file, so it was invisible to the prompt layer: it
+  // could not be reviewed, versioned, or provisioned per project. What remains here is the
+  // ENVELOPE — the stories and the signals — which is data the seam already holds.
   const storyLines = stories.map(s =>
     `  - ${s.id}: effort=${s.effort || '?'}, role=${s.agentRole || '?'}, deps=[${(s.dependencies || []).join(',')}]`
   ).join('\n');
@@ -97,41 +115,31 @@ async function main() {
       ).join('\n')
     : '';
 
-  const prompt =
-    `You are selecting an execution topology for orchestration phase "${phase}".\n\n` +
-    `Stories to classify:\n${storyLines}${cpaLines}\n\n` +
-    `Rules:\n` +
-    `- single: 0–1 worktree stories, OR high-effort story that needs focused attention\n` +
-    `- parallel: 2–4 independent stories with no shared file scope\n` +
-    `- sequential: stories with overlapping file scope, tight coupling, or shared state risk\n\n` +
-    `Use the select_topology tool to return your decision.`;
-
   try {
-    // Walk up from script location to find the repo root's node_modules
-    const path = require('path');
-    let sdkPath = null;
-    let dir = __dirname;
-    for (let i = 0; i < 8; i++) {
-      const candidate = path.join(dir, 'node_modules', '@anthropic-ai', 'sdk');
-      if (require('fs').existsSync(candidate)) { sdkPath = candidate; break; }
-      dir = path.dirname(dir);
-    }
-    if (!sdkPath) throw new Error('Cannot locate @anthropic-ai/sdk');
-    const Anthropic = require(sdkPath);
-    const client = new Anthropic.default({ apiKey, timeout: TIMEOUT_MS });
+    const MODEL = resolveModel();
+    const { renderEngineTemplate } = require('./engine-prompt.js');
+    const { callLlmJson } = require('./llm-call.js');
 
-    const response = await client.messages.create({
+    // Renders from THIS PROJECT's provisioned copy. If the project has no copy that is a
+    // provisioning defect and it throws by name — the catch below degrades to the heuristic
+    // rather than inventing a topology, which is the same contract as before.
+    const prompt = renderEngineTemplate('topology-router', {
+      __PHASE__: phase,
+      __STORIES__: storyLines,
+      __CPA_SIGNALS__: cpaLines,
+    });
+    // The hub is overridable so this seam is testable against a stub without ever reaching a
+    // vendor — the same affordance codeline-discovery already relies on.
+    const decision = await callLlmJson({
+      seam: 'topology-router',
+      prompt,
       model: MODEL,
-      max_tokens: 256,
-      tools: [TOPOLOGY_TOOL],
-      tool_choice: { type: 'tool', name: 'select_topology' },
-      messages: [{ role: 'user', content: prompt }],
+      timeoutMs: TIMEOUT_MS,
+      hubPath: process.env.EPAM_LLM_HUB || undefined,
     });
 
-    const toolUse = response.content.find(b => b.type === 'tool_use' && b.name === 'select_topology');
-    if (!toolUse || !toolUse.input || !toolUse.input.topology) throw new Error('No tool_use block');
-
-    const { topology, reason } = toolUse.input;
+    if (!decision || !decision.topology) throw new Error('no topology in the hub response');
+    const { topology, reason } = decision;
     process.stdout.write(JSON.stringify({ topology, reason, source: 'llm', model: MODEL }) + '\n');
 
   } catch (err) {

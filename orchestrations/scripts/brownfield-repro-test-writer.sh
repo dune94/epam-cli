@@ -214,7 +214,17 @@ _choose_target() {
     _cands=$(printf '  - %s\n' "${FIX_FILES[@]}")
     _ask=$(printf 'A change was made and must now be covered by ONE test.\n\nFiles this change touched:\n%s\n\nThe plan'"'"'s sites and what each does:\n%s\n\nWhat the test must prove:\n%s\n\nWhich ONE of the touched files carries the behaviour a test would exercise to prove those criteria? Not the file that merely configures or wires it — the one whose logic would be wrong if the criteria failed.\n\nReply with the file path only, exactly as listed above. No prose.\n' \
         "$_cands" "${_sites:-  (none recorded)}" "${_vcs:-  (none recorded)}")
-    _ans=$(printf '%s' "$_ask" | EPAM_MAX_ITERATIONS=3 EPAM_MAX_OUTPUT_TOKENS=256 \
+    # THE BUDGET IS DECLARED, NOT WRITTEN HERE. These were literals at this call site, so they
+    # outranked the seam's own declaration, never reached a cost estimate, and made changing the
+    # declared budget a no-op for this one call.
+    _mq_file="${EPAM_AGENTS_DIR:-$SCRIPT_DIR/../agents}/invocation-profiles.json"
+    _mq_iters=$(jq -r '.profiles["repro-test-writer"].microQuestion.maxIterations // empty' "$_mq_file" 2>/dev/null)
+    _mq_toks=$(jq -r '.profiles["repro-test-writer"].microQuestion.maxOutputTokens // empty' "$_mq_file" 2>/dev/null)
+    if [ -z "$_mq_iters" ] || [ -z "$_mq_toks" ]; then
+        warning "repro-test-writer declares no microQuestion budget — skipping the target question rather than inventing one"
+        return 1
+    fi
+    _ans=$(printf '%s' "$_ask" | EPAM_MAX_ITERATIONS="$_mq_iters" EPAM_MAX_OUTPUT_TOKENS="$_mq_toks" \
         "$AI_RUNNER_CMD" 2>/dev/null | tr -d '\r' | grep -oE '[A-Za-z0-9_./-]+\.[A-Za-z]+' | head -1)
     [ -n "$_ans" ] || return 1
     _is_testable_source "$_ans" || { warning "target choice '"'"'$_ans'"'"' is not testable source — ignoring"; return 1; }

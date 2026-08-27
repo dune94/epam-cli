@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+
+# A service URL has one home: config/services.json, read through this helper.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/service-urls.sh" 2>/dev/null || true
 # ──────────────────────────────────────────────────────────────────────────────
 # Tier 3: Metrolinx Brownfield — GLM + Kimi multi-model pipeline.
 #
@@ -36,6 +39,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # shellcheck source=lib/project-config.sh
 . "$SCRIPT_DIR/lib/project-config.sh"
+# The run's spend figure comes from the ACTIVE SET, not a vendor hardcoded here.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/spend-probe.sh" 2>/dev/null || true
+
 # The roster answers who may author code — the perimeter reads the same file, so the pre-flight
 # and the thing it predicts cannot disagree.
 # shellcheck source=lib/roster-read.sh
@@ -114,9 +120,10 @@ snapshot_operator_env
 load_env_file_safe "$REPO_ROOT/.env"
 ENV_FILE="$SCRIPT_DIR/../jira/metrolinx.env"
 [ -f "$ENV_FILE" ] && load_env_file_safe "$ENV_FILE" preserve || fail "metrolinx.env not found at $ENV_FILE"
-# Project-level config (pipeline flags, semble, AC gate settings)
-PROJECT_CONFIG="$SCRIPT_DIR/../projects/metrolinx/config.env"
-[ -f "$PROJECT_CONFIG" ] && load_env_file_safe "$PROJECT_CONFIG" preserve
+# Project-level config (pipeline flags, semble, AC gate settings). load_project_env loads BOTH
+# halves — the base and the half the active provider set decides. Naming one file here would
+# load only the base and silently drop the provider map and the fallback model.
+load_project_env "$SCRIPT_DIR/../projects/metrolinx" preserve || fail "project env not loadable"
 
 # Project-level tool config (dependency-check.json, etc.) — lives in epam-cli's
 # own codeline, never in a client repo. See run_dependency_check in claude.sh.
@@ -171,9 +178,7 @@ fi
 cd "$REPO_ROOT"
 
 # ── Capture spend baseline ────────────────────────────────────────────────────
-_usage_before=$(curl -s "https://openrouter.ai/api/v1/auth/key" \
-  -H "Authorization: Bearer $OPENROUTER_API_KEY" 2>/dev/null | \
-  node -e "process.stdout.write(''+JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).data.usage)" 2>/dev/null || echo "0")
+_usage_before="$(spend_probe_read)"
 info "OpenRouter usage before: \$$_usage_before"
 
 # ── Pre-flight: the built CLI must not be older than its source ──────────────
@@ -309,7 +314,7 @@ export JIRA_URL JIRA_EMAIL JIRA_PROJECT_KEY JIRA_BOARD_ID
 export JIRA_CODELINE_ROOT JIRA_BASELINE_BRANCH
 
 # Model config (sourced from metrolinx.env; re-export to ensure inheritance)
-export ORCH_GATE_PROVIDER EPAM_ORCHESTRATION_PROVIDER ORCH_GATE_MODEL
+export ORCH_GATE_PROVIDER EPAM_ORCHESTRATION_PROVIDER
 export ESCALATION_MODEL ESCALATION_MODEL_HIGH
 export EPAM_TEMPERATURE
 export SPEC_MODE_PROVIDER SPEC_MODE_OPENSPEC_MODEL SPEC_MODE_OPENSPEC_MODEL_HIGH
@@ -455,8 +460,8 @@ if [ "${OBSERVABILITY_PREFLIGHT:-1}" = "1" ]; then
                _obs_failed="${_obs_failed}${_name} "; return 1 ;;
     esac
   }
-  _obs_check "Langfuse" "${LANGFUSE_BASE_URL:-http://localhost:3100}" || true
-  _obs_check "Grafana"  "${GRAFANA_BASE_URL:-http://localhost:3001}"  || true
+  _obs_check "Langfuse" "$(service_url langfuse)" || true
+  _obs_check "Grafana"  "$(service_url grafana)"  || true
 
   if [ -n "$_obs_failed" ]; then
     error "Observability preflight FAILED: ${_obs_failed}— aborting before any spend."
@@ -561,9 +566,7 @@ run_phase() {
 run_phase "core"
 
 # ── Report spend ──────────────────────────────────────────────────────────────
-_usage_after=$(curl -s "https://openrouter.ai/api/v1/auth/key" \
-  -H "Authorization: Bearer $OPENROUTER_API_KEY" 2>/dev/null | \
-  node -e "process.stdout.write(''+JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).data.usage)" 2>/dev/null || echo "0")
+_usage_after="$(spend_probe_read)"
 _spent=$(node -e "console.log(($_usage_after-$_usage_before).toFixed(4))" 2>/dev/null || echo "?")
 info "OpenRouter usage after: \$$_usage_after"
 # Also into $LOG_FILE: the line above goes to stdout, which is the launch log

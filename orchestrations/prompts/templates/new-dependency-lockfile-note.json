@@ -2,7 +2,7 @@
   "$why": [
     "The half of the new-dependency directive that only applies to a codeline carrying a lockfile.",
     "",
-    "Live metrolinx AMSD-2041 hand-edited package.json and never ran an install, so package-lock.json did not move. Every check passed against a vendor directory left over from an earlier run, and the branch cannot be installed from a clean checkout.",
+    "A live brownfield run hand-edited package.json and never ran an install, so package-lock.json did not move. Every check passed against a vendor directory left over from an earlier run, and the branch cannot be installed from a clean checkout.",
     "",
     "Separate from the parent so that a codeline WITHOUT a lockfile still receives the directive's other half -- the instruction not to stall asking permission, which is why the directive exists at all."
   ],

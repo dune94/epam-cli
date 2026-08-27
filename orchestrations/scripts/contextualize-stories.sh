@@ -188,10 +188,12 @@ if [ ! -f "$LIB_DIR/tfidf.js" ]; then
   error "tfidf.js not found: $LIB_DIR/tfidf.js"; exit 1
 fi
 
-# Semantic search disabled — pipeline is MiniMax/GLM/Kimi only; no OpenAI embeddings.
-# TF-IDF (tfidf.js) is used unconditionally.
-SEMANTIC_SEARCH_JS="$LIB_DIR/semantic-search.js"
-USE_SEMANTIC_RAG=false
+# TF-IDF (tfidf.js) is the retrieval, unconditionally.
+#
+# Two variables used to be assigned here and never read again: SEMANTIC_SEARCH_JS and
+# USE_SEMANTIC_RAG=false. The flag read as a deliberate switch, so the module it pointed at —
+# which hardcoded api.openai.com and read OPENAI_API_KEY — looked merely disabled rather than
+# dead. It was never executed by anything. Both are gone with it.
 info "Retrieval: TF-IDF"
 
 # Brownfield context: optional existing-repo ingestion.
@@ -1238,12 +1240,12 @@ ${_cpa_after}
 
 Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}" | \
           AI_PROVIDER="${ORCH_GATE_PROVIDER}" \
-          AI_MODEL="${ORCH_GATE_MODEL:-${EPAM_MODEL:-}}" \
+          AI_MODEL="${EPAM_MODEL:-}" \
           EPAM_CLI="${EPAM_CLI:-epam}" \
           EPAM_MAX_OUTPUT_TOKENS="${CPA_GATE_MAX_OUTPUT_TOKENS:-16384}" \
           "$_cpa_ai_runner_cmd" \
               --provider "${ORCH_GATE_PROVIDER}" \
-              --model    "${ORCH_GATE_MODEL:-${EPAM_MODEL:-}}" \
+              --model    "${EPAM_MODEL:-}" \
           2>/dev/null | \
           python3 "$SCRIPT_DIR/lib/handlers/cpa-review-verdict.py" 2>/dev/null || echo "fail")
         if [ "$_cpa_verdict" = "fail" ]; then

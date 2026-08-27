@@ -101,9 +101,24 @@ fi
 # The project's declared codeline root, read the same way the launcher reads it. Its presence is
 # what tells this gate that scope — and therefore outputDir — is resolved during the run.
 _codeline_root="${JIRA_CODELINE_ROOT:-}"
-if [[ -z "$_codeline_root" ]] && [[ -n "${PROJECT_CONFIG_DIR:-}" ]] && [[ -f "${PROJECT_CONFIG_DIR}/config.env" ]]; then
-  _codeline_root=$(sed -n 's/^[[:space:]]*JIRA_CODELINE_ROOT=//p' "${PROJECT_CONFIG_DIR}/config.env" \
-                   | tail -1 | tr -d '"'"'"'"' )
+if [[ -z "$_codeline_root" ]] && [[ -n "${PROJECT_CONFIG_DIR:-}" ]]; then
+  # THE FILENAME IS NOT SPELLED HERE. The registry names a project's env files
+  # (config/provider-sets.json); a literal would be a second home for that name, free to drift
+  # with nothing failing. Both halves are scanned because the key may live in either, and the
+  # two are disjoint so at most one can answer.
+  _pe_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/llm-settings-resolve.js"
+  if [[ -f "$_pe_lib" ]] && { [[ -n "${NODE_BIN:-}" ]] || command -v node >/dev/null 2>&1; }; then
+    while IFS= read -r _pe_f; do
+      [[ -n "$_pe_f" ]] && [[ -f "$_pe_f" ]] || continue
+      _codeline_root=$(sed -n 's/^[[:space:]]*JIRA_CODELINE_ROOT=//p' "$_pe_f" \
+                       | tail -1 | tr -d '"'"'"'"' )
+      [[ -n "$_codeline_root" ]] && break
+    done < <("${NODE_BIN:-node}" -e '
+      const { projectEnvFiles } = require(process.argv[1]);
+      const f = projectEnvFiles(process.argv[2]);
+      if (f) process.stdout.write(f.base + "\n" + f.overlay + "\n");
+    ' "$_pe_lib" "$PROJECT_CONFIG_DIR" 2>/dev/null)
+  fi
 fi
 
 _prd_pending_ingest=0

@@ -2,7 +2,7 @@
   "$why": [
     "Moved out of src/scaffold/prompts.ts (compiled into dist/sdk.js) on 2026-08-15. A prompt",
     "reachable only inside a build artefact cannot be diffed, reviewed per project, corrected by",
-    "self-heal, or evaluated by mock3 — whose job is to evaluate the prompts of every agent.",
+    "self-heal, or evaluated by a rehearsal project — whose job is to evaluate the prompts of every agent.",
     "",
     "BOOTSTRAP, so COPIED and never generated: the mint needs this prompt before it can run, so",
     "it cannot be one of the prompts the mint produces. Pre-launch provisioning copies it verbatim.",

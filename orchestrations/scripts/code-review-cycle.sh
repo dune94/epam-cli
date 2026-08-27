@@ -112,7 +112,10 @@ AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
 # THE SEAM DECIDES. seam_ladder_export set EPAM_MODEL to the first rung of the chain this
 # seam's archetype declares; the literal that stood here overrode it silently, so editing the
 # declared tier moved no model. An operator value still wins; the unremovable default is gone.
-ORCH_GATE_MODEL="${ORCH_GATE_MODEL:-${EPAM_MODEL:-}}"
+# THE SEAM'S LADDER, not a run-wide pin. ORCH_GATE_MODEL reached every seam that could not
+# resolve a model itself, and .env pinned it to z-ai/glm-5.2 — which is why a mockserver run
+# asked for an OpenRouter model. Empty when the ladder cannot answer, so callers refuse.
+_CRC_MODEL="${EPAM_MODEL:-$(seam_model_or_fail "code-review-cycle" 2>/dev/null || true)}"
 
 run_review_prompt() {
     local prompt_text="$1"
@@ -121,12 +124,12 @@ run_review_prompt() {
         return 0
     fi
     echo "$prompt_text" | \
-        AI_MODEL="$ORCH_GATE_MODEL" \
+        AI_MODEL="$_CRC_MODEL" \
         CLAUDE_CMD="${CLAUDE_CMD:-claude}" \
         EPAM_CLI="${EPAM_CLI:-epam}" \
         EPAM_MAX_OUTPUT_TOKENS="${CODE_REVIEW_MAX_OUTPUT_TOKENS:-32768}" \
         "$AI_RUNNER_CMD" --provider "${EPAM_ORCHESTRATION_PROVIDER:-claude}" \
-            --model "$ORCH_GATE_MODEL" 2>&1
+            --model "$_CRC_MODEL" 2>&1
 }
 
 log "Code Review Cycle for Story: $STORY_ID (Iteration $ITERATION/$MAX_ITERATIONS)"

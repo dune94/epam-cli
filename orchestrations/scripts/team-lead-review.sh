@@ -50,6 +50,8 @@ REVIEW_LOG="${REVIEW_LOG:-$AUTOMATION_DIR/logs/code-reviews.jsonl}"
 # AGENT_PROFILES_FILE default any more: that default named the engine's own roster.
 # shellcheck source=lib/roster-read.sh
 . "$SCRIPT_DIR/lib/roster-read.sh"
+# shellcheck source=lib/render-engine-prompt.sh
+. "$SCRIPT_DIR/lib/render-engine-prompt.sh"
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
 # shellcheck source=lib/agent-invoke.sh
 source "$SCRIPT_DIR/lib/agent-invoke.sh"
@@ -128,7 +130,10 @@ source "$SCRIPT_DIR/lib/jq-vals.sh"
 # seam's ARCHETYPE declares. The literal that stood here overrode that silently — the reviewer asked
 # for its tier and then ignored the answer, so the declaration selected nothing. An operator value
 # still wins; what is gone is the default no configuration could remove.
-ORCH_GATE_MODEL="${ORCH_GATE_MODEL:-${EPAM_MODEL:-}}"
+# THE SEAM'S LADDER, not a run-wide pin. ORCH_GATE_MODEL reached every seam that could not
+# resolve a model itself, and .env pinned it to z-ai/glm-5.2 — which is why a mockserver run
+# asked for an OpenRouter model. Empty when the ladder cannot answer, so callers refuse.
+_TLR_MODEL="${EPAM_MODEL:-$(seam_model_or_fail "team-lead-review" 2>/dev/null || true)}"
 
 # Look up a model's HIGH-ladder successor (EPAM_MODEL_LADDER_HIGH is "from=to|...",
 # e.g. "z-ai/glm-5.1=moonshotai/kimi-k3"). Same laddering the detective + spec
@@ -296,7 +301,7 @@ run_review_prompt() {
         jq -cn \
             --arg ts "$(date -Iseconds)" \
             --arg phase "${_phase_id:-}" \
-            --arg model "${ORCH_GATE_MODEL:-}" \
+            --arg model "${_TLR_MODEL:-}" \
             --arg provider "${EPAM_ORCHESTRATION_PROVIDER:-}" \
             --argjson cost "${_cost:-0}" \
             --argjson tin "${_tin:-0}" \
@@ -560,14 +565,20 @@ while IFS= read -r story_id; do
                 # it can, and asking is better evidence than a window someone else chose.
                 _diff_stat=$(git -C "$PROJECT_ROOT" diff --stat "$_rev_base" HEAD -- . \
                     "${_diff_excludes[@]+"${_diff_excludes[@]}"}" 2>/dev/null || true)
+                # THE WORDS LIVE IN THE TEMPLATE LAYER. This block used to be written here and
+                # substituted into __STORY_DIFF__ — model-facing instruction inside a shell
+                # script, unreviewable in the prompt layer and unchangeable per project. Only
+                # the FACTS are assembled here; the sentences are prompts/templates/.
+                _sdni_vals=$(mktemp)
+                "${NODE_BIN:-node}" -e '"'"'
+                  const v = { __DIFF_BYTES__: process.argv[1], __PROJECT_ROOT__: process.argv[2],
+                              __REV_BASE__: process.argv[3] };
+                  process.stdout.write(JSON.stringify(v));
+                '"'"' "${_diff_bytes}" "${PROJECT_ROOT}" "${_rev_base}" > "$_sdni_vals"
                 STORY_DIFF="${_diff_stat}
 
-[The change is ${_diff_bytes} bytes and is NOT inlined here. Generated files (lockfiles, snapshots)
-are excluded above and gated separately -- they are not review material. Read what you need:
-
-    git -C ${PROJECT_ROOT} diff ${_rev_base} HEAD -- <path>
-
-Review every file listed. Do not assume a file you did not read is defect-free.]"
+$(render_engine_prompt story-diff-not-inlined "$_sdni_vals" excluded)"
+                rm -f "$_sdni_vals"
             else
                 STORY_DIFF="$_diff_full"
             fi
@@ -766,9 +777,9 @@ Review every file listed. Do not assume a file you did not read is defect-free.]
     REVIEW_OUTPUT=$(run_review_prompt "$REVIEW_PROMPT" "$_rung_model" "$_rung_provider" 2>&1 | tee -a "$REVIEW_OUTPUT_FILE")
     _review_rc=${PIPESTATUS[0]}
     if [ -z "$(printf '%s' "$REVIEW_OUTPUT" | tr -d '[:space:]')" ]; then
-        warning "  review-agent produced NO OUTPUT AT ALL (rc=${_review_rc}, model=${ORCH_GATE_MODEL:-?}, provider=${EPAM_ORCHESTRATION_PROVIDER:-?})"
+        warning "  review-agent produced NO OUTPUT AT ALL (rc=${_review_rc}, model=${_TLR_MODEL:-?}, provider=${EPAM_ORCHESTRATION_PROVIDER:-?})"
         printf '[team-lead-review] EMPTY RESULT rc=%s model=%s provider=%s story=%s at %s\n' \
-            "${_review_rc}" "${ORCH_GATE_MODEL:-?}" "${EPAM_ORCHESTRATION_PROVIDER:-?}" "$story_id" "$(date -Is)" \
+            "${_review_rc}" "${_TLR_MODEL:-?}" "${EPAM_ORCHESTRATION_PROVIDER:-?}" "$story_id" "$(date -Is)" \
             >> "$REVIEW_OUTPUT_FILE" 2>/dev/null || true
     fi
 

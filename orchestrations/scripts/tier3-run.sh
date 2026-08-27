@@ -82,9 +82,11 @@ if ! command -v load_env_file_safe >/dev/null 2>&1; then
   fail "lib/env-file.sh did not provide load_env_file_safe — refusing to launch with no project data"
 fi
 
-for _env in "$REPO_ROOT/.env" "$PROJECT_DIR/.env" "$PROJECT_DIR/config.env"; do
+for _env in "$REPO_ROOT/.env" "$PROJECT_DIR/.env"; do
   [ -f "$_env" ] && load_env_file_safe "$_env" preserve
 done
+# The project env is TWO files and the registry names them — see lib/env-file.sh.
+load_project_env "$PROJECT_DIR" preserve || exit 1
 
 export EPAM_PROJECT_CONFIG_DIR="$PROJECT_DIR"
 export PROJECT_NAME

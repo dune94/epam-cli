@@ -40,19 +40,33 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-# Pipeline code only. Tests are excluded: a fixture naming a client is not a shipped fact.
-mapfile -t FILES < <({
-  find orchestrations/scripts orchestrations/plugins src \
-    -type f \( -name '*.sh' -o -name '*.js' -o -name '*.ts' \) 2>/dev/null
-  # THE ENGINE'S OWN DATA. Not a project's config — orchestrations/projects/* is where a
-  # project's facts belong and is deliberately absent. These are shipped defaults that apply to
-  # every project, which is exactly what an engine fact is.
-  find orchestrations/config orchestrations/agents \
-    -type f -name '*.json' 2>/dev/null
-} | grep -vE 'node_modules|\.venv|/dist/|\.test\.|\.spec\.' \
-  | grep -vE '/(tier[0-9]+-[a-z0-9-]+-run|mock[0-9]*-[a-z-]*run)\.sh$')
+# WHAT IS SCANNED IS DECLARED — config/hardcoding-audit-scope.json.
+#
+# This swept orchestrations/config and orchestrations/agents JSON too, on the argument that a
+# shipped default is an engine fact. It made the headline number unreadable: 205 of 658 sites
+# were llm-defaults.*.json naming the models it exists to name. Those files ARE the configuration
+# the engine reads, which is the opposite of a value baked into code.
+#
+# The scope lives in config so narrowing it shows up in review. Narrowing a scanner is how a
+# scanner comes to report clean while the defect is still there, so a test asserts this one still
+# finds engine sites.
+_AUDIT_SCOPE="${EPAM_HARDCODING_AUDIT_SCOPE:-$ROOT/orchestrations/config/hardcoding-audit-scope.json}"
+mapfile -t FILES < <(
+  "${NODE_BIN:-node}" -e '
+    const fs=require("fs"),path=require("path"),cp=require("child_process");
+    const cfg=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+    const out=[];
+    for (const s of cfg.scan) {
+      const args=[s.path,"-type","f","("];
+      s.types.forEach((t,i)=>{ if(i) args.push("-o"); args.push("-name","*."+t); });
+      args.push(")");
+      try { out.push(...cp.execFileSync("find",args,{encoding:"utf8"}).trim().split("\n")); } catch {}
+    }
+    const ex=(cfg.excludePatterns||[]).map(p=>new RegExp(p));
+    process.stdout.write(out.filter(Boolean).filter(f=>!ex.some(r=>r.test(f))).join("\n"));
+  ' "$_AUDIT_SCOPE" 2>/dev/null)
 
-SCOPE_DIRS="orchestrations/scripts orchestrations/plugins src orchestrations/config orchestrations/agents"
+SCOPE_DIRS="$("${NODE_BIN:-node}" -e 'const c=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));process.stdout.write(c.scan.map(s=>s.path).join(" "))' "$_AUDIT_SCOPE" 2>/dev/null)"
 CALIBRATION="test/fixtures/hardcoding/known-hardcoding.txt"
 # Per-project LAUNCHERS are exempt, exactly as test/unit/orchestration/engine-is-generic.test.ts
 # exempts them: a launcher exists to declare ONE project's facts — its branch, its codeline

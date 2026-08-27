@@ -85,7 +85,7 @@ run_inline_tc_writer_gate() {
     local _tc_gate_facts_len=0
     local _tc_gate_exit=0
     "$SCRIPT_DIR/update-monitor.sh" story_start "$story_id" "main" "tc-writer-agent" "TC Writer: $story_id" \
-        "${ORCH_GATE_PROVIDER:-}" "${ORCH_GATE_MODEL:-}" 2>/dev/null || true
+        "${ORCH_GATE_PROVIDER:-}" "${EPAM_MODEL:-}" 2>/dev/null || true
     # B23 — self-heal + MEDIUM-ladder escalation.
     # This loop already retried 3x, but every attempt used the SAME model with the
     # SAME prompt: no escalation, no corrective guidance. That is the pattern that
@@ -100,7 +100,7 @@ run_inline_tc_writer_gate() {
     # NO SUBSTITUTED MODEL. This ended `:-MiniMax-M3`, so a broken ladder wrote test criteria
     # on a model the run never chose — and the cost ledger then named the model it was TOLD to
     # use, not the one that ran. Refusing is loud and fixable.
-    local _tc_base_model="${ORCH_GATE_MODEL:-}"
+    local _tc_base_model="${EPAM_MODEL:-$(seam_model_or_fail "tc-writer" 2>/dev/null || true)}"
     if [ -z "$_tc_base_model" ]; then
         log "  [tc-writer] no model resolved for this seam — its ladder declares none, or the tier's chain is unset."
         log "  [tc-writer] Refusing to substitute one."
@@ -135,7 +135,7 @@ run_inline_tc_writer_gate() {
             fi
         fi
         log "  Story $story_id needs testCriteria — running TC writer inline before it starts... (attempt ${_tc_gate_attempt}/3, model ${_tc_model})"
-        ORCH_GATE_MODEL="$_tc_model" AI_MODEL="$_tc_model" \
+        AI_MODEL="$_tc_model" \
         bash "$SCRIPT_DIR/post-impl-tc-writer.sh" \
             --prd "$PRD_FILE" \
             --phase "$phase" \

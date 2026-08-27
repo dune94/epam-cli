@@ -10,7 +10,7 @@
     "NO PROJECT FACT BELONGS HERE. Under the target design a mint-time agent generates each project prompt using this template as its guide.",
     "v2, 2026-08-13: the scan_secrets example named a CLIENT environment variable. A project fact in a generic template becomes wrong output for every other project once a mint-time agent generates project prompts from it.",
     "2026-08-19: see code-review-cycle — unevidenced issues are discarded by code-review-json.py, so this seam must ask for evidence too.",
-    "2026-08-19: this seam is the ONLY reviewer the pipeline executes, and it received no prior verdict and no iteration number — zero occurrences of PRIOR or __ITERATION__ in team-lead-review.sh. Live AMSD-2041 run 2 it approved a story whose blocker it had raised and which had not changed since; the engine detected that and called an escalation function that does not exist. It never changed its mind — it was never told it had a mind to change. The history was already append-only in code-reviews.jsonl."
+    "2026-08-19: this seam is the ONLY reviewer the pipeline executes, and it received no prior verdict and no iteration number — zero occurrences of PRIOR or __ITERATION__ in team-lead-review.sh. A live brownfield run run 2 it approved a story whose blocker it had raised and which had not changed since; the engine detected that and called an escalation function that does not exist. It never changed its mind — it was never told it had a mind to change. The history was already append-only in code-reviews.jsonl."
   ],
   "placeholders": [
     "__BLOCKER_DISCIPLINE__",

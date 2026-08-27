@@ -52,13 +52,15 @@ done
 [ -z "$PROJECT" ] && { echo "Usage: detective-rerun.sh --project <name> [--codelines a,b] [--story ID] [--report] [--derive-config-candidates]" >&2; exit 1; }
 
 PROJECT_DIR="$(project_config_dir "$PROJECT" "$REPO_ROOT")" || exit 1
-CONFIG="$PROJECT_DIR/config.env"
-[ -f "$CONFIG" ] || { echo "Project config not found: $CONFIG" >&2; exit 1; }
+# The project's env is TWO files — the base, and the half the active provider set decides.
+# load_project_env asks the registry which they are; naming one here would load only the base
+# and silently drop the provider map and fallback model.
+[ -d "$PROJECT_DIR" ] || { echo "Project config dir not found: $PROJECT_DIR" >&2; exit 1; }
 
 # Same order as orchestrate.sh: the project config is loaded last so a shared secrets file
 # cannot clobber it with another project's connection settings.
 load_env_file_safe "$REPO_ROOT/.env"
-load_env_file_safe "$CONFIG"
+load_project_env "$PROJECT_DIR" || exit 1
 if [ -n "${SECRETS_FILE:-}" ]; then
   case "$SECRETS_FILE" in
     /*) _secrets_abs="$SECRETS_FILE" ;;

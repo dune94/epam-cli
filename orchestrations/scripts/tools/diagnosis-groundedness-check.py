@@ -57,32 +57,80 @@ def main() -> None:
 
     import os
 
-    # OpenRouter only, by design: this pipeline already routes its own gate/
-    # QA agents through OpenRouter-backed models (qwen/z-ai) rather than
-    # OpenAI or Anthropic directly (see .env: "Orchestration gate agents: use
-    # Qwen for all pipeline/QA agents (no Anthropic/OpenAI key needed)") --
-    # this judge should follow the same provider policy rather than
-    # introducing a second, independent API-key dependency.
-    judge_model = os.environ.get("DEEPEVAL_JUDGE_MODEL", "").strip() or "openai/gpt-4o-mini"
+    # THE JUDGE GOES THROUGH THE CENTRAL HANDLER, LIKE EVERY OTHER CALL.
+    #
+    # This constructed deepeval's OpenRouterModel from OPENROUTER_API_KEY and defaulted the
+    # judge to the literal "openai/gpt-4o-mini" — a second channel with its own credential and
+    # its own vendor, so a run on any other provider set still judged via OpenRouter. Worse,
+    # the free-run scrub writes a placeholder key that is TRUTHY, so the `if not key: skip`
+    # guard below passed and the vendor was called anyway.
+    #
+    # The handler resolves vendor, model and credential from the active provider set. This file
+    # names none of them.
+    judge_model = os.environ.get("DEEPEVAL_JUDGE_MODEL", "").strip() or os.environ.get("EPAM_MODEL", "").strip()
+    if not judge_model:
+        print(json.dumps({"skipped": True, "reason": "no judge model resolved from the seam ladder or DEEPEVAL_JUDGE_MODEL"}))
+        return
+
+    judge_provider = (os.environ.get("EPAM_ORCHESTRATION_PROVIDER", "")
+                      or os.environ.get("AI_PROVIDER", "")).strip()
+    if not judge_provider:
+        print(json.dumps({"skipped": True, "reason": "no provider configured — the provider set supplies EPAM_ORCHESTRATION_PROVIDER"}))
+        return
 
     try:
         from deepeval.metrics import GEval
         from deepeval.test_case import LLMTestCase, LLMTestCaseParams
+        from deepeval.models import DeepEvalBaseLLM
     except Exception as e:
         print(json.dumps({"skipped": True, "reason": f"deepeval not available: {e}"}))
         return
 
-    openrouter_key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("EPAM_API_KEY_OPENROUTER")
-    if not openrouter_key:
-        print(json.dumps({"skipped": True, "reason": "no OPENROUTER_API_KEY available for the judge model"}))
+    import subprocess
+
+    hub = os.environ.get("EPAM_LLM_HUB") or os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "llm-handler.sh")
+    if not os.path.exists(hub):
+        print(json.dumps({"skipped": True, "reason": f"llm handler not found at {hub}"}))
         return
 
-    try:
-        from deepeval.models import OpenRouterModel
+    class _HubModel(DeepEvalBaseLLM):
+        """deepeval talks to the pipeline's one handler, not to a vendor SDK."""
 
-        resolved_model = OpenRouterModel(model=judge_model, api_key=openrouter_key)
+        def __init__(self, model_name, provider, hub_path):
+            self._name = model_name
+            self._provider = provider
+            self._hub = hub_path
+            super().__init__(model_name)
+
+        def load_model(self):
+            return None
+
+        def generate(self, prompt: str, *args, **kwargs) -> str:
+            timeout_s = int(os.environ.get("DIAGNOSIS_JUDGE_TIMEOUT_SECS", "120"))
+            proc = subprocess.run(
+                ["bash", self._hub, "--provider", self._provider, "--model", self._name],
+                input=prompt, capture_output=True, text=True, timeout=timeout_s,
+            )
+            if proc.returncode != 0:
+                raise RuntimeError(f"llm handler exited {proc.returncode}: {(proc.stderr or '').strip()[:300]}")
+            out = (proc.stdout or "").strip()
+            # An empty answer is a FAILURE, never a quiet zero. A groundedness gate that scores
+            # silence would pass exactly the diagnoses it exists to catch.
+            if not out:
+                raise RuntimeError("llm handler returned an empty response")
+            return out
+
+        async def a_generate(self, prompt: str, *args, **kwargs) -> str:
+            return self.generate(prompt, *args, **kwargs)
+
+        def get_model_name(self):
+            return self._name
+
+    try:
+        resolved_model = _HubModel(judge_model, judge_provider, hub)
     except Exception as e:
-        print(json.dumps({"skipped": True, "reason": f"could not construct OpenRouter judge model: {e}"}))
+        print(json.dumps({"skipped": True, "reason": f"could not construct the judge model: {e}"}))
         return
 
     try:

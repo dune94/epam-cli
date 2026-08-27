@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# A service URL has one home: config/services.json, read through this helper.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/service-urls.sh" 2>/dev/null || true
+
 # Master orchestration script for parallel multi-agent execution
 # Coordinates worktree-based parallel Claude agents across all EPAM CLI project phases
 
@@ -297,14 +300,28 @@ fi
 # Load project .env so API keys are available to all subprocesses (worktrees, epam-run, etc.)
 # Preserve caller-set gate overrides so tier scripts can override .env defaults.
 _pre_gate_provider="${ORCH_GATE_PROVIDER:-}"
-_pre_gate_model="${ORCH_GATE_MODEL:-}"
 _env_file="$(dirname "$AUTOMATION_DIR")/.env"
-if [ -f "$_env_file" ]; then set -a; . "$_env_file"; set +a; fi
+# PARSED, NOT EXECUTED. `set -a; . "$_env_file"` RUNS the file, and this repo's .env begins
+# with a bare `cd` — which means "go to $HOME". That is precisely the defect
+# lib/env-file.sh was written to prevent, and this was the last site still doing it.
+#
+# It also made every cost guard useless: keys unset before launch were RESTORED here, so a
+# run told to use MockServer called the real API with a real key (2026-08-25, unapproved).
+#
+# Verified equivalent BEFORE the change: both mechanisms produce the SAME 80 variables from
+# the real .env. Only the executable side effects are lost, which is the point.
+# PRESERVE MODE: a value the CALLER set wins over .env. That is what this block already
+# wanted — the line below it hand-restores two variables for exactly this reason — but it
+# only protected those two, so every other caller-set value was silently overwritten.
+#
+# It is also the cost guard. Keys scrubbed before launch were RESTORED here, so a run told
+# to use MockServer called the real API with a real key (2026-08-25, unapproved spend).
+# With preserve, a placeholder set by the caller survives and cannot authenticate.
+if [ -f "$_env_file" ]; then load_env_file_safe "$_env_file" preserve; fi
 unset _env_file
 # Restore caller overrides (tier scripts set these intentionally; .env has stale defaults)
 [ -n "$_pre_gate_provider" ] && ORCH_GATE_PROVIDER="$_pre_gate_provider"
-[ -n "$_pre_gate_model"    ] && ORCH_GATE_MODEL="$_pre_gate_model"
-unset _pre_gate_provider _pre_gate_model
+unset _pre_gate_provider
 # When PRD_FILE is an external path (e.g. a test-app), derive PROJECT_ROOT from
 # the directory two levels above the PRD file (prd sits in <root>/orchestrations/ normally,
 # but for test apps it sits directly in the app root — detect via presence of package.json).
@@ -399,12 +416,21 @@ case "$PROFILES_REL" in
 esac
 # Select wrapper script based on PROVIDER override or CLAUDE_CMD
 case "${EPAM_ORCHESTRATION_PROVIDER:-${CLAUDE_CMD}}" in
-    codemie-claude) CLAUDE_SH="$SCRIPT_DIR/codemie-claude.sh" ;;
+    # Repointed 2026-08-25 at the MAINTAINED script. codemie-claude.sh was a fork of
+    # claude.sh that had fallen 10,712 lines behind, and it set STORY_MAX_TURNS=10/30 —
+    # a flag Claude Code 2.1.245 no longer accepts, so it would have failed outright.
+    # Provider selection still comes from config; only the wrapper mapping changed.
+    codemie-claude) CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
     copilot)        CLAUDE_SH="$SCRIPT_DIR/copilot.sh" ;;
     openai)         CLAUDE_SH="$SCRIPT_DIR/openai.sh" ;;
     qwen)           CLAUDE_SH="$SCRIPT_DIR/qwen.sh" ;;
     cursor)         CLAUDE_SH="$SCRIPT_DIR/cursor.sh" ;;
     codex)          CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
+    # Plain Claude Code, the same maintained script every other provider uses. Reached by
+    # the mockserver set, which redirects it at MockServer via ANTHROPIC_BASE_URL — a
+    # rehearsal must not go through the codemie wrapper, whose --base-url selects an SSO
+    # profile and would demand credentials the mock has no business holding.
+    claude)         CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
     *)
         error "Unknown EPAM_ORCHESTRATION_PROVIDER '${EPAM_ORCHESTRATION_PROVIDER:-}'. Set it to one of: qwen|openai|copilot|cursor|codex|codemie-claude|claude in your .env file."
         exit 1
@@ -455,6 +481,24 @@ export AGENT_IO_DIR="${AGENT_IO_DIR:-$LOG_DIR/agent-io}"
 # exists to remove.
 . "$SCRIPT_DIR/lib/phase-exit.sh" || { echo "[preflight] lib/phase-exit.sh failed to load — refusing to run" >&2; exit 1; }
 . "$SCRIPT_DIR/lib/cost-ledger.sh"
+
+# ── A FREE RUN MUST BE INCAPABLE OF BILLING ──────────────────────────────────
+# Gated here because this is the earliest point that knows BOTH the provider set and the project,
+# and it is before any seam runs.
+#
+# On 2026-08-25 a run was launched as "mocked, cannot cost anything" and every seam called the
+# real Anthropic API. The assurance rested on a dry run showing the mock redirect resolved, and on
+# no key being present in the LAUNCHER. Neither was what mattered: a live child had
+# ANTHROPIC_BASE_URL=UNSET and a real sk-ant- key, while MockServer sat at zero requests.
+#
+# The set declares whether it can spend. A set whose runner is plain `claude` pointed at a mock
+# has no business holding a vendor key, so this REFUSES rather than trusting the redirect.
+. "$SCRIPT_DIR/lib/free-run-guard.sh" 2>/dev/null || true
+if declare -f free_run_requested >/dev/null 2>&1 && free_run_requested; then
+    echo "[free-run-guard] EPAM_FREE_RUN is set — this run reaches no vendor; sealing credentials" >&2
+    scrub_paid_keys "$(dirname "$AUTOMATION_DIR")/.env" "$AUTOMATION_DIR/jira/.env"
+    assert_no_paid_key "${EPAM_PROJECT_CONFIG_DIR:-}" "$(dirname "$AUTOMATION_DIR")/.env" || exit 1
+fi
 if [ -n "${EPAM_RUN_MODE:-}" ]; then
     apply_run_mode "$EPAM_RUN_MODE" || exit 1
 fi
@@ -475,7 +519,6 @@ export PHASE
 [ -n "${EPAM_FINAL_FALLBACK_MODEL:-}" ] && export EPAM_FINAL_FALLBACK_MODEL
 [ -n "${EPAM_FINAL_FALLBACK_PROVIDER:-}" ] && export EPAM_FINAL_FALLBACK_PROVIDER
 [ -n "${ORCH_GATE_PROVIDER:-}" ] && export ORCH_GATE_PROVIDER
-[ -n "${ORCH_GATE_MODEL:-}" ] && export ORCH_GATE_MODEL
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
 if [ -n "${CLAUDE_CMD:-}" ]; then
     CLAUDE_CMD="$CLAUDE_CMD"
@@ -1547,7 +1590,6 @@ _run_qa_gate_with_retry() {
     local _qg_prompt="$1" _qg_agent="$2" _qg_phase="$3" _qg_log="$4"
     local _qg_max="${QA_GATE_MAX_RETRIES:-2}"
     local _qg_attempt=0
-    local _saved_gate_model="${ORCH_GATE_MODEL:-}"
     # Derive short agent slug for file-recovery search (strip "qa-gate:" prefix)
     local _qg_slug="${_qg_agent#qa-gate:}"
     while [ "$_qg_attempt" -lt "$_qg_max" ]; do
@@ -1637,7 +1679,6 @@ $_qg_prompt"
         fi
         if [ -z "$_qg_schema_reason" ] \
            && grep -qE '"(verdict|findings|agent|summary)"' "$_qg_log" 2>/dev/null; then
-            ORCH_GATE_MODEL="$_saved_gate_model"
             unset ORCH_AGENT_MODEL_CLIMB
             return 0
         fi
@@ -1665,8 +1706,7 @@ $_qg_prompt"
             warning "  [qa-gate] $_qg_agent wrote output to file instead of stdout — recovering from: $_qg_recovered"
             cat "$_qg_recovered" >> "$_qg_log"
             if grep -qE '"(verdict|findings|agent|summary)"' "$_qg_log" 2>/dev/null; then
-                ORCH_GATE_MODEL="$_saved_gate_model"
-                unset ORCH_AGENT_MODEL_CLIMB
+                    unset ORCH_AGENT_MODEL_CLIMB
                 return 0
             fi
         fi
@@ -1677,7 +1717,6 @@ $_qg_prompt"
         fi
         _qg_attempt=$(( _qg_attempt + 1 ))
     done
-    ORCH_GATE_MODEL="$_saved_gate_model"
     unset ORCH_AGENT_MODEL_CLIMB
     return 1
 }
@@ -4685,7 +4724,7 @@ if [ "$PHASE" != "infra_test" ]; then
             echo -e "  $(basename "$0") --phase infra_test"
             echo ""
             echo -e "${YELLOW}If infra_test has been run but status not updated, check:${NC}"
-            echo -e "  curl -s http://localhost:8090/api/stories | jq '[.[] | select(.phase==\"infra_test\") | {id,status,completed}]'"
+            echo -e "  curl -s $(service_url storyApi)/api/stories | jq '[.[] | select(.phase==\"infra_test\") | {id,status,completed}]'"
             echo ""
             exit 1
         fi
@@ -5898,14 +5937,14 @@ else
             ORCH_JSON_RESULT="$_mc_cost" \
             AI_GATE_ALLOW_TOOLS=1 \
             ${ORCH_GATE_PROVIDER:+AI_PROVIDER="$ORCH_GATE_PROVIDER"} \
-            ${ORCH_GATE_MODEL:+AI_MODEL="$ORCH_GATE_MODEL"} \
+            ${EPAM_MODEL:+AI_MODEL="$EPAM_MODEL"} \
             EPAM_DANGEROUS_SKIP_APPROVAL=1 \
             EPAM_MAX_TOOL_CALLS="${PRD_MODEL_COORDINATOR_MAX_TOOL_CALLS:-12}" \
             CLAUDE_CMD="$CLAUDE_CMD" \
             EPAM_CLI="${EPAM_CLI:-epam}" \
             "$AI_RUNNER_CMD" \
                 ${ORCH_GATE_PROVIDER:+--provider "$ORCH_GATE_PROVIDER"} \
-                ${ORCH_GATE_MODEL:+--model "$ORCH_GATE_MODEL"} \
+                ${EPAM_MODEL:+--model "$EPAM_MODEL"} \
             2>&1 | tee -a "$LOG_DIR/prd-model-coordinator-${_mc_phase}.log")
         # PIPESTATUS[0], not the pipeline status: without pipefail this is tee's, always 0, so a
         # failed coordinator read as a success and every story kept whatever model it had.
@@ -7280,7 +7319,6 @@ run_phase_assessment() {
     local assessment_log="$LOG_DIR/assessment-${phase_id}.log"
 
     local _pa_attempt=0 _pa_success=0 _pa_raw=""
-    local _saved_pa_model="${ORCH_GATE_MODEL:-}"
     local _saved_gate_timeout="${EPAM_GATE_TIMEOUT_SECS:-}"
     # No tools needed anymore (see comment above) — this is now a pure
     # text-in/JSON-out judgment call, same class as openspec/speckit. The
@@ -7322,7 +7360,6 @@ run_phase_assessment() {
         fi
         _pa_attempt=$(( _pa_attempt + 1 ))
     done
-    ORCH_GATE_MODEL="$_saved_pa_model"
     unset ORCH_AGENT_MODEL_CLIMB
     EPAM_GATE_TIMEOUT_SECS="$_saved_gate_timeout"
 
@@ -10857,7 +10894,7 @@ LOAD_GRAPH_SH="$SCRIPT_DIR/load-phase-graph.sh"
 if [ -f "$LOAD_GRAPH_SH" ]; then
     log "Step 7: Loading phase graph into Neo4j..."
     if PHASE="$PHASE" bash "$LOAD_GRAPH_SH" --phase "$PHASE" >> "$LOG_DIR/neo4j-import.log" 2>&1; then
-        success "Step 7: Phase graph loaded — Bloom: http://localhost:7474/browser/bloom"
+        success "Step 7: Phase graph loaded — Bloom: $(service_url phaseGraph)/browser/bloom"
     else
         warning "Step 7: Neo4j graph load skipped (Neo4j may not be running)"
     fi

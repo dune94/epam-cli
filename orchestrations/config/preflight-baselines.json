@@ -11,5 +11,5 @@
     "  uncalibratedGuards — handlers/scan-uncalibrated-guards.js  (blocking function no test names)"
   ],
   "duplicatedLiterals": 10,
-  "uncalibratedGuards": 36
+  "uncalibratedGuards": 31
 }

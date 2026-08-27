@@ -109,15 +109,21 @@ export EPAM_PROJECT_CONFIG_DIR="$_epam_cfg_dir"
 # the CALLER to remember to source this lost TZ=UTC, producing a false
 # "date formatting regression" on unrelated tests. Same pattern tier3-*-run.sh
 # already uses. Caller-exported values still win where config.env uses `:-`.
-_CONFIG_ENV="$EPAM_PROJECT_CONFIG_DIR/config.env"
-if [ -f "$_CONFIG_ENV" ]; then
-  echo "[writer-retest] Sourcing project config: $_CONFIG_ENV"
-  set -a
-  # shellcheck disable=SC1090
-  source "$_CONFIG_ENV"
-  set +a
+# shellcheck source=lib/env-file.sh
+. "$SCRIPT_DIR/lib/env-file.sh"
+
+# TWO FIXES IN ONE. This used to `source` the file, EXECUTING it — the defect class where a
+# bare `cd` in an env file sends the script to $HOME. load_project_env PARSES instead, and it
+# loads both halves: the base, and the half the active provider set decides.
+_CONFIG_DIR="$EPAM_PROJECT_CONFIG_DIR"
+if [ -d "$_CONFIG_DIR" ]; then
+  echo "[writer-retest] Loading project env from: $_CONFIG_DIR"
+  load_project_env "$_CONFIG_DIR" || {
+    echo "[writer-retest] project env could not be resolved — refusing to run with a partial one" >&2
+    exit 1
+  }
 else
-  echo "[writer-retest] WARNING: no config.env found at $_CONFIG_ENV — proceeding without project-specific settings (TZ, SEMBLE_ENABLED, etc. may be wrong)" >&2
+  echo "[writer-retest] WARNING: no project config dir at $_CONFIG_DIR — proceeding without project-specific settings (TZ, SEMBLE_ENABLED, etc. may be wrong)" >&2
 fi
 
 # Restore profiles.json from its clean canonical source before every run — otherwise

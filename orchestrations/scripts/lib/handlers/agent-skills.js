@@ -30,6 +30,15 @@
  */
 'use strict';
 
+// HOW LONG A LOCAL TOOL MAY TAKE IS DECLARED, not written here. This was the literal 20000 at
+// two call sites — one decision with two homes, so a codeline large enough to need longer got a
+// truncated scan in both, and raising it meant finding both.
+function localToolTimeoutMs(configPath) {
+  try {
+    return JSON.parse(require('fs').readFileSync(configPath, 'utf8')).timeouts.localToolMs;
+  } catch { return undefined; }
+}
+
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
@@ -56,7 +65,7 @@ function ecosystemOf(repo) {
   try {
     const out = execFileSync(process.execPath, [
       path.join(__dirname, 'codeline-ecosystem.js'), repo,
-    ], { encoding: 'utf8', timeout: 20000 });
+    ], { encoding: 'utf8', timeout: localToolTimeoutMs(path.join(__dirname, '..', '..', '..', 'config', 'spec-mode-defaults.json')) });
     return JSON.parse(out);
   } catch {
     return null;

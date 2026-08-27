@@ -28,7 +28,17 @@ function envAuth() {
   return `Basic ${Buffer.from(`${pub}:${sec}`).toString('base64')}`;
 }
 
-const BASE = () => process.env.LANGFUSE_BASE_URL || 'http://localhost:3100';
+// THE SERVICE'S URL HAS ONE HOME: config/services.json, which also names the override env var.
+// A literal fallback here was a second home — moving the service meant editing config AND
+// hunting for the literal, and wherever it was missed the literal won.
+function declaredServiceUrl(name) {
+  try {
+    const p = require('path').join(__dirname, '..', 'config', 'services.json');
+    const s = JSON.parse(require('fs').readFileSync(p, 'utf8')).services[name];
+    return (s.env && process.env[s.env]) || s.url;
+  } catch { return ''; }
+}
+const BASE = () => declaredServiceUrl('langfuse');
 
 async function api(pathAndQuery) {
   const url = `${BASE()}${pathAndQuery}`;

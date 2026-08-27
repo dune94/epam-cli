@@ -26,6 +26,10 @@
  */
 'use strict';
 
+// Local tool caps are DECLARED — config/tool-timeouts.json. A literal here would be a
+// second home for a decision that already has one.
+const { toolTimeoutMs } = require('./tool-timeouts.js');
+
 const fs = require('fs');
 const path = require('path');
 
@@ -63,7 +67,7 @@ function stackFacts() {
       : '';
     const out = execFileSync(process.execPath, [
       path.join(__dirname, 'handlers', 'stack-facts.js'), repo, roles,
-    ], { encoding: 'utf8', timeout: 15000 });
+    ], { encoding: 'utf8', timeout: toolTimeoutMs('promptRender') });
     _stackFacts = JSON.parse(out);
 
     // THE SKILL PICTURE, rendered for a reader. Same derivation as agent-skills.js — the ecosystem
@@ -74,7 +78,7 @@ function stackFacts() {
         process.env.EPAM_CODELINE_PATH || '',
         path.join(__dirname, '..', '..', 'agents'),
         process.env.EPAM_CODELINE_PATHS || process.env.PROJECT_ROOT || '',
-      ], { encoding: 'utf8', timeout: 20000 }));
+      ], { encoding: 'utf8', timeout: toolTimeoutMs('promptRender') }));
 
       const lines = [];
       for (const s of skills.stacks || []) {

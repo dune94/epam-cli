@@ -107,8 +107,27 @@ const PROVIDER = getArg('--provider', process.env.ORCH_GATE_PROVIDER || process.
 // No literal fallback: see lib/seam-model.js. An AC classification produced by a model the
 // run never chose still reads as authoritative.
 const { resolveOrRefuse } = require('./seam-model.js');
+
+/**
+ * THIS SEAM'S MODEL, FROM ITS OWN LADDER.
+ *
+ * Replaces process.env.ORCH_GATE_MODEL — a RUN-WIDE PIN that reached every seam unable to
+ * resolve one itself, which was all of them outside the story path. `.env` set it to
+ * z-ai/glm-5.2, so a mockserver run asked for an OpenRouter model and nothing else could
+ * supply a different answer.
+ *
+ * Returns '' when the ladder cannot answer, so resolveOrRefuse still REFUSES rather than
+ * substituting: "we could not tell" is never "it is fine".
+ */
+function seamLadderModel(seam) {
+  try {
+    const { seamInvocationEnv } = require('./seam-invocation.js');
+    const env = seamInvocationEnv(seam, undefined, { sourceEnv: process.env }) || {};
+    return env.EPAM_MODEL || '';
+  } catch { return ''; }
+}
 const MODEL   = resolveOrRefuse({ seam: 'ac-gate',
-  sources: [getArg('--model', ''), process.env.ORCH_GATE_MODEL, process.env.EPAM_MODEL] });
+  sources: [getArg('--model', ''), seamLadderModel('ac-classification'), process.env.EPAM_MODEL] });
 
 const ISSUES_PATH = getArg('--issues');
 const OUT_PATH    = getArg('--out', '');   // write JSON results to file instead of stdout

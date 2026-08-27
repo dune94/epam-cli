@@ -30,10 +30,43 @@ _ladder_rungs() {
     local _settings="${1:-}"
     [ -n "$_settings" ] && [ -f "$_settings" ] || return 1
     command -v jq >/dev/null 2>&1 || return 1
+
+    # READ WHAT THE PROJECT RESOLVES, not what its own file happens to hold.
+    #
+    # Ladders moved to the provider SET on 2026-08-25 — a ladder names MODELS and models belong
+    # to a stack, so the stack declares them and every project inherits. This read the project
+    # file directly and found nothing, so pre-flight reported "membership UNKNOWN, refusing to
+    # approve" and aborted the run. Correct refusal, wrong premise: the ladders exist, just not
+    # where this looked.
+    #
+    # Falls back to the raw file when node or the resolver is unavailable, which is exactly the
+    # behaviour before inheritance existed.
+    local _merged=""
+    if [ -n "${NODE_BIN:-}" ] || command -v node >/dev/null 2>&1; then
+        local _libdir _resolver
+        _libdir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd) || _libdir=""
+        _resolver="$_libdir/llm-settings-resolve.js"
+        if [ -n "$_libdir" ] && [ -f "$_resolver" ]; then
+            _merged="$(mktemp)"
+            if "${NODE_BIN:-node}" -e '
+              const { resolveLlmSettings } = require(process.argv[1]);
+              const path = require("path");
+              process.stdout.write(JSON.stringify(
+                resolveLlmSettings({ projectConfigDir: path.dirname(process.argv[2]) })));
+            ' "$_resolver" "$_settings" > "$_merged" 2>/dev/null && [ -s "$_merged" ]; then
+                _settings="$_merged"
+            else
+                rm -f "$_merged"; _merged=""
+            fi
+        fi
+    fi
+
     jq -r '
         [ (.ladders // {})[] | ((.modelLadder // [])[] | .from, .to), (.startModel // empty) ]
         | map(select(type == "string" and . != "")) | unique | .[]
     ' "$_settings" 2>/dev/null
+    [ -n "$_merged" ] && rm -f "$_merged"
+    return 0
 }
 
 # model_is_on_ladder <model> <llm-settings.json>

@@ -8769,6 +8769,14 @@ function runClaudeTimeoutMs(env) {
     + 'one rather than letting a call run unbounded or be cut off by a number nobody chose.');
 }
 
+/** The --model value out of an execSpec's argv, or '' when it names none. */
+function _modelFromArgs(execSpec) {
+  const args = execSpec && Array.isArray(execSpec.args) ? execSpec.args : null;
+  if (!args) return '';
+  const i = args.indexOf('--model');
+  return i >= 0 && i + 1 < args.length ? String(args[i + 1]) : '';
+}
+
 function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
   return new Promise((resolve, reject) => {
     const env = { ...process.env, ...envOverrides };
@@ -8816,7 +8824,15 @@ function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
           agent: opts.costAgent || envOverrides.SPEC_AGENT_NAME || 'spec-mode-agent',
           storyId: opts.costStoryId || '',
           phase: process.env.PHASE || '',
-          model: envOverrides.AI_MODEL || execSpec?.model || process.env.SPEC_MODE_MODEL || '',
+          // THE MODEL IS IN argv, NOT ON THE OBJECT. execSpec is { cmd, args: ['--provider', p,
+          // '--model', m] } — it has no .model property, so this resolved to '' for every call that
+          // did not also set AI_MODEL in its env. 37 of 38 rows in the 2026-08-26 mock3 ledger carried
+          // no model, which makes "what did each model cost" unanswerable from the ledger — on the
+          // tracking the operator calls priority #1.
+          //
+          // indexOf guarded: absent, it returns -1 and args[0] would record '--provider' as the model.
+          model: envOverrides.AI_MODEL || _modelFromArgs(execSpec)
+            || execSpec?.model || process.env.SPEC_MODE_MODEL || '',
           provider: execSpec?.provider || process.env.SPEC_MODE_PROVIDER || process.env.EPAM_ORCHESTRATION_PROVIDER || '',
         });
       } catch { /* cost emission must never break the agent call */ }

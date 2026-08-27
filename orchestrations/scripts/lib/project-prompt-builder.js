@@ -331,6 +331,43 @@ async function buildProjectPrompts({
   // that. One line here answers it instead of another run spent guessing.
   log(`[prompt-builder] templates read from ${templatesDir}`);
 
+  // ── REUSE: DO NOT PAY TWICE FOR THE SAME PROMPT ──────────────────────────────────────────
+  //
+  // The pre-run reset deletes <project>/prompts every run, so every prompt was regenerated from
+  // unchanged immutable templates. Measured on mock3 run 9: 29 prompts, $5.48 — 89% of the run's
+  // cost, before a single story was touched.
+  //
+  // The obstacle is __MINTED_ROLES__: the mint invents new role names every run, so a digest over
+  // all inputs never matches. But of run 9's 31 generated prompts only FOUR embed a minted role
+  // name. Whether a template's OUTPUT depends on the roster is a fact about that template, and it
+  // is knowable — after generating once, by looking at what it produced.
+  //
+  // Each entry records both digests and which one governs it: a prompt naming a minted role is
+  // regenerated when the roster changes, one that does not is reused. Nothing is guessed — a
+  // template not in the cache is always generated.
+  //
+  // The cache lives OUTSIDE prompts/ so the reset's clean slate is untouched. This is memoisation
+  // on an exact key, not surviving state.
+  const cacheDir = path.join(outDir, '..', '.prompt-cache');
+  const sha = (t) => crypto.createHash('sha256').update(String(t)).digest('hex');
+  const baseDigest = (t) => sha(JSON.stringify({ t, generatorBody, projectContext, codelineContext }));
+  const rolesDigest = sha(String(mintedRoles || ''));
+  const usesRoles = (doc, roles) => {
+    const names = String(roles || '').match(/[a-z][a-z0-9]*(?:-[a-z0-9]+)+/g) || [];
+    const body = JSON.stringify(doc);
+    return names.some((n) => body.includes(n));
+  };
+  const cacheRead = (id) => {
+    try { return JSON.parse(fs.readFileSync(path.join(cacheDir, `${id}.json`), 'utf8')); }
+    catch { return null; }
+  };
+  const cacheWrite = (id, entry) => {
+    try {
+      fs.mkdirSync(cacheDir, { recursive: true });
+      fs.writeFileSync(path.join(cacheDir, `${id}.json`), JSON.stringify(entry, null, 2) + '\n');
+    } catch { /* a cache that cannot be written costs money, never correctness */ }
+  };
+
   for (const id of generated) {
     const template = readJson(path.join(templatesDir, `${id}.json`));
     // Per-template, only when it could matter: a template whose seam name differs from its id is
@@ -338,6 +375,16 @@ async function buildProjectPrompts({
     if (Array.isArray(template.seams) && template.seams.some((sm) => sm !== template.id)) {
       log(`[prompt-builder] ${id}: template declares seams ${JSON.stringify(template.seams)}`);
     }
+    // REUSE, before any model time is spent.
+    const _base = baseDigest(template);
+    const _hit = cacheRead(id);
+    if (_hit && _hit.base === _base && (!_hit.usesRoles || _hit.roles === rolesDigest)) {
+      fs.writeFileSync(path.join(outDir, `${id}.json`), JSON.stringify(_hit.doc, null, 2) + '\n');
+      built.push(id);
+      log(`[prompt-builder] reused ${id} (inputs unchanged${_hit.usesRoles ? ', roster unchanged' : ''})`);
+      continue;
+    }
+
     let refusal = '';
     let callFailure = '';
     let installed = false;
@@ -402,6 +449,9 @@ async function buildProjectPrompts({
         fs.writeFileSync(path.join(outDir, `${id}.json`), JSON.stringify(doc, null, 2) + '\n');
         built.push(id);
         installed = true;
+        // Whether this template's OUTPUT depends on the roster is decided by looking at what it
+        // produced, not guessed from what it was handed.
+        cacheWrite(id, { base: _base, roles: rolesDigest, usesRoles: usesRoles(doc, mintedRoles), doc });
         log(`[prompt-builder] generated ${id} (attempt ${attempt}/${attempts})`);
         break;
       }

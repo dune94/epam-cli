@@ -1158,7 +1158,12 @@ if (require.main !== module) return;
 
     process.env.EPAM_AGENT_NAME = 'prompt-builder';
     // Opt-in per project; the registry's prompt-review.enabledBy names this variable.
-    const _promptReviewEnabled = String(process.env.EPAM_PROMPT_REVIEW_ENABLED || '') === '1';
+    // ON UNLESS A PROJECT EXPLICITLY TURNS IT OFF.
+    //
+    // This required an opt-in flag no project ever set, so every generated prompt in every run was
+    // installed UNREVIEWED — the one artefact every downstream agent inherits whole was the only
+    // one nobody checked. Absence of a flag is not a decision to skip the review.
+    const _promptReviewEnabled = String(process.env.EPAM_PROMPT_REVIEW_ENABLED ?? '1') !== '0';
     // Hoisted so the reviewer is handed exactly the codelines the generator was — a reviewer
     // checking claims against different facts than the writer saw is not a review.
     const _codelineContext = codelines
@@ -1263,7 +1268,16 @@ if (require.main !== module) return;
             } catch { return ''; }
           })(),
           __PROMPT_ID__: id,
-          __TEMPLATE_BODY__: (template && template.body) || '',
+          // A MULTI-BODY TEMPLATE HAS NO .body, AND THE REVIEWER MUST SEE THE SOURCE.
+          //
+          // 21 templates carry `bodies` instead of `body`. This read .body — undefined for every one
+          // of them — so the reviewer was handed an EMPTY source and asked to check a generated prompt
+          // against nothing. It cannot evidence a false claim that way, and would return a clean
+          // verdict that means nothing while costing a model call.
+          //
+          // Same shape as the join(undefined) comma that aborted runs 9 and 10. Uses the SAME helper
+          // the generator and the contract check use, so the readers cannot drift again.
+          __TEMPLATE_BODY__: require('./lib/project-prompt-builder.js').templateBodyText(template),
           __GENERATED_BODY__: (generated && generated.body) || '',
           __CODELINE_BLOCK__: _codelineContext,
           __TICKET_BLOCK__: (Array.isArray(stories) ? stories : [])

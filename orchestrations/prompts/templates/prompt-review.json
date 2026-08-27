@@ -38,7 +38,9 @@
     "__TOOL_LINE__"
   ],
   "mayBeEmpty": [
+    "__PERSONA__",
     "__PROMPT_ID__"
   ],
-  "$whyMayBeEmpty": "Declared 2026-08-27 by sweeping the CLASS rather than the instance, after three runs died on it one placeholder at a time. Every call site for these writes an explicit empty branch \u2014 the story is not being split, attempt one carries no forced-retry note, no documentation was fetched, the persona prefix is optional \u2014 so absence is a real state, which is the renderer's own test. Placeholders supplied by a lookup that may FAIL (`x || ''`) are deliberately NOT here: for those, empty means broken, and declaring them would hide the blank-brief defect the renderer exists to surface. Unanimity is required \u2014 one deliberate branch among several defensive lookups is not a licence."
+  "$whyMayBeEmpty": "Declared 2026-08-27 by sweeping the CLASS rather than the instance, after three runs died on it one placeholder at a time. Every call site for these writes an explicit empty branch \u2014 the story is not being split, attempt one carries no forced-retry note, no documentation was fetched, the persona prefix is optional \u2014 so absence is a real state, which is the renderer's own test. Placeholders supplied by a lookup that may FAIL (`x || ''`) are deliberately NOT here: for those, empty means broken, and declaring them would hide the blank-brief defect the renderer exists to surface. Unanimity is required \u2014 one deliberate branch among several defensive lookups is not a licence.",
+  "$whyPersonaMayBeEmpty": "The reviewer's own brief is optional and the supplier says so in as many words \u2014 'Absent is fine \u2014 the template's persona section is then simply empty'. The template did not declare it, so the renderer refused, and reviewPrompt caught the refusal and installed the prompt UNREVIEWED. profiles.json carries no 'prompt-review' persona at all, so that happened on EVERY prompt: turning the review on would have reviewed nothing while looking enabled. Found 2026-08-27 by running the reviewer live against a prompt containing a deliberate false claim."
 }

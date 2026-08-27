@@ -191,7 +191,7 @@ async function buildProjectPrompts({
     log('[prompt-builder] prompt review ENABLED — each generated prompt is falsified before install');
   } else {
     log('[prompt-builder] prompt review is OFF — generated prompts are installed NOT REVIEWED '
-      + '(set EPAM_PROMPT_REVIEW_ENABLED=1 in the project config to turn it on)');
+      + '(this project set EPAM_PROMPT_REVIEW_ENABLED=0 — review is ON by default)');
   }
 
   const boot = readJson(bootstrapFile);
@@ -415,6 +415,29 @@ async function buildProjectPrompts({
     } catch { /* a cache that cannot be written costs money, never correctness */ }
   };
 
+  // THE REVIEWER'S OWN PROMPT IS PROVISIONED FIRST, because it cannot review anything until it
+  // exists. In run 20260827T151832Z it was generated 32nd of 39: the first 31 prompts were
+  // handed to a reviewer whose prompt was not on disk yet, the render failed, and every one of
+  // them was installed UNREVIEWED — while the log said review was enabled.
+  //
+  // Ordering only. Nothing is skipped and nothing is generated twice; the reviewer is simply
+  // built before the artefacts it must judge.
+  // WHICH prompt is the reviewer's is DERIVED, never named here: it is the template run by the
+  // seam that produces the prompt verdict. A literal would put a seam's identity in engine code
+  // and go stale the moment the seam is renamed.
+  const _reviewerTemplate = (() => {
+    try {
+      const _reg = registryFile && fs.existsSync(registryFile) ? readJson(registryFile) : null;
+      for (const prof of Object.values((_reg && _reg.profiles) || {})) {
+        if (prof && prof.produces === 'prompt-verdict' && prof.template) return prof.template;
+      }
+    } catch { /* absent stays absent — provisioning order is then unchanged */ }
+    return '';
+  })();
+  if (_reviewerTemplate) {
+    generated = [...generated].sort((a, b) => (a === _reviewerTemplate ? -1
+      : b === _reviewerTemplate ? 1 : 0));
+  }
   for (const id of generated) {
     const template = readJson(path.join(templatesDir, `${id}.json`));
     // Per-template, only when it could matter: a template whose seam name differs from its id is
@@ -558,4 +581,7 @@ async function buildProjectPrompts({
   return { copied, generated: built };
 }
 
-module.exports = { buildProjectPrompts, renderGeneratorPrompt, provisioningList };
+module.exports = { buildProjectPrompts, renderGeneratorPrompt, provisioningList,
+  // Exported so the prompt REVIEWER reads a template the same way the generator and the
+  // contract check do. Three readers of one shape is how the last three of these drifted.
+  templateBodyText };

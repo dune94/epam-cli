@@ -1,23 +1,23 @@
 {
   "_doc": [
-    "Agent invocation profiles — the Parameter Object for every LLM call in the pipeline.",
+    "Agent invocation profiles \u2014 the Parameter Object for every LLM call in the pipeline.",
     "",
     "WHY THIS EXISTS. Before this file, all 15 invocation sites hand-assembled their own",
     "env bundle, and every site omitted a different subset: no shell site set a timeout,",
     "13 of 15 never set ORCH_JSON_RESULT (so per-agent cost was invisible), and 5 set no",
-    "output budget at all — which on 2026-07-25 made the team-lead reviewer emit 169 bytes",
+    "output budget at all \u2014 which on 2026-07-25 made the team-lead reviewer emit 169 bytes",
     "of truncated <think> instead of a verdict and blocked a metrolinx run. Each omission",
     "was found by a LIVE RUN, one at a time, because 'a call site forgot a parameter' is",
     "invisible to a test that checks behaviour one site at a time.",
     "",
     "THE FIX IS STRUCTURAL, NOT A DEFAULT. Call sites no longer pass execution parameters;",
     "they name a ROLE. lib/agent-invoke.sh resolves the role here, validates that every",
-    "required key is present (fail-fast — an incomplete profile aborts the run loudly",
+    "required key is present (fail-fast \u2014 an incomplete profile aborts the run loudly",
     "rather than silently running at 4096), and exports the whole set. You cannot forget a",
     "parameter you never supply.",
     "",
     "SPLIT OF CONCERNS. Routing (which model/provider, ladder escalation, retry tiers) stays",
-    "with the caller — it is genuinely per-site and dynamic. The EXECUTION BUDGET lives here.",
+    "with the caller \u2014 it is genuinely per-site and dynamic. The EXECUTION BUDGET lives here.",
     "That is precisely the parameter set that kept getting dropped.",
     "",
     "anything under ~8192 risks the model spending its whole allowance thinking and",
@@ -33,35 +33,35 @@
     "at exactly 16384, and glm-5.1 produced a LEGITIMATE 16,403-token completion.",
     "",
     "VENDOR-VERIFIED (live probes + docs): reasoning tokens are deducted from max_tokens",
-    "on glm-5.1, glm-5.2, kimi-k3 and minimax-m3 — probed with max_tokens:200, all four",
+    "on glm-5.1, glm-5.2, kimi-k3 and minimax-m3 \u2014 probed with max_tokens:200, all four",
     "spent the ENTIRE budget thinking and returned EMPTY content with HTTP 200. Moonshot",
     "documents 'set max_tokens >= 16000 ... without truncation'; OpenAI advises reserving",
     ">= 25,000; Anthropic 16,000+ for complex work. Artificial Analysis measures GLM-5.2",
     "at ~43k output per task, 37k of it reasoning.",
     "",
     "So 32768: above every call we have ever observed, above every vendor floor, and",
-    "safely under the LOWEST per-provider ceiling on OpenRouter (65,535 — glm-5.1 ranges",
+    "safely under the LOWEST per-provider ceiling on OpenRouter (65,535 \u2014 glm-5.1 ranges",
     "65,535-202,752 across providers and OpenRouter load-balances between them).",
     "",
     "Raising a cap costs NOTHING: max_tokens is a ceiling, not a reservation, and billing",
     "is on tokens generated. Median real output is 108 tokens. Capping low does not make",
-    "the model think less — it cuts it off mid-thought, and you pay for the wasted tokens",
+    "the model think less \u2014 it cuts it off mid-thought, and you pay for the wasted tokens",
     "AND the escalation retry. That is the 169-byte reviewer.",
     "",
     "reasoning.max_tokens is NOT supported on these models (probed: glm-5.1 ignores it).",
     "The only working lever is full off: reasoning:{enabled:false} (5.1) /",
     "reasoning:{effort:'none'} (5.2), both verified. Worth using for structured-JSON",
-    "gates that do not need deep reasoning — safer and cheaper than budget-tuning.",
-    "agentSeams and seamPatterns map a MINTED AGENT to its ARCHETYPE — the base agent it is an instance of.",
+    "gates that do not need deep reasoning \u2014 safer and cheaper than budget-tuning.",
+    "agentSeams and seamPatterns map a MINTED AGENT to its ARCHETYPE \u2014 the base agent it is an instance of.",
     "It is not a bag of invocation settings that happen to suit. The distinction matters because an archetype carries what an instance INHERITS; an implementer pointed at a diagnostician would inherit the wrong prompt, the wrong output kind and the wrong inputs."
   ],
-  "$agentKindsWhy": "WHAT KINDS OF AGENT EXIST, declared once. Two engine modules held this as a literal and disagreed — project-roster.js allowed 'seam' and agent-roster.js called it an unrecognised kind — so whether a roster entry validated depended on which module looked. A kind decides whether an agent may own a story and author code, which is not a fact the engine may hold two opinions about. Adding one is an edit here.",
+  "$agentKindsWhy": "WHAT KINDS OF AGENT EXIST, declared once. Two engine modules held this as a literal and disagreed \u2014 project-roster.js allowed 'seam' and agent-roster.js called it an unrecognised kind \u2014 so whether a roster entry validated depended on which module looked. A kind decides whether an agent may own a story and author code, which is not a fact the engine may hold two opinions about. Adding one is an edit here.",
   "agentKinds": [
     "implementer",
     "investigator",
     "seam"
   ],
-  "$agentKindMembershipWhy": "WHICH FILE'S MEMBERSHIP MAKES AN AGENT WHICH KIND. kindOfAgent resolved this POSITIONALLY — AGENT_KINDS[0] for project-roles, [1] for project-investigators — so reordering the kind list silently changed what every registered agent IS. Stated here instead, because the mapping is a fact and not an ordering.",
+  "$agentKindMembershipWhy": "WHICH FILE'S MEMBERSHIP MAKES AN AGENT WHICH KIND. kindOfAgent resolved this POSITIONALLY \u2014 AGENT_KINDS[0] for project-roles, [1] for project-investigators \u2014 so reordering the kind list silently changed what every registered agent IS. Stated here instead, because the mapping is a fact and not an ordering.",
   "agentKindMembership": {
     "implementer": "project-roles.json",
     "investigator": "project-investigators.json"
@@ -151,7 +151,7 @@
         {
           "kind": "fix-plan",
           "required": false,
-          "_note": "NOT required, for the same reason as story-writer: DET-1 made \"investigated, found nothing\" a legitimate state. A reproducing test is written from the failure, and requiring a plan would refuse the story on any codeline where the detective found nothing — a hard failure for a state the pipeline treats as normal."
+          "_note": "NOT required, for the same reason as story-writer: DET-1 made \"investigated, found nothing\" a legitimate state. A reproducing test is written from the failure, and requiring a plan would refuse the story on any codeline where the detective found nothing \u2014 a hard failure for a state the pipeline treats as normal."
         },
         {
           "kind": "ticket"
@@ -162,9 +162,9 @@
       ],
       "template": "repro-test-writer",
       "toolGrant": "write",
-      "_outputIsArtefact": "Writes a test FILE (toolGrant write, produces \"repro-test\"). Its success is the file existing and failing on the pre-fix baseline, which the repro gate checks — not a parsed response.",
+      "_outputIsArtefact": "Writes a test FILE (toolGrant write, produces \"repro-test\"). Its success is the file existing and failing on the pre-fix baseline, which the repro gate checks \u2014 not a parsed response.",
       "microQuestion": {
-        "$why": "This seam asks one narrow question mid-work — which of the touched files carries the behaviour a test should exercise. The answer is a single path, so it needs a fraction of the seam budget. It was written at the call site as EPAM_MAX_ITERATIONS=3 EPAM_MAX_OUTPUT_TOKENS=256, which outranked this declaration, appeared in no cost estimate, and meant changing the seam budget silently did nothing to that call.",
+        "$why": "This seam asks one narrow question mid-work \u2014 which of the touched files carries the behaviour a test should exercise. The answer is a single path, so it needs a fraction of the seam budget. It was written at the call site as EPAM_MAX_ITERATIONS=3 EPAM_MAX_OUTPUT_TOKENS=256, which outranked this declaration, appeared in no cost estimate, and meant changing the seam budget silently did nothing to that call.",
         "maxIterations": 3,
         "maxOutputTokens": 256
       }
@@ -242,7 +242,7 @@
       ],
       "template": "prd-change-summarizer-text",
       "toolGrant": "read-only",
-      "_outputIsArtefact": "Produces PROSE. Its template is prd-change-summarizer-text and the caller caps it with head -c and prints it verbatim into the rejection text — a JSON envelope would have to be stripped before use."
+      "_outputIsArtefact": "Produces PROSE. Its template is prd-change-summarizer-text and the caller caps it with head -c and prints it verbatim into the rejection text \u2014 a JSON envelope would have to be stripped before use."
     },
     "impl-failure-analyst": {
       "_what": "Diagnoses why an implementation attempt failed.",
@@ -322,7 +322,7 @@
       "template": "codeline-discovery",
       "toolGrant": "read-only",
       "layer": "bootstrap",
-      "_why_bootstrap": "renders during Jira ingest, from lib/codeline-discovery.js — before the mint provisions any project prompt, and after pre-run-reset has removed the previous run's."
+      "_why_bootstrap": "renders during Jira ingest, from lib/codeline-discovery.js \u2014 before the mint provisions any project prompt, and after pre-run-reset has removed the previous run's."
     },
     "roster-review": {
       "_what": "Falsifies the claims in a generated agent roster before any implementer inherits them.",
@@ -417,9 +417,9 @@
         {
           "kind": "fix-plan",
           "required": false,
-          "authority": "plan of record — apply it",
+          "authority": "plan of record \u2014 apply it",
           "framing": "fix-plan",
-          "_note": "NOT required: DET-1 made \"investigated, found nothing\" a legitimate state, and claude.sh has carried that reasoning since 2026-08-08. Requiring a plan would refuse to build prompts the pipeline is supposed to build. The authority under which the writer reads a plan that IS present lives in the story-writer prompt document, body \"fix-plan\" — prompt text belongs in a prompt file."
+          "_note": "NOT required: DET-1 made \"investigated, found nothing\" a legitimate state, and claude.sh has carried that reasoning since 2026-08-08. Requiring a plan would refuse to build prompts the pipeline is supposed to build. The authority under which the writer reads a plan that IS present lives in the story-writer prompt document, body \"fix-plan\" \u2014 prompt text belongs in a prompt file."
         },
         {
           "kind": "verification-criteria",
@@ -487,7 +487,7 @@
       "toolGrant": "execute"
     },
     "qa-gate:spec-validator": {
-      "_what": "Checks the change satisfies the story’s acceptance criteria.",
+      "_what": "Checks the change satisfies the story\u2019s acceptance criteria.",
       "maxOutputTokens": 16384,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
@@ -568,14 +568,14 @@
       "toolGrant": "execute"
     },
     "prompt-builder": {
-      "_what": "Provisions this project's prompt library: reads the generic templates and decorates each one for the project and the roster just minted. Runs at mint time, as part of the same stage that creates the agents the prompts are for — the only stage that knows both what the project is and who will work on it.",
+      "_what": "Provisions this project's prompt library: reads the generic templates and decorates each one for the project and the roster just minted. Runs at mint time, as part of the same stage that creates the agents the prompts are for \u2014 the only stage that knows both what the project is and who will work on it.",
       "ladder": "mid",
       "reasoningEffort": "high",
       "temperature": "0.2",
       "maxOutputTokens": 65536,
       "_why_maxOutputTokens": "DOUBLED WITH THE ARTEFACT IT HANDLES. roster-specialiser was raised to 65536 so it could emit all 57 canonical agents in one file; this seam handles that same artefact and was left at 32768. On 2026-08-24 two review batches were TRUNCATED mid-JSON (62,648 and 38,432 bytes) and reported as unexamined, which is indistinguishable from a malformed reply, so the judge was retried identically and failed the same way. A budget belongs to the artefact, not to one seam: a reviewer quotes canonical AND derived text, so it needs at least what the writer needs.",
       "timeoutSecs": 900,
-      "_toolNote": "READ ONLY, deliberately. The job is to read a template and decorate it; the template zone is the one immutable thing in this design, and an agent granted bash could rewrite the very files it is reading from. The engine performs the write, after the contract check — so a prompt that fails its contract is never installed.",
+      "_toolNote": "READ ONLY, deliberately. The job is to read a template and decorate it; the template zone is the one immutable thing in this design, and an agent granted bash could rewrite the very files it is reading from. The engine performs the write, after the contract check \u2014 so a prompt that fails its contract is never installed.",
       "produces": "project-prompts",
       "consumes": [
         {
@@ -586,14 +586,14 @@
         {
           "kind": "template",
           "required": true,
-          "authority": "the generic prompt to decorate — its placeholders are a contract, not a suggestion"
+          "authority": "the generic prompt to decorate \u2014 its placeholders are a contract, not a suggestion"
         }
       ],
       "template": "project-prompt-generation",
       "toolGrant": "read-only",
       "_outputIsArtefact": "Writes the project prompt FILES themselves (produces=project-prompts, via project-prompt-builder.js). Its output IS the minted prompt layer on disk, so the artefact is the deliverable.",
-      "_why_ladder": "Operator decision 2026-08-22. Specialising a prompt is largely RESTATEMENT — keep the rule, replace the generic noun with this project's — and the ceiling rung buys nothing for that, the same argument that put the TC writer on medium. The judgement half (what an agent must know about this codeline) is covered by the review pass, which runs on the generator's own rung.",
-      "$whyLadder": "Moved off 'top' 2026-08-26 (operator decision, cost). This seam DECORATES a template — it reads the generic body and rewrites it for this project. It judges nothing, so the rule that a reviewer runs on the writer's rung does not bind it. Measured that day: 29 calls, $5.48, 80% of a run's cost before a story was touched, and a measured haiku-vs-sonnet comparison put sonnet at ~11x the cost per unit of output. 'mid' starts on the cheap rung and escalates.\n\nSAFE BECAUSE THE OUTPUT IS CHECKED, NOT TRUSTED: project-prompt-contract.js refuses a generation that drops a placeholder, a paired output tag or an output field, feeds the reason back, and reviewPrompt runs a second adversarial pass. A weaker model that fumbles is caught and escalated, never shipped. The residual risk is a prompt that is structurally valid and substantively worse, which only the review pass can see — watch the refusal counts in the log."
+      "_why_ladder": "Operator decision 2026-08-22. Specialising a prompt is largely RESTATEMENT \u2014 keep the rule, replace the generic noun with this project's \u2014 and the ceiling rung buys nothing for that, the same argument that put the TC writer on medium. The judgement half (what an agent must know about this codeline) is covered by the review pass, which runs on the generator's own rung.",
+      "$whyLadder": "Moved off 'top' 2026-08-26 (operator decision, cost). This seam DECORATES a template \u2014 it reads the generic body and rewrites it for this project. It judges nothing, so the rule that a reviewer runs on the writer's rung does not bind it. Measured that day: 29 calls, $5.48, 80% of a run's cost before a story was touched, and a measured haiku-vs-sonnet comparison put sonnet at ~11x the cost per unit of output. 'mid' starts on the cheap rung and escalates.\n\nSAFE BECAUSE THE OUTPUT IS CHECKED, NOT TRUSTED: project-prompt-contract.js refuses a generation that drops a placeholder, a paired output tag or an output field, feeds the reason back, and reviewPrompt runs a second adversarial pass. A weaker model that fumbles is caught and escalated, never shipped. The residual risk is a prompt that is structurally valid and substantively worse, which only the review pass can see \u2014 watch the refusal counts in the log."
     },
     "codeline-bridge-agent": {
       "_what": "Extracts the exported surface of a completed codeline so a later lane's detective can read it. Producers run before consumers precisely so this exists when it is needed.",
@@ -634,7 +634,7 @@
     "agent-mint": {
       "_what": "Proposes the roster of agents this project needs, from its tickets and its codelines.",
       "maxOutputTokens": 65536,
-      "_why_maxOutputTokens": "The mint now reads the roster it is adding to — all 57 canonical agents by name, plus whatever this project has minted — so its prompt and the reasoning it has to do both grew. It also emits a 150-300 word systemPrompt per proposed role. Raised with its siblings that handle the roster; a truncated proposal is refused by mergeProjectAgents and the attempt is spent either way.",
+      "_why_maxOutputTokens": "The mint now reads the roster it is adding to \u2014 all 57 canonical agents by name, plus whatever this project has minted \u2014 so its prompt and the reasoning it has to do both grew. It also emits a 150-300 word systemPrompt per proposed role. Raised with its siblings that handle the roster; a truncated proposal is refused by mergeProjectAgents and the attempt is spent either way.",
       "reasoningEffort": "high",
       "timeoutSecs": 900,
       "ladder": "top",
@@ -683,7 +683,7 @@
       "toolGrant": "read-only"
     },
     "spec-agent": {
-      "_what": "Writes one story's specification — the openspec or speckit author.",
+      "_what": "Writes one story's specification \u2014 the openspec or speckit author.",
       "maxOutputTokens": 32768,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
@@ -747,13 +747,10 @@
       "template": "prd-model-coordinator",
       "toolGrant": "write",
       "_outputShapeIn": "MODEL_REVIEW",
-      "_outputShapeInWhy": "JSON Schema in lib/agent-output-schema.js (required: storyId, finalModel). The tag name matches no name rule, so the link cannot be derived — guard-vocabulary and ticket-links CAN be derived from their tags and carry no such note."
+      "_outputShapeInWhy": "JSON Schema in lib/agent-output-schema.js (required: storyId, finalModel). The tag name matches no name rule, so the link cannot be derived \u2014 guard-vocabulary and ticket-links CAN be derived from their tags and carry no such note."
     },
     "prompt-review": {
       "_what": "Falsifies what a generated project prompt claims about this project, before any agent inherits it.",
-      "optIn": true,
-      "enabledBy": "EPAM_PROMPT_REVIEW_ENABLED",
-      "_optInNote": "DECLARED, BUILT, AND NOT INVOKED BY DEFAULT. project-prompt-builder.js calls this behind an optional `reviewPrompt` parameter; a project turns it on by setting EPAM_PROMPT_REVIEW_ENABLED=1 in its config.env. Marked here because without the mark this seam is indistinguishable from one that always runs — it carries a template, a produces and three required inputs like any other — and an audit had to read the call site to discover that no project had ever switched it on.",
       "ladder": "mid",
       "reasoningEffort": "high",
       "temperature": "0.1",
@@ -779,11 +776,12 @@
         }
       ],
       "template": "prompt-review",
-      "_why_ladder": "Operator decision 2026-08-22. Specialising a prompt is largely RESTATEMENT — keep the rule, replace the generic noun with this project's — and the ceiling rung buys nothing for that, the same argument that put the TC writer on medium. The judgement half (what an agent must know about this codeline) is covered by the review pass, which runs on the generator's own rung."
+      "_why_ladder": "Operator decision 2026-08-22. Specialising a prompt is largely RESTATEMENT \u2014 keep the rule, replace the generic noun with this project's \u2014 and the ceiling rung buys nothing for that, the same argument that put the TC writer on medium. The judgement half (what an agent must know about this codeline) is covered by the review pass, which runs on the generator's own rung.",
+      "_whyAlwaysOn": "ON BY DEFAULT. This was declared opt-in behind EPAM_PROMPT_REVIEW_ENABLED and no project ever set it, so the one artefact every downstream agent inherits WHOLE \u2014 its prompt \u2014 was the only generated thing installed unexamined. Operator, 2026-08-27: prompt review is the single review that makes the most sense. A run that wants it off says so; absence is no longer silence."
     },
     "survey-review": {
       "_what": "Falsifies what the estate survey claims about the codelines, before a roster is minted from it.",
-      "_why": "The survey decided scope and seeded every investigator brief, and NOTHING consumed it for review — no seam declared it as an input, so its claims reached the roster unchallenged. A codeline was reported in_scope on a file it does not contain and an implementer was briefed accordingly. A generated prompt already gets this treatment; the survey had none.",
+      "_why": "The survey decided scope and seeded every investigator brief, and NOTHING consumed it for review \u2014 no seam declared it as an input, so its claims reached the roster unchallenged. A codeline was reported in_scope on a file it does not contain and an implementer was briefed accordingly. A generated prompt already gets this treatment; the survey had none.",
       "ladder": "top",
       "reasoningEffort": "high",
       "temperature": "0.1",
@@ -829,12 +827,12 @@
     },
     "roster-specialiser": {
       "_what": "Specialises the canonical roster into this project's own roster, writing it with its tools.",
-      "_why": "The canonical roster belongs to no project, so running it unchanged gave every project the same personas — a reviewer judged one codeline while describing another. This is the derivation step, and it is agentic because deciding what an agent must know about a codeline is judgement, not substitution.",
+      "_why": "The canonical roster belongs to no project, so running it unchanged gave every project the same personas \u2014 a reviewer judged one codeline while describing another. This is the derivation step, and it is agentic because deciding what an agent must know about a codeline is judgement, not substitution.",
       "ladder": "top",
       "reasoningEffort": "high",
       "timeoutSecs": 1800,
       "maxOutputTokens": 65536,
-      "_why_maxOutputTokens": "THE WHOLE CANONICAL ROSTER IS ONE ARTEFACT. This seam must emit every canonical agent in a single file — the contract in project-roster.js refuses a subset — and 57 specialised personas measure ~51k tokens. At the 32768 every other seam uses it produced 38 of 57 and stopped, which the roster contract then refused, so the stage burned its attempts on a budget that could not hold the answer.",
+      "_why_maxOutputTokens": "THE WHOLE CANONICAL ROSTER IS ONE ARTEFACT. This seam must emit every canonical agent in a single file \u2014 the contract in project-roster.js refuses a subset \u2014 and 57 specialised personas measure ~51k tokens. At the 32768 every other seam uses it produced 38 of 57 and stopped, which the roster contract then refused, so the stage burned its attempts on a budget that could not hold the answer.",
       "toolGrant": "write",
       "produces": "project-roster",
       "consumes": [
@@ -871,7 +869,7 @@
     },
     "topology-router": {
       "_what": "Chooses the execution topology for a phase: single, parallel or sequential worktrees.",
-      "_why": "Declared 2026-08-25. It was calling an LLM while matching NO seam, so resolveOrRefuse could never answer and the call threw at module load — every topology decision in every run was the count heuristic, silently. The count cannot see shared file scope, so four stories editing one file went to parallel worktrees.",
+      "_why": "Declared 2026-08-25. It was calling an LLM while matching NO seam, so resolveOrRefuse could never answer and the call threw at module load \u2014 every topology decision in every run was the count heuristic, silently. The count cannot see shared file scope, so four stories editing one file went to parallel worktrees.",
       "maxOutputTokens": 16384,
       "reasoningEffort": "medium",
       "timeoutSecs": 60,
@@ -888,14 +886,14 @@
       ],
       "template": "topology-router",
       "toolGrant": "none",
-      "$whyOutputBudget": "The base position's declared budget, shared with every peer at this rung. It was 1024, and reasoning tokens are billed as output: a medium-effort call could exhaust the budget before emitting a topology at all, and a truncated answer falls back to the count heuristic that cannot see shared file scope — the exact failure this agent was declared to fix."
+      "$whyOutputBudget": "The base position's declared budget, shared with every peer at this rung. It was 1024, and reasoning tokens are billed as output: a medium-effort call could exhaust the budget before emitting a topology at all, and a truncated answer falls back to the count heuristic that cannot see shared file scope \u2014 the exact failure this agent was declared to fix."
     }
   },
   "_seamResolution": [
-    "HOW ANY AGENT — INCLUDING ONE MINTED THIS RUN — FINDS ITS SEAM.",
+    "HOW ANY AGENT \u2014 INCLUDING ONE MINTED THIS RUN \u2014 FINDS ITS SEAM.",
     "A run mints agents whose names cannot exist in this file: gotransit-investigator,",
     "contentstack-live-preview-integration-engineer. On 2026-08-11 it minted 64 against 17 named",
-    "profiles, and every unnamed one resolved to {} — no ladder, no effort, no temperature, and",
+    "profiles, and every unnamed one resolved to {} \u2014 no ladder, no effort, no temperature, and",
     "nothing said so. Resolution is now TOTAL and is tried in this order:",
     "  1. profiles[<agent>]     the agent IS a seam",
     "  2. agentSeams[<agent>]   explicit cross-reference: this agent enters by this seam",
@@ -996,7 +994,7 @@
     {
       "match": "(^|-)engineer$",
       "seam": "story-writer",
-      "_why": "implements the story — the archetype it is an instance of, not merely a profile whose ladder matches",
+      "_why": "implements the story \u2014 the archetype it is an instance of, not merely a profile whose ladder matches",
       "kind": "implementer"
     },
     {
@@ -1007,7 +1005,7 @@
     {
       "match": "(^|-)fixer$",
       "seam": "story-writer",
-      "_why": "edits code in place to a minimal, idiomatic change — the writer archetype, not a reviewer",
+      "_why": "edits code in place to a minimal, idiomatic change \u2014 the writer archetype, not a reviewer",
       "kind": "implementer"
     }
   ],
@@ -1079,7 +1077,7 @@
     "dependency-contracts",
     "generated-prompt"
   ],
-  "_publishesVia": "An archetype carrying publishesVia=\"agent-io\" has been migrated onto the published-inputs framework: it renders its own output and publishes it. Required-input enforcement applies ONLY to kinds whose producer carries this marker — a kind still rendered the old way has nothing in the store, and refusing every prompt over that would stop the pipeline rather than migrate it. Each producer gains the marker as it moves; when every producer has one, the marker and this note go.",
+  "_publishesVia": "An archetype carrying publishesVia=\"agent-io\" has been migrated onto the published-inputs framework: it renders its own output and publishes it. Required-input enforcement applies ONLY to kinds whose producer carries this marker \u2014 a kind still rendered the old way has nothing in the store, and refusing every prompt over that would stop the pipeline rather than migrate it. Each producer gains the marker as it moves; when every producer has one, the marker and this note go.",
   "agentSeamOrigin": {
     "spec-coordinator-agent": "derived",
     "openspec-agent": "derived",
@@ -1137,7 +1135,7 @@
     "contentstack-live-preview-engineer": "derived",
     "metrolinx-contentstack-detective": "derived"
   },
-  "_ladderPositions": "A seam declares a POSITION in the project’s ladderTierOrder (base|mid|top), never a tier NAME. The project owns its tier vocabulary; the engine owns none. Converted 2026-08-15 after twenty seams asking for a literal HIGHEST ran unladdered on a project that declared only high and medium.",
+  "_ladderPositions": "A seam declares a POSITION in the project\u2019s ladderTierOrder (base|mid|top), never a tier NAME. The project owns its tier vocabulary; the engine owns none. Converted 2026-08-15 after twenty seams asking for a literal HIGHEST ran unladdered on a project that declared only high and medium.",
   "_defaultSeam": "REMOVED 2026-08-16. A project may declare EPAM_DEFAULT_SEAM in its config if it wants unmatched agents absorbed; the engine declares none, so an unmatched agent fails the mint loudly and is fixed with one line rather than discovered mid-run.",
   "_seamPatternForm": "Each rule matches a role word as a whole name OR as a suffix: (^|-)word$. They were all -word$, so a minted agent named for its role alone -- \"generator\", \"reviewer\", \"analyst\" -- matched nothing. While the engine carried a defaultSeam that was invisible: the agent silently became a planning agent. Minting models produce bare role names routinely, so the suffix-only form made the pattern set depend on a naming habit nothing enforces.",
   "_addedSeams": "codeline-bridge-agent and qa-gate:e2e added 2026-08-16. Both were invoked BY NAME by run-agent-orchestration.sh and had no profile at all, so each ran with no ladder, no effort and no tool grant -- the same gap lint-fixer had. Found by the prompt-chain test, which asks that every seam a template names actually exists.",
@@ -1147,8 +1145,8 @@
     "read-only to read_file,list_files,search,codegraph_query, the last from the plugin its codelines",
     "provision. A project without that plugin must never be handed a tool that does not exist.",
     "",
-    "Before this, nine seams carried a literal 'bash,read_file,list_files,search' — one project's",
-    "answer frozen into the engine — while twenty-seven declared nothing at all and their CALL SITES",
+    "Before this, nine seams carried a literal 'bash,read_file,list_files,search' \u2014 one project's",
+    "answer frozen into the engine \u2014 while twenty-seven declared nothing at all and their CALL SITES",
     "resolved a grant dynamically anyway. The registry both hardcoded and under-declared the same fact.",
     "",
     "Every kind here was READ OFF the grant that seam already receives, by",
@@ -1156,10 +1154,10 @@
     "Nothing was chosen: a seam whose grant could not be found is reported `unknown` and left unset."
   ],
   "_whyKindOnPatterns": [
-    "2026-08-17: seam resolution keyed off the NAME only — agentSeams, then these suffix patterns.",
+    "2026-08-17: seam resolution keyed off the NAME only \u2014 agentSeams, then these suffix patterns.",
     "Proposals now DECLARE kind (implementer|investigator), and resolution ignored the declaration",
     "in favour of guessing at the name shape. Run 20260817T181432Z minted exactly the right roster",
-    "and died: 'typescript-vitest-implementer resolves to no seam' — a correctly declared",
+    "and died: 'typescript-vitest-implementer resolves to no seam' \u2014 a correctly declared",
     "implementer refused because the heuristics know '-engineer' and '-fixer'. The roster is",
     "model-authored, so the NAME is never ours to rely on; the kind is stated outright.",
     "These rules already named the seam, so labelling them with the kind they represent adds no new",

@@ -659,8 +659,52 @@ _ai_attempt_timeout() {
   return "$_rc"
 }
 
+# THE HIGHER RUNG MUST BE TOLD WHAT THE LOWER ONE GOT WRONG.
+#
+# Escalation recorded the failure, stepped the rung, and handed the stronger model the IDENTICAL
+# prompt. So it re-derived the same answer from the same inputs with no idea what had just failed —
+# a parse error, a truncated reply, a refused tool call — and the extra money bought a second guess
+# rather than a correction. Same-rung retries already feed the reason back (refusalBlock in
+# prompt-builder and the mint, retryUntilParsed in discovery); ladder escalation, which is the
+# EXPENSIVE one, fed back nothing, for every agent.
+#
+# last_err already held the previous attempt's stderr. Nothing needed capturing; it needed passing.
+#
+# Rendered from the SAME previous-refusal template the content retries use, so an agent meets one
+# format however it is being corrected.
+_ai_prompt_with_failure() {
+  local _why="$1"
+  [ -n "$_why" ] || { printf '%s' "$PROMPT_FILE"; return 0; }
+
+  # NEVER PUT A CREDENTIAL IN A PROMPT. stderr is arbitrary text from a vendor CLI and has carried
+  # keys before; a prompt is the one place a leaked value is guaranteed to be transmitted.
+  _why="$(printf '%s' "$_why" | sed -E 's/(sk-[A-Za-z0-9_-]{8,}|ey[A-Za-z0-9_-]{20,}|[A-Za-z0-9_-]{32,})/[REDACTED]/g')"
+  # Bounded: the reason is diagnostic, not the payload, and an unbounded stderr can dwarf the
+  # prompt it is meant to annotate. The tail is kept — the error is at the end.
+  _why="$(printf '%s' "$_why" | tail -c 1200)"
+
+  local _blk _out
+  _blk="$("${NODE_BIN:-node}" -e '
+      try {
+        const { renderEngineTemplate } = require(process.argv[1] + "/lib/engine-prompt.js");
+        process.stdout.write(renderEngineTemplate("previous-refusal", {
+          __REASON__: process.argv[2], __ARTEFACT__: process.argv[3] || "answer",
+        }));
+      } catch (e) { process.stdout.write(""); }
+    ' "$_SCRIPT_DIR_AIRUN" "$_why" "${_LADDER_AGENT:-answer}" 2>/dev/null || printf '')"
+  [ -n "$_blk" ] || { printf '%s' "$PROMPT_FILE"; return 0; }
+
+  _out="$(mktemp "${TMPDIR:-/tmp}/prompt-retry-XXXXXX")"
+  cat "$PROMPT_FILE" > "$_out"
+  printf '%s\n' "$_blk" >> "$_out"
+  printf '%s' "$_out"
+}
+
+_ai_original_prompt_file="$PROMPT_FILE"
 for _call_attempt in $(seq 1 "$_ai_max_attempts"); do
 if [ "$_call_attempt" -gt 1 ]; then
+  # The prompt the escalated rung sees carries the previous rung's failure.
+  PROMPT_FILE="$(_ai_prompt_with_failure "${last_err:-}")"
   # Escalate before retrying: repeating the same model on the same prompt is the
   # same gamble, which is how run 9 lost its premise on a single bad response.
   # RECORD THE FAILURE, THEN ASK. The handler steps one rung per recorded failure along the chain

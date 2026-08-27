@@ -23,7 +23,13 @@
  *
  *   1. EXACT PROFILE      the agent is named in the registry
  *   2. DECLARED PATTERN   registry.seamPatterns maps a name shape to a seam
- *   3. DECLARED DEFAULT   registry.defaultSeam
+ *   3. DECLARED DEFAULT   EPAM_DEFAULT_SEAM, or opts.defaultSeam — NOT registry.defaultSeam.
+ *                         The engine ships no default (removed 2026-08-16, see _defaultSeam in
+ *                         the registry): an unmatched agent fails the mint loudly rather than
+ *                         being absorbed silently. A PROJECT that wants absorption declares the
+ *                         env var. This line used to name registry.defaultSeam, which the code
+ *                         has never read — a registry declaring that field is ignored in silence,
+ *                         which is precisely the failure mode the removal was meant to end.
  *   4. THROW              never {}
  *
  * A registry that declares neither a matching pattern nor a default cannot describe its own

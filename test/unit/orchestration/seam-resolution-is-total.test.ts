@@ -64,12 +64,28 @@ const withPatterns = {
   },
 };
 
-const env = { EPAM_MODEL_LADDER_HIGH: 'a=b|b=c', EPAM_MODEL_LADDER_MEDIUM: 'm=n' };
+// THE SHAPE A RUN REALLY HAS. This set the chains and no _START variables, and the START is a
+// SEPARATE export: model-ladders.sh exports EPAM_MODEL_LADDER_<TIER>_START beside the chain, and
+// without it seam_ladder_export sets no EPAM_MODEL at all. So the fixture exercised a shape no run
+// is ever in, and the seam resolved a chain but no model. The same gap is recorded in
+// every-declared-agent-is-wired.test.ts, which fixed it there first.
+const env = {
+  EPAM_MODEL_LADDER_HIGH: 'a=b|b=c', EPAM_MODEL_LADDER_HIGH_START: 'a',
+  EPAM_MODEL_LADDER_MEDIUM: 'm=n', EPAM_MODEL_LADDER_MEDIUM_START: 'm',
+  EPAM_MODEL_LADDER_TIER_ORDER: 'medium high',
+};
 
 describe('the shipped registry can never name a minted agent', () => {
   it('it lists far fewer profiles than a run mints', () => {
     const reg = JSON.parse(readFileSync(REGISTRY, 'utf8'));
-    expect(Object.keys(reg.profiles).length).toBeLessThan(30);
+    // DERIVED, NOT PINNED. This asserted "< 30" and the registry has grown to 40, so it failed
+    // for growing rather than for the thing it is about: the shipped list can never enumerate the
+    // agents a run mints, because those names do not exist until the mint runs.
+    const shipped = Object.keys(reg.profiles).filter((k) => !k.startsWith('$') && !k.startsWith('_'));
+    const mintedThisRun = ['a-fare-engineer', 'a-schedule-detective'];
+    for (const m of mintedThisRun) {
+      expect(shipped, `the registry names ${m}, which only a mint can create`).not.toContain(m);
+    }
     // The 2026-08-11 run minted 64.
   });
 });
@@ -100,7 +116,20 @@ describe('RESOLUTION IS TOTAL — a minted name still gets a seam', () => {
 
   it('an unmatched name falls to the DECLARED default', () => {
     const { resolveSeam } = load();
-    expect(resolveSeam('something-nobody-anticipated', registry(withPatterns))).toBe('cpa-inference');
+    // THE DEFAULT WAS REMOVED 2026-08-16, DELIBERATELY. The registry records why: "the engine
+    // declares none, so an unmatched agent fails the mint LOUDLY and is fixed with one line rather
+    // than discovered mid-run." This test predates that by four days and asserted the old design.
+    //
+    // The requirement it was written for survives: an unmatched name must never run unconfigured.
+    // What changed is the remedy — refusal instead of absorption.
+    expect(() => resolveSeam('something-nobody-anticipated', registry(withPatterns)))
+      .toThrow(/resolves to no seam/);
+
+    // And a project that WANTS absorption declares EPAM_DEFAULT_SEAM — the escape hatch the
+    // removal left in place. NOT registry.defaultSeam: the code has never read that field, so a
+    // registry declaring it is ignored in silence. The docstring claimed otherwise until today.
+    expect(resolveSeam('something-nobody-anticipated', registry(withPatterns),
+      { defaultSeam: 'cpa-inference' })).toBe('cpa-inference');
   });
 });
 
@@ -141,8 +170,11 @@ describe('AN UNRESOLVABLE SEAM IS A HARD FAILURE, NEVER SILENCE', () => {
 
   it('a default naming a profile that does not exist throws', () => {
     const { resolveSeam } = load();
-    const broken = registry({ defaultSeam: 'ghost', profiles: { a: { ladder: 'high' } } });
-    expect(() => resolveSeam('x', broken)).toThrow(/ghost/);
+    // Via the route the code actually reads. registry.defaultSeam is not consulted, so a broken
+    // default declared THERE cannot be detected at all — which is why the env var is the sanctioned
+    // way to declare one.
+    const reg = registry({ profiles: { a: { ladder: 'high' } } });
+    expect(() => resolveSeam('x', reg, { defaultSeam: 'ghost' })).toThrow(/ghost/);
   });
 
   it('a pattern naming a profile that does not exist throws', () => {
@@ -169,8 +201,23 @@ describe('NO AGENT OR SEAM NAME IS COMPILED INTO THE ENGINE', () => {
     const reg = JSON.parse(readFileSync(REGISTRY, 'utf8'));
     expect(Array.isArray(reg.seamPatterns), 'no seamPatterns declared — minted agents cannot resolve').toBe(true);
     expect(reg.seamPatterns.length).toBeGreaterThan(0);
-    expect(reg.defaultSeam, 'no defaultSeam declared').toBeTruthy();
-    expect(reg.profiles[reg.defaultSeam], 'defaultSeam names a profile that does not exist').toBeTruthy();
+    // The SHIPPED registry declares no default, on purpose — see the _defaultSeam note in it.
+    // Asserting one exists asserted the design that was replaced.
+    expect(reg.defaultSeam, 'the engine ships a default seam again — an unmatched agent would be '
+      + 'absorbed silently instead of failing the mint').toBeFalsy();
+    // The patterns are what make a MINTED name resolve, and they must cover the suffixes the mint
+    // really produces.
+    const suffixes = reg.seamPatterns.map((r) => r.match).join(' ');
+    for (const s of ['investigator', 'engineer']) {
+      expect(suffixes, `no pattern covers a minted -${s}`).toContain(s);
+    }
+    expect(String(reg._defaultSeam || ''), 'the removal is no longer recorded, so the next reader '
+      + 'will assume it was an oversight').toMatch(/REMOVED/);
+    // No default is shipped, so there is no default profile to validate. Kept as an explicit
+    // statement rather than deleted: if one is ever added back, it must name a real profile.
+    if (reg.defaultSeam) {
+      expect(reg.profiles[reg.defaultSeam], 'defaultSeam names a profile that does not exist').toBeTruthy();
+    }
     for (const p of reg.seamPatterns) {
       expect(reg.profiles[p.seam], `pattern '${p.match}' names missing profile '${p.seam}'`).toBeTruthy();
     }

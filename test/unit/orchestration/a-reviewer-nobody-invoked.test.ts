@@ -34,11 +34,21 @@ const REGISTRY = JSON.parse(
 const { buildProjectPrompts } = require(BUILDER);
 
 describe('a reviewer nobody invoked', () => {
-  it('THE REGISTRY MARKS IT OPT-IN — it no longer looks like a seam that always runs', () => {
+  it('THE REVIEWER RUNS BY DEFAULT — being opt-in is what made it never run', () => {
     const seam = REGISTRY.profiles['prompt-review'];
     expect(seam, 'prompt-review is not in the registry at all').toBeTruthy();
-    expect(seam.optIn, 'prompt-review reads as an always-on seam while nothing invokes it')
-      .toBe(true);
+    // THIS ASSERTION WAS INVERTED, AND THE INVERSION WAS THE DEFECT.
+    //
+    // It demanded `optIn: true`, reasoning that a seam nothing invoked should not read as
+    // always-on. That marked the problem instead of fixing it: no project ever set the switch,
+    // so the one artefact every downstream agent inherits WHOLE — its prompt — was the only
+    // generated thing installed unexamined, for the whole life of the pipeline.
+    //
+    // Absence of a flag is not a decision to skip a review. A project that wants it off says so
+    // with EPAM_PROMPT_REVIEW_ENABLED=0.
+    expect(seam.optIn, 'prompt-review is marked opt-in again — it will silently never run')
+      .not.toBe(true);
+    expect(seam.enabledBy, 'prompt-review is gated behind a switch again').toBeFalsy();
   });
 
   it('AND ONLY SEAMS THAT ARE ACTUALLY OPTIONAL CARRY THAT MARK', () => {
@@ -53,7 +63,10 @@ describe('a reviewer nobody invoked', () => {
     // A seam declared opt-in must name the env var that turns it on, and something must read it.
     const optIn = Object.entries(REGISTRY.profiles as Record<string, any>)
       .filter(([, p]) => p.optIn === true);
-    expect(optIn.length, 'nothing is marked opt-in, so this proves nothing').toBeGreaterThan(0);
+    // Nothing is opt-in today, which is the DESIRED state — prompt-review being opt-in is
+    // exactly what made it never run. The rule below still binds the moment something becomes
+    // opt-in again, which is what this test exists for.
+    if (!optIn.length) return;
     const src = readFileSync(MINT, 'utf8') + readFileSync(BUILDER, 'utf8');
     for (const [name, p] of optIn) {
       expect(p.enabledBy, `seam '${name}' is opt-in but names no switch`).toBeTruthy();

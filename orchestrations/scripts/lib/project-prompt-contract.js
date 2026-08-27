@@ -87,6 +87,61 @@ function checkGeneratedPrompt(template, generated) {
     return { ok: false, reason: `declares placeholder(s) it never uses: ${orphan.join(', ')}` };
   }
 
+  // 4. THE OUTPUT CONTRACT MUST SURVIVE GENERATION.
+  //
+  // A generated prompt may specialise anything about HOW an agent works — this project's
+  // codelines, its stack, its tools. It may not change what an ANSWER looks like, because the
+  // consumer that reads the answer was not regenerated with it.
+  //
+  // Checked because two real generations shipped without it. prompt-review lost
+  // <PROMPT_REVIEW>{"falseClaims": []}</PROMPT_REVIEW> while lib/prompt-review.js parses exactly
+  // that tag, so the reviewer's answer could never be read. skill-assessment-prephase lost every
+  // output key and came back half the length. Both are the run-8 shape: the agent obeys its
+  // prompt and the engine reads something else, and nothing can say which side is wrong.
+  //
+  // ADDITIONS ARE FINE. Only a LOSS is refused: the consumer still reads what the template
+  // promised, so dropping it is what breaks.
+  const tplBody = String((template && template.body) || Object.values((template && template.bodies) || {}).join('\n') || '');
+  const genBody = generated.body;
+
+  // Response tags — <PROMPT_REVIEW>, <SPEC_AGENT> — are how a consumer finds the answer at all.
+  // A RESPONSE TAG IS PAIRED. A VALUE PLACEHOLDER IS NOT.
+  //
+  // This took every <UPPERCASE> in the body. skill-assessment-prephase's instructions contain an
+  // example JSONL record — {"timestamp":"<ISO8601>", ...} — where <ISO8601> is a TYPE placeholder
+  // inside an illustration, not a marker any consumer looks for. The guard demanded the generated
+  // prompt reproduce it verbatim, the generator legitimately rephrased the example, and mock3
+  // run 9 exhausted all three attempts and failed the step after 29 prompts had succeeded.
+  //
+  // A tag a consumer parses always wraps something: <PROMPT_REVIEW>…</PROMPT_REVIEW>. Across all
+  // 117 templates that separates them exactly — 4 paired (DISCOVERY_VOCABULARY, MODEL_REVIEW,
+  // PROMPT_REVIEW, SPEC_REVIEW), 1 unpaired (ISO8601). So pairing is the discriminator, and it is
+  // derived from the template rather than an exception list that would go stale.
+  const tplTags = [...new Set(tplBody.match(/<[A-Z][A-Z0-9_]+>/g) || [])]
+    .filter((t) => tplBody.includes(`</${t.slice(1, -1)}>`))
+    .flatMap((t) => [t, `</${t.slice(1, -1)}>`]);
+  const lostTags = tplTags.filter((t) => !genBody.includes(t));
+  if (lostTags.length) {
+    return {
+      ok: false,
+      reason: `the generated prompt dropped the output tag(s) the template states: ${lostTags.join(', ')}. `
+        + 'The consumer looks for exactly that marker, so the answer would be unreadable however '
+        + 'good it is.',
+    };
+  }
+
+  // Field names the template states as part of its response shape.
+  const tplKeys = [...new Set((tplBody.match(/"([a-zA-Z][a-zA-Z0-9_]*)"\s*:/g) || [])
+    .map((m) => m.replace(/[":\s]/g, '')))];
+  const lostKeys = tplKeys.filter((k) => !genBody.includes(k));
+  if (lostKeys.length) {
+    return {
+      ok: false,
+      reason: `the generated prompt dropped output field(s) the template states: ${lostKeys.join(', ')}. `
+        + 'The consumer still reads them, so the agent would answer a shape nothing accepts.',
+    };
+  }
+
   return { ok: true, reason: '' };
 }
 

@@ -25,7 +25,22 @@ function storyNeedingContext(prd, phase) {
   return (prd.stories || []).find((s) => s
     && ids.includes(s.id)
     && s.status !== 'deprecated'
-    && !((((s.testCriteria || {}).facts) || []).length)) || null;
+    && !((((s.testCriteria || {}).facts) || []).length)
+    // NOT YET IS NOT BROKEN.
+    //
+    // A story needs TC context only once the evidence to brief FROM exists. Verification criteria
+    // are that evidence, and the specification pass produces them — so before that pass every
+    // story lacks TC facts, this selected one anyway, and the caller reported
+    // "EMPTY — the TC writer would be given nothing" about a stage that had not run.
+    //
+    // The check could therefore only pass in a narrow mid-run window, and on a CLEAN pre-run PRD it
+    // failed by construction. Live 2026-08-27: it passed at run 14's launch because the PRD still
+    // held the PREVIOUS run's output, and failed afterwards on a correctly reset one — reporting
+    // health on stale data and a defect on good data, exactly backwards.
+    //
+    // With criteria present and context still empty, this reports as before: that is a real defect,
+    // and the distinction is what the check exists to draw.
+    && ((s.verificationCriteria || []).length > 0)) || null;
 }
 
 function main() {

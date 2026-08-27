@@ -32,6 +32,7 @@
     "code-graph-detective"
   ],
   "mayBeEmpty": [
+    "__DETECTIVE_PROFILE__",
     "__SURVEY_HYPOTHESIS__"
   ],
   "$whyMayBeEmpty": "Declared 2026-08-27. The estate survey may reach no hypothesis for a story, and the detective can search a codeline without one \u2014 that is a real state, not a failed lookup. Undeclared, the render threw and the seam was skipped with 'code-graph-detective unavailable', which then left __FIX_SITE_BLOCK__ empty for the spec agent downstream."

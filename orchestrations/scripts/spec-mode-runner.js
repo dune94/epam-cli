@@ -6363,6 +6363,9 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
           const _sh = require('./lib/self-heal.js').selfHeal({
             agent: 'code-graph-detective', storyId: (story && story.id) || '',
             reason: 'no parseable JSON after the extraction phase', output: out, logDir,
+    // attemptModel is the rung this attempt actually ran on — the analyst heals on it.
+    model: attemptModel || '', provider: process.env.AI_PROVIDER || '',
+    projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR || '',
           });
           if (_sh.rc === 2) console.warn(`spec-mode: self-heal analyst FAILED for ${story.id} — attempt ${attempt + 1} has no corrective guidance`);
         } catch { /* a diagnostic must never fail the run it is diagnosing */ }

@@ -2,16 +2,16 @@
   "$why": [
     "Moved out of spec-mode-runner.js regenerateVcViaOpenspec on 2026-08-16.",
     "",
-    "The site block carries the detective's findings — the file and function the fix must touch.",
+    "The site block carries the detective's findings \u2014 the file and function the fix must touch.",
     "Withholding it is what makes regenerated criteria vague, so it is handed over whole.",
     "",
     "THE FORM SAMPLES NEARLY DISAPPEARED HERE. The original injected them conditionally; the",
     "capture ran with none configured, so the branch collapsed and the first template baked in",
-    "nothing at all — the worked examples could never have reached the agent again. A golden",
+    "nothing at all \u2014 the worked examples could never have reached the agent again. A golden",
     "capture only proves the branches the fixture exercises, and an existing test caught this",
     "where the byte comparison could not."
   ],
-  "body": "Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:\n__FLAG_LIST__\n__SITE_BLOCK__\n\nAcceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):\n__AC_LIST__\nDescription: __STORY_DESCRIPTION__\n\n__OBSERVABILITY_RULES__\n__FORM_SAMPLES__\nDo NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.\nOutput ONLY a JSON array of verification-criterion strings. No prose, no markdown.",
+  "body": "Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:\n__FLAG_LIST__\n__SITE_BLOCK__\n\nAcceptance criteria (IMMUTABLE \u2014 the intent to verify; do NOT restate as-is, VERIFY them):\n__AC_LIST__\nDescription: __STORY_DESCRIPTION__\n\n__OBSERVABILITY_RULES__\n__FORM_SAMPLES__\nDo NOT restate an acceptance criterion as-is \u2014 express what a tester OBSERVES that confirms it. Address every flag above.\nOutput ONLY a JSON array of verification-criterion strings. No prose, no markdown.",
   "description": "Regenerate verification criteria after a review flagged them.",
   "id": "vc-regenerate",
   "placeholders": [
@@ -25,5 +25,9 @@
   "version": 1,
   "seams": [
     "vc-coverage"
-  ]
+  ],
+  "mayBeEmpty": [
+    "__FORM_SAMPLES__"
+  ],
+  "$whyMayBeEmpty": "Declared 2026-08-27 by sweeping the CLASS rather than the instance, after three runs died on it one placeholder at a time. Every call site for these writes an explicit empty branch \u2014 the story is not being split, attempt one carries no forced-retry note, no documentation was fetched, the persona prefix is optional \u2014 so absence is a real state, which is the renderer's own test. Placeholders supplied by a lookup that may FAIL (`x || ''`) are deliberately NOT here: for those, empty means broken, and declaring them would hide the blank-brief defect the renderer exists to surface. Unanimity is required \u2014 one deliberate branch among several defensive lookups is not a licence."
 }

@@ -533,6 +533,9 @@ async function buildProjectPrompts({
         // eslint-disable-next-line global-require
         const _sh = require('./self-heal.js').selfHeal({
           agent: `prompt-builder:${id}`, reason: verdict.reason, output: body,
+    // The rung that produced it — without this the analyst declines and heals nothing.
+    model: process.env.EPAM_MODEL || '', provider: process.env.AI_PROVIDER || '',
+    projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR || '',
           context: `template ${id} requires: ${(template.placeholders || []).join(', ')}`,
         });
         if (_sh.rc === 2) log(`[prompt-builder] self-heal analyst FAILED for ${id} — attempt ${attempt + 1} has no corrective`);

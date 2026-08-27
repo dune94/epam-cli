@@ -118,6 +118,8 @@ function retryUntilParsed({ call, parse, attempts = 3, what = 'response', log = 
       // eslint-disable-next-line global-require
       const _sh = require('./self-heal.js').selfHeal({
         agent: what, reason, output: raw, context: _correctionNote(attempt, reason, raw),
+        model: process.env.EPAM_MODEL || '', provider: process.env.AI_PROVIDER || '',
+        projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR || '',
       });
       if (_sh.rc === 2) {
         // Reported, never inferred: the next attempt runs with no corrective guidance.
@@ -176,6 +178,8 @@ async function retryUntilParsedAsync({ call, parse, attempts = 3, what = 'respon
       // eslint-disable-next-line global-require
       const _sh = require('./self-heal.js').selfHeal({
         agent: what, reason, output: raw, context: _correctionNote(attempt, reason, raw),
+        model: process.env.EPAM_MODEL || '', provider: process.env.AI_PROVIDER || '',
+        projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR || '',
       });
       if (_sh.rc === 2) {
         // Reported, never inferred: the next attempt runs with no corrective guidance.

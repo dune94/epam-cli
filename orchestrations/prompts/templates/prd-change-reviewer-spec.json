@@ -11,7 +11,7 @@
     "never had, or take one away. Whether they SHOULD be one prompt is a decision about what",
     "each reviewer is told, not a refactor."
   ],
-  "body": "__REVIEWER_PROFILE__\n\nSTORY: __STORY_ID__\nCHANGE TYPE: __CHANGE_TYPE__\n__SPLIT_NOTE__\nBEFORE:\n__BEFORE__\n\nAFTER:\n__AFTER__\n\nYou have read-only tools available (list/search/read files, run read-only shell commands). Several of your rejection rules (\"introduces a technology this project does not already use,\" \"TC fact cannot be verified by reading source code\") require checking a claim against the real manifests/config/source of THIS codeline — do not judge those from the before/after snapshots alone. Verify before rejecting on that basis. Your tool budget is small — check the ONE fact your verdict depends on, not the whole codebase.\n\nEmit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[\"<issue1>\"],\"reason\":\"<15 words max>\"}",
+  "body": "__REVIEWER_PROFILE__\n\nSTORY: __STORY_ID__\nCHANGE TYPE: __CHANGE_TYPE__\n__SPLIT_NOTE__\nBEFORE:\n__BEFORE__\n\nAFTER:\n__AFTER__\n\nYou have read-only tools available (list/search/read files, run read-only shell commands). Several of your rejection rules (\"introduces a technology this project does not already use,\" \"TC fact cannot be verified by reading source code\") require checking a claim against the real manifests/config/source of THIS codeline \u2014 do not judge those from the before/after snapshots alone. Verify before rejecting on that basis. Your tool budget is small \u2014 check the ONE fact your verdict depends on, not the whole codebase.\n\nEmit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[\"<issue1>\"],\"reason\":\"<15 words max>\"}",
   "description": "Validate a proposed PRD change in the spec pass and return pass or fail.",
   "id": "prd-change-reviewer-spec",
   "placeholders": [
@@ -25,5 +25,9 @@
   "version": 1,
   "seams": [
     "prd-change-reviewer"
-  ]
+  ],
+  "mayBeEmpty": [
+    "__SPLIT_NOTE__"
+  ],
+  "$whyMayBeEmpty": "Declared 2026-08-27 by sweeping the CLASS rather than the instance, after three runs died on it one placeholder at a time. Every call site for these writes an explicit empty branch \u2014 the story is not being split, attempt one carries no forced-retry note, no documentation was fetched, the persona prefix is optional \u2014 so absence is a real state, which is the renderer's own test. Placeholders supplied by a lookup that may FAIL (`x || ''`) are deliberately NOT here: for those, empty means broken, and declaring them would hide the blank-brief defect the renderer exists to surface. Unanimity is required \u2014 one deliberate branch among several defensive lookups is not a licence."
 }

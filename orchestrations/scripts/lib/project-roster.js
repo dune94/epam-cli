@@ -418,6 +418,8 @@ async function buildProjectRoster({
         // eslint-disable-next-line global-require
         const _sh = require('./self-heal.js').selfHeal({
           agent: 'roster-specialiser', reason: lastReason, output: _produced, logDir,
+    model: process.env.EPAM_MODEL || '', provider: process.env.AI_PROVIDER || '',
+    projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR || '',
         });
         if (_sh.rc === 2) log(`[roster] self-heal analyst FAILED — attempt ${attempt + 1} has no corrective`);
       } catch { /* a diagnostic must never fail the run it is diagnosing */ }

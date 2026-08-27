@@ -3,11 +3,11 @@
     "Moved out of spec-mode-runner.js deriveGuardVocabulary on 2026-08-15 (4 of 20).",
     "",
     "The terms this returns feed a BM25/IDF ranker, so the prompt decides what the search",
-    "amplifies and what it demotes. It carries FOUR conditional sections — persona,",
-    "documentation, evidence and the CodeGraph verify block — each assembled by the caller and",
+    "amplifies and what it demotes. It carries FOUR conditional sections \u2014 persona,",
+    "documentation, evidence and the CodeGraph verify block \u2014 each assembled by the caller and",
     "arriving whole or empty. A template that branches is a program."
   ],
-  "body": "__PERSONA_PREFIX__GUARD SEAM: __SEAM__\n\nTHE RULE THIS GUARD ENFORCES:\n__RULE__\n\nTHE STATEMENTS THE GUARD WILL CHECK:\n__STATEMENT_LIST__\n\nDECLARED MANIFEST (the files this story says it will touch):\n__MANIFEST__\n\n__DOC_SECTION__CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):\n__EVIDENCE__\n\nSTORY CONTEXT:\nTitle: __STORY_TITLE__\nDescription: __STORY_DESCRIPTION__\n__CODEGRAPH_SECTION__",
+  "body": "__PERSONA_PREFIX__GUARD SEAM: __SEAM__\n\nTHE RULE THIS GUARD ENFORCES:\n__RULE__\n\nTHE STATEMENTS THE GUARD WILL CHECK:\n__STATEMENT_LIST__\n\nDECLARED MANIFEST (the files this story says it will touch):\n__MANIFEST__\n\n__DOC_SECTION__CODE EVIDENCE (real findings from this repository \u2014 ground truth; derive from these, not from your own knowledge of any library):\n__EVIDENCE__\n\nSTORY CONTEXT:\nTitle: __STORY_TITLE__\nDescription: __STORY_DESCRIPTION__\n__CODEGRAPH_SECTION__",
   "description": "Derive the vocabulary a guard uses, verified against the repository index.",
   "id": "guard-vocabulary",
   "placeholders": [
@@ -28,7 +28,9 @@
   ],
   "mayBeEmpty": [
     "__CODEGRAPH_SECTION__",
-    "__DOC_SECTION__"
+    "__DOC_SECTION__",
+    "__PERSONA_PREFIX__"
   ],
-  "$mayBeEmptyWhy": "Both are REAL absent states, and production passes '' for them: spec-mode-runner supplies __CODEGRAPH_SECTION__ only when a codegraph tool AND a repo path are present, and __DOC_SECTION__ only when the story references documents. Without this declaration the prompt layer refuses to render for any project that has not provisioned the codegraph plugin — deriveGuardVocabulary then returns null, which its own callers must read as 'the guard could not be armed'. So the guard silently disarmed itself on exactly the projects least likely to notice. Unlike a brief or a tool grant, an absent section here reads correctly as absent."
+  "$mayBeEmptyWhy": "Both are REAL absent states, and production passes '' for them: spec-mode-runner supplies __CODEGRAPH_SECTION__ only when a codegraph tool AND a repo path are present, and __DOC_SECTION__ only when the story references documents. Without this declaration the prompt layer refuses to render for any project that has not provisioned the codegraph plugin \u2014 deriveGuardVocabulary then returns null, which its own callers must read as 'the guard could not be armed'. So the guard silently disarmed itself on exactly the projects least likely to notice. Unlike a brief or a tool grant, an absent section here reads correctly as absent.",
+  "$whyMayBeEmpty": "Declared 2026-08-27 by sweeping the CLASS rather than the instance, after three runs died on it one placeholder at a time. Every call site for these writes an explicit empty branch \u2014 the story is not being split, attempt one carries no forced-retry note, no documentation was fetched, the persona prefix is optional \u2014 so absence is a real state, which is the renderer's own test. Placeholders supplied by a lookup that may FAIL (`x || ''`) are deliberately NOT here: for those, empty means broken, and declaring them would hide the blank-brief defect the renderer exists to surface. Unanimity is required \u2014 one deliberate branch among several defensive lookups is not a licence."
 }

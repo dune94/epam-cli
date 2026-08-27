@@ -2,10 +2,14 @@
   "id": "previous-refusal",
   "authority": "template",
   "_what": "What an agent is told when its previous attempt was refused, and it must produce the artefact again.",
-  "_why": "This text was written in JavaScript at three call sites — the roster stage, the prompt generator and the roster namer — each with its own wording. Model-facing prose in engine code is unreviewable in the prompt layer, invisible to the drift checks that hold every project copy to its template, and unchangeable per project. It is a fragment: no seam declares it, so it renders from here and is composed into the prompt that needed it.",
+  "_why": "This text was written in JavaScript at three call sites \u2014 the roster stage, the prompt generator and the roster namer \u2014 each with its own wording. Model-facing prose in engine code is unreviewable in the prompt layer, invisible to the drift checks that hold every project copy to its template, and unchangeable per project. It is a fragment: no seam declares it, so it renders from here and is composed into the prompt that needed it.",
   "placeholders": [
     "__ARTEFACT__",
     "__REASON__"
   ],
-  "body": "\n\n## Your previous attempt was REFUSED\n\n__REASON__\n\nProduce the __ARTEFACT__ again, correcting exactly this. Change nothing else: the rest of your previous attempt was accepted, and rewriting it invites a second refusal for a different reason.\n"
+  "body": "\n\n## Your previous attempt was REFUSED\n\n__REASON__\n\nProduce the __ARTEFACT__ again, correcting exactly this. Change nothing else: the rest of your previous attempt was accepted, and rewriting it invites a second refusal for a different reason.\n",
+  "mayBeEmpty": [
+    "__REASON__"
+  ],
+  "$whyMayBeEmpty": "Declared 2026-08-27 by sweeping the CLASS rather than the instance, after three runs died on it one placeholder at a time. Every call site for these writes an explicit empty branch \u2014 the story is not being split, attempt one carries no forced-retry note, no documentation was fetched, the persona prefix is optional \u2014 so absence is a real state, which is the renderer's own test. Placeholders supplied by a lookup that may FAIL (`x || ''`) are deliberately NOT here: for those, empty means broken, and declaring them would hide the blank-brief defect the renderer exists to surface. Unanimity is required \u2014 one deliberate branch among several defensive lookups is not a licence."
 }

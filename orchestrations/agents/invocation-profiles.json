@@ -754,7 +754,7 @@
       "ladder": "mid",
       "reasoningEffort": "high",
       "temperature": "0.1",
-      "maxOutputTokens": 32768,
+      "maxOutputTokens": 4096,
       "timeoutSecs": 900,
       "toolGrant": "read-only",
       "produces": "prompt-verdict",
@@ -777,7 +777,8 @@
       ],
       "template": "prompt-review",
       "_why_ladder": "Operator decision 2026-08-22. Specialising a prompt is largely RESTATEMENT \u2014 keep the rule, replace the generic noun with this project's \u2014 and the ceiling rung buys nothing for that, the same argument that put the TC writer on medium. The judgement half (what an agent must know about this codeline) is covered by the review pass, which runs on the generator's own rung.",
-      "_whyAlwaysOn": "ON BY DEFAULT. This was declared opt-in behind EPAM_PROMPT_REVIEW_ENABLED and no project ever set it, so the one artefact every downstream agent inherits WHOLE \u2014 its prompt \u2014 was the only generated thing installed unexamined. Operator, 2026-08-27: prompt review is the single review that makes the most sense. A run that wants it off says so; absence is no longer silence."
+      "_whyAlwaysOn": "ON BY DEFAULT. This was declared opt-in behind EPAM_PROMPT_REVIEW_ENABLED and no project ever set it, so the one artefact every downstream agent inherits WHOLE \u2014 its prompt \u2014 was the only generated thing installed unexamined. Operator, 2026-08-27: prompt review is the single review that makes the most sense. A run that wants it off says so; absence is no longer silence.",
+      "_whyMaxOutputTokens": "4096, down from 32768. The deliverable is a JSON block that is 52 characters when clean and a few hundred when it has findings; 32768 was room to narrate, and the model used it \u2014 3,366 output tokens per call, of which the consumer reads about 13. The budget still holds a verdict with several evidenced findings many times over, and no longer pays for prose that is discarded unread."
     },
     "survey-review": {
       "_what": "Falsifies what the estate survey claims about the codelines, before a roster is minted from it.",

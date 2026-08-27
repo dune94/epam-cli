@@ -98,7 +98,24 @@ function retryUntilParsed({ call, parse, attempts = 3, what = 'response', log = 
     //
     // The rung is the CALLER'S decision — only it knows which seam it speaks for — so this
     // hands over the attempt number and nothing else.
-    raw = call(_correctionNote(attempt, reason, raw), attempt);
+    // A CALL THAT THREW IS AN ATTEMPT, NOT THE END OF THE RUN.
+    //
+    // Live 2026-08-27, run 20260827T143143Z: the discovery agent wrapped its JSON in markdown
+    // fences, callLlm ran JSON.parse on it, threw, and the exception escaped this loop and
+    // killed the process — on attempt ONE of three, at the most ordinary failure a model has.
+    // The run then reported "codeline scope could not be resolved", naming the consequence
+    // and not the cause.
+    //
+    // A throw costs one attempt and is fed back like any other refusal. Nothing here knows
+    // about JSON: whatever the reason, the loop exists for an answer that came back unusable.
+    try {
+      raw = call(_correctionNote(attempt, reason, raw), attempt);
+    } catch (e) {
+      raw = '';
+      reason = `the call itself failed: ${(e && e.message) || e}`;
+      log(`[content-retry] ${what}: attempt ${attempt}/${budget} CALL FAILED — ${reason}`);
+      continue;
+    }
     const verdict = parse(raw) || { ok: false, reason: 'the parser returned nothing' };
     if (verdict.ok) {
       if (attempt > 1) log(`[content-retry] ${what}: recovered on attempt ${attempt}`);
@@ -158,7 +175,15 @@ async function retryUntilParsedAsync({ call, parse, attempts = 3, what = 'respon
     //
     // The rung is the CALLER'S decision — only it knows which seam it speaks for — so this
     // hands over the attempt number and nothing else.
-    raw = await call(_correctionNote(attempt, reason, raw), attempt);
+    // Same guard as the sync twin: a throwing call costs one attempt, never the run.
+    try {
+      raw = await call(_correctionNote(attempt, reason, raw), attempt);
+    } catch (e) {
+      raw = '';
+      reason = `the call itself failed: ${(e && e.message) || e}`;
+      log(`[content-retry] ${what}: attempt ${attempt}/${budget} CALL FAILED — ${reason}`);
+      continue;
+    }
     const verdict = parse(raw) || { ok: false, reason: 'the parser returned nothing' };
     if (verdict.ok) {
       if (attempt > 1) log(`[content-retry] ${what}: recovered on attempt ${attempt}`);

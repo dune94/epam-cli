@@ -327,6 +327,39 @@ function dropUngroundedCodelines(parsed) {
 // out of it. The vocabulary agent shares this seam deliberately — the same provider, the same
 // retry and ladder budget, the same stderr capture. A second hand-rolled spawn would be a
 // second set of failure modes to discover in production.
+/**
+ * THE FIRST BALANCED OBJECT, NOT THE WIDEST SPAN BETWEEN BRACES.
+ *
+ * This was a greedy /{...}/ match — first '{' to LAST '}'. A model that fences its JSON, or writes a
+ * sentence containing a brace afterwards, produced a match spanning both and JSON.parse threw.
+ *
+ * Live 2026-08-27, run 20260827T143143Z: fenced JSON, "Unexpected non-whitespace character after
+ * JSON at position 958", the throw escaped the retry loop and killed the run — which then reported
+ * "codeline scope could not be resolved", the consequence rather than the cause.
+ *
+ * Scans for balance and respects strings and escapes, so a '}' inside a value cannot end the object.
+ * Returns '' when there is no object: absent stays absent rather than becoming a guess.
+ */
+function extractJsonObject(text) {
+  const s = String(text == null ? '' : text);
+  const start = s.indexOf('{');
+  if (start < 0) return '';
+  let depth = 0; let inStr = false; let esc = false;
+  for (let i = start; i < s.length; i += 1) {
+    const c = s[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === '\\') esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') { inStr = true; continue; }
+    if (c === '{') depth += 1;
+    else if (c === '}') { depth -= 1; if (depth === 0) return s.slice(start, i + 1); }
+  }
+  return '';
+}
+
 function callLlm(prompt, opts = {}) {
   const tmpPrompt = `/tmp/codeline-discovery-prompt-${process.pid}.txt`;
   fs.writeFileSync(tmpPrompt, prompt);
@@ -454,10 +487,10 @@ function callLlm(prompt, opts = {}) {
 
     if (opts.rawText) return raw;
 
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error(`No JSON in LLM response: ${raw.slice(0, 200)}`);
+    const jsonText = extractJsonObject(raw);
+    if (!jsonText) throw new Error(`No JSON in LLM response: ${raw.slice(0, 200)}`);
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    const parsed = JSON.parse(jsonText);
     if (debug) log(`DEBUG parsed codelines: ${JSON.stringify(parsed.codelines)}`);
     // The model decides WHICH repositories are in scope and why. It does not get to name
     // them: a codeline name is a primary key (byCodeline, the KB stores, story.codelines,
@@ -481,6 +514,8 @@ function callLlm(prompt, opts = {}) {
 // migration has to be provable byte-for-byte — which means a test must be able to call the
 // builder. An unguarded IIFE runs a whole discovery pass the moment anything requires this.
 module.exports = {
+  // Exported so the extraction rule is assertable without a model call.
+  extractJsonObject,
   buildDiscoveryPrompt, buildRepoManifest };
 
 if (require.main !== module) return;

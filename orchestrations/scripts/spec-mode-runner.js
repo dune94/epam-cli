@@ -8780,6 +8780,28 @@ function _modelFromArgs(execSpec) {
 function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
   return new Promise((resolve, reject) => {
     const env = { ...process.env, ...envOverrides };
+
+    // THE SEAM'S RESOLVED MODEL MUST REACH THE RUNNER, OR THE LADDER IS DECORATION.
+    //
+    // resolvePromptExec builds the execSpec ONCE at startup from process.env, where AI_MODEL and
+    // EPAM_MODEL are both empty — so argv carries no --model. The hub only reads AI_MODEL, and
+    // nothing bridged EPAM_MODEL to it. Every runClaude seam therefore ran on Claude Code's OWN
+    // default model, not the rung its ladder resolved, and could not escalate: there was no
+    // starting rung to escalate from.
+    //
+    // Proven three ways on 2026-08-26: the seam resolved claude-haiku-4-5 while argv held only
+    // ["--provider","claude"]; a stubbed runner with EPAM_MODEL set in the env received no
+    // --model at all; and the same call with --model passed explicitly received it intact. So the
+    // plumbing was sound and the value was simply never put in. It is why moving prompt-builder to
+    // the cheap rung changed nothing and cost stayed at $0.111/call against haiku's measured
+    // $0.039, and why every cost row carried a blank model.
+    //
+    // argv WINS. A caller that named a model meant it; this only fills the gap when none was
+    // named, so per-call overrides and the escalation ladder both keep working.
+    if (!env.AI_MODEL && !_modelFromArgs(execSpec) && env.EPAM_MODEL) {
+      env.AI_MODEL = env.EPAM_MODEL;
+    }
+
     // THIS RUNNER KEEPS ITS OWN COST LEDGER, so the hub must not write a second row for the same
     // call. Both fired before, and the 2026-08-26 mock3 ledger held 10 rows for 5 calls — a naive
     // sum reported $2.57 against $1.29 actually billed. The hub still records for every caller

@@ -471,14 +471,23 @@ function budgetFor(profile, ctx) {
  * describing the old shape.
  */
 function outputContractForSeam(seamName) {
-  let defs; let src; let render;
+  let defs; let render; let sources = [];
   try {
     // eslint-disable-next-line global-require
     defs = require(path.join(__dirname, 'spec-mode-runner.js'));
     render = defs.outputContractFor;
-    src = fs.readFileSync(path.join(__dirname, 'spec-mode-runner.js'), 'utf8');
+    // EVERY FILE THAT INVOKES A SEAM, not just the biggest one. prompt-review is invoked from
+    // mint-agents-step.js, which this never opened — so its contract was never found and a
+    // healthy seam reported "it did not examine anything". Listed by what they ARE (callers of
+    // seamInvocationEnv), so a new invoking file is found rather than remembered.
+    for (const f of fs.readdirSync(__dirname)) {
+      if (!f.endsWith('.js')) continue;
+      const txt = fs.readFileSync(path.join(__dirname, f), 'utf8');
+      if (txt.includes('seamInvocationEnv(')) sources.push(txt);
+    }
   } catch { return ''; }
-  if (typeof render !== 'function') return '';
+  if (typeof render !== 'function' || !sources.length) return '';
+  const src = sources.join('\n');
 
   const re = new RegExp(`seamInvocationEnv\\(\\s*['"\`]${seamName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"\`]`, 'g');
   let m;

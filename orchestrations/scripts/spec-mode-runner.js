@@ -9680,6 +9680,12 @@ module.exports = {
   // "it did not examine anything". Re-implementing it in the harness would be a second copy to
   // keep right — the defect this file keeps meeting.
   outputContractFor,
+  // Exported for the same reason as outputContractFor: agent-check discovers a seam's output
+  // contract from the (TOOL_X, 'TAG') pair at its call site, and can only render it if the
+  // definition is reachable. TOOL_TICKET_LINKS was the one binding left unexported, so
+  // ticket-links reported "the reply carries no JSON" while production appended its contract
+  // correctly — a harness failure indistinguishable from a broken agent.
+  TOOL_TICKET_LINKS,
   reviewSurvey,
   rosterCoverageBlock,
   runClaudeTimeoutMs,

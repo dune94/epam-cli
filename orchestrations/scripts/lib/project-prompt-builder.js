@@ -60,8 +60,8 @@ function templateBodyText(template) {
 
 function renderGeneratorPrompt({ generatorBody, template, projectContext, codelineContext, mintedRoles, refusal }) {
   let out = generatorBody
-    .split('__TEMPLATE_ID__').join(template.id)
-    .split('__TEMPLATE_DESCRIPTION__').join(template.description || '')
+    .split('__GEN_TEMPLATE_ID__').join(template.id)
+    .split('__GEN_TEMPLATE_DESCRIPTION__').join(template.description || '')
     // A MULTI-BODY TEMPLATE HAS NO .body, AND join(undefined) IS A COMMA.
     //
     // 21 templates carry `bodies` instead of `body`. This read template.body — undefined for every
@@ -77,15 +77,15 @@ function renderGeneratorPrompt({ generatorBody, template, projectContext, codeli
     // Joined the way checkGeneratedPrompt already joins them, so the text the model is given and
     // the text its output is checked against are the same text. Two readers of one template that
     // disagree is the defect this whole file keeps meeting.
-    .split('__TEMPLATE_PLACEHOLDERS__').join((template.placeholders || []).join(', ') || '(none)')
+    .split('__GEN_TEMPLATE_PLACEHOLDERS__').join((template.placeholders || []).join(', ') || '(none)')
     // THE SAME LIST THE CONTRACT CHECK WILL JUDGE IT AGAINST, from the same function, so the
     // generator cannot be refused for losing a field it was never told about.
-    .split('__TEMPLATE_OUTPUT_FIELDS__').join(
+    .split('__GEN_TEMPLATE_OUTPUT_FIELDS__').join(
       // eslint-disable-next-line global-require
       (require('./project-prompt-contract.js').outputFieldsIn(templateBodyText(template)) || []).join(', ') || '(none)')
-    .split('__PROJECT_CONTEXT__').join(projectContext || '')
-    .split('__CODELINE_CONTEXT__').join(codelineContext || '')
-    .split('__MINTED_ROLES__').join(mintedRoles || '')
+    .split('__GEN_PROJECT_CONTEXT__').join(projectContext || '')
+    .split('__GEN_CODELINE_CONTEXT__').join(codelineContext || '')
+    .split('__GEN_MINTED_ROLES__').join(mintedRoles || '')
     // THE RETRY MUST BE TOLD WHY — re-sending an identical instruction gets an identical answer,
     // and the refusal is the only new information the next attempt has. The words that carry it
     // are the GENERATOR PROMPT'S, not this file's: they used to be appended here in JavaScript,
@@ -94,7 +94,7 @@ function renderGeneratorPrompt({ generatorBody, template, projectContext, codeli
     //
     // An absent refusal substitutes empty, so a first attempt carries no heading for a refusal
     // that never happened.
-    .split('__PREVIOUS_REFUSAL__').join(refusalBlock(refusal, 'prompt'));
+    .split('__GEN_PREVIOUS_REFUSAL__').join(refusalBlock(refusal, 'prompt'));
 
   // THE TEMPLATE BODY GOES IN LAST, AND THIS ORDER IS THE WHOLE POINT.
   //
@@ -111,7 +111,7 @@ function renderGeneratorPrompt({ generatorBody, template, projectContext, codeli
   //
   // Substituted last, the body is inert text by the time it arrives: nothing after this line can
   // reach inside it.
-  out = out.split('__TEMPLATE_BODY__').join(templateBodyText(template));
+  out = out.split('__GEN_TEMPLATE_BODY__').join(templateBodyText(template));
   return out;
 }
 

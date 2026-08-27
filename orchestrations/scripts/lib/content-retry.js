@@ -88,7 +88,17 @@ function retryUntilParsed({ call, parse, attempts = 3, what = 'response', log = 
   let reason = '';
 
   for (let attempt = 1; attempt <= budget; attempt += 1) {
-    raw = call(_correctionNote(attempt, reason, raw));
+    // THE ATTEMPT TRAVELS WITH THE CALL, so a caller can climb its ladder.
+    //
+    // This passed only the correction note, so every caller re-invoked the SAME model and the
+    // retry was the same coin flipped again. Live 2026-08-27: prompt-builder refused a template
+    // three times, attempts 1 and 2 dropping the identical placeholders, and the run died with
+    // two stronger rungs unused. Telling a model what it got wrong is half a retry; the other
+    // half is asking a model that can do better.
+    //
+    // The rung is the CALLER'S decision — only it knows which seam it speaks for — so this
+    // hands over the attempt number and nothing else.
+    raw = call(_correctionNote(attempt, reason, raw), attempt);
     const verdict = parse(raw) || { ok: false, reason: 'the parser returned nothing' };
     if (verdict.ok) {
       if (attempt > 1) log(`[content-retry] ${what}: recovered on attempt ${attempt}`);
@@ -118,7 +128,17 @@ async function retryUntilParsedAsync({ call, parse, attempts = 3, what = 'respon
   let reason = '';
 
   for (let attempt = 1; attempt <= budget; attempt += 1) {
-    raw = await call(_correctionNote(attempt, reason, raw));
+    // THE ATTEMPT TRAVELS WITH THE CALL, so a caller can climb its ladder.
+    //
+    // This passed only the correction note, so every caller re-invoked the SAME model and the
+    // retry was the same coin flipped again. Live 2026-08-27: prompt-builder refused a template
+    // three times, attempts 1 and 2 dropping the identical placeholders, and the run died with
+    // two stronger rungs unused. Telling a model what it got wrong is half a retry; the other
+    // half is asking a model that can do better.
+    //
+    // The rung is the CALLER'S decision — only it knows which seam it speaks for — so this
+    // hands over the attempt number and nothing else.
+    raw = await call(_correctionNote(attempt, reason, raw), attempt);
     const verdict = parse(raw) || { ok: false, reason: 'the parser returned nothing' };
     if (verdict.ok) {
       if (attempt > 1) log(`[content-retry] ${what}: recovered on attempt ${attempt}`);

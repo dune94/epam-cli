@@ -408,7 +408,8 @@ function callLlm(prompt, opts = {}) {
               // (agent, agentsDir, opts) — the options are the THIRD argument. Passing them
               // second hands an object where a directory path is expected.
               return require('./seam-invocation.js')
-                .seamInvocationEnv('codeline-discovery', undefined, { env: _base });
+                .seamInvocationEnv('codeline-discovery', undefined,
+                    { env: _base, rung: Number(opts && opts.rung) || 0 });
             } catch { return {}; }
           })(),
         };
@@ -534,7 +535,9 @@ if (require.main !== module) return;
     what: 'codeline-discovery',
     attempts: Number(process.env.EPAM_CONTENT_RETRY_ATTEMPTS || 3),
     log,
-    call: (note) => callLlm(note ? `${note}${prompt}` : prompt, { manifest }),
+    // ATTEMPT N RUNS RUNG N-1. This re-invoked the same model each time, so a refusal was
+    // handed back to the one model that had just produced it — half a retry.
+    call: (note, attempt) => callLlm(note ? `${note}${prompt}` : prompt, { manifest, rung: Math.max(0, (attempt || 1) - 1) }),
     parse: (answer) => {
       const picked = (answer && answer.codelines) || [];
       if (!picked.length) {

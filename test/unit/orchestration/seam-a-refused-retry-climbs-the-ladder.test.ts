@@ -105,3 +105,47 @@ describe('a refused attempt climbs the ladder it was assigned', () => {
     expect(e.EPAM_LADDER_RUNG).toBe('2');
   });
 });
+
+describe('the retry helper hands its caller the attempt, so a ladder can be climbed', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { retryUntilParsed, retryUntilParsedAsync } = require(
+    join(REPO_ROOT, 'orchestrations/scripts/lib/content-retry.js'));
+
+  it('passes the attempt number to call() — sync', () => {
+    const seen: number[] = [];
+    try {
+      retryUntilParsed({
+        what: 'probe', attempts: 3,
+        call: (_note: string, attempt: number) => { seen.push(attempt); return 'nope'; },
+        parse: () => ({ ok: false, reason: 'never' }),
+      });
+    } catch { /* exhausting the budget throws; the attempts are the point */ }
+    expect(seen, 'call() was never told which attempt it was on — it cannot climb').toEqual([1, 2, 3]);
+  });
+
+  it('passes the attempt number to call() — async', async () => {
+    const seen: number[] = [];
+    try {
+      await retryUntilParsedAsync({
+        what: 'probe', attempts: 2,
+        call: async (_note: string, attempt: number) => { seen.push(attempt); return 'nope'; },
+        parse: () => ({ ok: false, reason: 'never' }),
+      });
+    } catch { /* as above */ }
+    expect(seen).toEqual([1, 2]);
+  });
+});
+
+describe('every seam behind a retry loop climbs, not just the one that bit us', () => {
+  // prompt-builder was fixed first because it aborted a run. These three retry through
+  // content-retry.js and re-invoked the SAME model on every attempt — the identical defect,
+  // three more times. Driven from the real exported ladders, never a hand-written chain.
+  for (const seam of ['survey-review', 'agent-mint', 'codeline-discovery']) {
+    it(`${seam} resolves a different model as its attempts advance`, () => {
+      const models = [0, 1].map((r) => modelAt(seam, r));
+      expect(models[0], `${seam} resolved no model at rung 0`).toBeTruthy();
+      expect(models[1], `${seam} runs the same model on attempt 2 — the retry does not climb`)
+        .not.toBe(models[0]);
+    });
+  }
+});

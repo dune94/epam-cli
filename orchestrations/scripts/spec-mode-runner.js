@@ -3992,13 +3992,17 @@ Do not propose a role that duplicates one of the canonical roles already listed 
     what: 'agent-mint proposals',
     attempts: Number(process.env.EPAM_CONTENT_RETRY_ATTEMPTS || 3),
     log: (m) => process.stderr.write(`${m}\n`),
-    call: async () => {
+    // ATTEMPT N RUNS RUNG N-1. This re-invoked the same model on every attempt, so a
+    // refusal was fed back to the one model that had just produced it — half a retry.
+    // The seam env is rebuilt per attempt so the ladder it declares is actually climbed.
+    call: async (note, attempt) => {
       _mintAttempt += 1;
       return runAgentForJson(
         promptExec, prompt, TOOL_PROJECT_AGENTS, 'PROJECT_AGENTS',
         logDir ? path.join(logDir, `project-agents-mint${_mintAttempt > 1 ? `-parse${_mintAttempt}` : ''}.log`) : null,
         null, '', repoPath || '',
-        _mintEnv,
+        // The declared ladder, climbed: rung 0 on attempt 1, rung 1 on attempt 2, and so on.
+        { ..._mintEnv, ...seamInvocationEnv('agent-mint', logDir, { rung: Math.max(0, (attempt || 1) - 1) }) },
       );
     },
     parse: (payload) => {
@@ -4328,12 +4332,43 @@ function rosterCoverageBlock(minted, registry) {
   return lines.join('\n');
 }
 
+/**
+ * THE STAGES THAT RUN ALONGSIDE THE ROSTER, read from the seam registry.
+ *
+ * Run 20260827T100559Z died here. Both implementer briefs said a dedicated pipeline stage writes
+ * test files — TRUE, those seams are declared — and the roster reviewer, holding only the roster,
+ * the codelines, the tickets and the coverage, concluded "no such role exists in this roster" and
+ * blocked twice. The gate was right to refuse evidence it did not have; it was simply never given
+ * it. A reviewer asked to falsify a claim about the PIPELINE must be shown the pipeline.
+ *
+ * Derived, never listed: each seam and what it declares it produces, straight from the registry.
+ * Adding or removing a seam changes this block with no edit here and none in the template.
+ */
+function pipelineStagesBlock() {
+  const unreadable = '- (the seam registry could not be read — treat any claim about a pipeline '
+    + 'stage as UNVERIFIABLE rather than false)';
+  try {
+    // eslint-disable-next-line global-require
+    const { registryPath } = require(path.join(__dirname, 'lib', 'seam-invocation.js'));
+    const reg = JSON.parse(fs.readFileSync(registryPath(), 'utf8'));
+    const rows = Object.entries(reg.profiles || {})
+      .map(([seam, prof]) => `- ${seam}${prof && prof.produces ? ` — produces ${prof.produces}` : ''}`)
+      .sort();
+    // ABSENT IS NOT EMPTY. A blank list would read as "the pipeline has no stages", licensing
+    // exactly the false finding this block exists to prevent.
+    return rows.length ? rows.join('\n') : unreadable;
+  } catch {
+    return unreadable;
+  }
+}
+
 function buildRosterReviewPrompt({ persona, briefBlock, clBlock, ticketBlock, docBlock, toolLine, coverageBlock }) {
   // RENDERED FROM THE TEMPLATE LAYER. The documentation section is assembled here because it
   // is conditional prose — present, it points the reviewer at the vendor's own text; absent,
   // it tells the reviewer that any vendor claim is unverifiable. A template cannot branch.
   return renderEngineTemplate('roster-review', {
     __PERSONA__: persona,
+    __PIPELINE_STAGES__: pipelineStagesBlock(),
     __BRIEF_BLOCK__: briefBlock,
     __COVERAGE_BLOCK__: coverageBlock || '- (coverage could not be derived)',
     __CODELINE_BLOCK__: clBlock || '- (none resolved)',
@@ -4434,11 +4469,16 @@ async function reviewSurvey({
       what: 'survey-review',
       attempts: Number(process.env.EPAM_CONTENT_RETRY_ATTEMPTS || 3),
       log: (m) => process.stderr.write(`${m}\n`),
-      call: async (note) => runAgentForJson(
+      // ATTEMPT N RUNS RUNG N-1. This re-invoked the same model on every attempt, so a
+      // refusal was fed back to the one model that had just produced it — half a retry.
+      // The seam env is rebuilt per attempt so the ladder it declares is actually climbed.
+      call: async (note, attempt) => runAgentForJson(
         promptExecFor({ promptExec }), note ? `${note}${prompt}` : prompt,
         TOOL_SURVEY_REVIEW, 'SURVEY_REVIEW',
         logDir ? path.join(logDir, 'survey-review.log') : null,
-        null, '', repoPath || '', env,
+        null, '', repoPath || '',
+        // The declared ladder, climbed: rung 0 on attempt 1, rung 1 on attempt 2, and so on.
+        { ...env, ...seamInvocationEnv('survey-review', logDir, { rung: Math.max(0, (attempt || 1) - 1) }) },
       ),
       parse: (payload) => {
         if (!payload) return { ok: false, reason: 'the response could not be parsed as JSON at all — a review must arrive inside its tags, not as prose' };
@@ -9680,6 +9720,9 @@ module.exports = {
   // "it did not examine anything". Re-implementing it in the harness would be a second copy to
   // keep right — the defect this file keeps meeting.
   outputContractFor,
+  // Exported so the stage list the roster reviewer is given can be asserted directly. The defect
+  // it fixes was invisible precisely because nothing could look at what the reviewer was handed.
+  pipelineStagesBlock,
   // Exported for the same reason as outputContractFor: agent-check discovers a seam's output
   // contract from the (TOOL_X, 'TAG') pair at its call site, and can only render it if the
   // definition is reachable. TOOL_TICKET_LINKS was the one binding left unexported, so

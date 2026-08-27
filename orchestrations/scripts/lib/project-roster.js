@@ -410,6 +410,17 @@ async function buildProjectRoster({
     if (!fs.existsSync(outPath)) {
       lastReason = `the agent wrote no roster at ${outPath}`;
       log(`[roster] attempt ${attempt}/${attempts} REFUSED: ${lastReason}`);
+      // SELF-HEAL, WITH THE ROSTER THE AGENT ACTUALLY WROTE. Reading it back is the only way
+      // the analyst can see WHY the contract failed rather than which clause reported it.
+      try {
+        let _produced = '';
+        try { _produced = fs.readFileSync(outPath, 'utf8'); } catch { _produced = ''; }
+        // eslint-disable-next-line global-require
+        const _sh = require('./self-heal.js').selfHeal({
+          agent: 'roster-specialiser', reason: lastReason, output: _produced, logDir,
+        });
+        if (_sh.rc === 2) log(`[roster] self-heal analyst FAILED — attempt ${attempt + 1} has no corrective`);
+      } catch { /* a diagnostic must never fail the run it is diagnosing */ }
       continue;
     }
     let roster;

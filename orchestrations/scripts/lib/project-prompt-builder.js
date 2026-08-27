@@ -527,6 +527,16 @@ async function buildProjectPrompts({
         // Never let evidence-keeping break the build it is evidence about.
         log(`[prompt-builder] (could not persist refused ${id} attempt ${attempt}: ${e.message})`);
       }
+      // THE ANALYST SEES THE REFUSED PROMPT ITSELF, not just which placeholder went missing.
+      // Seven generations were refused across runs 13 and 14 and none reached self-heal.
+      try {
+        // eslint-disable-next-line global-require
+        const _sh = require('./self-heal.js').selfHeal({
+          agent: `prompt-builder:${id}`, reason: verdict.reason, output: body,
+          context: `template ${id} requires: ${(template.placeholders || []).join(', ')}`,
+        });
+        if (_sh.rc === 2) log(`[prompt-builder] self-heal analyst FAILED for ${id} — attempt ${attempt + 1} has no corrective`);
+      } catch { /* a diagnostic must never fail the run it is diagnosing */ }
       log(`[prompt-builder] ! ${id} attempt ${attempt}/${attempts} refused: ${verdict.reason}`);
     }
 

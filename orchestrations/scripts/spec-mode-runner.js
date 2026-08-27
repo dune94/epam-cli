@@ -6353,6 +6353,19 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
       });
       if (findings === null) {
         console.warn(`spec-mode: ⚠️ code-graph-detective produced NO parseable JSON for ${story.id} (attempt ${attempt}/${maxAttempts}) even after the extraction phase. Phase-1 head: "${String(out || '').slice(0, 140).replace(/\s+/g, ' ').trim()}"`);
+        // SELF-HEAL BEFORE THE NEXT ATTEMPT, WITH THE OUTPUT THAT FAILED.
+        //
+        // This seam is named in agent-attempt-analyst.sh's own header as its next caller — it never
+        // became one. It climbs its ladder and appends a fixed retry note, but the episode was never
+        // recorded and no constraint was ever synthesised from what the model actually returned.
+        try {
+          // eslint-disable-next-line global-require
+          const _sh = require('./lib/self-heal.js').selfHeal({
+            agent: 'code-graph-detective', storyId: (story && story.id) || '',
+            reason: 'no parseable JSON after the extraction phase', output: out, logDir,
+          });
+          if (_sh.rc === 2) console.warn(`spec-mode: self-heal analyst FAILED for ${story.id} — attempt ${attempt + 1} has no corrective guidance`);
+        } catch { /* a diagnostic must never fail the run it is diagnosing */ }
         continue; // retry — this is the silent-failure mode we must not accept
       }
       if (findings.length === 0) {

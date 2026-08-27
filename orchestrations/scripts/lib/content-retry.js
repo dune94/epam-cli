@@ -106,6 +106,24 @@ function retryUntilParsed({ call, parse, attempts = 3, what = 'response', log = 
     }
     reason = verdict.reason || 'unusable';
     log(`[content-retry] ${what}: attempt ${attempt}/${budget} rejected — ${reason}`);
+    // EVERY AGENT REACHES THE ANALYST, AND IT IS SENT WHAT CAME BACK.
+    //
+    // A refusal was fed back to the model and nothing else happened: the episode was never
+    // recorded and no constraint was ever synthesised from it. agent-attempt-analyst.sh has
+    // existed for that since it was written and had ONE caller out of forty seams.
+    //
+    // `raw` is the point — the bytes the agent actually produced. A reason string says which
+    // rule was broken; only the output says why the agent broke it.
+    try {
+      // eslint-disable-next-line global-require
+      const _sh = require('./self-heal.js').selfHeal({
+        agent: what, reason, output: raw, context: _correctionNote(attempt, reason, raw),
+      });
+      if (_sh.rc === 2) {
+        // Reported, never inferred: the next attempt runs with no corrective guidance.
+        log(`[content-retry] ${what}: self-heal analyst FAILED — attempt ${attempt + 1} has no corrective`);
+      }
+    } catch { /* a diagnostic must never fail the run it is diagnosing */ }
   }
 
   throw new Error(_giveUpMessage(what, budget, raw, reason));
@@ -146,6 +164,24 @@ async function retryUntilParsedAsync({ call, parse, attempts = 3, what = 'respon
     }
     reason = verdict.reason || 'unusable';
     log(`[content-retry] ${what}: attempt ${attempt}/${budget} rejected — ${reason}`);
+    // EVERY AGENT REACHES THE ANALYST, AND IT IS SENT WHAT CAME BACK.
+    //
+    // A refusal was fed back to the model and nothing else happened: the episode was never
+    // recorded and no constraint was ever synthesised from it. agent-attempt-analyst.sh has
+    // existed for that since it was written and had ONE caller out of forty seams.
+    //
+    // `raw` is the point — the bytes the agent actually produced. A reason string says which
+    // rule was broken; only the output says why the agent broke it.
+    try {
+      // eslint-disable-next-line global-require
+      const _sh = require('./self-heal.js').selfHeal({
+        agent: what, reason, output: raw, context: _correctionNote(attempt, reason, raw),
+      });
+      if (_sh.rc === 2) {
+        // Reported, never inferred: the next attempt runs with no corrective guidance.
+        log(`[content-retry] ${what}: self-heal analyst FAILED — attempt ${attempt + 1} has no corrective`);
+      }
+    } catch { /* a diagnostic must never fail the run it is diagnosing */ }
   }
   throw new Error(_giveUpMessage(what, budget, raw, reason));
 }

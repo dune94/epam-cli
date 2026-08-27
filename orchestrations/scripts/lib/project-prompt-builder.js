@@ -47,11 +47,37 @@ const readJson = (p) => JSON.parse(fs.readFileSync(p, 'utf8'));
  */
 const { refusalBlock } = require('./refusal-block.js');
 
+/**
+ * The template's body as one string — the SAME expression checkGeneratedPrompt uses, so the text
+ * the generator is shown and the text its output is judged against cannot drift apart.
+ */
+function templateBodyText(template) {
+  if (!template) return '';
+  if (typeof template.body === 'string' && template.body) return template.body;
+  const bodies = template.bodies && typeof template.bodies === 'object' ? template.bodies : {};
+  return Object.values(bodies).filter((b) => typeof b === 'string').join('\n');
+}
+
 function renderGeneratorPrompt({ generatorBody, template, projectContext, codelineContext, mintedRoles, refusal }) {
   let out = generatorBody
     .split('__TEMPLATE_ID__').join(template.id)
     .split('__TEMPLATE_DESCRIPTION__').join(template.description || '')
-    .split('__TEMPLATE_BODY__').join(template.body)
+    // A MULTI-BODY TEMPLATE HAS NO .body, AND join(undefined) IS A COMMA.
+    //
+    // 21 templates carry `bodies` instead of `body`. This read template.body — undefined for every
+    // one of them — and String.prototype.join(undefined) falls back to its DEFAULT separator, so
+    // the generator prompt received the single character "," where the template should have been.
+    // The model was asked to rewrite a comma, could not possibly preserve the placeholders it had
+    // never seen, and the shape guard refused all three attempts for "dropped placeholder(s)".
+    //
+    // That aborted mock3 runs 9 and 10 at skill-assessment-prephase, each after ~29 single-body
+    // templates had generated cleanly — and it was invisible because the refusal named the
+    // placeholders rather than the empty input that caused them to be missing.
+    //
+    // Joined the way checkGeneratedPrompt already joins them, so the text the model is given and
+    // the text its output is checked against are the same text. Two readers of one template that
+    // disagree is the defect this whole file keeps meeting.
+    .split('__TEMPLATE_BODY__').join(templateBodyText(template))
     .split('__TEMPLATE_PLACEHOLDERS__').join((template.placeholders || []).join(', ') || '(none)')
     .split('__PROJECT_CONTEXT__').join(projectContext || '')
     .split('__CODELINE_CONTEXT__').join(codelineContext || '')

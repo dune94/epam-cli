@@ -155,7 +155,7 @@ function buildCostSnapshot({ agent, storyId, phase, model, provider, cost, turns
  * Field names match append_cost_record's record exactly, so both producers land in one uniform
  * stream: a consumer must never need to know which side of the pipeline paid.
  */
-function appendLedgerRecord({ ledgerFile, agent, storyId, phase, model, cost, turns, startedAt, endedAt }) {
+function appendLedgerRecord({ ledgerFile, agent, storyId, phase, model, cost, turns, startedAt, endedAt, rung }) {
   try {
     if (!ledgerFile) return null;
     const now = new Date().toISOString();
@@ -202,7 +202,11 @@ function appendLedgerRecord({ ledgerFile, agent, storyId, phase, model, cost, tu
       // Recorded so a $0.00 from a provider with no price table stays visibly different from a
       // call that genuinely cost nothing — the same distinction costUnknown draws in the event.
       costUnknown: !!cost.costUnknown,
-      attempt: null,
+      // THE RUNG THIS CALL RAN ON. Hardcoded null, so an escalation left no trace: a seam that
+      // climbed haiku -> sonnet -> opus recorded three rows that looked like three identical
+      // calls, and "did the retry escalate?" was unanswerable from the ledger. Supplied by the
+      // seam via EPAM_LADDER_RUNG; absent stays null rather than guessing rung 0.
+      attempt: rung === undefined || rung === null || rung === '' ? null : Number(rung),
     };
     // One line, well under PIPE_BUF, opened O_APPEND: concurrent lanes interleave records rather
     // than corrupting them. Nothing here is free text, so the record cannot grow past that bound.
@@ -219,7 +223,7 @@ function appendLedgerRecord({ ledgerFile, agent, storyId, phase, model, cost, tu
  * @returns {object|null} the emitted event, or null if there was nothing to emit.
  */
 function emitCostSnapshot({
-  resultFile, activityFile, ledgerFile, agent, storyId, phase, model, provider, turns, startedAt,
+  resultFile, activityFile, ledgerFile, agent, storyId, phase, model, provider, turns, startedAt, rung,
   logDir,
 }) {
   try {
@@ -268,7 +272,7 @@ function emitCostSnapshot({
     appendLedgerRecord({
       ledgerFile: ledgerFile || process.env.PHASE_COST_FILE
         || path.join(process.env.LOG_DIR || path.join(__dirname, '..', 'logs'), 'phase-cost.jsonl'),
-      agent, storyId, phase, model, cost, turns, startedAt,
+      agent, storyId, phase, model, cost, turns, startedAt, rung,
     });
     return evt;
   } catch {

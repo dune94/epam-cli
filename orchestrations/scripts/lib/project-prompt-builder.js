@@ -482,6 +482,30 @@ async function buildProjectPrompts({
         break;
       }
       refusal = verdict.reason;
+      // THE REFUSED TEXT IS THE ONLY EVIDENCE OF WHY, AND IT WAS THROWN AWAY.
+      //
+      // The log records WHICH placeholders went missing; the model's actual answer — the thing
+      // that would say whether it emitted JSON, truncated, or rewrote the body — was discarded
+      // the moment the verdict came back. Run 20260827T092415Z aborted on 'tc-writer' after three
+      // refusals and left nothing to read, so the cause had to be inferred from the symptom. The
+      // comment at the top of this file records the same blindness misdiagnosing runs 9 and 10.
+      //
+      // Generated output must be persisted — a refused artefact most of all, because it is the
+      // only one nobody can regenerate by rerunning a step that now succeeds.
+      try {
+        const refusedDir = path.join(outDir, '.refused');
+        fs.mkdirSync(refusedDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(refusedDir, `${id}.attempt-${attempt}.txt`),
+          `# refused: ${verdict.reason}\n`
+          + `# template: ${id}   attempt: ${attempt}/${attempts}\n`
+          + `# required placeholders: ${(template.placeholders || []).join(', ') || '(none)'}\n`
+          + `# ---------------- model reply below, verbatim ----------------\n`
+          + body);
+      } catch (e) {
+        // Never let evidence-keeping break the build it is evidence about.
+        log(`[prompt-builder] (could not persist refused ${id} attempt ${attempt}: ${e.message})`);
+      }
       log(`[prompt-builder] ! ${id} attempt ${attempt}/${attempts} refused: ${verdict.reason}`);
     }
 

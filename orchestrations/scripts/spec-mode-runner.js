@@ -8853,9 +8853,17 @@ function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
           // tracking the operator calls priority #1.
           //
           // indexOf guarded: absent, it returns -1 and args[0] would record '--provider' as the model.
-          model: envOverrides.AI_MODEL || _modelFromArgs(execSpec)
+          // READ THE DERIVED ENV, NOT THE CALLER'S RAW INPUT. The bridge above writes AI_MODEL
+          // onto `env` (process.env + overrides) when a seam supplied only EPAM_MODEL. This read
+          // `envOverrides`, which never receives it — so a seam that resolved its rung correctly
+          // and ran on the right model still recorded a BLANK one. All 7 prompt-builder rows in
+          // run 20260827T092415Z, $0.32 of spend, with no way to say what it bought.
+          model: env.AI_MODEL || envOverrides.AI_MODEL || _modelFromArgs(execSpec)
             || execSpec?.model || process.env.SPEC_MODE_MODEL || '',
           provider: execSpec?.provider || process.env.SPEC_MODE_PROVIDER || process.env.EPAM_ORCHESTRATION_PROVIDER || '',
+          // Which rung of its ladder this call ran on. Read from the seam's env, which is where
+          // seamInvocationEnv stamps it — the emitting process's own env never carries it.
+          rung: env.EPAM_LADDER_RUNG,
         });
       } catch { /* cost emission must never break the agent call */ }
       try { fs.unlinkSync(_costFile); } catch { /* ignore */ }

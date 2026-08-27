@@ -35,6 +35,58 @@ const argv = process.argv.slice(2);
 const arg = (f, d = '') => { const i = argv.indexOf(f); return i >= 0 ? argv[i + 1] : d; };
 const has = (f) => argv.includes(f);
 
+/**
+ * THE ENVIRONMENT A RUN ESTABLISHES, BEFORE ANY SEAM IS ASKED ANYTHING.
+ *
+ * This harness says it uses "the SAME invocation path a run uses" and then inherited only the
+ * caller's shell. A run does two things first that nothing here did:
+ *   - loads the project's config overlay, which is where the provider is named
+ *   - sources lib/model-ladders.sh and exports EPAM_MODEL_LADDER_*, which is where every seam's
+ *     model and escalation chain come from
+ * Without them every check resolved no ladder ("no model or escalation chain will be applied")
+ * and died at the hub with "no provider configured" — so the harness could not check ANY agent
+ * live, and the one failure it reported was its own.
+ *
+ * Built by SOURCING the same libraries the launcher sources, never by re-implementing them: the
+ * loaders must run in a shell, and their exports are read back from that shell's environment.
+ * A failure here is not fatal — the check proceeds on the caller's env and says what it lacked.
+ */
+let _runEnvCache = null;
+function runEnvironment() {
+  if (_runEnvCache) return _runEnvCache;
+  const projDir = process.env.EPAM_PROJECT_CONFIG_DIR || '';
+  let loaded = {};
+  if (projDir) {
+    try {
+      // printenv, not `env | grep`: this machine's grep is ugrep, which silently swallows the
+      // output of that pipeline and makes a working export look like an empty one.
+      // NO `set -a`. The loaders already export what they define, and marking everything for
+      // export sent the shell FUNCTIONS to every child too — which arrived as
+      // "error importing function definition for `export_model_ladders'" in the runner's stderr
+      // on each call. Noise at best, and a child that inherits a broken function definition is a
+      // failure waiting for the first caller that invokes it by name.
+      const dump = execFileSync('bash', ['-c', `
+        . "${path.join(__dirname, 'lib', 'env-file.sh')}" 2>/dev/null || true
+        command -v load_project_env >/dev/null 2>&1 && load_project_env "${projDir}" preserve >/dev/null 2>&1
+        . "${path.join(__dirname, 'lib', 'model-ladders.sh')}" 2>/dev/null || true
+        command -v export_model_ladders >/dev/null 2>&1 && export_model_ladders "${projDir}/llm-settings.json" >/dev/null 2>&1
+        printenv
+      `], { encoding: 'utf8', env: process.env });
+      for (const line of dump.split('\n')) {
+        const i = line.indexOf('=');
+        if (i > 0) loaded[line.slice(0, i)] = line.slice(i + 1);
+      }
+    } catch (e) {
+      process.stderr.write(`[agent-check] could not establish the run environment: ${e.message}\n`);
+      loaded = {};
+    }
+  }
+  // The caller's own exports still win: an operator checking one seam against a specific model
+  // must not have it overwritten by the project's default.
+  _runEnvCache = { ...loaded, ...process.env };
+  return _runEnvCache;
+}
+
 /** Every seam that names a prompt — read from the registry, never listed here. */
 function seams() {
   const reg = JSON.parse(fs.readFileSync(REGISTRY, 'utf8'));
@@ -62,6 +114,28 @@ function seams() {
  * value is. Where a name is not self-describing the value is still a plainly-labelled string, so a
  * reply that depends on it can be read as depending on it.
  */
+/**
+ * A MODEL NAME FOR FILLER, FROM WHATEVER STACK IS ACTIVE.
+ *
+ * Never a literal: a placeholder naming one vendor's model outlives that vendor's use. Any model
+ * the active set declares will do — the check is about the SHAPE an agent answers in, not about
+ * which model answers.
+ */
+function checkFillerModel() {
+  try {
+    // eslint-disable-next-line global-require
+    const { activeSet } = require('./lib/llm-settings-resolve.js');
+    const a = activeSet();
+    if (!a) return '(the run supplies the model)';
+    const j = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'config', a.cfg.settingsFile), 'utf8'));
+    for (const tier of Object.values(j.ladders || {})) {
+      if (tier && typeof tier.startModel === 'string' && tier.startModel) return tier.startModel;
+    }
+    if (j.finalFallback && j.finalFallback.model) return j.finalFallback.model;
+  } catch { /* no readable declaration: say so rather than inventing a vendor */ }
+  return '(the run supplies the model)';
+}
+
 function valueFor(ph, ctx) {
   const n = ph.replace(/^__|__$/g, '').toLowerCase();
   const pick = (...pairs) => {
@@ -72,17 +146,24 @@ function valueFor(ph, ctx) {
     [/story_?id|ticket_?id|jira/, ctx.storyId],
     [/(^|_)path$|_path$|file$/, ctx.repoPath],
     [/codeline/, `- ${ctx.codeline} at ${ctx.repoPath}`],
-    [/stack/, 'TypeScript, Node.js 20, jest'],
-    [/title|summary/, 'Live preview of draft content in the CMS'],
+    // NO DEPLOYMENT NAMED IN FILLER. These were a stack and a project's feature. Filler that
+    // names one deployment makes the check pass or fail for reasons belonging to that
+    // deployment, and this harness exists to prove the AGENT. The run supplies the real values
+    // when it has them; otherwise the filler says plainly that it is filler.
+    [/stack/, ctx.stack || "(the codeline's stack is supplied by the run)"],
+    [/title|summary/, 'A short representative change, supplied for this check'],
     [/description|body|context|block|section|prompt|note|addendum|persona/,
       'This is the supplied context for the check. It is short on purpose: the question is '
       + 'whether this agent answers in the shape it declares, not whether it can summarise a '
       + 'large input.'],
     [/diff|patch/, '--- a/src/x.ts\n+++ b/src/x.ts\n@@\n-const a = 1;\n+const a = 2;\n'],
-    [/test|spec/, 'src/x.test.ts'],
+    [/test|spec/, ctx.testFile || '(a test file path, supplied by the run)'],
     [/criteria|ac(s)?$|vc(s)?$/, 'AC1: the page renders draft content when preview is enabled'],
-    [/command|cmd/, 'npm test'],
-    [/model|rung/, 'z-ai/glm-5.2'],
+    [/command|cmd/, ctx.testCommand || "(the codeline's test command is supplied by the run)"],
+    // THE ACTIVE SET'S MODEL, NOT A VENDOR'S. A literal here meant the check ran against a
+    // model the deployment may not even declare, and it survived a whole provider migration
+    // unnoticed — nothing ever calls a placeholder wrong.
+    [/model|rung/, checkFillerModel()],
     [/tool/, 'read_file, list_files, search'],
     [/error|failure|log/, 'SyntaxError: Unexpected token export'],
     [/count|max|budget|limit/, '3'],
@@ -479,7 +560,7 @@ function checkOne(s, ctx) {
   // THE SAME INVOCATION PATH A RUN USES: the seam's own env — its ladder, model, effort, tool
   // grant — resolved through seam-invocation, then ai-run.sh. A check that called a model directly
   // would prove the model works, not that this seam does.
-  let env = { ...process.env, EPAM_AGENT_NAME: s.seam };
+  let env = { ...runEnvironment(), EPAM_AGENT_NAME: s.seam };
   try {
     // eslint-disable-next-line global-require
     const { seamInvocationEnv } = require(path.join(LIB, 'seam-invocation.js'));
@@ -549,9 +630,56 @@ module.exports = { budgetFor, checkReply, extractJson, responseSchemaFor, contra
 // process.exit(2) on collection.
 if (require.main !== module) return;
 
+// NO PROJECT OR STORY LITERAL. A default of 'metrolinx' / 'AMSD-2041' made this harness name
+// the very things the engine is forbidden to name, and it silently pointed every unflagged run
+// at one project's data. Both are now DISCOVERED: the codeline from the project config dir the
+// operator already exports, or from the single project on disk when there is exactly one; the
+// story from that project's own PRD. Ambiguity is an ERROR listing the real choices — never a
+// guess, because guessing here checks agents against the wrong project and reports it as a pass.
+const discoverCodeline = () => {
+  const fromEnv = process.env.EPAM_PROJECT_CONFIG_DIR;
+  if (fromEnv) return path.basename(fromEnv.replace(/\/+$/, ''));
+  const dir = path.join(__dirname, '..', 'projects');
+  let names = [];
+  try {
+    names = fs.readdirSync(dir, { withFileTypes: true })
+      .filter((d) => d.isDirectory()).map((d) => d.name);
+  } catch { names = []; }
+  if (names.length === 1) return names[0];
+  throw new Error(
+    '[agent-check] no codeline given and it cannot be discovered' +
+    (names.length ? ' — pass --codeline, one of: ' + names.join(', ')
+                  : ' — no projects found at ' + dir) +
+    ' (or export EPAM_PROJECT_CONFIG_DIR)');
+};
+
+const discoverStoryId = (codeline) => {
+  const prd = path.join(__dirname, '..', 'projects', codeline, 'prd.json');
+  let stories = [];
+  try {
+    const j = JSON.parse(fs.readFileSync(prd, 'utf8'));
+    stories = (j.stories || []).map((x) => x.id || x.jiraKey).filter(Boolean);
+  } catch { stories = []; }
+  if (stories.length === 1) return stories[0];
+  throw new Error(
+    '[agent-check] no story given and it cannot be discovered from ' + prd +
+    (stories.length ? ' — pass --story, one of: ' + stories.join(', ') : ' — it declares no stories'));
+};
+
+// A discovery failure is an OPERATOR error, not a crash: it prints what to pass and exits
+// non-zero. A stack trace here would bury the one line that tells them how to proceed.
+let _codeline, _storyId;
+try {
+  _codeline = arg('--codeline') || discoverCodeline();
+  _storyId = arg('--story') || discoverStoryId(_codeline);
+} catch (e) {
+  process.stderr.write(String((e && e.message) || e) + '\n');
+  process.exit(2);
+}
+
 const ctx = {
-  storyId: arg('--story', 'AMSD-2041'),
-  codeline: arg('--codeline', 'metrolinx'),
+  storyId: _storyId,
+  codeline: _codeline,
   repoPath: arg('--repo', process.env.PROJECT_ROOT || process.cwd()),
   dry: has('--dry'),
   timeoutMs: arg('--timeout-ms', '300000'),

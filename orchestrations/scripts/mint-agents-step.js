@@ -1189,7 +1189,16 @@ if (require.main !== module) return;
       // tools. Granting the channel without the list, or the list without the channel, both
       // produce an agent that quietly has nothing.
       runText: (prompt, meta) => {
-        const seamEnv = seamInvocationEnv('prompt-builder', path.join(engineRoot, 'orchestrations', 'agents'));
+        // THE RETRY CLIMBS. Attempt N runs rung N-1 of the ladder this seam declares.
+        //
+        // This called seamInvocationEnv with no rung on every attempt, so all three attempts ran
+        // the same model: `meta.attempt` arrived here and was used for the log filename and
+        // nothing else. Run 20260827T092415Z aborted on 'tc-writer' after three refusals from one
+        // model, with sonnet and opus unused in the chain the seam had already published.
+        // Feeding the refusal back is the other half of a retry; without the climb it asks the
+        // same model to notice what it just missed.
+        const _rung = Math.max(0, (Number((meta && meta.attempt) || 1) || 1) - 1);
+        const seamEnv = seamInvocationEnv('prompt-builder', path.join(engineRoot, 'orchestrations', 'agents'), { rung: _rung });
         if (seamEnv.EPAM_ALLOWED_TOOLS) seamEnv.AI_GATE_ALLOW_TOOLS = '1';
         // THE REVIEWER WILL RUN THIS MODEL. Captured at the moment the generator resolves it,
         // because a DECLARED tier and a RESOLVED model are not the same fact: both seams declare

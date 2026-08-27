@@ -440,8 +440,48 @@ function seamInvocationEnv(agent, agentsDir, opts) {
       // property of text ordering. Reordering the file changed which model every agent began on,
       // with nothing to indicate it had.
       const declaredStart = (sourceEnv[key + '_START'] || (_declared && _declared.start) || '').trim();
+      // A RETRY THAT DOES NOT CLIMB IS THE SAME COIN FLIPPED AGAIN.
+      //
+      // The chain above was exported on every attempt and walked on none: seams resolve their
+      // START model and nothing ever asked for the next rung, so a caller retrying a refused
+      // answer re-ran the identical model and got an identical refusal. Live 2026-08-27, run
+      // 20260827T092415Z: prompt-builder refused 'tc-writer' three times — attempts 1 and 2
+      // dropped the SAME two placeholders, because it was the same model doing the same thing —
+      // and the run aborted with sonnet and opus sitting unused in a chain it had already
+      // published.
+      //
+      // The rung is the CALLER'S, because only the caller knows an answer came back wrong. This
+      // walks the declared chain from the declared start; it invents no order and names no model.
+      // Past the top rung it stays on the top rung: a ladder that runs out is exhausted, not an
+      // error, and the caller's own attempt budget decides when to stop.
+      // THE CHAIN IS A HOP MAP, NOT A LIST. model-ladders.sh emits
+      //   from=to|from=to
+      // (e.g. haiku=sonnet|sonnet=opus-5), because a modelLadder has several independent roots
+      // and an ordered list could not say which model follows which. Climbing means applying the
+      // map, one hop per rung, from the model this seam declares it starts on.
+      const _hops = new Map(
+        rungs.split('|')
+          .map((pair) => { const i = pair.indexOf('='); return i < 1 ? null : [pair.slice(0, i).trim(), pair.slice(i + 1).trim()]; })
+          .filter((kv) => kv && kv[0] && kv[1]),
+      );
+      const _rung = Math.max(0, parseInt(o.rung, 10) || 0);
+      let _effectiveStart = declaredStart;
+      if (declaredStart && _rung > 0 && _hops.size) {
+        // Past the top the chain simply stops: a ladder that runs out is exhausted, not an error,
+        // and the caller's attempt budget decides when to give up. A cycle cannot spin forever
+        // because the walk is bounded by the rung count.
+        for (let i = 0; i < _rung; i += 1) {
+          const next = _hops.get(_effectiveStart);
+          if (!next) break;
+          _effectiveStart = next;
+        }
+      }
+      // What rung this invocation is actually on, stamped so a cost row and a log can say so.
+      // Without it an escalation is invisible in the ledger and looks like a seam that always
+      // ran the stronger model.
+      if (declaredStart) env.EPAM_LADDER_RUNG = String(_rung);
       if (declaredStart) {
-        env.EPAM_MODEL = declaredStart;
+        env.EPAM_MODEL = _effectiveStart;
         // THE BUDGET COMES FROM THE RUNG, resolved from the model this seam actually starts
         // on. EPAM_MODEL_ITERATIONS is emitted by lib/model-ladders.sh from the project's
         // own modelOverrides, so the number is the ladder's and is declared once.
@@ -469,13 +509,13 @@ function seamInvocationEnv(agent, agentsDir, opts) {
             const match = pair.slice(0, eq);
             const budget = pair.slice(eq + 1);
             if (match.startsWith('provider:')) continue; // provider rules need the provider, not the model
-            if (declaredStart.includes(match)) { resolved = budget; break; } // declaration order, first match wins
+            if (_effectiveStart.includes(match)) { resolved = budget; break; } // declaration order, first match wins
           }
           if (resolved) {
             env.EPAM_MAX_ITERATIONS = resolved;
           } else {
             process.stderr.write(
-              "[seam-invocation] seam '" + seam + "' starts on '" + declaredStart +
+              "[seam-invocation] seam '" + seam + "' starts on '" + _effectiveStart +
               "' but the project declares no iteration budget for it — the seam will run on " +
               "the engine default, which is nobody's choice\n");
           }

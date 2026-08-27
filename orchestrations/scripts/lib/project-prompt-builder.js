@@ -448,7 +448,21 @@ async function buildProjectPrompts({
     // REUSE, before any model time is spent.
     const _base = baseDigest(template);
     const _hit = cacheRead(id);
-    if (_hit && _hit.base === _base && (!_hit.usesRoles || _hit.roles === rolesDigest)) {
+    // A CACHE ENTRY IS ONLY A HIT IF IT PASSED THE GATES THAT APPLY NOW.
+    //
+    // The key was (template, generatorBody, contexts) and said nothing about REVIEW. So when
+    // review was finally switched on, 39 entries written while it was off were reused verbatim —
+    // never regenerated, therefore never reviewed — and the run logged "prompt review ENABLED"
+    // while reviewing almost nothing.
+    //
+    // Memoisation on inputs must also be keyed on the gates the artefact passed. An entry made
+    // without review is a MISS while review is on; one made WITH review stays a hit, so the cache
+    // keeps paying for itself.
+    const _reviewNow = typeof reviewPrompt === 'function';
+    if (_hit && _reviewNow && _hit.reviewed !== true) {
+      log(`[prompt-builder] ${id}: cached copy predates prompt review — regenerating so it is reviewed`);
+    }
+    if (_hit && (!_reviewNow || _hit.reviewed === true) && _hit.base === _base && (!_hit.usesRoles || _hit.roles === rolesDigest)) {
       fs.writeFileSync(path.join(outDir, `${id}.json`), JSON.stringify(_hit.doc, null, 2) + '\n');
       built.push(id);
       log(`[prompt-builder] reused ${id} (inputs unchanged${_hit.usesRoles ? ', roster unchanged' : ''})`);
@@ -521,7 +535,9 @@ async function buildProjectPrompts({
         installed = true;
         // Whether this template's OUTPUT depends on the roster is decided by looking at what it
         // produced, not guessed from what it was handed.
-        cacheWrite(id, { base: _base, roles: rolesDigest, usesRoles: usesRoles(doc, mintedRoles), doc });
+        cacheWrite(id, { base: _base, roles: rolesDigest, usesRoles: usesRoles(doc, mintedRoles), doc,
+          // The gate this artefact passed, so a later run cannot reuse an unreviewed prompt.
+          reviewed: typeof reviewPrompt === 'function' });
         log(`[prompt-builder] generated ${id} (attempt ${attempt}/${attempts})`);
         break;
       }

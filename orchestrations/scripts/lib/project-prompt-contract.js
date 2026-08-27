@@ -131,8 +131,7 @@ function checkGeneratedPrompt(template, generated) {
   }
 
   // Field names the template states as part of its response shape.
-  const tplKeys = [...new Set((tplBody.match(/"([a-zA-Z][a-zA-Z0-9_]*)"\s*:/g) || [])
-    .map((m) => m.replace(/[":\s]/g, '')))];
+  const tplKeys = outputFieldsIn(tplBody);
   const lostKeys = tplKeys.filter((k) => !genBody.includes(k));
   if (lostKeys.length) {
     return {
@@ -143,6 +142,21 @@ function checkGeneratedPrompt(template, generated) {
   }
 
   return { ok: true, reason: '' };
+}
+
+/**
+ * THE RESPONSE-SHAPE FIELD NAMES A TEMPLATE STATES.
+ *
+ * Defined once and exported, because two places need the same answer: this contract check, which
+ * REFUSES a generated prompt that lost a field, and the generator prompt, which must be TOLD the
+ * fields so it can keep them. Judging an agent against a list it was never shown is how
+ * skill-assessment-prephase came back missing timestamp, phase_id, agent_role, event,
+ * skill_category, context and added_by — the generator prompt gave placeholders their own section
+ * and an explicit list, and gave output fields one clause in the middle of a sentence.
+ */
+function outputFieldsIn(body) {
+  return [...new Set((String(body == null ? '' : body).match(/"([a-zA-Z][a-zA-Z0-9_]*)"\s*:/g) || [])
+    .map((m) => m.replace(/[":\s]/g, '')))];
 }
 
 /**
@@ -178,7 +192,26 @@ function buildGeneratedDoc(template, generatedBody) {
     // prompt-agent-link now reads the registry directly, so nothing consumes this field. Writing
     // it anyway would only invite the drift back.
     placeholders: placeholdersIn(body),
+    // THE DECLARATION TRAVELS WITH THE COPY THAT IS EXECUTED.
+    //
+    // mayBeEmpty says a placeholder may legitimately render blank — no prior gaps on a first pass,
+    // no fix sites before discovery, no forced retry on attempt one. The TEMPLATE declared it and
+    // this doc did not carry it, so every generated prompt lost the protection and the renderer
+    // refused at runtime on a block that was supposed to be empty.
+    //
+    // Live 2026-08-27, run 20260827T125654Z: the pipeline reached the specification pass for the
+    // first time and died there deterministically —
+    //   prompt 'spec-agent-openspec' was given EMPTY values for: __DECLARED_FILE_BLOCK__,
+    //   __FIX_SITE_BLOCK__, __FORCED_RETRY_BLOCK__, __PRIOR_GAPS_BLOCK__, …
+    // Three retries changed nothing because no model was ever asked anything, and both lanes
+    // halted. guard-vocabulary's template declared two and its generated copy carried none.
+    //
+    // FILTERED TO WHAT THIS BODY ACTUALLY HAS. A declaration naming a placeholder the generated
+    // text does not contain protects nothing and would only mislead the next reader — the same
+    // drift that removed the `seams` field above.
+    mayBeEmpty: (Array.isArray(template.mayBeEmpty) ? template.mayBeEmpty : [])
+      .filter((ph) => body.includes(ph)),
   };
 }
 
-module.exports = { checkGeneratedPrompt, buildGeneratedDoc, placeholdersIn };
+module.exports = { checkGeneratedPrompt, buildGeneratedDoc, placeholdersIn, outputFieldsIn };

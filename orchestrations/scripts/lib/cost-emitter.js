@@ -223,7 +223,7 @@ function appendLedgerRecord({ ledgerFile, agent, storyId, phase, model, cost, tu
  * @returns {object|null} the emitted event, or null if there was nothing to emit.
  */
 function emitCostSnapshot({
-  resultFile, activityFile, ledgerFile, agent, storyId, phase, model, provider, turns, startedAt, rung,
+  resultFile, activityFile, ledgerFile, agent, storyId, phase, model, provider, turns, startedAt, endedAt, rung,
   logDir,
 }) {
   try {

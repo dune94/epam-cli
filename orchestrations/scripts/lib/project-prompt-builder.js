@@ -77,8 +77,12 @@ function renderGeneratorPrompt({ generatorBody, template, projectContext, codeli
     // Joined the way checkGeneratedPrompt already joins them, so the text the model is given and
     // the text its output is checked against are the same text. Two readers of one template that
     // disagree is the defect this whole file keeps meeting.
-    .split('__TEMPLATE_BODY__').join(templateBodyText(template))
     .split('__TEMPLATE_PLACEHOLDERS__').join((template.placeholders || []).join(', ') || '(none)')
+    // THE SAME LIST THE CONTRACT CHECK WILL JUDGE IT AGAINST, from the same function, so the
+    // generator cannot be refused for losing a field it was never told about.
+    .split('__TEMPLATE_OUTPUT_FIELDS__').join(
+      // eslint-disable-next-line global-require
+      (require('./project-prompt-contract.js').outputFieldsIn(templateBodyText(template)) || []).join(', ') || '(none)')
     .split('__PROJECT_CONTEXT__').join(projectContext || '')
     .split('__CODELINE_CONTEXT__').join(codelineContext || '')
     .split('__MINTED_ROLES__').join(mintedRoles || '')
@@ -91,6 +95,23 @@ function renderGeneratorPrompt({ generatorBody, template, projectContext, codeli
     // An absent refusal substitutes empty, so a first attempt carries no heading for a refusal
     // that never happened.
     .split('__PREVIOUS_REFUSAL__').join(refusalBlock(refusal, 'prompt'));
+
+  // THE TEMPLATE BODY GOES IN LAST, AND THIS ORDER IS THE WHOLE POINT.
+  //
+  // Three of the generator's own placeholders — __PROJECT_CONTEXT__, __CODELINE_CONTEXT__ and
+  // __PREVIOUS_REFUSAL__ — are ALSO placeholders in templates it has to specialise. The body was
+  // embedded first and the value substitutions then ran across the entire string, so the embedded
+  // template's own placeholders were replaced with real project text before the model ever saw
+  // them. It was then refused for "dropping" placeholders it was never shown.
+  //
+  // Live 2026-08-27: roster-specialisation refused on exactly those three, on every attempt and on
+  // every rung, because no model can reproduce a token that is not in its input. Same shape as the
+  // join(undefined) comma that aborted runs 9 and 10 — the input was wrong, and the refusal
+  // described the output.
+  //
+  // Substituted last, the body is inert text by the time it arrives: nothing after this line can
+  // reach inside it.
+  out = out.split('__TEMPLATE_BODY__').join(templateBodyText(template));
   return out;
 }
 

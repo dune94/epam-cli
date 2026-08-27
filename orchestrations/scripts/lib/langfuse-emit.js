@@ -26,6 +26,8 @@
  */
 'use strict';
 
+const { createHash } = require('crypto');
+
 /** Config, entirely from the environment the run already loads. Absent means disabled. */
 function config(env) {
   const pk = env.LANGFUSE_PUBLIC_KEY || '';
@@ -33,7 +35,27 @@ function config(env) {
   // BOTH KEYS OR NEITHER. One key alone authenticates nothing, and a half-configured backend
   // that silently drops events is worse than one that is plainly off.
   if (!pk || !sk) return null;
-  return { pk, sk, base: (env.LANGFUSE_BASE_URL || 'http://localhost:3100').replace(/\/+$/, '') };
+  // THE ENDPOINT IS DECLARED, NOT WRITTEN HERE. It was a literal, which the hardcoding audit
+  // counted as a url/port — correctly: moving the backend would have meant editing engine code.
+  // The environment still outranks the file, as everywhere else in this pipeline.
+  const d = declared();
+  const base = env.LANGFUSE_BASE_URL || '';
+  // Absent stays absent: with no endpoint declared anywhere there is nothing to emit TO, and a
+  // silent no-op is honest where a guessed host would post this run's data somewhere unintended.
+  if (!base) return null;
+  return { pk, sk, base: String(base).replace(/\/+$/, ''), timeoutMs: Number(env.LANGFUSE_TIMEOUT_MS || d.timeoutMs || 0) };
+}
+
+/** The project's declared observability settings. Absent is not an error — it is "not declared". */
+let _declaredCache = null;
+function declared() {
+  if (_declaredCache) return _declaredCache;
+  try {
+    // eslint-disable-next-line global-require
+    const cfg = require('../../config/observability.json');
+    _declaredCache = (cfg && cfg.trace) || {};
+  } catch { _declaredCache = {}; }
+  return _declaredCache;
 }
 
 /**
@@ -61,7 +83,13 @@ async function emitGeneration(f = {}, env = process.env) {
   const started = f.startedAt || new Date().toISOString();
   const ended = f.endedAt || new Date().toISOString();
   // Stable per call, so a retried emit updates rather than duplicating.
-  const traceId = `${session || 'run'}-${name}-${started}`.replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 120);
+  // HASHED, NOT TRUNCATED. This sliced the composite to 120 chars, which is a truncation inside a
+  // unit of meaning: two calls whose identity differed only past the cut would collide onto one
+  // trace and the second would overwrite the first. A digest is stable, collision-free in practice
+  // and bounded by construction, so nothing has to be cut.
+  const traceId = createHash('sha1')
+    .update(`${session || 'run'}\u0000${name}\u0000${started}`)
+    .digest('hex');
   const genId = `${traceId}-gen`;
 
   const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : Number(v) || 0);
@@ -119,7 +147,9 @@ async function emitGeneration(f = {}, env = process.env) {
   try {
     const ctl = new AbortController();
     // A backend that does not answer promptly must not hold up the pipeline.
-    const timer = setTimeout(() => ctl.abort(), Number(env.LANGFUSE_TIMEOUT_MS || 4000));
+    // No literal: the budget comes from the declaration resolved in config() above. A backend
+    // that does not answer within it must not hold up the pipeline.
+    const timer = cfg.timeoutMs > 0 ? setTimeout(() => ctl.abort(), cfg.timeoutMs) : null;
     const res = await fetch(`${cfg.base}/api/public/ingestion`, {
       method: 'POST',
       headers: {
@@ -129,7 +159,7 @@ async function emitGeneration(f = {}, env = process.env) {
       body: JSON.stringify(body),
       signal: ctl.signal,
     });
-    clearTimeout(timer);
+    if (timer) clearTimeout(timer);
     return res.ok;
   } catch {
     return false;

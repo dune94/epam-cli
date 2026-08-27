@@ -107,6 +107,39 @@ describe('every stack is traced, not just the one with a provider decorator', ()
     expect(trace.name).toBe(AGENT);
   });
 
+  it('the BASH cost edge traces too — the path every vendor binary takes', async () => {
+    // Wiring only the JS edge would leave most of a run untraced while the ledger looked complete:
+    // hub calls (claude --print, codemie, epam run) record through lib/cost-record.sh, not through
+    // lib/cost-emitter.js. Executed for real, then read back out of Langfuse.
+    const { execFileSync } = require('node:child_process');
+    const os = require('node:os'); const fsx = require('node:fs');
+    const runId = `${RUN_ID}-bash`;
+    const reply = join(os.tmpdir(), `trace-probe-${process.pid}.json`);
+    fsx.writeFileSync(reply, JSON.stringify({
+      total_cost_usd: 0.0456, usage: { input_tokens: 77, output_tokens: 88 }, num_turns: 3,
+    }));
+    execFileSync('bash', ['-c', `
+      . orchestrations/scripts/lib/cost-record.sh
+      record_call_cost "${reply}" "bash-edge-probe" "STORY-9" "probe-model" "$(date -Iseconds)"
+      wait
+    `], {
+      cwd: REPO_ROOT,
+      env: { ...process.env, ...dotenv, NODE_BIN: process.execPath, EPAM_RUN_ID: runId,
+             LOG_DIR: os.tmpdir() },
+    });
+    fsx.unlinkSync(reply);
+
+    let hit: any = null;
+    for (let i = 0; i < 20 && !hit; i += 1) {
+      const r = await fetch(`${BASE}/api/public/traces?limit=20&sessionId=${encodeURIComponent(runId)}`,
+        { headers: { authorization: AUTH } });
+      if (r.ok) { const d: any = await r.json(); hit = (d.data || [])[0] || null; }
+      if (!hit) await new Promise((res) => setTimeout(res, 500));
+    }
+    expect(hit, `the bash cost edge emitted no trace for ${runId}`).toBeTruthy();
+    expect(hit.name).toBe('bash-edge-probe');
+  });
+
   it('is disabled, not broken, when the backend is not configured', async () => {
     // A project with no Langfuse must run exactly as before — observability is additive.
     const ok = await emitGeneration({ agent: 'x', model: 'y' },

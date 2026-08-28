@@ -19,5 +19,9 @@
   "version": 1,
   "seams": [
     "prd-change-reviewer"
-  ]
+  ],
+  "mayBeEmpty": [
+    "__BEFORE__"
+  ],
+  "$mayBeEmptyWhy": "__BEFORE__ is empty when there is no before-state to compare: an ac_patch on a story whose acceptanceCriteria were absent is an ADDITION, and the caller passes \"\" deliberately. Undeclared, the reviewer could not render and the change went unreviewed (2026-08-28). __AFTER__ is NOT declared: an empty after-state means the change itself is missing, which is a defect the renderer must keep refusing."
 }

@@ -40,6 +40,11 @@ const ORDINARY_ABSENCES: Record<string, Record<string, string>> = {
   'failure-analyst': {
     __SKILL_ADDENDUM__: 'a role may carry no accumulated skill notes',
   },
+  'prd-change-reviewer': {
+    __BEFORE__: 'an ac_patch on a story whose acceptanceCriteria were absent is an ADDITION, so the '
+      + 'caller passes "" deliberately — __AFTER__ stays undeclared, because an empty after-state '
+      + 'means the change itself is missing',
+  },
 };
 
 describe('THE GATES CAN RENDER ON A FIRST RUN', () => {

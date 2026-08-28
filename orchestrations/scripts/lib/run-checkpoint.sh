@@ -380,6 +380,20 @@ _CKPT_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _CKPT_MERGE_JQ="$_CKPT_LIB_DIR/jq/checkpoint-merge.jq"
 _CKPT_SPEC_JQ="$_CKPT_LIB_DIR/jq/checkpoint-spec-count.jq"
 
+# _operator_edited <live-file> <copy-handed-to-the-operator>
+#
+# True when the live file differs from the bytes the pause presented -- that is, a human changed it
+# at the review point. A byte comparison, not a heuristic: reviewed/ holds exactly what was shown.
+#
+# Everything the pause offers for editing is offered because changing it is the POINT of stopping,
+# so a difference here outranks a copy the run took before the human had looked at it.
+_operator_edited() {
+    local _live="${1:-}" _shown="${2:-}"
+    [ -n "$_live" ] && [ -f "$_live" ] || return 1
+    [ -n "$_shown" ] && [ -f "$_shown" ] || return 1   # nothing was shown: nothing to have edited
+    ! cmp -s "$_live" "$_shown"
+}
+
 restore_run_checkpoint() {
     local _rid="${1:-}"
     if [ -z "$_rid" ]; then
@@ -476,13 +490,28 @@ restore_run_checkpoint() {
         _live_spec=$(jq '[.stories[]? | ((.verificationCriteria // []) | length) + ((.fixSiteAnalysis // []) | length)] | add // 0' "$PRD_FILE" 2>/dev/null || echo 0)
     fi
     _ckpt_spec=$(jq '[.stories[]? | ((.verificationCriteria // []) | length) + ((.fixSiteAnalysis // []) | length)] | add // 0' "$_dir/prd.json" 2>/dev/null || echo 0)
-    if [ "${_live_spec:-0}" -gt "${_ckpt_spec:-0}" ]; then
+    # AND A RESTORE NEVER UNDOES THE OPERATOR.
+    #
+    # Spec items cannot see a role reassignment: an edited PRD carries exactly as many as the
+    # checkpoint, so the rule above says "not backwards -- copy" and the edit is silently gone.
+    # Measured 2026-08-28 on a rehearsal: a story reassigned at pause 1 was back to its old role
+    # after the resume, while the banner promised "it does not re-assign over your changes".
+    local _rev="$_dir/reviewed"
+    [ -d "$_rev" ] || _rev="${EPAM_PROJECT_CONFIG_DIR:-${PROJECT_CONFIG_DIR:-}}/runs/$_rid/checkpoint/reviewed"
+
+    if _operator_edited "$PRD_FILE" "$_rev/prd.json"; then
+        echo "[checkpoint] KEEPING the PRD on disk: it was EDITED at the pause, after this checkpoint was taken." >&2
+    elif [ "${_live_spec:-0}" -gt "${_ckpt_spec:-0}" ]; then
         echo "[checkpoint] KEEPING the PRD on disk: it carries ${_live_spec} spec item(s) and the checkpoint carries ${_ckpt_spec} — restoring would discard the spec pass this resume is meant to skip past" >&2
     else
         cp "$_dir/prd.json" "$PRD_FILE" || return 1
     fi
     if [ -f "$_dir/profiles.json" ] && [ -n "${AGENT_PROFILES_FILE:-}" ]; then
-        cp "$_dir/profiles.json" "$AGENT_PROFILES_FILE" || return 1
+        if _operator_edited "$AGENT_PROFILES_FILE" "$_rev/profiles.json"; then
+            echo "[checkpoint] KEEPING the roster on disk: it was EDITED at the pause." >&2
+        else
+            cp "$_dir/profiles.json" "$AGENT_PROFILES_FILE" || return 1
+        fi
     fi
 
     # COUNTED FROM THE PRD BEING RESTORED, not from the metadata. A merged lane restore carries

@@ -1,0 +1,35 @@
+{
+  "base": "d4e3938bc2169e2ae611fb62936b8a716b6f0a1dc90343c9846b77e6bb159b3d",
+  "roles": "88832fe89673d3105464843cafe58e599b2f12f9efcd9e035bf11b144f56ac5c",
+  "usesRoles": true,
+  "doc": {
+    "$why": [
+      "Generated from the guard-vocabulary template by the agent that minted this project's roster.",
+      "The template is never executed; this copy is. Placeholders were checked against the",
+      "template before installation — see lib/project-prompt-contract.js."
+    ],
+    "authority": "project",
+    "body": "__PERSONA_PREFIX__GUARD SEAM: __SEAM__\n\nTHE RULE THIS GUARD ENFORCES:\n__RULE__\n\nTHE STATEMENTS THE GUARD WILL CHECK:\n__STATEMENT_LIST__\n\nDECLARED MANIFEST (the files this story says it will touch):\n__MANIFEST__\n\nNote: This project is organized into two codelines (mocka and mockb), each with src/ directories and vitest-based test suites. Changes typically touch src/ implementation files and corresponding .test.ts or .spec.ts test files. Both codelines use TypeScript with strict mode enabled.\n\n__DOC_SECTION__CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):\n__EVIDENCE__\n\nGround your derivation strictly in the evidence provided. The evidence shows real test runs and actual code behavior from this repository, not generic library behavior. For this project's test framework (vitest) and type system (TypeScript), trust what the evidence demonstrates over assumptions.\n\nSTORY CONTEXT:\nTitle: __STORY_TITLE__\nDescription: __STORY_DESCRIPTION__\n\nThis project ships two independent systems: mocka (fare calculation logic) and mockb (schedule display logic). Each has its own test suite. When deriving the guard vocabulary, pay attention to the specific codebase (mocka or mockb) this story touches, as patterns and conventions may differ between them. The detective roles (mocka-detective, mockb-detective) verify the exact state of the codebase before implementers make changes.\n\n__CODEGRAPH_SECTION__",
+    "derivedFromSha256": "0d6528c4becd35c59315fd3ec95de7f16112cc789b5a3d484ec2e2871e257060",
+    "derivedFromVersion": 1,
+    "id": "guard-vocabulary",
+    "placeholders": [
+      "__CODEGRAPH_SECTION__",
+      "__DOC_SECTION__",
+      "__EVIDENCE__",
+      "__MANIFEST__",
+      "__PERSONA_PREFIX__",
+      "__RULE__",
+      "__SEAM__",
+      "__STATEMENT_LIST__",
+      "__STORY_DESCRIPTION__",
+      "__STORY_TITLE__"
+    ],
+    "mayBeEmpty": [
+      "__CODEGRAPH_SECTION__",
+      "__DOC_SECTION__",
+      "__PERSONA_PREFIX__"
+    ]
+  },
+  "reviewed": true
+}

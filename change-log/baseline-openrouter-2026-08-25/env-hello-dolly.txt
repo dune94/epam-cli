@@ -1,0 +1,7 @@
+EPAM_MODEL_LADDER_HIGH=MiniMax-M2.5=MiniMax-M3|MiniMax-M3=z-ai/glm-5.2|zhipuai/glm-z1-9b=zhipuai/glm-z1-32b|zhipuai/glm-z1-32b=z-ai/glm-5.2|z-ai/glm-5.1=z-ai/glm-5.2|z-ai/glm-5.2=moonshotai/kimi-k2.5|moonshotai/kimi-k2.5=moonshotai/kimi-k3
+EPAM_MODEL_LADDER_HIGHEST=MiniMax-M2.5=MiniMax-M3|MiniMax-M3=z-ai/glm-5.2|zhipuai/glm-z1-9b=zhipuai/glm-z1-32b|zhipuai/glm-z1-32b=z-ai/glm-5.2|z-ai/glm-5.1=z-ai/glm-5.2|z-ai/glm-5.2=moonshotai/kimi-k3|moonshotai/kimi-k2.5=moonshotai/kimi-k3
+EPAM_MODEL_LADDER_HIGHEST_START=z-ai/glm-5.2
+EPAM_MODEL_LADDER_HIGH_START=MiniMax-M3
+EPAM_MODEL_LADDER_MEDIUM=MiniMax-M2.5=MiniMax-M3|MiniMax-M3=z-ai/glm-5.2|zhipuai/glm-z1-9b=zhipuai/glm-z1-32b|zhipuai/glm-z1-32b=z-ai/glm-5.2|z-ai/glm-5.1=z-ai/glm-5.2
+EPAM_MODEL_LADDER_MEDIUM_START=MiniMax-M2.5
+EPAM_MODEL_LADDER_TIER_ORDER=medium high highest

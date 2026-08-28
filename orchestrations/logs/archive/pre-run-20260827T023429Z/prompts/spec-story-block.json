@@ -1,0 +1,23 @@
+{
+  "$why": [
+    "Generated from the spec-story-block template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": ",\n\n__PERSONA__\n\n## Story\n\n__TITLE__\n\n__DESCRIPTION__\n\nComponents: __COMPONENTS__\n\nDeclared files: __DECLARED_FILES__\n\n__LINK_BLOCK__\n\n__COMMENT_BLOCK__\n\n__RETRIEVED_DOCS__\n\n__DOC_PATHS__\n\n## Project context for this story\n\nThe only codeline in scope is `mocka`, checked out at `/home/bradleyjerome/projects/mock3/mock-a`. Its declared dependencies are `vitest` and `typescript` — nothing else is available, so do not reach for a test runner, assertion library, build tool or helper package that is not one of those two. The repository is small: treat the declared files above as the starting point, not as a guarantee that a named file exists.\n\nTwo tickets are in scope for this project:\n\n- MOCK3-1 — Riders aged exactly 65 are charged the adult fare. This is a boundary condition in the age comparison inside `src/fares.ts`, in `fareFor()`. It is a real source defect and the fix is a source edit, not a test-only change.\n- MOCK3-2 — The departure board omits the final stop. Investigation of this codeline has not established that a departure-board surface exists in it at all. If the story you have been handed is MOCK3-2, do not assume the feature is present and do not invent a module, file or function to host it; describe only what the evidence in front of you supports, and say plainly when the code that the ticket describes cannot be located.\n\nRoles working this project: `fare-rules-engineer` (implementer — owns the source edit for the age comparison in `src/fares.ts`) and `mocka-detective` (investigator — confirms the `fareFor()` boundary condition and the presence or absence of any MOCK3-2 surface). Write your spec so the implementer can act on it without re-deriving the investigation.\n\n## Stack traps for this codeline\n\n- **TypeScript strictness is a real constraint.** `typescript` is a declared dependency; any behaviour you specify must be expressible without loosening types or adding casts to make a change compile.\n- **Boundary conditions are the whole story for MOCK3-1.** `<` versus `<=` and `>` versus `>=` on the age comparison are not stylistic. State the exact intended behaviour at the boundary age — which side of the comparison the boundary rider falls on — rather than describing the fix in prose that leaves the operator ambiguous.\n- **Vitest is the only test surface.** Specify expected behaviour in terms a `vitest` test can assert directly: input age, expected fare outcome. Do not specify snapshot files, custom matchers or reporters.\n- **The repository is narrow.** With only a handful of files, an exhaustive read is cheap and a guess is inexcusable. If the spec needs a file path, a symbol name or a signature, it must be one you have actually seen in the code or one that appears in the declared files above.",
+  "derivedFromSha256": "41b6c41e78b4fc06be6b740b6110f0fa2010ba754f4f9639fc3df7228b2e7b19",
+  "derivedFromVersion": 1,
+  "id": "spec-story-block",
+  "placeholders": [
+    "__COMMENT_BLOCK__",
+    "__COMPONENTS__",
+    "__DECLARED_FILES__",
+    "__DESCRIPTION__",
+    "__DOC_PATHS__",
+    "__LINK_BLOCK__",
+    "__PERSONA__",
+    "__RETRIEVED_DOCS__",
+    "__TITLE__"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "$why": [
+    "Generated from the codeline-bridge template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "__BRIDGE_PROFILE__\n\n## About this project\n\nThe mock3 project contains two codelines that collaborate on a transit routing system:\n\n- **mocka** (/home/bradleyjerome/projects/mock3/mock-a) — implements passenger fare calculation, including fare-rule boundaries for rider age segments. Exports a fares module used by downstream consumers.\n\n- **mockb** (/home/bradleyjerome/projects/mock3/mock-b) — implements departure schedule rendering, including stop iteration and time formatting. Exports a schedule module used by downstream consumers.\n\nBoth codelines use TypeScript with vitest for testing. Build with `npm run build`, test with `npm run test`, and type-check with `npm run typecheck`.\n\n## Variables for this run\n\n- BRIDGE_SRC_CODELINE: __BCL__\n- BRIDGE_SRC_DIR: __BWT__\n- BRIDGE_OUT_FILE: __BRIDGE_OUT__\n- BRIDGE_PRD_FILE: __BPRD__\n\n## Extraction guidance\n\nExtract the exported API surface from the '__BCL__' codeline files and write the cross-codeline contract to __BRIDGE_OUT__.\n\nWhen extracting the surface:\n\n- Identify all named exports from the codeline's main entry point and secondary modules. For mocka, prioritize src/fares.ts. For mockb, prioritize src/schedule.ts.\n- Document the shape of each exported function, constant, type, or interface — signatures, parameter types, return types, and any documented constraints (e.g., boundary conditions, preconditions).\n- Include any type definitions the exported surface depends on, so downstream lanes can honor the contract without re-reading the codeline's internals.\n- Note if the codeline has any direct external dependencies beyond its declared deps (vitest, typescript) that affect the exported surface — these become implicit requirements for consumers.\n- List any environment assumptions or initialization requirements the exported API has.\n\nWrite the contract as structured data (JSON or YAML) that a downstream lane's implementer can ingest to understand what this codeline offers and what constraints apply to its use.",
+  "derivedFromSha256": "ac6209cc602f168e39ad8e6459ba79e96693037da4798d4b4719e1d64a772eed",
+  "derivedFromVersion": 1,
+  "id": "codeline-bridge",
+  "placeholders": [
+    "__BCL__",
+    "__BPRD__",
+    "__BRIDGE_OUT__",
+    "__BRIDGE_PROFILE__",
+    "__BWT__"
+  ],
+  "mayBeEmpty": []
+}

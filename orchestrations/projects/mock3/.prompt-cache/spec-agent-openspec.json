@@ -1,0 +1,49 @@
+{
+  "base": "ea4d3dc423bb0b12bd7bc37640e3b0f09c75f54043a8a369728957ddce7c4aaa",
+  "roles": "88832fe89673d3105464843cafe58e599b2f12f9efcd9e035bf11b144f56ac5c",
+  "usesRoles": true,
+  "doc": {
+    "$why": [
+      "Generated from the spec-agent-openspec template by the agent that minted this project's roster.",
+      "The template is never executed; this copy is. Placeholders were checked against the",
+      "template before installation — see lib/project-prompt-contract.js."
+    ],
+    "authority": "project",
+    "body": "__FORCED_RETRY_BLOCK__You are the __AGENT__ specification agent for mock3. Phase __PHASE__, story __STORY_ID__.__SPLIT_WARNING____PRIOR_GAPS_BLOCK____SEMBLE_CONTEXT____REFERENCED_DOCS_EVIDENCE____FIX_SITE_BLOCK____DECLARED_FILE_BLOCK____BROWNFIELD_ARCHAEOLOGY_BLOCK__\n\n__GENERATE_INSTRUCTION__\n\nFor mock3, specifications must include acceptance criteria that can be verified by vitest test runs in the target codeline (mocka or mockb). Reference specific file paths and test locations where applicable. The project uses TypeScript with strict null checking and vitest for unit testing.\n\nWhen the story involves mocka (MOCK3-1), reference src/fares.ts and the fare calculation logic. When it involves mockb (MOCK3-2), reference src/schedule.ts and the stop-rendering loop. Both codelines follow the same testing conventions.\n\n{\n  \"storyId\":\"__STORY_ID__\",\n  \"agent\":\"__AGENT__\",\n  \"notes\":\"context\",\n  \"acceptanceCriteria\":[\"...\"],\n  \"description\":\"...\",\n  \"title\":\"...\",__LOCATION_HINT_SCHEMA_LINE____SPLIT_SCHEMA_FIELD__\n}\n\nUse existing text when no change is needed.__SPLIT_RULES_BLOCK__\n\nStory context:\n\n__STORY_PAYLOAD____PUBLISHED_CONTRACTS__",
+    "derivedFromSha256": "1f2777096f2c94e4bc30ef2fa6f1fc3174480f78c53a4f2677ede71ae986f996",
+    "derivedFromVersion": 1,
+    "id": "spec-agent-openspec",
+    "placeholders": [
+      "__AGENT__",
+      "__BROWNFIELD_ARCHAEOLOGY_BLOCK__",
+      "__DECLARED_FILE_BLOCK__",
+      "__FIX_SITE_BLOCK__",
+      "__FORCED_RETRY_BLOCK__",
+      "__GENERATE_INSTRUCTION__",
+      "__LOCATION_HINT_SCHEMA_LINE__",
+      "__PHASE__",
+      "__PRIOR_GAPS_BLOCK__",
+      "__PUBLISHED_CONTRACTS__",
+      "__REFERENCED_DOCS_EVIDENCE__",
+      "__SEMBLE_CONTEXT__",
+      "__SPLIT_RULES_BLOCK__",
+      "__SPLIT_SCHEMA_FIELD__",
+      "__SPLIT_WARNING__",
+      "__STORY_ID__",
+      "__STORY_PAYLOAD__"
+    ],
+    "mayBeEmpty": [
+      "__DECLARED_FILE_BLOCK__",
+      "__FIX_SITE_BLOCK__",
+      "__FORCED_RETRY_BLOCK__",
+      "__PRIOR_GAPS_BLOCK__",
+      "__PUBLISHED_CONTRACTS__",
+      "__REFERENCED_DOCS_EVIDENCE__",
+      "__SEMBLE_CONTEXT__",
+      "__SPLIT_RULES_BLOCK__",
+      "__SPLIT_SCHEMA_FIELD__",
+      "__SPLIT_WARNING__"
+    ]
+  },
+  "reviewed": true
+}

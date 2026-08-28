@@ -10,7 +10,6 @@
       "declaredDeps": [
         "@azure/search-documents",
         "@cloudinary/url-gen",
-        "@contentstack/live-preview-utils",
         "@contentstack/utils",
         "@metrolinx/cx-shared",
         "@panzoom/panzoom",

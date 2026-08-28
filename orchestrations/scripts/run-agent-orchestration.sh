@@ -3914,6 +3914,88 @@ _run_agent_mint() {
 
 # ── Jira ingest flow ───────────────────────────────────────────────────────────
 # JIRA_PIPELINE=1: pull tickets, run AC gate, synthesize PRD, then route codelines.
+
+# PAUSE 1 of 2 — A HUMAN REVIEW POINT ON EVERY PATH, NOT JUST THE INGESTING ONE.
+#
+# This lived inline inside _run_jira_pipeline, so it was reachable only by a project that
+# ingests from a tracker. A project that AUTHORS its PRD takes the other _run_agent_mint call
+# site and ran straight past it into the spec phase: on 2026-08-27 mock3 was launched with
+# EPAM_PAUSE_AFTER_AGENT_MINT=1 correctly set and present in the process environment, and never
+# stopped — the operator was promised a review point that the shape of their project could not
+# reach. The pause is about the roster and the assignments, which every path produces.
+#
+# Defined ONCE and called from both sites: the review point and the checkpoint it writes are one
+# behaviour, and two copies is how the two paths drifted apart in the first place.
+_pause_after_agent_mint() {
+  # PAUSE 1 of 2 — the roster is minted and every story assigned, and nothing has been
+  # specified or written yet. Which roles exist, how they are briefed, and which story each
+  # owns shape every later stage, and they are cheap to correct here and expensive to correct
+  # after the spec pass has built on them.
+  if command -v should_pause_after_agent_mint >/dev/null 2>&1 && should_pause_after_agent_mint; then
+    local _rckpt=""
+    if _rckpt=$(save_run_checkpoint "${PHASE:-core}" post-roster 2>&1); then
+      info "[orch] post-roster checkpoint saved: ${_rckpt}"
+    else
+      warning "[orch] could not save the post-roster checkpoint: ${_rckpt}"
+    fi
+    echo ""
+    echo -e "${GREEN}╔════════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║  PAUSED — agents minted and assigned, spec NOT started             ║${NC}"
+    echo -e "${GREEN}╚════════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "  RUN NUMBER:  ${GREEN}${ORCH_RUN_ID:-unknown}${NC}"
+    echo -e "  Roster:      ${EPAM_AGENTS_DIR}/profiles.json"
+    echo -e "  Implementers:  ${EPAM_PROJECT_CONFIG_DIR:-${EPAM_AGENTS_DIR}}/project-roles.json"
+    echo -e "  Investigators: ${EPAM_PROJECT_CONFIG_DIR:-${EPAM_AGENTS_DIR}}/project-investigators.json"
+    echo -e "  Minted:      ${LOG_DIR}/agent-mint.json"
+    echo -e "  Assignments: ${LOG_DIR}/role-assignments.json"
+    echo -e "  ${GREEN}WHAT WAS GENERATED (vs canonical): ${LOG_DIR}/roster-diff.md${NC}"
+    echo -e "  What the mint could SEE:            ${LOG_DIR}/mint-inputs.json"
+    echo -e "  ${GREEN}ROSTER REVIEW:                      ${LOG_DIR}/roster-review.json${NC}"
+    if [ -f "${LOG_DIR}/roster-review.json" ] && command -v jq >/dev/null 2>&1; then
+      _rv=$(jq -r '.verdict // "?"' "${LOG_DIR}/roster-review.json" 2>/dev/null)
+      _rn=$(jq -r '.findings | length' "${LOG_DIR}/roster-review.json" 2>/dev/null)
+      _rb=$(jq -r '[.findings[]? | select(.severity=="blocking")] | length' "${LOG_DIR}/roster-review.json" 2>/dev/null)
+      if [ "${_rb:-0}" != "0" ]; then
+        echo -e "     ${RED}verdict: ${_rv} — ${_rn} finding(s), ${_rb} BLOCKING${NC}"
+      else
+        echo -e "     verdict: ${_rv} — ${_rn} finding(s)"
+      fi
+      jq -r '.findings[]? | "       [\(.severity)] \(.agent): \(.found)"' "${LOG_DIR}/roster-review.json" 2>/dev/null | head -8
+    fi
+    if [ -f "${LOG_DIR}/mint-inputs.json" ] && command -v jq >/dev/null 2>&1; then
+      _mi_repo=$(jq -r '.codelineRepo // "NONE"' "${LOG_DIR}/mint-inputs.json" 2>/dev/null)
+      _mi_deps=$(jq -r '.declaredDependencies // 0' "${LOG_DIR}/mint-inputs.json" 2>/dev/null)
+      _mi_df=$(jq -r '.documentsFetched // 0' "${LOG_DIR}/mint-inputs.json" 2>/dev/null)
+      _mi_dl=$(jq -r '.documentsLinked // 0' "${LOG_DIR}/mint-inputs.json" 2>/dev/null)
+      echo -e "     codeline repo:  ${_mi_repo}"
+      echo -e "     declared deps:  ${_mi_deps}"
+      if [ "${_mi_df}" != "${_mi_dl}" ]; then
+        echo -e "     ${RED}documents:      ${_mi_df} of ${_mi_dl} fetched — the roster was derived WITHOUT them${NC}"
+      else
+        echo -e "     documents:      ${_mi_df} of ${_mi_dl} fetched"
+      fi
+    fi
+    echo ""
+    echo -e "  Inspect and EDIT if needed:"
+    echo -e "    ${EPAM_AGENTS_DIR}/profiles.json         (each role's brief)"
+    echo -e "    ${EPAM_PROJECT_CONFIG_DIR:-${EPAM_AGENTS_DIR}}/project-roles.json   (implementers — may author code, may own a story)"
+    echo -e "    ${EPAM_PROJECT_CONFIG_DIR:-${EPAM_AGENTS_DIR}}/project-investigators.json   (investigators — read-only, one per codeline)"
+    echo -e "    ${_synth_prd}   (each story's agentRole)"
+    echo ""
+    echo -e "  Then CONTINUE into the spec phase with:"
+    echo -e "    ${GREEN}EPAM_RESUME_RUN=${ORCH_RUN_ID:-<run-id>} ${TIER3_LAUNCHER:-<your launcher>} --yes${NC}"
+    echo ""
+    echo -e "  Resume re-reads those files and VALIDATES your edits (every story assigned, every"
+    echo -e "  role real and not a canonical process role). It does not re-mint and does not"
+    echo -e "  re-assign over your changes."
+    echo ""
+    # END the run. The operator restarts it with the command above; resume validates the
+    # roster rather than regenerating it, so hand edits survive.
+    return 0
+  fi
+}
+
 _run_jira_pipeline() {
   local _jira_dir="$AUTOMATION_DIR/jira"
   local _log_file="/tmp/orch-$(date +%Y%m%dT%H%M%S).log"
@@ -4031,73 +4113,7 @@ _run_jira_pipeline() {
   # into a roster that was never minted.
   _run_agent_mint "$_synth_prd" "$_log_file" || return 1
 
-  # PAUSE 1 of 2 — the roster is minted and every story assigned, and nothing has been
-  # specified or written yet. Which roles exist, how they are briefed, and which story each
-  # owns shape every later stage, and they are cheap to correct here and expensive to correct
-  # after the spec pass has built on them.
-  if command -v should_pause_after_agent_mint >/dev/null 2>&1 && should_pause_after_agent_mint; then
-    local _rckpt=""
-    if _rckpt=$(save_run_checkpoint "${PHASE:-core}" post-roster 2>&1); then
-      info "[orch] post-roster checkpoint saved: ${_rckpt}"
-    else
-      warning "[orch] could not save the post-roster checkpoint: ${_rckpt}"
-    fi
-    echo ""
-    echo -e "${GREEN}╔════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║  PAUSED — agents minted and assigned, spec NOT started             ║${NC}"
-    echo -e "${GREEN}╚════════════════════════════════════════════════════════════════════╝${NC}"
-    echo ""
-    echo -e "  RUN NUMBER:  ${GREEN}${ORCH_RUN_ID:-unknown}${NC}"
-    echo -e "  Roster:      ${EPAM_AGENTS_DIR}/profiles.json"
-    echo -e "  Implementers:  ${EPAM_PROJECT_CONFIG_DIR:-${EPAM_AGENTS_DIR}}/project-roles.json"
-    echo -e "  Investigators: ${EPAM_PROJECT_CONFIG_DIR:-${EPAM_AGENTS_DIR}}/project-investigators.json"
-    echo -e "  Minted:      ${LOG_DIR}/agent-mint.json"
-    echo -e "  Assignments: ${LOG_DIR}/role-assignments.json"
-    echo -e "  ${GREEN}WHAT WAS GENERATED (vs canonical): ${LOG_DIR}/roster-diff.md${NC}"
-    echo -e "  What the mint could SEE:            ${LOG_DIR}/mint-inputs.json"
-    echo -e "  ${GREEN}ROSTER REVIEW:                      ${LOG_DIR}/roster-review.json${NC}"
-    if [ -f "${LOG_DIR}/roster-review.json" ] && command -v jq >/dev/null 2>&1; then
-      _rv=$(jq -r '.verdict // "?"' "${LOG_DIR}/roster-review.json" 2>/dev/null)
-      _rn=$(jq -r '.findings | length' "${LOG_DIR}/roster-review.json" 2>/dev/null)
-      _rb=$(jq -r '[.findings[]? | select(.severity=="blocking")] | length' "${LOG_DIR}/roster-review.json" 2>/dev/null)
-      if [ "${_rb:-0}" != "0" ]; then
-        echo -e "     ${RED}verdict: ${_rv} — ${_rn} finding(s), ${_rb} BLOCKING${NC}"
-      else
-        echo -e "     verdict: ${_rv} — ${_rn} finding(s)"
-      fi
-      jq -r '.findings[]? | "       [\(.severity)] \(.agent): \(.found)"' "${LOG_DIR}/roster-review.json" 2>/dev/null | head -8
-    fi
-    if [ -f "${LOG_DIR}/mint-inputs.json" ] && command -v jq >/dev/null 2>&1; then
-      _mi_repo=$(jq -r '.codelineRepo // "NONE"' "${LOG_DIR}/mint-inputs.json" 2>/dev/null)
-      _mi_deps=$(jq -r '.declaredDependencies // 0' "${LOG_DIR}/mint-inputs.json" 2>/dev/null)
-      _mi_df=$(jq -r '.documentsFetched // 0' "${LOG_DIR}/mint-inputs.json" 2>/dev/null)
-      _mi_dl=$(jq -r '.documentsLinked // 0' "${LOG_DIR}/mint-inputs.json" 2>/dev/null)
-      echo -e "     codeline repo:  ${_mi_repo}"
-      echo -e "     declared deps:  ${_mi_deps}"
-      if [ "${_mi_df}" != "${_mi_dl}" ]; then
-        echo -e "     ${RED}documents:      ${_mi_df} of ${_mi_dl} fetched — the roster was derived WITHOUT them${NC}"
-      else
-        echo -e "     documents:      ${_mi_df} of ${_mi_dl} fetched"
-      fi
-    fi
-    echo ""
-    echo -e "  Inspect and EDIT if needed:"
-    echo -e "    ${EPAM_AGENTS_DIR}/profiles.json         (each role's brief)"
-    echo -e "    ${EPAM_PROJECT_CONFIG_DIR:-${EPAM_AGENTS_DIR}}/project-roles.json   (implementers — may author code, may own a story)"
-    echo -e "    ${EPAM_PROJECT_CONFIG_DIR:-${EPAM_AGENTS_DIR}}/project-investigators.json   (investigators — read-only, one per codeline)"
-    echo -e "    ${_synth_prd}   (each story's agentRole)"
-    echo ""
-    echo -e "  Then CONTINUE into the spec phase with:"
-    echo -e "    ${GREEN}EPAM_RESUME_RUN=${ORCH_RUN_ID:-<run-id>} ${TIER3_LAUNCHER:-<your launcher>} --yes${NC}"
-    echo ""
-    echo -e "  Resume re-reads those files and VALIDATES your edits (every story assigned, every"
-    echo -e "  role real and not a canonical process role). It does not re-mint and does not"
-    echo -e "  re-assign over your changes."
-    echo ""
-    # END the run. The operator restarts it with the command above; resume validates the
-    # roster rather than regenerating it, so hand edits survive.
-    return 0
-  fi
+  _pause_after_agent_mint
 
   _run_codeline_loop "$_synth_prd" "$_log_file"
 }
@@ -4225,6 +4241,10 @@ if is_parent; then
 
     # THE MINT, on this path too. Scope is resolved above, so the codelines it needs exist.
     _run_agent_mint "$PRD_FILE" "${LOG_DIR:-}/orchestration.log" || exit 1
+
+    # THE SAME REVIEW POINT THE INGESTING PATH GETS. A project that authors its PRD produces a
+    # roster and assignments exactly as one that ingests does, so it stops here too.
+    _pause_after_agent_mint
 
     # Canonical PRD flow: if the PRD defines multiple codelines, route them.
     # Single-codeline PRDs fall through to the normal phase execution below.

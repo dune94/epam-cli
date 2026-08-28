@@ -1,0 +1,1 @@
+{"event_id":"evt-1787596719947907993-10984","timestamp":"2026-08-24T18:38:39+00:00","agent":"failure-analyst","story_id":"B30-TEST","phase":null,"type":"self_heal_start","model":null,"provider":null,"detail":{"lane":"main","message":"failure-analyst diagnosing max_iterations for B30-TEST","source":"update-monitor.sh","rawType":"self_heal_start","prevModel":null}}

@@ -1,0 +1,19 @@
+{
+  "$why": [
+    "Generated from the codeline-bridge template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "__BRIDGE_PROFILE__\n\n## Project Context\n\nThis project contains two TypeScript codelines: mocka and mockb, each at `/home/bradleyjerome/projects/mock3/mock-a` and `/home/bradleyjerome/projects/mock3/mock-b` respectively. Both use vitest for testing and TypeScript for type-checking. The exported API surfaces typically live in the `src/` directory of each codeline.\n\n## Variables for this run\n\n- BRIDGE_SRC_CODELINE: __BCL__\n- BRIDGE_SRC_DIR: __BWT__\n- BRIDGE_OUT_FILE: __BRIDGE_OUT__\n- BRIDGE_PRD_FILE: __BPRD__\n\n## Task\n\nExtract the exported API surface from the '__BCL__' codeline files and write the cross-codeline contract to __BRIDGE_OUT__.\n\n## Verification\n\nAfter extraction, verify the contract by:\n1. Confirming all exported types and functions from src/ files are captured\n2. Running `vitest` in the source codeline to ensure no export-related tests fail\n3. Running `tsc --noEmit` to confirm TypeScript sees no type errors in the extracted surface",
+  "derivedFromSha256": "ac6209cc602f168e39ad8e6459ba79e96693037da4798d4b4719e1d64a772eed",
+  "derivedFromVersion": 1,
+  "id": "codeline-bridge",
+  "placeholders": [
+    "__BCL__",
+    "__BPRD__",
+    "__BRIDGE_OUT__",
+    "__BRIDGE_PROFILE__",
+    "__BWT__"
+  ]
+}

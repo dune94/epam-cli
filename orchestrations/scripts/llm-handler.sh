@@ -168,6 +168,29 @@ run_provider_once() {
     apply_runner_settings "$(basename "$CLAUDE_CMD")" "${EPAM_PROJECT_CONFIG_DIR:-}" || true
     runner_args=(${RUNNER_FLAGS[@]+"${RUNNER_FLAGS[@]}"})
   fi
+    # BIND THE OUTPUT CONTRACT AT THE PROVIDER, WHERE IT CAN ACTUALLY BE ENFORCED.
+    #
+    # Seams declare their output shape and pass it as EPAM_RESPONSE_SCHEMA. That variable was read
+    # in exactly one place — src/agent/AgentRunner.ts, on the `epam run` arm — so on a one-shot
+    # runner it bound NOTHING and the prompt was the contract's only channel. Asking a model in
+    # prose for a JSON shape and hoping is what produced "no parseable output", "missing required
+    # field" and "16 chars of unusable output" across this pipeline, and what the retry ladder,
+    # self-heal and MINIMAX_JSON_MODE were all built to survive.
+    #
+    # The CLI enforces it directly: --json-schema validates structured output before the reply is
+    # returned. The schema is the seam's OWN declaration, unwrapped from the {name, schema} envelope
+    # schemaEnv() builds — nothing is authored here and no seam is named.
+    #
+    # Absent, unreadable, or on a runner that does not accept the flag, the call proceeds exactly as
+    # before and the tag in the prompt remains the contract: enforcement is an upgrade, never a
+    # precondition.
+    if [ -n "${EPAM_RESPONSE_SCHEMA:-}" ] && command -v jq >/dev/null 2>&1; then
+      _rs_schema="$(printf '%s' "$EPAM_RESPONSE_SCHEMA" | jq -c '.schema // empty' 2>/dev/null || true)"
+      if [ -n "$_rs_schema" ] && "$CLAUDE_CMD" --help 2>/dev/null | grep -q -- '--json-schema'; then
+        runner_args+=(--json-schema "$_rs_schema")
+      fi
+    fi
+
 
   case "$provider" in
     claude)

@@ -1,0 +1,17 @@
+{
+  "$why": [
+    "Generated from the vc-coverage template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "You are checking whether a test suite covers ONE specific requirement.\n\n## The requirement\n__VERIFICATION_CRITERION__\n\n## The test file (complete)\n```\n__TEST_SOURCE__\n```\n\n## Project context\n\nThis is a mock3 project with two codelines, each using vitest for testing:\n\n- **mocka**: Handles fare logic. The requirement, if for MOCK3-1, concerns fare boundaries in src/fares.ts. Focus on how age comparisons are written (e.g., `>`, `>=`, `<`, `<=`) — off-by-one boundaries are common, and a test covering age 65 specifically is different from one covering \"65 or older.\"\n\n- **mockb**: Handles schedule rendering. The requirement, if for MOCK3-2, concerns the departure board rendering in src/schedule.ts. Focus on loop bounds and array indices — test assertions must verify what is included and excluded from the rendered output, not just that rendering completes.\n\nAnswer ONE question: does this test file contain a case that would FAIL if this requirement were violated?\n\nJudge the ASSERTIONS, not the titles. A test whose name mentions the same words is irrelevant if it does not actually exercise the requirement — in particular a requirement stating something must NOT happen is not covered by a test asserting that it DOES happen, however similar the wording.\n\nOutput ONLY this JSON, nothing else:\n{\"covered\": true|false, \"case\": \"<the test case name that covers it, or empty>\", \"why\": \"<one sentence>\"}",
+  "derivedFromSha256": "79377c166256044a0c88d4179fdbfbc9d800d74e6cdd9ee4ecc0db817527f795",
+  "derivedFromVersion": 1,
+  "id": "vc-coverage",
+  "placeholders": [
+    "__TEST_SOURCE__",
+    "__VERIFICATION_CRITERION__"
+  ],
+  "mayBeEmpty": []
+}

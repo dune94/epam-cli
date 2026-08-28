@@ -1,0 +1,25 @@
+{
+  "base": "96120684eb5df88e9ed835a21bcf21518132dc2c73176c9f3e87c362de2b1061",
+  "roles": "eaa3230161d443e86ba6a9a4c034434e9f0339c0bbae86b2d4e3eb0a533fb90a",
+  "usesRoles": false,
+  "doc": {
+    "$why": [
+      "Generated from the topology-router template by the agent that minted this project's roster.",
+      "The template is never executed; this copy is. Placeholders were checked against the",
+      "template before installation — see lib/project-prompt-contract.js."
+    ],
+    "authority": "project",
+    "body": "You are selecting an execution topology for orchestration phase \"__PHASE__\".\n\nStories to classify:\n__STORIES__\n__CPA_SIGNALS__\n\nProject context — mock3:\nThis project contains two independent codelines with no shared files: mocka (fare logic, src/fares.ts) and mockb (schedule rendering logic, src/schedule.ts). Both use vitest and typescript. The two tickets in scope map to these separate codelines with no overlapping file scope.\n\nRules:\n- single: 0-1 worktree stories, OR one high-effort story that needs focused attention\n- parallel: 2-4 independent stories with no shared file scope\n- sequential: stories with overlapping file scope, tight coupling, or shared state risk\n\nOverlapping file scope outranks story count. Stories that edit the same file must not run in\nparallel worktrees, even when there are only two or three of them: the count alone cannot see\nthat, and parallel worktrees over a shared file produce a merge conflict the run cannot resolve.\n\nRespond with ONLY this JSON object. No prose, no markdown fences:\n{\"topology\":\"single|parallel|sequential\",\"reason\":\"<one sentence naming the deciding factor>\"}",
+    "derivedFromSha256": "b4c3438df71eb71922697b957dbb1f6d448451bac32e3948af4d507c1b54fa34",
+    "derivedFromVersion": 1,
+    "id": "topology-router",
+    "placeholders": [
+      "__CPA_SIGNALS__",
+      "__PHASE__",
+      "__STORIES__"
+    ],
+    "mayBeEmpty": [
+      "__CPA_SIGNALS__"
+    ]
+  }
+}

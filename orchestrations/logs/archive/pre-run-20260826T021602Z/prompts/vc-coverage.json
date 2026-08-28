@@ -1,0 +1,16 @@
+{
+  "$why": [
+    "Generated from the vc-coverage template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "You are checking whether a test suite covers ONE specific requirement.\n\n## The requirement\n__VERIFICATION_CRITERION__\n\n## The test file (complete)\n```\n__TEST_SOURCE__\n```\n\nAnswer ONE question: does this test file contain a case that would FAIL if this\nrequirement were violated?\n\nJudge the ASSERTIONS, not the titles. A test whose name mentions the same words\nis irrelevant if it does not actually exercise the requirement — in particular a\nrequirement stating something must NOT happen is not covered by a test asserting\nthat it DOES happen, however similar the wording.\n\n### Project context\n\nThis project has two codelines, both pure TypeScript modules tested with vitest:\n\n- **mock-a** (`src/fares.ts`, tested by `test/fares.test.ts`) — fare calculation. The bug is a boundary comparison: `fareFor` checks `rider.age > 65` instead of `>= 65`, so a rider aged **exactly 65** is charged `BASE_FARE_CENTS` (350) instead of `CONCESSION_FARE_CENTS` (175). A test that checks age 70 does NOT cover the criterion \"aged exactly 65\" — only an assertion on age 65 exactly would fail if the boundary were wrong.\n- **mock-b** (`src/schedule.ts`, tested by `test/schedule.test.ts`) — departure board rendering. The bug is that `formatStops` loops `i < stops.length - 1`, omitting the **last stop**. A test that checks the first stop appears does NOT cover \"the final stop is shown\" — only an assertion that the last stop's name appears in the output would fail if the loop truncated it.\n\nTests use vitest idioms: `import { describe, it, expect } from 'vitest'`, assertions like `expect(value).toBe(expected)` and `expect(string).toContain(substring)`. Source is imported from `../src/<module>`. The test command is `vitest run`.\n\nWhen judging coverage, pay special attention to **boundary values**: a requirement about an exact threshold (age 65, the last stop) is only covered by a test that asserts on that exact boundary, not by one that tests a value well inside or outside the range.\n\nOutput ONLY this JSON, nothing else:\n{\"covered\": true|false, \"case\": \"<the test case name that covers it, or empty>\", \"why\": \"<one sentence>\"}",
+  "derivedFromSha256": "0fafc6c338e518bf0e7ff734ef2f484ce696c7cbfc8ae424cdb8b4e4598545ff",
+  "derivedFromVersion": 1,
+  "id": "vc-coverage",
+  "placeholders": [
+    "__TEST_SOURCE__",
+    "__VERIFICATION_CRITERION__"
+  ]
+}

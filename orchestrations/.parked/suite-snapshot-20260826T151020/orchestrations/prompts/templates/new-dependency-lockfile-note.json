@@ -1,0 +1,20 @@
+{
+  "$why": [
+    "The half of the new-dependency directive that only applies to a codeline carrying a lockfile.",
+    "",
+    "A live brownfield run hand-edited package.json and never ran an install, so package-lock.json did not move. Every check passed against a vendor directory left over from an earlier run, and the branch cannot be installed from a clean checkout.",
+    "",
+    "Separate from the parent so that a codeline WITHOUT a lockfile still receives the directive's other half -- the instruction not to stall asking permission, which is why the directive exists at all."
+  ],
+  "description": "Tells the writer to keep the manifest and the lockfile in step by installing rather than hand-editing.",
+  "seams": [
+    "story-writer"
+  ],
+  "id": "new-dependency-lockfile-note",
+  "version": 1,
+  "placeholders": [
+    "__MANIFEST_FILE__",
+    "__LOCKFILE__"
+  ],
+  "body": "\nRun that command rather than editing __MANIFEST_FILE__ by hand. __MANIFEST_FILE__ states an intent; __LOCKFILE__ is the only record of what a clean checkout actually installs, and the command above writes both together. A hand-edited manifest leaves __LOCKFILE__ untouched — your import will still resolve here, because the package may already be present from earlier work, so the type check and the tests will pass and the change will still be broken for everyone else. A deterministic check verifies this and will reject the story.\n\nDo not edit __LOCKFILE__ yourself.\n"
+}

@@ -1,0 +1,39 @@
+This is the supplied context for the check. It is short on purpose: the question is whether this agent answers in the shape it declares, not whether it can summarise a large input.
+
+Codelines in scope and their declared dependencies:
+- metrolinx at /home/bradleyjerome/projects/metrolinx/next.metrolinx.com
+
+The roles you minted for this project:
+(supplied value for __MINTED_ROLES__)
+
+## Project-specific conventions and commands
+
+This project uses Next.js with TypeScript and follows these conventions:
+- Build command: `npm run build` 
+- Test command: `npm run test`
+- Development command: `npm run dev`
+- Type checking: `npm run check-types`
+- Linting: `npm run lint`
+- Formatting: `npm run format`
+
+Key project structure:
+- Source files in `/src` directory
+- Tests in `/__tests__` and `/src/__tests__` directories
+- Configuration files like `next.config.js`, `tsconfig.json`, `tailwind.config.js`
+- Environment variables handled via `.env.local` file
+
+The project uses:
+- React 18 with TypeScript
+- Next.js 15
+- Tailwind CSS for styling
+- Jest for testing
+- ESLint and Prettier for code quality
+- Husky for git hooks
+- i18next for internationalization
+
+Project-specific traps:
+- Requires Node.js 22.x
+- Uses esbuild for building next.config.js
+- Uses rimraf for cleaning temporary files
+- Uses next-sitemap for sitemap generation
+- Uses migration-scripts for content management

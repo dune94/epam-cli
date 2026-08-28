@@ -1,0 +1,30 @@
+{
+  "base": "61b9c37978f8db51e1efea1a2665ab0251cb785790bdea0b3e1531c0d19e2361",
+  "roles": "88832fe89673d3105464843cafe58e599b2f12f9efcd9e035bf11b144f56ac5c",
+  "usesRoles": true,
+  "doc": {
+    "$why": [
+      "Generated from the spec-story-block template by the agent that minted this project's roster.",
+      "The template is never executed; this copy is. Placeholders were checked against the",
+      "template before installation — see lib/project-prompt-contract.js."
+    ],
+    "authority": "project",
+    "body": "## PROJECT CONTEXT FOR MOCK3\n\nThis is a dual-package TypeScript monorepo:\n- **mocka** (/home/bradleyjerome/projects/mock3/mock-a): Fare calculation logic\n- **mockb** (/home/bradleyjerome/projects/mock3/mock-b): Schedule display logic\n\nBoth packages use **vitest** for testing and **TypeScript** for type safety. When reading code or test coverage, look for `.test.ts` or `.spec.ts` files.\n\n**MOCK3-1 Workflow**: mocka-detective reads src/fares.ts to confirm the age boundary comparison operator and test coverage → fare-rules-engineer implements the fix.\n\n**MOCK3-2 Workflow**: mockb-detective reads src/schedule.ts to confirm the loop-bound mismatch and test coverage → schedule-display-engineer implements the fix.\n\nInvestigators: your job is to report exactly what the code does NOW and what tests exist. Do not propose fixes—that's the implementer's role.\n\n---\n\n__PERSONA__STORY\nTitle: __TITLE__\nDescription: __DESCRIPTION__\nComponents: __COMPONENTS__\nDeclared files: __DECLARED_FILES__\n\nLINKS FOUND IN THIS TICKET:\n__LINK_BLOCK__\n\nCOMMENT THREAD (context for judging relevance — a link's surrounding discussion often says why it was posted):\n__COMMENT_BLOCK__\n__RETRIEVED_DOCS__\n\nALREADY RETRIEVED — these documents have been fetched for you and written to disk. Read them\nwith read_file rather than fetching them again; the text is the same and it costs you nothing:\n__DOC_PATHS__\nA document listed here that you did not read is a document you cannot quote.",
+    "derivedFromSha256": "41b6c41e78b4fc06be6b740b6110f0fa2010ba754f4f9639fc3df7228b2e7b19",
+    "derivedFromVersion": 1,
+    "id": "spec-story-block",
+    "placeholders": [
+      "__COMMENT_BLOCK__",
+      "__COMPONENTS__",
+      "__DECLARED_FILES__",
+      "__DESCRIPTION__",
+      "__DOC_PATHS__",
+      "__LINK_BLOCK__",
+      "__PERSONA__",
+      "__RETRIEVED_DOCS__",
+      "__TITLE__"
+    ],
+    "mayBeEmpty": []
+  },
+  "reviewed": true
+}

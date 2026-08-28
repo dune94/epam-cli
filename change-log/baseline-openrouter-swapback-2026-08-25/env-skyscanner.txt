@@ -1,0 +1,14 @@
+EPAM_FINAL_FALLBACK_MODEL=moonshotai/kimi-k3
+EPAM_FINAL_FALLBACK_PROVIDER=qwen
+EPAM_MODEL_LADDER=
+EPAM_MODEL_LADDER_HIGH=MiniMax-M2.5=MiniMax-M3|MiniMax-M3=z-ai/glm-5.2|zhipuai/glm-z1-9b=zhipuai/glm-z1-32b|zhipuai/glm-z1-32b=z-ai/glm-5.2|z-ai/glm-5.1=z-ai/glm-5.2|z-ai/glm-5.2=moonshotai/kimi-k3|moonshotai/kimi-k2.5=moonshotai/kimi-k3
+EPAM_MODEL_LADDER_HIGHEST=z-ai/glm-5.3=moonshotai/kimi-k3|z-ai/glm-5.2=z-ai/glm-5.3|z-ai/glm-5.1=z-ai/glm-5.3|MiniMax-M2.7-highspeed=MiniMax-M3|MiniMax-M2.7=MiniMax-M3|MiniMax-M2.5=MiniMax-M3|MiniMax-M3=z-ai/glm-5.3|zhipuai/glm-z1-9b=zhipuai/glm-z1-32b|zhipuai/glm-z1-32b=z-ai/glm-5.3|moonshotai/kimi-k2.5=moonshotai/kimi-k3
+EPAM_MODEL_LADDER_HIGHEST_START=z-ai/glm-5.3
+EPAM_MODEL_LADDER_HIGH_START=MiniMax-M3
+EPAM_MODEL_LADDER_MEDIUM=MiniMax-M2.7-highspeed=MiniMax-M3|MiniMax-M2.7=MiniMax-M3|MiniMax-M2.5=MiniMax-M3|MiniMax-M3=z-ai/glm-5.3|z-ai/glm-5.1=z-ai/glm-5.3|z-ai/glm-5.2=z-ai/glm-5.3|zhipuai/glm-z1-9b=zhipuai/glm-z1-32b|zhipuai/glm-z1-32b=z-ai/glm-5.3
+EPAM_MODEL_LADDER_MEDIUM_START=MiniMax-M2.7-highspeed
+EPAM_MODEL_LADDER_TIER_ORDER=medium high highest
+EPAM_MODEL_PROVIDER_MAP=zhipuai/*=qwen|moonshotai/*=qwen|z-ai/*=qwen|glm-*=qwen|kimi-*=qwen|deepseek/*=qwen|MiniMax-*=minimax
+EPAM_ORCHESTRATION_PROVIDER=qwen
+ORCH_GATE_PROVIDER=qwen
+SPEC_MODE_PROVIDER=qwen

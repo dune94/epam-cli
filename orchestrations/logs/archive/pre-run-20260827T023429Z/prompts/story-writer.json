@@ -1,0 +1,13 @@
+{
+  "$why": [
+    "Generated from the story-writer template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": ",",
+  "derivedFromSha256": "f3a1152250a807e5f064f852e854a593dfcc2ed3f89e020fdfdb1bc1c0854a6b",
+  "derivedFromVersion": 1,
+  "id": "story-writer",
+  "placeholders": []
+}

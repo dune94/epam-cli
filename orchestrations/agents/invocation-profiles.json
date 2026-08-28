@@ -1136,7 +1136,11 @@
     "contentstack-live-preview-engineer": "derived",
     "metrolinx-contentstack-detective": "derived"
   },
-  "_ladderPositions": "A seam declares a POSITION in the project\u2019s ladderTierOrder (base|mid|top), never a tier NAME. The project owns its tier vocabulary; the engine owns none. Converted 2026-08-15 after twenty seams asking for a literal HIGHEST ran unladdered on a project that declared only high and medium.",
+  "_ladderPositions": {
+    "$why": "A seam declares a POSITION in the project\u2019s ladderTierOrder (base|mid|top), never a tier NAME. The project owns its tier vocabulary; the engine owns none. Converted 2026-08-15 after twenty seams asking for a literal HIGHEST ran unladdered on a project that declared only high and medium.",
+    "$namesWhy": "Machine-readable because two readers need the same answer and both used to restate it: resolveTierPosition, which maps a position onto a project's tier order, and seamLadderFor, which refuses a project override that is not a position. Restated in code, a position added to one and not the other resolves for a seam and is rejected for a project.",
+    "names": ["base", "mid", "top"]
+  },
   "_defaultSeam": "REMOVED 2026-08-16. A project may declare EPAM_DEFAULT_SEAM in its config if it wants unmatched agents absorbed; the engine declares none, so an unmatched agent fails the mint loudly and is fixed with one line rather than discovered mid-run.",
   "_seamPatternForm": "Each rule matches a role word as a whole name OR as a suffix: (^|-)word$. They were all -word$, so a minted agent named for its role alone -- \"generator\", \"reviewer\", \"analyst\" -- matched nothing. While the engine carried a defaultSeam that was invisible: the agent silently became a planning agent. Minting models produce bare role names routinely, so the suffix-only form made the pattern set depend on a naming habit nothing enforces.",
   "_addedSeams": "codeline-bridge-agent and qa-gate:e2e added 2026-08-16. Both were invoked BY NAME by run-agent-orchestration.sh and had no profile at all, so each ran with no ladder, no effort and no tool grant -- the same gap lint-fixer had. Found by the prompt-chain test, which asks that every seam a template names actually exists.",
@@ -1163,5 +1167,106 @@
     "model-authored, so the NAME is never ours to rely on; the kind is stated outright.",
     "These rules already named the seam, so labelling them with the kind they represent adds no new",
     "mapping. A separate kind->seam table would be a second place to keep correct."
+  ],
+  "$engineConsumesWhy": "What the ENGINE reads out of an agent, as opposed to what another AGENT reads. The registry could say what a seam produces and what a seam consumes, and what the engine PRODUCES, but had no way to say what the engine CONSUMES. So twenty-one artefacts that the orchestrator parses inline or reads from disk appeared to have no consumer at all, and an audit driven by these declarations would certify a pipeline that drops them. Each entry carries the token it is read as and the files that read it, so a declaration cannot outlive the code it describes.",
+  "engineConsumes": {
+    "ac-classification": {
+      "readsAs": "ac-classification",
+      "readBy": [
+        "orchestrations/scripts/agent-check.js",
+        "orchestrations/scripts/lib/ac-gate.js",
+        "orchestrations/scripts/pre-run-reset.sh",
+        "orchestrations/scripts/spec-mode-runner.js"
+      ]
+    },
+    "agent-roster": {
+      "readsAs": "agent-roster",
+      "readBy": [
+        "orchestrations/scripts/claude.sh",
+        "orchestrations/scripts/detective-rerun-step.js",
+        "orchestrations/scripts/lib/agent-kinds.js",
+        "orchestrations/scripts/lib/agent-roster.js"
+      ]
+    },
+    "change-verdict": {
+      "readsAs": "change-verdict",
+      "readBy": [
+        "orchestrations/scripts/claude.sh"
+      ]
+    },
+    "codeline-selection": {
+      "readsAs": "codeline-discovery.json",
+      "readBy": [
+        "orchestrations/scripts/ingest-jira-tickets.sh",
+        "orchestrations/scripts/lib/handlers/apply-codeline-scope.js",
+        "orchestrations/scripts/lib/handlers/codeline-discovery-exports.js",
+        "orchestrations/scripts/mint-agents-step.js"
+      ]
+    },
+    "gate-verdict": {
+      "readsAs": "gate-verdict",
+      "readBy": [
+        "orchestrations/scripts/ingest-jira-tickets.sh",
+        "orchestrations/scripts/lib/handlers/ac-gate-verdicts.js"
+      ]
+    },
+    "guard-vocabulary": {
+      "readsAs": "guard-vocabulary",
+      "readBy": [
+        "orchestrations/scripts/claude.sh",
+        "orchestrations/scripts/lib/agent-output-schema.js",
+        "orchestrations/scripts/lib/guard-vocabulary.js",
+        "orchestrations/scripts/lib/project-prompt-contract.js"
+      ]
+    },
+    "prompt-verdict": {
+      "readsAs": "prompt-verdict",
+      "readBy": [
+        "orchestrations/scripts/lib/project-prompt-builder.js"
+      ]
+    },
+    "role-assignments": {
+      "readsAs": "role-assignments",
+      "readBy": [
+        "orchestrations/scripts/agent-check.js",
+        "orchestrations/scripts/mint-agents-step.js",
+        "orchestrations/scripts/pre-run-reset.sh",
+        "orchestrations/scripts/run-agent-orchestration.sh"
+      ]
+    },
+    "roster-verdict": {
+      "readsAs": "roster-verdict",
+      "readBy": [
+        "orchestrations/scripts/agent-check.js"
+      ]
+    },
+    "survey-verdict": {
+      "readsAs": "survey-verdict",
+      "readBy": [
+        "orchestrations/scripts/agent-check.js"
+      ]
+    },
+    "topology": {
+      "readsAs": "topology",
+      "readBy": [
+        "orchestrations/scripts/lib/eslint-baseline-gate.sh",
+        "orchestrations/scripts/lib/llm-call.js",
+        "orchestrations/scripts/lib/seam-invocation.js",
+        "orchestrations/scripts/lib/topology-router.js"
+      ]
+    }
+  },
+  "$unconsumedOutputsWhy": "Agent output that NOTHING has been shown to read — neither a seam nor the engine. Each one is a model call whose answer is discarded, which is the rule against unused agent output. Listed rather than hidden so the count is visible and cannot grow silently; a test holds it at this number. Removing an entry means a consumer was found or the call was stopped.",
+  "_unconsumedOutputs": [
+    "agent-skill-augmentation",
+    "change-summary",
+    "project-prompts",
+    "qa-verdict",
+    "runtime-boundary-findings",
+    "spec-assignments",
+    "story-model-assignments",
+    "story-specification",
+    "ticket-link-evidence",
+    "vc-coverage-report"
   ]
 }

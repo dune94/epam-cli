@@ -462,7 +462,7 @@
           "range": ">=3.0.0 <3.1.5"
         },
         {
-          "source": 1145454,
+          "source": 1145636,
           "name": "fast-uri",
           "dependency": "fast-uri",
           "title": "fast-uri vulnerable to host confusion via failed IDN canonicalization",
@@ -1026,12 +1026,12 @@
       "total": 17
     },
     "dependencies": {
-      "prod": 938,
-      "dev": 660,
+      "prod": 602,
+      "dev": 952,
       "optional": 66,
-      "peer": 48,
+      "peer": 0,
       "peerOptional": 0,
-      "total": 1640
+      "total": 1592
     }
   }
 }

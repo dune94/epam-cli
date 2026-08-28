@@ -1,0 +1,47 @@
+{
+  "$comment": "THE PROVIDERS THIS ENGINE KNOWS. Data, not code: preflight validates a PRD's aiProvider against `known`, and nothing in the pipeline carries a vendor name as a literal. Adding a provider is an edit here and nowhere else. Extracted from preflight-check.sh on 2026-08-16, where the same set lived as a Python set literal inside an embedded program — a place no other check could read and no one would think to update.",
+  "known": [
+    "qwen",
+    "openai",
+    "codex",
+    "cursor",
+    "opencode",
+    "minimax",
+    "codemie-claude",
+    "copilot",
+    "claude"
+  ],
+  "$effortBadgeComment": "Providers whose viewer badge is driven by the effort tier, so effort=low renders as the cheapest badge. Preflight warns when a story on one of these is assigned effort=low, because the badge then misreports the model actually doing the work.",
+  "effortBadged": [
+    "qwen",
+    "openai",
+    "anthropic",
+    "claude",
+    "gemini"
+  ],
+  "$modelRulesComment": "Per-provider rules about the MODEL a story may be assigned. `requiresSlug` means the model must be a routed slug carrying a '/' — an assignment without one names a model the router cannot reach, and the story fails with an empty result rather than a routing error. `knownModels` is advisory: an unlisted model warns, because a new model appearing is normal and a typo looks the same. Absent from this map means no rule.",
+  "modelRules": {
+    "qwen": {
+      "requiresSlug": true
+    },
+    "minimax": {
+      "$suitabilityComment": "Test-authoring drifted on this provider (see the brownfield test-authoring incident): it rewrites the assertions instead of writing the test the criterion asks for. A story whose files are test files must not be assigned to it.",
+      "suitableForTestAuthoring": false,
+      "knownModels": [
+        "MiniMax-M3",
+        "MiniMax-M2.5",
+        "MiniMax-M1.5",
+        "MiniMax-M1",
+        "upgrade"
+      ]
+    }
+  },
+  "$statusComment": "The story statuses a PRD may carry. Preflight rejects anything else — an unexpected status is read as not-completed by every gate, so a typo silently fails a story that succeeded.",
+  "storyStatuses": [
+    "pending",
+    "completed",
+    "failed",
+    "deprecated"
+  ],
+  "$knownDrift": "known must match the list provider_to_cli() ADVERTISES in its own error message — that is the engine's statement of what a PRD may assign. 'epam' was removed 2026-08-25: it is a vestigial case arm mapping to $EPAM_CLI, the same target as copilot/openai/qwen/cursor/minimax, it names the RUNNER rather than a vendor, nothing assigns it, and the engine does not advertise it. codemie-claude and copilot were ADDED for the opposite reason: both are advertised and accepted, and preflight would have rejected a PRD assigning them. 'anthropic', 'claude' and 'gemini' were removed the same day for the INVERSE reason: they were listed with no case arm at all, so a PRD assigning them passed the gate and died at runtime. brownfield-test-prd.json already assigned \"claude\" and would have failed mid-run; it now fails at preflight, before anything is spent."
+}

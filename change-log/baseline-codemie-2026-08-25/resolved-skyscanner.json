@@ -1,0 +1,133 @@
+{
+  "$schema": "../../config/llm-settings.schema.json",
+  "_laddersMovedToSet": "ladders, ladderTierOrder and modelOverrides REMOVED 2026-08-25. A ladder names MODELS and models belong to a STACK, so the stack declares them and every project inherits. While a project declared its own, project-overrides-set meant EPAM_PROVIDER_SET=codemie changed the provider and left the models behind — a run pointed at codemie-claude still asking for MiniMax-M3. See config/llm-defaults.<set>.json.",
+  "_migrationNote": "Ladders MOVED VERBATIM from config.env EPAM_MODEL_LADDER_* pins (B6, 2026-08-25). The ladder design post-dates this project and it was never migrated; the engine kept honouring the pins, so nothing failed and the drift stayed invisible. startModel and the highest tier were ADDED 2026-08-25 as a reviewed change, separately from the verbatim migration. Values are grounded in this project’s own removed config.env pins (ORCH_MINI_MODEL, ORCH_UPGRADE_MODEL, ESCALATION_MODEL_HIGH) and in the shape metrolinx/mock3/hello-dolly share. highest carries the SAME chain as high and differs only in entry.",
+  "ladderTierOrder": [
+    "medium",
+    "high",
+    "highest"
+  ],
+  "ladders": {
+    "high": {
+      "$why": "Same ENTRY as medium, higher CEILING. That is the 'different entry, same ceiling' rule applied between high and highest: what separates the tiers is how far they may climb, not where they start.",
+      "modelLadder": [
+        {
+          "from": "claude-haiku-4-5-20251001",
+          "to": "claude-sonnet-5"
+        },
+        {
+          "from": "claude-sonnet-5",
+          "to": "claude-opus-5"
+        }
+      ],
+      "rungs": [
+        {
+          "maxIterations": 40,
+          "reasoningEffort": "medium",
+          "rung": 0
+        },
+        {
+          "maxIterations": 250,
+          "reasoningEffort": "high",
+          "rung": 1
+        },
+        {
+          "maxIterations": 300,
+          "reasoningEffort": "high",
+          "rung": 2
+        }
+      ],
+      "startModel": "claude-haiku-4-5-20251001"
+    },
+    "highest": {
+      "$why": "Skips Haiku. 25 seams resolve here and would waste a rung proving a small model cannot do the work. Same ceiling as high, entered two rungs up.",
+      "modelLadder": [
+        {
+          "from": "claude-sonnet-5",
+          "to": "claude-opus-4-8"
+        },
+        {
+          "from": "claude-opus-4-8",
+          "to": "claude-opus-5"
+        }
+      ],
+      "rungs": [
+        {
+          "maxIterations": 250,
+          "reasoningEffort": "high",
+          "rung": 0
+        },
+        {
+          "maxIterations": 250,
+          "reasoningEffort": "high",
+          "rung": 1
+        },
+        {
+          "maxIterations": 300,
+          "reasoningEffort": "xhigh",
+          "rung": 2
+        }
+      ],
+      "startModel": "claude-sonnet-5"
+    },
+    "medium": {
+      "$why": "Enters cheap and tops out at Sonnet-5. A `mid` seam never reaches Opus: 14 seams resolve here, and measured turn counts are p50 4, p90 24 — work that does not need a frontier model.",
+      "modelLadder": [
+        {
+          "from": "claude-haiku-4-5-20251001",
+          "to": "claude-sonnet-5"
+        }
+      ],
+      "rungs": [
+        {
+          "maxIterations": 40,
+          "reasoningEffort": "medium",
+          "rung": 0
+        },
+        {
+          "maxIterations": 120,
+          "reasoningEffort": "high",
+          "rung": 1
+        }
+      ],
+      "startModel": "claude-haiku-4-5-20251001"
+    }
+  },
+  "modelOverrides": {
+    "$whyAdaptive": "Thinking is held STABLE per model. Anthropic's docs list effort and thinking-parameter changes as cache invalidators, so a config that changes between attempts discards the cache every retry — the opposite of what a 1h TTL is for.",
+    "$whyAutoCompress": "150000 against a 200000 window is an OVERFLOW GUARD near the ceiling, never a token-saving device: compaction rewrites the prefix and destroys the prompt cache. Measured input is p50 13.3k, p90 19k, max 25.9k — about 13% of the window — so this should never fire. If it does, something has gone wrong upstream and that is worth knowing.",
+    "$whyNoTemperature": "codemie-claude exposes no temperature flag and Claude Code has no supported lever for it. Declaring one would be decoration. Deliberation is controlled by reasoningEffort and thinking instead.",
+    "claude-haiku-4-5": {
+      "autoCompressAt": 150000,
+      "matchOn": "model",
+      "matchSubstring": "claude-haiku-4-5",
+      "maxOutputTokens": 32000,
+      "promptCacheTtl": "1h",
+      "thinking": "adaptive"
+    },
+    "claude-opus-4-8": {
+      "autoCompressAt": 150000,
+      "matchOn": "model",
+      "matchSubstring": "claude-opus-4-8",
+      "maxOutputTokens": 64000,
+      "promptCacheTtl": "1h",
+      "thinking": "adaptive"
+    },
+    "claude-opus-5": {
+      "autoCompressAt": 150000,
+      "matchOn": "model",
+      "matchSubstring": "claude-opus-5",
+      "maxOutputTokens": 64000,
+      "promptCacheTtl": "1h",
+      "thinking": "adaptive"
+    },
+    "claude-sonnet-5": {
+      "autoCompressAt": 150000,
+      "matchOn": "model",
+      "matchSubstring": "claude-sonnet-5",
+      "maxOutputTokens": 64000,
+      "promptCacheTtl": "1h",
+      "thinking": "adaptive"
+    }
+  }
+}

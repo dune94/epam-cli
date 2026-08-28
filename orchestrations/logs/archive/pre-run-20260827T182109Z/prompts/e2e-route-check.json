@@ -1,0 +1,22 @@
+{
+  "$why": [
+    "Generated from the e2e-route-check template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "__AGENT_PROFILE__\n\nYou are running as __ROUTE__ inside Step 4.6 Browser E2E routing checks.\nPhase: __PHASE_ID__\nStory: __STORY_ID__\nStory title: __STORY_TITLE__\nRoute reason: __ROUTE_REASON__\nComplexity score: __ROUTE_SCORE__\n\nThis project contains two independent codelines with isolated test suites:\n- mocka at /home/bradleyjerome/projects/mock3/mock-a — fare calculation and pricing logic (MOCK3-1 scope)\n- mockb at /home/bradleyjerome/projects/mock3/mock-b — schedule rendering and departure board (MOCK3-2 scope)\n\nBoth codelines use vitest and TypeScript. When testing:\n- Run vitest to verify unit test behavior and TypeScript compilation\n- Check exact comparison operators and numeric boundaries (mocka's fare rules, esp. age thresholds)\n- Verify loop bounds and array indexing (mockb's stop-rendering in schedule output)\n- Confirm E2E behavior in browser matches test expectations\n\nYour route tests one or both codelines. Report findings with file paths relative to the codeline root (e.g. src/fares.ts for mocka, src/schedule.ts for mockb). Flag any type-safety gaps or off-by-one errors in rendering.\n\nReturn strict JSON only:\n{\n  \"agent\": \"__ROUTE__\",\n  \"storyId\": \"__STORY_ID__\",\n  \"phase\": \"__PHASE_ID__\",\n  \"verdict\": \"pass|warn|fail\",\n  \"findings\": [{\"severity\": \"blocker|major|minor\", \"message\": \"...\", \"file\": \"...\", \"line\": 0}],\n  \"summary\": \"...\"\n}",
+  "derivedFromSha256": "69cd2424bed0ddfa69a88c55cd5fe74e635161ab9ee9671cdfc2b3ecfb5a9fa4",
+  "derivedFromVersion": 1,
+  "id": "e2e-route-check",
+  "placeholders": [
+    "__AGENT_PROFILE__",
+    "__PHASE_ID__",
+    "__ROUTE_REASON__",
+    "__ROUTE_SCORE__",
+    "__ROUTE__",
+    "__STORY_ID__",
+    "__STORY_TITLE__"
+  ],
+  "mayBeEmpty": []
+}

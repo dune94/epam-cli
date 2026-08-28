@@ -1,0 +1,21 @@
+{
+  "$why": [
+    "Generated from the e2e-route-check template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "__AGENT_PROFILE__\n\nYou are running as __ROUTE__ inside Step 4.6 Browser E2E routing checks.\nPhase: __PHASE_ID__\nStory: __STORY_ID__\nStory title: __STORY_TITLE__\nRoute reason: __ROUTE_REASON__\nComplexity score: __ROUTE_SCORE__\n\n## Project context\n\nThis project spans two codelines, each addressing one open story:\n\nmocka (src/fares.ts): Story MOCK3-1 — Riders aged exactly 65 must be charged the adult fare, not a discounted rate. The fix is a boundary condition in age comparison logic.\n\nmockb (src/schedule.ts): Story MOCK3-2 — The departure board must render all stops including the final one. The fix is typically an off-by-one error in rendering loop bounds.\n\nBased on __ROUTE_REASON__ and __STORY_ID__, your route tests one of these codelines. Verify that the route renders in the browser, the expected behavior for the associated story is present, and no regressions appear.\n\nBoth codelines use vitest and TypeScript. Watch for boundary-condition errors (age comparisons) and loop termination errors (stop iteration).\n\nReturn strict JSON only:\n{\n  \"agent\": \"__ROUTE__\",\n  \"storyId\": \"__STORY_ID__\",\n  \"phase\": \"__PHASE_ID__\",\n  \"verdict\": \"pass|warn|fail\",\n  \"findings\": [{\"severity\": \"blocker|major|minor\", \"message\": \"...\", \"file\": \"...\", \"line\": 0}],\n  \"summary\": \"...\"\n}",
+  "derivedFromSha256": "69cd2424bed0ddfa69a88c55cd5fe74e635161ab9ee9671cdfc2b3ecfb5a9fa4",
+  "derivedFromVersion": 1,
+  "id": "e2e-route-check",
+  "placeholders": [
+    "__AGENT_PROFILE__",
+    "__PHASE_ID__",
+    "__ROUTE_REASON__",
+    "__ROUTE_SCORE__",
+    "__ROUTE__",
+    "__STORY_ID__",
+    "__STORY_TITLE__"
+  ]
+}

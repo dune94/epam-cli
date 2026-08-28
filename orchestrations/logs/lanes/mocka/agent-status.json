@@ -1178,6 +1178,926 @@
       "role": "",
       "message": "All steps finished",
       "timestamp": "2026-08-18T11:20:58-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T09:25:42-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK3-1 — tracing the causal fix site",
+      "timestamp": "2026-08-27T09:25:42-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK3-1 — tracing the causal fix site",
+      "timestamp": "2026-08-27T09:25:42-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK3-1 — tracing the causal fix site",
+      "timestamp": "2026-08-27T09:25:43-04:00"
+    },
+    {
+      "type": "error",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] FATAL — openspec produced no parsable output for MOCK3-1 after 3 attempt(s)",
+      "timestamp": "2026-08-27T09:25:43-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T12:00:28-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK3-1 — tracing the causal fix site",
+      "timestamp": "2026-08-27T12:00:28-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective located fix site: src/fares.ts",
+      "timestamp": "2026-08-27T12:02:37-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T18:53:12-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK3-1 — tracing the causal fix site",
+      "timestamp": "2026-08-27T18:53:12-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective located fix site: src/fares.ts",
+      "timestamp": "2026-08-27T18:55:26-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T21:15:04-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK3-1 — tracing the causal fix site",
+      "timestamp": "2026-08-27T21:15:04-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective located fix site: src/fares.ts (reuse CONCESSION_FARE_CENTS)",
+      "timestamp": "2026-08-27T21:15:09-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-27T21:15:15-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T21:15:15-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-27T21:15:18-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T21:17:30-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK3-1 — tracing the causal fix site",
+      "timestamp": "2026-08-27T21:17:30-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective located fix site: src/fares.ts (reuse CONCESSION_FARE_CENTS)",
+      "timestamp": "2026-08-27T21:17:35-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-27T21:17:40-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T21:17:40-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-27T21:17:43-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T21:19:53-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK3-1 — tracing the causal fix site",
+      "timestamp": "2026-08-27T21:19:54-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective located fix site: src/fares.ts (reuse CONCESSION_FARE_CENTS)",
+      "timestamp": "2026-08-27T21:19:59-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-27T21:20:04-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T21:20:04-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-27T21:20:07-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T21:22:18-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK3-1 — tracing the causal fix site",
+      "timestamp": "2026-08-27T21:22:18-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective located fix site: src/fares.ts (reuse CONCESSION_FARE_CENTS)",
+      "timestamp": "2026-08-27T21:22:23-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-27T21:22:28-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T21:22:28-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-27T21:22:31-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T21:24:57-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK3-1 — tracing the causal fix site",
+      "timestamp": "2026-08-27T21:24:57-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective located fix site: src/fares.ts (reuse CONCESSION_FARE_CENTS)",
+      "timestamp": "2026-08-27T21:25:03-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-27T21:25:08-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T21:25:08-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-27T21:25:11-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T22:09:39-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK3-1 — tracing the causal fix site",
+      "timestamp": "2026-08-27T22:09:39-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective located fix site: src/context/ContentstackContext.tsx",
+      "timestamp": "2026-08-27T22:09:53-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T22:13:39-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK3-1 — tracing the causal fix site",
+      "timestamp": "2026-08-27T22:13:40-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective located fix site: src/fares.ts (reuse CONCESSION_FARE_CENTS)",
+      "timestamp": "2026-08-27T22:13:45-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-27T22:13:52-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T22:13:52-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-27T22:13:55-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T22:17:27-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK3-1 — tracing the causal fix site",
+      "timestamp": "2026-08-27T22:17:27-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective located fix site: src/fares.ts (reuse CONCESSION_FARE_CENTS)",
+      "timestamp": "2026-08-27T22:17:33-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-27T22:17:38-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T22:17:38-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-27T22:17:41-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T22:23:46-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK3-1 — tracing the causal fix site",
+      "timestamp": "2026-08-27T22:23:46-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective located fix site: src/fares.ts (reuse CONCESSION_FARE_CENTS)",
+      "timestamp": "2026-08-27T22:23:52-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-27T22:23:57-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T22:23:57-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-27T22:24:00-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T22:29:58-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK3-1 — tracing the causal fix site",
+      "timestamp": "2026-08-27T22:29:58-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective located fix site: src/fares.ts (reuse CONCESSION_FARE_CENTS)",
+      "timestamp": "2026-08-27T22:30:03-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-27T22:30:09-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T22:30:09-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-27T22:30:12-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T22:34:19-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK3-1 — tracing the causal fix site",
+      "timestamp": "2026-08-27T22:34:19-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective located fix site: src/fares.ts (reuse CONCESSION_FARE_CENTS)",
+      "timestamp": "2026-08-27T22:34:27-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-27T22:34:34-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T22:34:34-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-27T22:34:37-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T22:36:30-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK3-1 — tracing the causal fix site",
+      "timestamp": "2026-08-27T22:36:30-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective located fix site: src/fares.ts (reuse CONCESSION_FARE_CENTS)",
+      "timestamp": "2026-08-27T22:36:36-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-27T22:36:42-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T22:36:42-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-27T22:36:45-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T22:43:28-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK3-1 — tracing the causal fix site",
+      "timestamp": "2026-08-27T22:43:28-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective located fix site: src/fares.ts (reuse CONCESSION_FARE_CENTS)",
+      "timestamp": "2026-08-27T22:43:33-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-27T22:43:39-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-27T22:43:39-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-27T22:43:42-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-28T04:49:07-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK3-1 — tracing the causal fix site",
+      "timestamp": "2026-08-28T04:49:07-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective located fix site: src/fares.ts (reuse CONCESSION_FARE_CENTS)",
+      "timestamp": "2026-08-28T04:49:13-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-28T04:49:19-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-28T04:49:19-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-28T04:49:22-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-28T06:21:52-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK3-1 — tracing the causal fix site",
+      "timestamp": "2026-08-28T06:21:52-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective located fix site: src/fares.ts (reuse CONCESSION_FARE_CENTS)",
+      "timestamp": "2026-08-28T06:22:02-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-28T06:22:11-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-28T06:22:11-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-28T06:22:16-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-28T06:28:21-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK3-1 — tracing the causal fix site",
+      "timestamp": "2026-08-28T06:28:21-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective located fix site: src/fares.ts (reuse CONCESSION_FARE_CENTS)",
+      "timestamp": "2026-08-28T06:28:30-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-28T06:28:37-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-28T06:28:37-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-28T06:28:41-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-28T06:32:04-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK3-1 — tracing the causal fix site",
+      "timestamp": "2026-08-28T06:32:04-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective located fix site: src/fares.ts (reuse CONCESSION_FARE_CENTS)",
+      "timestamp": "2026-08-28T06:32:11-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-28T06:32:22-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-28T06:32:22-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-28T07:36:03-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK3-1 — tracing the causal fix site",
+      "timestamp": "2026-08-28T07:36:03-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective located fix site: src/fares.ts (reuse CONCESSION_FARE_CENTS)",
+      "timestamp": "2026-08-28T07:36:10-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-28T07:36:18-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit started on MOCK3-1 (Riders aged exactly 65 are charged the adult fare)",
+      "timestamp": "2026-08-28T07:36:18-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit updated MOCK3-1 acChanged=no splitCount=0",
+      "timestamp": "2026-08-28T07:36:22-04:00"
     }
   ],
   "stories": {

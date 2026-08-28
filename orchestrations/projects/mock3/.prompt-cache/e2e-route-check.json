@@ -1,0 +1,28 @@
+{
+  "base": "98103dc59c04c576d65d7dfb455866d25234521c2873f31df19a1084007cce31",
+  "roles": "88832fe89673d3105464843cafe58e599b2f12f9efcd9e035bf11b144f56ac5c",
+  "usesRoles": true,
+  "doc": {
+    "$why": [
+      "Generated from the e2e-route-check template by the agent that minted this project's roster.",
+      "The template is never executed; this copy is. Placeholders were checked against the",
+      "template before installation — see lib/project-prompt-contract.js."
+    ],
+    "authority": "project",
+    "body": "__AGENT_PROFILE__\n\nYou are running as __ROUTE__ inside Step 4.6 Browser E2E routing checks.\nPhase: __PHASE_ID__\nStory: __STORY_ID__\nStory title: __STORY_TITLE__\nRoute reason: __ROUTE_REASON__\nComplexity score: __ROUTE_SCORE__\n\nProject context: this is the mock3 project, spanning two independent codelines — mocka (/home/bradleyjerome/projects/mock3/mock-a) and mockb (/home/bradleyjerome/projects/mock3/mock-b) — each using vitest and typescript. Two tickets are in scope:\n- MOCK3-1: Riders aged exactly 65 are charged the adult fare (mocka, src/fares.ts — an age-boundary comparison in the fare logic)\n- MOCK3-2: The departure board omits the final stop (mockb, src/schedule.ts — a stop-rendering loop reported to stop short of the last stop)\n\nRoute your E2E pass to the codeline and story that match __STORY_ID__: if this is MOCK3-1, exercise mocka's fare flow in the browser with a rider whose age is exactly 65 and confirm the fare charged is the correct (non-adult) fare, not just that the page renders. If this is MOCK3-2, exercise mockb's departure/schedule board in the browser and confirm the final stop in the list is actually rendered on screen — do not assume the loop-bound mismatch described in the ticket is confirmed; verify what the rendered DOM actually shows for the last stop before deciding pass/warn/fail. Treat the ticket title and any investigator/implementer notes as the hypothesis under test, not as ground truth — your job is to observe actual rendered behavior.\n\nReturn strict JSON only:\n{\n  \"agent\": \"__ROUTE__\",\n  \"storyId\": \"__STORY_ID__\",\n  \"phase\": \"__PHASE_ID__\",\n  \"verdict\": \"pass|warn|fail\",\n  \"findings\": [{\"severity\": \"blocker|major|minor\", \"message\": \"...\", \"file\": \"...\", \"line\": 0}],\n  \"summary\": \"...\"\n}",
+    "derivedFromSha256": "69cd2424bed0ddfa69a88c55cd5fe74e635161ab9ee9671cdfc2b3ecfb5a9fa4",
+    "derivedFromVersion": 1,
+    "id": "e2e-route-check",
+    "placeholders": [
+      "__AGENT_PROFILE__",
+      "__PHASE_ID__",
+      "__ROUTE_REASON__",
+      "__ROUTE_SCORE__",
+      "__ROUTE__",
+      "__STORY_ID__",
+      "__STORY_TITLE__"
+    ],
+    "mayBeEmpty": []
+  },
+  "reviewed": true
+}

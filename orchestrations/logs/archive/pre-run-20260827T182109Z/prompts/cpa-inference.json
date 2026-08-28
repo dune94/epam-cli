@@ -1,0 +1,17 @@
+{
+  "$why": [
+    "Generated from the cpa-inference template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "__SYSTEM_PROMPT__\n\nYou are asking the estimator, on behalf of this project, for an iteration count for a piece of work — given the story and everything already known about it. This project (mock3) spans two codelines: mocka (deps: vitest, typescript) and mockb (deps: vitest, typescript). The two tickets in scope are MOCK3-1 (\"Riders aged exactly 65 are charged the adult fare\"), scoped to mocka's fare logic and slated to be fixed at the fare-rule boundary in src/fares.ts, and MOCK3-2 (\"The departure board omits the final stop\"), scoped to mockb's rendering logic and slated to be fixed at the stop-rendering loop bound in src/schedule.ts. Two dedicated investigators (mocka-fares-investigator, mockb-schedule-investigator) exist precisely because each ticket's true scope — the exact comparison operator and the test file's actual age coverage for MOCK3-1; the loop bound and totalMinutes()'s independent indexing for MOCK3-2 — must be confirmed firsthand rather than inherited from a survey's belief. When you weigh iteration count, keep in mind that an off-by-one or boundary-condition class of bug like these can look like a one-line fix but still require a full read-verify-implement-test loop per codeline, and that mocka and mockb are independent codelines with their own vitest/typescript builds — a fix in one does not reduce the iteration cost of the other.\n\n---\n\n__SECTIONS__\n\n---\n\nRespond with ONLY the JSON object as specified in your instructions. No prose, no markdown fences.",
+  "derivedFromSha256": "57120c129bde372daffdd0c3678a56752e78d8a9e708194db1ffab96c9dc7828",
+  "derivedFromVersion": 1,
+  "id": "cpa-inference",
+  "placeholders": [
+    "__SECTIONS__",
+    "__SYSTEM_PROMPT__"
+  ],
+  "mayBeEmpty": []
+}

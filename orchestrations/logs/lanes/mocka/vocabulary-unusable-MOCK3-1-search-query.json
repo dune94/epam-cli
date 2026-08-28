@@ -1,0 +1,17 @@
+{
+  "storyId": "MOCK3-1",
+  "seam": "search-query",
+  "rule": "A search term is USEFUL when it names something that exists in the repository being searched — a symbol, function, file, module, or a domain noun the code itself uses. It is NOISE when it names the ticket's packaging rather than its subject: routing tags, brand or product labels, ticket prefixes, status words, people, or generic prose.\nReturn as BLACKLIST every candidate that names packaging rather than subject, or that resolves to nothing in the index. Return as WHITELIST the terms that name the capability or code under discussion.",
+  "statements": [
+    "Riders aged exactly 65 are charged the adult fare",
+    "The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule."
+  ],
+  "payload": {
+    "blacklist": [],
+    "whitelist": []
+  },
+  "normalised": {
+    "blacklist": [],
+    "whitelist": []
+  }
+}

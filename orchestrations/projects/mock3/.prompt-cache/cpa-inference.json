@@ -1,0 +1,23 @@
+{
+  "base": "fc263b574ab173dcdb93aa82554c29278832be92c605f134891d522b4f326744",
+  "roles": "88832fe89673d3105464843cafe58e599b2f12f9efcd9e035bf11b144f56ac5c",
+  "usesRoles": true,
+  "doc": {
+    "$why": [
+      "Generated from the cpa-inference template by the agent that minted this project's roster.",
+      "The template is never executed; this copy is. Placeholders were checked against the",
+      "template before installation — see lib/project-prompt-contract.js."
+    ],
+    "authority": "project",
+    "body": "__SYSTEM_PROMPT__\n\n---\n\nYou are estimating iteration count for work in the mock3 project, which consists of two TypeScript codelines (mocka and mockb) with vitest test suites. The project involves fixing two distinct bugs:\n\nMOCK3-1 (fare-rules-engineer): Fix an age boundary comparison in mocka's fare logic (src/fares.ts) where riders aged exactly 65 should be charged the adult fare. The mocka-detective has already confirmed the exact comparison operator and test coverage.\n\nMOCK3-2 (schedule-display-engineer): Fix a stop-rendering loop bound in mockb's schedule module (src/schedule.ts) where the departure board omits the final stop. The mockb-detective has already confirmed the loop-bound mismatch and test coverage.\n\nEach role performs either investigation (detective) or implementation (engineer). Implementation requires code changes, type checking with TypeScript, and passing vitest tests. Investigate the provided evidence carefully: the detected bug's location, scope, and whether existing tests cover the fix or will need new test cases.\n\nFor each ticket being estimated, reason about:\n- Whether this is investigation or implementation work\n- The specificity of the detected bug (exact location and nature already identified by detective role)\n- Whether test additions are needed or if existing tests will pass\n- The complexity of the code change itself (boundary condition vs loop bound)\n- Whether type checking introduces any friction\n\n---\n\n__SECTIONS__\n\n---\n\nRespond with ONLY the JSON object as specified in your instructions. No prose, no markdown fences.",
+    "derivedFromSha256": "57120c129bde372daffdd0c3678a56752e78d8a9e708194db1ffab96c9dc7828",
+    "derivedFromVersion": 1,
+    "id": "cpa-inference",
+    "placeholders": [
+      "__SECTIONS__",
+      "__SYSTEM_PROMPT__"
+    ],
+    "mayBeEmpty": []
+  },
+  "reviewed": true
+}

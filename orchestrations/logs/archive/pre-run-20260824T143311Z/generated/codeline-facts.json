@@ -1,0 +1,17 @@
+{
+  "_what": "What each codeline IS and what an agent working inside it needs to know that the source does not say. Produced by the codeline-discovery agent during THIS run and rewritten every run — never accumulated, so nothing here is older than the run that wrote it. The engine splits this per codeline into each worktree's .epam/.",
+  "_shape": "Codeline names are TOP-LEVEL keys, because the engine extracts one with jq '.[$cl]'. Nesting them under another key parses fine and yields nothing for every codeline.",
+  "gotransit": {
+    "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
+    "facts": [
+      {
+        "text": "Tests for the checkout form live in src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx and use @testing-library with data-testid selectors like 'checkout-confirm-email-input'; a test for case-insensitive matching would be added here.",
+        "source": "src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx lines 108, 178-180, 233-245"
+      },
+      {
+        "text": "The confirmEmail field prevents pasting via onPaste handler that calls e.preventDefault(), so any test must type the value rather than paste it.",
+        "source": "src/components/pages/CheckoutPage/CheckoutForm.tsx lines 323-327"
+      }
+    ]
+  }
+}

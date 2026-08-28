@@ -1,0 +1,173 @@
+{
+  "verdict": "defects_found",
+  "findings": [
+    {
+      "agent": "doc-coordinator",
+      "severity": "blocking",
+      "claim": "src/**/*.ts scan",
+      "checked": "list_files src/**/*.ts",
+      "found": "no matches",
+      "verification": {
+        "kind": "not_mechanically_checkable",
+        "codeline": "gotransit",
+        "subject": "src/**/*.ts",
+        "expected": "absent",
+        "briefAsserts": "absent"
+      }
+    },
+    {
+      "agent": "doc-coordinator",
+      "severity": "blocking",
+      "claim": "docs/ directory",
+      "checked": "list_files docs/**",
+      "found": "no matches",
+      "verification": {
+        "kind": "not_mechanically_checkable",
+        "codeline": "gotransit",
+        "subject": "docs/",
+        "expected": "absent",
+        "briefAsserts": "absent"
+      }
+    },
+    {
+      "agent": "docstring-agent",
+      "severity": "blocking",
+      "claim": "EpamError subclasses",
+      "checked": "search EpamError",
+      "found": "no matches",
+      "verification": {
+        "kind": "not_mechanically_checkable",
+        "codeline": "gotransit",
+        "subject": "EpamError",
+        "expected": "absent",
+        "briefAsserts": "absent"
+      }
+    },
+    {
+      "agent": "docstring-agent",
+      "severity": "blocking",
+      "claim": "ast-grep/tree-sitter",
+      "checked": "dependency_available ast-grep tree-sitter",
+      "found": "absent",
+      "verification": {
+        "kind": "not_mechanically_checkable",
+        "codeline": "gotransit",
+        "subject": "ast-grep/tree-sitter",
+        "expected": "absent",
+        "briefAsserts": "absent"
+      }
+    },
+    {
+      "agent": "docstring-agent",
+      "severity": "blocking",
+      "claim": "doc-comments-ai",
+      "checked": "dependency_available doc-comments-ai",
+      "found": "absent",
+      "verification": {
+        "kind": "not_mechanically_checkable",
+        "codeline": "gotransit",
+        "subject": "doc-comments-ai",
+        "expected": "absent",
+        "briefAsserts": "absent"
+      }
+    },
+    {
+      "agent": "ui-engineer",
+      "checked": "read_file on /home/bradleyjerome/projects/metrolinx/next.gotransit.com/package.json — scripts: check-types (tsc --noEmit --incremental), test (jest), lint (eslint src/ ...), build (node -v && npm run clean-temp && ... next build && ...), pretest (npm run build:config), build:config (esbuild next.config.source.ts ...); tsconfig.json — baseUrl ./src, target es2017, strict: true; list_files src/ — components/, pages/, api/, services/, hooks/, utils/, interface/, constants/, context/ all present; dependencies — next ^15.5.21, react ^18.2.0, react-hook-form ^7.41.1, joi, @stripe/*, swr, i18next, @metrolinx/cx-shared; devDependencies — jest, @testing-library/react, @testing-library/user-event, tailwindcss, husky, lint-staged, commitlint-plugin-jira-rules",
+      "claim": "A RULE WAS WEAKENED — the derived persona drops the canonical post-write verification requirement",
+      "found": "Canonical: 'After writing a file you read it back and verify it is well-formed HTML.' Derived persona contains no equivalent — it replaces the entire behavioural contract with gotransit stack facts. The post-write read-back obligation is gone.",
+      "severity": "blocking",
+      "verification": {
+        "briefAsserts": "absent",
+        "codeline": "gotransit",
+        "expected": "present",
+        "kind": "dependency_declared",
+        "subject": "ui-engineer"
+      }
+    },
+    {
+      "agent": "failure-analyst",
+      "checked": "package.json scripts: pretest=\"npm run build:config\", test=\"jest\". Test file glob: 744 *.spec.* files found, zero *.test.* files. The project uses Jest, not Vitest.",
+      "claim": "Derived says: \"jest 'No test files found' when a story writes code but no *.spec.tsx file\" and \"jest.mock() factory must return all exported members the test references\". Canonical says: \"vitest 'No test files found' when a story writes code but no *.test.ts file\" and \"vi.mock() factory must return all exported members the test references\" and \"afterEach must call vi.unstubAllGlobals() when using vi.stubGlobal('fetch', ...)\".",
+      "found": "The derived failure-analyst correctly adapts vitest→jest and *.test.ts→*.spec.tsx (the project uses jest and .spec.* files). However, it keeps the canonical's \"afterEach must call vi.unstubAllGlobals() when using vi.stubGlobal('fetch', ...)\" verbatim — vi.unstubAllGlobals and vi.stubGlobal are Vitest APIs that do not exist in Jest. This is a false claim about the codeline's test framework: the project uses Jest, which has no vi.* APIs. An agent following this instruction would try to call vi.unstubAllGlobals() in a Jest test and fail.",
+      "severity": "blocking",
+      "verification": {
+        "briefAsserts": "absent",
+        "codeline": "gotransit",
+        "expected": "absent",
+        "kind": "not_mechanically_checkable",
+        "subject": "vi.unstubAllGlobals"
+      }
+    },
+    {
+      "agent": "failure-analyst",
+      "checked": "package.json scripts: pretest=\"npm run build:config\", test=\"jest\". Test file glob: 744 *.spec.* files found, zero *.test.* files.",
+      "claim": "Derived says: \"@testing-library/react requires the app instance not a running server\". Canonical says: \"supertest requires the app instance not a running server\".",
+      "found": "The project does have @testing-library/react in devDependencies, and does NOT have supertest. However, the statement \"@testing-library/react requires the app instance not a running server\" is semantically wrong — @testing-library/react renders React components, not server instances. The canonical's supertest advice (passing the app instance to supertest rather than a listening server) is an Express/HTTP testing concern that does not apply to this Next.js/@testing-library/react project at all. The derived persona has replaced one inapplicable tool with another and introduced a nonsensical claim about @testing-library/react.",
+      "severity": "blocking",
+      "verification": {
+        "briefAsserts": "present",
+        "codeline": "gotransit",
+        "expected": "present",
+        "kind": "not_mechanically_checkable",
+        "subject": "@testing-library/react"
+      }
+    },
+    {
+      "agent": "kb-change-reviewer",
+      "checked": "package.json: engines.node=\"22.x\", next=\"^15.5.21\", jest=\"^29.0.3\", @testing-library/react=\"^13.4.0\". No express, no vitest, no supertest dependencies.",
+      "claim": "Derived says: \"Entry references technology outside the project stack (TypeScript/Node.js 22/Next.js 15/Jest/@testing-library/react only)\". Canonical says: \"TypeScript/Node.js 20/Express 4/Vitest/supertest only\".",
+      "found": "The derived stack description (TypeScript/Node.js 22/Next.js 15/Jest/@testing-library/react) is accurate against the actual package.json. This is a correct specialisation, not a defect.",
+      "severity": "blocking",
+      "verification": {
+        "briefAsserts": "present",
+        "codeline": "gotransit",
+        "expected": "present",
+        "kind": "not_mechanically_checkable",
+        "subject": "stack"
+      }
+    },
+    {
+      "agent": "codeline-bridge-agent",
+      "checked": "package.json: next=\"^15.5.21\" (Next.js 15, pages router). Test files use .spec.ts/.spec.tsx. No express dependency.",
+      "claim": "Derived says: \"HTTP routes: Next.js API routes under src/pages/api/ using handler functionsatch` and `app.get/post`\" and \"Exclude *.spec.tsx and *.spec.ts\". Canonical says: \"HTTP routes: express `router.get/post/put/delete/patch` and `app.get/post`\" and \"Exclude *.test.ts and *.spec.ts\".",
+      "found": "Two issues: (1) The derived text \"using handler functionsatch`\" is garbled/corrupted — it appears to be a failed merge of \"handler functions\" with \"match\" or similar, producing nonsensical text. An agent reading this cannot determine what HTTP route pattern to look for. (2) The derived adds \"Exclude *.spec.tsx\" which is correct for this project (spec files use .spec.tsx and .spec.ts). The canonical's exclusion of *.test.ts is correctly dropped since no .test.ts files exist. The garbled route description is the defect.",
+      "severity": "blocking",
+      "verification": {
+        "briefAsserts": "present",
+        "codeline": "gotransit",
+        "expected": "present",
+        "kind": "not_mechanically_checkable",
+        "subject": "HTTP routes"
+      }
+    },
+    {
+      "agent": "gotransit-checkout-investigator",
+      "severity": "blocking",
+      "claim": "A RULE WAS WEAKENED — output contract and tool grant dropped",
+      "checked": "The canonical agent (code-graph-detective) mandates: 'OUTPUT — a JSON array of locationHint objects' and 'CRITICAL: Never invent a module or symbol name. Every path and function you output must have come from a real tool result.' The canonical agent is also granted the codegraph-agent-query.sh tool and told to call it 5-10 times. The derived gotransit-checkout-investigator persona drops the JSON locationHint output contract entirely, drops the codegraph tool grant, drops the iteration method (5-10 calls), and drops the 'never invent a symbol name' rule. It replaces them with 'Report your findings with exact file paths, line numbers, and code snippets.' This is not a specialisation of what the agent knows — it changes what the agent is REQUIRED TO DO: the canonical agent must output a structured JSON array and must ground every finding in tool results; the derived agent has no such obligation. A downstream consumer expecting locationHint JSON will get prose instead.",
+      "found": "Canonical: 'OUTPUT — a JSON array of locationHint objects, most-likely first: [{\"file\":\"<repo-relative path>\",\"function\":\"<symbol>\",\"reason\":\"<why this location>\"}]. Include only files you actually surfaced via the tool — never a file you did not confirm exists in the index.' and 'CRITICAL: Never invent a module or symbol name.' Derived: 'Report your findings with exact file paths, line numbers, and code snippets so the implementer can act on them.' — no JSON contract, no tool grounding requirement, no prohibition on inventing symbols."
+    },
+    {
+      "agent": "gotransit-checkout-investigator",
+      "severity": "blocking",
+      "claim": "AN AGENT LOST ITS PURPOSE",
+      "checked": "The canonical ancestor is code-graph-detective: its single job is to 'find the EXACT existing source file and function most relevant before any code is written' using the codegraph-agent-query.sh tool, iterating 5-10 times. The derived gotransit-checkout-investigator persona is now 'an investigator for the gotransit codeline' whose job is to 'READ code and report what you find — you never write or edit any file.' It is instructed to read specific files and characterize them, not to run the codegraph tool or produce locationHint output. The derived agent has become a different agent — a code reader/reporter rather than a code-graph detective. The pipeline will invoke it for the original work (finding attachment points / fix sites via the graph) and it will not do that work.",
+      "found": "Canonical: 'Your single job: given a ticket … find the EXACT existing source file and function most relevant before any code is written.' Derived: 'Your job is to READ code and report what you find — you never write or edit any file.' The canonical agent's purpose (codegraph-driven location discovery) is absent from the derived agent."
+    },
+    {
+      "agent": "checkout-validation-fixer",
+      "severity": "blocking",
+      "claim": "A RULE WAS WEAKENED — mandatory dependency check dropped",
+      "checked": "The canonical persona contains a mandatory, non-negotiable rule: 'MANDATORY DEPENDENCY CHECK — DO THIS BEFORE WRITING ANY TEST IMPORT' requiring the agent to check package.json devDependencies before writing any import for a package not already a runtime dependency, and to install it first if absent. The rule is explicitly called 'the single most common avoidable test failure in this pipeline.' The derived checkout-validation-fixer persona drops this rule entirely — it contains no dependency-check instruction at all. An agent that skips this check will write imports for packages that are not installed, causing test failures.",
+      "found": "Canonical: 'MANDATORY DEPENDENCY CHECK — DO THIS BEFORE WRITING ANY TEST IMPORT … Never skip step 2.' Derived: No mention of checking package.json before writing imports, no mention of installing missing dependencies. The rule is absent."
+    },
+    {
+      "agent": "checkout-validation-fixer",
+      "severity": "blocking",
+      "claim": "A RULE WAS WEAKENED — scaffold immutability rule and async error contract dropped",
+      "checked": "The canonical persona contains two further mandatory rules: (1) '## Scaffold Immutability Rule — NEVER create, overwrite, or modify package.json, tsconfig.json, vitest.config.ts, or .gitignore in any phase after scaffold.' (2) '## Async Error Contract (Non-Negotiable for ALL Promise implementations)' requiring reject wiring on EventEmitter callbacks and input validation before Promise creation. The derived persona drops both. While the scaffold immutability rule references vitest.config.ts (not applicable to a Jest project), the rule's core prohibition on modifying package.json and tsconfig.json is still relevant to this codeline. The async error contract is universally applicable and its absence means the agent will not wire error events on Promise-wrapped emitters.",
+      "found": "Canonical: 'NEVER create, overwrite, or modify package.json, tsconfig.json, vitest.config.ts, or .gitignore in any phase after scaffold.' and 'Any public method returning Promise<void> that wraps a Node.js EventEmitter callback … MUST: … Wire the error event to reject.' Derived: Neither rule appears."
+    }
+  ]
+}

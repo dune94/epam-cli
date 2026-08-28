@@ -18,8 +18,11 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
+import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const PROJECT_DIR = join(REPO_ROOT, 'orchestrations/projects/mock3');
@@ -69,9 +72,38 @@ describe('a refused attempt climbs the ladder it was assigned', () => {
       .toBeGreaterThan(1);
   });
 
+  /**
+   * TWO SEAMS THAT DECLARE DIFFERENT POSITIONS MUST NOT OPEN ON THE SAME MODEL.
+   *
+   * The pair is DISCOVERED from the registry, not named: naming two seams bakes today's roster in,
+   * and this assertion already went stale once when a project moved every seam onto one rung.
+   *
+   * It is also read through a project that declares no seamLadders. Read through one that does,
+   * it asserts nothing — a project is entitled to put every seam on the same rung, and two seams
+   * agreeing by project policy is not evidence the engine honours what each seam declares.
+   */
   it('climbs from the rung the seam DECLARES, not from a shared root', () => {
-    // prompt-builder is `mid`, codeline-discovery is `top`. They must not start together.
-    expect(modelAt('prompt-builder', 0)).not.toBe(modelAt('codeline-discovery', 0));
+    const reg = JSON.parse(readFileSync(
+      join(REPO_ROOT, 'orchestrations/agents/invocation-profiles.json'), 'utf8'));
+    const byPosition = new Map<string, string>();
+    for (const [seam, prof] of Object.entries<any>(reg.profiles)) {
+      if (prof && prof.ladder && !byPosition.has(prof.ladder)) byPosition.set(prof.ladder, seam);
+    }
+    const pair = [...byPosition.values()].slice(0, 2);
+    expect(pair.length, 'the registry declares seams at only one position — nothing to compare')
+      .toBe(2);
+
+    const plain = mkdtempSync(join(tmpdir(), 'no-seam-ladders-'));
+    try {
+      const settings = JSON.parse(readFileSync(join(PROJECT_DIR, 'llm-settings.json'), 'utf8'));
+      delete settings.seamLadders;
+      writeFileSync(join(plain, 'llm-settings.json'), JSON.stringify(settings));
+      const at = (seam: string) => seamInvocationEnv(seam, undefined,
+        { env: { ...ladderEnv, EPAM_PROJECT_CONFIG_DIR: plain }, rung: 0 }).EPAM_MODEL;
+      expect(at(pair[0]), 'no model resolved at all').toBeTruthy();
+      expect(at(pair[0]), `${pair[0]} and ${pair[1]} declare different positions and opened together`)
+        .not.toBe(at(pair[1]));
+    } finally { rmSync(plain, { recursive: true, force: true }); }
   });
 
   it('each rung is one hop along that seam\'s own chain', () => {

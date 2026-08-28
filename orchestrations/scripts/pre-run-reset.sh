@@ -338,6 +338,25 @@ done < <(find "$LOG_DIR" -type f \( -name '*.log' -o -name 'story-outputs-*.txt'
 # BY PATTERN, NOT BY NAME. This reset has now been caught twice enumerating specific names —
 # '*.count' while .model and .iterbump survived, and the PRD/roster while review feedback
 # survived. A feedback artefact added tomorrow is covered without anyone remembering this code.
+# IS THIS A CONTINUATION? ASKED ONCE, HERE, BEFORE ANYTHING ACTS ON THE ANSWER.
+#
+# The run-state clearing below deletes estate-survey.json, referenced-docs.json and
+# ticket-documents.json. Whether this is a resume used to be worked out ~190 lines LATER, so that
+# clearing could not see it: every resume deleted the artefacts the run had already produced.
+# estate-survey.json is read back by surveyHypothesisBlock and injected into code-graph-detective,
+# so the survey was paid for, shown to a human at the pause, and thrown away by the act of
+# resuming — after which the detective rediscovered an estate that had already been surveyed.
+#
+# This is deliberately NOT _IS_RESUME, which is a broader question answered further down and is
+# also true for EPAM_SKIP_AGENT_MINT=1. A skip-mint run is a FRESH run: it keeps the ROSTER the
+# mint last produced, because nothing is going to rebuild it, but its LOG_DIR artefacts belong to
+# a PREVIOUS run and must still be cleared — a stale survey matched by codeline name (api, web,
+# src) is how one project's evidence reached another project's prompts.
+_IS_RESUMED_RUN=0
+if [ -n "${EPAM_RESUME_RUN:-}" ]; then
+    _IS_RESUMED_RUN=1
+fi
+
 _RUN_ARTIFACT_DIR="${LOG_DIR:-}"
 if [ -n "$_RUN_ARTIFACT_DIR" ] && [ -d "$_RUN_ARTIFACT_DIR" ]; then
     # EVERYWHERE A LANE CAN READ ONE, not just the parent directory.
@@ -375,7 +394,9 @@ fi
 # Third time the reset has been caught missing shared state after review artefacts and the
 # published agent-input store. The rule that keeps being relearned: anything a later step READS
 # out of LOG_DIR is run state, and run state is cleared here.
-if [ -n "${_RUN_ARTIFACT_DIR:-}" ] && [ -d "$_RUN_ARTIFACT_DIR" ]; then
+if [ "${_IS_RESUMED_RUN:-0}" = "1" ]; then
+    info "  Resuming — keeping this run's own fetched documents and estate survey"
+elif [ -n "${_RUN_ARTIFACT_DIR:-}" ] && [ -d "$_RUN_ARTIFACT_DIR" ]; then
     _TD_CLEARED=0
     # estate-survey.json joins them: surveyHypothesisBlock (spec-mode-runner.js) reads it back out
     # of LOG_DIR and injects the survey's EVIDENCE into a prompt, matched by codeline NAME. A stale
@@ -569,7 +590,7 @@ _PROJECT_CFG_DIR="${EPAM_PROJECT_CONFIG_DIR:-}"
 # runs are gone" — and the resumed run died at assignment with no agent. Any roster reset added
 # later must read _IS_RESUME rather than re-deriving this.
 _IS_RESUME=0
-if [ -n "${EPAM_RESUME_RUN:-}" ]; then
+if [ "${_IS_RESUMED_RUN:-0}" = "1" ]; then
     _IS_RESUME=1
     _PROJECT_CFG_DIR=""
     info "  Resuming ${EPAM_RESUME_RUN} — keeping the roster this run already minted and reviewed"
@@ -733,7 +754,17 @@ fi
 # The PRD is ingested: the tracker supplies the work and the project's config supplies the
 # identity, both re-read every run. A run that ingests cannot inherit, and a run that does not
 # ingest has no PRD to restore from a template either.
-if [ "$_IS_RESUME" = "1" ]; then
+# THE PRD IS RESTORED FOR EVERY FRESH RUN, INCLUDING ONE THAT SKIPS THE MINT.
+#
+# This read _IS_RESUME, which EPAM_SKIP_AGENT_MINT=1 also sets. That exemption exists for the
+# ROSTER, where it is right — nothing rebuilds a roster the mint did not mint. The PRD is rebuilt
+# from an authored file that is always present, so it does not need the exemption and must not
+# borrow it: a fresh skip-mint run inherited whatever the previous run had written.
+#
+# Live 2026-08-27, the first mock3 launch: this printed "Resume — keeping the runtime PRD" on a
+# FRESH run, and scope resolution then found the previous run's two codelines already declared and
+# skipped codeline-discovery entirely — one of the two agents that run existed to exercise.
+if [ "${_IS_RESUMED_RUN:-0}" = "1" ]; then
     info "  Resume — keeping the runtime PRD as the run left it"
 elif [ "${JIRA_PIPELINE:-0}" = "1" ]; then
     # AN INGESTING PROJECT REBUILDS ITS PRD FROM THE TRACKER, so there is nothing to restore and

@@ -1,37 +1,36 @@
 {
   "codelines": [
     {
-      "name": "metrolinx",
-      "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com",
-      "reason": "This is the Metrolinx Next.js frontend that renders CMS content from Contentstack and is where the live-preview feature for the MX Homepage and Discover Article pages would be implemented, as indicated by the ticket's FE-only estimate and its MX component.",
-      "evidence": "ticket component \"MX\"; repository uses Contentstack as its CMS (package.json dependency \"contentstack\": \"^3.15.2\" and extensive Contentstack service imports throughout src/)",
+      "name": "mocka",
+      "path": "/home/bradleyjerome/projects/mock3/mock-a",
+      "reason": "MOCK3-1 covers the senior-fare boundary bug, and this repository's src/fares.ts contains the fare rule where riders aged 65 and over should pay the concession fare but age > 65 excludes exactly 65.",
+      "evidence": "ticket component \"mocka\"; src/fares.ts: \"if (rider.age > 65) return CONCESSION_FARE_CENTS;\" under the comment \"Riders aged 65 AND OVER pay the concession fare.\"",
       "facts": [
         {
-          "text": "The pretest script runs 'npm run build:config' which uses esbuild to compile next.config.source.ts into next.config.js; tests will fail if this step hasn't run because next/jest loads next.config.js.",
-          "source": "package.json scripts: \"pretest\": \"npm run build:config\", \"build:config\": \"esbuild next.config.source.ts --bundle --outfile=next.config.js --platform=node --external:./node_modules/* --target=es2020 --minify\""
+          "text": "Tests are run with vitest via the package.json script \"test\": \"vitest run\"; the build check is \"build\": \"tsc --noEmit\" and lint is a no-op (\"lint\": \"echo no-lint-configured\").",
+          "source": "package.json: \"scripts\": { \"test\": \"vitest run\", \"lint\": \"echo no-lint-configured\", \"build\": \"tsc --noEmit\" }"
         },
         {
-          "text": "The build throws an error and aborts if CLOUDINARY_DOMAIN or CLOUDINARY_CLOUDNAME environment variables are not set (except in test env).",
-          "source": "next.config.source.ts: if (!CLOUDINARY_DOMAIN || !CLOUDINARY_CLOUDNAME) { throw new Error(\"Missing required environment variables\"); }"
-        },
-        {
-          "text": "Jest enforces a global coverage threshold of 60% for branches, functions, lines, and statements; 'npm run test:coverage-check' will fail if any metric drops below 60%.",
-          "source": "jest.config.js: coverageThreshold: { global: { branches: 60, functions: 60, lines: 60, statements: 60 } }"
-        },
-        {
-          "text": "Commit messages must follow Jira-style conventions enforced by commitlint-plugin-jira-rules with extends 'jira'; non-conforming commits are rejected by the husky hook.",
-          "source": "commitlint.config.js: module.exports = { plugins: [\"commitlint-plugin-jira-rules\"], extends: [\"jira\"] }"
-        },
-        {
-          "text": "lint-staged runs 'npm run check-types' (tsc), eslint, prettier, and stylelint on staged files before a commit is allowed through.",
-          "source": ".lintstagedrc.js"
-        },
-        {
-          "text": "Node 22.x is required; other versions may not work.",
-          "source": "package.json: engines: { node: \"22.x\" }"
+          "text": "Source lives in src/fares.ts and its tests in test/fares.test.ts; the existing suite has no case for a rider aged exactly 65, only age 70 (\"charges the concession fare well past the senior boundary\"), so the boundary bug is untested.",
+          "source": "test/fares.test.ts: \"expect(fareFor({ age: 70, hasPass: false })).toBe(CONCESSION_FARE_CENTS);\""
         }
-      ],
-      "modelName": "nextmetrolinx"
+      ]
+    },
+    {
+      "name": "mockb",
+      "path": "/home/bradleyjerome/projects/mock3/mock-b",
+      "reason": "MOCK3-2 covers the departure board omitting the final stop, and this repository's src/schedule.ts contains formatStops looping to stops.length - 1, dropping the last stop, while totalMinutes is computed independently and stays correct.",
+      "evidence": "ticket component \"mockb\"; src/schedule.ts: \"for (let i = 0; i < stops.length - 1; i++)\" in formatStops",
+      "facts": [
+        {
+          "text": "Tests are run with vitest via the package.json script \"test\": \"vitest run\"; the build check is \"build\": \"tsc --noEmit\" and lint is a no-op (\"lint\": \"echo no-lint-configured\").",
+          "source": "package.json: \"scripts\": { \"test\": \"vitest run\", \"lint\": \"echo no-lint-configured\", \"build\": \"tsc --noEmit\" }"
+        },
+        {
+          "text": "Source lives in src/schedule.ts and its tests in test/schedule.test.ts; the existing formatStops tests only assert the arrow separator and the first stop's name, never that the last stop appears, which is why the omission passes the suite.",
+          "source": "test/schedule.test.ts: \"expect(formatStops(LINE)).toContain('->');\" and \"expect(formatStops(LINE)).toContain('Union');\""
+        }
+      ]
     }
   ]
 }

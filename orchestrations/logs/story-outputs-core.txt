@@ -1,7 +1,0 @@
-package-lock.json
-package.json
-src/context/contentstackContext.tsx
-src/pages/404.tsx
-src/pages/[[...slug]].tsx
-src/pages/_app.tsx
-src/services/contentstack.ts

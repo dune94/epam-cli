@@ -1,0 +1,16 @@
+{
+  "$why": [
+    "Generated from the vc-coverage template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "You are checking whether a test suite covers ONE specific requirement.\n\n## Project context\n\nThis is a two-codeline TypeScript project tested with vitest:\n\n- **mocka** (`mock-a`) — fare logic in `src/fares.ts`, tests in `test/fares.test.ts`.\n- **mockb** (`mock-b`) — schedule rendering in `src/schedule.ts`, tests in `test/schedule.test.ts`.\n\nThe test source you are given is a vitest file: `describe` / `it` blocks with `expect(...)`\nassertions, sometimes table-driven over an array of cases. Read the assertions inside the\nblocks, including any loop or `it.each`-style table that generates cases — a case generated\nfrom a data table counts as a real case, and the concrete input values in that table are\nwhat determine coverage, not the table's label.\n\nThe requirements in this project are boundary and omission rules — the two traps below are\nthe ones that actually bite here:\n\n- **Boundary values.** A requirement about an exact value (e.g. behaviour at exactly one age)\n  is NOT covered by a case one step either side of it. A test at 64 and a test at 66 leave\n  65 untested; only a case whose input is exactly the boundary can fail when the comparison\n  operator is wrong. Check the literal numbers passed in, not the prose around them.\n- **Off-by-one over a sequence.** A requirement about which elements of a list appear in\n  output (e.g. whether the last stop is included or omitted) is only covered by an assertion\n  pinned to the sequence's end — an exact full-output equality, a length check, or an\n  explicit assertion about the final element. A test that merely checks some middle element\n  is present would still pass if the loop bound were wrong.\n\n## The requirement\n__VERIFICATION_CRITERION__\n\n## The test file (complete)\n```\n__TEST_SOURCE__\n```\n\nAnswer ONE question: does this test file contain a case that would FAIL if this\nrequirement were violated?\n\nJudge the ASSERTIONS, not the titles. A test whose name mentions the same words\nis irrelevant if it does not actually exercise the requirement — in particular a\nrequirement stating something must NOT happen is not covered by a test asserting\nthat it DOES happen, however similar the wording. An assertion that the final stop\nappears in the board is the inverse of a requirement that it be omitted, not\nevidence for it.\n\nOutput ONLY this JSON, nothing else:\n{\"covered\": true|false, \"case\": \"<the test case name that covers it, or empty>\", \"why\": \"<one sentence>\"}",
+  "derivedFromSha256": "79377c166256044a0c88d4179fdbfbc9d800d74e6cdd9ee4ecc0db817527f795",
+  "derivedFromVersion": 1,
+  "id": "vc-coverage",
+  "placeholders": [
+    "__TEST_SOURCE__",
+    "__VERIFICATION_CRITERION__"
+  ]
+}

@@ -1,0 +1,14 @@
+[
+  {
+    "storyId": "MOCK3-1",
+    "codeline": "mocka",
+    "agentRole": "fare-boundary-fixer",
+    "reason": "The bug is a fare age-boundary condition (age 65 not treated as concession), which is exactly the fare-boundary-fixer's domain."
+  },
+  {
+    "storyId": "MOCK3-2",
+    "codeline": "mockb",
+    "agentRole": "stop-rendering-fixer",
+    "reason": "The bug is in formatStops dropping the last stop when rendering the departure board, which is the stop-rendering-fixer's domain."
+  }
+]

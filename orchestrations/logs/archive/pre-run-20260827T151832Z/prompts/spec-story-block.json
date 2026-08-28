@@ -1,0 +1,23 @@
+{
+  "$why": [
+    "Generated from the spec-story-block template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "__PERSONA__STORY\nTitle: __TITLE__\nDescription: __DESCRIPTION__\nComponents: __COMPONENTS__\nDeclared files: __DECLARED_FILES__\n\nPROJECT CONTEXT — mock3 codelines:\nThis project has two independent codelines: mocka and mockb, each with its own src/ and test/ structure.\nBoth use Vitest for testing and TypeScript for type safety.\n\nTo run tests for a codeline: `cd mock-a && npm test` or `cd mock-b && npm test`\nTo type-check a codeline: `cd mock-a && npx tsc --noEmit` or `cd mock-b && npx tsc --noEmit`\n\nINVESTIGATOR vs IMPLEMENTER ROLES:\n- Investigators (mocka-fare-detective, mockb-schedule-detective) are READ-ONLY: read code, tests, and docs only. Do not propose or apply code changes.\n- Implementers (fare-boundary-fixer, stop-rendering-fixer) have WRITE access and apply the fixes investigators uncover.\n\nCRITICAL LOGIC AREAS:\n- Fare comparison (mocka/src/fares.ts): Age boundary conditions are exact; off-by-one errors silently pass weak tests. Read actual comparison operators and edge cases in tests carefully.\n- Schedule rendering (mockb/src/schedule.ts): Loop bounds for iteration control the final stop inclusion. Verify array indices, loop condition types (< vs <=), and what the test assertions actually expect.\n\nLINKS FOUND IN THIS TICKET:\n__LINK_BLOCK__\n\nCOMMENT THREAD (context for judging relevance — a link's surrounding discussion often says why it was posted):\n__COMMENT_BLOCK__\n__RETRIEVED_DOCS__\n\nALREADY RETRIEVED — these documents have been fetched for you and written to disk. Read them\nwith read_file rather than fetching them again; the text is the same and it costs you nothing:\n__DOC_PATHS__\nA document listed here that you did not read is a document you cannot quote.",
+  "derivedFromSha256": "41b6c41e78b4fc06be6b740b6110f0fa2010ba754f4f9639fc3df7228b2e7b19",
+  "derivedFromVersion": 1,
+  "id": "spec-story-block",
+  "placeholders": [
+    "__COMMENT_BLOCK__",
+    "__COMPONENTS__",
+    "__DECLARED_FILES__",
+    "__DESCRIPTION__",
+    "__DOC_PATHS__",
+    "__LINK_BLOCK__",
+    "__PERSONA__",
+    "__RETRIEVED_DOCS__",
+    "__TITLE__"
+  ]
+}

@@ -1,0 +1,12 @@
+EPAM_FINAL_FALLBACK_PROVIDER=codemie-claude
+EPAM_MODEL_LADDER_HIGH=claude-haiku-4-5-20251001=claude-sonnet-5|claude-sonnet-5=claude-opus-5
+EPAM_MODEL_LADDER_HIGHEST=claude-sonnet-5=claude-opus-4-8|claude-opus-4-8=claude-opus-5
+EPAM_MODEL_LADDER_HIGHEST_START=claude-sonnet-5
+EPAM_MODEL_LADDER_HIGH_START=claude-haiku-4-5-20251001
+EPAM_MODEL_LADDER_MEDIUM=claude-haiku-4-5-20251001=claude-sonnet-5
+EPAM_MODEL_LADDER_MEDIUM_START=claude-haiku-4-5-20251001
+EPAM_MODEL_LADDER_TIER_ORDER=medium high highest
+EPAM_MODEL_PROVIDER_MAP=claude-*=codemie-claude
+EPAM_ORCHESTRATION_PROVIDER=codemie-claude
+ORCH_GATE_PROVIDER=codemie-claude
+SPEC_MODE_PROVIDER=codemie-claude

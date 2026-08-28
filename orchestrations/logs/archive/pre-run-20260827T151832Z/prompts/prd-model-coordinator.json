@@ -1,0 +1,17 @@
+{
+  "$why": [
+    "Generated from the prd-model-coordinator template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "__PROFILE__\n\nPRD file: __MC_PRD_TARGET__\nPhase: __MC_PHASE__\n\nThis project contains two codelines (mocka and mockb), each using TypeScript and Vitest. Four roles are defined:\n- mocka-fare-detective (investigator, read-only) and fare-boundary-fixer (implementer) for MOCK3-1 (riders aged 65 adult fare)\n- mockb-schedule-detective (investigator, read-only) and stop-rendering-fixer (implementer) for MOCK3-2 (departure board final stop)\n\nAssign model, aiProvider, and reasoningEffort to every pending story in this phase that is missing one or more of these fields. Consider the role's nature (investigator roles prioritize deep code reading; implementer roles prioritize code changes) when assigning models and reasoning effort. Write the updated PRD back to the file, then emit the JSON summary.",
+  "derivedFromSha256": "2256fe8b3cde59fed36608ad759ef441f4e38c7715131af419b13674a9b706a9",
+  "derivedFromVersion": 1,
+  "id": "prd-model-coordinator",
+  "placeholders": [
+    "__MC_PHASE__",
+    "__MC_PRD_TARGET__",
+    "__PROFILE__"
+  ]
+}

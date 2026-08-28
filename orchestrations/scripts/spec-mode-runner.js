@@ -1370,6 +1370,20 @@ function outputContractFor(toolDef, tag) {
 }
 
 async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey, storyId = '', repoPath = '', envOverride = null) {
+  // EVERY SEAM THAT DECLARES A SHAPE BINDS IT, NOT JUST THE ONES THAT REMEMBERED TO.
+  //
+  // EPAM_RESPONSE_SCHEMA was set at a handful of call sites by hand, so most seams asked for their
+  // shape in prose and nothing enforced it. The tool definition is already here — every caller
+  // passes one — so the binding is derived from it rather than repeated per call site, and a seam
+  // added tomorrow is bound without anyone remembering to do it.
+  //
+  // A caller that set it explicitly still wins.
+  if (toolDef && toolDef.parameters) {
+    const _bound = schemaEnv(toolDef);
+    if (_bound) {
+      envOverride = { EPAM_RESPONSE_SCHEMA: _bound, ...(envOverride || {}) };
+    }
+  }
   // The contract travels with the prompt, for every stack. See outputContractFor above.
   prompt = `${prompt}${outputContractFor(toolDef, tag)}`;
   // envOverride: per-agent tool grant. Most spec-mode agents share specAgentEnv's

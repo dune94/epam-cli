@@ -1,0 +1,25 @@
+{
+  "_what": "What each codeline IS and what an agent working inside it needs to know that the source does not say. Produced by the codeline-discovery agent during THIS run and rewritten every run — never accumulated, so nothing here is older than the run that wrote it. The engine splits this per codeline into each worktree's .epam/.",
+  "_shape": "Codeline names are TOP-LEVEL keys, because the engine extracts one with jq '.[$cl]'. Nesting them under another key parses fine and yields nothing for every codeline.",
+  "metrolinx": {
+    "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com",
+    "facts": [
+      {
+        "text": "Jest is the test runner, but 'npm test' has a pretest hook ('pretest': 'npm run build:config') that first bundles next.config.source.ts into next.config.js with esbuild, and the same build:config step is also required before dev, build and lint.",
+        "source": "package.json scripts: \"pretest\": \"npm run build:config\", \"test\": \"jest\", \"build:config\": \"esbuild next.config.source.ts --bundle --outfile=next.config.js ...\""
+      },
+      {
+        "text": "Node 22.x is required by the engines field, and husky (via the 'prepare' script) plus commitlint with commitlint-config-jira and commitlint-plugin-jira-rules are installed, so commits must follow the Jira-aware commit convention.",
+        "source": "package.json: \"engines\": { \"node\": \"22.x\" }, \"prepare\": \"husky install\", devDependencies \"commitlint-config-jira\": \"^1.6.3\", \"commitlint-plugin-jira-rules\": \"^1.6.3\""
+      },
+      {
+        "text": "Outside the test environment the app throws \"Missing required environment variables\" unless API_KEY, DELIVERY_TOKEN, ENVIRONMENT and CONTENTSTACK_BRANCH are set, so any preview work depends on these Contentstack credentials being present.",
+        "source": "src/services/contentstack.ts: \"throw new Error(\\\"Missing required environment variables\\\")\" when !API_KEY || !DELIVERY_TOKEN || !ENVIRONMENT || !CONTENTSTACK_BRANCH"
+      },
+      {
+        "text": "A dedicated preview-environment CI/CD pipeline already exists that the live-preview work can build on.",
+        "source": ".github/workflows/build-deploy-preview-workflow.yml: name: \"Preview Environment CI/CD\""
+      }
+    ]
+  }
+}

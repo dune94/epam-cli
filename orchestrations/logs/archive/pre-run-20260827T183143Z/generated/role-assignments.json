@@ -1,0 +1,14 @@
+[
+  {
+    "storyId": "MOCK3-1",
+    "codeline": "mocka",
+    "agentRole": "fare-rules-engineer",
+    "reason": "The bug is in the fare calculation boundary logic for concession eligibility, which is the fare-rules-engineer's domain."
+  },
+  {
+    "storyId": "MOCK3-2",
+    "codeline": "mockb",
+    "agentRole": "departure-board-engineer",
+    "reason": "The bug is in formatStops on the departure board rendering, which is the departure-board-engineer's domain."
+  }
+]

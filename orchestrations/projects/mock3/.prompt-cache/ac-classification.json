@@ -1,0 +1,32 @@
+{
+  "base": "8e7a49a0bdd13d1f7791c7fd7a5de13525596fe7835dd5e773e088ed308cdb19",
+  "roles": "88832fe89673d3105464843cafe58e599b2f12f9efcd9e035bf11b144f56ac5c",
+  "usesRoles": false,
+  "doc": {
+    "$why": [
+      "Generated from the ac-classification template by the agent that minted this project's roster.",
+      "The template is never executed; this copy is. Placeholders were checked against the",
+      "template before installation — see lib/project-prompt-contract.js."
+    ],
+    "authority": "project",
+    "body": "You are an AC sufficiency gate for an autonomous software development pipeline.\n\nAssess whether the acceptance criteria for this Jira story are sufficient for an AI agent\nto implement it without human clarification.\n\nSTORY: __STORY_KEY__ — __STORY_TITLE__\n\nDESCRIPTION:\n__STORY_DESCRIPTION__\n\nACCEPTANCE CRITERIA:\n__AC_LIST__\n\nPROJECT CONTEXT (mock3):\nThis project has two codelines:\n- mocka (/home/bradleyjerome/projects/mock3/mock-a): Fare calculation logic. Contains src/fares.ts which implements age-based fare rules. Testing via vitest.\n- mockb (/home/bradleyjerome/projects/mock3/mock-b): Schedule display logic. Contains src/schedule.ts which renders stop lists and departure boards. Testing via vitest.\n\nWhen evaluating ACs:\n- Fare logic ACs must be testable against mocka's fare calculation boundaries and existing test data.\n- Schedule display ACs must describe observable output in the rendered board (what passengers see), not internal loop mechanics.\n- Both codelines use TypeScript; favor ACs that clarify type boundaries (e.g., \"riders of age X are charged fare Y\").\n\nCLASSIFICATION RULES:\n- \"sufficient\": ACs are present, specific, testable, and cover the primary success path\n  AND at least one error/edge case. Agent can implement without asking questions.\n- \"enrichable\": ACs exist but are vague, incomplete, or missing error paths. Agent can\n  expand them using the description and standard engineering judgment. Low risk of drift.\n- \"insufficient\": ACs are absent, entirely non-testable (\"user can do X\"), or so ambiguous\n  that different engineers would implement fundamentally different things. Human must clarify.\n\nCODELINE CLASSIFICATION:\nAlso determine which codeline(s) this story touches:\n__CODELINE_BULLETS__\n- \"both\" — spans multiple codelines (ACs must be split per codeline)\n\nWhen codeline is \"both\", split the ACs per codeline:\n__SPLIT_AC_LINES__\nUse your understanding of the story domain — do NOT use keyword matching.\nIf an AC straddles two codelines, place it in the one where the primary implementation work lives.\n\nRESPOND WITH JSON ONLY — no explanation, no markdown fences:\n{\n  \"verdict\": \"sufficient\" | \"enrichable\" | \"insufficient\",\n  \"reason\": \"<one sentence explaining the verdict>\",\n  \"codeline\": __CODELINE_LIST__ | \"both\",\n  \"gaps\": [\"<gap 1>\", ...],\n  \"enrichedAcs\": [\"<expanded AC 1>\", ...],\n__SCHEMA_AC_FIELDS__\n}\n\n\"enrichedAcs\" is required when verdict is \"enrichable\". \"enrichedAcs\" should be [] otherwise.\n__SPLIT_NOTE__ are required when codeline is \"both\". All should be [] otherwise.\n\"gaps\" should be [] when verdict is \"sufficient\".\n\nENRICHMENT RULE (critical): enrichedAcs must describe OBSERVABLE BEHAVIOR to VERIFY — never HOW to implement it. Do NOT prescribe an internal mechanism or algorithm. Forbidden: \"calculate independently\", \"split\", \"halve\"/\"×0.5\", \"per segment\", \"for each line item\", adding new fields/flags, or any phrasing that presumes a particular code approach. A bug ticket describes a SYMPTOM (\"the amount is not displayed for the return leg\"); keep the enriched ACs at that symptom/behavior level (what a tester observes), and enrich ONLY for clarity, testability, and genuinely-missing edge/error cases. Inventing an implementation approach in an AC misdirects the downstream code investigation toward the wrong fix.",
+    "derivedFromSha256": "eaca045db21c3b06f1b20a643fb9b0d1976271ef9b64692b15898cf7fdbf160a",
+    "derivedFromVersion": 1,
+    "id": "ac-classification",
+    "placeholders": [
+      "__AC_LIST__",
+      "__CODELINE_BULLETS__",
+      "__CODELINE_LIST__",
+      "__SCHEMA_AC_FIELDS__",
+      "__SPLIT_AC_LINES__",
+      "__SPLIT_NOTE__",
+      "__STORY_DESCRIPTION__",
+      "__STORY_KEY__",
+      "__STORY_TITLE__"
+    ],
+    "mayBeEmpty": [
+      "__SPLIT_NOTE__"
+    ]
+  },
+  "reviewed": true
+}

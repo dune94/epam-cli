@@ -1,10 +1,10 @@
 {
   "minted": [
     {
-      "name": "typescript-logic-fixer",
+      "name": "fare-calculation-engineer",
       "kind": "implementer",
       "codeline": "",
-      "rationale": "Both tickets are off-by-one / boundary bugs in pure TypeScript modules with no external dependencies, so one implementer who knows the two source files and the shared vitest+typescript stack can fix both.",
+      "rationale": "MOCK3-1 names a concrete off-by-boundary defect in fareFor() that only a role authorized to edit src/fares.ts across the project can correct.",
       "surfaces": [
         "profiles.json",
         "kb",
@@ -13,26 +13,14 @@
       ]
     },
     {
-      "name": "fares-investigator",
-      "kind": "investigator",
-      "codeline": "mocka",
-      "rationale": "The fare bug is a one-line boundary comparison, but the implementer needs to know exactly where the age check lives, what the fare constants are, and what the existing test already covers before touching it.",
+      "name": "schedule-display-engineer",
+      "kind": "implementer",
+      "codeline": "",
+      "rationale": "MOCK3-2 names a concrete loop-bound defect in formatStops() that only a role authorized to edit src/schedule.ts across the project can correct.",
       "surfaces": [
         "profiles.json",
         "kb",
-        "project-investigators",
-        "project-profiles"
-      ]
-    },
-    {
-      "name": "schedule-investigator",
-      "kind": "investigator",
-      "codeline": "mockb",
-      "rationale": "The omitted-stop bug is in a rendering loop, but the implementer needs to know the exact function signature, the data shape, and how the loop truncates before editing.",
-      "surfaces": [
-        "profiles.json",
-        "kb",
-        "project-investigators",
+        "project-roles",
         "project-profiles"
       ]
     }
@@ -40,27 +28,15 @@
   "rejected": [],
   "unchanged": [],
   "projectRoles": [
-    "typescript-logic-fixer"
+    "fare-calculation-engineer",
+    "schedule-display-engineer"
   ],
   "projectInvestigators": [
-    "fares-investigator",
-    "schedule-investigator"
+    "fares-detective",
+    "schedule-detective"
   ],
-  "rejectedAcrossAttempts": [
-    {
-      "name": "typescript-logic-fixer",
-      "reason": "brief names 2 path(s) that do not exist in any codeline: src/fares.test.ts, src/schedule.test.ts"
-    },
-    {
-      "name": "fares-investigator",
-      "reason": "brief names 1 path(s) that do not exist in codeline 'mocka': src/fares.test.ts"
-    },
-    {
-      "name": "schedule-investigator",
-      "reason": "brief names 1 path(s) that do not exist in codeline 'mockb': src/schedule.test.ts"
-    }
-  ],
-  "proposed": 6,
-  "attempts": 2,
+  "proposed": 2,
+  "rejectedAcrossAttempts": [],
+  "attempts": 1,
   "protectedRoles": 21
 }

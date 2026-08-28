@@ -1,10 +1,10 @@
 {
   "minted": [
     {
-      "name": "contentstack-live-preview-engineer",
+      "name": "fare-rules-engineer",
       "kind": "implementer",
       "codeline": "",
-      "rationale": "The metrolinx codeline declares contentstack and @contentstack/utils but not @contentstack/live-preview-utils, and its Stack config at src/services/contentstack.ts has no live_preview block; this role installs and wires the three missing integration points the ticket requires.",
+      "rationale": "MOCK3-1 requires an actual code change to the age boundary in mocka's fare logic, and no existing canonical role owns writing to src/fares.ts.",
       "surfaces": [
         "profiles.json",
         "kb",
@@ -13,10 +13,34 @@
       ]
     },
     {
-      "name": "metrolinx-contentstack-detective",
+      "name": "schedule-display-engineer",
+      "kind": "implementer",
+      "codeline": "",
+      "rationale": "MOCK3-2 requires an actual code change to the stop-rendering loop in mockb's schedule module, and no existing canonical role owns writing to src/schedule.ts.",
+      "surfaces": [
+        "profiles.json",
+        "kb",
+        "project-roles",
+        "project-profiles"
+      ]
+    },
+    {
+      "name": "mocka-detective",
       "kind": "investigator",
-      "codeline": "metrolinx",
-      "rationale": "The metrolinx codeline's data-fetch architecture (ContentstackFactory → pageService functions → useContent hook → page components) must be fully mapped before the implementer can wire onEntryChange without breaking SSR/SSG flows, and the survey's claim that live_preview is absent everywhere needs confirmation against the actual source.",
+      "codeline": "mocka",
+      "rationale": "mocka's fare boundary bug needs its own reader to confirm the exact comparison operator and existing test coverage before fare-rules-engineer edits src/fares.ts.",
+      "surfaces": [
+        "profiles.json",
+        "kb",
+        "project-investigators",
+        "project-profiles"
+      ]
+    },
+    {
+      "name": "mockb-detective",
+      "kind": "investigator",
+      "codeline": "mockb",
+      "rationale": "mockb's stop-rendering bug needs its own reader to confirm the loop-bound mismatch and existing test coverage before schedule-display-engineer edits src/schedule.ts.",
       "surfaces": [
         "profiles.json",
         "kb",
@@ -28,22 +52,15 @@
   "rejected": [],
   "unchanged": [],
   "projectRoles": [
-    "contentstack-live-preview-engineer"
+    "fare-rules-engineer",
+    "schedule-display-engineer"
   ],
   "projectInvestigators": [
-    "metrolinx-contentstack-detective"
-  ],
-  "rejectedAcrossAttempts": [
-    {
-      "name": "contentstack-live-preview-engineer",
-      "reason": "brief names 1 path(s) that do not exist in any codeline: src/services/livePreview.ts"
-    },
-    {
-      "name": "metrolinx-contentstack-detective",
-      "reason": "brief names 1 path(s) that do not exist in codeline 'metrolinx': src/app/"
-    }
+    "mocka-detective",
+    "mockb-detective"
   ],
   "proposed": 4,
-  "attempts": 2,
+  "rejectedAcrossAttempts": [],
+  "attempts": 1,
   "protectedRoles": 21
 }

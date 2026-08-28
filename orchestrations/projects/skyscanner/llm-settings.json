@@ -1,0 +1,5 @@
+{
+  "$schema": "../../config/llm-settings.schema.json",
+  "_migrationNote": "Ladders MOVED VERBATIM from config.env EPAM_MODEL_LADDER_* pins (B6, 2026-08-25). The ladder design post-dates this project and it was never migrated; the engine kept honouring the pins, so nothing failed and the drift stayed invisible. startModel and the highest tier were ADDED 2026-08-25 as a reviewed change, separately from the verbatim migration. Values are grounded in this project’s own removed config.env pins (ORCH_MINI_MODEL, ORCH_UPGRADE_MODEL, ESCALATION_MODEL_HIGH) and in the shape metrolinx/mock3/hello-dolly share. highest carries the SAME chain as high and differs only in entry.",
+  "_laddersMovedToSet": "ladders, ladderTierOrder and modelOverrides REMOVED 2026-08-25. A ladder names MODELS and models belong to a STACK, so the stack declares them and every project inherits. While a project declared its own, project-overrides-set meant EPAM_PROVIDER_SET=codemie changed the provider and left the models behind — a run pointed at codemie-claude still asking for MiniMax-M3. See config/llm-defaults.<set>.json."
+}

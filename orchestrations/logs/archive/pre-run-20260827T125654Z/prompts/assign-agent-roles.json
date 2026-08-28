@@ -1,0 +1,16 @@
+{
+  "$why": [
+    "Generated from the assign-agent-roles template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "Assign an implementation agent role to every story below.\n\nAVAILABLE ROLES — these are this project's own engineering roles. Choose from these and\nnothing else; the name you return must match one of them verbatim:\n__ROLE_BLOCK__\n\nSTORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:\n__STORY_BLOCK__\n\nPick the role whose stated expertise actually covers the work the story describes. If two\nroles could plausibly own a story, prefer the one whose brief names the surface the story\ntouches.\n\nTHE UNIT OF ASSIGNMENT IS A (STORY, CODELINE) PAIR, NOT A STORY. A story listing three\ncodelines needs THREE assignments — the repositories differ, so the right owner can differ.\nCount the codelines listed against each story and return exactly that many assignments for it,\nnaming the codeline on every one. A story is not assigned until every codeline it lists is.\n\nTHE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —\nthe one whose brief names those files or directories. A role whose brief is about settings in\na vendor's console, or about documentation, cannot deliver a story here: the agent's output is\na change in a repository. Live 2026-08-07: this story went to the one role of three that owned\nno source files, and all such a role can produce is a configuration note. Where the story needs\nboth console configuration and code,\n\nPROJECT-SPECIFIC GUIDANCE FOR mock3\n\nThis project has two codelines — mocka and mockb — both plain TypeScript + vitest workspaces\nwith no external services. Each repo follows the same layout: source in src/, tests in test/,\nand the scripts are identical in both package.json files: `vitest run` for tests, `tsc --noEmit`\nfor type-check. There is no lint step worth mentioning.\n\nThree roles were minted for this project. Only one of them — typescript-logic-fixer — is an\nimplementer who edits source files. The other two — fares-investigator and schedule-investigator\n— are investigator roles: they produce findings about where a bug lives and what the tests\nalready cover, but they do not commit code changes. An investigator cannot deliver a story\nbecause the pipeline expects a repository diff, not a report. If a story needs code changed,\nassign typescript-logic-fixer.\n\nEach story in this project lists exactly one codeline, so each story needs exactly one\nassignment. MOCK3-1 (fare boundary bug) touches mocka — the source file is src/fares.ts with\ntests in test/fares.test.ts. MOCK3-2 (departure board omits final stop) touches mockb — the\nsource file is src/schedule.ts with tests in test/schedule.test.ts.",
+  "derivedFromSha256": "66fc16a82ef8885d42431174a6a882d9246b4ce8db482427b2b1b3e9cbdb84f7",
+  "derivedFromVersion": 1,
+  "id": "assign-agent-roles",
+  "placeholders": [
+    "__ROLE_BLOCK__",
+    "__STORY_BLOCK__"
+  ]
+}

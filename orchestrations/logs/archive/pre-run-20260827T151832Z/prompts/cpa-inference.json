@@ -1,0 +1,16 @@
+{
+  "$why": [
+    "Generated from the cpa-inference template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "__SYSTEM_PROMPT__\n\n---\n\n## Project context\n\nYou are estimating iteration counts for the mock3 project, which spans two codelines:\n- **mocka** (`/home/bradleyjerome/projects/mock3/mock-a`): handles fare calculations\n- **mockb** (`/home/bradleyjerome/projects/mock3/mock-b`): handles schedule rendering\n\nBoth use vitest for testing and typescript for type checking.\n\n## Tickets in scope\n\n**MOCK3-1**: Riders aged exactly 65 are charged the adult fare\n- Investigator role: mocka-fare-detective (reads-only analysis of src/fares.ts comparison logic and test coverage)\n- Implementer role: fare-boundary-fixer (applies code changes to src/fares.ts)\n- Domain: Age boundary comparison in fare calculation\n\n**MOCK3-2**: The departure board omits the final stop\n- Investigator role: mockb-schedule-detective (reads-only analysis of src/schedule.ts loop bounds and assertions)\n- Implementer role: stop-rendering-fixer (applies code changes to src/schedule.ts)\n- Domain: Loop range boundaries in schedule rendering\n\n## Estimation context\n\nEach ticket has an investigator role (read-only, analyzes existing logic and test coverage) and a separate implementer role (write access, applies verified fixes). Iteration estimates should account for:\n- Test coverage gaps that detectives may surface\n- Type checking with typescript (both codelines)\n- vitest test suite runs to verify changes\n- The separation between investigation and implementation phases\n\n---\n\n__SECTIONS__\n\n---\n\nRespond with ONLY the JSON object as specified in your instructions. No prose, no markdown fences.",
+  "derivedFromSha256": "57120c129bde372daffdd0c3678a56752e78d8a9e708194db1ffab96c9dc7828",
+  "derivedFromVersion": 1,
+  "id": "cpa-inference",
+  "placeholders": [
+    "__SECTIONS__",
+    "__SYSTEM_PROMPT__"
+  ]
+}

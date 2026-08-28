@@ -1,17 +1,31 @@
 {
   "$why": [
-    "Generated from the spec-coordinator template by the agent that minted this project's roster.",
-    "The template is never executed; this copy is. Placeholders were checked against the",
-    "template before installation — see lib/project-prompt-contract.js."
+    "Moved out of spec-mode-runner.js on 2026-08-16.",
+    "",
+    "The spec coordinator decides when a phase's specification is DONE, so its wording sets",
+    "the bar every story is admitted against.",
+    "",
+    "The schema example said a ticket-shaped id. A DELIBERATE change on migration, not a byte-preserving",
+    "move: a ticket-shaped id in a generic template is a fake ticket the model can anchor on, and",
+    "the project rule forbidding ticket ids in templates is right to catch it. Replaced with the",
+    "placeholder the field actually takes."
   ],
-  "authority": "project",
-  "body": "__PROFILE_PREFIX__You are the EPAM CLI specification coordinator agent for phase __PHASE__.\n\nDecide which specification agents should run for each story below.\nAvailable agents and their roles:\n  - openspec: Elaborates requirements — refines AC, proposes story splits, adds technical depth\n  - speckit: Reviews & hardens — adds testability criteria, security checks, edge cases, flags gaps\n\nAgent collaboration model:\n  - If both are assigned, openspec runs FIRST, then speckit reviews openspec's output\n  - Assign both for complex/critical stories\n  - Assign only openspec for simple elaboration\n  - Assign only speckit for stories that just need test/security hardening\n\nProject context for calibration:\n  - This project has two codelines, both pure TypeScript + vitest: mocka (src/fares.ts, test/fares.test.ts) and mockb (src/schedule.ts, test/schedule.test.ts). Lint is a no-op; type-check is `tsc --noEmit`; tests run via `vitest run`.\n  - Both stories in scope are low-effort defect fixes — boundary / off-by-one bugs in single functions, not feature work.\n  - MOCK3-1: `fareFor` in mocka uses `rider.age > 65` where it should use `>=`; the existing test suite covers age 70 but not age 65, so the boundary is untested. The PRD already lists three clear acceptance criteria.\n  - MOCK3-2: `formatStops` in mockb loops `i < stops.length - 1`, omitting the final stop; the existing tests assert the separator and first stop name but never the last stop. The PRD already lists three clear acceptance criteria.\n  - Because the ACs are already well-formed and the fixes are one-line comparisons, heavy elaboration (openspec) is likely unnecessary; the highest-value spec work is testability hardening (speckit) to ensure the boundary cases that are currently untested get coverage criteria.\n\nRespond with raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:\n[\n  {\"storyId\":\"<storyId>\",\"agents\":[\"openspec\",\"speckit\"],\"notes\":\"reason\",\"priority\":\"high\"}\n]\nIf a story does not need spec work, provide an empty agents array.\n\nStories JSON:\n__STORIES_PAYLOAD__",
-  "derivedFromSha256": "9a75a0e7028ce1008af5ec35812924d6d2d09fd6978d356127b411cfb30b5538",
-  "derivedFromVersion": 1,
+  "body": "__PROFILE_PREFIX__You are the EPAM CLI specification coordinator agent for phase __PHASE__.\n\nDecide which specification agents should run for each story below.\nAvailable agents and their roles:\n  - openspec: Elaborates requirements — refines AC, proposes story splits, adds technical depth\n  - speckit: Reviews & hardens — adds testability criteria, security checks, edge cases, flags gaps\n\nAgent collaboration model:\n  - If both are assigned, openspec runs FIRST, then speckit reviews openspec's output\n  - Assign both for complex/critical stories\n  - Assign only openspec for simple elaboration\n  - Assign only speckit for stories that just need test/security hardening\n\nRespond with raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:\n[\n  {\"storyId\":\"<storyId>\",\"agents\":[\"openspec\",\"speckit\"],\"notes\":\"reason\",\"priority\":\"high\"}\n]\nIf a story does not need spec work, provide an empty agents array.\n\nStories JSON:\n__STORIES_PAYLOAD__\n",
+  "description": "Coordinate the specification pass across a phase and decide whether it is complete.",
   "id": "spec-coordinator",
   "placeholders": [
     "__PHASE__",
     "__PROFILE_PREFIX__",
     "__STORIES_PAYLOAD__"
-  ]
+  ],
+  "version": 1,
+  "seams": [
+    "spec-coordinator"
+  ],
+  "mayBeEmpty": [
+    "__PROFILE_PREFIX__"
+  ],
+  "$whyMayBeEmpty": "Declared 2026-08-27 by sweeping the CLASS rather than the instance, after three runs died on it one placeholder at a time. Every call site for these writes an explicit empty branch — the story is not being split, attempt one carries no forced-retry note, no documentation was fetched, the persona prefix is optional — so absence is a real state, which is the renderer's own test. Placeholders supplied by a lookup that may FAIL (`x || ''`) are deliberately NOT here: for those, empty means broken, and declaring them would hide the blank-brief defect the renderer exists to surface. Unanimity is required — one deliberate branch among several defensive lookups is not a licence.",
+  "derivedFromSha256": "9a75a0e7028ce1008af5ec35812924d6d2d09fd6978d356127b411cfb30b5538",
+  "authority": "project"
 }

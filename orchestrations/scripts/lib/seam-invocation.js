@@ -127,16 +127,135 @@ function declaredTierChain(sourceEnv, tierName) {
  *
  * Returns '' when no order is available; the caller reports that rather than guessing a name.
  */
+/**
+ * THE POSITION VOCABULARY IS THE ENGINE'S; THE TIER NAMES ARE THE PROJECT'S.
+ *
+ * Declared once here because two readers need the same answer: resolveTierPosition, which maps a
+ * position onto a project's tier, and seamLadderFor, which refuses a project override that is not
+ * a position. Split across the two, a position added to one and not the other would resolve for a
+ * seam and be rejected for a project.
+ */
+let _positionsCache;
+function ladderPositions() {
+  // THE ENGINE'S OWN REGISTRY, ALWAYS — never a caller's file and never AGENT_PROFILES_REGISTRY.
+  //
+  // Positions are the engine's vocabulary; only the TIER NAMES they resolve to belong to a
+  // project. Reading them from whatever registry a caller passed made every consumer with a
+  // fixture or minimal registry throw instead of resolving — the shell-side callers and the
+  // archetype ladder fixtures all point AGENT_PROFILES_REGISTRY at their own file, and a
+  // ladder that cannot name its positions stopped climbing.
+  if (_positionsCache) return _positionsCache;
+  const own = path.join(__dirname, '..', '..', 'agents', 'invocation-profiles.json');
+  const decl = (readRegistry(own) || {})._ladderPositions;
+  const names = decl && Array.isArray(decl.names) ? decl.names.filter(Boolean) : [];
+  if (!names.length) {
+    throw new Error(
+      '[seam-invocation] invocation-profiles.json declares no _ladderPositions.names, so there is '
+      + 'no position vocabulary to resolve a seam or validate a project override against. '
+      + 'Refusing to guess one.');
+  }
+  _positionsCache = names;
+  return names;
+}
+
+/**
+ * WHICH RUNG THIS SEAM STARTS ON, FOR THIS PROJECT.
+ *
+ * The registry's `ladder` is the DEFAULT, not the decision. It is one shared file, so while it was
+ * the only source, moving a seam to a cheaper rung for one project moved it for every project —
+ * and the only way to make a cheap seam-test project cheap was to retune production with it.
+ *
+ * A project overrides per seam in its own llm-settings.json, which is the same file it already
+ * uses to declare its tier order and its rungs:
+ *
+ *   "seamLadders": { "codeline-discovery": "mid", "estate-survey": "mid" }
+ *
+ * A position that is not one is refused rather than silently ignored: a cost decision that
+ * quietly did not apply is the failure this exists to replace.
+ */
+function seamLadderFor(seam, projectDir, registryFile) {
+  const profile = (readRegistry(registryFile || registryPath()).profiles || {})[seam] || {};
+  const decl = projectLadderDecl({ EPAM_PROJECT_CONFIG_DIR: projectDir || '' });
+  const overrides = (decl && decl.seamLadders) || null;
+  // A named seam wins; '*' is the project's default for everything it did not name; failing both,
+  // the registry's default stands.
+  if (!overrides) return profile.ladder;
+  const named = Object.prototype.hasOwnProperty.call(overrides, seam);
+  if (!named && !Object.prototype.hasOwnProperty.call(overrides, '*')) return profile.ladder;
+  const raw = named ? overrides[seam] : overrides['*'];
+  const want = String(raw || '').trim().toLowerCase();
+  const _positions = ladderPositions();
+  if (!_positions.includes(want)) {
+    throw new Error(
+      `[seam-invocation] this project's llm-settings.json sets seamLadders['${named ? seam : '*'}'] to `
+      + `'${raw}', which is not a ladder position — expected one of `
+      + `${_positions.join(', ')}. A seam declares a POSITION; the project's `
+      + 'ladderTierOrder supplies the tier name it lands on.');
+  }
+  return want;
+}
+
 function resolveTierPosition(position, sourceEnv) {
   const order = declaredTierOrder(sourceEnv);
   if (!order.length) return '';
   const p = String(position || '').trim().toLowerCase();
-  if (p === 'base') return order[0];
-  if (p === 'top') return order[order.length - 1];
-  if (p === 'mid') return order[Math.floor((order.length - 1) / 2)];
+  // Position -> index in the project's own tier order. The NAMES come from the registry; the
+  // mapping is the engine's, and biases low on an even count because over-spending is the more
+  // expensive mistake and a seam asking for the middle is not asking for the ceiling.
+  // Positions are declared lowest-to-highest, as tiers are, so a position maps to the tier at the
+  // same proportion of the order: the first to the first, the last to the last, and anything
+  // between to its proportional place. Floor, not round, so an even count biases LOW — a seam
+  // asking for the middle is not asking for the ceiling, and over-spending is the more expensive
+  // mistake. No count is special-cased: a project declaring two tiers or five gets the same rule.
+  const _names = ladderPositions();
+  const _i = _names.indexOf(p);
+  if (_i >= 0) {
+    const _span = _names.length - 1;
+    return order[_span ? Math.floor((_i * (order.length - 1)) / _span) : 0];
+  }
   // Not a position: a project tier name may still be passed through unchanged, so an older
   // registry keeps working while it is being migrated.
   return order.includes(p) ? p : '';
+}
+
+/**
+ * THE ITERATION BUDGET THIS RUNG DECLARES.
+ *
+ * A ladder declares maxIterations per RUNG — ladders.high.rungs[1].maxIterations = 250 — beside the
+ * models that rung runs. The seam already resolved its tier and its rung to pick the model; the
+ * budget is the field sitting next to it.
+ *
+ * It used to be looked up only through the project's modelOverrides, matched on a model-name
+ * substring. That made the budget a property of the PROJECT while the model is a property of the
+ * STACK, so moving a project to another stack silently detached every budget: on 2026-08-27 mock3
+ * ran every seam on the engine default because its overrides still named minimax and glm models
+ * that the claude ladder never produces.
+ *
+ * Read where the ladder is read: the project's own declaration first, then the resolved provider
+ * set, which is where a project that moved its ladders to the stack now keeps them.
+ */
+function rungBudget(sourceEnv, tierName, rung) {
+  if (!tierName) return '';
+  const docs = [];
+  const own = projectLadderDecl(sourceEnv);
+  if (own) docs.push(own);
+  try {
+    // eslint-disable-next-line global-require
+    const { resolveLlmSettings } = require('./llm-settings-resolve.js');
+    const resolved = resolveLlmSettings();
+    if (resolved) docs.push(resolved);
+  } catch { /* no provider set resolvable here; the project's own declaration stands alone */ }
+
+  for (const doc of docs) {
+    const tier = doc && doc.ladders && doc.ladders[tierName];
+    const rungs = tier && Array.isArray(tier.rungs) ? tier.rungs : [];
+    if (!rungs.length) continue;
+    // Past the top rung the ladder is exhausted, not broken: hold the last budget rather than
+    // dropping to a default nobody chose — the same rule the model walk follows.
+    const at = rungs[Math.min(Math.max(0, rung), rungs.length - 1)];
+    if (at && Number.isFinite(at.maxIterations)) return String(at.maxIterations);
+  }
+  return '';
 }
 
 function resolveSeam(agent, file, opts) {
@@ -393,7 +512,22 @@ function seamInvocationEnv(agent, agentsDir, opts) {
   // that. See lib/model-settings.js.
   if (profile.maxIterations !== undefined) env.EPAM_MAX_ITERATIONS = String(profile.maxIterations);
   if (profile.maxOutputTokens !== undefined) env.EPAM_MAX_OUTPUT_TOKENS = String(profile.maxOutputTokens);
-  if (profile.timeoutSecs !== undefined) env.EPAM_TIMEOUT_SECS = String(profile.timeoutSecs);
+  if (profile.timeoutSecs !== undefined) {
+    // A CEILING FOR RUNS THAT ARE NOT WAITING ON A MODEL.
+    //
+    // Seam timeouts are sized for real inference — estate-survey declares 900 seconds — which is
+    // right when a model is thinking and absurd when nothing is. A rehearsal answers from a local
+    // mock in milliseconds, so a seam that has not replied is never going to: the request matched
+    // no expectation and the run then sits out the full timeout in silence. One unmatched seam
+    // turned a three-minute rehearsal into a fifteen-minute hang tonight, and a hang is
+    // indistinguishable from slow work, which is the property that makes a fast loop worth having.
+    //
+    // Declared, never assumed: the cap applies only where a caller sets it, so real runs keep the
+    // budgets their seams declare and only a rehearsal asks for a short fuse.
+    const cap = Number(sourceEnv.EPAM_SEAM_TIMEOUT_CAP_SECS || 0);
+    const declared = Number(profile.timeoutSecs);
+    env.EPAM_TIMEOUT_SECS = String(cap > 0 ? Math.min(declared, cap) : declared);
+  }
 
   // WHERE THE TEMPLATE ZONE IS, for a seam granted the tools to read it. A read grant with no
   // path is useless, and the alternative — a directory named inside a prompt — is exactly the
@@ -402,7 +536,9 @@ function seamInvocationEnv(agent, agentsDir, opts) {
   if (env.EPAM_ALLOWED_TOOLS && /read_file|list_files/.test(env.EPAM_ALLOWED_TOOLS)) {
     env.EPAM_PROMPT_TEMPLATES_DIR = path.join(__dirname, '..', '..', 'prompts', 'templates');
   }
-  if (profile.ladder) {
+  // The project's override outranks the registry default; see seamLadderFor.
+  const _ladder = seamLadderFor(seam, (sourceEnv && sourceEnv.EPAM_PROJECT_CONFIG_DIR) || '', file);
+  if (_ladder) {
     // A SEAM DECLARES A POSITION; THE PROJECT SUPPLIES THE NAME.
     //
     // The registry used to name tiers literally ('HIGHEST', 'medium'). llm-settings.json
@@ -415,19 +551,19 @@ function seamInvocationEnv(agent, agentsDir, opts) {
     // ladderTierOrder is declared lowest-to-highest by the project and exported by
     // model-ladders.sh. Positions are resolved against it, so they hold whatever a project
     // calls its tiers and however many it declares.
-    const tierName = resolveTierPosition(profile.ladder, sourceEnv);
+    const tierName = resolveTierPosition(_ladder, sourceEnv);
     if (!tierName) {
       process.stderr.write(
-        "[seam-invocation] seam '" + seam + "' asks for ladder position '" + profile.ladder +
+        "[seam-invocation] seam '" + seam + "' asks for ladder position '" + _ladder +
         "' but EPAM_MODEL_LADDER_TIER_ORDER is unset or empty — the project declares no tier " +
         "order, so no position can be resolved\n");
     }
-    const key = 'EPAM_MODEL_LADDER_' + String(tierName || profile.ladder).toUpperCase().replace(/[^A-Z0-9]/g, '_');
+    const key = 'EPAM_MODEL_LADDER_' + String(tierName || _ladder).toUpperCase().replace(/[^A-Z0-9]/g, '_');
     // ENVIRONMENT FIRST — an exported chain is an operator override and outranks the file, the
     // same precedence model-ladders.sh applies. Then the project's own declaration, so a caller
     // that never sourced that library still gets the ladder its project declares rather than
     // none. `_declared` also supplies the start model for the same reason.
-    const _declared = sourceEnv[key] ? null : declaredTierChain(sourceEnv, tierName || profile.ladder);
+    const _declared = sourceEnv[key] ? null : declaredTierChain(sourceEnv, tierName || _ladder);
     const rungs = sourceEnv[key] || (_declared && _declared.chain) || '';
     if (rungs) {
       // The ladder this seam climbs, under the generic name every consumer reads.
@@ -501,30 +637,34 @@ function seamInvocationEnv(agent, agentsDir, opts) {
             return iterationMap(path.join(dir, 'llm-settings.json')) || '';
           } catch { return ''; }
         })());
-        if (itMap) {
-          let resolved = '';
-          for (const pair of itMap.split('|')) {
-            const eq = pair.lastIndexOf('=');
-            if (eq < 1) continue;
-            const match = pair.slice(0, eq);
-            const budget = pair.slice(eq + 1);
-            if (match.startsWith('provider:')) continue; // provider rules need the provider, not the model
-            if (_effectiveStart.includes(match)) { resolved = budget; break; } // declaration order, first match wins
-          }
-          if (resolved) {
-            env.EPAM_MAX_ITERATIONS = resolved;
-          } else {
-            process.stderr.write(
-              "[seam-invocation] seam '" + seam + "' starts on '" + _effectiveStart +
-              "' but the project declares no iteration budget for it — the seam will run on " +
-              "the engine default, which is nobody's choice\n");
-          }
+        // AN EXPLICIT PER-MODEL BUDGET FIRST: a project that named this model on purpose is
+        // stating something the rung default cannot know.
+        let resolved = '';
+        for (const pair of itMap.split('|')) {
+          const eq = pair.lastIndexOf('=');
+          if (eq < 1) continue;
+          const match = pair.slice(0, eq);
+          const budget = pair.slice(eq + 1);
+          if (match.startsWith('provider:')) continue; // provider rules need the provider, not the model
+          if (_effectiveStart.includes(match)) { resolved = budget; break; } // declaration order, first match wins
+        }
+        // THEN THE RUNG'S OWN. This used to sit inside `if (itMap)`, so a project declaring no
+        // modelOverrides at all never reached any budget lookup and was not even told so — the
+        // warning below was unreachable for exactly the projects most likely to need it.
+        if (!resolved) resolved = rungBudget(sourceEnv, tierName, _rung);
+        if (resolved) {
+          env.EPAM_MAX_ITERATIONS = resolved;
+        } else {
+          process.stderr.write(
+            "[seam-invocation] seam '" + seam + "' starts on '" + _effectiveStart +
+            "' but neither this project nor its ladder declares an iteration budget for that rung " +
+            "— the seam will run on the engine default, which is nobody's choice\n");
         }
       } else {
         // Absent stays absent: the seam keeps whatever model it would otherwise resolve, and the
         // gap is stated rather than filled with a root chosen by accident.
         process.stderr.write(
-          "[seam-invocation] seam '" + seam + "' climbs ladder '" + profile.ladder +
+          "[seam-invocation] seam '" + seam + "' climbs ladder '" + _ladder +
           "' which declares no startModel — not inferring one from map order; the seam will start " +
           "on whatever model it resolves for itself\n");
       }
@@ -533,7 +673,7 @@ function seamInvocationEnv(agent, agentsDir, opts) {
       // that cannot be reached is not a ladder assignment, so it is never silent.
       process.stderr.write(
         `[seam-invocation] agent '${agent}' resolved to seam '${seam}' which asks for ladder ` +
-        `'${profile.ladder}', but ${key} is unset in this process — no model or escalation ` +
+        `'${_ladder}', but ${key} is unset in this process — no model or escalation ` +
         'chain will be applied\n');
     }
   }
@@ -542,4 +682,4 @@ function seamInvocationEnv(agent, agentsDir, opts) {
 
 // resolveTierPosition is exported because the SHELL side needs the same answer: a profile
 // declares a position, and two places must not each decide what a position means.
-module.exports = { seamInvocationEnv, resolveSeam, registryPath, resolveTierPosition };
+module.exports = { seamInvocationEnv, resolveSeam, registryPath, resolveTierPosition, seamLadderFor };

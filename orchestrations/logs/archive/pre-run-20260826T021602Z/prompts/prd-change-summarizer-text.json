@@ -1,0 +1,18 @@
+{
+  "$why": [
+    "Generated from the prd-change-summarizer-text template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "You are a PRD change summarizer. A __CHANGE_TYPE__ for story __STORY_ID__ was REJECTED by the change reviewer for these reasons:\n__ISSUES__\n\nORIGINAL TEXT:\n__REJECTED_TEXT__\n\nRewrite the text to fix ONLY the issues listed above, preserving the original actionable rule. Requirements: no reference to any specific story ID; start with an imperative verb (Use, Always, Never, Prefer, Avoid); under 200 characters; end on a complete sentence; no markdown, no headers, no commentary.\n\nProject-specific constraints for this codeline:\n- Both tickets in scope are off-by-one / boundary bugs in pure TypeScript modules. Boundary-precision wording such as \"exactly 65\" or \"final stop\" IS the actionable rule — preserve it verbatim when fixing reviewer issues; do not soften or generalise it.\n- Rules must describe observable outcomes (fare values in cents like 175 or 350, stop names on the departure board), not implementation mechanisms (constant names like BASE_FARE_CENTS, comparison operators like >=, loop bounds, or function internals). If the rejected text referenced an implementation detail, remove it; if it described an observable outcome, keep it.\n- The stack is vitest and typescript only. Do not introduce references to other frameworks, libraries, or runtimes.\n\nEmit ONLY the corrected text — nothing else.",
+  "derivedFromSha256": "a4f3e073dedb864b4437d37657827042822cb7fcc10c3946e118510762689ed7",
+  "derivedFromVersion": 1,
+  "id": "prd-change-summarizer-text",
+  "placeholders": [
+    "__CHANGE_TYPE__",
+    "__ISSUES__",
+    "__REJECTED_TEXT__",
+    "__STORY_ID__"
+  ]
+}

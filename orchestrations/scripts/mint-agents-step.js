@@ -693,19 +693,6 @@ if (require.main !== module) return;
     process.stderr.write(`[mint-step] project roster: ${Object.keys(roster.agents).length} agent(s)\n`);
   };
 
-  // ROSTER-ONLY: derive the roster and stop.
-  //
-  // A writer-style resume skips the mint on purpose, and every launch runs the pre-run reset.
-  // The launcher calls this step in roster-only mode on those paths: identities are derived,
-  // nothing is re-minted, and no role accumulates a near-duplicate. Placed here because
-  // everything the stage needs is already resolved, and everything below costs model time this
-  // path is explicitly avoiding.
-  if (String(process.env.EPAM_ROSTER_ONLY || '') === '1') {
-    process.stderr.write('[mint-step] roster-only: deriving this project\'s roster, minting nothing\n');
-    await runRosterStage([]);
-    return { rosterOnly: true };
-  }
-
   const docs = await referencedDocs(LOG_DIR, stories);
   const fetchedDocs = docs.filter((d) => d && d.fetchStatus === 'fetched').length;
 
@@ -719,6 +706,57 @@ if (require.main !== module) return;
     documentsFetched: fetchedDocs,
     documentsUnfetched: docs.filter((d) => d && d.fetchStatus !== 'fetched').map((d) => ({ url: d.url, status: d.fetchStatus })),
   }, null, 2));
+
+  // ESTATE SURVEY — ITS OWN STEP, NOT THE MINT'S.
+  //
+  // This call used to sit inside the mint's else-branch, so every path that declined to mint
+  // also silently declined to survey: EPAM_SKIP_AGENT_MINT=1 meant 'skip the mint' and
+  // delivered 'skip discovery too', with nothing saying so. A seam's invocation must not be
+  // conditional on another seam's branch — the survey observes the estate, which is worth
+  // doing whether or not a roster is being minted from it, and the mint below simply reads
+  // what it produced.
+
+  // DET-1: LOOK AT THE CODE BEFORE ASSEMBLING THE TEAM.
+  //
+  // Everything the mint has had until now — the ticket, its documents, the declared
+  // dependencies — is a CLAIM about the estate. None of it is an observation of it, which is
+  // how briefs came to own modules nobody had searched for, and how scope came to be taken
+  // from ticket labels that are routinely wrong about which repositories are involved.
+  //
+  // The survey is cheap by construction: it decides where to look, not what to change. Its
+  // failure is not fatal — an estate that cannot be surveyed is the state the roster was
+  // minted in until today.
+  process.env.EPAM_AGENT_NAME = 'estate-survey';
+  const survey = await spec.surveyEstate({
+    promptExec,
+    tickets: stories,
+    referencedDocs: docs,
+    declaredDependencies: deps,
+    codelines,
+    toolGrant,
+    logDir: LOG_DIR,
+    repoPath: REPO_PATH,
+  });
+  if (survey.ran) {
+    for (const c of survey.codelines) {
+      process.stderr.write(`[mint-step]   survey: ${c.codeline} — ${c.state}` +
+        `${c.surfaces && c.surfaces.length ? ` (${c.surfaces.join(', ')})` : ''}\n`);
+    }
+    for (const r of survey.recommendedInvestigators) {
+      process.stderr.write(`[mint-step]   survey recommends an investigator for ${r.codeline}: ${r.focus}\n`);
+    }
+  } else {
+    process.stderr.write('[mint-step]   survey did not run — the roster is minted from the ticket alone\n');
+  }
+
+  // ROSTER-ONLY: derive the roster and stop.
+  //
+  // A writer-style resume skips the mint on purpose, and every launch runs the pre-run reset.
+  // The launcher calls this step in roster-only mode on those paths: identities are derived,
+  // nothing is re-minted, and no role accumulates a near-duplicate. Placed here because
+  // everything the stage needs is already resolved, and everything below costs model time this
+  // path is explicitly avoiding.
+
 
   // NO ROSTER DRIFT ACROSS RUNS OR CODELINES (operator direction, 2026-08-07).
   //
@@ -745,7 +783,16 @@ if (require.main !== module) return;
     process.stderr.write(
       `[mint-step] roster already minted in THIS run (${thisRunId}): ${existingRoles.join(', ')} ` +
       '— reusing exactly what was reviewed at the pause.\n');
-  } else if (process.env.EPAM_SKIP_AGENT_MINT === '1') {
+  } else if (process.env.EPAM_SKIP_AGENT_MINT === '1'
+             || String(process.env.EPAM_ROSTER_ONLY || '') === '1') {
+    // ROSTER-ONLY DECLINES THE MINT, NOT THE REST OF THE STEP.
+    //
+    // This used to return outright, several hundred lines above role assignment and prompt
+    // provisioning — so a run that skipped the mint also silently skipped both. Neither mints
+    // anything: assignment maps existing roles to stories, and provisioning in copy mode is a
+    // file copy costing no model call. Live 2026-08-27: mock3 reached agent-check with
+    // topology-router.json missing, because the only thing that provisions it sits past that
+    // return.
     process.stderr.write('[mint-step] mint skipped (EPAM_SKIP_AGENT_MINT=1) — resuming from a checkpoint\n');
   } else {
     // Start from the BASE roster, never a mutated one. Anything a previous run minted is
@@ -762,38 +809,6 @@ if (require.main !== module) return;
     // Agent identity reaches ai-run.sh through EPAM_AGENT_NAME and is what makes a cost row
     // attributable. Two distinct agents run here, so each names itself rather than sharing one
     // label — an anonymous or shared identity is how per-agent spend becomes unreadable.
-    // DET-1: LOOK AT THE CODE BEFORE ASSEMBLING THE TEAM.
-    //
-    // Everything the mint has had until now — the ticket, its documents, the declared
-    // dependencies — is a CLAIM about the estate. None of it is an observation of it, which is
-    // how briefs came to own modules nobody had searched for, and how scope came to be taken
-    // from ticket labels that are routinely wrong about which repositories are involved.
-    //
-    // The survey is cheap by construction: it decides where to look, not what to change. Its
-    // failure is not fatal — an estate that cannot be surveyed is the state the roster was
-    // minted in until today.
-    process.env.EPAM_AGENT_NAME = 'estate-survey';
-    const survey = await spec.surveyEstate({
-      promptExec,
-      tickets: stories,
-      referencedDocs: docs,
-      declaredDependencies: deps,
-      codelines,
-      toolGrant,
-      logDir: LOG_DIR,
-      repoPath: REPO_PATH,
-    });
-    if (survey.ran) {
-      for (const c of survey.codelines) {
-        process.stderr.write(`[mint-step]   survey: ${c.codeline} — ${c.state}` +
-          `${c.surfaces && c.surfaces.length ? ` (${c.surfaces.join(', ')})` : ''}\n`);
-      }
-      for (const r of survey.recommendedInvestigators) {
-        process.stderr.write(`[mint-step]   survey recommends an investigator for ${r.codeline}: ${r.focus}\n`);
-      }
-    } else {
-      process.stderr.write('[mint-step]   survey did not run — the roster is minted from the ticket alone\n');
-    }
     // FALSIFY THE SURVEY BEFORE ANYTHING IS MINTED FROM IT.
     //
     // The survey seeds every investigator brief and scoped the whole run, and nothing reviewed it

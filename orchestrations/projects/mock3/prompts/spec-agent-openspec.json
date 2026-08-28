@@ -1,14 +1,18 @@
 {
   "$why": [
-    "Generated from the spec-agent-openspec template by the agent that minted this project's roster.",
+    "Moved out of spec-mode-runner.js runSpecAgent on 2026-08-16.",
     "",
-    "Specialised for mock3: a two-codeline transit workspace (mocka/fares, mockb/schedule).",
-    "Each codeline is a standalone TypeScript+vitest project with no shared code or monorepo tooling.",
-    "Both stories are off-by-one boundary bugs in single functions — additions cover the exact",
-    "source symbols, build/test commands, strict-mode trap, and the requirement that acceptance",
-    "criteria include the exact boundary value the existing tests miss."
+    "The openspec agent writes the specification every later stage is judged against. Every",
+    "one of its seventeen inputs is a NAMED BLOCK computed above the literal — nothing branches",
+    "inside the prompt itself, which is why this one migrates cleanly where the VC prompts did",
+    "not: there is no conditional here for a fixture to leave unexercised.",
+    "",
+    "Its seven ADJACENT blocks on the opening line are what exposed a greedy-matching bug in the",
+    "renderer: __A____B__ was read as one placeholder, so this template declared a token nobody",
+    "supplies and threw on every render. The pattern is lazy now; substitution by key was always",
+    "adjacency-safe."
   ],
-  "body": "__FORCED_RETRY_BLOCK__You are the __AGENT__ specification agent for EPAM CLI. Phase __PHASE__, story __STORY_ID__.__SPLIT_WARNING____PRIOR_GAPS_BLOCK____SEMBLE_CONTEXT____REFERENCED_DOCS_EVIDENCE____FIX_SITE_BLOCK____DECLARED_FILE_BLOCK____BROWNFIELD_ARCHAEOLOGY_BLOCK__\n\n## Project: mock3\n\nA two-codeline transit workspace. Each codeline is a standalone TypeScript project — no shared code, no shared config, no monorepo tooling. Stories map one-to-one to codelines.\n\n### mocka — transit fares (MOCK3-1)\n\n- **Source:** `src/fares.ts` — exports `fareFor(rider: Rider): number`, `totalFor(riders: Rider[]): number`, type `Rider = { age: number; hasPass: boolean }`, constants `BASE_FARE_CENTS` (350) and `CONCESSION_FARE_CENTS` (175).\n- **Tests:** `test/fares.test.ts` — vitest, imports from `../src/fares`.\n- **The bug:** `fareFor` checks `rider.age > 65` for the senior concession. A rider aged exactly 65 falls through to the base fare. The fix is the comparison operator (`>` → `>=`), not a restructuring.\n- **Existing test gap:** the test suite checks age 70 (well past the boundary) but never age 65 exactly. Acceptance criteria must call out the exact boundary value as a testable condition.\n\n### mockb — departure board (MOCK3-2)\n\n- **Source:** `src/schedule.ts` — exports `formatStops(stops: Stop[]): string`, `totalMinutes(stops: Stop[]): number`, type `Stop = { name: string; minutes: number }`.\n- **Tests:** `test/schedule.test.ts` — vitest, imports from `../src/schedule`.\n- **The bug:** `formatStops` loops `for (let i = 0; i < stops.length - 1; i++)`, which skips the final stop. The fix is the loop bound (`stops.length - 1` → `stops.length`), not a restructuring.\n- **Existing test gap:** the test suite checks that the arrow separator and the first stop name appear, but never asserts the last stop is present. Acceptance criteria must require every stop to appear in the output, including the final one.\n\n### Build and test commands\n\nRun inside the codeline directory (e.g. `/home/bradleyjerome/projects/mock3/mock-a` or `/home/bradleyjerome/projects/mock3/mock-b`):\n\n- `npm test` — runs `vitest run` (single pass, not watch mode).\n- `npm run build` — runs `tsc --noEmit` (typecheck only; no artefacts emitted).\n- `npm run lint` — no-op (`echo no-lint-configured`); do not rely on lint for correctness.\n\n### Conventions and traps\n\n- Both codelines use `\"type\": \"module\"` with ES2022 module resolution (`\"moduleResolution\": \"bundler\"`). Test files import source via relative paths (`../src/...`).\n- TypeScript `\"strict\": true` is enabled in both codelines. Any type error fails `tsc --noEmit`. Acceptance criteria that imply a type change must be type-safe under strict mode.\n- Tests use vitest's `describe` / `it` / `expect` pattern. Each test file imports the symbols it checks directly from the source module — no test utilities, no fixtures, no shared setup.\n- Both defects are off-by-one boundary errors. When writing acceptance criteria, always include the exact boundary value as an explicit, testable condition. The existing tests miss these boundaries, which is why the bugs went undetected — the spec must close that gap.\n- Do not propose splitting either story: each is a single-line fix in a single function in a single file, already scoped to one codeline with one assigned implementer.\n\n__GENERATE_INSTRUCTION__\n{\n  \"storyId\":\"__STORY_ID__\",\n  \"agent\":\"__AGENT__\",\n  \"notes\":\"context\",\n  \"acceptanceCriteria\":[\"...\"],\n  \"description\":\"...\",\n  \"title\":\"...\",__LOCATION_HINT_SCHEMA_LINE____SPLIT_SCHEMA_FIELD__\n}\nUse existing text when no change is needed.__SPLIT_RULES_BLOCK__\n\nStory context:\n__STORY_PAYLOAD____PUBLISHED_CONTRACTS__\n",
+  "body": "__FORCED_RETRY_BLOCK__You are the __AGENT__ specification agent for EPAM CLI. Phase __PHASE__, story __STORY_ID__.__SPLIT_WARNING____PRIOR_GAPS_BLOCK____SEMBLE_CONTEXT____REFERENCED_DOCS_EVIDENCE____FIX_SITE_BLOCK____DECLARED_FILE_BLOCK____BROWNFIELD_ARCHAEOLOGY_BLOCK__\n__GENERATE_INSTRUCTION__\n{\n  \"storyId\":\"__STORY_ID__\",\n  \"agent\":\"__AGENT__\",\n  \"notes\":\"context\",\n  \"acceptanceCriteria\":[\"...\"],\n  \"description\":\"...\",\n  \"title\":\"...\",__LOCATION_HINT_SCHEMA_LINE____SPLIT_SCHEMA_FIELD__\n}\nUse existing text when no change is needed.__SPLIT_RULES_BLOCK__\n\nStory context:\n__STORY_PAYLOAD____PUBLISHED_CONTRACTS__\n",
   "description": "Produce or revise the specification for one story, as the openspec agent.",
   "id": "spec-agent-openspec",
   "placeholders": [
@@ -34,5 +38,19 @@
   "seams": [
     "spec-agent"
   ],
-  "derivedFromSha256": "c3ce0355799388af9c5a40e045a6495ac36b4c02b28976f1710971b0373c7dbb"
+  "mayBeEmpty": [
+    "__DECLARED_FILE_BLOCK__",
+    "__FIX_SITE_BLOCK__",
+    "__FORCED_RETRY_BLOCK__",
+    "__PRIOR_GAPS_BLOCK__",
+    "__PUBLISHED_CONTRACTS__",
+    "__REFERENCED_DOCS_EVIDENCE__",
+    "__SEMBLE_CONTEXT__",
+    "__SPLIT_RULES_BLOCK__",
+    "__SPLIT_SCHEMA_FIELD__",
+    "__SPLIT_WARNING__"
+  ],
+  "$whyMayBeEmpty": "Declared 2026-08-27 after run 20260827T125654Z aborted here. Each of these is a CONDITIONAL INSERT: the story is not being split, no earlier pass left gaps, no documentation was fetched, no contract has been published yet and attempt one carries no forced-retry note. The renderer's own rule is that absence must be a real state rather than a failed lookup — and a first pass having no prior gaps is exactly that. All ten rendered empty during normal operation and the render refused, three times per story, with no model involved; both lanes halted at the specification pass. __FIX_SITE_BLOCK__ is the one to watch: empty is legitimate before discovery has run, but it is ALSO what an unavailable code-graph-detective produces, and that failure is reported separately rather than inferred from this blank.",
+  "derivedFromSha256": "c3ce0355799388af9c5a40e045a6495ac36b4c02b28976f1710971b0373c7dbb",
+  "authority": "project"
 }

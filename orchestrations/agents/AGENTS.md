@@ -14610,3 +14610,27 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/AMSD-2041_*.log
 
+## MOCK3-1: Riders aged exactly 65 are charged the adult fare
+- **Date**: 2026-08-28 10:09:52
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-1_*.log
+
+## MOCK3-2: The departure board omits the final stop
+- **Date**: 2026-08-28 10:10:01
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-2_*.log
+
+## MOCK3-1: Riders aged exactly 65 are charged the adult fare
+- **Date**: 2026-08-28 10:14:27
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-1_*.log
+
+## MOCK3-2: The departure board omits the final stop
+- **Date**: 2026-08-28 10:14:35
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-2_*.log
+

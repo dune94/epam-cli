@@ -40,3 +40,9 @@
 {"timestamp":"2026-08-28T13:54:29.138Z","step":"ac-review","storyId":"MOCK3-1","runId":"20260828T135319Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"f600939"}
 {"timestamp":"2026-08-28T13:55:13Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260828T135319Z","promptVersion":"f600939"}
 {"timestamp":"2026-08-28T13:55:17Z","step":"0.9","phaseId":"core","attempts":1,"outcome":"noop","reason":"","violationTypes":[],"runId":"20260828T135319Z","promptVersion":"f600939"}
+{"timestamp":"2026-08-28T14:09:05.487Z","step":"ac-review","storyId":"MOCK3-1","runId":"20260828T140801Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"23f3050"}
+{"timestamp":"2026-08-28T14:09:46Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260828T140801Z","promptVersion":"23f3050"}
+{"timestamp":"2026-08-28T14:09:49Z","step":"0.9","phaseId":"core","attempts":1,"outcome":"noop","reason":"","violationTypes":[],"runId":"20260828T140801Z","promptVersion":"23f3050"}
+{"timestamp":"2026-08-28T14:12:49.317Z","step":"ac-review","storyId":"MOCK3-1","runId":"20260828T141137Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"23f3050"}
+{"timestamp":"2026-08-28T14:13:30Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260828T141137Z","promptVersion":"23f3050"}
+{"timestamp":"2026-08-28T14:13:34Z","step":"0.9","phaseId":"core","attempts":1,"outcome":"noop","reason":"","violationTypes":[],"runId":"20260828T141137Z","promptVersion":"23f3050"}

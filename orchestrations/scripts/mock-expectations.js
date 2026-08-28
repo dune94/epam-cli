@@ -768,15 +768,59 @@ function roleShaped(token) {
   return suffixes.has(tail) && String(token).includes('-');
 }
 
+/**
+ * THE MODELS THIS STACK ACTUALLY DECLARES.
+ *
+ * Read from the resolved provider set's ladders — the same source the pipeline resolves a seam's
+ * model from. Never listed here: another stack declares other models and must need no change.
+ */
+let _ladderModels;
+function declaredModels() {
+  if (_ladderModels) return _ladderModels;
+  _ladderModels = [];
+  try {
+    // eslint-disable-next-line global-require
+    const { resolveLlmSettings } = require('./lib/llm-settings-resolve.js');
+    const st = resolveLlmSettings() || {};
+    const seen = new Set();
+    for (const tier of Object.values(st.ladders || {})) {
+      for (const hop of (tier.modelLadder || [])) {
+        for (const m of [hop && hop.from, hop && hop.to]) if (m && !seen.has(m)) { seen.add(m); _ladderModels.push(m); }
+      }
+      if (tier.startModel && !seen.has(tier.startModel)) { seen.add(tier.startModel); _ladderModels.push(tier.startModel); }
+    }
+  } catch { _ladderModels = []; }
+  return _ladderModels;
+}
+
 function refreshEntities(cap) {
   if (!cap || !cap.body) return cap;
   const declared = [...projectEntities()];
   if (!declared.length) return cap;
   let body = String(cap.body);
+  const swappedModels = [];
+  // A MODEL FROM ANOTHER STACK IS ANOTHER STACK'S ANSWER.
+  //
+  // prd-model-coordinator assigns a model per story, and a replayed answer assigns the model of the
+  // run it came from: on 2026-08-28 both mock3 stories were assigned MiniMax-M3, which is on no
+  // ladder the claude stack declares, and the next run's pre-flight refused to start — correctly,
+  // since a model on no ladder cannot escalate. Rewritten to this stack's own opening model, which
+  // is what the pipeline would have resolved for itself.
+  const models = declaredModels();
+  if (models.length) {
+    const stale = [...new Set(body.match(/\b[A-Za-z][A-Za-z0-9.]*(?:-[A-Za-z0-9.]+){1,4}\b/g) || [])]
+      .filter((t) => /^(minimax|glm|kimi|qwen|z-ai|zhipuai|moonshotai|gpt|claude)/i.test(t))
+      .filter((t) => !models.includes(t));
+    for (const m of stale) {
+      body = body.split(m).join(models[0]);
+      swappedModels.push(`${m} -> ${models[0]}`);
+    }
+  }
+
   const shaped = [...new Set(body.match(/\b[a-z]+(?:-[a-z]+){1,3}\b/g) || [])]
     .filter((t) => roleShaped(t))
     .filter((t) => !declared.includes(t));
-  if (!shaped.length) return cap;
+  if (!shaped.length) return swappedModels.length ? { ...cap, body, refreshed: swappedModels } : cap;
   // Keep the kind: a detective in the capture becomes a detective here, an implementer an
   // implementer — the suffix is how this roster states kind, so it is what the match reads.
   const kindOf = (n) => (/-detective$/.test(n) ? 'detective' : 'implementer');
@@ -789,7 +833,7 @@ function refreshEntities(cap) {
     body = body.split(stale).join(to);
     swapped.push(`${stale} -> ${to}`);
   });
-  return { ...cap, body, refreshed: swapped };
+  return { ...cap, body, refreshed: [...swappedModels, ...swapped] };
 }
 
 /**

@@ -1,6 +1,6 @@
 {
   "phase": "core",
-  "updatedAt": "2026-08-28T09:55:17-04:00",
+  "updatedAt": "2026-08-28T10:14:27-04:00",
   "steps": [
     {"id":"1","label":"Step 1: Specification pass","status":"pass","detail":""},
     {"id":"1a","label":"  openspec (elaboration)","status":"pass","detail":"claude-haiku-4-5-20251001, 1 stor(y/ies)"},
@@ -11,7 +11,7 @@
     {"id":"5","label":"Step 5: Regression guard","status":"pass","detail":""},
     {"id":"6","label":"Step 6: mkdir src/ dirs","status":"pass","detail":""},
     {"id":"7","label":"Step 7: PRD model coordinator","status":"pass","detail":""},
-    {"id":"8","label":"Step 8: Main-branch stories","status":"skip","detail":"paused before the writer (EPAM_PAUSE_BEFORE_WRITER)"},
+    {"id":"8","label":"Step 8: Main-branch stories","status":"fail","detail":""},
     {"id":"9","label":"auto-commit","status":"pending","detail":""},
     {"id":"10","label":"tc-writer","status":"pending","detail":""},
     {"id":"11","label":"skills-audit","status":"pending","detail":""},

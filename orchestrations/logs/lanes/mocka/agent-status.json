@@ -1,5 +1,5 @@
 {
-  "startedAt": "2026-08-28T09:55:07-04:00",
+  "startedAt": "2026-08-28T10:13:23-04:00",
   "phase": "core",
   "orchMode": "bash",
   "lanes": {
@@ -7,7 +7,7 @@
       "status": "running",
       "currentStory": null,
       "storiesCompleted": 1,
-      "storiesFailed": 0
+      "storiesFailed": 2
     },
     "primary": {
       "status": "idle",
@@ -29,7 +29,7 @@
       "lane": "main",
       "role": "team-lead-agent",
       "message": "Pre-phase assessment completed",
-      "timestamp": "2026-08-28T09:55:13-04:00"
+      "timestamp": "2026-08-28T10:13:30-04:00"
     },
     {
       "type": "story_start",
@@ -39,7 +39,7 @@
       "provider": "claude",
       "model": "claude-haiku-4-5-20251001",
       "message": "Starting PRD Model Coordinator",
-      "timestamp": "2026-08-28T09:55:16-04:00"
+      "timestamp": "2026-08-28T10:13:34-04:00"
     },
     {
       "type": "story_complete",
@@ -47,16 +47,100 @@
       "lane": "main",
       "role": "prd-model-coordinator",
       "message": "Completed PRD model assignments done",
-      "timestamp": "2026-08-28T09:55:17-04:00"
+      "timestamp": "2026-08-28T10:13:35-04:00"
+    },
+    {
+      "type": "story_start",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "fare-rules-engineer",
+      "provider": "claude",
+      "model": "MiniMax-M3",
+      "message": "Starting ",
+      "timestamp": "2026-08-28T10:13:36-04:00"
+    },
+    {
+      "type": "retry",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "fare-rules-engineer",
+      "message": "Retry R1 Rung0: model=MiniMax-M3 (self-heal active)",
+      "timestamp": "2026-08-28T10:13:44-04:00"
+    },
+    {
+      "type": "ladder_rung",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "fare-rules-engineer",
+      "message": "InferenceLadder Rung1/R2: MiniMax-M3→MiniMax-M3 effort=max",
+      "timestamp": "2026-08-28T10:13:51-04:00"
+    },
+    {
+      "type": "ladder_rung",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "fare-rules-engineer",
+      "message": "InferenceLadder Rung1/R3: MiniMax-M3→MiniMax-M3 effort=max",
+      "timestamp": "2026-08-28T10:13:58-04:00"
+    },
+    {
+      "type": "ladder_rung",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "fare-rules-engineer",
+      "message": "InferenceLadder Rung2/R4: MiniMax-M3→MiniMax-M3 effort=max",
+      "timestamp": "2026-08-28T10:14:04-04:00"
+    },
+    {
+      "type": "ladder_rung",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "fare-rules-engineer",
+      "message": "InferenceLadder Rung2/R5: MiniMax-M3→MiniMax-M3 effort=max",
+      "timestamp": "2026-08-28T10:14:11-04:00"
+    },
+    {
+      "type": "ladder_rung",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "fare-rules-engineer",
+      "message": "InferenceLadder Rung3/R6: MiniMax-M3→MiniMax-M3 effort=max",
+      "timestamp": "2026-08-28T10:14:18-04:00"
+    },
+    {
+      "type": "ladder_rung",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "fare-rules-engineer",
+      "message": "InferenceLadder Rung3/R7: MiniMax-M3→MiniMax-M3 effort=max",
+      "timestamp": "2026-08-28T10:14:24-04:00"
+    },
+    {
+      "type": "story_fail",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "fare-rules-engineer",
+      "message": "Failed after 12 attempts",
+      "timestamp": "2026-08-28T10:14:27-04:00"
+    },
+    {
+      "type": "story_fail",
+      "story": "MOCK3-1",
+      "lane": "main",
+      "role": "fare-rules-engineer",
+      "message": "exit 1",
+      "timestamp": "2026-08-28T10:14:27-04:00"
     }
   ],
   "stories": {
     "MOCK3-1": {
-      "status": "pending",
-      "lane": null,
+      "status": "fail",
+      "lane": "main",
       "role": "fare-rules-engineer",
-      "title": "Riders aged exactly 65 are charged the adult fare",
-      "updatedAt": null
+      "title": "",
+      "provider": "claude",
+      "model": "MiniMax-M3",
+      "updatedAt": "2026-08-28T10:14:27-04:00"
     },
     "": {
       "status": "complete",
@@ -65,7 +149,7 @@
       "title": "PRD Model Coordinator",
       "provider": "claude",
       "model": "claude-haiku-4-5-20251001",
-      "updatedAt": "2026-08-28T09:55:17-04:00"
+      "updatedAt": "2026-08-28T10:13:35-04:00"
     }
   }
 }

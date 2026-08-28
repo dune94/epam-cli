@@ -6045,6 +6045,36 @@ else
 
         _mc_assigned_count=$(echo "$_mc_result" | python3 "$SCRIPT_DIR/lib/handlers/mc-assigned-count.py" 2>/dev/null || echo 0)
 
+        # A MODEL ON NO LADDER CANNOT ESCALATE — CAUGHT HERE, NOT NEXT RUN.
+        #
+        # The coordinator writes its assignment straight into the PRD, and nothing looked at it
+        # until the NEXT run's pre-flight, which then refused to start. Live 2026-08-28: mock3's two
+        # stories were assigned MiniMax-M3 on a claude stack, EPAM_MODEL_PROVIDER_MAP routed
+        # MiniMax-* to the minimax provider, and the writer spent twelve attempts against a model
+        # this stack does not declare. The following run would not start at all.
+        #
+        # The permitted set is the project's own declared ladder — read, never listed. An assignment
+        # outside it is corrected to that ladder's opening model and said out loud: the run keeps
+        # moving on a model that can actually escalate, and the deviation is visible rather than
+        # discovered a run later.
+        if command -v jq >/dev/null 2>&1; then
+            _mc_allowed="$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/ladder-models.js" 2>/dev/null || echo "")"
+            if [ -n "$_mc_allowed" ]; then
+                _mc_fixed=$(jq -r --argjson allowed "$_mc_allowed" '
+                    [ .stories[]? | select((.model // "") != "" and ((.model) as $m | $allowed | index($m) | not)) | .id ]
+                    | join(", ")' "$_mc_prd_target" 2>/dev/null || echo "")
+                if [ -n "$_mc_fixed" ]; then
+                    _mc_start=$(printf '%s' "$_mc_allowed" | jq -r '.[0] // empty')
+                    warning "  [prd-model-coordinator] assigned a model on no declared ladder for: ${_mc_fixed}"
+                    warning "    corrected to '${_mc_start}' — a model off the ladder has no successor and cannot escalate"
+                    _mc_tmp=$(mktemp)
+                    jq --argjson allowed "$_mc_allowed" --arg start "$_mc_start" '
+                        .stories |= map(if ((.model // "") != "" and ((.model) as $m | $allowed | index($m) | not))
+                                        then .model = $start else . end)'                         "$_mc_prd_target" > "$_mc_tmp" 2>/dev/null && mv "$_mc_tmp" "$_mc_prd_target" || rm -f "$_mc_tmp"
+                fi
+            fi
+        fi
+
         _mc_prd_after=$(cat "$_mc_prd_target" 2>/dev/null || echo "{}")
         # Gate on whether the PRD FILE actually changed, not the agent's own
         # self-reported assigned_count. Root cause of a live-run defect

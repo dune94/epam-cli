@@ -2444,6 +2444,102 @@
       "role": "speckit",
       "message": "[core] speckit updated MOCK3-2 acChanged=no splitCount=0",
       "timestamp": "2026-08-28T08:19:44-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-2",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on MOCK3-2 (The departure board omits the final stop)",
+      "timestamp": "2026-08-28T08:30:13-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-2",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK3-2 — tracing the causal fix site",
+      "timestamp": "2026-08-28T08:30:13-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-2",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective located fix site: src/fares.ts (reuse CONCESSION_FARE_CENTS)",
+      "timestamp": "2026-08-28T08:30:29-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-2",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec updated MOCK3-2 acChanged=no splitCount=0",
+      "timestamp": "2026-08-28T08:30:36-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-2",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit started on MOCK3-2 (The departure board omits the final stop)",
+      "timestamp": "2026-08-28T08:30:36-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-2",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit updated MOCK3-2 acChanged=no splitCount=0",
+      "timestamp": "2026-08-28T08:30:41-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-2",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on MOCK3-2 (The departure board omits the final stop)",
+      "timestamp": "2026-08-28T08:32:21-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-2",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK3-2 — tracing the causal fix site",
+      "timestamp": "2026-08-28T08:32:21-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-2",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective located fix site: src/fares.ts (reuse CONCESSION_FARE_CENTS)",
+      "timestamp": "2026-08-28T08:32:42-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-2",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec updated MOCK3-2 acChanged=no splitCount=0",
+      "timestamp": "2026-08-28T08:32:51-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-2",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit started on MOCK3-2 (The departure board omits the final stop)",
+      "timestamp": "2026-08-28T08:32:51-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK3-2",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit updated MOCK3-2 acChanged=no splitCount=0",
+      "timestamp": "2026-08-28T08:32:55-04:00"
     }
   ],
   "stories": {

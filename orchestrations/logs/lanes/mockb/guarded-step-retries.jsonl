@@ -23,3 +23,5 @@
 {"timestamp":"2026-08-28T11:57:55.296Z","step":"ac-review","storyId":"MOCK3-2","runId":"20260828T115714Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"b3fc684"}
 {"timestamp":"2026-08-28T12:06:51.996Z","step":"ac-review","storyId":"MOCK3-2","runId":"20260828T120609Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"b3fc684"}
 {"timestamp":"2026-08-28T12:19:40.536Z","step":"ac-review","storyId":"MOCK3-2","runId":"20260828T121859Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"b3fc684"}
+{"timestamp":"2026-08-28T12:30:36.575Z","step":"ac-review","storyId":"MOCK3-2","runId":"20260828T122951Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"a347d9f"}
+{"timestamp":"2026-08-28T12:32:51.345Z","step":"ac-review","storyId":"MOCK3-2","runId":"20260828T123156Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"a347d9f"}

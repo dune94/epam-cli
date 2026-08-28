@@ -1022,9 +1022,26 @@ function endsInToolCall(cap, seam) {
         }
       } catch { standCall = null; }
     }
+    // A STORY-SPECIFIC CAPTURE IS MATCHED THE SAME WAY A STORY-SPECIFIC STAND-IN IS.
+    //
+    // Matching a capture on the story ALONE matches every prompt carrying the PRD — all of them —
+    // so it answers other seams' calls. Matching on the seam's TEMPLATE alone ignores the story, so
+    // MOCK3-1's detective answer was served for MOCK3-2 and mockb was specified against mocka's
+    // src/fares.ts. Both together identify the one call this capture belongs to; the seam is named
+    // by its output tag where it has one, since that is what every prompt for it carries.
+    const _capTag = (() => {
+      try {
+        // eslint-disable-next-line global-require
+        const { declaredContracts: dc } = require('./lib/agent-output-schema.js');
+        const d = dc()[seam];
+        return (d && d.tag) ? `<${d.tag}>` : '';
+      } catch { return ''; }
+    })();
     const _disc = storyDiscriminator(_story);
+    const _seamMark = _capTag || key;
     const bodyMatch = _disc
-      ? { type: 'STRING', string: wireForm(_disc), subString: true }
+      ? { type: 'REGEX',
+          regex: `(?s)(?=.*${rx(wireForm(_seamMark))})(?=.*${rx(wireForm(_disc))}).*` }
       : { type: 'STRING', string: wireForm(key), subString: true };
     const PROTOCOLS = [
       { path: '/api/v1/chat/completions', text: sse, calls: sseToolCalls },
@@ -1078,8 +1095,18 @@ function endsInToolCall(cap, seam) {
             // answer 104 characters long. The matcher must identify the SEAM as well as the story:
             // the seam's own fingerprint and this story's title, both required.
             httpRequest: { method: 'POST', path: proto.path,
+              // THE TAG IDENTIFIES THE SEAM ACROSS EVERY PROMPT THAT USES IT.
+              //
+              // A template fingerprint identifies ONE prompt. spec-agent is called from two — the
+              // openspec pass and the speckit review — built from different templates, so a
+              // fingerprint matched one and left the other to the catch-all, which answered {} and
+              // reported the seam's own required field as missing.
+              //
+              // outputContractFor() appends the seam's output tag to every prompt it sends, so the
+              // tag is the one thing common to all of them. Tag plus story: this seam, this story,
+              // whichever prompt asked.
               body: { type: 'REGEX',
-                regex: `(?s)(?=.*${rx(wireForm(key))})(?=.*${rx(wireForm(disc))}).*` } },
+                regex: `(?s)(?=.*${rx(wireForm(`<${_tag}>`))})(?=.*${rx(wireForm(disc))}).*` } },
             httpResponse: { statusCode: 200,
               headers: { 'content-type': ['text/event-stream'], 'x-seam': [`${seam}:${item.storyId}`] },
               body: proto.text(tagged) },

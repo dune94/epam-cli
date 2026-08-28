@@ -177,3 +177,29 @@ describe('THE STAGE A RESUME STARTED FROM IS A SNAPSHOT, NOT LIVE STATE', () => 
       .toBe(false);
   });
 });
+
+describe('_pause_already_passed — the predicate both pauses defer to', () => {
+  // Exercised by name, not only through its callers: a blocking function that no test has ever
+  // heard of is how three guards reached production inert while the suite was green.
+
+  const ask = (env: Record<string, string>, stage: string) => {
+    const p = projectWithRun(RUN, 'post-roster');
+    const r = inLib(`if _pause_already_passed ${stage}; then echo PASSED; else echo AHEAD; fi`, env, p);
+    return (r.stdout || '').trim().split('\n').pop();
+  };
+
+  it('says a pause is still AHEAD when this is not a resume', () => {
+    expect(ask({}, 'post-roster')).toBe('AHEAD');
+  });
+
+  it('says PASSED only once the resumed stage reaches the guarded one', () => {
+    expect(ask({ EPAM_RESUMED_FROM_STAGE: 'post-roster' }, 'post-roster')).toBe('PASSED');
+    expect(ask({ EPAM_RESUMED_FROM_STAGE: 'post-roster' }, 'pre-writer')).toBe('AHEAD');
+    expect(ask({ EPAM_RESUMED_FROM_STAGE: 'pre-writer' }, 'post-roster')).toBe('PASSED');
+  });
+
+  it('treats an unrecognised stage as no progress at all', () => {
+    expect(ask({ EPAM_RESUMED_FROM_STAGE: 'something-else' }, 'post-roster'),
+      'an unknown stage was read as progress, skipping a review point').toBe('AHEAD');
+  });
+});

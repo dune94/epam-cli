@@ -1600,6 +1600,37 @@ _lint_fix_findings_directly() {
     return 1
 }
 
+# runtime_boundary_verdict <gate-log> <project-root>
+#
+# THE VERDICT DECIDES, NOT THE EXIT CODE.
+#
+# This gate's result handling read $? and nothing else: the log was written, handed to the gate and
+# never read again, so a grounded report that a change cannot execute printed "Step 22g — pass"
+# because the process exited 0. Its sibling two lines below has always grepped the log.
+#
+# Grounding, same discipline as fuzz-weaver: a `fail` blocks only when a finding names a file that
+# exists. A claim about a file that does not exist is not evidence, and a gate that blocks on one
+# teaches the operator to ignore it.
+#
+# An unparseable or empty log is a WARN, never a pass: a gate that could not produce an answer has
+# not cleared the change.
+#
+# Echoes: fail | warn | pass
+runtime_boundary_verdict() {
+    local _log="${1:-}" _root="${2:-}"
+    [ -n "$_log" ] && [ -s "$_log" ] || { echo warn; return 0; }
+
+    if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$_log" 2>/dev/null; then
+        local _grounded
+        _grounded=$(python3 "$SCRIPT_DIR/lib/handlers/findings-grounded.py" "$_log" "$_root" 2>/dev/null || echo 0)
+        if [ "${_grounded:-0}" -gt 0 ]; then echo fail; else echo warn; fi
+        return 0
+    fi
+    if grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$_log" 2>/dev/null; then echo warn; return 0; fi
+    if grep -q '"verdict"[[:space:]]*:[[:space:]]*"pass"' "$_log" 2>/dev/null; then echo pass; return 0; fi
+    echo warn
+}
+
 _run_qa_gate_with_retry() {
     local _qg_prompt="$1" _qg_agent="$2" _qg_phase="$3" _qg_log="$4"
     local _qg_max="${QA_GATE_MAX_RETRIES:-2}"
@@ -9873,10 +9904,33 @@ $perf_prompt"
         local _rb_exit=0
         wait $_rb_pid || _rb_exit=$?
         { [ $_rb_exit -eq 0 ] && _emit_agent complete "runtime-boundary"; } || _emit_agent fail "runtime-boundary" "exit $_rb_exit"
-        if [ $_rb_exit -eq 0 ]; then
-            step_emit "22g" "pass" "Step 22g: Runtime boundary"
+        # THE EXIT CODE ONLY SAYS THE AGENT RAN. What it FOUND is in the log, and until
+        # 2026-08-28 nothing read it: a grounded report that the change cannot execute printed
+        # "pass" here because the process exited 0.
+        if [ $_rb_exit -ne 0 ]; then
+            # No structured output after retries. A gate that could not run is not a confirmed
+            # failure, and is not a pass either.
+            step_emit "22g" "warn" "Step 22g: Runtime boundary" "no structured output (exit ${_rb_exit})"
+            warning "  Runtime-boundary: no structured output after all retries — non-blocking warn"
         else
-            step_emit "22g" "fail" "Step 22g: Runtime boundary" "exit ${_rb_exit}"
+            case "$(runtime_boundary_verdict "$_rb_log" "$PROJECT_ROOT")" in
+                fail)
+                    step_emit "22g" "fail" "Step 22g: Runtime boundary"
+                    error "  Runtime-boundary: FAIL — the change cannot execute as this codeline is configured."
+                    error "    See ${_rb_log}"
+                    failed=1
+                    _failing_logs+=("$_rb_log")
+                    _log_labels+=("runtime-boundary")
+                    ;;
+                warn)
+                    step_emit "22g" "warn" "Step 22g: Runtime boundary" "findings not grounded in real files"
+                    warning "  Runtime-boundary: WARN — findings could not be grounded in real files (non-blocking)"
+                    ;;
+                *)
+                    step_emit "22g" "pass" "Step 22g: Runtime boundary"
+                    success "  Runtime-boundary: PASS"
+                    ;;
+            esac
         fi
 
         # Evaluate Phase C results

@@ -6193,8 +6193,80 @@ COORDINATOR_ESCALATE="yes"
 COORDINATOR_FAILURE_CLASS="unknown"
 COORDINATOR_PROMPT_AMENDMENT=""
 
+# classify_invocation_refusal <attempt-output-file> <exit-code>
+#
+# TRUE when the CLI refused its own command line -- an argument it will refuse identically forever.
+#
+# 2026-08-28: every writer attempt died in milliseconds on
+#   error: option '--autocompact <auto|tokens>' argument '80000' is invalid.
+# The coordinator called all twelve "unknown", escalated haiku -> sonnet-5 and reset the worktree
+# between each, because no raw output file existed and absent was read as "no evidence". The
+# evidence was in the attempt's own output log the whole time, identical every time.
+#
+# Retrying is for conditions that might differ next time. This is not one of them: report the
+# offending option and stop, so the operator fixes the flag instead of paying for eleven repeats.
+classify_invocation_refusal() {
+    local _out="${1:-}" _exit="${2:-1}"
+    [ "$_exit" -ne 0 ] || return 1
+    [ -n "$_out" ] && [ -f "$_out" ] || return 1
+
+    # The CLI's own argument-parser wording. Anchored on "option ... argument ... invalid" rather
+    # than on any one flag: the next flag to move its accepted range must land here too.
+    local _line
+    _line=$(grep -m1 -aE "^error: (option|unknown option|required option)" "$_out" 2>/dev/null || true)
+    [ -n "$_line" ] || return 1
+
+    local _opt
+    _opt=$(printf '%s' "$_line" | grep -oE -m1 -- "--[a-z0-9-]+" | head -1)
+    warning "  Coordinator[L1]: the CLI REFUSED its own command line -- ${_opt:-<option>} is not"
+    warning "    acceptable to the installed binary, so every retry fails identically before any"
+    warning "    token is sent. Not retryable. Fix the flag, then re-run."
+    warning "    ${_line}"
+    return 0
+}
+
 # classify_failure_class <raw_file> <result_json> <exit_code>
 # Layer 1: rule-based triage. Sets COORDINATOR_FAILURE_CLASS and COORDINATOR_ESCALATE.
+# resolve_model_override <model> <provider> <settings-file>...
+#
+# THE FIRST FILE THAT DECLARES THIS MODEL WINS -- per MODEL, not per FILE.
+#
+# Overrides live in the active stack, and a project may override for its own reasons, so the caller
+# passes project first and stack second. The precedence used to be applied to the FILE: if the
+# project declared any modelOverrides at all, the stack's were never read. mock3 declares overrides
+# for the models of the stack it was written against; run on claude, none matched, and the stack's
+# own claude entries were skipped, so the value fell through to defaultAutoCompressAt: 80000 and the
+# CLI rejected the argument outright -- twelve attempts, no tokens, a whole writer leg (2026-08-28).
+#
+# A project's silence about THIS model is not an instruction to ignore the stack's answer for it.
+#
+# Emits the matching override object as compact JSON, or nothing.
+resolve_model_override() {
+    local _model="${1:-}" _provider="${2:-}"
+    shift 2 || true
+    local _f _json
+    for _f in "$@"; do
+        [ -n "$_f" ] && [ -f "$_f" ] || continue
+        # A "$"-prefixed key is a documentation note, not an override. Indexing .value.matchOn on a
+        # string aborts the whole query, and a swallowed error reads as "no overrides on this file".
+        _json=$(jq -c --arg provider "$_provider" --arg model "$_model" '
+            (.modelOverrides // {}) | to_entries
+            | map(select(.value | type == "object"))
+            | map(select(
+                (.value.matchOn == "provider" and .value.matchValue == $provider)
+                or (.value.matchOn == "model" and (.value.matchSubstring // null) != null
+                    and (.value.matchSubstring as $sub | $model | contains($sub)))
+              ))
+            | (.[0].value // empty)
+        ' "$_f" 2>/dev/null)
+        if [ -n "$_json" ] && [ "$_json" != "null" ]; then
+            printf '%s' "$_json"
+            return 0
+        fi
+    done
+    return 0
+}
+
 classify_failure_class() {
     local raw_file="${1:-}"
     local result_json="${2:-}"
@@ -10116,37 +10188,21 @@ $_kb_section"
                 # The project file is still preferred when it declares overrides: a project may
                 # legitimately override for its own reasons, and that is the layer where such a
                 # decision belongs.
-                local _model_override_settings_file="${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json"
-                if ! { [ -f "$_model_override_settings_file" ] \
-                       && "${NODE_BIN:-node}" -e 'const o=(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).modelOverrides)||{}; process.exit(Object.keys(o).filter(k=>!k.startsWith("$")).length?0:1)' \
-                            "$_model_override_settings_file" 2>/dev/null; }; then
-                    local _set_settings_file
-                    _set_settings_file="$("${NODE_BIN:-node}" -e '
-                        try {
-                          const { activeSetFile } = require(process.argv[1] + "/lib/llm-settings-resolve.js");
-                          process.stdout.write(activeSetFile() || "");
-                        } catch (_) { process.stdout.write(""); }
-                    ' "$SCRIPT_DIR" 2>/dev/null || printf '')"
-                    [ -n "$_set_settings_file" ] && [ -f "$_set_settings_file" ] \
-                        && _model_override_settings_file="$_set_settings_file"
-                fi
-                if [ -f "$_model_override_settings_file" ]; then
-                    local _override_json
-                    _override_json=$(jq -c --arg provider "${STORY_PROVIDER:-}" --arg model "${STORY_MODEL:-}" '
-                        (.modelOverrides // {}) | to_entries
-                        # A "$"-prefixed key is a documentation note, not an override. Indexing
-                        # .value.matchOn on a string aborts the whole query, and the 2>/dev/null
-                        # below turns that into an empty result — every override on the file lost,
-                        # silently, because someone wrote a comment beside them.
-                        | map(select(.value | type == "object"))
-                        | map(select(
-                            (.value.matchOn == "provider" and .value.matchValue == $provider)
-                            or (.value.matchOn == "model" and (.value.matchSubstring // null) != null
-                                and (.value.matchSubstring as $sub | $model | contains($sub)))
-                          ))
-                        | (.[0].value // empty)
-                    ' "$_model_override_settings_file" 2>/dev/null)
-                    if [ -n "$_override_json" ] && [ "$_override_json" != "null" ]; then
+                  # BOTH LAYERS, IN ORDER -- the project first, then the active stack. Asking which
+                  # FILE to read skipped the stack whenever the project declared any override at
+                  # all; resolve_model_override asks which file declares THIS MODEL.
+                  local _proj_override_file="${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json"
+                  local _stack_override_file
+                  _stack_override_file="$("${NODE_BIN:-node}" -e '
+                      try {
+                        const { activeSetFile } = require(process.argv[1] + "/lib/llm-settings-resolve.js");
+                        process.stdout.write(activeSetFile() || "");
+                      } catch (_) { process.stdout.write(""); }
+                  ' "$SCRIPT_DIR" 2>/dev/null || printf '')"
+                  local _override_json
+                  _override_json=$(resolve_model_override "${STORY_MODEL:-}" "${STORY_PROVIDER:-}" \
+                      "$_proj_override_file" "$_stack_override_file")
+                  if [ -n "$_override_json" ] && [ "$_override_json" != "null" ]; then
                         local _ov_effort _ov_temp _ov_iter _ov_compress_at _ov_compress_n _ov_top_p _ov_temp_locked _ov_provider_order
                         _ov_effort=$(jq -r '.reasoningEffort // empty' <<<"$_override_json")
                         _ov_top_p=$(jq -r '.topP // empty' <<<"$_override_json")
@@ -10240,7 +10296,6 @@ $_kb_section"
                         [ -n "$_ov_compress_n" ] && _effective_compress_every_n="$_ov_compress_n"
                         log "  ModelOverride[${STORY_MODEL:-$STORY_PROVIDER}]: effort=${_ov_effort:-unchanged} temp=${_ov_temp:-unchanged} maxIter=${_effective_max_iterations} compaction=$([ -n "$_effective_compress_every_n" ] && echo "every ${_effective_compress_every_n} iter" || echo "token-threshold") (tokenThreshold=${_effective_compress_at:-none})"
                     fi
-                fi
                 # TELL THE WATCHDOG WHAT WE ACTUALLY GRANTED.
                 #
                 # The parent sizes the story's wall from iterations x secondsPerIteration, but
@@ -10586,6 +10641,14 @@ $_kb_section"
             [ ! -f "$_raw_for_coord" ] && _raw_for_coord=""
 
             # Layer 1: rule-based triage (always runs)
+            # A REFUSED COMMAND LINE ENDS THE STORY -- it cannot differ on the next attempt.
+            # Checked before the coordinator, whose evidence is the raw output file that a refused
+            # invocation never produces; the attempt log always exists and carries the error.
+            if classify_invocation_refusal "$output_file" "$exit_code"; then
+                COORDINATOR_FAILURE_CLASS="invocation"
+                COORDINATOR_ESCALATE="no"
+                return 1
+            fi
             classify_failure_class "$_raw_for_coord" "$json_result_file" "$exit_code" "$story_id"
 
             # Work carryover: verify_story_deliverables() (called above, on

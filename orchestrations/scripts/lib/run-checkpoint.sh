@@ -136,12 +136,39 @@ _is_known_stage() {
 # that an earlier checkpoint holds none of what the writer consumes. That reasoning still
 # holds for the WRITER — and the roster pause is not about the writer. It is about the
 # agents themselves, which did not used to be generated at all.
+# A PAUSE THE RUN HAS ALREADY BEEN THROUGH MUST NOT FIRE AGAIN.
+#
+# The settings live in the project's config.env, so they are set for EVERY run of that project --
+# including the resume whose whole purpose is to continue PAST the pause the operator just reviewed.
+# Read as a bare env check, pause 1 was a trap with no exit: resume, re-pause, resume, re-pause.
+#
+# It went unnoticed because the pause used `return` where it meant `exit`, so the resume "continued"
+# by accident. Fixing the halt turned an accident that behaved correctly into a stall that could not.
+#
+# Skipping too little wastes the pause; skipping too much silently drops work that was never done --
+# so the test is the stage the resumed run actually REACHED, ranked by _stage_rank, against the stage
+# this pause guards. An unknown or unreadable stage ranks 0 and so skips NOTHING: a failed lookup
+# must never be the reason a human review point is bypassed.
+#
+# _pause_already_passed <stage-this-pause-guards>
+_pause_already_passed() {
+    local _guards="${1:-}"
+    # The SNAPSHOT, not a fresh reading. EPAM_RESUMED_FROM_STAGE is published by resume_skip_env at
+    # startup and inherited by every lane; a fresh run never sets it, so nothing is ever skipped.
+    # Re-deriving here is the trap described above: the run would test state it had just written.
+    local _reached="${EPAM_RESUMED_FROM_STAGE:-}"
+    [ -n "$_reached" ] || return 1
+    [ "$(_stage_rank "${_reached}")" -ge "$(_stage_rank "${_guards}")" ]
+}
+
+# The stage each pause guards is the SAME string it hands save_run_checkpoint at that point, which is
+# what makes the comparison meaningful rather than a second, drifting spelling of the same fact.
 should_pause_before_writer() {
-    is_truthy "${EPAM_PAUSE_BEFORE_WRITER:-}"
+    is_truthy "${EPAM_PAUSE_BEFORE_WRITER:-}" && ! _pause_already_passed pre-writer
 }
 
 should_pause_after_agent_mint() {
-    is_truthy "${EPAM_PAUSE_AFTER_AGENT_MINT:-}"
+    is_truthy "${EPAM_PAUSE_AFTER_AGENT_MINT:-}" && ! _pause_already_passed post-roster
 }
 
 # resume_skip_env <run-id> — emit the env assignments a resume must apply, derived from
@@ -232,6 +259,15 @@ resume_skip_env() {
             return 1
             ;;
     esac
+    # THE STAGE THIS RESUME STARTED FROM, published once so the pauses can compare against it.
+    #
+    # It cannot be re-derived later: pause 2 saves the pre-writer checkpoint and then asks whether
+    # the run has already passed pre-writer, so a live read answers with the file it wrote three
+    # lines earlier and the pause skips itself. Free rehearsal, 2026-08-28 — it went into the writer
+    # unattended, which is the one thing that pause exists to prevent.
+    #
+    # Emitted here because this runs ONCE, in the parent, before any lane exists.
+    echo "EPAM_RESUMED_FROM_STAGE=${_stage}"
     run_mode_env "$_mode"
 }
 

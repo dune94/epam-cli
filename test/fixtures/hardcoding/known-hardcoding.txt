@@ -29,3 +29,24 @@ function scoreRepos(issues, manifest, topN = 8, vocabulary = null) {
 out += 'Produce the prompt again, correcting exactly this. Change nothing else.';
 # [naming conventions in engine data]
   "exclude": ["^docs\\."]
+
+// ── NOT hardcoding: a truncation that bounds what a HUMAN reads ──────────────
+// Category 6 exists for truncations that decide how much a MODEL sees. A cut inside a
+// diagnostic decides how much of a message reaches a log, which is not a pipeline
+// decision anyone needs to configure. Added 2026-08-28 while reviewing all 441 findings:
+// 25 of the 144 truncations were of this shape, and counting them hid the 110 that matter.
+console.warn(`spec-mode: story ${id} rejected — ${reason.slice(0, 120)}`);
+printf '%s\n' "$_out" | head -15 | sed 's/^/    /' >&2
+const stamp = new Date().toISOString().slice(0, 10);
+
+// ── NOT hardcoding: unit conversions and decimal rounding ────────────────────
+// Category 9 is "a number DECIDING something, with no name to configure it by". These decide
+// nothing — 1000 ms in a second, 1024 bytes in a KiB, 60 minutes in an hour, x100 for a
+// percentage, and round-to-4dp — and none has another possible value, which is the test for
+// whether a knob would mean anything. Same reasoning that removed `x += 1` when this category
+// reported 304. Added 2026-08-28 while reviewing all 441 findings.
+const timeoutMs = declaredSeconds * 1000;
+if (stat.size > MAX_FILE_KB * 1024) continue;
+const minutes = forecastHours * 60;
+const pct = ((n / total) * 100).toFixed(1) + '%';
+score: Math.round(score * 10000) / 10000,

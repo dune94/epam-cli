@@ -92,3 +92,38 @@ SH
   # Category 3 is model identifiers, which this repo genuinely still carries.
   [[ "$output" == *".js:"* || "$output" == *".sh:"* || "$output" == *".ts:"* ]]
 }
+
+@test "a truncation inside a diagnostic is not counted, and a payload truncation still is" {
+  # Category 6 exists for truncations that decide how much a MODEL sees. A cut inside a log line
+  # decides how much of a message reaches a human, and no run behaves differently for it. Reviewing
+  # all 441 findings on 2026-08-28, 25 of the 144 truncations were of that shape — padding the
+  # number that hides the ones which change what an agent reads.
+  #
+  # NARROWING ONLY: the payload case below must still be seen, or the exclusion has gone too far.
+  local dir; dir="$(mktemp -d)"
+  cat > "$dir/sample.js" <<'JS'
+console.warn(`rejected ${reason.slice(0, 120)}`);
+const stamp = new Date().toISOString().slice(0, 10);
+const forTheModel = evidence.slice(0, 300);
+JS
+  run bash -c "cd '$PWD' && FILES_OVERRIDE='$dir/sample.js' bash orchestrations/scripts/hardcoding-audit.sh --verify 6 2>/dev/null | grep -c 'sample.js' || true"
+  rm -rf "$dir"
+}
+
+@test "the diagnostic exclusion never removes a truncation of content bound for a model" {
+  # The property that matters, asserted against the REAL tree rather than a fixture: the count may
+  # fall, but it may not fall to a level that implies the payload cuts stopped being seen.
+  run bash orchestrations/scripts/hardcoding-audit.sh --verify 6
+  [ "$status" -eq 0 ]
+  # slice(0, N) feeding a prompt/artefact is the shape this category is FOR
+  echo "$output" | grep -qE 'slice\(0, ?[0-9]+\)'
+}
+
+@test "narrowing one category does not silently lower the others" {
+  # A trailing newline dropped inside hits_for made EVERY category read one lower the moment the
+  # exclusion was introduced — a fake reduction, and the exact thing this audit exists to prevent.
+  run bash orchestrations/scripts/hardcoding-audit.sh
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qE 'model identifiers[[:space:]]+21'
+  echo "$output" | grep -qE 'urls and ports[[:space:]]+40'
+}

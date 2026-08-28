@@ -167,7 +167,60 @@ add "naming conventions in engine data" \
 # NO MATCHES IS AN ANSWER, NOT A FAILURE. grep exits 1 when it finds nothing, and that status
 # propagated out of --verify, so inspecting a clean category looked like the audit had broken.
 # A caller wiring this into a gate would have read "this class is clear" as "the tool failed".
-hits_for() { grep -rnE "${PATTERNS[$1]}" "${FILES[@]}" 2>/dev/null | drop_narration || true; }
+# A TRUNCATION INSIDE A DIAGNOSTIC IS NOT A DECISION ANYONE CONFIGURES.
+#
+# Category 6 exists for truncations that decide how much a MODEL sees. A cut inside a log line
+# decides how much of a message reaches a HUMAN reading stderr, and no run behaves differently for
+# it. Reviewing all 441 findings on 2026-08-28: 25 of the 144 truncations were of that shape —
+# console.warn/log/error, a shell warning()/info()/log()/error(), a `head` piped to sed or >&2 for
+# display — and counting them padded the number that hides the 110 which do change what an agent
+# reads. The same reasoning that removed `x += 1` from category 10 when it reported 304.
+#
+# ISO-date slices and file-signature reads are FORMATS, not windows: slice(0, 10) on a timestamp is
+# YYYY-MM-DD, and `head -c 15` reading "SQLite format 3" is a magic number in the literal sense.
+# Neither has another possible value, which is the test for whether a knob would mean anything.
+#
+# Narrowing only — nothing here can hide a truncation of content on its way to a model, and
+# --calibrate proves every category still sees its own example before any count is printed.
+drop_diagnostics() {
+    grep -vE ':[0-9]+:.*(console\.(warn|log|error)|^[^:]*:[0-9]+:[[:space:]]*(warning|info|log|error)[[:space:]]*\()' \
+    | grep -vE ':[0-9]+:.*(head|tail) -[0-9]+[^|]*\|[[:space:]]*(sed|cut)' \
+    | grep -vE ':[0-9]+:.*(head|tail) -[0-9]+[^>]*>&2' \
+    | grep -vE ':[0-9]+:.*(toISOString\(\)|String\([^)]*(created|updated|date|time)[^)]*\))\.slice\(0, ?(4|7|10)\)' \
+    | grep -vE ':[0-9]+:.*head -c 1[0-9][[:space:]]' \
+    || true
+}
+
+hits_for() {
+    local _out
+    _out=$(grep -rnE "${PATTERNS[$1]}" "${FILES[@]}" 2>/dev/null | drop_narration || true)
+    # Only the truncation category: elsewhere a log line naming a model or a URL is still a finding,
+    # because the LITERAL is the defect there, not the size of the window.
+    # printf '%s' drops the trailing newline and the last finding with it — every category read
+    # one lower the moment this function was introduced, which is a fake reduction and the exact
+    # thing this audit exists to make impossible.
+    # A UNIT CONVERSION DECIDES NOTHING. Category 9 asks for numbers that decide something with no
+    # name to configure them by. 1000 ms in a second, 1024 bytes in a KiB, 60 minutes in an hour,
+    # x100 for a percentage, round-to-N-decimals — none has another possible value, so a knob for it
+    # would name a fact rather than a choice. 29 of the 131 were these. The same reasoning that took
+    # this category from 304 when `x += 1` turned out to be a counter, not a decision.
+    #
+    # A bare factor keeps its finding: only these unit constants are excluded, and only where they
+    # appear AS the multiplier or divisor.
+    if [ "${NAMES[$1]}" = "unnamed numeric decisions" ]; then
+        printf '%s\n' "$_out" | grep -v '^$' \
+            | grep -vE ':[0-9]+:.*[*/][[:space:]]*(1000|1024|60)\b' \
+            | grep -vE ':[0-9]+:.*\*[[:space:]]*100\b.*(toFixed|pct|percent|%)' \
+            | grep -vE ':[0-9]+:.*Math\.round\([^)]*\*[[:space:]]*10+\)[[:space:]]*/[[:space:]]*10+' \
+            || true
+        return 0
+    fi
+    if [ "${NAMES[$1]}" = "truncations" ]; then
+        printf '%s\n' "$_out" | grep -v '^$' | drop_diagnostics
+    else
+        printf '%s\n' "$_out" | grep -v '^$'
+    fi
+}
 
 case "${1:-}" in
   --scope)

@@ -25,5 +25,9 @@
   ],
   "seams": [
     "impl-failure-analyst"
-  ]
+  ],
+  "mayBeEmpty": [
+    "__SKILL_ADDENDUM__"
+  ],
+  "$mayBeEmptyWhy": "A role may carry no accumulated skill notes — skill_addendum defaults to \"\" and the lookup ends `// \"\"`. Undeclared, the analyst could not build its prompt, so the thing that diagnoses a failed gate died of the same fault as the gate (2026-08-28)."
 }

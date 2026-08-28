@@ -1,0 +1,25 @@
+{
+  "$why": [
+    "Moved out of claude.sh on 2026-08-15 (9 of 20). First migration in claude.sh, the file the",
+    "writer path runs through.",
+    "",
+    "The reviewer PROFILE is a value, not part of the template: it comes from profiles.json and",
+    "is the project-authority half of what this agent is told."
+  ],
+  "body": "__REVIEWER_PROFILE__\n\nSTORY: __STORY_ID__\nCHANGE TYPE: __CHANGE_TYPE__\n\nBEFORE:\n__BEFORE__\n\nAFTER:\n__AFTER__\n\nYou have read-only tools available (list/search/read files, run read-only shell commands). Several of your rejection rules (introduces a technology this project does not already use; TC fact cannot be verified by reading source code) require checking a claim against the real manifests/config/source of THIS codeline — do not judge those from the before/after excerpts alone. Verify before rejecting on that basis; a wrong rejection blocks a correct change and is worse than a slower correct one. Your tool budget is small — check the ONE fact your verdict depends on, not the whole codebase.\n\nEmit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[\"<issue1>\"],\"reason\":\"<15 words max>\"}",
+  "description": "Validate a proposed PRD change against the codebase and pass or fail it.",
+  "id": "prd-change-reviewer",
+  "placeholders": [
+    "__AFTER__",
+    "__BEFORE__",
+    "__CHANGE_TYPE__",
+    "__REVIEWER_PROFILE__",
+    "__STORY_ID__"
+  ],
+  "version": 1,
+  "seams": [
+    "prd-change-reviewer"
+  ],
+  "derivedFromSha256": "1a550d29cd0c39181ddab3caf6658c2a828842de1dfab9b86608b25547ea9113",
+  "authority": "project"
+}

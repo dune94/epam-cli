@@ -4004,9 +4004,19 @@ _pause_after_agent_mint() {
     echo -e "  role real and not a canonical process role). It does not re-mint and does not"
     echo -e "  re-assign over your changes."
     echo ""
-    # END the run. The operator restarts it with the command above; resume validates the
-    # roster rather than regenerating it, so hand edits survive.
-    return 0
+    # END THE RUN — exit, not return.
+    #
+    # This said `return 0` under this same comment. `return` leaves the FUNCTION; the caller carries
+    # on. On the ingesting path the call happened to be the last thing before an exit, so it halted
+    # by accident and looked correct for as long as nobody called it from anywhere else.
+    #
+    # Live 2026-08-28 on a PAID run: the banner printed with its resume instructions, the operator
+    # was told the run had stopped, and it went straight into the spec pass and was making model
+    # calls when it was killed by hand. Pause 2, three thousand lines below, has always used exit.
+    #
+    # The operator restarts with the command above; resume validates the roster rather than
+    # regenerating it, so hand edits survive.
+    exit 0
   fi
 }
 

@@ -4880,12 +4880,47 @@ _wt_stories_list=""
 [ -n "$independent_stories" ] && _wt_stories_list="${_wt_stories_list}${independent_stories}"$'\n'
 _wt_count=$(echo "$_wt_stories_list" | grep -c '[^[:space:]]') || _wt_count=0
 
+# THE TOPOLOGY A PROJECT ALREADY KNOWS, DECLARED RATHER THAN INFERRED.
+#
+# The router asks a model which execution topology a phase should use — single, parallel or
+# sequential worktrees. That is worth a call when the answer is genuinely uncertain, and it is spend
+# with no decision in it when the operator already knows: an estate that always runs sequentially
+# pays per phase to be told so, and a project with no minted router prompt fails its seam check over
+# a question a declaration answers.
+#
+# EPAM_TOPOLOGY is that declaration. Set, it is used and no model is asked; unset, the router runs
+# exactly as before and the count heuristic still backs it. Declared in the project's own config.env
+# like every other project decision, so no engine change is needed to express one.
+#
+# Precedence, highest first: the operator's declaration, the router's answer, the count heuristic.
+_topology_declared="${EPAM_TOPOLOGY:-}"
+case "$_topology_declared" in
+    single|parallel|sequential) ;;
+    "") ;;
+    *)
+        warning "[orch] EPAM_TOPOLOGY='${_topology_declared}' is not one of single, parallel, sequential — ignoring it and asking the router"
+        _topology_declared=""
+        ;;
+esac
+
 _router_js="$SCRIPT_DIR/lib/topology-router.js"
 _topology_decision=""
 _topology_reason=""
 _topology_source="heuristic"
 
-if [ -f "$_router_js" ] && command -v node &>/dev/null; then
+if [ -n "$_topology_declared" ]; then
+    _topology_decision="$_topology_declared"
+    _topology_source="declared"
+    _topology_reason="declared by the project as EPAM_TOPOLOGY"
+elif [ "${EPAM_TOPOLOGY_ROUTER:-1}" = "0" ]; then
+    # THE ROUTER, TURNED OFF, WITHOUT PINNING A SHAPE.
+    #
+    # EPAM_TOPOLOGY pins the answer; this declines to ASK while leaving the answer to the count
+    # heuristic, which is deterministic and free. A project that does not want to pay a model per
+    # phase to be told what a comparison already knows says so here, and the heuristic below runs
+    # exactly as it does whenever the router returns nothing.
+    _topology_source="heuristic"
+elif [ -f "$_router_js" ] && command -v node &>/dev/null; then
     # Build JSON payload: story metadata from PRD
     _story_ids_json=$(echo "$_wt_stories_list" | grep '[^[:space:]]' | \
         jq -R . | jq -s 'map(select(. != ""))' 2>/dev/null || echo "[]")

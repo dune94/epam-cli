@@ -2,13 +2,13 @@
   {
     "storyId": "MOCK3-1",
     "codeline": "mocka",
-    "agentRole": "fare-schedule-engineer",
-    "reason": "The bug is in fare-charging logic (age-based fare tier boundary), squarely within the fare-schedule-engineer's domain."
+    "agentRole": "fare-rules-engineer",
+    "reason": "fare-rules-engineer"
   },
   {
     "storyId": "MOCK3-2",
     "codeline": "mockb",
-    "agentRole": "fare-schedule-engineer",
-    "reason": "fare-schedule-engineer is the only role offered, so it is assigned by default even though the bug is in departure-board rendering (formatStops) rather than fare logic."
+    "agentRole": "fare-rules-engineer",
+    "reason": "schedule-display-engineer"
   }
 ]

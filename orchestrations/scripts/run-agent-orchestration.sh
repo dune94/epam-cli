@@ -5996,11 +5996,25 @@ else
         _mc_role_file=$(mktemp "${TMPDIR:-/tmp}/mc-role-XXXXXX.txt")
         jq -r '.["prd-model-coordinator"] // ""' "$_mc_profiles_file" > "$_mc_role_file" 2>/dev/null || : > "$_mc_role_file"
         _cp_vals=$(mktemp "${TMPDIR:-/tmp}/prd-model-coordinator-vals-XXXXXX.json")
-        jq_vals \
-              --rawfile profile "$_mc_role_file" \
-              --arg mc_prd_target "$_mc_prd_target" \
-              --arg mc_phase "$_mc_phase" \
-              '{"__PROFILE__":$profile,"__MC_PRD_TARGET__":$mc_prd_target,"__MC_PHASE__":$mc_phase}' > "$_cp_vals"
+          # THE STACK'S OWN VOCABULARY, NOT THE PERSONA'S. The persona named MiniMax-M3 and
+          # {minimax, qwen} in prose, so on the claude stack the coordinator wrote a model no claude
+          # ladder declares into every story -- no successor, so no escalation, and the NEXT run
+          # refused to start (2026-08-28). Read from the resolved set, so a project declaring other
+          # models or runners needs no change here.
+          _mc_models=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/ladder-models.js" 2>/dev/null || echo "")
+          _mc_providers=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/ladder-providers.js" 2>/dev/null || echo "")
+          if [ -z "$_mc_models" ] || [ "$_mc_models" = "[]" ] || [ -z "$_mc_providers" ] || [ "$_mc_providers" = "[]" ]; then
+              # Refuse rather than render an empty vocabulary: an unconstrained coordinator invents
+              # names this stack cannot route, which is the defect this replaced.
+              error "[prd-model-coordinator] the resolved provider set declares no models or no providers -- refusing to run it."
+          fi
+          jq_vals \
+                --rawfile profile "$_mc_role_file" \
+                --arg mc_prd_target "$_mc_prd_target" \
+                --arg mc_phase "$_mc_phase" \
+                --arg mc_models "$_mc_models" \
+                --arg mc_providers "$_mc_providers" \
+                '{"__PROFILE__":$profile,"__MC_PRD_TARGET__":$mc_prd_target,"__MC_PHASE__":$mc_phase,"__MC_PERMITTED_MODELS__":$mc_models,"__MC_PERMITTED_PROVIDERS__":$mc_providers}' > "$_cp_vals"
         _mc_prompt="$(render_engine_prompt prd-model-coordinator "$_cp_vals")"
         rm -f "$_cp_vals"
         rm -f "$_mc_role_file"

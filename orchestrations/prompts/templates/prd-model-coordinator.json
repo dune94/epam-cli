@@ -4,7 +4,8 @@
     "",
     "Its role instructions were a command substitution piping profiles.json through python",
     "inside the heredoc — a shell pipeline assembling the prompt, failing to an empty string in",
-    "silence, so the coordinator could run with no role at all and nothing would say so."
+    "silence, so the coordinator could run with no role at all and nothing would say so.",
+    "The permitted models and providers are placeholders, not prose: the persona named MiniMax-M3 outright, so on the claude stack the coordinator wrote a model no claude ladder declares into every story. A model off the ladder has no successor, so the writer could never escalate and the next run refused to start (2026-08-28)."
   ],
   "description": "Assigns models to stories from the PRD, under the project's own coordinator profile.",
   "id": "prd-model-coordinator",
@@ -14,8 +15,10 @@
   "placeholders": [
     "__PROFILE__",
     "__MC_PRD_TARGET__",
-    "__MC_PHASE__"
+    "__MC_PHASE__",
+    "__MC_PERMITTED_MODELS__",
+    "__MC_PERMITTED_PROVIDERS__"
   ],
   "version": 1,
-  "body": "__PROFILE__\n\nPRD file: __MC_PRD_TARGET__\nPhase: __MC_PHASE__\n\nAssign model, aiProvider, and reasoningEffort to every pending story in this phase that is missing one or more of these fields. Write the updated PRD back to the file, then emit the JSON summary."
+  "body": "__PROFILE__\n\nPRD file: __MC_PRD_TARGET__\nPhase: __MC_PHASE__\n\nAssign model, aiProvider, and reasoningEffort to every pending story in this phase that is missing one or more of these fields. Write the updated PRD back to the file, then emit the JSON summary.\n\nPERMITTED MODELS — the only model names this run can route, in ladder order. The FIRST is the\nopening model: default to it when a story has no assignment.\n__MC_PERMITTED_MODELS__\n\nPERMITTED PROVIDERS — the only provider names this run can route:\n__MC_PERMITTED_PROVIDERS__\n"
 }

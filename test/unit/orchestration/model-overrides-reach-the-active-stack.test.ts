@@ -29,7 +29,9 @@ const claudeSrc = readFileSync(join(SCRIPT_DIR, 'claude.sh'), 'utf8');
 const NODE_BIN = join(process.env.HOME || '', '.nvm/versions/node/v20.20.0/bin/node');
 
 function effortHelpers(): string {
-  return ['effort_rank', 'max_effort', 'next_effort'].map((n) => {
+  // resolve_model_override joined this list on 2026-08-28: the lifted block calls it, claude.sh
+  // defines it above the block, and lifting one half of a pair proves only that the lift worked.
+  return ['effort_rank', 'max_effort', 'next_effort', 'resolve_model_override'].map((n) => {
     const m = new RegExp(`^${n}\\(\\) \\{$`, 'm').exec(claudeSrc);
     if (!m) return '';
     return claudeSrc.slice(m.index, claudeSrc.indexOf('\n}\n', m.index) + 3);
@@ -61,6 +63,9 @@ function resolve(opts: { projectSettings: object; set: string; model: string; pr
       `log() { :; }`,
       `warning() { :; }`,
       effortHelpers(),
+            // The lifted block calls resolve_model_override, which claude.sh defines above it —
+      // lifting one half of a pair proves only that the lift worked, so the harness loads
+      // the function the same way the run has it in scope.
       `resolve_override() {`,
       resolverBlock(),
       `  echo "compress_at=\${_effective_compress_at:-}"`,

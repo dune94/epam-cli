@@ -499,7 +499,17 @@ restore_run_checkpoint() {
     local _rev="$_dir/reviewed"
     [ -d "$_rev" ] || _rev="${EPAM_PROJECT_CONFIG_DIR:-${PROJECT_CONFIG_DIR:-}}/runs/$_rid/checkpoint/reviewed"
 
-    if _operator_edited "$PRD_FILE" "$_rev/prd.json"; then
+    # AN EDIT IS A CHANGE, NOT A LOSS.
+    #
+    # "Different from what the operator was shown" also describes a PRD that was emptied or damaged
+    # after the pause — which is the exact failure this restore exists to repair, and keeping it
+    # would reintroduce that failure while fixing its opposite. An operator retunes an assignment;
+    # they do not delete the story list. So an edit is honoured only while the stories survive it.
+    local _live_stories=0 _kept_stories=0
+    _live_stories=$(jq '(.stories // []) | length' "$PRD_FILE" 2>/dev/null || echo 0)
+    _kept_stories=$(jq '(.stories // []) | length' "$_dir/prd.json" 2>/dev/null || echo 0)
+    if _operator_edited "$PRD_FILE" "$_rev/prd.json" \
+       && [ "${_live_stories:-0}" -ge "${_kept_stories:-0}" ]; then
         echo "[checkpoint] KEEPING the PRD on disk: it was EDITED at the pause, after this checkpoint was taken." >&2
     elif [ "${_live_spec:-0}" -gt "${_ckpt_spec:-0}" ]; then
         echo "[checkpoint] KEEPING the PRD on disk: it carries ${_live_spec} spec item(s) and the checkpoint carries ${_ckpt_spec} — restoring would discard the spec pass this resume is meant to skip past" >&2

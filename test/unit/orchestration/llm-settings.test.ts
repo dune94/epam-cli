@@ -62,9 +62,15 @@ function extractModelOverrideResolverBlock(src: string): string {
 }
 
 
-/** The effort helpers claude.sh's override resolver depends on, lifted from the real source. */
+/**
+ * The helpers claude.sh's override resolver depends on, lifted from the real source.
+ *
+ * resolve_model_override joined them on 2026-08-28, when the precedence moved from "which FILE do
+ * we read" to "which file declares this MODEL". The lifted block calls it; lifting one half of a
+ * pair proves only that the lift worked.
+ */
 function effortHelpers(): string {
-  return ['effort_rank', 'max_effort', 'next_effort'].map((n) => {
+  return ['effort_rank', 'max_effort', 'next_effort', 'resolve_model_override'].map((n) => {
     const m = new RegExp(`^${n}\\(\\) \\{$`, 'm').exec(claudeSrc);
     if (!m) return '';
     return claudeSrc.slice(m.index, claudeSrc.indexOf('\n}\n', m.index) + 3);

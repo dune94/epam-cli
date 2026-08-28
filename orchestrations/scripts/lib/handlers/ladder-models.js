@@ -7,7 +7,6 @@
  * that declares other models needs no change here.
  */
 try {
-  // eslint-disable-next-line import/no-dynamic-require, global-require
   const { resolveLlmSettings } = require('../llm-settings-resolve.js');
   const st = resolveLlmSettings() || {};
   const order = Array.isArray(st.ladderTierOrder) ? st.ladderTierOrder : Object.keys(st.ladders || {});

@@ -103,6 +103,36 @@ describe('AN EDIT MADE AT THE PAUSE OUTRANKS THE CHECKPOINT COPY', () => {
   });
 });
 
+describe('AN EDIT IS A CHANGE, NOT A LOSS', () => {
+  it('restores a PRD that lost its stories, however different it is from what was shown', () => {
+    // Caught by the existing suite, 2026-08-28: pause-resume-wiring empties the PRD to
+    // {stories: []} to simulate damage and expects the restore to repair it. Read as "different
+    // from what the operator was shown", that damage looked exactly like an edit and was KEPT —
+    // which is the failure restore_run_checkpoint exists to prevent, reintroduced by the fix for
+    // the opposite failure. An operator retunes an assignment; they do not empty the story list.
+    const w = atPauseOne({
+      live: JSON.stringify({ stories: [] }),
+      kept: prd('fare-rules-engineer'),
+      reviewed: prd('fare-rules-engineer'),
+    });
+    restore(w);
+    expect(JSON.parse(readFileSync(w.prdFile, 'utf8')).stories,
+      'an emptied PRD was mistaken for an operator edit and left in place')
+      .toHaveLength(2);
+  });
+
+  it('still keeps a real edit that changes a story without losing any', () => {
+    const w = atPauseOne({
+      live: prd('schedule-display-engineer'),
+      kept: prd('fare-rules-engineer'),
+      reviewed: prd('fare-rules-engineer'),
+    });
+    restore(w);
+    expect(JSON.parse(readFileSync(w.prdFile, 'utf8')).stories[1].agentRole)
+      .toBe('schedule-display-engineer');
+  });
+});
+
 describe('AND THE RESTORE STILL DOES ITS ORIGINAL JOB', () => {
   it('restores the checkpoint PRD when the operator changed nothing', () => {
     // Untouched since the pause: reviewed/ and live agree, so the checkpoint copy governs. This is

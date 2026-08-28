@@ -11,7 +11,6 @@
  * never listed here: a set that declares other runners needs no change to this file.
  */
 try {
-  // eslint-disable-next-line import/no-dynamic-require, global-require
   // activeSetFile() is the resolver's own answer to "which set is in force", so the path
   // convention is not restated here — resolveLlmSettings() projects runners away.
   const { resolveLlmSettings, activeSetFile } = require('../llm-settings-resolve.js');

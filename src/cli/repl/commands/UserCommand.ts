@@ -18,6 +18,7 @@ import { homedir } from 'os';
 import { join } from 'path';
 import { execSync } from 'child_process';
 import type { SlashCommand, SlashCommandContext } from '../SlashCommands.js';
+import { PROVIDER_NAMES } from '../../../auth/types.js';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -102,7 +103,26 @@ const TOKEN_ENV_VAR: Record<string, string> = {
   copilot: 'COPILOT_GITHUB_TOKEN',
 };
 
-const KNOWN_PROVIDERS = ['anthropic', 'openai', 'gemini', 'codex', 'copilot', 'codemie'];
+/**
+ * DERIVED, NOT HAND-KEPT.
+ *
+ * This listed six providers while auth/types.ts declared three, and the audit found them on
+ * 2026-08-28 already disagreeing. The difference was not drift — this enumerates providers the CLI
+ * can hold CREDENTIALS for, which legitimately includes ones with no LLM implementation. But a
+ * hand-kept list still goes stale the moment a provider is added to a map below and not here, and
+ * `user list` would simply never show its accounts.
+ *
+ * So it is computed: every LLM provider, plus everything the credential maps already name.
+ * EXTRA_CREDENTIAL_PROVIDERS carries only what no map mentions, so the exception stays visible.
+ */
+const EXTRA_CREDENTIAL_PROVIDERS = ['codemie'];
+
+const KNOWN_PROVIDERS = [...new Set([
+  ...PROVIDER_NAMES,
+  ...Object.keys(ENV_VAR),
+  ...Object.keys(TOKEN_ENV_VAR),
+  ...EXTRA_CREDENTIAL_PROVIDERS,
+])].filter((p) => p !== 'claude');   // an alias of anthropic in ENV_VAR, not a provider of its own
 
 // ── Read current credential for a provider ────────────────────────────────────
 

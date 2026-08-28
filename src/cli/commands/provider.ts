@@ -10,8 +10,10 @@ import {
 import type { ProviderName } from '../../auth/types.js';
 import { CodemieSSO } from '../../providers/codemie/CodemieSSO.js';
 import { CodexProvider } from '../../providers/codex/CodexProvider.js';
+import { PROVIDER_NAMES } from '../../auth/types.js';
 
-const SUPPORTED_PROVIDERS: ProviderName[] = ['anthropic', 'openai', 'gemini'];
+// The list has ONE home — see PROVIDER_NAMES in auth/types.ts. Four copies had already drifted.
+const SUPPORTED_PROVIDERS: readonly ProviderName[] = PROVIDER_NAMES;
 const SSO_PROVIDERS = ['codemie'];
 const CLI_PROVIDERS = ['codex'];
 

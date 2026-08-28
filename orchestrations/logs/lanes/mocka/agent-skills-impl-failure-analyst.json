@@ -1,0 +1,21 @@
+{
+  "codeline": "mocka",
+  "stacks": [
+    {
+      "codeline": "mocka",
+      "path": "/home/bradleyjerome/projects/mock3/mock-a",
+      "stack": "node",
+      "manifest": "package.json",
+      "testCommand": "npm test",
+      "declaredDeps": [
+        "vitest",
+        "typescript"
+      ]
+    }
+  ],
+  "learned": [],
+  "sources": [
+    "/home/bradleyjerome/projects/mock3/mock-a/package.json"
+  ],
+  "empty": false
+}

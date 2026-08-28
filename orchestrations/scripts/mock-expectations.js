@@ -393,7 +393,14 @@ async function langfuseReply(seam) {
     parsed: !!best.parsed, calls: best.calls || [] };
 }
 
-function cassetteReply(seam) {
+/**
+ * A CAPTURE FOR THIS SEAM — AND, WHERE ASKED, FOR THIS STORY.
+ *
+ * Cassettes are recorded per call, so a seam invoked once per story has one file per story:
+ * `code-graph-detective · MOCK3-1.json` beside `· MOCK3-2.json`. This returned the FIRST match and
+ * stopped, so the second story's real answer was never reachable at all.
+ */
+function cassetteReply(seam, story) {
   const root = path.join(ROOT, 'orchestrations/cassettes');
   if (!fs.existsSync(root)) return null;
   const unesc = (n) => n.replace(/~00([0-9a-f]{2})/gi, (_, h) => String.fromCharCode(parseInt(h, 16)));
@@ -407,8 +414,13 @@ function cassetteReply(seam) {
     for (const f of files) {
       if (!f.endsWith('.json')) continue;
       // The seam is the leading segment: "spec-agent · MOCK3-2.json" -> "spec-agent".
-      const name = unesc(f.replace(/\.json$/, '')).split(/[:·]/)[0].trim();
+      const plain = unesc(f.replace(/\.json$/, ''));
+        const name = plain.split(/[:·]/)[0].trim();
       if (name !== seam) continue;
+        // WHEN A STORY IS ASKED FOR, ONLY ITS OWN CAPTURE WILL DO. Asking for one story and
+        // being handed another's is the defect this parameter exists to prevent: MOCK3-2 was
+        // specified against src/fares.ts, mocka's file, from MOCK3-1's recorded answer.
+        if (story && !plain.includes(story)) continue;
       let doc;
       try { doc = JSON.parse(fs.readFileSync(path.join(run, f), 'utf8')); } catch { continue; }
       // Turns are indexed; the last one carries the answer the pipeline consumed.
@@ -1059,8 +1071,17 @@ function endsInToolCall(cap, seam) {
     // So a seam whose schema carries a storyId is registered ONCE PER STORY, each matched on that
     // story's own title — the one thing in its prompt no other story shares. Stories come from the
     // PRD; nothing is named here.
-    const _perStorySeam = !cap && Array.isArray(stood) && stood.length > 1
-      && stood.every((x) => x && x.storyId);
+    // PER-STORY EITHER WAY: a real capture per story where one was recorded, a stand-in per story
+    // otherwise. This used to require the stand-in path (!cap), so a seam WITH per-story captures —
+    // code-graph-detective has one for each — took the single-capture branch and answered every
+    // story with the first story's finding.
+    const _stories = projectStories();
+    const _perStoryCaptures = _stories.length > 1
+      ? _stories.map((st) => ({ story: st, cap: cassetteReply(seam, st.id) }))
+          .filter((x) => x.cap)
+      : [];
+    const _perStorySeam = (_perStoryCaptures.length > 1)
+      || (!cap && Array.isArray(stood) && stood.length > 1 && stood.every((x) => x && x.storyId));
     const _tag = (() => {
       try {
         // eslint-disable-next-line global-require
@@ -1077,7 +1098,31 @@ function endsInToolCall(cap, seam) {
     // call matches the first story's expectation and the rest are never served: MOCK3-1 was
     // answered six times and MOCK3-2 came back unassigned.
     const _oneCallForAll = !!TAG_ITEMS_KEY(seam);
-    if (_perStorySeam && _tag && !_oneCallForAll) {
+    // A SEAM WITHOUT A TAG IS IDENTIFIED BY ITS TEMPLATE. code-graph-detective produces an
+    // artefact rather than a tagged block, so requiring a tag here skipped it entirely — and it is
+    // precisely the seam whose per-story answers were being crossed.
+    const _mark = _tag ? `<${_tag}>` : key;
+    if (_perStorySeam && !_oneCallForAll && _perStoryCaptures.length > 1) {
+      // REAL ANSWERS, ONE PER STORY. Preferred over stand-ins: a recorded reply carries the
+      // reasoning and the file paths a synthesised one cannot.
+      for (const { story: st, cap: c2 } of _perStoryCaptures) {
+        const disc = storyDiscriminator(st.id);
+        if (!disc) continue;
+        for (const proto of PROTOCOLS) {
+          // eslint-disable-next-line no-await-in-loop
+          await put('/mockserver/expectation', {
+            priority: 50,
+            httpRequest: { method: 'POST', path: proto.path,
+              body: { type: 'REGEX',
+                regex: `(?s)(?=.*${rx(wireForm(_mark))})(?=.*${rx(wireForm(disc))}).*` } },
+            httpResponse: { statusCode: 200,
+              headers: { 'content-type': ['text/event-stream'], 'x-seam': [`${seam}:${st.id}`] },
+              body: proto.text(refreshEntities(c2).body) },
+          });
+        }
+        perStory.push(`${seam} · ${st.id}  <- ${c2.file}`);
+      }
+    } else if (_perStorySeam && _tag && !_oneCallForAll) {
       for (const item of stood) {
         const disc = storyDiscriminator(item.storyId);
         if (!disc) continue;

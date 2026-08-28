@@ -1,12 +1,12 @@
 {
   "phase": "core",
-  "updatedAt": "2026-08-28T08:32:56-04:00",
+  "updatedAt": "2026-08-28T09:25:34-04:00",
   "steps": [
-    {"id":"1","label":"Step 1: Specification pass","status":"fail","detail":""},
-    {"id":"1a","label":"  openspec (elaboration)","status":"fail","detail":"claude-haiku-4-5-20251001"},
-    {"id":"1b","label":"  speckit (verification)","status":"fail","detail":"claude-haiku-4-5-20251001"},
-    {"id":"2","label":"cpa","status":"pending","detail":""},
-    {"id":"3","label":"skill-pre","status":"pending","detail":""},
+    {"id":"1","label":"Step 1: Specification pass","status":"pass","detail":""},
+    {"id":"1a","label":"  openspec (elaboration)","status":"pass","detail":"claude-haiku-4-5-20251001, 1 stor(y/ies)"},
+    {"id":"1b","label":"  speckit (verification)","status":"pass","detail":"claude-haiku-4-5-20251001, 1 stor(y/ies)"},
+    {"id":"2","label":"Step 2: CPA pre-pass","status":"pass","detail":""},
+    {"id":"3","label":"Step 3: Skill assessment","status":"running","detail":""},
     {"id":"4","label":"hybrid-coord","status":"pending","detail":""},
     {"id":"5","label":"regression","status":"pending","detail":""},
     {"id":"6","label":"mkdir","status":"pending","detail":""},

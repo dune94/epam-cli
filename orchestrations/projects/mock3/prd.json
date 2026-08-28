@@ -87,14 +87,14 @@
             }
           ]
         },
-        "runId": "20260828T133739Z",
+        "runId": "20260828T135319Z",
         "assignedAgents": [
           "openspec",
           "speckit"
         ],
         "coordinatorNotes": "",
         "status": "completed",
-        "updatedAt": "2026-08-28T13:38:21.808Z",
+        "updatedAt": "2026-08-28T13:54:38.027Z",
         "appliedAgents": [
           "openspec",
           "speckit"
@@ -106,7 +106,7 @@
             "notes": "Defect: the comparison rider.age > 65 in fareFor excludes age 65 from the concession tier. Changing to >= fixes the boundary. VCs are derived from the acceptance criteria and observe only the function's return value.",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-08-28T13:38:18.071Z"
+            "timestamp": "2026-08-28T13:54:29.210Z"
           },
           {
             "agent": "speckit",
@@ -114,7 +114,7 @@
             "notes": "Defect: the comparison rider.age > 65 in fareFor excludes age 65 from the concession tier. Changing to >= fixes the boundary. VCs are derived from the acceptance criteria and observe only the function's return value.",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-08-28T13:38:21.808Z"
+            "timestamp": "2026-08-28T13:54:38.026Z"
           }
         ]
       },
@@ -247,7 +247,10 @@
       "cpaConfidence": null,
       "cpaGate": null,
       "ladderTier": null,
-      "cpaIterationEstimate": 1
+      "cpaIterationEstimate": 1,
+      "model": "MiniMax-M3",
+      "aiProvider": "minimax",
+      "reasoningEffort": "low"
     },
     {
       "id": "MOCK3-2",
@@ -334,14 +337,14 @@
             }
           ]
         },
-        "runId": "20260828T133739Z",
+        "runId": "20260828T135319Z",
         "assignedAgents": [
           "openspec",
           "speckit"
         ],
         "coordinatorNotes": "",
         "status": "completed",
-        "updatedAt": "2026-08-28T13:38:28.490Z",
+        "updatedAt": "2026-08-28T13:54:49.642Z",
         "appliedAgents": [
           "openspec",
           "speckit"
@@ -353,7 +356,7 @@
             "notes": "Defect: the for-loop bound `i < stops.length - 1` in formatStops skips the last stop. The fix site is formatStops itself; totalMinutes is already correct. VCs are black-box checks on the returned string ? no implementation prescription, no internal structure references, no cross-comparisons.",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-08-28T13:38:24.731Z"
+            "timestamp": "2026-08-28T13:54:42.590Z"
           },
           {
             "agent": "speckit",
@@ -361,7 +364,7 @@
             "notes": "Defect: the for-loop bound `i < stops.length - 1` in formatStops skips the last stop. The fix site is formatStops itself; totalMinutes is already correct. VCs are black-box checks on the returned string ? no implementation prescription, no internal structure references, no cross-comparisons.",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-08-28T13:38:28.490Z"
+            "timestamp": "2026-08-28T13:54:49.641Z"
           }
         ]
       },
@@ -476,7 +479,10 @@
       "cpaConfidence": null,
       "cpaGate": null,
       "ladderTier": null,
-      "cpaIterationEstimate": 1
+      "cpaIterationEstimate": 1,
+      "model": "MiniMax-M3",
+      "aiProvider": "minimax",
+      "reasoningEffort": "low"
     }
   ],
   "implementationOrder": {

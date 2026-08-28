@@ -5743,12 +5743,22 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
         fi
     fi
     _rg_vendored="$(printf '%s' "$_rg_facts" | python3 "$SCRIPT_DIR/lib/handlers/json-field.py" installDir 2>/dev/null || echo "")"
+    # WHY IT IS NOT READY, NOT MERELY THAT IT IS NOT.
+    #
+    # "declares a test script but it could not be run" names no cause, so diagnosing it means
+    # re-deriving four values by hand from outside the run. Each is known here; stating the one
+    # that failed turns an afternoon of bisecting into a line of output.
     _rg_ready=1
-    [ "$_rg_test_declared" -eq 1 ] || _rg_ready=0
+    _rg_notready=""
+    [ "$_rg_test_declared" -eq 1 ] || { _rg_ready=0; _rg_notready="no test command detected"; }
     # Only an ecosystem that vendors in-repo needs its interpreter and its install present before
     # the tests can be trusted. Requiring them of every ecosystem is what skipped the guard.
     if [ -n "$_rg_vendored" ] && [ "$_rg_vendored" != "null" ]; then
-      { [ -n "$_rg_node" ] && [ -n "$_rg_bin" ]; } || _rg_ready=0
+      if [ -z "$_rg_node" ]; then
+          _rg_ready=0; _rg_notready="no node could be resolved for this codeline"
+      elif [ -z "$_rg_bin" ]; then
+          _rg_ready=0; _rg_notready="${_rg_vendored}/.bin holds no executable — dependencies not installed"
+      fi
     fi
     if [ "$_rg_ready" -eq 1 ]; then
         step_emit "5" "running" "Step 5: Regression guard"
@@ -5896,6 +5906,7 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
         if [ "$_rg_test_declared" -eq 1 ]; then
             step_emit "5" "fail" "Step 5: Regression guard" "declares a test script but it could not be run"
             error "Step 5: Regression guard COULD NOT RUN — $_rg_root declares a test script but it could not be executed"
+            error "  Reason: ${_rg_notready:-unknown}"
             error "  test command: ${_rg_test_cmd:-<none declared>}   package manager: ${_rg_pm:-<none detected>}   vendored: ${_rg_vendored:-<none>}"
             error "  The baseline is therefore UNVERIFIED: a break introduced by an earlier phase would not be caught."
             error "  This is an environment failure, not an absence of tests — check the codeline's node_modules install."

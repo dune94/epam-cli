@@ -23,6 +23,63 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 # The resolved value for a settings name. An operator override wins, as everywhere else.
+# clamp_flag_to_cli_range <binary> <--flag> <value>
+#
+# THE BINARY DECLARES WHAT IT ACCEPTS -- read it before spending.
+#
+# mock3 declares compaction.defaultAutoCompressAt=80000, written against a stack whose CLI took it.
+# The installed claude CLI declares "--autocompact <auto|tokens>  Auto-compact window size (auto,
+# or 100k-1M tokens)" and refuses 80000 outright, so every writer attempt died on argument
+# validation before a token was sent (2026-08-28). The project's value is not wrong; it is wrong FOR
+# THIS RUNNER, and no layer compared the two.
+#
+# Clamped, not refused: a window under the CLI's floor is a preference the binary cannot honour, and
+# the nearest legal value keeps the run moving. Always said out loud -- a silently rewritten setting
+# is its own defect.
+#
+# Emits the value to use. Anything it cannot read -- no help, no declared range, a non-numeric value
+# such as "auto" -- passes through untouched: a guess is worse than the operator's own number.
+clamp_flag_to_cli_range() {
+    local _bin="${1:-}" _flag="${2:-}" _val="${3:-}"
+    printf '%s' "$_val" | grep -qE '^[0-9]+$' || { printf '%s' "$_val"; return 0; }
+    command -v "$_bin" >/dev/null 2>&1 || { printf '%s' "$_val"; return 0; }
+
+    # The flag's own help entry, plus the wrapped continuation lines that carry the range.
+    local _help _range
+    # The CLI prints an EN DASH (U+2013), not a hyphen — normalised first, because a range that
+    # does not match reads exactly like a CLI that declares none, and then nothing is checked.
+    _help=$("$_bin" --help 2>&1 | grep -A2 -- "$_flag" | head -3 | sed 's/\xe2\x80\x93/-/g; s/\xe2\x80\x94/-/g') \
+        || { printf '%s' "$_val"; return 0; }
+    _range=$(printf '%s' "$_help" | grep -oE '[0-9]+[kKmM]?[[:space:]]*-[[:space:]]*[0-9]+[kKmM]?' | head -1)
+    [ -n "$_range" ] || { printf '%s' "$_val"; return 0; }
+
+    local _lo _hi
+    _lo=$(printf '%s' "$_range" | grep -oE '^[0-9]+[kKmM]?')
+    _hi=$(printf '%s' "$_range" | grep -oE '[0-9]+[kKmM]?$')
+    _lo=$(_expand_magnitude "$_lo"); _hi=$(_expand_magnitude "$_hi")
+    { [ -n "$_lo" ] && [ -n "$_hi" ]; } || { printf '%s' "$_val"; return 0; }
+
+    if [ "$_val" -lt "$_lo" ]; then
+        warning "  ${_flag}=${_val} is below what ${_bin} accepts (${_lo}-${_hi}) — using ${_lo}."
+        printf '%s' "$_lo"; return 0
+    fi
+    if [ "$_val" -gt "$_hi" ]; then
+        warning "  ${_flag}=${_val} is above what ${_bin} accepts (${_lo}-${_hi}) — using ${_hi}."
+        printf '%s' "$_hi"; return 0
+    fi
+    printf '%s' "$_val"
+}
+
+# 100k -> 100000, 1M -> 1000000, 250 -> 250. The CLI writes its range in the short form.
+_expand_magnitude() {
+    local _n="${1:-}"
+    case "$_n" in
+        *k|*K) printf '%s' "$(( ${_n%[kK]} * 1000 ))" ;;
+        *m|*M) printf '%s' "$(( ${_n%[mM]} * 1000000 ))" ;;
+        *)     printf '%s' "$_n" ;;
+    esac
+}
+
 apply_runner_settings() {
     local _runner="${1:-}" _projdir="${2:-}"
     [ -n "$_runner" ] || return 0
@@ -73,6 +130,11 @@ apply_runner_settings() {
                 [ -n "$_val" ] && export "${_a}=${_val}"
                 ;;
             F)  _val="$_b"
+                # THE BINARY'S OWN DECLARATION HAS THE LAST WORD. A project's value can be
+                # perfectly good and still be refused by this runner — 80000 for --autocompact,
+                # against a CLI whose floor is 100k, killed twelve attempts before any token was
+                # sent. Costs one --help; the alternative cost a writer leg.
+                [ -n "$_val" ] && _val=$(clamp_flag_to_cli_range "$_runner" "$_a" "$_val")
                 [ -n "$_val" ] && RUNNER_FLAGS+=("$_a" "$_val")
                 ;;
         esac

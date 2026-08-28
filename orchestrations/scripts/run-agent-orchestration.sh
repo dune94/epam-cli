@@ -3992,10 +3992,12 @@ _pause_after_agent_mint() {
     fi
     echo ""
     echo -e "  Inspect and EDIT if needed:"
-    echo -e "    ${EPAM_AGENTS_DIR}/profiles.json         (each role's brief)"
-    echo -e "    ${EPAM_PROJECT_CONFIG_DIR:-${EPAM_AGENTS_DIR}}/project-roles.json   (implementers — may author code, may own a story)"
-    echo -e "    ${EPAM_PROJECT_CONFIG_DIR:-${EPAM_AGENTS_DIR}}/project-investigators.json   (investigators — read-only, one per codeline)"
-    echo -e "    ${_synth_prd}   (each story's agentRole)"
+    # The set is declared by operator_reviewable_inputs and kept by save_run_checkpoint. Printing a
+    # second hand-kept list here is how the banner came to offer files the checkpoint never saved.
+    while IFS=$'\t' read -r _ri_path _ri_what; do
+        [ -n "$_ri_path" ] || continue
+        echo -e "    ${_ri_path}   (${_ri_what})"
+    done < <(operator_reviewable_inputs "${_synth_prd}")
     echo ""
     echo -e "  Then CONTINUE into the spec phase with:"
     echo -e "    ${GREEN}EPAM_RESUME_RUN=${ORCH_RUN_ID:-<run-id>} ${TIER3_LAUNCHER:-<your launcher>} --yes${NC}"

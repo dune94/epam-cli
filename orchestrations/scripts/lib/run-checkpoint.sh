@@ -278,6 +278,34 @@ resume_skip_env() {
 # always has its payload already on disk. Saving again later in the same run overwrites
 # the earlier checkpoint and advances its recorded stage — the newest one is the most
 # valuable, because it has paid for the most.
+# THE FILES THE OPERATOR MAY EDIT AT A PAUSE — declared once, read by everyone who needs them.
+#
+# Pause 1 prints these under "Inspect and EDIT if needed" and promises the resume will not write
+# over the changes. The checkpoint has to keep them for that promise to be checkable: without a copy
+# there is no before to compare against and nothing to restore from, so "your edits survived" can be
+# asserted but never shown. Found 2026-08-28, on a rehearsal, when an assignments file changed
+# across a resume and the change could not be characterised.
+#
+# One declaration because two hand-kept lists drift -- resume_skip_env, in this same file, carries
+# the comment about the last time that happened here.
+#
+# Emits: <path>\t<what it is>, one per line. Callers filter for existence; a file that a given
+# stage has not produced yet is not an error.
+#
+#   operator_reviewable_inputs [prd-path]
+operator_reviewable_inputs() {
+    local _cfg="${EPAM_PROJECT_CONFIG_DIR:-${EPAM_AGENTS_DIR:-}}"
+    local _prd="${1:-${PRD_FILE:-}}"
+    [ -n "${EPAM_AGENTS_DIR:-}" ] && printf '%s\t%s\n' \
+        "${EPAM_AGENTS_DIR}/profiles.json" "each role's brief"
+    if [ -n "$_cfg" ]; then
+        printf '%s\t%s\n' "${_cfg}/project-roles.json" "implementers — may author code"
+        printf '%s\t%s\n' "${_cfg}/project-investigators.json" "investigators — read-only"
+    fi
+    [ -n "$_prd" ] && printf '%s\t%s\n' "$_prd" "each story's agentRole"
+    return 0
+}
+
 save_run_checkpoint() {
     local _phase="${1:-${PHASE:-main}}"
     local _stage="${2:-post-spec}"
@@ -302,8 +330,22 @@ save_run_checkpoint() {
         cp "$AGENT_PROFILES_FILE" "$_dir/profiles.json" || return 1
     fi
 
+    # THE REVIEWABLE FILES, KEPT VERBATIM. Required, not forensic: this is the copy that makes an
+    # operator's edit at the pause recoverable if a later stage writes over it.
+    mkdir -p "$_dir/reviewed" || return 1
+    local _rp _rd
+    while IFS=$'\t' read -r _rp _rd; do
+        [ -n "$_rp" ] && [ -f "$_rp" ] || continue
+        cp "$_rp" "$_dir/reviewed/$(basename "$_rp")" || return 1
+    done < <(operator_reviewable_inputs)
+
     # Best-effort extras: useful for forensics, never required for a resume.
+    # role-assignments.json is here because the resume REWRITES it in place (annotating each entry
+    # "pre-assigned (validated, not regenerated)"), and without the before there is no way to show
+    # the validation preserved what the operator set.
     if [ -n "${LOG_DIR:-}" ] && [ -d "${LOG_DIR}" ]; then
+        [ -f "$LOG_DIR/role-assignments.json" ] \
+            && cp "$LOG_DIR/role-assignments.json" "$_dir/reviewed/role-assignments.json" 2>/dev/null || true
         for _extra in story-ids-presplit.txt phase-baseline-sha.txt; do
             [ -f "$LOG_DIR/$_extra" ] && cp "$LOG_DIR/$_extra" "$_dir/$_extra" 2>/dev/null || true
         done

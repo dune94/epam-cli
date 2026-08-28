@@ -1,7 +1,7 @@
 {
-  "runId": "20260828T133739Z",
+  "runId": "20260828T132745Z",
   "phase": "core",
-  "startedAt": "2026-08-28T13:37:57.956Z",
+  "startedAt": "2026-08-28T13:28:05.557Z",
   "stories": [
     {
       "storyId": "MOCK3-2",
@@ -23,7 +23,7 @@
           "notes": "Defect: the for-loop bound `i < stops.length - 1` in formatStops skips the last stop. The fix site is formatStops itself; totalMinutes is already correct. VCs are black-box checks on the returned string ? no implementation prescription, no internal structure references, no cross-comparisons.",
           "acceptanceChanged": false,
           "splitCount": 0,
-          "timestamp": "2026-08-28T13:38:24.731Z"
+          "timestamp": "2026-08-28T13:28:33.766Z"
         },
         {
           "agent": "speckit",
@@ -31,7 +31,7 @@
           "notes": "Defect: the for-loop bound `i < stops.length - 1` in formatStops skips the last stop. The fix site is formatStops itself; totalMinutes is already correct. VCs are black-box checks on the returned string ? no implementation prescription, no internal structure references, no cross-comparisons.",
           "acceptanceChanged": false,
           "splitCount": 0,
-          "timestamp": "2026-08-28T13:38:28.490Z"
+          "timestamp": "2026-08-28T13:28:37.878Z"
         }
       ]
     }
@@ -46,6 +46,6 @@
     "agentFailures": 0,
     "agentAttempts": 2
   },
-  "completedAt": "2026-08-28T13:38:37.882Z",
+  "completedAt": "2026-08-28T13:28:47.989Z",
   "storyCount": 1
 }

@@ -1,7 +1,7 @@
 {
-  "runId": "20260828T133739Z",
+  "runId": "20260828T133134Z",
   "phase": "core",
-  "startedAt": "2026-08-28T13:37:57.909Z",
+  "startedAt": "2026-08-28T13:31:53.790Z",
   "stories": [
     {
       "storyId": "MOCK3-1",
@@ -23,7 +23,7 @@
           "notes": "Defect: the comparison rider.age > 65 in fareFor excludes age 65 from the concession tier. Changing to >= fixes the boundary. VCs are derived from the acceptance criteria and observe only the function's return value.",
           "acceptanceChanged": false,
           "splitCount": 0,
-          "timestamp": "2026-08-28T13:38:18.071Z"
+          "timestamp": "2026-08-28T13:32:14.582Z"
         },
         {
           "agent": "speckit",
@@ -31,7 +31,7 @@
           "notes": "Defect: the comparison rider.age > 65 in fareFor excludes age 65 from the concession tier. Changing to >= fixes the boundary. VCs are derived from the acceptance criteria and observe only the function's return value.",
           "acceptanceChanged": false,
           "splitCount": 0,
-          "timestamp": "2026-08-28T13:38:21.808Z"
+          "timestamp": "2026-08-28T13:32:18.461Z"
         }
       ]
     }
@@ -46,6 +46,6 @@
     "agentFailures": 0,
     "agentAttempts": 2
   },
-  "completedAt": "2026-08-28T13:38:30.505Z",
+  "completedAt": "2026-08-28T13:32:27.386Z",
   "storyCount": 1
 }

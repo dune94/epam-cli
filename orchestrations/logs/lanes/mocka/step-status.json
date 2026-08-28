@@ -1,14 +1,14 @@
 {
   "phase": "core",
-  "updatedAt": "2026-08-28T09:25:29-04:00",
+  "updatedAt": "2026-08-28T09:38:41-04:00",
   "steps": [
     {"id":"1","label":"Step 1: Specification pass","status":"pass","detail":""},
     {"id":"1a","label":"  openspec (elaboration)","status":"pass","detail":"claude-haiku-4-5-20251001, 1 stor(y/ies)"},
     {"id":"1b","label":"  speckit (verification)","status":"pass","detail":"claude-haiku-4-5-20251001, 1 stor(y/ies)"},
     {"id":"2","label":"Step 2: CPA pre-pass","status":"pass","detail":""},
-    {"id":"3","label":"Step 3: Skill assessment","status":"running","detail":""},
-    {"id":"4","label":"hybrid-coord","status":"pending","detail":""},
-    {"id":"5","label":"regression","status":"pending","detail":""},
+    {"id":"3","label":"Step 3: Skill assessment","status":"pass","detail":""},
+    {"id":"4","label":"Step 4: Hybrid pre-coord","status":"skip","detail":"ORCH_MODE=bash"},
+    {"id":"5","label":"Step 5: Regression guard","status":"fail","detail":"declares a test script but it could not be run"},
     {"id":"6","label":"mkdir","status":"pending","detail":""},
     {"id":"7","label":"model-coord","status":"pending","detail":""},
     {"id":"8","label":"main-stories","status":"pending","detail":""},

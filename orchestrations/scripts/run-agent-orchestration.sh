@@ -387,6 +387,20 @@ fi
 # "unchanged", minted nothing, and the run died at assignment — while also writing into the
 # client's own agents directory. Unset, this is exactly the previous path.
 EPAM_AGENTS_DIR="${EPAM_AGENTS_DIR:-$AUTOMATION_DIR/agents}"
+
+# THE ROSTER FILE, DEFINED ONCE — IT NEVER WAS.
+#
+# AGENT_PROFILES_FILE is read in three places in this script and assigned in none, so it was empty
+# on every path that did not inherit it from a caller. In a codeline lane that meant: profiles_backup
+# became the bare string '.original', the canonical looked missing, `cp "" .original` failed the
+# phase; and PROFILES_REL, built by realpath-ing the same empty string, rendered post-failure-analyst
+# with an empty value, which the prompt layer correctly refuses. Both lanes died in the pre-phase
+# skill assessment, and the message the operator saw was about a missing canonical roster.
+#
+# Derived here from the directory that is already resolved, so every reader gets the same answer and
+# a caller that exports its own still wins.
+AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$EPAM_AGENTS_DIR/profiles.json}"
+export AGENT_PROFILES_FILE
 # The roster is the only source of an agent's identity — lib/roster-read.sh. The default this
 # replaces named the engine's own roster, which is what a client codeline's reviewer inherited.
 # shellcheck source=lib/roster-read.sh
@@ -5241,13 +5255,20 @@ run_pre_phase_assessment() {
     # shellcheck disable=SC2287
     local _pfa_facts_file; _pfa_facts_file=$(mktemp "${TMPDIR:-/tmp}/pfa-facts-XXXXXX.txt")
     printf '%s' "${_pfa_facts:-}" > "$_pfa_facts_file"
+      # THE GLOBALS, NOT LOWERCASE NAMES THAT EXIST NOWHERE. `prd_rel` and `profiles_rel`
+      # are assigned in no line of this script; the values live in PRD_REL and
+      # PROFILES_REL, computed near the top. Reading the lowercase names handed the
+      # renderer two empty strings, and it correctly refused to render an analyst that
+      # would then report on files it had not been told about — killing both lanes in
+      # the pre-phase skill assessment. One call site three lines below already used
+      # the globals, which is why only these two failed.
     _ap_vals=$(mktemp "${TMPDIR:-/tmp}/post-failure-analyst-vals-XXXXXX.json")
     jq_vals \
           --rawfile pfa_facts "$_pfa_facts_file" \
           --arg pfa_tool_budget "$_pfa_tool_budget" \
           --arg phase_id "$phase_id" \
-          --arg prd_rel "$prd_rel" \
-          --arg profiles_rel "$profiles_rel" \
+          --arg prd_rel "${PRD_REL}" \
+          --arg profiles_rel "${PROFILES_REL}" \
           '{"__PFA_FACTS__":$pfa_facts,"__PFA_TOOL_BUDGET__":$pfa_tool_budget,"__PHASE_ID__":$phase_id,"__PRD_REL__":$prd_rel,"__PROFILES_REL__":$profiles_rel}' > "$_ap_vals"
     # The codeline's own facts — this template declares them and nothing supplied them.
     # Stack facts are the RENDERER's job — engine-prompt.js adds exactly the stack
@@ -5565,7 +5586,7 @@ run_hybrid_precoordination() {
     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/hybrid-prephase-coordinator-vals-XXXXXX.json")
     jq_vals \
           --arg phase_id "$phase_id" \
-          --arg prd_rel "$prd_rel" \
+          --arg prd_rel "${PRD_REL}" \
           '{"__PHASE_ID__":$phase_id,"__PRD_REL__":$prd_rel}' > "$_cp_vals"
     coord_prompt="$(render_engine_prompt hybrid-prephase-coordinator "$_cp_vals")"
     rm -f "$_cp_vals"

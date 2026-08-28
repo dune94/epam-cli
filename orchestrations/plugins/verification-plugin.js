@@ -48,6 +48,24 @@ function readManifest(projectRoot) {
  * renames its checker, pins a version, or wraps it in a monorepo runner keeps working, because
  * the engine never learns the tool's name.
  */
+/**
+ * The script names this stack verifies with — read from the ecosystem file that owns them.
+ *
+ * A gate that carries its own copy is the engine learning a tool's name, which this file's own
+ * docstring forbids. Absent or unreadable, the caller gets an empty list and reports "not declared"
+ * rather than guessing: a check that cannot run must never read as a pass.
+ */
+function verificationScriptNames(kind) {
+  try {
+    // eslint-disable-line
+    const eco = require(join(__dirname, '..', 'ecosystems', 'package-json.js'));
+    const names = eco && eco.verificationScripts && eco.verificationScripts[kind];
+    return Array.isArray(names) ? names : [];
+  } catch {
+    return [];
+  }
+}
+
 function detectVerification(projectRoot) {
   const pkgPath = join(projectRoot, 'package.json');
   if (existsSync(pkgPath)) {
@@ -55,7 +73,7 @@ function detectVerification(projectRoot) {
     try { pkg = JSON.parse(readFileSync(pkgPath, 'utf8')); } catch { pkg = null; }
     const scripts = (pkg && pkg.scripts) || {};
     // The project's OWN script name, in the order a human would try them.
-    const named = ['typecheck', 'type-check', 'tsc', 'check-types', 'lint:types']
+    const named = verificationScriptNames('typecheck')
       .find((s) => typeof scripts[s] === 'string' && scripts[s].trim() !== '');
     if (named) {
       const runner = existsSync(join(projectRoot, 'pnpm-lock.yaml')) ? 'pnpm'
@@ -217,7 +235,7 @@ function detectTests(projectRoot) {
     let pkg = null;
     try { pkg = JSON.parse(readFileSync(pkgPath, 'utf8')); } catch { pkg = null; }
     const scripts = (pkg && pkg.scripts) || {};
-    const named = ['test', 'tests', 'test:unit', 'jest', 'vitest']
+    const named = verificationScriptNames('test')
       .find((s) => typeof scripts[s] === 'string' && scripts[s].trim() !== '');
     if (named) {
       const runner = existsSync(join(projectRoot, 'pnpm-lock.yaml')) ? 'pnpm'
@@ -259,7 +277,7 @@ function detectLint(projectRoot) {
     let pkg = null;
     try { pkg = JSON.parse(readFileSync(pkgPath, 'utf8')); } catch { pkg = null; }
     const scripts = (pkg && pkg.scripts) || {};
-    const named = ['lint', 'lint:js', 'lint:src', 'eslint']
+    const named = verificationScriptNames('lint')
       .find((s) => typeof scripts[s] === 'string' && scripts[s].trim() !== '');
     if (named) {
       const runner = existsSync(join(projectRoot, 'pnpm-lock.yaml')) ? 'pnpm'

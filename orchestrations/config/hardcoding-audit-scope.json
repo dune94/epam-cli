@@ -23,6 +23,13 @@
         "ts",
         "js"
       ]
+    },
+    {
+      "path": "orchestrations/ecosystems",
+      "types": [
+        "js",
+        "json"
+      ]
     }
   ],
   "$excludeWhy": "Tests are excluded because a fixture naming a client is not a shipped fact. Per-project launchers are excluded because a launcher exists to declare ONE project's facts — configuration living in the file that owns it. Vendored trees are not ours. \"/test/\" excludes a test DIRECTORY, which the .test./.spec. infixes did not: orchestrations/scripts/test/test-epam-providers.sh contributed 6 model-identifier findings for models it exists to exercise, while the header already declared tests out of scope. Anchored on the directory, so engine files merely NAMED test-something (test-engine.sh) are still scanned.",

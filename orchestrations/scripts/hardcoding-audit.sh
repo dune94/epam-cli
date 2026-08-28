@@ -134,11 +134,16 @@ add "truncations" \
 add "foreign schema" \
     'customfield_[0-9]+'
 
+#    ALSO AS AN OBJECT PROPERTY, not only an assignment. `= [...]` alone missed `key: [...]`, so
+#    moving three lists out of verification-plugin.js and into the ecosystem file that owns them
+#    made them VANISH from the count while the file itself was in scope — a relocation reading as
+#    repair, which is precisely how this audit was defeated on 2026-08-23. Caught 2026-08-28 by
+#    checking the new home was still seen rather than trusting the total to fall honestly.
 # 9. A FIXED VOCABULARY OF DOMAIN VALUES used in logic — issue types, workflow states, kinds.
 #    supportedTypes = ['story','task','bug'] dropped every ticket outside it with `return null`,
 #    and KINDS/AGENT_KINDS were two copies of one vocabulary that had already drifted apart.
 add "domain vocabularies" \
-    "=[[:space:]]*\\[[[:space:]]*['\"][a-z][a-z-]{2,}['\"][[:space:]]*,[[:space:]]*['\"][a-z][a-z-]{2,}['\"]"
+    "(=|:)[[:space:]]*\\[[[:space:]]*['\"][a-z][a-z-]{2,}['\"][[:space:]]*,[[:space:]]*['\"][a-z][a-z-]{2,}['\"]"
 
 # 10. A NUMBER DECIDING SOMETHING, with no name to configure it by. Category 6 needs a knob
 #     (TIMEOUT, MAX, LIMIT); these have none, which is precisely why nobody could change them:
@@ -207,6 +212,16 @@ hits_for() {
     #
     # A bare factor keeps its finding: only these unit constants are excluded, and only where they
     # appear AS the multiplier or divisor.
+    # A SCHEMA'S `required:` IS A LIST OF FIELD NAMES, NOT DOMAIN VALUES. Widening this category to
+    # object properties made it see JSON-schema declarations, which are the contract itself and are
+    # meant to be explicit. `enum:` is NOT excluded — that genuinely is a vocabulary, and the fact
+    # that it constrains a model's output is a reason to keep it visible, not to hide it.
+    if [ "${NAMES[$1]}" = "domain vocabularies" ]; then
+        printf '%s\n' "$_out" | grep -v '^$' \
+            | grep -vE ':[0-9]+:[[:space:]]*required:[[:space:]]*\[' \
+            || true
+        return 0
+    fi
     if [ "${NAMES[$1]}" = "unnamed numeric decisions" ]; then
         printf '%s\n' "$_out" | grep -v '^$' \
             | grep -vE ':[0-9]+:.*[*/][[:space:]]*(1000|1024|60)\b' \

@@ -115,6 +115,17 @@ const LANGFUSE_PAGE_SIZE = 50;
 const MINIMUM_PROMPT_CHARS = 200;
 const MINIMUM_REPLY_CHARS = 2;
 
+/**
+ * A MATCHER COMPARES AGAINST THE BODY AS SENT, NOT AS AUTHORED.
+ *
+ * MockServer matches the raw request body, where the prompt is a JSON string value — so every quote
+ * in it arrives escaped. A fingerprint taken straight from a template or a PRD carries raw quotes
+ * and matches nothing.
+ */
+const wireForm = (t) => JSON.stringify(t).slice(1, -1);
+/** Escape a literal so it can sit inside a regex matcher. */
+const rx = (t) => String(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 function matchKey(template) {
   const f = path.join(TPL, `${template}.json`);
   if (!fs.existsSync(f)) return null;
@@ -591,6 +602,17 @@ function expectsARole(spec) {
   return /\brole\b/i.test(String(spec.description || ''));
 }
 
+/** The wrapper key a tagged payload uses for this seam, or '' when items are bare. */
+function TAG_ITEMS_KEY(seam) {
+  try {
+    // eslint-disable-next-line global-require
+    const { declaredContracts: dc, TAG_TO_TOOL } = require('./lib/agent-output-schema.js');
+    const c = dc()[seam];
+    const t = c && c.tag && TAG_TO_TOOL[c.tag];
+    return (t && t.itemsKey) || '';
+  } catch { return ''; }
+}
+
 function contractStandIn(seam) {
   let contracts = {};
   try {
@@ -852,6 +874,7 @@ function endsInToolCall(cap, seam) {
   const stale = [];
   const unusable = [];
   const shared = [];
+  const perStory = [];
   const foreign = [];
   const seen = new Set();
 
@@ -999,6 +1022,72 @@ function endsInToolCall(cap, seam) {
         }
       } catch { standCall = null; }
     }
+    const _disc = storyDiscriminator(_story);
+    const bodyMatch = _disc
+      ? { type: 'STRING', string: wireForm(_disc), subString: true }
+      : { type: 'STRING', string: wireForm(key), subString: true };
+    const PROTOCOLS = [
+      { path: '/api/v1/chat/completions', text: sse, calls: sseToolCalls },
+      { path: '/v1/messages', text: anthropicSse, calls: anthropicSseToolCalls },
+    ];
+
+    // A PER-STORY SEAM NEEDS ONE ANSWER PER STORY, WHETHER OR NOT A CAPTURE NAMES ONE.
+    //
+    // The story used to be read from the CAPTURE's filename, so a stand-in — which has no file —
+    // got a single expectation serving every story. Evidence from the logs it writes:
+    // MOCK3-2-openspec-spec.log received `"storyId": "MOCK3-1"`, and mockb was then specified
+    // against src/fares.ts and test/fares.test.ts, which are mocka's. The reply was correct; it was
+    // answering for the wrong story.
+    //
+    // So a seam whose schema carries a storyId is registered ONCE PER STORY, each matched on that
+    // story's own title — the one thing in its prompt no other story shares. Stories come from the
+    // PRD; nothing is named here.
+    const _perStorySeam = !cap && Array.isArray(stood) && stood.length > 1
+      && stood.every((x) => x && x.storyId);
+    const _tag = (() => {
+      try {
+        // eslint-disable-next-line global-require
+        const { declaredContracts: dc } = require('./lib/agent-output-schema.js');
+        const d = dc()[seam];
+        return (d && d.tag) || '';
+      } catch { return ''; }
+    })();
+    // ONE CALL PER STORY, OR ONE CALL FOR ALL OF THEM? THE REGISTRY ALREADY SAYS.
+    //
+    // A tag with an itemsKey returns a LIST covering every story in a single call — role-assigner
+    // answers all assignments at once. A tag without one is asked per story, and spec-agent is
+    // called separately for each. Registering per-story answers for the first kind means the one
+    // call matches the first story's expectation and the rest are never served: MOCK3-1 was
+    // answered six times and MOCK3-2 came back unassigned.
+    const _oneCallForAll = !!TAG_ITEMS_KEY(seam);
+    if (_perStorySeam && _tag && !_oneCallForAll) {
+      for (const item of stood) {
+        const disc = storyDiscriminator(item.storyId);
+        if (!disc) continue;
+        const tagged = `<${_tag}>\n${JSON.stringify(
+          (TAG_ITEMS_KEY(seam) ? { [TAG_ITEMS_KEY(seam)]: [item] } : item), null, 2)}\n</${_tag}>`;
+        for (const proto of PROTOCOLS) {
+          // eslint-disable-next-line no-await-in-loop
+          await put('/mockserver/expectation', {
+            priority: 50,
+            // BOTH, OR IT HIJACKS ANOTHER SEAM'S CALL.
+            //
+            // Matching on the story alone matches every prompt that carries the PRD — which is all
+            // of them. Registered at a higher priority it then answered codeline-discovery's
+            // request with a spec-agent reply, and discovery gave up after three attempts on an
+            // answer 104 characters long. The matcher must identify the SEAM as well as the story:
+            // the seam's own fingerprint and this story's title, both required.
+            httpRequest: { method: 'POST', path: proto.path,
+              body: { type: 'REGEX',
+                regex: `(?s)(?=.*${rx(wireForm(key))})(?=.*${rx(wireForm(disc))}).*` } },
+            httpResponse: { statusCode: 200,
+              headers: { 'content-type': ['text/event-stream'], 'x-seam': [`${seam}:${item.storyId}`] },
+              body: proto.text(tagged) },
+          });
+        }
+        perStory.push(`${seam} · ${item.storyId}`);
+      }
+    }
     seen.add(_dedup);
     // TWO PROTOCOLS, REGISTERED TOGETHER.
     //
@@ -1021,15 +1110,6 @@ function endsInToolCall(cap, seam) {
     // every request in its escaped form and absent in its raw one; all sixteen of its calls fell to
     // the catch-all and the seam reported its own required field as missing. Only the eight seams
     // whose fingerprints happened to contain no quotes were matching at all.
-    const wireForm = (t) => JSON.stringify(t).slice(1, -1);
-    const _disc = storyDiscriminator(_story);
-    const bodyMatch = _disc
-      ? { type: 'STRING', string: wireForm(_disc), subString: true }
-      : { type: 'STRING', string: wireForm(key), subString: true };
-    const PROTOCOLS = [
-      { path: '/api/v1/chat/completions', text: sse, calls: sseToolCalls },
-      { path: '/v1/messages', text: anthropicSse, calls: anthropicSseToolCalls },
-    ];
 
     if (cap && cap.multi) {
       // ONE EXPECTATION PER TURN, each consumed once, so the conversation replays in the order it

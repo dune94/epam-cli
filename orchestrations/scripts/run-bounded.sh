@@ -38,8 +38,19 @@ if command -v systemd-run >/dev/null 2>&1 && [ -d /sys/fs/cgroup ]; then
     # host never grew — the cgroup held — but the pages went to swap, so the run continued,
     # thrashing, instead of failing. A limit a process can walk around by swapping is a slowdown,
     # not a limit, and a thrashing run is the hang that wastes the operator's time.
+    # HOME IS RESTORED EXPLICITLY, BECAUSE THE SCOPE RESETS IT.
+    #
+    # systemd-run --user --scope sets HOME to the login user's own directory. A free run isolates
+    # HOME precisely so ~/.claude/.credentials.json does not exist for it — OAuth on disk is a
+    # second, independent credential path, and a mock BASE_URL only out-prefers it. So wrapping a
+    # rehearsal in this scope silently handed back the ability to spend real money, and the only
+    # thing still standing between the two was a redirect. Proven here: the inner command saw the
+    # real home while every other variable survived intact.
+    #
+    # Every caller-set variable is preserved; HOME is named because it is the one the scope takes.
     exec systemd-run --user --scope --quiet --collect \
         -p MemoryHigh="${_high_mb}M" -p MemoryMax="${_max_mb}M" -p MemorySwapMax=0 \
+        --setenv=HOME="$HOME" \
         -- "$@"
 fi
 

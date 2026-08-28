@@ -22,7 +22,21 @@ import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 
 const ROOT = join(__dirname, '../../../');
-const CANONICAL = join(ROOT, 'orchestrations/agents/profiles.canonical.json');
+/**
+ * EVERY profile SOURCE, not just the one that was noticed.
+ *
+ * The persona was fixed in profiles.canonical.json and left untouched in profiles.json.original —
+ * so the model name was removed from one source and kept in another, which is how the same defect
+ * comes back on the next run that restores from the other file. The rule has always been that the
+ * three profile files move together.
+ *
+ * profiles.json is GENERATED from these and is deliberately not listed: it is restored per run, and
+ * editing it would be editing output instead of the thing that produces it.
+ */
+const PROFILE_SOURCES = [
+  'orchestrations/agents/profiles.canonical.json',
+  'orchestrations/agents/profiles.json.original',
+].map((p) => join(ROOT, p));
 
 /** Every model name any declared provider set can resolve to — the stack's own vocabulary. */
 function declaredModels(): string[] {
@@ -43,16 +57,18 @@ function declaredModels(): string[] {
 }
 
 describe('NO PERSONA NAMES A MODEL', () => {
-  it('the canonical roster mentions no model any stack declares', () => {
+  it('no profile SOURCE mentions a model any stack declares', () => {
     const models = declaredModels();
     expect(models.length, 'no models resolved — this test would pass vacuously').toBeGreaterThan(3);
 
-    const raw = readFileSync(CANONICAL, 'utf8');
     const offenders: string[] = [];
-    for (const [name, body] of Object.entries<any>(JSON.parse(raw))) {
-      const text = typeof body === 'string' ? body : JSON.stringify(body);
-      for (const m of models) {
-        if (text.includes(m)) offenders.push(`${name} names "${m}"`);
+    for (const file of PROFILE_SOURCES) {
+      if (!existsSync(file)) continue;
+      for (const [name, body] of Object.entries<any>(JSON.parse(readFileSync(file, 'utf8')))) {
+        const text = typeof body === 'string' ? body : JSON.stringify(body);
+        for (const m of models) {
+          if (text.includes(m)) offenders.push(`${file.split('/').pop()}: ${name} names "${m}"`);
+        }
       }
     }
     expect(offenders, 'a persona names a specific model, so it is right on one stack and wrong on '

@@ -40,5 +40,8 @@
     "roster-review"
   ],
   "derivedFromSha256": "0644495947e044d5941edc18d8cc913a40f5d4fc40468b7206fa6bdfb368cafa",
-  "authority": "project"
+  "authority": "project",
+  "mayBeEmpty": [
+    "__DOC_SECTION__"
+  ]
 }

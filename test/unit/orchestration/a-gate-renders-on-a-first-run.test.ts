@@ -36,6 +36,10 @@ const ORDINARY_ABSENCES: Record<string, Record<string, string>> = {
     __LEARNED_RULES_BLOCK__: 'the KB is cleared per run, so a first review has learned nothing yet',
     __PRIOR_REVIEW__: 'the first cycle has no earlier review of its own to read',
     __UNCOVERED_VC_BLOCK__: 'every verification criterion covered is the GOOD outcome, not an error',
+    __FIX_ANALYSIS_BLOCK__: 'a story with no root-cause analysis is ordinary — greenfield work, or a '
+      + 'story the detective did not analyse. Undeclared, the reviewer REFUSED TO RENDER for it and '
+      + 'the phase could not proceed: the producer is `[ -n "$STORY_FIX_ANALYSIS" ] && ... || true`, '
+      + 'a deliberate empty, exactly like the uncovered-VC block above',
   },
   'failure-analyst': {
     __SKILL_ADDENDUM__: 'a role may carry no accumulated skill notes',

@@ -39,5 +39,17 @@
     "spec-agent"
   ],
   "derivedFromSha256": "c3ce0355799388af9c5a40e045a6495ac36b4c02b28976f1710971b0373c7dbb",
-  "authority": "project"
+  "authority": "project",
+  "mayBeEmpty": [
+    "__DECLARED_FILE_BLOCK__",
+    "__FIX_SITE_BLOCK__",
+    "__FORCED_RETRY_BLOCK__",
+    "__PRIOR_GAPS_BLOCK__",
+    "__PUBLISHED_CONTRACTS__",
+    "__REFERENCED_DOCS_EVIDENCE__",
+    "__SEMBLE_CONTEXT__",
+    "__SPLIT_RULES_BLOCK__",
+    "__SPLIT_SCHEMA_FIELD__",
+    "__SPLIT_WARNING__"
+  ]
 }

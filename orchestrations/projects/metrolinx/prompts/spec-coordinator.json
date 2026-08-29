@@ -23,5 +23,8 @@
     "spec-coordinator"
   ],
   "derivedFromSha256": "9a75a0e7028ce1008af5ec35812924d6d2d09fd6978d356127b411cfb30b5538",
-  "authority": "project"
+  "authority": "project",
+  "mayBeEmpty": [
+    "__PROFILE_PREFIX__"
+  ]
 }

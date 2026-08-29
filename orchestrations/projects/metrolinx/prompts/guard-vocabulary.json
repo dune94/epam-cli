@@ -27,5 +27,10 @@
     "guard-vocabulary"
   ],
   "derivedFromSha256": "c166120e0d26778e9a07875e25fa6f6acc3574807ef0013d18803d2b623060cd",
-  "authority": "project"
+  "authority": "project",
+  "mayBeEmpty": [
+    "__CODEGRAPH_SECTION__",
+    "__DOC_SECTION__",
+    "__PERSONA_PREFIX__"
+  ]
 }

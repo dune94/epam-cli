@@ -54,5 +54,8 @@
   ],
   "layer": "project",
   "derivedFromSha256": "e351426fcf0c7794efe04639d33f444a77c653aad3ecf74b2fa324844587d0b5",
-  "authority": "project"
+  "authority": "project",
+  "mayBeEmpty": [
+    "__PREVIOUS_REFUSAL__"
+  ]
 }

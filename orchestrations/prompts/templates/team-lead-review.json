@@ -39,7 +39,8 @@
   "mayBeEmpty": [
     "__LEARNED_RULES_BLOCK__",
     "__PRIOR_REVIEW__",
-    "__UNCOVERED_VC_BLOCK__"
+    "__UNCOVERED_VC_BLOCK__",
+    "__FIX_ANALYSIS_BLOCK__"
   ],
-  "$mayBeEmptyWhy": "Ordinary absences on a first cycle, each with a deliberate empty branch in its producer: the KB is cleared per run so nothing has been learned yet; the first cycle has no earlier review of its own; and every verification criterion being covered is the GOOD outcome, not an error. Undeclared, the renderer refused and the reviewer could not run AT ALL — it emitted a synthetic phase-level changes_requested, no per-story feedback existed, and the loop halted the run of 2026-08-28 with two correct one-line fixes sitting unreviewed on their branches. prior-reviews.py WARNS when it cannot read the log, so declaring this hides no failed lookup."
+  "$mayBeEmptyWhy": "Ordinary absences on a first cycle, each with a deliberate empty branch in its producer: the KB is cleared per run so nothing has been learned yet; the first cycle has no earlier review of its own; and every verification criterion being covered is the GOOD outcome, not an error. Undeclared, the renderer refused and the reviewer could not run AT ALL — it emitted a synthetic phase-level changes_requested, no per-story feedback existed, and the loop halted the run of 2026-08-28 with two correct one-line fixes sitting unreviewed on their branches. prior-reviews.py WARNS when it cannot read the log, so declaring this hides no failed lookup. __FIX_ANALYSIS_BLOCK__ joined them on 2026-08-29: a story with no root-cause analysis is ordinary — greenfield work, or one the detective did not analyse — and its producer is a deliberate empty (`[ -n \"$STORY_FIX_ANALYSIS\" ] && ... || true`). Undeclared, the reviewer refused to render for such a story and the phase could not proceed at all. The paid run of 2026-08-28 hid this because every story it carried HAD an analysis."
 }

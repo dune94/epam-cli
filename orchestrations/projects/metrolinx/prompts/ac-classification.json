@@ -26,5 +26,8 @@
     "ac-classification"
   ],
   "derivedFromSha256": "2b8483385c537fa3b318a46ab611948b47d2095bd8734a35b466b99550df8476",
-  "authority": "project"
+  "authority": "project",
+  "mayBeEmpty": [
+    "__SPLIT_NOTE__"
+  ]
 }

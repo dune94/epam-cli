@@ -141,10 +141,25 @@ function main() {
   const rows = [];
   for (const pair of pairs()) {
     const missing = driftFor(pair);
-    if (missing.length) rows.push({ ...pair, missing });
+    // A COPY ALSO DRIFTS WHEN IT LACKS A DECLARATION, not only a block.
+    //
+    // Drift was measured on placeholders alone, so a template that learned "this block may
+    // legitimately render empty" never told the project copies and `report` said 0 drifted while
+    // metrolinx/team-lead-review carried NO mayBeEmpty at all — a reviewer that refuses to render
+    // the moment a first cycle has no prior review. Same silence, different field.
+    const _t = readJson(pair.tf);
+    const _p = readJson(pair.pf);
+    const _pBody = Array.isArray(_p.body) ? _p.body.join('\n') : String(_p.body || '');
+    const _have = new Set(Array.isArray(_p.mayBeEmpty) ? _p.mayBeEmpty : []);
+    const missingDecl = (Array.isArray(_t.mayBeEmpty) ? _t.mayBeEmpty : [])
+      .filter((ph) => _pBody.includes(ph) && !_have.has(ph));
+    if (missing.length || missingDecl.length) {
+      rows.push({ ...pair, missing, missingDecl });
+    }
   }
   if (cmd === 'report') {
-    rows.forEach((r) => console.log(`${r.proj}/${r.id}: ${r.missing.join(' ')}`));
+    rows.forEach((r) => console.log(`${r.proj}/${r.id}: ${[...r.missing,
+      ...(r.missingDecl || []).map((d) => `mayBeEmpty:${d}`)].join(' ')}`));
     console.log(`${rows.length} drifted project prompt(s)`);
     process.exit(rows.length ? 1 : 0);
   }
@@ -264,8 +279,20 @@ function main() {
       continue;
     }
     if (unanchored.length) console.error(`  ${r.proj}/${r.id}: appended (no anchor): ${unanchored.join(' ')}`);
-    if (!dry) fs.writeFileSync(r.pf, `${JSON.stringify({ ...p, placeholders: declared, body }, null, 2)}\n`);
-    console.log(`${dry ? 'would patch' : 'patched'} ${r.proj}/${r.id}: +${r.missing.join(' ')}`);
+    // mayBeEmpty TRAVELS TOO, filtered to what this body actually uses.
+    //
+    // The tool ported missing PLACEHOLDERS and left the declarations behind, so a template that
+    // learned a block may legitimately render empty never told the project copies — and `report`
+    // said "0 drifted" the whole time. metrolinx/team-lead-review carried NO mayBeEmpty at all on
+    // 2026-08-29: its reviewer would refuse to render the moment a first cycle had no prior
+    // review, no learned rules, no uncovered VC or no root-cause analysis. The phase would stop,
+    // and the reason would read as a rendering error rather than a missing declaration.
+    const _mbe = (Array.isArray(t.mayBeEmpty) ? t.mayBeEmpty : []).filter((ph) => nowPresent.has(ph));
+    const _out = { ...p, placeholders: declared, body };
+    if (_mbe.length) _out.mayBeEmpty = _mbe;
+    if (!dry) fs.writeFileSync(r.pf, `${JSON.stringify(_out, null, 2)}\n`);
+    console.log(`${dry ? 'would patch' : 'patched'} ${r.proj}/${r.id}: +${[...r.missing,
+      ...(r.missingDecl || []).map((d) => `mayBeEmpty:${d}`)].join(' ')}`);
   }
 }
 

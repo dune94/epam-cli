@@ -39,5 +39,9 @@
     "__TOOL_LINE__"
   ],
   "derivedFromSha256": "c4c221f4ed26165774a6058ccc2845914a1a620764b83a506a4faf5f85d19d6e",
-  "authority": "project"
+  "authority": "project",
+  "mayBeEmpty": [
+    "__PERSONA__",
+    "__PROMPT_ID__"
+  ]
 }

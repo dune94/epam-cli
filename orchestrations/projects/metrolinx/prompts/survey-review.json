@@ -33,5 +33,8 @@
     "__TOOL_LINE__"
   ],
   "derivedFromSha256": "350bf585df57239950090b95d86bd2957f9dc7aa7e853321073a07d3fa7e9aea",
-  "authority": "project"
+  "authority": "project",
+  "mayBeEmpty": [
+    "__SURVEY_BLOCK__"
+  ]
 }

@@ -25,5 +25,9 @@
     "estate-survey"
   ],
   "derivedFromSha256": "53bfe6bfe9409a2c8663b03c24010c75f90bfe71a9d6f1a0c254abf6b9b6c0a5",
-  "authority": "project"
+  "authority": "project",
+  "mayBeEmpty": [
+    "__DOC_SECTION__",
+    "__DEP_SECTION__"
+  ]
 }

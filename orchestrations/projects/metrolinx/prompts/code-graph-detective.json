@@ -30,5 +30,9 @@
     "code-graph-detective"
   ],
   "derivedFromSha256": "19a888346794b05c1534e6c101e9e0306457f18bf4bdf9ba348c017abdb05acf",
-  "authority": "project"
+  "authority": "project",
+  "mayBeEmpty": [
+    "__DETECTIVE_PROFILE__",
+    "__SURVEY_HYPOTHESIS__"
+  ]
 }

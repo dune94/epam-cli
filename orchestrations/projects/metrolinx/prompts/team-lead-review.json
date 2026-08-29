@@ -35,5 +35,11 @@
     "team-lead-review"
   ],
   "derivedFromSha256": "15f827f51592c224e4a1e20ddbf4a451e440a95e83f3b6d28aadf430fff36139",
-  "authority": "project"
+  "authority": "project",
+  "mayBeEmpty": [
+    "__LEARNED_RULES_BLOCK__",
+    "__PRIOR_REVIEW__",
+    "__UNCOVERED_VC_BLOCK__",
+    "__FIX_ANALYSIS_BLOCK__"
+  ]
 }

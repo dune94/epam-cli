@@ -27,5 +27,8 @@
     "impl-failure-analyst"
   ],
   "derivedFromSha256": "5e26e350cb43269cd6b165a8caf2004124b18360082b8f87ebd6db83a1c0958c",
-  "authority": "project"
+  "authority": "project",
+  "mayBeEmpty": [
+    "__SKILL_ADDENDUM__"
+  ]
 }

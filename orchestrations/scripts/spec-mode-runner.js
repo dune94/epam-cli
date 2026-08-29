@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 const { evidenceWindow } = require('./lib/evidence-windows.js');
+const { recordAgentReply } = require('./lib/agent-reply-log.js');
 // Local tool caps are DECLARED — config/tool-timeouts.json. A literal here would be a
 // second home for a decision that already has one.
 const { toolTimeoutMs } = require('./lib/tool-timeouts.js');
@@ -1420,7 +1421,12 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
     // SPEC_MODE_MAX_OUTPUT_TOKENS is spec-only; it doesn't affect implementation runs.
     const specEnv = Object.assign(specAgentEnv(process.env, repoPath), envOverride || {});
     const output = await runClaude(directExec, prompt, logPath, specEnv, { costAgent: costLabelFor(tag, specEnv), costStoryId: storyId });
-    return _validatedOrNull(extractTaggedJson(output, tag), tag, specEnv && specEnv.EPAM_AGENT_NAME);
+    // KEEP THE REPLY BEFORE ANYTHING INTERPRETS IT. metrolinx AMSD-1919 halted on a shape
+  // nobody could establish, because the log excerpts at 2000 chars, the rejection persister
+  // needed a logDir nobody passed, and Langfuse records no completions at all. Written here,
+  // at the one funnel every agent's raw text passes through, it cannot be forgotten per seam.
+  recordAgentReply(tag, output);
+  return _validatedOrNull(extractTaggedJson(output, tag), tag, specEnv && specEnv.EPAM_AGENT_NAME);
   }
 
   // THE MINIMAX SPECIAL CASE IS GONE.
@@ -1444,6 +1450,11 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
   // classify a URL from its address; its `quotes` field could never be populated, which is
   // the whole reason the step exists. Silent, and invisible in the output.
   const output = await runClaude(execSpec, prompt, logPath, envOverride || {}, { costAgent: costLabelFor(tag, envOverride), costStoryId: storyId });
+  // KEEP THE REPLY BEFORE ANYTHING INTERPRETS IT. metrolinx AMSD-1919 halted on a shape
+  // nobody could establish, because the log excerpts at 2000 chars, the rejection persister
+  // needed a logDir nobody passed, and Langfuse records no completions at all. Written here,
+  // at the one funnel every agent's raw text passes through, it cannot be forgotten per seam.
+  recordAgentReply(tag, output);
   return _validatedOrNull(extractTaggedJson(output, tag), tag);
 }
 

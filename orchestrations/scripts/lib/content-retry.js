@@ -84,14 +84,23 @@ function _text(raw) {
  * two fixes before it wrong.
  */
 function _persistRejected(logDir, what, text) {
-  if (!logDir || !text) return '';
+  // A CALLER THAT FORGOT TO SAY WHERE IS NOT A REASON TO DISCARD THE EVIDENCE.
+  //
+  // metrolinx AMSD-1919 died three times on 2026-08-29 with a 3885-character reply the log
+  // excerpted at 2000. This returned empty because its caller passed no logDir, so the one
+  // artefact that could say whether the envelope held one element or several was never written,
+  // and the diagnosis needed a second PAID run to see what the first already knew.
+  if (!text) return '';
+  let dir = logDir;
+  if (!dir) dir = process.env.OUTPUT_DIR || '';
+  if (!dir) dir = require('path').join(require('os').tmpdir(), 'epam-rejected');
   try {
     const fs = require('fs');
     const path = require('path');
     const slug = String(what).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const file = path.join(logDir, `rejected-${slug}-${stamp}.txt`);
-    fs.mkdirSync(logDir, { recursive: true });
+    const file = path.join(dir, `rejected-${slug}-${stamp}.txt`);
+    fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(file, text);
     return file;
   } catch {
@@ -243,4 +252,9 @@ async function retryUntilParsedAsync({ call, parse, attempts = 3, what = 'respon
   throw new Error(_giveUpMessage(what, budget, raw, reason, logDir));
 }
 
-module.exports = { retryUntilParsed, retryUntilParsedAsync };
+module.exports = {
+  retryUntilParsed,
+  retryUntilParsedAsync,
+  // Exported so a test can prove the evidence is kept, without paying for a run.
+  _persistRejected,
+};

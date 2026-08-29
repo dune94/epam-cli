@@ -13,7 +13,54 @@ set -euo pipefail
 EPAM_CLI="${EPAM_CLI:-epam}"
 CLAUDE_CMD="${CLAUDE_CMD:-claude}"
 AI_MODEL="${AI_MODEL:-}"
-PRIMARY_PROVIDER="${AI_PROVIDER:-${EPAM_ORCHESTRATION_PROVIDER:-}}"
+# resolve_primary_provider — the SET decides, not whatever a file left in the environment.
+#
+# This was a bare read of AI_PROVIDER / EPAM_ORCHESTRATION_PROVIDER, which knows nothing about the
+# provider set in force. On 2026-08-29 a metrolinx run launched with EPAM_PROVIDER_SET=claude
+# resolved the claude ladder — "at the top of its declared chain (claude-opus-5)" — and then asked
+# provider 'qwen' for it, because the repo's .env still carried EPAM_ORCHESTRATION_PROVIDER=qwen
+# from another stack. Three attempts, no completion record, and the run died AFTER the roster had
+# been minted and reviewed against real client code.
+#
+# The repo already had this incident on record once. Twice is a design fault, not an accident.
+#
+# The set is the deliberate per-launch choice; the env var is whatever was left behind. So a
+# provider the active set cannot route is replaced by one it can — and the substitution is
+# ANNOUNCED, because an operator who really meant qwen has to see that they did not get it.
+#
+# A run that declares no set has expressed no preference this can contradict, and is left alone.
+resolve_primary_provider() {
+    local _env_provider="${AI_PROVIDER:-${EPAM_ORCHESTRATION_PROVIDER:-}}"
+    local _set="${EPAM_PROVIDER_SET:-}"
+    if [ -z "$_set" ]; then
+        printf '%s' "$_env_provider"
+        return 0
+    fi
+
+    local _routable
+    _routable=$("${NODE_BIN:-node}" "${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}/lib/handlers/ladder-providers.js" 2>/dev/null || echo "")
+    if [ -z "$_routable" ] || [ "$_routable" = "[]" ]; then
+        printf '%s' "$_env_provider"
+        return 0
+    fi
+
+    if [ -n "$_env_provider" ] \
+       && printf '%s' "$_routable" | jq -e --arg p "$_env_provider" 'index($p) != null' >/dev/null 2>&1; then
+        printf '%s' "$_env_provider"
+        return 0
+    fi
+
+    local _first
+    _first=$(printf '%s' "$_routable" | jq -r '.[0] // empty')
+    [ -n "$_first" ] || { printf '%s' "$_env_provider"; return 0; }
+    if [ -n "$_env_provider" ]; then
+        warning "  [provider] '${_env_provider}' is not routable by the '${_set}' set — using '${_first}'."
+        warning "  [provider] The set is the launch's own choice; the env value was left by something else."
+    fi
+    printf '%s' "$_first"
+}
+
+PRIMARY_PROVIDER="$(resolve_primary_provider)"
 FALLBACKS_RAW="${AI_PROVIDER_FALLBACKS:-}"
 # SDK invocation toggle — when 1, routes Claude provider through invoke.py.
 # Inherited from environment; set by run-agent-orchestration.sh or caller.

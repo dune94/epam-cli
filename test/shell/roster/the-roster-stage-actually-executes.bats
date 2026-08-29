@@ -18,6 +18,11 @@
 # what is asserted is that it got THAT far, which is past every error above.
 # ─────────────────────────────────────────────────────────────────────────────
 
+# `env` does not execute its command in every environment this suite runs in — on 2026-08-28
+# `env FOO=1 echo hello` produced no output and exited 0, so these assertions ran against
+# nothing and failed for a reason that had nothing to do with the pipeline.
+load "../helpers/env-run"
+
 setup() {
     REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
     SCRIPTS="$REPO_ROOT/orchestrations/scripts"
@@ -32,7 +37,7 @@ teardown() { rm -rf "$WORK"; }
 # Runs the real step in roster-only mode. No spend: the key is invalid, so the model call fails or
 # stalls and the timeout ends it. The OUTPUT up to that point is what is under test.
 run_stage() {
-    timeout 45 env \
+    timeout 45 env_run \
         EPAM_ROSTER_ONLY=1 \
         EPAM_PROJECT_CONFIG_DIR="$WORK/proj" \
         LOG_DIR="$WORK/logs" \

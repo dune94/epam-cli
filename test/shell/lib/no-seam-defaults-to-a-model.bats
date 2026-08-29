@@ -22,9 +22,23 @@ setup() {
     PROJECTS="$REPO_ROOT/orchestrations/projects"
 }
 
-# Every model name any project declares, from the files that own that decision.
+# Every model name this repo declares, from the files that own that decision.
+#
+# OWNERSHIP MOVED. Models used to live in each project's llm-settings.json; the 2026-08-25
+# migration put them in config/llm-defaults.<set>.json, because a per-model setting belongs to the
+# model and a model belongs to a STACK. Every project now declares zero, so the vacuity guard below
+# — "projects really do declare models" — began failing on an architecture working as intended.
+# It went unnoticed because no runner executed .bats files at all until 2026-08-28.
+#
+# The requirement is unchanged and is the test beneath this one: no seam substitutes a model it was
+# not given. Only the place the vocabulary is read from has moved. A project MAY still override, so
+# both layers are read.
 declared_models() {
-    { for f in "$PROJECTS"/*/llm-settings.json; do
+    { for f in "$REPO_ROOT"/orchestrations/config/llm-defaults.*.json; do
+        [ -f "$f" ] || continue
+        jq -r '.. | objects | (.to? // .from? // .startModel? // .model? // empty)' "$f" 2>/dev/null
+      done
+      for f in "$PROJECTS"/*/llm-settings.json; do
         [ -f "$f" ] || continue
         jq -r '.. | objects | (.to? // .from? // .model? // empty)' "$f" 2>/dev/null
       done

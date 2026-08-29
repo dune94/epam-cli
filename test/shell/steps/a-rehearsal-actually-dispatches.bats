@@ -11,6 +11,11 @@
 # This runs the REAL ai-run.sh end to end against a stubbed CLI, so what is asserted is what the
 # script did, not what a block of it would do in isolation.
 
+# `env` does not execute its command in every environment this suite runs in — on 2026-08-28
+# `env FOO=1 echo hello` produced no output and exited 0, so these assertions ran against
+# nothing and failed for a reason that had nothing to do with the pipeline.
+load "../helpers/env-run"
+
 setup() {
   REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../../.." && pwd)"
   # llm-handler.sh, not ai-run.sh: the provider block moved when eight independent paths to a
@@ -37,7 +42,7 @@ SH
 }
 
 @test "a cassette makes ai-run dispatch through the CLI as provider 'replay'" {
-  run env EPAM_CLI="$STUB" \
+  run env_run EPAM_CLI="$STUB" \
       EPAM_REPLAY_CASSETTE_DIR="$WORK/cassette" \
       AI_PROVIDER="" EPAM_ORCHESTRATION_PROVIDER="" AI_MODEL="" \
       bash "$SCRIPT" <<< "rehearse this"
@@ -60,7 +65,7 @@ SH
 @test "without a cassette the configured provider is dispatched, not replay" {
   # The negative half. A substitution that fired unconditionally would silently replay every run,
   # including the paid ones the operator meant to make.
-  run env EPAM_CLI="$STUB" \
+  run env_run EPAM_CLI="$STUB" \
       AI_PROVIDER="qwen" AI_MODEL="" \
       bash "$SCRIPT" <<< "run this for real"
 

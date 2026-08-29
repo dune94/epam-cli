@@ -15,6 +15,11 @@
 # permission are properties of an entry, not reasons for another file.
 # ─────────────────────────────────────────────────────────────────────────────
 
+# `env` does not execute its command in every environment this suite runs in — on 2026-08-28
+# `env FOO=1 echo hello` produced no output and exited 0, so these assertions ran against
+# nothing and failed for a reason that had nothing to do with the pipeline.
+load "../helpers/env-run"
+
 setup() {
     REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
     SCRIPTS="$REPO_ROOT/orchestrations/scripts"
@@ -143,26 +148,26 @@ load_helper() {
 
 @test "roster_dir refuses when the project is not declared" {
     load_helper
-    run env -u EPAM_PROJECT_CONFIG_DIR bash -c ". '$SCRIPTS/lib/roster-read.sh'; roster_dir"
+    run env_run -u EPAM_PROJECT_CONFIG_DIR bash -c ". '$SCRIPTS/lib/roster-read.sh'; roster_dir"
     [ "$status" -ne 0 ] || { echo "roster_dir returned success with no project: $output"; false; }
     [[ "$output" == *"EPAM_PROJECT_CONFIG_DIR"* ]]
 }
 
 @test "roster_file names the roster inside the project dir" {
     load_helper
-    run env EPAM_PROJECT_CONFIG_DIR="$WORK/project" bash -c ". '$SCRIPTS/lib/roster-read.sh'; roster_file"
+    run env_run EPAM_PROJECT_CONFIG_DIR="$WORK/project" bash -c ". '$SCRIPTS/lib/roster-read.sh'; roster_file"
     [ "$output" = "$WORK/project/roster.json" ]
 }
 
 @test "roster_persona returns the persona, and FAILS for an unknown agent" {
     run make_roster "$WORK"
     load_helper
-    run env NODE_BIN="$NODE" EPAM_PROJECT_CONFIG_DIR="$WORK/project" \
+    run env_run NODE_BIN="$NODE" EPAM_PROJECT_CONFIG_DIR="$WORK/project" \
         bash -c ". '$SCRIPTS/lib/roster-read.sh'; roster_persona review-agent"
     [ "$status" -eq 0 ] || { echo "$output"; false; }
     [[ "$output" == "[project]"* ]]
 
-    run env NODE_BIN="$NODE" EPAM_PROJECT_CONFIG_DIR="$WORK/project" \
+    run env_run NODE_BIN="$NODE" EPAM_PROJECT_CONFIG_DIR="$WORK/project" \
         bash -c ". '$SCRIPTS/lib/roster-read.sh'; roster_persona no-such-agent"
     [ "$status" -ne 0 ] || { echo "an unknown agent succeeded — that is an empty system prompt"; false; }
     # a stack trace in a run log reads as a pipeline crash, not a stated defect
@@ -171,7 +176,7 @@ load_helper() {
 
 @test "roster_persona FAILS when the roster is absent — never an empty string" {
     load_helper
-    run env NODE_BIN="$NODE" EPAM_PROJECT_CONFIG_DIR="$WORK/nowhere" \
+    run env_run NODE_BIN="$NODE" EPAM_PROJECT_CONFIG_DIR="$WORK/nowhere" \
         bash -c ". '$SCRIPTS/lib/roster-read.sh'; roster_persona review-agent"
     [ "$status" -ne 0 ]
     # (a `[ ... ] || true` line stood here and asserted nothing — removed rather than left to
@@ -182,12 +187,12 @@ load_helper() {
 @test "roster_agents_of_kind answers the write perimeter's question, and refuses without a roster" {
     run make_roster "$WORK"
     load_helper
-    run env NODE_BIN="$NODE" EPAM_PROJECT_CONFIG_DIR="$WORK/project" \
+    run env_run NODE_BIN="$NODE" EPAM_PROJECT_CONFIG_DIR="$WORK/project" \
         bash -c ". '$SCRIPTS/lib/roster-read.sh'; roster_agents_of_kind implementer"
     [ "$status" -eq 0 ]
     [ "$output" = "typescript-engineer" ]
 
-    run env NODE_BIN="$NODE" EPAM_PROJECT_CONFIG_DIR="$WORK/nowhere" \
+    run env_run NODE_BIN="$NODE" EPAM_PROJECT_CONFIG_DIR="$WORK/nowhere" \
         bash -c ". '$SCRIPTS/lib/roster-read.sh'; roster_agents_of_kind implementer"
     [ "$status" -ne 0 ] || {
         echo "an absent roster produced an implementer list — that either locks or opens the codeline"
@@ -198,10 +203,10 @@ load_helper() {
 @test "roster_exists REPORTS absence and never chooses a fallback" {
     run make_roster "$WORK"
     load_helper
-    run env EPAM_PROJECT_CONFIG_DIR="$WORK/project" \
+    run env_run EPAM_PROJECT_CONFIG_DIR="$WORK/project" \
         bash -c ". '$SCRIPTS/lib/roster-read.sh'; roster_exists"
     [ "$status" -eq 0 ]
-    run env EPAM_PROJECT_CONFIG_DIR="$WORK/nowhere" \
+    run env_run EPAM_PROJECT_CONFIG_DIR="$WORK/nowhere" \
         bash -c ". '$SCRIPTS/lib/roster-read.sh'; roster_exists"
     [ "$status" -ne 0 ]
 }

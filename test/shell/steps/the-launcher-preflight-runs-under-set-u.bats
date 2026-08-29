@@ -16,6 +16,11 @@
 # nothing else defined. If it references a name the launcher does not have, it aborts here.
 # ─────────────────────────────────────────────────────────────────────────────
 
+# `env` does not execute its command in every environment this suite runs in — on 2026-08-28
+# `env FOO=1 echo hello` produced no output and exited 0, so these assertions ran against
+# nothing and failed for a reason that had nothing to do with the pipeline.
+load "../helpers/env-run"
+
 setup() {
     REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
     SCRIPTS="$REPO_ROOT/orchestrations/scripts"
@@ -50,7 +55,7 @@ perimeter_block() {
 
 @test "IT RUNS UNDER set -u with a roster present" {
     blk="$(perimeter_block)"
-    run env -u NODE_BIN EPAM_PROJECT_CONFIG_DIR="$WORK/proj" PRD_FILE="$WORK/prd.json" \
+    run env_run -u NODE_BIN EPAM_PROJECT_CONFIG_DIR="$WORK/proj" PRD_FILE="$WORK/prd.json" \
         bash -c "set -euo pipefail
                  error(){ echo \"ERR: \$*\"; }; info(){ echo \"INFO: \$*\"; }
                  . '$SCRIPTS/lib/roster-read.sh'
@@ -69,7 +74,7 @@ perimeter_block() {
     # The other branch. A first run has no roster, and the block must report that rather than
     # abort: refusing here would block the very run that produces one.
     blk="$(perimeter_block)"
-    run env -u NODE_BIN EPAM_PROJECT_CONFIG_DIR="$WORK/absent" PRD_FILE="$WORK/prd.json" \
+    run env_run -u NODE_BIN EPAM_PROJECT_CONFIG_DIR="$WORK/absent" PRD_FILE="$WORK/prd.json" \
         bash -c "set -euo pipefail
                  error(){ echo \"ERR: \$*\"; }; info(){ echo \"INFO: \$*\"; }
                  . '$SCRIPTS/lib/roster-read.sh'
@@ -82,7 +87,7 @@ perimeter_block() {
 @test "an agentRole the roster does not hold is REFUSED, not warned" {
     printf '%s' '{"stories":[{"id":"T-1","agentRole":"nobody-agent"}]}' > "$WORK/prd.json"
     blk="$(perimeter_block)"
-    run env -u NODE_BIN EPAM_PROJECT_CONFIG_DIR="$WORK/proj" PRD_FILE="$WORK/prd.json" \
+    run env_run -u NODE_BIN EPAM_PROJECT_CONFIG_DIR="$WORK/proj" PRD_FILE="$WORK/prd.json" \
         bash -c "set -euo pipefail
                  error(){ echo \"ERR: \$*\"; }; info(){ echo \"INFO: \$*\"; }
                  . '$SCRIPTS/lib/roster-read.sh'

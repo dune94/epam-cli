@@ -569,7 +569,11 @@ function put(urlPath, payload) {
   });
 }
 
-module.exports = { sse, sseToolCalls, anthropicSse, anthropicSseToolCalls };
+module.exports = {
+  sse, sseToolCalls, anthropicSse, anthropicSseToolCalls,
+  // Exported so a test can put the stand-in through the CONSUMER'S OWN GATE, without a run.
+  contractStandIn, expectsARole, standInRoleName,
+};
 
 // RUNNING IS OPT-IN. Requiring this file used to EXECUTE the whole registration pass — which
 // meant a test that imported it hit MockServer, and the two SSE framings could not be unit
@@ -611,7 +615,11 @@ function expectsARole(spec) {
     const declared = [...projectEntities()];
     return spec.enum.some((v) => declared.includes(v));
   }
-  return /\brole\b/i.test(String(spec.description || ''));
+  // SINGULAR AND PLURAL BOTH NAME A ROLE. The role-assigner's field describes itself as "MUST be
+  // one of the offered roles, verbatim" — plural — and \brole\b does not match "roles", so the one
+  // property this function exists to recognise was the one it missed. The stand-in fell through to
+  // the generic string branch and the assigner offered a role with no profile entry.
+  return /\broles?\b/i.test(String(spec.description || ''));
 }
 
 /** The wrapper key a tagged payload uses for this seam, or '' when items are bare. */
@@ -664,12 +672,27 @@ function contractStandIn(seam) {
     const ents = [...projectEntities()];
     const build = (name, spec) => {
       const t = (spec && spec.type) || 'string';
+      // A STAND-IN THAT FAILS THE CONSUMER'S GATE IS NOT A STAND-IN.
+      //
+      // Every string was once filled with `stand-in for <seam>`, and the mint refused its own
+      // answer four rehearsals running — unrecognised kind, then a name with spaces in it, then a
+      // rationale under the declared minimum, then a name routing to no seam. Each read in the log
+      // exactly like a pipeline defect. The contract states all four; this reads them.
+      if (Array.isArray(spec && spec.enum) && spec.enum.length) return spec.enum[0];
       if (t === 'array') return [];
       if (t === 'number' || t === 'integer') return 0;
       if (t === 'boolean') return false;
       if (t === 'object') return {};
       if (/role|agent|name/i.test(name) && ents.length) return ents[0];
-      return `stand-in for ${seam}`;
+      // A NAME MUST LOOK LIKE A NAME: the mint refuses one that is not kebab-case.
+      if (/name|role|id$/i.test(name)) {
+        return `stand-in-${String(seam).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
+      }
+      // LENGTH IS PART OF THE CONTRACT: a rationale under the declared minimum "says nothing".
+      const base = `stand-in reply for the ${seam} seam, long enough to satisfy the contract's`
+        + ' declared minimum so the consumer judges the WIRING rather than the prose';
+      const min = Number(spec && spec.minLength) || 0;
+      return base.length >= min ? base : base.padEnd(min, ' .');
     };
     // ONE ROLE PER STORY, NOT THE SAME ROLE TWICE.
     //
@@ -687,12 +710,19 @@ function contractStandIn(seam) {
         // A FIELD IS ROLE-VALUED WHEN ITS OWN SCHEMA SAYS SO, not when its name matches a list
         // kept here. The property describes itself — "MUST be one of the offered roles" — and that
         // description is the seam's statement about its own contract, which is the thing to read.
-        if (story && _ents.length && expectsARole((schema.properties || {})[k])) {
-          o[k] = _ents[(idx || 0) % _ents.length];
-          continue;
+        if (story && expectsARole((schema.properties || {})[k])) {
+          // EXPECTATIONS ARE REGISTERED BEFORE THE RUN, so roles the mint registers DURING it are
+          // not on disk yet and projectEntities() is legitimately empty here. Inventing a name made
+          // the assigner offer a role with no profile entry — "the writer would run with an empty
+          // system prompt" — so where the project declares nothing yet, the assigner names the SAME
+          // role the mint's stand-in registers, because both are built from the same registry.
+          if (_ents.length) { o[k] = _ents[(idx || 0) % _ents.length]; continue; }
+          const minted = standInRoleName('implementer');
+          if (minted) { o[k] = minted; continue; }
         }
         o[k] = build(k, (schema.properties || {})[k]);
       }
+      nameItForItsKind(o, schema);
       return o;
     };
     // ONE ITEM PER STORY WHERE THE SCHEMA IS PER-STORY.
@@ -722,6 +752,55 @@ function contractStandIn(seam) {
  * Read from the project's own declarations, never listed here — a different project has different
  * roles and must need no change to this file.
  */
+/**
+ * A NAME IS NOT FREE TEXT: THE SUFFIX IS WHAT ROUTES IT.
+ *
+ * mint-agents-step resolves every proposed name to a seam and refuses one routing nowhere, so a
+ * stand-in named after the seam that generated it ("stand-in-agent-mint") is refused for the same
+ * reason a badly-suffixed real proposal is: nothing can run the role. The permitted suffixes are
+ * not knowledge to keep here — the seam registry declares them per kind, exactly as the mint's own
+ * prompt rule is derived — so the suffix is READ from the registry and put through resolveSeam
+ * before it is emitted. A stand-in that cannot prove it routes asserts nothing.
+ */
+function standInRoleName(kind) {
+  let registry = null;
+  let resolveSeam = null;
+  try {
+    // eslint-disable-next-line global-require
+    const si = require('./lib/seam-invocation.js');
+    resolveSeam = si.resolveSeam;
+    registry = JSON.parse(require('node:fs').readFileSync(si.registryPath(), 'utf8'));
+  } catch (_) { return null; }
+
+  const patterns = Array.isArray(registry.seamPatterns) ? registry.seamPatterns : [];
+  // A PATTERN DECLARING THIS KIND OUTRANKS ONE DECLARING NONE. Registry order alone gave an
+  // "implementer" the -analyst suffix — analyst declares no kind, so nothing excluded it — and the
+  // project registered a failure analyst as its only implementation role.
+  const ordered = [
+    ...patterns.filter((r) => r && kind && r.kind === kind),
+    ...patterns.filter((r) => r && !r.kind),
+  ];
+  for (const r of ordered) {
+    const suffix = String(r.match || r.pattern || '').replace(/[^a-z-]/gi, '').replace(/^-+/, '');
+    if (!suffix) continue;
+    const candidate = `stand-in-${suffix}`;
+    try {
+      if (resolveSeam(candidate)) return candidate;
+    } catch (_) { /* this suffix does not route; try the next the registry declares */ }
+  }
+  return null;
+}
+
+/** Give a built item the name its declared kind routes under. */
+function nameItForItsKind(o, schema) {
+  const props = (schema && schema.properties) || {};
+  const nameKey = Object.keys(o).find((k) => /^name$/i.test(k));
+  if (!nameKey || typeof o[nameKey] !== 'string') return;
+  const kindKey = Object.keys(o).find((k) => Array.isArray((props[k] || {}).enum));
+  const routed = standInRoleName(kindKey ? o[kindKey] : null);
+  if (routed) o[nameKey] = routed;
+}
+
 function projectEntities() {
   const dir = process.env.EPAM_PROJECT_CONFIG_DIR || '';
   const names = new Set();

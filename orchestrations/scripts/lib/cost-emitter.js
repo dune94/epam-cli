@@ -222,9 +222,43 @@ function appendLedgerRecord({ ledgerFile, agent, storyId, phase, model, cost, tu
  * Best-effort: never throws, never blocks the caller.
  * @returns {object|null} the emitted event, or null if there was nothing to emit.
  */
+/**
+ * THE COMPLETION, OUT OF WHATEVER SHAPE THE RUNNER RETURNED IT IN.
+ *
+ * The cost seam already reads the provider's whole JSON to count tokens, so the reply has been in
+ * that string all along while every trace recorded out=4ch. Runners shape the result differently,
+ * exactly as they shape usage differently — which is why the token parser above already accepts
+ * input_tokens, inputTokens and input. This reads text with the same tolerance, and returns empty
+ * rather than inventing something when there is genuinely no text to find.
+ */
+function replyTextFrom(j) {
+  if (!j || typeof j !== 'object') return '';
+  if (typeof j.result === 'string' && j.result) return j.result;
+  if (typeof j.completion === 'string' && j.completion) return j.completion;
+  if (Array.isArray(j.content)) {
+    const parts = j.content
+      .map((b) => (b && typeof b.text === 'string' ? b.text : ''))
+      .filter(Boolean);
+    if (parts.length) return parts.join('\n');
+  }
+  if (Array.isArray(j.choices) && j.choices.length) {
+    const m = j.choices[0] && j.choices[0].message;
+    if (m && typeof m.content === 'string' && m.content) return m.content;
+  }
+  if (typeof j.text === 'string' && j.text) return j.text;
+  return '';
+}
+
+function _parsedResult(text) {
+  try { return JSON.parse(text); } catch { return null; }
+}
+
 function emitCostSnapshot({
   resultFile, activityFile, ledgerFile, agent, storyId, phase, model, provider, turns, startedAt, endedAt, rung,
   logDir,
+  // The PROMPT, when the caller has it: the cost seam never sees the prompt, only the caller
+  // that built it does, so it is offered here rather than guessed at downstream.
+  input,
 }) {
   try {
     if (!resultFile || !activityFile) return null;
@@ -273,6 +307,8 @@ function emitCostSnapshot({
       require('./langfuse-emit.js').emitGeneration({
         agent, storyId, phase, model, provider, turns, rung,
         startedAt, endedAt,
+        // The words, not just the price. Read from the result this function already holds.
+        output: replyTextFrom(_parsedResult(raw)),
         costUsd: cost.costUsd, tokensIn: cost.tokensIn, tokensOut: cost.tokensOut,
         cacheRead: cost.tokensCached, cacheCreate: cost.tokensCacheCreate,
         costIsEstimate: cost.costIsEstimate,
@@ -296,4 +332,7 @@ function emitCostSnapshot({
   }
 }
 
-module.exports = { parseCostRecord, buildCostSnapshot, appendLedgerRecord, emitCostSnapshot };
+module.exports = {
+  parseCostRecord, buildCostSnapshot, appendLedgerRecord, emitCostSnapshot,
+  replyTextFrom,
+};

@@ -73,6 +73,83 @@ function sessionId(env) {
  * One LLM call, as a Langfuse trace + generation. Returns false when disabled or when the
  * backend refused it; never throws.
  */
+/**
+ * THE INGESTION PAYLOAD, BUILT WHERE IT CAN BE TESTED.
+ *
+ * Kept separate from the POST so a test can assert what a trace CARRIES without a Langfuse to
+ * send it to. The fields that were missing for the life of this pipeline — input and output —
+ * are exactly the ones no test could have caught while the body was built inside the request.
+ */
+function buildIngestionBody(f, ids) {
+  const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : Number(v) || 0);
+  const traceId = (ids && ids.traceId) || '';
+  const genId = (ids && ids.genId) || `${traceId}-gen`;
+  const started = (ids && ids.started) || f.startedAt || new Date().toISOString();
+  const ended = (ids && ids.ended) || f.endedAt || started;
+  const name = f.agent || f.name || 'agent';
+  const session = (ids && ids.session) || '';
+  const body = {
+  batch: [
+    {
+      id: `${traceId}-t`,
+      type: 'trace-create',
+      timestamp: started,
+      body: {
+        id: traceId,
+        name,
+        // Absent stays absent: an empty sessionId is not a session.
+        ...(session ? { sessionId: session } : {}),
+        userId: f.storyId || undefined,
+        metadata: {
+          phase: f.phase || '',
+          story_id: f.storyId || '',
+          provider: f.provider || '',
+          // The rung this call ran on — what makes an escalation visible here as well as in
+          // the cost ledger.
+          ladder_rung: f.rung === undefined || f.rung === null || f.rung === '' ? null : num(f.rung),
+        },
+        tags: [f.provider || '', f.phase || ''].filter(Boolean),
+      },
+    },
+    {
+      id: `${genId}-e`,
+      type: 'generation-create',
+      timestamp: started,
+      body: {
+        id: genId,
+        traceId,
+        name,
+        startTime: started,
+        endTime: ended,
+        model: f.model || '',
+        usage: {
+          input: num(f.tokensIn),
+          output: num(f.tokensOut),
+          unit: 'TOKENS',
+          totalCost: num(f.costUsd),
+        },
+        // WHAT WAS ACTUALLY SAID. Every observation this pipeline ever wrote read in=4ch out=4ch —
+        // the string "null" — because the body carried no such fields. Cost and tokens were traced;
+        // the prompt and the completion were not, for any agent, successful or failed. So a
+        // content-shaped failure could only be diagnosed by paying for another run, and "replay it
+        // from Langfuse" was never possible: there is nothing in there to replay.
+        //
+        // Absent stays absent: an empty string would read as "the model answered with nothing"
+        // rather than "we never captured it".
+        ...(f.input ? { input: f.input } : {}),
+        ...(f.output ? { output: f.output } : {}),
+        metadata: {
+          turns: num(f.turns),
+          cache_read_tokens: num(f.cacheRead),
+          cache_create_tokens: num(f.cacheCreate),
+          cost_is_estimate: !!f.costIsEstimate,
+        },
+      },
+    },
+  ],
+  };
+  return body;
+}
 async function emitGeneration(f = {}, env = process.env) {
   const cfg = config(env);
   if (!cfg) return false;
@@ -92,57 +169,7 @@ async function emitGeneration(f = {}, env = process.env) {
     .digest('hex');
   const genId = `${traceId}-gen`;
 
-  const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : Number(v) || 0);
-  const body = {
-    batch: [
-      {
-        id: `${traceId}-t`,
-        type: 'trace-create',
-        timestamp: started,
-        body: {
-          id: traceId,
-          name,
-          // Absent stays absent: an empty sessionId is not a session.
-          ...(session ? { sessionId: session } : {}),
-          userId: f.storyId || undefined,
-          metadata: {
-            phase: f.phase || '',
-            story_id: f.storyId || '',
-            provider: f.provider || '',
-            // The rung this call ran on — what makes an escalation visible here as well as in
-            // the cost ledger.
-            ladder_rung: f.rung === undefined || f.rung === null || f.rung === '' ? null : num(f.rung),
-          },
-          tags: [f.provider || '', f.phase || ''].filter(Boolean),
-        },
-      },
-      {
-        id: `${genId}-e`,
-        type: 'generation-create',
-        timestamp: started,
-        body: {
-          id: genId,
-          traceId,
-          name,
-          startTime: started,
-          endTime: ended,
-          model: f.model || '',
-          usage: {
-            input: num(f.tokensIn),
-            output: num(f.tokensOut),
-            unit: 'TOKENS',
-            totalCost: num(f.costUsd),
-          },
-          metadata: {
-            turns: num(f.turns),
-            cache_read_tokens: num(f.cacheRead),
-            cache_create_tokens: num(f.cacheCreate),
-            cost_is_estimate: !!f.costIsEstimate,
-          },
-        },
-      },
-    ],
-  };
+  const body = buildIngestionBody(f, { traceId, genId, started, ended, session });
 
   try {
     const ctl = new AbortController();
@@ -166,7 +193,7 @@ async function emitGeneration(f = {}, env = process.env) {
   }
 }
 
-module.exports = { emitGeneration, config, sessionId };
+module.exports = { emitGeneration, buildIngestionBody, config, sessionId };
 
 // CLI edge, so the bash cost seam can use the SAME implementation rather than a second one
 // written in jq and curl. Reads one JSON object on stdin.

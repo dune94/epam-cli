@@ -8977,6 +8977,9 @@ function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
       if (!_costFile) return;
       try {
         emitCostSnapshot({
+          // The prompt this call actually ran on. Only the caller that built it has it — the cost
+          // seam downstream never sees it, which is why every trace recorded in=4ch.
+          input: typeof prompt === 'string' ? prompt : '',
           startedAt: _callStartedAt,
           logDir: process.env.LOG_DIR || process.env.EPAM_PROJECT_OUTPUT_DIR || '',
           resultFile: _costFile,

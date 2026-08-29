@@ -272,6 +272,27 @@ function resolveSeam(agent, file, opts) {
   //    pattern meant for a family.
   if (profiles[agent]) return agent;
 
+  // 1b. A NAMESPACED KEY IS STILL THIS AGENT'S OWN DECLARATION.
+  //
+  // The QA gates are declared as `qa-gate:<name>` while everything that calls one names it bare:
+  // the roster lists `runtime-boundary`, and profiles.json holds its persona under that name. The
+  // exact match above missed, so a gate fell through to the family suffix patterns below — and
+  // five of the eight resolved only because their names happen to end in a suffix declared for
+  // some OTHER family (-validator, -ranger, -hunter, -weaver, -sentinel). The three whose names do
+  // not — sast, e2e, runtime-boundary — resolved to nothing and would have run with no ladder, no
+  // effort and no tool grants. runtime-boundary had never once executed.
+  //
+  // An agent's own declaration must outrank a family rule, whatever namespace it is filed under,
+  // so this sits with rule 1 and above the patterns. Two namespaces declaring the same bare name
+  // is an ambiguity nobody decided: it is refused rather than guessed.
+  const namespaced = Object.keys(profiles).filter((k) => k.slice(k.indexOf(':') + 1) === agent
+    && k.includes(':'));
+  if (namespaced.length === 1) return namespaced[0];
+  if (namespaced.length > 1) {
+    throw new Error(`'${agent}' is declared under more than one namespace (${namespaced.join(', ')}); `
+      + 'name the seam on the agent\'s roster entry to say which one it enters by');
+  }
+
   // 2. The explicit cross-reference: this agent enters by this seam. Named agents that are
   //    not themselves profiles live here, and an entry always beats a pattern — a family rule
   //    must never override a decision someone made deliberately about one agent.

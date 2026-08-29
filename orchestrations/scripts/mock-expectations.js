@@ -1001,6 +1001,21 @@ function endsInToolCall(cap, seam) {
 }
 
 (async () => {
+  // A HARNESS THAT CANNOT SEE THE PROJECT MUST SAY SO, NOT STAND IN FOR IT ANYWAY.
+  //
+  // Registration happens BEFORE the run, in a separate process, so it only sees the project when
+  // the operator hands it the same environment the run uses. Registered without it, projectStories()
+  // returns empty, every per-story stand-in loses its storyId, and the run dies three stages later
+  // with `stand-in-role-assigner was assigned "stand-in-role-assigner"` — which reads like an
+  // assignment defect and is not one. Two rehearsals were spent on that. Silence is the defect;
+  // this is the exit status the operator can act on.
+  if (!projectStories().length) {
+    console.error('mock-expectations: this project declares no stories, so every per-story stand-in');
+    console.error('would answer for no story and the run would fail at assignment.');
+    console.error('Set PRD_FILE (or EPAM_PROJECT_CONFIG_DIR) to the project this rehearsal is for:');
+    console.error(`  PRD_FILE=${'<path to prd.json>'} node orchestrations/scripts/mock-expectations.js`);
+    process.exit(1);
+  }
   await put('/mockserver/reset');
   const all = seams();
   const covered = [];

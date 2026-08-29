@@ -6205,6 +6205,34 @@ COORDINATOR_PROMPT_AMENDMENT=""
 #
 # Retrying is for conditions that might differ next time. This is not one of them: report the
 # offending option and stop, so the operator fixes the flag instead of paying for eleven repeats.
+# require_profile <persona-key> <profiles-file>
+#
+# THE BRIEF, OR NOTHING — never prose written here.
+#
+# Three call sites carried `[ -z "$x" ] && x="You are a ..."`, so a missing roster entry silently
+# substituted a persona that no prompt file holds, no review ever saw, and no project can
+# specialise. All three keys exist in both roster sources, which means the fallback could only fire
+# when the roster was BROKEN — exactly when running anyway is worst, and the resulting verdict is
+# one nobody can audit or reproduce.
+#
+# The pipeline already knows the right answer: runtime-boundary refuses "with no instructions", and
+# team-lead-review refuses rather than review on an empty brief. A gate that declines is
+# recoverable. A gate that invents its own instructions is not.
+require_profile() {
+    local _key="${1:-}" _file="${2:-}"
+    local _brief=""
+    [ -n "$_key" ] || { error "  [profile] no persona key given — refusing to invent one"; return 1; }
+    if [ -n "$_file" ] && [ -f "$_file" ]; then
+        _brief=$(jq -r --arg k "$_key" '.[$k] // ""' "$_file" 2>/dev/null || echo "")
+    fi
+    if [ -z "$_brief" ] || [ "$_brief" = "null" ]; then
+        error "  [profile] '${_key}' has no brief in ${_file:-<no profiles file>} — refusing to run it on"
+        error "  [profile] prose written in this script. Mint the roster, or restore profiles.json."
+        return 1
+    fi
+    printf '%s' "$_brief"
+}
+
 classify_invocation_refusal() {
     local _out="${1:-}" _exit="${2:-1}"
     [ "$_exit" -ne 0 ] || return 1
@@ -7015,9 +7043,8 @@ run_prd_change_reviewer() {
     [ "$change_type" = "kb_entry" ] && _profile_key="kb-change-reviewer"
     local reviewer_profile=""
     if [ -f "$profiles_file" ]; then
-        reviewer_profile=$(jq -r --arg k "$_profile_key" '.[$k] // ""' "$profiles_file" 2>/dev/null || echo "")
+        reviewer_profile=$(require_profile "$_profile_key" "$profiles_file" || true)
     fi
-    [ -z "$reviewer_profile" ] && reviewer_profile="You are a change reviewer. Validate the proposed change and emit {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}."
 
     local review_prompt
     # RENDERED FROM THE TEMPLATE LAYER. Values go via a FILE, never argv: before/after carry
@@ -7515,9 +7542,8 @@ run_failure_analyst() {
     # Load failure-analyst profile from profiles.json (role-level instructions)
     local analyst_profile=""
     if [ -f "$profiles_file" ]; then
-        analyst_profile=$(jq -r '."failure-analyst" // ""' "$profiles_file" 2>/dev/null || echo "")
+        analyst_profile=$(require_profile "failure-analyst" "$profiles_file" || true)
     fi
-    [ -z "$analyst_profile" ] && analyst_profile="You are a self-healing pipeline analyst. Diagnose the exact root cause of the test failure and prescribe the minimum fix so the NEXT retry succeeds."
 
     # Dependency contract injection (added 2026-07-07): same ground-truth
     # mechanism already proven for build_implementation_prompt() — the
@@ -9033,9 +9059,8 @@ run_retry_extension_coordinator() {
     local profiles_file="$(dirname "$SCRIPT_DIR")/agents/profiles.json"
     local coordinator_profile=""
     if [ -f "$profiles_file" ]; then
-        coordinator_profile=$(jq -r '."retry-extension-coordinator" // ""' "$profiles_file" 2>/dev/null || echo "")
+        coordinator_profile=$(require_profile "retry-extension-coordinator" "$profiles_file" || true)
     fi
-    [ -z "$coordinator_profile" ] && coordinator_profile="You are the retry-extension coordinator. Given hard evidence about a story's self-heal history, decide whether one more bounded batch of retries is pragmatic."
 
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
     local ac_count

@@ -3,6 +3,9 @@
 # A service URL has one home: config/services.json, read through this helper.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/service-urls.sh" 2>/dev/null || true
 
+# How much evidence each agent is shown, by name — see config/evidence-windows.json.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/evidence-windows.sh" 2>/dev/null || true
+
 # Master orchestration script for parallel multi-agent execution
 # Coordinates worktree-based parallel Claude agents across all EPAM CLI project phases
 
@@ -1519,7 +1522,7 @@ _lint_fix_findings_directly() {
     # grep reading a FILE still dies on SIGPIPE when head exits after 25 lines: a lint log with
     # more than 25 findings killed the caller. Collect first, take second.
     _lf_all=$(grep -oE '^[^ ]+\.[A-Za-z]+:[0-9]+:[0-9]+ +[^ ]+ +.*' "$_lf_log" 2>/dev/null || true)
-    _lf_findings=$(head -25 <<< "$_lf_all")
+    _lf_findings=$(head -n "$(evidence_window lintFindingLines)" <<< "$_lf_all")
     [ -n "$_lf_findings" ] || return 1
 
     # Scope: ONLY the files the gate flagged. Nothing else is touched.
@@ -1689,7 +1692,7 @@ $_qg_prompt"
             if [ -f "$_qg_log" ] && grep -q "has been written" "$_qg_log" 2>/dev/null; then
                 _qg_class="answered_via_write_tool"
             fi
-            head -c 8000 "$_qg_log" 2>/dev/null | \
+            head -c "$(evidence_window gateLogChars)" "$_qg_log" 2>/dev/null | \
                 FAILURE_CLASS="$_qg_class" \
                 kb_record_episode "${_qg_phase:-}" "$_qg_slug" "gate produced no verdict" "$_qg_class" || true
             kb_apply_constraints "$_qg_slug" "story:${_qg_phase:-}" || true
@@ -8583,7 +8586,7 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
             if [ -f "$SCRIPT_DIR/lib/kb-apply.sh" ]; then
                 # shellcheck disable=SC1090
                 . "$SCRIPT_DIR/lib/kb-apply.sh"
-                head -c 8000 "$_lint_log" 2>/dev/null | \
+                head -c "$(evidence_window lintLogChars)" "$_lint_log" 2>/dev/null | \
                     kb_record_episode "${_phase:-${PHASE:-core}}" "lint-gate" "lint gate failed" || true
             fi
             info "  [lint-gate:analyst] Extracting grounded finding from lint log..."
@@ -9217,7 +9220,7 @@ $sast_prompt"
                 local _err_count
                 _err_count=$(echo "$_tsc_out" | { grep -c "error TS" 2>/dev/null || true; })
                 tsc_summary="tsc: FAIL (exit $_tsc_rc) — $_err_count error(s)
-$(echo "$_tsc_out" | head -40)"
+$(echo "$_tsc_out" | head -n "$(evidence_window typecheckLines)")"
             fi
         else
             tsc_summary="(tsc oracle skipped — node or tsc binary not found at $PROJECT_ROOT)"
@@ -9609,7 +9612,7 @@ $review_prompt"
                         fi
                         _src_content="$_src_content
 --- $_f ---
-$(head -100 "$PROJECT_ROOT/$_f" 2>/dev/null || echo '(unreadable)')${_mut_src_marker}"
+$(head -n "$(evidence_window mutationSourceLines)" "$PROJECT_ROOT/$_f" 2>/dev/null || echo '(unreadable)')${_mut_src_marker}"
                     done <<< "$_changed_src"
                 fi
                 # The tests to judge are THIS RUN'S tests. This used to be
@@ -9640,7 +9643,7 @@ $(head -100 "$PROJECT_ROOT/$_f" 2>/dev/null || echo '(unreadable)')${_mut_src_ma
                     fi
                     _test_content="$_test_content
 --- $_tf ---
-$(head -60 "$_tf" 2>/dev/null || echo '(unreadable)')${_mut_test_marker}"
+$(head -n "$(evidence_window mutationTestLines)" "$_tf" 2>/dev/null || echo '(unreadable)')${_mut_test_marker}"
                 done <<< "$_test_files"
                 _cp_vals=$(mktemp "${TMPDIR:-/tmp}/qa-evidence-labels-vals-XXXXXX.json")
                 jq_vals \
@@ -10579,7 +10582,7 @@ _failure_is_tolerated() {
             # HERESTRING, NOT A PIPE. `printf ... | head -150` kills this script: head takes its
             # lines and exits, printf gets SIGPIPE and dies 141, pipefail promotes it and set -e
             # ends the run -- silently. Measured at 141; it is what killed run 5 in the reviewer.
-            failure_excerpt=$(head -150 <<< "$_failure_excerpt_full")
+            failure_excerpt=$(head -n "$(evidence_window failureExcerptLines)" <<< "$_failure_excerpt_full")
             failure_excerpt="${failure_excerpt}
 [TRUNCATED — ${_failure_excerpt_lines} total lines, only the first 150 shown.]"
         else

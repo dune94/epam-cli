@@ -1,0 +1,49 @@
+{
+  "$what": "HOW MUCH EVIDENCE EACH AGENT SEES, named so it can be changed.",
+  "$why": [
+    "These were literals at their call sites — head -c 8000 of a gate log, head -40 of a compiler's",
+    "output, head -100 of a source file — and every one decides what an agent is shown and therefore",
+    "what it can conclude. A number with no name cannot be tuned by an operator, cannot appear in a",
+    "cost estimate, and cannot be found by anyone asking why an agent missed something that was three",
+    "lines past the cut.",
+    "",
+    "Declared here so a project can widen a window when its evidence is larger, and so the audit that",
+    "counts unnamed decisions stops counting these.",
+    "",
+    "UNITS ARE IN THE NAME. `Chars` is a byte window (head -c); `Lines` is a line window (head -n)."
+  ],
+  "windows": {
+    "gateLogChars": {
+      "value": 8000,
+      "$why": "A QA gate's log, handed to the self-heal analyst. Long enough for a stack trace and the assertion around it."
+    },
+    "lintLogChars": {
+      "value": 8000,
+      "$why": "The lint log for the same analyst — same shape of evidence, same window."
+    },
+    "typecheckLines": {
+      "value": 40,
+      "$why": "Compiler errors are one line each and the first are the causes; the rest are usually consequences."
+    },
+    "lintFindingLines": {
+      "value": 25,
+      "$why": "Lint findings handed to a writer as a correction list."
+    },
+    "failureExcerptLines": {
+      "value": 150,
+      "$why": "A failing test's output. Wide, because the assertion and the value that produced it can be far apart."
+    },
+    "mutationSourceLines": {
+      "value": 100,
+      "$why": "The source file a mutant-hunter reasons about."
+    },
+    "mutationTestLines": {
+      "value": 60,
+      "$why": "The test file paired with it."
+    },
+    "storyTitleLines": {
+      "value": 10,
+      "$why": "A list of story titles for context, not for analysis."
+    }
+  }
+}

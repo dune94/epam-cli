@@ -3,6 +3,9 @@
 # The run's spend figure comes from the ACTIVE SET, not a vendor hardcoded here.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/spend-probe.sh" 2>/dev/null || true
 
+# How much evidence each agent is shown, by name — see config/evidence-windows.json.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/evidence-windows.sh" 2>/dev/null || true
+
 # EPAM CLI Orchestration Script - AI-driven development loop
 # This script orchestrates Claude Code CLI for autonomous story implementation
 #
@@ -4106,7 +4109,7 @@ run_vendor_integrity_check() {
     [ "${#tampered[@]}" -eq 0 ] && return 0
 
     local details
-    details=$(head -20 <<< "$(printf '%s\n' "${tampered[@]}")")
+    details=$(head -n "$(evidence_window tamperedFileLines)" <<< "$(printf '%s\n' "${tampered[@]}")")
     VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nFile(s) inside a vendored/third-party dependency directory were modified — this is never legitimate (only NEW dependencies should be added via the manifest, never an existing installed package edited directly). Revert this change and fix the ACTUAL problem (e.g. wrong package.json config, missing devDependency) instead:\n\n%s\n' "$details")
     {
         echo ""
@@ -5201,7 +5204,7 @@ run_external_verification() {
         {
             echo ""
             echo "=== External verification TIMED OUT after ${_test_timeout}s ==="
-            echo "$test_output" | head -60
+            echo "$test_output" | head -n "$(evidence_window testOutputLines)"
         } >> "$output_file"
         return 1
     fi
@@ -5264,7 +5267,7 @@ run_external_verification() {
         {
             echo ""
             echo "=== External verification failed (exit $test_exit) ==="
-            echo "$test_output" | head -60
+            echo "$test_output" | head -n "$(evidence_window testOutputLines)"
         } >> "$output_file"
         return 1
     fi
@@ -5310,7 +5313,7 @@ _attempt_change_summary() {
                            [ -n "$_u" ] || continue
                            printf ' %s | new file\n' "$_u"
                        done
-                   fi; } | grep -vE '^[[:space:]]*$' | head -60 )
+                   fi; } | grep -vE '^[[:space:]]*$' | head -n "$(evidence_window changedFileLines)" )
     fi
 
     if [ -z "$(printf '%s' "$_stat" | tr -d '[:space:]')" ]; then
@@ -5400,7 +5403,7 @@ _run_declared_lint_gate() {
     export DETERMINISTIC_CHECK_FAILURE
     STORY_REJECTION_KEY="lint:${story_id}"
     VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe repository lints with `%s` and it rejects your change:\n\n```\n%s\n```\n\nFix these before the change can be committed.\n' \
-        "$_cmd" "$(printf '%s' "$_dl_out" | head -40)")
+        "$_cmd" "$(printf '%s' "$_dl_out" | head -n "$(evidence_window lintOutputLines)")")
     export VERIFICATION_FAILURE
     printf '%s\n' "$_dl_out" >> "$output_file" 2>/dev/null || true
     return 1
@@ -5556,7 +5559,7 @@ run_repo_lint_verification() {
 
     error "  [repo-lint] $story_id: the repository's own eslint rejects ${#_files[@]} changed file(s) —"
     error "  [repo-lint]   the pre-commit hook will refuse this commit and lint-staged will REVERT the work."
-    printf '%s\n' "$_lint_output" | head -40 >&2
+    printf '%s\n' "$_lint_output" | head -n "$(evidence_window lintOutputLines)" >&2
 
     # THE CHANNEL THE WRITER ACTUALLY READS.
     #
@@ -5613,7 +5616,7 @@ run_repo_lint_verification() {
         echo "These violations are in files THIS story changed. They are not optional:"
         echo "the hook rejects the commit and lint-staged then reverts your work away."
         echo ""
-        printf '%s\n' "$_lint_output" | head -40
+        printf '%s\n' "$_lint_output" | head -n "$(evidence_window lintOutputLines)"
     } >> "$output_file" 2>/dev/null || true
     return 1
 }
@@ -5836,7 +5839,7 @@ run_tsc_verification() {
         {
             echo ""
             echo "=== the project type check failed (exit $_tsc_exit) — new errors introduced by this story ==="
-            echo "$_new_errors" | head -60
+            echo "$_new_errors" | head -n "$(evidence_window typecheckErrorLines)"
         } >> "$output_file"
         return 1
     fi

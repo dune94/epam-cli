@@ -44,6 +44,26 @@
     "storyTitleLines": {
       "value": 10,
       "$why": "A list of story titles for context, not for analysis."
+    },
+    "testOutputLines": {
+      "value": 60,
+      "$why": "A failing or timed-out test run, appended to what the writer reads. The assertion and the values that produced it are usually near the top."
+    },
+    "typecheckErrorLines": {
+      "value": 60,
+      "$why": "New type errors introduced by a story, handed to the writer as the thing to fix."
+    },
+    "lintOutputLines": {
+      "value": 40,
+      "$why": "Lint violations in files this story changed — the writer must fix these or the pre-commit hook reverts its work."
+    },
+    "changedFileLines": {
+      "value": 60,
+      "$why": "The list of files a story changed, shown as context rather than analysed."
+    },
+    "tamperedFileLines": {
+      "value": 20,
+      "$why": "Files touched inside a vendored directory. A handful names the problem; a long list does not change the verdict."
     }
   }
 }

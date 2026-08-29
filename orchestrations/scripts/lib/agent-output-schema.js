@@ -273,4 +273,27 @@ function validateDeclaredOutput(seam, parsed) {
   return { ok: true, reason: '', declared: true };
 }
 
-module.exports = { validateTaggedOutput, validateDeclaredOutput, declaredContracts, TAG_TO_TOOL, itemSchemaFor };
+/**
+ * unwrapEnvelope(payload, key) — the answer a model wrapped in a one-element array.
+ *
+ * The agent-mint asked for {"proposedAgents": [...]} and received
+ *
+ *     [{"proposedAgents":[{"name":"commerce-checkout-engineer", ...}]}]
+ *
+ * The parse looked for the key at the top level, found an Array, and rejected it — three times,
+ * because a content retry cannot change a shape the model considers correct. metrolinx AMSD-1919
+ * died there on 2026-08-29, after discovery, minting and a grounded roster review had all worked.
+ *
+ * ONE element only. A two-element array is a model that answered twice and there is no way to know
+ * which it meant, so it is refused exactly as before. Every field is still validated afterwards:
+ * this removes an envelope, never a check.
+ */
+function unwrapEnvelope(payload, key) {
+  if (!Array.isArray(payload) || payload.length !== 1) return payload;
+  const only = payload[0];
+  if (!only || typeof only !== 'object' || Array.isArray(only)) return payload;
+  if (!key || !Object.prototype.hasOwnProperty.call(only, key)) return payload;
+  return only;
+}
+
+module.exports = { unwrapEnvelope, validateTaggedOutput, validateDeclaredOutput, declaredContracts, TAG_TO_TOOL, itemSchemaFor };

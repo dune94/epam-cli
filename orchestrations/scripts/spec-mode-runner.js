@@ -24,6 +24,7 @@ const path = require('node:path');
 const { renderEngineTemplate } = require('./lib/engine-prompt.js');
 const os = require('node:os');
 const { spawn, execSync } = require('node:child_process');
+const { unwrapEnvelope } = require('./lib/agent-output-schema.js');
 // Lazily loaded: this file is executed from an ISOLATED COPY by some callers
 // (see guarded-step-retry-history.test.ts), so a hard top-level require of a
 // sibling lib would break them at load time rather than at use.
@@ -4016,8 +4017,14 @@ Do not propose a role that duplicates one of the canonical roles already listed 
         { ..._mintEnv, ...seamInvocationEnv('agent-mint', logDir, { rung: Math.max(0, (attempt || 1) - 1) }) },
       );
     },
-    parse: (payload) => {
+    parse: (payloadIn) => {
+      let payload = payloadIn;
       if (!payload) return { ok: false, reason: 'the response could not be parsed as JSON at all' };
+      // A model may wrap its answer in a one-element array; that is still the answer. Every field
+      // below is validated exactly as before — this removes an envelope, not a check. metrolinx
+      // AMSD-1919 died on this shape three times on 2026-08-29, after discovery, minting and a
+      // grounded roster review had all succeeded.
+      payload = unwrapEnvelope(payload, 'proposedAgents');
       if (!Array.isArray(payload.proposedAgents)) {
         return { ok: false, reason: 'the response had no "proposedAgents" array' };
       }

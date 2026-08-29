@@ -717,8 +717,12 @@ function contractStandIn(seam) {
           // system prompt" — so where the project declares nothing yet, the assigner names the SAME
           // role the mint's stand-in registers, because both are built from the same registry.
           if (_ents.length) { o[k] = _ents[(idx || 0) % _ents.length]; continue; }
-          const minted = standInRoleName('implementer');
-          if (minted) { o[k] = minted; continue; }
+          // ASK THE MINT WHAT IT MINTED, rather than naming a kind here. Passing a literal kind
+          // would put the harness's own opinion of what an implementation role is beside the
+          // mint's, and the two would drift apart silently. The mint's stand-in is right here:
+          // whatever IT names is what the roster will hold, so the assigner offers exactly that.
+          const minted = mintedRoleNames();
+          if (minted.length) { o[k] = minted[(idx || 0) % minted.length]; continue; }
         }
         o[k] = build(k, (schema.properties || {})[k]);
       }
@@ -799,6 +803,56 @@ function nameItForItsKind(o, schema) {
   const kindKey = Object.keys(o).find((k) => Array.isArray((props[k] || {}).enum));
   const routed = standInRoleName(kindKey ? o[kindKey] : null);
   if (routed) o[nameKey] = routed;
+}
+
+/**
+ * THE NAMES THE MINT'S OWN STAND-IN REGISTERS.
+ *
+ * Expectations are registered before the run, so the roster is empty on disk when the assigner's
+ * stand-in is built. Rather than guess a name — or hardcode the kind that would produce one — this
+ * asks the mint's stand-in what it will register, and the assigner offers exactly those. The two
+ * cannot disagree, because there is only one answer and both read it.
+ */
+function mintedRoleNames() {
+  // WHICH SEAM PROPOSES AGENTS IS A STRUCTURAL QUESTION, NOT A NAME TO TYPE HERE.
+  //
+  // Naming the seam would be the only literal seam name in the engine, and it would go stale the
+  // moment the seam is renamed or split. The seam that proposes agents is the one whose contract
+  // ENUMERATES THE AGENT KINDS — that is what makes it the mint — so it is found by that.
+  let seamName = null;
+  let bestCovers = 0;
+  try {
+    // eslint-disable-next-line global-require
+    const { declaredContracts, itemSchemaFor } = require('./lib/agent-output-schema.js');
+    // eslint-disable-next-line global-require
+    const kinds = require('./lib/agent-roster.js').agentKinds();
+    const declared = declaredContracts();
+    for (const [name, c] of Object.entries(declared)) {
+      if (!c || c.kind !== 'schema' || !c.tag) continue;
+      const props = (itemSchemaFor(c.tag) || {}).properties || {};
+      // DRAWN FROM the kind vocabulary, and the seam that covers MOST of it is the one proposing
+      // agents. The roster declares a kind the mint does not propose, so requiring the same length
+      // found no seam at all; and a threshold ("at least two") would be a number nobody decided.
+      // Ranking needs neither: whichever contract's enum covers the most agent kinds is the mint,
+      // and a contract covering none is not a candidate at all.
+      const covers = Object.values(props).reduce((best, spec) => {
+        if (!Array.isArray(spec && spec.enum) || !spec.enum.length) return best;
+        if (!spec.enum.every((v) => kinds.includes(v))) return best;
+        return Math.max(best, spec.enum.length);
+      }, 0);
+      if (covers > bestCovers) { bestCovers = covers; seamName = name; }
+    }
+  } catch (_) { return []; }
+  if (!seamName) return [];
+
+  let stood = null;
+  try { stood = contractStandIn(seamName); } catch (_) { return []; }
+  if (!stood) return [];
+  const items = Array.isArray(stood) ? stood
+    : (stood.agents || stood.projectAgents || [stood]);
+  return items
+    .map((a) => a && a.name)
+    .filter((n) => typeof n === 'string' && n.trim());
 }
 
 function projectEntities() {

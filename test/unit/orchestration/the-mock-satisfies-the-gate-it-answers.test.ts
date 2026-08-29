@@ -53,4 +53,23 @@ describe('the mock satisfies the gate it answers', () => {
       codeline: '*',
     }), `the minted implementer name is not usable: ${minted}`).toBeFalsy();
   });
+
+  it('the assigner offers exactly the role the mint mints', () => {
+    // Not "a role of the right kind" — THE role. Expectations are registered before the run, so
+    // the roster is empty on disk and any independently-derived name is a guess. Both stand-ins
+    // read the one answer, so they cannot disagree.
+    const mint = mock.contractStandIn('agent-mint');
+    const minted = (Array.isArray(mint) ? mint : (mint.agents || [mint])).map((a: any) => a.name);
+    expect(minted.length, 'the mint must mint something for this to mean anything').toBeGreaterThan(0);
+
+    const assigned = mock.contractStandIn('role-assigner');
+    const rows = Array.isArray(assigned) ? assigned : [assigned];
+    expect(rows.length, 'the assigner must answer for at least one story').toBeGreaterThan(0);
+
+    for (const row of rows) {
+      expect(row.storyId, 'an assignment that names no story answers for none').toBeTruthy();
+      expect(minted, `story ${row.storyId} was assigned a role the mint never minted`)
+        .toContain(row.agentRole);
+    }
+  });
 });

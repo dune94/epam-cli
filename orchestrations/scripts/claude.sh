@@ -6217,7 +6217,11 @@ classify_invocation_refusal() {
     [ -n "$_line" ] || return 1
 
     local _opt
-    _opt=$(printf '%s' "$_line" | grep -oE -m1 -- "--[a-z0-9-]+" | head -1)
+    # NO `| head -1`: under pipefail head closes the pipe, grep dies of SIGPIPE and the assignment
+    # fails on a line that matched perfectly well. grep -m1 already stops at the first match, so the
+    # head was redundant as well as harmful. Caught by sigpipe-under-pipefail.bats — a suite that had
+    # never executed until the day this line was written.
+    _opt=$(printf '%s' "$_line" | grep -oE -m1 -- "--[a-z0-9-]+" || true)
     warning "  Coordinator[L1]: the CLI REFUSED its own command line -- ${_opt:-<option>} is not"
     warning "    acceptable to the installed binary, so every retry fails identically before any"
     warning "    token is sent. Not retryable. Fix the flag, then re-run."

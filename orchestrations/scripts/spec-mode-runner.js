@@ -4002,6 +4002,10 @@ Do not propose a role that duplicates one of the canonical roles already listed 
   let _mintAttempt = 0;
   const proposals = await retryUntilParsedAsync({
     what: 'agent-mint proposals',
+    // Keep the WHOLE rejected reply. The excerpt in the log cut off at 2000 characters, so when
+    // this rejected `[{"proposedAgents":[...]}]` three times on 2026-08-29 there was no way to tell
+    // whether the envelope held one element or several — and the next step had to be a guess.
+    logDir,
     attempts: Number(process.env.EPAM_CONTENT_RETRY_ATTEMPTS || 3),
     log: (m) => process.stderr.write(`${m}\n`),
     // ATTEMPT N RUNS RUNG N-1. This re-invoked the same model on every attempt, so a

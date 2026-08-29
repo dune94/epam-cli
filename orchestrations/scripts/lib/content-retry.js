@@ -73,16 +73,44 @@ function _text(raw) {
  * EMPTY AND MALFORMED ARE DIFFERENT FAILURES and must not report identically: one is a transport
  * or budget problem, the other a contract problem, and they are fixed in different places.
  */
-function _giveUpMessage(what, budget, raw, reason) {
+/**
+ * THE REPLY THAT FAILED IS THE ONLY EVIDENCE OF WHY — so it is written whole.
+ *
+ * The give-up message carries the first 2000 characters and the rest was discarded. On 2026-08-29
+ * the agent-mint rejected `[{"proposedAgents":[...]}]` three times; a fix to unwrap that envelope
+ * was written and committed, the next paid run failed identically, and whether the array held ONE
+ * element (the fix should have fired) or several (it correctly refuses) could not be established
+ * because nothing kept the reply. The next step had to be a guess — and guessing is what made the
+ * two fixes before it wrong.
+ */
+function _persistRejected(logDir, what, text) {
+  if (!logDir || !text) return '';
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const slug = String(what).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const file = path.join(logDir, `rejected-${slug}-${stamp}.txt`);
+    fs.mkdirSync(logDir, { recursive: true });
+    fs.writeFileSync(file, text);
+    return file;
+  } catch {
+    return '';
+  }
+}
+
+function _giveUpMessage(what, budget, raw, reason, logDir) {
   const text = _text(raw);
   const shape = text.trim().length === 0
     ? 'the answer was EMPTY (no text at all — a transport or budget failure, not a format one)'
     : `the answer was ${text.length} characters long and did not parse`;
+  const kept = _persistRejected(logDir, what, text);
   return `${what}: gave up after ${budget} attempt(s). ${shape}. Last rejection: ${reason}.\n`
-    + `--- what it actually returned (first 2000 chars) ---\n${text.slice(0, 2000)}\n---`;
+    + `--- what it actually returned (first 2000 chars) ---\n${text.slice(0, 2000)}\n---`
+    + (kept ? `\n--- the FULL reply is kept at ${kept} ---` : '');
 }
 
-function retryUntilParsed({ call, parse, attempts = 3, what = 'response', log = () => {} }) {
+function retryUntilParsed({ call, parse, attempts = 3, what = 'response', log = () => {}, logDir = '' }) {
   const budget = Math.max(1, Number(attempts) || 1);
   let raw = '';
   let reason = '';
@@ -145,7 +173,7 @@ function retryUntilParsed({ call, parse, attempts = 3, what = 'response', log = 
     } catch { /* a diagnostic must never fail the run it is diagnosing */ }
   }
 
-  throw new Error(_giveUpMessage(what, budget, raw, reason));
+  throw new Error(_giveUpMessage(what, budget, raw, reason, logDir));
 }
 
 /**
@@ -159,7 +187,7 @@ function retryUntilParsed({ call, parse, attempts = 3, what = 'response', log = 
  * Deliberately a separate function rather than a sync/async hybrid: a function that sometimes
  * returns a promise is a bug waiting for the one caller that forgets to await it.
  */
-async function retryUntilParsedAsync({ call, parse, attempts = 3, what = 'response', log = () => {} }) {
+async function retryUntilParsedAsync({ call, parse, attempts = 3, what = 'response', log = () => {}, logDir = '' }) {
   const budget = Math.max(1, Number(attempts) || 1);
   let raw = '';
   let reason = '';
@@ -212,7 +240,7 @@ async function retryUntilParsedAsync({ call, parse, attempts = 3, what = 'respon
       }
     } catch { /* a diagnostic must never fail the run it is diagnosing */ }
   }
-  throw new Error(_giveUpMessage(what, budget, raw, reason));
+  throw new Error(_giveUpMessage(what, budget, raw, reason, logDir));
 }
 
 module.exports = { retryUntilParsed, retryUntilParsedAsync };

@@ -12,7 +12,13 @@
 
 setup() {
   REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../../.." && pwd)"
-  SCRIPT="${REPO_ROOT}/orchestrations/scripts/ai-run.sh"
+  # llm-handler.sh, not ai-run.sh: the provider-selection block moved when the pipeline's EIGHT
+  # independent paths to a vendor API were consolidated into one hub, and ai-run.sh became a shim
+  # carrying no logic. This test kept extracting from the shim, found nothing, and failed on its own
+  # vacuity guard — correctly, and into the void, because no runner executed .bats files at all.
+  # The guarantee it protects is that a rehearsal never reaches a paid provider, so it has been
+  # unverified since the move.
+  SCRIPT="${REPO_ROOT}/orchestrations/scripts/llm-handler.sh"
   WORK="${BATS_TEST_TMPDIR}/w"
   mkdir -p "$WORK"
 

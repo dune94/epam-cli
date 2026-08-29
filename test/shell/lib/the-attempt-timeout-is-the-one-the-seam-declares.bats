@@ -16,7 +16,7 @@
 
 setup() {
   REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../../.." && pwd)"
-  AI_RUN="${REPO_ROOT}/orchestrations/scripts/ai-run.sh"
+  AI_RUN="${REPO_ROOT}/orchestrations/scripts/llm-handler.sh"
   FN="${BATS_TEST_TMPDIR}/fn.sh"
   # Extract the watchdog through its closing brace.
   awk '/^_ai_attempt_timeout\(\)/,/^}/' "$AI_RUN" > "$FN"

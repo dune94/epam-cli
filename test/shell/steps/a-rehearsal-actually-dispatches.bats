@@ -13,7 +13,11 @@
 
 setup() {
   REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../../.." && pwd)"
-  SCRIPT="${REPO_ROOT}/orchestrations/scripts/ai-run.sh"
+  # llm-handler.sh, not ai-run.sh: the provider block moved when eight independent paths to a
+  # vendor API were consolidated into one hub, leaving ai-run.sh a logic-free shim. The test
+  # extracted from the shim, found nothing, and failed on its own vacuity guard — into the
+  # void, because no runner executed .bats files at all.
+  SCRIPT="${REPO_ROOT}/orchestrations/scripts/llm-handler.sh"
   WORK="${BATS_TEST_TMPDIR}/w"
   mkdir -p "$WORK/cassette"
 

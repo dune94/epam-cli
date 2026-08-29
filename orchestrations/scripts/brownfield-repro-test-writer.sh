@@ -21,6 +21,9 @@
 # Exit: always 0 (best-effort). The repro-gate is the enforcer. Escape: EPAM_SKIP_REPRO_TEST_WRITER=1.
 set -uo pipefail
 
+# How much evidence each agent is shown, by name — see config/evidence-windows.json.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/evidence-windows.sh" 2>/dev/null || true
+
 # _run_project_verification <project_root>
 # Runs the project's declared check (.epam/verification.json) via the verification plugin.
 # The engine names no tool, extension, directory or runtime path. Undeclared -> non-zero with a
@@ -207,10 +210,10 @@ _choose_target() {
     local _sites _vcs _cands _ask _ans
     _sites=$(jq -r --arg id "$STORY_ID" \
         '(.stories[]? | select(.id == $id) | .fixSiteAnalysis // [])[] | "  - \(.file): \(.finding // .reason // .change // "")"' \
-        "$PRD_FILE" 2>/dev/null | head -20)
+        "$PRD_FILE" 2>/dev/null | head -n "$(evidence_window fixSitesForReproWriter)")
     _vcs=$(jq -r --arg id "$STORY_ID" \
         '(.stories[]? | select(.id == $id) | .verificationCriteria // [])[] | "  - \(if type=="object" then (.criterion // .text // tostring) else tostring end)"' \
-        "$PRD_FILE" 2>/dev/null | head -20)
+        "$PRD_FILE" 2>/dev/null | head -n "$(evidence_window vcsForReproWriter)")
     _cands=$(printf '  - %s\n' "${FIX_FILES[@]}")
     _ask=$(printf 'A change was made and must now be covered by ONE test.\n\nFiles this change touched:\n%s\n\nThe plan'"'"'s sites and what each does:\n%s\n\nWhat the test must prove:\n%s\n\nWhich ONE of the touched files carries the behaviour a test would exercise to prove those criteria? Not the file that merely configures or wires it — the one whose logic would be wrong if the criteria failed.\n\nReply with the file path only, exactly as listed above. No prose.\n' \
         "$_cands" "${_sites:-  (none recorded)}" "${_vcs:-  (none recorded)}")
@@ -564,7 +567,7 @@ _validate_written_test() {
             log "written test FAILS against the committed fix (${_failed}/${total}) — rejecting so the writer can retry"
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/repro-feedback-vals-XXXXXX.json")
             jq_vals \
-                  --arg failure_json "$(printf '%s' "$json" | head -c 1200)" \
+                  --arg failure_json "$(printf '%s' "$json" | head -c "$(evidence_window reproFailureJsonChars)")" \
                   --arg failed "${_failed}" \
                   --arg total "${total}" \
                   '{"__FAILURE_JSON__":$failure_json,"__FAILED__":$failed,"__TOTAL__":$total}' > "$_cp_vals"

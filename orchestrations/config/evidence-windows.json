@@ -84,6 +84,22 @@
     "vcSubjectChars": {
       "value": 160,
       "$why": "The subject line of a fallback verification criterion, trimmed so a whole description does not become the criterion."
+    },
+    "fixSitesForReproWriter": {
+      "value": 20,
+      "$why": "Fix sites shown to the repro-test writer, so the test it writes exercises the located behaviour rather than a guess."
+    },
+    "vcsForReproWriter": {
+      "value": 20,
+      "$why": "Verification criteria shown alongside them — the observable behaviour the test must assert."
+    },
+    "reproFailureJsonChars": {
+      "value": 1200,
+      "$why": "The failure payload returned when a written test fails against the committed fix, fed back so the writer can correct it."
+    },
+    "quarantineRawChars": {
+      "value": 2000,
+      "$why": "The raw agent output kept on a quarantined KB record. Enough to diagnose why it was rejected without storing an entire transcript."
     }
   }
 }

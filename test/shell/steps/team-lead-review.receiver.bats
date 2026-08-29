@@ -90,7 +90,18 @@ RUNNER
       "$REPO_ROOT/orchestrations/agents/profiles.canonical.json" \
       "$REPO_ROOT/orchestrations/scripts/lib/project-roster.js"
     export PHASE=core
+    # A real run always declares which stack it is on; the fixture did not, so the ladder
+    # resolver had neither a project settings file nor a set to fall back to.
+    export EPAM_PROVIDER_SET="$(jq -r .defaultSet "$REPO_ROOT/orchestrations/config/provider-sets.json")"
     export EPAM_MODEL=test-model
+    # THE TIER ORDER COMES FROM THE STACK NOW. Seams ask for a ladder POSITION (base|mid|top) and the
+    # order they index into used to live in each project's llm-settings.json. The 2026-08-25
+    # migration moved it to the active provider set, so this fixture's empty project dir left the
+    # reviewer unable to resolve 'top' and it stopped before invoking anything — reported as the very
+    # regression this file exists to reproduce. A real run always has the order; so does this now.
+    export EPAM_MODEL_LADDER_TIER_ORDER="$(jq -r '(.ladderTierOrder // []) | join(",")' \
+        "$REPO_ROOT/orchestrations/config/llm-defaults.$(jq -r .defaultSet \
+        "$REPO_ROOT/orchestrations/config/provider-sets.json").json")"
     export ORCH_GATE_MODEL=test-model
 
     # THE ENGINE ALWAYS PERSISTS A RUNG BEFORE REVIEW. claude.sh writes it on every attempt

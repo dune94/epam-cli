@@ -16,6 +16,21 @@
  */
 import { describe, it, expect } from 'vitest';
 
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+
+// A TEST MUST NOT DEPEND ON THE SHELL THAT LAUNCHED IT. This passed only when the caller happened
+// to export PRD_FILE; without it projectStories() is empty, every per-story stand-in loses its
+// story, and the assertion fails for a reason that has nothing to do with what it tests. The
+// project is DISCOVERED — the first one declaring stories — so no path is written down here.
+const PROJECTS = path.join(__dirname, '../../../orchestrations/projects');
+const withStories = fs.readdirSync(PROJECTS)
+  .map((d) => path.join(PROJECTS, d, 'prd.json'))
+  .find((f) => {
+    try { return (JSON.parse(fs.readFileSync(f, 'utf8')).stories || []).length > 0; } catch { return false; }
+  });
+if (withStories) process.env.PRD_FILE = withStories;
+
 const mock = require('../../../orchestrations/scripts/mock-expectations.js');
 const roster = require('../../../orchestrations/scripts/lib/agent-roster.js');
 

@@ -289,11 +289,34 @@ function validateDeclaredOutput(seam, parsed) {
  * this removes an envelope, never a check.
  */
 function unwrapEnvelope(payload, key) {
-  if (!Array.isArray(payload) || payload.length !== 1) return payload;
-  const only = payload[0];
-  if (!only || typeof only !== 'object' || Array.isArray(only)) return payload;
-  if (!key || !Object.prototype.hasOwnProperty.call(only, key)) return payload;
-  return only;
+  // AN ENVELOPE IS NOT ALWAYS EXACTLY ONE ELEMENT DEEP.
+  //
+  // This required `length === 1`, so a model that emitted its answer beside a note, or put it
+  // second, or nested it one layer further, was told its key was absent when it was present.
+  // metrolinx AMSD-1919 halted on that reading after discovery, minting and a grounded roster
+  // review had all succeeded — the whole ticket abandoned over packaging.
+  //
+  // Removing an envelope is not accepting a wrong answer: every field is still validated by the
+  // caller exactly as before. This decides only WHERE the answer is, and it refuses to decide
+  // when the payload gives two candidates, because that is an ambiguity nobody declared.
+  if (!key || !Array.isArray(payload)) return payload;
+
+  const holdsKey = (v) => v && typeof v === 'object' && !Array.isArray(v)
+    && Object.prototype.hasOwnProperty.call(v, key);
+
+  const found = [];
+  const visit = (node, depth) => {
+    if (!Array.isArray(node) || depth > 2) return;
+    for (const el of node) {
+      if (holdsKey(el)) found.push(el);
+      else if (Array.isArray(el)) visit(el, depth + 1);
+    }
+  };
+  visit(payload, 0);
+
+  // Exactly one element carries the key: that element IS the answer. None, or several, and the
+  // payload comes back untouched so the caller rejects it — never invented, never merged.
+  return found.length === 1 ? found[0] : payload;
 }
 
 module.exports = { unwrapEnvelope, validateTaggedOutput, validateDeclaredOutput, declaredContracts, TAG_TO_TOOL, itemSchemaFor };

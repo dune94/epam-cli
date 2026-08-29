@@ -54,8 +54,13 @@ resolve_primary_provider() {
     _first=$(printf '%s' "$_routable" | jq -r '.[0] // empty')
     [ -n "$_first" ] || { printf '%s' "$_env_provider"; return 0; }
     if [ -n "$_env_provider" ]; then
-        warning "  [provider] '${_env_provider}' is not routable by the '${_set}' set — using '${_first}'."
-        warning "  [provider] The set is the launch's own choice; the env value was left by something else."
+        # STDERR DIRECTLY, not warning(): this runs before llm-handler.sh defines its log helpers,
+        # and under `set -euo pipefail` a command-not-found aborts the whole substitution — which
+        # left the provider as whatever the environment said and failed the metrolinx run of
+        # 2026-08-29 a SECOND time, with this very fix in place. A diagnostic must not be able to
+        # break the thing it is diagnosing.
+        printf '%s\n' "  [provider] '${_env_provider}' is not routable by the '${_set}' set — using '${_first}'." >&2
+        printf '%s\n' "  [provider] The set is the launch's own choice; the env value was left by something else." >&2
     fi
     printf '%s' "$_first"
 }

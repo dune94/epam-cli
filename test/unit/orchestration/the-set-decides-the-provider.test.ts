@@ -31,7 +31,13 @@ const HANDLER = join(ROOT, 'orchestrations/scripts/llm-handler.sh');
 /** Ask the real resolver, in the real file, under a given environment. */
 function resolve(env: Record<string, string>) {
   const r = spawnSync('bash', ['-c',
-    `warning(){ echo "WARN $*" >&2; }; info(){ :; }; log(){ :; }
+    `# NO warning()/info()/log() DEFINED — deliberately.
+     #
+     # The first version of the resolver called warning(), which llm-handler.sh does not define at
+     # the point the provider is chosen. Under set -euo pipefail that is "command not found", the
+     # command substitution aborts, and the provider silently stays whatever the environment said.
+     # The metrolinx run of 2026-08-29 failed a second time on exactly that, with the fix in place.
+     # The harness leaves them undefined so the resolver must not depend on them.
      SCRIPT_DIR=${JSON.stringify(join(ROOT, 'orchestrations/scripts'))}
      eval "$(sed -n '/^resolve_primary_provider() {/,/^}/p' ${JSON.stringify(HANDLER)})"
      resolve_primary_provider`,

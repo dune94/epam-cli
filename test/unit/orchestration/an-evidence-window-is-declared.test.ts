@@ -12,9 +12,11 @@
 
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+const require_ = createRequire(import.meta.url);
 const ROOT = join(__dirname, '../../../');
 const LIB = join(ROOT, 'orchestrations/scripts/lib/evidence-windows.sh');
 const CONFIG = join(ROOT, 'orchestrations/config/evidence-windows.json');
@@ -52,5 +54,24 @@ describe('EVERY WINDOW IS READ FROM ITS DECLARATION', () => {
 
   it('names the window it could not find, so it can be declared', () => {
     expect(win('noSuchWindow')).toMatch(/noSuchWindow/);
+  });
+});
+
+describe('THE SHELL AND JS READERS SHARE ONE DECLARATION', () => {
+  // Two files declaring the same number is how a limit comes to half-apply: this pipeline already
+  // had a lint window written twice, and raising one of them changed nothing anybody could see.
+  const js = require_(join(ROOT, 'orchestrations/scripts/lib/evidence-windows.js'));
+
+  it('every declared window resolves identically in both', () => {
+    const doc = JSON.parse(readFileSync(CONFIG, 'utf8'));
+    for (const name of Object.keys(doc.windows)) {
+      const fromShell = win(name).replace(/^OK:/, '').trim();
+      expect(String(js.evidenceWindow(name)), `${name} differs between the readers`)
+        .toBe(fromShell);
+    }
+  });
+
+  it('the JS reader THROWS on an unknown name rather than defaulting', () => {
+    expect(() => js.evidenceWindow('noSuchWindow')).toThrow(/not declared/);
   });
 });

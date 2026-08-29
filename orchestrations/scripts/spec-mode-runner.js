@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+const { evidenceWindow } = require('./lib/evidence-windows.js');
 // Local tool caps are DECLARED — config/tool-timeouts.json. A literal here would be a
 // second home for a decision that already has one.
 const { toolTimeoutMs } = require('./lib/tool-timeouts.js');
@@ -2903,7 +2904,7 @@ function findVcMechanism(vc, storyId, vocabulary) {
 // passing findVcMechanism — see vc-fallback-grounded-in-detective.test.ts.
 function safeFallbackVc(story, findings) {
   const subject = String((story && (story.title || story.description)) || 'the behavior described in the ticket')
-    .replace(/\s+/g, ' ').trim().slice(0, 160);
+    .replace(/\s+/g, ' ').trim().slice(0, evidenceWindow('vcSubjectChars'));
   const located = Array.isArray(findings) ? findings.find((f) => f && f.file) : null;
   const locationNote = located ? ` (located near ${located.file}${located.function ? `, ${located.function}` : ''})` : '';
   return [
@@ -3689,7 +3690,7 @@ async function mintProjectAgents({
   // came back empty, and the repo path given was the estate root rather than a repository —
   // so the mint invented a vendor and briefed every role on the wrong product's APIs.
   const depBlock = (Array.isArray(declaredDependencies) ? declaredDependencies : [])
-    .slice(0, 300).map((d) => `- ${d}`).join('\n');
+    .slice(0, evidenceWindow('declaredDependenciesInPrompt')).map((d) => `- ${d}`).join('\n');
 
   // ONE ROSTER, ALL CODELINES. The first mint saw a single repository while three were in
   // scope, and wrote that one repository's absolute path into every brief.
@@ -6814,7 +6815,7 @@ function referencedDocsBlock(docs) {
   lines.push('\n## REFERENCED DOCUMENTATION (quoted from sources linked on the ticket — authoritative over assumption)');
   for (const d of list) {
     lines.push(`- ${d.url} [${d.classification}]${d.reason ? ` — ${d.reason}` : ''}`);
-    for (const q of (Array.isArray(d.quotes) ? d.quotes : []).slice(0, 6)) lines.push(`    "${q}"`);
+    for (const q of (Array.isArray(d.quotes) ? d.quotes : []).slice(0, evidenceWindow('quotesPerDocument'))) lines.push(`    "${q}"`);
     if (d.scopeCaveat) lines.push(`    SCOPE CAVEAT: ${d.scopeCaveat}`);
   }
   return lines.join('\n') + '\n';
@@ -6964,7 +6965,7 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, fo
   }
   const fixSiteBlock = detectiveFindings.length
     ? `\n\nLOCATED FIX SITE(S) — traced in this repository before you were asked. Anchor every criterion to the behaviour THIS code produces:\n`
-      + detectiveFindings.slice(0, 5).map((f) => `- ${f.file}${f.function ? ` :: ${f.function}` : ''}${f.reason ? ` — ${f.reason}` : ''}`).join('\n') + '\n'
+      + detectiveFindings.slice(0, evidenceWindow('fixSitesInPrompt')).map((f) => `- ${f.file}${f.function ? ` :: ${f.function}` : ''}${f.reason ? ` — ${f.reason}` : ''}`).join('\n') + '\n'
     : '';
   // detectiveFindings, not story.fixSiteAnalysis: the field is not set until later.
   const declaredFileBlock = manifestFileExcerpts(story, prd, { located: detectiveFindings });

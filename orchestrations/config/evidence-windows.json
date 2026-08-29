@@ -64,6 +64,26 @@
     "tamperedFileLines": {
       "value": 20,
       "$why": "Files touched inside a vendored directory. A handful names the problem; a long list does not change the verdict."
+    },
+    "declaredDependenciesInPrompt": {
+      "value": 300,
+      "$why": "The project's declared dependencies, given to the mint. On 2026-08-07 an empty estate made it invent a vendor, so this list is the guard against that — wide, because the cost of missing one is a whole roster briefed on the wrong product."
+    },
+    "quotesPerDocument": {
+      "value": 6,
+      "$why": "Quotes carried from each ticket-linked document. Enough to establish what the source says without pasting the document."
+    },
+    "fixSitesInPrompt": {
+      "value": 5,
+      "$why": "Located fix sites shown to the spec agent so it anchors criteria to real code rather than guessing."
+    },
+    "filesPerStory": {
+      "value": 3,
+      "$why": "A story's own declared files. A handful is a story; more is a story that should have been split."
+    },
+    "vcSubjectChars": {
+      "value": 160,
+      "$why": "The subject line of a fallback verification criterion, trimmed so a whole description does not become the criterion."
     }
   }
 }

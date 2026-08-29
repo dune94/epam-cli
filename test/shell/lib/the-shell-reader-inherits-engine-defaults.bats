@@ -97,15 +97,34 @@ run_export() {
   [ "$output" = "operator=wins" ]
 }
 
-@test "the REAL metrolinx project exports the same chains it does today" {
-  # Fixture-free regression guard against the shipped config.
+@test "the REAL shipped config exports exactly the chains it declares" {
+  # Fixture-free regression guard against the shipped config — but against the file that OWNS the
+  # ladders, which is no longer the project's. The 2026-08-25 migration moved them into the active
+  # provider set, so reading metrolinx/llm-settings.json exported nothing and this failed on an
+  # architecture working as intended, unnoticed until .bats files first executed on 2026-08-28.
+  #
+  # And it asserted two literal model names. Those are exactly what a stack is allowed to change:
+  # the pair it pinned belonged to a stack this repo no longer runs by default. What must hold is
+  # that what the reader EXPORTS is what the set DECLARES — a property that survives every
+  # legitimate model change, and still catches a reader that drops or invents a chain.
+  local set_file
+  set_file="$REPO_ROOT/orchestrations/config/llm-defaults.$(jq -r .defaultSet \
+      "$REPO_ROOT/orchestrations/config/provider-sets.json").json"
+  [ -f "$set_file" ]
+
+  local declared_highest declared_medium
+  declared_highest=$(jq -r '.ladders.highest.startModel // empty' "$set_file")
+  declared_medium=$(jq -r '.ladders.medium.startModel // empty' "$set_file")
+  [ -n "$declared_highest" ] && [ -n "$declared_medium" ]
+
   run bash -c "
     set -uo pipefail
     export NODE_BIN='$NODE_BIN'
     . '$ML'
-    export_model_ladders '${REPO_ROOT}/orchestrations/projects/metrolinx/llm-settings.json' >/dev/null 2>&1
+    export_model_ladders '$set_file' >/dev/null 2>&1
     printf '%s|%s' \"\${EPAM_MODEL_LADDER_HIGHEST_START:-}\" \"\${EPAM_MODEL_LADDER_MEDIUM_START:-}\"
   "
   [ "$status" -eq 0 ]
-  [ "$output" = "z-ai/glm-5.3|MiniMax-M2.7-highspeed" ]
+  [ "$output" = "${declared_highest}|${declared_medium}" ] || {
+      echo "exported [$output] but the set declares [${declared_highest}|${declared_medium}]"; false; }
 }

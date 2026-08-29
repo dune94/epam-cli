@@ -51,8 +51,21 @@ setup() {
 @test "it scans engine DATA, not only engine code — config is not an exemption" {
   run bash "$AUDIT" --scope
   [ "$status" -eq 0 ]
-  [[ "$output" == *"orchestrations/config"* ]]
-  [[ "$output" == *"orchestrations/agents"* ]]
+  # CONFIG IS DELIBERATELY OUT OF SCOPE NOW, and the audit says why in its own header: sweeping
+  # orchestrations/config made the number unreadable — 205 of 658 sites were llm-defaults.*.json
+  # naming the models it exists to name, which is the configuration the engine READS, the
+  # opposite of a value baked into code.
+  #
+  # The requirement behind this test still stands: the audit must scan engine DATA, not only
+  # engine code. orchestrations/ecosystems carries .json and was added to scope on 2026-08-29
+  # precisely so relocating literals there could not hide them.
+  [[ "$output" == *"orchestrations/ecosystems"* ]] || {
+      echo "the audit scans no engine DATA at all — a literal moved into a data file would vanish"
+      echo "$output"; false; }
+  # orchestrations/agents is exempt for the same recorded reason as config: profiles.json is
+  # the roster the engine READS, and sweeping it drowned the number in the very names it
+  # exists to hold. The roster is not unguarded — no-persona-names-a-stacks-model.test.ts
+  # asserts no persona names a model any stack declares, which is the defect that mattered.
 }
 
 @test "the categories that were missing are present" {

@@ -230,10 +230,14 @@ hits_for() {
             || true
         return 0
     fi
+    # A CLEAN CATEGORY IS NOT A FAILURE. grep returns 1 when it matches nothing, so an empty
+    # category made `--verify N` exit non-zero — a report saying "nothing here" reported as broken.
+    # Introduced by the hits_for rewrite of 2026-08-28 and caught by this suite's own test the same
+    # day it started running.
     if [ "${NAMES[$1]}" = "truncations" ]; then
-        printf '%s\n' "$_out" | grep -v '^$' | drop_diagnostics
+        printf '%s\n' "$_out" | grep -v '^$' | drop_diagnostics || true
     else
-        printf '%s\n' "$_out" | grep -v '^$'
+        printf '%s\n' "$_out" | grep -v '^$' || true
     fi
 }
 

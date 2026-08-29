@@ -14,6 +14,11 @@
 # one that fails open QUIETLY is worse, so the refusal is stated.
 # ─────────────────────────────────────────────────────────────────────────────
 
+# `env` does not execute its command in every environment this suite runs in — on 2026-08-28
+# `env FOO=1 echo hello` produced no output and exited 0, so these assertions ran against
+# nothing. env_run does what env was there for, in-shell.
+load "../helpers/env-run"
+
 setup() {
     REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
     SCRIPTS="$REPO_ROOT/orchestrations/scripts"
@@ -35,7 +40,7 @@ setup() {
 teardown() { rm -rf "$WORK"; }
 
 roles() {  # $1 = project dir
-    env EPAM_PROJECT_CONFIG_DIR="$1" NODE_BIN="$NODE" bash -c \
+    env_run EPAM_PROJECT_CONFIG_DIR="$1" NODE_BIN="$NODE" bash -c \
         ". '$PERIM'; _perimeter_project_roles"
 }
 

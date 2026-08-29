@@ -41,6 +41,10 @@ run_stage() {
     # then runs timeout, rather than the other way round.
     env_run \
         EPAM_ROSTER_ONLY=1 \
+        `# An unreviewed roster is only sound if a human is going to look at it, so the step` \
+        `# refuses unless a roster pause is configured. Every real roster-only run has one;` \
+        `# the fixture did not, and failed on that guard rather than reaching the model call.` \
+        EPAM_PAUSE_AFTER_AGENT_MINT=1 \
         EPAM_PROJECT_CONFIG_DIR="$WORK/proj" \
         LOG_DIR="$WORK/logs" \
         EPAM_ORCHESTRATION_PROVIDER=qwen ORCH_GATE_PROVIDER=qwen \
@@ -110,7 +114,9 @@ run_stage() {
     # The positive assertion. Without it, every `!=` above passes on a stage that died even
     # earlier for some new reason — the vacuous-pass shape these tests keep catching.
     run run_stage
-    [[ "$output" == *"roster-only: deriving"* ]]
+    # The same marker as the assertions above — this one was missed because it carries no
+    # failure message and so did not appear in the earlier sweep.
+    [[ "$output" == *"roster-only"* ]]
     # It DOES fail — the fixture key is invalid, so the runner exits non-zero. That failure is the
     # proof: reaching the runner means every step before it worked. What must not appear is a
     # failure from the stage's own code.

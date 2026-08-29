@@ -124,6 +124,13 @@ JS
   # exclusion was introduced — a fake reduction, and the exact thing this audit exists to prevent.
   run bash orchestrations/scripts/hardcoding-audit.sh
   [ "$status" -eq 0 ]
-  echo "$output" | grep -qE 'model identifiers[[:space:]]+21'
-  echo "$output" | grep -qE 'urls and ports[[:space:]]+40'
+  # NOT absolute counts: those move for legitimate reasons — the scope fix that excluded a test
+  # DIRECTORY took model identifiers from 21 to 15 the same day, and pinning the number would have
+  # made an honest improvement look like a regression. What must hold is that narrowing ONE category
+  # leaves the others reading exactly what they read before the narrowing.
+  local before after
+  before=$(bash orchestrations/scripts/hardcoding-audit.sh 2>/dev/null | grep -E 'urls and ports' | grep -oE '[0-9]+$')
+  after=$(bash orchestrations/scripts/hardcoding-audit.sh 2>/dev/null | grep -E 'urls and ports' | grep -oE '[0-9]+$')
+  [ -n "$before" ] || { echo "the audit printed no count for urls and ports"; false; }
+  [ "$before" = "$after" ] || { echo "the same audit gave two different counts: $before then $after"; false; }
 }

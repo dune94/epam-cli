@@ -24,7 +24,32 @@ if [ "${#FILES[@]}" -eq 0 ]; then
     exit 0
 fi
 
-if ! command -v bats >/dev/null 2>&1; then
+# HOW BATS IS INVOKED HERE, AND WHY NOT THE WRAPPER.
+#
+# bin/bats defines bats_readlinkf, exports it, and does `exec env ... libexec/bats-core/bats`. In
+# this environment an exported bash function does NOT survive a non-bash process: `env | grep
+# BASH_FUNC` returns nothing, though bash->bash inheritance works fine. So the inner runner starts
+# with bats_readlinkf missing, computes an EMPTY BATS_LIBEXEC, cannot find bats-exec-test — and
+# exits 0 having run nothing. That is why 462 tests across 57 files passed in silence.
+#
+# Calling the inner runner directly, with the helper supplied and no `env` in between, is the whole
+# fix. Nothing is patched inside node_modules.
+_bats() {
+    local _root="$ROOT/node_modules/bats"
+    if [ -x "$_root/libexec/bats-core/bats" ]; then
+        bash -c '
+            bats_readlinkf() { readlink -f "$1"; }
+            export -f bats_readlinkf
+            export BATS_ROOT="$1" BATS_LIBDIR=lib
+            shift
+            exec "$BATS_ROOT/libexec/bats-core/bats" "$@"
+        ' _ "$_root" "$@"
+        return $?
+    fi
+    command bats "$@"
+}
+
+if [ ! -x "$ROOT/node_modules/bats/libexec/bats-core/bats" ] && ! command -v bats >/dev/null 2>&1; then
     echo "[shell-tests] bats is not installed — ${#FILES[@]} shell test file(s) CANNOT run." >&2
     echo "[shell-tests] Reporting failure rather than silence: install bats-core, or remove the files." >&2
     exit 2
@@ -32,7 +57,7 @@ fi
 
 _planned=0 _ran=0 _failed=0 _files_ok=0 _files_bad=0
 for f in "${FILES[@]}"; do
-    out=$(bats --tap "$f" 2>&1)
+    out=$(_bats --tap "$f" 2>&1)
     # TAP: "1..N" is the plan; each "ok"/"not ok" is a test that actually executed.
     # THE FILE'S OWN @test COUNT IS THE TRUTH, not the plan the runner prints.
     #

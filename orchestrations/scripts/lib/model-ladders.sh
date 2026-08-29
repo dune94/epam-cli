@@ -54,6 +54,20 @@ export_model_ladders() {
         echo "[model-ladders] jq not on PATH — cannot read $_settings, no ladder chains exported" >&2
         return 1
     }
+    # THE FILE THE CALLER HANDED US, VALIDATED BEFORE THE MERGE.
+    #
+    # There is a JSON check below, but it runs AFTER the resolver merges engine defaults in — and
+    # the resolver ignores a project file it cannot parse and returns the defaults, so that check
+    # only ever sees valid JSON. A malformed llm-settings.json therefore exported the engine's
+    # ladders and returned 0, and the project's own chains vanished with nothing said. A run would
+    # climb a ladder its project never declared.
+    #
+    # Checked here, on the ORIGINAL path, where a parse failure is still attributable to the caller.
+    jq -e . "$_settings" >/dev/null 2>&1 || {
+        echo "[model-ladders] settings file is not valid JSON: $_settings — refusing to export" >&2
+        echo "[model-ladders] engine defaults would silently replace this project's ladders." >&2
+        return 1
+    }
     # THE ENGINE BASE, MERGED IN BEFORE ANYTHING IS READ.
     #
     # A project states only what it changes — the rule config/llm-defaults.json already applies

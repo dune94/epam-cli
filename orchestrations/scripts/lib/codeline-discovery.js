@@ -363,6 +363,14 @@ function extractJsonObject(text) {
 function callLlm(prompt, opts = {}) {
   const tmpPrompt = `/tmp/codeline-discovery-prompt-${process.pid}.txt`;
   fs.writeFileSync(tmpPrompt, prompt);
+  // KEPT WHERE THE TRACE CAN REACH IT. This seam spawns its runner directly rather than going
+  // through runAgentForJson, so nothing recorded its prompt and it was the last agent still
+  // tracing in=4ch after every other had one. Keyed by the agent name, because this seam declares
+  // requiredKeys rather than a tag.
+  try {
+    // eslint-disable-next-line global-require
+    require('./agent-reply-log.js').recordAgentPrompt(opts.costAgent || 'codeline-discovery', prompt);
+  } catch { /* a trace field, never the run */ }
   const debug = process.env.DEBUG_CODELINE_DISCOVERY === '1';
   // COST IS RECORDED, NOT ASSUMED. Discovery makes two model calls per run — the vocabulary
   // agent and the matcher, one of them at effort:high with a 16k output budget — and neither

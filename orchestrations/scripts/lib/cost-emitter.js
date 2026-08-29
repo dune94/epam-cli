@@ -279,6 +279,11 @@ function promptForTrace(explicit, agent) {
       const { declaredContracts } = require('./agent-output-schema.js');
       const c = (declaredContracts() || {})[agent];
       if (c && c.tag) f = promptFileForTag(c.tag);
+      // A SEAM NEED NOT DECLARE A TAG. codeline-discovery declares requiredKeys instead, so there
+      // is no tag to key on — and it was the one agent still recording in=4ch after every other
+      // had a prompt. Its own name is the key then: unique by construction, and the emitter
+      // already has it.
+      if (!f) f = promptFileForTag(agent);
     }
     if (!f) {
       // SAY WHY THE FIELD IS EMPTY. A trace that silently records in=4ch is exactly the condition

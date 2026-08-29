@@ -8773,7 +8773,7 @@ function readAgentRawOutput(logPath) {
   } catch { return ''; }
 }
 
-function extractTaggedJson(text, tag) {
+function _extractTaggedJsonRaw(text, tag) {
   if (!text) return null;
 
   // Normalize variant opening tags that models sometimes emit:
@@ -8837,6 +8837,31 @@ function extractTaggedJson(text, tag) {
 
   return null;
 }
+
+/**
+ * EVERY AGENT'S REPLY, IN EVERY SHAPE A PROVIDER CAN RETURN IT.
+ *
+ * The pipeline's contract is a tagged block. Since --json-schema was wired into the claude arm a
+ * provider may return the object BARE, and a model may wrap either form in a single-element array.
+ * v1.5 passed --json-schema zero times, so that shape never arrived and nothing had to handle it.
+ *
+ * metrolinx AMSD-1919 died three times in the agent-mint on exactly this:
+ *   [{"proposedAgents":[{"name":"gotransit-checkout-investigator", ...}]}]
+ * rejected as "no proposedAgents array". The first fix was applied at ONE call site, which is no
+ * fix at all — every seam extracts the same way.
+ *
+ * ONE element only. Two means the model answered twice and there is no way to know which it meant,
+ * so that is still refused, and every field is validated afterwards exactly as before. This removes
+ * an envelope, never a check.
+ */
+function extractTaggedJson(text, tag) {
+  const out = _extractTaggedJsonRaw(text, tag);
+  if (!Array.isArray(out) || out.length !== 1) return out;
+  const only = out[0];
+  if (!only || typeof only !== 'object' || Array.isArray(only)) return out;
+  return only;
+}
+
 
 // READ AT CALL TIME, not at module load.
 //

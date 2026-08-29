@@ -79,8 +79,19 @@ export_model_ladders() {
     # project actually runs with. If node or the resolver is unavailable the raw project file is
     # used, which is exactly the behaviour before inheritance existed — additive, never a new
     # way to fail.
+    # ONLY MERGE WHEN THE GIVEN FILE IS THE ONE THE RESOLVER WOULD READ.
+    #
+    # The resolver takes a project DIRECTORY and reads llm-settings.json from it. Handed any other
+    # path — a fixture, a set file, a copy under a different name — it finds no project settings,
+    # returns the engine defaults, and those replaced the file the caller explicitly asked for. The
+    # caller's own ladders vanished with nothing said: "I gave you this file, you used another one."
+    #
+    # Inheritance is for a PROJECT stating only what it changes, which is exactly the case where the
+    # basename matches. Anywhere else, the explicit path is the answer.
     local _merged=""
-    if [ -n "${NODE_BIN:-}" ] || command -v node >/dev/null 2>&1; then
+    if [ "$(basename "$_settings")" != "llm-settings.json" ]; then
+        _merged=""
+    elif [ -n "${NODE_BIN:-}" ] || command -v node >/dev/null 2>&1; then
         local _resolver
         _resolver="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/llm-settings-resolve.js"
         if [ -f "$_resolver" ]; then

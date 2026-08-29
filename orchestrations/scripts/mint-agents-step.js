@@ -537,7 +537,48 @@ function validateWorkflow(profilesPath, registryPath) {
   return true;
 }
 
-module.exports = { resolveRepoPath, rosterAgents, resolveCodelines, declaredDependencies, writeRosterDiff, mintTools, provisionPlugins, writeAgentSeamCrossReference, validateWorkflow };
+/**
+ * WHY THE MINT IS BEING SKIPPED, IN WORDS THAT ARE TRUE.
+ *
+ * One hardcoded sentence served two conditions: "mint skipped (EPAM_SKIP_AGENT_MINT=1) — resuming
+ * from a checkpoint". So a roster-only run announced a flag it was never given, and a
+ * start-at-the-beginning run announced a checkpoint that did not exist — three times in the paid
+ * run of 2026-08-28, on a run that had nothing to resume.
+ *
+ * The skip itself is correct; only the justification was false. A false reason is worse than
+ * silence, because a reason gets believed: the roster review then declined itself citing "the run
+ * being resumed" of a run that never existed, and nobody questioned it for months.
+ *
+ * THE ONLY THING THAT MAKES A RUN A RESUME IS EPAM_RESUME_RUN. Everything else is a mode.
+ */
+function mintSkipReason(env) {
+  const e = env || process.env;
+  const rosterOnly = String(e.EPAM_ROSTER_ONLY || '') === '1';
+  const skipMint = String(e.EPAM_SKIP_AGENT_MINT || '') === '1';
+  if (!rosterOnly && !skipMint) return '';
+  const resumeOf = String(e.EPAM_RESUME_RUN || '').trim();
+  const mode = rosterOnly
+    ? 'roster-only mode — identities are derived, nothing is minted'
+    : 'mint skipped (EPAM_SKIP_AGENT_MINT=1)';
+  return resumeOf ? mode + '; resuming ' + resumeOf + ' from its checkpoint' : mode;
+}
+
+/**
+ * WHY THE ROSTER REVIEW IS NOT RUNNING.
+ *
+ * Operator ruling, 2026-08-28: skipping the review when the mint was skipped is CORRECT — there is
+ * nothing minted to review. The defect was the sentence "reviewed in the run being resumed", said
+ * on runs that resumed nothing, which turned a sound decision into an unfalsifiable one.
+ */
+function rosterReviewSkipReason(env) {
+  const e = env || process.env;
+  const resumeOf = String(e.EPAM_RESUME_RUN || '').trim();
+  return resumeOf
+    ? 'roster carried over from ' + resumeOf + ' — reviewed in that run, not re-reviewed here'
+    : 'roster not re-reviewed — the mint did not run, so nothing was minted to review';
+}
+
+module.exports = { mintSkipReason, rosterReviewSkipReason, resolveRepoPath, rosterAgents, resolveCodelines, declaredDependencies, writeRosterDiff, mintTools, provisionPlugins, writeAgentSeamCrossReference, validateWorkflow };
 
 if (require.main !== module) return;
 
@@ -793,7 +834,7 @@ if (require.main !== module) return;
     // file copy costing no model call. Live 2026-08-27: mock3 reached agent-check with
     // topology-router.json missing, because the only thing that provisions it sits past that
     // return.
-    process.stderr.write('[mint-step] mint skipped (EPAM_SKIP_AGENT_MINT=1) — resuming from a checkpoint\n');
+    process.stderr.write(`[mint-step] ${mintSkipReason(process.env)}\n`);
   } else {
     // Start from the BASE roster, never a mutated one. Anything a previous run minted is
     // cleared before this run proposes: registry, stored briefs and live entries. Canonical
@@ -1021,7 +1062,7 @@ if (require.main !== module) return;
   }
   if (_mintWasSkipped) {
     process.stderr.write(
-      '[mint-step] resumed roster — reviewed in the run being resumed, not re-reviewed here\n');
+      `[mint-step] ${rosterReviewSkipReason(process.env)}\n`);
   }
 
   // Still defective after the full correction budget. With the pause on, the operator sees it

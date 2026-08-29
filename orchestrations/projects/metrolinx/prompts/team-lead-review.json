@@ -40,6 +40,8 @@
     "__LEARNED_RULES_BLOCK__",
     "__PRIOR_REVIEW__",
     "__UNCOVERED_VC_BLOCK__",
-    "__FIX_ANALYSIS_BLOCK__"
+    "__FIX_ANALYSIS_BLOCK__",
+    "__TEST_FILES__",
+    "__PROJECT_TOOLS_BLOCK__"
   ]
 }

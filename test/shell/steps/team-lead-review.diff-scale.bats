@@ -46,7 +46,9 @@ setup() {
 {
   "implementationOrder": { "core": ["S-1"] },
   "stories": [{
-    "id": "S-1", "title": "a story", "status": "completed", "completed": true,
+    "id": "S-1", "title": "a story",
+    "description": "the fare boundary excludes riders aged exactly 65",
+    "status": "completed", "completed": true,
     "agentRole": "impl-agent",
     "technicalNotes": { "files": ["src/a.ts"] },
     "acceptanceCriteria": ["it works"],

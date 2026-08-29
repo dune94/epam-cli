@@ -253,6 +253,51 @@ function _parsedResult(text) {
   try { return JSON.parse(text); } catch { return null; }
 }
 
+/**
+ * THE PROMPT OF THE CALL IN FLIGHT, WHEREVER IT CAME FROM.
+ *
+ * A caller that already holds the prompt passes it and wins. Everything else reads the file the
+ * invoker named in the environment — because most emitters never see a prompt at all, which is why
+ * every trace recorded in=4ch and why wiring the one site that HAD a prompt changed nothing.
+ *
+ * Never throws, and returns empty rather than inventing a prompt: an uncaptured call must not look
+ * like a call made with nothing.
+ */
+function promptForTrace(explicit, agent) {
+  if (typeof explicit === 'string' && explicit) return explicit;
+  try {
+    // eslint-disable-next-line global-require
+    const { PROMPT_FILE_ENV, promptFileForTag } = require('./agent-reply-log.js');
+    // The environment first: same-process callers have it, and it is the freshest answer.
+    let f = process.env[PROMPT_FILE_ENV] || '';
+    if (!f && agent) {
+      // ACROSS A PROCESS BOUNDARY, VIA THE SEAM'S OWN TAG. The shell edge emits from a sibling
+      // process that never saw the variable — which is why the prompts were on disk and every
+      // trace still read in=4ch. Which tag this agent writes under is DECLARED, not guessed:
+      // the contract registry already says so, so no mapping is kept here.
+      // eslint-disable-next-line global-require
+      const { declaredContracts } = require('./agent-output-schema.js');
+      const c = (declaredContracts() || {})[agent];
+      if (c && c.tag) f = promptFileForTag(c.tag);
+    }
+    if (!f) {
+      // SAY WHY THE FIELD IS EMPTY. A trace that silently records in=4ch is exactly the condition
+      // this whole seam exists to end, so when the prompt cannot be found the reason is stated
+      // once, on stderr, naming the agent — never swallowed.
+      if (process.env.EPAM_TRACE_DEBUG) {
+        process.stderr.write(`[trace] no prompt found for '${agent || '(no agent)'}'\n`);
+      }
+      return '';
+    }
+    return fs.readFileSync(f, 'utf8');
+  } catch (e) {
+    if (process.env.EPAM_TRACE_DEBUG) {
+      process.stderr.write(`[trace] prompt lookup failed for '${agent || '(no agent)'}': ${e.message}\n`);
+    }
+    return '';
+  }
+}
+
 function emitCostSnapshot({
   resultFile, activityFile, ledgerFile, agent, storyId, phase, model, provider, turns, startedAt, endedAt, rung,
   logDir,
@@ -309,6 +354,9 @@ function emitCostSnapshot({
         startedAt, endedAt,
         // The words, not just the price. Read from the result this function already holds.
         output: replyTextFrom(_parsedResult(raw)),
+        // And the prompt. The caller passes it when it has one; otherwise it is read from the
+        // pointer the invoker left, which is the only channel that crosses to the shell edge.
+        input: promptForTrace(input, agent),
         costUsd: cost.costUsd, tokensIn: cost.tokensIn, tokensOut: cost.tokensOut,
         cacheRead: cost.tokensCached, cacheCreate: cost.tokensCacheCreate,
         costIsEstimate: cost.costIsEstimate,
@@ -335,4 +383,5 @@ function emitCostSnapshot({
 module.exports = {
   parseCostRecord, buildCostSnapshot, appendLedgerRecord, emitCostSnapshot,
   replyTextFrom,
+  promptForTrace,
 };

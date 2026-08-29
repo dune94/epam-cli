@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 const { evidenceWindow } = require('./lib/evidence-windows.js');
-const { recordAgentReply } = require('./lib/agent-reply-log.js');
+const { recordAgentReply, recordAgentPrompt } = require('./lib/agent-reply-log.js');
 // Local tool caps are DECLARED — config/tool-timeouts.json. A literal here would be a
 // second home for a decision that already has one.
 const { toolTimeoutMs } = require('./lib/tool-timeouts.js');
@@ -1389,6 +1389,10 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
   }
   // The contract travels with the prompt, for every stack. See outputContractFor above.
   prompt = `${prompt}${outputContractFor(toolDef, tag)}`;
+  // THE PROMPT AS SENT, kept where the cost seam can reach it. Recorded AFTER the output
+  // contract is appended, because that is the prompt the model actually received — a trace
+  // of the prompt before its contract would not reproduce the call.
+  recordAgentPrompt(tag, prompt);
   // envOverride: per-agent tool grant. Most spec-mode agents share specAgentEnv's
   // read-only set; an agent with a different need (the ticket-link agent must FETCH a
   // document, not just read the repo) supplies its own here rather than widening the

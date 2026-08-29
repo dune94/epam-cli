@@ -61,4 +61,55 @@ function recordAgentReply(tag, text) {
   }
 }
 
-module.exports = { recordAgentReply, replyLogDir };
+
+/**
+ * The environment variable naming the prompt of the call in flight. The cost seam is a different
+ * function — on the shell edge, a different PROCESS — so the path travels in the environment,
+ * which is the one channel both edges already share.
+ */
+const PROMPT_FILE_ENV = 'EPAM_CURRENT_PROMPT_FILE';
+
+/**
+ * KEEP THE PROMPT WHERE THE COST SEAM CAN REACH IT.
+ *
+ * Traces recorded in=4ch for every agent, and passing the prompt per-caller could not fix it: of
+ * the emitters, only spec-mode-runner and cpa-inference hold a prompt at all — codeline-discovery,
+ * ac-gate and the shell edge never see one. Wiring the single site that had it moved nothing.
+ *
+ * The invoker always has the prompt, because it is about to send it. So it writes the prompt down
+ * and names the file in the environment; the cost seam reads it there, on both edges, and no
+ * caller has to remember anything. Same contract as recordAgentReply: never throws.
+ *
+ * @returns {string} the file written, or '' when there was nothing to keep
+ */
+function recordAgentPrompt(tag, text) {
+  const file = recordAgentReply(`${tag || 'untagged'}-prompt`, text);
+  if (!file) return '';
+  // THE ENVIRONMENT DOES NOT CROSS A PROCESS BOUNDARY, AND THE EMITTER IS A DIFFERENT PROCESS.
+  //
+  // Naming the file in the environment was the first design and it failed silently: the prompts
+  // were written correctly, and every trace still read in=4ch, because the shell edge emits from a
+  // sibling process that never saw the variable. A pointer FILE, keyed by the seam's own tag,
+  // crosses that boundary — and keying it by tag rather than using one shared pointer keeps two
+  // lanes running in parallel from claiming each other's prompt.
+  process.env[PROMPT_FILE_ENV] = file;
+  try {
+    const slug = String(tag || 'untagged').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    fs.writeFileSync(path.join(replyLogDir(), `.prompt-${slug}`), file);
+  } catch { /* a pointer that cannot be written costs a trace field, never the run */ }
+  return file;
+}
+
+/** The prompt most recently recorded for a seam's tag, or '' when there is none. Never throws. */
+function promptFileForTag(tag) {
+  try {
+    const slug = String(tag || 'untagged').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    return fs.readFileSync(path.join(replyLogDir(), `.prompt-${slug}`), 'utf8').trim();
+  } catch {
+    return '';
+  }
+}
+
+module.exports = {
+  recordAgentReply, recordAgentPrompt, promptFileForTag, replyLogDir, PROMPT_FILE_ENV,
+};

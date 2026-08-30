@@ -144,4 +144,64 @@ describe('a set carries only its own credentials', () => {
     expect(offenders, 'these projects demand a vendor key that belongs to a stack, not to them')
       .toEqual([]);
   });
+
+  // ── The receiver ──────────────────────────────────────────────────────────────────────────────
+  //
+  // Everything above proves the library answers correctly. None of it fails if orchestrate.sh
+  // never calls it — deleting the call site left all ten green, which is the shape of a library
+  // that has a test but no caller. These execute the launcher's OWN sections.
+
+  /** Run one section of orchestrate.sh, spliced out at its marker and executed for real. */
+  function launcherSection(marker: string, endMarker: RegExp, env: Record<string, string>) {
+    const src = readFileSync(join(ROOT, 'orchestrations/scripts/orchestrate.sh'), 'utf8');
+    const lines = src.split('\n');
+    const from = lines.findIndex((l) => l.includes(marker));
+    expect(from, `orchestrate.sh no longer contains ${marker}`).toBeGreaterThan(-1);
+    const rest = lines.slice(from + 1);
+    const to = rest.findIndex((l) => endMarker.test(l));
+    const body = rest.slice(0, to === -1 ? rest.length : to).join('\n');
+    expect(body.trim().length, 'the spliced section is empty').toBeGreaterThan(0);
+    return spawnSync('bash', ['-c', `
+      cd "${ROOT}"
+      fail() { echo "FAILED: $*"; exit 9; }
+      . orchestrations/scripts/lib/set-credentials.sh
+      ${body}
+      echo "__RAN__=1"
+      for k in $(compgen -e); do case "$k" in EPAM_API_KEY_*) printf '%s=%s\n' "$k" "\${!k}";; esac; done
+    `], { encoding: 'utf8', timeout: 60000, env: { ...process.env, ...env } });
+  }
+
+  it('the launcher itself exports the credentials — not just the library that can', () => {
+    const r = launcherSection('Export all config vars', /^# ──/, {
+      ...PLANTED, EPAM_PROVIDER_SET: 'openrouter',
+    });
+    expect(r.stdout, 'the launcher export section did not run').toContain('__RAN__=1');
+    expect(r.stdout, 'orchestrate.sh no longer exports the active stack\'s credentials at all — '
+      + 'the library is wired to nothing')
+      .toContain(`EPAM_API_KEY_OPENROUTER=${PLANTED.OPENROUTER_API_KEY}`);
+  }, 60_000);
+
+  it('the launcher enforces the set\'s required keys, and refuses when one is missing', () => {
+    // The union has to be read, not merely computed. With the openrouter stack selected and its
+    // keys absent, the launcher must refuse rather than start and die at the first seam.
+    const bare = { ...process.env } as Record<string, string>;
+    for (const k of Object.keys(PLANTED)) delete bare[k];
+    const r = launcherSection('Required key validation', /^# ──/,
+      { ...bare, EPAM_PROVIDER_SET: 'openrouter', REQUIRED_KEYS: '' });
+    expect(r.stdout + r.stderr, 'the openrouter stack launched with no key for the vendors it calls')
+      .toMatch(/FAILED: (OPENROUTER|MINIMAX)_API_KEY/);
+  }, 60_000);
+
+  it('and does NOT refuse on a stack that needs no key at all', () => {
+    // The negative half: a union that always demands something would block claude and mockserver,
+    // which is how this started.
+    const bare = { ...process.env } as Record<string, string>;
+    for (const k of Object.keys(PLANTED)) delete bare[k];
+    for (const set of ['claude', 'mockserver']) {
+      const r = launcherSection('Required key validation', /^# ──/,
+        { ...bare, EPAM_PROVIDER_SET: set, REQUIRED_KEYS: '' });
+      expect(r.stdout, `the ${set} stack was blocked by a key requirement it does not have`)
+        .not.toMatch(/FAILED:/);
+    }
+  }, 60_000);
 });

@@ -14,6 +14,7 @@
 #   0 - Review approved or max iterations reached
 #   1 - Review failed (errors during review)
 #   2 - Agent has not responded to feedback yet
+#   3 - Nothing was reviewed (story not complete) — NOT an approval
 
 set -euo pipefail
 
@@ -103,7 +104,12 @@ command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "$_SEAM_NAME
 
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
-PRD_FILE="$AUTOMATION_DIR/prd.json"
+# THE CALLER'S PRD, not a global one. This was assigned unconditionally, so whatever PRD the run
+# was launched with was discarded in favour of orchestrations/prd.json — which holds
+# {"stories":[],"implementationOrder":{}}. Every story therefore looked absent, and the paths
+# below turned that into a clean exit. orchestrate.sh settled the same question with ${PRD_FILE:-}
+# after a hardcoded default synthesised one project's PRD into another's.
+PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
 REVIEW_LOG="${REVIEW_LOG:-$AUTOMATION_DIR/logs/code-reviews.jsonl}"
 MESSAGES_DIR="${MESSAGES_DIR:-$AUTOMATION_DIR/logs/messages}"
 # shellcheck source=lib/roster-read.sh
@@ -145,14 +151,22 @@ STORY_COMPLETED=$(jq -r --arg id "$STORY_ID" \
 STORY_PHASE=$(jq -r --arg id "$STORY_ID" \
     '.implementationOrder | to_entries[] | select(.value[] | contains($id)) | .key' "$PRD_FILE")
 
-if [ "$STORY_AGENT" = "unknown" ]; then
-    error "Story not found or no agent assigned: $STORY_ID"
+# EMPTY IS ABSENT. `.agentRole // "unknown"` supplies its default when the key is NULL — not when
+# the selector matches no story at all, which yields an empty string. Testing only for "unknown"
+# let a story that is not in the PRD fall through to the completed check below, where it was
+# reported as "not completed yet" and exited 0.
+if [ -z "$STORY_AGENT" ] || [ "$STORY_AGENT" = "unknown" ] || [ "$STORY_AGENT" = "null" ]; then
+    error "Story not found in $PRD_FILE, or it has no agent assigned: $STORY_ID"
     exit 1
 fi
 
+# A REVIEW THAT DID NOT RUN IS NOT AN APPROVED REVIEW. This exited 0, which is the code this
+# script documents as "Review approved or max iterations reached" — so a caller reading the exit
+# status could not tell a passed review from one that never happened. Skipping an incomplete story
+# is correct; saying "approved" about it is not.
 if [ "$STORY_COMPLETED" != "true" ]; then
-    warning "Story not completed yet, skipping review"
-    exit 0
+    warning "Story not completed yet, skipping review (nothing was reviewed)"
+    exit 3
 fi
 
 log "Story: $STORY_TITLE"

@@ -54,11 +54,16 @@ function runAcGate(env: Record<string, string>) {
   // The shape ac-gate reads: it renders __STORY_KEY__ and __STORY_TITLE__ from jiraKey/title, and
   // the prompt refuses to render without them — which is correct, and is why a Jira-shaped fixture
   // never reached the runner.
+  // The shape ac-gate reads. It renders __STORY_KEY__/__STORY_TITLE__ from jiraKey/title, and
+  // derives __CODELINE_LIST__, __CODELINE_BULLETS__, __SPLIT_AC_LINES__ and __SCHEMA_AC_FIELDS__
+  // from the codelines the stories declare — so a story with none makes the prompt refuse to
+  // render, correctly, and the runner is never reached.
   writeFileSync(issues, JSON.stringify([{
     jiraKey: 'AB-1',
     title: 'Email confirm case sensitivity',
     description: 'the confirm email field is case sensitive',
-    acceptanceCriteria: [],
+    codelines: ['alphashop', 'betashop'],
+    acceptanceCriteria: ['The confirm email field accepts any case'],
   }]));
 
   const r = spawnSync(process.execPath, [AC_GATE, '--issues', issues, '--out', join(work, 'out.json')], {
@@ -68,6 +73,10 @@ function runAcGate(env: Record<string, string>) {
       // all — correctly — and never reaches the runner, so the vector could not be observed.
       ...process.env, ...LADDERS,
       AI_RUNNER_CMD: stub,
+      // resolveCodelines() reads JIRA_CODELINES or codeline-* labels — not the story field. Its
+      // own warning says so, and without it every codeline-derived value renders empty and the
+      // prompt refuses, so the runner is never reached.
+      JIRA_CODELINES: 'alphashop,betashop',
       LOG_DIR: work,
       AC_GATE_TIMEOUT_MS: '30000',
       ...env,

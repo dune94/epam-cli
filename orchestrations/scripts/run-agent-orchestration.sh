@@ -6965,6 +6965,15 @@ else
                 if [ "$_tc_attempt" -ge 1 ]; then
                     _tc_bn_err=""
                     _tc_bn_err=$(bash -n "$_tc_path" 2>&1 || true)
+                    # A CLEAN SYNTAX CHECK IS AN ANSWER, NOT AN ABSENCE. `bash -n` prints nothing when the
+                    # file parses, which is the USUAL case here: this retry fires because the previous attempt
+                    # failed, and most failures are not syntactic. The empty value made the retry-prefix render
+                    # refuse, the handler below fell back to the ORIGINAL prompt, and the retry then repeated
+                    # the identical call that had just failed — an unwinnable loop, reported only as "could not
+                    # render the retry prefix". Same idiom as the analyst's "(empty — it produced nothing)":
+                    # say what was observed rather than nothing at all.
+                    [ -n "${_tc_bn_err//[[:space:]]/}" ] || \
+                        _tc_bn_err="(the file parses cleanly — the previous attempt did not fail on syntax)"
                     _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
                     jq_vals \
                           --arg tc_bn_err "${_tc_bn_err}" \

@@ -39,11 +39,17 @@ const REVIEWED: Record<string, string> = {
     'not this defect — roster_persona failing exits 1 before the render, so empty never reaches it',
   'code-review-cycle:__STORY_DIFF__':
     'a story whose diff is empty changed nothing; refusing is the correct outcome, not a gap',
-  'agent-retry-prefix:__TC_BN_ERR__': 'PENDING: not yet driven; reachability unverified',
+  'agent-retry-prefix:__TC_BN_ERR__':
+    'RESOLVED at the caller instead: a clean `bash -n` printed nothing, the prefix refused to '
+    + 'render and the retry re-ran the original prompt unchanged. It now states the clean parse, '
+    + 'so the value is never empty and the placeholder stays required',
   'corrective-note:__MC_CORRECTIVE_NOTE__': 'PENDING: not yet driven; reachability unverified',
   'failure-analyst:__VERIFICATION_FAILURE__': 'PENDING: not yet driven; reachability unverified',
-  'lint-ac-remediator:__FINDING__': 'PENDING: not yet driven; reachability unverified',
-  'tc-writer:__TC_WRITER_PROFILE__': 'PENDING: not yet driven; reachability unverified',
+  'lint-ac-remediator:__FINDING__':
+    'not this defect — the caller checks the finding is non-empty before rendering',
+  'tc-writer:__TC_WRITER_PROFILE__':
+    'not this defect — post-impl-tc-writer.sh exits 1 with "refusing to write test criteria from '
+    + 'a placeholder prompt" before any render, so empty never reaches it',
 };
 
 function shellScripts(): [string, string][] {

@@ -60,10 +60,18 @@ function coverageFor(covDir, files) {
       // Outermost first, so a nested count-0 range overwrites the enclosing count.
       const ranges = (script.functions || []).flatMap((fn) => fn.ranges || [])
         .sort((a, b) => (b.endOffset - b.startOffset) - (a.endOffset - a.startOffset));
+      // Within ONE script, ranges nest and the innermost wins, so a later (smaller) range
+      // overwrites. ACROSS processes it is the opposite: a run that never loaded the module
+      // reports count 0 for every line, and letting that overwrite an earlier hit erases real
+      // execution. So each process is folded on its own, then merged by taking the maximum.
+      const thisScript = new Map();
       for (const r of ranges) {
         const from = toLine(r.startOffset);
         const to = toLine(Math.max(r.startOffset, r.endOffset - 1));
-        for (let ln = from; ln <= to; ln += 1) seen.set(ln, r.count);
+        for (let ln = from; ln <= to; ln += 1) thisScript.set(ln, r.count);
+      }
+      for (const [ln, count] of thisScript) {
+        seen.set(ln, Math.max(seen.get(ln) || 0, count));
       }
     }
   }

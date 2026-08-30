@@ -29,6 +29,18 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
+/**
+ * Whatever the caller returned, as text. `output`/`context` are routinely an already-parsed
+ * object — codeline-discovery.js's `call` returns callLlm(...), never a string, and
+ * content-retry.js hands that straight through. `String(obj)` yields the single word
+ * "[object Object]", the only evidence the analyst gets discarded before it ever sees it.
+ */
+function _asText(v) {
+  if (v == null) return '';
+  if (typeof v === 'string') return v;
+  try { return JSON.stringify(v, null, 2); } catch { return String(v); }
+}
+
 /** The failure classes the analyst distinguishes. Derived from what the caller saw, never guessed. */
 function classify(reason, output) {
   const r = `${reason || ''}`.toLowerCase();
@@ -61,10 +73,10 @@ function selfHeal({ agent, storyId, reason, output, context, logDir, model, prov
     outFile = path.join(dir, 'failed-output.txt');
     // WHAT THE AGENT ACTUALLY RETURNED, in full. A reason string says which rule was broken; only
     // the output says why the agent broke it.
-    fs.writeFileSync(outFile, String(output == null ? '' : output));
+    fs.writeFileSync(outFile, _asText(output));
     if (context) {
       ctxFile = path.join(dir, 'context.txt');
-      fs.writeFileSync(ctxFile, String(context));
+      fs.writeFileSync(ctxFile, _asText(context));
     }
   } catch { return { ran: false, rc: 0, corrective: '' }; }
 
@@ -141,4 +153,4 @@ function selfHeal({ agent, storyId, reason, output, context, logDir, model, prov
   }
 }
 
-module.exports = { selfHeal, classify };
+module.exports = { selfHeal, classify, _asText };

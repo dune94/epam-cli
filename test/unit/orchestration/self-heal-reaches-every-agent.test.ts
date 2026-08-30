@@ -20,7 +20,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const REPO_ROOT = join(__dirname, '../../../');
@@ -71,5 +72,31 @@ describe('self-heal reaches every agent that retries', () => {
   it('never throws, so a broken diagnostic cannot fail the run it diagnoses', () => {
     expect(() => selfHeal({} as any)).not.toThrow();
     expect(() => selfHeal({ output: null, reason: null } as any)).not.toThrow();
+  });
+
+  it('writes the FULL text of an object answer, never "[object Object]"', () => {
+    // codeline-discovery.js's `call` returns callLlm(...) — an already-parsed object, not a
+    // string — and content-retry.js hands that straight to selfHeal as `output`. The analyst
+    // reads outFile as ITS ONLY EVIDENCE of what the agent produced; a coercion that discards
+    // the object's content leaves it diagnosing a failure it cannot see.
+    //
+    // selfHeal never returns or cleans up its temp dir, so this reads the real artefact it
+    // wrote — the same file agent-attempt-analyst.sh reads — rather than inspecting a mock.
+    const before = new Set(readdirSync(tmpdir()).filter((d) => d.startsWith('self-heal-')));
+    selfHeal({
+      agent: 'codeline-discovery', storyId: 'S1', reason: 'no tagged JSON',
+      output: { codelines: ['apps/web'], note: 'refused: missing blacklist' },
+    });
+    const after = readdirSync(tmpdir()).filter((d) => d.startsWith('self-heal-'));
+    const created = after.filter((d) => !before.has(d))
+      .map((d) => join(tmpdir(), d))
+      .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
+    expect(created.length, 'selfHeal never created its temp dir').toBeGreaterThan(0);
+    const outFile = join(created[0], 'failed-output.txt');
+    expect(existsSync(outFile), 'selfHeal never wrote failed-output.txt').toBe(true);
+    const written = readFileSync(outFile, 'utf8');
+    expect(written).not.toBe('[object Object]');
+    expect(written).toContain('apps/web');
+    expect(written).toContain('missing blacklist');
   });
 });

@@ -1,1 +1,42 @@
-[]
+[
+  {
+    "id": "codeline-discovery-class-malformed",
+    "scope": {
+      "agent_role": "codeline-discovery"
+    },
+    "trigger": {
+      "signature": "class:malformed"
+    },
+    "enforcement": {
+      "kind": "response_schema",
+      "name": "codeline_discovery",
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "codelines"
+        ],
+        "properties": {
+          "codelines": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "unsure": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "reason": "Binds output space so the agent physically cannot emit the [object Object] tool-call payload; prose already asked twice and failed.",
+    "origin_episodes": [
+      "evt-1788114099055-869190",
+      "evt-1788114163931-284006"
+    ],
+    "ttl_cycles": 20,
+    "status": "active",
+    "cycles_idle": 0
+  }
+]

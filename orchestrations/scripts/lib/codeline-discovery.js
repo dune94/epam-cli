@@ -394,9 +394,29 @@ function callLlm(prompt, opts = {}) {
     // call failed is the only thing that makes the fallback judgeable.
     const _errFile = `${tmpPrompt}.err`;
 
+    // A FLAG WITH NO VALUE IS NOT AN EMPTY ARGUMENT — IT IS NO ARGUMENT.
+    //
+    // PROVIDER defaults to '' when neither ORCH_GATE_PROVIDER nor EPAM_ORCHESTRATION_PROVIDER is
+    // set, and interpolating that into a command STRING made the shell collapse the gap, so the
+    // vector that arrived was:
+    //
+    //     --provider  --model  claude-sonnet-5
+    //
+    // llm-handler.sh took '--model' as the provider's value and met the model name as a bare word:
+    // "unknown option 'claude-sonnet-5'", exit 2. Discovery saw no output and reported "the answer
+    // was EMPTY ... a transport or budget failure, not a format one" — sending an operator to
+    // timeouts and credits for a fault that was one empty string, three attempts earlier.
+    //
+    // Omitting the flag is right rather than inventing a value: the handler resolves the provider
+    // from the active set when it is not told one (`if [ -n "$PRIMARY_PROVIDER" ]`). Values are
+    // quoted, so a future empty or spaced one cannot shift the vector again.
+    const _flag = (name, value) => (String(value == null ? '' : value).trim()
+      ? ` --${name} ${JSON.stringify(String(value).trim())}`
+      : '');
+    const _flags = _flag('provider', PROVIDER) + _flag('model', MODEL());
     const cmd = debug
-      ? `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL()} < ${tmpPrompt}`
-      : `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL()} < ${tmpPrompt} 2>${_errFile}`;
+      ? `bash ${AI_RUN_SH}${_flags} < ${tmpPrompt}`
+      : `bash ${AI_RUN_SH}${_flags} < ${tmpPrompt} 2>${_errFile}`;
     const raw = execSync(cmd, {
       encoding:   'utf8',
       // Covers BOTH passes: plan-execute puts a plan call (up to

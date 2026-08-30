@@ -23,6 +23,10 @@ import { tmpdir } from 'node:os';
 
 const ROOT = join(__dirname, '../../..');
 const ORCH = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
+// _halt_recovery_state now lives in lib/halt-recovery.sh — lifted out of the 11k-line
+// orchestrator so the message an operator acts on can be executed by a test. Sourced whole
+// rather than sliced out by pattern, which is also more faithful than slicing was.
+const HALT_LIB = join(ROOT, 'orchestrations/scripts/lib/halt-recovery.sh');
 const RETRY_LIB = join(ROOT, 'orchestrations/scripts/lib/story-retry-state.sh');
 const made: string[] = [];
 
@@ -38,7 +42,7 @@ warning() { echo "WARN: $*"; }
 LOG_DIR=${JSON.stringify(logDir)}
 MAX_RETRIES=${opts.maxRetries}
 . ${JSON.stringify(RETRY_LIB)}
-eval "$(awk '/^_halt_recovery_state\\(\\) \\{/,/^\\}/' ${JSON.stringify(ORCH)})"
+    . ${JSON.stringify(HALT_LIB)}
 if ! declare -F _halt_recovery_state >/dev/null 2>&1; then echo "NOFUNC"; exit 0; fi
 _halt_recovery_state "S-1"
 `;

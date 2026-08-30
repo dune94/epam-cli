@@ -118,30 +118,10 @@ _parse_failing_test_files() {
         | sort -u
 }
 
-# _halt_recovery_state <story_id> — report the recovery state ACTUALLY observed for this story.
-#
-# The halt used to assert "failed after its retries and self-heal completed" and "recovery is
-# exhausted" unconditionally. Live metrolinx AMSD-2041, 2026-08-19: a gate failed one story at
-# attempt 2 of 12, the ladder had not left its first rung, and the writer was mid-way through
-# addressing the reviewer's findings — and the run reported exhaustion. That message is the
-# evidence an operator reads when deciding whether to retry, and it said the opposite of the truth.
-#
-# HALTING IS STILL THE MANDATE: let recovery run, then stop. What must not happen is CLAIMING
-# exhaustion without checking. story_ladder_exhausted() already existed and was already used
-# elsewhere in this file; the halt simply never asked it.
-_halt_recovery_state() {
-    local _story="${1:-}"
-    local _used _max="${MAX_RETRIES:-11}"
-    _used="$(read_story_retry_count "${LOG_DIR:-}" "$_story" 2>/dev/null || echo 0)"
-    case "$_used" in (''|*[!0-9]*) _used=0 ;; esac
-    if story_ladder_exhausted "${LOG_DIR:-}" "$_story" "$_max" 2>/dev/null; then
-        error "[orch]   recovery is exhausted for '${_story}' — ${_used} of $((_max + 1)) attempt(s) used and the model ladder reached its top rung."
-        error "[orch]   Another lane would reproduce the same failure at full ladder price."
-    else
-        error "[orch]   recovery was NOT exhausted for '${_story}': ${_used} of $((_max + 1)) attempt(s) used, ladder still below its top rung."
-        error "[orch]   The story failed on a gate verdict, not on running out of attempts — read the last gate message before assuming the work cannot converge."
-    fi
-}
+# _halt_recovery_state now lives in lib/halt-recovery.sh so the message an operator acts on
+# can be executed by a test. See that file.
+# shellcheck source=lib/halt-recovery.sh
+. "$SCRIPT_DIR/lib/halt-recovery.sh"
 
 _run_project_verification() {
     local _root="${1:-$PROJECT_ROOT}"

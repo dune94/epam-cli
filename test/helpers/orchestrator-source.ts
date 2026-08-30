@@ -29,6 +29,7 @@ export const ORCHESTRATOR = join(SCRIPTS, 'run-agent-orchestration.sh');
 export const EXTRACTED_LIBS = [
   join(SCRIPTS, 'lib/orch-prompt.sh'),    // run_orch_prompt
   join(SCRIPTS, 'lib/gate-verdicts.sh'),  // runtime_boundary_verdict, _run_qa_gate_with_retry
+  join(SCRIPTS, 'lib/halt-recovery.sh'),  // _halt_recovery_state
 ];
 
 /**

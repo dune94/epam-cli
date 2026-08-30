@@ -6922,7 +6922,12 @@ assess_model_escalation() {
 
     local gate_provider="${ORCH_GATE_PROVIDER:-}"
     local gate_model="${EPAM_MODEL:-}"
-    [ -z "$gate_provider" ] && return
+    # A capability that silently does not run is indistinguishable from one that ran and found
+    # nothing. Say which happened.
+    if [ -z "$gate_provider" ]; then
+        log "  [ModelEscalation] no gate provider configured — SKIPPING escalation assessment; this run performs none"
+        return
+    fi
 
     # Read failure evidence (cap at 3000 chars to stay within gate model budget)
     local result_text=""
@@ -7027,7 +7032,16 @@ run_prd_change_reviewer() {
 
     local gate_provider="${ORCH_GATE_PROVIDER:-}"
     if [ -z "$gate_provider" ]; then
-        echo "pass"
+        # A GATE THAT CANNOT JUDGE DOES NOT PASS. This emitted a literal "pass", so with no gate
+        # provider configured every KB/PRD/profile write was AUTO-APPROVED and the caller read a
+        # manufactured verdict as a real one — indistinguishable from a review that ran and found
+        # nothing wrong.
+        #
+        # 'unreviewed' is the honest answer and callers already understand it:
+        # reviewOutcomeKeepsChange() accepts only an explicit pass, so the change reverts rather
+        # than standing on a judgement nobody made.
+        error "  [PRD-ChangeReviewer] no gate provider configured — NOT reviewing; returning 'unreviewed' so the change is not kept on an unmade judgement" >&2
+        echo "unreviewed"
         return 0
     fi
     # KB/PRD/profile writes are persistent and must be reviewed by the highest-quality
@@ -9062,6 +9076,10 @@ run_retry_extension_coordinator() {
     local gate_provider="${ORCH_GATE_PROVIDER:-}"
     local gate_model="${EPAM_MODEL:-}"
     if [ -z "$gate_provider" ]; then
+        # 0 is a plausible answer — "no extension is warranted" — and was returned without any
+        # coordination happening. Same shape as the fabricated "pass" above: a value nobody
+        # decided, arriving where a decision is expected.
+        log "  [RetryExtension] no gate provider configured — SKIPPING coordination; returning 0 because none was DECIDED, not because none was warranted"
         echo 0
         return 0
     fi

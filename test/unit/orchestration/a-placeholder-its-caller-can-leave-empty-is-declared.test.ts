@@ -35,6 +35,16 @@ const SCRIPTS = join(REPO, 'orchestrations/scripts');
  * somebody decided, and said why.
  */
 const REVIEWED: Record<string, string> = {
+  'code-graph-detective:__REPO_PATH__':
+    'scanner false positive — the "" it matched is a FUNCTION PARAMETER default in an unrelated '
+    + 'signature, not the value handed to the template',
+  'guard-vocabulary-codegraph:__REPO_PATH__':
+    'scanner false positive — same parameter default as code-graph-detective:__REPO_PATH__',
+  'roster-review:__COVERAGE_BLOCK__':
+    'RESOLVED at the caller instead: a failed derivation was swallowed into "", which refused the '
+    + 'render and would otherwise have told the reviewer that NOTHING is required. It now states '
+    + 'whether coverage is unknown or genuinely empty, so the value is never blank',
+  'topology-router:__PHASE__': 'PENDING: destructuring default; reachability not yet driven',
   'code-review-cycle:__REVIEW_PROFILE__':
     'not this defect — roster_persona failing exits 1 before the render, so empty never reaches it',
   'code-review-cycle:__STORY_DIFF__':
@@ -51,6 +61,24 @@ const REVIEWED: Record<string, string> = {
     'not this defect — post-impl-tc-writer.sh exits 1 with "refusing to write test criteria from '
     + 'a placeholder prompt" before any render, so empty never reaches it',
 };
+
+/**
+ * JS renderers were a blind spot. The first version of this scanner read only shell callers with
+ * `--arg`, so it missed cpa-inference.js — which destructures `systemPrompt = ''` and passes it as
+ * __SYSTEM_PROMPT__, declaring the field optional in its own signature while the render refused it.
+ * A scanner that covers one calling convention finds one calling convention's bugs.
+ */
+function jsRenderers(): [string, string][] {
+  const out: [string, string][] = [];
+  (function walk(d: string) {
+    for (const e of readdirSync(d)) {
+      const p = join(d, e);
+      if (statSync(p).isDirectory()) { if (!/node_modules|archived/.test(p)) walk(p); continue; }
+      if (p.endsWith('.js')) out.push([p, readFileSync(p, 'utf8')]);
+    }
+  })(SCRIPTS);
+  return out;
+}
 
 function shellScripts(): [string, string][] {
   const out: [string, string][] = [];
@@ -82,6 +110,18 @@ function canBeLeftEmpty(): { key: string; script: string; variable: string }[] {
         if (!m) continue;
         if (!new RegExp(`^\\s*${m[1]}=""\\s*$`, 'm').test(src)) continue;
         found.push({ key: `${id}:${p}`, script: sp.replace(`${REPO}/`, ''), variable: m[1] });
+      }
+    }
+    // The same shape in a JS renderer: `__FOO__: foo` where foo has an empty destructuring default.
+    for (const [jp, src] of jsRenderers()) {
+      if (!src.includes(`'${id}'`) && !src.includes(`"${id}"`)) continue;
+      for (const p of (t.placeholders || []) as string[]) {
+        if (may.has(p)) continue;
+        const m = new RegExp(`${p}\\s*:\\s*([A-Za-z_$][A-Za-z0-9_$]*)`).exec(src);
+        if (!m) continue;
+        const v = m[1];
+        if (!new RegExp(`\\b${v}\\s*=\\s*(''|"")`).test(src)) continue;
+        found.push({ key: `${id}:${p}`, script: jp.replace(`${REPO}/`, ''), variable: v });
       }
     }
   }

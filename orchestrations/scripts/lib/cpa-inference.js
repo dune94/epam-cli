@@ -30,9 +30,17 @@ const fs            = require('fs');
 const CLAUDE_CMD = process.env.CLAUDE_CMD || 'claude';
 const AI_RUNNER_CMD = process.env.AI_RUNNER_CMD || path.resolve(__dirname, '..', 'ai-run.sh');
 // Default provider: openrouter (OpenRouter). Override via CPA_PROVIDER or AI_PROVIDER env vars.
+// NO VENDOR OF ITS OWN. This ended in a hardcoded vendor name, the second copy of the fallback
+// removed from ac-gate.js: it fires when the project env has not reached the child, and where a
+// missing provider should defer it instead SUCCEEDS against a stack the operator did not choose.
+// llm-handler.sh resolves the provider from the ACTIVE SET when it is not told one, so empty is
+// the correct answer and the flag is omitted rather than passed blank.
+//
+// The codex branch stays: that is not a vendor preference but a fact about the runner in hand —
+// a codex binary cannot be driven as anything else.
 const AI_PROVIDER = process.env.AI_PROVIDER
   || process.env.EPAM_ORCHESTRATION_PROVIDER
-  || (/codex$/.test(CLAUDE_CMD) ? 'codex' : 'openrouter');
+  || (/codex$/.test(CLAUDE_CMD) ? 'codex' : '');
 const TIMEOUT_MS = parseInt(process.env.CPA_TIMEOUT_MS || '120000', 10);
 
 // ── Read stdin ─────────────────────────────────────────────────────────────
@@ -290,7 +298,8 @@ async function main() {
   const _costFile = `${require('os').tmpdir()}/cpa-cost-${process.pid}-${Date.now()}.json`;
 
   const t0 = Date.now();
-  const cliArgs = ['--provider', AI_PROVIDER];
+  // A flag with no value is not an empty argument — omit it, and let the hub resolve.
+  const cliArgs = AI_PROVIDER ? ['--provider', AI_PROVIDER] : [];
   const result = spawnSync(
     AI_RUNNER_CMD,
     cliArgs,

@@ -4910,10 +4910,21 @@ async function reviewRoster({
   // WHAT THE TEAM MUST BE ABLE TO PRODUCE, derived from the registry and handed to the reviewer.
   // Without it the reviewer sees only briefs and cannot report the one defect that has no brief:
   // a role nobody minted. See rosterCoverageBlock.
+  // A FAILED DERIVATION IS NOT AN ABSENT ONE. This swallowed the error and left the block empty,
+  // so the render refused — "was given EMPTY values for: __COVERAGE_BLOCK__" — and the roster
+  // review did not happen at all. Worse, an empty block would tell the reviewer that NOTHING is
+  // required, which is the opposite of what a failed lookup means. Say which of the two happened,
+  // the way the analyst says "(empty — it produced nothing)".
   let coverageBlock = '';
   try {
     coverageBlock = rosterCoverageBlock(_minted, readRegistryForCoverage());
-  } catch { coverageBlock = ''; }
+  } catch (e) {
+    coverageBlock = `(the required-roles coverage could not be derived: ${(e && e.message) || e}. `
+      + 'Treat this as UNKNOWN coverage, not as "nothing is required".)';
+  }
+  if (!String(coverageBlock).trim()) {
+    coverageBlock = '(the registry declares no required roles for this project.)';
+  }
 
   const prompt = buildRosterReviewPrompt({
     persona, briefBlock, clBlock, ticketBlock, docBlock, toolLine, coverageBlock,

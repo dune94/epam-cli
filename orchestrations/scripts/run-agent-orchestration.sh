@@ -118,10 +118,15 @@ _parse_failing_test_files() {
         | sort -u
 }
 
-# _halt_recovery_state now lives in lib/halt-recovery.sh so the message an operator acts on
-# can be executed by a test. See that file.
+# _halt_recovery_state now lives in lib/halt-recovery.sh so the message an operator acts on can be
+# executed by a test. See that file.
+#
+# RESOLVED FROM BASH_SOURCE, NOT SCRIPT_DIR. This sits above the line that defines SCRIPT_DIR, so
+# "$SCRIPT_DIR/lib/..." expanded to "/lib/..." and every run died at startup with
+# "No such file or directory". bash -n cannot see it — the path is only wrong at runtime — and a
+# unit test cannot either, because tests source the lib directly. The free rehearsal caught it.
 # shellcheck source=lib/halt-recovery.sh
-. "$SCRIPT_DIR/lib/halt-recovery.sh"
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/halt-recovery.sh"
 
 _run_project_verification() {
     local _root="${1:-$PROJECT_ROOT}"

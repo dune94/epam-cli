@@ -33,5 +33,9 @@
     "hint_no_json": "The agent produced no parseable structured output (prose, or a tool-call wrapper). The directive must make it emit ONLY the required output inline, no tool calls, no prose.",
     "hint_invalid_test": "The agent DID write the file, but it is not valid, runnable code — it failed to parse/compile, so the test never executed (the runner's exact error is in the output below). This is a SYNTAX/structure problem, not a logic problem: the directive must tell it to emit a complete, syntactically valid file — balanced braces/brackets, correct object-literal and array syntax, every import present — and to re-read its own output end-to-end before finishing. Do NOT tell it to change the assertion or the scenario; the previous attempt's intent was fine, only the code was malformed.",
     "hint_default": "The agent failed to produce usable output."
-  }
+  },
+  "mayBeEmpty": [
+    "__PROFILE__"
+  ],
+  "$mayBeEmpty": "__PROFILE__ reuses the failure-analyst role instructions, and the caller says so in its own words: 'Reuse the failure-analyst profile WHEN PRESENT'. It sets _profile=\"\" and fills it only if agents/profiles.json exists and holds that entry — so absent is a state the caller deliberately allows, while the render refused it. Declaring it here makes the template agree with the caller instead of contradicting it."
 }

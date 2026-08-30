@@ -110,11 +110,18 @@ run_orch_prompt() {
     # real gate response; exit 124 from timeout is treated as a failure.
     local _gate_timeout="${EPAM_GATE_TIMEOUT_SECS:-600}"
     local _rc=0
+    # NAME THE AGENT AT THE CALL. A caller that already set one keeps it — _run_qa_gate_with_retry
+    # names the gate it is running — but this function knows its own agent_type, so an invocation
+    # through any other path is attributed too. An anonymous call writes its cost row, its plan
+    # record and its Langfuse trace against a default, which is how a hung call once hid behind 35
+    # identical unreadable rows.
     echo "$prompt_text" | \
         AI_PROVIDER="$gate_provider" \
         AI_MODEL="$gate_model" \
         CLAUDE_CMD="$CLAUDE_CMD" \
         EPAM_CLI="${EPAM_CLI:-epam}" \
+        EPAM_AGENT_NAME="${EPAM_AGENT_NAME:-$agent_type}" \
+        EPAM_STORY_ID="${EPAM_STORY_ID:-$story_id}" \
         ORCH_JSON_RESULT="$json_result_file" \
         timeout "${_gate_timeout}" \
         "$AI_RUNNER_CMD" --provider "$gate_provider" "${model_args[@]}" || _rc=$?

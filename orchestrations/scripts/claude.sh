@@ -7140,8 +7140,17 @@ run_prd_change_summarizer() {
     local issues="$3"
     local rejected_text="$4"
 
-    local gate_provider="${ORCH_GATE_PROVIDER:-}"
+    # THE SAME CHAIN ITS FAMILY USES. ac-gate.js, codeline-discovery.js and cpa-inference.js all
+    # consult EPAM_ORCHESTRATION_PROVIDER before giving up; this one read ORCH_GATE_PROVIDER alone,
+    # so a run that set the orchestration provider and not the gate provider lost EVERY rewrite.
+    local gate_provider="${ORCH_GATE_PROVIDER:-${EPAM_ORCHESTRATION_PROVIDER:-}}"
     if [ -z "$gate_provider" ]; then
+        # DEGRADING IS FINE; DEGRADING IN SILENCE IS NOT. This returned the rejected text with no
+        # diagnostic and exit 0, and the caller assigns the result as the rewritten value
+        # (current=$(run_prd_change_summarizer ...)) — so the content a reviewer had just rejected
+        # flowed onward as though it had been fixed. The text is still returned, because the caller
+        # must not be left with nothing; what changes is that the skip is now visible.
+        error "  [PRD-Summarizer] no provider resolved (ORCH_GATE_PROVIDER and EPAM_ORCHESTRATION_PROVIDER are both unset) — skipping the rewrite; the REJECTED text is being returned unchanged" >&2
         printf '%s' "$rejected_text"
         return 0
     fi

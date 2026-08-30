@@ -8870,12 +8870,20 @@ function _extractTaggedJsonRaw(text, tag) {
  * an envelope, never a check.
  */
 function extractTaggedJson(text, tag) {
-  const out = _extractTaggedJsonRaw(text, tag);
-  if (!Array.isArray(out) || out.length !== 1) return out;
-  const only = out[0];
-  if (!only || typeof only !== 'object' || Array.isArray(only)) return out;
-  return only;
+  // EXTRACTION EXTRACTS. IT DOES NOT GUESS WHICH VALUE THE CALLER WANTED.
+  //
+  // This used to strip a one-element array here — blindly, because at this point nothing knows
+  // which key the consumer is looking for. That contradicted the contract a caller already
+  // depends on ("returns last parseable match when the model echoes an empty template block"),
+  // which requires the list to survive, and it silently changed the shape every seam receives.
+  //
+  // Removing an envelope needs to know what is inside it, so it happens where the key IS known:
+  // unwrapEnvelope(payload, key) in lib/agent-output-schema.js, which unwraps only when exactly
+  // one element carries that key and leaves the payload untouched otherwise. One place, and it
+  // can tell an envelope from an answer.
+  return _extractTaggedJsonRaw(text, tag);
 }
+
 
 
 // READ AT CALL TIME, not at module load.

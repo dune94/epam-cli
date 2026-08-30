@@ -16,6 +16,7 @@ import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
 const require_ = createRequire(import.meta.url);
+const { unwrapEnvelope } = require('../../../orchestrations/scripts/lib/agent-output-schema.js');
 const runner = require_(join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'));
 const { TAG_TO_TOOL } = require_(join(__dirname, '../../../orchestrations/scripts/lib/agent-output-schema.js'));
 
@@ -48,10 +49,14 @@ describe('EVERY DECLARED AGENT CONTRACT PARSES IN EVERY SHAPE', () => {
     });
 
     it(`${tag}: a single-element ARRAY envelope parses`, () => {
-      const out = runner.extractTaggedJson(JSON.stringify([obj()]), tag);
+      // Through the CONSUMER'S path: extraction extracts, and the envelope comes off where the
+      // expected key is known. Demanding the extractor strip it blindly would make it guess which
+      // value was wanted — and that guess broke a seam whose answer is itself a list.
+      const extracted = runner.extractTaggedJson(JSON.stringify([obj()]), tag);
       const key = (TAG_TO_TOOL as Record<string, { itemsKey?: string | null }>)[tag]?.itemsKey;
-      expect(out, 'a model wrapping its answer in an array kills this seam, as it killed the mint')
+      expect(extracted, 'a model wrapping its answer in an array kills this seam, as it killed the mint')
         .toBeTruthy();
+      const out = key ? unwrapEnvelope(extracted, key) : extracted;
       if (key) expect(Array.isArray((out as Record<string, unknown>)[key])).toBe(true);
     });
   }

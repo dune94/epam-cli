@@ -15,6 +15,7 @@ import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
 const require_ = createRequire(import.meta.url);
+const { unwrapEnvelope } = require('../../../orchestrations/scripts/lib/agent-output-schema.js');
 const runner = require_(join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'));
 
 /** The mint's answer, as the schema declares it. */
@@ -26,8 +27,13 @@ const ANSWER = {
 
 /** The real accept-or-retry decision, exactly as the mint makes it. */
 function mintAccepts(reply: string): { ok: boolean; reason?: string } {
-  const payload = runner.extractTaggedJson(reply, 'PROJECT_AGENTS');
-  if (!payload) return { ok: false, reason: 'the response could not be parsed as JSON at all' };
+  // THE REAL PATH HAS TWO STEPS, AND THIS USED TO SKIP ONE. The mint extracts and THEN calls
+  // unwrapEnvelope(payload, 'proposedAgents'). Asserting on extraction alone made this test demand
+  // that the extractor strip envelopes blindly — which it cannot do, because at that point nothing
+  // knows which key the caller wants, and stripping broke a seam whose answer IS a list.
+  const extracted = runner.extractTaggedJson(reply, 'PROJECT_AGENTS');
+  if (!extracted) return { ok: false, reason: 'the response could not be parsed as JSON at all' };
+  const payload = unwrapEnvelope(extracted, 'proposedAgents');
   if (!Array.isArray((payload as { proposedAgents?: unknown[] }).proposedAgents)) {
     return { ok: false, reason: 'the response had no "proposedAgents" array' };
   }

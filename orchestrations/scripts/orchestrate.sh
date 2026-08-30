@@ -27,6 +27,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/lib/phase-exit.sh" || { echo "[preflight] lib/phase-exit.sh failed to load — refusing to run" >&2; exit 1; }
 # The run's spend figure comes from the ACTIVE SET, not a vendor hardcoded here.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/spend-probe.sh" 2>/dev/null || true
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/set-credentials.sh"
 
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # Config files are DATA: load them without executing them. See lib/env-file.sh.
@@ -154,7 +155,11 @@ PRD_FILE="${PRD_FILE:-$PROJECT_DIR/prd.json}"
 export PRD_FILE
 
 # ── Required key validation ───────────────────────────────────────────────────
-IFS=',' read -ra _required_keys <<< "${REQUIRED_KEYS:-}"
+# The project declares what is true of it on ANY stack; the active set declares the vendor keys
+# it cannot start without. Neither list names the other's concern, so selecting a set is never an
+# edit to a project — see lib/set-credentials.sh.
+_set_keys="$(set_required_keys)"
+IFS=',' read -ra _required_keys <<< "${REQUIRED_KEYS:-}${_set_keys:+,$_set_keys}"
 for _key in "${_required_keys[@]}"; do
   _key="${_key// /}"
   [ -z "${_key}" ] && continue
@@ -191,9 +196,12 @@ cd "$REPO_ROOT"
 # ── Export all config vars so subprocesses inherit them ───────────────────────
 set -a
 EPAM_BROWNFIELD="${EPAM_BROWNFIELD:-0}"
-EPAM_API_KEY_MINIMAX="${MINIMAX_API_KEY:-}"
-EPAM_API_KEY_OPENROUTER="${OPENROUTER_API_KEY:-}"
 set +a
+
+# Only the active stack's keys, under the names the pipeline reads. Exporting a vendor key on a
+# stack that never calls it is not merely untidy: a key present OUTRANKS the OAuth session on
+# disk, so the subscription the operator pays for goes unused while an API account is billed.
+export_set_credentials
 
 # ── Capture OpenRouter spend baseline ─────────────────────────────────────────
 _usage_before="0"

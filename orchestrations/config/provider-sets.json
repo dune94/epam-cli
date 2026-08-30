@@ -17,22 +17,41 @@
         "url": "https://openrouter.ai/api/v1/auth/key",
         "keyEnv": "OPENROUTER_API_KEY",
         "usagePath": "data.usage"
-      }
+      },
+      "credentials": [
+        {
+          "env": "EPAM_API_KEY_OPENROUTER",
+          "from": "OPENROUTER_API_KEY",
+          "required": true
+        },
+        {
+          "env": "EPAM_API_KEY_MINIMAX",
+          "from": "MINIMAX_API_KEY",
+          "required": true
+        }
+      ],
+      "$credentials": "The two vendors this stack actually calls. Required, because a run that starts without them dies at the first seam instead of at the launcher."
     },
     "codemie": {
       "settingsFile": "llm-defaults.codemie.json",
       "projectEnvSuffix": "codemie",
-      "description": "Claude via the CodeMie SSO proxy, through the codemie-claude wrapper. Declared 2026-08-25 once its ladders existed — an undeclared set fails loudly, an empty one silently."
+      "description": "Claude via the CodeMie SSO proxy, through the codemie-claude wrapper. Declared 2026-08-25 once its ladders existed — an undeclared set fails loudly, an empty one silently.",
+      "credentials": [],
+      "$credentials": "NONE. The codemie-claude wrapper authenticates through CodeMie SSO; no key reaches this layer."
     },
     "mockserver": {
       "settingsFile": "llm-defaults.mockserver.json",
       "projectEnvSuffix": "mockserver",
-      "description": "Claude Code answered by MockServer over HTTP. No credentials, no spend. Named for the MECHANISM: 'mock' collides with the ordinary word this repo uses throughout, and 'replay' is already a PROVIDER — the cassette rehearsal in ai-run.sh, which replays at the ai-run layer and therefore cannot reach Claude Code at all. Different mechanism, different layer, different name."
+      "description": "Claude Code answered by MockServer over HTTP. No credentials, no spend. Named for the MECHANISM: 'mock' collides with the ordinary word this repo uses throughout, and 'replay' is already a PROVIDER — the cassette rehearsal in ai-run.sh, which replays at the ai-run layer and therefore cannot reach Claude Code at all. Different mechanism, different layer, different name.",
+      "credentials": [],
+      "$credentials": "NONE. MockServer answers over plain HTTP. A free rehearsal that can reach a paid vendor is not a free rehearsal."
     },
     "claude": {
       "settingsFile": "llm-defaults.claude.json",
       "projectEnvSuffix": "claude",
-      "description": "Plain Claude Code on the operator's own tokens. The default stack."
+      "description": "Plain Claude Code on the operator's own tokens. The default stack.",
+      "credentials": [],
+      "$credentials": "NONE, DELIBERATELY. Claude Code authenticates through the OAuth session on disk. An ANTHROPIC_API_KEY present in the environment OUTRANKS that session, so exporting one here would bill an API account while the subscription the operator pays for went unused - which is exactly what happened for seven runs."
     }
   },
   "$defaultSet": "Chosen by the operator 2026-08-25. codemie is what RUNS; openrouter is the hot-swap target kept fully executable beside it. This field previously read 'openrouter' — a value nobody chose: it was invented when this registry was written and then read back as if it were a requirement.",
@@ -49,5 +68,6 @@
     ]
   },
   "$spendProbeWhy": "A run reported its spend by curling a vendor credit endpoint hardcoded in ten places across six launchers, guarded only by `[ -n $OPENROUTER_API_KEY ]`. So a codemie or mockserver run still called OpenRouter — on a free run, the one vendor call that was supposed to be impossible. Which endpoint reports credit is a fact about a STACK, so the set declares it. A set that declares none simply reports no spend.",
-  "$defaultSetWhy": "claude is the default because CodeMie tokens are limited and cannot be topped up. codemie is hot swap 1, openrouter hot swap 2 — both remain declared and unchanged, and swapping is EPAM_PROVIDER_SET, not an edit."
+  "$defaultSetWhy": "claude is the default because CodeMie tokens are limited and cannot be topped up. codemie is hot swap 1, openrouter hot swap 2 — both remain declared and unchanged, and swapping is EPAM_PROVIDER_SET, not an edit.",
+  "$credentials": "WHICH CREDENTIALS A STACK NEEDS IS A FACT ABOUT THE STACK, so it is declared here and nowhere else. orchestrate.sh exported EPAM_API_KEY_MINIMAX and EPAM_API_KEY_OPENROUTER on EVERY stack, and a project's REQUIRED_KEYS named those same two vendors - so a project pinned to claude could not launch without keys for a stack it never calls, and every run carried usable credentials for vendors it was not using. Each entry maps the source variable the operator sets (`from`) to the name the pipeline reads (`env`); `required` means the launcher refuses rather than failing at the first seam. A project declares only what is true of it on ANY stack, such as a Jira token."
 }

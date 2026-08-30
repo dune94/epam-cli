@@ -198,3 +198,28 @@ $_qg_prompt"
     unset ORCH_AGENT_MODEL_CLIMB
     return 1
 }
+
+# qa_gate_verdict_of <log-file> — the verdict a QA gate actually reported.
+#
+# ABSENCE OF "fail" IS NOT SUCCESS. The e2e route check read its log as:
+#
+#     if   grep -q '"verdict": *"fail"'  -> FAIL
+#     elif grep -q '"verdict": *"warn"'  -> WARN
+#     else                                  success "PASS"
+#
+# so an empty log, an unparseable reply, a truncated answer or a verdict the gate has never
+# emitted all arrived as a PASS — reported to the operator in the same words as a gate that ran
+# and approved the work. It is the same shape as a reviewer returning a manufactured "pass",
+# except here nobody wrote the word: it was inferred from silence.
+#
+# Echoes exactly one of: fail | warn | pass | unknown. 'unknown' is the honest answer when the
+# log holds no verdict, and callers must treat it as NOT a pass.
+qa_gate_verdict_of() {
+    local _log="${1:-}"
+    [ -n "$_log" ] && [ -f "$_log" ] || { echo "unknown"; return 0; }
+    if   grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$_log" 2>/dev/null; then echo "fail"
+    elif grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$_log" 2>/dev/null; then echo "warn"
+    elif grep -q '"verdict"[[:space:]]*:[[:space:]]*"pass"' "$_log" 2>/dev/null; then echo "pass"
+    else echo "unknown"
+    fi
+}

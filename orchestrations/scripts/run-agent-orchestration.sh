@@ -8719,15 +8719,28 @@ step_emit "23"  "skip" "Step 23: Browser E2E" "SKIP_TESTING_GATES=true"
                 failed=1
                 continue
             fi
-            if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$story_log" 2>/dev/null; then
-                error "  Step 4.6: $route reported FAIL for $story_id"
-                e2e_route_failed=$((e2e_route_failed + 1))
-                failed=1
-            elif grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$story_log" 2>/dev/null; then
-                warning "  Step 4.6: $route reported WARN for $story_id"
-            else
-                success "  Step 4.6: $route PASS for $story_id"
-            fi
+            # ABSENCE OF "fail" IS NOT SUCCESS. This read the log for fail, then warn, and called
+            # everything else a PASS — so an empty log, an unparseable reply or a verdict this
+            # gate has never emitted was reported to the operator in the same words as an
+            # approval. See qa_gate_verdict_of in lib/gate-verdicts.sh.
+            case "$(qa_gate_verdict_of "$story_log")" in
+                fail)
+                    error "  Step 4.6: $route reported FAIL for $story_id"
+                    e2e_route_failed=$((e2e_route_failed + 1))
+                    failed=1
+                    ;;
+                warn)
+                    warning "  Step 4.6: $route reported WARN for $story_id"
+                    ;;
+                pass)
+                    success "  Step 4.6: $route PASS for $story_id"
+                    ;;
+                *)
+                    error "  Step 4.6: $route produced NO verdict for $story_id — treating as a failure, because a gate that did not judge has not approved anything"
+                    e2e_route_failed=$((e2e_route_failed + 1))
+                    failed=1
+                    ;;
+            esac
         done <<< "$phase_ids"
 
         if [ $e2e_route_runs -eq 0 ]; then

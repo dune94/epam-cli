@@ -80,6 +80,8 @@ function selfHeal({ agent, storyId, reason, output, context, logDir, model, prov
     }
   } catch { return { ran: false, rc: 0, corrective: '' }; }
 
+  // Unique per call, so a marker left in a log by an earlier run cannot be read as this one's.
+  const marker = `__SELF_HEAL_ANALYSED_${process.pid}_${Date.now()}__`;
   const args = [script, classify(reason, output), outFile];
   if (ctxFile) args.push(ctxFile);
   try {
@@ -127,6 +129,7 @@ function selfHeal({ agent, storyId, reason, output, context, logDir, model, prov
         // real model. Without it the only affordable test case is the one the analyst skips — which
         // is exactly the single happy path that let a declining mechanism look wired.
         ...(runner ? { AI_RUNNER_CMD: String(runner) } : {}),
+        SELF_HEAL_ANALYSED_MARKER: marker,
         // THE PROJECT, STATED RATHER THAN INHERITED. The KB the analyst records into roots at
         // EPAM_PROJECT_CONFIG_DIR/kb, and reading it from ambient env made the outcome depend on
         // whatever else had touched process.env — the same call recorded an episode when run
@@ -144,7 +147,12 @@ function selfHeal({ agent, storyId, reason, output, context, logDir, model, prov
     // field exists to expose. The real signals are on stderr: it says which model it is diagnosing
     // via, or why it will not.
     const err = String(r.stderr || '');
-    const analysed = /diagnosing\s+\S+\s+via\s+\S+/.test(err);
+    // WHETHER THE ANALYST RAN IS NOT A QUESTION ABOUT ITS PROSE. This matched the sentence
+    // "diagnosing <class> via <model>", so rewording one log line would have turned every
+    // successful analysis into a decline — silently, and exactly like the live failure recorded
+    // in the comments above. The marker is declared HERE, by the reader, and echoed back by the
+    // analyst: one string, chosen by whoever has to recognise it, and prose is free to change.
+    const analysed = err.includes(marker);
     const why = (err.match(/no model resolved[^\n]*|settings file not found[^\n]*|cannot render[^\n]*/) || [''])[0];
     const declined = rc === 0 && !analysed && !corrective;
     return { ran: true, rc, corrective, analysed, declined, declinedReason: why, stderr: err };

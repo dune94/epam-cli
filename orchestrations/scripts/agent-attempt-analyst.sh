@@ -19,8 +19,14 @@
 # Exit contract (B30, 2026-07-25) — deliberately three-valued, because "produced
 # no corrective" is a LEGITIMATE outcome for provider/infra/timeout and must stay
 # distinguishable from a BROKEN analyst:
-#   0 + output    -> corrective prescribed
-#   0 + no output -> deliberate skip (provider/infra/timeout: no behaviour to fix)
+#   0 + marker    -> analysed; the corrective is recorded as a KB EPISODE, not returned as prose
+#   0 + no marker -> deliberate skip (provider/infra/timeout: no behaviour to fix)
+#
+# THE CORRECTIVE IS NOT ON STDOUT. It used to be returned for the caller to prepend to the next
+# attempt; that is a self-heal push into a prompt, which is banned. Nothing has been written to
+# stdout since, so a caller distinguishing "analysed" from "skipped" by the presence of output
+# would read every success as a skip. The caller declares SELF_HEAL_ANALYSED_MARKER and this
+# script echoes it on stderr when it actually analyses.
 #   2             -> the analyst itself failed; the caller must RECORD that the
 #                    next attempt is running with no corrective guidance
 #
@@ -184,6 +190,19 @@ _emit_fa() { bash "$SCRIPT_DIR/update-monitor.sh" event "$1" "$2" "$_fa_sid" "ma
 _emit_fa "self_heal_start" "failure-analyst diagnosing ${FAILURE_CLASS}${_fa_sid:+ for ${_fa_sid}}"
 
 log "diagnosing ${FAILURE_CLASS} via ${_model}"
+
+# THE CALLER DECLARES HOW IT WILL RECOGNISE A REAL ANALYSIS, and this echoes it back.
+
+# self-heal.js used to decide by regex-matching the sentence above, so rewording one line
+
+# of prose turned every successful analysis into a "decline" — the same indistinguishable
+
+# state recorded live on 2026-08-27 as seven refusals with zero episodes and zero rc=2.
+
+# One string, chosen by the reader, and the prose is free to change.
+
+[ -n "${SELF_HEAL_ANALYSED_MARKER:-}" ] && printf '%s\n' "$SELF_HEAL_ANALYSED_MARKER" >&2
+
 # Keep the runner's stderr: it is the only evidence of WHY self-heal failed, and
 # both call sites used to discard it along with everything else.
 _analyst_err="$(mktemp 2>/dev/null || echo /tmp/agent-analyst-err.$$)"

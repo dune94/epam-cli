@@ -39,7 +39,7 @@ if [ -f "$_ml_lib" ]; then
     # shellcheck source=lib/model-ladders.sh
     . "$_ml_lib" || true
     command -v export_model_ladders >/dev/null 2>&1 \
-        && export_model_ladders "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json}" || true
+        && export_model_ladders "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/llm-settings.json}}" || true
 fi
 # ask must come BEFORE any model is resolved below: seam_ladder_export sets EPAM_MODEL, and
 # a later assignment that wins makes the whole thing decorative.

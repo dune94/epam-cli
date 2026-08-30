@@ -42,8 +42,19 @@
 # can no longer do is mistake "no project" for "no ladders declared".
 export_model_ladders() {
     local _settings="${1:-${EPAM_LLM_SETTINGS_FILE:-}}"
+    # A PATH BUILT FROM AN UNSET VARIABLE IS NOT A MISSING FILE. Callers resolve this as
+    # "${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json", so an unset config dir yields
+    # /llm-settings.json — the filesystem ROOT — and "not found" then sends whoever reads it
+    # hunting for a file rather than for the variable nobody set. Name the variable instead.
+    case "$_settings" in
+        /*/*) : ;;
+        /*)
+            echo "[model-ladders] EPAM_PROJECT_CONFIG_DIR is not set, so the settings path resolved to '$_settings' at the filesystem root — no ladder chains exported. Set EPAM_PROJECT_CONFIG_DIR, or pass EPAM_LLM_SETTINGS_FILE." >&2
+            return 1
+            ;;
+    esac
     [ -n "$_settings" ] || {
-        echo "[model-ladders] no settings file given — no ladder chains exported" >&2
+        echo "[model-ladders] no settings file given, and neither EPAM_LLM_SETTINGS_FILE nor EPAM_PROJECT_CONFIG_DIR is set — no ladder chains exported" >&2
         return 1
     }
     [ -f "$_settings" ] || {

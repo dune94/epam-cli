@@ -86,7 +86,7 @@ if [ -f "$_ml_lib" ]; then
     # shellcheck source=lib/model-ladders.sh
     . "$_ml_lib" || true
     command -v export_model_ladders >/dev/null 2>&1 \
-        && export_model_ladders "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json}" || true
+        && export_model_ladders "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/llm-settings.json}}" || true
 fi
 command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "$_SEAM_NAME"
 

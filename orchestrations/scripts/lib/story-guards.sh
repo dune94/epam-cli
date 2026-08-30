@@ -464,7 +464,7 @@ reset_brownfield_story_commit() {
 # config = never block" posture).
 _text_violates_anti_pattern() {
     local _text="$1"
-    local _rules_file="${EPAM_PROJECT_CONFIG_DIR:-}/anti-patterns.json"
+    local _rules_file="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/anti-patterns.json}"
     [ -f "$_rules_file" ] || return 0
 
     python3 "$SCRIPT_DIR/lib/handlers/story-text-rule-check.py" "$_rules_file" "$_text"
@@ -554,7 +554,8 @@ _persist_skill_note_simple() {
 # Best-effort: malformed/absent config is silently skipped, same posture as
 # every other loader in this file.
 _load_timeout_config() {
-    local _settings_file="${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json"
+    # :+ not :- — an unset config dir must yield an EMPTY path, never one at the filesystem root.
+    local _settings_file="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/llm-settings.json}"
     [ -f "$_settings_file" ] || return 0
 
     # `|| true` is load-bearing (found live, 2026-08-02): this runs under

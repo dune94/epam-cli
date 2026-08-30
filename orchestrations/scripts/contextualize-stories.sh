@@ -71,7 +71,7 @@ if [ -f "$_ml_lib" ]; then
     # shellcheck source=lib/model-ladders.sh
     . "$_ml_lib" || true
     command -v export_model_ladders >/dev/null 2>&1 \
-        && export_model_ladders "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json}" || true
+        && export_model_ladders "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/llm-settings.json}}" || true
 fi
 command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "$_SEAM_NAME"
 
@@ -98,7 +98,7 @@ EXTRA_DOCS="$AUTOMATION_DIR/INSTRUCTIONS.md,$AUTOMATION_DIR/estimation.md,$AUTOM
 # Project manifest (dependency-check.json) — fed to CPA so brownfield stories
 # with empty Jira ACs can still be sized from the project's declared deps/
 # stack facts instead of defaulting to effort:low on nothing. See CPA-BF.
-MANIFEST_FILE="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+MANIFEST_FILE="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/dependency-check.json}"
 if [ -f "$MANIFEST_FILE" ]; then
   MANIFEST_JSON="$(cat "$MANIFEST_FILE")"
 else

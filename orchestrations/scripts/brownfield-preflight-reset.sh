@@ -77,7 +77,7 @@ _apply_local_dependency_overrides() {
     local _proj_root="$1"
     local _codeline_name
     _codeline_name="$(basename "$_proj_root")"
-    local _config="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+    local _config="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/dependency-check.json}"
     [ -f "$_config" ] || return 0
 
     local _overrides_json

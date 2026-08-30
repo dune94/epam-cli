@@ -209,7 +209,7 @@ export ORCH_GATE_PROVIDER EPAM_ORCHESTRATION_PROVIDER
 # a project .env file, or the launch shell all still win). This must run
 # before MAX_RETRIES is read a few lines down, so it's called immediately.
 load_llm_settings_json() {
-    local _settings_file="${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json"
+    local _settings_file="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/llm-settings.json}"
     # NOTE: no early return when the project has no settings file. The engine-wide budget
     # defaults below must still be applied — returning here left every budget unset and the
     # literals in the case statement were the only thing filling them in.
@@ -1086,7 +1086,7 @@ _coupled_pair_gate_for_story() {
     # The gate had therefore never once run.
     #
     # Two candidates, same order as the plugin: project config, then the codeline copy.
-    local _manifest="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+    local _manifest="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/dependency-check.json}"
     [ -f "$_manifest" ] || _manifest="${PROJECT_ROOT}/.epam/dependency-check.json"
     [ -f "$_report_file" ] || return 0
 
@@ -1150,7 +1150,7 @@ _plan_fidelity_gate_for_story() {
     if [ ! -s "$_changed_list" ]; then rm -f "$_changed_list"; return 0; fi
 
     # Two candidates, same order as the dependency plugin and the coupled-pair gate.
-    local _manifest="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+    local _manifest="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/dependency-check.json}"
     [ -f "$_manifest" ] || _manifest="${PROJECT_ROOT}/.epam/dependency-check.json"
 
     local _gate_out _gate_rc=0
@@ -4157,7 +4157,7 @@ run_vendor_integrity_check() {
 # and inventing them is worse than saying nothing.
 _module_resolution_context() {
     local _repo="${1:-$PROJECT_ROOT}"
-    local _cfg="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+    local _cfg="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/dependency-check.json}"
     [ -f "$_cfg" ] || _cfg="$_repo/.epam/dependency-check.json"
     [ -f "$_cfg" ] || return 0
 
@@ -4607,7 +4607,7 @@ run_anti_pattern_check() {
     local project_root="$1"
     local output_file="${2:-/dev/null}"
     local story_id="${3:-}"
-    local rules_file="${EPAM_PROJECT_CONFIG_DIR:-}/anti-patterns.json"
+    local rules_file="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/anti-patterns.json}"
     [ -f "$rules_file" ] || return 0
 
     local owned_files_json="[]"
@@ -5679,7 +5679,7 @@ _verification_plugin_call() {
 _project_dep_config_value() {
     local _root="${1:-$PROJECT_ROOT}" _key="$2"
     local _cfg="$_root/.epam/dependency-check.json"
-    [ -f "$_cfg" ] || _cfg="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+    [ -f "$_cfg" ] || _cfg="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/dependency-check.json}"
     [ -f "$_cfg" ] || return 0
     jq -r --arg k "$_key" '.[$k] // empty' "$_cfg" 2>/dev/null
 }
@@ -10221,7 +10221,7 @@ $_kb_section"
                   # BOTH LAYERS, IN ORDER -- the project first, then the active stack. Asking which
                   # FILE to read skipped the stack whenever the project declared any override at
                   # all; resolve_model_override asks which file declares THIS MODEL.
-                  local _proj_override_file="${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json"
+                  local _proj_override_file="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/llm-settings.json}"
                   local _stack_override_file
                   _stack_override_file="$("${NODE_BIN:-node}" -e '
                       try {

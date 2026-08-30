@@ -61,7 +61,7 @@ if [ -z "$_prd" ]; then
     # No cross-run glob and no fallback to a shared namespace. If this run's PRD cannot be
     # located, artifacts.json records it as MISSING — absence is honest, another project's
     # data is not.
-    _run_work="${EPAM_PROJECT_CONFIG_DIR:-}/runs/${ORCH_RUN_ID:-}/work"
+    _run_work="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/runs/${ORCH_RUN_ID}:-}/work"
     if [ -n "${ORCH_RUN_ID:-}" ] && [ -d "$_run_work" ]; then
         _prd=$(ls -t "$_run_work"/*-prd.json 2>/dev/null | head -1)
     fi

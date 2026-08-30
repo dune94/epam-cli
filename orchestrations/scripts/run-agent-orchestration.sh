@@ -275,7 +275,7 @@ if command -v export_model_ladders >/dev/null 2>&1; then
     # outcome: no chains, and every seam declining or falling back.
     if ! export_model_ladders "$(command -v project_settings_file >/dev/null 2>&1 \
             && project_settings_file "${EPAM_PROJECT_CONFIG_DIR:-}" \
-            || echo "${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json")"; then
+            || echo "${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/llm-settings.json}")"; then
         echo "[orch] WARNING: no ladder chains exported (see [model-ladders] above) — seams will have no resolvable model" >&2
     fi
 else
@@ -5848,7 +5848,7 @@ else
             printf '%s' "$_mc_prd_before" > "$_mc_before_file"
             printf '%s' "$_mc_prd_after" > "$_mc_after_file"
             _mc_verdict=$(python3 "$SCRIPT_DIR/lib/handlers/mc-review.py" "$_mc_before_file" "$_mc_after_file" \
-                "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json}" \
+                "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/llm-settings.json}}" \
                 2>"$_mc_verdict_stderr"
 )
             rm -f "$_mc_before_file" "$_mc_after_file"

@@ -18,6 +18,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import fs from 'fs';
 import path from 'path';
+import { orchestratorSource } from '../../helpers/orchestrator-source';
 
 const ORCH_SCRIPT   = path.resolve(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
 const AI_RUN        = path.resolve(__dirname, '../../../orchestrations/scripts/llm-handler.sh');
@@ -28,7 +29,10 @@ const PRD_REMEDIATE = path.resolve(__dirname, '../../../orchestrations/scripts/p
 const PRD_REMEDIATE_IMPL = path.resolve(__dirname, '../../../orchestrations/scripts/_prd_remediate_impl.py');
 const MONITOR_HTML  = path.resolve(__dirname, '../../../orchestrations/dashboards/monitor.html');
 
-const orchSrc   = fs.readFileSync(ORCH_SCRIPT, 'utf8');
+// Reads the orchestrator AND the libs lifted out of it: run_orch_prompt and the gate verdict
+// logic now live under lib/. The property is about the SHIPPED path, not about which file
+// happens to hold a function today. See test/helpers for the single definition.
+const orchSrc = orchestratorSource();
 
 // THE ORCHESTRATOR IS NO LONGER ONE FILE.
 //
@@ -1182,6 +1186,8 @@ describe('Tool access contract — QA gate agents have file access', () => {
   });
 
   it('_run_qa_gate_with_retry is defined before it is first used (at the sast call site)', () => {
+    // Definition-before-use still holds, and still by position: the lib is spliced in at its
+    // source line, exactly where bash pulls it in, so this means what it always meant.
     const defIdx = orchSrc.indexOf('_run_qa_gate_with_retry()');
     const useIdx = orchSrc.indexOf('_run_qa_gate_with_retry "$sast_prompt"');
     expect(defIdx).toBeGreaterThan(-1);

@@ -1,0 +1,40 @@
+orchestrations/scripts/claude.sh:6324:                "https://openrouter.ai/api/v1/auth/key" \
+orchestrations/scripts/lib/story-guards.sh:103:    warning "  Resume: POST http://localhost:${CONTROL_PLANE_PORT}/resume"
+orchestrations/scripts/lib/story-guards.sh:109:            warning "Still paused (${_waited}s / ${_max}s max). POST http://localhost:${CONTROL_PLANE_PORT}/resume to continue."
+orchestrations/scripts/mock-expectations.js:42:const HOST = arg('--host', 'http://localhost:1080');
+orchestrations/scripts/validate-dashboards.sh:249:        url="http://localhost:${PORT}/${dash}"
+orchestrations/scripts/control-plane.js:229:  process.stdout.write(`[control-plane] listening on http://0.0.0.0:${PORT}  LOG_DIR=${LOG_DIR}\n`);
+src/observability/LangfuseTracer.ts:46:      baseUrl: process.env.LANGFUSE_BASE_URL ?? 'http://localhost:3100',
+src/config/GlobalConfig.ts:10:  backendUrl: 'https://api.epam.example.com',
+src/remote/RemoteSessionStore.ts:41:    this.baseUrl = baseUrl || 'http://localhost:8080';
+src/cli/repl/commands/UserCommand.ts:230:          console.log(chalk.dim('  2. Or create a PAT at: https://github.com/settings/tokens'));
+src/cli/repl/commands/ProviderCommand.ts:251:        console.log(chalk.dim('Get an API key at: https://aistudio.google.com/apikey'));
+src/cli/repl/commands/ProviderCommand.ts:272:        console.log(chalk.dim('Get a free API key at: https://openrouter.ai/keys  (no credit card required)'));
+src/cli/repl/commands/ProviderCommand.ts:390:          cursor:    'https://aistudio.google.com/apikey',
+src/cli/repl/commands/ProviderCommand.ts:391:          qwen:      'https://openrouter.ai/keys',
+src/cli/repl/commands/ProviderCommand.ts:392:          anthropic: 'https://console.anthropic.com/settings/keys',
+src/cli/repl/commands/ProviderCommand.ts:393:          claude:    'https://console.anthropic.com/settings/keys',
+src/cli/repl/commands/ProviderCommand.ts:394:          openai:    'https://platform.openai.com/api-keys',
+src/cli/repl/commands/ProviderCommand.ts:395:          gemini:    'https://aistudio.google.com/apikey',
+src/cli/repl/commands/MCPCommand.ts:73:    console.log(chalk.dim('      "url": "http://localhost:3000"'));
+src/cli/repl/commands/DashboardCommand.ts:12:  monitor: 'http://localhost:8092/monitor.html',
+src/cli/repl/commands/DashboardCommand.ts:13:  prd: 'http://localhost:8092/prd-viewer.html',
+src/cli/repl/commands/DashboardCommand.ts:14:  cost: 'http://localhost:8092/phase-cost-monitor.html',
+src/cli/repl/commands/DashboardCommand.ts:15:  agents: 'http://localhost:8092/agent-profiles.html',
+src/cli/repl/commands/DashboardCommand.ts:16:  orchestration: 'http://localhost:8092/orchestration-plan.html',
+src/cli/repl/commands/MCPQueryCommand.ts:53:    console.log(chalk.dim('  MCP_JIRA_URL=http://localhost:9010'));
+src/cli/repl/commands/MCPQueryCommand.ts:54:    console.log(chalk.dim('  MCP_CONFLUENCE_URL=http://localhost:9020'));
+src/cli/repl/commands/MCPQueryCommand.ts:55:    console.log(chalk.dim('  MCP_DRAWIO_URL=http://localhost:9040'));
+src/cli/commands/provider.ts:49:  const defaultUrl = 'https://codemie.lab.epam.com';
+src/auth/OAuthClient.ts:31:    const redirectUri = `http://localhost:${CALLBACK_PORT}${CALLBACK_PATH}`;
+src/auth/OAuthClient.ts:49:        const url = new URL(req.url ?? '/', `http://localhost:${CALLBACK_PORT}`);
+src/providers/qwen/QwenProvider.ts:80:export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
+src/providers/qwen/QwenProvider.ts:156:export const DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/api/v1';
+src/providers/qwen/QwenProvider.ts:252:        'HTTP-Referer': 'https://epam.com',
+src/providers/qwen/QwenProvider.ts:357:        'HTTP-Referer': 'https://epam.com',
+src/providers/anthropic/AnthropicProvider.ts:179:              detailedMessage = 'Anthropic API: Credit balance too low. Please add credits at https://console.anthropic.com/settings/plans';
+src/providers/cursor/CursorProvider.ts:25:    this.baseURL = config.baseURL || 'https://generativelanguage.googleapis.com/v1beta';
+src/providers/copilot/CopilotProvider.ts:20:const GITHUB_MODELS_URL = 'https://models.github.ai/inference';
+src/providers/copilot/CopilotProvider.ts:21:const COPILOT_API_URL = 'https://api.githubcopilot.com';
+src/providers/codemie/CodemieSSO.ts:199:        const url = new URL(req.url, `http://localhost:${serverPort}`);
+src/providers/minimax/MiniMaxProvider.ts:18:export const MINIMAX_BASE_URL = 'https://api.minimaxi.chat/v1';

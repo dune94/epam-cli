@@ -22,8 +22,10 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { orchestratorSource } from '../../helpers/orchestrator-source';
 
 const ORCH = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
+const GATE_LIB = join(__dirname, '../../../orchestrations/scripts/lib/gate-verdicts.sh');
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 
@@ -45,7 +47,9 @@ function verdict(logText: string) {
      # and without it every fail silently degrades to warn — which is how a gate looks wired and
      # is not.
      SCRIPT_DIR=${JSON.stringify(join(__dirname, '../../../orchestrations/scripts'))}
-     eval "$(sed -n '/^runtime_boundary_verdict() {/,/^}/p' ${JSON.stringify(ORCH)})"
+         # The function now lives in lib/gate-verdicts.sh — lifted out of the orchestrator so it
+         # could be executed by a test at all. Sourced whole rather than sliced out by pattern.
+         . ${JSON.stringify(GATE_LIB)}
      runtime_boundary_verdict ${JSON.stringify(s.log)} ${JSON.stringify(s.root)}`,
   ], { encoding: 'utf8', timeout: 60000 });
   return ((r.stdout || '').trim().split('\n').pop() || '').trim();
@@ -94,7 +98,7 @@ describe('AND THE RUN ACTUALLY ASKS FOR IT', () => {
   // written and always ignored. This asserts the RECEIVER — that the gate's own log reaches the
   // verdict — because everything above passes just as happily while the caller reads only $?.
   it('the gate log is handed to the verdict, not just the exit code', () => {
-    const text = readFileSync(ORCH, 'utf8');
+    const text = orchestratorSource();
     const at = text.indexOf('_run_qa_gate_with_retry "$_rb_prompt"');
     expect(at, 'the runtime-boundary gate call is gone').toBeGreaterThan(-1);
 
@@ -106,7 +110,7 @@ describe('AND THE RUN ACTUALLY ASKS FOR IT', () => {
   });
 
   it('a blocking verdict actually fails the phase', () => {
-    const text = readFileSync(ORCH, 'utf8');
+    const text = orchestratorSource();
     const at = text.indexOf('case "$(runtime_boundary_verdict');
     expect(at, 'the verdict is not consulted at all').toBeGreaterThan(-1);
     const block = text.slice(at, text.indexOf('esac', at));

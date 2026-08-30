@@ -21,6 +21,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const SCRIPTS = join(__dirname, '../../../orchestrations/scripts');
+// Deliberately the orchestrator ALONE. This extracts a block by position and runs it verbatim,
+// and the KB gate block never moved — joining the extracted libs only shifts what it finds.
 const src = readFileSync(join(SCRIPTS, 'run-agent-orchestration.sh'), 'utf8');
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });

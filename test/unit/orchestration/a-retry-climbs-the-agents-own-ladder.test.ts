@@ -19,6 +19,7 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { orchestratorSource } from '../../helpers/orchestrator-source';
 
 const ROOT = join(__dirname, '../../..');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -30,7 +31,7 @@ const ORCH = join(SCRIPTS, 'run-agent-orchestration.sh');
 const ORCH_PROMPT = join(SCRIPTS, 'lib/orch-prompt.sh');
 const NODE = process.execPath;
 
-const src = () => `${readFileSync(ORCH, 'utf8')}\n${readFileSync(ORCH_PROMPT, 'utf8')}`;
+const src = () => orchestratorSource();
 const code = () => src().split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
 
 /** Run a ladder expression with mock3's ladders loaded, as the engine does. */

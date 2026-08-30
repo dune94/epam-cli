@@ -20,9 +20,13 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { orchestratorSource } from '../../helpers/orchestrator-source';
 
 const SCRIPTS = join(__dirname, '../../../orchestrations/scripts');
-const orch = readFileSync(join(SCRIPTS, 'run-agent-orchestration.sh'), 'utf8');
+// Reads the orchestrator AND the libs carved out of it — run_orch_prompt and the gate verdict
+// logic now live in lib/. See test/helpers/orchestrator-source.ts: the property is about the
+// shipped path, not about which file happens to hold it today.
+const orch = orchestratorSource();
 
 describe('gate agents cannot loop forever', () => {
   it('run_orch_prompt sets an iteration bound', () => {

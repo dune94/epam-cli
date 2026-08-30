@@ -7,10 +7,14 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { orchestratorSource } from '../../helpers/orchestrator-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
-const src = readFileSync(ORCH_SH, 'utf8');
+// Reads the orchestrator AND the libs lifted out of it: run_orch_prompt and the gate verdict
+// logic now live under lib/. The property is about the SHIPPED path, not about which file
+// happens to hold a function today. See test/helpers for the single definition.
+const src = orchestratorSource();
 
 // ── LG1: gate-finding-analyst (lint path) ────────────────────────────────────
 describe('LG1: lint-gate gate-finding-analyst — retry on empty output', () => {

@@ -26,10 +26,14 @@ import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSyn
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { orchestratorSource } from '../../helpers/orchestrator-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
-const orchSrc = readFileSync(ORCH_SH, 'utf8');
+// Reads the orchestrator AND the libs lifted out of it: run_orch_prompt and the gate verdict
+// logic now live under lib/. The property is about the SHIPPED path, not about which file
+// happens to hold a function today. See test/helpers for the single definition.
+const orchSrc = orchestratorSource();
 const NODE_BIN = process.execPath;
 
 function extractFuzzVerifyPython(): string {

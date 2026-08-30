@@ -1,0 +1,133 @@
+### unnamed numeric decisions — every matching line
+
+orchestrations/scripts/spec-mode-runner.js:351:function getDeterministicCandidateFiles(story, topN = 3) {
+orchestrations/scripts/spec-mode-runner.js:578:function acquireFileLock(lockPath, timeoutMs = 30000, staleMs = 30000) {
+orchestrations/scripts/spec-mode-runner.js:5526:  const planIdents = [...new Set([...backticked(plan), ...camelOrPathLike(plan)].map(norm).filter((t) => t.length >= 4))];
+orchestrations/scripts/spec-mode-runner.js:5533:    ]).map(norm).filter((t) => t.length >= 4)
+orchestrations/scripts/spec-mode-runner.js:6647:  const findLinks = (node, depth = 0) => {
+orchestrations/scripts/spec-mode-runner.js:7768:  if (!outputDir || !Array.isArray(siblings) || siblings.length < 2) return;
+orchestrations/scripts/spec-mode-runner.js:8685:    let depth = 0, inStr = false, esc = false;
+orchestrations/scripts/spec-mode-runner.js:8850:  if (Number.isFinite(declared) && declared > 0) return declared * 1000;
+orchestrations/scripts/spec-mode-runner.js:8855:  if (Number.isFinite(cfg) && cfg > 0) return cfg * 1000;
+orchestrations/scripts/claude.sh:610:            log "  TestEngineerEffortFloor: low -> medium (maxIter=10 maxOutTok=6144) -- test-writing needs more research/verification turns than impl at the same tier"
+orchestrations/scripts/claude.sh:615:            log "  TestEngineerEffortFloor: medium -> high (maxIter=15 maxOutTok=6144)"
+orchestrations/scripts/claude.sh:6466:                log "  Coordinator[L1]: cross-run KB synthesis disabled (EPAM_KB_CROSS_RUN_SYNTHESIS=0) — $story_id has ${_prior_cap_count} capability failures, not persisted to the KB"
+orchestrations/scripts/claude.sh:7862:    json.dump(prd, f, indent=2)
+orchestrations/scripts/claude.sh:7891:    json.dump(prd, f, indent=2)
+orchestrations/scripts/claude.sh:7941:    json.dump(prd, f, indent=2)
+orchestrations/scripts/claude.sh:7970:    json.dump(prd, f, indent=2)
+orchestrations/scripts/snapshot-watch.js:15:const INTERVAL_MS  = (parseInt(process.argv[2], 10) || 10) * 1000;
+orchestrations/scripts/agent-check.js:439:  const declaredMs = Number(profile && profile.timeoutSecs) * 1000;
+orchestrations/scripts/test-engine.sh:48:run_mode "CLI invoke path  (EPAM_SDK_INVOKE=0)" "run-hello-world-test.sh"
+orchestrations/scripts/test-engine.sh:49:run_mode "SDK invoke path  (EPAM_SDK_INVOKE=1)" "run-hello-world-sdk-test.sh"
+orchestrations/scripts/kb-replay.js:120:  let compiles = 0, noMechanism = 0;
+orchestrations/scripts/kb-replay.js:134:  const pct = n => ((n / episodes.length) * 100).toFixed(1) + '%';
+orchestrations/scripts/brownfield-repro-test-writer.sh:127:[ "${EPAM_SKIP_REPRO_TEST_WRITER:-0}" = "1" ] && { log "skipped (EPAM_SKIP_REPRO_TEST_WRITER=1)"; exit 0; }
+orchestrations/scripts/pre-run-reset.sh:192:  info "  Container restart skipped (EPAM_SKIP_CONTAINER_RESTART=1)"
+orchestrations/scripts/pre-run-reset.sh:607:    info "  Mint skipped (EPAM_SKIP_AGENT_MINT=1) — keeping the roster and registries the mint last produced"
+orchestrations/scripts/mint-agents-step.js:796:    process.stderr.write('[mint-step] mint skipped (EPAM_SKIP_AGENT_MINT=1) — resuming from a checkpoint\n');
+orchestrations/scripts/lib/handlers/spanning-stories-incomplete.js:44:  if (want.length < 2) continue;                       // not a spanning story
+orchestrations/scripts/lib/codegraph-context.js:146:function queryCodeGraph(keywords, repoPath, limit = 10) {
+orchestrations/scripts/lib/codegraph-context.js:168:function exploreCodeGraph(query, repoPath, { maxFiles = 4, maxChars = 12000 } = {}) {
+orchestrations/scripts/lib/codegraph-context.js:227:function exploreCandidateFiles(query, repoPath, topN = 3) {
+orchestrations/scripts/lib/topology-router.js:73:  if (wt.length <= 4) return { topology: 'parallel',   reason: `Count heuristic: ${wt.length} stories → parallel worktrees.`, source: 'heuristic' };
+orchestrations/scripts/lib/cpa-inference.js:374:    tokenEfficiency: Math.min(1.0, Math.round((populated * 60) / Math.max(1, tokensOut) * 100) / 100),
+orchestrations/scripts/lib/content-retry.js:85:function retryUntilParsed({ call, parse, attempts = 3, what = 'response', log = () => {} }) {
+orchestrations/scripts/lib/content-retry.js:162:async function retryUntilParsedAsync({ call, parse, attempts = 3, what = 'response', log = () => {} }) {
+orchestrations/scripts/lib/cost-emitter.js:109:function buildCostSnapshot({ agent, storyId, phase, model, provider, cost, turns = 1, source = 'spec-mode-runner' }) {
+orchestrations/scripts/lib/cost-emitter.js:165:      Math.round(((new Date(ended) - new Date(started)) / 60000) * 100) / 100) || 0;
+orchestrations/scripts/lib/ac-gate.js:249:      issue.acceptanceCriteria.length >= 3 &&
+orchestrations/scripts/lib/ac-gate.js:250:      issue.acceptanceCriteria.some(ac => ac.length > 30);
+orchestrations/scripts/lib/agent-roster.js:192:    if (segs.length < 2) return false;
+orchestrations/scripts/lib/tfidf.js:59:    .filter(t => t.length > 2 && !STOPWORDS.has(t));
+orchestrations/scripts/lib/tfidf.js:210:    score: Math.round(score * 10000) / 10000,
+orchestrations/scripts/lib/jira-adapter.js:156:    .filter(l => l.length > 5);
+orchestrations/scripts/lib/project-prompt-builder.js:183:  projectContext, codelineContext, mintedRoles, attempts = 3, mode = 'generate', log = () => {},
+orchestrations/scripts/lib/jira-client.js:171:async function searchIssues(jql, maxResults = 50, fields = []) {
+orchestrations/scripts/lib/jira-client.js:392:    .filter(l => l.length > 5);
+orchestrations/scripts/lib/project-roster.js:362:  canonicalPath, logDir, projectConfigDir, produce, review, attempts = 3, log = () => {},
+orchestrations/scripts/lib/codeline-health.sh:41:  _ch_log "skipped (SKIP_CODELINE_HEALTH=1)"
+orchestrations/scripts/lib/prompt-drift.js:117:  const substantial = (l) => l.trim().length > 40;
+orchestrations/scripts/lib/llm-call.js:44:    timeoutMs = 0,
+orchestrations/scripts/lib/brownfield-context.js:120:    if (text.length > 20) {
+orchestrations/scripts/lib/brownfield-context.js:130:  return text.toLowerCase().replace(/[^a-z0-9_]/g, ' ').split(/\s+/).filter(t => t.length > 2);
+orchestrations/scripts/lib/brownfield-context.js:244:        if (text.length > 20) chunks.push({ source: 'stub:confluence', chunk: text });
+orchestrations/scripts/lib/brownfield-context.js:276:        if (stat.size > MAX_FILE_KB * 1024) continue;
+orchestrations/scripts/lib/brownfield-context.js:296:      .map(c => ({ source: c.source, score: Math.round(c.score * 10000) / 10000, chunk: c.chunk }));
+orchestrations/scripts/mock-expectations.js:766:  const suffixes = new Set(declared.map((d) => d.split('-').pop()).filter((x) => x && x.length > 3));
+orchestrations/scripts/estimate-stories.sh:210:            tier_forecast=$(echo "$completed_data" | jq -s "[.[] | $filter | ((.forecast_hours // 0) * 60)] | add // 0")
+orchestrations/scripts/estimate-stories.sh:244:        sum_forecast_min=$(echo "$completed_data" | jq -s 'map((.forecast_hours // 0) * 60) | add // 0')
+orchestrations/scripts/estimate-stories.sh:637:    cache_pct=$(echo "scale=0; ($cache_ratio * 100) / 1" | bc)
+orchestrations/scripts/run-agent-orchestration.sh:1786:        info "Control plane disabled (EPAM_CONTROL_PLANE=0)."
+orchestrations/scripts/run-agent-orchestration.sh:2916:        info "Dashboard auto-serve disabled (EPAM_DASH_AUTO_SERVE=0)."
+orchestrations/scripts/run-agent-orchestration.sh:3606:        error "[orch]   Aborting the codeline(s) still running (EPAM_CASCADE_ABORT_ON_LANE_FAILURE=1) —"
+orchestrations/scripts/run-agent-orchestration.sh:3922:    log "[mint] Agent mint skipped (EPAM_SKIP_AGENT_MINT=1) — using the roster on disk (${_roster_n} agent(s))"
+orchestrations/scripts/run-agent-orchestration.sh:4260:        error "[orch] resume '${EPAM_RESUME_RUN}' skips the spec pass (EPAM_SPEC_MODE=0), but the PRD"
+orchestrations/scripts/run-agent-orchestration.sh:4725:    info "Step 1: Specification pass disabled (EPAM_SPEC_MODE=0)"
+orchestrations/scripts/run-agent-orchestration.sh:4880:        info "Step 2: CPA pre-pass skipped (SKIP_CPA=1)"
+orchestrations/scripts/run-agent-orchestration.sh:5576:    log "Step 3: Skipped (SKIP_SKILL_ASSESSMENT=1)"
+orchestrations/scripts/run-agent-orchestration.sh:5997:    info "  [prd-model-coordinator] Skipped (SKIP_PRD_MODEL_COORDINATOR=1)"
+orchestrations/scripts/run-agent-orchestration.sh:6956:    info "Step 10: TC writer gate skipped (SKIP_TC_WRITER=1)"
+orchestrations/scripts/run-agent-orchestration.sh:7576:    info "Step 18: Skipped (SKIP_SKILL_ASSESSMENT=1)"
+orchestrations/scripts/run-agent-orchestration.sh:8599:            python3 -c "import json,sys; d=json.load(open('${MAIN_PRD_FILE:-$PRD_FILE}')); active=[s for s in d.get('stories',[]) if not s.get('completed')]; print(json.dumps([{k:s.get(k) for k in ('id','title','agentRole')} for s in active], indent=2))" > "$_lf_stories_file" 2>/dev/null || echo "[]" > "$_lf_stories_file"
+orchestrations/scripts/run-agent-orchestration.sh:8672:                python3 -c "import json; d=json.load(open('${MAIN_PRD_FILE:-$PRD_FILE}')); [print(json.dumps(s.get('acceptanceCriteria', []), indent=2)) for s in d.get('stories',[]) if s.get('id')=='$_lint_story_id']" > "$_lac_acs_file" 2>/dev/null || echo "[]" > "$_lac_acs_file"
+orchestrations/plugins/dependency-contract-plugin.js:43:const MAX_FILE_BYTES = 2 * 1024 * 1024;
+orchestrations/plugins/dependency-contract-plugin.js:114:    if (evidence.length >= 5) break;
+orchestrations/plugins/secret-scan-plugin.js:86:    if (value.length < 12) continue;                    // too short to be a key
+src/agent/AgentRunner.ts:168:      if ((tokenTriggerHit || iterationTriggerHit) && messages.length > 6) {
+src/agent/AgentRunner.ts:377:          `${partial.slice(0, 200)}${partial.length > 200 ? '…' : ''}`
+src/agent/AgentRunner.ts:647:        'RalphWiggumLoop: Skipped (EPAM_RALPH_WIGGUM_ENABLED=0)');
+src/remote/RemoteSessionStore.ts:71:    const expiresAt = new Date(Date.now() + this.ttl * 1000).toISOString();
+src/remote/RemoteSessionStore.ts:124:    const expiresAt = new Date(Date.now() + this.ttl * 1000).toISOString();
+src/remote/RemoteSessionAPI.ts:4:const MAX_PAYLOAD_SIZE = 5 * 1024 * 1024; // 5 MB
+src/remote/RemoteSessionAPI.ts:19:export function createRateLimiter(limitPerMinute: number = 5): RequestHandler {
+src/remote/RemoteSessionAPI.ts:27:    const windowMs = 60 * 1000; // 1 minute
+src/assets/AssetStore.ts:184:        .filter(token => token.length >= 2) // Skip very short tokens
+src/cli/output/StreamWriter.ts:18:    const preview = inputStr.length > 80 ? inputStr.slice(0, 80) + '...' : inputStr;
+src/cli/output/StreamWriter.ts:26:      const preview = result.length > 100 ? result.slice(0, 100) + '...' : result;
+src/cli/repl/RawInputBox.ts:55:      if (this.history.length > 500) this.history.pop();
+src/cli/repl/Repl.ts:418:              ? ((1 - nextRate / currentRate) * 100).toFixed(0) 
+src/cli/repl/Repl.ts:790:      if (codes.length > 3) {
+src/cli/repl/SlashCommands.ts:174:          const warningPct = Math.min(100, (cost / limits.warningAt) * 100);
+src/cli/repl/SlashCommands.ts:179:          const limitPct = Math.min(100, (cost / limits.hardLimitAt) * 100);
+src/cli/repl/SlashCommands.ts:257:      if (ctx.messages.length < 2) {
+src/cli/repl/SlashCommands.ts:269:          ? lastUser.content.slice(0, 80) + (lastUser.content.length > 80 ? '…' : '')
+src/cli/repl/PromptZone.ts:46:    const pct = Math.max(0, ((state.hardLimitAt - cost) / state.hardLimitAt) * 100).toFixed(1);
+src/cli/repl/commands/UserCommand.ts:136:  if (!s || s.length < 10) return '****';
+src/cli/repl/commands/UserCommand.ts:333:          const isLive       = liveSecret.length > 4 && storedSecret === liveSecret;
+src/cli/repl/commands/TeamCommand.ts:111:        if (team.sharedSessions.length > 5) {
+src/cli/repl/commands/TeamCommand.ts:140:          if (allCodes.length > 5) {
+src/cli/repl/commands/TeamCommand.ts:163:          if (incomingBundles.length > 3) {
+src/cli/repl/commands/StatusCommand.ts:58:    if (tools.length > 5) {
+src/cli/repl/commands/AgentCommand.ts:164:        if ((line + w).length > 80) { console.log(line); line = '  ' + w + ' '; }
+src/cli/repl/commands/TasksCommand.ts:39:      if (tools.length > 8) {
+src/cli/repl/commands/RemoteCommand.ts:194:                const display = oneLine.length > 120 ? oneLine.slice(0, 117) + '…' : oneLine;
+src/cli/repl/commands/MCPQueryCommand.ts:159:    if (result.items.length > 5) {
+src/cli/repl/commands/ImportCommand.ts:120:        const userPreview = turn.userMessage.length > 120
+src/cli/repl/commands/ImportCommand.ts:126:        const assistantPreview = turn.assistantResponse.length > 200
+src/cli/commands/phase.ts:149:function formatNumber(value: number, digits = 2): string {
+src/cli/commands/report.ts:130:      ? ((cost / report.totalCost) * 100).toFixed(1)
+src/cli/commands/provider.ts:19:  if (secret.length <= 8) return '****';
+src/cli/commands/import.ts:86:          const userPreview = turn.userMessage.length > 120
+src/cli/commands/import.ts:90:          const assistantPreview = turn.assistantResponse.length > 200
+src/cli/commands/doctor.ts:109:              const masked = record.secret.length > 8
+src/cli/commands/run.ts:228:    cost_usd: Math.round(cost * 10000) / 10000,
+src/cli/commands/replay.ts:142:function indent(text: string, spaces = 2): string {
+src/cli/commands/profile.ts:91:          const suffix = profile.systemPromptAppend.length > 80 ? '…' : '';
+src/memory/MemoryImportResolver.ts:28:  async resolve(content: string, depth = 0): Promise<ResolveResult> {
+src/context/RedisSessionStore.ts:16:const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
+src/context/MemoryCompressor.ts:8:  if (messages.length <= 4) return messages;
+src/scaffold/ManifestAnalyzer.ts:20:  maxTokens = 16384,
+src/mcp/MCPAutoQuery.ts:94:    if (result.items.length > 3) {
+src/auth/JWTDecoder.ts:13:export function isTokenExpired(token: string, bufferSeconds = 60): boolean {
+src/auth/JWTDecoder.ts:16:  const expiresAt = claims.exp * 1000;
+src/auth/JWTDecoder.ts:17:  return Date.now() > expiresAt - bufferSeconds * 1000;
+src/auth/DeviceFlow.ts:47:      await this.sleep(intervalSeconds * 1000);
+src/providers/codex/CodexProvider.ts:127:      const display = inner.length > 100 ? inner.slice(0, 97) + '…' : inner;
+src/providers/codex/CodexProvider.ts:136:      const preview = out.length > 80 ? out.slice(0, 77) + '…' : out;
+src/providers/codex/CodexProvider.ts:289:        }, (20 * 60 - 45) * 1000);
+src/providers/codex/CodexProvider.ts:290:      }, 45 * 1000);
+src/providers/health/FailoverPolicy.ts:77:  if (statusCode === 429) return 5 * 60 * 1000;  // 5 min for rate limits
+src/providers/health/FailoverPolicy.ts:78:  if (statusCode != null && statusCode >= 500) return 2 * 60 * 1000; // 2 min for server errors
+src/providers/health/FailoverPolicy.ts:79:  return 3 * 60 * 1000; // 3 min default
+src/providers/codemie/CodemieSSO.ts:110:          expiresAt: Date.now() + (24 * 60 * 60 * 1000) // 24 hours

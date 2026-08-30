@@ -38,13 +38,19 @@ describe('no call site invents its own budget', () => {
       + 'the seam in invocation-profiles.json and read it.').toEqual([])
   })
 
-  it('the repro-test-writer seam declares the narrow-question budget it needs', () => {
+  it('the repro-test-writer seam declares its narrow question\'s SIZE — but not its turns', () => {
     const p = PROFILES.profiles['repro-test-writer']
     expect(p, 'repro-test-writer is not a declared seam').toBeTruthy()
     expect(p.microQuestion, 'no declared budget for the seam\'s one-line question').toBeTruthy()
-    expect(Number.isFinite(p.microQuestion.maxIterations)).toBe(true)
     expect(Number.isFinite(p.microQuestion.maxOutputTokens)).toBe(true)
     // it must stay CHEAPER than the seam's own budget, or it is not a micro question
     expect(p.microQuestion.maxOutputTokens).toBeLessThan(p.maxOutputTokens)
+
+    // THE LADDER OWNS THE TURNS. This used to require maxIterations here too, which is the same
+    // defect as the call-site literals this file exists to prevent — a number outranking the
+    // seam's ladder rung, only spelled as configuration. Output SIZE is the question's own
+    // property; how many turns it may take is not.
+    expect(p.microQuestion.maxIterations,
+      'a declared iteration budget outranks the ladder rung for this one call').toBeUndefined()
   })
 })

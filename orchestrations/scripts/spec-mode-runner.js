@@ -8788,6 +8788,50 @@ function readAgentRawOutput(logPath) {
   } catch { return ''; }
 }
 
+/**
+ * THE FIRST COMPLETE JSON VALUE IN A STRING, OR NULL.
+ *
+ * JSON.parse rejects the whole text when anything follows the value — "Extra data" — and the caller
+ * is then told there was no answer at all. On metrolinx AMSD-1919 that cost TWO paid runs:
+ * run_orch_prompt captures the runner with `2>&1 | tee`, so a provider-substitution notice the
+ * PIPELINE ITSELF printed landed after the reviewer's JSON and the roster specialiser failed 3 of 3.
+ *
+ * Routing that notice to stderr did not fix it — 2>&1 merges the streams — which is exactly why the
+ * tolerance belongs here and not in whichever component prints something next. Any banner,
+ * deprecation warning or progress line from anything, ever, is covered by this.
+ *
+ * String- and escape-aware, so a brace inside a quoted value cannot end the scan early. Stops at
+ * the first balanced value; anything after it is ignored, never merged, because a second value is
+ * not part of the first answer.
+ */
+function _firstCompleteJsonValue(text) {
+  const start = text.search(/[{[]/);
+  if (start < 0) return null;
+  const open = text[start];
+  const close = open === '{' ? '}' : ']';
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i += 1) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') { inString = true; continue; }
+    if (ch === open) depth += 1;
+    else if (ch === close) {
+      depth -= 1;
+      if (depth === 0) {
+        try { return JSON.parse(text.slice(start, i + 1)); } catch { return null; }
+      }
+    }
+  }
+  return null;
+}
+
 function _extractTaggedJsonRaw(text, tag) {
   if (!text) return null;
 
@@ -8803,6 +8847,10 @@ function _extractTaggedJsonRaw(text, tag) {
     try {
       return JSON.parse(jsonText);
     } catch (err) {
+      // A COMPLETE VALUE FOLLOWED BY ANYTHING IS STILL COMPLETE. Tried before repair, because this
+      // is exact — it parses the value that is really there — whereas repair guesses.
+      const firstValue = _firstCompleteJsonValue(jsonText);
+      if (firstValue !== null) return firstValue;
       // Try jsonrepair for M3-style malformed JSON (truncated strings, unescaped chars, double braces).
       // Only attempt repair when text looks like JSON (starts with { or [) to avoid
       // jsonrepair turning arbitrary plain text into a JSON string.

@@ -62,12 +62,25 @@ function cases(): Case[] {
   return out;
 }
 
-function drive(answer: string) {
+/**
+ * Drive a seam through the REAL capture path.
+ *
+ * run_orch_prompt captures the runner with `2>&1 | tee`, so ANYTHING the pipeline writes to stderr
+ * — a provider notice, a banner, a deprecation warning — is merged into the very text the consumer
+ * parses. Feeding a clean answer tests the caller, not the receiver, and that gap cost two paid
+ * metrolinx runs: a stderr-only fix was shipped as "corruption resolved" while the corruption was
+ * still arriving through the merge.
+ *
+ * `stderrNoise` reproduces it exactly.
+ */
+function drive(answer: string, stderrNoise = '') {
   const dir = mkdtempSync(join(tmpdir(), 'seam-all-')); dirs.push(dir);
   const runner = join(dir, 'ai-run.sh');
   writeFileSync(runner, [
     '#!/usr/bin/env bash',
     '[ -n "${ORCH_JSON_RESULT:-}" ] && printf \'%s\' \'{"cost_usd":0,"usage":{"inputTokens":1,"outputTokens":1}}\' > "$ORCH_JSON_RESULT"',
+    // Written to STDERR, which 2>&1 merges into the captured stream — the real path.
+    ...(stderrNoise ? [`cat >&2 <<'NOISE_EOF'`, stderrNoise, 'NOISE_EOF'] : []),
     "cat <<'ANSWER_EOF'", answer, 'ANSWER_EOF',
   ].join('\n'));
   chmodSync(runner, 0o755);
@@ -106,7 +119,7 @@ describe('every seam survives its runner', () => {
       // the answer plus two [provider] lines, found two values where it wanted one, and reported
       // the key absent when it was present. So the driven output is put through the real extractor
       // and must still yield the answer.
-      const polluted = drive(`${c.answer}\n${NOISE}`);
+      const polluted = drive(c.answer, NOISE);
       expect(polluted, 'the seam returned nothing at all').toContain(c.probe);
       if (!c.tag) return;                 // only a tagged contract has an extractor to run
       const parsed = extractTaggedJson(polluted, c.tag);

@@ -9106,8 +9106,13 @@ $spec_prompt"
                 _failing_logs+=("$sast_log")
                 _log_labels+=("sast-sentinel")
             else
+                # THE RECORD SAID warn AND THE OPERATOR WAS TOLD "PASS". blockerCount could not
+                # be parsed and the raw verdict held no "fail", so nothing was READ — on the
+                # security gate, of all of them. The step stays a warn, which is the policy
+                # already chosen here; what changes is that the sentence matches it. A gate whose
+                # findings could not be parsed has not cleared anything.
                 step_emit "22a" "warn" "Step 22a: SAST sentinel" "no parseable findings"
-                success "  SAST sentinel: PASS (no parseable findings)"
+                warning "  SAST sentinel: findings could not be parsed and no fail verdict was present — NOT a pass; nothing was checked"
             fi
         elif [ "$_sast_blockers" -gt 0 ]; then
             step_emit "22a" "fail" "Step 22a: SAST sentinel"

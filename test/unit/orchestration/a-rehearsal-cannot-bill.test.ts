@@ -53,10 +53,22 @@ describe('a rehearsal cannot bill', () => {
     const unset = unsetBy('llm-defaults.mockserver.json');
     expect(unset.length, 'the free set declares no unsetEnv at all').toBeGreaterThan(0);
 
-    const uncovered = declaredVendors().filter(
-      (v) => !unset.some((n) => n.toUpperCase().includes(v)),
-    );
+    // EVERY VENDOR EXCEPT ANTHROPIC'S OWN. The mockBaseUrl redirect covers Anthropic traffic and
+    // nothing else, so another vendor's credential is a live route out — the writer really did run
+    // provider=minimax under this set with MINIMAX_API_KEY present.
+    //
+    // ANTHROPIC_API_KEY is deliberately LEFT: Claude Code falls back to the OAuth credentials on
+    // disk when it finds no key, and that bills for real. Scrubbing it is the inversion this exists
+    // to prevent — recorded in seam-the-subscription-pays-not-the-api-key, learned live.
+    const routedByTheRedirect = ['ANTHROPIC', 'CLAUDE'];
+    const uncovered = declaredVendors()
+      .filter((v) => !routedByTheRedirect.includes(v))
+      .filter((v) => !unset.some((n) => n.toUpperCase().includes(v)));
     expect(uncovered, `a rehearsal keeps live credentials for: ${uncovered.join(', ')}`).toEqual([]);
+
+    // And the one that must survive, stated as its own assertion so it cannot be "tidied" away.
+    expect(unset.some((n) => n.toUpperCase() === 'ANTHROPIC_API_KEY'),
+      'scrubbing the mock key sends Claude Code to OAuth on disk, which bills').toBe(false);
   });
 
   it('the paid set still keeps its own seal — this must not regress it', () => {
@@ -66,7 +78,10 @@ describe('a rehearsal cannot bill', () => {
     expect(unset).toContain('ANTHROPIC_AUTH_TOKEN');
   });
 
-  it('supplies a worthless credential in place of the ones it removed', () => {
+  it.skip('supplies a worthless credential in place of the ones it removed', () => {
+    // WITHDRAWN. Declaring a fake key in the set violates the-mock-set-needs-no-credentials, which
+    // requires the set itself to carry no credential at all. The operator's own fake key is what
+    // the runner uses, and it is now left alone rather than replaced.
     // A SEAL THAT ONLY TAKES AWAY CAN CAUSE THE THING IT PREVENTS. runner-settings.sh warns of it
     // directly: remove a mock run's credential and the runner falls back to the OAuth credentials
     // on disk — "the exact inversion this line must not cause". Removing must come with replacing,

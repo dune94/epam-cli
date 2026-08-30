@@ -1425,7 +1425,7 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
     // SPEC_MODE_MAX_OUTPUT_TOKENS is spec-only; it doesn't affect implementation runs.
     const specEnv = Object.assign(specAgentEnv(process.env, repoPath), envOverride || {});
     const output = await runClaude(directExec, prompt, logPath, specEnv, { costAgent: costLabelFor(tag, specEnv), costStoryId: storyId });
-    // KEEP THE REPLY BEFORE ANYTHING INTERPRETS IT. metrolinx AMSD-1919 halted on a shape
+    // KEEP THE REPLY BEFORE ANYTHING INTERPRETS IT. A live run halted on a shape
   // nobody could establish, because the log excerpts at 2000 chars, the rejection persister
   // needed a logDir nobody passed, and Langfuse records no completions at all. Written here,
   // at the one funnel every agent's raw text passes through, it cannot be forgotten per seam.
@@ -1454,7 +1454,7 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
   // classify a URL from its address; its `quotes` field could never be populated, which is
   // the whole reason the step exists. Silent, and invisible in the output.
   const output = await runClaude(execSpec, prompt, logPath, envOverride || {}, { costAgent: costLabelFor(tag, envOverride), costStoryId: storyId });
-  // KEEP THE REPLY BEFORE ANYTHING INTERPRETS IT. metrolinx AMSD-1919 halted on a shape
+  // KEEP THE REPLY BEFORE ANYTHING INTERPRETS IT. A live run halted on a shape
   // nobody could establish, because the log excerpts at 2000 chars, the rejection persister
   // needed a logDir nobody passed, and Langfuse records no completions at all. Written here,
   // at the one funnel every agent's raw text passes through, it cannot be forgotten per seam.
@@ -8792,7 +8792,7 @@ function readAgentRawOutput(logPath) {
  * THE FIRST COMPLETE JSON VALUE IN A STRING, OR NULL.
  *
  * JSON.parse rejects the whole text when anything follows the value — "Extra data" — and the caller
- * is then told there was no answer at all. On metrolinx AMSD-1919 that cost TWO paid runs:
+ * is then told there was no answer at all. On one live ticket that cost TWO paid runs:
  * run_orch_prompt captures the runner with `2>&1 | tee`, so a provider-substitution notice the
  * PIPELINE ITSELF printed landed after the reviewer's JSON and the roster specialiser failed 3 of 3.
  *
@@ -8847,10 +8847,33 @@ function _extractTaggedJsonRaw(text, tag) {
     try {
       return JSON.parse(jsonText);
     } catch (err) {
-      // A COMPLETE VALUE FOLLOWED BY ANYTHING IS STILL COMPLETE. Tried before repair, because this
-      // is exact — it parses the value that is really there — whereas repair guesses.
+      // A COMPLETE VALUE FOLLOWED BY ANYTHING IS STILL COMPLETE — tried BEFORE repair, because
+      // this is exact where repair guesses: jsonrepair folds "answer + trailing notice" into a
+      // TWO-ELEMENT ARRAY, and the consumer then rejects element 1.
+      //
+      // A TOOL-CALL WRAPPER IS NOT THE ANSWER, THOUGH. Matching one here returned it whole and
+      // unwrapToolCallJson never ran, so a working recovery path died to an eager fallback. The
+      // test is by SHAPE, matching the rest of this file: a call wrapper names what it invokes and
+      // carries its payload under arguments.
+      // A TOOL CALL IS ANSWERED BY THE TOOL-CALL RECOVERY, NOT BY EITHER FALLBACK. Asked here
+      // rather than guessed at: wrappers carry their payload under arguments, input OR content,
+      // and a key list would miss the next spelling. unwrapToolCallJson already decides this, so
+      // it decides it once. Tried EARLIER this ran after the fallbacks and they returned the
+      // wrapper whole, so a working recovery path died to an eager guess.
+      // ONLY WHEN THERE IS MARKUP TO UNWRAP. unwrapToolCallJson is eager — handed plain text it
+      // will treat a bare array's single element as a payload and hand back the element, which
+      // silently turns a list answer into one item. A tool call always arrives inside a tag; the
+      // test is for markup, not for a list of wrapper NAMES, which would miss the next spelling.
+      const hasMarkup = /<[A-Za-z_][\w.:-]*(\s[^>]*)?>/.test(text);
+      const viaToolCall = hasMarkup ? unwrapToolCallJson(text) : null;
+      if (viaToolCall !== null) return viaToolCall;
+
+      // A COMPLETE VALUE FOLLOWED BY ANYTHING IS STILL COMPLETE — before repair, because this is
+      // exact where repair guesses: jsonrepair folds "answer + trailing notice" into a TWO-ELEMENT
+      // ARRAY and the consumer then rejects element 1.
       const firstValue = _firstCompleteJsonValue(jsonText);
       if (firstValue !== null) return firstValue;
+
       // Try jsonrepair for M3-style malformed JSON (truncated strings, unescaped chars, double braces).
       // Only attempt repair when text looks like JSON (starts with { or [) to avoid
       // jsonrepair turning arbitrary plain text into a JSON string.
@@ -8897,6 +8920,18 @@ function _extractTaggedJsonRaw(text, tag) {
   // JSON payload (write_file content / arguments). Recover it rather than lose it.
   const unwrapped = unwrapToolCallJson(text);
   if (unwrapped !== null) return unwrapped;
+
+  // LAST RESORT: A COMPLETE VALUE FOLLOWED BY ANYTHING IS STILL COMPLETE.
+  //
+  // The pipeline concatenates stdout and stderr before any consumer parses, so its own notices
+  // land after the answer; jsonrepair then folds "answer + notice" into a TWO-ELEMENT ARRAY and
+  // the consumer rejects element 1. Taking the first balanced value fixes that exactly.
+  //
+  // AFTER tool-call recovery, deliberately. Tried earlier it matched the WRAPPER of a
+  // <function_calls> payload and returned it whole, so the arguments inside were never
+  // unwrapped — a working recovery path broken by a fallback that ran too eagerly.
+  const firstValue = _firstCompleteJsonValue(text);
+  if (firstValue !== null) return firstValue;
 
   return null;
 }

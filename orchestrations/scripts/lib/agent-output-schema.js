@@ -281,7 +281,7 @@ function validateDeclaredOutput(seam, parsed) {
  *     [{"proposedAgents":[{"name":"commerce-checkout-engineer", ...}]}]
  *
  * The parse looked for the key at the top level, found an Array, and rejected it — three times,
- * because a content retry cannot change a shape the model considers correct. metrolinx AMSD-1919
+ * because a content retry cannot change a shape the model considers correct. A live brownfield run
  * died there on 2026-08-29, after discovery, minting and a grounded roster review had all worked.
  *
  * ONE element only. A two-element array is a model that answered twice and there is no way to know
@@ -293,7 +293,7 @@ function unwrapEnvelope(payload, key) {
   //
   // This required `length === 1`, so a model that emitted its answer beside a note, or put it
   // second, or nested it one layer further, was told its key was absent when it was present.
-  // metrolinx AMSD-1919 halted on that reading after discovery, minting and a grounded roster
+  // A live run halted on that reading after discovery, minting and a grounded roster
   // review had all succeeded — the whole ticket abandoned over packaging.
   //
   // Removing an envelope is not accepting a wrong answer: every field is still validated by the

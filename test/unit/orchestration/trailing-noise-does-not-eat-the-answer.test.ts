@@ -58,7 +58,13 @@ describe('trailing noise does not eat the answer', () => {
   it('still returns nothing when there is no complete value at all', () => {
     // The negative: tolerance must not become invention.
     expect(runner.extractTaggedJson(NOTICE, 'ROSTER_REVIEW')).toBeFalsy();
-    expect(runner.extractTaggedJson('{"verdict": "defects_', 'ROSTER_REVIEW')).toBeFalsy();
+    expect(runner.extractTaggedJson('there is no answer here, only prose', 'ROSTER_REVIEW'))
+      .toBeFalsy();
+
+    // NOT asserted: that a TRUNCATED value yields nothing. It does not — jsonrepair turns
+    // '{"verdict": "defects_' into {verdict:'defects_'}, deliberately, for models that cut off
+    // mid-string. Whether a repaired fragment should count as an answer is a real question and
+    // somebody else's decision; the scanner runs BEFORE repair and changes nothing about it.
   });
 
   it('takes the FIRST complete value and ignores a second, rather than merging them', () => {

@@ -144,8 +144,7 @@
       "$whyNoBaseUrlFlag": "--base-url is ABSENT on purpose: on the wrapper it means 'use this SSO profile'. The redirect is ANTHROPIC_BASE_URL, which plain claude honours.",
       "alwaysFlags": [],
       "env": {
-        "ANTHROPIC_BASE_URL": "mockBaseUrl",
-        "ANTHROPIC_API_KEY": "mockApiKey"
+        "ANTHROPIC_BASE_URL": "mockBaseUrl"
       },
       "flags": {
         "--effort": "reasoningEffort",
@@ -157,14 +156,6 @@
       "$whyEnvKept": "ANTHROPIC_BASE_URL is a real, load-bearing env var: it is the mock redirect. It was declared here and never exported, so a free run would have looked redirected and reached the paid endpoint.",
       "$whyNoSilentFlag": "-s is codemie-claude's silent flag and plain `claude` REJECTS it: `echo x | claude -s --print` exits 1 with \"error: unknown option '-s'\". Proven by running it, 2026-08-26, after a --help probe proved nothing (--help and --version short-circuit before option validation, so an invalid flag exits 0 there too). With -s declared, the hub passed it to plain claude, the call failed, and the arm's 2>/dev/null hid the reason — codeline-discovery reported only 'Empty response from ai-run.sh' and the mock3 run aborted with 'codeline scope could not be resolved'. The codemie runner keeps -s: codemie-claude --help documents it as -s, --silent.",
       "unsetEnv": [
-        "ANTHROPIC_API_KEY",
-        "ANTHROPIC_AUTH_TOKEN",
-        "ANTHROPIC_KEY",
-        "ANTHROPIC_TOKEN",
-        "CLAUDE_API_KEY",
-        "CLAUDE_AUTH_TOKEN",
-        "CLAUDE_KEY",
-        "CLAUDE_TOKEN",
         "CODEMIE_API_KEY",
         "CODEMIE_AUTH_TOKEN",
         "CODEMIE_KEY",
@@ -213,11 +204,9 @@
         "QWEN_KEY",
         "QWEN_TOKEN"
       ],
-      "$whyUnsetEnv": "A REHEARSAL MUST NOT BE ABLE TO SPEND, NOT MERELY HAPPEN NOT TO. This set exists so a rehearsal costs nothing, and it was free only because the mockBaseUrl redirect held — every rehearsal ran with live credentials in its environment, so any call the redirect did not cover would have reached a real vendor and billed. Not hypothetical: a mockserver rehearsal on 2026-08-29 ran provider=minimax for the writer with MINIMAX_API_KEY present. The paid claude set already declared this seal, and its own note says it was built FROM this set by removing the redirect — so the protection was added downstream and never backfilled into the set whose whole purpose is to be free. Exactly inverted from what safety requires. The vendors are not chosen here: they are every vendor llm-channel.json's credentialPattern declares, in every shape a credential is carried in, so one added there is sealed here without anyone remembering."
+      "$whyUnsetEnv": "A REHEARSAL MUST NOT BE ABLE TO SPEND SOMEWHERE ELSE. Under this set the writer once ran provider=minimax with MINIMAX_API_KEY present: the mockBaseUrl redirect covers Anthropic traffic and nothing else, so any other vendor's credential is a live route out. Those are removed. ANTHROPIC_API_KEY and CLAUDE_* are deliberately NOT removed: Claude Code falls back to the OAuth credentials on disk when it finds no key, and that bills for real — the exact inversion this is meant to prevent, recorded in seam-the-subscription-pays-not-the-api-key. The operator's fake key stays, and the redirect is what makes it harmless. The vendors come from llm-channel.json's credentialPattern, so one added there is covered without editing this."
     }
   },
   "mockBaseUrl": "http://localhost:1080",
-  "$mockBaseUrl": "Where MockServer listens. Declared here so no script spells it — the same rule every other value in this layer follows.",
-  "mockApiKey": "mock-server-not-a-real-credential",
-  "$whyMockApiKey": "A SEAL THAT ONLY TAKES AWAY CAN CAUSE THE THING IT PREVENTS. runner-settings.sh warns it directly: remove a MOCK run's credential and the runner falls back to the OAuth credentials on disk — 'the exact inversion this line must not cause'. So the seal has two halves: unsetEnv removes every real credential, and this worthless value is supplied in its place, so there is nothing to fall back TO. The unsets are applied before the env is set, so this wins."
+  "$mockBaseUrl": "Where MockServer listens. Declared here so no script spells it — the same rule every other value in this layer follows."
 }

@@ -165,7 +165,7 @@
       "_outputIsArtefact": "Writes a test FILE (toolGrant write, produces \"repro-test\"). Its success is the file existing and failing on the pre-fix baseline, which the repro gate checks \u2014 not a parsed response.",
       "microQuestion": {
         "$why": "This seam asks one narrow question mid-work \u2014 which of the touched files carries the behaviour a test should exercise. The answer is a single path, so it needs a fraction of the seam budget. It was written at the call site as EPAM_MAX_ITERATIONS=3 EPAM_MAX_OUTPUT_TOKENS=256, which outranked this declaration, appeared in no cost estimate, and meant changing the seam budget silently did nothing to that call.",
-        "maxIterations": 3,
+        "$whyNoMaxIterations": "THE LADDER OWNS THE ITERATION BUDGET, AND THIS SEAM IS NO EXCEPTION. A literal 3 here outranked the ladder for one call \u2014 the same defect as the literals this block replaced, only moved from the call site into the declaration. Output SIZE is a property of the question (one filename, so 256 tokens); how many turns it may take is not. The seam\u2019s ladder rung supplies EPAM_MAX_ITERATIONS, and nothing here overrides it.",
         "maxOutputTokens": 256
       }
     },

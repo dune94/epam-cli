@@ -221,13 +221,16 @@ _choose_target() {
     # outranked the seam's own declaration, never reached a cost estimate, and made changing the
     # declared budget a no-op for this one call.
     _mq_file="${EPAM_AGENTS_DIR:-$SCRIPT_DIR/../agents}/invocation-profiles.json"
-    _mq_iters=$(jq -r '.profiles["repro-test-writer"].microQuestion.maxIterations // empty' "$_mq_file" 2>/dev/null)
+    # THE LADDER OWNS THE ITERATION BUDGET. This read a declared maxIterations, which outranked
+    # the seam's own ladder rung for this one call — the same defect as the literals it replaced,
+    # only moved into the declaration. EPAM_MAX_ITERATIONS is left exactly as the ladder set it.
+    # Output SIZE is still the question's own property: one filename needs 256 tokens, not 32k.
     _mq_toks=$(jq -r '.profiles["repro-test-writer"].microQuestion.maxOutputTokens // empty' "$_mq_file" 2>/dev/null)
-    if [ -z "$_mq_iters" ] || [ -z "$_mq_toks" ]; then
+    if [ -z "$_mq_toks" ]; then
         warning "repro-test-writer declares no microQuestion budget — skipping the target question rather than inventing one"
         return 1
     fi
-    _ans=$(printf '%s' "$_ask" | EPAM_MAX_ITERATIONS="$_mq_iters" EPAM_MAX_OUTPUT_TOKENS="$_mq_toks" \
+    _ans=$(printf '%s' "$_ask" | EPAM_MAX_OUTPUT_TOKENS="$_mq_toks" \
         "$AI_RUNNER_CMD" 2>/dev/null | tr -d '\r' | grep -oE '[A-Za-z0-9_./-]+\.[A-Za-z]+' | head -1)
     [ -n "$_ans" ] || return 1
     _is_testable_source "$_ans" || { warning "target choice '"'"'$_ans'"'"' is not testable source — ignoring"; return 1; }

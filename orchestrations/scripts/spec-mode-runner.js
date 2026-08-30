@@ -1954,7 +1954,9 @@ async function run() {
           });
         }
 
-        if (reviewResult.verdict === 'fail') {
+        // 'unreviewed' reverts too: the attempts above produced no judgement, and an unjudged
+        // change must not stand. The event below keeps rejection and silence tellable apart.
+        if (!reviewOutcomeKeepsChange(reviewResult.verdict)) {
           console.warn(`spec-mode: prd-change-reviewer REJECTED ${agent}'s changes to ${story.id} after ${acReviewAttempts} attempt(s): ${reviewResult.issues.join('; ') || 'no details'} — reverting`);
           story.acceptanceCriteria = beforeSnapshot.acceptanceCriteria;
           story.description = beforeSnapshot.description;
@@ -1967,7 +1969,7 @@ async function run() {
           changes.acceptanceChanged = false;
           changes.splitCount = 0;
           afterSnapshot = captureStorySnapshot(story);
-          appendSpecPassEvent(logDir, { storyId: story.id, phase: opts.phase, event: 'reviewer_rejected', decision: 'rejected', details: { agent, attempts: acReviewAttempts, reasons: reviewResult.issues } });
+          appendSpecPassEvent(logDir, { storyId: story.id, phase: opts.phase, event: reviewResult.verdict === 'fail' ? 'reviewer_rejected' : 'reviewer_unjudged', decision: reviewResult.verdict === 'fail' ? 'rejected' : 'unreviewed', details: { agent, attempts: acReviewAttempts, reasons: reviewResult.issues } });
         } else {
           appendSpecPassEvent(logDir, { storyId: story.id, phase: opts.phase, event: 'reviewer_accepted', decision: 'accepted', details: { agent, attempts: acReviewAttempts } });
         }
@@ -9452,6 +9454,24 @@ function capReviewSnapshot(snapshot) {
 // accepted. Non-blocking by design: any call failure or unconfigured gate
 // defaults to "pass" (matches claude.sh's run_prd_change_reviewer contract) —
 // this is a quality gate, not a hard dependency for the spec pass to function.
+/**
+ * DOES THIS REVIEW OUTCOME LET THE CHANGE STAND?
+ *
+ * Only an explicit pass does. 'fail' reverts — and so does 'unreviewed', because a reviewer that
+ * could not judge after its retries has told us nothing, and "we could not tell" is not "it is
+ * fine".
+ *
+ * The unjudged case used to fall through to acceptance: the loop retried twice, wrote a
+ * `reviewer_unjudged` event, and then `if (verdict === 'fail')` simply did not match, so the
+ * change was kept. That event is written and read by NOTHING — a logged block that does not block.
+ *
+ * Exported because the call site is buried in a 10,000-line runner, and a decision that cannot be
+ * asserted on its own gets restated slightly differently the next time it is needed.
+ */
+function reviewOutcomeKeepsChange(verdict) {
+  return verdict === 'pass';
+}
+
 async function reviewPrdChange({ aiRunnerCmd, profiles, storyId, changeType, before, after, logDir, splitOccurred }) {
   const gateProvider = process.env.ORCH_GATE_PROVIDER || '';
   if (!gateProvider) return { verdict: 'pass', issues: [] };
@@ -9965,6 +9985,7 @@ function costLabelFor(tag, env) {
 }
 
 module.exports = {
+  reviewOutcomeKeepsChange,
   // Exported so the brief lookup can be asserted without a run.
   profilesWithProjectBriefs,
   // Exported for orchestrations/scripts/agent-check.js. The harness must append the SAME output

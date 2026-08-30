@@ -441,7 +441,7 @@ cost = (uncached_in  / 1M) × price_input
   <table>
     <tr><th>Priority</th><th>Condition</th><th>Price source</th></tr>
     <tr><td>1</td><td>Story has <code>.model</code> set in prd.json</td><td><code>src/billing/pricing.ts</code> — exact model rate (e.g. <code>gpt-4.1</code> → $2.00/$8.00 per M)</td></tr>
-    <tr><td>2</td><td>Story has <code>.aiProvider</code> set (no model)</td><td>Provider default model → <code>pricing.ts</code> lookup (e.g. <code>qwen</code> → <code>qwen/qwen3-235b-a22b</code>)</td></tr>
+    <tr><td>2</td><td>Story has <code>.aiProvider</code> set (no model)</td><td>Provider default model → <code>pricing.ts</code> lookup (e.g. <code>openrouter</code> → <code>openrouter/model3-235b-a22b</code>)</td></tr>
     <tr><td>3</td><td>Neither set, or model not in registry</td><td>Effort-tier proxy below (Haiku / Sonnet / Opus rates)</td></tr>
   </table>
   <p>Subscription-billed providers (<code>copilot</code>, <code>cursor</code>) are emitted as <code>$0.00 (subscription)</code> — no per-token cost is fabricated. Pass <code>--force-effort-tier</code> to bypass the vendor lookup and use the effort-tier proxy for all stories.</p>
@@ -460,7 +460,7 @@ cost = (uncached_in  / 1M) × price_input
     <tr><td>gpt-4o</td><td>$2.50</td><td>$10.00</td></tr>
     <tr><td>gemini-2.5-pro</td><td>$1.25</td><td>$5.00</td></tr>
     <tr><td>gemini-2.5-flash</td><td>$0.15</td><td>$0.60</td></tr>
-    <tr><td>qwen/qwen3-235b-a22b</td><td>$0.60</td><td>$2.40</td></tr>
+    <tr><td>openrouter/model3-235b-a22b</td><td>$0.60</td><td>$2.40</td></tr>
     <tr><td>deepseek/deepseek-r1</td><td>$0.55</td><td>$2.19</td></tr>
     <tr><td>copilot / cursor</td><td colspan="2">subscription — $0.00 per token</td></tr>
   </table>
@@ -607,7 +607,7 @@ cost_high    = cost × (1 + range_factor × 1.5)</div>
   <h2 id="providers">5. Provider Layer</h2>
   <p>
     The orchestration system supports multiple AI providers per phase or per story. Four providers —
-    <strong>copilot</strong>, <strong>openai</strong>, <strong>qwen</strong>, and <strong>cursor</strong> — run
+    <strong>copilot</strong>, <strong>openai</strong>, <strong>openrouter</strong>, and <strong>cursor</strong> — run
     via the <code>epam run --json</code> interface. Existing providers (<code>claude</code>, <code>codex</code>,
     <code>codemie-claude</code>) retain their direct CLI invocation paths.
   </p>
@@ -625,7 +625,7 @@ cost_high    = cost × (1 + range_factor × 1.5)</div>
     <tr><td>codemie-claude</td><td>claude.sh</td><td>codemie-claude CLI direct</td></tr>
     <tr><td>copilot</td><td>copilot.sh → claude.sh</td><td><code>epam run --provider copilot --json</code></td></tr>
     <tr><td>openai</td><td>openai.sh → claude.sh</td><td><code>epam run --provider openai --json</code></td></tr>
-    <tr><td>qwen</td><td>qwen.sh → claude.sh</td><td><code>epam run --provider qwen --json</code></td></tr>
+    <tr><td>openrouter</td><td>openrouter.sh → claude.sh</td><td><code>epam run --provider openrouter --json</code></td></tr>
     <tr><td>cursor</td><td>cursor.sh → claude.sh</td><td><code>epam run --provider cursor --json</code></td></tr>
   </table>
   <p>
@@ -636,7 +636,7 @@ cost_high    = cost × (1 + range_factor × 1.5)</div>
   </p>
   <div class="formula">provider_to_cli("copilot")  → $EPAM_CLI   (epam run --provider copilot ...)
 provider_to_cli("openai")   → $EPAM_CLI   (epam run --provider openai ...)
-provider_to_cli("qwen")     → $EPAM_CLI   (epam run --provider qwen ...)
+provider_to_cli("openrouter")     → $EPAM_CLI   (epam run --provider openrouter ...)
 provider_to_cli("cursor")   → $EPAM_CLI   (epam run --provider cursor ...)
 provider_to_cli("codex")    → codex
 provider_to_cli("*")        → $CLAUDE_CMD (claude)</div>
@@ -740,7 +740,7 @@ result                      →   result  (preserved)</div>
     <tr>
       <td><code>epam orchestrate</code></td>
       <td>run-agent-orchestration.sh (skips estimate)</td>
-      <td><code>--phase</code>, <code>--mode bash|hybrid</code>, <code>--skip-cpa</code>, <code>--strict-cpa</code>, <code>--provider copilot|openai|qwen|cursor</code></td>
+      <td><code>--phase</code>, <code>--mode bash|hybrid</code>, <code>--skip-cpa</code>, <code>--strict-cpa</code>, <code>--provider copilot|openai|openrouter|cursor</code></td>
     </tr>
   </table>
 
@@ -758,7 +758,7 @@ epam estimate --phase finops --force-effort-tier
 epam phase approve --phase finops
 epam phase run --phase finops --require-approval
 
-# 5. Run via a specific provider (copilot/openai/qwen/cursor)
+# 5. Run via a specific provider (copilot/openai/openrouter/cursor)
 EPAM_ORCHESTRATION_PROVIDER=openai epam orchestrate --phase finops
 
 # 6. After phase completes, refine constants for next run

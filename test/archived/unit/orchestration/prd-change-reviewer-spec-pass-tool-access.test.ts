@@ -28,19 +28,19 @@ const SRC = readFileSync(join(__dirname, '../../../orchestrations/scripts/spec-m
 describe('buildGateExec — model-tier consistency', () => {
   it('honors ESCALATION_MODEL_HIGH when set, matching claude.sh run_prd_change_reviewer precedence', () => {
     const exec = specModeRunner.buildGateExec('ai-run.sh', {
-      ORCH_GATE_PROVIDER: 'qwen',
+      ORCH_GATE_PROVIDER: 'openrouter',
       ORCH_GATE_MODEL: 'z-ai/glm-5.2',
       ESCALATION_MODEL_HIGH: 'z-ai/glm-5.1',
     });
-    expect(exec.args).toEqual(['--provider', 'qwen', '--model', 'z-ai/glm-5.1']);
+    expect(exec.args).toEqual(['--provider', 'openrouter', '--model', 'z-ai/glm-5.1']);
   });
 
   it('falls back to ORCH_GATE_MODEL when ESCALATION_MODEL_HIGH is unset', () => {
     const exec = specModeRunner.buildGateExec('ai-run.sh', {
-      ORCH_GATE_PROVIDER: 'qwen',
+      ORCH_GATE_PROVIDER: 'openrouter',
       ORCH_GATE_MODEL: 'z-ai/glm-5.2',
     });
-    expect(exec.args).toEqual(['--provider', 'qwen', '--model', 'z-ai/glm-5.2']);
+    expect(exec.args).toEqual(['--provider', 'openrouter', '--model', 'z-ai/glm-5.2']);
   });
 
   it('falls back to MiniMax-M3/minimax when nothing is configured', () => {

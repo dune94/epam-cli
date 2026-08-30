@@ -84,14 +84,14 @@ describe('cost-emitter — the emitted event', () => {
   it('matches the cost_snapshot shape the bash side already emits', () => {
     const e = buildCostSnapshot({
       agent: 'code-graph-detective', storyId: 'AMSD-1820', phase: 'core',
-      model: 'z-ai/glm-5.1', provider: 'qwen', cost,
+      model: 'z-ai/glm-5.1', provider: 'openrouter', cost,
     });
     expect(e.type).toBe('cost_snapshot');
     expect(e.agent).toBe('code-graph-detective');
     expect(e.story_id).toBe('AMSD-1820');
     expect(e.phase).toBe('core');
     expect(e.model).toBe('z-ai/glm-5.1');
-    expect(e.provider).toBe('qwen');
+    expect(e.provider).toBe('openrouter');
     expect(e.detail.costUsd).toBeCloseTo(0.05);
     expect(e.detail.tokensIn).toBe(100);
     expect(e.detail.tokensOut).toBe(20);
@@ -102,7 +102,7 @@ describe('cost-emitter — the emitted event', () => {
   it('carries the costUnknown flag through so dashboards can show it', () => {
     const e = buildCostSnapshot({
       agent: 'x', storyId: 's', phase: 'core', model: 'moonshotai/kimi-k3',
-      provider: 'qwen', cost: { costUsd: 0, tokensIn: 34511, tokensOut: 3088, costUnknown: true },
+      provider: 'openrouter', cost: { costUsd: 0, tokensIn: 34511, tokensOut: 3088, costUnknown: true },
     });
     expect(e.detail.costUnknown).toBe(true);
   });

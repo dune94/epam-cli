@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # ──────────────────────────────────────────────────────────────────────────────
-# Tier 3: Production run — Qwen3-30B on OpenRouter (costs credits).
 #
 # Only run this after BOTH Tier 1 and Tier 2 have passed cleanly.
 #   bash orchestrations/scripts/tier1-mock-run.sh   # zero cost
@@ -8,7 +7,6 @@
 #   bash orchestrations/scripts/tier3-paid-run.sh   # ~$0.15–0.50
 #
 # What this validates above Tier 2:
-#   • Production model quality (Qwen3-coder-30B)
 #   • Real-world token costs within expected budget
 #   • Full ACs met with the target model
 #
@@ -40,7 +38,6 @@ fi
 
 PRD_FILE="$REPO_ROOT/orchestrations/hello-world-prd.json"
 
-info "Tier 3 production run — Qwen3-coder-30B (USES OPENROUTER CREDITS)"
 info "  Prerequisite: Tier 1 and Tier 2 must have passed"
 info "  Estimated cost: \$0.15–0.50"
 info "  Log: $LOG_FILE"

@@ -52,10 +52,10 @@ describe('reviewer ladder + resilience', () => {
     const out = execFileSync('bash', ['-c', `
       source <(sed -n '/^_ladder_next_model()/,/^}/p;/^_provider_for_model()/,/^}/p' ${SH})
       export EPAM_MODEL_LADDER_HIGH="z-ai/glm-5.2=z-ai/glm-5.1|z-ai/glm-5.1=moonshotai/kimi-k3"
-      export EPAM_MODEL_PROVIDER_MAP="moonshotai/*=qwen|z-ai/*=qwen"
+      export EPAM_MODEL_PROVIDER_MAP="moonshotai/*=openrouter|z-ai/*=openrouter"
       echo "$(_ladder_next_model z-ai/glm-5.1)|$(_provider_for_model moonshotai/kimi-k3)|$(_ladder_next_model z-ai/glm-5.2)"
     `], { encoding: 'utf8' }).trim();
-    expect(out).toBe('moonshotai/kimi-k3|qwen|z-ai/glm-5.1');
+    expect(out).toBe('moonshotai/kimi-k3|openrouter|z-ai/glm-5.1');
   });
 });
 

@@ -270,7 +270,7 @@ describe('the agent is handed the link, uncut, and is really given a way to open
   });
 
   it('the grant also reaches the runner on the SPEC_MODE_PROVIDER fast-path', async () => {
-    const { runner } = await runChain({ SPEC_MODE_PROVIDER: 'qwen', SPEC_MODE_MODEL: 'stub' });
+    const { runner } = await runChain({ SPEC_MODE_PROVIDER: 'openrouter', SPEC_MODE_MODEL: 'stub' });
     const env = JSON.parse(readFileSync(runner.envFile, 'utf8'));
     expect(env.EPAM_ALLOWED_TOOLS).toContain('fetch_url');
     expect(env.AI_GATE_ALLOW_TOOLS).toBe('1');
@@ -339,7 +339,7 @@ describe('ai-run.sh — the receiver — honours the grant it is handed', () => 
     const argv = stubEpam(dir);
     const promptFile = join(dir, 'p.txt');
     writeFileSync(promptFile, 'hello');
-    spawnSync('bash', [join(ROOT, 'orchestrations/scripts/ai-run.sh'), '--provider', 'qwen'], {
+    spawnSync('bash', [join(ROOT, 'orchestrations/scripts/ai-run.sh'), '--provider', 'openrouter'], {
       input: 'hello', encoding: 'utf8',
       env: { ...process.env, EPAM_CLI: join(dir, 'epam'), PROMPT_FILE: promptFile, ...env },
     });

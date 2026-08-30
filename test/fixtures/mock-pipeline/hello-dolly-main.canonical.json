@@ -7,7 +7,7 @@
   },
   "configuration": {
     "budget": 5,
-    "aiRuntime": { "provider": "qwen", "defaultModel": "z-ai/glm-5.1" }
+    "aiRuntime": { "provider": "openrouter", "defaultModel": "z-ai/glm-5.1" }
   },
   "implementationOrder": {
     "mock_hello_dolly": ["MOCK-HW-1"]

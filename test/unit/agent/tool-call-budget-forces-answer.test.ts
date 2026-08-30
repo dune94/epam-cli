@@ -36,7 +36,7 @@ const usage = { inputTokens: 10, outputTokens: 10 };
 function relentlessProvider() {
   const seen: Array<{ toolCount: number; lastUserText: string }> = [];
   const provider = {
-    name: 'qwen',
+    name: 'openrouter',
     complete: vi.fn(),
     stream: vi.fn(async (req: any) => {
       const lastUser = [...(req.messages ?? [])].reverse().find((m: any) => m.role === 'user');
@@ -162,7 +162,7 @@ describe('the tool-call budget is enforced, not requested', () => {
 
   it('never fires when the model answers on its own', async () => {
     const provider = {
-      name: 'qwen',
+      name: 'openrouter',
       complete: vi.fn(),
       stream: vi.fn().mockResolvedValue({
         content: [{ type: 'text', text: 'done' }], stopReason: 'end_turn', usage,
@@ -183,7 +183,7 @@ describe('a hung forced-answer turn cannot consume the whole run', () => {
     // every remaining second and the attempt died with nothing — not even the
     // evidence it had already gathered.
     const provider = {
-      name: 'qwen',
+      name: 'openrouter',
       complete: vi.fn(),
       stream: vi.fn(async (req: any) => {
         if (!req.tools) return new Promise(() => {});   // the hang, exactly as observed

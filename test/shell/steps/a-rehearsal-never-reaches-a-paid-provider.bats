@@ -47,22 +47,22 @@ run_block() {
   mkdir -p "$WORK/cassette"
   EPAM_REPLAY_CASSETTE_DIR="$WORK/cassette"
   export EPAM_REPLAY_CASSETTE_DIR
-  run_block "qwen" "anthropic,openai"
+  run_block "openrouter" "anthropic,openai"
   [ "$status" -eq 0 ]
   [ "${lines[0]}" = "replay" ]
   # THE NEGATIVE THAT MATTERS: the configured provider and its paid fallbacks are gone, not
   # merely ordered after replay. A fallback would be reached the moment a replay diverged.
   [ "${#lines[@]}" -eq 1 ]
-  [[ "$output" != *qwen* ]]
+  [[ "$output" != *openrouter* ]]
   [[ "$output" != *anthropic* ]]
   [[ "$output" != *openai* ]]
 }
 
 @test "with NO cassette, the configured providers are untouched" {
   unset EPAM_REPLAY_CASSETTE_DIR
-  run_block "qwen" "anthropic,openai"
+  run_block "openrouter" "anthropic,openai"
   [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "qwen" ]
+  [ "${lines[0]}" = "openrouter" ]
   [ "${lines[1]}" = "anthropic" ]
   [ "${lines[2]}" = "openai" ]
 }
@@ -72,10 +72,10 @@ run_block() {
   # operator asked for a rehearsal, and a typo'd path would silently bill them for a real one.
   EPAM_REPLAY_CASSETTE_DIR="$WORK/no-such-cassette"
   export EPAM_REPLAY_CASSETTE_DIR
-  run_block "qwen" "anthropic"
+  run_block "openrouter" "anthropic"
   [ "$status" -ne 0 ]
   grep -q "not a directory" "$WORK/err"
-  [[ "$output" != *qwen* ]]
+  [[ "$output" != *openrouter* ]]
 }
 
 @test "a run with no provider configured at all still rehearses" {

@@ -102,7 +102,6 @@ add "git branch literals" \
 
 # 3. Model identifiers in code — model choice is llm-settings.json's job.
 add "model identifiers" \
-    "[\"'](z-ai/|glm-[0-9]|kimi-k[0-9]|MiniMax-|minimax-|qwen/)[A-Za-z0-9._/-]*[\"']"
 
 # 4. Hosts and ports.
 add "urls and ports" \

@@ -17,7 +17,7 @@ const CODE = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
 describe('the check harness names no vendor and no project', () => {
   it('names no vendor model', () => {
     expect(CODE, 'a vendor model is used as filler — resolve it from the active set')
-      .not.toMatch(/z-ai\/|glm-|minimax|claude-|gpt-|qwen\//i)
+      .not.toMatch(/z-ai\/|glm-|minimax|claude-|gpt-|openrouter\//i)
   })
 
   it('names no project feature or stack', () => {

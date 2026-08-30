@@ -72,7 +72,7 @@ describe('a failed gate call says why', () => {
   });
 
   it('reports the reason with the failure, not just that it was empty', () => {
-    const r = runGate(failingAiRun('provider refused: no API key for qwen'));
+    const r = runGate(failingAiRun('provider refused: no API key for openrouter'));
     const said = `${r.stdout}${r.stderr}`;
     expect(said,
       'the gate reported a failure without the reason, so a missing key, a timeout and a refusal '

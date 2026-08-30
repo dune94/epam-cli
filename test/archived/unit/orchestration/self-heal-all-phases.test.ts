@@ -93,7 +93,7 @@ describe('claude.sh — failure analyst fires for any story in any phase', () =>
     const analystEnd   = claudeSrc.indexOf('\n}', analystStart + 100);
     const body         = claudeSrc.slice(analystStart, analystEnd);
     expect(body).toMatch(/gate_model.*ORCH_GATE_MODEL/);
-    expect(body).not.toMatch(/gpt-4o|claude-haiku|qwen3-coder/);
+    expect(body).not.toMatch(/gpt-4o|claude-haiku|openrouter3-coder/);
   });
 });
 
@@ -257,8 +257,8 @@ describe('providers — EPAM_REASONING_EFFORT maps to native API param, not temp
   const minimaxSrc = readFileSync(
     join(__dirname, '../../../src/providers/minimax/MiniMaxProvider.ts'), 'utf8'
   );
-  const qwenSrc = readFileSync(
-    join(__dirname, '../../../src/providers/qwen/QwenProvider.ts'), 'utf8'
+  const openrouterSrc = readFileSync(
+    join(__dirname, '../../../src/providers/openrouter/OpenRouterProvider.ts'), 'utf8'
   );
 
   it('MiniMaxProvider has resolveReasoningEffort, which stays independent of temperature', () => {
@@ -280,19 +280,19 @@ describe('providers — EPAM_REASONING_EFFORT maps to native API param, not temp
     expect(minimaxSrc).not.toMatch(/effort.*===.*'high'.*return 0\.1|effort.*===.*'medium'.*return 0\.3/);
   });
 
-  it('QwenProvider resolves temperature independently of reasoning effort (resolveTemperature never reads EPAM_REASONING_EFFORT)', () => {
-    expect(qwenSrc).toMatch(/resolveTemperature\(request, 0\.7\)/);
+  it('OpenRouterProvider resolves temperature independently of reasoning effort (resolveTemperature never reads EPAM_REASONING_EFFORT)', () => {
+    expect(openrouterSrc).toMatch(/resolveTemperature\(request, 0\.7\)/);
   });
 
-  it('QwenProvider sends reasoning.effort to OpenRouter via resolveOpenRouterReasoning', () => {
-    expect(qwenSrc).toMatch(/resolveOpenRouterReasoning/);
-    expect(qwenSrc).toMatch(/reasoning.*effort/is);
+  it('OpenRouterProvider sends reasoning.effort to OpenRouter via resolveOpenRouterReasoning', () => {
+    expect(openrouterSrc).toMatch(/resolveOpenRouterReasoning/);
+    expect(openrouterSrc).toMatch(/reasoning.*effort/is);
   });
 
-  it('QwenProvider resolveOpenRouterReasoning covers low effort (not just medium+high)', () => {
-    const funcStart = qwenSrc.indexOf('resolveOpenRouterReasoning');
-    const funcEnd   = qwenSrc.indexOf('\n  }', funcStart);
-    const body      = qwenSrc.slice(funcStart, funcEnd);
+  it('OpenRouterProvider resolveOpenRouterReasoning covers low effort (not just medium+high)', () => {
+    const funcStart = openrouterSrc.indexOf('resolveOpenRouterReasoning');
+    const funcEnd   = openrouterSrc.indexOf('\n  }', funcStart);
+    const body      = openrouterSrc.slice(funcStart, funcEnd);
     expect(body).toMatch(/low/);
   });
 });

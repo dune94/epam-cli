@@ -58,7 +58,7 @@ esac
   chmodSync(stub, 0o755);
 
   const jsonOut = join(dir, 'result.json');
-  const r = spawnSync('bash', [AI_RUN, '--provider', 'qwen', '--model', 'z-ai/glm-5.2'], {
+  const r = spawnSync('bash', [AI_RUN, '--provider', 'openrouter', '--model', 'z-ai/glm-5.2'], {
     input: opts.prompt ?? 'Find the broken line.',
     encoding: 'utf8', timeout: 30000,
     env: {

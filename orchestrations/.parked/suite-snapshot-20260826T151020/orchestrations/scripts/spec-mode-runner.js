@@ -819,7 +819,7 @@ const MINIMAX_TOOL_TIMEOUT_MS = parseInt(process.env.MINIMAX_TOOL_TIMEOUT_MS || 
 // Ladder: if minimax times out or returns null, escalates to SPEC_PASS_LADDER_PROVIDER
 // (default: openai via OpenRouter) using the raw JSON + jsonrepair path.
 //
-// Fast-path: set SPEC_MODE_PROVIDER=qwen to skip MiniMax entirely.
+// Fast-path: set SPEC_MODE_PROVIDER=openrouter to skip MiniMax entirely.
 //   SPEC_MODE_OPENSPEC_MODEL — model for openspec calls (default: z-ai/glm-5.2)
 //   SPEC_MODE_SPECKIT_MODEL  — model for speckit calls  (default: z-ai/glm-5.2)
 //   SPEC_MODE_MODEL          — fallback for all other spec-mode calls (default: z-ai/glm-5.2)
@@ -1313,7 +1313,7 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
   // shared grant for everyone.
   const provider = (process.env.AI_PROVIDER || process.env.EPAM_ORCHESTRATION_PROVIDER || '').toLowerCase();
   // SPEC_PASS_LADDER_PROVIDER removed with the minimax branch: it defaulted to the literal
-  // 'qwen', so a failure on one vendor was answered by a vendor named in code.
+  // 'openrouter', so a failure on one vendor was answered by a vendor named in code.
 
   // Fast-path: bypass MiniMax entirely when SPEC_MODE_PROVIDER is set.
   // Detects openspec vs speckit from logPath to pick the right model.
@@ -1350,7 +1350,7 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
   // for API-enforced tool JSON; the handler's minimax arm already sets EPAM_MINIMAX_JSON_MODE=1,
   // which buys the same guarantee through the one channel.
   //
-  // Its ladder-to-'qwen' fallback goes with it: a vendor named in code cannot be the answer to
+  // Its ladder-to-'openrouter' fallback goes with it: a vendor named in code cannot be the answer to
   // another vendor failing. MiniMax still runs — it falls through to the path below, which
   // dispatches through the handler like every other provider.
 
@@ -2285,7 +2285,6 @@ async function run() {
   //   catches false negatives the rules missed. LLM decision is final.
   // Both passes write to story.specification.modelUpgrade for full auditability.
   // Fallback default MUST stay within this pipeline's configured model ladder
-  // (MiniMax/qwen-routed models only — Anthropic models are never permitted
   // here). A prior default of 'anthropic/claude-sonnet-4-6' meant ANY
   // invocation that forgot to export ORCH_UPGRADE_MODEL (e.g. a hand-rolled
   // launcher that didn't replicate tier3-travel-app-run.sh's full env-var
@@ -7681,9 +7680,9 @@ function assertNoStoryIdsLost(beforeIds, afterIds, contextLabel) {
 // Root cause this fixes (found live, 2026-07-07): spec-mode's LLM model-review
 // step (below) can override a story's .model field (e.g. moonshotai/kimi-k2 ->
 // MiniMax-M3) but never touched .aiProvider — a story ended up with
-// aiProvider="qwen" (correct for the OLD model) paired with model="MiniMax-M3"
+// aiProvider="openrouter" (correct for the OLD model) paired with model="MiniMax-M3"
 // (which needs the "minimax" provider), silently sending a MiniMax-native model
-// name to the OpenRouter-routed qwen provider. That request never resolves
+// name to the OpenRouter-routed openrouter provider. That request never resolves
 // correctly and hangs until the pipeline's 600s watchdog kills it — the actual
 // root cause of SKY-002-test/SKY-003-test repeatedly stalling with zero output
 // in that day's live run, misread at first as a flaky-API/network issue.
@@ -8584,7 +8583,7 @@ function extractTaggedJson(text, tag) {
   if (!text) return null;
 
   // Normalize variant opening tags that models sometimes emit:
-  //   <_TAG>  →  <TAG>   (Qwen adds leading underscore to distinguish from template echo)
+  //   <_TAG>  →  <TAG>   (OpenRouter adds leading underscore to distinguish from template echo)
   //   <-TAG>  →  <TAG>   (similar dash-prefix variant)
   text = text.replace(new RegExp(`<[_\\-]${tag}>`, 'g'), `<${tag}>`);
 
@@ -8824,7 +8823,7 @@ function resolvePromptProvider(env = process.env) {
     || (/codex$/.test(env.CLAUDE_CMD || '') ? 'codex' : null);
   if (!provider) {
     throw new Error(
-      'No AI provider configured. Set AI_PROVIDER or EPAM_ORCHESTRATION_PROVIDER (e.g. EPAM_ORCHESTRATION_PROVIDER=qwen).'
+      'No AI provider configured. Set AI_PROVIDER or EPAM_ORCHESTRATION_PROVIDER (e.g. EPAM_ORCHESTRATION_PROVIDER=openrouter).'
     );
   }
   return provider;
@@ -8919,7 +8918,6 @@ function buildKnownValidModels(upgradeModel, miniModel) {
 // Anthropic/Claude models are never permitted as a story-agent assignment in
 // this pipeline (this engine IS Claude Code — running Claude AS a story
 // agent inside its own orchestration is not a supported configuration; the
-// pipeline is qwen/minimax-routed by design). This is an absolute rule, not
 // just a preference for what the default should be — checked independently
 // of currentModel/knownValidModels so it still holds even if a story's
 // current model was somehow already corrupted to an Anthropic model by an
@@ -8939,7 +8937,7 @@ function isValidModelString(model, currentModel, knownValidModels) {
 // run_prd_change_reviewer.
 function buildGateExec(aiRunnerCmd, env = process.env) {
   // NO PROVIDER DEFAULT. `|| 'minimax'` named a provider no configuration asks for — every
-  // project config.env and every launcher sets qwen — so it was unreachable in practice and
+  // project config.env and every launcher sets openrouter — so it was unreachable in practice and
   // wrong when reached. Routing the same model through a different provider is a different
   // setup, not a detail. Unset now fails at the call instead of routing somewhere unchosen.
   const provider = env.ORCH_GATE_PROVIDER || '';

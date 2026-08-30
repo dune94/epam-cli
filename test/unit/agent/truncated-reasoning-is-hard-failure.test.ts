@@ -28,7 +28,7 @@ import type { LLMProvider } from '../../../src/providers/types';
 function providerReturning(resp: any): LLMProvider {
   // AgentRunner drives provider.stream(), not complete().
   return {
-    name: 'qwen',
+    name: 'openrouter',
     stream: vi.fn().mockResolvedValue(resp),
     complete: vi.fn().mockResolvedValue(resp),
   } as unknown as LLMProvider;

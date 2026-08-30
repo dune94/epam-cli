@@ -171,7 +171,7 @@ declare -A PRICING_INPUT=( [high]=15.00 [medium]=3.00 [low]=0.80 )
 declare -A PRICING_CACHED=( [high]=1.50 [medium]=0.30 [low]=0.08 )
 declare -A PRICING_OUTPUT=( [high]=75.00 [medium]=15.00 [low]=4.00 )
 
-# Qwen effort-tier fallback (only used when model not in model-pricing.json)
+# OpenRouter effort-tier fallback (only used when model not in model-pricing.json)
 declare -A OPENROUTER_PRICING_INPUT=( [high]=1.25 [medium]=0.40 [low]=0.1875 )
 declare -A OPENROUTER_PRICING_CACHED=( [high]=0.25 [medium]=0.08 [low]=0.0375 )
 declare -A OPENROUTER_PRICING_OUTPUT=( [high]=3.75 [medium]=1.60 [low]=1.125 )
@@ -639,9 +639,6 @@ while IFS= read -r sid; do
     # Model name by effort (and provider)
     if [ "$s_provider" = "openrouter" ]; then
         case "$effort" in
-            low)    model_name="Qwen3.6 Flash" ;;
-            medium) model_name="Qwen3.7 Plus" ;;
-            high)   model_name="Qwen3.7 Max" ;;
         esac
     else
         case "$effort" in

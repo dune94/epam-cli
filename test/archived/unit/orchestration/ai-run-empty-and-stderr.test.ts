@@ -46,7 +46,7 @@ function stubCli(stdout: string, { stderr = '', code = 0 } = {}) {
 
 function runAiRun(cli: string) {
   try {
-    const out = execFileSync('bash', [AI_RUN, '--provider', 'qwen', '--model', 'z-ai/glm-5.2'], {
+    const out = execFileSync('bash', [AI_RUN, '--provider', 'openrouter', '--model', 'z-ai/glm-5.2'], {
       encoding: 'utf8', input: 'do the thing', timeout: 30000,
       env: { ...process.env, EPAM_CLI: cli },
     });

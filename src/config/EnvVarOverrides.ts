@@ -89,7 +89,7 @@ export function getApiKey(provider: string): string | undefined {
     case 'cursor':
       return process.env.CURSOR_API_KEY ?? process.env.EPAM_API_KEY_CURSOR;
     case 'openrouter':
-      return process.env.OPENROUTER_API_KEY ?? process.env.EPAM_API_KEY_OPENROUTER ?? process.env.DASHSCOPE_API_KEY ?? process.env.OPENROUTER_API_KEY ?? process.env.EPAM_API_KEY_OPENROUTER;
+      return process.env.OPENROUTER_API_KEY ?? process.env.EPAM_API_KEY_OPENROUTER;
     default:
       return undefined;
   }

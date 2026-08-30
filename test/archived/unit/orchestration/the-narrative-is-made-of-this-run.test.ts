@@ -272,7 +272,7 @@ describe('THE WHOLE STORY, NOT A SUMMARY OF IT', () => {
     const logText = readFileSync(runs[runs.length - 1].log, 'utf8').replace(/\x1b\[[0-9;]*m/g, '');
     const escalations = [...new Set(
       [...logText.matchAll(/(\S+)\s*(?:→|->)\s*(\S+)/g)]
-        .filter((m) => /glm|minimax|claude|gpt|qwen|kimi/i.test(m[0]))
+        .filter((m) => /glm|minimax|claude|gpt|openrouter|kimi/i.test(m[0]))
         .map((m) => m[2].replace(/['"]/g, '')),
     )];
     if (escalations.length === 0) return; // nothing to prove for a run that never escalated

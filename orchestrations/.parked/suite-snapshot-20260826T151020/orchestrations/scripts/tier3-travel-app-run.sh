@@ -203,9 +203,9 @@ export EPAM_API_KEY_OPENROUTER="$OPENROUTER_API_KEY"
 # implementation. Directly explained a real misdiagnosis (SKY-002-test-1's
 # casing-typo import bug called a "default vs named export mismatch" —
 # wrong — burning a full 8-attempt ladder escalation on the wrong fix).
-export ORCH_GATE_PROVIDER="qwen"
-export EPAM_ORCHESTRATION_PROVIDER="qwen"
-# Escalation model: GLM 5.2 for Rung 2/3 (reasoning model, 1M ctx; routes via OpenRouter/qwen provider)
+export ORCH_GATE_PROVIDER="openrouter"
+export EPAM_ORCHESTRATION_PROVIDER="openrouter"
+# Escalation model: GLM 5.2 for Rung 2/3 (reasoning model, 1M ctx; routes via OpenRouter/openrouter provider)
 # HIGH tier: stronger/pricier model than the medium-tier ESCALATION_MODEL.
 # claude.sh's classify_ladder_tier() dynamically decides medium vs high per
 # story from its own recorded failure history (story-failures.jsonl) — never
@@ -238,7 +238,7 @@ export EPAM_TEMPERATURE="0"
 # model (the HIGH ladder tier) for spec-mode's own decisions, since there's no
 # later opportunity to escalate a bad split/elaboration call the way there is
 # for implementation.
-export SPEC_MODE_PROVIDER="qwen"
+export SPEC_MODE_PROVIDER="openrouter"
 export SPEC_MODE_OPENSPEC_MODEL="${SPEC_MODE_OPENSPEC_MODEL:-${ESCALATION_MODEL_HIGH}}"
 export SPEC_MODE_SPECKIT_MODEL="${SPEC_MODE_SPECKIT_MODEL:-${ESCALATION_MODEL_HIGH}}"
 export SPEC_MODE_MODEL="${SPEC_MODE_MODEL:-${ESCALATION_MODEL_HIGH}}"
@@ -269,7 +269,7 @@ export SPEC_MODE_MODEL="${SPEC_MODE_MODEL:-${ESCALATION_MODEL_HIGH}}"
 # medium/high split.
 export EPAM_MODEL_LADDER="${EPAM_MODEL_LADDER:-}"
 # Final fallback: used at R3 when the story model was never escalated at R2
-export EPAM_FINAL_FALLBACK_PROVIDER="${EPAM_FINAL_FALLBACK_PROVIDER:-qwen}"
+export EPAM_FINAL_FALLBACK_PROVIDER="${EPAM_FINAL_FALLBACK_PROVIDER:-openrouter}"
 # Dynamic retry-extension coordinator (2026-07-12): shipped disabled at
 # first, same rollout discipline as the DeepEval groundedness check --
 # prove it via fixture tests and observe it advisory-only before letting it
@@ -284,10 +284,10 @@ export EPAM_RETRY_EXTENSION_MAX="${EPAM_RETRY_EXTENSION_MAX:-2}"
 # Model-to-provider routing for post-escalation model steps (consumed by
 # claude.sh's resolve_model_provider() — zero vendor names hardcoded in the
 # engine itself, see that function's comment). This project routes every
-# OpenRouter-hosted vendor through the "qwen" provider umbrella; MiniMax
+# OpenRouter-hosted vendor through the "openrouter" provider umbrella; MiniMax
 # direct-API models route through "minimax". A project using different model
 # vendors/providers would supply a different map here.
-export EPAM_MODEL_PROVIDER_MAP="${EPAM_MODEL_PROVIDER_MAP:-zhipuai/*=qwen|moonshotai/*=qwen|z-ai/*=qwen|glm-*=qwen|kimi-*=qwen|deepseek/*=qwen|MiniMax-*=minimax}"
+export EPAM_MODEL_PROVIDER_MAP="${EPAM_MODEL_PROVIDER_MAP:-zhipuai/*=openrouter|moonshotai/*=openrouter|z-ai/*=openrouter|glm-*=openrouter|kimi-*=openrouter|deepseek/*=openrouter|MiniMax-*=minimax}"
 # MiniMax runtime settings
 export MINIMAX_TOOL_TIMEOUT_MS="${MINIMAX_TOOL_TIMEOUT_MS:-15000}"
 export PRD_FILE

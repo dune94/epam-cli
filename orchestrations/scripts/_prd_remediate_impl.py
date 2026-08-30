@@ -279,7 +279,6 @@ if backfilled:
 # `git checkout` restores of the runtime PRD tonight, because git checkout
 # only restores to whatever was last COMMITTED -- which was itself already
 # contaminated from an earlier (pre-tonight) run that predates the ".test.ts
-# stories must use qwen/K2" rule. preflight-prd-integrity.sh's check #9 has
 # always caught this, but nothing ever repaired it -- the phase just
 # hard-aborted with "fix prd.json manually" even though the correct value was
 # sitting right there in the canonical PRD the whole time.

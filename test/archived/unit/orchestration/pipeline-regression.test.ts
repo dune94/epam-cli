@@ -579,8 +579,8 @@ describe('Issue 5 — spec-mode bypasses MiniMax when SPEC_MODE_PROVIDER is set'
     expect(specSrc).toMatch(/openspec.*SPEC_MODE_OPENSPEC_MODEL|SPEC_MODE_OPENSPEC_MODEL.*openspec/s);
   });
 
-  it('tier3 script exports SPEC_MODE_PROVIDER=qwen', () => {
-    expect(tier3Src).toMatch(/SPEC_MODE_PROVIDER=["']?qwen["']?/);
+  it('tier3 script exports SPEC_MODE_PROVIDER=openrouter', () => {
+    expect(tier3Src).toMatch(/SPEC_MODE_PROVIDER=["']?openrouter["']?/);
   });
 
   // 2026-07-06: openspec/speckit make MANDATORY, non-retryable decisions (AC

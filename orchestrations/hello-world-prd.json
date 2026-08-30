@@ -81,7 +81,7 @@
         ]
       },
       "storyType": "implementation",
-      "aiProvider": "qwen",
+      "aiProvider": "openrouter",
       "model": "openai/gpt-4o-mini",
       "effort": "low",
       "specification": {
@@ -160,7 +160,7 @@
         ]
       },
       "storyType": "verification",
-      "aiProvider": "qwen",
+      "aiProvider": "openrouter",
       "model": "openai/gpt-4o-mini",
       "effort": "low",
       "specification": {
@@ -251,7 +251,7 @@
         ]
       },
       "storyType": "review",
-      "aiProvider": "qwen",
+      "aiProvider": "openrouter",
       "model": "openai/gpt-4o-mini",
       "effort": "low",
       "specification": {
@@ -313,7 +313,7 @@
       "completed": false,
       "effort": "low",
       "storyType": "implementation",
-      "aiProvider": "qwen",
+      "aiProvider": "openrouter",
       "model": "openai/gpt-4o-mini",
       "acceptanceCriteria": [
         "formatDate.ts exists in the project root and exports `function formatDate(date: Date, format: 'short' | 'long'): string` (named export, exact signature)",
@@ -392,7 +392,7 @@
       "completed": false,
       "effort": "low",
       "storyType": "implementation",
-      "aiProvider": "qwen",
+      "aiProvider": "openrouter",
       "model": "openai/gpt-4o-mini",
       "acceptanceCriteria": [
         "truncate.ts exists and exports truncate with correct signature: export function truncate(text: string, maxLength: number, suffix?: string): string",
@@ -457,7 +457,7 @@
     },
     {
       "id": "HW-006",
-      "title": "Implement slugify() utility via Qwen/OpenRouter",
+      "title": "Implement slugify() utility via openrouter/OpenRouter",
       "description": "Create slugify.ts in the project root. Export a single function `export function slugify(text: string): string` that lowercases the input, trims leading/trailing whitespace, replaces runs of whitespace or non-alphanumeric characters with a single hyphen, and strips leading/trailing hyphens (e.g. 'Hello,  World!' → 'hello-world'). Create slugify.test.ts with at least 5 vitest tests covering normal input, punctuation, repeated separators, leading/trailing whitespace, and empty string. Do not modify any existing files.",
       "priority": "medium",
       "agentRole": "typescript-engineer",
@@ -466,7 +466,7 @@
       "completed": false,
       "effort": "low",
       "storyType": "implementation",
-      "aiProvider": "qwen",
+      "aiProvider": "openrouter",
       "model": "openai/gpt-4o-mini",
       "humanHours": 0.5,
       "acceptanceCriteria": [

@@ -5,14 +5,14 @@
  * parses `--provider` at line 132, so a flag built from a stale environment OVERWRITES the set's
  * decision. The substitution notice is printed and the routing is unchanged.
  *
- * If that is true, a call under EPAM_PROVIDER_SET=claude carrying `--provider qwen` ends up on
- * qwen. That is what the roster specialiser log shows, three paid runs running:
+ * If that is true, a call under EPAM_PROVIDER_SET=claude carrying `--provider openrouter` ends up on
+ * openrouter. That is what the roster specialiser log shows, three paid runs running:
  *
- *   [provider] 'qwen' is not routable by the 'claude' set — using 'claude'.
- *   [ai-run] provider 'qwen' returned NO completion record — treating as FAILURE
+ *   [provider] 'openrouter' is not routable by the 'claude' set — using 'claude'.
+ *   [ai-run] provider 'openrouter' returned NO completion record — treating as FAILURE
  *   [ai-run] 'roster-specialiser' failed after 3 attempt(s)
  *
- * The notice says claude; the failure names qwen. If this test does not reproduce that, the
+ * The notice says claude; the failure names openrouter. If this test does not reproduce that, the
  * diagnosis is wrong and no fix should be written on the strength of it.
  */
 import { describe, it, expect } from 'vitest';
@@ -53,15 +53,15 @@ describe('the set outranks the provider flag', () => {
   it('REPRODUCES: a --provider flag from a stale env survives the claude set', () => {
     // This is the assertion that proves the diagnosis. It is written to FAIL once the set is made
     // to outrank the flag — at which point it becomes the regression guard.
-    const used = effectiveProvider(['--provider', 'qwen'],
-      { EPAM_PROVIDER_SET: 'claude', EPAM_ORCHESTRATION_PROVIDER: 'qwen' });
+    const used = effectiveProvider(['--provider', 'openrouter'],
+      { EPAM_PROVIDER_SET: 'claude', EPAM_ORCHESTRATION_PROVIDER: 'openrouter' });
     expect(used, 'the set was honoured after all — the diagnosis is wrong, do not fix on it')
       .toBe('claude');
   });
 
   it('with no flag, the set already wins — so the flag is the whole difference', () => {
     const used = effectiveProvider([],
-      { EPAM_PROVIDER_SET: 'claude', EPAM_ORCHESTRATION_PROVIDER: 'qwen' });
+      { EPAM_PROVIDER_SET: 'claude', EPAM_ORCHESTRATION_PROVIDER: 'openrouter' });
     expect(used).toBe('claude');
   });
 });

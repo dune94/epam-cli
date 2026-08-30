@@ -10,7 +10,7 @@
 // down the SAME function, the provider case re-derives it:
 //
 //   case "${STORY_PROVIDER:-codex}" in
-//       copilot|openai|qwen|cursor|minimax) resolve_model_from_story "$story_id" ;;
+//       copilot|openai|openrouter|cursor|minimax) resolve_model_from_story "$story_id" ;;
 //   esac
 //
 // resolve_model_from_story assigns STORY_MODEL="$story_model" straight from prd.json whenever the
@@ -59,14 +59,14 @@ eval "$(awk '/^resolve_model_from_story\\(\\) \\{/,/^\\}/' "${CLAUDE_SH}")"
 
 # THE REAL RESUME BLOCK, extracted verbatim — not a re-implementation of it. If the resume stops
 # recording the restored position, this test goes red rather than quietly agreeing with itself.
-resolve_model_provider() { echo "qwen"; }
+resolve_model_provider() { echo "openrouter"; }
 STORY_MODEL="${PRD_MODEL}"            # what resolve_provider_settings left behind
 _persisted_model="${CLIMBED_TO}"      # what the ladder actually climbed to
 eval "$(awk '/if \\[ -n "\\$_persisted_model" \\]/,/^    fi$/' "${CLAUDE_SH}" | sed 's/^        local /        /')"
 
 # ...and then the provider case re-derives from the PRD (claude.sh ~8706).
 case "\${STORY_PROVIDER:-codex}" in
-  copilot|openai|qwen|cursor|minimax) resolve_model_from_story "AMSD-2041" ;;
+  copilot|openai|openrouter|cursor|minimax) resolve_model_from_story "AMSD-2041" ;;
 esac
 
 echo "MODEL=\${STORY_MODEL}"

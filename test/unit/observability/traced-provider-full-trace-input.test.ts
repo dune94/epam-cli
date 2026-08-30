@@ -38,7 +38,7 @@ vi.mock('../../../src/observability/OtelTracer.js', () => ({
 
 function fakeProvider(responseText: string): LLMProvider {
   return {
-    name: 'qwen',
+    name: 'openrouter',
     complete: async (_req: ProviderRequest): Promise<ProviderResponse> => ({
       content: [{ type: 'text', text: responseText } as any],
       stopReason: 'end_turn',

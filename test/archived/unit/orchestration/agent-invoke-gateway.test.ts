@@ -153,9 +153,9 @@ describe('Gateway — fail-fast beats a silent default', () => {
 
 describe('Gateway — routing stays with the caller', () => {
   it('passes the caller model and provider through to the runner', () => {
-    const { seen } = invoke('team-lead-review', '--model z-ai/glm-5.2 --provider qwen');
+    const { seen } = invoke('team-lead-review', '--model z-ai/glm-5.2 --provider openrouter');
     expect(seen.AI_MODEL).toBe('z-ai/glm-5.2');
-    expect(seen.AI_PROVIDER).toBe('qwen');
+    expect(seen.AI_PROVIDER).toBe('openrouter');
   });
 
   it('tags the invocation with its role so logs can attribute it', () => {

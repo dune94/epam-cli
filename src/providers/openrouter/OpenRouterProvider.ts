@@ -22,9 +22,7 @@ import { logger } from '../../utils/logger.js';
  * execute them normally. Exported for unit testing.
  */
 /**
- * Strip <think>...</think> reasoning blocks from Qwen3 model responses.
  *
- * Qwen3-coder emits chain-of-thought inside <think> tags before its actual
  * response. These blocks are 3-8K tokens each. If left in the text they
  * accumulate in the AgentRunner message history and are resent on every
  * subsequent iteration, causing quadratic token growth. Strip them here so
@@ -153,11 +151,11 @@ export function openRouterSessionId(): string {
   return _processSessionId;
 }
 
-export const DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/api/v1';
-
 export class OpenRouterProvider implements LLMProvider {
   readonly name = 'openrouter';
-  readonly defaultModel = 'openrouter/qwen3-coder-30b-a3b-instruct';
+  // TAKEN FROM THE OPENROUTER SET'S OWN LADDER, not chosen here: the opening rung of the
+  // medium tier. A default invented in code is the hardcoding this project forbids.
+  readonly defaultModel = 'MiniMax-M2.7-highspeed';
 
   private apiKey: string;
   private baseURL: string;
@@ -166,10 +164,12 @@ export class OpenRouterProvider implements LLMProvider {
   constructor(config: OpenRouterConfig) {
     this.apiKey = config.apiKey;
     this.openRouterMode = config.openRouterMode ?? false;
-    this.baseURL = config.baseURL || (this.openRouterMode ? OPENROUTER_BASE_URL : DASHSCOPE_BASE_URL);
+    // ONE BASE URL. DashScope was Alibaba's direct openrouter API — the second route OpenRouter
+    // replaced — so there is no longer a non-OpenRouter mode to fall back to.
+    this.baseURL = config.baseURL || OPENROUTER_BASE_URL;
   }
 
-  /** Only use request.model if it looks like a openrouter/openrouter model. Falls back to default.
+  /** Only use request.model if it looks like an OpenRouter model. Falls back to default.
    *  EPAM_OPENROUTER_MODEL_OVERRIDE always wins — lets local Ollama models override PRD model names. */
   private resolveModel(requested?: string): string {
     const override = process.env.EPAM_OPENROUTER_MODEL_OVERRIDE;
@@ -723,19 +723,18 @@ export class OpenRouterProvider implements LLMProvider {
  * Factory function to create OpenRouter provider
  */
 export function createOpenRouterProvider(apiKey?: string, model?: string): OpenRouterProvider | null {
-  // Prefer OpenRouter key (English UI, no Alibaba account needed)
-  const openRouterKey = process.env.OPENROUTER_API_KEY ?? process.env.EPAM_API_KEY_OPENROUTER;
-  const dashScopeKey = apiKey ?? process.env.DASHSCOPE_API_KEY ?? process.env.OPENROUTER_API_KEY;
+  // ONE ROUTE. There were two: OpenRouter, and DashScope — Alibaba's DIRECT openrouter API, reached with
+  // DASHSCOPE_API_KEY or a vendor-direct key. That second route WAS the openrouter provider, and OpenRouter
+  // replaced it, so it is removed rather than renamed. Renaming it produced a variable called
+  // dashScopeKey falling back to the OpenRouter key, and two names reading one environment
+  // variable — a rename where a deprecation was asked for.
+  const key = apiKey ?? process.env.OPENROUTER_API_KEY ?? process.env.EPAM_API_KEY_OPENROUTER;
 
-  if (openRouterKey) {
-    const baseURL = process.env.OPENROUTER_BASE_URL || undefined;
-    return new OpenRouterProvider({ apiKey: openRouterKey, openRouterMode: true, baseURL });
-  }
-
-  if (!dashScopeKey) {
+  if (!key) {
     logger.warn('OpenRouter API key not found. Set OPENROUTER_API_KEY or use /provider auth openrouter');
     return null;
   }
 
-  return new OpenRouterProvider({ apiKey: dashScopeKey });
+  const baseURL = process.env.OPENROUTER_BASE_URL || undefined;
+  return new OpenRouterProvider({ apiKey: key, openRouterMode: true, baseURL });
 }

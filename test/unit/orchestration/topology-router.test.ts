@@ -2,7 +2,7 @@
  * Unit tests for orchestrations/scripts/lib/topology-router.js
  *
  * Covers heuristicTopology — the fallback used when no Anthropic key is
- * available (which is our case with OpenRouter/Qwen).
+ * available (which is our case with OpenRouter/OpenRouter).
  *
  * Rules under test:
  *   - 0 or 1 worktree stories → single

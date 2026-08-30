@@ -2,7 +2,6 @@
 # ──────────────────────────────────────────────────────────────────────────────
 # Tier 1 (Ollama): Real-model pipeline validation — zero paid credits.
 #
-# Uses local Ollama (qwen2.5:1.5b) as the LLM backend. Unlike the Docker mock
 # server, Ollama actually generates responses — so it exercises error recovery,
 # RalphWiggumLoop, retry paths, and tool-call parsing in a way the mock cannot.
 #
@@ -11,7 +10,6 @@
 # without spending OpenRouter credits.
 #
 # What this validates beyond the mock:
-#   • QwenProvider model-name override (EPAM_OPENROUTER_MODEL_OVERRIDE=qwen2.5:1.5b)
 #   • Tool-call parsing with real Ollama streaming responses
 #   • RalphWiggumLoop fires and recovers when model writes bad code
 #   • AgentRunner handles slow responses (Ollama ~2–5 tok/s on quiet machine)
@@ -26,7 +24,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 OLLAMA_URL="http://127.0.0.1:11434/v1"
-OLLAMA_MODEL="qwen2.5:1.5b"
 LOG_FILE="/tmp/tier1-ollama-run-$(date +%Y%m%dT%H%M%S).log"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'

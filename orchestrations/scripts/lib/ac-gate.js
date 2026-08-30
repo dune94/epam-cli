@@ -102,7 +102,7 @@ const AUTO_ELABORATE     = process.env.AC_GATE_AUTO_ELABORATE === '1';
 const BROWNFIELD         = process.env.EPAM_BROWNFIELD === '1';
 const DEFAULT_CODELINE   = process.env.JIRA_DEFAULT_CODELINE || '';
 // Explicit provider. These called ai-run.sh with --model but NO --provider, so
-// provider came only from ambient env — e.g. `--provider qwen --model claude-haiku`.
+// provider came only from ambient env — e.g. `--provider openrouter --model claude-haiku`.
 const PROVIDER = getArg('--provider', process.env.ORCH_GATE_PROVIDER || process.env.EPAM_ORCHESTRATION_PROVIDER || 'openrouter');
 // No literal fallback: see lib/seam-model.js. An AC classification produced by a model the
 // run never chose still reads as authoritative.

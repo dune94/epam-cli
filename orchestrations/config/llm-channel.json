@@ -43,7 +43,7 @@
     "orchestrations/scripts/lib/topology-router.js — collapsed onto the hub 2026-08-25; seam declared, prompt templated, no credential read",
     "orchestrations/scripts/lib/semantic-search.js — DELETED 2026-08-25; dead code, never executed, hardcoded api.openai.com",
     "spec-mode-runner.js — direct MiniMax fetch + callMiniMaxWithTool DELETED 2026-08-25; minimax falls through to the handler",
-    "post-impl-tc-writer.sh — routed through the handler 2026-08-25; qwen literal and OPENROUTER->OPENAI key cross-wiring removed",
+    "post-impl-tc-writer.sh — routed through the handler 2026-08-25; openrouter literal and OPENROUTER->OPENAI key cross-wiring removed",
     "tools/diagnosis-groundedness-check.py — judge routed through the handler 2026-08-25; OpenRouterModel and gpt-4o-mini literal removed"
   ]
 }

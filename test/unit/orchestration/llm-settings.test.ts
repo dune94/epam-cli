@@ -412,7 +412,7 @@ describe('model-override resolver — picks the right entry per resolved STORY_P
   });
 
   it('glm-5.2 gets its own high-effort, 1M-context-appropriate budget', () => {
-    const env = resolveModelOverride(METROLINX_SETTINGS, 'qwen', 'z-ai/glm-5.2');
+    const env = resolveModelOverride(METROLINX_SETTINGS, 'openrouter', 'z-ai/glm-5.2');
     expect(env.EPAM_REASONING_EFFORT).toBe('high');
     expect(env._effective_max_iterations).toBe('120');
     // TRACKS THE DECLARATION, does not pin a number. This asserted 128000 while the project
@@ -429,7 +429,7 @@ describe('model-override resolver — picks the right entry per resolved STORY_P
   });
 
   it('kimi-k2.5 (intermediate escalation step) gets its own distinct, lighter budget than kimi-k3', () => {
-    const env = resolveModelOverride(METROLINX_SETTINGS, 'qwen', 'moonshotai/kimi-k2.5');
+    const env = resolveModelOverride(METROLINX_SETTINGS, 'openrouter', 'moonshotai/kimi-k2.5');
     expect(env.EPAM_TEMPERATURE).toBe('1');
     expect(env.EPAM_REASONING_EFFORT).toBe('medium');
     expect(env._effective_max_iterations).toBe('60');
@@ -437,7 +437,7 @@ describe('model-override resolver — picks the right entry per resolved STORY_P
   });
 
   it('kimi-k3 gets its own temperature/compaction override, distinct from kimi-k2.5 (no substring collision)', () => {
-    const env = resolveModelOverride(METROLINX_SETTINGS, 'qwen', 'moonshotai/kimi-k3');
+    const env = resolveModelOverride(METROLINX_SETTINGS, 'openrouter', 'moonshotai/kimi-k3');
     expect(env.EPAM_TEMPERATURE).toBe('1');
     expect(env.EPAM_REASONING_EFFORT).toBe('max');
     expect(env._effective_max_iterations).toBe('150');
@@ -445,7 +445,7 @@ describe('model-override resolver — picks the right entry per resolved STORY_P
   });
 
   it('a model matching nothing gets no override applied (defaults untouched)', () => {
-    const env = resolveModelOverride(METROLINX_SETTINGS, 'qwen', 'z-ai/glm-5.1');
+    const env = resolveModelOverride(METROLINX_SETTINGS, 'openrouter', 'z-ai/glm-5.1');
     expect(env.EPAM_REASONING_EFFORT).toBe('');
     expect(env.EPAM_TEMPERATURE).toBe('');
   });

@@ -2,7 +2,7 @@
  * Root cause of a live hang (found 2026-07-07, tier3 relaunch): spec-mode's LLM
  * model-review step overrides a story's .model field (e.g.
  * moonshotai/kimi-k2 -> MiniMax-M3) but never touched .aiProvider. A story ended
- * up with aiProvider="qwen" (OpenRouter routing, correct for the OLD model)
+ * up with aiProvider="openrouter" (OpenRouter routing, correct for the OLD model)
  * paired with model="MiniMax-M3" (a MiniMax-native model needing the "minimax"
  * provider) — sending the wrong model name to the wrong API. That request never
  * resolved and hung until the pipeline's 600s watchdog killed it, twice, on
@@ -24,16 +24,16 @@ const SPEC_MODE_RUNNER = join(REPO_ROOT, 'orchestrations/scripts/spec-mode-runne
 const { resolveModelProvider } = require(SPEC_MODE_RUNNER);
 
 const PROVIDER_MAP =
-  'zhipuai/*=qwen|moonshotai/*=qwen|z-ai/*=qwen|glm-*=qwen|kimi-*=qwen|deepseek/*=qwen|MiniMax-*=minimax';
+  'zhipuai/*=openrouter|moonshotai/*=openrouter|z-ai/*=openrouter|glm-*=openrouter|kimi-*=openrouter|deepseek/*=openrouter|MiniMax-*=minimax';
 
 describe('resolveModelProvider() — JS port of resolve_model_provider (config-driven, no hardcoded vendors)', () => {
-  it('matches the exact live bug shape: MiniMax-M3 resolves to "minimax", not "qwen"', () => {
+  it('matches the exact live bug shape: MiniMax-M3 resolves to "minimax", not "openrouter"', () => {
     expect(resolveModelProvider('MiniMax-M3', { EPAM_MODEL_PROVIDER_MAP: PROVIDER_MAP })).toBe('minimax');
   });
 
-  it('matches an OpenRouter-routed vendor to "qwen"', () => {
-    expect(resolveModelProvider('moonshotai/kimi-k2', { EPAM_MODEL_PROVIDER_MAP: PROVIDER_MAP })).toBe('qwen');
-    expect(resolveModelProvider('z-ai/glm-5.2', { EPAM_MODEL_PROVIDER_MAP: PROVIDER_MAP })).toBe('qwen');
+  it('matches an OpenRouter-routed vendor to "openrouter"', () => {
+    expect(resolveModelProvider('moonshotai/kimi-k2', { EPAM_MODEL_PROVIDER_MAP: PROVIDER_MAP })).toBe('openrouter');
+    expect(resolveModelProvider('z-ai/glm-5.2', { EPAM_MODEL_PROVIDER_MAP: PROVIDER_MAP })).toBe('openrouter');
   });
 
   it('returns null when no pattern matches (caller keeps existing aiProvider)', () => {

@@ -127,7 +127,7 @@ describe('run_retry_extension_coordinator() — REAL integration: the exact call
           `MAIN_PRD_FILE=${JSON.stringify(prdPath)}`,
           'EPAM_CLI=epam',
           'EPAM_RETRY_EXTENSION_ENABLED=1',
-          'ORCH_GATE_PROVIDER=qwen',
+          'ORCH_GATE_PROVIDER=openrouter',
           'ORCH_GATE_MODEL=test-model',
           // Minimal color vars log() references -- absence would just print
           // literal empty strings, not a functional difference for this test.

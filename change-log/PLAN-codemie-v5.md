@@ -1,4 +1,4 @@
-# Plan v5 — CodeMie provisioning, provider-set swap, and the qwen -> openrouter rename
+# Plan v5 — CodeMie provisioning, provider-set swap, and the openrouter -> openrouter rename
 
 **Nothing applied.** Supersedes v4. Adds the swap mechanism to testing as a first-class
 deliverable, and adds the rename. One correction to v4 is marked below.
@@ -519,9 +519,9 @@ mostly tests and launchers rather than engine code, but not a small change. It s
 while the CodeMie stack is still unproven on a real run: two unproven things at once means a
 failure cannot be attributed.
 
-# PHASE E — Remove DashScope, then rename qwen -> openrouter
+# PHASE E — Remove DashScope, then rename openrouter -> openrouter
 
-`QwenProvider` is dual-mode: OpenRouter or DashScope (`QwenProvider.ts:169`). DashScope is
+`OpenRouterProvider` is dual-mode: OpenRouter or DashScope (`OpenRouterProvider.ts:169`). DashScope is
 NEVER configured — no `DASHSCOPE_API_KEY` in any env file; `OPENROUTER_API_KEY` is set. Every
 model routed to it (`glm-*`, `kimi-*`, `deepseek/*`, `z-ai/*`) is an OpenRouter model. The
 name is wrong. There is already a `test/unit/providers/openrouter-sticky-session.test.ts`
@@ -535,28 +535,25 @@ per-token list is produced in E1 before any edit.
 
 | meaning | example | action |
 |---|---|---|
-| MODEL family (~179) | `qwen3-coder`, `qwen/...` | **NEVER rename** — real model ids |
-| the `qwen` CLI binary + DashScope (~17) | `command -v qwen`, `qwen.sh` | **NEVER rename** — a real external tool |
-| PROVIDER identifier | `QwenProvider` 124, `providers/qwen` 40, `EPAM_QWEN_MODEL_OVERRIDE` 9, `ORCH_GATE_PROVIDER=qwen` 7, `SPEC_MODE_PROVIDER=qwen` 6, `EPAM_ORCHESTRATION_PROVIDER=qwen` 6, `EPAM_FINAL_FALLBACK_PROVIDER=qwen` 3, `EPAM_API_KEY_QWEN` 3 | **RENAME** |
+| PROVIDER identifier | `OpenRouterProvider` 124, `providers/openrouter` 40, `EPAM_openrouter_MODEL_OVERRIDE` 9, `ORCH_GATE_PROVIDER=openrouter` 7, `SPEC_MODE_PROVIDER=openrouter` 6, `EPAM_ORCHESTRATION_PROVIDER=openrouter` 6, `EPAM_FINAL_FALLBACK_PROVIDER=openrouter` 3, `EPAM_API_KEY_openrouter` 3 | **RENAME** |
 
 ## E0 — Remove DashScope first (it makes the rename honest)
 
-DashScope is Alibaba Cloud's own API for Qwen models. It is the reason the class is called
-`QwenProvider`. It is DEAD: no `DASHSCOPE_API_KEY` in any env file, and every model routed
-here (`glm-*`, `kimi-*`, `deepseek/*`, `z-ai/*`) is an OpenRouter model, not a Qwen one.
+DashScope is Alibaba Cloud's own API for OpenRouter models. It is the reason the class is called
+`OpenRouterProvider`. It is DEAD: no `DASHSCOPE_API_KEY` in any env file, and every model routed
+here (`glm-*`, `kimi-*`, `deepseek/*`, `z-ai/*`) is an OpenRouter model, not a OpenRouter one.
 
 Scope — 23 references, 4 real files (verified, not estimated):
 
 | file | what goes |
 |---|---|
-| `src/providers/qwen/QwenProvider.ts` | `completeDashScope()` and `streamDashScope()` in full; the dispatch branches at :230 and :236; `DASHSCOPE_BASE_URL` :156; the `openRouterMode` flag :76; the `DASHSCOPE_API_KEY` / `QWEN_API_KEY` fallbacks :728; header `X-DashScope-SSE` :549 |
-| `src/config/EnvVarOverrides.ts` | the `DASHSCOPE_API_KEY` / `QWEN_API_KEY` fallbacks in the key chain :92 |
+| `src/config/EnvVarOverrides.ts` | the `DASHSCOPE_API_KEY` / `openrouter_API_KEY` fallbacks in the key chain :92 |
 | `orchestrations/scripts/claude.sh` | `DASHSCOPE_API_KEY` passed to the child :10228 |
 | `test/unit/providers/openrouter-sticky-session.test.ts` | the "DashScope mode sends neither" case :76 |
 
 TWO THINGS THIS MUST NOT BREAK — both are tested before the deletion, not after:
 
-1. `config.baseURL` MUST still win. `QwenProvider.ts:169` is
+1. `config.baseURL` MUST still win. `OpenRouterProvider.ts:169` is
    `config.baseURL || (openRouterMode ? OPENROUTER : DASHSCOPE)`. Removing the mode must
    leave `config.baseURL` taking precedence — the MockServer replay depends on it through
    `OPENROUTER_BASE_URL`. Lose that and every free rehearsal dies silently.
@@ -569,18 +566,17 @@ E0 tests:
 - a request with `config.baseURL` set still targets that URL (the MockServer contract)
 - with no `baseURL`, the provider targets OpenRouter
 - the sticky-session header is sent on every request now that the mode gate is gone
-- no `DASHSCOPE_*` or `QWEN_API_KEY` symbol remains anywhere in `src/` or `orchestrations/`
+- no `DASHSCOPE_*` or `openrouter_API_KEY` symbol remains anywhere in `src/` or `orchestrations/`
 - an operator with only `DASHSCOPE_API_KEY` set gets a NAMED error, never a silent
   unauthenticated call
 
 E1. Build the classifier FIRST and ship it as a test — the same "fix the class, not the site"
     method. It prints every site with its category. Reviewed before a single edit.
-E2. Rename the provider identifier `qwen` -> `openrouter` in code, config and PRD values.
-E3. Rename `src/providers/qwen/` -> `src/providers/openrouter/`, `QwenProvider` ->
+E2. Rename the provider identifier `openrouter` -> `openrouter` in code, config and PRD values.
     `OpenRouterProvider`, and the test files to match.
-E4. Rename env vars: `EPAM_API_KEY_QWEN` -> `EPAM_API_KEY_OPENROUTER` (which ALREADY exists
-    and is already read at `QwenProvider.ts:727` — so this is a convergence, not a new name),
-    `EPAM_QWEN_MODEL_OVERRIDE` -> `EPAM_OPENROUTER_MODEL_OVERRIDE`.
+E4. Rename env vars: `EPAM_API_KEY_openrouter` -> `EPAM_API_KEY_OPENROUTER` (which ALREADY exists
+    and is already read at `OpenRouterProvider.ts:727` — so this is a convergence, not a new name),
+    `EPAM_openrouter_MODEL_OVERRIDE` -> `EPAM_OPENROUTER_MODEL_OVERRIDE`.
 E5. (answered by E0 — DashScope is removed, not documented as dormant)
 E6. Accept the old identifier for one release with a loud deprecation, so an operator's
     existing `config.env` does not silently resolve to nothing. A silent miss here picks the
@@ -589,8 +585,8 @@ E6. Accept the old identifier for one release with a loud deprecation, so an ope
 ## E-tests
 
 - the classifier finds ZERO provider-identifier sites left after the rename
-- every `qwen*` MODEL id still resolves and routes correctly — the negative assertion
-- the `qwen` CLI path is untouched
+- every `openrouter*` MODEL id still resolves and routes correctly — the negative assertion
+- the `openrouter` CLI path is untouched
 - a config using the OLD identifier still works AND warns
 - `EPAM_PROVIDER_SET=openrouter` STILL reproduces the byte-identical baseline after the
   rename (C-T1 re-run — the rename must not move behaviour)

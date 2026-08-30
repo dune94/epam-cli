@@ -217,7 +217,6 @@ start_jira || exit 1
 echo "[mock1-paused] mock Jira on 127.0.0.1:${JIRA_PORT}"
 
 # ── Launch ───────────────────────────────────────────────────────────────────
-# Production agent routing (qwen/glm), identical to the vitest mock — a run that
 # exercises a provider path production does not use proves nothing.
 export JIRA_PIPELINE=1
 export JIRA_URL="http://127.0.0.1:${JIRA_PORT}"
@@ -231,7 +230,7 @@ export JIRA_CODELINE_ROOT="$CODELINE_ROOT"
 export JIRA_BASELINE_BRANCH="main"
 export AGENT_PROFILES_FILE="$REPO_ROOT/orchestrations/agents/profiles.json"
 export EPAM_DANGEROUS_SKIP_APPROVAL=1
-# PROVIDER PINS REMOVED 2026-08-25. These were exported here as "qwen", and a launcher export
+# PROVIDER PINS REMOVED 2026-08-25. These were exported here as "openrouter", and a launcher export
 # is already-set, so it OUTRANKED anything hello-dolly declared — which is why the project had
 # no config.env at all. Both now come from its config.<set>.env, chosen by EPAM_PROVIDER_SET,
 # exactly as every other project resolves them.

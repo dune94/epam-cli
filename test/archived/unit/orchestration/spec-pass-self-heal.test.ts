@@ -39,16 +39,16 @@ describe('spec-mode-runner.js — buildGateExec uses the gate model, not the sto
 
   it('respects ORCH_GATE_PROVIDER and ORCH_GATE_MODEL when set', () => {
     const exec = buildGateExec('/path/to/ai-run.sh', {
-      ORCH_GATE_PROVIDER: 'qwen',
+      ORCH_GATE_PROVIDER: 'openrouter',
       ORCH_GATE_MODEL: 'z-ai/glm-5.2',
     });
-    expect(exec.args).toContain('qwen');
+    expect(exec.args).toContain('openrouter');
     expect(exec.args).toContain('z-ai/glm-5.2');
   });
 
   it('is independent of AI_PROVIDER/AI_MODEL (the story-agent provider)', () => {
     const exec = buildGateExec('/path/to/ai-run.sh', {
-      AI_PROVIDER: 'qwen',
+      AI_PROVIDER: 'openrouter',
       AI_MODEL: 'moonshotai/kimi-k2',
     });
     // Should still default to the gate model, not the story-agent model

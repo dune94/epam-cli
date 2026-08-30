@@ -942,7 +942,7 @@ function refreshEntities(cap) {
   const models = declaredModels();
   if (models.length) {
     const stale = [...new Set(body.match(/\b[A-Za-z][A-Za-z0-9.]*(?:-[A-Za-z0-9.]+){1,4}\b/g) || [])]
-      .filter((t) => /^(minimax|glm|kimi|qwen|z-ai|zhipuai|moonshotai|gpt|claude)/i.test(t))
+      .filter((t) => /^(minimax|glm|kimi|openrouter|z-ai|zhipuai|moonshotai|gpt|claude)/i.test(t))
       .filter((t) => !models.includes(t));
     for (const m of stale) {
       body = body.split(m).join(models[0]);

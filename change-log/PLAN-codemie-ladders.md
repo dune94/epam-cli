@@ -71,7 +71,6 @@ family, the Kimi entry, and any legacy id still reachable through routing.
 EPAM_MODEL_PROVIDER_MAP="claude-*=codemie-claude|moonshotai.*=codemie-claude"
 ```
 
-replacing today's qwen/minimax map. `ai-run.sh:103,179` already dispatches `codemie-claude`, so
 no code change.
 
 ## Change inventory
@@ -86,7 +85,7 @@ no code change.
 | 6 | `test/…` (14 files) | test | retarget assertions from the fork to `claude.sh` |
 
 **Item 5 is a live bug today**, independent of this plan: `known` is
-`[qwen, openai, anthropic, claude, gemini, codex, cursor, opencode, minimax]` — no codemie. So
+`[openrouter, openai, anthropic, claude, gemini, codex, cursor, opencode, minimax]` — no codemie. So
 preflight rejects a PRD assigning it while two call sites accept it.
 
 ## Model overrides — required, not optional

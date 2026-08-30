@@ -74,7 +74,7 @@ describe('PRD atomic-write permission regression — REAL execution', () => {
     const dir = mkdtempSync(join(tmpdir(), 'prd-perm-hotswap-'));
     try {
       const prdFile = join(dir, 'prd.json');
-      writeFileSync(prdFile, JSON.stringify({ stories: [{ id: 'SKY-999', model: 'old-model', aiProvider: 'qwen' }] }));
+      writeFileSync(prdFile, JSON.stringify({ stories: [{ id: 'SKY-999', model: 'old-model', aiProvider: 'openrouter' }] }));
       chmodSync(prdFile, 0o644);
       // hot_swap resolves its ladder tier through _resolve_ladder_tier, which reads the
       // archetype's declared ladder. An extracted function needs what the script provides.
@@ -118,7 +118,7 @@ describe('PRD atomic-write permission regression — REAL execution', () => {
     const dir = mkdtempSync(join(tmpdir(), 'prd-perm-tcdensity-'));
     try {
       const prdFile = join(dir, 'prd.json');
-      writeFileSync(prdFile, JSON.stringify({ stories: [{ id: 'SKY-999', model: 'old-model', aiProvider: 'qwen' }] }));
+      writeFileSync(prdFile, JSON.stringify({ stories: [{ id: 'SKY-999', model: 'old-model', aiProvider: 'openrouter' }] }));
       chmodSync(prdFile, 0o644);
       const fnBody = extractFunctionBodyBraceCounted('maybe_upgrade_model_for_tc_density');
       const scriptPath = join(dir, 'run.sh');

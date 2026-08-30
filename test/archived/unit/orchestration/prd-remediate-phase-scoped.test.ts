@@ -188,9 +188,9 @@ describe('prd-remediate.sh — is_canonical bypass is scoped to the phase being 
       },
       // core's own stories are genuinely pre-spec-pass: no createdFrom, no
       // testCriteria yet — exactly the live SKY-002/003/004 shape.
-      { id: 'SKY-002', status: 'pending', completed: false, effort: 'low', aiProvider: 'qwen', acceptanceCriteria: ['ac'], technicalNotes: { files: ['src/a.ts'] } },
-      { id: 'SKY-003', status: 'pending', completed: false, effort: 'low', aiProvider: 'qwen', acceptanceCriteria: ['ac'], technicalNotes: { files: ['src/b.ts'] } },
-      { id: 'SKY-004', status: 'pending', completed: false, effort: 'low', aiProvider: 'qwen', acceptanceCriteria: ['ac'], technicalNotes: { files: ['src/c.ts'] } },
+      { id: 'SKY-002', status: 'pending', completed: false, effort: 'low', aiProvider: 'openrouter', acceptanceCriteria: ['ac'], technicalNotes: { files: ['src/a.ts'] } },
+      { id: 'SKY-003', status: 'pending', completed: false, effort: 'low', aiProvider: 'openrouter', acceptanceCriteria: ['ac'], technicalNotes: { files: ['src/b.ts'] } },
+      { id: 'SKY-004', status: 'pending', completed: false, effort: 'low', aiProvider: 'openrouter', acceptanceCriteria: ['ac'], technicalNotes: { files: ['src/c.ts'] } },
     ],
   };
 

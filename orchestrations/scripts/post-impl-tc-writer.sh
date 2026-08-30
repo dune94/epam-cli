@@ -196,7 +196,7 @@ echo "  [tc-writer] Invoking TC writer agent..."
 TC_MODEL="${TC_WRITER_MODEL:-${EPAM_MODEL:-}}"
 # THE SET DECIDES THE VENDOR — NO LITERAL.
 #
-# This read `${TC_WRITER_PROVIDER:-qwen}`, and TC_WRITER_PROVIDER is set nowhere. So the TC
+# This read `${TC_WRITER_PROVIDER:-openrouter}`, and TC_WRITER_PROVIDER is set nowhere. So the TC
 # writer went to an OpenRouter-routed vendor on EVERY run, whatever provider set was active: a
 # codemie or mockserver run still paid OpenRouter here. A vendor named in code outranked the
 # stack the run had chosen.

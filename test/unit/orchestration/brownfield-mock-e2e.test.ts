@@ -21,7 +21,7 @@
  *   - Every real gate: spec pass, CPA, skill assessment, story execution,
  *     TC-writer gate, team-lead review, all 6 QA testing gates (SAST
  *     sentinel, spec-validator, review-ranger, mutant-hunter, fuzz-weaver,
- *     perf-sentinel). Real LLM calls throughout via OpenRouter's `qwen`
+ *     perf-sentinel). Real LLM calls throughout via OpenRouter's `openrouter`
  *     provider with the cheapest models already proven real+working in
  *     `test/integration/real-cost-live.test.ts`.
  *
@@ -281,7 +281,7 @@ describe.skipIf(!RUN_REAL)('Full mock brownfield pipeline — REAL Jira ingest +
           JIRA_BASELINE_BRANCH: 'main',
           AGENT_PROFILES_FILE,
           EPAM_DANGEROUS_SKIP_APPROVAL: '1',
-          ORCH_GATE_PROVIDER: 'qwen',
+          ORCH_GATE_PROVIDER: 'openrouter',
           // ── Agent routing parity with production ──────────────────────────
           // Without SPEC_MODE_PROVIDER the spec pass does NOT take the fast path
           // and falls through to callMiniMaxWithTool, which throws instantly
@@ -290,9 +290,9 @@ describe.skipIf(!RUN_REAL)('Full mock brownfield pipeline — REAL Jira ingest +
           //
           // Worse than the failure: every green run before it exercised a
           // provider path production does not use. metrolinx runs the spec pass
-          // on qwen/glm; this mock was routing through MiniMax and calling that
+          // on openrouter/glm; this mock was routing through MiniMax and calling that
           // a passing pipeline test. Enforced by mock-metrolinx-flow-parity.
-          SPEC_MODE_PROVIDER: 'qwen',
+          SPEC_MODE_PROVIDER: 'openrouter',
           SPEC_MODE_OPENSPEC_MODEL: 'z-ai/glm-5.2',
           SPEC_MODE_SPECKIT_MODEL: 'z-ai/glm-5.1',
           SPEC_MODE_MODEL: 'z-ai/glm-5.2',

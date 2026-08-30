@@ -6,7 +6,7 @@
  * project's own env, .env's stale defaults win and the run executes on a stack nobody selected.
  *
  * tier3-mock-run.sh did exactly that. mock3 run 2, launched with EPAM_PROVIDER_SET=claude, reached
- * estate-survey on provider 'qwen' (from .env line 20), failed three attempts on a ladder it should
+ * estate-survey on provider 'openrouter' (from .env line 20), failed three attempts on a ladder it should
  * never have been on, and aborted. Every log line looked configured.
  *
  * It is also the shape of the 2026-08-25 unapproved spend: a run told to use MockServer called the
@@ -63,7 +63,7 @@ describe('seam: the project stack survives the launcher', () => {
     writeFileSync(join(proj, 'config.claude.env'), 'EPAM_ORCHESTRATION_PROVIDER=claude\n')
     writeFileSync(join(proj, 'llm-settings.json'), '{}')
     const fakeEnv = join(proj, 'repo.env')
-    writeFileSync(fakeEnv, 'EPAM_ORCHESTRATION_PROVIDER=qwen\n')
+    writeFileSync(fakeEnv, 'EPAM_ORCHESTRATION_PROVIDER=openrouter\n')
 
     const out = spawnSync('bash', ['-c',
       `SCRIPT_DIR=${JSON.stringify(SCRIPTS)}; . ${JSON.stringify(join(SCRIPTS, 'lib/env-file.sh'))}; `

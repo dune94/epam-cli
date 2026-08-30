@@ -65,7 +65,7 @@ function stubbing(reply: string) {
 
 async function review(reply: string, logDir: string, stub: string) {
   const saved = { ...process.env };
-  Object.assign(process.env, { AI_PROVIDER: 'qwen', AI_RUNNER_CMD: stub, EPAM_CONTENT_RETRY_ATTEMPTS: '2' });
+  Object.assign(process.env, { AI_PROVIDER: 'openrouter', AI_RUNNER_CMD: stub, EPAM_CONTENT_RETRY_ATTEMPTS: '2' });
   try {
     return await runner.reviewSurvey({
       promptExec: null, survey: SURVEY, codelines: SURVEY.codelines,

@@ -4,19 +4,18 @@
 #
 # Uses OpenRouter's free-tier models (`:free` suffix) which are rate-limited
 # but cost $0.  Validates real LLM integration: streaming, token handling,
-# QwenProvider parsing, and actual code generation on a small model.
+# OpenRouterProvider parsing, and actual code generation on a small model.
 #
 # Prerequisite: Tier 1 must pass first.
 #   bash orchestrations/scripts/tier1-mock-run.sh
 #
 # What this tests (on top of Tier 1):
 #   • Real OpenRouter API calls (auth, headers, streaming SSE)
-#   • QwenProvider streaming/tool-call parsing on live responses
+#   • OpenRouterProvider streaming/tool-call parsing on live responses
 #   • Actual code generation (not scripted) — model must write passing TS
 #   • Token accumulation stays within budget (autoCompressAt guard)
 #
 # Free models used (no credits consumed):
-#   qwen/qwen3-coder:free  — same provider family as production Qwen3-Coder-30B
 #
 # Usage:
 #   bash orchestrations/scripts/tier2-free-run.sh   (reads .env automatically)
@@ -45,8 +44,7 @@ fi
 
 PRD_FILE="$REPO_ROOT/orchestrations/hello-world-prd.json"
 
-# Free Qwen coder model — same provider as production, zero credits
-FREE_MODEL="${FREE_MODEL:-qwen/qwen3-coder:free}"
+# Free OpenRouter coder model — same provider as production, zero credits
 # WHICH provider gets moved onto the free model. It was written into the patch program itself, so
 # this launcher could only ever patch one; it is a setting now.
 FREE_PROVIDER="${FREE_PROVIDER:-openrouter}"

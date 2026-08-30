@@ -41,7 +41,7 @@ const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 
 /** The notice that actually corrupted metrolinx, in shape. */
-const NOISE = "  [provider] 'qwen' is not routable by the 'claude' set — using 'claude'.";
+const NOISE = "  [provider] 'openrouter' is not routable by the 'claude' set — using 'claude'.";
 
 type Case = { seam: string; answer: string; probe: string; tag?: string };
 

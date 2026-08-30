@@ -259,7 +259,7 @@ def build_calibration(records, decay, min_n):
             model_alias = "openai"
         elif "deepseek" in model:
             model_alias = "deepseek"
-        elif "qwen" in model or "mistral" in model or "llama" in model:
+        elif "openrouter" in model or "mistral" in model or "llama" in model:
             model_alias = "openrouter"
         else:
             model_alias = "unknown"

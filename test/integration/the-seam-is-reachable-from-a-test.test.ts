@@ -62,7 +62,7 @@ function driveSeam(runnerStdout: string) {
 
 const ANSWER = '<ROLE_ASSIGNMENTS>{"assignments":[]}</ROLE_ASSIGNMENTS>';
 /** The notice that actually corrupted metrolinx, in shape. */
-const NOTICE = "  [provider] 'qwen' is not routable by the 'claude' set — using 'claude'.";
+const NOTICE = "  [provider] 'openrouter' is not routable by the 'claude' set — using 'claude'.";
 
 describe('the seam is reachable from a test', () => {
   it('run_orch_prompt can be called without running the pipeline', () => {

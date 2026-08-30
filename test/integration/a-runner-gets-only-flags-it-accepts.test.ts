@@ -13,8 +13,8 @@
  *   ea776eb — tier3-mock-run.sh resolved EPAM_PROJECT_CONFIG_DIR and never loaded the env inside
  *             it, so config.env and config.<set>.env were both ignored. run-agent-orchestration.sh
  *             then loaded the repo .env in preserve mode and, nothing having set a provider yet,
- *             that file's stale EPAM_ORCHESTRATION_PROVIDER=qwen won. A run launched with
- *             EPAM_PROVIDER_SET=claude ended up on qwen.
+ *             that file's stale EPAM_ORCHESTRATION_PROVIDER=openrouter won. A run launched with
+ *             EPAM_PROVIDER_SET=claude ended up on openrouter.
  *
  * Both are asserted on what the pipeline RESOLVES, not on the text that produces it.
  */

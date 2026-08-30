@@ -2,10 +2,10 @@
  * Regression guard: auto-generated BUG-* stories (Step 4.5's bug-fix flow)
  * must never assign aiProvider="openrouter" — that string is not a
  * recognized provider anywhere in this codebase. provider_to_cli() in
- * claude.sh only accepts opencode|codex|copilot|openai|qwen|cursor|minimax|
+ * claude.sh only accepts opencode|codex|copilot|openai|openrouter|cursor|minimax|
  * codemie-claude; "openrouter" hits its error branch and the story fails
  * immediately. The correct provider name for routing to OpenRouter models
- * (including anthropic/* slugs like the sonnet escalation) is "qwen".
+ * (including anthropic/* slugs like the sonnet escalation) is "openrouter".
  *
  * Spotted during review, not yet triggered live — this test prevents it
  * from ever regressing back in.
@@ -30,11 +30,11 @@ describe('provider_to_cli — confirms "openrouter" is not a recognized provider
     expect(body).not.toMatch(/openrouter\)/);
   });
 
-  it('qwen IS a recognized provider (the correct OpenRouter-routing name)', () => {
+  it('openrouter IS a recognized provider (the correct OpenRouter-routing name)', () => {
     const idx = claudeSrc.indexOf('provider_to_cli()');
     const fnEnd = claudeSrc.indexOf('\n}', idx);
     const body = claudeSrc.slice(idx, fnEnd);
-    expect(body).toMatch(/qwen/);
+    expect(body).toMatch(/openrouter/);
   });
 });
 
@@ -46,7 +46,7 @@ describe('run-agent-orchestration.sh — bug-fix story creation never uses "open
   });
 
   it('the owner-story aiProvider has NO engine-chosen default at all', () => {
-    // WAS: expected `.aiProvider // "qwen"`. The concern behind it was real — "openrouter" is not
+    // WAS: expected `.aiProvider // "openrouter"`. The concern behind it was real — "openrouter" is not
     // a provider name this pipeline uses — but the fix named a DIFFERENT provider in the engine,
     // which is the same defect one value over. A project declares its providers; the engine picks
     // none. The provider now follows the model through EPAM_MODEL_PROVIDER_MAP.

@@ -298,7 +298,7 @@ body {
 /* Provider badge — a fixed color PALETTE, not a hardcoded provider→color
    mapping. providerBadge() hashes whatever provider string actually appears
    in the run's own data to one of these 6 slots, so any provider (minimax,
-   qwen, z-ai, deepseek, claude, whatever a future run uses) gets a stable,
+   openrouter, z-ai, deepseek, claude, whatever a future run uses) gets a stable,
    distinct color with zero enumeration. */
 .badge-p0 { background: var(--teal-dim);   color: var(--teal2); }
 .badge-p1 { background: var(--violet-dim); color: var(--violet2); }
@@ -784,7 +784,7 @@ function hashStr(s) {
 
 /** Provider → badge class + label. No hardcoded provider list — whatever
  * provider string the run's own data actually contains gets a stable color
- * from a fixed 6-slot palette via hashing, so any provider (minimax, qwen,
+ * from a fixed 6-slot palette via hashing, so any provider (minimax, openrouter,
  * z-ai, deepseek, claude, or one that doesn't exist yet) renders correctly
  * with zero enumeration (found live 2026-07-13: the old hardcoded
  * claude/opencode/codex list didn't match a single provider this run

@@ -35,8 +35,7 @@ Opus-5 in two hops. Every tier ends at Opus-5 or below it, so nothing is unreach
 5. Change `run-agent-orchestration.sh:402` to `CLAUDE_SH="$SCRIPT_DIR/claude.sh"; CLAUDE_CMD="codemie-claude"`.
 6. Delete `orchestrations/scripts/codemie-claude.sh` — 1,602 lines, 10,712 behind the script it forked.
 7. Correct `orchestrations/INSTRUCTIONS.md:92`, which still calls that fork "an identical clone except CLAUDE_CMD".
-8. Set `EPAM_MODEL_PROVIDER_MAP="claude-*=codemie-claude"` in project config, replacing the qwen/minimax map.
-9. Switch `EPAM_ORCHESTRATION_PROVIDER` and `ORCH_GATE_PROVIDER` from `qwen` to `codemie-claude`.
+9. Switch `EPAM_ORCHESTRATION_PROVIDER` and `ORCH_GATE_PROVIDER` from `openrouter` to `codemie-claude`.
 10. Add `codemie-claude` to `providers.json`'s `known` list — **a live bug today**: preflight rejects a PRD assigning it while two call sites accept it.
 11. Pass `--base-url` through `ai-run.sh`'s codemie arm from an `EPAM_CODEMIE_BASE_URL` env var, so the mock can redirect it exactly as OpenRouter and MiniMax are redirected.
 12. Update the 14 test files referencing the deleted fork to target `claude.sh`.
@@ -66,5 +65,4 @@ Opus-5 in two hops. Every tier ends at Opus-5 or below it, so nothing is unreach
 
 Step 4 deletes the projects' ladder blocks so they inherit. That is the point of the architecture —
 but it means metrolinx, mock3 and skyscanner all move to CodeMie at once, because they would all
-inherit the same base. If mock3 or skyscanner should stay on qwen/minimax, they keep their own
 `ladders` block and override the base. Which do you want?

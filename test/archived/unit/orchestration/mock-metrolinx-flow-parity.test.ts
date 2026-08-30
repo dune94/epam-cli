@@ -120,7 +120,7 @@ describe('mock1/mock2 flow parity with the real Metrolinx run', () => {
  * The AGENT ROUTING family. Drift here does not skip a stage — it runs the stage
  * through a different provider entirely.
  *
- * Live 2026-07-27, mock1 run 6: metrolinx sets SPEC_MODE_PROVIDER=qwen and takes
+ * Live 2026-07-27, mock1 run 6: metrolinx sets SPEC_MODE_PROVIDER=openrouter and takes
  * the fast path ("skipping MiniMax"). mock1 set no SPEC_MODE_* at all, so the
  * spec pass fell through to callMiniMaxWithTool, which throws immediately
  * without a MiniMax key — four attempts, eighteen seconds, "openspec returned

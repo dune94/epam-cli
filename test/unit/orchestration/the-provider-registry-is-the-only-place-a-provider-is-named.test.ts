@@ -138,7 +138,7 @@ describe('the PRD integrity gate reads the same registry', () => {
 
   it('applies the slug rule from the registry, not from a literal', () => {
     // MUTATION: the rule is moved onto a provider that never had it. A gate carrying
-    // `prov == 'qwen'` in its own code cannot follow.
+    // `prov == 'openrouter'` in its own code cannot follow.
     const registry = writeJson('audit-registry-slug.json', {
       known: ['openai'],
       modelRules: { openai: { requiresSlug: true } },

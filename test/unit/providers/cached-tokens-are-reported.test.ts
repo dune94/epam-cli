@@ -18,7 +18,7 @@
  * The blindness was five links long, each individually reasonable:
  *
  *   1. MiniMaxProvider reads usage.prompt_tokens and ignores prompt_tokens_details
- *   2. QwenProvider (OpenRouter) does the same
+ *   2. OpenRouterProvider (OpenRouter) does the same
  *   3. TokenUsage has no field to carry it
  *   4. run.ts emits {inputTokens, outputTokens, totalTokens} — no cache field
  *   5. claude.sh:9677 reads `.usage.cache_read_input_tokens`, an ANTHROPIC-shaped key that our
@@ -36,7 +36,7 @@ import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { MiniMaxProvider } from '../../../src/providers/minimax/MiniMaxProvider';
-import { QwenProvider } from '../../../src/providers/qwen/QwenProvider';
+import { OpenRouterProvider } from '../../../src/providers/openrouter/OpenRouterProvider';
 import { buildRunResultJson } from '../../../src/cli/commands/run';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -93,7 +93,7 @@ describe('the provider surfaces the number the API already returns', () => {
 
   it('OpenRouter reports zero distinctly from absent', async () => {
     stubFetch(OPENROUTER_USAGE);
-    const r = await new QwenProvider({ apiKey: 'k', openRouterMode: true }).complete(REQ);
+    const r = await new OpenRouterProvider({ apiKey: 'k', openRouterMode: true }).complete(REQ);
     expect(r.usage.cachedInputTokens, 'a measured zero is a finding, not a gap').toBe(0);
   });
 

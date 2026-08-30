@@ -120,9 +120,9 @@ describe('a role it cannot serve is refused, never defaulted', () => {
 
 describe('per-site values still belong to the caller', () => {
   it('model and provider are passed through', () => {
-    const { env } = invoke('team-lead-review', ['--model', 'z-ai/glm-5.2', '--provider', 'qwen']);
+    const { env } = invoke('team-lead-review', ['--model', 'z-ai/glm-5.2', '--provider', 'openrouter']);
     expect(env.AI_MODEL).toBe('z-ai/glm-5.2');
-    expect(env.AI_PROVIDER).toBe('qwen');
+    expect(env.AI_PROVIDER).toBe('openrouter');
   });
 
   it('the TOOL GRANT comes from the profile, resolved for this codeline', () => {

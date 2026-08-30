@@ -73,7 +73,7 @@ describe('hot_swap_story_model_if_unstable — REAL execution', () => {
       writeFileSync(
         prdFile,
         JSON.stringify({
-          stories: [{ id: 'SKY-999', model: opts.currentModel, aiProvider: 'qwen', ladderTier: opts.ladderTier }],
+          stories: [{ id: 'SKY-999', model: opts.currentModel, aiProvider: 'openrouter', ladderTier: opts.ladderTier }],
         }),
       );
       const scriptPath = join(dir, 'run.sh');
@@ -108,7 +108,7 @@ describe('hot_swap_story_model_if_unstable — REAL execution', () => {
       currentModel: 'moonshotai/kimi-k2',
       ladderTier: 'medium',
       ladderMedium: 'moonshotai/kimi-k2=MiniMax-M3',
-      providerMap: 'moonshotai/*=qwen|MiniMax-*=minimax',
+      providerMap: 'moonshotai/*=openrouter|MiniMax-*=minimax',
     });
     expect(result.model).toBe('MiniMax-M3');
     expect(result.aiProvider).toBe('minimax');
@@ -119,10 +119,10 @@ describe('hot_swap_story_model_if_unstable — REAL execution', () => {
       currentModel: 'moonshotai/kimi-k2',
       ladderTier: 'high',
       ladderHigh: 'moonshotai/kimi-k2=z-ai/glm-5.1',
-      providerMap: 'moonshotai/*=qwen|z-ai/*=qwen',
+      providerMap: 'moonshotai/*=openrouter|z-ai/*=openrouter',
     });
     expect(result.model).toBe('z-ai/glm-5.1');
-    expect(result.aiProvider).toBe('qwen');
+    expect(result.aiProvider).toBe('openrouter');
   });
 
   it('is a no-op when no ladder is configured for this tier', () => {
@@ -144,10 +144,10 @@ describe('hot_swap_story_model_if_unstable — REAL execution', () => {
       currentModel: 'moonshotai/kimi-k2',
       ladderTier: 'medium',
       ladderMedium: 'moonshotai/kimi-k2=some-unmapped-model',
-      providerMap: 'moonshotai/*=qwen',
+      providerMap: 'moonshotai/*=openrouter',
     });
     expect(result.model).toBe('some-unmapped-model');
-    expect(result.aiProvider).toBe('qwen');
+    expect(result.aiProvider).toBe('openrouter');
   });
 
   it('is domain-agnostic: works for an arbitrary hypothetical vendor ladder, not tied to this project\'s models', () => {
@@ -199,7 +199,7 @@ describe('hot_swap_story_model_if_unstable — top-of-ladder fallback (fixes liv
       writeFileSync(
         prdFile,
         JSON.stringify({
-          stories: [{ id: 'SKY-999', model: opts.currentModel, aiProvider: 'qwen', ladderTier: opts.ladderTier }],
+          stories: [{ id: 'SKY-999', model: opts.currentModel, aiProvider: 'openrouter', ladderTier: opts.ladderTier }],
         }),
       );
       const scriptPath = join(dir, 'run.sh');
@@ -236,15 +236,15 @@ describe('hot_swap_story_model_if_unstable — top-of-ladder fallback (fixes liv
       currentModel: 'z-ai/glm-5.1',
       ladderTier: 'high',
       ladderHigh: 'MiniMax-M3=z-ai/glm-5.1', // z-ai/glm-5.1 is a TARGET, never a source -- no step FROM it
-      providerMap: 'z-ai/*=qwen|moonshotai/*=qwen',
+      providerMap: 'z-ai/*=openrouter|moonshotai/*=openrouter',
       finalFallbackModel: 'moonshotai/kimi-k2',
-      finalFallbackProvider: 'qwen',
+      finalFallbackProvider: 'openrouter',
     });
     // Desired (post-fix): swaps to the configured final fallback, a genuinely
     // different model, instead of leaving z-ai/glm-5.1 in place to repeat
     // the same hang on retry.
     expect(result.model).toBe('moonshotai/kimi-k2');
-    expect(result.aiProvider).toBe('qwen');
+    expect(result.aiProvider).toBe('openrouter');
   });
 
   it('does not fall back when the current model already IS the final fallback (nothing left to try)', () => {
@@ -252,7 +252,7 @@ describe('hot_swap_story_model_if_unstable — top-of-ladder fallback (fixes liv
       currentModel: 'moonshotai/kimi-k2',
       ladderTier: 'medium',
       finalFallbackModel: 'moonshotai/kimi-k2',
-      finalFallbackProvider: 'qwen',
+      finalFallbackProvider: 'openrouter',
     });
     expect(result.model).toBe('moonshotai/kimi-k2');
   });
@@ -269,7 +269,7 @@ describe('hot_swap_story_model_if_unstable — top-of-ladder fallback (fixes liv
       ladderMedium: 'moonshotai/kimi-k2=MiniMax-M3',
       providerMap: 'MiniMax-*=minimax',
       finalFallbackModel: 'z-ai/glm-5.1',
-      finalFallbackProvider: 'qwen',
+      finalFallbackProvider: 'openrouter',
     });
     expect(result.model).toBe('MiniMax-M3');
   });

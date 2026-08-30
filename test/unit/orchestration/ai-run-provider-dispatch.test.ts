@@ -249,10 +249,10 @@ exit 0
     });
   });
 
-  describe('epam CLI umbrella providers (openai|qwen|cursor|copilot|minimax)', () => {
+  describe('epam CLI umbrella providers (openai|openrouter|cursor|copilot|minimax)', () => {
     it('extracts .result from the last JSON line with a non-null result (success path)', () => {
       const { stdout, rc } = run({
-        provider: 'qwen',
+        provider: 'openrouter',
         stubs: {
           epam: `#!/usr/bin/env bash
 cat > /dev/null
@@ -272,7 +272,7 @@ exit 0
       // forwards captured STDOUT to the caller's stderr on failure — so the stub
       // must write the diagnostic to stdout, not stderr, to match real behavior.
       const { rc, stderr } = run({
-        provider: 'qwen',
+        provider: 'openrouter',
         stubs: {
           epam: `#!/usr/bin/env bash\ncat > /dev/null\necho "epam internal error"\nexit 1\n`,
         },
@@ -286,7 +286,7 @@ exit 0
       // filter that only keeps lines with a non-empty .result, so args must
       // be captured via the side channel rather than echoed to stdout.
       const { sideChannel } = run({
-        provider: 'qwen',
+        provider: 'openrouter',
         stubs: {
           epam: `#!/usr/bin/env bash
 cat > /dev/null
@@ -300,7 +300,7 @@ echo '{"result":"ok"}'
 
     it('omits --no-tools when AI_GATE_ALLOW_TOOLS=1 (QA gate agents need file-read tools)', () => {
       const { sideChannel } = run({
-        provider: 'qwen',
+        provider: 'openrouter',
         stubs: {
           epam: `#!/usr/bin/env bash
 cat > /dev/null

@@ -18,7 +18,7 @@ AI_MODEL="${AI_MODEL:-}"
 # This was a bare read of AI_PROVIDER / EPAM_ORCHESTRATION_PROVIDER, which knows nothing about the
 # provider set in force. On 2026-08-29 a metrolinx run launched with EPAM_PROVIDER_SET=claude
 # resolved the claude ladder — "at the top of its declared chain (claude-opus-5)" — and then asked
-# provider 'qwen' for it, because the repo's .env still carried EPAM_ORCHESTRATION_PROVIDER=qwen
+# provider 'openrouter' for it, because the repo's .env still carried EPAM_ORCHESTRATION_PROVIDER=openrouter
 # from another stack. Three attempts, no completion record, and the run died AFTER the roster had
 # been minted and reviewed against real client code.
 #
@@ -26,7 +26,7 @@ AI_MODEL="${AI_MODEL:-}"
 #
 # The set is the deliberate per-launch choice; the env var is whatever was left behind. So a
 # provider the active set cannot route is replaced by one it can — and the substitution is
-# ANNOUNCED, because an operator who really meant qwen has to see that they did not get it.
+# ANNOUNCED, because an operator who really meant openrouter has to see that they did not get it.
 #
 # A run that declares no set has expressed no preference this can contradict, and is left alone.
 resolve_primary_provider() {
@@ -155,10 +155,10 @@ done
 # PRIMARY_PROVIDER is resolved from the active set above, and then the argument loop just above
 # overwrites it with --provider. resolvePromptExec builds that flag ONCE at startup from the
 # environment, so a stale AI_PROVIDER reaches the runner however the launch was configured. The
-# substitution notice printed "using 'claude'" and the call went to qwen regardless.
+# substitution notice printed "using 'claude'" and the call went to openrouter regardless.
 #
 # Cost: three paid runs on one ticket, all dying at the roster specialiser with
-#   [ai-run] provider 'qwen' returned NO completion record — treating as FAILURE
+#   [ai-run] provider 'openrouter' returned NO completion record — treating as FAILURE
 # while the line above it announced claude.
 #
 # Re-applied AFTER parsing, so the flag is honoured whenever the set can route it and corrected

@@ -182,7 +182,6 @@
         "EPAM_API_KEY_MINIMAX",
         "EPAM_API_KEY_OPENAI",
         "EPAM_API_KEY_OPENROUTER",
-        "EPAM_API_KEY_QWEN",
         "GEMINI_API_KEY",
         "GEMINI_AUTH_TOKEN",
         "GEMINI_KEY",
@@ -198,11 +197,7 @@
         "OPENROUTER_API_KEY",
         "OPENROUTER_AUTH_TOKEN",
         "OPENROUTER_KEY",
-        "OPENROUTER_TOKEN",
-        "QWEN_API_KEY",
-        "QWEN_AUTH_TOKEN",
-        "QWEN_KEY",
-        "QWEN_TOKEN"
+        "OPENROUTER_TOKEN"
       ],
       "$whyUnsetEnv": "A REHEARSAL MUST NOT BE ABLE TO SPEND SOMEWHERE ELSE. Under this set the writer once ran provider=minimax with MINIMAX_API_KEY present: the mockBaseUrl redirect covers Anthropic traffic and nothing else, so any other vendor's credential is a live route out. Those are removed. ANTHROPIC_API_KEY and CLAUDE_* are deliberately NOT removed: Claude Code falls back to the OAuth credentials on disk when it finds no key, and that bills for real — the exact inversion this is meant to prevent, recorded in seam-the-subscription-pays-not-the-api-key. The operator's fake key stays, and the redirect is what makes it harmless. The vendors come from llm-channel.json's credentialPattern, so one added there is covered without editing this."
     }

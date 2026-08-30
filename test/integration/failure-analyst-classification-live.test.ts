@@ -42,7 +42,7 @@ const NODE_BIN = process.env.NODE_BIN || process.execPath;
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
 const SRC = readFileSync(CLAUDE_SH, 'utf8');
 
-const GATE_PROVIDER = process.env.ORCH_GATE_PROVIDER || 'qwen';
+const GATE_PROVIDER = process.env.ORCH_GATE_PROVIDER || 'openrouter';
 const GATE_MODEL = process.env.ORCH_GATE_MODEL || 'z-ai/glm-5.2';
 const hasKey = !!(process.env.OPENROUTER_API_KEY || process.env.EPAM_API_KEY_OPENROUTER);
 

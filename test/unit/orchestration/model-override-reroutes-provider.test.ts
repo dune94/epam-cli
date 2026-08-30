@@ -95,7 +95,7 @@ echo "PROVIDER=\${STORY_PROVIDER:-}"
 }
 
 // The live configuration, verbatim from projects/metrolinx/config.env.
-const MAP = 'zhipuai/*=qwen|moonshotai/*=qwen|z-ai/*=qwen|glm-*=qwen|kimi-*=qwen|deepseek/*=qwen|MiniMax-*=minimax';
+const MAP = 'zhipuai/*=openrouter|moonshotai/*=openrouter|z-ai/*=openrouter|glm-*=openrouter|kimi-*=openrouter|deepseek/*=openrouter|MiniMax-*=minimax';
 const BROWNFIELD_NOVEL = { EPAM_BROWNFIELD: '1', ESCALATION_MODEL_HIGH: 'z-ai/glm-5.1', EPAM_MODEL_PROVIDER_MAP: MAP };
 
 /** The live story: CPA sized it cheap, so the coordinator paired MiniMax with a MiniMax model. */
@@ -109,7 +109,7 @@ describe('the novel-brownfield override re-routes the provider with the model', 
       `model '${model}' was sent to provider '${provider}'. MiniMax rejects it with ` +
       '400 "unknown model" before any inference: sub-second, zero tokens, $0, ' +
       'and eight retries up a ladder that cannot fix a wrong vendor.')
-      .toBe('qwen');
+      .toBe('openrouter');
   });
 
   it('leaves the provider alone when the override does not fire', () => {
@@ -129,7 +129,7 @@ describe('the novel-brownfield override re-routes the provider with the model', 
     // resolve_model_provider returns empty on no match, and its documented
     // contract is that the caller keeps STORY_PROVIDER unchanged. Blanking the
     // provider would break every project that configures no map at all.
-    const { model, provider } = resolve(STORY, { ...BROWNFIELD_NOVEL, EPAM_MODEL_PROVIDER_MAP: 'nothing/*=qwen' });
+    const { model, provider } = resolve(STORY, { ...BROWNFIELD_NOVEL, EPAM_MODEL_PROVIDER_MAP: 'nothing/*=openrouter' });
     expect(model).toBe('z-ai/glm-5.1');
     expect(provider, 'an unmatched model blanked the provider instead of keeping it').toBe('minimax');
   });

@@ -3,7 +3,7 @@
  * advisory second opinion on the FailureAnalyst's own diagnosis, using
  * DeepEval's GEval metric as an LLM judge over OpenRouter (this pipeline's
  * existing gate-model provider -- see .env: "Orchestration gate agents: use
- * Qwen for all pipeline/QA agents (no Anthropic/OpenAI key needed)").
+ * OpenRouter for all pipeline/QA agents (no Anthropic/OpenAI key needed)").
  *
  * Scope, per design discussion: advisory/logged only for now. This test
  * file covers the standalone Python tool

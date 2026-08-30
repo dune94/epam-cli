@@ -794,10 +794,10 @@ describe('spec-mode-runner.js — functional: resolvePromptExec ladder contract'
 
   it('ladder execSpec built from minimax exec must NOT inherit minimax provider', () => {
     const minimaxExec = resolvePromptExec('/ai-run.sh', { AI_PROVIDER: 'minimax', AI_MODEL: 'MiniMax-M3' });
-    const ladderExec = { cmd: minimaxExec.cmd, args: ['--provider', 'qwen'] };
+    const ladderExec = { cmd: minimaxExec.cmd, args: ['--provider', 'openrouter'] };
     expect(ladderExec.args).not.toContain('minimax');
     expect(ladderExec.args).not.toContain('MiniMax-M3');
-    expect(ladderExec.args[ladderExec.args.indexOf('--provider') + 1]).toBe('qwen');
+    expect(ladderExec.args[ladderExec.args.indexOf('--provider') + 1]).toBe('openrouter');
   });
 
   it('buildAssignments rejects agent names longer than 20 chars (ENAMETOOLONG guard)', () => {

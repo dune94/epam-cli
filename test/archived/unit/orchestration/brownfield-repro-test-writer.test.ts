@@ -125,7 +125,7 @@ describe('brownfield-repro-test-writer — retry + ladder + self-heal', () => {
       EPAM_TEST_TARGET_ASK: '0',
       SPEC_MODE_SPECKIT_MODEL: 'z-ai/glm-5.1',
       EPAM_MODEL_LADDER_HIGH: 'z-ai/glm-5.1=moonshotai/kimi-k3',
-      EPAM_MODEL_PROVIDER_MAP: 'moonshotai/*=qwen|z-ai/*=qwen',
+      EPAM_MODEL_PROVIDER_MAP: 'moonshotai/*=openrouter|z-ai/*=openrouter',
     });
     // recovered: the test file exists and was committed
     expect(existsSync(join(repo, 'src', 'svc', 'discount.spec.ts'))).toBe(true);

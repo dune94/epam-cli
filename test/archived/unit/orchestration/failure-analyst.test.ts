@@ -242,7 +242,7 @@ describe('claude.sh — ORCH_GATE_MODEL survives .env reload (run 103 regression
     const analystEnd   = src.indexOf('\n}', analystStart + 50);
     const body         = src.slice(analystStart, analystEnd);
     expect(body).toMatch(/gate_model.*ORCH_GATE_MODEL/);
-    expect(body).not.toMatch(/qwen3-coder|gpt-4o|MiniMax-M3|claude-haiku/);
+    expect(body).not.toMatch(/openrouter3-coder|gpt-4o|MiniMax-M3|claude-haiku/);
   });
 });
 

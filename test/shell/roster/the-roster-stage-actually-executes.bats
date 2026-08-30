@@ -47,7 +47,7 @@ run_stage() {
         EPAM_PAUSE_AFTER_AGENT_MINT=1 \
         EPAM_PROJECT_CONFIG_DIR="$WORK/proj" \
         LOG_DIR="$WORK/logs" \
-        EPAM_ORCHESTRATION_PROVIDER=qwen ORCH_GATE_PROVIDER=qwen \
+        EPAM_ORCHESTRATION_PROVIDER=openrouter ORCH_GATE_PROVIDER=openrouter \
         OPENROUTER_API_KEY=sk-invalid-fixture EPAM_API_KEY_OPENROUTER=sk-invalid-fixture \
         EPAM_ROSTER_ATTEMPTS=1 \
         timeout 45 "$NODE" "$SCRIPTS/mint-agents-step.js" \

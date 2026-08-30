@@ -32,10 +32,10 @@ const sessions = [
     ],
   },
   {
-    id: 'qwen-session-001',
-    provider: 'qwen',
-    model: 'qwen-max',
-    description: 'Qwen session - API development',
+    id: 'openrouter-session-001',
+    provider: 'openrouter',
+    model: 'openrouter-max',
+    description: 'OpenRouter session - API development',
     messages: [
       { role: 'user', content: 'Create a REST API for user management' },
       { role: 'assistant', content: 'I\'ll create a REST API with Express.js for user management...' },
@@ -101,5 +101,5 @@ console.log('  /failover <provider>');
 console.log();
 console.log('Example:');
 console.log('  /resume codemie-session-001');
-console.log('  /failover qwen');
+console.log('  /failover openrouter');
 console.log();

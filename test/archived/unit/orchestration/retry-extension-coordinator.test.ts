@@ -242,7 +242,7 @@ describe('run_retry_extension_coordinator() — REAL execution', () => {
           `EPAM_CLI=epam`,
           opts.enabled !== undefined ? `EPAM_RETRY_EXTENSION_ENABLED=${JSON.stringify(opts.enabled)}` : '',
           opts.maxExtension !== undefined ? `EPAM_RETRY_EXTENSION_MAX=${JSON.stringify(opts.maxExtension)}` : '',
-          `ORCH_GATE_PROVIDER=qwen`,
+          `ORCH_GATE_PROVIDER=openrouter`,
           `ORCH_GATE_MODEL=test-model`,
           'log() { echo "LOG: $*" >&2; }',
           'warning() { echo "WARN: $*" >&2; }',

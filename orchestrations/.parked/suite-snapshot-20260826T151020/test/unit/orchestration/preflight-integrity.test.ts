@@ -37,7 +37,7 @@ const prd: Prd = JSON.parse(readFileSync(PRD_PATH, 'utf8'));
 const activeIds = new Set(Object.values(prd.implementationOrder).flat());
 const byId = new Map(prd.stories.map((s) => [s.id, s]));
 const outputDir = prd.project?.outputDir ?? '';
-const KNOWN_PROVIDERS = new Set(['qwen', 'minimax', 'anthropic', 'claude', 'gemini', 'opencode', 'codex', 'cursor']);
+const KNOWN_PROVIDERS = new Set(['openrouter', 'minimax', 'anthropic', 'claude', 'gemini', 'opencode', 'codex', 'cursor']);
 const KNOWN_MINIMAX_MODELS = new Set(['MiniMax-M3', 'MiniMax-M2.5', 'MiniMax-M1.5', 'MiniMax-M1', 'upgrade']);
 // Canonical = pre-spec-pass. Spec-mode mutates model fields during a run, so model-format checks only valid on canonical.
 const isCanonical = prd.stories.every((s: any) => !s?.specification?.createdFrom || s?.specification?.splitOrigin === 'spec-pass');
@@ -118,16 +118,16 @@ describe('PRD integrity — provider and model alignment', () => {
     expect(bad.map((s) => s.id)).toHaveLength(0);
   });
 
-  it('active qwen stories have an OpenRouter slug (contains "/")', () => {
+  it('active openrouter stories have an OpenRouter slug (contains "/")', () => {
     if (!isCanonical) return; // spec-mode may override model to MiniMax during a run
     const bad = [...activeIds]
       .map((id) => byId.get(id)!)
-      .filter((s) => s?.aiProvider === 'qwen' && s.model && !s.model.includes('/'));
+      .filter((s) => s?.aiProvider === 'openrouter' && s.model && !s.model.includes('/'));
     expect(bad.map((s) => s.id)).toHaveLength(0);
   });
 
-  it('active .test.ts stories use qwen provider OR have an explicit MiniMax-M3 model upgrade', () => {
-    // Original rule: test stories use qwen (OpenRouter, kimi-k2).
+  it('active .test.ts stories use openrouter provider OR have an explicit MiniMax-M3 model upgrade', () => {
+    // Original rule: test stories use openrouter (OpenRouter, kimi-k2).
     // Exception: stories explicitly upgraded to MiniMax-M3 (stronger model) are allowed
     // to use minimax provider — the intent is quality, not provider lock-in.
     const badTestTsMinimax = [...activeIds]
@@ -273,7 +273,7 @@ describe('preflight-prd-integrity.sh — real subprocess execution', () => {
           status: 'pending',
           completed: false,
           effort: 'medium',
-          aiProvider: 'qwen',
+          aiProvider: 'openrouter',
           model: 'moonshotai/kimi-k2',
           acceptanceCriteria: ['does a thing'],
           technicalNotes: { files: [`${outputDir}/src/thing.ts`] },
@@ -332,7 +332,7 @@ describe('preflight-prd-integrity.sh — real subprocess execution', () => {
       status: 'pending',
       completed: false,
       effort: 'low',
-      aiProvider: 'qwen',
+      aiProvider: 'openrouter',
       model: 'moonshotai/kimi-k2',
       acceptanceCriteria: [],
       technicalNotes: { files: [] },
@@ -367,7 +367,7 @@ describe('preflight-check.sh / prd-remediate.sh — canonical bypass catches sta
   const CANONICAL_SHAPED = {
     project: { outputDir: '/tmp/preflight-canonical-fixture-app' },
     stories: [
-      { id: 'SKY-001', status: 'pending', completed: false, effort: 'medium', aiProvider: 'qwen', model: 'moonshotai/kimi-k2', acceptanceCriteria: ['a'], technicalNotes: { files: ['src/index.ts'] } },
+      { id: 'SKY-001', status: 'pending', completed: false, effort: 'medium', aiProvider: 'openrouter', model: 'moonshotai/kimi-k2', acceptanceCriteria: ['a'], technicalNotes: { files: ['src/index.ts'] } },
     ],
     // scaffold lists SKY-001 with a non-empty technicalNotes.files (matching
     // how a real canonical PRD looks even pre-spec-pass — see

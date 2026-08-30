@@ -29,7 +29,7 @@ const fs            = require('fs');
 // ── Configuration ──────────────────────────────────────────────────────────
 const CLAUDE_CMD = process.env.CLAUDE_CMD || 'claude';
 const AI_RUNNER_CMD = process.env.AI_RUNNER_CMD || path.resolve(__dirname, '..', 'ai-run.sh');
-// Default provider: qwen (OpenRouter). Override via CPA_PROVIDER or AI_PROVIDER env vars.
+// Default provider: openrouter (OpenRouter). Override via CPA_PROVIDER or AI_PROVIDER env vars.
 const AI_PROVIDER = process.env.AI_PROVIDER
   || process.env.EPAM_ORCHESTRATION_PROVIDER
   || (/codex$/.test(CLAUDE_CMD) ? 'codex' : 'openrouter');

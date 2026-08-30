@@ -165,7 +165,7 @@ _ladder_next_model() {
         case "$_pair" in "${_m}="*) echo "${_pair#*=}"; return 0 ;; esac
     done
 }
-# Resolve a model's provider via EPAM_MODEL_PROVIDER_MAP (glob patterns like moonshotai/*=qwen).
+# Resolve a model's provider via EPAM_MODEL_PROVIDER_MAP (glob patterns like moonshotai/*=openrouter).
 _provider_for_model() {
     local _m="$1" _map="${EPAM_MODEL_PROVIDER_MAP:-}" _pair _pat _prov
     [ -z "$_map" ] && { echo "${EPAM_ORCHESTRATION_PROVIDER:-claude}"; return; }

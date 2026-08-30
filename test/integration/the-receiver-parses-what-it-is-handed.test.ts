@@ -34,7 +34,7 @@ afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true 
 
 /** The notice that actually did this, in shape. */
 const NOISE = [
-  "  [provider] 'qwen' is not routable by the 'claude' set — using 'claude'.",
+  "  [provider] 'openrouter' is not routable by the 'claude' set — using 'claude'.",
   "  [provider] The set is the launch's own choice; the env value was left by something else.",
 ].join('\n');
 

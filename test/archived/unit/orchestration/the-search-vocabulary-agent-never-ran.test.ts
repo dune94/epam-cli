@@ -38,14 +38,14 @@ const runner = require(join(__dirname, '../../../orchestrations/scripts/spec-mod
 
 describe('the search-term vocabulary agent never ran', () => {
   it('OMITTING promptExec YIELDS A REAL EXEC — the default is the runner, not null', () => {
-    const exec = runner.promptExecFor({}, { AI_RUNNER_CMD: '/somewhere/ai-run.sh', AI_PROVIDER: 'qwen' });
+    const exec = runner.promptExecFor({}, { AI_RUNNER_CMD: '/somewhere/ai-run.sh', AI_PROVIDER: 'openrouter' });
     expect(exec, 'omitting promptExec still resolves to nothing to invoke').toBeTruthy();
     expect(exec.cmd, 'the resolved exec has no command to run').toBe('/somewhere/ai-run.sh');
     expect(Array.isArray(exec.args), 'the resolved exec carries no argv').toBe(true);
   });
 
   it('falls back to the shipped ai-run.sh when the env names none', () => {
-    const exec = runner.promptExecFor({}, { AI_PROVIDER: 'qwen' });
+    const exec = runner.promptExecFor({}, { AI_PROVIDER: 'openrouter' });
     expect(exec.cmd, 'no runner resolved from a bare environment').toMatch(/ai-run\.sh$/);
   });
 
@@ -55,7 +55,7 @@ describe('the search-term vocabulary agent never ran', () => {
   });
 
   it('RESOLVES TO THE SAME THING run() USES — one definition, not a second copy', () => {
-    const env = { AI_RUNNER_CMD: '/somewhere/ai-run.sh', AI_MODEL: 'some-model', AI_PROVIDER: 'qwen' };
+    const env = { AI_RUNNER_CMD: '/somewhere/ai-run.sh', AI_MODEL: 'some-model', AI_PROVIDER: 'openrouter' };
     expect(runner.promptExecFor({}, env)).toEqual(runner.resolvePromptExec('/somewhere/ai-run.sh', env));
   });
 
@@ -69,7 +69,7 @@ describe('the search-term vocabulary agent never ran', () => {
     chmodSync(stub, 0o755);
 
     const saved = { ...process.env };
-    Object.assign(process.env, { AI_PROVIDER: 'qwen', AI_RUNNER_CMD: stub, STUB_LOG: seen });
+    Object.assign(process.env, { AI_PROVIDER: 'openrouter', AI_RUNNER_CMD: stub, STUB_LOG: seen });
     try {
       await runner.deriveGuardVocabulary({
         // promptExec deliberately ABSENT — exactly what runCodeGraphDetective does.
@@ -97,7 +97,7 @@ describe('the search-term vocabulary agent never ran', () => {
     chmodSync(stub, 0o755);
 
     const saved = { ...process.env };
-    Object.assign(process.env, { AI_PROVIDER: 'qwen', AI_RUNNER_CMD: stub, STUB_LOG: seen });
+    Object.assign(process.env, { AI_PROVIDER: 'openrouter', AI_RUNNER_CMD: stub, STUB_LOG: seen });
     try {
       await runner.deriveGuardVocabulary({
         promptExec: null,
@@ -131,7 +131,7 @@ describe('the search-term vocabulary agent never ran', () => {
     chmodSync(stub, 0o755);
 
     const saved = { ...process.env };
-    Object.assign(process.env, { AI_PROVIDER: 'qwen', AI_RUNNER_CMD: stub });
+    Object.assign(process.env, { AI_PROVIDER: 'openrouter', AI_RUNNER_CMD: stub });
     let result: unknown = 'unset';
     try {
       result = await runner.deriveGuardVocabulary({

@@ -46,7 +46,7 @@ describe('validateMidExecutionSplits — parent restoration on coherence rejecti
   // under test here `continue`s before ever calling it -- set a dummy
   // provider so that resolution doesn't throw before reaching the code path
   // being tested.
-  process.env.AI_PROVIDER = process.env.AI_PROVIDER || 'qwen';
+  process.env.AI_PROVIDER = process.env.AI_PROVIDER || 'openrouter';
   process.env.PHASE = 'core';
 
   function buildPrd(dir: string) {

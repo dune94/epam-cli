@@ -40,7 +40,7 @@ run_orch_prompt() {
     local provider_hint
     provider_hint="$(resolve_prompt_provider)"
     # ORCH_GATE_PROVIDER overrides the story-agent provider for coordinator/gate calls.
-    # Set to "openai" to use GPT-4o as coordinator while qwen handles story agents.
+    # Set to "openai" to use GPT-4o as coordinator while openrouter handles story agents.
     local gate_provider="${ORCH_GATE_PROVIDER:-$provider_hint}"
 
     if [ ! -x "$AI_RUNNER_CMD" ]; then

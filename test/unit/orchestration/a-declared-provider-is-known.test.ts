@@ -24,7 +24,7 @@ const claudeSrc = readFileSync(join(ROOT, 'orchestrations/scripts/claude.sh'), '
  * is its statement of what a PRD may assign.
  *
  * NOT every case arm. `epam` is an arm mapping to $EPAM_CLI — the same target as
- * copilot/openai/qwen/cursor/minimax. It names the RUNNER, not a vendor, nothing assigns it,
+ * copilot/openai/openrouter/cursor/minimax. It names the RUNNER, not a vendor, nothing assigns it,
  * and the engine does not advertise it. Deriving from arms treated that vestige as a supported
  * provider and put it in the gate.
  */

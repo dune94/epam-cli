@@ -117,7 +117,7 @@ describe('isValidModelString — real execution against the exact hallucinated d
 
   it('rejects other plausible-looking but unlisted org/model combinations', () => {
     // Same failure shape as the live bug: valid-looking org prefix, wrong model
-    expect(isValidModelString('qwen/MiniMax-M3', 'MiniMax-M3', knownValidModels)).toBe(false);
+    expect(isValidModelString('openrouter/MiniMax-M3', 'MiniMax-M3', knownValidModels)).toBe(false);
     expect(isValidModelString('moonshotai/glm-5.2', 'MiniMax-M3', knownValidModels)).toBe(false);
   });
 
@@ -127,7 +127,7 @@ describe('isValidModelString — real execution against the exact hallucinated d
   // own upgradeModel/miniModel params, so isValidModelString() accepted it as
   // "known valid" by construction. Assigned to SKY-001, failed 8/8 attempts
   // (wrong provider/model pairing), aborted the phase. Anthropic/Claude models
-  // are never a valid assignment in this pipeline (qwen/minimax-routed by
+  // are never a valid assignment in this pipeline (openrouter/minimax-routed by
   // design) — checked independently of currentModel/knownValidModels so this
   // holds even if a story's current model was already corrupted.
   it('rejects any anthropic/* model even when it is the (unset-default-corrupted) upgradeModel', () => {

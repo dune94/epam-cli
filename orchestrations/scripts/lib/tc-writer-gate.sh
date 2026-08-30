@@ -242,7 +242,7 @@ run_inline_tc_writer_gate() {
     # function uses _tc_model; so does this now, which is the only way the two can agree.
     #
     # The provider is read the same way, from what the run declares, and is left EMPTY rather
-    # than defaulted: a ledger that invents "qwen" for a run on another provider is worse than
+    # than defaulted: a ledger that invents "openrouter" for a run on another provider is worse than
     # one that admits it does not know.
     #
     # (cost not tracked since post-impl-tc-writer uses `epam run` directly without

@@ -7,7 +7,7 @@
  * elsewhere already. Two distinct root causes, both fixed here:
  *
  * 1. preflight-prd-integrity.sh's checks #9 (.test.ts stories must use
- *    qwen not minimax), #10 (clean pending state), and #17 (testCriteria
+ *    openrouter not minimax), #10 (clean pending state), and #17 (testCriteria
  *    field present) all scanned `active_ids` — the union of EVERY phase's
  *    implementationOrder, not just the phase actually being validated. Once
  *    scaffold's SKY-001 legitimately became status=completed, check #10
@@ -54,7 +54,7 @@ function liveFixture() {
         status: 'completed',
         completed: true,
         effort: 'medium',
-        aiProvider: 'qwen',
+        aiProvider: 'openrouter',
         model: 'moonshotai/kimi-k2',
         acceptanceCriteria: ['a'],
         technicalNotes: { files: ['/tmp/skyscanner-fixture-app/src/index.ts'] },
@@ -97,9 +97,9 @@ function liveFixture() {
 function canonicalCounterpart() {
   return {
     stories: [
-      { id: 'SKY-002', aiProvider: 'qwen', model: 'moonshotai/kimi-k2' },
-      { id: 'SKY-003', aiProvider: 'qwen', model: 'moonshotai/kimi-k2' },
-      { id: 'SKY-004', aiProvider: 'qwen', model: 'moonshotai/kimi-k2' },
+      { id: 'SKY-002', aiProvider: 'openrouter', model: 'moonshotai/kimi-k2' },
+      { id: 'SKY-003', aiProvider: 'openrouter', model: 'moonshotai/kimi-k2' },
+      { id: 'SKY-004', aiProvider: 'openrouter', model: 'moonshotai/kimi-k2' },
     ],
   };
 }
@@ -175,17 +175,17 @@ describe('_prd_remediate_impl.py — repairs provider/model from canonical (REAL
   it('REPRODUCES + FIXES: a .test.ts story on minimax is repaired to canonical\'s provider/model', () => {
     const { prd, stdout } = run(liveFixture(), canonicalCounterpart(), 'core');
     const byId = Object.fromEntries(prd.stories.map((s: any) => [s.id, s]));
-    expect(byId['SKY-002'].aiProvider).toBe('qwen');
+    expect(byId['SKY-002'].aiProvider).toBe('openrouter');
     expect(byId['SKY-002'].model).toBe('moonshotai/kimi-k2');
-    expect(byId['SKY-003'].aiProvider).toBe('qwen');
-    expect(byId['SKY-004'].aiProvider).toBe('qwen');
+    expect(byId['SKY-003'].aiProvider).toBe('openrouter');
+    expect(byId['SKY-004'].aiProvider).toBe('openrouter');
     expect(stdout).toMatch(/repaired provider\/model misalignment from canonical/);
   });
 
   it('does NOT touch a prior-phase story (SKY-001) even though canonical also has it', () => {
     const { prd } = run(liveFixture(), canonicalCounterpart(), 'core');
     const sky001 = prd.stories.find((s: any) => s.id === 'SKY-001');
-    expect(sky001.aiProvider).toBe('qwen'); // was already correct/untouched
+    expect(sky001.aiProvider).toBe('openrouter'); // was already correct/untouched
     expect(sky001.status).toBe('completed'); // untouched by step 6's reset too
   });
 

@@ -15,7 +15,7 @@
  * template literal was being evaluated.
  *
  * That throw happened BEFORE the try block, before runAgentForJson, before any
- * model call. Proof from the live log: `spec-mode: fast-path qwen/...` printed
+ * model call. Proof from the live log: `spec-mode: fast-path openrouter/...` printed
  * exactly ONCE — for the coordinator — and never for openspec, and no
  * MOCK-HW-1-openspec-spec.log was written at all. Four "retries" re-ran the same
  * unconditional crash and burned the run.

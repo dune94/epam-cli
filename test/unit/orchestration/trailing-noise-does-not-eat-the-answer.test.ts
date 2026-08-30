@@ -11,7 +11,7 @@
  *
  *     {"verdict":"defects_found","findings":[...]}
  *
- *       [provider] 'qwen' is not routable by the 'claude' set — using 'claude'.
+ *       [provider] 'openrouter' is not routable by the 'claude' set — using 'claude'.
  *
  * Sending that notice to stderr did NOT fix it — 2>&1 merges the two streams — which is why the
  * remedy belongs here rather than in whichever component prints next. Any banner, deprecation
@@ -26,7 +26,7 @@ const runner = require('../../../orchestrations/scripts/spec-mode-runner.js');
 
 /** The notice that actually did this, in shape. */
 const NOTICE = [
-  "  [provider] 'qwen' is not routable by the 'claude' set — using 'claude'.",
+  "  [provider] 'openrouter' is not routable by the 'claude' set — using 'claude'.",
   "  [provider] The set is the launch's own choice; the env value was left by something else.",
 ].join('\n');
 

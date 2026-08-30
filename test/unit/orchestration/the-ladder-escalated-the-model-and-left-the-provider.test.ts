@@ -14,7 +14,7 @@
  * Ten of twelve attempts were unreachable by construction. Reproduced exactly:
  *
  *   minimax + MiniMax-M3    exit=0  413 bytes
- *   qwen    + z-ai/glm-5.2  exit=0  410 bytes
+ *   openrouter    + z-ai/glm-5.2  exit=0  410 bytes
  *   minimax + z-ai/glm-5.2  exit=1  0 bytes    <-- "All providers exhausted"
  *
  * MODEL AND PROVIDER ARE ONE DECISION, made in many places. Several escalation arms remember to
@@ -34,7 +34,7 @@ import { join } from 'node:path';
 const ROOT = join(__dirname, '../../..');
 const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
 
-const MAP = 'zhipuai/*=qwen|moonshotai/*=qwen|z-ai/*=qwen|glm-*=qwen|kimi-*=qwen|deepseek/*=qwen|MiniMax-*=minimax';
+const MAP = 'zhipuai/*=openrouter|moonshotai/*=openrouter|z-ai/*=openrouter|glm-*=openrouter|kimi-*=openrouter|deepseek/*=openrouter|MiniMax-*=minimax';
 
 /** Extract a shell function from claude.sh by name and run it — the established pattern. */
 function extractFn(name: string): string {
@@ -56,9 +56,9 @@ describe('the ladder escalated the model and left the provider', () => {
   it('resolve_model_provider maps each escalation target — the raw material', () => {
     const fn = extractFn('resolve_model_provider');
     const r = runWith(`${fn}\nfor m in z-ai/glm-5.2 MiniMax-M3 glm-5.1 kimi-k3; do echo "$m=$(resolve_model_provider "$m")"; done`);
-    expect(r.stdout).toContain('z-ai/glm-5.2=qwen');
+    expect(r.stdout).toContain('z-ai/glm-5.2=openrouter');
     expect(r.stdout).toContain('MiniMax-M3=minimax');
-    expect(r.stdout).toContain('glm-5.1=qwen');
+    expect(r.stdout).toContain('glm-5.1=openrouter');
   });
 
   it('THE PROVIDER FOLLOWS THE MODEL AT THE POINT OF USE — whatever the escalation arm did', () => {
@@ -67,7 +67,7 @@ describe('the ladder escalated the model and left the provider', () => {
     // The exact live state: an arm escalated the model and left STORY_PROVIDER on minimax.
     const r = runWith(`${fn}\n${sync}\nSTORY_MODEL='z-ai/glm-5.2'; STORY_PROVIDER='minimax'\n`
       + `sync_provider_to_model\necho "provider=$STORY_PROVIDER"`);
-    expect(r.stdout.trim(), `combination that returns 0 bytes: ${r.stderr}`).toBe('provider=qwen');
+    expect(r.stdout.trim(), `combination that returns 0 bytes: ${r.stderr}`).toBe('provider=openrouter');
   });
 
   it('leaves a provider alone when the model already matches it', () => {

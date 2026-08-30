@@ -72,7 +72,7 @@ describe('tier3 script — EPAM_MODEL_LADDER is exported with valid format', () 
     // NOT asserted: that the launcher exports it. This one never did — the value reaches a
     // run through the project env and the seam's ladder, and demanding an export here would
     // have been a second requirement invented to make an assertion pass.
-    expect(tier3).not.toMatch(/ORCH_GATE_MODEL=qwen\/qwen3-coder/);
+    expect(tier3).not.toMatch(/ORCH_GATE_MODEL=openrouter\/openrouter3-coder/);
   });
 
   it('tier3 sets ORCH_GATE_PROVIDER to a non-empty value', () => {
@@ -105,12 +105,12 @@ describe('claude.sh — three-phase inference ladder (R1: effort↑, R2: model�
 });
 
 // ── 4. Reasoning effort reaches providers as native API parameter ─────────────
-describe('MiniMax + Qwen providers — EPAM_REASONING_EFFORT passed as native API parameter', () => {
+describe('MiniMax + OpenRouter providers — EPAM_REASONING_EFFORT passed as native API parameter', () => {
   const minimaxSrc = readFileSync(
     join(__dirname, '../../../src/providers/minimax/MiniMaxProvider.ts'), 'utf8'
   );
-  const qwenSrc = readFileSync(
-    join(__dirname, '../../../src/providers/qwen/QwenProvider.ts'), 'utf8'
+  const openrouterSrc = readFileSync(
+    join(__dirname, '../../../src/providers/openrouter/OpenRouterProvider.ts'), 'utf8'
   );
 
   it('MiniMaxProvider reads EPAM_REASONING_EFFORT and passes reasoning_effort as its own native parameter, independent of temperature', () => {
@@ -126,40 +126,40 @@ describe('MiniMax + Qwen providers — EPAM_REASONING_EFFORT passed as native AP
     expect(reasoningFnBody).not.toMatch(/temperature/i);
   });
 
-  it('QwenProvider does NOT conflate reasoning effort with temperature (resolveOpenRouterReasoning never reads/sets temperature)', () => {
-    const reasoningFnStart = qwenSrc.indexOf('resolveOpenRouterReasoning(request: ProviderRequest)');
-    const reasoningFnEnd = qwenSrc.indexOf('\n  }', reasoningFnStart);
-    const reasoningFnBody = qwenSrc.slice(reasoningFnStart, reasoningFnEnd);
+  it('OpenRouterProvider does NOT conflate reasoning effort with temperature (resolveOpenRouterReasoning never reads/sets temperature)', () => {
+    const reasoningFnStart = openrouterSrc.indexOf('resolveOpenRouterReasoning(request: ProviderRequest)');
+    const reasoningFnEnd = openrouterSrc.indexOf('\n  }', reasoningFnStart);
+    const reasoningFnBody = openrouterSrc.slice(reasoningFnStart, reasoningFnEnd);
     expect(reasoningFnBody).not.toMatch(/temperature/i);
   });
 
-  it('QwenProvider sends reasoning.effort to OpenRouter for models that support it', () => {
-    expect(qwenSrc).toMatch(/resolveOpenRouterReasoning/);
-    expect(qwenSrc).toMatch(/reasoning.*effort/is);
+  it('OpenRouterProvider sends reasoning.effort to OpenRouter for models that support it', () => {
+    expect(openrouterSrc).toMatch(/resolveOpenRouterReasoning/);
+    expect(openrouterSrc).toMatch(/reasoning.*effort/is);
   });
 
-  it('QwenProvider resolveOpenRouterReasoning covers low/medium/high (not just medium+high)', () => {
-    expect(qwenSrc).toMatch(/effort.*low|low.*effort/is);
+  it('OpenRouterProvider resolveOpenRouterReasoning covers low/medium/high (not just medium+high)', () => {
+    expect(openrouterSrc).toMatch(/effort.*low|low.*effort/is);
   });
 
-  it('QwenProvider resolveModel handles models from multiple OpenRouter providers', () => {
+  it('OpenRouterProvider resolveModel handles models from multiple OpenRouter providers', () => {
     // Must accept models from any provider that goes through OpenRouter,
     // not just one hardcoded family. Check the regex includes multiple prefixes.
-    expect(qwenSrc).toMatch(/moonshotai|zhipuai/);
+    expect(openrouterSrc).toMatch(/moonshotai|zhipuai/);
   });
 
-  it('QwenProvider resolveModel accepts z-ai/* slugs (GLM 5.x family)', () => {
-    expect(qwenSrc).toMatch(/z-ai/);
+  it('OpenRouterProvider resolveModel accepts z-ai/* slugs (GLM 5.x family)', () => {
+    expect(openrouterSrc).toMatch(/z-ai/);
   });
 });
 
 // ── 7. Rung 2 provider routing is config-driven, not hardcoded ───────────────
-// (2026-07-06: replaced an inline `case $model in zhipuai/*|z-ai/*|...) qwen;;`
+// (2026-07-06: replaced an inline `case $model in zhipuai/*|z-ai/*|...) openrouter;;`
 // statement baked into claude.sh — a different project's model vendors would
 // get silently wrong/no provider routing from a hardcoded case like that.
 // Routing now goes through resolve_model_provider(), which reads
 // EPAM_MODEL_PROVIDER_MAP — a per-project config value (tier3-travel-app-run.sh
-// supplies the z-ai/zhipuai/moonshotai/kimi/deepseek->qwen, MiniMax->minimax
+// supplies the z-ai/zhipuai/moonshotai/kimi/deepseek->openrouter, MiniMax->minimax
 // map for THIS project), with zero vendor names in the engine itself.
 describe('claude.sh — Rung2 provider routing is config-driven via resolve_model_provider()', () => {
   it('Rung2 calls resolve_model_provider() instead of a hardcoded vendor case statement', () => {
@@ -178,11 +178,11 @@ describe('claude.sh — Rung2 provider routing is config-driven via resolve_mode
     expect(body).not.toMatch(/zhipuai|moonshotai|z-ai|MiniMax|kimi|deepseek/i);
   });
 
-  it('tier3-travel-app-run.sh supplies EPAM_MODEL_PROVIDER_MAP covering z-ai/* and zhipuai/* -> qwen', () => {
+  it('tier3-travel-app-run.sh supplies EPAM_MODEL_PROVIDER_MAP covering z-ai/* and zhipuai/* -> openrouter', () => {
     const idx = tier3.indexOf('EPAM_MODEL_PROVIDER_MAP=');
     const line = tier3.slice(idx, tier3.indexOf('\n', idx));
-    expect(line).toMatch(/zhipuai\/\*=qwen/);
-    expect(line).toMatch(/z-ai\/\*=qwen/);
+    expect(line).toMatch(/zhipuai\/\*=openrouter/);
+    expect(line).toMatch(/z-ai\/\*=openrouter/);
     expect(line).toMatch(/MiniMax-\*=minimax/);
   });
 });
@@ -200,12 +200,12 @@ describe('resolve_model_provider() — REAL execution', () => {
     return execFileSync('bash', ['-c', script], { encoding: 'utf8' }).trim();
   }
 
-  const MAP = 'zhipuai/*=qwen|moonshotai/*=qwen|z-ai/*=qwen|glm-*=qwen|kimi-*=qwen|deepseek/*=qwen|MiniMax-*=minimax';
+  const MAP = 'zhipuai/*=openrouter|moonshotai/*=openrouter|z-ai/*=openrouter|glm-*=openrouter|kimi-*=openrouter|deepseek/*=openrouter|MiniMax-*=minimax';
 
   it('matches a glob pattern and returns the configured provider', () => {
-    expect(run('z-ai/glm-5.1', MAP)).toBe('qwen');
+    expect(run('z-ai/glm-5.1', MAP)).toBe('openrouter');
     expect(run('MiniMax-M3', MAP)).toBe('minimax');
-    expect(run('moonshotai/kimi-k2', MAP)).toBe('qwen');
+    expect(run('moonshotai/kimi-k2', MAP)).toBe('openrouter');
   });
 
   it('returns empty string when no pattern matches (caller keeps STORY_PROVIDER unchanged)', () => {

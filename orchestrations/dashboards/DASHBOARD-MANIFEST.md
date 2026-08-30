@@ -91,7 +91,7 @@ criteria, test criteria, technical notes, spec-pass lineage, metadata.
 **Sources:** `prd.json` only.
 **Caveats:** Model badge (`modelInfo()`) is provider-aware but falls back to a
 hashed generic-palette label+color for any provider/model not in its small
-named set (opencode/codex/qwen+deepseek/openai/4 specific Claude model IDs) —
+named set (opencode/codex/openrouter+deepseek/openai/4 specific Claude model IDs) —
 same no-hardcoding principle as monitor.html. Test Criteria section (added
 2026-07-13) only renders when `testCriteria` has real content (facts/
 sourceFiles/mockStrategy/bannedPatterns) — silent for non-test stories, which

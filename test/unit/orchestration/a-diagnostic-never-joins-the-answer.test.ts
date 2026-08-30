@@ -9,7 +9,7 @@
  *
  *     {"verdict":"defects_found","findings":[...]}
  *
- *       [provider] 'qwen' is not routable by the 'claude' set — using 'claude'.
+ *       [provider] 'openrouter' is not routable by the 'claude' set — using 'claude'.
  *
  * The extractor then saw two values instead of one, element [1] was not an object, and the run
  * died reporting "ROSTER_REVIEW[1]: expected an object, got object". Three specialiser attempts,
@@ -42,7 +42,7 @@ function resolve(env: Record<string, string>) {
 describe('a diagnostic never joins the answer', () => {
   it('stdout carries the provider and nothing else, even when it substitutes', () => {
     // The exact condition from the run: the environment names a provider the set cannot route.
-    const { out } = resolve({ EPAM_PROVIDER_SET: 'claude', EPAM_ORCHESTRATION_PROVIDER: 'qwen' });
+    const { out } = resolve({ EPAM_PROVIDER_SET: 'claude', EPAM_ORCHESTRATION_PROVIDER: 'openrouter' });
     expect(out, 'the answer must not be empty; that would prove nothing').not.toBe('');
     expect(out, 'the notice must not travel with the answer').not.toContain('[provider]');
     expect(out.trim().split('\n')).toHaveLength(1);
@@ -50,7 +50,7 @@ describe('a diagnostic never joins the answer', () => {
   });
 
   it('still SAYS it substituted — on stderr, where it cannot corrupt a reply', () => {
-    const { err } = resolve({ EPAM_PROVIDER_SET: 'claude', EPAM_ORCHESTRATION_PROVIDER: 'qwen' });
+    const { err } = resolve({ EPAM_PROVIDER_SET: 'claude', EPAM_ORCHESTRATION_PROVIDER: 'openrouter' });
     expect(err, 'silently substituting a provider would be worse than the corruption').toContain('[provider]');
   });
 

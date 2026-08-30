@@ -7,8 +7,8 @@
  *
  * which knows nothing about the provider set in force. So on 2026-08-29 a metrolinx run launched
  * with EPAM_PROVIDER_SET=claude resolved the claude ladder — "at the top of its declared chain
- * (claude-opus-5)" — and then asked provider 'qwen' for it, because the repo's .env still carried
- * EPAM_ORCHESTRATION_PROVIDER=qwen from another stack. Three attempts, no completion record, and
+ * (claude-opus-5)" — and then asked provider 'openrouter' for it, because the repo's .env still carried
+ * EPAM_ORCHESTRATION_PROVIDER=openrouter from another stack. Three attempts, no completion record, and
  * the run died after the roster had already been minted and reviewed against real client code.
  *
  * This repo has the incident on record once already: a stale file's provider beat an explicit
@@ -16,7 +16,7 @@
  *
  * The SET is the deliberate, per-launch choice; the env var is whatever a file left behind. So a
  * provider the active set cannot route is overridden by one it can, and the substitution is
- * announced — never silent, because an operator who really meant qwen must see that they did not
+ * announced — never silent, because an operator who really meant openrouter must see that they did not
  * get it.
  */
 
@@ -47,15 +47,15 @@ function resolve(env: Record<string, string>) {
 
 describe('A PROVIDER THE SET CANNOT ROUTE IS NOT USED', () => {
   it('THE DEFECT: a stale env provider no longer beats an explicit set', () => {
-    const { out } = resolve({ EPAM_PROVIDER_SET: 'claude', EPAM_ORCHESTRATION_PROVIDER: 'qwen' });
-    expect(out, 'the run asked qwen for a claude model, exactly as it did on 2026-08-29')
-      .not.toBe('qwen');
+    const { out } = resolve({ EPAM_PROVIDER_SET: 'claude', EPAM_ORCHESTRATION_PROVIDER: 'openrouter' });
+    expect(out, 'the run asked openrouter for a claude model, exactly as it did on 2026-08-29')
+      .not.toBe('openrouter');
     expect(out).toBe('claude');
   });
 
   it('and says so, because a silent substitution is its own defect', () => {
-    const { err } = resolve({ EPAM_PROVIDER_SET: 'claude', EPAM_ORCHESTRATION_PROVIDER: 'qwen' });
-    expect(err).toMatch(/qwen/);
+    const { err } = resolve({ EPAM_PROVIDER_SET: 'claude', EPAM_ORCHESTRATION_PROVIDER: 'openrouter' });
+    expect(err).toMatch(/openrouter/);
     expect(err).toMatch(/claude/);
   });
 
@@ -70,7 +70,7 @@ describe('A PROVIDER THE SET CANNOT ROUTE IS NOT USED', () => {
 
   it('falls back to the env untouched when no set is declared', () => {
     // A run that names no set has not expressed a preference this can contradict.
-    expect(resolve({ EPAM_ORCHESTRATION_PROVIDER: 'qwen' }).out).toBe('qwen');
+    expect(resolve({ EPAM_ORCHESTRATION_PROVIDER: 'openrouter' }).out).toBe('openrouter');
   });
 
   it('supplies the set\'s provider when the env names none at all', () => {

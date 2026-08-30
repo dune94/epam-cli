@@ -425,7 +425,6 @@ case "${EPAM_ORCHESTRATION_PROVIDER:-${CLAUDE_CMD}}" in
     codemie-claude) CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
     copilot)        CLAUDE_SH="$SCRIPT_DIR/copilot.sh" ;;
     openai)         CLAUDE_SH="$SCRIPT_DIR/openai.sh" ;;
-    # OPENROUTER REPLACED OPENROUTER ENTIRELY. qwen.sh was a ten-line shim that exec'd claude.sh, so
     # this was always an alias. What made the rename urgent is that the dispatch REJECTED
     # openrouter, so the value the operator asked for could not be set at all: a run launched
     # with it died at startup with "Unknown EPAM_ORCHESTRATION_PROVIDER 'openrouter'".
@@ -530,8 +529,7 @@ if [ -n "${CLAUDE_CMD:-}" ]; then
     CLAUDE_CMD="$CLAUDE_CMD"
 elif [ "${EPAM_ORCHESTRATION_PROVIDER:-}" = "codex" ]; then
     CLAUDE_CMD="codex"
-# THE qwen BRANCH IS GONE, NOT RENAMED. It selected a `qwen` BINARY; openrouter never had one
-# — qwen.sh was a shim that exec'd claude.sh — so the correct replacement is the default below,
+# THE openrouter BRANCH IS GONE, NOT RENAMED. It selected a `openrouter` BINARY; openrouter never had one
 # which is claude. Renaming it would have named a binary that does not exist either.
 else
     CLAUDE_CMD="claude"
@@ -1524,7 +1522,7 @@ stop_control_plane() {
 # combination for the full timeout window again.
 #
 # Root cause this addresses (found live, 2026-07-07): a story ended up with
-# aiProvider="qwen" (OpenRouter) paired with model="MiniMax-M3" (a MiniMax-
+# aiProvider="openrouter" (OpenRouter) paired with model="MiniMax-M3" (a MiniMax-
 # native model) after spec-mode's LLM model-review step changed .model without
 # syncing .aiProvider — see resolveModelProvider()'s docstring in
 # spec-mode-runner.js for the full story. That specific mismatch is now fixed
@@ -2734,7 +2732,6 @@ _run_codeline_bridge() {
     # contract to BRIDGE_OUT_FILE — the read-only allowlist would let it read
     # but never persist its own output. Found live (2026-07-31 agent audit):
     # this call went through plain run_orch_prompt with no tool grant at all,
-    # under the pipeline's actual qwen/openai gate providers that means
     # --no-tools — the same class of gap already fixed once for
     # code-graph-detective/failure-analyst. Budgeted like every other
     # tool-bearing gate call in this file.
@@ -5712,7 +5709,7 @@ else
         jq -r '.["prd-model-coordinator"] // ""' "$_mc_profiles_file" > "$_mc_role_file" 2>/dev/null || : > "$_mc_role_file"
         _cp_vals=$(mktemp "${TMPDIR:-/tmp}/prd-model-coordinator-vals-XXXXXX.json")
           # THE STACK'S OWN VOCABULARY, NOT THE PERSONA'S. The persona named MiniMax-M3 and
-          # {minimax, qwen} in prose, so on the claude stack the coordinator wrote a model no claude
+          # {minimax, openrouter} in prose, so on the claude stack the coordinator wrote a model no claude
           # ladder declares into every story -- no successor, so no escalation, and the NEXT run
           # refused to start (2026-08-28). Read from the resolved set, so a project declaring other
           # models or runners needs no change here.
@@ -9819,7 +9816,6 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                     _gfa_raw=$(echo "$_gfa_prompt" | \
                         AI_GATE_ALLOW_TOOLS=1 \
                         # NO PROVIDER DEFAULT. This read `:-minimax`, which no configuration
-                        # asks for — every project config.env and every launcher sets qwen. So
                         # the literal was both unreachable in practice and wrong when reached,
                         # and routing the same model through another provider is a different
                         # setup, not a detail (MiniMax direct vs via a gateway differed 99.8%
@@ -10399,7 +10395,7 @@ _emit_unfixed_bug_list() {
 # (openspec → story agent → QA gates) in a bug_fix sub-phase.
 # Round 1 uses the original story model; round 2 escalates to
 # ESCALATION_MODEL (same model the InferenceLadder uses, default z-ai/glm-5.2)
-# via the qwen (OpenRouter) provider.
+# via the openrouter (OpenRouter) provider.
 # If the escalated model cannot fix it → hard fail with structured bug list.
 # UNIT_TEST_BUG_DEPTH env var prevents recursive bug story creation.
 run_unit_tests_gate() {

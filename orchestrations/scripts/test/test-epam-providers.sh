@@ -246,7 +246,6 @@ cat > "$PRD_WITH_EST" <<'PRDJSON'
       "id": "HW-004",
       "title": "Implement formatDate()",
       "aiProvider": "openrouter",
-      "model": "openrouter/qwen3-coder",
       "effort": "low",
       "estimatedHours": 0.05,
       "estimatedCost": 0.0082
@@ -313,7 +312,6 @@ bash -c '
     PHASE_COST_FILE="'"$COST_JSONL2"'"
     STORY_EFFORT="low"
     STORY_TYPE="implementation"
-    RESOLVED_MODEL="openrouter/qwen3-coder"
     INVOKE_MODE="epam-run"
     STORY_PROMPT_TOKENS="0"
 
@@ -360,7 +358,6 @@ PINOEOF
 cat <<'RESULTEOF'
 {
   "result": "slugify implemented",
-  "model": "openrouter/qwen3-coder-30b-a3b-instruct",
   "provider": "openrouter",
   "usage": {
     "inputTokens": 1200,
@@ -374,7 +371,6 @@ RESULTEOF
 MOCKEOF
 chmod +x "$MOCK_EPAM_DIR/epam"
 
-airun_result=$(bash "$AIRUN_SCRIPT" --provider openrouter --model "openrouter/qwen3-coder-30b-a3b-instruct" \
     <<< "implement slugify" \
     2>/dev/null \
     EPAM_CLI="$MOCK_EPAM_DIR/epam" \
@@ -386,10 +382,8 @@ airun_result=$(bash -c "
     EPAM_CLI='$MOCK_EPAM_DIR/epam'
     ORCH_JSON_RESULT='$AIRUN_ORCH_RESULT'
     export EPAM_CLI ORCH_JSON_RESULT
-    AI_PROVIDER=openrouter AI_MODEL='openrouter/qwen3-coder-30b-a3b-instruct' \
     EPAM_CLI='$MOCK_EPAM_DIR/epam' \
     ORCH_JSON_RESULT='$AIRUN_ORCH_RESULT' \
-    bash '$AIRUN_SCRIPT' --provider openrouter --model 'openrouter/qwen3-coder-30b-a3b-instruct' <<< 'implement slugify'
 " 2>/dev/null) || true
 
 assert_eq "$airun_result" "slugify implemented" "ai-run openrouter+pino: result text extracted correctly"

@@ -6,7 +6,7 @@ import { join } from 'node:path'
 
 // A run labelled mockserver spent real money for 34 minutes. Three things had to line up:
 //
-//   1. the repo .env pins EPAM_ORCHESTRATION_PROVIDER=qwen (an OpenRouter route)
+//   1. the repo .env pins EPAM_ORCHESTRATION_PROVIDER=openrouter (an OpenRouter route)
 //   2. the set overlay sets it to the mock provider — correctly
 //   3. a later re-read of .env OVERWROTE the overlay AND re-injected the real keys
 //

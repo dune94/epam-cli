@@ -20,7 +20,7 @@ const base = {
   toolCallCount: 3,
   iterations: 20,
 };
-const config = { model: 'z-ai/glm-5.2', provider: 'qwen' };
+const config = { model: 'z-ai/glm-5.2', provider: 'openrouter' };
 
 describe('an exhausted run is distinguishable from a completed one', () => {
   it('a completed run carries NO stop_reason — absent is not "zero"', () => {

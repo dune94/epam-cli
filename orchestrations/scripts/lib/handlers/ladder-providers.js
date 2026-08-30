@@ -3,7 +3,7 @@
  * THE PROVIDERS THIS RUN CAN ACTUALLY ROUTE TO, AS A JSON ARRAY.
  *
  * The sibling of ladder-models.js, and asked for the same reason: the prd-model-coordinator writes
- * an aiProvider into every story, and until 2026-08-28 its persona named {minimax, qwen} in prose.
+ * an aiProvider into every story, and until 2026-08-28 its persona named {minimax, openrouter} in prose.
  * On the claude stack that is a provider nothing can route, paired with a model no ladder declares.
  *
  * A provider is routable when the resolved provider set declares a RUNNER for it — the runner is

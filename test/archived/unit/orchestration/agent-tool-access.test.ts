@@ -287,7 +287,7 @@ const sites: Site[] = [
     reason: 'FIXED 2026-07-31 (full agent audit, same class as HEAL-BLIND): profile ' +
       'explicitly instructs reading real source files in BRIDGE_SRC_DIR and WriteFile-ing ' +
       'the extracted contract to BRIDGE_OUT_FILE, but this call went through plain ' +
-      'run_orch_prompt with no tool grant at all — under the pipeline\'s actual qwen/openai ' +
+      'run_orch_prompt with no tool grant at all — under the pipeline\'s actual openrouter/openai ' +
       'gate providers that means --no-tools. Live-corroborated: archived agent-activity.jsonl ' +
       'shows repeated retry cost entries for the same story/lane, the signature of an agent ' +
       'told to WriteFile with nothing to do it with. Now grants AI_GATE_ALLOW_TOOLS=1 with no ' +

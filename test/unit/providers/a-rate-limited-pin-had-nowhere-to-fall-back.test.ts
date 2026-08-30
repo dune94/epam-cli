@@ -29,7 +29,7 @@
  * behind a reroute would hide a real fault.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { QwenProvider } from '../../../src/providers/qwen/QwenProvider';
+import { OpenRouterProvider } from '../../../src/providers/openrouter/OpenRouterProvider';
 
 const REQ = { model: 'z-ai/glm-5.2', messages: [{ role: 'user' as const, content: 'hi' }], maxTokens: 8 };
 const OK_BODY = {
@@ -38,7 +38,7 @@ const OK_BODY = {
 };
 
 let sent: Array<Record<string, any>>;
-const provider = () => new QwenProvider({ apiKey: 'k', openRouterMode: true });
+const provider = () => new OpenRouterProvider({ apiKey: 'k', openRouterMode: true });
 
 /** Queue of responses; each fetch call shifts one. */
 function stubFetch(queue: Array<{ ok: boolean; status: number; body?: unknown; text?: string }>) {

@@ -78,8 +78,8 @@ const argv    = process.argv.slice(2);
 const getArg  = (flag, def = '') => { const i = argv.indexOf(flag); return i !== -1 ? argv[i + 1] : def; };
 const DRY_RUN = argv.includes('--dry-run') || process.env.CODELINE_DISCOVERY_DRY_RUN === '1';
 // Explicit provider. These called ai-run.sh with --model but NO --provider, so
-// provider came only from ambient env — e.g. `--provider qwen --model claude-haiku`.
-// NO VENDOR NAMED HERE. This ended in `|| 'qwen'`, so a project that configured nothing had its
+// provider came only from ambient env — e.g. `--provider openrouter --model claude-haiku`.
+// NO VENDOR NAMED HERE. This ended in `|| 'openrouter'`, so a project that configured nothing had its
 // discovery call routed to a vendor it never chose — and the run looked configured. An absent
 // provider is a configuration gap, and the call refuses rather than picking someone.
 const PROVIDER = getArg('--provider',

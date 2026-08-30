@@ -129,8 +129,8 @@ info "Project config: $EPAM_PROJECT_CONFIG_DIR"
 # This launcher resolved the project config DIR and then never loaded the env inside it, so
 # config.env and the active set's config.<set>.env were both ignored. run-agent-orchestration.sh
 # then loaded the repo .env in preserve mode, and because nothing had set the provider yet, that
-# file's stale EPAM_ORCHESTRATION_PROVIDER=qwen won. Launched with EPAM_PROVIDER_SET=claude, the
-# 2026-08-26 mock3 run reached estate-survey on provider 'qwen', failed three attempts on a
+# file's stale EPAM_ORCHESTRATION_PROVIDER=openrouter won. Launched with EPAM_PROVIDER_SET=claude, the
+# 2026-08-26 mock3 run reached estate-survey on provider 'openrouter', failed three attempts on a
 # ladder it should never have been on, and aborted the mint.
 #
 # preserve, so an operator variable given on the command line still outranks the files.

@@ -207,7 +207,7 @@ export EPAM_API_KEY_OPENROUTER="$OPENROUTER_API_KEY"
 # failure-analyst ran on MiniMax-M3 and misdiagnosed SKY-002-test-1's casing bug.
 export ORCH_GATE_PROVIDER="openrouter"
 export EPAM_ORCHESTRATION_PROVIDER="openrouter"
-# Escalation model: GLM 5.2 for Rung 2/3 (reasoning model, 1M ctx; routes via OpenRouter/qwen provider)
+# Escalation model: GLM 5.2 for Rung 2/3 (reasoning model, 1M ctx; routes via OpenRouter/openrouter provider)
 # HIGH tier: stronger/pricier model than the medium-tier ESCALATION_MODEL.
 # claude.sh's classify_ladder_tier() dynamically decides medium vs high per
 # story from its own recorded failure history (story-failures.jsonl) — never
@@ -296,7 +296,7 @@ export EPAM_RETRY_EXTENSION_MAX="${EPAM_RETRY_EXTENSION_MAX:-2}"
 # Model-to-provider routing for post-escalation model steps (consumed by
 # claude.sh's resolve_model_provider() — zero vendor names hardcoded in the
 # engine itself, see that function's comment). This project routes every
-# OpenRouter-hosted vendor through the "qwen" provider umbrella; MiniMax
+# OpenRouter-hosted vendor through the "openrouter" provider umbrella; MiniMax
 # direct-API models route through "minimax". A project using different model
 # vendors/providers would supply a different map here.
 export EPAM_MODEL_PROVIDER_MAP="${EPAM_MODEL_PROVIDER_MAP:-zhipuai/*=openrouter|moonshotai/*=openrouter|z-ai/*=openrouter|glm-*=openrouter|kimi-*=openrouter|deepseek/*=openrouter|MiniMax-*=minimax}"

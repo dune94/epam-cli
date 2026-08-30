@@ -208,5 +208,19 @@
       ]
     },
     "$miniTierWhy": "miniTier marks the cheap, fast rung — the models that are quick but limited in generation capacity. It was decided in engine code by sniffing vendor naming habits (-mini, -flash, -haiku, minimax-m2), which breaks in both directions: a cheap model named differently read as capable, and a capable model containing -flash read as cheap. The set that declares the model declares its tier."
-  }
+  },
+  "runners": {
+    "claude": {
+      "$whyFlags": "The same two knobs every stack exposes, so a seam's declared effort and compaction reach the runner here exactly as they do on the others. Naming them per set rather than in engine code is what makes a swap a config edit.",
+      "alwaysFlags": [],
+      "env": {},
+      "flags": {
+        "--effort": "reasoningEffort",
+        "--autocompact": "autoCompressAt"
+      },
+      "$whyNoUnsetEnv": "Deliberately empty. Scrubbing ANTHROPIC_API_KEY sends Claude Code to the OAuth credentials on disk and bills for real — recorded in seam-the-subscription-pays-not-the-api-key. This stack authenticates with OPENROUTER_API_KEY and has no reason to take anything away.",
+      "unsetEnv": []
+    }
+  },
+  "$whyRunners": "THE SWAP MUST NOT INHERIT THE PREVIOUS STACK'S RUNNER. apply_runner_settings is called with the BASENAME of CLAUDE_CMD, which is 'claude' under every set, so a set declaring no runner by that name resolves nothing and the flags, env and scrubs of whatever ran before are simply carried over. claude, codemie and mockserver each declared one; this set did not, which made hot swap 2 the one stack that silently kept another stack's settings."
 }

@@ -50,6 +50,6 @@ describe('one node-side face for the hub', () => {
     const src = readFileSync(CALLER, 'utf8')
     // strip comments — the file explains WHY it must not, and that prose is not a read
     const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
-    expect(code).not.toMatch(/(ANTHROPIC|OPENAI|OPENROUTER|MINIMAX|CLAUDE|QWEN)[A-Z_]*_(API_)?KEY/)
+    expect(code).not.toMatch(/(ANTHROPIC|OPENAI|OPENROUTER|MINIMAX|CLAUDE|OPENROUTER)[A-Z_]*_(API_)?KEY/)
   })
 })

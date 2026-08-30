@@ -367,7 +367,7 @@ RETRY_DELAY=5
 ORCH_MODE="${ORCH_MODE:-bash}"
 # SDK invocation mode — when 1, routes Claude provider calls through invoke.py
 # using the Anthropic Python SDK instead of the claude CLI.
-# All other providers (opencode, codex, copilot, openai, qwen, cursor) are unaffected.
+# All other providers (opencode, codex, copilot, openai, openrouter, cursor) are unaffected.
 # Requires: pip install -r orchestrations/scripts/requirements.txt
 # and ANTHROPIC_API_KEY to be set in the environment.
 EPAM_SDK_INVOKE="${EPAM_SDK_INVOKE:-0}"
@@ -381,7 +381,7 @@ INVOKE_PYTHON="${INVOKE_PYTHON:-$SCRIPT_DIR/.venv/bin/python3}"
 # These map to a model and a max-turns cap for the Claude CLI invocation.
 # Env-overridable, not hardcoded to one provider's model: a project whose
 # story's aiProvider is never "codex" (e.g. Metrolinx, which routes brownfield
-# work through minimax/qwen) still got "gpt-5-codex" here as the CONFIG
+# work through minimax/openrouter) still got "gpt-5-codex" here as the CONFIG
 # DEFAULT resolve_model_from_story() falls back to before overriding from the
 # story's own .model field — harmless when the story sets .model, but a real
 # footgun for any invocation path that reaches this default without one
@@ -1341,7 +1341,6 @@ _brownfield_rung_bump() {
 }
 
 # resolve_model_from_story <story_id>
-# For epam-run providers (copilot/openai/qwen/cursor), the prd.json story carries
 # a .model field directly.  If set, it overrides the effort-based STORY_MODEL.
 # _tc_writer_phase — which phase the TC writer is generating for.
 #
@@ -1873,7 +1872,6 @@ check_prerequisites() {
     fi
 
     # Check for Claude CLI only when actually needed (provider=claude or codemie-claude)
-    # For qwen/openai/copilot/cursor/codex all traffic goes through epam CLI or ai-run.sh
     if command -v "$CLAUDE_CMD" &> /dev/null; then
         : # claude is available — all paths work
     else
@@ -6853,9 +6851,9 @@ get_model_ladder_step() {
 # and returns the provider for a model name, matched via bash glob patterns —
 # no hardcoded vendor/model names in this function. Per-project tier scripts
 # supply their own map (e.g. tier3-travel-app-run.sh sets
-# "zhipuai/*=qwen|moonshotai/*=qwen|z-ai/*=qwen|glm-*=qwen|kimi-*=qwen|deepseek/*=qwen|MiniMax-*=minimax"
+# "zhipuai/*=openrouter|moonshotai/*=openrouter|z-ai/*=openrouter|glm-*=openrouter|kimi-*=openrouter|deepseek/*=openrouter|MiniMax-*=minimax"
 # because this project routes all OpenRouter-hosted vendors through the
-# "qwen" provider umbrella and MiniMax direct-API models through "minimax").
+# "openrouter" provider umbrella and MiniMax direct-API models through "minimax").
 # Root cause this replaces: the escalation-ladder code used to hardcode this
 # exact vendor-name case statement twice inline (found live, 2026-07-06) —
 # a project using different model vendors/providers would get silently wrong
@@ -6888,7 +6886,7 @@ resolve_model_provider() {
 # ten of twelve writer attempts asked the minimax provider for z-ai/glm-5.2:
 #
 #   minimax + MiniMax-M3    exit=0  413 bytes
-#   qwen    + z-ai/glm-5.2  exit=0  410 bytes
+#   openrouter    + z-ai/glm-5.2  exit=0  410 bytes
 #   minimax + z-ai/glm-5.2  exit=1  0 bytes   "All providers exhausted"
 #
 # Zero bytes and a non-zero exit read as an environment crash, so the coordinator spent the rest
@@ -7498,7 +7496,7 @@ run_failure_analyst() {
     [ -z "${VERIFICATION_FAILURE:-}" ] && return 0
 
     local gate_provider="${ORCH_GATE_PROVIDER:-}"
-    # Failure analyst uses ESCALATION_MODEL (z-ai/glm-5.2) when set — never qwen chat models;
+    # Failure analyst uses ESCALATION_MODEL (z-ai/glm-5.2) when set — never openrouter chat models;
     # falls back to ORCH_GATE_MODEL only when no escalation model is configured.
     # THE SEAM'S LADDER, not a run-wide pin. ORCH_GATE_MODEL reached every seam that could
     # not resolve one itself; .env set it to z-ai/glm-5.2, so a mockserver run asked for an

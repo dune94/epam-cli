@@ -627,13 +627,8 @@ while IFS= read -r sid; do
       *haiku*) _model_alias="haiku" ;;
       *opus*)  _model_alias="opus"  ;;
       *sonnet*)_model_alias="sonnet";;
-      # Qwen via OpenRouter — keep calibration data separate from Claude tiers
-      *qwen3.7-max*)   _model_alias="qwen-max"   ;;
-      *qwen3.7-plus*)  _model_alias="qwen-plus"  ;;
-      *qwen3.6-flash*) _model_alias="qwen-flash" ;;
-      *qwen3-coder*)   _model_alias="qwen-coder" ;;
-      *qwen*)          _model_alias="openrouter"       ;;
-      # DeepSeek via OpenRouter — tracked separately from Qwen/Claude tiers
+      # OpenRouter via OpenRouter — keep calibration data separate from Claude tiers
+      *openrouter*)          _model_alias="openrouter"       ;;
       *deepseek*)      _model_alias="deepseek"   ;;
       # OpenAI via OpenRouter — separate buckets per model family
       *gpt-4o-mini*)   _model_alias="gpt4omini"  ;;

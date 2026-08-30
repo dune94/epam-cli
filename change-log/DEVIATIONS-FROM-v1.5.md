@@ -948,7 +948,7 @@ neither invocation-profiles.json nor profiles.json contains a single model-beari
 
 ### hello-dolly, and the pin that was hiding it
 It had no config.env because `mock1-paused-run.sh` PINNED its providers
-(`export ORCH_GATE_PROVIDER="qwen"`). A launcher export is already-set and OUTRANKS config, so
+(`export ORCH_GATE_PROVIDER="openrouter"`). A launcher export is already-set and OUTRANKS config, so
 the project never needed config and could never be swapped. Pin removed; config.env and both
 overlays created. Its config.env holds ONE key — PROJECT_NAME, DERIVED from its own
 prd.authored.json. Everything else that launcher exports is RUN state, not project identity, and
@@ -1025,7 +1025,6 @@ times in one session after being told twice.
 right, and the check they prompted found a second, worse problem.
 
 ### `epam` was never a provider
-It is a case arm mapping to `$EPAM_CLI` — the SAME target as copilot/openai/qwen/cursor/minimax.
 It names the RUNNER, not a vendor; nothing anywhere assigns it; and `provider_to_cli()` does NOT
 advertise it in its own error message, which is the engine's statement of what a PRD may assign.
 
@@ -1043,7 +1042,7 @@ worst possible moment.
 
 ### Result
 `known` is now exactly what the engine advertises:
-qwen, openai, codex, cursor, opencode, minimax, codemie-claude, copilot
+openrouter, openai, codex, cursor, opencode, minimax, codemie-claude, copilot
 
 ### Two assertions, one per direction
 - every provider the engine ACCEPTS is in `known` — else preflight rejects what the engine runs

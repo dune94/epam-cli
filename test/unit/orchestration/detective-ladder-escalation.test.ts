@@ -21,7 +21,7 @@ const specSrc = readFileSync(
   join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'), 'utf8');
 
 const LADDER = 'MiniMax-M3=z-ai/glm-5.1|z-ai/glm-5.1=moonshotai/kimi-k3';
-const PROV = 'moonshotai/*=qwen|z-ai/*=qwen|MiniMax-*=minimax';
+const PROV = 'moonshotai/*=openrouter|z-ai/*=openrouter|MiniMax-*=minimax';
 
 describe('ladderNextModel', () => {
   it('resolves the HIGH-ladder successor of glm-5.1 to kimi-k3', () => {
@@ -35,7 +35,7 @@ describe('ladderNextModel', () => {
   });
   it('the escalated model resolves to a real provider via the provider map', () => {
     const next = ladderNextModel('z-ai/glm-5.1', { EPAM_MODEL_LADDER_HIGH: LADDER });
-    expect(resolveModelProvider(next, { EPAM_MODEL_PROVIDER_MAP: PROV })).toBe('qwen');
+    expect(resolveModelProvider(next, { EPAM_MODEL_PROVIDER_MAP: PROV })).toBe('openrouter');
   });
 });
 

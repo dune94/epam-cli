@@ -85,7 +85,7 @@ function invokeReviewer(env: Record<string, string> = {}): Record<string, string
     'info() { :; }',
     '_ladder_next_model() { echo ""; }',
     '_ladder_skip_reason() { echo "test"; }',
-    '_provider_for_model() { echo "qwen"; }',
+    '_provider_for_model() { echo "openrouter"; }',
     `AI_RUNNER_CMD=${JSON.stringify(stub)}`,
     `SCRIPT_DIR=${JSON.stringify(dir)}`,
     `AUTOMATION_DIR=${JSON.stringify(dir)}`,

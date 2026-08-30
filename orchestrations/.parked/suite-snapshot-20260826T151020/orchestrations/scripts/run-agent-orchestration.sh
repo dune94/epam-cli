@@ -423,7 +423,6 @@ case "${EPAM_ORCHESTRATION_PROVIDER:-${CLAUDE_CMD}}" in
     codemie-claude) CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
     copilot)        CLAUDE_SH="$SCRIPT_DIR/copilot.sh" ;;
     openai)         CLAUDE_SH="$SCRIPT_DIR/openai.sh" ;;
-    qwen)           CLAUDE_SH="$SCRIPT_DIR/qwen.sh" ;;
     cursor)         CLAUDE_SH="$SCRIPT_DIR/cursor.sh" ;;
     codex)          CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
     # Plain Claude Code, the same maintained script every other provider uses. Reached by
@@ -432,7 +431,7 @@ case "${EPAM_ORCHESTRATION_PROVIDER:-${CLAUDE_CMD}}" in
     # profile and would demand credentials the mock has no business holding.
     claude)         CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
     *)
-        error "Unknown EPAM_ORCHESTRATION_PROVIDER '${EPAM_ORCHESTRATION_PROVIDER:-}'. Set it to one of: qwen|openai|copilot|cursor|codex|codemie-claude|claude in your .env file."
+        error "Unknown EPAM_ORCHESTRATION_PROVIDER '${EPAM_ORCHESTRATION_PROVIDER:-}'. Set it to one of: openrouter|openai|copilot|cursor|codex|codemie-claude|claude in your .env file."
         exit 1
         ;;
 esac
@@ -509,7 +508,7 @@ export PHASE
 [ -n "${OPENROUTER_BASE_URL:-}" ] && export OPENROUTER_BASE_URL
 [ -n "${OPENROUTER_API_KEY:-}" ] && export OPENROUTER_API_KEY
 [ -n "${EPAM_API_KEY_OPENROUTER:-}" ] && export EPAM_API_KEY_OPENROUTER
-[ -n "${EPAM_QWEN_MODEL_OVERRIDE:-}" ] && export EPAM_QWEN_MODEL_OVERRIDE
+[ -n "${EPAM_openrouter_MODEL_OVERRIDE:-}" ] && export EPAM_openrouter_MODEL_OVERRIDE
 # Propagate MiniMax key to all subprocesses
 [ -n "${MINIMAX_API_KEY:-}" ] && export MINIMAX_API_KEY
 [ -n "${EPAM_API_KEY_MINIMAX:-}" ] && export EPAM_API_KEY_MINIMAX
@@ -524,8 +523,8 @@ if [ -n "${CLAUDE_CMD:-}" ]; then
     CLAUDE_CMD="$CLAUDE_CMD"
 elif [ "${EPAM_ORCHESTRATION_PROVIDER:-}" = "codex" ]; then
     CLAUDE_CMD="codex"
-elif [ "${EPAM_ORCHESTRATION_PROVIDER:-}" = "qwen" ]; then
-    CLAUDE_CMD="qwen"
+elif [ "${EPAM_ORCHESTRATION_PROVIDER:-}" = "openrouter" ]; then
+    CLAUDE_CMD="openrouter"
 else
     CLAUDE_CMD="claude"
 fi
@@ -1135,7 +1134,7 @@ resolve_prompt_provider() {
         return
     fi
     case "$(basename "$CLAUDE_CMD")" in
-        codex|openai|qwen|cursor|copilot|codemie-claude) echo "$(basename "$CLAUDE_CMD")" ;;
+        codex|openai|openrouter|cursor|copilot|codemie-claude) echo "$(basename "$CLAUDE_CMD")" ;;
         *) echo "claude" ;;
     esac
 }
@@ -1257,7 +1256,7 @@ run_orch_prompt() {
     local provider_hint
     provider_hint="$(resolve_prompt_provider)"
     # ORCH_GATE_PROVIDER overrides the story-agent provider for coordinator/gate calls.
-    # Set to "openai" to use GPT-4o as coordinator while qwen handles story agents.
+    # Set to "openai" to use GPT-4o as coordinator while openrouter handles story agents.
     local gate_provider="${ORCH_GATE_PROVIDER:-$provider_hint}"
 
     if [ ! -x "$AI_RUNNER_CMD" ]; then
@@ -1795,7 +1794,7 @@ stop_control_plane() {
 # combination for the full timeout window again.
 #
 # Root cause this addresses (found live, 2026-07-07): a story ended up with
-# aiProvider="qwen" (OpenRouter) paired with model="MiniMax-M3" (a MiniMax-
+# aiProvider="openrouter" (OpenRouter) paired with model="MiniMax-M3" (a MiniMax-
 # native model) after spec-mode's LLM model-review step changed .model without
 # syncing .aiProvider — see resolveModelProvider()'s docstring in
 # spec-mode-runner.js for the full story. That specific mismatch is now fixed
@@ -3005,7 +3004,6 @@ _run_codeline_bridge() {
     # contract to BRIDGE_OUT_FILE — the read-only allowlist would let it read
     # but never persist its own output. Found live (2026-07-31 agent audit):
     # this call went through plain run_orch_prompt with no tool grant at all,
-    # under the pipeline's actual qwen/openai gate providers that means
     # --no-tools — the same class of gap already fixed once for
     # code-graph-detective/failure-analyst. Budgeted like every other
     # tool-bearing gate call in this file.
@@ -8471,7 +8469,7 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
                 # silently lose tool access the same way codeline-bridge-agent
                 # did. See gate-finding-analyst-dual-mechanism.test.ts.
                 _lga_raw="$(echo "$_lga_prompt" | \
-                    timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-qwen}" \
+                    timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-openrouter}" \
                         --model "${_lga_model}" \
                         --json - 2>>"$_lint_rem_log" || echo "")"
                 if [ -n "$_lga_raw" ]; then
@@ -8522,7 +8520,7 @@ if m:
                         rm -f "$_rp_vals"
                     fi
                     _lrem_raw="$(echo "$_lrem_prompt" | \
-                        timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-qwen}" \
+                        timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-openrouter}" \
                             --model "${_lrem_model}" \
                             --json - 2>>"$_lint_rem_log" || echo "")"
                     if [ -n "$_lrem_raw" ]; then
@@ -8547,13 +8545,13 @@ if m:
                 # Agent 3: profile-augmentor — 1 retry on empty output
                 info "  [lint-gate:augmentor] Recording lint anti-pattern in profile..."
                 _laug_raw="$(echo "$_lint_finding_raw" | \
-                    timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-qwen}" \
+                    timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-openrouter}" \
                         --model "$(seam_model_or_fail "gate-finding-analyst")" \
                         --json - 2>>"$_lint_rem_log" || echo "")"
                 if [ -z "$_laug_raw" ]; then
                     warning "  [lint-gate:augmentor] attempt 1 returned no output — retrying"
                     echo "$_lint_finding_raw" | \
-                        timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-qwen}" \
+                        timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-openrouter}" \
                             --model "$(seam_model_or_fail "story-ac-remediator")" \
                             --json - 2>>"$_lint_rem_log" || true
                 fi
@@ -9938,7 +9936,6 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                     _gfa_raw=$(echo "$_gfa_prompt" | \
                         AI_GATE_ALLOW_TOOLS=1 \
                         # NO PROVIDER DEFAULT. This read `:-minimax`, which no configuration
-                        # asks for — every project config.env and every launcher sets qwen. So
                         # the literal was both unreachable in practice and wrong when reached,
                         # and routing the same model through another provider is a different
                         # setup, not a detail (MiniMax direct vs via a gateway differed 99.8%
@@ -10518,7 +10515,7 @@ _emit_unfixed_bug_list() {
 # (openspec → story agent → QA gates) in a bug_fix sub-phase.
 # Round 1 uses the original story model; round 2 escalates to
 # ESCALATION_MODEL (same model the InferenceLadder uses, default z-ai/glm-5.2)
-# via the qwen (OpenRouter) provider.
+# via the openrouter (OpenRouter) provider.
 # If the escalated model cannot fix it → hard fail with structured bug list.
 # UNIT_TEST_BUG_DEPTH env var prevents recursive bug story creation.
 run_unit_tests_gate() {

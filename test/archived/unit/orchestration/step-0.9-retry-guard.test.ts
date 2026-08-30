@@ -102,7 +102,7 @@ export -f AI_RUNNER_CMD 2>/dev/null || true
         `if [ "$n" -le ${opts.violateForAttempts} ]; then`,
         `  jq '(.stories[] | select(.id == "SKY-002")).status = "completed"' ${JSON.stringify(prdPath)} > ${JSON.stringify(prdPath)}.tmp && mv ${JSON.stringify(prdPath)}.tmp ${JSON.stringify(prdPath)}`,
         'else',
-        `  jq '(.stories[] | select(.id == "SKY-002")).model = "moonshotai/kimi-k2" | (.stories[] | select(.id == "SKY-002")).aiProvider = "qwen" | (.stories[] | select(.id == "SKY-002")).reasoningEffort = "medium"' ${JSON.stringify(prdPath)} > ${JSON.stringify(prdPath)}.tmp && mv ${JSON.stringify(prdPath)}.tmp ${JSON.stringify(prdPath)}`,
+        `  jq '(.stories[] | select(.id == "SKY-002")).model = "moonshotai/kimi-k2" | (.stories[] | select(.id == "SKY-002")).aiProvider = "openrouter" | (.stories[] | select(.id == "SKY-002")).reasoningEffort = "medium"' ${JSON.stringify(prdPath)} > ${JSON.stringify(prdPath)}.tmp && mv ${JSON.stringify(prdPath)}.tmp ${JSON.stringify(prdPath)}`,
         'fi',
         'echo \'{"assigned_count": 1}\'',
       ].join('\n'),

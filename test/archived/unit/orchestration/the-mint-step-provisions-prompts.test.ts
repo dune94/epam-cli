@@ -87,7 +87,7 @@ function runStep(s: ReturnType<typeof sandbox>, env: Record<string, string> = {}
       EPAM_PROJECT_CONFIG_DIR: s.projectDir,
       JIRA_CODELINES: 'mock-one',
       JIRA_WORKTREE_MOCK_ONE: s.codeline,
-      EPAM_ORCHESTRATION_PROVIDER: 'qwen',
+      EPAM_ORCHESTRATION_PROVIDER: 'openrouter',
       // HOW THIS PROJECT PROVISIONS ITS PROMPTS. A project fact with no engine default: the
       // engine used to pick 'generate' for everyone silently, which meant a copy-mode project
       // was regenerated on every mint. The sandbox exercises generate, because that is the path

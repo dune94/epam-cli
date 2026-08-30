@@ -446,7 +446,7 @@ _provider_for_model() {
 # retry (ladder up the HIGH ladder on escalation), and on a no-file/max-iter failure run the
 # reusable agent-attempt-analyst to diagnose WHY and prepend a tailored corrective directive
 # to the next attempt — instead of blindly re-running the same prompt.
-_base_provider="${SPEC_MODE_PROVIDER:-${EPAM_ORCHESTRATION_PROVIDER:-qwen}}"
+_base_provider="${SPEC_MODE_PROVIDER:-${EPAM_ORCHESTRATION_PROVIDER:-openrouter}}"
 # THE SEAM DECIDES, NOT THIS FILE. seam_ladder_export (line ~61) sets EPAM_MODEL to the first rung
 # of the chain this seam's archetype declares. The literal that stood here overrode that silently:
 # the seam asked for its ladder, and the answer was thrown away one variable later, so changing the

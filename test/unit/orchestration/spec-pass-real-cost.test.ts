@@ -60,7 +60,7 @@ function activityLine(agent: string, costUsd: number, source: string, phase = 'c
     event_id: `evt-${agent}-${costUsd}`,
     timestamp: '2026-07-30T10:12:35+00:00',
     agent, story_id: 'AMSD-2041', phase, type: 'cost_snapshot',
-    model: 'z-ai/glm-5.1', provider: 'qwen',
+    model: 'z-ai/glm-5.1', provider: 'openrouter',
     detail: { costUsd, tokensIn: 1000, tokensOut: 50, turns: 0, source },
   });
 }

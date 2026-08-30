@@ -66,11 +66,11 @@ SH
   # The negative half. A substitution that fired unconditionally would silently replay every run,
   # including the paid ones the operator meant to make.
   run env_run EPAM_CLI="$STUB" \
-      AI_PROVIDER="qwen" AI_MODEL="" \
+      AI_PROVIDER="openrouter" AI_MODEL="" \
       bash "$SCRIPT" <<< "run this for real"
 
   [ "$status" -eq 0 ]
   [ -s "$STUB_ARGV_LOG" ]
-  [[ "$(cat "$STUB_ARGV_LOG")" == *"--provider qwen"* ]]
+  [[ "$(cat "$STUB_ARGV_LOG")" == *"--provider openrouter"* ]]
   [[ "$(cat "$STUB_ARGV_LOG")" != *"replay"* ]]
 }

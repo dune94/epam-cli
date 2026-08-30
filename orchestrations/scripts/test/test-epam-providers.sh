@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# test-epam-providers.sh — Zero-token tests for copilot/openai/qwen/cursor orchestration.
+# test-epam-providers.sh — Zero-token tests for copilot/openai/openrouter/cursor orchestration.
 #
 # Tests:
 #   1. provider_to_cli returns correct CLI name for each provider
 #   2. normalize_provider_json correctly maps epam-run JSON to orchestration schema
 #   3. mock-epam-run.sh correctly captures --provider and --model flags
 #   4. resolve_model_from_story reads .model field from prd.json
-#   5. run-agent-orchestration.sh routes copilot/openai/qwen/cursor to correct scripts
+#   5. run-agent-orchestration.sh routes copilot/openai/openrouter/cursor to correct scripts
 #
 # No real API calls are made.  EPAM_CLI is set to the mock.
 #
@@ -52,7 +52,7 @@ _result=$(
         source /tmp/_ptc.sh
         echo "copilot=$(provider_to_cli copilot)"
         echo "openai=$(provider_to_cli openai)"
-        echo "qwen=$(provider_to_cli qwen)"
+        echo "openrouter=$(provider_to_cli openrouter)"
         echo "cursor=$(provider_to_cli cursor)"
         echo "codex=$(provider_to_cli codex)"
         # unknown provider — should fail
@@ -62,7 +62,7 @@ _result=$(
 
 assert_eq "$(echo "$_result" | grep '^copilot='   | cut -d= -f2)" "epam" "provider_to_cli copilot → epam"
 assert_eq "$(echo "$_result" | grep '^openai='    | cut -d= -f2)" "epam" "provider_to_cli openai  → epam"
-assert_eq "$(echo "$_result" | grep '^qwen='      | cut -d= -f2)" "epam" "provider_to_cli qwen    → epam"
+assert_eq "$(echo "$_result" | grep '^openrouter='      | cut -d= -f2)" "epam" "provider_to_cli openrouter    → epam"
 assert_eq "$(echo "$_result" | grep '^cursor='    | cut -d= -f2)" "epam" "provider_to_cli cursor  → epam"
 assert_eq "$(echo "$_result" | grep '^codex='     | cut -d= -f2)" "codex"  "provider_to_cli codex   → codex"
 assert_eq "$(echo "$_result" | grep '^unknown='   | cut -d= -f2)" "error" "provider_to_cli unknown → error (no silent claude fallback)"
@@ -154,7 +154,7 @@ echo ""
 # ─────────────────────────────────────────────────────────────────
 echo "5. run-agent-orchestration.sh routing"
 
-for provider in copilot openai qwen cursor; do
+for provider in copilot openai openrouter cursor; do
     expected="$SCRIPTS_DIR/$provider.sh"
     selected=$(bash -c '
         EPAM_ORCHESTRATION_PROVIDER="'"$provider"'"
@@ -163,7 +163,7 @@ for provider in copilot openai qwen cursor; do
             codemie-claude) echo "$SCRIPT_DIR/codemie-claude.sh" ;;
             copilot)        echo "$SCRIPT_DIR/copilot.sh" ;;
             openai)         echo "$SCRIPT_DIR/openai.sh" ;;
-            qwen)           echo "$SCRIPT_DIR/qwen.sh" ;;
+            openrouter)           echo "$SCRIPT_DIR/openrouter.sh" ;;
             cursor)         echo "$SCRIPT_DIR/cursor.sh" ;;
             *)              echo "$SCRIPT_DIR/claude.sh" ;;
         esac
@@ -245,8 +245,8 @@ cat > "$PRD_WITH_EST" <<'PRDJSON'
     {
       "id": "HW-004",
       "title": "Implement formatDate()",
-      "aiProvider": "qwen",
-      "model": "qwen/qwen3-coder",
+      "aiProvider": "openrouter",
+      "model": "openrouter/qwen3-coder",
       "effort": "low",
       "estimatedHours": 0.05,
       "estimatedCost": 0.0082
@@ -313,7 +313,7 @@ bash -c '
     PHASE_COST_FILE="'"$COST_JSONL2"'"
     STORY_EFFORT="low"
     STORY_TYPE="implementation"
-    RESOLVED_MODEL="qwen/qwen3-coder"
+    RESOLVED_MODEL="openrouter/qwen3-coder"
     INVOKE_MODE="epam-run"
     STORY_PROMPT_TOKENS="0"
 
@@ -337,11 +337,11 @@ rm -f "$PRD_WITH_EST" "$RESULT_JSON" "$COST_JSONL" "$COST_JSONL2"
 echo ""
 
 # ─────────────────────────────────────────────────────────────────
-# Test 9: ai-run.sh qwen path — pino lines mixed with result JSON
+# Test 9: ai-run.sh openrouter path — pino lines mixed with result JSON
 # This covers the "Invalid numeric literal at line 2, column 4" jq
 # error when epam run --json emits pino log lines alongside result.
 # ─────────────────────────────────────────────────────────────────
-echo "9. ai-run.sh qwen path: pino log lines mixed in stdout → result extracted"
+echo "9. ai-run.sh openrouter path: pino log lines mixed in stdout → result extracted"
 
 AIRUN_SCRIPT="$SCRIPTS_DIR/ai-run.sh"
 AIRUN_PROMPT=$(mktemp /tmp/airun_prompt_XXXXXX.txt)
@@ -360,8 +360,8 @@ PINOEOF
 cat <<'RESULTEOF'
 {
   "result": "slugify implemented",
-  "model": "qwen/qwen3-coder-30b-a3b-instruct",
-  "provider": "qwen",
+  "model": "openrouter/qwen3-coder-30b-a3b-instruct",
+  "provider": "openrouter",
   "usage": {
     "inputTokens": 1200,
     "outputTokens": 90,
@@ -374,7 +374,7 @@ RESULTEOF
 MOCKEOF
 chmod +x "$MOCK_EPAM_DIR/epam"
 
-airun_result=$(bash "$AIRUN_SCRIPT" --provider qwen --model "qwen/qwen3-coder-30b-a3b-instruct" \
+airun_result=$(bash "$AIRUN_SCRIPT" --provider openrouter --model "openrouter/qwen3-coder-30b-a3b-instruct" \
     <<< "implement slugify" \
     2>/dev/null \
     EPAM_CLI="$MOCK_EPAM_DIR/epam" \
@@ -386,28 +386,28 @@ airun_result=$(bash -c "
     EPAM_CLI='$MOCK_EPAM_DIR/epam'
     ORCH_JSON_RESULT='$AIRUN_ORCH_RESULT'
     export EPAM_CLI ORCH_JSON_RESULT
-    AI_PROVIDER=qwen AI_MODEL='qwen/qwen3-coder-30b-a3b-instruct' \
+    AI_PROVIDER=openrouter AI_MODEL='openrouter/qwen3-coder-30b-a3b-instruct' \
     EPAM_CLI='$MOCK_EPAM_DIR/epam' \
     ORCH_JSON_RESULT='$AIRUN_ORCH_RESULT' \
-    bash '$AIRUN_SCRIPT' --provider qwen --model 'qwen/qwen3-coder-30b-a3b-instruct' <<< 'implement slugify'
+    bash '$AIRUN_SCRIPT' --provider openrouter --model 'openrouter/qwen3-coder-30b-a3b-instruct' <<< 'implement slugify'
 " 2>/dev/null) || true
 
-assert_eq "$airun_result" "slugify implemented" "ai-run qwen+pino: result text extracted correctly"
+assert_eq "$airun_result" "slugify implemented" "ai-run openrouter+pino: result text extracted correctly"
 
 # Test 10: ORCH_JSON_RESULT file populated with normalized JSON
 if [ -f "$AIRUN_ORCH_RESULT" ] && [ -s "$AIRUN_ORCH_RESULT" ]; then
     orch_cost=$(jq -r '.cost_usd // 0' "$AIRUN_ORCH_RESULT" 2>/dev/null || echo "0")
     orch_tokens=$(jq -r '.usage.inputTokens // 0' "$AIRUN_ORCH_RESULT" 2>/dev/null || echo "0")
-    assert_eq "$orch_cost"   "0.0028" "ai-run qwen ORCH_JSON_RESULT: cost_usd = 0.0028"
-    assert_eq "$orch_tokens" "1200"   "ai-run qwen ORCH_JSON_RESULT: usage.inputTokens = 1200"
+    assert_eq "$orch_cost"   "0.0028" "ai-run openrouter ORCH_JSON_RESULT: cost_usd = 0.0028"
+    assert_eq "$orch_tokens" "1200"   "ai-run openrouter ORCH_JSON_RESULT: usage.inputTokens = 1200"
 else
-    pass "ai-run qwen ORCH_JSON_RESULT: (skipped — result file not populated in subshell)"
-    pass "ai-run qwen ORCH_JSON_RESULT tokens: (skipped)"
+    pass "ai-run openrouter ORCH_JSON_RESULT: (skipped — result file not populated in subshell)"
+    pass "ai-run openrouter ORCH_JSON_RESULT tokens: (skipped)"
 fi
 
-# Test 11: ai-run.sh qwen path — empty result → exits non-zero, no garbage output
+# Test 11: ai-run.sh openrouter path — empty result → exits non-zero, no garbage output
 echo ""
-echo "11. ai-run.sh qwen path: mock epam emitting empty JSON → exits 1"
+echo "11. ai-run.sh openrouter path: mock epam emitting empty JSON → exits 1"
 MOCK_EPAM_EMPTY_DIR=$(mktemp -d /tmp/mock_epam_empty_XXXXXX)
 cat > "$MOCK_EPAM_EMPTY_DIR/epam" <<'EMPTYEOF'
 #!/usr/bin/env bash
@@ -419,13 +419,13 @@ chmod +x "$MOCK_EPAM_EMPTY_DIR/epam"
 empty_rc=0
 empty_out=$(bash -c "
     EPAM_CLI='$MOCK_EPAM_EMPTY_DIR/epam' \
-    AI_PROVIDER=qwen \
-    bash '$AIRUN_SCRIPT' --provider qwen <<< 'prompt'
+    AI_PROVIDER=openrouter \
+    bash '$AIRUN_SCRIPT' --provider openrouter <<< 'prompt'
 " 2>/dev/null) || empty_rc=$?
 
-assert_eq "$empty_out" "" "ai-run qwen empty-result: no garbage output to stdout"
-[ "$empty_rc" -ne 0 ] && pass "ai-run qwen empty-result: exits non-zero" \
-                       || fail "ai-run qwen empty-result: exits non-zero (got $empty_rc)"
+assert_eq "$empty_out" "" "ai-run openrouter empty-result: no garbage output to stdout"
+[ "$empty_rc" -ne 0 ] && pass "ai-run openrouter empty-result: exits non-zero" \
+                       || fail "ai-run openrouter empty-result: exits non-zero (got $empty_rc)"
 
 rm -f "$AIRUN_PROMPT" "$AIRUN_ORCH_RESULT"
 rm -rf "$MOCK_EPAM_DIR" "$MOCK_EPAM_EMPTY_DIR"

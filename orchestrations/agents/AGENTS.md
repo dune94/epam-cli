@@ -14634,3 +14634,81 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: failed
 - **Log**: logs/claude_outputs/MOCK3-2_*.log
 
+## MOCK3-2: The departure board omits the final stop
+- **Date**: 2026-08-28 11:28:51
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-2_*.log
+
+## MOCK3-1: Riders aged exactly 65 are charged the adult fare
+- **Date**: 2026-08-28 14:58:27
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-1_*.log
+
+## MOCK3-2: The departure board omits the final stop
+- **Date**: 2026-08-28 14:58:27
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-2_*.log
+
+## MOCK3-2: The departure board omits the final stop
+- **Date**: 2026-08-28 15:14:54
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-2_*.log
+
+## MOCK3-1: Riders aged exactly 65 are charged the adult fare
+- **Date**: 2026-08-28 15:14:54
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-1_*.log
+
+## MOCK3-1: Riders aged exactly 65 are charged the adult fare
+- **Date**: 2026-08-28 15:34:28
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK3-1_*.log
+
+## MOCK3-1: Riders aged exactly 65 are charged the adult fare
+- **Date**: 2026-08-28 15:37:15
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK3-1_*.log
+
+## MOCK3-2: The departure board omits the final stop
+- **Date**: 2026-08-28 15:37:33
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK3-2_*.log
+
+## MOCK3-2: The departure board omits the final stop
+- **Date**: 2026-08-28 15:40:19
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK3-2_*.log
+
+## MOCK3-2: The departure board omits the final stop
+- **Date**: 2026-08-28 15:54:18
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK3-2_*.log
+
+## MOCK3-1: Riders aged exactly 65 are charged the adult fare
+- **Date**: 2026-08-28 15:54:33
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK3-1_*.log
+
+## MOCK3-1: Riders aged exactly 65 are charged the adult fare
+- **Date**: 2026-08-29 16:46:15
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-1_*.log
+
+## MOCK3-2: The departure board omits the final stop
+- **Date**: 2026-08-29 16:46:21
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-2_*.log
+

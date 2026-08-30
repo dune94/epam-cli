@@ -1,0 +1,25 @@
+{
+  "_what": "What each codeline IS and what an agent working inside it needs to know that the source does not say. Produced by the codeline-discovery agent during THIS run and rewritten every run — never accumulated, so nothing here is older than the run that wrote it. The engine splits this per codeline into each worktree's .epam/.",
+  "_shape": "Codeline names are TOP-LEVEL keys, because the engine extracts one with jq '.[$cl]'. Nesting them under another key parses fine and yields nothing for every codeline.",
+  "gotransit": {
+    "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
+    "facts": [
+      {
+        "text": "A pre-commit hook rejects commits unless the current branch name matches ^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$",
+        "source": ".husky/pre-commit"
+      },
+      {
+        "text": "lint-staged runs `npm run check-types`, eslint, and prettier on staged src/**/*.ts(x) and js files before a commit is allowed to complete",
+        "source": ".lintstagedrc.js"
+      },
+      {
+        "text": "Tests run via `jest` (next/jest config) with jsdom test environment, and CI/coverage runs enforce a global coverage threshold of 60% for branches, functions, lines, and statements",
+        "source": "jest.config.js (scripts.test = \"jest\"; coverageThreshold.global = {branches:60,functions:60,lines:60,statements:60})"
+      },
+      {
+        "text": "Node version is pinned to v22 for this project",
+        "source": ".nvmrc"
+      }
+    ]
+  }
+}

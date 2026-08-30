@@ -1,0 +1,6 @@
+{"storyId":"MOCK3-2","failureClass":"unknown","model":"claude-haiku-4-5-20251001","attempt":0,"exitCode":1,"rawBytes":0,"outputTokens":2084,"maxIterations":19,"timestamp":"2026-08-28T19:33:13Z"}
+{"storyId":"MOCK3-1","failureClass":"unknown","model":"claude-haiku-4-5-20251001","attempt":0,"exitCode":1,"rawBytes":0,"outputTokens":1591,"maxIterations":12,"timestamp":"2026-08-28T19:33:32Z"}
+{"storyId":"MOCK3-2","failureClass":"unknown","model":"claude-haiku-4-5-20251001","attempt":1,"exitCode":1,"rawBytes":0,"outputTokens":10449,"maxIterations":19,"timestamp":"2026-08-28T19:34:39Z"}
+{"storyId":"MOCK3-1","failureClass":"unknown","model":"claude-haiku-4-5-20251001","attempt":1,"exitCode":1,"rawBytes":0,"outputTokens":1927,"maxIterations":12,"timestamp":"2026-08-28T19:36:13Z"}
+{"storyId":"MOCK3-2","failureClass":"unknown","model":"claude-sonnet-5","attempt":2,"exitCode":1,"rawBytes":0,"outputTokens":11911,"maxIterations":24,"timestamp":"2026-08-28T19:36:53Z"}
+{"storyId":"MOCK3-2","failureClass":"unknown","model":"claude-sonnet-5","attempt":3,"exitCode":1,"rawBytes":0,"outputTokens":287,"maxIterations":19,"timestamp":"2026-08-28T19:39:56Z"}

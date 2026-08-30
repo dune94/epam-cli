@@ -632,7 +632,7 @@ while IFS= read -r sid; do
       *qwen3.7-plus*)  _model_alias="qwen-plus"  ;;
       *qwen3.6-flash*) _model_alias="qwen-flash" ;;
       *qwen3-coder*)   _model_alias="qwen-coder" ;;
-      *qwen*)          _model_alias="qwen"       ;;
+      *qwen*)          _model_alias="openrouter"       ;;
       # DeepSeek via OpenRouter — tracked separately from Qwen/Claude tiers
       *deepseek*)      _model_alias="deepseek"   ;;
       # OpenAI via OpenRouter — separate buckets per model family
@@ -645,7 +645,7 @@ while IFS= read -r sid; do
   else
     # Infer from effort (mirrors claude.sh resolve_model_settings logic)
     case "$f_effort" in
-      low)    _model_alias="qwen"   ;;
+      low)    _model_alias="openrouter"   ;;
       high)   _model_alias="sonnet" ;;
       *)      _model_alias="sonnet" ;;
     esac
@@ -784,7 +784,7 @@ while IFS= read -r sid; do
   t_start=$(date +%s%3N)
   cpa_raw=$(echo "$inference_input" | \
     CLAUDE_CMD="${CLAUDE_CMD:-claude}" \
-    AI_PROVIDER="${CPA_PROVIDER:-${AI_PROVIDER:-qwen}}" \
+    AI_PROVIDER="${CPA_PROVIDER:-${AI_PROVIDER:-openrouter}}" \
     AI_MODEL="${CPA_MODEL:-${AI_MODEL:-${EPAM_MODEL:-}}}" \
     "$NODE_CMD" "$LIB_DIR/cpa-inference.js" 2>"$_cpa_err" || echo "")
   t_end=$(date +%s%3N)

@@ -1,0 +1,51 @@
+{
+  "runId": "20260828T172102Z",
+  "phase": "core",
+  "startedAt": "2026-08-28T18:07:45.608Z",
+  "stories": [
+    {
+      "storyId": "MOCK3-1",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "notes": "",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Fixed site confirmed in src/fares.ts::fareFor line 10: uses > (strict greater-than) instead of >= (greater-than-or-equal), excluding age 65 from concession fare eligibility. Comment on line 7 correctly states 'Riders aged 65 AND OVER', confirming this is a boundary bug. The change to >= aligns the code with the specification.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-28T18:14:24.517Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Kept openspec's AC1 and AC2—solid boundary tests for the age 65 threshold. Decomposed openspec's vague AC3 into four specific, testable criteria: AC3 tests the boundary immediately above 65 (age 66) to confirm the fix doesn't break existing senior fare logic; AC4 tests child concessions (age 12 < 13) to ensure child fares are unchanged; AC5 tests regular adult fares (age 30 in the 18–64 range) to ensure base fare logic is unchanged; AC6 tests pass-holder logic (age 65 with pass) to ensure fare exemption persists regardless of the age boundary fix. Together these provide comprehensive regression coverage while remaining observable and testable.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-28T18:15:52.358Z"
+        }
+      ]
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1,
+      "speckit": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 2
+  },
+  "completedAt": "2026-08-28T18:16:58.088Z",
+  "storyCount": 1
+}

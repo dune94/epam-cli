@@ -1,0 +1,20 @@
+{
+  "message_id": "msg-1787946955545",
+  "timestamp": "2026-08-28T15:55:55-04:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "schedule-display-engineer",
+  "type": "approval",
+  "priority": "normal",
+  "subject": "Code review approved: MOCK3-2",
+  "story_id": "MOCK3-2",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review passed for story MOCK3-2. No issues found. Ready to proceed.",
+    "story_id": "MOCK3-2",
+    "phase_id": "core",
+    "data": {}
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

@@ -102,7 +102,7 @@ export class TracedProvider implements LLMProvider {
       const response = await this.inner.complete(request);
       const latencyMs = Date.now() - start;
       // REAL BILLED COST WINS. Providers that report what was actually charged
-      // (OpenRouter via `usage: { include: true }` — see QwenProvider) are
+      // (OpenRouter via `usage: { include: true }` — see OpenRouterProvider) are
       // authoritative; calculateCost is only an estimate, and returns 0 for any
       // model absent from MODEL_PRICING (pricing.ts:104). That silently reported
       // $0 for moonshotai/kimi-k3 while it burned 34,511 in / 3,088 out — and
@@ -171,7 +171,7 @@ export class TracedProvider implements LLMProvider {
       const response = await this.inner.stream(request, wrappedHandler);
       const latencyMs = Date.now() - start;
       // REAL BILLED COST WINS. Providers that report what was actually charged
-      // (OpenRouter via `usage: { include: true }` — see QwenProvider) are
+      // (OpenRouter via `usage: { include: true }` — see OpenRouterProvider) are
       // authoritative; calculateCost is only an estimate, and returns 0 for any
       // model absent from MODEL_PRICING (pricing.ts:104). That silently reported
       // $0 for moonshotai/kimi-k3 while it burned 34,511 in / 3,088 out — and

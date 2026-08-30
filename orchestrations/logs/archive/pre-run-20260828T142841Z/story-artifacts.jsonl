@@ -1,0 +1,16 @@
+{"storyId":"MOCK3-1","phase":"core","status":"attempt","elapsedMinutes":0.01,"costUsd":0,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-28T14:13:39Z"}
+{"storyId":"MOCK3-1","phase":"core","status":"attempt","elapsedMinutes":0.01,"costUsd":0,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-28T14:13:46Z"}
+{"storyId":"MOCK3-2","phase":"core","status":"attempt","elapsedMinutes":0,"costUsd":0,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-28T14:13:48Z"}
+{"storyId":"MOCK3-1","phase":"core","status":"attempt","elapsedMinutes":0,"costUsd":0,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-28T14:13:53Z"}
+{"storyId":"MOCK3-2","phase":"core","status":"attempt","elapsedMinutes":0,"costUsd":0,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-28T14:13:54Z"}
+{"storyId":"MOCK3-1","phase":"core","status":"attempt","elapsedMinutes":0,"costUsd":0,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-28T14:13:59Z"}
+{"storyId":"MOCK3-2","phase":"core","status":"attempt","elapsedMinutes":0,"costUsd":0,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-28T14:14:01Z"}
+{"storyId":"MOCK3-1","phase":"core","status":"attempt","elapsedMinutes":0.01,"costUsd":0,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-28T14:14:06Z"}
+{"storyId":"MOCK3-2","phase":"core","status":"attempt","elapsedMinutes":0,"costUsd":0,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-28T14:14:07Z"}
+{"storyId":"MOCK3-1","phase":"core","status":"attempt","elapsedMinutes":0,"costUsd":0,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-28T14:14:12Z"}
+{"storyId":"MOCK3-2","phase":"core","status":"attempt","elapsedMinutes":0,"costUsd":0,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-28T14:14:14Z"}
+{"storyId":"MOCK3-1","phase":"core","status":"attempt","elapsedMinutes":0.01,"costUsd":0,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-28T14:14:19Z"}
+{"storyId":"MOCK3-2","phase":"core","status":"attempt","elapsedMinutes":0,"costUsd":0,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-28T14:14:20Z"}
+{"storyId":"MOCK3-2","phase":"core","status":"attempt","elapsedMinutes":0.01,"costUsd":0,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-28T14:14:27Z"}
+{"storyId":"MOCK3-1","phase":"core","status":"failed","elapsedMinutes":0.83,"costUsd":0,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-28T14:14:27Z"}
+{"storyId":"MOCK3-2","phase":"core","status":"failed","elapsedMinutes":0.81,"costUsd":0,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-28T14:14:35Z"}

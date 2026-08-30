@@ -425,7 +425,11 @@ case "${EPAM_ORCHESTRATION_PROVIDER:-${CLAUDE_CMD}}" in
     codemie-claude) CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
     copilot)        CLAUDE_SH="$SCRIPT_DIR/copilot.sh" ;;
     openai)         CLAUDE_SH="$SCRIPT_DIR/openai.sh" ;;
-    qwen)           CLAUDE_SH="$SCRIPT_DIR/qwen.sh" ;;
+    # OPENROUTER REPLACED OPENROUTER ENTIRELY. qwen.sh was a ten-line shim that exec'd claude.sh, so
+    # this was always an alias. What made the rename urgent is that the dispatch REJECTED
+    # openrouter, so the value the operator asked for could not be set at all: a run launched
+    # with it died at startup with "Unknown EPAM_ORCHESTRATION_PROVIDER 'openrouter'".
+    openrouter)     CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
     cursor)         CLAUDE_SH="$SCRIPT_DIR/cursor.sh" ;;
     codex)          CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
     # Plain Claude Code, the same maintained script every other provider uses. Reached by
@@ -434,7 +438,7 @@ case "${EPAM_ORCHESTRATION_PROVIDER:-${CLAUDE_CMD}}" in
     # profile and would demand credentials the mock has no business holding.
     claude)         CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
     *)
-        error "Unknown EPAM_ORCHESTRATION_PROVIDER '${EPAM_ORCHESTRATION_PROVIDER:-}'. Set it to one of: qwen|openai|copilot|cursor|codex|codemie-claude|claude in your .env file."
+        error "Unknown EPAM_ORCHESTRATION_PROVIDER '${EPAM_ORCHESTRATION_PROVIDER:-}'. Set it to one of: openrouter|openai|copilot|cursor|codex|codemie-claude|claude in your .env file."
         exit 1
         ;;
 esac
@@ -511,7 +515,7 @@ export PHASE
 [ -n "${OPENROUTER_BASE_URL:-}" ] && export OPENROUTER_BASE_URL
 [ -n "${OPENROUTER_API_KEY:-}" ] && export OPENROUTER_API_KEY
 [ -n "${EPAM_API_KEY_OPENROUTER:-}" ] && export EPAM_API_KEY_OPENROUTER
-[ -n "${EPAM_QWEN_MODEL_OVERRIDE:-}" ] && export EPAM_QWEN_MODEL_OVERRIDE
+[ -n "${EPAM_OPENROUTER_MODEL_OVERRIDE:-}" ] && export EPAM_OPENROUTER_MODEL_OVERRIDE
 # Propagate MiniMax key to all subprocesses
 [ -n "${MINIMAX_API_KEY:-}" ] && export MINIMAX_API_KEY
 [ -n "${EPAM_API_KEY_MINIMAX:-}" ] && export EPAM_API_KEY_MINIMAX
@@ -526,8 +530,9 @@ if [ -n "${CLAUDE_CMD:-}" ]; then
     CLAUDE_CMD="$CLAUDE_CMD"
 elif [ "${EPAM_ORCHESTRATION_PROVIDER:-}" = "codex" ]; then
     CLAUDE_CMD="codex"
-elif [ "${EPAM_ORCHESTRATION_PROVIDER:-}" = "qwen" ]; then
-    CLAUDE_CMD="qwen"
+# THE qwen BRANCH IS GONE, NOT RENAMED. It selected a `qwen` BINARY; openrouter never had one
+# — qwen.sh was a shim that exec'd claude.sh — so the correct replacement is the default below,
+# which is claude. Renaming it would have named a binary that does not exist either.
 else
     CLAUDE_CMD="claude"
 fi
@@ -1137,7 +1142,7 @@ resolve_prompt_provider() {
         return
     fi
     case "$(basename "$CLAUDE_CMD")" in
-        codex|openai|qwen|cursor|copilot|codemie-claude) echo "$(basename "$CLAUDE_CMD")" ;;
+        codex|openai|openrouter|cursor|copilot|codemie-claude) echo "$(basename "$CLAUDE_CMD")" ;;
         *) echo "claude" ;;
     esac
 }
@@ -8324,7 +8329,7 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
                 # silently lose tool access the same way codeline-bridge-agent
                 # did. See gate-finding-analyst-dual-mechanism.test.ts.
                 _lga_raw="$(echo "$_lga_prompt" | \
-                    timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-qwen}" \
+                    timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-openrouter}" \
                         --model "${_lga_model}" \
                         --json - 2>>"$_lint_rem_log" || echo "")"
                 if [ -n "$_lga_raw" ]; then
@@ -8375,7 +8380,7 @@ if m:
                         rm -f "$_rp_vals"
                     fi
                     _lrem_raw="$(echo "$_lrem_prompt" | \
-                        timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-qwen}" \
+                        timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-openrouter}" \
                             --model "${_lrem_model}" \
                             --json - 2>>"$_lint_rem_log" || echo "")"
                     if [ -n "$_lrem_raw" ]; then
@@ -8400,13 +8405,13 @@ if m:
                 # Agent 3: profile-augmentor — 1 retry on empty output
                 info "  [lint-gate:augmentor] Recording lint anti-pattern in profile..."
                 _laug_raw="$(echo "$_lint_finding_raw" | \
-                    timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-qwen}" \
+                    timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-openrouter}" \
                         --model "$(seam_model_or_fail "gate-finding-analyst")" \
                         --json - 2>>"$_lint_rem_log" || echo "")"
                 if [ -z "$_laug_raw" ]; then
                     warning "  [lint-gate:augmentor] attempt 1 returned no output — retrying"
                     echo "$_lint_finding_raw" | \
-                        timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-qwen}" \
+                        timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-openrouter}" \
                             --model "$(seam_model_or_fail "story-ac-remediator")" \
                             --json - 2>>"$_lint_rem_log" || true
                 fi

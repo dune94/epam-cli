@@ -32,7 +32,7 @@ const AI_RUNNER_CMD = process.env.AI_RUNNER_CMD || path.resolve(__dirname, '..',
 // Default provider: qwen (OpenRouter). Override via CPA_PROVIDER or AI_PROVIDER env vars.
 const AI_PROVIDER = process.env.AI_PROVIDER
   || process.env.EPAM_ORCHESTRATION_PROVIDER
-  || (/codex$/.test(CLAUDE_CMD) ? 'codex' : 'qwen');
+  || (/codex$/.test(CLAUDE_CMD) ? 'codex' : 'openrouter');
 const TIMEOUT_MS = parseInt(process.env.CPA_TIMEOUT_MS || '120000', 10);
 
 // ── Read stdin ─────────────────────────────────────────────────────────────

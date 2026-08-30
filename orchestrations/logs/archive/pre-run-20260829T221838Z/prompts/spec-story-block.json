@@ -1,0 +1,35 @@
+{
+  "$why": [
+    "Moved out of spec-mode-runner.js on 2026-08-16. The labelled STORY block handed to the spec",
+    "agents, and the retrieved-documents notice that goes with it.",
+    "",
+    "TWO BODIES, because the notice is a prompt in its own right and was nested inside one of the",
+    "outer block's interpolations. A first attempt mapped every ${...} to a placeholder and",
+    "produced a template that looked complete while that paragraph stayed in the script — it",
+    "passed a syntax check and a module load without complaint. A half-migration is the failure",
+    "this whole exercise exists to end."
+  ],
+  "description": "The labelled story block handed to a spec agent, and its retrieved-documents notice.",
+  "id": "spec-story-block",
+  "seams": [
+    "ticket-links"
+  ],
+  "placeholders": [
+    "__PERSONA__",
+    "__TITLE__",
+    "__DESCRIPTION__",
+    "__COMPONENTS__",
+    "__DECLARED_FILES__",
+    "__LINK_BLOCK__",
+    "__COMMENT_BLOCK__",
+    "__RETRIEVED_DOCS__",
+    "__DOC_PATHS__"
+  ],
+  "version": 1,
+  "bodies": {
+    "block": "__PERSONA__STORY\nTitle: __TITLE__\nDescription: __DESCRIPTION__\nComponents: __COMPONENTS__\nDeclared files: __DECLARED_FILES__\n\nLINKS FOUND IN THIS TICKET:\n__LINK_BLOCK__\n\nCOMMENT THREAD (context for judging relevance — a link's surrounding discussion often says why it was posted):\n__COMMENT_BLOCK__\n__RETRIEVED_DOCS__",
+    "retrieved_docs": "\nALREADY RETRIEVED — these documents have been fetched for you and written to disk. Read them\nwith read_file rather than fetching them again; the text is the same and it costs you nothing:\n__DOC_PATHS__\nA document listed here that you did not read is a document you cannot quote.\n"
+  },
+  "derivedFromSha256": "372ceec07f5d6c695b43581ceea5399ba5e650a4a58d3dfca5e1fc088bf64b9e",
+  "authority": "project"
+}

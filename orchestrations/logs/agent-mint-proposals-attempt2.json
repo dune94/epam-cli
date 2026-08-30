@@ -1,21 +1,19 @@
 {
   "attempt": 2,
-  "proposed": 2,
+  "proposed": 1,
   "proposals": [
     {
-      "name": "fare-boundary-engineer",
+      "name": "stand-in-agent-mint",
       "kind": "implementer",
-      "codeline": "*",
-      "systemPrompt": "You are a TypeScript engineer fixing fare-calculation logic in the mocka codeline (vitest + typescript, per its package.json). Your owned file is src/fares.ts, specifically the fareFor() function, which currently branches on rider.age using `if (rider.age > 65) return CONCESSION_FARE_CENTS;` before falling through to `if (rider.age < 13) ...` and finally `return BASE_FARE_CENTS`. MOCK3-1 reports that a rider aged exactly 65 is charged BASE_FARE_CENTS (350 cents) instead of CONCESSION_FARE_CENTS (175 cents) — treat this as a lead to confirm by reading the current source yourself, not as settled fact. If confirmed, correct the boundary comparison so age-65 riders receive the concession fare, per the module's own doc comment '/** Riders aged 65 AND OVER pay the concession fare. */', while preserving existing behavior for hasPass, age<13, and age>65 riders. Keep the fix minimal and scoped to the comparison operator/logic — do not restructure fareFor(), totalFor(), or the Rider type beyond what the fix requires. Tests for this module live in test/fares.test.ts and run via `npm test` (vitest run, declared in package.json); a separate role owns writing and editing that file and any other test file — you must not create, edit, or otherwise touch test files, only src/fares.ts. Run `npm run build` (tsc --noEmit) to confirm your change typechecks before handing off.",
-      "rationale": "MOCK3-1 requires an actual code change to the fare-rule boundary in src/fares.ts within the mocka codeline, and only an implementer can author that fix."
-    },
-    {
-      "name": "departure-board-engineer",
-      "kind": "implementer",
-      "codeline": "*",
-      "systemPrompt": "You are a TypeScript engineer fixing departure-board rendering logic in the mockb codeline (vitest + typescript, per its package.json). Your owned file is src/schedule.ts, specifically the formatStops() function, which currently loops `for (let i = 0; i < stops.length - 1; i++)`. MOCK3-2 reports that this bound excludes the final stop from the rendered output (a three-stop line shows only two) — treat this as a lead to confirm by reading the current source yourself, not as settled fact. If confirmed, adjust the loop bound so every stop, including the last, is included in the joined output, without altering the `${name} (${minutes}m)` formatting or the ' -> ' join separator. Do not modify totalMinutes(), which reads stops[stops.length - 1].minutes directly and is reported to already be correct — verify that independently rather than assuming it. Keep the change minimal and scoped to the loop bound in formatStops(). Tests for this module live in test/schedule.test.ts and run via `npm test` (vitest run, declared in package.json); a separate role owns writing and editing that file and any other test file — you must not create, edit, or otherwise touch test files, only src/schedule.ts. Run `npm run build` (tsc --noEmit) to confirm your change typechecks before handing off.",
-      "rationale": "MOCK3-2 requires an actual code change to the stop-rendering loop bound in src/schedule.ts within the mockb codeline, and only an implementer can author that fix."
+      "codeline": "stand-in reply for the agent-mint seam, long enough to satisfy the contract's declared minimum so the consumer judges the WIRING rather than the prose",
+      "systemPrompt": "stand-in reply for the agent-mint seam, long enough to satisfy the contract's declared minimum so the consumer judges the WIRING rather than the prose",
+      "rationale": "stand-in reply for the agent-mint seam, long enough to satisfy the contract's declared minimum so the consumer judges the WIRING rather than the prose"
     }
   ],
-  "refused": []
+  "refused": [
+    {
+      "name": "stand-in-agent-mint",
+      "reason": "the name \"stand-in-agent-mint\" resolves to no seam, so nothing can run this role. An agent of kind \"implementer\" must be named ending in \"-engineer\" or \"-fixer\"."
+    }
+  ]
 }

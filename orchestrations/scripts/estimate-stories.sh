@@ -172,9 +172,9 @@ declare -A PRICING_CACHED=( [high]=1.50 [medium]=0.30 [low]=0.08 )
 declare -A PRICING_OUTPUT=( [high]=75.00 [medium]=15.00 [low]=4.00 )
 
 # Qwen effort-tier fallback (only used when model not in model-pricing.json)
-declare -A QWEN_PRICING_INPUT=( [high]=1.25 [medium]=0.40 [low]=0.1875 )
-declare -A QWEN_PRICING_CACHED=( [high]=0.25 [medium]=0.08 [low]=0.0375 )
-declare -A QWEN_PRICING_OUTPUT=( [high]=3.75 [medium]=1.60 [low]=1.125 )
+declare -A OPENROUTER_PRICING_INPUT=( [high]=1.25 [medium]=0.40 [low]=0.1875 )
+declare -A OPENROUTER_PRICING_CACHED=( [high]=0.25 [medium]=0.08 [low]=0.0375 )
+declare -A OPENROUTER_PRICING_OUTPUT=( [high]=3.75 [medium]=1.60 [low]=1.125 )
 
 # lookup_model_pricing <model-name>
 # Returns "input_per_M|cached_per_M|output_per_M" reading from model-pricing.json.
@@ -588,10 +588,10 @@ while IFS= read -r sid; do
     else
         # Fallback: effort-tier pricing keyed by provider
         case "$s_provider" in
-            qwen)
-                price_input="${QWEN_PRICING_INPUT[$effort]}"
-                price_cached="${QWEN_PRICING_CACHED[$effort]}"
-                price_output="${QWEN_PRICING_OUTPUT[$effort]}"
+            openrouter)
+                price_input="${OPENROUTER_PRICING_INPUT[$effort]}"
+                price_cached="${OPENROUTER_PRICING_CACHED[$effort]}"
+                price_output="${OPENROUTER_PRICING_OUTPUT[$effort]}"
                 ;;
             *)
                 price_input="${PRICING_INPUT[$effort]}"
@@ -637,7 +637,7 @@ while IFS= read -r sid; do
     cache_pct=$(echo "scale=0; ($cache_ratio * 100) / 1" | bc)
 
     # Model name by effort (and provider)
-    if [ "$s_provider" = "qwen" ]; then
+    if [ "$s_provider" = "openrouter" ]; then
         case "$effort" in
             low)    model_name="Qwen3.6 Flash" ;;
             medium) model_name="Qwen3.7 Plus" ;;

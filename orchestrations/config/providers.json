@@ -1,7 +1,7 @@
 {
   "$comment": "THE PROVIDERS THIS ENGINE KNOWS. Data, not code: preflight validates a PRD's aiProvider against `known`, and nothing in the pipeline carries a vendor name as a literal. Adding a provider is an edit here and nowhere else. Extracted from preflight-check.sh on 2026-08-16, where the same set lived as a Python set literal inside an embedded program — a place no other check could read and no one would think to update.",
   "known": [
-    "qwen",
+    "openrouter",
     "openai",
     "codex",
     "cursor",
@@ -13,7 +13,7 @@
   ],
   "$effortBadgeComment": "Providers whose viewer badge is driven by the effort tier, so effort=low renders as the cheapest badge. Preflight warns when a story on one of these is assigned effort=low, because the badge then misreports the model actually doing the work.",
   "effortBadged": [
-    "qwen",
+    "openrouter",
     "openai",
     "anthropic",
     "claude",
@@ -21,7 +21,7 @@
   ],
   "$modelRulesComment": "Per-provider rules about the MODEL a story may be assigned. `requiresSlug` means the model must be a routed slug carrying a '/' — an assignment without one names a model the router cannot reach, and the story fails with an empty result rather than a routing error. `knownModels` is advisory: an unlisted model warns, because a new model appearing is normal and a typo looks the same. Absent from this map means no rule.",
   "modelRules": {
-    "qwen": {
+    "openrouter": {
       "requiresSlug": true
     },
     "minimax": {

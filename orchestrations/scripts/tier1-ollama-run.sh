@@ -11,7 +11,7 @@
 # without spending OpenRouter credits.
 #
 # What this validates beyond the mock:
-#   • QwenProvider model-name override (EPAM_QWEN_MODEL_OVERRIDE=qwen2.5:1.5b)
+#   • QwenProvider model-name override (EPAM_OPENROUTER_MODEL_OVERRIDE=qwen2.5:1.5b)
 #   • Tool-call parsing with real Ollama streaming responses
 #   • RalphWiggumLoop fires and recovers when model writes bad code
 #   • AgentRunner handles slow responses (Ollama ~2–5 tok/s on quiet machine)
@@ -79,7 +79,7 @@ success "hello-world reset to fixture-v1"
 # ── 4. Run the pipeline ────────────────────────────────────────────────────────
 info "Launching pipeline (log: $LOG_FILE)"
 info "  OPENROUTER_BASE_URL=$OLLAMA_URL"
-info "  EPAM_QWEN_MODEL_OVERRIDE=$OLLAMA_MODEL"
+info "  EPAM_OPENROUTER_MODEL_OVERRIDE=$OLLAMA_MODEL"
 info "  RalphWiggumLoop: ENABLED (1 agent, 5-min timeout)"
 info "  Expected runtime: 10–60 min on busy machine"
 echo ""
@@ -95,7 +95,7 @@ pre_run_reset_or_abort --prd "$PRD_FILE"
 OPENROUTER_API_KEY="ollama" \
 OPENROUTER_BASE_URL="$OLLAMA_URL" \
 EPAM_API_KEY_OPENROUTER="ollama" \
-EPAM_QWEN_MODEL_OVERRIDE="$OLLAMA_MODEL" \
+EPAM_OPENROUTER_MODEL_OVERRIDE="$OLLAMA_MODEL" \
 PRD_FILE="$PRD_FILE" \
 SKIP_REGRESSION_GUARD=true \
 SKIP_CPA=1 \

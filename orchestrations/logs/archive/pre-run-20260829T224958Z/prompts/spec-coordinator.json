@@ -1,0 +1,31 @@
+{
+  "$why": [
+    "Moved out of spec-mode-runner.js on 2026-08-16.",
+    "",
+    "The spec coordinator decides when a phase's specification is DONE, so its wording sets",
+    "the bar every story is admitted against.",
+    "",
+    "The schema example said a ticket-shaped id. A DELIBERATE change on migration, not a byte-preserving",
+    "move: a ticket-shaped id in a generic template is a fake ticket the model can anchor on, and",
+    "the project rule forbidding ticket ids in templates is right to catch it. Replaced with the",
+    "placeholder the field actually takes."
+  ],
+  "body": "__PROFILE_PREFIX__You are the EPAM CLI specification coordinator agent for phase __PHASE__.\n\nDecide which specification agents should run for each story below.\nAvailable agents and their roles:\n  - openspec: Elaborates requirements — refines AC, proposes story splits, adds technical depth\n  - speckit: Reviews & hardens — adds testability criteria, security checks, edge cases, flags gaps\n\nAgent collaboration model:\n  - If both are assigned, openspec runs FIRST, then speckit reviews openspec's output\n  - Assign both for complex/critical stories\n  - Assign only openspec for simple elaboration\n  - Assign only speckit for stories that just need test/security hardening\n\nRespond with raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:\n[\n  {\"storyId\":\"<storyId>\",\"agents\":[\"openspec\",\"speckit\"],\"notes\":\"reason\",\"priority\":\"high\"}\n]\nIf a story does not need spec work, provide an empty agents array.\n\nStories JSON:\n__STORIES_PAYLOAD__\n",
+  "description": "Coordinate the specification pass across a phase and decide whether it is complete.",
+  "id": "spec-coordinator",
+  "placeholders": [
+    "__PHASE__",
+    "__PROFILE_PREFIX__",
+    "__STORIES_PAYLOAD__"
+  ],
+  "version": 1,
+  "seams": [
+    "spec-coordinator"
+  ],
+  "mayBeEmpty": [
+    "__PROFILE_PREFIX__"
+  ],
+  "$whyMayBeEmpty": "Declared 2026-08-27 by sweeping the CLASS rather than the instance, after three runs died on it one placeholder at a time. Every call site for these writes an explicit empty branch — the story is not being split, attempt one carries no forced-retry note, no documentation was fetched, the persona prefix is optional — so absence is a real state, which is the renderer's own test. Placeholders supplied by a lookup that may FAIL (`x || ''`) are deliberately NOT here: for those, empty means broken, and declaring them would hide the blank-brief defect the renderer exists to surface. Unanimity is required — one deliberate branch among several defensive lookups is not a licence.",
+  "derivedFromSha256": "9a75a0e7028ce1008af5ec35812924d6d2d09fd6978d356127b411cfb30b5538",
+  "authority": "project"
+}

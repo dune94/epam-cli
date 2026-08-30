@@ -1,50 +1,14 @@
 {
   "minted": [
     {
-      "name": "fare-rules-engineer",
+      "name": "stand-in-engineer",
       "kind": "implementer",
-      "codeline": "",
-      "rationale": "MOCK3-1 requires an actual code change to the age boundary in mocka's fare logic, and no existing canonical role owns writing to src/fares.ts.",
+      "codeline": "stand-in reply for the agent-mint seam, long enough to satisfy the contract's declared minimum so the consumer judges the WIRING rather than the prose",
+      "rationale": "stand-in reply for the agent-mint seam, long enough to satisfy the contract's declared minimum so the consumer judges the WIRING rather than the prose",
       "surfaces": [
         "profiles.json",
         "kb",
         "project-roles",
-        "project-profiles"
-      ]
-    },
-    {
-      "name": "schedule-display-engineer",
-      "kind": "implementer",
-      "codeline": "",
-      "rationale": "MOCK3-2 requires an actual code change to the stop-rendering loop in mockb's schedule module, and no existing canonical role owns writing to src/schedule.ts.",
-      "surfaces": [
-        "profiles.json",
-        "kb",
-        "project-roles",
-        "project-profiles"
-      ]
-    },
-    {
-      "name": "mocka-detective",
-      "kind": "investigator",
-      "codeline": "mocka",
-      "rationale": "mocka's fare boundary bug needs its own reader to confirm the exact comparison operator and existing test coverage before fare-rules-engineer edits src/fares.ts.",
-      "surfaces": [
-        "profiles.json",
-        "kb",
-        "project-investigators",
-        "project-profiles"
-      ]
-    },
-    {
-      "name": "mockb-detective",
-      "kind": "investigator",
-      "codeline": "mockb",
-      "rationale": "mockb's stop-rendering bug needs its own reader to confirm the loop-bound mismatch and existing test coverage before schedule-display-engineer edits src/schedule.ts.",
-      "surfaces": [
-        "profiles.json",
-        "kb",
-        "project-investigators",
         "project-profiles"
       ]
     }
@@ -52,14 +16,10 @@
   "rejected": [],
   "unchanged": [],
   "projectRoles": [
-    "fare-rules-engineer",
-    "schedule-display-engineer"
+    "stand-in-engineer"
   ],
-  "projectInvestigators": [
-    "mocka-detective",
-    "mockb-detective"
-  ],
-  "proposed": 4,
+  "projectInvestigators": [],
+  "proposed": 1,
   "rejectedAcrossAttempts": [],
   "attempts": 1,
   "protectedRoles": 21

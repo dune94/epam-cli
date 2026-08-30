@@ -110,7 +110,7 @@ function globToRegExp(glob: string): RegExp {
  * takes priority, then EPAM_TEMPERATURE (set per-story or project-wide by the
  * orchestration layer — e.g. 0 for reduced token-selection variance), then the
  * provider's own default. Mirrors the same request-field-then-env-var-then-default
- * pattern already used for reasoningEffort (see QwenProvider/MiniMaxProvider's
+ * pattern already used for reasoningEffort (see OpenRouterProvider/MiniMaxProvider's
  * resolveReasoningEffort), so both knobs are wired consistently.
  *
  * EPAM_TEMPERATURE_MODEL_PATTERN (optional, pipe-separated globs, e.g.

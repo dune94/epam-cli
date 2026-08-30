@@ -9214,7 +9214,7 @@ function resolvePromptProvider(env = process.env) {
     || (/codex$/.test(env.CLAUDE_CMD || '') ? 'codex' : null);
   if (!provider) {
     throw new Error(
-      'No AI provider configured. Set AI_PROVIDER or EPAM_ORCHESTRATION_PROVIDER (e.g. EPAM_ORCHESTRATION_PROVIDER=qwen).'
+      'No AI provider configured. Set AI_PROVIDER or EPAM_ORCHESTRATION_PROVIDER (e.g. EPAM_ORCHESTRATION_PROVIDER=openrouter).'
     );
   }
   return provider;

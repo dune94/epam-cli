@@ -1,8 +1,0 @@
-{
-  "model": "MiniMax-M3",
-  "provider": "minimax",
-  "reasoningEffort": "max",
-  "temperature": "1.00",
-  "maxIterations": "46",
-  "maxOutputTokens": "24576"
-}

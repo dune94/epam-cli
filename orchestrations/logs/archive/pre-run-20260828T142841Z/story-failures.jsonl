@@ -1,0 +1,14 @@
+{"storyId":"MOCK3-1","failureClass":"unknown","model":"MiniMax-M3","attempt":0,"exitCode":1,"rawBytes":14,"outputTokens":0,"maxIterations":16,"timestamp":"2026-08-28T14:13:39Z"}
+{"storyId":"MOCK3-1","failureClass":"unknown","model":"MiniMax-M3","attempt":1,"exitCode":1,"rawBytes":14,"outputTokens":0,"maxIterations":16,"timestamp":"2026-08-28T14:13:46Z"}
+{"storyId":"MOCK3-2","failureClass":"unknown","model":"MiniMax-M3","attempt":0,"exitCode":1,"rawBytes":14,"outputTokens":0,"maxIterations":16,"timestamp":"2026-08-28T14:13:48Z"}
+{"storyId":"MOCK3-1","failureClass":"unknown","model":"MiniMax-M3","attempt":2,"exitCode":1,"rawBytes":14,"outputTokens":0,"maxIterations":21,"timestamp":"2026-08-28T14:13:53Z"}
+{"storyId":"MOCK3-2","failureClass":"unknown","model":"MiniMax-M3","attempt":1,"exitCode":1,"rawBytes":14,"outputTokens":0,"maxIterations":16,"timestamp":"2026-08-28T14:13:54Z"}
+{"storyId":"MOCK3-1","failureClass":"unknown","model":"MiniMax-M3","attempt":3,"exitCode":1,"rawBytes":14,"outputTokens":0,"maxIterations":26,"timestamp":"2026-08-28T14:13:59Z"}
+{"storyId":"MOCK3-2","failureClass":"unknown","model":"MiniMax-M3","attempt":2,"exitCode":1,"rawBytes":14,"outputTokens":0,"maxIterations":21,"timestamp":"2026-08-28T14:14:01Z"}
+{"storyId":"MOCK3-1","failureClass":"unknown","model":"MiniMax-M3","attempt":4,"exitCode":1,"rawBytes":14,"outputTokens":0,"maxIterations":31,"timestamp":"2026-08-28T14:14:06Z"}
+{"storyId":"MOCK3-2","failureClass":"unknown","model":"MiniMax-M3","attempt":3,"exitCode":1,"rawBytes":14,"outputTokens":0,"maxIterations":26,"timestamp":"2026-08-28T14:14:08Z"}
+{"storyId":"MOCK3-1","failureClass":"unknown","model":"MiniMax-M3","attempt":5,"exitCode":1,"rawBytes":14,"outputTokens":0,"maxIterations":36,"timestamp":"2026-08-28T14:14:12Z"}
+{"storyId":"MOCK3-2","failureClass":"unknown","model":"MiniMax-M3","attempt":4,"exitCode":1,"rawBytes":14,"outputTokens":0,"maxIterations":31,"timestamp":"2026-08-28T14:14:14Z"}
+{"storyId":"MOCK3-1","failureClass":"unknown","model":"MiniMax-M3","attempt":6,"exitCode":1,"rawBytes":14,"outputTokens":0,"maxIterations":41,"timestamp":"2026-08-28T14:14:19Z"}
+{"storyId":"MOCK3-2","failureClass":"unknown","model":"MiniMax-M3","attempt":5,"exitCode":1,"rawBytes":14,"outputTokens":0,"maxIterations":36,"timestamp":"2026-08-28T14:14:20Z"}
+{"storyId":"MOCK3-2","failureClass":"unknown","model":"MiniMax-M3","attempt":6,"exitCode":1,"rawBytes":14,"outputTokens":0,"maxIterations":41,"timestamp":"2026-08-28T14:14:27Z"}

@@ -150,6 +150,30 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# THE SET OUTRANKS THE FLAG, AND THIS IS WHERE THAT HAS TO HAPPEN.
+#
+# PRIMARY_PROVIDER is resolved from the active set above, and then the argument loop just above
+# overwrites it with --provider. resolvePromptExec builds that flag ONCE at startup from the
+# environment, so a stale AI_PROVIDER reaches the runner however the launch was configured. The
+# substitution notice printed "using 'claude'" and the call went to qwen regardless.
+#
+# Cost: three paid runs on one ticket, all dying at the roster specialiser with
+#   [ai-run] provider 'qwen' returned NO completion record — treating as FAILURE
+# while the line above it announced claude.
+#
+# Re-applied AFTER parsing, so the flag is honoured whenever the set can route it and corrected
+# when it cannot. A provider the set routes is left exactly alone.
+if [ -n "$PRIMARY_PROVIDER" ]; then
+    _routed="$(AI_PROVIDER="$PRIMARY_PROVIDER" EPAM_ORCHESTRATION_PROVIDER="$PRIMARY_PROVIDER" \
+                 resolve_primary_provider 2>/dev/null)"
+    if [ -n "$_routed" ] && [ "$_routed" != "$PRIMARY_PROVIDER" ]; then
+        printf '%s\n' "  [provider] '${PRIMARY_PROVIDER}' is not routable by the '${EPAM_PROVIDER_SET:-}' set — using '${_routed}'." >&2
+        PRIMARY_PROVIDER="$_routed"
+    fi
+    unset _routed
+fi
+
+
 # A REHEARSAL BRINGS ITS OWN PROVIDER. The cassette directory names it; this refusal is about a
 # run that has no provider at all, and would otherwise reject a replay before the substitution
 # below is ever reached.
@@ -160,7 +184,7 @@ fi
 if [ -z "$PRIMARY_PROVIDER" ]; then
   cmd_base="$(basename "$CLAUDE_CMD")"
   case "$cmd_base" in
-    codex|openai|qwen|cursor|copilot|codemie-claude) PRIMARY_PROVIDER="$cmd_base" ;;
+    codex|openai|openrouter|cursor|copilot|codemie-claude) PRIMARY_PROVIDER="$cmd_base" ;;
     *)
       echo "llm-handler.sh: no provider configured. Set AI_PROVIDER or EPAM_ORCHESTRATION_PROVIDER." >&2
       exit 1
@@ -350,7 +374,7 @@ run_provider_once() {
     # The tool posture is NOT special-cased. A replayed call carries the same env the recorded
     # call did, so a seam that had tools then has them now — which is what makes the recorded
     # tool calls executable rather than refused.
-    openai|qwen|cursor|copilot|minimax|replay)
+    openai|openrouter|cursor|copilot|minimax|replay)
       # Capture to temp file so pino JSON lines on stdout don't corrupt jq parsing
       local _epam_out
       _epam_out="$(mktemp)"

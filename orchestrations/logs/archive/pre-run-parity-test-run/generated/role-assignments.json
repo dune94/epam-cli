@@ -3,12 +3,12 @@
     "storyId": "MOCK3-1",
     "codeline": "mocka",
     "agentRole": "fare-rules-engineer",
-    "reason": "fare-rules-engineer"
+    "reason": "pre-assigned (validated, not regenerated)"
   },
   {
     "storyId": "MOCK3-2",
     "codeline": "mockb",
-    "agentRole": "fare-rules-engineer",
-    "reason": "schedule-display-engineer"
+    "agentRole": "schedule-display-engineer",
+    "reason": "pre-assigned (validated, not regenerated)"
   }
 ]

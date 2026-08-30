@@ -267,22 +267,22 @@ async function authenticateProvider(providerName: string, ctx: SlashCommandConte
         break;
       }
 
-      case 'qwen': {
-        console.log(chalk.dim('Qwen models are accessed via OpenRouter — an English-language gateway to 200+ AI models.'));
+      case 'openrouter': {
+        console.log(chalk.dim('Models are accessed via OpenRouter — an English-language gateway to 200+ AI models.'));
         console.log(chalk.dim('Get a free API key at: https://openrouter.ai/keys  (no credit card required)'));
         console.log();
-        const { default: promptsQwen } = await import('prompts');
-        const { apiKey: qwenKey } = await promptsQwen([{
+        const { default: promptsOpenRouter } = await import('prompts');
+        const { apiKey: openrouterKey } = await promptsOpenRouter([{
           type: 'password',
           name: 'apiKey',
-          message: 'OpenRouter API key (for Qwen access)',
+          message: 'OpenRouter API key',
           validate: (v: string) => v.trim().length > 0 ? true : 'API key cannot be empty',
         }]);
-        if (qwenKey) {
+        if (openrouterKey) {
           const { storeApiKey } = await import('../../../billing/KeychainKeyStore.js');
-          await storeApiKey('qwen', qwenKey.trim());
+          await storeApiKey('openrouter', openrouterKey.trim());
           console.log();
-          console.log(chalk.green('✓ Qwen (via OpenRouter) API key saved'));
+          console.log(chalk.green('✓ OpenRouter API key saved'));
           console.log(chalk.dim('  To use env var instead: export OPENROUTER_API_KEY=<key>'));
         }
         break;
@@ -377,7 +377,7 @@ async function logoutProvider(providerName: string, _ctx: SlashCommandContext): 
       }
 
       case 'cursor':
-      case 'qwen':
+      case 'openrouter':
       case 'anthropic':
       case 'claude':
       case 'openai':
@@ -388,7 +388,7 @@ async function logoutProvider(providerName: string, _ctx: SlashCommandContext): 
         const storedKey = await getApiKey(storeKey);
         const revokeUrls: Record<string, string> = {
           cursor:    'https://aistudio.google.com/apikey',
-          qwen:      'https://openrouter.ai/keys',
+          openrouter:      'https://openrouter.ai/keys',
           anthropic: 'https://console.anthropic.com/settings/keys',
           claude:    'https://console.anthropic.com/settings/keys',
           openai:    'https://platform.openai.com/api-keys',
@@ -396,7 +396,7 @@ async function logoutProvider(providerName: string, _ctx: SlashCommandContext): 
         };
         const envVarMap: Record<string, string> = {
           cursor:    'CURSOR_API_KEY',
-          qwen:      'OPENROUTER_API_KEY',
+          openrouter:      'OPENROUTER_API_KEY',
           anthropic: 'EPAM_API_KEY_ANTHROPIC',
           claude:    'EPAM_API_KEY_ANTHROPIC',
           openai:    'EPAM_API_KEY_OPENAI',

@@ -1,1 +1,2 @@
-{"ts":"2026-08-22T01:35:03Z","story_id":"AMSD-2041","retry":0,"rung":0,"target":"tool","diagnosis":"Agent added @contentstack/live-preview-utils to package.json but never ran npm install to update package-lock.json.","patches_applied":0,"profile_updated":true}
+{"ts":"2026-08-28T19:53:29Z","story_id":"MOCK3-1","retry":0,"rung":0,"target":"skill","diagnosis":"Agent created .epam/verification.json with only test entry, missing required typecheck entry","patches_applied":0,"profile_updated":true}
+{"ts":"2026-08-28T19:53:32Z","story_id":"MOCK3-2","retry":0,"rung":0,"target":"skill","diagnosis":"verification.json missing typecheck entry required by orchestrator","patches_applied":0,"profile_updated":true}

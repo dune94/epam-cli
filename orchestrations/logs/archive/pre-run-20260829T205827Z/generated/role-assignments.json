@@ -1,0 +1,14 @@
+[
+  {
+    "storyId": "MOCK3-1",
+    "codeline": "mocka",
+    "agentRole": "stand-in-engineer",
+    "reason": "pre-assigned (validated, not regenerated)"
+  },
+  {
+    "storyId": "MOCK3-2",
+    "codeline": "mockb",
+    "agentRole": "stand-in-engineer",
+    "reason": "pre-assigned (validated, not regenerated)"
+  }
+]

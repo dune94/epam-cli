@@ -49,7 +49,7 @@ PRD_FILE="$REPO_ROOT/orchestrations/hello-world-prd.json"
 FREE_MODEL="${FREE_MODEL:-qwen/qwen3-coder:free}"
 # WHICH provider gets moved onto the free model. It was written into the patch program itself, so
 # this launcher could only ever patch one; it is a setting now.
-FREE_PROVIDER="${FREE_PROVIDER:-qwen}"
+FREE_PROVIDER="${FREE_PROVIDER:-openrouter}"
 
 info "Tier 2 free-model run"
 info "  Model: $FREE_MODEL (zero credits)"

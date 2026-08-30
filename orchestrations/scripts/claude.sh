@@ -1648,10 +1648,10 @@ provider_to_cli() {
         # providers.json with NO case arm — a PRD could name it, pass the gate, and die
         # here at runtime. Now it is genuinely accepted, so the gate and the engine agree.
         claude)                      echo "claude" ;;
-        copilot|openai|qwen|cursor|minimax)  echo "$EPAM_CLI" ;;
+        copilot|openai|openrouter|cursor|minimax)  echo "$EPAM_CLI" ;;
         epam)                        echo "$EPAM_CLI" ;;
         *)
-            error "Unknown aiProvider '$1' — set aiProvider in prd.json to one of: opencode|codex|copilot|openai|qwen|cursor|minimax|codemie-claude|claude"
+            error "Unknown aiProvider '$1' — set aiProvider in prd.json to one of: opencode|codex|copilot|openai|openrouter|cursor|minimax|codemie-claude|claude"
             return 1
             ;;
     esac
@@ -9335,7 +9335,7 @@ implement_story() {
     # For epam-run providers, prd.json .model field overrides effort-based model
     case "${STORY_PROVIDER:-codex}" in
         codex) resolve_codex_model_settings "$story_id" ;;
-        copilot|openai|qwen|cursor|minimax) resolve_model_from_story "$story_id" ;;
+        copilot|openai|openrouter|cursor|minimax) resolve_model_from_story "$story_id" ;;
     esac
     # prd-model-coordinator's .reasoningEffort field overrides the "low" reset above
     resolve_reasoning_effort_from_story "$story_id"
@@ -10084,7 +10084,7 @@ $_kb_section"
                     invoke_success=true
                 fi
                 ;;
-            copilot|openai|qwen|cursor|minimax)
+            copilot|openai|openrouter|cursor|minimax)
                 # epam-run providers: invoke via `epam run --provider X --model M --json`
                 # EPAM_CLI can be overridden with a mock for zero-token testing.
                 # Explicitly forward API keys so subshells that didn't inherit them still work.
@@ -10361,9 +10361,9 @@ $_kb_section"
                         OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
                         EPAM_API_KEY_OPENROUTER="${EPAM_API_KEY_OPENROUTER:-}" \
                         OPENROUTER_BASE_URL="${OPENROUTER_BASE_URL:-}" \
-                        EPAM_QWEN_MODEL_OVERRIDE="${EPAM_QWEN_MODEL_OVERRIDE:-}" \
+                        EPAM_OPENROUTER_MODEL_OVERRIDE="${EPAM_OPENROUTER_MODEL_OVERRIDE:-}" \
                         DASHSCOPE_API_KEY="${DASHSCOPE_API_KEY:-}" \
-                        EPAM_API_KEY_QWEN="${EPAM_API_KEY_QWEN:-}" \
+                        EPAM_API_KEY_OPENROUTER="${EPAM_API_KEY_OPENROUTER:-}" \
                         MINIMAX_API_KEY="${MINIMAX_API_KEY:-}" \
                         EPAM_API_KEY_MINIMAX="${EPAM_API_KEY_MINIMAX:-}" \
                         MINIMAX_BASE_URL="${MINIMAX_BASE_URL:-}" \

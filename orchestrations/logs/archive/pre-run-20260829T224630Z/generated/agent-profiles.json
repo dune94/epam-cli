@@ -1,0 +1,7 @@
+{
+  "runId": "20260829T224457Z",
+  "_what": "This project's minted agent briefs. profiles.json is restored from its canonical original at the start of every run, which would otherwise delete them; they are re-applied from here. Kept out of the engine base so one project's agents never reach another's roster.",
+  "profiles": {
+    "stand-in-engineer": "stand-in reply for the agent-mint seam, long enough to satisfy the contract's declared minimum so the consumer judges the WIRING rather than the prose"
+  }
+}

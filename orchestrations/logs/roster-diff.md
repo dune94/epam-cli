@@ -1,7 +1,7 @@
 # Roster diff — generated vs canonical
 
-canonical: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/agents/profiles.canonical.json (54 roles)
-live:      /home/bradleyjerome/projects/ai/epam-cli/orchestrations/agents/profiles.json (57 roles)
+canonical: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/agents/profiles.canonical.json (55 roles)
+live:      /home/bradleyjerome/projects/ai/epam-cli/orchestrations/agents/profiles.json (58 roles)
 
 ## MINTED BY THIS RUN — IMPLEMENTERS, may author code (0)
 - (none)

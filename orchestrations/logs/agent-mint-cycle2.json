@@ -1,26 +1,14 @@
 {
   "minted": [
     {
-      "name": "fare-calculation-engineer",
-      "kind": "implementer",
-      "codeline": "",
-      "rationale": "MOCK3-1 names a concrete off-by-boundary defect in fareFor() that only a role authorized to edit src/fares.ts across the project can correct.",
+      "name": "checkout-forms-detective",
+      "kind": "investigator",
+      "codeline": "gotransit",
+      "rationale": "AMSD-1919's fix hinges on knowing that EMAIL_REGEX/EMAIL_INPUT_MAX_LENGTH actually resolve from the @metrolinx/cx-shared package rather than the look-alike local src/constants/common.ts, a distinction the previously rejected roster got backwards and that the checkout-validation-engineer implementer needs verified before touching the confirmEmail validate rule.",
       "surfaces": [
         "profiles.json",
         "kb",
-        "project-roles",
-        "project-profiles"
-      ]
-    },
-    {
-      "name": "schedule-display-engineer",
-      "kind": "implementer",
-      "codeline": "",
-      "rationale": "MOCK3-2 names a concrete loop-bound defect in formatStops() that only a role authorized to edit src/schedule.ts across the project can correct.",
-      "surfaces": [
-        "profiles.json",
-        "kb",
-        "project-roles",
+        "project-investigators",
         "project-profiles"
       ]
     }
@@ -28,14 +16,12 @@
   "rejected": [],
   "unchanged": [],
   "projectRoles": [
-    "fare-calculation-engineer",
-    "schedule-display-engineer"
+    "checkout-validation-engineer"
   ],
   "projectInvestigators": [
-    "fares-detective",
-    "schedule-detective"
+    "checkout-forms-detective"
   ],
-  "proposed": 2,
+  "proposed": 1,
   "rejectedAcrossAttempts": [],
   "attempts": 1,
   "protectedRoles": 21

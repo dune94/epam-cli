@@ -73,7 +73,7 @@
     ],
     "ttl_cycles": 20,
     "status": "active",
-    "cycles_idle": 4
+    "cycles_idle": 17
   },
   {
     "id": "prompt-builder-tc-writer-class-malformed",
@@ -134,7 +134,7 @@
     ],
     "ttl_cycles": 20,
     "status": "active",
-    "cycles_idle": 4
+    "cycles_idle": 17
   },
   {
     "id": "prompt-builder-cpa-inference-class-malformed",
@@ -172,7 +172,7 @@
     ],
     "ttl_cycles": 20,
     "status": "active",
-    "cycles_idle": 4
+    "cycles_idle": 17
   },
   {
     "id": "prompt-builder-code-graph-detective-class-malformed",
@@ -237,7 +237,7 @@
     ],
     "ttl_cycles": 20,
     "status": "active",
-    "cycles_idle": 4
+    "cycles_idle": 17
   },
   {
     "id": "prompt-builder-spec-coordinator-class-malformed",
@@ -292,7 +292,7 @@
     ],
     "ttl_cycles": 20,
     "status": "active",
-    "cycles_idle": 4
+    "cycles_idle": 17
   },
   {
     "id": "prompt-builder-skill-assessment-prephase-class-malformed",
@@ -355,7 +355,7 @@
     ],
     "ttl_cycles": 20,
     "status": "active",
-    "cycles_idle": 4
+    "cycles_idle": 17
   },
   {
     "id": "prompt-builder-prompt-review-class-malformed",
@@ -403,7 +403,7 @@
     ],
     "ttl_cycles": 20,
     "status": "active",
-    "cycles_idle": 4
+    "cycles_idle": 17
   },
   {
     "id": "prompt-builder-assign-agent-roles-class-malformed",
@@ -458,6 +458,6 @@
     ],
     "ttl_cycles": 20,
     "status": "active",
-    "cycles_idle": 4
+    "cycles_idle": 17
   }
 ]

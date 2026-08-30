@@ -2,7 +2,7 @@
   "$comment": "THE ONE CHANNEL. Every LLM call in the pipeline must resolve its provider, model, base URL and credential in exactly one place, and issue its request from exactly one place. Eight independent channels were confirmed on 2026-08-25, each with its own credential read and its own endpoint; the free-run seal held at one of them. This file declares what counts as a channel so the invariant is scanned, not asserted by hand.",
   "$why": "Declared rather than hardcoded in the scanner: which module is the gateway, and which sites are still being migrated, are facts about this deployment's progress — not about how to detect a channel.",
   "gateway": "orchestrations/scripts/llm-handler.sh",
-  "credentialPattern": "(ANTHROPIC|OPENAI|OPENROUTER|MINIMAX|CLAUDE|GEMINI|QWEN|DASHSCOPE|CURSOR|COPILOT|CODEMIE)[A-Z_]*(API_KEY|_KEY|TOKEN)",
+  "credentialPattern": "(ANTHROPIC|OPENAI|OPENROUTER|MINIMAX|CLAUDE|GEMINI|DASHSCOPE|CURSOR|COPILOT|CODEMIE)[A-Z_]*(API_KEY|_KEY|TOKEN)",
   "endpointPattern": "api\\.anthropic\\.com|api\\.openai\\.com|openrouter\\.ai|api\\.minimaxi\\.chat|dashscope\\.aliyun|generativelanguage\\.googleapis\\.com|models\\.github\\.ai|api\\.githubcopilot\\.com",
   "scanRoots": [
     "orchestrations/scripts",
@@ -37,8 +37,7 @@
     "src/providers/ProviderChain.ts",
     "src/providers/copilot/CopilotProvider.ts",
     "src/providers/cursor/CursorProvider.ts",
-    "src/providers/minimax/MiniMaxProvider.ts",
-    "src/providers/qwen/QwenProvider.ts"
+    "src/providers/minimax/MiniMaxProvider.ts"
   ],
   "$resolved": [
     "orchestrations/scripts/lib/topology-router.js — collapsed onto the hub 2026-08-25; seam declared, prompt templated, no credential read",

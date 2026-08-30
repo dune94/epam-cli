@@ -1,10 +1,9 @@
 [
   {
     "rung": "1",
-    "model": "z-ai/glm-5.2",
+    "model": "claude-sonnet-5",
     "files": [
-      ".epam/verification.json",
-      "orchestrations/logs/agent-activity.jsonl"
+      ".epam/verification.json"
     ]
   }
 ]

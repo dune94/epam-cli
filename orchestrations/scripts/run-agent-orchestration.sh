@@ -1452,37 +1452,10 @@ _lint_fix_findings_directly() {
     warning "  [lint-fix] could not repair in place — falling through to gate remediation"
     return 1
 }
-
-# runtime_boundary_verdict <gate-log> <project-root>
-#
-# THE VERDICT DECIDES, NOT THE EXIT CODE.
-#
-# This gate's result handling read $? and nothing else: the log was written, handed to the gate and
-# never read again, so a grounded report that a change cannot execute printed "Step 22g — pass"
-# because the process exited 0. Its sibling two lines below has always grepped the log.
-#
-# Grounding, same discipline as fuzz-weaver: a `fail` blocks only when a finding names a file that
-# exists. A claim about a file that does not exist is not evidence, and a gate that blocks on one
-# teaches the operator to ignore it.
-#
-# An unparseable or empty log is a WARN, never a pass: a gate that could not produce an answer has
-# not cleared the change.
-#
-# Echoes: fail | warn | pass
-runtime_boundary_verdict() {
-    local _log="${1:-}" _root="${2:-}"
-    [ -n "$_log" ] && [ -s "$_log" ] || { echo warn; return 0; }
-
-    if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$_log" 2>/dev/null; then
-        local _grounded
-        _grounded=$(python3 "$SCRIPT_DIR/lib/handlers/findings-grounded.py" "$_log" "$_root" 2>/dev/null || echo 0)
-        if [ "${_grounded:-0}" -gt 0 ]; then echo fail; else echo warn; fi
-        return 0
-    fi
-    if grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$_log" 2>/dev/null; then echo warn; return 0; fi
-    if grep -q '"verdict"[[:space:]]*:[[:space:]]*"pass"' "$_log" 2>/dev/null; then echo pass; return 0; fi
-    echo warn
-}
+# runtime_boundary_verdict now lives in lib/gate-verdicts.sh so its fail/warn/pass rules — and
+# the grounding check that decides whether a fail may block — can be executed by a test.
+# shellcheck source=lib/gate-verdicts.sh
+. "$SCRIPT_DIR/lib/gate-verdicts.sh"
 
 _run_qa_gate_with_retry() {
     local _qg_prompt="$1" _qg_agent="$2" _qg_phase="$3" _qg_log="$4"

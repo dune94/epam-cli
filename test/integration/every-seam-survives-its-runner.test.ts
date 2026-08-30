@@ -34,7 +34,8 @@ process.env.EPAM_PROJECT_CONFIG_DIR = process.env.EPAM_PROJECT_CONFIG_DIR || PRO
 const { declaredContracts } = require('../../orchestrations/scripts/lib/agent-output-schema.js');
 const { contractStandIn } = require('../../orchestrations/scripts/mock-expectations.js');
 const { extractTaggedJson } = require('../../orchestrations/scripts/spec-mode-runner.js');
-const { unwrapEnvelope } = require('../../orchestrations/scripts/lib/agent-output-schema.js');
+const { unwrapEnvelope, validateTaggedOutput } =
+  require('../../orchestrations/scripts/lib/agent-output-schema.js');
 
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
@@ -110,6 +111,27 @@ describe('every seam survives its runner', () => {
       if (!c.tag) return;                 // only a tagged contract has an extractor to run
       const parsed = extractTaggedJson(polluted, c.tag);
       expect(parsed, `the parser lost ${c.seam}'s answer to a line it did not expect`).toBeTruthy();
+    }, 60_000);
+
+  it.each(TABLE.filter((c) => c.tag).map((c) => [c.seam, c] as [string, Case]))(
+    '%s: what comes back is VALID against its own declared contract', (_seam, c) => {
+      // Extracting is not the same as being acceptable. A seam can hand its consumer a payload
+      // that parses and still fails the contract the registry declares for it — which is the
+      // difference between "the answer arrived" and "the answer is usable", and the difference
+      // the mint spent three metrolinx attempts on.
+      // ARGUMENT ORDER IS (tag, parsed). Called the other way round it looks up a schema for the
+      // PAYLOAD, finds none, and returns pass() for anything at all — which is exactly how this
+      // assertion first shipped, green and worthless. The mutation caught it: neutering every item
+      // check left all 95 passing.
+      const extracted = extractTaggedJson(drive(c.answer), c.tag as string);
+      const verdict = validateTaggedOutput(c.tag as string, extracted);
+      expect(verdict.ok, `${c.seam} returned a payload its own contract rejects: ${verdict.reason}`)
+        .toBe(true);
+
+      // THE NEGATIVE, which is what proves the validator is engaged rather than absent: a payload
+      // that is plainly not this seam's answer must be refused.
+      const refused = validateTaggedOutput(c.tag as string, [{ nothing: 'that belongs here' }]);
+      expect(refused.ok, `${c.seam}'s contract accepts anything — it enforces nothing`).toBe(false);
     }, 60_000);
 
   it.each(TABLE.filter((c) => c.tag).map((c) => [c.seam, c] as [string, Case]))(

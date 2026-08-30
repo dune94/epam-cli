@@ -9186,7 +9186,19 @@ function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
         if (opts.salvageOutputOnFailure && output) {
           return resolve(output);
         }
-        return reject(new Error(`prompt runner exited with code ${code}`));
+        // A FAILING CALL SAID SOMETHING, AND IT IS THE PART WORTH KEEPING.
+        //
+        // This rejected with the exit code alone and dropped everything the child wrote. The roster
+        // specialiser then failed three attempts out of three, across three PAID runs, reporting
+        // only "prompt runner exited with code 1" — no log, no captured reply, nothing on disk. The
+        // cause is still unknown, which is the price of discarding evidence at the one moment it
+        // matters. The reply of a failing call is worth more than the reply of a passing one.
+        const _said = finishOutput();
+        if (_said) {
+          try { recordAgentReply(`${opts.costAgent || "agent"}-FAILED`, _said); } catch { /* never */ }
+        }
+        return reject(new Error(`prompt runner exited with code ${code}`
+          + (_said ? `: ${_said.slice(-1200)}` : " (the runner wrote nothing at all)")));
       }
       resolve(output);
     });
@@ -9285,6 +9297,27 @@ function seamStartModel(agent) {
  */
 function buildKnownValidModels(upgradeModel, miniModel) {
   const known = new Set();
+
+  // ONE ANSWER TO "WHICH MODELS MAY A STORY BE ASSIGNED", NOT TWO.
+  //
+  // This read EPAM_MODEL_LADDER_* from the environment alone. In a process where those were never
+  // exported the set came back EMPTY, and isValidModelString's remaining rule is
+  // `model === currentModel` — so a story already carrying a foreign model kept it. That is how a
+  // mockserver rehearsal, whose set declares a Claude ladder, assigned MiniMax-M3 and spent twelve
+  // writer attempts per story on a model the set cannot route.
+  //
+  // lib/handlers/ladder-models.js already answers this question correctly from the ACTIVE SET, and
+  // pre-flight already trusts it. Asked here too, so the assignment is bounded by the same ladder
+  // the run is actually climbing rather than by whatever happens to be in the environment.
+  try {
+    // eslint-disable-next-line global-require
+    const { execFileSync } = require('child_process');
+    const out = execFileSync(process.execPath,
+      [path.join(__dirname, 'lib', 'handlers', 'ladder-models.js')],
+      { encoding: 'utf8', timeout: 20000 });
+    for (const m of JSON.parse(out || '[]')) if (m && String(m).trim()) known.add(String(m).trim());
+  } catch { /* the environment below still answers, exactly as before */ }
+
   for (const [key, value] of Object.entries(process.env)) {
     if (!/^EPAM_MODEL_LADDER(_[A-Z0-9_]+)?$/.test(key) || !value) continue;
     if (key.endsWith('_TIER_ORDER')) continue;
@@ -9315,7 +9348,20 @@ const DISALLOWED_MODEL_PATTERN = /^anthropic\/|claude/i;
 function isValidModelString(model, currentModel, knownValidModels) {
   if (typeof model !== 'string') return false;
   if (DISALLOWED_MODEL_PATTERN.test(model)) return false;
-  return model === currentModel || knownValidModels.has(model);
+  if (knownValidModels.has(model)) return true;
+
+  // "IT IS ALREADY THE CURRENT MODEL" IS NOT A REASON TO KEEP IT.
+  //
+  // This accepted anything equal to currentModel, ahead of consulting the ladder at all — so a
+  // story that had somehow acquired a foreign model perpetuated it on every pass. MiniMax-M3 rode
+  // that rule through a run whose set declares a Claude ladder, and the writer then spent twelve
+  // attempts per story on a model the set cannot route.
+  //
+  // The concession stays only where it is safe: when the permitted set is EMPTY nothing can be
+  // checked against it, and refusing everything there would strand a project whose ladder could
+  // not be resolved. Where the ladder IS known, it decides.
+  if (knownValidModels.size === 0) return model === currentModel;
+  return false;
 }
 
 // buildGateExec <aiRunnerCmd>

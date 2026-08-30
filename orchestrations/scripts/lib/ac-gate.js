@@ -103,7 +103,23 @@ const BROWNFIELD         = process.env.EPAM_BROWNFIELD === '1';
 const DEFAULT_CODELINE   = process.env.JIRA_DEFAULT_CODELINE || '';
 // Explicit provider. These called ai-run.sh with --model but NO --provider, so
 // provider came only from ambient env — e.g. `--provider openrouter --model claude-haiku`.
-const PROVIDER = getArg('--provider', process.env.ORCH_GATE_PROVIDER || process.env.EPAM_ORCHESTRATION_PROVIDER || 'openrouter');
+// NO VENDOR OF ITS OWN. This ended in `|| 'openrouter'` — a hardcoded last resort firing under
+// exactly the condition that killed discovery: the project env not reaching the child. Where
+// discovery DIED, this succeeded against the wrong vendor, so a run launched as claude spent
+// on another stack with nothing in the log saying so.
+//
+// Empty is the correct answer: llm-handler.sh resolves the provider from the ACTIVE SET when
+// it is not told one, and the flag is omitted below rather than passed empty.
+const PROVIDER = getArg('--provider',
+  process.env.ORCH_GATE_PROVIDER || process.env.EPAM_ORCHESTRATION_PROVIDER || '');
+
+// A FLAG WITH NO VALUE IS NOT AN EMPTY ARGUMENT — IT IS NO ARGUMENT, and the flag then swallows
+// whatever follows. codeline-discovery.js emitted `--provider --model X` this way; the hub read
+// '--model' as the provider and rejected the model name as an unknown option. Quoted, so a value
+// with a space cannot split either.
+const flagArg = (name, value) => (String(value == null ? '' : value).trim()
+  ? ` --${name} ${JSON.stringify(String(value).trim())}`
+  : '');
 // No literal fallback: see lib/seam-model.js. An AC classification produced by a model the
 // run never chose still reads as authoritative.
 const { resolveOrRefuse } = require('./seam-model.js');
@@ -272,7 +288,8 @@ function classifyWithLLM(issue, knownCodelines) {
 
   try {
     // Use ai-run.sh for provider-agnostic LLM call with proper env/key routing
-    const cmd = `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>${_errFile}`;
+    const cmd = `bash ${AI_RUN_SH}${flagArg('provider', PROVIDER)}`
+      + `${flagArg('model', MODEL)} < ${tmpPrompt} 2>${_errFile}`;
     const raw = execSync(cmd, {
       encoding: 'utf8',
       timeout: Number(process.env.AC_GATE_TIMEOUT_MS || 360000),
@@ -344,7 +361,8 @@ function classifyCodelineOnly(issue, knownCodelines) {
   const _errFile = `${tmpPrompt}.err`;
   fs.writeFileSync(tmpPrompt, prompt);
   try {
-    const cmd = `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>${_errFile}`;
+    const cmd = `bash ${AI_RUN_SH}${flagArg('provider', PROVIDER)}`
+      + `${flagArg('model', MODEL)} < ${tmpPrompt} 2>${_errFile}`;
     const raw = execSync(cmd, {
       encoding: 'utf8',
       timeout: Number(process.env.AC_GATE_TIMEOUT_MS || 360000),
@@ -401,7 +419,8 @@ function elaborateAcs(issue) {
   const _errFile = `${tmpPrompt}.err`;
   fs.writeFileSync(tmpPrompt, prompt);
   try {
-    const cmd = `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>${_errFile}`;
+    const cmd = `bash ${AI_RUN_SH}${flagArg('provider', PROVIDER)}`
+      + `${flagArg('model', MODEL)} < ${tmpPrompt} 2>${_errFile}`;
     const raw = execSync(cmd, { encoding: 'utf8', timeout: Number(process.env.AC_GATE_TIMEOUT_MS || 360000), env: seamEnv('ac-elaboration', _costFile) }).trim();
     if (!raw) throw new Error(`Empty elaboration response${_why(_errFile)}`);
     const parsed = parseLooseJson(raw, 'elaboration');

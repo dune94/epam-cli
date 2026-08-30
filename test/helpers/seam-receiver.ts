@@ -44,7 +44,7 @@ export interface HubResult {
 }
 
 /** The ladder environment a run exports, read from the set rather than invented. */
-function ladderEnv(): Record<string, string> {
+export function ladderEnv(): Record<string, string> {
   const dump = `${JSON.stringify(process.execPath)} -e `
     + `'for (const [k,v] of Object.entries(process.env)) `
     + `if (k.startsWith("EPAM_MODEL_LADDER")) process.stdout.write(k+"="+v+"\\n")'`;
@@ -61,7 +61,7 @@ function ladderEnv(): Record<string, string> {
   }
   return out;
 }
-const LADDERS = ladderEnv();
+export const LADDERS = ladderEnv();
 
 export interface HubOptions {
   /** What the stubbed runner answers. */

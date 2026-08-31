@@ -2,6 +2,17 @@
 
 # Modes are declared once, in config/run-modes.json — see lib/run-modes.sh.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/run-modes.sh"
+# A LIBRARY SOURCES WHAT IT CALLS.
+#
+# should_pause_before_writer and should_pause_after_agent_mint call is_truthy, which lives in
+# flags.sh. run-agent-orchestration.sh happens to source flags.sh one line earlier;
+# mock1-paused-run.sh does not — so in a script whose entire purpose is a PAUSED run, is_truthy was
+# undefined, both pause checks returned non-zero, and neither pause fired. Nothing reported it: an
+# undefined function in a boolean test simply reads as false.
+#
+# Sourcing it here fixes every caller, including the next one, instead of relying on each to
+# remember an order nothing enforces.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/flags.sh"
 # Run checkpoints — pause after the spec pass, resume at implementation.
 #
 # WHY. The spec pass is the expensive half of a run: ~12 agent calls, ~50 minutes

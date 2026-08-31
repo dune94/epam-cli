@@ -40,10 +40,6 @@ if [ -z "$PROJECT_CONFIG_DIR" ]; then
   )
   PROJECT_CONFIG_DIR="${PROJECT_CONFIG_DIR//\$REPO_ROOT/$REPO_ROOT}"
 fi
-if [ -z "$PROJECT_CONFIG_DIR" ] || [ ! -d "$PROJECT_CONFIG_DIR" ]; then
-  echo "[mock1-paused] cannot determine the mock project config dir — set EPAM_PROJECT_CONFIG_DIR" >&2
-  exit 2
-fi
 MOCK_JIRA_SERVER="$REPO_ROOT/test/fixtures/mock-pipeline/mock-jira-server.js"
 NODE_BIN="${NODE_BIN:-$HOME/.nvm/versions/node/v20.20.0/bin/node}"
 command -v "$NODE_BIN" >/dev/null 2>&1 || NODE_BIN="$(command -v node)"
@@ -98,6 +94,25 @@ case "${1:-}" in
   "" ) ;;
   * ) echo "unknown option '$1'" >&2; exit 2 ;;
 esac
+
+# THE PROJECT IS RESOLVED AFTER PARSING, because most modes do not need one.
+#
+# This check ran FIRST, so --where, --list, --seed and every bad-argument refusal died on it — and
+# those three modes exist precisely to be usable WITHOUT starting a run: --where reports a location
+# without creating anything, --seed builds only the fixture with no Jira stub, no pipeline and no
+# spend. The whole script was unusable, because the default it derived no longer exists: it scraped
+# tier3-mock-run.sh for `EPAM_PROJECT_CONFIG_DIR="${EPAM_PROJECT_CONFIG_DIR:-...}"`, and that
+# launcher now resolves the directory from the PRD it is given. The derivation meant to stop the two
+# drifting drifted, silently, and left this script refusing every invocation.
+#
+# A run still needs a project, and says so. The modes that do not, no longer pay for it.
+# --seed IS NOT EXEMPT, though it spends nothing: its sources live with the project
+# ($PROJECT_CONFIG_DIR/seed), deliberately, because a seed file written by a heredoc here would be a
+# project fact inside the pipeline that cannot be opened, linted or type-checked where it sits.
+if [ -z "$PROJECT_CONFIG_DIR" ] || [ ! -d "$PROJECT_CONFIG_DIR" ]; then
+  echo "[mock1-paused] cannot determine the mock project config dir — set EPAM_PROJECT_CONFIG_DIR" >&2
+  exit 2
+fi
 
 # ── Run identity ─────────────────────────────────────────────────────────────
 # On a resume the run id is GIVEN; on a start it is minted here and announced before

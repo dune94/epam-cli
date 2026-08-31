@@ -21,6 +21,12 @@
 # Usage:
 #   MINIMAX_API_KEY=<key> OPENROUTER_API_KEY=<key> bash orchestrations/scripts/tier3-travel-app-run.sh
 # ──────────────────────────────────────────────────────────────────────────────
+
+# A launcher decides what a run costs. It does not get to do that untested.
+_scg_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/stage-coverage-gate.sh"
+# shellcheck source=/dev/null
+[ -f "$_scg_lib" ] && . "$_scg_lib" && require_stage_coverage launch || exit 1
+
 set -euo pipefail
 
 # Run this whole script — and everything it forks (run-agent-orchestration.sh,

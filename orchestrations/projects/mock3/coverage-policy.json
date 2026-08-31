@@ -1,0 +1,8 @@
+{
+  "_comment": "HOW MUCH OF THE CODE A RUN EXECUTES MUST HAVE A TEST BEHIND IT, BEFORE IT SPENDS.",
+  "_comment2": "Read by orchestrations/scripts/lib/handlers/stage-coverage.js. Per project, because what a run costs is per project: there is no engine-wide default, and a stage whose project declares no policy is refused rather than waved through.",
+  "_comment3": "thresholdPercent — the floor, checked per stage and again over every stage at pre-flight.",
+  "_comment4": "blocker — true halts the pipeline on a shortfall; false reports it and lets the stage run untested code.",
+  "thresholdPercent": 95,
+  "blocker": true
+}

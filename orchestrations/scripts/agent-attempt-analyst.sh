@@ -36,6 +36,13 @@
 # analyst was indistinguishable from a working one in both logs and dashboard,
 # and every retry silently re-ran the identical prompt. Not blocking the caller
 # is not the same as not telling anyone.
+
+# THE PIPELINE DOES NOT RUN CODE NOBODY HAS TESTED. This stage asks how much of the code it is
+# about to execute has a test behind it, and halts when the project says it must.
+_scg_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/stage-coverage-gate.sh"
+# shellcheck source=/dev/null
+[ -f "$_scg_lib" ] && . "$_scg_lib" && require_stage_coverage selfheal || exit 1
+
 set -uo pipefail
 
 FAILURE_CLASS="${1:-}"

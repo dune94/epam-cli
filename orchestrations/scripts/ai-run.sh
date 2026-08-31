@@ -9,4 +9,11 @@
 # This shim exists ONLY so the migration does not have to rewrite 536 call sites in
 # one change. It carries no logic: any behaviour here would be a second hub, which is
 # the exact defect the consolidation removes. Delete it once call sites name the hub.
+
+# THE PIPELINE DOES NOT RUN CODE NOBODY HAS TESTED. This stage asks how much of the code it is
+# about to execute has a test behind it, and halts when the project says it must.
+_scg_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/stage-coverage-gate.sh"
+# shellcheck source=/dev/null
+[ -f "$_scg_lib" ] && . "$_scg_lib" && require_stage_coverage writer || exit 1
+
 exec bash "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/llm-handler.sh" "$@"

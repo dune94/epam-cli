@@ -5,6 +5,13 @@
 # call, a codeline, or a dollar. This runs the checks that would have caught them.
 #
 # Exit 0 = safe to launch. Non-zero = a defect that WILL surface in a run.
+
+# THE PIPELINE DOES NOT RUN CODE NOBODY HAS TESTED. This stage asks how much of the code it is
+# about to execute has a test behind it, and halts when the project says it must.
+_scg_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/stage-coverage-gate.sh"
+# shellcheck source=/dev/null
+[ -f "$_scg_lib" ] && . "$_scg_lib" && require_all_stage_coverage || exit 1
+
 set -uo pipefail
 # NEITHER OF THESE IS WRITTEN DOWN.
 #

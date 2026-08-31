@@ -147,6 +147,8 @@ _run_project_verification() {
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/seam-ladder.sh
 source "$SCRIPT_DIR/lib/seam-ladder.sh"
+# The pipeline does not run code nobody has tested. Every stage below asks this first.
+source "$SCRIPT_DIR/lib/stage-coverage-gate.sh"
 # shellcheck source=lib/render-engine-prompt.sh
 source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
@@ -3582,6 +3584,7 @@ _run_agent_mint() {
   # It lived inside the Jira branch, so a project with an authored PRD never got one — the same
   # shape as the mint itself and as codeline discovery. Paired with the mint here because both
   # prepare the roster's working conditions and both are needed by every project.
+  require_stage_coverage ingest || exit 1
   if "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/run-jira-pipeline.js" "$_prd"; then
     log "[mint] Scaffold phase present for the pre-phase skill assessment"
   else
@@ -3608,6 +3611,7 @@ _run_agent_mint() {
     # persona for it — and there is no engine roster to fall back to any more.
     #
     # Roster-only: no survey, no proposals, no role assignment. Just canonical -> this project.
+    require_stage_coverage mint || exit 1
     log "[mint] Deriving this project's roster (roster-only — nothing is minted)..."
     EPAM_ROSTER_ONLY=1 "$NODE_BIN" "$SCRIPT_DIR/mint-agents-step.js" \
         --prd "$_prd" \
@@ -3970,6 +3974,7 @@ if is_parent; then
     #
     # HALTS on failure. A run that proceeds with an unresolved scope writes to whichever single
     # repository it happens to land on.
+    require_stage_coverage discovery || exit 1
     if ! bash "$SCRIPT_DIR/resolve-codeline-scope.sh" --prd "$PRD_FILE"; then
       error "[orch] codeline scope could not be resolved — refusing to run against an unknown scope"
       exit 1
@@ -4297,6 +4302,7 @@ print_step_checklist
 # ── Step 0: Specification pre-pass (OpenSpec/Speckit) ─────────────────────────
 run_specification_pass() {
     local phase_id="$1"
+    require_stage_coverage spec || return 1
     local spec_runner="$SCRIPT_DIR/spec-mode-runner.js"
     if [ ! -f "$spec_runner" ]; then
         info "Step 1: Specification runner not found (${spec_runner##*/}) — skipping"
@@ -7854,6 +7860,7 @@ _review_approval_is_giveup() {
 
 while true; do
     _review_fp_now="$(_review_tree_fingerprint)"
+    require_stage_coverage gates || exit 1
     if "$SCRIPT_DIR/team-lead-review.sh" "$PHASE"; then
         if _review_approval_is_giveup "${_review_prev_blocker:-0}" "${_review_prev_fp:-}" "$_review_fp_now"; then
             error "Step 3.6: review APPROVED after a blocker-level rejection, with the codeline UNCHANGED since that rejection."

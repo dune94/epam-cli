@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 
 # A service URL has one home: config/services.json, read through this helper.
+
+# A launcher decides what a run costs. It does not get to do that untested.
+_scg_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/stage-coverage-gate.sh"
+# shellcheck source=/dev/null
+[ -f "$_scg_lib" ] && . "$_scg_lib" && require_stage_coverage launch || exit 1
+
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/service-urls.sh" 2>/dev/null || true
 # ──────────────────────────────────────────────────────────────────────────────
 # Tier 3: Metrolinx Brownfield — GLM + Kimi multi-model pipeline.

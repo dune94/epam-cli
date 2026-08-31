@@ -35,6 +35,12 @@
 # had been silently reading an unrelated, empty orchestrations/logs the whole
 # time for any such run).
 # ──────────────────────────────────────────────────────────────────────────────
+
+# The reset deletes a run's working state. Untested code doing that is how finished work disappears.
+_scg_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/stage-coverage-gate.sh"
+# shellcheck source=/dev/null
+[ -f "$_scg_lib" ] && . "$_scg_lib" && require_stage_coverage reset || exit 1
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

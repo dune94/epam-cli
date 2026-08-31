@@ -6833,7 +6833,17 @@ async function reviewTicketLinks({ promptExec, story, logDir, docPaths = [] }) {
     return normaliseTicketLinks(payload);
   } catch (err) {
     console.warn(`spec-mode: ticket-link review unavailable for ${story && story.id} (${err && err.message}) — proceeding without documentation evidence`);
-    return [];
+    // "NO DOCUMENTS WERE LINKED" AND "THE LINKED ONES COULD NOT BE READ" ARE DIFFERENT
+    // ANSWERS, and this returned the first for both. referencedDocsBlock([]) renders an
+    // empty string, so the agent writing the spec was told the ticket carried no
+    // documentation — while the warning above went only to the console. The caller holds
+    // `links`, so it knows documents existed and yielded nothing; that fact travels.
+    return links.length ? [{
+      relevant: true,
+      unreadable: true,
+      url: `(${links.length} document(s) linked on this ticket)`,
+      reason: String((err && err.message) || err),
+    }] : [];
   }
 }
 
@@ -6843,6 +6853,17 @@ function referencedDocsBlock(docs) {
   const list = Array.isArray(docs) ? docs.filter((d) => d && d.relevant) : [];
   if (!list.length) return '';
   const lines = [];
+  // A LOOKUP THAT FAILED IS NOT AN ABSENCE. Rendering nothing here would tell the agent the ticket
+  // carried no documentation, and it would specify accordingly — confidently, and on nothing.
+  const unreadable = list.filter((d) => d.unreadable);
+  if (unreadable.length) {
+    lines.push('\n## DOCUMENTATION LINKED ON THIS TICKET COULD NOT BE READ');
+    for (const d of unreadable) {
+      lines.push(`- ${d.url}${d.reason ? ` — ${d.reason}` : ''}`);
+    }
+    lines.push('  Do not treat this as an absence of documentation. Specify only what the ticket '
+      + 'itself supports, and say where documentation would have been needed.');
+  }
   const contradictions = list.filter((d) => d.contradictsStory);
   if (contradictions.length) {
     lines.push('\n## DOCUMENTATION CONTRADICTS THIS STORY — resolve before specifying');

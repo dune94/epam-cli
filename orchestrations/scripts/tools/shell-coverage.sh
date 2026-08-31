@@ -103,7 +103,28 @@ run_suite() {
 # spawns bash for nearly every pipeline test it has, and those are real executions of real scripts —
 # exactly the lines this is meant to measure.
 run_suite bats bash "$ROOT/orchestrations/scripts/run-shell-tests.sh"
-run_suite vitest "$NODE_BIN" "$ROOT/node_modules/.bin/vitest" run
+# ONLY THE TESTS THAT ACTUALLY SPAWN BASH.
+#
+# Tracing the WHOLE vitest suite cost ~800s to measure shell, and most of it cannot contribute a
+# single traced line: test/unit/agent, test/unit/providers and the rest are pure TypeScript that
+# never starts a shell. Scoping to the directories whose tests execute pipeline scripts collects the
+# same shell coverage for a fraction of the wall clock.
+#
+# SCOPE IS DISCOVERED, NOT LISTED. A directory qualifies if any test in it spawns bash — grep decides,
+# so a new directory that starts executing scripts is measured without anyone remembering to add it.
+mapfile -t _shell_test_dirs < <(
+    grep -rl -e "spawnSync('bash'" -e 'spawnSync("bash"' -e "execFileSync('bash'" -e 'execFileSync("bash"' \
+        --include='*.ts' "$ROOT/test" 2>/dev/null \
+    | sed "s|$ROOT/||" | xargs -r -n1 dirname | sort -u
+)
+if [ "${#_shell_test_dirs[@]}" -eq 0 ]; then
+    echo "[shell-coverage] no test directory spawns bash — refusing to report a shell coverage of zero, which would be the collector's failure, not the suite's" >&2
+    exit 5
+fi
+echo "[shell-coverage] tracing ${#_shell_test_dirs[@]} test directories that spawn bash" >&2
+# Bounded workers: the collector once drove a 13GB box into swap.
+run_suite vitest "$NODE_BIN" "$ROOT/node_modules/.bin/vitest" run \
+    --maxWorkers="${SHELL_COVERAGE_WORKERS:-2}" "${_shell_test_dirs[@]}"
 
 kill "$COMPACTOR" 2>/dev/null || true
 sleep 1

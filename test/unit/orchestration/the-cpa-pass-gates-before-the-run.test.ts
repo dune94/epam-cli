@@ -173,6 +173,39 @@ describe('the CPA pass gates before a run is authorised', () => {
     expect(r.out).toMatch(/--strict|--apply|--dry-run/);
   }, 240_000);
 
+  it('--apply WRITES the blended estimates back, which the default must not', () => {
+    // The whole point of the pass is to correct the formula estimate. If --apply did nothing, the
+    // corrected numbers would be computed, reported, and thrown away.
+    const prd = prdWith([story()]);
+    const r = cpa(prd, CONFIDENT, ['--apply']);
+    const after = JSON.parse(readFileSync(r.prdPath, 'utf8'));
+    expect(after, '--apply changed nothing, so the correction is computed and discarded')
+      .not.toEqual(prd);
+  }, 240_000);
+
+  it('--apply and --dry-run together do NOT write — the safer flag wins', () => {
+    // An operator passing both means "show me what would happen". Writing anyway is the opposite.
+    const prd = prdWith([story()]);
+    const r = cpa(prd, CONFIDENT, ['--apply', '--dry-run']);
+    expect(JSON.parse(readFileSync(r.prdPath, 'utf8')),
+      '--dry-run was overridden by --apply and the PRD was rewritten').toEqual(prd);
+  }, 240_000);
+
+  it('--reconcile with NO actuals says so and exits cleanly, rather than reporting a comparison', () => {
+    // A reconciliation against nothing is not a reconciliation showing no drift.
+    const r = cpa(prdWith([story()]), CONFIDENT, ['--reconcile']);
+    expect(r.code, 'reconcile failed rather than reporting that there is nothing to compare').toBe(0);
+    expect(r.out + r.err, 'it reported nothing about the missing actuals')
+      .toMatch(/nothing to reconcile|no actuals|run CPA first/i);
+  }, 240_000);
+
+  it('--calibrate reports what it did rather than exiting in silence', () => {
+    // A calibration that did not happen must not be indistinguishable from one that found no
+    // adjustment to make.
+    const r = cpa(prdWith([story()]), CONFIDENT, ['--calibrate']);
+    expect(r.out + r.err, 'calibration ran and said nothing at all').not.toBe('');
+  }, 240_000);
+
   it('--phase scopes the pass to one phase', () => {
     const body = prdWith([story({ id: 'A', phase: 'core' }), story({ id: 'B', phase: 'later' })]);
     const r = cpa(body, CONFIDENT, ['--json', '--phase', 'core']);

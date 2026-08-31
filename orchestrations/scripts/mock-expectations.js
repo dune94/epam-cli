@@ -438,16 +438,48 @@ function cassetteReply(seam, story) {
   return null;
 }
 
-function capturedReply(seam) {
-  if (!fs.existsSync(ARCHIVE_ROOT)) return null;
+/**
+ * THE ARCHIVE IS READ ONCE, AND BOUNDED.
+ *
+ * This listed every archive directory and then read each one AGAIN for every seam — roughly forty
+ * seams across hundreds of directories, against an archive that was 475MB and 11,607 files. The pass
+ * did not finish inside two minutes and printed nothing while it ran, so a slow start could not be
+ * told from a hang. The archive only grows, so this gets worse every run.
+ *
+ * Two changes, neither of which alters WHICH reply wins:
+ *
+ *   The listing is read once and cached. Directories are already searched newest-first, so the first
+ *   match for a seam is the same file it was before.
+ *
+ *   Only the most recent MOCK_ARCHIVE_SCAN directories are searched, and it SAYS when it stopped
+ *   early. A recording older than that bound was already never reached in practice — but silently,
+ *   which is the part worth fixing.
+ */
+const ARCHIVE_SCAN_LIMIT = Math.max(1, parseInt(process.env.MOCK_ARCHIVE_SCAN || '60', 10) || 60);
+let _archiveIndex;
+function archiveIndex() {
+  if (_archiveIndex) return _archiveIndex;
+  if (!fs.existsSync(ARCHIVE_ROOT)) { _archiveIndex = []; return _archiveIndex; }
   const dirs = fs.readdirSync(ARCHIVE_ROOT)
     .map((d) => path.join(ARCHIVE_ROOT, d))
     .filter((d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } })
     .sort().reverse();
-  const wanted = new RegExp(`^${seam.replace(/[^a-z0-9]/gi, '.')}.*\\.log$`, 'i');
-  for (const d of dirs) {
+  const scanned = dirs.slice(0, ARCHIVE_SCAN_LIMIT);
+  if (dirs.length > scanned.length) {
+    process.stderr.write(`[mock-expectations] archive has ${dirs.length} runs; searching the `
+      + `${scanned.length} most recent (raise MOCK_ARCHIVE_SCAN to widen)\n`);
+  }
+  _archiveIndex = scanned.map((d) => {
     let files = [];
-    try { files = fs.readdirSync(d); } catch { continue; }
+    try { files = fs.readdirSync(d); } catch { /* unreadable run directory */ }
+    return { dir: d, files };
+  });
+  return _archiveIndex;
+}
+
+function capturedReply(seam) {
+  const wanted = new RegExp(`^${seam.replace(/[^a-z0-9]/gi, '.')}.*\\.log$`, 'i');
+  for (const { dir: d, files } of archiveIndex()) {
     for (const f of files.filter((x) => wanted.test(x))) {
       let t = '';
       try { t = fs.readFileSync(path.join(d, f), 'utf8'); } catch { continue; }

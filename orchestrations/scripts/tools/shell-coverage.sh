@@ -33,11 +33,11 @@ TRACES="$WORK/traces"
 UNIQ="$WORK/uniq"
 ENABLER="$WORK/trace-on.sh"
 OUT="${SHELL_COVERAGE_OUT:-$ROOT/coverage/lcov.shell.info}"
-# A single process producing more than this is looping, not testing. Its own file is dropped and
-# named, rather than the whole collection being silently truncated.
-PER_PROC_CAP_MB="${SHELL_COVERAGE_PER_PROC_CAP_MB:-64}"
+# No per-process cap: every pass consumes the bytes it has read, so a long-running shell costs the
+# same as a short one and nothing legitimate is ever discarded.
 
-mkdir -p "$WORK" "$TRACES" "$(dirname "$OUT")"
+OFFSETS="$WORK/offsets"
+mkdir -p "$WORK" "$TRACES" "$OFFSETS" "$(dirname "$OUT")"
 : > "$UNIQ"
 
 # Sourced by EVERY non-interactive bash, including ones this repo does not own, so it must be inert
@@ -53,26 +53,35 @@ if [ -n "${SHCOV_TRACES:-}" ] && [ -z "${SHCOV_OFF:-}" ]; then
 fi
 ENABLER_EOF
 
-# THE COMPACTOR. A trace file is only touched once its owning pid is gone, so a live writer is never
-# read out from under. Everything it yields is a short `file:line` string, deduplicated on the spot.
+# THE COMPACTOR, READING FORWARD ONLY.
+#
+# An appending writer never rewrites bytes it has already written, so a live trace can be read from
+# where the last pass stopped — no truncation, no race, and nothing dropped. The first version
+# instead DROPPED any process whose file grew past a cap, which threw away the coverage of exactly
+# the long-running test shells that exercise the most code: three were discarded at 87MB, 85MB and
+# 68MB, and those were tests doing their job, not loops.
+#
+# Disk stays bounded because every pass consumes the new bytes and only the unique `file:line` pairs
+# are kept. A file is deleted once its owning pid is gone and its tail has been read.
 compact() {
-    local _f _pid _sz
+    local _f _pid _size _off _offfile
     for _f in "$TRACES"/*.trace; do
         [ -e "$_f" ] || continue
         _pid="$(basename "$_f" .trace)"
-        _sz=$(( $(stat -c %s "$_f" 2>/dev/null || echo 0) / 1048576 ))
-        if [ "$_sz" -ge "$PER_PROC_CAP_MB" ] && kill -0 "$_pid" 2>/dev/null; then
-            echo "[shell-coverage] pid $_pid produced ${_sz}MB of trace — dropping it; a single shell that large is looping, not testing" >&2
-            : > "$_f"
-            continue
+        _offfile="$OFFSETS/$_pid"
+        _off=0; [ -s "$_offfile" ] && _off="$(cat "$_offfile" 2>/dev/null || echo 0)"
+        _size="$(stat -c %s "$_f" 2>/dev/null || echo 0)"
+        if [ "$_size" -gt "$_off" ]; then
+            tail -c "+$((_off + 1))" "$_f" 2>/dev/null \
+                | grep -o '@@[^@]*@@' 2>/dev/null | sort -u >> "$UNIQ"
+            printf '%s' "$_size" > "$_offfile"
         fi
-        kill -0 "$_pid" 2>/dev/null && continue   # still writing; leave it alone
-        grep -o '@@[^@]*@@' "$_f" 2>/dev/null | sort -u >> "$UNIQ"
-        rm -f "$_f"
+        if ! kill -0 "$_pid" 2>/dev/null; then
+            rm -f "$_f" "$_offfile"
+        fi
     done
-    if [ -s "$UNIQ" ]; then
-        sort -u "$UNIQ" -o "$UNIQ"
-    fi
+    [ -s "$UNIQ" ] && sort -u "$UNIQ" -o "$UNIQ"
+    return 0
 }
 
 ( while sleep 5; do [ -d "$TRACES" ] || break; compact; done ) & COMPACTOR=$!

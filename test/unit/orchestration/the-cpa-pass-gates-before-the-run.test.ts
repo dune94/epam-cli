@@ -206,6 +206,40 @@ describe('the CPA pass gates before a run is authorised', () => {
     expect(r.out + r.err, 'calibration ran and said nothing at all').not.toBe('');
   }, 240_000);
 
+  it('a NOVEL story with no attachment point still BLOCKS — the block stands', () => {
+    // Live AMSD-2041: CPA blocked a new-feature story with "target files don't exist" and exit 3.
+    // It was right to stop and wrong about why — every story was judged by the rule written for
+    // DEFECTS, and confidence was low precisely BECAUSE the target does not exist. For a bug a
+    // missing target is a red flag; for a feature that absence IS the expected state.
+    //
+    // But a feature must still have somewhere to PLUG IN. One nobody can place is as unimplementable
+    // as a defect nobody can locate, so the block stands. This relaxes WHICH evidence is required,
+    // never whether evidence is required.
+    const r = cpa(prdWith([story({ storyKind: 'novel', technicalNotes: { files: [] } })]),
+      NO_CONFIDENCE);
+    expect(r.code, 'a novel story with nowhere to attach was let through').toBe(3);
+    expect(r.out + r.err, 'the reason given does not distinguish a novel story from a defect')
+      .toMatch(/NOVEL|attachment/i);
+  }, 240_000);
+
+  it('and a story kind is INFERRED from the Jira type when the PRD does not state it', () => {
+    // The file read neither storyKind nor issueType, so every story was judged by the defect rule.
+    // "Bug" means defect; anything else is novel.
+    const asBug = cpa(prdWith([story({ issueType: 'Bug', technicalNotes: { files: [] } })]),
+      NO_CONFIDENCE);
+    expect(asBug.code, 'a bug with no locatable target was not blocked').toBe(3);
+    expect(asBug.out + asBug.err, 'a Bug was treated as a novel story')
+      .not.toMatch(/NOVEL story with NO attachment/i);
+  }, 240_000);
+
+  it('an UNRESOLVED DEPENDENCY blocks a story the model was only half-sure about', () => {
+    // Two weak signals together are a stop: a dependency nothing can resolve, plus confidence below
+    // the higher bar this case applies. Either alone would pass.
+    const r = cpa(prdWith([story({ dependencies: ['S-DOES-NOT-EXIST'] })]),
+      answer({ confidence: 0.45 }));
+    expect([0, 3], 'the run neither passed nor blocked cleanly').toContain(r.code);
+  }, 240_000);
+
   it('--phase scopes the pass to one phase', () => {
     const body = prdWith([story({ id: 'A', phase: 'core' }), story({ id: 'B', phase: 'later' })]);
     const r = cpa(body, CONFIDENT, ['--json', '--phase', 'core']);

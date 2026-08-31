@@ -9044,6 +9044,11 @@ run_retry_extension_coordinator() {
     local evidence
     evidence=$(compute_retry_extension_evidence "$story_id")
     if [ -z "$evidence" ] || ! echo "$evidence" | jq empty 2>/dev/null; then
+        # UNREADABLE EVIDENCE IS NOT "NO EXTENSION WARRANTED". Both answer 0, and the caller
+        # cannot tell them apart — the same defect fixed two branches below, where a missing
+        # provider also returned a believable 0. Say which happened; the value is unchanged so
+        # no run behaves differently, but a 0 that nobody decided is now visible.
+        log "  [RetryExtension] retry-extension evidence for ${story_id} is missing or not valid JSON — returning 0 because it could not be READ, not because none was warranted"
         echo 0
         return 0
     fi

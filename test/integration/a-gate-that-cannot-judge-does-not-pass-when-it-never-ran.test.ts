@@ -102,6 +102,28 @@ describe('a gate that cannot judge does not pass', () => {
       .toMatch(/SKIPPING|not DECIDED|not decided/i);
   }, 60_000);
 
+  it('an unreadable evidence file is distinguishable from "none warranted"', () => {
+    // The same function answers 0 in two different situations: no provider configured, and
+    // evidence that could not be read. Both are believable and neither was decided, so each has
+    // to say which it is — otherwise a 0 in the log means nothing.
+    const r = spawnSync('bash', ['-c', `
+      log() { echo "$*"; }
+      error() { echo "$*" >&2; }
+      compute_retry_extension_evidence() { echo 'not json at all'; }
+      ${fn('run_retry_extension_coordinator')}
+      run_retry_extension_coordinator "S-1" "1" "" || true
+    `], {
+      encoding: 'utf8', timeout: 60000, cwd: REPO,
+      env: {
+        ...process.env, ORCH_GATE_PROVIDER: 'claude', EPAM_MODEL: 'm',
+        EPAM_RETRY_EXTENSION_ENABLED: '1',
+      },
+    });
+    const out = `${r.stdout ?? ''}\n${r.stderr ?? ''}`;
+    expect(out, 'unreadable evidence returned 0 with no word that it could not be read')
+      .toMatch(/could not be READ|not valid JSON|missing or not valid/i);
+  }, 60_000);
+
   it('no gate in this file still hands back a bare "pass" when it cannot run', () => {
     // The class. A fabricated verdict is worse than a refusal, and this is where it hid.
     const offenders: string[] = [];

@@ -88,9 +88,21 @@ function config() {
 }
 
 /** Lines executable and hit, per file, from lcov. Absent data is ABSENT — never zero, never full. */
+/**
+ * BOTH INSTRUMENTS, ONE ANSWER.
+ *
+ * The JS instrument cannot see shell and the shell tracer cannot see JS, and 37% of this repo is
+ * shell. Reading only one of them makes every shell-heavy stage report near zero forever — launch
+ * and reset are 100% shell and read exactly 0% — which looks like an absent test suite rather than
+ * an absent measurement, and sends someone writing tests that already exist.
+ */
+const LCOV_SHELL = process.env.STAGE_COVERAGE_LCOV_SHELL
+  || path.join(path.dirname(LCOV), 'lcov.shell.info');
+
 function lcovByFile() {
   let text;
   try { text = fs.readFileSync(LCOV, 'utf8'); } catch { return null; }
+  try { text += `\n${fs.readFileSync(LCOV_SHELL, 'utf8')}`; } catch { /* shell not measured yet */ }
   const out = new Map();
   let file = null; let found = 0; let hit = 0;
   for (const line of text.split('\n')) {
@@ -236,7 +248,10 @@ const REPORT = process.env.STAGE_COVERAGE_REPORT || path.join(REPO, 'coverage/st
  */
 function sourcesNewerThanCoverage(cfg) {
   let lcovMtime;
-  try { lcovMtime = fs.statSync(LCOV).mtimeMs; } catch { return null; } // absence is handled elsewhere
+  try { lcovMtime = fs.statSync(LCOV).mtimeMs; } catch { return null; }
+  // The OLDER of the two instruments decides: shell coverage measured last week does not become
+  // current because the JS suite ran this morning.
+  try { lcovMtime = Math.min(lcovMtime, fs.statSync(LCOV_SHELL).mtimeMs); } catch { /* absent */ } // absence is handled elsewhere
   const moved = [];
   for (const f of projectFiles(cfg)) {
     let st;
@@ -260,7 +275,7 @@ function fingerprint(cfg) {
     try { const st = fs.statSync(f); parts.push(`${f}:${st.size}:${Math.floor(st.mtimeMs)}`); }
     catch { parts.push(`${f}:missing`); }
   }
-  for (const f of [LCOV, CONFIG]) {
+  for (const f of [LCOV, LCOV_SHELL, CONFIG]) {
     try { const st = fs.statSync(f); parts.push(`${f}:${st.size}:${Math.floor(st.mtimeMs)}`); }
     catch { parts.push(`${f}:missing`); }
   }

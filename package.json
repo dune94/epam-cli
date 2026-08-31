@@ -36,7 +36,7 @@
     "format": "prettier --write 'src/**/*.ts' 'test/**/*.ts'",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage && npm run coverage:persist",
+    "test:coverage": "vitest run --coverage && npm run coverage:shell && npm run coverage:persist",
     "clean": "rm -rf dist",
     "dashboards:build": "npx @11ty/eleventy --config orchestrations/dashboards/.eleventy.js",
     "dashboards:watch": "npx @11ty/eleventy --watch --config orchestrations/dashboards/.eleventy.js",
@@ -46,7 +46,8 @@
     "test:guard": "vitest run --config vitest.guard.config.ts && npm run lint:pipeline",
     "lint:pipeline": "eslint --config orchestrations/eslint.pipeline.config.mjs orchestrations/scripts orchestrations/plugins",
     "test:shell": "bash test/shell/helpers/run-bats.sh test/shell/",
-    "coverage:persist": "node orchestrations/scripts/lib/handlers/stage-coverage.js --persist > /dev/null && node orchestrations/scripts/lib/handlers/stage-coverage.js --all"
+    "coverage:persist": "node orchestrations/scripts/lib/handlers/stage-coverage.js --persist > /dev/null && node orchestrations/scripts/lib/handlers/stage-coverage.js --all",
+    "coverage:shell": "bash orchestrations/scripts/tools/shell-coverage.sh"
   },
   "keywords": [
     "ai",

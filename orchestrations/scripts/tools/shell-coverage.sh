@@ -12,9 +12,16 @@
 # at a private descriptor, sets PS4 to carry ${BASH_SOURCE}:${LINENO}, and turns xtrace on. The trace
 # lands in its own file, NOT stderr, so nothing under test sees output it would not normally see.
 #
-# BOUNDED BEFORE IT STARTS. A full xtrace of both suites is large, so the trace file is capped and
-# the cap is enforced by the collector itself rather than hoped for. Exceeding it is reported, never
-# silently truncated mid-record.
+# BOUNDED BY CONSTRUCTION, NOT BY A WATCHDOG. The first version wrote one shared trace file and
+# watched its size. `set -x` prints the whole expanded command after PS4, so the bats suite alone
+# produced 2.7GB in minutes — and the watchdog could only NOTICE, not stop the writers, because
+# every traced shell already held the descriptor. Truncating a file other processes are appending to
+# loses records, and a lost record reads as "this line never ran".
+#
+# So nothing keeps the raw trace. Each shell writes to its OWN file named for its pid, and a
+# compactor reduces each one to unique `file:line` pairs and deletes it — but only once that pid has
+# exited, so there is no truncation race with a live writer. What survives is a set of roughly
+# thirty thousand short lines, whatever the suites do.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
@@ -22,21 +29,23 @@ cd "$ROOT"
 
 NODE_BIN="${NODE_BIN:-$(command -v node)}"
 WORK="${SHELL_COVERAGE_WORK:-${TMPDIR:-/tmp}/shell-coverage-$$}"
-TRACE="$WORK/trace"
+TRACES="$WORK/traces"
+UNIQ="$WORK/uniq"
 ENABLER="$WORK/trace-on.sh"
 OUT="${SHELL_COVERAGE_OUT:-$ROOT/coverage/lcov.shell.info}"
-# Cap in megabytes. A trace bigger than this means something is looping, and an unbounded file here
-# once filled a disk during a run.
-CAP_MB="${SHELL_COVERAGE_CAP_MB:-2048}"
+# A single process producing more than this is looping, not testing. Its own file is dropped and
+# named, rather than the whole collection being silently truncated.
+PER_PROC_CAP_MB="${SHELL_COVERAGE_PER_PROC_CAP_MB:-64}"
 
-mkdir -p "$WORK" "$(dirname "$OUT")"
-: > "$TRACE"
+mkdir -p "$WORK" "$TRACES" "$(dirname "$OUT")"
+: > "$UNIQ"
 
-# The enabler is sourced by EVERY non-interactive bash, including ones this repo does not own, so it
-# must be inert when the trace is not wanted and must never fail a shell that sources it.
+# Sourced by EVERY non-interactive bash, including ones this repo does not own, so it must be inert
+# when unwanted and must never fail a shell that sources it. Each shell gets its OWN file: no shared
+# writer, no truncation race, and a runaway process can be dropped on its own.
 cat > "$ENABLER" <<'ENABLER_EOF'
-if [ -n "${SHCOV_TRACE:-}" ] && [ -z "${SHCOV_OFF:-}" ]; then
-  exec 9>>"$SHCOV_TRACE" 2>/dev/null || true
+if [ -n "${SHCOV_TRACES:-}" ] && [ -z "${SHCOV_OFF:-}" ]; then
+  exec 9>>"$SHCOV_TRACES/$$.trace" 2>/dev/null || true
   BASH_XTRACEFD=9
   PS4='@@${BASH_SOURCE}:${LINENO}@@
 '
@@ -44,41 +53,51 @@ if [ -n "${SHCOV_TRACE:-}" ] && [ -z "${SHCOV_OFF:-}" ]; then
 fi
 ENABLER_EOF
 
-echo "[shell-coverage] tracing into $TRACE (cap ${CAP_MB}MB)"
-
-# The watchdog is the bound. Without it a runaway trace fills the disk, and a truncated-by-accident
-# trace reads as "these lines were never run" — a coverage result that is really a full disk.
-(
-  while sleep 10; do
-    [ -f "$TRACE" ] || break
-    sz=$(( $(stat -c %s "$TRACE" 2>/dev/null || echo 0) / 1048576 ))
-    if [ "$sz" -ge "$CAP_MB" ]; then
-      echo "[shell-coverage] TRACE HIT THE ${CAP_MB}MB CAP — stopping collection. The result is partial and must not be read as coverage." >&2
-      : > "$WORK/.capped"
-      break
+# THE COMPACTOR. A trace file is only touched once its owning pid is gone, so a live writer is never
+# read out from under. Everything it yields is a short `file:line` string, deduplicated on the spot.
+compact() {
+    local _f _pid _sz
+    for _f in "$TRACES"/*.trace; do
+        [ -e "$_f" ] || continue
+        _pid="$(basename "$_f" .trace)"
+        _sz=$(( $(stat -c %s "$_f" 2>/dev/null || echo 0) / 1048576 ))
+        if [ "$_sz" -ge "$PER_PROC_CAP_MB" ] && kill -0 "$_pid" 2>/dev/null; then
+            echo "[shell-coverage] pid $_pid produced ${_sz}MB of trace — dropping it; a single shell that large is looping, not testing" >&2
+            : > "$_f"
+            continue
+        fi
+        kill -0 "$_pid" 2>/dev/null && continue   # still writing; leave it alone
+        grep -o '@@[^@]*@@' "$_f" 2>/dev/null | sort -u >> "$UNIQ"
+        rm -f "$_f"
+    done
+    if [ -s "$UNIQ" ]; then
+        sort -u "$UNIQ" -o "$UNIQ"
     fi
-  done
-) & WATCHDOG=$!
+}
+
+( while sleep 5; do [ -d "$TRACES" ] || break; compact; done ) & COMPACTOR=$!
+
+echo "[shell-coverage] tracing into $TRACES (per-process, compacted continuously)"
 
 run_suite() {
     local _label="$1"; shift
     echo "[shell-coverage] running $_label"
-    SHCOV_TRACE="$TRACE" BASH_ENV="$ENABLER" "$@" >"$WORK/$_label.log" 2>&1
+    SHCOV_TRACES="$TRACES" BASH_ENV="$ENABLER" "$@" >"$WORK/$_label.log" 2>&1
     echo "[shell-coverage] $_label exited $? (output: $WORK/$_label.log)"
+    compact
 }
 
 # BOTH SUITES, because both execute shell. bats runs the .bats cases directly; the vitest suite
-# spawns bash for nearly every pipeline test it has, and those runs are real executions of real
-# scripts — exactly the lines this is meant to measure.
+# spawns bash for nearly every pipeline test it has, and those are real executions of real scripts —
+# exactly the lines this is meant to measure.
 run_suite bats bash "$ROOT/orchestrations/scripts/run-shell-tests.sh"
 run_suite vitest "$NODE_BIN" "$ROOT/node_modules/.bin/vitest" run
 
-kill "$WATCHDOG" 2>/dev/null || true
+kill "$COMPACTOR" 2>/dev/null || true
+sleep 1
+compact
 
-if [ -f "$WORK/.capped" ]; then
-    echo "[shell-coverage] REFUSING to emit lcov from a capped trace: a partial trace reports lines as never-run when they simply were not recorded." >&2
-    exit 4
-fi
+echo "[shell-coverage] $(wc -l < "$UNIQ") unique traced lines, $(du -sh "$UNIQ" | cut -f1) on disk"
 
-"$NODE_BIN" "$ROOT/orchestrations/scripts/lib/handlers/shell-trace-to-lcov.js" "$TRACE" "$OUT" || exit $?
+"$NODE_BIN" "$ROOT/orchestrations/scripts/lib/handlers/shell-trace-to-lcov.js" "$UNIQ" "$OUT" || exit $?
 echo "[shell-coverage] wrote $OUT"

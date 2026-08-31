@@ -106,3 +106,11 @@ fi
   process.stderr.write("[trace-children] "+covered.size+" child-executed files ("+newFiles+" new, "+newLines+" newly covered lines)\n");
 ' "$W/v8" "$ACC" "$ROOT"
 echo "[trace-children] $# target(s), exit $_rc"
+
+# THE RUNNER'S FAILURE IS THIS TOOL'S FAILURE.
+#
+# The exit code was captured, printed, and then discarded: the last command was an echo, so the
+# tool exited 0 whatever happened. A target that does not exist, or a suite that failed to start,
+# reported a clean measurement — turning "nothing ran" into "nothing is covered", which are the
+# same number and opposite problems.
+exit "$_rc"

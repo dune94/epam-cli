@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# index-codelines.sh — Build/refresh CodeGraph indexes for all Metrolinx codelines.
+# index-codelines.sh — Build/refresh CodeGraph indexes for every codeline a run resolved.
+#
+# NO CLIENT IS NAMED HERE. The header said "all Metrolinx codelines", which is a project fact in
+# engine code: the codelines are whatever discovery resolved for this ticket, on whatever project.
 #
 # Skips:
-#   - docs.* repos (not in maintenance scope)
 #   - Already-indexed repos (unless --force is passed)
 #   - Anything without a .git directory
 #
@@ -19,10 +21,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="${JIRA_CODELINE_ROOT:-}"
 # No client path default: an engine default pointing at one client's checkout is
 # hardcoding, and silently indexes the wrong tree when the var is forgotten.
-if [ -z "$ROOT" ]; then
-    echo "JIRA_CODELINE_ROOT is not set — cannot index codelines." >&2
-    exit 1
-fi
 FORCE=0
 MAX_PARALLEL=4
 BIN="${CODEGRAPH_BIN:-$(which codegraph 2>/dev/null || echo '')}"
@@ -35,6 +33,16 @@ while [[ $# -gt 0 ]]; do
     *) echo "Unknown arg: $1"; exit 1 ;;
   esac
 done
+
+# THE ROOT IS CHECKED AFTER PARSING, because --root is how it is supplied.
+#
+# This check ran BEFORE the argument loop, so the documented flag could never satisfy it: passing
+# --root and nothing else exited 1 saying JIRA_CODELINE_ROOT is not set. A flag that cannot work is
+# worse than one that does not exist — the usage promises it.
+if [ -z "$ROOT" ]; then
+    echo "JIRA_CODELINE_ROOT is not set — cannot index codelines." >&2
+    exit 1
+fi
 
 if [[ -z "$BIN" ]]; then
   echo "ERROR: codegraph binary not found. Run: npm i -g @colbymchenry/codegraph"
@@ -50,11 +58,15 @@ echo ""
 REPOS=()
 for dir in "$ROOT"/*/; do
   name="$(basename "$dir")"
-  # Exclude docs.* repos
-  if [[ "$name" == docs.* ]]; then
-    echo "  SKIP (docs): $name"
-    continue
-  fi
+  # NOTHING IS EXCLUDED BY NAME.
+  #
+  # This skipped `docs.*` as "not in maintenance scope" — one client's naming habit asserted over
+  # every project, and it fails in the direction of doing LESS, silently. On a project whose product
+  # IS a documentation platform it would skip the work. The same literal was removed from
+  # codeline-discovery.js for the same reason; relocating it here did not make it project data.
+  #
+  # A codeline is indexed if discovery resolved it and it is a git repository. That is the shape of
+  # the thing, not a judgement about relevance.
   # Must be a git repo
   if [[ ! -d "$dir/.git" ]]; then
     echo "  SKIP (not git): $name"

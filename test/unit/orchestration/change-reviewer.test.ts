@@ -202,15 +202,29 @@ describe('claude.sh — run_prd_change_reviewer verdict is not polluted by its o
   const body    = claudeSrc.slice(fnStart, fnEnd);
 
   it('redirects the REJECTED warning to stderr (does not pollute the captured verdict)', () => {
-    const idx = body.indexOf('REJECTED');
-    const line = body.slice(body.lastIndexOf('\n', idx), body.indexOf('\n', idx));
-    expect(line).toMatch(/>&2/);
+    // THE LOG CALL, NOT THE FIRST TIME THE WORD APPEARS. A comment in this function mentions
+    // AUTO-APPROVED while explaining the defect, and indexOf found that prose instead of the line
+    // that logs — asserting >&2 on a comment, which of course has none. A guard a comment can
+    // break is measuring text, not behaviour.
+    const lines = body.split('\n')
+      .filter((l) => /\b(log|warning|error|success)\b/.test(l) && l.includes('REJECTED')
+        && !l.trim().startsWith('#'));
+    expect(lines.length, 'no REJECTED log call found at all — the shape has changed')
+      .toBeGreaterThan(0);
+    for (const line of lines) expect(line, `this REJECTED log line pollutes the captured verdict`).toMatch(/>&2/);
   });
 
   it('redirects the APPROVED log line to stderr (does not pollute the captured verdict)', () => {
-    const idx = body.indexOf('APPROVED');
-    const line = body.slice(body.lastIndexOf('\n', idx), body.indexOf('\n', idx));
-    expect(line).toMatch(/>&2/);
+    // THE LOG CALL, NOT THE FIRST TIME THE WORD APPEARS. A comment in this function mentions
+    // AUTO-APPROVED while explaining the defect, and indexOf found that prose instead of the line
+    // that logs — asserting >&2 on a comment, which of course has none. A guard a comment can
+    // break is measuring text, not behaviour.
+    const lines = body.split('\n')
+      .filter((l) => /\b(log|warning|error|success)\b/.test(l) && l.includes('APPROVED')
+        && !l.trim().startsWith('#'));
+    expect(lines.length, 'no APPROVED log call found at all — the shape has changed')
+      .toBeGreaterThan(0);
+    for (const line of lines) expect(line, `this APPROVED log line pollutes the captured verdict`).toMatch(/>&2/);
   });
 
   it('no other warning()/log()/error()/success() call inside the function is missing >&2', () => {

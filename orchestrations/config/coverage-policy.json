@@ -1,5 +1,6 @@
 {
   "$comment": "THE DEFAULT COVERAGE POLICY, DECLARED — not hardcoded in the engine. A project overrides it by shipping its own coverage-policy.json in its config directory; onboarding a project needs no file here and no pipeline change. Editing this file changes the floor for every project that has not stated its own. If neither this nor a project file exists, the gate refuses rather than inventing a number.",
-  "thresholdPercent": 95,
-  "blocker": true
+  "thresholdPercent": 60,
+  "blocker": true,
+  "$baseline": "60% set 2026-08-31 by the operator as the working baseline for every stage. spec, reset and mint already clear it; the rest are the work in front. This is a floor to hold, not a target to stop at."
 }

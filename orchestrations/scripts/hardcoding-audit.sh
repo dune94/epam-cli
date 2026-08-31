@@ -287,6 +287,19 @@ case "${1:-}" in
     echo "### ${NAMES[$i]} — per file"; echo
     hits_for "$i" | awk -F: '{print $1}' | sort | uniq -c | sort -rn
     ;;
+  --*)
+    # AN UNKNOWN FLAG IS REFUSED, NOT REPORTED OVER.
+    #
+    # Every unrecognised argument used to fall through to the default report, so `--calibrat` printed
+    # a full audit and an operator reading it believed calibration had passed. A typo in the one
+    # command that proves this detector can still SEE is exactly the typo that must not pass quietly.
+    echo "hardcoding-audit: unknown option '$1'" >&2
+    echo "  --scope       what this audit covers" >&2
+    echo "  --calibrate   prove every category can still see its own example" >&2
+    echo "  --verify <n>  every matching line for category n" >&2
+    echo "  --files <n>   per-file counts for category n" >&2
+    exit 2
+    ;;
   *)
     echo "hardcoding audit — ${#FILES[@]} engine files (tests and PROJECT config excluded)"; echo
     printf "  %-3s %-28s %s\n" "#" "CATEGORY" "SITES"

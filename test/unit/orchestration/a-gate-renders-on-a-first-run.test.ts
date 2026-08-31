@@ -40,6 +40,13 @@ const ORDINARY_ABSENCES: Record<string, Record<string, string>> = {
       + 'story the detective did not analyse. Undeclared, the reviewer REFUSED TO RENDER for it and '
       + 'the phase could not proceed: the producer is `[ -n "$STORY_FIX_ANALYSIS" ] && ... || true`, '
       + 'a deliberate empty, exactly like the uncovered-VC block above',
+    __TEST_FILES__: 'the producer is a git diff filtered to test-file paths, so a story that changed '
+      + 'no test file yields nothing — ordinary for a greenfield story, and for any change whose '
+      + 'tests have not been written yet. Undeclared, the reviewer would refuse to render for '
+      + 'exactly those stories',
+    __PROJECT_TOOLS_BLOCK__: 'the producer is `--arg tools "${_review_project_tools_block:-}"`, an '
+      + 'explicit `:-` default and therefore a deliberate empty: a project that declares no tools '
+      + 'has nothing to say here, which is not the same as a failed lookup',
   },
   'failure-analyst': {
     __SKILL_ADDENDUM__: 'a role may carry no accumulated skill notes',

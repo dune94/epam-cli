@@ -8,6 +8,19 @@ module.exports = {
   precedence: 75,
   file: 'build.gradle',
   alsoMatches: ['build.gradle.kts'],
+  // THE EXTENSIONS THIS ECOSYSTEM SOURCE IS WRITTEN IN.
+  //
+  // Only package-json.js declared these, so lib/handlers/testable-source.js resolved an EMPTY
+  // set for every other ecosystem and found no file testable on a Python, Go, Rust, Ruby, Java
+  // or PHP codeline. brownfield-repro-test-writer.sh then reported "nothing sensible to test" —
+  // indistinguishable from a correct decision — so bug-reproduction tests silently never
+  // happened outside Node. That is the exact Node-only defect testable-source.js was written to
+  // remove, surviving one layer further down because the DATA it reads was never filled in.
+  codelineManifests: {
+    dependencyCheck: {
+      scanFileExtensions: [".java",".kt"],
+    },
+  },
   stack: 'java',
   installDir: null,
   protectedFiles: ['build.gradle', 'build.gradle.kts', 'settings.gradle', 'gradle.properties'],

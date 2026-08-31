@@ -35,7 +35,20 @@ module.exports = {
     // one wrongly included shows up in a diff a human reads. So Go's vendor/ and bin/ are absent
     // deliberately — vendor/ is committed by convention and bin/ is tracked in plenty of repos.
     artifactDirs: ['.bundle'],
-    stack: 'ruby',
+    // THE EXTENSIONS THIS ECOSYSTEM SOURCE IS WRITTEN IN.
+  //
+  // Only package-json.js declared these, so lib/handlers/testable-source.js resolved an EMPTY
+  // set for every other ecosystem and found no file testable on a Python, Go, Rust, Ruby, Java
+  // or PHP codeline. brownfield-repro-test-writer.sh then reported "nothing sensible to test" —
+  // indistinguishable from a correct decision — so bug-reproduction tests silently never
+  // happened outside Node. That is the exact Node-only defect testable-source.js was written to
+  // remove, surviving one layer further down because the DATA it reads was never filled in.
+  codelineManifests: {
+    dependencyCheck: {
+      scanFileExtensions: [".rb"],
+    },
+  },
+  stack: 'ruby',
     installDir: null,
     lockfiles: { 'Gemfile.lock': 'bundle' },
     // HOW THIS ECOSYSTEM ADDS ONE NEW DEPENDENCY.

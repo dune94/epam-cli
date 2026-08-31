@@ -129,19 +129,22 @@ describe('the CPA pass gates before a run is authorised', () => {
       'the PRD was rewritten without --apply').toEqual(prd);
   }, 240_000);
 
-  it.fails('AN INFERENCE THAT RETURNS NOTHING is still gated PASS — an open defect', () => {
-    // OPEN DEFECT, recorded rather than hidden. cpa-inference.js now reports a failed review as
-    // confidence 0 with a risk flag (see cpa-inference.test.ts), but the story still reaches the
-    // gate as PASS and the run exits 0. At least one further coercion sits between them —
-    // `parseFloat(reviewData.confidence) || 0.3` turns 0 into 0.3, and the _inferenceSkipped path
-    // may be handled separately.
-    //
-    // Marked .fails so the suite is honest: this asserts the behaviour we WANT, records that it
-    // does not hold, and will fail loudly the moment it starts holding, at which point the marker
-    // comes off. The last gate before money is spent currently authorises a story whose review
-    // never happened.
+  it('AN INFERENCE THAT RETURNS NOTHING is gated BLOCK, not passed', () => {
+    // The last gate before a run is authorised used to force gate=pass on _inferenceSkipped alone,
+    // commented "no API key — don't penalise missing key". Every path setting that flag is a
+    // FAILURE: the runner was unavailable, returned nothing, or returned something unparseable.
+    // There is no deliberate-skip path in cpa-inference.js at all, so the branch treated a broken
+    // reviewer as a missing key and authorised every story — PASS in the report, 0 from the process.
     const r = cpa(prdWith([story()]), '');
     expect(r.code, 'an estimate that was never made was gated as a pass').toBe(3);
+  }, 240_000);
+
+  it('and a review that was never ATTEMPTED may still pass on the formula estimate', () => {
+    // The distinction the fix rests on: _inferenceFailed separates "attempted and broke" from
+    // "deliberately not attempted". A confident answer still passes, so the gate did not simply
+    // become a blanket refusal.
+    const r = cpa(prdWith([story()]), CONFIDENT);
+    expect(r.code, 'a confident review was blocked, so the gate now refuses everything').toBe(0);
   }, 240_000);
 
   it('and an answer that does not parse as an object is treated as NO CONFIDENCE', () => {

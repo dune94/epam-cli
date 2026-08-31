@@ -274,6 +274,15 @@ function skippedReview(formulaEstimate, reason) {
     citedSources:         [],
     reasoning:            `Inference skipped — ${reason}. Formula estimate used unchanged.`,
     _inferenceSkipped:    true,
+    // ATTEMPTED AND FAILED — not "deliberately not attempted".
+    //
+    // The shell reads _inferenceSkipped and forces gate=pass, commented "no API key — don't penalise
+    // missing key". But every caller of this function is a FAILURE: the runner was unavailable, it
+    // returned nothing, or its answer did not parse. There is no deliberate-skip path in this file at
+    // all, so that branch has been treating a broken reviewer as a missing key and authorising the
+    // run. This flag lets the gate tell the two apart; if a genuine "not configured" path is ever
+    // added, it sets _inferenceSkipped WITHOUT this.
+    _inferenceFailed:     true,
     _metrics:             { latencyMs: 0, tokensIn: 0, tokensOut: 0, tokenEfficiency: 0 },
   };
 }

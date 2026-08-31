@@ -885,8 +885,17 @@ while IFS= read -r sid; do
   esc_total=$(ensure_leading_zero "$esc_total")
 
   # ── Gate decision ─────────────────────────────────────────────────────────────
-  # When inference was skipped (no API key), default to pass — don't penalise missing key
-  if [ "$inference_skipped" = "true" ]; then
+  # A DELIBERATE SKIP MAY PASS. A FAILED REVIEW MAY NOT.
+  #
+  # This read _inferenceSkipped alone and forced gate=pass, commented "no API key — don't penalise
+  # missing key". Every path that sets that flag in cpa-inference.js is a FAILURE — the runner was
+  # unavailable, returned nothing, or returned something unparseable — so the last gate before a run
+  # is authorised passed every story whenever its reviewer broke, reported PASS, and exited 0.
+  #
+  # _inferenceFailed distinguishes them. A review that was never attempted still passes on the
+  # formula estimate; a review that was attempted and failed does not.
+  _inference_failed=$(echo "$cpa_raw" | jq -r '._inferenceFailed // false' 2>/dev/null)
+  if [ "$inference_skipped" = "true" ] && [ "$_inference_failed" != "true" ]; then
     gate="pass"
   else
     gate=$(compute_gate "$confidence" "$flag_count" "$dep_unresolved")

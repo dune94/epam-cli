@@ -6,11 +6,13 @@
 #
 # Exit 0 = safe to launch. Non-zero = a defect that WILL surface in a run.
 
-# THE PIPELINE DOES NOT RUN CODE NOBODY HAS TESTED. This stage asks how much of the code it is
-# about to execute has a test behind it, and halts when the project says it must.
-_scg_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/stage-coverage-gate.sh"
-# shellcheck source=/dev/null
-[ -f "$_scg_lib" ] && . "$_scg_lib" && require_all_stage_coverage || exit 1
+# THE COVERAGE GATE IS NOT HERE. This file is a STATIC SOURCE AUDIT — it reads code and reports
+# findings, and it is run at a desk as often as in a pipeline. Halting it on a coverage measurement
+# meant it printed nothing at all whenever coverage was stale, so every check it performs vanished
+# and the operator saw an empty report rather than a reason.
+#
+# The whole-map gate belongs where money moves: the tier3 launchers call require_all_stage_coverage
+# before they spend, which is also what marks the run gated for the per-stage gates.
 
 set -uo pipefail
 # NEITHER OF THESE IS WRITTEN DOWN.

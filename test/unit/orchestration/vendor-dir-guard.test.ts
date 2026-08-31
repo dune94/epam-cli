@@ -238,13 +238,20 @@ describe('run_vendor_integrity_check — REAL execution, reproduces the exact li
 
       const getVendorDirsBody = extractFunctionByLineAnchor('_get_vendor_dirs');
       const checkBody = extractFunctionByLineAnchor('run_vendor_integrity_check');
+    const projectTestCommandBody = extractFunctionByLineAnchor('_project_test_command');
+    const repoHasTestsBody = extractFunctionByLineAnchor('_project_repo_has_tests');
       const outLog = join(dir, 'out.log');
       const scriptPath = join(dir, 'run.sh');
       writeFileSync(
         scriptPath,
         [
           `VERIFICATION_FAILURE=""`,
+          // evidence_window sizes the evidence the check captures; without it the report is built
+          // from an empty head(1) and never names the tampered file.
+          `. ${JSON.stringify(join(REPO_ROOT, 'orchestrations/scripts/lib/evidence-windows.sh'))} 2>/dev/null || true`,
           getVendorDirsBody,
+          projectTestCommandBody,
+          repoHasTestsBody,
           checkBody,
           `run_vendor_integrity_check "${dir}" "${outLog}"`,
           `echo "RC=$?"`,
@@ -349,13 +356,20 @@ describe('run_vendor_integrity_check — vendorCacheExcludePatterns (fixes false
 
       const getVendorDirsBody = extractFunctionByLineAnchor('_get_vendor_dirs');
       const checkBody = extractFunctionByLineAnchor('run_vendor_integrity_check');
+    const projectTestCommandBody = extractFunctionByLineAnchor('_project_test_command');
+    const repoHasTestsBody = extractFunctionByLineAnchor('_project_repo_has_tests');
       const outLog = join(dir, 'out.log');
       const scriptPath = join(dir, 'run.sh');
       writeFileSync(
         scriptPath,
         [
           `VERIFICATION_FAILURE=""`,
+          // evidence_window sizes the evidence the check captures; without it the report is built
+          // from an empty head(1) and never names the tampered file.
+          `. ${JSON.stringify(join(REPO_ROOT, 'orchestrations/scripts/lib/evidence-windows.sh'))} 2>/dev/null || true`,
           getVendorDirsBody,
+          projectTestCommandBody,
+          repoHasTestsBody,
           checkBody,
           `run_vendor_integrity_check "${dir}" "${outLog}"`,
           `echo "RC=$?"`,
@@ -474,6 +488,12 @@ describe('run_external_verification — vendor dirs are ALWAYS unlocked, whether
       const lockBody = extractFunctionByLineAnchor('_vendor_lock');
       const unlockBody = extractFunctionByLineAnchor('_vendor_unlock');
       const integrityCheckBody = extractFunctionByLineAnchor('run_vendor_integrity_check');
+      // THE FUNCTION'S REAL DEPENDENCY, EXTRACTED TOO. run_vendor_integrity_check calls
+      // _project_test_command; without it bash reported 'command not found' mid-check and the
+      // tampered file never made it into the report — which read as "the guard does not detect
+      // tampering" when the harness was simply incomplete.
+      const projectTestCommandBody = extractFunctionByLineAnchor('_project_test_command');
+      const repoHasTestsBody = extractFunctionByLineAnchor('_project_repo_has_tests');
       // extractHeredocAwareFunctionBody equivalent for run_external_verification,
       // since it embeds calls to other functions we stub below (not heredocs
       // itself at the point we need — the vendor-check wiring is near the top,

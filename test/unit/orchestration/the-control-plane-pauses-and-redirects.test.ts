@@ -51,7 +51,14 @@ beforeAll(async () => {
   await new Promise((r) => setTimeout(r, 1500));
 }, 60_000);
 
-afterAll(() => { try { proc.kill('SIGKILL'); } catch { /* already gone */ } });
+afterAll(async () => {
+  // SIGTERM, not SIGKILL. A killed process never runs its exit handlers, so V8 never flushes the
+  // coverage it collected — 233 lines of exercised code reported as zero. Asking it to stop, and
+  // waiting briefly, is the difference between measuring this file and not.
+  try { proc.kill('SIGTERM'); } catch { /* already gone */ }
+  await new Promise((r) => { proc.once('exit', r); setTimeout(r, 3000); });
+  try { proc.kill('SIGKILL'); } catch { /* already exited */ }
+});
 
 describe('the control plane pauses a run by the sentinel the orchestrator polls', () => {
   it('is alive and answers /health', async () => {

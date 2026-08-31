@@ -10809,18 +10809,9 @@ fi
 assert_no_story_ids_lost "presplit" "Step 24: Final post-phase assessment"
 assert_no_story_ids_gained "post-parallel" "Step 24: Final post-phase assessment"
 
-# ──────────────────────────────────────────────
-# Step 7: Load Phase Graph into Neo4j
-# ──────────────────────────────────────────────
-LOAD_GRAPH_SH="$SCRIPT_DIR/load-phase-graph.sh"
-if [ -f "$LOAD_GRAPH_SH" ]; then
-    log "Step 7: Loading phase graph into Neo4j..."
-    if PHASE="$PHASE" bash "$LOAD_GRAPH_SH" --phase "$PHASE" >> "$LOG_DIR/neo4j-import.log" 2>&1; then
-        success "Step 7: Phase graph loaded — Bloom: $(service_url phaseGraph)/browser/bloom"
-    else
-        warning "Step 7: Neo4j graph load skipped (Neo4j may not be running)"
-    fi
-fi
+# Step 7 (Neo4j phase-graph load) REMOVED 2026-08-31 at the operator's instruction. It loaded the
+# phase graph into a Neo4j instance nobody reads, warned and continued whenever Neo4j was absent —
+# which was always — and its only consumer was a Bloom URL. Gone with load-phase-graph.sh.
 
 # ──────────────────────────────────────────────
 # Step 7.5: Write cross-phase handoff document

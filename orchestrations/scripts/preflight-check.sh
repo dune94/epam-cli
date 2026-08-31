@@ -322,10 +322,15 @@ fi
 # ── 5. Dashboard is up ───────────────────────────────────────────────────────
 if [ "$_assess_environment" != "0" ]; then
 echo "[ Dashboard ]"
-if curl -sf ${_DASH}/prd.json >/dev/null 2>&1; then
-  ok "Dashboard serving prd.json at ${_DASH}"
+# The dashboards are how a run is watched, so pre-flight BRINGS THEM UP rather than reporting that
+# they are down. See lib/dashboard-ensure.sh — it restarts the container and re-checks before it
+# fails. The old probe curled prd.json, a file the dashboards no longer read.
+# shellcheck source=lib/dashboard-ensure.sh
+. "$SCRIPT_DIR/lib/dashboard-ensure.sh"
+if ensure_dashboards_up "$_DASH"; then
+  ok "Dashboard is up at ${_DASH}"
 else
-  fail "Dashboard not responding — run pre-run-reset.sh first"
+  fail "Dashboard not serving at ${_DASH} — a run started now cannot be watched"
 fi
 
 # ── 6. Self-heal observability routing ───────────────────────────────────────

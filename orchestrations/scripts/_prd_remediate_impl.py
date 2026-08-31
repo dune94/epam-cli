@@ -8,7 +8,7 @@ import sys
 # ui_and_review removed (2026-07-07): the pipeline is scaffold -> core only.
 # 'documentation' is NOT added here despite being requested — investigation
 # (2026-07-07) confirmed it has never been wired into phase execution at all:
-# the doc-* agent profiles (doc-coordinator, guide-author, etc.) exist in
+# the guide-author agent profile exists in
 # profiles.json but no phase-loop code in run-agent-orchestration.sh/
 # tier3-travel-app-run.sh ever invokes them. Adding it to REQUIRED_PHASES now
 # would fail every run against a PRD that (correctly, today) has no

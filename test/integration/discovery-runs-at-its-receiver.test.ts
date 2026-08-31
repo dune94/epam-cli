@@ -16,7 +16,7 @@
  * claimed.
  */
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, existsSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runDiscovery, estatePath, DISCOVERY_FILES, REPO } from '../helpers/discovery-receiver';
@@ -131,6 +131,79 @@ describe('discovery runs at its receiver', () => {
     expect(r.code, r.stderr.slice(-300)).toBe(0);
     expect(existsSync(join(proj, 'codeline-facts.json')),
       'discovery resolved facts and wrote them nowhere').toBe(true);
+  }, 120_000);
+
+  it('facts the agent supplies are written, sourced or not', () => {
+    // The facts file is what agents working inside a repository read INSTEAD of re-deriving what
+    // the estate already knows. Every earlier case returned codelines with no facts at all, so the
+    // rendering — including the "(unsourced)" marker for a fact the agent gave no origin for —
+    // executed nowhere.
+    const proj = mkdtempSync(join(tmpdir(), 'discovery-facts-'));
+    let work = '';
+    const r = runDiscovery({
+      covDir: COV, env: { ...FAST, EPAM_PROJECT_CONFIG_DIR: proj },
+      onWork: (w) => { work = w; },
+      reply: () => JSON.stringify({
+        codelines: [{
+          path: estatePath(work, 'alpha.shop.com'), name: 'model-said-this',
+          reason: 'checkout lives here', evidence: 'checkout email confirm',
+          facts: [
+            { text: 'the checkout form validates email case-insensitively', source: 'src/checkout.js' },
+            { text: 'a fact the agent gave no origin for' },
+            { text: '   ' },
+          ],
+        }],
+      }),
+    });
+    expect(r.code, r.stderr.slice(-300)).toBe(0);
+    const facts = JSON.parse(readFileSync(join(proj, 'codeline-facts.json'), 'utf8'));
+    const entry = facts.alphashop;
+    expect(entry, `no entry for the codeline: ${Object.keys(facts).join(', ')}`).toBeTruthy();
+    // The blank one is dropped; the unsourced one is KEPT and marked, because discarding it would
+    // lose a fact while pretending none was given.
+    expect(entry.facts).toHaveLength(2);
+    expect(entry.facts[1].source).toMatch(/unsourced/);
+  }, 120_000);
+
+  it('a malformed codeline in the reply does not corrupt the facts file', () => {
+    // The other side of two branches the happy path never takes: an entry with no name (skipped
+    // rather than written under "undefined") and one with no path (written with an empty path
+    // rather than the string "undefined"). A model returning either is a real case, and the facts
+    // file is read by every agent working in that repository.
+    const proj = mkdtempSync(join(tmpdir(), 'discovery-malformed-'));
+    let work = '';
+    const r = runDiscovery({
+      covDir: COV, env: { ...FAST, EPAM_PROJECT_CONFIG_DIR: proj },
+      onWork: (w) => { work = w; },
+      reply: () => JSON.stringify({
+        codelines: [
+          {
+            path: estatePath(work, 'alpha.shop.com'), name: 'model-said-this',
+            reason: 'checkout lives here', evidence: 'checkout email confirm',
+            facts: [{ text: 'the checkout form exists', source: 'src/checkout.js' }],
+          },
+          // Grounded (a real repository in the estate) but unnamed — an ungrounded entry is
+          // rejected earlier, so this is the only way the nameless path is reachable at all.
+          { path: estatePath(work, 'beta.shop.com'), name: '', reason: 'nameless', evidence: 'timetable' },
+        ],
+      }),
+    });
+    expect(r.code, r.stderr.slice(-300)).toBe(0);
+    const facts = JSON.parse(readFileSync(join(proj, 'codeline-facts.json'), 'utf8'));
+    const keys = Object.keys(facts).filter((k) => !k.startsWith('_'));
+    expect(keys, 'a nameless codeline was written into the facts file')
+      .not.toContain('undefined');
+    expect(keys, 'the well-formed codeline did not survive the malformed one')
+      .toContain('alphashop');
+  }, 120_000);
+
+  it('a codeline with no facts is recorded as having none, not skipped', () => {
+    // withoutFacts: the difference between "we asked and got nothing" and "we never asked".
+    const proj = mkdtempSync(join(tmpdir(), 'discovery-nofacts-'));
+    const r = run({ env: { EPAM_PROJECT_CONFIG_DIR: proj } });
+    expect(r.code, r.stderr.slice(-300)).toBe(0);
+    expect(r.stderr, 'a codeline with no facts was written without a word about it')
+      .toMatch(/no facts for codeline/i);
   }, 120_000);
 
   it('two colliding siblings do not collapse into one codeline', () => {

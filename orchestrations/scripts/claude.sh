@@ -12215,5 +12215,19 @@ run_pre_phase_assessment() {
     fi
 }
 
+# RUNNING IS OPT-IN — the guard mock-expectations.js and agent-check.js already carry.
+#
+# This file is 12,219 lines and 155 functions, and its tests reach them by COPYING function bodies
+# into `bash -c "<string>"` harnesses. bash then attributes every traced line to that string, so the
+# writer stage reads 21% while its tests exist and pass: there is no file for the coverage to land on.
+#
+# Sourced, this defines the functions and stops. Executed, `main "$@"` runs exactly as before —
+# `return` outside a function succeeds only in a sourced file, which is how the two are told apart.
+# Nothing above this line changes, so an executed run reaches main having done identically what it
+# did before.
+if (return 0 2>/dev/null); then
+    return 0
+fi
+
 # Run main
 main "$@"

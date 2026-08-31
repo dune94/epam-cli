@@ -60,15 +60,35 @@ function coverageFor(covDir, files) {
       // Outermost first, so a nested count-0 range overwrites the enclosing count.
       const ranges = (script.functions || []).flatMap((fn) => fn.ranges || [])
         .sort((a, b) => (b.endOffset - b.startOffset) - (a.endOffset - a.startOffset));
-      // Within ONE script, ranges nest and the innermost wins, so a later (smaller) range
-      // overwrites. ACROSS processes it is the opposite: a run that never loaded the module
-      // reports count 0 for every line, and letting that overwrite an earlier hit erases real
-      // execution. So each process is folded on its own, then merged by taking the maximum.
+      // A LINE IS COVERED WHEN ITS STATEMENT RAN — the ordinary meaning of line coverage, and
+      // what a "95% coverage" requirement asks for.
+      //
+      // The first version attributed a line from ANY range overlapping it, innermost winning. That
+      // reports BRANCHES: `cl.path || ''` has a count-0 range for the fallback, so the line was
+      // called uncovered although it plainly executed. Two lines a new test demonstrably ran were
+      // being reported as unreached, which is what exposed it.
+      //
+      // v8-to-istanbul's rule instead: find the innermost range containing the line's FIRST
+      // non-whitespace character, and take that range's count. A line inside a block that never
+      // ran is still uncovered, because the enclosing count-0 range contains its first character.
+      const firstTokenOffset = new Map();
+      {
+        let off = 0;
+        src.split('\n').forEach((text, i) => {
+          const lead = text.length - text.trimStart().length;
+          if (text.trim()) firstTokenOffset.set(i + 1, off + lead);
+          off += text.length + 1;
+        });
+      }
       const thisScript = new Map();
-      for (const r of ranges) {
-        const from = toLine(r.startOffset);
-        const to = toLine(Math.max(r.startOffset, r.endOffset - 1));
-        for (let ln = from; ln <= to; ln += 1) thisScript.set(ln, r.count);
+      for (const [line, offset] of firstTokenOffset) {
+        let best = null;
+        for (const r of ranges) {
+          if (offset < r.startOffset || offset >= r.endOffset) continue;
+          const size = r.endOffset - r.startOffset;
+          if (best === null || size < best.size) best = { size, count: r.count };
+        }
+        if (best !== null) thisScript.set(line, best.count);
       }
       for (const [ln, count] of thisScript) {
         seen.set(ln, Math.max(seen.get(ln) || 0, count));

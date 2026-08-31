@@ -40,6 +40,8 @@ export interface RunOptions {
   /** Extra environment, and extra CLI arguments. */
   env?: Record<string, string>;
   args?: string[];
+  /** Point --root somewhere else, to exercise an unreadable or absent codeline root. */
+  rootOverride?: string;
   /** Estate entries to leave as plain directories — a repository is what `git init` makes it. */
   nonRepos?: string[];
   /** Emit a [provider] notice on stderr, as the real handler does when it reroutes. */
@@ -164,7 +166,7 @@ exit ${o.exitCode ?? 0}
 
   const args = o.omitArgs ? (o.args ?? []) : [
     '--issues', join(work, 'issues.json'),
-    '--root', join(work, 'estate'),
+    '--root', o.rootOverride ?? join(work, 'estate'),
     '--out', join(work, 'out.json'),
     ...(o.args ?? []),
   ];

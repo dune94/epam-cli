@@ -228,6 +228,135 @@ describe('discovery runs at its receiver', () => {
     expect(new Set(names).size, `two repositories share one key: ${names.join(', ')}`).toBe(2);
   }, 120_000);
 
+  it('a selection with no evidence is dropped, and said to be', () => {
+    // Grounding is not only "the path exists" — a codeline chosen with no evidence is a guess. The
+    // agent must be told which selections were discarded and why, or the next attempt repeats them.
+    let work = '';
+    const r = runDiscovery({
+      covDir: COV, env: FAST, onWork: (w) => { work = w; },
+      reply: () => JSON.stringify({
+        codelines: [
+          {
+            path: estatePath(work, 'alpha.shop.com'), name: 'a',
+            reason: 'checkout lives here', evidence: 'checkout email confirm',
+          },
+          { path: estatePath(work, 'beta.shop.com'), name: 'b', reason: 'a hunch', evidence: '' },
+        ],
+        // The field is `unsure`, not `unresolved` — read from the code rather than guessed at.
+        unsure: [{ part: 'the confirm-email field', why: 'no repository mentions it' }],
+      }),
+    });
+    expect(r.stderr, 'a codeline chosen with no evidence was dropped silently')
+      .toMatch(/NO evidence/i);
+    expect(r.stderr, 'the dropped selection\'s stated reason was not reported')
+      .toMatch(/its stated reason was/i);
+    expect(r.stderr, 'the unresolved part of the ticket was not reported')
+      .toMatch(/unresolved part of the ticket/i);
+  }, 120_000);
+
+  it('when EVERY selection lacks evidence they are kept, loudly, rather than aborting', () => {
+    // The judgement call the engine makes rather than failing the run outright — and it has to be
+    // audible, because the lanes that follow are running on unevidenced choices.
+    let work = '';
+    const r = runDiscovery({
+      covDir: COV, env: FAST, onWork: (w) => { work = w; },
+      reply: () => JSON.stringify({
+        codelines: [
+          { path: estatePath(work, 'alpha.shop.com'), name: 'a', reason: 'a hunch', evidence: '' },
+        ],
+      }),
+    });
+    expect(r.stderr, 'every codeline lacked evidence and nothing said so')
+      .toMatch(/every codeline lacked evidence/i);
+  }, 120_000);
+
+  it('a dry run shows the prompt and selects nothing', () => {
+    // Used to inspect what discovery WOULD send without spending anything. It must be obvious that
+    // no selection was made, or a dry run reads like a real one that found nothing.
+    const r = run({ args: ['--dry-run'] });
+    expect(r.stderr, 'a dry run did not announce itself').toMatch(/DRY-RUN/);
+    expect(r.out, 'a dry run wrote a selection').toBeNull();
+  }, 120_000);
+
+  it('an unreadable codeline root fails loudly, naming the path', () => {
+    // JIRA_CODELINE_ROOT pointing somewhere that does not exist is an operator mistake, and the
+    // message has to name the path or the operator checks the wrong thing.
+    const r = run({ rootOverride: '/nowhere/does/not/exist' });
+    expect(r.code, 'an unreadable codeline root was not an error').not.toBe(0);
+    expect(r.stderr, 'the failure does not name the root it could not read')
+      .toMatch(/nowhere\/does\/not\/exist/);
+  }, 120_000);
+
+  it('debug mode shows the call it makes', () => {
+    // The debug path builds its command differently — without the stderr redirect — so it is a
+    // second construction that has to stay correct alongside the first.
+    let work = '';
+    const r = runDiscovery({
+      covDir: COV, onWork: (w) => { work = w; },
+      env: { ...FAST, DEBUG_CODELINE_DISCOVERY: '1' },
+      reply: () => picks(work),
+    });
+    expect(r.code, r.stderr.slice(-300)).toBe(0);
+    expect(r.out.codelines[0].name).toBe('alphashop');
+  }, 120_000);
+
+  it('a facts file it cannot write is reported, and does not lose the codelines', () => {
+    // The codelines are valid whether or not the facts landed. What must never happen is the run
+    // proceeding while BELIEVING facts were provisioned.
+    const proj = mkdtempSync(join(tmpdir(), 'discovery-rofacts-'));
+    mkdirSync(join(proj, 'codeline-facts.json'), { recursive: true });   // a directory in its place
+    const r = run({ env: { EPAM_PROJECT_CONFIG_DIR: proj } });
+    expect(r.stderr, 'a failed facts write was silent')
+      .toMatch(/could not write codeline facts/i);
+    expect(r.out?.codelines?.[0]?.name, 'the codelines were lost with the facts').toBe('alphashop');
+  }, 120_000);
+
+  it('selecting nothing is rejected with a reason the agent can act on', () => {
+    // "A run cannot start with no scope at all." The rejection has to explain what to do next,
+    // because the retry re-asks the same model — a bare refusal earns the same empty answer.
+    const r = run({ reply: '{"codelines": []}' });
+    expect(r.code, 'an empty selection was accepted as a discovery').not.toBe(0);
+    expect(r.stderr, 'the rejection does not tell the agent it selected nothing')
+      .toMatch(/selected no codeline/i);
+    expect(r.stderr, 'the rejection gives no route out — it must name the tools and the "unsure" '
+      + 'escape, or the retry repeats the same empty answer').toMatch(/unsure/i);
+  }, 120_000);
+
+  it('lanes are ordered producers first when one repository depends on another', () => {
+    // orderCodelines sequences the lanes from real inter-repo dependencies, so a library is built
+    // before the app consuming it. The reordering is only visible when the agent returns them in
+    // the WRONG order, which is the case worth asserting.
+    let work = '';
+    const r = runDiscovery({
+      covDir: COV, env: FAST, onWork: (w) => { work = w; },
+      estate: {
+        'lib.shop.com': { 'package.json': JSON.stringify({ name: '@shop/lib', version: '1.0.0' }) },
+        'app.shop.com': {
+          'package.json': JSON.stringify({
+            name: '@shop/app', version: '1.0.0', dependencies: { '@shop/lib': '^1.0.0' },
+          }),
+        },
+      },
+      reply: () => JSON.stringify({
+        codelines: [
+          { path: estatePath(work, 'app.shop.com'), name: 'app', reason: 'r', evidence: 'package.json' },
+          { path: estatePath(work, 'lib.shop.com'), name: 'lib', reason: 'r', evidence: 'package.json' },
+        ],
+      }),
+    });
+    expect(r.code, r.stderr.slice(-300)).toBe(0);
+    expect(r.stderr, 'the consumer was listed first and nothing reordered the lanes')
+      .toMatch(/Run order \(producers first\)/);
+  }, 120_000);
+
+  it('a reply cut off mid-JSON is not parsed as far as it got', () => {
+    // A truncated answer opens a brace and never closes it. Taking the fragment would select
+    // whatever survived the cut — the model did not choose that set, the network did.
+    const r = run({ reply: '{"codelines": [{"path": "/x", "name": "a"' });
+    expect(r.code, 'a truncated reply produced a discovery').not.toBe(0);
+    expect(r.out, 'a truncated reply was written as a selection').toBeNull();
+  }, 120_000);
+
   it('RECEIVER COVERAGE OF DISCOVERY IS AT LEAST 95%', () => {
     // The requirement, measured from what the child processes above actually executed, reported per
     // file so a regression names the file instead of moving one number.

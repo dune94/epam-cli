@@ -44,6 +44,17 @@ fi
         lines.set(n,Math.max(lines.get(n)||0,h||0))}
       else if(l==="end_of_record") cur=null; }
     return m };
+  const path=require("path");
+  const root=process.cwd();
+  const {executableLineNumbers}=require(path.join(root,"orchestrations/scripts/lib/handlers/executable-lines.js"));
+  // ONE DENOMINATOR, HERE TOO.
+  //
+  // The child collector already drops lines outside the shared executable-line definition; this side
+  // did not, so a file measured only by vitest kept counting its shebang and its whole comment header.
+  // mint-agents-step.js carried 708 such lines in a record of 1393 — more than half the denominator
+  // was text nothing can execute, and no test could ever have moved it.
+  const execOf=(f)=>{ try { return executableLineNumbers(fs.readFileSync(f,"utf8")); } catch { return null; } };
+
   const acc=read(process.argv[1]), fresh=read(process.argv[2]);
   let newFiles=0,newLines=0;
   for(const [f,lines] of fresh){
@@ -54,6 +65,11 @@ fi
       if(h>0&&was===0) newLines++;
       into.set(n,Math.max(was,h));
     }
+  }
+  for(const [f,lines] of acc){
+    const exec=execOf(f);
+    if(!exec) continue;
+    for(const n of [...lines.keys()]) if(!exec.has(n)) lines.delete(n);
   }
   const out=[];
   for(const [f,lines] of acc){

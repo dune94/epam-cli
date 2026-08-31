@@ -13,8 +13,11 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$ROOT"
-TARGET="${1:-}"
-[ -n "$TARGET" ] || { echo "usage: trace-shell.sh <test-file|dir|.bats>" >&2; exit 2; }
+# MANY TARGETS, ONE PROCESS. Tracing files one at a time pays vitest's ~3s startup per file, so 43
+# files cost two minutes of startup to collect thirty seconds of trace. Passed together they cost one.
+[ "$#" -gt 0 ] || { echo "usage: trace-shell.sh <test-file|dir|.bats> [more...]" >&2; exit 2; }
+TARGETS=("$@")
+TARGET="$1"
 
 NODE_BIN="${NODE_BIN:-$(command -v node)}"
 ACC="${SHELL_COVERAGE_ACC:-$ROOT/coverage/.shell-trace-lines}"
@@ -37,7 +40,7 @@ export SHCOV_TRACES="$W/traces" BASH_ENV="$W/on.sh"
 if [[ "$TARGET" == *.bats ]]; then
     bash "$ROOT/orchestrations/scripts/run-shell-tests.sh" "$TARGET" >"$W/run.log" 2>&1
 else
-    "$NODE_BIN" "$ROOT/node_modules/.bin/vitest" run --maxWorkers=2 "$TARGET" >"$W/run.log" 2>&1
+    "$NODE_BIN" "$ROOT/node_modules/.bin/vitest" run --maxWorkers=2 "${TARGETS[@]}" >"$W/run.log" 2>&1
 fi
 _rc=$?
 unset SHCOV_TRACES BASH_ENV
@@ -47,4 +50,4 @@ cat "$W/traces"/*.trace 2>/dev/null | grep -o '@@[^@]*@@' | sort -u >> "$ACC"
 sort -u "$ACC" -o "$ACC"
 
 "$NODE_BIN" "$ROOT/orchestrations/scripts/lib/handlers/shell-trace-to-lcov.js" "$ACC" "$OUT" 2>&1 | tail -1
-echo "[trace-shell] $TARGET (exit $_rc) — accumulated $(wc -l < "$ACC") unique shell lines"
+echo "[trace-shell] ${#TARGETS[@]} target(s) (exit $_rc) — accumulated $(wc -l < "$ACC") unique shell lines"

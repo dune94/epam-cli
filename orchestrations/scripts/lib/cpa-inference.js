@@ -104,6 +104,18 @@ function buildPrompt(input) {
   const { story, kbChunks = [], codebaseSignals = {}, formulaEstimate = {},
           adjacentStories = [], systemPrompt = '', manifest } = input;
 
+  // THE PERSONA IS NOT OPTIONAL, AND AN EMPTY ONE IS WORSE THAN A MISSING FILE.
+  //
+  // Defaulting it to '' renders a blank section, the model is asked to answer as nobody in
+  // particular, and the answer comes back looking like every other answer — so the failure is
+  // invisible in the output and only shows up as degraded estimates. Refusing here, by the
+  // placeholder's own name, turns a silent quality loss into a stated one that names what to fix.
+  if (typeof systemPrompt !== 'string' || systemPrompt.trim() === '') {
+    throw new Error('cpa-inference buildPrompt: __SYSTEM_PROMPT__ is empty — the persona is not '
+      + 'optional. A blank persona renders a blank section and the agent answers as nobody in '
+      + 'particular, which cannot be seen in the output.');
+  }
+
   const storyJson = JSON.stringify({
     id:                  story.id,
     title:               story.title,

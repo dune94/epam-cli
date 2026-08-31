@@ -88,7 +88,13 @@ describe('estimate-stories.sh pricing — data-driven', () => {
   it('openrouter_PRICING tier arrays are kept as fallback only (not the primary path)', () => {
     // The fallback is inside an else block following the model-pricing lookup
     const modelBlock  = estimateSrc.indexOf('_model_prices=$(lookup_model_pricing');
-    const openrouterPricing = estimateSrc.indexOf('openrouter_PRICING_INPUT', modelBlock);
+    // THE NAME IT ACTUALLY HAS. The lower-case spelling stopped existing when the tier arrays were
+    // renamed, so indexOf returned -1 and the assertion "must appear after the else" compared -1
+    // against a real offset. A guard that cannot find its subject proves nothing about ordering —
+    // it just fails, or worse, would have passed vacuously had the comparison run the other way.
+    const openrouterPricing = estimateSrc.indexOf('OPENROUTER_PRICING_INPUT[', modelBlock);
+    expect(openrouterPricing, 'the fallback tier array was not found at all — the shape has changed')
+      .toBeGreaterThan(-1);
     const elseBlock   = estimateSrc.indexOf('else', modelBlock);
     expect(elseBlock).toBeGreaterThan(-1);
     // openrouter_PRICING must appear AFTER the else (inside the fallback branch)

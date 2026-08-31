@@ -1,0 +1,1 @@
+{"event_id":"evt-1788195624898357663-15110","timestamp":"2026-08-31T13:00:24-04:00","agent":"failure-analyst","story_id":null,"phase":null,"type":"self_heal_start","model":null,"provider":null,"detail":{"lane":"main","message":"failure-analyst diagnosing malformed","source":"update-monitor.sh","rawType":"self_heal_start","prevModel":null}}

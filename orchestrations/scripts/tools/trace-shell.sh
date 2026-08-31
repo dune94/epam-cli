@@ -23,27 +23,37 @@ NODE_BIN="${NODE_BIN:-$(command -v node)}"
 ACC="${SHELL_COVERAGE_ACC:-$ROOT/coverage/.shell-trace-lines}"
 OUT="${SHELL_COVERAGE_OUT:-$ROOT/coverage/lcov.shell.info}"
 W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
-mkdir -p "$W/traces" "$(dirname "$ACC")"
+mkdir -p "$W/traces" "$W/src" "$(dirname "$ACC")"
 touch "$ACC"
 
-cat > "$W/on.sh" <<'ENABLER'
-if [ -n "${SHCOV_TRACES:-}" ]; then
-  exec 9>>"$SHCOV_TRACES/$$.trace" 2>/dev/null || true
+# THE ENABLER ALSO KEEPS A COPY OF WHAT IT RAN.
+#
+# 81 test files extract a block from run-agent-orchestration.sh or claude.sh into a temp script and
+# run that. bash attributes the trace to the temp file, the test deletes it, and by the time anything
+# reads the trace there is nothing left to map back — so three stages that are heavily tested read
+# near zero. Copying the script HERE, as it starts, is the only moment the content is guaranteed to
+# exist. The copy is keyed by the same pid the trace is, so the two line up afterwards.
+cat > "$W/on.sh" <<ENABLER
+if [ -n "\${SHCOV_TRACES:-}" ]; then
+  exec 9>>"\$SHCOV_TRACES/\$\$.trace" 2>/dev/null || true
   BASH_XTRACEFD=9
-  PS4='@@${BASH_SOURCE}:${LINENO}@@
+  if [ -n "\${SHCOV_SRC:-}" ] && [ -f "\$0" ]; then
+    cp "\$0" "\$SHCOV_SRC/\$\$.src" 2>/dev/null || true
+  fi
+  PS4='@@\${BASH_SOURCE}:\${LINENO}@@
 '
   set -x
 fi
 ENABLER
 
-export SHCOV_TRACES="$W/traces" BASH_ENV="$W/on.sh"
+export SHCOV_TRACES="$W/traces" SHCOV_SRC="$W/src" BASH_ENV="$W/on.sh"
 if [[ "$TARGET" == *.bats ]]; then
     bash "$ROOT/orchestrations/scripts/run-shell-tests.sh" "$TARGET" >"$W/run.log" 2>&1
 else
     "$NODE_BIN" "$ROOT/node_modules/.bin/vitest" run --maxWorkers=2 "${TARGETS[@]}" >"$W/run.log" 2>&1
 fi
 _rc=$?
-unset SHCOV_TRACES BASH_ENV
+unset SHCOV_TRACES SHCOV_SRC BASH_ENV
 
 # Everything traced, reduced to unique file:line and merged with what previous runs found.
 # EXECUTION IN A COPY IS STILL EXECUTION.
@@ -64,8 +74,11 @@ while IFS= read -r _hit; do
     _line="${_f##*:}"; _file="${_f%:*}"
     case "$_file" in
         "$ROOT"/*)  printf '%s\n' "$_hit" >> "$ACC" ;;               # already the real file
-        *)  [ -f "$_file" ] || continue
-            _text="$(sed -n "${_line}p" "$_file" 2>/dev/null)"
+        *)  _snap="$_file"
+            [ -f "$_snap" ] || _snap="$W/src/$(basename "${_file%.*}").src"
+            [ -f "$_snap" ] || { _pid="${_file##*/}"; _snap="$W/src/${_pid%%.*}.src"; }
+            [ -f "$_snap" ] || continue
+            _text="$(sed -n "${_line}p" "$_snap" 2>/dev/null)"
             [ -n "${_text// }" ] || continue
             printf '%s\t%s\n' "$_line" "$_text" >> "$W/hits" ;;
     esac

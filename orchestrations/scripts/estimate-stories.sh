@@ -485,8 +485,40 @@ while IFS= read -r sid; do
     IFS='|' read -r s_id s_title s_hours s_priority s_type s_role s_deps s_skills s_files s_provider s_skill_csv <<< "$story_data"
     s_model=$(jq -r --arg id "$sid" '.stories[] | select(.id == $id) | .model // ""' "$PRD_FILE")
 
-    # Effort tier
-    effort=$(get_effort_tier "$s_hours")
+    # Effort tier.
+    #
+    # A STORY THAT DECLARES ITS EFFORT IS BELIEVED. This read humanHours alone, and a story carrying
+    # `effort: "high"` with no humanHours fell to 0 hours, scored the "low" tier, and forecast ZERO
+    # minutes, ZERO tokens and ZERO cost — a confident statement that the run is free, which is the
+    # worst answer this script can give. Brownfield tickets routinely carry an effort label and no
+    # hours estimate at all.
+    #
+    # Hours still win when present: they are the more specific fact.
+    effort=""
+    if [ -n "$s_hours" ] && [ "$s_hours" != "0" ] && [ "$s_hours" != "null" ]; then
+        effort=$(get_effort_tier "$s_hours")
+    else
+        _declared=$(jq -r --arg id "$sid" '.stories[] | select(.id == $id) | .effort // ""' "$PRD_FILE")
+        case "$_declared" in
+            low|medium|high) effort="$_declared" ;;
+            *) effort=$(get_effort_tier "$s_hours") ;;
+        esac
+        unset _declared
+    fi
+
+    # A ZERO FORECAST IS NOT A CHEAP STORY, IT IS AN UNKNOWN ONE.
+    #
+    # The cost model multiplies by hours, so a story carrying no humanHours forecasts zero minutes,
+    # zero tokens and zero cost — a confident statement that this story is free. That is the worst
+    # answer this script can give, and it is silent: the row prints, the totals add up, and the
+    # operator approves a run whose cost was never estimated.
+    #
+    # No number is invented here. The story is NAMED on stderr so the total is known to be an
+    # underestimate, and by which stories.
+    if [ -z "$s_hours" ] || [ "$s_hours" = "0" ] || [ "$s_hours" = "null" ]; then
+        echo "[estimate] $sid: no humanHours — its forecast is 0 and the run total is an UNDERESTIMATE by this story" >&2
+        UNESTIMATED_STORIES="${UNESTIMATED_STORIES:-}${UNESTIMATED_STORIES:+ }$sid"
+    fi
 
     # Phase and position
     phase="${STORY_PHASE[$sid]:-unknown}"

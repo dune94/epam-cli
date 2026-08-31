@@ -800,6 +800,16 @@ while IFS= read -r sid; do
   fi
 
   # ── Parse CPA output ──────────────────────────────────────────────────────────
+  # AN ANSWER THAT DOES NOT PARSE HAS NO CONFIDENCE — it is not a low-confidence estimate, it is no
+  # estimate. Every `// default` below applies only when the JSON PARSES: on prose, jq exits 5 and
+  # each value comes back EMPTY, so confidence was "" rather than 0.30, no threshold compared true,
+  # and the story passed the gate in silence. A gate that cannot read the verdict has judged
+  # nothing, and treating that as a pass is the fail-open this pipeline has paid for repeatedly.
+  if ! echo "$cpa_raw" | jq -e 'type == "object"' >/dev/null 2>&1; then
+      echo "[cpa] ${story_id:-story}: the estimate did not parse as JSON — treating as NO CONFIDENCE, not as a pass" >&2
+      cpa_raw='{"confidence": 0, "riskFlags": ["cpa answer did not parse"], "reasoning": "the model returned no readable estimate"}'
+  fi
+
   confidence=$(echo "$cpa_raw" | jq -r '.confidence // 0.30')
   complexity_adj=$(echo "$cpa_raw" | jq -r '.complexityAdjustment // 1.0')
   adj_min=$(echo "$cpa_raw" | jq -r '.adjustedEstimate.aiMinutes // 0')

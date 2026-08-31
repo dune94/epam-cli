@@ -248,12 +248,28 @@ function extractJSON(text) {
 }
 
 // ── Fallback (inference unavailable) ──────────────────────────────────────
+/**
+ * A REVIEW THAT DID NOT HAPPEN HAS NO CONFIDENCE.
+ *
+ * This returned confidence 0.70 with NO risk flags, so an inference that failed was indistinguishable
+ * from one that succeeded and approved. All three callers are FAILURES — the prompt runner was
+ * unavailable, it returned nothing, or its answer did not parse — and the CPA gate reads confidence
+ * and risk-flag count to decide whether a run may proceed. 0.70 with zero flags is a PASS.
+ *
+ * So the last gate before any money is spent authorised every story whenever its reviewer broke, and
+ * said so nowhere: the report read PASS, the exit code was 0, and the only trace was a reasoning
+ * string nobody gates on.
+ *
+ * The formula estimate is still carried — it is a real estimate and the caller needs it — but the
+ * confidence is what it actually is, and the reason is a RISK FLAG so it is counted rather than
+ * narrated.
+ */
 function skippedReview(formulaEstimate, reason) {
   return {
-    confidence:           0.70,
+    confidence:           0,
     complexityAdjustment: 1.0,
     adjustedEstimate:     formulaEstimate,
-    riskFlags:            [],
+    riskFlags:            [`CPA review did not happen: ${reason}`],
     missingKbCoverage:    [],
     citedSources:         [],
     reasoning:            `Inference skipped — ${reason}. Formula estimate used unchanged.`,

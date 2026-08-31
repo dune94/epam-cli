@@ -98,10 +98,16 @@ describe('skippedReview', () => {
     expect(result.adjustedEstimate).toEqual(formula);
   });
 
-  it('sets confidence to 0.70', () => {
-    const result = skippedReview(formula, 'timeout');
-    expect(result.confidence).toBe(0.70);
+  it('has NO confidence — a review that did not happen has not approved anything', () => {
+    // This asserted 0.70 with no risk flags, so an inference that FAILED was indistinguishable from
+    // one that succeeded and approved. All three callers are failures — the prompt runner was
+    // unavailable, returned nothing, or its answer did not parse — and the CPA gate reads confidence
+    // and risk-flag count to decide whether a run may proceed. 0.70 with zero flags is a PASS, so
+    // the last gate before any money is spent authorised every story whenever its reviewer broke.
+    const r = skippedReview({ aiMinutes: 10 }, 'x');
+    expect(r.confidence, 'a review that never ran still carries confidence').toBe(0);
   });
+
 
   it('sets complexityAdjustment to 1.0', () => {
     const result = skippedReview(formula, 'timeout');
@@ -118,12 +124,22 @@ describe('skippedReview', () => {
     expect(result.reasoning).toContain('rate limited');
   });
 
-  it('returns empty arrays for riskFlags, missingKbCoverage, citedSources', () => {
-    const result = skippedReview(formula, 'x');
-    expect(result.riskFlags).toEqual([]);
-    expect(result.missingKbCoverage).toEqual([]);
-    expect(result.citedSources).toEqual([]);
+  it('RAISES a risk flag naming why it did not happen, and leaves the other lists empty', () => {
+    // The reason used to live only in a `reasoning` string nobody gates on. As a risk flag it is
+    // counted rather than narrated.
+    const r = skippedReview({ aiMinutes: 10 }, 'empty response from prompt runner');
+    expect(r.riskFlags.length, 'the failure was recorded nowhere the gate reads').toBe(1);
+    expect(r.riskFlags[0], 'the flag does not say what failed')
+      .toMatch(/did not happen[\s\S]*empty response/);
+    expect(r.missingKbCoverage).toEqual([]);
+    expect(r.citedSources).toEqual([]);
   });
+
+  it('and still carries the formula estimate — it is a real estimate, only unreviewed', () => {
+    const formula = { aiMinutes: 42, cost: 1.5 };
+    expect(skippedReview(formula, 'x').adjustedEstimate).toEqual(formula);
+  });
+
 
   it('includes zero _metrics', () => {
     const result = skippedReview(formula, 'x');

@@ -88,6 +88,9 @@ export function callSeamThroughHub(seam: string, prompt: string, o: HubOptions =
   const promptDir = join(work, 'prompts');
   mkdirSync(promptDir, { recursive: true });
 
+  const replyFile = join(work, 'reply.txt');
+  writeFileSync(replyFile, o.reply ?? '{"ok":true}');
+
   const runner = join(work, 'stub-runner');
   writeFileSync(runner, [
     '#!/usr/bin/env bash',
@@ -96,7 +99,12 @@ export function callSeamThroughHub(seam: string, prompt: string, o: HubOptions =
     `for a in "$@"; do printf '%s\\n' "$a" >> ${JSON.stringify(argvLog)}; done`,
     `n=$(ls ${JSON.stringify(promptDir)} | wc -l)`,
     `cat > ${JSON.stringify(promptDir)}/"$n"`,
-    `printf '%s' ${JSON.stringify(o.reply ?? '{"ok":true}')}`,
+    // THE ANSWER COMES FROM A FILE, NOT FROM printf. Embedding it as a shell argument meant a
+    // JSON-escaped string reached printf, which does not interpret escapes — so every multi-line
+    // reply arrived with literal backslash-n and forty seams looked like they were corrupting
+    // answers they had handled perfectly. A harness that cannot express a multi-line model reply
+    // cannot test one.
+    `cat ${JSON.stringify(replyFile)}`,
     `exit ${o.exitCode ?? 0}`,
     '',
   ].join('\n'));

@@ -48,9 +48,8 @@ require_stage_coverage() {
     # (The "no project selected" stand-down that used to sit here is gone: the policy resolver now
     # falls back to the repository's DECLARED default, so a gated run always has a policy to apply.)
 
-    local _dir _handler
-    _dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    _handler="$_dir/handlers/stage-coverage.js"
+    local _handler
+    _handler="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/handlers/stage-coverage.js"
     if [ ! -f "$_handler" ]; then
         echo "[coverage-gate] the coverage handler is missing at $_handler — this is not a pass; the gate itself could not run" >&2
         return 1
@@ -120,9 +119,8 @@ require_stage_coverage() {
 # no gate can reach is exactly where untested code accumulates. Unassigned files are attributed to
 # preflight by the handler for the same reason: a file belonging to no step still runs.
 require_all_stage_coverage() {
-    local _dir _handler _stages _stage _failed=0
-    _dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    _handler="$_dir/handlers/stage-coverage.js"
+    local _handler _stages _stage _failed=0
+    _handler="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/handlers/stage-coverage.js"
     if [ ! -f "$_handler" ]; then
         echo "[coverage-gate] the coverage handler is missing at $_handler — the gate could not run" >&2
         return 1

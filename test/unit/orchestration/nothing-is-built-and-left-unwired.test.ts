@@ -76,7 +76,10 @@ function unreferenced(): string[] {
     try {
       hits = execSync(
         `grep -rn --exclude-dir=node_modules --exclude-dir=archived --exclude-dir=.parked `
-        + `-F -- ${JSON.stringify(name)} orchestrations src test scripts 2>/dev/null || true`,
+            // package.json IS a call site: an npm script ("coverage:shell": "bash .../x.sh") is as
+            // real an invocation as a line in another shell script. Leaving it out of the corpus
+            // reported a wired, working tool as an orphan — the guard inventing dead code.
+        + `-F -- ${JSON.stringify(name)} orchestrations src test scripts package.json 2>/dev/null || true`,
         { cwd: REPO, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
       );
     } catch { /* grep found nothing */ }

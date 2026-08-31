@@ -4682,10 +4682,21 @@ elif [ -f "$_router_js" ] && command -v node &>/dev/null; then
                 | { id, filesExist: (.technicalNotes.filesExist // 0),
                     estimatedTurns: (.estimatedTurns // null) }
             ]
-        }' 2>/dev/null || echo '{"phase":"","stories":[],"cpaSignals":[]}')
+        }' 2>/dev/null || echo '')
+
+        # AN INPUT NOBODY PRODUCED IS NOT AN INPUT. This fell back to
+        # '{"phase":"","stories":[],"cpaSignals":[]}' when jq could not build the payload — a
+        # well-formed object with nothing in it. topology-router.js then refused to render
+        # ("EMPTY values for: __PHASE__"), its stderr went to /dev/null, and the heuristic ran
+        # with nobody aware the model router had been skipped. The heuristic is a fine outcome;
+        # being unable to tell it apart from a model decision is not.
+        if [ -z "$_stories_payload" ]; then
+            warning "  [topology-router] could not build its input from the PRD — SKIPPING the model router; the topology below is the heuristic's, not a model's"
+        fi
 
     _router_started=$(date -Iseconds)
-    _router_out=$(echo "$_stories_payload" | \
+    _router_out=""
+    [ -n "$_stories_payload" ] && _router_out=$(echo "$_stories_payload" | \
         ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-${EPAM_API_KEY_ANTHROPIC:-}}" \
         node "$_router_js" 2>/dev/null || echo "")
 

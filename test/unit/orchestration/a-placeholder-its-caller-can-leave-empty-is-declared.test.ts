@@ -44,7 +44,10 @@ const REVIEWED: Record<string, string> = {
     'RESOLVED at the caller instead: a failed derivation was swallowed into "", which refused the '
     + 'render and would otherwise have told the reviewer that NOTHING is required. It now states '
     + 'whether coverage is unknown or genuinely empty, so the value is never blank',
-  'topology-router:__PHASE__': 'PENDING: destructuring default; reachability not yet driven',
+  'topology-router:__PHASE__':
+    'RESOLVED at the caller instead: its jq payload fell back to a well-formed but EMPTY object, '
+    + 'which made the render refuse and the heuristic run unannounced. The caller no longer '
+    + 'invents a payload, so the placeholder stays required',
   'code-review-cycle:__REVIEW_PROFILE__':
     'not this defect — roster_persona failing exits 1 before the render, so empty never reaches it',
   'code-review-cycle:__STORY_DIFF__':
@@ -53,8 +56,12 @@ const REVIEWED: Record<string, string> = {
     'RESOLVED at the caller instead: a clean `bash -n` printed nothing, the prefix refused to '
     + 'render and the retry re-ran the original prompt unchanged. It now states the clean parse, '
     + 'so the value is never empty and the placeholder stays required',
-  'corrective-note:__MC_CORRECTIVE_NOTE__': 'PENDING: not yet driven; reachability unverified',
-  'failure-analyst:__VERIFICATION_FAILURE__': 'PENDING: not yet driven; reachability unverified',
+  'corrective-note:__MC_CORRECTIVE_NOTE__':
+    'not this defect — the render sits inside `if [ -n "$_mc_corrective_note" ]`, so an empty '
+    + 'value never reaches it',
+  'failure-analyst:__VERIFICATION_FAILURE__':
+    'not this defect — run_failure_analyst returns at `[ -z "${VERIFICATION_FAILURE:-}" ] && '
+    + 'return 0`, well before the render, so an empty value never reaches it',
   'lint-ac-remediator:__FINDING__':
     'not this defect — the caller checks the finding is non-empty before rendering',
   'tc-writer:__TC_WRITER_PROFILE__':

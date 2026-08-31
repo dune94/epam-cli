@@ -134,6 +134,67 @@ describe('the PRD is synthesised from the ticket alone', () => {
     expect(prd.stories[0].id).toBe('AMSD-1');
   }, 90_000);
 
+  it('a SPLIT ticket becomes one story per codeline, each depending on the last', () => {
+    // Splitting exists so one ticket touching several repositories becomes work each lane can do.
+    // The dependency chain is what stops two lanes editing a shared contract at once.
+    const { prd } = synthesise([
+      ticket({ codeline: 'both' }), ticket({ jiraKey: 'AMSD-2', storyId: 'AMSD-2', codeline: 'be' }),
+      ticket({ jiraKey: 'AMSD-3', storyId: 'AMSD-3', codeline: 'fe' })],
+    { JIRA_SPLIT_CODELINE: 'both' });
+    const split = prd.stories.filter((s: any) => String(s.id).startsWith('AMSD-1'));
+    expect(split.length, 'the split ticket did not become one story per codeline')
+      .toBeGreaterThan(1);
+    const lanes = split.map((s: any) => s.codeline).sort();
+    expect(new Set(lanes).size, 'two split stories landed in the same lane').toBe(split.length);
+    const later = split[split.length - 1];
+    expect(later.dependencies, 'the split stories can run concurrently on a shared contract')
+      .toContain(split[0].id);
+  }, 90_000);
+
+  it('and each split story takes its OWN acceptance criteria when the ticket declares them', () => {
+    const { prd } = synthesise([
+      ticket({ codeline: 'both', beAcs: ['a backend AC'], feAcs: ['a frontend AC', 'and another'] }),
+      ticket({ jiraKey: 'AMSD-2', storyId: 'AMSD-2', codeline: 'be' }),
+      ticket({ jiraKey: 'AMSD-3', storyId: 'AMSD-3', codeline: 'fe' })],
+    { JIRA_SPLIT_CODELINE: 'both' });
+    const be = prd.stories.find((s: any) => s.id === 'AMSD-1-be');
+    const fe = prd.stories.find((s: any) => s.id === 'AMSD-1-fe');
+    expect(be.acceptanceCriteria, "the backend split did not take the ticket's backend ACs")
+      .toEqual(['a backend AC']);
+    expect(fe.acceptanceCriteria).toEqual(['a frontend AC', 'and another']);
+  }, 90_000);
+
+  it('a SPANNING ticket stays ONE story that names every codeline it spans', () => {
+    // codelines[] is authoritative: the story stays whole and participates in each lane rather than
+    // being partitioned into exactly one, which is how a multi-codeline ticket used to vanish.
+    const { prd } = synthesise([
+      ticket({ codeline: 'be' }), ticket({ jiraKey: 'AMSD-2', storyId: 'AMSD-2', codeline: 'fe' })],
+    { EPAM_MULTI_CODELINE_STORIES: '1' });
+    const spanning = prd.stories.find((s: any) => Array.isArray(s.codelines) && s.codelines.length > 1);
+    if (spanning) {
+      expect(spanning.codeline, 'the spanning story names no starting lane').toBeTruthy();
+      expect(spanning.codelines.length, 'a spanning story was partitioned into one lane')
+        .toBeGreaterThan(1);
+    }
+  }, 90_000);
+
+  it('falls back to the codelines DISCOVERY found when no ticket carries a label', () => {
+    // Deriving the list only from per-story labels threw that work away: AMSD-2041 was a single
+    // story marked SPLIT, every candidate was filtered out, the list came back empty and ingest
+    // exited 1 — after discovery had successfully identified the repositories and exported them.
+    const r = synthesise([ticket({ codeline: undefined })], { JIRA_CODELINES: 'be,fe' });
+    expect(r.code, `discovery's codelines were not used as the fallback: ${r.err.slice(0, 300)}`)
+      .toBe(0);
+    expect(r.prd.stories.length).toBeGreaterThan(0);
+  }, 90_000);
+
+  it('and refuses when NO codeline can be established at all, naming what to set', () => {
+    const r = synthesise([ticket({ codeline: undefined })], { JIRA_CODELINES: '' });
+    expect(r.code, 'a PRD was written with no codeline for anything').not.toBe(0);
+    expect(r.err, 'the refusal does not say what would fix it')
+      .toMatch(/codeline|JIRA_DEFAULT_CODELINE/i);
+  }, 90_000);
+
   it('refuses an empty classification set rather than writing an empty PRD', () => {
     // An empty PRD is a run with nothing to do that still costs a launch to discover it.
     const r = synthesise([]);

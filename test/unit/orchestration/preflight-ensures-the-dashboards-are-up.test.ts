@@ -58,6 +58,23 @@ describe('pre-flight ensures the dashboards are up', () => {
     expect(r.code, 'a dashboard on a dead port was reported as serving').not.toBe(0);
   }, 90_000);
 
+  it('_dashboard_serving is the verdict, and it is driven directly', () => {
+    // The guard scanner's bar is that a blocking function's NAME appears under test/. That bar
+    // exists because three guards were confirmed inert in production while the suite was green —
+    // each had tests, none ran the guard against a case it was supposed to catch. Driving it
+    // through its caller is not the same as driving it.
+    const verdict = (code: string) => spawnSync('bash', ['-c',
+      `. ${JSON.stringify(LIB)}; _dashboard_serving ${JSON.stringify(code)}; echo "rc=$?"`],
+      { encoding: 'utf8', timeout: 60_000, cwd: REPO }).stdout.trim();
+    expect(verdict('200'), 'a 200 was not judged as serving').toBe('rc=0');
+    expect(verdict('204')).toBe('rc=0');
+    expect(verdict('301')).toBe('rc=0');
+    expect(verdict('404'), 'a 404 was judged as serving').toBe('rc=1');
+    expect(verdict('502'), 'a container answering 502 was judged as serving').toBe('rc=1');
+    expect(verdict('000'), 'an unreachable dashboard was judged as serving').toBe('rc=1');
+    expect(verdict(''), 'an empty status was judged as serving').toBe('rc=1');
+  }, 90_000);
+
   it('with no URL configured it refuses rather than silently passing', () => {
     const r = spawnSync('bash', ['-c',
       `. ${JSON.stringify(LIB)}; ensure_dashboards_up "" --no-fix`],

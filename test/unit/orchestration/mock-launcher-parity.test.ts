@@ -25,6 +25,7 @@
  * env var names), never client facts — a mock is expected to differ in WHICH project
  * config it points at, and identical in THAT it points at one.
  */
+import { gatedRunEnv } from '../../helpers/gated-run-env';
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -144,6 +145,9 @@ describe('archiving on failure is proven by EXECUTION, not by a string being pre
       encoding: 'utf8',
       timeout: 120000,
       env: {
+        // The paid launcher gates the coverage map before spending; this test is about launcher
+        // parity, so the precondition is supplied as a real passing measurement.
+        ...gatedRunEnv(),
         ...process.env,
         TIER3_SETSID_DONE: '1',          // stay attached so the assertion can observe it
         EPAM_PROJECT_CONFIG_DIR: configDir,

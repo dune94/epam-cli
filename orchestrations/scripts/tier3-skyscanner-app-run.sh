@@ -25,7 +25,10 @@
 # A launcher decides what a run costs. It does not get to do that untested.
 _scg_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/stage-coverage-gate.sh"
 # shellcheck source=/dev/null
-[ -f "$_scg_lib" ] && . "$_scg_lib" && require_stage_coverage launch || exit 1
+# THE WHOLE MAP, BEFORE ANY MONEY MOVES. A paid launcher measures EVERY stage against the project's
+# threshold here, and only then declares the run gated — which is what turns on the per-stage gates
+# for the rest of the run. Failing here costs nothing; failing mid-run costs everything spent so far.
+[ -f "$_scg_lib" ] && . "$_scg_lib" && require_all_stage_coverage || exit 1
 
 set -euo pipefail
 

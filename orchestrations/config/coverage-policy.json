@@ -1,0 +1,5 @@
+{
+  "$comment": "THE DEFAULT COVERAGE POLICY, DECLARED — not hardcoded in the engine. A project overrides it by shipping its own coverage-policy.json in its config directory; onboarding a project needs no file here and no pipeline change. Editing this file changes the floor for every project that has not stated its own. If neither this nor a project file exists, the gate refuses rather than inventing a number.",
+  "thresholdPercent": 95,
+  "blocker": true
+}

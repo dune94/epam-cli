@@ -65,6 +65,8 @@ function runScript(script: string, dir: string, extra: Record<string, string> = 
       STAGE_COVERAGE_POLICY: join(dir, 'coverage-policy.json'),
       STAGE_COVERAGE_LCOV: join(dir, 'coverage/lcov.info'),
       EPAM_STAGE_COVERAGE_CACHE: join(dir, 'cache'),
+      // A gated run: pre-flight has passed, so the launcher's stage gate enforces.
+      EPAM_COVERAGE_GATED: '1',
       ...extra,
     },
   });
@@ -117,7 +119,7 @@ describe('every stage asks the coverage gate', () => {
     const r = spawnSync('bash', ['-c',
       `. "${join(SCRIPTS, 'lib/stage-coverage-gate.sh')}"; require_stage_coverage writer`], {
       encoding: 'utf8', timeout: 120_000,
-      env: { ...process.env, NODE_BIN: NODE,
+      env: { ...process.env, NODE_BIN: NODE, EPAM_COVERAGE_GATED: '1',
         STAGE_COVERAGE_POLICY: join(dir, 'coverage-policy.json'),
         STAGE_COVERAGE_LCOV: join(dir, 'coverage/lcov.info'),
         EPAM_STAGE_COVERAGE_CACHE: join(dir, 'cache') },
@@ -131,8 +133,10 @@ describe('every stage asks the coverage gate', () => {
     const r = spawnSync('bash', ['-c',
       `. "${join(SCRIPTS, 'lib/stage-coverage-gate.sh')}"; require_stage_coverage writer`], {
       encoding: 'utf8', timeout: 120_000,
-      env: { ...process.env, NODE_BIN: NODE, STAGE_COVERAGE_POLICY: '/nonexistent/policy.json',
-        EPAM_PROJECT_CONFIG_DIR: '' },
+      env: { ...process.env, NODE_BIN: NODE, EPAM_COVERAGE_GATED: '1',
+        STAGE_COVERAGE_POLICY: '/nonexistent/policy.json', EPAM_PROJECT_CONFIG_DIR: '',
+        // and no declared default either, or the fallback would legitimately supply one
+        STAGE_COVERAGE_DEFAULT_POLICY: '/nonexistent/default-policy.json' },
     });
     expect(r.status, 'a stage ran under a coverage policy nobody declared').not.toBe(0);
   }, 180_000);
@@ -140,7 +144,8 @@ describe('every stage asks the coverage gate', () => {
   it('the gate refuses a call that names no stage', () => {
     const r = spawnSync('bash', ['-c',
       `. "${join(SCRIPTS, 'lib/stage-coverage-gate.sh')}"; require_stage_coverage`],
-      { encoding: 'utf8', timeout: 60_000, env: { ...process.env, NODE_BIN: NODE } });
+      { encoding: 'utf8', timeout: 60_000,
+        env: { ...process.env, NODE_BIN: NODE, EPAM_COVERAGE_GATED: '1' } });
     expect(r.status, 'the gate judged a stage it was never told').not.toBe(0);
   }, 120_000);
 
@@ -166,7 +171,7 @@ describe('every stage asks the coverage gate', () => {
     const ask = (dir: string) => spawnSync('bash', ['-c',
       `. "${join(SCRIPTS, 'lib/stage-coverage-gate.sh')}"; require_stage_coverage writer`], {
       encoding: 'utf8', timeout: 120_000,
-      env: { ...process.env, NODE_BIN: NODE, TMPDIR: shared,
+      env: { ...process.env, NODE_BIN: NODE, TMPDIR: shared, EPAM_COVERAGE_GATED: '1',
         STAGE_COVERAGE_POLICY: join(dir, 'coverage-policy.json'),
         STAGE_COVERAGE_LCOV: join(dir, 'coverage/lcov.info'),
         STAGE_COVERAGE_REPORT: join(dir, 'coverage/stage-coverage.json') },
@@ -181,6 +186,52 @@ describe('every stage asks the coverage gate', () => {
     expect(`${second.stderr}`, 'the second ask produced no gate output at all — it read a cache')
       .toMatch(/coverage-gate/);
   }, 180_000);
+
+  it('a stage gate STANDS DOWN when no pre-flight has run — it enforces, it does not decide', () => {
+    // Pre-flight is what makes a run gated: it measures every stage before anything can spend, and
+    // it persists the report. Its absence means this is not a gated run — a unit test executing a
+    // launcher, someone running one script by hand.
+    //
+    // Enforcing there was a false-positive gate: every test that executes a pipeline script started
+    // depending on a current coverage report, so the scripts became unrunnable outside a full
+    // measurement. A gate nobody can satisfy is worse than no gate — it teaches people to route
+    // around it.
+    const r = spawnSync('bash', ['-c',
+      `. "${join(SCRIPTS, 'lib/stage-coverage-gate.sh')}"; require_stage_coverage writer`], {
+      encoding: 'utf8', timeout: 120_000,
+      env: { ...process.env, NODE_BIN: NODE, EPAM_COVERAGE_GATED: '0' },
+    });
+    expect(r.status, 'a stage refused outside a gated run, making the script unrunnable').toBe(0);
+    expect(r.stderr).toMatch(/no pre-flight has gated this run|standing down/i);
+  }, 180_000);
+
+  it('and once pre-flight HAS gated the run, the same stage enforces', () => {
+    // The other half: the marker turns enforcement ON. If it did not, nothing would ever be gated.
+    const r = spawnSync('bash', ['-c',
+      `. "${join(SCRIPTS, 'lib/stage-coverage-gate.sh')}"; require_stage_coverage writer`], {
+      encoding: 'utf8', timeout: 120_000,
+      env: { ...process.env, NODE_BIN: NODE, EPAM_COVERAGE_GATED: '1',
+        STAGE_COVERAGE_LCOV: '/tmp/definitely-no-such-lcov.info',
+        STAGE_COVERAGE_REPORT: '/tmp/definitely-no-such-report.json' },
+    });
+    expect(r.status, 'a gated run proceeded with no coverage measurement at all').not.toBe(0);
+    expect(r.stderr).toMatch(/Unmeasured is not covered|HALTING/i);
+  }, 180_000);
+
+  it('but PRE-FLIGHT never stands down — it is the one that gates the run', () => {
+    // The other half. If pre-flight also stood down on a missing report, nothing would ever gate:
+    // the absence it checks for would excuse the check.
+    const r = spawnSync('bash', ['-c',
+      `. "${join(SCRIPTS, 'lib/stage-coverage-gate.sh')}"; require_all_stage_coverage`], {
+      encoding: 'utf8', timeout: 180_000,
+      env: { ...process.env, NODE_BIN: NODE,
+        STAGE_COVERAGE_REPORT: '/tmp/definitely-no-such-report.json',
+        STAGE_COVERAGE_LCOV: '/tmp/definitely-no-such-lcov.info',
+        STAGE_COVERAGE_POLICY: '' },
+    });
+    expect(r.status, 'pre-flight let a run start with no coverage measurement at all').not.toBe(0);
+    expect(r.stderr).toMatch(/refusing to start|Unmeasured is not covered/i);
+  }, 240_000);
 
   it('every project the repo ships declares a policy', () => {
     // A project without one cannot launch at all — the refusal above is total.

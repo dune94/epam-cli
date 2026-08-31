@@ -81,12 +81,55 @@ function runGate(dir: string, stage: string, extra: Record<string, string> = {})
     encoding: 'utf8', timeout: 60000, cwd: REPO,
     env: { ...process.env, STAGE_COVERAGE_CONFIG: join(dir, 'stage-coverage.json'),
       STAGE_COVERAGE_LCOV: join(dir, 'coverage/lcov.info'), STAGE_COVERAGE_ROOT: dir,
-      STAGE_COVERAGE_POLICY: join(dir, 'coverage-policy.json'), ...extra },
+      STAGE_COVERAGE_POLICY: join(dir, 'coverage-policy.json'),
+      // A gated run: pre-flight has passed, so the stage gates enforce rather than stand down.
+      EPAM_COVERAGE_GATED: '1',
+      ...extra },
   });
   return { code: r.status ?? -1, out: (r.stdout ?? '').trim(), err: (r.stderr ?? '').trim() };
 }
 
 describe('a stage does not run untested code', () => {
+  it('a project that ships no policy gets the DECLARED default, not a refusal', () => {
+    // Requiring every project to ship coverage-policy.json made onboarding a project need a
+    // pipeline artefact — the opposite of "a new project is DATA" — and it broke launching any
+    // project that had not been given one, which is every new project by definition.
+    //
+    // The default is a CONFIG FILE an operator edits, not a number in the engine. That is the
+    // difference between a declared default and a hardcoded one.
+    const dir = workspace({ threshold: 95, blocker: true, lcov: '' });
+    const r = spawnSync(process.execPath, [HANDLER, '--policy'], {
+      encoding: 'utf8', timeout: 60000, cwd: REPO,
+      env: { ...process.env, EPAM_PROJECT_CONFIG_DIR: join(dir, 'no-such-project'),
+        STAGE_COVERAGE_POLICY: '' },
+    });
+    expect(r.status, `a project without its own policy was refused: ${r.stderr}`).toBe(0);
+    const p = JSON.parse(r.stdout);
+    expect(typeof p.thresholdPercent).toBe('number');
+    expect(typeof p.blocker).toBe('boolean');
+  }, 60_000);
+
+  it("and a project's OWN policy still wins over the default", () => {
+    const dir = workspace({ threshold: 42, blocker: false, lcov: '' });
+    const r = spawnSync(process.execPath, [HANDLER, '--policy'], {
+      encoding: 'utf8', timeout: 60000, cwd: REPO,
+      env: { ...process.env, EPAM_PROJECT_CONFIG_DIR: dir, STAGE_COVERAGE_POLICY: '' },
+    });
+    expect(r.status, r.stderr).toBe(0);
+    expect(JSON.parse(r.stdout).thresholdPercent,
+      "the repo default overrode the project's own policy").toBe(42);
+  }, 60_000);
+
+  it('with neither present it still REFUSES — the default is declared, not invented', () => {
+    const r = spawnSync(process.execPath, [HANDLER, '--policy'], {
+      encoding: 'utf8', timeout: 60000, cwd: REPO,
+      env: { ...process.env, EPAM_PROJECT_CONFIG_DIR: '/tmp/nope-not-a-project',
+        STAGE_COVERAGE_POLICY: '', STAGE_COVERAGE_DEFAULT_POLICY: '/tmp/nope-not-a-default.json' },
+    });
+    expect(r.status, 'a run proceeded under a coverage policy nobody declared anywhere').not.toBe(0);
+    expect(r.stderr).toMatch(/no coverage policy could be read/i);
+  }, 60_000);
+
   it('the handler reports the percentage for the stage it is asked about', () => {
     const dir = workspace({ lcov: record('orchestrations/scripts/lib/alpha.js', 100, 96) });
     const r = askHandler(dir, 'step-1-spec');
@@ -192,9 +235,15 @@ describe('a stage does not run untested code', () => {
       encoding: 'utf8', timeout: 60000, cwd: REPO,
       env: { ...process.env, STAGE_COVERAGE_CONFIG: join(dir, 'stage-coverage.json'),
         STAGE_COVERAGE_LCOV: join(dir, 'coverage/lcov.info'), STAGE_COVERAGE_ROOT: dir,
-        STAGE_COVERAGE_POLICY: join(dir, 'no-such-policy.json'), EPAM_PROJECT_CONFIG_DIR: '' },
+        STAGE_COVERAGE_POLICY: join(dir, 'no-such-policy.json'), EPAM_PROJECT_CONFIG_DIR: '',
+        EPAM_COVERAGE_GATED: '1',
+        // AND no declared default either. The requirement is that a run never proceeds under a
+        // policy NOBODY declared — a repository default IS declared, in a config file an operator
+        // edits, so it legitimately satisfies the requirement. Only the state where nothing at all
+        // declares one may refuse.
+        STAGE_COVERAGE_DEFAULT_POLICY: join(dir, 'no-such-default.json') },
     });
-    expect(r.status, 'a stage ran under a policy nobody declared').not.toBe(0);
+    expect(r.status, 'a stage ran under a policy nobody declared anywhere').not.toBe(0);
     expect(`${r.stdout}${r.stderr}`).toMatch(/policy/i);
   }, 60_000);
 

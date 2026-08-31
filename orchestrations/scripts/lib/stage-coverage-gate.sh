@@ -25,21 +25,28 @@ require_stage_coverage() {
         return 1
     fi
 
-    # NO PROJECT SELECTED MEANS THERE IS NO POLICY TO APPLY — and nothing to protect.
+    # PRE-FLIGHT IS WHAT MAKES A RUN GATED. The per-stage gates ENFORCE; they do not decide.
     #
-    # The threshold and the blocker are per project, by design. A script executed with no project
-    # selected is not a run: it cannot reach a model and it cannot spend. Refusing there does not
-    # protect anything, it just makes the script unrunnable — which is exactly what happened when
-    # this gate was wired in and twelve test files that execute these scripts directly began exiting
-    # 1 before doing anything.
+    # require_all_stage_coverage runs at pre-flight, before anything can spend, measures every stage
+    # and — only when it passes — declares the run gated. The per-stage gates then enforce for the
+    # rest of the run.
     #
-    # This is not a hole. Every launcher selects a project before spending, and pre-flight — which
-    # runs with the project selected — gates the whole map before the pipeline starts. A run that
-    # could spend always has a project; one that has none could never spend.
-    if [ -z "${EPAM_PROJECT_CONFIG_DIR:-}" ] && [ -z "${STAGE_COVERAGE_POLICY:-}" ]; then
-        echo "[coverage-gate] $_stage: no project selected, so no coverage policy applies — not a run, nothing to gate" >&2
+    # Without that marker this is not a gated run: a unit test executing a launcher, or someone
+    # running one script by hand. Enforcing there was a false-positive gate. It made every test that
+    # executes a pipeline script depend on a current coverage report, so the scripts became
+    # unrunnable outside a full measurement — and a gate nobody can satisfy is worse than no gate,
+    # because it teaches people to route around it.
+    #
+    # THIS IS NOT A BYPASS. Nothing sets the marker except a pre-flight that has already checked
+    # every stage against the project's threshold, and a real launch cannot skip pre-flight. Turning
+    # it on by hand only turns enforcement ON.
+    if [ "${EPAM_COVERAGE_GATED:-0}" != "1" ]; then
+        echo "[coverage-gate] $_stage: no pre-flight has gated this run — standing down" >&2
         return 0
     fi
+
+    # (The "no project selected" stand-down that used to sit here is gone: the policy resolver now
+    # falls back to the repository's DECLARED default, so a gated run always has a policy to apply.)
 
     local _dir _handler
     _dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -131,6 +138,11 @@ require_all_stage_coverage() {
     for _stage in $(printf '%s\n' "$_stages" | awk '{print $1}'); do
         require_stage_coverage "$_stage" || _failed=1
     done
+    if [ "$_failed" = "0" ]; then
+        # THE RUN IS NOW GATED. Every stage entered from here on enforces against the same policy.
+        export EPAM_COVERAGE_GATED=1
+        echo "[coverage-gate] every stage measured and above threshold — the run is gated" >&2
+    fi
     if [ "$_failed" != "0" ]; then
         echo "[coverage-gate] PRE-FLIGHT HALT: the pipeline does not start. Failing a stage here costs nothing; failing it mid-run costs the whole run up to that point." >&2
         return 1

@@ -46,20 +46,39 @@ const LCOV = process.env.STAGE_COVERAGE_LCOV || path.join(REPO, 'coverage/lcov.i
  * place every other per-project decision lives. A project that declares no policy gets a refusal,
  * not a number somebody chose on its behalf.
  */
+/**
+ * THE POLICY IS DECLARED, AND A PROJECT MAY OVERRIDE IT.
+ *
+ * A project's own coverage-policy.json wins. Failing that, the repository's declared default in
+ * orchestrations/config/coverage-policy.json applies.
+ *
+ * The default is NOT a hardcoded number: it is a config file an operator edits, exactly like the
+ * per-project one, and the engine still refuses when neither exists. Requiring every project to
+ * ship its own file made onboarding a project need a pipeline artefact, which is the opposite of
+ * the rule that a new project is DATA — and it broke launching any project that had not been given
+ * one, which is every new project by definition.
+ */
+const DEFAULT_POLICY = process.env.STAGE_COVERAGE_DEFAULT_POLICY
+  || path.join(REPO, 'orchestrations/config/coverage-policy.json');
+
 function policy() {
   const dir = process.env.EPAM_PROJECT_CONFIG_DIR || '';
   const explicit = process.env.STAGE_COVERAGE_POLICY || '';
-  const file = explicit || (dir ? path.join(dir, 'coverage-policy.json') : '');
-  if (!file) {
-    die('no project config dir is set, so no coverage policy can be read. The threshold and the '
-      + 'blocker belong to the PROJECT — set EPAM_PROJECT_CONFIG_DIR.');
-  }
+  const candidates = [
+    explicit,
+    dir ? path.join(dir, 'coverage-policy.json') : '',
+    DEFAULT_POLICY,
+  ].filter(Boolean);
+
+  let file = '';
   let raw;
-  try { raw = fs.readFileSync(file, 'utf8'); }
-  catch {
-    die(`this project declares no coverage policy at ${file}. It must state thresholdPercent and `
-      + 'blocker: how much cover a project demands before it spends is the operator\'s decision, '
-      + 'and defaulting it here would make that decision silently.');
+  for (const c of candidates) {
+    try { raw = fs.readFileSync(c, 'utf8'); file = c; break; } catch { /* try the next */ }
+  }
+  if (!file) {
+    die(`no coverage policy could be read. Looked at: ${candidates.join(', ')}. It must state `
+      + 'thresholdPercent and blocker: how much cover a run demands before it spends is the '
+      + "operator's decision, and defaulting it in code would make that decision silently.");
   }
   let p;
   try { p = JSON.parse(raw); }

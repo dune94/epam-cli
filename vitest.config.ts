@@ -66,6 +66,13 @@ export default defineConfig({
 
     coverage: {
       provider: 'v8',
+      // WRITE THE REPORT EVEN WHEN TESTS FAIL. Defaults to FALSE, so one failing test anywhere
+      // silently suppresses the whole coverage report — no lcov, no table, no warning. Two 800s
+      // runs produced nothing and looked like coverage had simply not been requested.
+      //
+      // Measurement must not depend on a green suite: coverage is how the gaps are found, and a
+      // report available only once everything passes is unavailable exactly when it is needed.
+      reportOnFailure: true,
       reporter: ['text', 'lcov'],
       include: ['src/**/*.ts', 'orchestrations/scripts/**/*.js'],
       exclude: ['src/**/*.d.ts', 'orchestrations/scripts/**/*.test.js'],

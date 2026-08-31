@@ -25,6 +25,22 @@ require_stage_coverage() {
         return 1
     fi
 
+    # NO PROJECT SELECTED MEANS THERE IS NO POLICY TO APPLY — and nothing to protect.
+    #
+    # The threshold and the blocker are per project, by design. A script executed with no project
+    # selected is not a run: it cannot reach a model and it cannot spend. Refusing there does not
+    # protect anything, it just makes the script unrunnable — which is exactly what happened when
+    # this gate was wired in and twelve test files that execute these scripts directly began exiting
+    # 1 before doing anything.
+    #
+    # This is not a hole. Every launcher selects a project before spending, and pre-flight — which
+    # runs with the project selected — gates the whole map before the pipeline starts. A run that
+    # could spend always has a project; one that has none could never spend.
+    if [ -z "${EPAM_PROJECT_CONFIG_DIR:-}" ] && [ -z "${STAGE_COVERAGE_POLICY:-}" ]; then
+        echo "[coverage-gate] $_stage: no project selected, so no coverage policy applies — not a run, nothing to gate" >&2
+        return 0
+    fi
+
     local _dir _handler
     _dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     _handler="$_dir/handlers/stage-coverage.js"

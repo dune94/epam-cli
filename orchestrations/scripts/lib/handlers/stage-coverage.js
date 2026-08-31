@@ -31,6 +31,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { countExecutableLines } = require('./executable-lines');
 
 // The root the stage map is resolved against. Overridable so this handler can be driven against a
 // fixture tree — without it the only way to test the gate is to change the repository it is
@@ -130,18 +131,11 @@ function projectFiles(cfg) {
 
 /** Executable lines: not blank, not a comment, not a bare block delimiter. */
 function executableLines(file) {
+  // ONE DEFINITION, shared with the shell-trace converter that produces the numerator. If these two
+  // ever disagree, the gate reports a fraction whose halves were counted by different rules.
   let src = '';
   try { src = fs.readFileSync(file, 'utf8'); } catch { return 0; }
-  let n = 0; let inBlock = false;
-  for (const raw of src.split('\n')) {
-    const t = raw.trim();
-    if (inBlock) { if (t.includes('*/')) inBlock = false; continue; }
-    if (t.startsWith('/*')) { if (!t.includes('*/')) inBlock = true; continue; }
-    if (!t || t.startsWith('#') || t.startsWith('//') || t.startsWith('*')) continue;
-    if (/^(fi|done|esac|\}|\{|else|elif|then|do|;;)$/.test(t)) continue;
-    n += 1;
-  }
-  return n;
+  return countExecutableLines(src);
 }
 
 /** The files a stage owns. A file belongs to exactly ONE stage, so the totals add up. */

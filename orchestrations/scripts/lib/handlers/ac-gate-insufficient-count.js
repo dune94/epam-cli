@@ -25,7 +25,7 @@ if (!process.argv[2]) {
 
 let results;
 try {
-  results = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+  results = require('./_read-input.js').readJsonOrRefuse(process.argv[2], 'the AC gate results', { expect: 'array' });
 } catch (e) {
   process.stderr.write(`[ac-gate-insufficient-count] cannot read ${process.argv[2]}: ${e.message}\n`);
   process.exit(1);

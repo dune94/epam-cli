@@ -8,7 +8,7 @@
  *
  * IT DID. Extracted from an inline shell snippet, the body kept the shell's own placeholder:
  *
- *     JSON.parse(require('fs').readFileSync('$1','utf8'))
+ *     require('./_read-input.js').readJsonOrRefuse('$1', 'the PRD', { expect: 'object' })
  *
  * `$1` was never substituted, so it tried to open a file literally named `$1`, threw, and the
  * caller's `2>/dev/null` swallowed it. Every parallel lane received an empty phase list, ran its
@@ -34,7 +34,7 @@ if (!file) {
 
 let prd;
 try {
-  prd = JSON.parse(fs.readFileSync(file, 'utf8'));
+  prd = require('./_read-input.js').readJsonOrRefuse(file, 'the PRD', { expect: 'object' });
 } catch (err) {
   // LOUD. A silent failure here is indistinguishable from a PRD with no phases, and the caller
   // treats that as "nothing to do" rather than "I could not tell".

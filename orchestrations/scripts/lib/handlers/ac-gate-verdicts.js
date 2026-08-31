@@ -21,12 +21,9 @@ if (!process.argv[2]) {
 }
 
 let results;
-try {
-  results = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-} catch (e) {
-  process.stderr.write(`[ac-gate-verdicts] cannot read ${process.argv[2]}: ${e.message}\n`);
-  process.exit(1);
-}
+// This refused an unreadable file correctly and then died on `null` — parsed, so not a read
+// failure, but with no fields to iterate. One reader handles both.
+results = require('./_read-input.js').readJsonOrRefuse(process.argv[2], 'the AC gate results', { expect: 'array' });
 
 const ICON = { sufficient: '✅', enrichable: '🔶', insufficient: '🛑' };
 

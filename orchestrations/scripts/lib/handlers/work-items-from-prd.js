@@ -36,7 +36,7 @@ if (!prdPath) {
 
 let prd;
 try {
-  prd = JSON.parse(fs.readFileSync(prdPath, 'utf8'));
+  prd = require('./_read-input.js').readJsonOrRefuse(prdPath, 'the PRD', { expect: 'object' });
 } catch (e) {
   process.stderr.write(`[work-items-from-prd] cannot read ${prdPath}: ${e.message}\n`);
   process.exit(1);

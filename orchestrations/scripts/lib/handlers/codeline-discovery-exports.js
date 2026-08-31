@@ -33,7 +33,7 @@ if (!process.argv[2]) {
 
 let disc;
 try {
-  disc = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+  disc = require('./_read-input.js').readJsonOrRefuse(process.argv[2], "discovery's selection");
 } catch (e) {
   process.stderr.write(`[codeline-discovery-exports] cannot read ${process.argv[2]}: ${e.message}\n`);
   process.exit(1);

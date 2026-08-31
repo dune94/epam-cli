@@ -24,7 +24,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync, statSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -32,6 +32,16 @@ const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
 const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
 
+/**
+ * THE FUNCTION BODY, STILL — for the STATIC assertions below, which read the source text.
+ *
+ * The EXECUTING harnesses no longer copy it: claude.sh is sourceable now, so they run the real
+ * function from the real file. That matters twice over. Coverage lands on claude.sh instead of on an
+ * anonymous string, and the harness stops drifting — this file had to be handed
+ * _project_test_command, _project_repo_has_tests and evidence_window one at a time as the real
+ * function acquired them, and every omission read as the GUARD failing rather than the harness being
+ * incomplete.
+ */
 function extractFunctionByLineAnchor(name: string): string {
   const lines = claudeSrc.split('\n');
   const startIdx = lines.findIndex((l) => l === `${name}() {`);
@@ -39,6 +49,20 @@ function extractFunctionByLineAnchor(name: string): string {
   const endIdx = lines.findIndex((l, i) => i > startIdx && l === '}');
   if (endIdx === -1) throw new Error(`${name} end anchor not found`);
   return lines.slice(startIdx, endIdx + 1).join('\n');
+}
+
+/** Run a snippet with claude.sh SOURCED, so its functions come from the file under test. */
+const MOCK_PROJECT = join(REPO_ROOT, 'orchestrations/projects/mock3');
+function sourcedClaude(script: string, env: Record<string, string> = {}) {
+  // `set +e` AFTER sourcing: claude.sh sets -e, which is right for the script and wrong for a
+  // harness — a function that returns non-zero to REPORT something (tampering found) would kill the
+  // shell before the test could read the code it returned.
+  return spawnSync('bash', ['-c',
+    `. ${JSON.stringify(CLAUDE_SH)} >/dev/null 2>&1\nset +e\n${script}`], {
+    encoding: 'utf8', timeout: 180_000, cwd: REPO_ROOT,
+    env: { ...process.env, NODE_BIN: process.execPath, EPAM_PROJECT_CONFIG_DIR: MOCK_PROJECT,
+      EPAM_COVERAGE_GATED: '0', ...env },
+  });
 }
 
 describe('vendor-dir guard — design (static)', () => {
@@ -236,28 +260,14 @@ describe('run_vendor_integrity_check — REAL execution, reproduces the exact li
         writeFileSync(fullPath, opts.tamperAfterLock.newContent);
       }
 
-      const getVendorDirsBody = extractFunctionByLineAnchor('_get_vendor_dirs');
-      const checkBody = extractFunctionByLineAnchor('run_vendor_integrity_check');
-    const projectTestCommandBody = extractFunctionByLineAnchor('_project_test_command');
-    const repoHasTestsBody = extractFunctionByLineAnchor('_project_repo_has_tests');
+      // SOURCED, NOT COPIED. This assembled four function bodies plus evidence-windows.sh by hand,
+      // and each had to be added as the real check acquired it — every omission read as the GUARD
+      // failing rather than the harness being short a dependency. claude.sh brings its own now, and
+      // the lines it runs are attributed to claude.sh instead of to an anonymous string.
       const outLog = join(dir, 'out.log');
-      const scriptPath = join(dir, 'run.sh');
-      writeFileSync(
-        scriptPath,
-        [
-          `VERIFICATION_FAILURE=""`,
-          // evidence_window sizes the evidence the check captures; without it the report is built
-          // from an empty head(1) and never names the tampered file.
-          `. ${JSON.stringify(join(REPO_ROOT, 'orchestrations/scripts/lib/evidence-windows.sh'))} 2>/dev/null || true`,
-          getVendorDirsBody,
-          projectTestCommandBody,
-          repoHasTestsBody,
-          checkBody,
-          `run_vendor_integrity_check "${dir}" "${outLog}"`,
-          `echo "RC=$?"`,
-        ].join('\n'),
-      );
-      const output = execFileSync('bash', [scriptPath], { encoding: 'utf8' });
+      const res = sourcedClaude(
+        `VERIFICATION_FAILURE=""\nrun_vendor_integrity_check "${dir}" "${outLog}"\necho "RC=$?"`);
+      const output = `${res.stdout ?? ''}${res.stderr ?? ''}`;
       const rc = parseInt(output.match(/RC=(\d+)/)?.[1] ?? '-1', 10);
       let details = '';
       try {
@@ -354,28 +364,14 @@ describe('run_vendor_integrity_check — vendorCacheExcludePatterns (fixes false
       chmodSync(fullPath, 0o644);
       writeFileSync(fullPath, opts.tamperAfterLock.newContent);
 
-      const getVendorDirsBody = extractFunctionByLineAnchor('_get_vendor_dirs');
-      const checkBody = extractFunctionByLineAnchor('run_vendor_integrity_check');
-    const projectTestCommandBody = extractFunctionByLineAnchor('_project_test_command');
-    const repoHasTestsBody = extractFunctionByLineAnchor('_project_repo_has_tests');
+      // SOURCED, NOT COPIED. This assembled four function bodies plus evidence-windows.sh by hand,
+      // and each had to be added as the real check acquired it — every omission read as the GUARD
+      // failing rather than the harness being short a dependency. claude.sh brings its own now, and
+      // the lines it runs are attributed to claude.sh instead of to an anonymous string.
       const outLog = join(dir, 'out.log');
-      const scriptPath = join(dir, 'run.sh');
-      writeFileSync(
-        scriptPath,
-        [
-          `VERIFICATION_FAILURE=""`,
-          // evidence_window sizes the evidence the check captures; without it the report is built
-          // from an empty head(1) and never names the tampered file.
-          `. ${JSON.stringify(join(REPO_ROOT, 'orchestrations/scripts/lib/evidence-windows.sh'))} 2>/dev/null || true`,
-          getVendorDirsBody,
-          projectTestCommandBody,
-          repoHasTestsBody,
-          checkBody,
-          `run_vendor_integrity_check "${dir}" "${outLog}"`,
-          `echo "RC=$?"`,
-        ].join('\n'),
-      );
-      const output = execFileSync('bash', [scriptPath], { encoding: 'utf8' });
+      const res = sourcedClaude(
+        `VERIFICATION_FAILURE=""\nrun_vendor_integrity_check "${dir}" "${outLog}"\necho "RC=$?"`);
+      const output = `${res.stdout ?? ''}${res.stderr ?? ''}`;
       const rc = parseInt(output.match(/RC=(\d+)/)?.[1] ?? '-1', 10);
       let details = '';
       try {

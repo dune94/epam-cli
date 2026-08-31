@@ -51,7 +51,17 @@ spend_probe_report() {
     [ -n "$_after" ] || return 0
     if [ -n "$_before" ]; then
         local _spent
-        _spent=$("${NODE_BIN:-node}" -e "console.log((($2)-($1)).toFixed(4))" "$_before" "$_after" 2>/dev/null || echo "?")
+        # $1 AND $2 INSIDE A DOUBLE-QUOTED STRING ARE BASH'S, NOT NODE'S.
+        #
+        # This read `-e "console.log((($2)-($1)).toFixed(4))"`, and bash expanded both before node
+        # ever saw the string: $1 was the before-figure and $2 was unset, so the expression became
+        # `(()-(1.00))` — a syntax error the `|| echo "?"` swallowed. Every run has reported
+        # "spent this run: $?" and nothing indicated the figure had never been computed. Real cost
+        # per run is the operator's stated first priority; single-quote the script and read node's
+        # own argv.
+        _spent=$("${NODE_BIN:-node}" -e 'const b=Number(process.argv[1]),a=Number(process.argv[2]);
+          if(!Number.isFinite(a)||!Number.isFinite(b)) process.exit(1);
+          console.log((a-b).toFixed(4));' "$_before" "$_after" 2>/dev/null || echo "?")
         echo "  usage after: \$$_after   spent this run: \$$_spent"
     else
         echo "  usage: \$$_after"

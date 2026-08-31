@@ -81,6 +81,13 @@ fi
     const key = file.startsWith(root + "/") ? file.slice(root.length + 1) : file;
     if(!a.has(key)){a.set(key,new Map());newFiles++}
     const into=a.get(key);
+    // ONE DENOMINATOR. vitest records a STATEMENT map and this records EXECUTABLE LINES, and
+    // unioning the two line-number sets put lines in the denominator that can never be hit — a
+    // shebang, a comment block, a closing brace. One file sat at 41% with roughly a hundred
+    // unhittable lines counted against it, and no test could ever move it.
+    //
+    // Everything outside the shared definition is dropped from the record as it is re-traced.
+    for (const n of [...into.keys()]) if (!exec.has(n)) into.delete(n);
     for (const n of exec) {
       const h=hitLines.has(n)?1:0;
       const was=into.get(n)||0;

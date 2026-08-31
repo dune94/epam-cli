@@ -3,8 +3,7 @@
   "_allCodeIsInPlay": "Every file under `roots` belongs to exactly ONE stage, so the stage line totals equal the project line total. A file assigned to no stage is measured by nothing and gated by nothing — the audit fails rather than excluding it quietly. Patterns are regular expressions against the repo-relative path, matched in declaration order; the first stage to claim a file owns it.",
   "_policyLivesWithTheProject": "thresholdPercent and blocker are NOT here. How much cover a project demands before it spends is that project's decision, declared in its own coverage-policy.json.",
   "roots": [
-    "orchestrations/scripts",
-    "src"
+    "orchestrations/scripts"
   ],
   "extensions": [
     ".js",
@@ -92,12 +91,10 @@
       "^orchestrations/scripts/tools/.*$",
       "^orchestrations/scripts/(test-epam-providers)\\.sh$",
       "^orchestrations/scripts/lib/handlers/(_read-input)\\.js$"
-    ],
-    "cli": [
-      "^src/.*$"
     ]
   },
   "_whatIsExcluded": "node_modules is vendored, dist is build output, archived and .parked are not source. NOTHING ELSE. An exclusion is a denominator choice, and a denominator I choose is one I can flatter — /tools/ was excluded here for one commit and that was already one too many.",
   "_howOwnershipIsDecided": "Declared, in order, and matched first-wins. A derivation was tried and discarded: attributing a file to the nearest preceding step_emit put 140 files in step-18 because that is where their name first appears in the orchestrator, which is arbitrary. A bad derivation is an invented denominator wearing a derivation's clothes. These are the stages the pipeline actually performs, and the audit proves every file lands in exactly one.",
-  "_whyNoCatchAll": "The last pattern was ^orchestrations/scripts/.*$ — a catch-all, so no file could ever be unassigned and the completeness check could never fail. A check that cannot fail is not a check; it is a denominator arranged to flatter. Every stage now claims files deliberately, and an unclaimed file is a real finding: nobody has said which stage runs it, so nothing gates it."
+  "_whyNoCatchAll": "The last pattern was ^orchestrations/scripts/.*$ — a catch-all, so no file could ever be unassigned and the completeness check could never fail. A check that cannot fail is not a check; it is a denominator arranged to flatter. Every stage now claims files deliberately, and an unclaimed file is a real finding: nobody has said which stage runs it, so nothing gates it.",
+  "$scope": "src/ is OUT OF SCOPE (operator decision 2026-08-31). It is the epam CLI — a separate product from the orchestration pipeline. The pipeline executes dist/epam.js, so src/ is not dead, but it is not what this coverage baseline governs. Removing it from roots keeps the invariant intact: every line under the declared roots belongs to exactly one stage, and stage lines still equal project lines."
 }

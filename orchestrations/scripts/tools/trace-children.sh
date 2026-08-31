@@ -73,8 +73,14 @@ fi
   for (const [file,hitLines] of covered) {
     let src=""; try{src=fs.readFileSync(file,"utf8")}catch{continue}
     const exec=executableLineNumbers(src);
-    if(!a.has(file)){a.set(file,new Map());newFiles++}
-    const into=a.get(file);
+    // THE SAME FILE MUST HAVE ONE RECORD. vitest writes SF: as a path relative to the repository
+    // root; writing an absolute one here gave every child-executed file TWO records, the relative
+    // one at 0% and the absolute one at 100%, and the reader takes the max of each field
+    // separately, so it combined one denominator with the other numerator.
+    // (No apostrophes in this block: the whole script is a single-quoted shell argument.)
+    const key = file.startsWith(root + "/") ? file.slice(root.length + 1) : file;
+    if(!a.has(key)){a.set(key,new Map());newFiles++}
+    const into=a.get(key);
     for (const n of exec) {
       const h=hitLines.has(n)?1:0;
       const was=into.get(n)||0;

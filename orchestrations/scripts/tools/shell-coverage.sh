@@ -89,10 +89,13 @@ compact() {
 echo "[shell-coverage] tracing into $TRACES (per-process, compacted continuously)"
 
 run_suite() {
+    # DIAGNOSTICS GO TO STDERR. A function's stdout is its return value the moment anyone captures
+    # it, and a bracketed progress line inside a captured value is a defect this repo has paid for
+    # before.
     local _label="$1"; shift
-    echo "[shell-coverage] running $_label"
+    echo "[shell-coverage] running $_label" >&2
     SHCOV_TRACES="$TRACES" BASH_ENV="$ENABLER" "$@" >"$WORK/$_label.log" 2>&1
-    echo "[shell-coverage] $_label exited $? (output: $WORK/$_label.log)"
+    echo "[shell-coverage] $_label exited $? (output: $WORK/$_label.log)" >&2
     compact
 }
 

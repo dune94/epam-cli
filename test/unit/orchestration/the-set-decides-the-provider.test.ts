@@ -93,8 +93,18 @@ describe('AND THE HUB ACTUALLY USES IT', () => {
     const assignments = src.split('\n')
       .map((l, i) => ({ l: l.trim(), n: i + 1 }))
       .filter(({ l }) => /^PRIMARY_PROVIDER=/.test(l));
+      // A THIRD deliberate assignment: the routing correction. When an explicit --provider names
+      // something the active set cannot route, the hub re-resolves and substitutes. That fix
+      // exists because three paid runs died at the roster specialiser announcing 'claude' on the
+      // line above and then calling openrouter.
+      //
+      // Exempt ONLY because its value comes from the resolver — asserted here, so the exemption
+      // cannot become a hole through which a bare env read is smuggled back in.
+      expect(src, '$_routed is exempt only while it comes from the resolver')
+        .toMatch(/_routed="\$\([\s\S]{0,200}?resolve_primary_provider/);
     const unexpected = assignments.filter(({ l }) =>
-      !/resolve_primary_provider/.test(l) && !/"\$\{2:-\}"/.test(l) && !/"replay"/.test(l));
+      !/resolve_primary_provider/.test(l) && !/"\$\{2:-\}"/.test(l) && !/"replay"/.test(l)
+        && !/"\$_routed"/.test(l));
     expect(unexpected.map((a) => `line ${a.n}: ${a.l}`),
       'an assignment that is neither the resolver, the explicit flag, nor the replay guarantee')
       .toEqual([]);

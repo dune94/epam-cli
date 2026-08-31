@@ -222,6 +222,21 @@ function declaredSeams() {
  * @returns {{ok: boolean, reason: string}}
  */
 /**
+ * The seam this agent's NAME resolves to, or '' when nothing does.
+ *
+ * Deliberately THE SAME resolver the runtime uses. mint-agents-step.js says why: "two
+ * implementations of 'which seam is this agent' would be two answers to one question".
+ */
+function derivedSeamFor(name) {
+  try {
+    // eslint-disable-next-line global-require
+    const { resolveSeam } = require('./seam-invocation.js');
+    return resolveSeam(name, path.join(__dirname, '..', '..', 'agents', 'invocation-profiles.json'),
+      { ignoreXref: true }) || '';
+  } catch { return ''; }
+}
+
+/**
  * Is this agent registered as one of THIS PROJECT's own — an implementer or an investigator?
  *
  * Read from the kind registries the mint writes, which is the same source kindOfAgent uses. A
@@ -289,7 +304,27 @@ function checkEntry(name, entry, canonical) {
       return { ok: false, reason: 'seam is present but empty — omit it, or name one' };
     }
     if (!declaredSeams().has(entry.seam)) {
-      return { ok: false, reason: `seam '${entry.seam}' is not declared in the registry` };
+      // THE RESOLVER ALREADY KNOWS. An agent's seam is derivable from its NAME — the registry's
+      // seamPatterns map `(^|-)engineer$` to story-writer and carry `kind: "implementer"` while
+      // doing it. So a `seam` field is a second answer to a question already settled, and this
+      // check failed whole mints over which FIELD a correct word sat in.
+      //
+      // Live 2026-08-31, metrolinx AMSD-1919: two agents minted, roster review sound, then
+      // "seam 'implementer' is not declared in the registry" — where `implementer` is the very
+      // kind the matching pattern declares, and both names resolved cleanly.
+      const derived = derivedSeamFor(name);
+      // Naming the KIND is not an invented seam: it is the right word in the wrong field, and the
+      // run must not die for it while the name resolves on its own.
+      if (agentKinds().includes(entry.seam) && derived) return { ok: true, reason: '' };
+      // Otherwise refused — but a refusal the producer cannot act on earns the same answer again,
+      // because the retry re-asks the same model with the same brief.
+      return {
+        ok: false,
+        reason: `seam '${entry.seam}' is not declared in the registry`
+          + (derived
+            ? ` — this agent's name resolves to '${derived}'; use that, or omit the field`
+            : ' — omit the field and let the resolver derive it from the name'),
+      };
     }
   }
   return { ok: true, reason: '' };

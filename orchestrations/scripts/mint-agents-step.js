@@ -662,6 +662,14 @@ if (require.main !== module) return;
       // The SAME context the prompt builder is given, computed the same way — a derivation that
       // sees different facts than its sibling stage is two projects, not one.
       const prompt = renderSpecialisation({
+        // THE VOCABULARY THE ANSWER IS JUDGED AGAINST. Read from the registry rather than written
+        // out here: a hand-kept second copy of a closed list only ever drifts from the list.
+        __DECLARED_SEAMS__: (() => {
+          try {
+            const _reg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'agents', 'invocation-profiles.json'), 'utf8'));
+            return Object.keys(_reg.profiles || {}).sort().map((s) => `- ${s}`).join('\n');
+          } catch { return ''; }
+        })(),
         __CANONICAL_COPY_PATH__: canonicalCopyPath,
         __OUT_PATH__: outPath,
         __PROJECT_CONTEXT__: [

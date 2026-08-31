@@ -6,6 +6,22 @@
  * never run" could not be asked of the larger half of the pipeline. That is how a branch shipped at
  * v1.5, was never once exercised by a test, and killed a live run.
  *
+ * WHAT AN EARLIER ATTEMPT LEARNED, kept because the knowledge is dearer than the code.
+ * orchestrations/scripts/tools/bash-coverage.js did this first on 2026-07-12, was wired to
+ * nothing, and rotted for seven weeks until a dead-code scan found it. It ran but produced no
+ * trace here, so it is gone; these are the observations it paid for:
+ *
+ *   - PATH-shimming `bash` across nested invocations HANGS in this sandboxed shell. Invoke the
+ *     target directly.
+ *   - bash's $LINENO attribution is not consistent by command shape. A command-substitution
+ *     assignment and a multi-line quoted string attribute their single hit to the LAST physical
+ *     line; a plain command with a multi-line argument list and a trailing redirect has been seen
+ *     attributing to the FIRST.
+ *   - `done <<< "$var"` sometimes produces no hit at all even when the loop body demonstrably ran.
+ *   - So when a line a test PROVABLY exercises still reads uncovered — verified by the command's
+ *     real side effect, not by the trace — treat it as a measurement gap, not a test gap, before
+ *     writing a test to "cover" it.
+ *
  * bash can answer it itself. With PS4 carrying ${BASH_SOURCE}:${LINENO} and xtrace sent to its own
  * descriptor, every executed line announces itself — the same mechanism bashcov uses. The trace fd
  * is separate from stderr, so a script's own diagnostics stay readable and nothing under test has

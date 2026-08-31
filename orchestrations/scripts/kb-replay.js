@@ -24,7 +24,11 @@
 const fs = require('fs');
 const path = require('path');
 
-const ROOT = path.join(__dirname, '..');
+// OVERRIDABLE, so this can be pointed at a fixture. It reads healing episodes out of a logs tree and
+// reports what the store and compiler really produce; with the tree hardcoded it could only ever be
+// run against the live one, which means it could not be tested and its own answers could not be
+// checked against a case whose outcome is known.
+const ROOT = process.env.KB_REPLAY_ROOT || path.join(__dirname, '..');
 const VERBOSE = process.argv.includes('--verbose');
 
 // ── Load every historical episode ────────────────────────────────────────────

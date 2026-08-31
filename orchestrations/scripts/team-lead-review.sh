@@ -15,6 +15,14 @@
 
 set -euo pipefail
 
+# RUNNING IS OPT-IN — the guard mock-expectations.js and agent-check.js already carry, for the same
+# reason: a file that EXECUTES on import cannot be unit tested, so its functions get copied into test
+# harnesses as strings. bash then attributes every traced line to that string, so this file's tests
+# exist, pass, and are invisible to every coverage collector.
+#
+# `return` outside a function succeeds only in a sourced file, which is how the two are told apart.
+if (return 0 2>/dev/null); then _TLR_SOURCED=1; else _TLR_SOURCED=0; fi
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -29,13 +37,18 @@ warning() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error()   { echo -e "${RED}[FAIL]${NC} $1" >&2; }
 
 # Parse arguments
+# Sourced: there are no arguments to validate, and no run to refuse.
+if [ "$_TLR_SOURCED" = 0 ]; then
 if [ $# -lt 1 ]; then
     error "Missing required argument PHASE_ID"
     echo "Usage: $0 <PHASE_ID>" >&2
     exit 1
 fi
+fi
 
-PHASE_ID=$1
+# `${1:-}` so a sourced file does not trip `set -u`. Executed, the validation above has already
+# guaranteed the argument is there, so this reads exactly as it did.
+PHASE_ID="${1:-}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 # Respect the caller's PROJECT_ROOT/PRD_FILE (exported by run-agent-orchestration.sh)
@@ -350,6 +363,9 @@ run_review_prompt() {
     echo '{"verdict":"changes_requested","reviewIncomplete":true,"issues":[{"severity":"blocker","description":"review-agent did not complete — it thrashed/stalled and produced no verdict even after ladder escalation. The change was NOT reviewed; blocking rather than auto-approving.","suggestedFix":"Re-run the reviewer, or review manually before merge."}],"summary":"review incomplete — not reviewed"}'
     return 0
 }
+
+# Sourced: the functions above are the deliverable; the review itself is not run.
+if [ "$_TLR_SOURCED" = 1 ]; then return 0; fi
 
 _reviewed_count=0
 # shellcheck disable=SC1090

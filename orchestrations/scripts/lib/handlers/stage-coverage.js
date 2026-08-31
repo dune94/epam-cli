@@ -223,6 +223,43 @@ function audit(cfg) {
  */
 const REPORT = process.env.STAGE_COVERAGE_REPORT || path.join(REPO, 'coverage/stage-coverage.json');
 
+/**
+ * HAS THE SUITE ACTUALLY SEEN THIS TREE?
+ *
+ * The fingerprint proves the report matches lcov. It says nothing about whether lcov matches the
+ * SOURCE — and that is the gap that made this whole gate a formality. Run the suite at 100%, add a
+ * hundred brand-new untested lines, do not re-run it: the report is correctly invalidated, then
+ * recomputed against coverage data that predates the code and still reports 100%. The untested code
+ * is invisible, which is precisely what this gate exists to prevent.
+ *
+ * Recomputing cannot fix it. The INPUT is stale, so every answer derived from it is stale. The only
+ * honest response is to refuse and say the suite has not been run since the code changed.
+ *
+ * It fails CLOSED, and that is the point: nobody has to remember to refresh the measurement,
+ * because nothing runs until they do. mtime is a coarse signal — a checkout or a touch will trip it
+ * — but it errs toward "run the suite again", which is the safe direction. Erring the other way is
+ * how a run pays for code nobody tested.
+ */
+function sourcesNewerThanCoverage(cfg) {
+  let lcovMtime;
+  try { lcovMtime = fs.statSync(LCOV).mtimeMs; } catch { return null; } // absence is handled elsewhere
+  const moved = [];
+  for (const f of projectFiles(cfg)) {
+    let st;
+    try { st = fs.statSync(f); } catch { continue; }
+    if (st.mtimeMs > lcovMtime) moved.push(f.replace(`${REPO}/`, ''));
+  }
+  return moved;
+}
+
+function refuseStaleCoverage(moved) {
+  const shown = moved.slice(0, 5).join(', ');
+  const more = moved.length > 5 ? ` (and ${moved.length - 5} more)` : '';
+  die(`the coverage data at ${LCOV} is OLDER than ${moved.length} file(s) it is supposed to `
+    + `measure: ${shown}${more}. A percentage computed from it would describe code that no longer `
+    + 'exists, and would hide every line added since. Re-run the suite: npm run test:coverage', 5);
+}
+
 function fingerprint(cfg) {
   const parts = [];
   for (const f of projectFiles(cfg)) {
@@ -308,6 +345,8 @@ if (arg === '--policy') {
 }
 
 if (arg === '--all') {
+  const moved = sourcesNewerThanCoverage(cfg);
+  if (moved && moved.length) refuseStaleCoverage(moved);
   // Pre-flight asks about every stage. Asking one process fourteen questions costs one startup;
   // asking fourteen processes one question each costs fourteen, and startup is now the whole bill.
   const r = fromReport(cfg, PREFLIGHT_STAGE) ? JSON.parse(fs.readFileSync(REPORT, 'utf8'))
@@ -346,6 +385,9 @@ function refuseEmpty(stage) {
   die(`stage '${stage}' matches no file in ${CONFIG} — its patterns select nothing, so there is `
     + 'nothing to measure. Fix the declaration; a stage with no code must not be scored 0%.', 4);
 }
+
+const movedSinceSuite = sourcesNewerThanCoverage(cfg);
+if (movedSinceSuite && movedSinceSuite.length) refuseStaleCoverage(movedSinceSuite);
 
 const cached = fromReport(cfg, arg);
 if (cached) {

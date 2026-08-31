@@ -108,10 +108,20 @@ describe('stage coverage is persisted, not recomputed', () => {
     writeFileSync(join(dir, 'orchestrations/scripts/lib/alpha.js'),
       Array.from({ length: 120 }, (_, i) => `const y${i} = ${i};`).join('\n'));
 
+    // THE REQUIREMENT is that the stale number is never served. Refusing outright satisfies it more
+    // strongly than recomputing does, and refusing is what a moved tree now gets — the coverage data
+    // itself predates the edit, so there is no honest number left to compute. Asserted so that both
+    // remedies pass and only serving the stale number fails.
     const r = run(dir, 'step-1-spec');
-    expect(r.status, r.stderr).toBe(0);
     expect(r.stdout.trim(), 'a percentage measured against code that no longer exists was served')
       .not.toBe('42.5');
+    if (r.status === 0) {
+      expect(Number(r.stdout.trim()), 'it answered, so the answer must describe the tree on disk')
+        .toBeLessThan(90);
+    } else {
+      expect(r.stderr, 'it refused, but not because the measurement no longer applies')
+        .toMatch(/OLDER than|stale|re-?run/i);
+    }
   }, 120_000);
 
   it('and so does changed coverage data — the suite is part of what the answer depends on', () => {
@@ -182,6 +192,46 @@ describe('stage coverage is persisted, not recomputed', () => {
     // And asking the first again, after the second has been measured, still gives the first's.
     expect(Number(run(a, 'step-1-spec').stdout.trim()),
       'the first tree\'s answer was overwritten by the second\'s').toBeCloseTo(96, 1);
+  }, 120_000);
+
+  it('COVERAGE DATA OLDER THAN THE CODE IS REFUSED — the suite must have seen this tree', () => {
+    // THE HOLE THIS CLOSES. The fingerprint proves the report matches lcov. Nothing proved lcov
+    // matches the SOURCE. So: run the suite at 100%, then add a hundred brand-new untested lines
+    // and do not re-run it. The report is correctly invalidated — and then recomputed against
+    // coverage data that predates the code, which still says every line is hit. It reported 100%
+    // for a file that was 50% covered, and the new untested code was invisible.
+    //
+    // Recomputing cannot fix this: the input itself is stale. The only honest answer is to refuse
+    // and say the suite has not been run since the code changed. It fails CLOSED, which is the
+    // whole point — nobody has to remember to refresh it, because nothing runs until they do.
+    const dir = workspace({ hit: 100 });
+    expect(Number(run(dir, 'step-1-spec').stdout.trim()), 'the fixture did not start covered')
+      .toBeCloseTo(100, 1);
+
+    const f = join(dir, 'orchestrations/scripts/lib/alpha.js');
+    writeFileSync(f, `${readFileSync(f, 'utf8')}\n${
+      Array.from({ length: 100 }, (_, i) => `const untested${i} = ${i};`).join('\n')}`);
+    const later = new Date(Date.now() + 10_000);
+    utimesSync(f, later, later);
+
+    const r = run(dir, 'step-1-spec');
+    expect(r.status, 'a percentage was reported from coverage data older than the code it measured')
+      .not.toBe(0);
+    expect(r.stderr, 'the refusal does not say the suite needs re-running')
+      .toMatch(/suite|re-?run|older|stale/i);
+    expect(r.stderr, 'the refusal does not name the file that moved').toMatch(/alpha\.js/);
+  }, 120_000);
+
+  it('and it is not merely refusing everything — a tree the suite HAS seen still answers', () => {
+    // Guards the fix against being a gate nobody can satisfy. Same shape, suite run after the edit.
+    const dir = workspace({ hit: 80 });
+    const f = join(dir, 'orchestrations/scripts/lib/alpha.js');
+    writeFileSync(f, readFileSync(f, 'utf8'));
+    const later = new Date(Date.now() + 10_000);
+    utimesSync(join(dir, 'coverage/lcov.info'), later, later); // the suite ran afterwards
+    const r = run(dir, 'step-1-spec');
+    expect(r.status, r.stderr).toBe(0);
+    expect(Number(r.stdout.trim())).toBeCloseTo(80, 1);
   }, 120_000);
 
   it('no coverage data at all is still a refusal, warm report or not', () => {

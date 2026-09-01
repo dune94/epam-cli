@@ -76,12 +76,17 @@ describe('the review budget comes from the model', () => {
   });
 
   it('an undeclared capacity is REFUSED by name, never defaulted', () => {
-    const at = RUNNER.indexOf('_budgetFromModel');
-    expect(at, 'the model-derived budget is missing').toBeGreaterThan(-1);
-    const block = RUNNER.slice(at, at + 2400);
-    for (const needed of ['autoCompressAt', 'charsPerToken', 'review_failed']) {
-      expect(block, `an undeclared ${needed} does not produce a refusal`).toContain(needed);
+    // NO CHARACTER WINDOW. A first version sliced 2400 chars after _budgetFromModel and broke the
+    // moment the block grew: the code was right and the test failed, which is worse than useless.
+    // Assert the pieces exist and are connected, not that they sit within N characters of one another.
+    expect(RUNNER.indexOf('_budgetFromModel'), 'the model-derived budget is missing')
+      .toBeGreaterThan(-1);
+    for (const needed of ['autoCompressAt', 'charsPerToken']) {
+      expect(RUNNER, `an undeclared ${needed} produces no refusal`)
+        .toMatch(new RegExp(`declares no ${needed}`));
     }
+    expect(RUNNER, 'a budget error does not become a review_failed verdict')
+      .toMatch(/_budgetFromModel\.error[\s\S]{0,400}review_failed/);
   });
 
   it('EVERY RUNG carries the whole roster in one call', () => {

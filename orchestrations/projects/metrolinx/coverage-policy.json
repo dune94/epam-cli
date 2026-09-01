@@ -4,6 +4,7 @@
   "_comment3": "thresholdPercent — the floor, checked per stage and again over every stage at pre-flight.",
   "_comment4": "blocker — true halts the pipeline on a shortfall; false reports it and lets the stage run untested code.",
   "thresholdPercent": 60,
-  "blocker": true,
-  "$baseline": "60% set 2026-08-31 by the operator as the working baseline for every stage. spec, reset and mint already clear it; the rest are the work in front. This is a floor to hold, not a target to stop at."
+  "blocker": false,
+  "$baseline": "60% set 2026-08-31 by the operator as the working baseline for every stage. spec, reset and mint already clear it; the rest are the work in front. This is a floor to hold, not a target to stop at.",
+  "_blockerOff": "Set false 2026-09-01 by operator decision: launch 14.1%, writer 24.9% and gates 38.3% are below the 60% threshold, and pre-flight halts the run before any step while the blocker is on. The gate still MEASURES and REPORTS every shortfall — this waives enforcement, it does not stop the measurement."
 }

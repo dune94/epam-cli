@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Five names on ONE line. A sweep that removed this because CYAN was unused took GREEN, RED,
+# YELLOW and NC with it, and every script here died on `GREEN: unbound variable` under set -u.
+# shellcheck disable=SC2034
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
 # ──────────────────────────────────────────────────────────────────────────────
 # generate-run-narrative.sh — Post-run prose narrative generator.
 #

@@ -455,6 +455,28 @@ function cassetteReply(seam, story) {
         try { parsed = JSON.parse(String(text).trim()); } catch { /* prose is a real reply too */ }
         seq.push({ body: String(text || '').trim(), parsed: !!parsed, calls });
       }
+      // A REVIEW VERDICT IS THE REVIEWER'S ANSWER, NOT THIS SEAM'S.
+      //
+      // prompt-review runs inside another seam's call and is traced under THAT seam's name, so a
+      // recorded session interleaves the seam's own replies with {verdict, issues, reason} objects
+      // belonging to the reviewer. Replayed in order, the seam's next request draws the reviewer's
+      // verdict: cpa-inference asked for an estimate, was handed a verdict carrying no confidence
+      // field, fell back to the 0.30 default and gated 'block' — halting both codeline lanes at
+      // Step 2 with an empty detail, three stages from the cause.
+      //
+      // A verdict is only this seam's answer when the seam IS a reviewer.
+      if (!/review/i.test(seam)) {
+        const own = seq.filter((t) => {
+          if (!t.parsed) return true;
+          let o = null; try { o = JSON.parse(t.body); } catch { return true; }
+          const isVerdict = o && typeof o === 'object'
+            && Object.prototype.hasOwnProperty.call(o, 'verdict')
+            && !Object.prototype.hasOwnProperty.call(o, 'confidence');
+          return !isVerdict;
+        });
+        if (own.length) seq.length = 0, seq.push(...own);
+      }
+
       if (!seq.length) continue;
 
       const nCalls = seq.reduce((n, t) => n + t.calls.length, 0);

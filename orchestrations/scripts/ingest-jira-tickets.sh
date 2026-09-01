@@ -29,6 +29,10 @@ NODE_BIN="${NODE_BIN:-$(command -v node 2>/dev/null || echo 'node')}"
 # valid on one machine, for one nvm install, until that version was upgraded.
 . "$(dirname "${BASH_SOURCE[0]}")/lib/node-bin.sh" 2>/dev/null || . "$(dirname "${BASH_SOURCE[0]}")/../lib/node-bin.sh"
 NODE_BIN="$(resolve_node_bin)"
+# Five names on ONE line. A sweep that removed this because CYAN was unused took GREEN, RED,
+# YELLOW and NC with it, and every script here died on `GREEN: unbound variable` under set -u.
+# shellcheck disable=SC2034
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
 log()  { echo -e "${GREEN}[ingest]${NC} $*"; }
 warn() { echo -e "${YELLOW}[ingest]${NC} $*"; }
 err()  { echo -e "${RED}[ingest]${NC} $*" >&2; }

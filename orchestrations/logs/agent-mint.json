@@ -1,10 +1,10 @@
 {
   "minted": [
     {
-      "name": "checkout-forms-engineer",
+      "name": "checkout-form-engineer",
       "kind": "implementer",
       "codeline": "",
-      "rationale": "AMSD-1919 pins the defect to a concrete line — CheckoutForm.tsx's confirmEmail validate rule doing `value !== email` — so this project needs an implementer who owns react-hook-form validation logic in the checkout flow to correct that specific case-sensitive comparison.",
+      "rationale": "AMSD-1919 requires an actual code change to the case-sensitive `value !== email` comparison in CheckoutForm.tsx's confirmEmail validate rule, and no implementer for the gotransit codeline currently exists among the fixed roles to make that edit.",
       "surfaces": [
         "profiles.json",
         "kb",
@@ -13,10 +13,10 @@
       ]
     },
     {
-      "name": "gotransit-checkout-detective",
+      "name": "checkout-form-detective",
       "kind": "investigator",
       "codeline": "gotransit",
-      "rationale": "The survey flagged that the client-side fix in CheckoutForm.tsx may not be the only place this equality check lives, so gotransit needs its own investigator to confirm or rule out duplicate server-side or shared-schema validation before the implementer's fix is considered complete.",
+      "rationale": "The ticket's fix and its existing TRM774-asserting test both live in CheckoutForm.tsx and CheckoutForm.spec.tsx, so gotransit needs a dedicated reader who reports the exact comparison logic and test scaffolding without asserting unverified package APIs as fact.",
       "surfaces": [
         "profiles.json",
         "kb",
@@ -28,13 +28,18 @@
   "rejected": [],
   "unchanged": [],
   "projectRoles": [
-    "checkout-forms-engineer"
+    "checkout-form-engineer"
   ],
   "projectInvestigators": [
-    "gotransit-checkout-detective"
+    "checkout-form-detective"
   ],
-  "proposed": 2,
-  "rejectedAcrossAttempts": [],
-  "attempts": 1,
+  "rejectedAcrossAttempts": [
+    {
+      "name": "checkout-form-detective",
+      "reason": "brief names 1 path(s) that do not exist in codeline 'gotransit': lodash.isstring/lodash.isequal"
+    }
+  ],
+  "proposed": 3,
+  "attempts": 2,
   "protectedRoles": 21
 }

@@ -1,9 +1,9 @@
 {
   "_what": "This project's minted READ-ONLY agents — investigators. They report what is in the code and never author it. The write perimeter does not read this file, and story assignment never offers these names.",
   "investigators": [
-    "checkout-form-detective"
+    "gotransit-checkout-detective"
   ],
   "byCodeline": {
-    "gotransit": "checkout-form-detective"
+    "gotransit": "gotransit-checkout-detective"
   }
 }

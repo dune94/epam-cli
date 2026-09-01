@@ -598,20 +598,26 @@ function agentsOfKind(kind, projectConfigDir) {
 
 
 /**
- * classifyReviewVerdict — WHAT THE REVIEWER ACTUALLY SAID, MAPPED TO WHAT THE GATE DOES.
+ * classifyReviewVerdict — WHAT reviewProjectRoster SAID, MAPPED TO WHAT THE GATE DOES.
  *
- * This gate accepted `verdict === 'approved'` and retried on `'review_failed'`. The reviewer emits
- * neither: its prompt declares `sound` and `defects_found`, and the schema allows
- * `nothing_to_review`. With no overlap, every outcome fell through to rejection — live 2026-09-01
- * a review returning {"verdict":"sound"} with zero findings had its roster discarded, three
- * attempts ran, the mint failed and the run halted. Eighteen model calls whose answer could not be
- * acted on whatever it was.
+ * The vocabulary here is the one THIS GATE'S CALLER emits, which is not the one the model emits.
+ * The model answers `sound` / `defects_found`; reviewProjectRoster aggregates those and returns
+ * `approved`, `changes_requested` or `review_failed`. The gate receives the second set.
  *
- *   sound                        → approved
- *   defects_found, no blocking   → approved  (advisory findings are notes, not blockers)
- *   defects_found, blocking      → rejected  (the reason carries the findings to the next attempt)
- *   nothing_to_review            → review_failed (the JUDGE did not look; the roster is not at fault)
- *   anything else                → unrecognised (never an approval, and it says so)
+ * I got this wrong on 2026-09-01 and it cost a run. Seeing `approved` in the gate and `sound` in
+ * the captured model output, I concluded the gate read a verdict nothing emits and rewrote it to
+ * accept the MODEL's words. It then recognised none of its caller's, so a clean review came back
+ * `approved`, fell through to the unrecognised branch, and the mint failed three attempts running.
+ * The original check was right; the lesson is to read the CALLER, not the transcript.
+ *
+ * Both vocabularies are accepted now, because the boundary has been crossed both ways in this
+ * file's history and neither spelling should be able to fail silently again:
+ *
+ *   approved | sound                          -> approved
+ *   changes_requested | defects_found+blocking -> rejected (reason carries the findings)
+ *   defects_found with only advisory findings  -> approved (notes are not blockers)
+ *   review_failed | nothing_to_review          -> review_failed (the JUDGE did not look)
+ *   anything else                              -> unrecognised, never an approval, and it says so
  */
 function classifyReviewVerdict(verdict) {
   const v = verdict && typeof verdict === 'object' ? verdict.verdict : undefined;
@@ -621,22 +627,35 @@ function classifyReviewVerdict(verdict) {
     .map((f) => `${f.agent || 'roster'}: ${f.claim || f.found || f.remedy || 'no detail given'}`)
     .join('; ');
 
-  if (v === 'sound') return { outcome: 'approved', reason: '' };
+  if (v === 'approved' || v === 'sound') return { outcome: 'approved', reason: '' };
+
+  if (v === 'changes_requested') {
+    return {
+      outcome: 'rejected',
+      reason: (verdict && verdict.reason) || describe(blocking.length ? blocking : findings)
+        || 'the review requested changes without naming one',
+    };
+  }
+
   if (v === 'defects_found') {
     return blocking.length
       ? { outcome: 'rejected', reason: describe(blocking) }
       : { outcome: 'approved', reason: findings.length ? describe(findings) : '' };
   }
-  if (v === 'nothing_to_review') {
-    return { outcome: 'review_failed', reason: 'the reviewer did not examine the roster' };
+
+  if (v === 'review_failed' || v === 'nothing_to_review') {
+    return {
+      outcome: 'review_failed',
+      reason: (verdict && verdict.reason) || 'the reviewer did not examine the roster',
+    };
   }
+
   return {
     outcome: 'unrecognised',
-    reason: `the reviewer answered '${String(v)}', which this gate does not recognise — `
-      + 'its declared vocabulary is sound | defects_found | nothing_to_review',
+    reason: `the review answered '${String(v)}', which this gate does not recognise — it handles `
+      + 'approved | sound | changes_requested | defects_found | review_failed | nothing_to_review',
   };
 }
-
 module.exports = {
   classifyReviewVerdict,
   buildProjectRoster,

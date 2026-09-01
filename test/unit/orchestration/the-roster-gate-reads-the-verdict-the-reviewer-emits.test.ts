@@ -1,26 +1,25 @@
 /**
- * THE ROSTER GATE READ A VERDICT NOTHING EVER EMITTED.
+ * THE GATE MUST HANDLE EVERY WORD ITS CALLER CAN SEND — AND THE CALLER IS NOT THE MODEL.
  *
- * project-roster.js accepted the roster on `verdict === 'approved'` and retried the judge on
- * `verdict === 'review_failed'`. The reviewer emits neither. Its prompt declares `sound` and
- * `defects_found`, and the schema also allows `nothing_to_review`.
+ * A correction is recorded here because the first version of this file asserted the opposite and
+ * cost a run.
  *
- * With no overlap, EVERY outcome fell through to the rejection branch. Live 2026-09-01, metrolinx
- * AMSD-1919: batch5 returned `{"verdict":"sound"}` with zero findings and zero blocking — a clean
- * pass — and the roster was thrown away anyway. Three attempts, all rejected, the mint failed and
- * the run halted. The same step killed the 30 August run.
+ * WHAT I BELIEVED: project-roster.js approved on `verdict === 'approved'`; the captured model
+ * output says `sound` / `defects_found`; therefore the gate waited on a word nothing produces. I
+ * rewrote it to accept the model's words and asserted here that `approved` must NOT be an approval.
  *
- * The cost is not only the halt. Six review batches per attempt, three attempts — eighteen model
- * calls whose verdict could not be acted on whatever it said.
+ * WHAT IS TRUE: the gate is not handed the model's verdict. reviewProjectRoster aggregates the
+ * review batches and returns its OWN vocabulary — `approved`, `changes_requested`, `review_failed`.
+ * The original check was correct. My change made the gate recognise none of its caller's words, so
+ * a clean review returned `approved`, fell to the unrecognised branch, and the mint failed three
+ * attempts running. Live 2026-09-01: a killed metrolinx run.
  *
- * A gate must be written against the vocabulary its judge ACTUALLY emits. This is the same defect
- * shape already recorded for the spec-review gate, in a different gate, and it survived because
- * nothing tested the mapping — the reviewer was tested, the roster writer was tested, and the JOIN
- * between them was not.
+ * Both vocabularies are accepted now, because this boundary has been crossed in both directions and
+ * neither spelling should be able to fail silently again.
  *
- * THE LAST TEST HERE IS THE ONE THAT MATTERS: it reads the vocabulary out of the prompt template
- * and asserts the gate handles every value the reviewer is told to produce. That is what makes the
- * two impossible to drift apart again.
+ * THE TEST THAT WOULD HAVE CAUGHT ME is at the bottom: it reads the verdicts out of
+ * reviewProjectRoster's own return statements and asserts the gate handles each one. Reading the
+ * caller is the check; reading a transcript is how I got it wrong.
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -71,7 +70,10 @@ describe('the roster gate reads the verdict the reviewer emits', () => {
   it('an unrecognised verdict is never silently treated as approval', () => {
     // The failure that made this test necessary was a vocabulary mismatch. If it drifts again the
     // gate must say so, not guess in either direction.
-    for (const v of ['approved', 'yes', '', undefined, null]) {
+    // 'approved' is NOT in this list: it is what reviewProjectRoster returns for a clean review.
+    // Asserting it here was my wrong diagnosis written down as a test, and it passed while the
+    // pipeline could not approve a roster at all.
+    for (const v of ['yes', 'maybe_ok', '', undefined, null]) {
       const r = classifyReviewVerdict({ verdict: v as any, findings: [] });
       expect(r.outcome, `"${String(v)}" was treated as an approval`).not.toBe('approved');
       expect(r.reason, `"${String(v)}" produced no explanation`).toBeTruthy();
@@ -98,5 +100,54 @@ describe('the roster gate reads the verdict the reviewer emits', () => {
       expect(r.outcome, `the reviewer is told it may answer "${v}" and the gate does not handle it`)
         .not.toBe('unrecognised');
     }
+  });
+});
+
+/**
+ * THE VOCABULARY THAT MATTERS IS THE CALLER'S.
+ *
+ * I read the gate (approved) and the captured model output (sound), concluded the gate expected a
+ * word nothing produces, and rewrote it to accept the MODEL's words. But the gate is not handed the
+ * model's verdict — reviewProjectRoster aggregates the batches and returns its OWN: approved,
+ * changes_requested, review_failed. My change made the gate recognise none of them, so a clean
+ * review came back approved, fell to the unrecognised branch, and the mint failed three attempts
+ * running. Live 2026-09-01, a killed run.
+ *
+ * These assertions are taken from the RETURN STATEMENTS of reviewProjectRoster, so the gate is held
+ * to what its caller actually sends rather than to what a transcript happens to show.
+ */
+describe('the gate handles the vocabulary its CALLER returns', () => {
+  const RUNNER = readFileSync(join(REPO, 'orchestrations/scripts/spec-mode-runner.js'), 'utf8');
+
+  it('every verdict reviewProjectRoster can return is handled', () => {
+    // Read them out of the function rather than listing them here, so a new return value that
+    // nothing downstream understands fails this test the day it is added.
+    const start = RUNNER.indexOf('async function reviewProjectRoster({');
+    expect(start, 'reviewProjectRoster is missing').toBeGreaterThan(-1);
+    const body = RUNNER.slice(start, start + 20000);
+    const emitted = [...new Set(
+      [...body.matchAll(/verdict:\s*['"]([a-z_]+)['"]/g)].map((m) => m[1]),
+    )];
+    expect(emitted.length, 'no verdicts parsed from the caller — this proves nothing')
+      .toBeGreaterThan(1);
+    for (const v of emitted) {
+      expect(classifyReviewVerdict({ verdict: v, findings: [] }).outcome,
+        `reviewProjectRoster can return '${v}' and the gate does not recognise it`)
+        .not.toBe('unrecognised');
+    }
+  });
+
+  it('THE REGRESSION: approved is an approval', () => {
+    expect(classifyReviewVerdict({ verdict: 'approved', findings: [] }).outcome).toBe('approved');
+  });
+
+  it('changes_requested is a rejection that carries its reason', () => {
+    const r = classifyReviewVerdict({
+      verdict: 'changes_requested',
+      reason: 'agent-x: the brief names a path that does not exist',
+      findings: [{ agent: 'agent-x', severity: 'blocking', claim: 'bad path' }],
+    });
+    expect(r.outcome).toBe('rejected');
+    expect(r.reason, 'the next attempt is told nothing to fix').toMatch(/does not exist|bad path/);
   });
 });

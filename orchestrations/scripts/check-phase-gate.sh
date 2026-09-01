@@ -55,7 +55,7 @@ fi
 PHASE_ID=$1
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
-PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
+export PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
 PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
 COST_LOG="${COST_LOG:-$AUTOMATION_DIR/logs/phase-cost.jsonl}"
 GATE_LOG="${GATE_LOG:-$AUTOMATION_DIR/logs/phase-gates.jsonl}"

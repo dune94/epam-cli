@@ -25,7 +25,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-cd "$ROOT"
+cd "$ROOT" || exit 1
 
 NODE_BIN="${NODE_BIN:-$(command -v node)}"
 WORK="${SHELL_COVERAGE_WORK:-${TMPDIR:-/tmp}/shell-coverage-$$}"

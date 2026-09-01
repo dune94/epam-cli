@@ -103,7 +103,7 @@ echo ""
 pre_run_reset_or_abort --prd "$PRD_FILE"
 
 cd "$REPO_ROOT"
-OPENROUTER_API_KEY="mock-key" \
+export OPENROUTER_API_KEY="mock-key" \
 OPENROUTER_BASE_URL="$MOCK_URL" \
 EPAM_API_KEY_OPENROUTER="mock-key" \
 ORCH_GATE_PROVIDER="openrouter" \

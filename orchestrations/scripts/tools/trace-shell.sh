@@ -12,7 +12,7 @@
 #   trace-shell.sh test/shell/steps/the-reset-copies-a-run-before-it-deletes-it.bats
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-cd "$ROOT"
+cd "$ROOT" || exit 1
 # MANY TARGETS, ONE PROCESS. Tracing files one at a time pays vitest's ~3s startup per file, so 43
 # files cost two minutes of startup to collect thirty seconds of trace. Passed together they cost one.
 [ "$#" -gt 0 ] || { echo "usage: trace-shell.sh <test-file|dir|.bats> [more...]" >&2; exit 2; }

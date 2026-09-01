@@ -11,7 +11,7 @@
 # the whole report with those two files and delete everything measured before.
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-cd "$ROOT"
+cd "$ROOT" || exit 1
 [ "$#" -gt 0 ] || { echo "usage: trace-js.sh <test-file|dir> [more...]" >&2; exit 2; }
 
 NODE_BIN="${NODE_BIN:-$(command -v node)}"

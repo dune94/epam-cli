@@ -151,7 +151,7 @@ story_outputs_files() {
         fi
         command -v warning >/dev/null 2>&1 && \
             warning "  no writer-output manifest at $manifest — falling back to the baseline diff for scope"
-        STORY_OUTPUTS_SOURCE="baseline diff"
+        export STORY_OUTPUTS_SOURCE="baseline diff"
         raw=$( { git -C "$project_root" diff --name-only --diff-filter=ACMRT "$baseline" 2>/dev/null
                  git -C "$project_root" ls-files --others --exclude-standard 2>/dev/null; } )
     fi

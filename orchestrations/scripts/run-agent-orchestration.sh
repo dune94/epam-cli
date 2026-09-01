@@ -4997,7 +4997,7 @@ run_pre_phase_assessment() {
         # is what makes the deterministic apply safe, and removing the writes is
         # what makes the schema safe: a schema over an agent that still exhausts
         # returns a valid EMPTY object, which is a loud failure turned silent.
-        EPAM_ALLOWED_WRITE_PATHS="" \
+        export EPAM_ALLOWED_WRITE_PATHS="" \
         EPAM_MAX_TOOL_CALLS="${_pfa_tool_budget}" \
         EPAM_RESPONSE_SCHEMA="${_pfa_schema:-}" \
         # ITS OWN IDENTITY. This passed "team-lead-agent", so the pre-phase skill assessment

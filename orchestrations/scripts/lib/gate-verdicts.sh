@@ -169,15 +169,15 @@ $_qg_prompt"
         local _qg_recovered=""
         _qg_recovered=$(find "${OUTPUT_DIR:-${PROJECT_ROOT:-$PWD}}" \
             -maxdepth 4 -name "*.json" -newer "$_qg_log" \
-            2>/dev/null | \
-            xargs grep -l "\"${_qg_slug}\"\|\"verdict\"\|\"summary\"" 2>/dev/null | \
+            -print0 2>/dev/null | \
+            xargs -0 grep -l "\"${_qg_slug}\"\|\"verdict\"\|\"summary\"" 2>/dev/null | \
             head -1 || true)
         if [ -z "$_qg_recovered" ]; then
             # Also check current directory and /tmp for files written in last 5 min
             _qg_recovered=$(find . /tmp -maxdepth 2 -name "*.json" \
                 -newer "$_qg_log" \
-                2>/dev/null | \
-                xargs grep -l "\"${_qg_slug}\"" 2>/dev/null | \
+                -print0 2>/dev/null | \
+                xargs -0 grep -l "\"${_qg_slug}\"" 2>/dev/null | \
                 head -1 || true)
         fi
         if [ -n "$_qg_recovered" ]; then

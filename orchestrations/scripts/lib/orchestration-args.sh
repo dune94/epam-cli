@@ -26,27 +26,27 @@ while [[ $# -gt 0 ]]; do
                 error "--phase requires a phase name"
                 exit 1
             fi
-            PHASE="$2"
+            export PHASE="$2"
             shift 2
             ;;
         --reset)
-            RESET_STORIES=true
+            export RESET_STORIES=true
             shift
             ;;
         --dry-run)
-            DRY_RUN=true
+            export DRY_RUN=true
             shift
             ;;
         --skip-cleanup)
-            SKIP_CLEANUP=true
+            export SKIP_CLEANUP=true
             shift
             ;;
         --sandbox)
-            EPAM_SANDBOX=true
+            export EPAM_SANDBOX=true
             shift
             ;;
         --allow-network)
-            EPAM_SANDBOX_ALLOW_NETWORK=true
+            export EPAM_SANDBOX_ALLOW_NETWORK=true
             shift
             ;;
         --mode)
@@ -58,7 +58,7 @@ while [[ $# -gt 0 ]]; do
                 error "Invalid --mode: $2 (must be 'bash' or 'hybrid')"
                 exit 1
             fi
-            ORCH_MODE="$2"
+            export ORCH_MODE="$2"
             shift 2
             ;;
         --help|-h)

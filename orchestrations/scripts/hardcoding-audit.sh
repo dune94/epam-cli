@@ -38,7 +38,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$ROOT"
+cd "$ROOT" || exit 1
 
 # WHAT IS SCANNED IS DECLARED — config/hardcoding-audit-scope.json.
 #

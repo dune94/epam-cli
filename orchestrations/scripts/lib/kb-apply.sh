@@ -56,7 +56,7 @@ kb_apply_constraints() {
     eval "$_out"
 
     KB_LAST_FIRED="${KB_FIRED:-}"
-    KB_LAST_GATES="${KB_GATES:-}"
+    export KB_LAST_GATES="${KB_GATES:-}"
 
     # Mirror onto the story-path knobs. claude.sh reads STORY_* at the invocation
     # site (`EPAM_MAX_ITERATIONS="${STORY_MAX_ITERATIONS:-6}"`), so setting only the

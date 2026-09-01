@@ -589,7 +589,6 @@ while IFS= read -r sid; do
 
   s_title=$(echo "$story_json" | jq -r '.title')
   s_human_hours=$(echo "$story_json" | jq -r '.humanHours // .estimatedHours // 0')
-  s_priority=$(echo "$story_json" | jq -r '.priority // "medium"')
   s_type=$(echo "$story_json" | jq -r '.storyType // "implementation"')
   s_skills=$(echo "$story_json" | jq -r '.technicalNotes.requiredSkills | join(" ")' 2>/dev/null || echo "")
   deps_json=$(echo "$story_json" | jq -c '.dependencies // []' 2>/dev/null || echo "[]")

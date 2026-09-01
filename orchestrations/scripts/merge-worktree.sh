@@ -160,6 +160,10 @@ echo ""
 log "Step 2: Attempting merge..."
 
 merge_output=$(mktemp)
+# The expansion is deliberate: the trap must remove THE FILE CREATED ON THE LINE ABOVE, even if
+# merge_output is later reassigned. Deferring it (single quotes) would delete whatever the variable
+# happens to name at exit, which is not the temp file this trap was installed for.
+# shellcheck disable=SC2064
 trap "rm -f $merge_output" EXIT
 
 if ! git merge --no-commit --no-ff "$BRANCH_NAME" 2>&1 | tee "$merge_output"; then

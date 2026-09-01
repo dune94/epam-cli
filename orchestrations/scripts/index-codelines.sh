@@ -17,7 +17,7 @@
 
 set -eo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="${JIRA_CODELINE_ROOT:-}"
 # No client path default: an engine default pointing at one client's checkout is
 # hardcoding, and silently indexes the wrong tree when the var is forgotten.

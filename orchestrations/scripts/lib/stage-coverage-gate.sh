@@ -41,6 +41,9 @@ _coverage_gate_run_spends() {
         # UNABLE TO PROVE A RUN IS FREE MEANS IT SPENDS, which is the guard's own default and the
         # only safe direction: a missing file must never buy an exemption.
         [ -f "$_guard" ] || return 0
+        # The guard sits beside this file, resolved from BASH_SOURCE at runtime, so its path is
+        # not a constant shellcheck can follow.
+        # shellcheck source=/dev/null
         . "$_guard"
     fi
     free_run_requested && return 1

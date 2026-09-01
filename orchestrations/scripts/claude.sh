@@ -355,7 +355,7 @@ CONTROL_PLANE_PORT="${CONTROL_PLANE_PORT:-8094}"
 # Worktree configuration (set by --worktree flag)
 WORKTREE_MODE=""        # "primary", "independent", or "" for main
 MAIN_PRD_FILE=""        # Points to main repo's prd.json when in worktree mode
-REVIEW_PHASE=""         # Phase name for --review-phase mode
+export REVIEW_PHASE=""         # Phase name for --review-phase mode
 CURRENT_PHASE=""        # Current phase being executed (for cost tracking)
 
 # Configuration
@@ -6016,7 +6016,6 @@ $(cat "$_cf")
     local plan_text=""
 
     local plan_constitution="${AGENT_CONSTITUTION}${DYNAMIC_CONSTITUTION}"
-    local plan_permissions=("--dangerously-skip-permissions" "--append-system-prompt" "$plan_constitution")
     if [ "${EPAM_SDK_INVOKE:-0}" = "1" ] && [ -f "$INVOKE_PY" ]; then
         echo "$planning_prompt" | "$INVOKE_PYTHON" "$INVOKE_PY" \
             --cache-system \
@@ -10663,7 +10662,7 @@ $_kb_section"
         elif [ "$_invoke_success_before_tsc" = true ]; then
             LAST_ATTEMPT_TSC_PASSED=false
         else
-            LAST_ATTEMPT_TSC_PASSED=unknown
+            export LAST_ATTEMPT_TSC_PASSED=unknown
         fi
 
         # The repository's OWN lint, before the commit rather than at Step 20. A violation here

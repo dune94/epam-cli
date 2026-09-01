@@ -10,7 +10,7 @@
 # set, converts what the children produced, and merges it into the accumulating lcov.
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-cd "$ROOT"
+cd "$ROOT" || exit 1
 [ "$#" -gt 0 ] || { echo "usage: trace-children.sh <test-file|dir> [more...]" >&2; exit 2; }
 NODE_BIN="${NODE_BIN:-$(command -v node)}"
 ACC="${JS_COVERAGE_ACC:-$ROOT/coverage/lcov.info}"

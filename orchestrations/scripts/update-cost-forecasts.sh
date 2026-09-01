@@ -28,7 +28,7 @@ error()   { echo -e "${RED}[ERROR]${NC} $1" >&2; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
-PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
+export PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
 # OVERRIDABLE, LIKE ITS SIBLING. estimate-stories.sh honours PRD_FILE; this hardcoded one path, so
 # it could only ever act on a single PRD and could not be exercised without writing to the real one.
 # A script that rewrites a PRD and cannot be pointed at a copy is a script nobody can test safely.

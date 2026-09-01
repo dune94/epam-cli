@@ -23,7 +23,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
-MAGENTA='\033[0;35m'
+export MAGENTA='\033[0;35m'
 NC='\033[0m'
 
 log()     { echo -e "${CYAN}[REVIEW-CYCLE]${NC} $1"; }
@@ -306,7 +306,7 @@ if [ "$_RAW_VERDICT" = "changes_requested" ]; then
         ISSUES+=("$_issue")
     done < <(echo "$_REVIEW_JSON" | jq -c '.issues[]?' 2>/dev/null)
 fi
-REVIEW_STATUS="${_RAW_VERDICT}"
+export REVIEW_STATUS="${_RAW_VERDICT}"
 
 ISSUE_COUNT=${#ISSUES[@]}
 

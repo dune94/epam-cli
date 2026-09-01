@@ -16,7 +16,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$ROOT"
+cd "$ROOT" || exit 1
 
 mapfile -t FILES < <(find test -name '*.bats' -type f | sort)
 if [ "${#FILES[@]}" -eq 0 ]; then

@@ -496,20 +496,22 @@ async function buildProjectRoster({
           verdict = { verdict: 'review_failed', reason: `the review call failed: ${(e && e.message) || e}` };
         }
 
-        if (verdict && verdict.verdict === 'approved') { approved = true; break; }
+        const _cls = classifyReviewVerdict(verdict);
+        if (_cls.outcome === 'approved') { approved = true; break; }
 
         // A REVIEW THAT FAILED IS NOT A ROSTER THAT FAILED. 'nothing_to_review' means the reviewer
         // did not look — it returned its own plan, once — and the schema distinguishes that from
         // examined-and-defective on purpose. Retry the judge; leave the artefact alone.
-        if (verdict && verdict.verdict === 'review_failed') {
-          reviewReason = verdict.reason || 'the review did not examine the roster';
+        if (_cls.outcome === 'review_failed' || _cls.outcome === 'unrecognised') {
+          reviewReason = verdict.reason || _cls.reason;
           log(`[roster] review did not examine the roster (${r}/${attempts}): ${reviewReason}`);
           continue;
         }
 
         // Examined, and found wanting. THAT implicates the roster.
-        lastReason = (verdict && (verdict.reason || (verdict.findings || []).join('; ')))
-          || 'review returned no verdict';
+        // The findings themselves, not "[object Object]": the next attempt can only fix what it
+        // is told, and joining an array of objects tells it nothing.
+        lastReason = _cls.reason || 'review returned no verdict';
         log(`[roster] attempt ${attempt}/${attempts} REJECTED by review: ${lastReason}`);
         break;
       }
@@ -594,7 +596,49 @@ function agentsOfKind(kind, projectConfigDir) {
   return Object.keys(doc.agents).filter((n) => doc.agents[n] && doc.agents[n].kind === kind).sort();
 }
 
+
+/**
+ * classifyReviewVerdict — WHAT THE REVIEWER ACTUALLY SAID, MAPPED TO WHAT THE GATE DOES.
+ *
+ * This gate accepted `verdict === 'approved'` and retried on `'review_failed'`. The reviewer emits
+ * neither: its prompt declares `sound` and `defects_found`, and the schema allows
+ * `nothing_to_review`. With no overlap, every outcome fell through to rejection — live 2026-09-01
+ * a review returning {"verdict":"sound"} with zero findings had its roster discarded, three
+ * attempts ran, the mint failed and the run halted. Eighteen model calls whose answer could not be
+ * acted on whatever it was.
+ *
+ *   sound                        → approved
+ *   defects_found, no blocking   → approved  (advisory findings are notes, not blockers)
+ *   defects_found, blocking      → rejected  (the reason carries the findings to the next attempt)
+ *   nothing_to_review            → review_failed (the JUDGE did not look; the roster is not at fault)
+ *   anything else                → unrecognised (never an approval, and it says so)
+ */
+function classifyReviewVerdict(verdict) {
+  const v = verdict && typeof verdict === 'object' ? verdict.verdict : undefined;
+  const findings = (verdict && Array.isArray(verdict.findings)) ? verdict.findings : [];
+  const blocking = findings.filter((f) => f && f.severity === 'blocking');
+  const describe = (list) => list
+    .map((f) => `${f.agent || 'roster'}: ${f.claim || f.found || f.remedy || 'no detail given'}`)
+    .join('; ');
+
+  if (v === 'sound') return { outcome: 'approved', reason: '' };
+  if (v === 'defects_found') {
+    return blocking.length
+      ? { outcome: 'rejected', reason: describe(blocking) }
+      : { outcome: 'approved', reason: findings.length ? describe(findings) : '' };
+  }
+  if (v === 'nothing_to_review') {
+    return { outcome: 'review_failed', reason: 'the reviewer did not examine the roster' };
+  }
+  return {
+    outcome: 'unrecognised',
+    reason: `the reviewer answered '${String(v)}', which this gate does not recognise — `
+      + 'its declared vocabulary is sound | defects_found | nothing_to_review',
+  };
+}
+
 module.exports = {
+  classifyReviewVerdict,
   buildProjectRoster,
   loadRoster,
   personaFor,

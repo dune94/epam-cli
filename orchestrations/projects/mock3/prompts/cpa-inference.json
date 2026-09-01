@@ -22,6 +22,10 @@
   "seams": [
     "cpa-inference"
   ],
+  "mayBeEmpty": [
+    "__SYSTEM_PROMPT__"
+  ],
+  "$mayBeEmpty": "__SYSTEM_PROMPT__ is optional input and the caller says so in its own signature: cpa-inference.js destructures `systemPrompt = ''`. The render refused that state, so a caller omitting an optional field got 'FATAL: prompt was given EMPTY values' instead of an estimate. Declaring it makes the template agree with the contract the caller already publishes.",
   "derivedFromSha256": "dc93df7ee7f6934c34857cd941e20063088809bfde885a6747e75548fba9e85b",
   "authority": "project"
 }

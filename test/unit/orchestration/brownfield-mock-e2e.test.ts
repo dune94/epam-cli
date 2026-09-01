@@ -225,8 +225,14 @@ function runFullPipeline(opts: { prdPath: string; projectRoot: string; env: Node
     '--prd', opts.prdPath,
     // The PRD at that path does not exist yet: this run's ingest synthesizes it there. So the
     // project is DECLARED, exactly as production declares it by pointing at a project's own
-    // canonical prd.json. hello-dolly is what this mock has always configured from.
-    '--project', 'hello-dolly',
+    // canonical prd.json.
+    //
+    // mock3, on the evidence of the run itself rather than on the launcher history: this test
+    // ingests two stories, resolves codelines mocka and mockb, and mock3 is the project declaring
+    // exactly those two with a prd.json carrying two stories. The cassettes replayed for it are
+    // mock3-20260818T101809Z. hello-dolly declares the same codelines but ships no prd.json at
+    // all, so a mock loaded for it has no stories to stand in for.
+    '--project', 'mock3',
     '--project-root', opts.projectRoot,
     '--phase', PHASE,
   ], {
@@ -269,6 +275,46 @@ describe.skipIf(!RUN_REAL)('Full mock brownfield pipeline — REAL Jira ingest +
     try {
       const synthPrdPath = join(codelineRoot, '..', 'synthesized-prd.json');
 
+      // THE REHEARSAL PROVISIONS ITS OWN MOCK.
+      //
+      // Nothing did. No launcher loads mock-expectations.js, so MockServer served whatever was last
+      // registered by hand — which made every seam answered by a stale stand-in look like a
+      // pipeline fault three stages downstream.
+      //
+      // It has to be loaded for THE STORIES THIS RUN CREATES. The loader builds a stand-in per
+      // story, and driving it from mock3's canonical prd.json produced stand-ins for MOCK3-1 and
+      // MOCK3-2 while this run ingests MOCK-HW-1 from the mock Jira ticket. Every per-story seam
+      // then answered for a story that does not exist here, and role assignment ended with
+      // "unassigned after the agent's full retry/ladder budget: MOCK-HW-1 @ mocka, MOCK-HW-1 @
+      // mockb" — a null agent, from a mock that was answering a different question.
+      //
+      // The story shape is mock3's own, with this run's id: invented fields would be a fixture
+      // asserting my assumptions rather than the producer's values.
+      const canonicalPrd = JSON.parse(
+        readFileSync(join(REPO_ROOT, 'orchestrations/projects/mock3/prd.json'), 'utf8'));
+      const mockPrdPath = join(codelineRoot, '..', 'mock-expectations-prd.json');
+      writeFileSync(mockPrdPath, JSON.stringify({
+        ...canonicalPrd,
+        stories: [{
+          ...canonicalPrd.stories[0],
+          id: STORY_ID,
+          jiraKey: STORY_ID,
+          codelines: ['mocka', 'mockb'],
+        }],
+      }, null, 2));
+      const provisioned = spawnSync(NODE20, [
+        join(REPO_ROOT, 'orchestrations/scripts/mock-expectations.js')], {
+        encoding: 'utf8', timeout: 560000, cwd: REPO_ROOT,
+        env: {
+          ...process.env,
+          PRD_FILE: mockPrdPath,
+          EPAM_PROJECT_CONFIG_DIR: join(REPO_ROOT, 'orchestrations/projects/mock3'),
+        },
+      });
+      expect(provisioned.status,
+        `the mock could not be provisioned, so this run would rehearse against stale expectations:\n${
+          (provisioned.stdout || '') + (provisioned.stderr || '')}`).toBe(0);
+
       const { stdout, exitCode } = runFullPipeline({
         prdPath: synthPrdPath,
         projectRoot: clone,
@@ -280,6 +326,18 @@ describe.skipIf(!RUN_REAL)('Full mock brownfield pipeline — REAL Jira ingest +
           JIRA_PROJECT_KEY: 'MOCK',
           JIRA_STATUS_FILTER: 'To Do',
           JIRA_SYNTH_PRD_PATH: synthPrdPath,
+          // NOBODY IS WATCHING THIS RUN, SO THE REVIEW PAUSES MUST NOT FIRE.
+          //
+          // mock3's config.env declares EPAM_PAUSE_AFTER_AGENT_MINT=1 and EPAM_PAUSE_BEFORE_WRITER=1,
+          // which is right for an operator driving the mock by hand: pause 1 after the roster is
+          // minted, pause 2 before the writer touches anything. This test drives it unattended and
+          // asserts the whole chain through to a branch, so both would stop the run at mint — which
+          // they did, cleanly and with exit 0, leaving "no branch was created" as the only symptom.
+          //
+          // Overridden here rather than in the project's config, because which review points a
+          // project wants is the project's declaration to make, not this test's.
+          EPAM_PAUSE_AFTER_AGENT_MINT: '0',
+          EPAM_PAUSE_BEFORE_WRITER: '0',
           EPAM_BROWNFIELD: '1',
           JIRA_CODELINE_ROOT: codelineRoot,
           JIRA_BASELINE_BRANCH: 'main',

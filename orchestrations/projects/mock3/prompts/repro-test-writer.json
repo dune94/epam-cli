@@ -45,6 +45,10 @@
   "seams": [
     "repro-test-writer"
   ],
+  "mayBeEmpty": [
+    "__EXAMPLE_BLOCK__"
+  ],
+  "$mayBeEmpty": "__EXAMPLE_BLOCK__ offers the writer an existing test to mirror. brownfield-repro-test-writer.sh sets it only when it finds one — `if [ -n \"$_example_rel\" ] && [ -f ... ]` — so a codeline with no tests leaves it empty, and the render then refused: 'FATAL: the repro-test-writer prompt did not render'. A repository with no tests is precisely the one that needs this seam, and it was the single case the seam could not serve. Absent is a real state here. Every OTHER placeholder still refuses when empty, __FIX_DIFF__ included — an empty fix diff means the fix changed nothing, which no test can be derived from.",
   "derivedFromSha256": "1b569e43de6fe450417be47ac69be985131f1071104730055986fbf58bbbd7fe",
   "authority": "project"
 }

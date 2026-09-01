@@ -1,7 +1,7 @@
 {
   "canonicalFile": "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/agents/profiles.canonical.json",
-  "canonicalRoles": 55,
-  "liveRoles": 58,
+  "canonicalRoles": 47,
+  "liveRoles": 50,
   "generated": [
     {
       "role": "agent-systems-engineer",
@@ -39,11 +39,6 @@
       "role": "review-agent",
       "canonicalChars": 2851,
       "liveChars": 2976
-    },
-    {
-      "role": "docstring-agent",
-      "canonicalChars": 1170,
-      "liveChars": 1330
     }
   ],
   "missingFromLive": []

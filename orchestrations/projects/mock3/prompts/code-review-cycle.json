@@ -26,6 +26,10 @@
   "seams": [
     "code-review-cycle"
   ],
+  "mayBeEmpty": [
+    "__PRIOR_CONTEXT__"
+  ],
+  "$mayBeEmpty": "__PRIOR_CONTEXT__ carries the PREVIOUS iteration's findings, and iteration 1 has no previous iteration — code-review-cycle.sh sets it only `when iteration > 1`. Without this declaration the library refused every render on a first review, so the seam could not perform an initial review at all: it printed 'cannot render its prompt — refusing to run with no instructions' and the caller saw a review that never happened. Absent is a REAL state here, which is exactly what mayBeEmpty is for.",
   "derivedFromSha256": "d9387b87361153c239a4da8be927fefd80200cfa035678cb6e1ea41c329f5ad0",
   "authority": "project"
 }

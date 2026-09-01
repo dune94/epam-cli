@@ -1,7 +1,20 @@
 {
-  "codeline": "mock3",
-  "stacks": [],
+  "codeline": "mockhelloworld",
+  "stacks": [
+    {
+      "codeline": "mockhelloworld",
+      "path": "/tmp/brownfield-mock-e2e-50G4EJ/codelines/mock-hello-world",
+      "stack": "node",
+      "manifest": "package.json",
+      "testCommand": "",
+      "declaredDeps": [
+        "typescript"
+      ]
+    }
+  ],
   "learned": [],
-  "sources": [],
-  "empty": true
+  "sources": [
+    "/tmp/brownfield-mock-e2e-50G4EJ/codelines/mock-hello-world/package.json"
+  ],
+  "empty": false
 }

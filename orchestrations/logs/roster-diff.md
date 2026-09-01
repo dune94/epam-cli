@@ -1,7 +1,7 @@
 # Roster diff — generated vs canonical
 
-canonical: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/agents/profiles.canonical.json (55 roles)
-live:      /home/bradleyjerome/projects/ai/epam-cli/orchestrations/agents/profiles.json (58 roles)
+canonical: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/agents/profiles.canonical.json (47 roles)
+live:      /home/bradleyjerome/projects/ai/epam-cli/orchestrations/agents/profiles.json (50 roles)
 
 ## MINTED BY THIS RUN — IMPLEMENTERS, may author code (0)
 - (none)
@@ -17,12 +17,11 @@ live:      /home/bradleyjerome/projects/ai/epam-cli/orchestrations/agents/profil
 - billing-engineer
 - cli-ux-engineer
 
-## Brief differs from canonical (5)
+## Brief differs from canonical (4)
 - typescript-engineer  canonical 6325 -> live 7040 chars
 - test-engineer  canonical 7129 -> live 7185 chars
 - team-lead-agent  canonical 1816 -> live 1879 chars
 - review-agent  canonical 2851 -> live 2976 chars
-- docstring-agent  canonical 1170 -> live 1330 chars
 
 ## In canonical but NOT live (0)
 - (none)

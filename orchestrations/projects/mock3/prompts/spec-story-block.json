@@ -30,6 +30,16 @@
     "block": "__PERSONA__STORY\nTitle: __TITLE__\nDescription: __DESCRIPTION__\nComponents: __COMPONENTS__\nDeclared files: __DECLARED_FILES__\n\nLINKS FOUND IN THIS TICKET:\n__LINK_BLOCK__\n\nCOMMENT THREAD (context for judging relevance — a link's surrounding discussion often says why it was posted):\n__COMMENT_BLOCK__\n__RETRIEVED_DOCS__",
     "retrieved_docs": "\nALREADY RETRIEVED — these documents have been fetched for you and written to disk. Read them\nwith read_file rather than fetching them again; the text is the same and it costs you nothing:\n__DOC_PATHS__\nA document listed here that you did not read is a document you cannot quote.\n"
   },
+  "mayBeEmpty": [
+    "__DOC_PATHS__",
+    "__RETRIEVED_DOCS__",
+    "__COMMENT_BLOCK__"
+  ],
+  "$mayBeEmptyWhy": {
+    "__DOC_PATHS__": "reviewTicketLinks defaults docPaths to [], and the caller passes ticketDocPaths which is empty whenever no document was fetched — including when retrieval FAILED, a path that logs \"agents will have quotes only\" and carries on. Undeclared, the renderer threw, the caller swallowed it in a try/catch, and the whole ticket-link review silently did not happen.",
+    "__RETRIEVED_DOCS__": "same condition: no documents retrieved is ordinary, not a failed lookup.",
+    "__COMMENT_BLOCK__": "a ticket with no comments is ordinary."
+  },
   "derivedFromSha256": "372ceec07f5d6c695b43581ceea5399ba5e650a4a58d3dfca5e1fc088bf64b9e",
   "authority": "project"
 }

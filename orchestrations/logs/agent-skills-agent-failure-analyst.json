@@ -3,7 +3,7 @@
   "stacks": [
     {
       "codeline": "mockhelloworld",
-      "path": "/tmp/brownfield-mock-e2e-rI97WL/codelines/mock-hello-world",
+      "path": "/tmp/brownfield-mock-e2e-fU8lho/codelines/mock-hello-world",
       "stack": "node",
       "manifest": "package.json",
       "testCommand": "",
@@ -14,7 +14,7 @@
   ],
   "learned": [],
   "sources": [
-    "/tmp/brownfield-mock-e2e-rI97WL/codelines/mock-hello-world/package.json"
+    "/tmp/brownfield-mock-e2e-fU8lho/codelines/mock-hello-world/package.json"
   ],
   "empty": false
 }

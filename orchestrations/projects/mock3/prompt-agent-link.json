@@ -115,64 +115,16 @@
         "qa-spec-validator"
       ]
     },
-    "doc-coordinator": {
-      "seam": "cpa-inference",
-      "prompts": [
-        "cpa-inference"
-      ]
-    },
-    "docstring-agent": {
-      "seam": "cpa-inference",
-      "prompts": [
-        "cpa-inference"
-      ]
-    },
-    "api-doc-generator": {
-      "seam": "tc-writer",
-      "prompts": [
-        "tc-writer"
-      ]
-    },
     "guide-author": {
       "seam": "tc-writer",
       "prompts": [
         "tc-writer"
       ]
     },
-    "architecture-doc-agent": {
-      "seam": "cpa-inference",
-      "prompts": [
-        "cpa-inference"
-      ]
-    },
     "changelog-agent": {
       "seam": "cpa-inference",
       "prompts": [
         "cpa-inference"
-      ]
-    },
-    "doc-reviewer": {
-      "seam": "code-review-cycle",
-      "prompts": [
-        "code-review-cycle"
-      ]
-    },
-    "doc-index-builder": {
-      "seam": "tc-writer",
-      "prompts": [
-        "tc-writer"
-      ]
-    },
-    "doc-search-agent": {
-      "seam": "cpa-inference",
-      "prompts": [
-        "cpa-inference"
-      ]
-    },
-    "doc-site-builder": {
-      "seam": "tc-writer",
-      "prompts": [
-        "tc-writer"
       ]
     },
     "grooming-coordinator": {

@@ -1,0 +1,17 @@
+{
+  "storyId": "MOCK-HW-1",
+  "seam": "search-query",
+  "rule": "A search term is USEFUL when it names something that exists in the repository being searched — a symbol, function, file, module, or a domain noun the code itself uses. It is NOISE when it names the ticket's packaging rather than its subject: routing tags, brand or product labels, ticket prefixes, status words, people, or generic prose.\nReturn as BLACKLIST every candidate that names packaging rather than subject, or that resolves to nothing in the index. Return as WHITELIST the terms that name the capability or code under discussion.",
+  "statements": [
+    "Hello world greeting should say hello dolly",
+    "The getGreeting() function in this codebase currently returns the string 'hello world'. It should instead return 'hello dolly'. Update any test that asserts the old value to match the new one. This is a customer-facing greeting shown on first load; the exact casing, spacing, and punctuation of the returned string matter and must match 'hello dolly' precisely — no trailing punctuation, no capitalization changes, no extra whitespace. Every existing test in src/hello.test.ts that currently asserts the old 'hello world' value must be updated to assert the new value instead — do not leave any stale assertion in place, and do not delete test coverage for this function. No other exported function's behavior, signature, or return type in this file may change as a side effect of this fix — the change must be scoped precisely to the string literal returned by getGreeting()."
+  ],
+  "payload": {
+    "blacklist": [],
+    "whitelist": []
+  },
+  "normalised": {
+    "blacklist": [],
+    "whitelist": []
+  }
+}

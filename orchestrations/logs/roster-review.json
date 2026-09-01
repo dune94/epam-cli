@@ -1,7 +1,6 @@
 {
-  "verdict": "sound",
+  "verdict": "not_run",
   "findings": [],
-  "refuted": [],
-  "reviewed": 1,
+  "reviewed": 0,
   "cycles": 1
 }

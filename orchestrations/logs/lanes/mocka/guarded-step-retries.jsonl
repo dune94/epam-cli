@@ -64,3 +64,4 @@
 {"timestamp":"2026-08-29T20:44:46.567Z","step":"ac-review","storyId":"MOCK3-1","runId":"20260829T202631Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"e54f916"}
 {"timestamp":"2026-08-29T20:45:20Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260829T202631Z","promptVersion":"e54f916"}
 {"timestamp":"2026-08-29T20:45:23Z","step":"0.9","phaseId":"core","attempts":1,"outcome":"noop","reason":"","violationTypes":[],"runId":"20260829T202631Z","promptVersion":"e54f916"}
+{"timestamp":"2026-09-01T09:59:25.190Z","step":"ac-review","storyId":"MOCK-HW-1","runId":"20260901T095717Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"583efa55"}

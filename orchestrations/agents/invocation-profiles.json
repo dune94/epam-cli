@@ -888,6 +888,14 @@
       "template": "topology-router",
       "toolGrant": "none",
       "$whyOutputBudget": "The base position's declared budget, shared with every peer at this rung. It was 1024, and reasoning tokens are billed as output: a medium-effort call could exhaust the budget before emitting a topology at all, and a truncated answer falls back to the count heuristic that cannot see shared file scope — the exact failure this agent was declared to fix."
+    },
+    "kb-synthesizer": {
+      "_what": "Synthesises repeated healing events into KB entries.",
+      "_why": "It made LLM calls while declaring nothing, so its timeout and output budget lived as literals in lib/kb-synthesizer.js and no run could see or change them. Declared here with the values it was already using, so the numbers are visible and the code reads them instead of carrying its own.",
+      "ladder": "medium",
+      "reasoningEffort": "medium",
+      "timeoutSecs": 180,
+      "maxOutputTokens": 32768
     }
   },
   "_seamResolution": [

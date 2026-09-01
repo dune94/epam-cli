@@ -41,7 +41,19 @@ const AI_RUNNER_CMD = process.env.AI_RUNNER_CMD || path.resolve(__dirname, '..',
 const AI_PROVIDER = process.env.AI_PROVIDER
   || process.env.EPAM_ORCHESTRATION_PROVIDER
   || (/codex$/.test(CLAUDE_CMD) ? 'codex' : '');
-const TIMEOUT_MS = parseInt(process.env.CPA_TIMEOUT_MS || '120000', 10);
+// The seam declares its own timeout (invocation-profiles.json: cpa-inference timeoutSecs), and
+// seamInvocationEnv resolves it. This carried a 120000 literal — 40% of the declared 300s — so the
+// declaration was decorative and the call was cut short by a number nobody chose.
+const TIMEOUT_MS = (function () {
+  const explicit = Number(process.env.CPA_TIMEOUT_MS);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  try {
+    const env = require("./seam-invocation.js").seamInvocationEnv("cpa-inference", undefined, { sourceEnv: process.env }) || {};
+    const secs = Number(env.EPAM_TIMEOUT_SECS);
+    if (Number.isFinite(secs) && secs > 0) return secs * 1000;
+  } catch (e) { /* fall through to the refusal below */ }
+  return undefined;
+}());
 
 // ── Read stdin ─────────────────────────────────────────────────────────────
 // Retrieved source chunks reach the estimator whole. They were cut at 800/1200 chars —

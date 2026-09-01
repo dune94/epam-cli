@@ -2700,7 +2700,7 @@ function precomputeDetectiveExplore(repoPath, story, toolPath, env = process.env
       'bash', [toolPath, 'explore', ...terms],
       {
         encoding: 'utf8',
-        timeout: Number(env.CODEGRAPH_DETECTIVE_PRESEED_TIMEOUT_MS || '60000'),
+        timeout: (Number(env.CODEGRAPH_DETECTIVE_PRESEED_TIMEOUT_MS) || seamDeclares('code-graph-detective').timeoutMs),
         env: Object.assign({}, env, { PROJECT_ROOT: repoPath }),
       },
     );
@@ -4669,6 +4669,33 @@ function aggregateRosterReview(results, legalVerdicts) {
   };
 }
 
+
+/**
+ * seamDeclares(seam) — THE VALUES A SEAM STATES ABOUT ITSELF.
+ *
+ * invocation-profiles.json is the source of truth for a seam's timeout and output budget, and
+ * seamInvocationEnv already resolves both (EPAM_TIMEOUT_SECS, EPAM_MAX_OUTPUT_TOKENS). Call sites
+ * in this file resolved them and then bounded the call with their own literals instead:
+ *
+ *   code-graph-detective declares 900s and 32768 tokens; the code used 450000ms and 24576
+ *   cpa-inference declares 300s;                          the code used 120000ms
+ *
+ * A declaration the caller overrides is decorative. Returns undefined for anything undeclared —
+ * no number is invented here, because inventing one is the defect.
+ */
+function seamDeclares(seam) {
+  try {
+    const { seamInvocationEnv } = require('./lib/seam-invocation.js');
+    const env = seamInvocationEnv(seam, undefined, { sourceEnv: process.env }) || {};
+    const secs = Number(env.EPAM_TIMEOUT_SECS);
+    const out = Number(env.EPAM_MAX_OUTPUT_TOKENS);
+    return {
+      timeoutMs: Number.isFinite(secs) && secs > 0 ? secs * 1000 : undefined,
+      maxOutputTokens: Number.isFinite(out) && out > 0 ? String(out) : undefined,
+    };
+  } catch (e) { return {}; }
+}
+
 async function reviewProjectRoster({
   promptExec, rosterPath, canonicalPath, codelines, logDir, repoPath, toolGrant,
 }) {
@@ -5429,7 +5456,7 @@ async function _vcLlmCall(prompt, cycle, logPath, storyId = '', role = 'openspec
     PROJECT_ROOT: repoPath,
   } : {};
   return runClaude(exec, prompt, logPath, {
-    EPAM_MAX_OUTPUT_TOKENS: process.env.CODEGRAPH_DETECTIVE_MAX_OUTPUT_TOKENS || '24576',
+    EPAM_MAX_OUTPUT_TOKENS: process.env.CODEGRAPH_DETECTIVE_MAX_OUTPUT_TOKENS || seamDeclares('code-graph-detective').maxOutputTokens,
     EPAM_MAX_ITERATIONS: '2',
     // VC production is a RESTATE task, not a reasoning task: describe the observable
     // outcome faithfully, do NOT reason toward an implementation. High reasoning
@@ -5440,7 +5467,7 @@ async function _vcLlmCall(prompt, cycle, logPath, storyId = '', role = 'openspec
     EPAM_TEMPERATURE: process.env.VC_LLM_TEMPERATURE || '0',
     EPAM_REASONING_EFFORT: process.env.VC_LLM_REASONING_EFFORT || 'low',
     ...toolEnv,
-  }, { costAgent: 'vc-agent', costStoryId: storyId, salvageOutputOnFailure: true, timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '450000') });
+  }, { costAgent: 'vc-agent', costStoryId: storyId, salvageOutputOnFailure: true, timeoutMs: (Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS) || seamDeclares('code-graph-detective').timeoutMs) });
 }
 /**
  * Extracted verbatim so its migration can be proven byte-for-byte.
@@ -6381,7 +6408,7 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
         // the source of the detective's non-determinism). Floor it high so the
         // model has room to think AND write. Same class as claude.sh's
         // resolve_brownfield_effort_floor (24576) for the impl agent.
-        EPAM_MAX_OUTPUT_TOKENS: process.env.CODEGRAPH_DETECTIVE_MAX_OUTPUT_TOKENS || '24576',
+        EPAM_MAX_OUTPUT_TOKENS: process.env.CODEGRAPH_DETECTIVE_MAX_OUTPUT_TOKENS || seamDeclares('code-graph-detective').maxOutputTokens,
         // STRUCTURAL guard: the detective is read-only — it queries CodeGraph via
         // Bash and outputs JSON. Restricting it to `bash` means it CANNOT reach
         // write_file, so it can never "answer" by writing a file and losing its
@@ -6454,7 +6481,7 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
         // in-pipeline: glm-5.1 hung 6 min producing nothing while the pipeline
         // hammered the same OpenRouter key) fails FAST and escalates up the
         // ladder, instead of burning the full RUNCLAUDE_TIMEOUT_MS per attempt.
-        timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '450000'),
+        timeoutMs: (Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS) || seamDeclares('code-graph-detective').timeoutMs),
       });
       let findings = parseFindings(out);
       const _phase1Findings = Array.isArray(findings) ? findings.length : 0;
@@ -6468,9 +6495,9 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
         const extractLog = logPath ? logPath.replace(/\.log$/, '-extract.log') : null;
         const out2 = await runClaude(exec, extractPrompt, extractLog, {
           // No AI_GATE_ALLOW_TOOLS → ai-run.sh adds --no-tools → pure extraction.
-          EPAM_MAX_OUTPUT_TOKENS: process.env.CODEGRAPH_DETECTIVE_MAX_OUTPUT_TOKENS || '24576',
+          EPAM_MAX_OUTPUT_TOKENS: process.env.CODEGRAPH_DETECTIVE_MAX_OUTPUT_TOKENS || seamDeclares('code-graph-detective').maxOutputTokens,
           EPAM_MAX_ITERATIONS: '2',
-        }, { salvageOutputOnFailure: true, costAgent: 'code-graph-detective', costStoryId: story && story.id ? story.id : '', timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '450000') });
+        }, { salvageOutputOnFailure: true, costAgent: 'code-graph-detective', costStoryId: story && story.id ? story.id : '', timeoutMs: (Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS) || seamDeclares('code-graph-detective').timeoutMs) });
         findings = parseFindings(out2);
         if (findings && findings.length) {
           console.warn(`spec-mode: code-graph-detective phase-2 extraction recovered ${findings.length} fix-site(s) for ${story.id} from a narrative phase-1 answer.`);

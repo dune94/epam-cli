@@ -135,6 +135,27 @@ const { resolveOrRefuse } = require('./seam-model.js');
  * Returns '' when the ladder cannot answer, so resolveOrRefuse still REFUSES rather than
  * substituting: "we could not tell" is never "it is fine".
  */
+/**
+ * The timeout this seam DECLARES, in milliseconds.
+ *
+ * seamInvocationEnv already resolves it — EPAM_TIMEOUT_SECS, from the seam's timeoutSecs in
+ * invocation-profiles.json, capped by EPAM_SEAM_TIMEOUT_CAP_SECS. This file resolved it and then
+ * ignored it, bounding the call with its own literal instead: a seam could declare 1800s and be
+ * killed at 360s by the code invoking it. The ladder is the source of truth; reading anything else
+ * here makes the declaration decorative.
+ *
+ * No fallback number. A seam that declares no timeout gets none from this file, and the caller is
+ * left to fail with the reason rather than run under a bound nobody chose.
+ */
+function seamDeclaredTimeoutMs(seam) {
+  try {
+    const { seamInvocationEnv } = require('./seam-invocation.js');
+    const env = seamInvocationEnv(seam, undefined, { sourceEnv: process.env }) || {};
+    const secs = Number(env.EPAM_TIMEOUT_SECS);
+    return Number.isFinite(secs) && secs > 0 ? secs * 1000 : undefined;
+  } catch { return undefined; }
+}
+
 function seamLadderModel(seam) {
   try {
     const { seamInvocationEnv } = require('./seam-invocation.js');
@@ -292,7 +313,7 @@ function classifyWithLLM(issue, knownCodelines) {
       + `${flagArg('model', MODEL)} < ${tmpPrompt} 2>${_errFile}`;
     const raw = execSync(cmd, {
       encoding: 'utf8',
-      timeout: Number(process.env.AC_GATE_TIMEOUT_MS || 360000),
+      timeout: seamDeclaredTimeoutMs('ac-classification'),
       env: seamEnv('ac-classification', _costFile),
     }).trim();
 
@@ -365,7 +386,7 @@ function classifyCodelineOnly(issue, knownCodelines) {
       + `${flagArg('model', MODEL)} < ${tmpPrompt} 2>${_errFile}`;
     const raw = execSync(cmd, {
       encoding: 'utf8',
-      timeout: Number(process.env.AC_GATE_TIMEOUT_MS || 360000),
+      timeout: seamDeclaredTimeoutMs('ac-classification'),
       env: seamEnv('ac-classification', _costFile),
     }).trim();
     if (!raw) throw new Error(`Empty response from ai-run.sh${_why(_errFile)}`);
@@ -421,7 +442,7 @@ function elaborateAcs(issue) {
   try {
     const cmd = `bash ${AI_RUN_SH}${flagArg('provider', PROVIDER)}`
       + `${flagArg('model', MODEL)} < ${tmpPrompt} 2>${_errFile}`;
-    const raw = execSync(cmd, { encoding: 'utf8', timeout: Number(process.env.AC_GATE_TIMEOUT_MS || 360000), env: seamEnv('ac-elaboration', _costFile) }).trim();
+    const raw = execSync(cmd, { encoding: 'utf8', timeout: seamDeclaredTimeoutMs('ac-classification'), env: seamEnv('ac-elaboration', _costFile) }).trim();
     if (!raw) throw new Error(`Empty elaboration response${_why(_errFile)}`);
     const parsed = parseLooseJson(raw, 'elaboration');
     return Array.isArray(parsed.enrichedAcs) && parsed.enrichedAcs.length > 0

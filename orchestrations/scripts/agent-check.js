@@ -247,7 +247,29 @@ function realValueFor(ph, ctx) {
       const canon = (canonRaw.agents && typeof canonRaw.agents === 'object') ? canonRaw.agents : canonRaw;
       const personaOf = (v) => (typeof v === 'string' ? v : String((v && v.persona) || ''));
       const entries = roster.agents || {};
-      const budget = Math.max(4000, Number(process.env.EPAM_ROSTER_REVIEW_BATCH_CHARS || '60000'));
+      // THE SAME BUDGET AS THE RUNNER, FROM THE SAME PLACE. This carried its own copy of the
+      // 60000/4000 guess, so the dry check sized the review differently from the run it is meant to
+      // predict. The model declares its capacity (autoCompressAt x charsPerToken); a second literal
+      // here is a second thing to drift.
+      const budget = (function () {
+        const model = String(process.env.EPAM_MODEL || process.env.AI_MODEL || "").trim();
+        try {
+          const resolver = require("./lib/llm-settings-resolve.js");
+          const overrides = (resolver.resolveLlmSettings({ projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR }) || {}).modelOverrides || {};
+          for (const [name, ov] of Object.entries(overrides)) {
+            if (name.startsWith("$") || !ov || typeof ov !== "object") continue;
+            const needle = ov.matchSubstring || name;
+            if (needle && model.includes(needle) && ov.autoCompressAt && ov.charsPerToken) {
+              return Math.floor(Number(ov.autoCompressAt) * Number(ov.charsPerToken));
+            }
+          }
+        } catch (e) { /* reported as undeclared below */ }
+        return undefined;
+      }());
+      if (!budget) {
+        return { ok: false, why: "the review budget is undeclared for model '" + (process.env.EPAM_MODEL || process.env.AI_MODEL || "(none)")
+          + "' — declare autoCompressAt and charsPerToken for it in the active provider set" };
+      }
       const out = [];
       let size = 0;
       for (const name of Object.keys(entries)) {

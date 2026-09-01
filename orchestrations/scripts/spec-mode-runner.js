@@ -4704,31 +4704,67 @@ async function reviewProjectRoster({
     };
   }
 
-  // THE BUDGET IS DECLARED BY THE SEAM, NOT GUESSED HERE.
+  // THE BUDGET COMES FROM THE MODEL THIS SEAM IS RUNNING ON.
   //
-  // This was a literal 60000 with an env override, while the commit that introduced it stated the
-  // batches were 'sized by a declared budget, not guessed'. They were guessed. project-roster-review
-  // declares timeoutSecs, maxOutputTokens and reasoningEffort in invocation-profiles.json; the
-  // batch budget belongs beside them, in the one place this seam describes itself.
+  // It was a literal 60000 in this file. Replacing that with a number on the seam was no better:
+  // a seam ESCALATES through a ladder, so one figure is wrong the moment it moves from haiku to
+  // sonnet. The constraint was never a property of the seam at all — it is the model's input
+  // capacity, and the ladder already declares it per model as autoCompressAt (the guard below the
+  // context window), alongside charsPerToken for callers that measure payloads in characters.
   //
-  // NO DEFAULT. A seam that declares no budget is a seam nobody sized, and picking a number here
-  // is how the literal got in the first time.
-  const _seamProfile = (function () {
+  // budget = autoCompressAt x charsPerToken, for the model actually resolved. No safety factor is
+  // applied because autoCompressAt IS the guard — 150000 against a 200000 window.
+  //
+  // NO DEFAULT anywhere in this path. A model whose capacity is undeclared is refused by name, so
+  // the answer is to declare it, never to invent one here.
+  const _budgetFromModel = (function () {
+    const model = String(process.env.EPAM_MODEL || process.env.AI_MODEL || '').trim();
+    if (!model) return { error: 'no model is resolved for this seam (EPAM_MODEL/AI_MODEL are empty), so its input capacity cannot be read' };
+    let overrides = {};
     try {
-      const reg = require(require('path').join(__dirname, '../agents/invocation-profiles.json'));
-      return (reg.profiles || reg)['project-roster-review'] || {};
-    } catch (e) { return {}; }
+      const resolver = require(require('path').join(__dirname, 'lib/llm-settings-resolve.js'));
+      const settings = resolver.resolveLlmSettings({ projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR });
+      overrides = (settings && settings.modelOverrides) || {};
+    } catch (e) {
+      return { error: 'the model overrides could not be read: ' + ((e && e.message) || e) };
+    }
+    let hit = null;
+    for (const [name, ov] of Object.entries(overrides)) {
+      if (name.startsWith('$') || !ov || typeof ov !== 'object') continue;
+      const needle = ov.matchSubstring || name;
+      if (needle && model.includes(needle)) { hit = { name, ov }; break; }
+    }
+    if (!hit) return { error: "no model override matches '" + model + "', so its input capacity is undeclared" };
+    const tokens = Number(hit.ov.autoCompressAt);
+    const cpt = Number(hit.ov.charsPerToken);
+    if (!Number.isFinite(tokens) || tokens <= 0) return { error: "'" + hit.name + "' declares no autoCompressAt" };
+    if (!Number.isFinite(cpt) || cpt <= 0) return { error: "'" + hit.name + "' declares no charsPerToken" };
+    return { chars: Math.floor(tokens * cpt), model: hit.name };
   }());
-  const _declaredBudget = Number(process.env.EPAM_ROSTER_REVIEW_BATCH_CHARS || _seamProfile.reviewBatchChars);
-  if (!Number.isFinite(_declaredBudget) || _declaredBudget < 4000) {
+
+  if (_budgetFromModel.error) {
     return {
       verdict: 'review_failed',
       findings: [],
-      reason: 'project-roster-review declares no usable reviewBatchChars in invocation-profiles.json, '
-        + 'so the review cannot be sized. Declare it beside timeoutSecs.',
+      reason: 'the roster review cannot be sized: ' + _budgetFromModel.error
+        + '. Declare autoCompressAt and charsPerToken for it in the active provider set.',
     };
   }
-  const _budget = _declaredBudget;
+
+  // A batch must hold at least the LARGEST SINGLE PAIR or none can be formed. Derived from the
+  // pairs in hand, never a floor picked in code.
+  const _largestPair = _pairs.reduce((m, pr) =>
+    Math.max(m, pr.derived.length + pr.canonical.length + pr.name.length + 200), 0);
+  if (_budgetFromModel.chars < _largestPair) {
+    return {
+      verdict: 'review_failed',
+      findings: [],
+      reason: _budgetFromModel.model + ' allows ' + _budgetFromModel.chars
+        + ' chars, smaller than the largest agent pair of ' + _largestPair
+        + ' chars, so no batch can be formed.',
+    };
+  }
+  const _budget = _budgetFromModel.chars;
   const _batches = [];
   let _cur = [];
   let _size = 0;

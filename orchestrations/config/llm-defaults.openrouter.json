@@ -135,7 +135,8 @@
       "autoCompressEveryNIterations": 15,
       "topP": 0.85,
       "temperature": 0.2,
-      "miniTier": true
+      "miniTier": true,
+      "charsPerToken": 4
     },
     "minimax-m3": {
       "matchOn": "model",
@@ -144,7 +145,8 @@
       "maxIterations": 120,
       "autoCompressAt": 180000,
       "topP": 0.85,
-      "temperature": 0.2
+      "temperature": 0.2,
+      "charsPerToken": 4
     },
     "glm-5.2": {
       "matchOn": "model",
@@ -156,7 +158,8 @@
       "temperature": 0.9,
       "providerOrder": [
         "CoreWeave"
-      ]
+      ],
+      "charsPerToken": 4
     },
     "kimi-k2.5": {
       "matchOn": "model",
@@ -167,7 +170,8 @@
       "autoCompressAt": 128000,
       "autoCompressEveryNIterations": 20,
       "topP": 1,
-      "temperatureLocked": true
+      "temperatureLocked": true,
+      "charsPerToken": 4
     },
     "kimi-k3": {
       "matchOn": "model",
@@ -180,7 +184,8 @@
       "temperatureLocked": true,
       "providerOrder": [
         "Moonshot AI"
-      ]
+      ],
+      "charsPerToken": 4
     },
     "minimax-m2.7": {
       "matchOn": "model",
@@ -192,7 +197,8 @@
       "autoCompressEveryNIterations": 15,
       "topP": 0.85,
       "temperature": 0.2,
-      "miniTier": true
+      "miniTier": true,
+      "charsPerToken": 4
     },
     "glm-5.3": {
       "matchOn": "model",
@@ -205,9 +211,11 @@
       "temperature": 0.9,
       "providerOrder": [
         "Z.AI"
-      ]
+      ],
+      "charsPerToken": 4
     },
-    "$miniTierWhy": "miniTier marks the cheap, fast rung — the models that are quick but limited in generation capacity. It was decided in engine code by sniffing vendor naming habits (-mini, -flash, -haiku, minimax-m2), which breaks in both directions: a cheap model named differently read as capable, and a capable model containing -flash read as cheap. The set that declares the model declares its tier."
+    "$miniTierWhy": "miniTier marks the cheap, fast rung — the models that are quick but limited in generation capacity. It was decided in engine code by sniffing vendor naming habits (-mini, -flash, -haiku, minimax-m2), which breaks in both directions: a cheap model named differently read as capable, and a capable model containing -flash read as cheap. The set that declares the model declares its tier.",
+    "$whyCharsPerToken": "INPUT CAPACITY IN CHARACTERS. autoCompressAt is the models input ceiling in TOKENS; callers that must size a payload measure it in characters. The ratio belongs with the model, because it is a property of that models tokenizer, not of any caller. Declared so a caller derives its budget instead of inventing one: the roster review carried a literal 60000 in code, which split a 276KB roster into six calls and failed the whole review whenever any one of them answered off-schema."
   },
   "runners": {
     "claude": {

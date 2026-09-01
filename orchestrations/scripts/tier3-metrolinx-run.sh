@@ -13,8 +13,12 @@ _scg_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/stage-coverage-gate.
 # launcher exported it 128 lines BELOW the gate call. So pre-flight always read the repository
 # default instead of the project's own declaration: metrolinx declaring blocker:false was ignored,
 # and the run was refused by a policy nobody chose. Resolved here, re-exported below unchanged.
-export EPAM_PROJECT_CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../projects/metrolinx"
+EPAM_PROJECT_CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../projects/metrolinx"
+export EPAM_PROJECT_CONFIG_DIR
 # for the rest of the run. Failing here costs nothing; failing mid-run costs everything spent so far.
+# The library sits beside this script, resolved from BASH_SOURCE at runtime, so its path is not a
+# constant the analyser can follow.
+# shellcheck source=/dev/null
 [ -f "$_scg_lib" ] && . "$_scg_lib" && require_all_stage_coverage || exit 1
 
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/service-urls.sh" 2>/dev/null || true

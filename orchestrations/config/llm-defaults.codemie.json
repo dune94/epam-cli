@@ -103,7 +103,8 @@
       "promptCacheTtl": "1h",
       "autoCompressAt": 150000,
       "maxOutputTokens": 32000,
-      "miniTier": true
+      "miniTier": true,
+      "charsPerToken": 4
     },
     "claude-sonnet-5": {
       "matchOn": "model",
@@ -111,7 +112,8 @@
       "thinking": "adaptive",
       "promptCacheTtl": "1h",
       "autoCompressAt": 150000,
-      "maxOutputTokens": 64000
+      "maxOutputTokens": 64000,
+      "charsPerToken": 4
     },
     "claude-opus-4-8": {
       "matchOn": "model",
@@ -119,7 +121,8 @@
       "thinking": "adaptive",
       "promptCacheTtl": "1h",
       "autoCompressAt": 150000,
-      "maxOutputTokens": 64000
+      "maxOutputTokens": 64000,
+      "charsPerToken": 4
     },
     "claude-opus-5": {
       "matchOn": "model",
@@ -127,9 +130,11 @@
       "thinking": "adaptive",
       "promptCacheTtl": "1h",
       "autoCompressAt": 150000,
-      "maxOutputTokens": 64000
+      "maxOutputTokens": 64000,
+      "charsPerToken": 4
     },
-    "$miniTierWhy": "miniTier marks the cheap, fast rung — the models that are quick but limited in generation capacity. It was decided in engine code by sniffing vendor naming habits (-mini, -flash, -haiku, minimax-m2), which breaks in both directions: a cheap model named differently read as capable, and a capable model containing -flash read as cheap. The set that declares the model declares its tier."
+    "$miniTierWhy": "miniTier marks the cheap, fast rung — the models that are quick but limited in generation capacity. It was decided in engine code by sniffing vendor naming habits (-mini, -flash, -haiku, minimax-m2), which breaks in both directions: a cheap model named differently read as capable, and a capable model containing -flash read as cheap. The set that declares the model declares its tier.",
+    "$whyCharsPerToken": "INPUT CAPACITY IN CHARACTERS. autoCompressAt is the models input ceiling in TOKENS; callers that must size a payload measure it in characters. The ratio belongs with the model, because it is a property of that models tokenizer, not of any caller. Declared so a caller derives its budget instead of inventing one: the roster review carried a literal 60000 in code, which split a 276KB roster into six calls and failed the whole review whenever any one of them answered off-schema."
   },
   "finalFallback": {
     "$why": "Applies after ladder exhaustion — the one point where the ladder has nothing left to say. Sonnet-5 differs from the top rung on high and highest, so it is a real second answer rather than a retry of the model that just failed.",

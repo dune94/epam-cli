@@ -276,18 +276,14 @@ function sourcesNewerThanCoverage(cfg) {
   // loop meant to make coverage cheap became the slowest thing here, and the way out was to stop
   // measuring. The rule below is strictly narrower and strictly correct.
   const declared = (cfg && cfg.instruments) || null;
+  // NO GUESSING WHICH REPORT COVERS WHAT. This carried a twelve-line fallback that re-derived the
+  // old cross-instrument rule when the declaration was absent — a second answer to the same
+  // question, reachable only by misconfiguration, and therefore never exercised. Refusing is one
+  // line, fails closed like everything else here, and says exactly what to add.
   if (!declared) {
-    // NO GUESSING WHICH REPORT COVERS WHAT. Without the declaration the safe answer is the old
-    // one: every file judged against the older report.
-    let deadline;
-    try { deadline = fs.statSync(LCOV).mtimeMs; } catch { return null; }
-    try { deadline = Math.min(deadline, fs.statSync(LCOV_SHELL).mtimeMs); } catch { /* absent */ }
-    const moved = [];
-    for (const f of projectFiles(cfg)) {
-      let st; try { st = fs.statSync(f); } catch { continue; }
-      if (st.mtimeMs > deadline) moved.push(f.replace(`${REPO}/`, ''));
-    }
-    return moved;
+    die(`${CONFIG} declares no "instruments" map, so nothing says which report measures which `
+      + 'extension. Add one beside "extensions" — a report can only go stale against files it '
+      + 'actually contains.', 6);
   }
 
   const deadlineFor = new Map();

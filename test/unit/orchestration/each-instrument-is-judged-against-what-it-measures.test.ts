@@ -21,7 +21,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { statSync, utimesSync, readdirSync, existsSync } from 'node:fs';
+import { statSync, utimesSync, readdirSync, existsSync, mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const REPO = process.cwd();
@@ -143,3 +144,33 @@ describe('a stage is refused only for its own files', () => {
   }, 260_000);
 });
 
+/**
+ * The declaration is required, not merely preferred. Guessing which report covers which extension
+ * is the very thing this rule exists to stop, so an absent map is refused rather than silently
+ * re-deriving the old cross-instrument behaviour.
+ */
+describe('the instrument map is declared, or the handler refuses', () => {
+  it('a config with no instruments map is refused, and the refusal says what to add', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'no-instruments-'));
+    const cfg = JSON.parse(readFileSync(join(REPO, 'orchestrations/config/stage-coverage.json'), 'utf8'));
+    delete cfg.instruments;
+    const p = join(dir, 'stage-coverage.json');
+    writeFileSync(p, JSON.stringify(cfg));
+    const r = spawnSync(NODE20, [HANDLER, '--all'], {
+      encoding: 'utf8', timeout: 240000, cwd: REPO,
+      env: { ...process.env, STAGE_COVERAGE_CONFIG: p },
+    });
+    const out = (r.stdout || '') + (r.stderr || '');
+    expect(r.status, `it answered anyway:\n${out.slice(0, 300)}`).not.toBe(0);
+    expect(out, 'the refusal does not name what is missing').toMatch(/instruments/i);
+  }, 260_000);
+
+  it('and the shipped config DOES declare one, so the refusal is not the normal path', () => {
+    const cfg = JSON.parse(readFileSync(join(REPO, 'orchestrations/config/stage-coverage.json'), 'utf8'));
+    expect(cfg.instruments, 'the shipped config lost its instruments map').toBeTruthy();
+    const claimed = Object.values<string[]>(cfg.instruments).flat();
+    for (const e of cfg.extensions) {
+      expect(claimed, `extension ${e} is in scope but no instrument claims it`).toContain(e);
+    }
+  });
+});

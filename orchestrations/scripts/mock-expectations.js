@@ -1585,7 +1585,9 @@ function endsInToolCall(cap, seam) {
   console.log(`\n${accounted} of ${all.length} declared seam(s) accounted for`
     + ` (${covered.length} recorded, ${stoodIn.length} stand-in, ${shared.length} shared,`
     + ` ${uncovered.length} uncovered)`);
-  if (accounted !== all.length) {
-    console.log(`  WARNING: ${all.length - accounted} seam(s) reached no printed bucket`);
-  }
+  // STATED EVERY TIME, NOT ONLY WHEN WRONG. As a conditional this was a branch nobody executed
+  // in the healthy case, so the one line that proves the report is complete was itself unproven.
+  console.log(accounted === all.length
+    ? '  every declared seam reached a printed bucket'
+    : `  WARNING: ${all.length - accounted} seam(s) reached no printed bucket`);
 })().catch((e) => { console.error(e.message); process.exit(1); });

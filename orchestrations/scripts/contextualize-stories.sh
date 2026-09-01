@@ -343,6 +343,9 @@ while IFS= read -r phase; do
   pos=1
   while IFS= read -r sid; do
     STORY_PHASE["$sid"]="$phase"
+    # Set for the child process invoked below, or read by a script that sources this file.
+    # ShellCheck cannot see the consumer, so it reports these unused; removing them takes the value away.
+    # shellcheck disable=SC2034
     STORY_POSITION["$sid"]=$pos
     pos=$((pos + 1))
   done < <(jq -r --arg p "$phase" '.implementationOrder[$p][]' "$PRD_FILE")

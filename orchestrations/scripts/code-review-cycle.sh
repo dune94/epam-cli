@@ -226,6 +226,9 @@ _STORY_FILES=$(jq -r --arg id "$STORY_ID" \
 # truncation is now an EXPLICIT marker in the reviewer's own input.
 _STORY_DIFF=""
 if [ -d "$PROJECT_ROOT/.git" ]; then
+    # The expansion is split into separate arguments ON PURPOSE: this passes a LIST to a command
+    # that takes them as individual operands. Quoting it would hand over one argument with spaces.
+    # shellcheck disable=SC2046
     _diff_full=$(git -C "$PROJECT_ROOT" diff HEAD~5 HEAD -- \
         $(echo "$_STORY_FILES") 2>/dev/null || true)
     [ -z "$_diff_full" ] && \

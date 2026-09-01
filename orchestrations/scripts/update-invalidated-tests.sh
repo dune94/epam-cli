@@ -205,6 +205,10 @@ if [ "$_rc2" -ne 0 ]; then
 fi
 
 if [ -n "$_dirty" ]; then
+    # The expansion is split into separate arguments ON PURPOSE: this passes a LIST — file paths or
+    # pids — to a command that takes them as individual operands. Quoting it would hand over one
+    # argument containing spaces, which is not the same call.
+    # shellcheck disable=SC2046
     git -C "$PROJECT_ROOT" add -- $(printf '%s\n' "$_dirty" | tr '\n' ' ') 2>/dev/null || true
     # Ticket-ID-first message — same commitlint-compatibility fix as
     # brownfield-repro-test-writer.sh's identical commit call (found live

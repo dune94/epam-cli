@@ -186,6 +186,9 @@ _is_testable_source() {
     local _f="$1"
     if [ "$_TESTABLE_RESOLVED" -eq 0 ]; then
         _TESTABLE_RESOLVED=1
+        # The expansion is split into separate arguments ON PURPOSE: this passes a LIST to a command
+        # that takes them as individual operands. Quoting it would hand over one argument with spaces.
+        # shellcheck disable=SC2046
         _TESTABLE_SET=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/testable-source.js" \
             "$PROJECT_ROOT" $(git -C "$PROJECT_ROOT" ls-files 2>/dev/null) 2>/dev/null || echo "")
     fi
@@ -445,6 +448,8 @@ _ladder_skip_reason() {
 _provider_for_model() {
     local _m="$1" _map="${EPAM_MODEL_PROVIDER_MAP:-}" _pair _pat _prov
     IFS='|' read -ra _pairs <<< "$_map"
+    # The pattern is a GLOB and must stay unquoted: quoting it matches the literal characters.
+    # shellcheck disable=SC2254
     for _pair in "${_pairs[@]}"; do _pat="${_pair%%=*}"; _prov="${_pair#*=}"; case "$_m" in $_pat) echo "$_prov"; return 0 ;; esac; done
     echo ""
 }

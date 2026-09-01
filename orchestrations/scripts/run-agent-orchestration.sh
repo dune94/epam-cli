@@ -1098,6 +1098,9 @@ resolve_codeline_node() {
 ensure_node_modules_healthy() {
     local codeline_root="$1"
     local node_bin="$2"
+    # Set for the child process invoked below, or read by a script that sources this file.
+    # ShellCheck cannot see the consumer, so it reports these unused; removing them takes the value away.
+    # shellcheck disable=SC2034
     local test_bin="$3"   # legacy: an arbitrary .bin entry, no longer trusted
 
     # Probe the runner the PROJECT DECLARES, not whatever sorts first in
@@ -9765,6 +9768,9 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                         rm -f "$_rp_vals"
                     fi
                     local _gfa_raw
+                    # Set for the child process invoked below, or for a script that sources this file. The
+                    # analyser cannot see the consumer, so it reports these unused; removing them takes the value away.
+                    # shellcheck disable=SC2034
                     _gfa_raw=$(echo "$_gfa_prompt" | \
                         AI_GATE_ALLOW_TOOLS=1 \
                         # NO PROVIDER DEFAULT. This read `:-minimax`, which no configuration

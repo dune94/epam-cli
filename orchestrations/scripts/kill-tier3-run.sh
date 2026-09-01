@@ -180,8 +180,9 @@ sleep 1
 remaining="$(list_survivors)"
 if [ -n "$remaining" ]; then
   echo "[kill-tier3] ✗ FAILED — these processes SURVIVED the kill and may still be billing:" >&2
-  # shellcheck disable=SC2086
-  ps -o pid,pgid,etime,args -p $(echo "$remaining" | tr '\n' ' ') 2>/dev/null >&2 || echo "$remaining" >&2
+  # ps accepts a COMMA-SEPARATED list, so the pids are passed as one quoted argument instead of
+  # relying on the shell to split an unquoted expansion — which breaks the moment one is empty.
+  ps -o pid,pgid,etime,args -p "$(echo "$remaining" | tr '\n' ',' | sed 's/,$//')" 2>/dev/null >&2 || echo "$remaining" >&2
   echo "[kill-tier3] The run is NOT stopped. Investigate before launching anything else." >&2
   exit 1
 fi

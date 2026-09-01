@@ -61,7 +61,13 @@ kb_apply_constraints() {
     # Mirror onto the story-path knobs. claude.sh reads STORY_* at the invocation
     # site (`EPAM_MAX_ITERATIONS="${STORY_MAX_ITERATIONS:-6}"`), so setting only the
     # EPAM_* name would be silently ignored there.
+    # Set for the child process invoked below, or read by a script that sources this file.
+    # ShellCheck cannot see the consumer, so it reports these unused; removing them takes the value away.
+    # shellcheck disable=SC2034
     [ -n "${EPAM_MAX_ITERATIONS:-}" ]    && STORY_MAX_ITERATIONS="$EPAM_MAX_ITERATIONS"
+    # Set for the child process invoked below, or for a script that sources this file. The
+    # analyser cannot see the consumer, so it reports these unused; removing them takes the value away.
+    # shellcheck disable=SC2034
     [ -n "${EPAM_MAX_OUTPUT_TOKENS:-}" ] && STORY_MAX_OUTPUT_TOKENS="$EPAM_MAX_OUTPUT_TOKENS"
 
     [ -n "$KB_LAST_FIRED" ] && \

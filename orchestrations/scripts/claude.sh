@@ -798,12 +798,11 @@ _iteration_exhaustion_bump() {
 # with a diff" instead makes the reset a no-op (a broken file also has a
 # diff), which defeats the point.
 #
-# The signal that actually distinguishes them: LAST_ATTEMPT_TSC_PASSED (set
-# right after run_tsc_verification, above) is real, already-computed evidence
-# the WHOLE tree is at least type/syntax-correct — not a guess. If it passed,
-# preserve the entire diff wholesale, declared or not. If it failed, there is
-# positive evidence the tree is bad — reset to baseline rather than gamble on
-# which files are safe.
+# That was once answered by a compiler signal (LAST_ATTEMPT_TSC_PASSED, set after
+# run_tsc_verification): preserve the whole diff if the tree type-checked, reset it if not. That
+# design is GONE, and the paragraphs below say why — a partially-complete multi-file change is
+# correct progress and a compile error at the same time, so it preserved only work that was already
+# coherent. The signal is no longer computed; the predicate is the spec's changeRequired.
 #
 # The third case is `unknown`: an earlier gate rejected the attempt before the
 # tsc gate could run, so nothing is known either way. Treating that as failure
@@ -5411,6 +5410,9 @@ _run_declared_lint_gate() {
     fi
 
     local _dl_out _dl_rc=0
+    # The project DECLARES its command as a string, so running it means eval. The file list after it
+    # is a quoted array, which is the part that must not be re-split.
+    # shellcheck disable=SC2294
     _dl_out=$(cd "$PROJECT_ROOT" && eval "$_cmd" "${_dl_files[@]}" 2>&1) || _dl_rc=$?
 
     if [ "$_dl_rc" -eq 127 ]; then
@@ -5756,7 +5758,10 @@ _project_owned_test_files() {
 
 # The declared scoped-run command with {files} substituted, or empty when undeclared.
 _project_scoped_test_command() {
-    local _root="$1" _files="$2"
+    # _files_joined, not _files: this is a SPACE-JOINED STRING substituted into {files}, while
+    # another function in this file uses _files as an array. One name for two shapes reads as a
+    # bug even when it is not, and shellcheck cannot tell them apart either.
+    local _root="$1" _files_joined="$2"
     local _plugin="${AUTOMATION_DIR}/plugins/verification-plugin.js"
     local _node="${NODE_CMD:-${NODE_BIN:-node}}"
     [ -f "$_plugin" ] || return 0
@@ -5766,7 +5771,7 @@ _project_scoped_test_command() {
       if (!m || !m.ok) process.exit(0);
       const tpl = m.manifest && m.manifest.test && m.manifest.test.scopedCommand;
       if (typeof tpl === "string" && tpl.trim()) console.log(tpl.replace(/\{files\}/g, process.argv[3]));
-    ' "$_plugin" "$_root" "$_files" 2>/dev/null
+    ' "$_plugin" "$_root" "$_files_joined" 2>/dev/null
 }
 
 run_tsc_verification() {
@@ -6598,6 +6603,9 @@ effort_is_higher() {
 next_effort() {
     # One notch up the CONFIGURED ladder, saturating at its top. The level names live in
     # config (effortLadder), so a vendor adding a level is a config change, not a code change.
+    # Set for the child process invoked below, or read by a script that sources this file.
+    # ShellCheck cannot see the consumer, so it reports these unused; removing them takes the value away.
+    # shellcheck disable=SC2034
     local cur="${1:-}" prev="" lvl found=0 first=""
     local IFS='|'
     for lvl in ${EPAM_EFFORT_LADDER:-low|medium|high|max}; do
@@ -9261,10 +9269,6 @@ implement_story() {
     # this story has ever called verify_story_deliverables itself.
     LAST_VERIFIED_TOUCHED_FILES=""
     LAST_VERIFIED_UNCHANGED_FILES=""
-    # `unknown`, not `false` — a story that has not yet run tsc has produced no evidence in
-    # either direction, and `false` is read downstream as a conviction. See the tri-state
-    # assignment after the tsc gate below.
-    LAST_ATTEMPT_TSC_PASSED=unknown
     # Which rung's contribution the NEXT attribution call should credit
     # changes to (backlog #113) — updated every rung transition, read at the
     # NEXT one and again at the story's own success path.
@@ -10316,7 +10320,7 @@ $_kb_section"
                         _ov_compress_at=$(jq -r '.autoCompressAt // empty' <<<"$_override_json")
                         _ov_compress_n=$(jq -r '.autoCompressEveryNIterations // empty' <<<"$_override_json")
                         # FLOOR, not overwrite — see max_effort(). The rung's escalation must survive.
-                        [ -n "$_ov_effort" ] && export EPAM_REASONING_EFFORT="$(max_effort "${EPAM_REASONING_EFFORT:-}" "$_ov_effort")"
+                        [ -n "$_ov_effort" ] && EPAM_REASONING_EFFORT="$(max_effort "${EPAM_REASONING_EFFORT:-}" "$_ov_effort")"
 
                         # OPERATOR RULE (2026-08-10): a retry must ALWAYS raise reasoning effort
                         # when the model is NOT escalating. A rung spans two attempts, so the
@@ -10663,13 +10667,19 @@ $_kb_section"
         # story rejected by verify_story_deliverables for being INCOMPLETE never reaches the tsc
         # gate above, so its two correct fix sites were recorded as type-failures and erased at
         # the next rung transition — four attempts re-deriving the same files from an empty tree.
-        if [ "$_invoke_success_before_tsc" = true ] && [ "$invoke_success" = true ]; then
-            LAST_ATTEMPT_TSC_PASSED=true
-        elif [ "$_invoke_success_before_tsc" = true ]; then
-            LAST_ATTEMPT_TSC_PASSED=false
-        else
-            export LAST_ATTEMPT_TSC_PASSED=unknown
-        fi
+        # THE COMPILER SIGNAL IS GONE ON PURPOSE — DO NOT PUT IT BACK.
+        #
+        # A tri-state LAST_ATTEMPT_TSC_PASSED was computed here for _selective_worktree_reset, to
+        # decide whether the current diff was safe to preserve. That function no longer asks the
+        # question: keep/discard is a SPEC question, not a compiler one. For any multi-file change a
+        # partially-complete edit is correct progress AND a compile error at once, so the compiler
+        # could only preserve work that was already coherent — precisely the work that never needed
+        # preserving. Live 2026-08-10: 25 file writes across five invocations, zero survivors, on a
+        # story with 13 interdependent fix sites. The predicate is now the spec's changeRequired.
+        #
+        # The variable outlived its consumer: assigned in three places, read in none, while the
+        # comments here still called it the deciding signal. Removed rather than rewired — rewiring
+        # it would restore the behaviour that destroyed those 25 writes.
 
         # The repository's OWN lint, before the commit rather than at Step 20. A violation here
         # is fatal at commit time (husky rejects, lint-staged reverts the work), so it has to be

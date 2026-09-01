@@ -18,10 +18,12 @@ safe_jq_update() {
     local description="$1"
     shift
     local tmp_file="${PRD_FILE}.reset.$$"
-    local orig_count=$(jq '.stories | length' "$PRD_FILE")
+    local orig_count
+    orig_count=$(jq '.stories | length' "$PRD_FILE")
 
     if jq "$@" "$PRD_FILE" > "$tmp_file" 2>/dev/null; then
-        local new_count=$(jq '.stories | length' "$tmp_file" 2>/dev/null || echo 0)
+        local new_count
+        new_count=$(jq '.stories | length' "$tmp_file" 2>/dev/null || echo 0)
         if [ "$new_count" -eq "$orig_count" ] && [ "$new_count" -gt 0 ]; then
             mv "$tmp_file" "$PRD_FILE"
         else

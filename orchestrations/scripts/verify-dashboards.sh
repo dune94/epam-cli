@@ -391,7 +391,7 @@ for file in "${DASHBOARDS[@]}"; do
       for opt in "${OPTIONAL_DATA_FILES[@]}"; do
         [ "$clean_url" = "$opt" ] && already_optional=true
       done
-      if [ "$already_optimal" != "true" ]; then
+      if [ "$already_optional" != "true" ]; then
         : # silent — covered by required/optional checks above
       fi
     fi

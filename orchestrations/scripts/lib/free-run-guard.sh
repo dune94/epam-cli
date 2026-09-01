@@ -114,7 +114,8 @@ assert_no_paid_key() {
     local _leaked
     _leaked=$(
         export _FRG_LIB="$_libdir" _FRG_PROJ="$_projdir" _FRG_ENV="$_envfile" _FRG_RE="$_real_re"
-        export _FRG_KEEP="$(_free_run_keep)"
+        _FRG_KEEP="$(_free_run_keep)"
+        export _FRG_KEEP
         bash -c '
             . "$_FRG_LIB/env-file.sh"
             [ -n "$_FRG_ENV" ] && [ -f "$_FRG_ENV" ] && load_env_file_safe "$_FRG_ENV" preserve

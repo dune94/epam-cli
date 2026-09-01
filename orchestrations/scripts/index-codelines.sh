@@ -49,7 +49,7 @@ if [[ -z "$BIN" ]]; then
   exit 1
 fi
 
-echo "[index-codelines] Using codegraph: $BIN ($(\"$BIN\" --version 2>/dev/null))"
+echo "[index-codelines] Using codegraph: $BIN ($("$BIN" --version 2>/dev/null))"
 echo "[index-codelines] Root: $ROOT"
 echo "[index-codelines] Parallel workers: $MAX_PARALLEL"
 echo ""
@@ -96,7 +96,8 @@ FAILED=()
 
 index_repo() {
   local dir="$1"
-  local name="$(basename "$dir")"
+  local name
+  name="$(basename "$dir")"
   local start_ts=$SECONDS
   echo "[$(date +%H:%M:%S)] START  $name"
   if "$BIN" init "$dir" 2>&1 | tail -1; then

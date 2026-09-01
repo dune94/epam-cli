@@ -242,7 +242,7 @@ for f in "${CLEARABLE_LOGS[@]}"; do
   fp="$LOG_DIR/$f"
   if [ -f "$fp" ] && [ -s "$fp" ]; then
     cp "$fp" "$ARCHIVE_DIR/$f"
-    > "$fp"
+    : > "$fp"
     ARCHIVED=$((ARCHIVED+1))
   fi
 done
@@ -794,7 +794,7 @@ fi
 
 # Clear stale lock files
 for lf in "$LOG_DIR"/*.lock; do
-  [ -f "$lf" ] && > "$lf"
+  [ -f "$lf" ] && : > "$lf"
 done
 
 [ "$ARCHIVED" -gt 0 ] \

@@ -140,8 +140,7 @@ run_orch_prompt() {
         if [ "${cost:-0}" = "0" ] && { [ "${tokens_in:-0}" -gt 0 ] || [ "${tokens_out:-0}" -gt 0 ]; }; then
             local _pricing_file="$SCRIPT_DIR/model-pricing.json"
             if [ -f "$_pricing_file" ]; then
-                cost=$(python3 "$SCRIPT_DIR/lib/handlers/model-call-cost.py" "$_pricing_file" "${gate_model:-}" "${tokens_in:-0}" "${tokens_out:-0}"
-2>/dev/null || echo "0")
+                cost=$(python3 "$SCRIPT_DIR/lib/handlers/model-call-cost.py" "$_pricing_file" "${gate_model:-}" "${tokens_in:-0}" "${tokens_out:-0}" 2>/dev/null || echo "0")
             fi
         fi
         append_pipeline_cost_record \

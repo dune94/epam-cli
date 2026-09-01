@@ -1391,7 +1391,8 @@ _lint_fix_findings_directly() {
               --arg project_root "${PROJECT_ROOT}" \
               --arg lf_files "${_lf_files}" \
               '{"__LF_FINDINGS__":$lf_findings,"__PROJECT_ROOT__":$project_root,"__LF_FILES__":$lf_files}' > "$_cp_vals"
-        local _lf_prompt="$(render_engine_prompt lint-fixer "$_cp_vals")"
+        local _lf_prompt
+        _lf_prompt="$(render_engine_prompt lint-fixer "$_cp_vals")"
         rm -f "$_cp_vals"
 
         AI_GATE_ALLOW_TOOLS=1 \
@@ -1826,7 +1827,8 @@ run_story_recovery_analyst() {
           --arg log_tail "${_log_tail}" \
           --arg story_id "${story_id}" \
           '{"__STORY_JSON__":$story_json,"__LOG_TAIL__":$log_tail,"__STORY_ID__":$story_id}' > "$_cp_vals"
-    local _prompt="$(render_engine_prompt story-recovery-analyst "$_cp_vals")"
+    local _prompt
+    _prompt="$(render_engine_prompt story-recovery-analyst "$_cp_vals")"
     rm -f "$_cp_vals"
 
     local _analyst_response="" _sra_attempt=0
@@ -2716,7 +2718,8 @@ _run_codeline_bridge() {
         --arg bcl "${_bcl}" \
         --arg bwt "${_bwt}" \
         '{"__BRIDGE_PROFILE__":$bridge_profile,"__BRIDGE_OUT__":$bridge_out,"__BPRD__":$bprd,"__BCL__":$bcl,"__BWT__":$bwt}' > "$_cp_vals"
-  local _base_prompt="$(render_engine_prompt codeline-bridge "$_cp_vals")"
+  local _base_prompt
+  _base_prompt="$(render_engine_prompt codeline-bridge "$_cp_vals")"
   rm -f "$_cp_vals"
 
   local _bridge_attempt=0 _bridge_ok=0 _corrective_note=""
@@ -3748,7 +3751,8 @@ _pause_after_agent_mint() {
 
 _run_jira_pipeline() {
   local _jira_dir="$AUTOMATION_DIR/jira"
-  local _log_file="/tmp/orch-$(date +%Y%m%dT%H%M%S).log"
+  local _log_file
+  _log_file="/tmp/orch-$(date +%Y%m%dT%H%M%S).log"
 
   local _missing=()
   [ -z "${JIRA_URL:-}"         ] && _missing+=("JIRA_URL")
@@ -4241,8 +4245,10 @@ run_specification_pass() {
     # count per agent; model comes from the same env vars the runner itself
     # uses (SPEC_MODE_OPENSPEC_MODEL/SPEC_MODE_SPECKIT_MODEL).
     local _spec_summary="$LOG_DIR/spec-summary.json"
-    local _openspec_model="$(seam_model_or_fail "spec-agent")"
-    local _speckit_model="$(seam_model_or_fail "spec-agent")"
+    local _openspec_model
+    _openspec_model="$(seam_model_or_fail "spec-agent")"
+    local _speckit_model
+    _speckit_model="$(seam_model_or_fail "spec-agent")"
     local _openspec_count=0 _speckit_count=0
     if [ -f "$_spec_summary" ]; then
         _openspec_count=$(jq -r '.stats.agents.openspec // 0' "$_spec_summary" 2>/dev/null || echo 0)
@@ -8320,8 +8326,7 @@ if m:
                 _lint_ac_tmp="$(mktemp)"
                 echo "$_lint_ac_raw" > "$_lint_ac_tmp"
                 _lint_acs_added="$( ( flock -w 10 200 || { error "  [lint-gate:remediator] Could not acquire lock on ${MAIN_PRD_FILE:-$PRD_FILE}"; return 1; }
-                python3 "$SCRIPT_DIR/lib/handlers/lint-ac.py" "${MAIN_PRD_FILE:-$PRD_FILE}" "$_lint_story_id" "$_lint_ac_tmp"
-                2>/dev/null || echo "0"
+                python3 "$SCRIPT_DIR/lib/handlers/lint-ac.py" "${MAIN_PRD_FILE:-$PRD_FILE}" "$_lint_story_id" "$_lint_ac_tmp" 2>/dev/null || echo "0"
                 ) 200>"${MAIN_PRD_FILE:-$PRD_FILE}.lock" )"
                 rm -f "$_lint_ac_tmp"
                 if [ "${_lint_acs_added:-0}" -gt 0 ]; then
@@ -8738,8 +8743,7 @@ $sast_prompt"
             local _semgrep_rc=$?
             set -e
             if [ -f "$semgrep_json" ] && [ -s "$semgrep_json" ]; then
-                semgrep_summary=$(python3 "$SCRIPT_DIR/lib/handlers/semgrep-summary.py" "$semgrep_json"
-2>/dev/null || echo "(semgrep unavailable)")
+                semgrep_summary=$(python3 "$SCRIPT_DIR/lib/handlers/semgrep-summary.py" "$semgrep_json" 2>/dev/null || echo "(semgrep unavailable)")
             else
                 semgrep_summary="(semgrep produced no output — exit code $_semgrep_rc)"
             fi
@@ -8813,8 +8817,7 @@ $sast_prompt"
             # hardcoded file names, no assumption beyond "this is a tsconfig.json".
             if [ $_tsc_rc -ne 0 ] && echo "$_tsc_out" | grep -q "error TS18003"; then
                 local _placeholder_created=""
-                _placeholder_created=$(python3 "$SCRIPT_DIR/lib/handlers/tsconfig-strictness.py" "$PROJECT_ROOT"
-2>/dev/null || echo "")
+                _placeholder_created=$(python3 "$SCRIPT_DIR/lib/handlers/tsconfig-strictness.py" "$PROJECT_ROOT" 2>/dev/null || echo "")
 
                 if [ -n "$_placeholder_created" ]; then
                     warning "  [scaffold-self-heal] tsconfig.json include glob matched zero files (TS18003) — created minimal placeholder: $_placeholder_created"
@@ -8887,8 +8890,7 @@ $(echo "$_tsc_out" | head -n "$(evidence_window typecheckLines)")"
             set -e
             # Also inject content of expected files listed in technicalNotes.files
             local _spec_file_excerpts=""
-            _spec_file_excerpts=$(python3 "$SCRIPT_DIR/lib/handlers/phase-story-summary.py" "$PRD_FILE" "$phase_id" "$PROJECT_ROOT"
-2>/dev/null || echo "(file oracle unavailable)")
+            _spec_file_excerpts=$(python3 "$SCRIPT_DIR/lib/handlers/phase-story-summary.py" "$PRD_FILE" "$phase_id" "$PROJECT_ROOT" 2>/dev/null || echo "(file oracle unavailable)")
             _spec_impl_evidence="## Implementation Evidence (pre-computed — do NOT call any tools)
 
 ### Git diff since phase start ($phase_id)
@@ -8948,8 +8950,7 @@ $spec_prompt"
             local _oracle_rc=$?
             set -e
             if [ -f "$oracle_json" ]; then
-                oracle_summary=$(python3 "$SCRIPT_DIR/lib/handlers/vitest-oracle-summary.py" "$oracle_json"
-2>/dev/null || echo "(oracle unavailable)")
+                oracle_summary=$(python3 "$SCRIPT_DIR/lib/handlers/vitest-oracle-summary.py" "$oracle_json" 2>/dev/null || echo "(oracle unavailable)")
             else
                 oracle_summary="(vitest ran but produced no JSON output — exit code $_oracle_rc)"
             fi
@@ -9070,8 +9071,7 @@ $spec_prompt"
         # spec-validator "fail" verdict (e.g. SKY-004 missing /search, /cheapest,
         # dashboard) was silently downgraded to a non-blocking warning on every
         # run, never once actually parsed. Fixed: double-quote so bash expands it.
-        _spec_failing=$(python3 "$SCRIPT_DIR/lib/handlers/spec-extractor.py" "$spec_log"
-2>/dev/null || echo "error")
+        _spec_failing=$(python3 "$SCRIPT_DIR/lib/handlers/spec-extractor.py" "$spec_log" 2>/dev/null || echo "error")
         if [ "$_spec_failing" = "no-data" ] || [ "$_spec_failing" = "no-json" ] || [ "$_spec_failing" = "error" ]; then
             step_emit "22b" "warn" "Step 22b: Spec validator" "no story data"
             warning "  Spec validator: WARN — agent returned no story data (oracle injection needed)"
@@ -9329,8 +9329,7 @@ $mutant_prompt"
                 # pipeline. Same "quote it, then verify the quote" pattern now
                 # applied here: require at least one blocker finding whose
                 # codeSnippet is a literal substring of the real file on disk.
-                _review_grounded=$(python3 "$SCRIPT_DIR/lib/handlers/review.py" "$review_log" "$PROJECT_ROOT"
-2>/dev/null || echo "0")
+                _review_grounded=$(python3 "$SCRIPT_DIR/lib/handlers/review.py" "$review_log" "$PROJECT_ROOT" 2>/dev/null || echo "0")
                 if [ "${_review_grounded:-0}" -gt 0 ]; then
                     step_emit "22c" "fail" "Step 22c: Review ranger"
                     error "  Review-ranger: FAIL — confirmed blocker (codeSnippet verified against the real file)"
@@ -9369,8 +9368,7 @@ $mutant_prompt"
                 # originalCode is a literal substring of the real file on disk
                 # (catches a fabricated file/line/code claim, same "quote it,
                 # verify it" pattern as review-ranger/perf-sentinel).
-                _mutant_grounded=$(python3 "$SCRIPT_DIR/lib/handlers/mutant.py" "$mutant_log" "$PROJECT_ROOT"
-2>/dev/null || echo "0")
+                _mutant_grounded=$(python3 "$SCRIPT_DIR/lib/handlers/mutant.py" "$mutant_log" "$PROJECT_ROOT" 2>/dev/null || echo "0")
                 if [ "${_mutant_grounded:-0}" -gt 0 ]; then
                     step_emit "22d" "fail" "Step 22d: Mutant hunter"
                     error "  Mutant-hunter: FAIL — confirmed surviving mutation (originalCode verified against the real file, survived count self-consistent)"
@@ -9590,8 +9588,7 @@ $perf_prompt"
                 #     were actually demonstrated against the real source, not merely asserted.
                 local _node_bin
                 _node_bin=$(detect_node 2>/dev/null || true)
-                _fuzz_grounded=$(python3 "$SCRIPT_DIR/lib/handlers/fuzz-verify.py" "$fuzz_log" "$PROJECT_ROOT" "${_node_bin:-}"
-2>/dev/null || echo "0")
+                _fuzz_grounded=$(python3 "$SCRIPT_DIR/lib/handlers/fuzz-verify.py" "$fuzz_log" "$PROJECT_ROOT" "${_node_bin:-}" 2>/dev/null || echo "0")
                 if [ "${_fuzz_grounded:-0}" -gt 0 ]; then
                     step_emit "22e" "fail" "Step 22e: Fuzz-weaver"
                     error "  Fuzz-weaver: FAIL — ${_fuzz_grounded} confirmed vulnerability/vulnerabilities (verified by actually running the agent's own test against the real code)"
@@ -9638,8 +9635,7 @@ $perf_prompt"
                 # content — same "quote it, then we verify the quote"
                 # pattern already used for the code-graph-detective's
                 # brokenLine field.
-                _perf_grounded=$(python3 "$SCRIPT_DIR/lib/handlers/perf.py" "$perf_log" "$PROJECT_ROOT"
-2>/dev/null || echo "0")
+                _perf_grounded=$(python3 "$SCRIPT_DIR/lib/handlers/perf.py" "$perf_log" "$PROJECT_ROOT" 2>/dev/null || echo "0")
                 if [ "${_perf_grounded:-0}" -gt 0 ]; then
                     step_emit "22f" "fail" "Step 22f: Perf sentinel"
                     error "  Perf-sentinel: FAIL — confirmed performance blocker (codeSnippet verified against the real file)"
@@ -9749,7 +9745,8 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                 local _finding_json="" _gfa_attempt=0
                 while [ "$_gfa_attempt" -lt 2 ] && [ -z "$_finding_json" ]; do
                     local _gfa_prompt="$_finding_prompt"
-                    local _gfa_model="$(seam_model_or_fail "gate-finding-analyst")"
+                    local _gfa_model
+                    _gfa_model="$(seam_model_or_fail "gate-finding-analyst")"
                     if [ "$_gfa_attempt" -ge 1 ]; then
                         [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _gfa_model="${ESCALATION_MODEL_HIGH}"
                         _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
@@ -9872,7 +9869,8 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                 local _ac_result="" _acr_attempt=0
                 while [ "$_acr_attempt" -lt 2 ] && [ -z "$_ac_result" ]; do
                     local _acr_prompt="$_ac_prompt"
-                    local _acr_model="$(seam_model_or_fail "story-ac-remediator")"
+                    local _acr_model
+                    _acr_model="$(seam_model_or_fail "story-ac-remediator")"
                     if [ "$_acr_attempt" -ge 1 ]; then
                         [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _acr_model="${ESCALATION_MODEL_HIGH}"
                         _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
@@ -9904,8 +9902,7 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                 echo "$_ac_result" > "$_ac_result_tmp"
                 local _acs_added
                 _acs_added=$( ( flock -w 10 200 || { error "  [story-ac-remediator] Could not acquire lock on ${MAIN_PRD_FILE:-$PRD_FILE}"; return 1; }
-                python3 "$SCRIPT_DIR/lib/handlers/ac-apply.py" "${MAIN_PRD_FILE:-$PRD_FILE}" "$_story_id" "$_ac_result_tmp"
-                2>/dev/null || echo 0
+                python3 "$SCRIPT_DIR/lib/handlers/ac-apply.py" "${MAIN_PRD_FILE:-$PRD_FILE}" "$_story_id" "$_ac_result_tmp" 2>/dev/null || echo 0
                 ) 200>"${MAIN_PRD_FILE:-$PRD_FILE}.lock" )
                 rm -f "$_ac_result_tmp"
 

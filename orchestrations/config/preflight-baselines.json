@@ -13,5 +13,5 @@
   ],
   "duplicatedLiterals": 10,
   "uncalibratedGuards": 31,
-  "shellDefects": 183
+  "shellDefects": 84
 }

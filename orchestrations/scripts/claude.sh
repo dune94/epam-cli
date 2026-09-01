@@ -1917,7 +1917,8 @@ get_story_title() {
 # Check if story exists
 story_exists() {
     local story_id=$1
-    local exists=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .id' "$PRD_FILE")
+    local exists
+    exists=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .id' "$PRD_FILE")
     [ -n "$exists" ]
 }
 
@@ -1948,7 +1949,8 @@ get_story_dependencies() {
 # Check if all dependencies are satisfied (completed)
 are_dependencies_satisfied() {
     local story_id=$1
-    local deps=$(get_story_dependencies "$story_id")
+    local deps
+    deps=$(get_story_dependencies "$story_id")
 
     if [ -z "$deps" ]; then
         return 0  # No dependencies
@@ -1998,7 +2000,8 @@ check_plan_mode_required() {
 run_plan_mode() {
     local story_id="$1"
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
-    local plan_log="$CLAUDE_OUTPUT_DIR/${story_id}_plan_$(date +'%Y%m%d_%H%M%S').log"
+    local plan_log
+    plan_log="$CLAUDE_OUTPUT_DIR/${story_id}_plan_$(date +'%Y%m%d_%H%M%S').log"
     local plan_json="${plan_log%.log}_result.json"
     local messages_jsonl="${MESSAGES_JSONL:-$LOG_DIR/agent-messages.jsonl}"
 
@@ -2036,7 +2039,8 @@ run_plan_mode() {
     else
         # Route through ai-run.sh with the configured orchestration provider
         local _orch_provider="${EPAM_ORCHESTRATION_PROVIDER:-}"
-        local _orch_model="$(seam_model_or_fail "phase-assessment" 2>/dev/null || true)"
+        local _orch_model
+        _orch_model="$(seam_model_or_fail "phase-assessment" 2>/dev/null || true)"
         if [ -z "$_orch_provider" ]; then
             warning "Plan mode: EPAM_ORCHESTRATION_PROVIDER not set — skipping plan"
         # AI_GATE_ALLOW_TOOLS=1: the plan_prompt below explicitly instructs the
@@ -2135,8 +2139,10 @@ log_to_monitor() {
     fi
 
     local lane="${WORKTREE_MODE:-main}"
-    local role=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .agentRole // ""' "$PRD_FILE" 2>/dev/null || echo "")
-    local timestamp=$(date -Iseconds)
+    local role
+    role=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .agentRole // ""' "$PRD_FILE" 2>/dev/null || echo "")
+    local timestamp
+    timestamp=$(date -Iseconds)
 
     # Use flock to prevent race conditions
     (
@@ -2182,7 +2188,8 @@ get_prioritized_stories() {
     local result=()
 
     # Get phases in order
-    local phases=$(get_phases)
+    local phases
+    phases=$(get_phases)
 
     if [ -z "$phases" ]; then
         # No phases defined, fall back to all incomplete stories sorted by priority
@@ -2196,7 +2203,8 @@ get_prioritized_stories() {
         [ -z "$phase" ] && continue
 
         # Get stories in this phase
-        local phase_stories=$(get_phase_stories "$phase")
+        local phase_stories
+        phase_stories=$(get_phase_stories "$phase")
 
         # For each story in the phase, check if it's incomplete and dependencies are met
         while IFS= read -r story_id; do
@@ -2220,7 +2228,8 @@ list_phases() {
     echo -e "${MAGENTA}=== Implementation Phases ===${NC}"
     echo ""
 
-    local phases=$(get_phases)
+    local phases
+    phases=$(get_phases)
 
     if [ -z "$phases" ]; then
         echo -e "${YELLOW}No phases defined in implementationOrder${NC}"
@@ -2232,7 +2241,8 @@ list_phases() {
 
         local total=0
         local completed=0
-        local stories=$(get_phase_stories "$phase")
+        local stories
+        stories=$(get_phase_stories "$phase")
 
         while IFS= read -r story_id; do
             [ -z "$story_id" ] && continue
@@ -2257,11 +2267,13 @@ list_phases() {
         # Show stories in phase
         while IFS= read -r story_id; do
             [ -z "$story_id" ] && continue
-            local title=$(get_story_title "$story_id")
+            local title
+            title=$(get_story_title "$story_id")
             if is_story_completed "$story_id"; then
                 echo -e "    ${GREEN}+${NC} $story_id: $title"
             else
-                local deps=$(get_story_dependencies "$story_id" | tr '\n' ',' | sed 's/,$//')
+                local deps
+                deps=$(get_story_dependencies "$story_id" | tr '\n' ',' | sed 's/,$//')
                 local deps_info=""
                 if [ -n "$deps" ]; then
                     if are_dependencies_satisfied "$story_id"; then
@@ -2279,14 +2291,16 @@ list_phases() {
 
 # Get project context for Claude
 get_project_context() {
-    local stack=$(jq -r '.project.stack | to_entries | map("\(.key): \(.value)") | join(", ")' "$PRD_FILE" 2>/dev/null || echo "")
+    local stack
+    stack=$(jq -r '.project.stack | to_entries | map("\(.key): \(.value)") | join(", ")' "$PRD_FILE" 2>/dev/null || echo "")
     # Project-level criteria are optional. When absent this used to emit the
     # heading followed by a bare "- ", which reads to the agent as "there is a
     # criterion here" while carrying none — observed live 2026-07-29, where the
     # story ALSO had no acceptance criteria of its own, so the prompt asserted
     # constraints twice and supplied none. An absent section is honest; an empty
     # one is misleading.
-    local criteria=$(jq -r '(.acceptanceCriteria // []) | join("\n- ")' "$PRD_FILE" 2>/dev/null || echo "")
+    local criteria
+    criteria=$(jq -r '(.acceptanceCriteria // []) | join("\n- ")' "$PRD_FILE" 2>/dev/null || echo "")
 
     cat << EOF
 Project: $(jq -r '.project.name' "$PRD_FILE")
@@ -2391,12 +2405,17 @@ story_declared_files() {
 
 build_implementation_prompt() {
     local story_id=$1
-    local story_json=$(get_story_details "$story_id")
+    local story_json
+    story_json=$(get_story_details "$story_id")
 
-    local title=$(echo "$story_json" | jq -r '.title')
-    local description=$(echo "$story_json" | jq -r '.description')
-    local acceptance_criteria=$(echo "$story_json" | jq -r '.acceptanceCriteria | join("\n- ")')
-    local technical_notes=$(echo "$story_json" | jq -r '.technicalNotes // empty')
+    local title
+    title=$(echo "$story_json" | jq -r '.title')
+    local description
+    description=$(echo "$story_json" | jq -r '.description')
+    local acceptance_criteria
+    acceptance_criteria=$(echo "$story_json" | jq -r '.acceptanceCriteria | join("\n- ")')
+    local technical_notes
+    technical_notes=$(echo "$story_json" | jq -r '.technicalNotes // empty')
     # Prefer THIS lane's resolved paths. The flat technicalNotes.files array is shared
     # by every codeline, but separate repositories spell the same file differently —
     # live 2026-08-03 the detective's root-cause fix site resolved on one lane of three,
@@ -2404,7 +2423,8 @@ build_implementation_prompt() {
     # then blocked for. spec-mode-runner resolves each declared path against each
     # codeline's own checkout and persists technicalNotes.perCodeline.<codeline>.files;
     # falling back to the flat array keeps older PRDs working unchanged.
-    local _cl_name=$(_current_lane "$story_json")
+    local _cl_name
+    _cl_name=$(_current_lane "$story_json")
     local _lane="$_cl_name"
     # Lane-resolved, de-duplicated, one definition — see story_declared_files.
     local files
@@ -3117,14 +3137,21 @@ fi)" \
 
 build_generator_prompt() {
     local story_id=$1
-    local story_json=$(get_story_details "$story_id")
-    local _lane=$(_current_lane "$story_json")
+    local story_json
+    story_json=$(get_story_details "$story_id")
+    local _lane
+    _lane=$(_current_lane "$story_json")
 
-    local title=$(echo "$story_json" | jq -r '.title')
-    local description=$(echo "$story_json" | jq -r '.description')
-    local acceptance_criteria=$(echo "$story_json" | jq -r '.acceptanceCriteria | join("\n- ")')
-    local technical_notes=$(echo "$story_json" | jq -r '.technicalNotes // empty')
-    local files=$(echo "$story_json" | jq -r '.technicalNotes.files // [] | join(", ")')
+    local title
+    title=$(echo "$story_json" | jq -r '.title')
+    local description
+    description=$(echo "$story_json" | jq -r '.description')
+    local acceptance_criteria
+    acceptance_criteria=$(echo "$story_json" | jq -r '.acceptanceCriteria | join("\n- ")')
+    local technical_notes
+    technical_notes=$(echo "$story_json" | jq -r '.technicalNotes // empty')
+    local files
+    files=$(echo "$story_json" | jq -r '.technicalNotes.files // [] | join(", ")')
     local dependencies=$(echo "$story_json" | jq -r \
         '(.dependencies // .technicalNotes.dependsOn // []) | join(", ")')
 
@@ -5032,7 +5059,8 @@ run_external_verification() {
     # implement `-u` (confirmed live: `env -u FOO bash -c '...'` silently
     # produced none of the command's effects). A prefixed `unset` string has
     # no dependency on any external binary and can't be shadowed this way.
-    local _orch_env_file="$(dirname "$AUTOMATION_DIR")/.env"
+    local _orch_env_file
+    _orch_env_file="$(dirname "$AUTOMATION_DIR")/.env"
     local _orch_env_unset_prefix=""
     if [ -f "$_orch_env_file" ]; then
         while IFS='=' read -r _envkey _envval; do
@@ -5979,7 +6007,8 @@ $(cat "$_cf")
           --arg title "${title}" \
           --arg ac "${ac}" \
           '{"__DECLARED_PATHS__":$declared_paths,"__DEPENDENCY_CONTRACTS__":$dependency_contracts,"__CROSS_CODELINE_CONTRACT__":$cross_codeline_contract,"__STORY_ID__":$story_id,"__TITLE__":$title,"__AC__":$ac}' > "$_cp_vals"
-    local planning_prompt="$(render_engine_prompt plan-producer "$_cp_vals")"
+    local planning_prompt
+    planning_prompt="$(render_engine_prompt plan-producer "$_cp_vals")"
     rm -f "$_cp_vals"
 
     local plan_result_file
@@ -6089,7 +6118,8 @@ $(cat "$_contract_file")
           --arg plan_text "${plan_text}" \
           --arg story_id "${story_id}" \
           '{"__DECLARED_OUTPUT_FILES__":$declared_output_files,"__DEPENDENCY_CONTRACTS__":$dependency_contracts,"__PLAN_TEXT__":$plan_text,"__STORY_ID__":$story_id}' > "$_cp_vals"
-    local review_prompt="$(render_engine_prompt plan-reviewer "$_cp_vals")"
+    local review_prompt
+    review_prompt="$(render_engine_prompt plan-reviewer "$_cp_vals")"
     rm -f "$_cp_vals"
 
     # Tool access (HEAL-BLIND, 2026-07-31): this gate exists specifically to
@@ -6146,7 +6176,8 @@ $(cat "$_contract_file")
           --arg plan_text "${plan_text}" \
           --arg story_id "${story_id}" \
           '{"__CORRECTIONS__":$corrections,"__PLAN_TEXT__":$plan_text,"__STORY_ID__":$story_id}' > "$_cp_vals"
-    local corrective_prompt="$(render_engine_prompt plan-corrective "$_cp_vals")"
+    local corrective_prompt
+    corrective_prompt="$(render_engine_prompt plan-corrective "$_cp_vals")"
     rm -f "$_cp_vals"
 
     local corrected_plan
@@ -6973,7 +7004,7 @@ assess_model_escalation() {
       --arg story_title "$story_title" \
       --arg current_model "$current_model" \
       --arg target_model "$target_model" \
-      --arg coordinator_failure_class "$coordinator_failure_class" \
+      --arg coordinator_failure_class "$COORDINATOR_FAILURE_CLASS" \
           '{"__RESULT_TEXT__":$result_text,"__LOG_TAIL__":$log_tail,"__TEST_FAILURE_SNIPPET__":$test_failure_snippet,"__PRIOR_FAILURE_SUMMARY__":$prior_failure_summary,"__STORY_ID__":$story_id,"__STORY_TITLE__":$story_title,"__CURRENT_MODEL__":$current_model,"__TARGET_MODEL__":$target_model,"__COORDINATOR_FAILURE_CLASS__":$coordinator_failure_class}' > "$_cp_vals"
     coordinator_prompt="$(render_engine_prompt inference-ladder-coordinator "$_cp_vals")"
     rm -f "$_cp_vals"
@@ -9089,7 +9120,8 @@ run_retry_extension_coordinator() {
         return 0
     fi
 
-    local profiles_file="$(dirname "$SCRIPT_DIR")/agents/profiles.json"
+    local profiles_file
+    profiles_file="$(dirname "$SCRIPT_DIR")/agents/profiles.json"
     local coordinator_profile=""
     if [ -f "$profiles_file" ]; then
         coordinator_profile=$(require_profile "retry-extension-coordinator" "$profiles_file" || true)
@@ -9260,16 +9292,20 @@ implement_story() {
     # reset between stories, so a stale amendment from story A could otherwise
     # leak into story B's first attempt.
     COORDINATOR_PROMPT_AMENDMENT=""
-    local output_file="$CLAUDE_OUTPUT_DIR/${story_id}_$(date +'%Y%m%d_%H%M%S').log"
-    local story_started_at=$(date -Iseconds)
+    local output_file
+    output_file="$CLAUDE_OUTPUT_DIR/${story_id}_$(date +'%Y%m%d_%H%M%S').log"
+    local story_started_at
+    story_started_at=$(date -Iseconds)
 
-    local title=$(get_story_title "$story_id")
+    local title
+    title=$(get_story_title "$story_id")
     log "Implementing story: $story_id - $title"
     update_monitor_status "start" "$story_id"
 
     # Check dependencies first
     if ! are_dependencies_satisfied "$story_id"; then
-        local deps=$(get_story_dependencies "$story_id" | tr '\n' ',' | sed 's/,$//')
+        local deps
+        deps=$(get_story_dependencies "$story_id" | tr '\n' ',' | sed 's/,$//')
         error "Cannot implement $story_id - dependencies not satisfied: $deps"
         return 1
     fi
@@ -9528,7 +9564,8 @@ implement_story() {
                         # de-escalating a struggling story. Operator rule: a retry never lowers
                         # effort. Rung 0 still ASSIGNS, because it is the story's starting point
                         # and must not inherit the previous story's ceiling.
-                        export EPAM_REASONING_EFFORT="$(max_effort "${EPAM_REASONING_EFFORT:-}" "${EPAM_RUNG1_REASONING_EFFORT:-medium}")"
+                        EPAM_REASONING_EFFORT="$(max_effort "${EPAM_REASONING_EFFORT:-}" "${EPAM_RUNG1_REASONING_EFFORT:-medium}")"
+                        export EPAM_REASONING_EFFORT
                         export EPAM_TEMPERATURE="${EPAM_RUNG1_TEMPERATURE:-0}"
                         _rung_iter_bump=$(( $(_brownfield_rung_bump "$story_id") + $(_iteration_exhaustion_bump "$story_id") ))
                         STORY_ITERATION_BUMP_TOTAL=$(( ${STORY_ITERATION_BUMP_TOTAL:-0} + _rung_iter_bump ))
@@ -9637,7 +9674,8 @@ implement_story() {
                                 fi
                             fi
                         fi
-                        export EPAM_REASONING_EFFORT="$(max_effort "${EPAM_REASONING_EFFORT:-}" "${EPAM_RUNG2_REASONING_EFFORT:-high}")"
+                        EPAM_REASONING_EFFORT="$(max_effort "${EPAM_REASONING_EFFORT:-}" "${EPAM_RUNG2_REASONING_EFFORT:-high}")"
+                        export EPAM_REASONING_EFFORT
                         export EPAM_TEMPERATURE="${EPAM_RUNG2_TEMPERATURE:-0.3}"
                         _rung_iter_bump=$(( $(_brownfield_rung_bump "$story_id") + $(_iteration_exhaustion_bump "$story_id") ))
                         STORY_ITERATION_BUMP_TOTAL=$(( ${STORY_ITERATION_BUMP_TOTAL:-0} + _rung_iter_bump ))
@@ -9723,7 +9761,8 @@ implement_story() {
                                 fi
                             fi
                         fi
-                        export EPAM_REASONING_EFFORT="$(max_effort "${EPAM_REASONING_EFFORT:-}" "${EPAM_RUNG3_REASONING_EFFORT:-high}")"
+                        EPAM_REASONING_EFFORT="$(max_effort "${EPAM_REASONING_EFFORT:-}" "${EPAM_RUNG3_REASONING_EFFORT:-high}")"
+                        export EPAM_REASONING_EFFORT
                         export EPAM_TEMPERATURE="${EPAM_RUNG3_TEMPERATURE:-0.7}"
                         _rung_iter_bump=$(( $(_brownfield_rung_bump "$story_id") + $(_iteration_exhaustion_bump "$story_id") ))
                         STORY_ITERATION_BUMP_TOTAL=$(( ${STORY_ITERATION_BUMP_TOTAL:-0} + _rung_iter_bump ))
@@ -10062,7 +10101,8 @@ $_kb_section"
         local invoke_success=false
         # Track the raw output file across all provider branches for coordinator triage
         local attempt_raw_file="${json_result_file%.json}_raw.json"
-        local attempt_started_at=$(date -Iseconds)
+        local attempt_started_at
+        attempt_started_at=$(date -Iseconds)
 
         # Optional per-story wall-clock timeout — set EPAM_STORY_TIMEOUT_SECS in the tier script.
         # No default: if unset, no timeout is applied (behaviour is unchanged).
@@ -10982,7 +11022,8 @@ Apply the above diagnosis AND fix the deterministic check violation — both mus
 update_story_status() {
     local story_id=$1
     local status=$2  # "completed" or "failed"
-    local timestamp=$(date -Iseconds)
+    local timestamp
+    timestamp=$(date -Iseconds)
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
     local lock_file="${prd_target}.lock"
 
@@ -11047,12 +11088,18 @@ append_cost_record() {
 
     # Read story metadata from prd.json
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
-    local title=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .title // "unknown"' "$prd_target")
-    local agent_id=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .agentRole // "unknown"' "$prd_target")
-    local forecast_hours=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .estimatedHours // 0' "$prd_target")
-    local forecast_cost=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .estimatedCost // 0' "$prd_target" 2>/dev/null || echo 0)
-    local story_effort=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .effort // "medium"' "$prd_target")
-    local story_type=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .storyType // "implementation"' "$prd_target")
+    local title
+    title=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .title // "unknown"' "$prd_target")
+    local agent_id
+    agent_id=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .agentRole // "unknown"' "$prd_target")
+    local forecast_hours
+    forecast_hours=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .estimatedHours // 0' "$prd_target")
+    local forecast_cost
+    forecast_cost=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .estimatedCost // 0' "$prd_target" 2>/dev/null || echo 0)
+    local story_effort
+    story_effort=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .effort // "medium"' "$prd_target")
+    local story_type
+    story_type=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .storyType // "implementation"' "$prd_target")
     # A result file that predates this attempt belongs to the previous one; reading it would
     # bill this attempt for a call it never made. See result_is_from_this_attempt.
     if [ -n "$json_result_file" ] && ! result_is_from_this_attempt "$json_result_file" "$started_at"; then
@@ -11074,8 +11121,10 @@ append_cost_record() {
     fi
 
     # Compute elapsed minutes
-    local start_epoch=$(date -d "$started_at" +%s 2>/dev/null || echo 0)
-    local end_epoch=$(date -d "$ended_at" +%s 2>/dev/null || echo 0)
+    local start_epoch
+    start_epoch=$(date -d "$started_at" +%s 2>/dev/null || echo 0)
+    local end_epoch
+    end_epoch=$(date -d "$ended_at" +%s 2>/dev/null || echo 0)
     local elapsed_minutes=0
     if [ "$start_epoch" -gt 0 ] && [ "$end_epoch" -gt 0 ]; then
         elapsed_minutes=$(echo "scale=2; ($end_epoch - $start_epoch) / 60" | bc 2>/dev/null || echo "0")
@@ -11099,8 +11148,10 @@ append_cost_record() {
         # Turn count: Claude CLI reports num_turns/turns; AgentRunner reports iterations
         task_turns=$(jq -r '.num_turns // .turns // .usage.turns // .iterations // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
         # Cache tokens (Claude CLI only; no-op for epam output)
-        local cache_create=$(jq -r '.usage.cache_creation_input_tokens // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
-        local cache_read=$(jq -r '.usage.cache_read_input_tokens // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
+        local cache_create
+        cache_create=$(jq -r '.usage.cache_creation_input_tokens // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
+        local cache_read
+        cache_read=$(jq -r '.usage.cache_read_input_tokens // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
         tokens_in=$(( ${tokens_in:-0} + ${cache_create:-0} + ${cache_read:-0} ))
         # epam's own providers are OpenAI-shaped: prompt_tokens ALREADY INCLUDES the cached
         # portion, so this one is recorded and never added — adding it would double-count every
@@ -11380,8 +11431,10 @@ build_kb_prompt_section() {
 update_agents_file() {
     local story_id=$1
     local status=$2
-    local title=$(get_story_title "$story_id")
-    local phase=$(get_story_phase "$story_id")
+    local title
+    title=$(get_story_title "$story_id")
+    local phase
+    phase=$(get_story_phase "$story_id")
 
     if [ ! -f "$AGENTS_FILE" ]; then
         mkdir -p "$(dirname "$AGENTS_FILE")"
@@ -11407,7 +11460,8 @@ EOF
 
 # Increment iteration counter
 increment_iteration() {
-    local current=$(jq -r '.currentIteration' "$PRD_FILE")
+    local current
+    current=$(jq -r '.currentIteration' "$PRD_FILE")
     local next=$((current + 1))
     jq ".currentIteration = $next" "$PRD_FILE" > "$PRD_FILE.tmp" && mv "$PRD_FILE.tmp" "$PRD_FILE"
 }
@@ -11418,8 +11472,10 @@ show_status() {
     echo -e "${MAGENTA}=== PRD Status ===${NC}"
     echo ""
 
-    local total=$(jq '.stories | length' "$PRD_FILE")
-    local completed=$(jq '[.stories[] | select(.completed == true)] | length' "$PRD_FILE")
+    local total
+    total=$(jq '.stories | length' "$PRD_FILE")
+    local completed
+    completed=$(jq '[.stories[] | select(.completed == true)] | length' "$PRD_FILE")
     local pending=$((total - completed))
 
     echo -e "Project: ${CYAN}$(jq -r '.project.name' "$PRD_FILE")${NC}"
@@ -11429,27 +11485,33 @@ show_status() {
     echo ""
 
     # Show next recommended story
-    local next=$(get_next_story)
+    local next
+    next=$(get_next_story)
     if [ -n "$next" ]; then
         echo -e "Next recommended: ${WHITE}$next${NC} - $(get_story_title "$next")"
-        local phase=$(get_story_phase "$next")
+        local phase
+        phase=$(get_story_phase "$next")
         [ -n "$phase" ] && echo -e "                 Phase: ${CYAN}$phase${NC}"
     fi
     echo ""
 
     echo -e "${CYAN}Stories by Phase:${NC}"
 
-    local phases=$(get_phases)
+    local phases
+    phases=$(get_phases)
     if [ -n "$phases" ]; then
         while IFS= read -r phase; do
             [ -z "$phase" ] && continue
             echo -e "\n  ${WHITE}$phase:${NC}"
 
-            local stories=$(get_phase_stories "$phase")
+            local stories
+            stories=$(get_phase_stories "$phase")
             while IFS= read -r story_id; do
                 [ -z "$story_id" ] && continue
-                local title=$(get_story_title "$story_id")
-                local priority=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .priority // "medium"' "$PRD_FILE")
+                local title
+                title=$(get_story_title "$story_id")
+                local priority
+                priority=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .priority // "medium"' "$PRD_FILE")
                 local priority_badge=""
                 case $priority in
                     high) priority_badge=" ${RED}[H]${NC}" ;;
@@ -11461,7 +11523,8 @@ show_status() {
                 elif are_dependencies_satisfied "$story_id"; then
                     echo -e "    ${YELLOW}o${NC} $story_id: $title$priority_badge ${CYAN}(ready)${NC}"
                 else
-                    local deps=$(get_story_dependencies "$story_id" | tr '\n' ',' | sed 's/,$//')
+                    local deps
+                    deps=$(get_story_dependencies "$story_id" | tr '\n' ',' | sed 's/,$//')
                     echo -e "    ${RED}x${NC} $story_id: $title$priority_badge ${RED}(blocked: $deps)${NC}"
                 fi
             done <<< "$stories"
@@ -11507,14 +11570,16 @@ dry_run() {
             continue
         fi
 
-        local phase=$(get_story_phase "$story_id")
+        local phase
+        phase=$(get_story_phase "$story_id")
         local phase_info=""
         [ -n "$phase" ] && phase_info=" ${CYAN}[$phase]${NC}"
 
         if is_story_completed "$story_id"; then
             echo -e "  ${YELLOW}x${NC} $story_id - $(get_story_title "$story_id")$phase_info [ALREADY COMPLETED]"
         elif ! are_dependencies_satisfied "$story_id"; then
-            local deps=$(get_story_dependencies "$story_id" | tr '\n' ',' | sed 's/,$//')
+            local deps
+            deps=$(get_story_dependencies "$story_id" | tr '\n' ',' | sed 's/,$//')
             echo -e "  ${RED}x${NC} $story_id - $(get_story_title "$story_id")$phase_info [BLOCKED: $deps]"
         else
             echo -e "  ${CYAN}$order.${NC} $story_id - $(get_story_title "$story_id")$phase_info"
@@ -11666,7 +11731,8 @@ run_implementation() {
         if [ -x "$dep_checker" ]; then
             # Use dedicated dependency checker for better validation and output
             if ! PRD_FILE="$PRD_FILE" "$dep_checker" "$story_id" 2>&1; then
-                local deps=$(get_story_dependencies "$story_id" | tr '\n' ',' | sed 's/,$//')
+                local deps
+                deps=$(get_story_dependencies "$story_id" | tr '\n' ',' | sed 's/,$//')
                 warning "Story $story_id blocked by dependencies: $deps - skipping"
                 log_to_monitor "dependency_blocked" "$story_id" "Blocked by dependencies: $deps"
                 skipped=$((skipped + 1))
@@ -11675,7 +11741,8 @@ run_implementation() {
         else
             # Fallback to inline dependency check
             if ! are_dependencies_satisfied "$story_id"; then
-                local deps=$(get_story_dependencies "$story_id" | tr '\n' ',' | sed 's/,$//')
+                local deps
+                deps=$(get_story_dependencies "$story_id" | tr '\n' ',' | sed 's/,$//')
                 warning "Story $story_id blocked by dependencies: $deps - skipping"
                 log_to_monitor "dependency_blocked" "$story_id" "Blocked by dependencies: $deps"
                 skipped=$((skipped + 1))
@@ -11971,7 +12038,8 @@ main() {
 
     # If phase filter specified, get stories for that phase
     if [ -n "$phase_filter" ]; then
-        local phase_stories=$(get_phase_stories "$phase_filter")
+        local phase_stories
+        phase_stories=$(get_phase_stories "$phase_filter")
         if [ -z "$phase_stories" ]; then
             error "Phase '$phase_filter' not found or has no stories"
             echo ""
@@ -12175,7 +12243,8 @@ run_pre_phase_assessment() {
 
     cd "$PROJECT_ROOT"
     local _orch_provider="${EPAM_ORCHESTRATION_PROVIDER:-}"
-    local _orch_model="$(seam_model_or_fail "phase-assessment" 2>/dev/null || true)"
+    local _orch_model
+    _orch_model="$(seam_model_or_fail "phase-assessment" 2>/dev/null || true)"
     if [ -z "$_orch_provider" ]; then
         warning "Pre-phase assessment: EPAM_ORCHESTRATION_PROVIDER not set — skipping (non-critical)"
     # AI_GATE_ALLOW_TOOLS=1: the prompt above instructs the agent to run real

@@ -338,6 +338,19 @@ describe.skipIf(!RUN_REAL)('Full mock brownfield pipeline — REAL Jira ingest +
           // project wants is the project's declaration to make, not this test's.
           EPAM_PAUSE_AFTER_AGENT_MINT: '0',
           EPAM_PAUSE_BEFORE_WRITER: '0',
+          // LANES RUN ONE AT A TIME, BECAUSE A REPLAY IS AN ORDERED SEQUENCE.
+          //
+          // A recorded session is registered as one expectation per turn, each consumed once, in
+          // the order the turns really happened: cpa-inference's capture runs estimate, verdict,
+          // estimate, verdict. Two lanes running concurrently draw from that one sequence, so a
+          // lane asking for an estimate can be handed the verdict turn — which carries no
+          // confidence field at all. The CPA then scored 0.3, gated 'block', and both lanes failed
+          // Step 2 with an empty detail, three stages from the cause.
+          //
+          // This is a property of REPLAY, not of the pipeline: parallel lanes are correct in a real
+          // run, where each seam gets its own answer. Sequential lanes make the rehearsal
+          // deterministic, which is the only way its failures mean anything.
+          EPAM_PARALLEL_CODELINES: '0',
           EPAM_BROWNFIELD: '1',
           JIRA_CODELINE_ROOT: codelineRoot,
           JIRA_BASELINE_BRANCH: 'main',

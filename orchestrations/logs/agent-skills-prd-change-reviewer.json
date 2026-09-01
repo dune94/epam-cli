@@ -1,9 +1,9 @@
 {
-  "codeline": "mockb",
+  "codeline": "mocka",
   "stacks": [
     {
-      "codeline": "mockb",
-      "path": "/home/bradleyjerome/projects/mock3/mock-b",
+      "codeline": "mocka",
+      "path": "/home/bradleyjerome/projects/mock3/mock-a",
       "stack": "node",
       "manifest": "package.json",
       "testCommand": "npm test",
@@ -15,7 +15,7 @@
   ],
   "learned": [],
   "sources": [
-    "/home/bradleyjerome/projects/mock3/mock-b/package.json"
+    "/home/bradleyjerome/projects/mock3/mock-a/package.json"
   ],
   "empty": false
 }

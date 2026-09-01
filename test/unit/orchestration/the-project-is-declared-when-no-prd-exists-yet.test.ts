@@ -41,7 +41,9 @@ function resolve(prdPath: string, declared: string) {
      resolve_run_project ${JSON.stringify(prdPath)} ${JSON.stringify(declared)}`],
     {
       encoding: 'utf8', timeout: 60000, cwd: SCRIPTS,
-      env: { PATH: process.env.PATH, HOME: process.env.HOME, NODE_BIN: NODE20 } as any,
+      // Inherit so the shell coverage collector's BASH_ENV instrumentation survives; a hand-built
+      // { PATH, HOME } makes every line this suite executes invisible to the meter.
+      env: { ...process.env, NODE_BIN: NODE20 } as any,
     });
   return { name: (r.stdout || '').trim(), err: (r.stderr || '').trim(), status: r.status };
 }

@@ -37,12 +37,18 @@ function gate(stage: string, env: Record<string, string> = {}) {
     `. ${JSON.stringify(GATE)}; require_stage_coverage ${JSON.stringify(stage)}; echo "EXIT=$?"`],
     {
       encoding: 'utf8', timeout: 120000, cwd: REPO,
-      env: {
-        PATH: process.env.PATH, HOME: process.env.HOME,
-        NODE_BIN: NODE20,
-        EPAM_COVERAGE_GATED: '1',
-        ...env,
-      } as any,
+      // INHERIT THE ENVIRONMENT, THEN CONTROL ONLY WHAT IS UNDER TEST.
+      //
+      // A hand-built { PATH, HOME } reads as careful isolation and silently defeats measurement:
+      // the shell coverage collector instruments children through BASH_ENV and BASH_XTRACEFD, so
+      // replacing the environment strips the instrumentation and every line the suite executes is
+      // invisible to the meter. The variables this suite decides are still set explicitly below,
+      // and EPAM_FREE_RUN is cleared first so an inherited one cannot answer for it.
+      env: (() => {
+        const e: any = { ...process.env };
+        delete e.EPAM_FREE_RUN;
+        return { ...e, NODE_BIN: NODE20, EPAM_COVERAGE_GATED: '1', ...env };
+      })(),
     });
   const out = (r.stdout || '') + (r.stderr || '');
   return { exit: /EXIT=(\d+)/.exec(r.stdout || '')?.[1], out };

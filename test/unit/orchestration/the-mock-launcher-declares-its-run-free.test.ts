@@ -53,7 +53,9 @@ function preambleDeclaresFreeRun(): string {
       // and the gate line finds no library, takes its `|| exit 1` branch and the preamble dies
       // before reaching anything this test is about. That failure looks identical to the defect.
       encoding: 'utf8', timeout: 120000, cwd: SCRIPTS,
-      env: { PATH: process.env.PATH, HOME: process.env.HOME, NODE_BIN: NODE20 } as any,
+      // Inherit, then clear EPAM_FREE_RUN: the preamble under test is what must set it, and a
+      // hand-built environment would strip the BASH_ENV shell-coverage instrumentation as well.
+      env: (() => { const e: any = { ...process.env }; delete e.EPAM_FREE_RUN; return { ...e, NODE_BIN: NODE20 }; })(),
     });
   return ((r.stdout || '').trim().split('\n').pop() || '').trim();
 }

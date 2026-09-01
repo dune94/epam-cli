@@ -19,7 +19,10 @@ const LIB = join(REPO, 'orchestrations/scripts/lib/free-run-guard.sh')
 function askGuard(env: Record<string, string>) {
   const r = spawnSync('bash', ['-c',
     `. ${JSON.stringify(LIB)}; free_run_requested && echo FREE_RUN || echo SPENDS`],
-    { encoding: 'utf8', timeout: 20000, env: { PATH: process.env.PATH, HOME: process.env.HOME, ...env } as any })
+    { encoding: 'utf8', timeout: 20000,
+      // Inherit, then clear the one variable this suite decides — a hand-built { PATH, HOME }
+      // strips the BASH_ENV instrumentation the shell coverage collector relies on.
+      env: (() => { const e: any = { ...process.env }; delete e.EPAM_FREE_RUN; return { ...e, ...env }; })() })
   return (r.stdout || '').trim()
 }
 

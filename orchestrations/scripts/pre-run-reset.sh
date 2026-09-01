@@ -852,6 +852,10 @@ fi
 # shellcheck source=lib/kb-canonical.sh
 . "$SCRIPT_DIR/lib/kb-canonical.sh"
 kb_restore_canonical "$REPO_ROOT/orchestrations"
+# AND THE LAUNCHING PROJECT'S OWN KB — deleted outright. The line above resets only the ENGINE KB;
+# the project's KB.md and kb/ were touched by nothing, so a run inherited the previous run's
+# conclusions about a different ticket.
+kb_delete_project_kb
 
 # ── Step 4: Reset agent-status.json ──────────────────────────────────────────
 info "Resetting agent-status.json..."

@@ -2,44 +2,35 @@
   "verdict": "defects_found",
   "findings": [
     {
-      "agent": "fuzz-weaver",
+      "agent": "typescript-engineer",
       "severity": "blocking",
-      "claim": "CANONICAL: 'When the tool list is empty the verdict is `warn`, never `fail`, and ALL cases are `gap`. A `gap` says \"no test covers this\"; a `vulnerability` asserts the code would break, and that assertion requires reading the code.' and 'Before marking any case a `vulnerability`, verify the file exists and cite the exact path and line. A `fail` verdict requires a confirmed file path on disk.' and 'Never report a case against a file you have not seen.'",
-      "checked": "Compared the canonical fuzz-weaver GROUNDING RULES section word-for-word against the derived fuzz-weaver GROUNDING RULES section.",
-      "found": "The derived version deletes all three fuzz-weaver-specific rules above and replaces them with the generic 4-bullet block shared by review-ranger/mutant-hunter/spec-validator ('report warn, set the analysed/scanned count...', 'cite a real file path...', 'a count of zero inspected files with a non-empty findings list is a contradiction'). The generic block never states that every `case` must be forced to `gap` when tools are unavailable, and never gates a `vulnerability` classification specifically on a confirmed on-disk file path. This is exactly the failure mode the canonical text calls out by name ('This gate has previously invented vulnerabilities in files that did not exist') — the fix for that specific history was deleted.",
-      "remedy": "Restore the fuzz-weaver-specific rules verbatim: force all cases to `gap` (never `vulnerability`) when the tool list is empty, and require a confirmed on-disk path before any `vulnerability` classification."
+      "claim": "Derived Scaffold Immutability Rule: \"NEVER create, overwrite, or modify package.json, tsconfig.json, jest.config.js, or .gitignore outside of an explicit dependency-install step covered by the MANDATORY DEPENDENCY CHECK above.\"",
+      "checked": "Diffed this section against the canonical typescript-engineer's Scaffold Immutability Rule, which reads: \"NEVER create, overwrite, or modify package.json, tsconfig.json, vitest.config.ts, or .gitignore in any phase after scaffold. These files are owned exclusively by the scaffold phase. If your story appears to require dependency changes, add a comment in the code explaining what is needed — do NOT run npm install or touch package.json.\" Also read src/pages/api/v1/search.ts to confirm the codeline facts elsewhere in the brief are otherwise accurately grounded, so this is not a case of the whole section being fabricated — only this one clause was altered.",
+      "found": "Canonical states an unconditional, unqualified prohibition: after scaffold, an implementer must NEVER touch package.json even to add a dependency the story needs — the required action is to add a code comment instead and leave the file alone ('do NOT run npm install or touch package.json'). The derived version deletes that sentence and replaces it with a carve-out that legitimizes exactly the action canonical forbids: package.json/tsconfig.json/jest.config.js may be modified whenever it happens 'as an explicit dependency-install step covered by the MANDATORY DEPENDENCY CHECK' — and the MANDATORY DEPENDENCY CHECK earlier in the same derived brief is unconditional (applies to any missing package, any phase). An implementer following the derived brief will run npm install and edit package.json post-scaffold for any missing dependency; an implementer following canonical would not — it would add a comment and leave package.json to the scaffold phase alone. This is a forbidding rule that was softened into its own exception.",
+      "remedy": "Keep the canonical carve-out absolute: after the scaffold phase, package.json/tsconfig.json/jest.config.js/.gitignore must never be modified, even to add a dependency the story needs — add an explanatory code comment instead of running npm install, matching canonical's 'do NOT run npm install or touch package.json.' The MANDATORY DEPENDENCY CHECK section should be scoped to apply only during/at scaffold time, not as a blanket license for later phases to edit these files."
     },
     {
-      "agent": "perf-sentinel",
+      "agent": "code-graph-detective",
       "severity": "blocking",
-      "claim": "CANONICAL: '## When tool access is unavailable\\n\\n  Emit exactly this shape, with counts reflecting that nothing was inspected:\\n\\n  {\"summary\":{\"filesAnalysed\":0,\"findingsCount\":0,\"blockerCount\":0},\"findings\":[],\"verdict\":\"warn\"}\\n\\n  NEVER emit `\"verdict\":\"fail\"` with filesAnalysed=0.'",
-      "checked": "Compared the full canonical perf-sentinel prompt section-by-section against the derived perf-sentinel prompt, looking specifically for the '## When tool access is unavailable' heading.",
-      "found": "The derived perf-sentinel prompt goes straight from '## Discover the codeline before you assess it' to '## GROUNDING RULES' — the entire '## When tool access is unavailable' section, including the mandatory exact-JSON output shape and the explicit 'NEVER emit fail with filesAnalysed=0' instruction, is missing. Only the generic GROUNDING RULES bullets remain, which state the same idea in prose but no longer pin down the exact required output contract.",
-      "remedy": "Re-add the '## When tool access is unavailable' section with the literal JSON shape and the explicit prohibition on emitting `fail` with filesAnalysed=0."
+      "claim": "This has already played out on this codeline: for AMSD-2041 (a Contentstack live-preview ticket), the tool traced the symptom through src/pages/_app.tsx's onEntryChange subscription, src/context/ContentstackContext.tsx, src/hooks/useContent.ts (the hook 147+ components use to read Contentstack data), and src/services/pageService.ts's PageService.getPageEntry / getSinglePageEntry (which delegates to getSingleEntry/getSingletonEntry in src/services/contentstack.ts) to find the real reactive-data pipeline, rather than stopping at the component that merely renders the page.",
+      "checked": "grep -rn \"onEntryChange\" across the whole repo (all .ts/.tsx, node_modules excluded); grep -n \"getPageEntry\\|getSinglePageEntry\\|getSingleEntry\\b\" src/services/pageService.ts src/services/contentstack.ts; read src/pages/_app.tsx and src/context/ContentstackContext.tsx in full; grep -n \"^\\s*async \\|^export \" src/services/pageService.ts to enumerate every actual PageService method.",
+      "found": "onEntryChange appears nowhere in the repository. src/context/ContentstackContext.tsx contains no subscription or live-preview logic at all — it is a plain React Context populated once via useMemo from a defaultContent prop passed in from _app.tsx, with no listener or reactive mechanism. PageService has no method named getPageEntry or getSinglePageEntry — its real methods are getAllPublishedPages, getHeaderAndFooter, getStaticUpdates, getPageLevelServiceAlerts, getCookiesBanner, getGlobalDictionary, getPageSpecificData, getStationDetailPages, getServiceUpdatesPage, getPagesBaseURLs, getSingletonSlug, findSingletonSlug, getAllLineColors. src/services/contentstack.ts does export getSingleEntry, getEntry, findSingletonEntry, getSingletonEntry, but nothing in pageService.ts calls getSingleEntry, and no getSinglePageEntry exists to do so. This entire passage is a fabricated trace presented as an already-proven result — directly violating this same brief's own 'CRITICAL: Never invent a module or symbol name' rule and its instruction to output only symbols actually surfaced by the tool.",
+      "remedy": "Remove the fabricated AMSD-2041 walkthrough, or replace it with a real trace actually produced by codegraph-agent-query.sh against this codeline and verified against the source, using real symbol names (e.g. a correctly named PageService method such as getPageSpecificData, and confirming whether any reactive live-preview pipeline actually exists in this codebase before describing one).",
+      "verification": {
+        "kind": "not_mechanically_checkable",
+        "codeline": "gotransit",
+        "subject": "onEntryChange / PageService.getPageEntry / PageService.getSinglePageEntry",
+        "expected": "absent",
+        "briefAsserts": "present"
+      }
     },
     {
-      "agent": "doc-coordinator",
-      "severity": "blocking",
-      "claim": "DERIVED: 'you scan the exported public surface under src/ (components, hooks in src/hooks, services, utils, interface types, Next.js API routes in src/api) ... Coverage gate: reconciliation must show >=80% of public API surface documented before proceeding to index build.'",
-      "checked": "Ran `find src/pages/api -iname '*.ts'` and `find src/api -maxdepth 1 -iname '*.ts'`, then read src/api/algolia.ts to see whether it is a Next.js route handler or a plain module.",
-      "found": "The real Next.js API routes (files Next.js's file-based router exposes as HTTP endpoints, e.g. src/pages/api/v1/autocomplete.ts, src/pages/api/v1/email-sign-up.ts, src/pages/api/auth/[...nextauth].ts) live under src/pages/api/, not src/api/. src/api/ instead contains plain backend service/client modules (e.g. algolia.ts just exports an Algolia client and search params — no route handler) consumed by the real route files. Scanning src/api for 'Next.js API routes' misses the actual routing surface and misattributes an unrelated directory, which directly corrupts the totalExports/coveragePercent computation that gates the >=80% threshold.",
-      "remedy": "Point the API-routes portion of the scan at src/pages/api/ (route handlers), and describe src/api/ as backend service modules, not routes."
-    },
-    {
-      "agent": "api-doc-generator",
+      "agent": "code-graph-detective",
       "severity": "advisory",
-      "claim": "DERIVED: 'group documentation by this app's domains: ... and Next.js API routes (src/api)'",
-      "checked": "Same as doc-coordinator finding above: find src/pages/api vs src/api, and content of src/api/algolia.ts.",
-      "found": "Same mislocation — src/api holds service/client modules, not the file-based route handlers, which are under src/pages/api. This will cause api-doc-generator to label the wrong directory as the 'API routes' domain group and likely miss the actual route handlers, but since this only affects page grouping/labeling within generated reference docs (not a hard pass/fail gate), the impact is cosmetic rather than blocking.",
-      "remedy": "Group Next.js API routes from src/pages/api, and list src/api separately as internal service modules."
-    },
-    {
-      "agent": "spike-agent",
-      "severity": "advisory",
-      "claim": "Derived ARTIFACT QUALITY BAR list: \"HTTP 429 confirms an endpoint exists; HTTP 404 means the path does not exist on that host. Capture Retry-After, Content-Type, and X-* headers with curl -s -i.\"",
-      "checked": "Diffed the derived ARTIFACT QUALITY BAR bullet list against the canonical one line-by-line.",
-      "found": "Canonical includes an explicit fallback step between the 404 rule and the header-capture rule: \"Try the host from API documentation first; if 404 is returned on all paths, try alternative host variants (e.g. …) — Capture response headers…\". The derived brief drops this host-retry instruction entirely, going straight from the 404-exclusion rule to header capture. A spike-agent following only the derived text will, per its own retained rule (\"HTTP 404 means the path does not exist on this host — exclude from endpoint list\"), mark a vendor endpoint as nonexistent after one host fails 404 across the board, instead of trying alternate host variants (e.g. a sandbox vs. production subdomain for Stripe/Algolia/Contentstack) as canonical instructs. This narrows discovery thoroughness for exactly the kind of vendor-API probing this codeline's spike-agent brief calls out (Contentstack, Algolia, Stripe, Uniform).",
-      "remedy": "Restore the dropped instruction, e.g.: \"Try the host from API documentation first; if 404 is returned on all paths, try alternative host variants (e.g. a sandbox/regional subdomain) before concluding the endpoint does not exist.\""
+      "claim": "src/hooks/useContent.ts (the hook 147+ components use to read Contentstack data)",
+      "checked": "grep -rl for imports of hooks/useContent and useContent( calls across src/**/*.{ts,tsx}, node_modules excluded.",
+      "found": "Actual usage is 123 files importing from \"hooks/useContent\" (131 if counting any file merely mentioning the word), not '147+' — the figure appears inflated and sits inside the same fabricated passage as the blocking finding above.",
+      "remedy": "Drop the specific count or replace it with a verified figure from an actual grep/codegraph query."
     }
   ]
 }

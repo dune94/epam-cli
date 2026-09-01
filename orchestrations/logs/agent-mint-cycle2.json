@@ -1,14 +1,14 @@
 {
   "minted": [
     {
-      "name": "checkout-forms-detective",
-      "kind": "investigator",
-      "codeline": "gotransit",
-      "rationale": "AMSD-1919's fix hinges on knowing that EMAIL_REGEX/EMAIL_INPUT_MAX_LENGTH actually resolve from the @metrolinx/cx-shared package rather than the look-alike local src/constants/common.ts, a distinction the previously rejected roster got backwards and that the checkout-validation-engineer implementer needs verified before touching the confirmEmail validate rule.",
+      "name": "checkout-payments-fixer",
+      "kind": "implementer",
+      "codeline": "",
+      "rationale": "AMSD-1919 requires a source-code fix to the exact case-sensitive equality check confirmed at CheckoutForm.tsx:306, and this roster currently has no implementer able to write that change since checkout-flow-detective is read-only by design.",
       "surfaces": [
         "profiles.json",
         "kb",
-        "project-investigators",
+        "project-roles",
         "project-profiles"
       ]
     }
@@ -16,10 +16,10 @@
   "rejected": [],
   "unchanged": [],
   "projectRoles": [
-    "checkout-validation-engineer"
+    "checkout-payments-fixer"
   ],
   "projectInvestigators": [
-    "checkout-forms-detective"
+    "checkout-flow-detective"
   ],
   "proposed": 1,
   "rejectedAcrossAttempts": [],

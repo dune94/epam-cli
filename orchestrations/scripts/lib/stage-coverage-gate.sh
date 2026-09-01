@@ -173,7 +173,23 @@ require_all_stage_coverage() {
         return 0
     fi
     if [ -z "$_stages" ]; then
-        echo "[coverage-gate] no stage coverage could be measured — refusing to start a pipeline whose coverage is unknown. Unmeasured is not covered." >&2
+        echo "[coverage-gate] no stage coverage could be measured." >&2
+        # THE BLOCKER DECIDES THIS TOO, NOT JUST THE PER-STAGE SHORTFALLS.
+        #
+        # This refused outright, without ever reading the policy — so a project that has declared
+        # blocker:false, meaning REPORT the shortfalls and let the run proceed, was still stopped
+        # dead the moment its report went stale. Turning the gate off did not turn it off, which
+        # is not a decision this file gets to make on the operator's behalf.
+        #
+        # blocker:true still refuses: there, unmeasured is not covered.
+        local _pol _blk
+        _pol="$("${NODE_BIN:-node}" "$_handler" --policy 2>/dev/null)"
+        _blk="$(printf '%s' "$_pol" | "${NODE_BIN:-node}" -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{process.stdout.write(String(JSON.parse(d).blocker))}catch{process.stdout.write("")}})')"
+        if [ "$_blk" != "true" ]; then
+            echo "[coverage-gate] the blocker is OFF for this project — the shortfall is REPORTED and the run PROCEEDS." >&2
+            return 0
+        fi
+        echo "[coverage-gate] refusing to start a pipeline whose coverage is unknown. Unmeasured is not covered." >&2
         return 1
     fi
     for _stage in $(printf '%s\n' "$_stages" | awk '{print $1}'); do

@@ -1,0 +1,28 @@
+{
+  "codelines": [
+    {
+      "codeline": "gotransit",
+      "state": "in_scope",
+      "evidence": "Opened src/components/pages/CheckoutPage/CheckoutForm.tsx and found the confirmEmail field's react-hook-form `validate` rule at line 305-309: `validate: (value: string) => { if (email && value && value !== email) { return t(\"TRM774\"); } }`. This is a case-sensitive string comparison (`!==`) between the watched `email` value (line 126-128) and the confirmEmail input value, producing the TRM774 mismatch error message even when the two emails differ only by letter casing — matching the ticket's exact symptom. TRM774 is the dictionary term linked from one of the ticket's attached documents. Also opened src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx which already contains a test suite exercising the email/confirmEmail fields (e.g. 'should trigger validation error on blur only when confirmEmail field is not empty' at line 248, using getEmail/getConfirmEmail helpers), confirming this is the right test surface for a fix + regression test. Also opened CheckoutFormProvider.tsx which defines the default form values `email`/`confirmEmail` (lines 24-26, 52-53) but contains no comparison logic itself.",
+      "surfaces": [
+        "src/components/pages/CheckoutPage"
+      ],
+      "filesRead": [
+        "src/components/pages/CheckoutPage/CheckoutForm.tsx",
+        "src/components/pages/CheckoutPage/CheckoutFormProvider.tsx",
+        "src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx"
+      ],
+      "evidenceGap": false
+    }
+  ],
+  "recommendedInvestigators": [],
+  "recommendedWriters": [
+    {
+      "codeline": "gotransit",
+      "focus": "Make the confirmEmail validate rule in CheckoutForm.tsx perform a case-insensitive comparison against the email field, and extend/add a test in CheckoutForm.spec.tsx covering mixed-case matching emails (e.g. uppercase in one field, lowercase in the other) to prove no mismatch error is shown, alongside the existing genuinely-different-email mismatch case.",
+      "why": "The exact case-sensitive comparison (`value !== email`) causing the reported bug was located and read at CheckoutForm.tsx's confirmEmail validate rule, and an existing test file with matching helpers/fixtures for this form is already in place to extend."
+    }
+  ],
+  "violations": [],
+  "ran": true
+}

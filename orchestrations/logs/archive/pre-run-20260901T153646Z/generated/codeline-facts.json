@@ -1,0 +1,25 @@
+{
+  "_what": "What each codeline IS and what an agent working inside it needs to know that the source does not say. Produced by the codeline-discovery agent during THIS run and rewritten every run — never accumulated, so nothing here is older than the run that wrote it. The engine splits this per codeline into each worktree's .epam/.",
+  "_shape": "Codeline names are TOP-LEVEL keys, because the engine extracts one with jq '.[$cl]'. Nesting them under another key parses fine and yields nothing for every codeline.",
+  "gotransit": {
+    "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
+    "facts": [
+      {
+        "text": "Tests run via `jest` (npm script `test`).",
+        "source": "package.json scripts.test: \"jest\""
+      },
+      {
+        "text": "A matching spec file already exists for this component at src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx; a case-insensitivity fix should be covered there.",
+        "source": "find output: next.gotransit.com/src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx"
+      },
+      {
+        "text": "A pre-commit hook (husky) runs `npx lint-staged` and also rejects commits unless the current branch name matches ^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$ — the commit is rejected outright on a non-conforming branch name.",
+        "source": ".husky/pre-commit"
+      },
+      {
+        "text": "Lint is run separately via `eslint src/ migration-scripts/ next.config.source.ts postbuild.ts next-sitemap.config.ts --ext .ts,.tsx,.js,.jsx` (npm script `lint`).",
+        "source": "package.json scripts.lint"
+      }
+    ]
+  }
+}

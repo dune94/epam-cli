@@ -1,14 +1,26 @@
 {
   "minted": [
     {
-      "name": "stand-in-engineer",
+      "name": "checkout-payments-engineer",
       "kind": "implementer",
-      "codeline": "stand-in reply for the agent-mint seam, long enough to satisfy the contract's declared minimum so the consumer judges the WIRING rather than the prose",
-      "rationale": "stand-in reply for the agent-mint seam, long enough to satisfy the contract's declared minimum so the consumer judges the WIRING rather than the prose",
+      "codeline": "",
+      "rationale": "AMSD-1919 requires an actual code change to the case-sensitive confirmEmail validate rule in CheckoutForm.tsx, and this checkout-page/payment surface (react-hook-form plus the Stripe Elements wiring in CheckoutPaymentMethodsProvider.tsx) is a distinct implementation domain from the rest of the site.",
       "surfaces": [
         "profiles.json",
         "kb",
         "project-roles",
+        "project-profiles"
+      ]
+    },
+    {
+      "name": "checkout-flow-detective",
+      "kind": "investigator",
+      "codeline": "gotransit",
+      "rationale": "The confirmEmail case-sensitivity bug spans a provider/consumer split between CheckoutFormProvider.tsx and CheckoutForm.tsx, so the implementer needs a dedicated reader of this exact directory's real files and test layout rather than the two nonexistent paths cited in the prior attempt.",
+      "surfaces": [
+        "profiles.json",
+        "kb",
+        "project-investigators",
         "project-profiles"
       ]
     }
@@ -16,11 +28,22 @@
   "rejected": [],
   "unchanged": [],
   "projectRoles": [
-    "stand-in-engineer"
+    "checkout-payments-engineer"
   ],
-  "projectInvestigators": [],
-  "proposed": 1,
-  "rejectedAcrossAttempts": [],
-  "attempts": 1,
+  "projectInvestigators": [
+    "checkout-flow-detective"
+  ],
+  "rejectedAcrossAttempts": [
+    {
+      "name": "checkout-payments-engineer",
+      "reason": "brief names 1 path(s) that do not exist in any codeline: utils/ecommerce/checkout/"
+    },
+    {
+      "name": "checkout-flow-detective",
+      "reason": "brief names 2 path(s) that do not exist in codeline 'gotransit': interface/ecommerce/cart.ts, interface/contentstack.ts"
+    }
+  ],
+  "proposed": 4,
+  "attempts": 2,
   "protectedRoles": 21
 }

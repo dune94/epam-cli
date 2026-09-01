@@ -7,6 +7,13 @@ _scg_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/stage-coverage-gate.
 # shellcheck source=/dev/null
 # THE WHOLE MAP, BEFORE ANY MONEY MOVES. A paid launcher measures EVERY stage against the project's
 # threshold here, and only then declares the run gated — which is what turns on the per-stage gates
+# THE PROJECT MUST BE KNOWN BEFORE THE GATE READS ITS POLICY.
+#
+# The coverage gate resolves thresholdPercent and blocker from EPAM_PROJECT_CONFIG_DIR, and this
+# launcher exported it 128 lines BELOW the gate call. So pre-flight always read the repository
+# default instead of the project's own declaration: metrolinx declaring blocker:false was ignored,
+# and the run was refused by a policy nobody chose. Resolved here, re-exported below unchanged.
+export EPAM_PROJECT_CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../projects/metrolinx"
 # for the rest of the run. Failing here costs nothing; failing mid-run costs everything spent so far.
 [ -f "$_scg_lib" ] && . "$_scg_lib" && require_all_stage_coverage || exit 1
 

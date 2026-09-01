@@ -111,3 +111,62 @@ EOF
     fi
     return 0
 }
+
+# kb_delete_project_kb [project-config-dir] — THE LAUNCHING PROJECT'S KB, DELETED.
+#
+# The KB is per-run scratch: written freely DURING a run, never surviving one. Only half of that
+# was enforced — kb_restore_canonical resets the ENGINE KB and truncates the engine store, and
+# nothing at all touched the project's own. So projects/metrolinx/KB.md (16 Aug) and
+# projects/metrolinx/kb/*.jsonl (30 Aug) reached the 2026-09-01 run for AMSD-1919 carrying August's
+# conclusions about AMSD-2041 — a different, closed ticket. kb-store.js reads exactly this path.
+#
+# DELETED, not truncated: kb-store.js recreates its directory on first write, so nothing needs an
+# empty file left behind. Residue is an ERROR — announcing a clean start while carrying the last
+# run's conclusions is the failure this file exists to prevent.
+kb_delete_project_kb() {
+    local _proj="${1:-${EPAM_PROJECT_CONFIG_DIR:-}}"
+    if [ -z "$_proj" ] || [ ! -d "$_proj" ]; then
+        if command -v info >/dev/null 2>&1; then
+            info "No project selected — no project KB to delete"
+        else
+            echo "INFO: no project selected — nothing to delete" >&2
+        fi
+        return 0
+    fi
+
+    local _removed=0
+    if [ -f "$_proj/KB.md" ]; then
+        rm -f "$_proj/KB.md" 2>/dev/null || true
+        _removed=$((_removed + 1))
+    fi
+    if [ -d "$_proj/kb" ]; then
+        local _f
+        while IFS= read -r _f; do
+            [ -n "$_f" ] || continue
+            rm -f "$_f" 2>/dev/null || true
+            _removed=$((_removed + 1))
+        done <<EOF
+$(find "$_proj/kb" -maxdepth 1 -type f 2>/dev/null)
+EOF
+    fi
+
+    # WHAT IS STILL THERE DECIDES THE VERDICT, not what was attempted.
+    local _left=0
+    [ -f "$_proj/KB.md" ] && _left=$((_left + 1))
+    if [ -d "$_proj/kb" ]; then
+        _left=$((_left + $(find "$_proj/kb" -maxdepth 1 -type f 2>/dev/null | wc -l)))
+    fi
+    if [ "$_left" -gt 0 ]; then
+        if command -v fail_contamination >/dev/null 2>&1; then
+            fail_contamination "$_left project KB file(s) could NOT be deleted in $_proj — this run would inherit the previous run's conclusions"
+        else
+            echo "ERROR: $_left project KB file(s) could NOT be deleted in $_proj" >&2
+        fi
+        return 1
+    fi
+
+    if command -v success >/dev/null 2>&1; then
+        success "Deleted $_removed project KB file(s) in $_proj — this run starts with no KB at all"
+    fi
+    return 0
+}

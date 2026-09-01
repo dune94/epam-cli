@@ -9386,7 +9386,25 @@ function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
         return reject(new Error(`prompt runner exited with code ${code}`
           + (_said ? `: ${_said.slice(-1200)}` : " (the runner wrote nothing at all)")));
       }
-      resolve(output);
+      // A SUCCESSFUL REPLY IS STDOUT. STDERR IS THE RUNNER TALKING, NOT THE MODEL.
+      //
+      // This resolved `output` — stdout AND stderr — so every line the child logged to stderr
+      // became part of what the pipeline believed the agent said. .env carries
+      // EPAM_ORCHESTRATION_PROVIDER=openrouter from the openrouter stack; under
+      // EPAM_PROVIDER_SET=claude that is unroutable, so llm-handler.sh:62 warned correctly to
+      // stderr on EVERY call, and those two lines were welded onto EVERY reply of the run.
+      // Measured 2026-09-01: 4 of 4 generated metrolinx prompts carried them in the prompt BODY,
+      // cached and marked reviewed:true. mock3, cached before the stray variable existed, has 0 of
+      // 39. Worse than the noise is the parse: a JSON verdict with log lines appended does not
+      // parse, and "no parseable verdict" is a failure this pipeline has died on more than once.
+      //
+      // The other paths are UNCHANGED and deliberately so. The failure, timeout and salvage
+      // branches above still carry both streams: on 2026-07-23 the code-graph-detective emitted
+      // perfect fix-site JSON, exited non-zero, and this function discarded all of it. The reply of
+      // a failing call is evidence, and stderr is the useful half of it. The log file written above
+      // also keeps both, so nothing is lost for diagnosis — only the value handed to the caller as
+      // "what the model answered" is narrowed to what the model actually wrote.
+      resolve(stdout.trim());
     });
     proc.unref(); // don't keep Node alive waiting for the child
     proc.stdin?.on('error', () => { /* suppress EPIPE when process is killed before stdin flush */ });

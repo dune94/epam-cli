@@ -194,6 +194,70 @@
       "role": "context-purveyor",
       "message": "CPA gate BLOCKED — pipeline halted",
       "timestamp": "2026-09-01T06:00:33-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK-HW-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on MOCK-HW-1 (Hello world greeting should say hello dolly)",
+      "timestamp": "2026-09-01T06:03:16-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK-HW-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK-HW-1 — tracing the causal fix site",
+      "timestamp": "2026-09-01T06:03:18-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK-HW-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec updated MOCK-HW-1 acChanged=no splitCount=0",
+      "timestamp": "2026-09-01T06:04:09-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK-HW-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit started on MOCK-HW-1 (Hello world greeting should say hello dolly)",
+      "timestamp": "2026-09-01T06:04:09-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK-HW-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit updated MOCK-HW-1 acChanged=no splitCount=0",
+      "timestamp": "2026-09-01T06:04:21-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "",
+      "lane": "main",
+      "role": "spec-coordinator",
+      "message": "[core] specification completed run=20260901T100123Z stories=1",
+      "timestamp": "2026-09-01T06:05:04-04:00"
+    },
+    {
+      "type": "specification_pass",
+      "story": "",
+      "lane": "main",
+      "role": "spec-coordinator",
+      "message": "Specification agents completed (OpenSpec/Speckit)",
+      "timestamp": "2026-09-01T06:05:04-04:00"
+    },
+    {
+      "type": "cpa_block",
+      "story": "",
+      "lane": "main",
+      "role": "context-purveyor",
+      "message": "CPA gate BLOCKED — pipeline halted",
+      "timestamp": "2026-09-01T06:05:19-04:00"
     }
   ],
   "stories": {

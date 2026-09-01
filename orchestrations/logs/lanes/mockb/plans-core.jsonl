@@ -454,3 +454,12 @@
 {"ts":"2026-09-01T10:00:01Z","agent":"spec-coordinator","story":"phase:core","model":"z-ai/glm-5.2","phase":"core","plan":"{}"}
 {"ts":"2026-09-01T10:00:10Z","agent":"cpa-inference","story":"","model":"claude-sonnet-5","phase":"core","plan":"{\"verdict\":\"pass\",\"issues\":[],\"reason\":\"All estimates positive, effort/gate/confidence within valid ranges.\"}"}
 {"ts":"2026-09-01T10:00:25Z","agent":"cpa-inference","story":"","model":"claude-sonnet-5","phase":"core","plan":"{}"}
+{"ts":"2026-09-01T10:03:11Z","agent":"spec-coordinator","story":"phase:core","model":"z-ai/glm-5.2","phase":"core","plan":"<SPEC_ASSIGNMENTS>\n{\n  \"assignments\": [\n    {\n      \"storyId\": \"MOCK-HW-1\",\n      \"agents\": []\n    }\n  ]\n}\n</SPEC_ASSIGNMENTS>"}
+{"ts":"2026-09-01T10:03:23Z","agent":"guard-vocabulary","story":"MOCK-HW-1","model":"z-ai/glm-5.2","phase":"core","plan":"<GUARD_VOCABULARY>\n{\n  \"blacklist\": [],\n  \"whitelist\": []\n}\n</GUARD_VOCABULARY>"}
+{"ts":"2026-09-01T10:03:41Z","agent":"spec-agent","story":"MOCK-HW-1","model":"z-ai/glm-5.2","phase":"core","plan":"<SPEC_AGENT>\n{\n  \"storyId\": \"MOCK-HW-1\",\n  \"agent\": \"stand-in-engineer\",\n  \"acceptanceCriteria\": []\n}\n</SPEC_AGENT>"}
+{"ts":"2026-09-01T10:03:51Z","agent":"prd-change-reviewer","story":"MOCK-HW-1","model":"claude-haiku-4-5-20251001","phase":"core","plan":"{\"verdict\":\"pass\",\"issues\":[],\"reason\":\"All VCs match description, ACs are measurable, title is specific.\"}"}
+{"ts":"2026-09-01T10:04:14Z","agent":"SPEC_AGENT","story":"MOCK-HW-1","model":"z-ai/glm-5.1","phase":"core","plan":"{}"}
+{"ts":"2026-09-01T10:04:36Z","agent":"spec-coordinator","story":"phase:core","model":"z-ai/glm-5.2","phase":"core","plan":"{}"}
+{"ts":"2026-09-01T10:04:46Z","agent":"spec-coordinator","story":"phase:core","model":"z-ai/glm-5.2","phase":"core","plan":"{}"}
+{"ts":"2026-09-01T10:05:08Z","agent":"cpa-inference","story":"","model":"claude-sonnet-5","phase":"core","plan":"{\"verdict\":\"pass\",\"issues\":[],\"reason\":\"All estimates positive, effort/gate/confidence within valid ranges.\"}"}
+{"ts":"2026-09-01T10:05:16Z","agent":"cpa-inference","story":"","model":"claude-sonnet-5","phase":"core","plan":"{}"}

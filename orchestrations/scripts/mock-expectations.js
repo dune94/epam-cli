@@ -423,16 +423,49 @@ function cassetteReply(seam, story) {
         if (story && !plain.includes(story)) continue;
       let doc;
       try { doc = JSON.parse(fs.readFileSync(path.join(run, f), 'utf8')); } catch { continue; }
-      // Turns are indexed; the last one carries the answer the pipeline consumed.
-      const turns = Object.keys(doc).filter((k) => /^\d+$/.test(k)).sort((a, b) => a - b);
-      for (const k of turns.reverse()) {
-        const text = doc[k] && (doc[k].text || doc[k].content);
-        if (typeof text === 'string' && text.trim()) {
-          let parsed = null;
-          try { parsed = JSON.parse(text.trim()); } catch { /* prose is still a real reply */ }
-          return { body: text.trim(), file: `cassette:${path.basename(run)}/${f}`, parsed: !!parsed };
-        }
+
+      // A CASSETTE IS A SESSION, NOT A SENTENCE.
+      //
+      // This walked the turns in REVERSE and returned the first one carrying text, on the reasoning
+      // that "the last one carries the answer the pipeline consumed". True for a seam that answers
+      // by TALKING; false, and quietly destructive, for one that answers by ACTING.
+      // roster-specialiser writes its roster with bash: its recording is a 178-turn session holding
+      // 216 bash references — the reads, the batched persona dumps, the write itself — followed by
+      // a sentence describing what it had done. Serving that sentence left no file behind, the
+      // contract refused three attempts running, and the run halted at mint with "the agent wrote
+      // no roster", naming a destination three stages downstream of the cause.
+      //
+      // The Langfuse source already learned this and returns whole sessions as { turns, multi }.
+      // The registration path is generic and has always been able to replay them — one expectation
+      // per turn, each consumed once, in the order it really happened. Only this reader was
+      // throwing the session away, which made the richest recordings in the repository the ones
+      // least able to be replayed.
+      const idx = Array.isArray(doc)
+        ? doc.map((_, i) => i)
+        : Object.keys(doc).filter((k) => /^\d+$/.test(k)).sort((a, b) => a - b);
+      const seq = [];
+      for (const k of idx) {
+        const t = doc[k];
+        if (!t) continue;
+        const text = typeof t === 'string' ? t : (t.text || t.content || '');
+        const calls = (t && Array.isArray(t.toolCalls)) ? t.toolCalls : [];
+        // A TURN THAT ONLY ACTED IS STILL A TURN. Requiring text here is what dropped the write.
+        if (!String(text || '').trim() && !calls.length) continue;
+        let parsed = null;
+        try { parsed = JSON.parse(String(text).trim()); } catch { /* prose is a real reply too */ }
+        seq.push({ body: String(text || '').trim(), parsed: !!parsed, calls });
       }
+      if (!seq.length) continue;
+
+      const nCalls = seq.reduce((n, t) => n + t.calls.length, 0);
+      if (seq.length > 1) {
+        const last = seq[seq.length - 1];
+        return { turns: seq, multi: true,
+          file: `cassette:${path.basename(run)}/${f} (${seq.length} turns, ${nCalls} tool call(s))`,
+          body: last.body, parsed: last.parsed, calls: [] };
+      }
+      return { body: seq[0].body, file: `cassette:${path.basename(run)}/${f}`,
+        parsed: seq[0].parsed, calls: seq[0].calls };
     }
   }
   return null;
@@ -1204,7 +1237,32 @@ function endsInToolCall(cap, seam) {
       unusable.push(`${seam}  <- ${cap.file} (ends in prose; this seam is answered by a tool call)`);
       cap = null;
     }
-    if (cap && cap.parsed === false) {
+    // BUT A SEAM THAT DELIVERS BY ACTING IS NOT JUDGED ON ITS CLOSING SENTENCE.
+    //
+    // "parsed" asks whether the reply is JSON its consumer can read. That is the right question for
+    // a seam that answers by talking, and the wrong one for a seam whose delivery IS a tool call:
+    // roster-specialiser writes its roster with bash and then says, in prose, what it did. Judging
+    // the session on that sentence discarded a 178-turn recording carrying the write itself — the
+    // one capture in the repository that could satisfy the seam — and handed the run a stand-in
+    // that leaves no file behind. The check above has already confirmed the required call is
+    // present; nothing about the narration afterwards changes that.
+    // A SESSION THAT ACTED IS NOT JUDGED ON ITS CLOSING SENTENCE.
+    //
+    // "parsed" asks whether the reply is JSON its consumer can read — the right question for a seam
+    // that answers by TALKING, the wrong one for a seam that answers by DOING. roster-specialiser
+    // writes its roster with bash and then says in prose what it did. It declares no tag-to-tool
+    // contract, so the named-tool test above cannot speak for it, and the prose test discarded a
+    // 59-turn recording carrying the write itself — the only capture that could satisfy the seam —
+    // in favour of a stand-in that performs no action at all and therefore CANNOT satisfy it.
+    //
+    // Scope is deliberate. A single-turn prose capture is still set aside, and so is a seam whose
+    // checker reads a named tool call that the capture never makes (spec-agent, spec-coordinator):
+    // those are handled above and reach here already discarded. What survives is a recorded session
+    // that really did the work, replayed turn by turn — which is what the rehearsal is for.
+    const _acted = !!(cap && cap.multi && Array.isArray(cap.turns)
+      && cap.turns.some((t) => t && Array.isArray(t.calls) && t.calls.length));
+    if (cap && cap.parsed === false && !_acted
+        && !(standCallRequired(seam) && endsInToolCall(cap, seam))) {
       unusable.push(`${seam}  <- ${cap.file} (prose — never satisfied its contract)`);
       cap = null;
     }
@@ -1452,7 +1510,12 @@ function endsInToolCall(cap, seam) {
           body: proto.text(cap ? cap.body : (standTagged || JSON.stringify(stood))) },
       });
     }
-    if (cap) covered.push(`${seam}  <- ${cap.file}${cap.parsed ? '' : ' (prose)'}`);
+    // "(prose)" DESCRIBES THE LAST SENTENCE, NOT THE SESSION. A replayed session that made tool
+    // calls delivered by acting; labelling it prose says the opposite of what will happen, and the
+    // file string already carries its turn and call counts.
+    const _actedCap = !!(cap && cap.multi && Array.isArray(cap.turns)
+      && cap.turns.some((t) => t && Array.isArray(t.calls) && t.calls.length));
+    if (cap) covered.push(`${seam}  <- ${cap.file}${(cap.parsed || _actedCap) ? '' : ' (prose)'}`);
       else stoodIn.push(`${seam}  <- contract stand-in (${Object.keys(stood).join(', ') || 'artefact'})`);
   }
 
@@ -1478,8 +1541,51 @@ function endsInToolCall(cap, seam) {
       body: anthropicSse('{}') },
   });
 
+  // EVERY BUCKET IS PRINTED, AND THEY MUST ADD UP.
+  //
+  // This reported two of six. A rehearsal of 40 seams said "covered 9" and "UNCOVERED 0" — both
+  // true, and together they read as complete coverage while 31 seams answered with a contract
+  // stand-in: a synthetic reply carrying the declared fields and nothing else. Survivable for most
+  // seams. Not for one that DELIVERS BY WRITING A FILE — roster-specialiser writes its roster with
+  // bash, a stand-in leaves no file behind, the contract refuses it three attempts running, and the
+  // run halts at mint with "the agent wrote no roster", naming a destination rather than the cause.
+  // Three stages downstream of a decision this summary made in silence.
+  //
+  // A count whose method is not stated implies completeness it does not have.
+  const bucket = (label, list, note) => {
+    console.log(`\n${label} ${list.length}${note ? ` — ${note}` : ''}${list.length ? ':' : ''}`);
+    list.slice(0, 20).forEach((x) => console.log(`  ${x}`));
+    if (list.length > 20) console.log(`  ... and ${list.length - 20} more`);
+  };
+
   console.log(`covered ${covered.length} seam(s) from real captures:`);
   covered.forEach((c) => console.log(`  ${c}`));
+
+  bucket('STAND-IN', stoodIn,
+    'INVENTED, not recorded: the declared fields and nothing else. A seam that delivers by writing '
+    + 'a file cannot be satisfied this way');
+  bucket('UNUSABLE', unusable,
+    'a real capture EXISTS but could not be served; this is a recording to re-take, not one to hunt for');
+  bucket('STALE', stale, 'entities in the capture were refreshed to match this run');
+  bucket('SHARED', shared,
+    'share a matcher with an earlier seam, so one answer serves both — a terminal outcome, not an annotation');
+  bucket('PER-STORY', perStory, 'bound to a specific story of this run');
+  bucket('FOREIGN', foreign, 'matched a seam this project does not declare');
   console.log(`\nUNCOVERED ${uncovered.length} — these answer {} and will fail their contract:`);
   uncovered.slice(0, 20).forEach((u) => console.log(`  ${u}`));
+
+  // THE BUCKETS MUST ACCOUNT FOR EVERY DECLARED SEAM. covered/stood-in/uncovered are the three
+  // terminal outcomes of the loop above; the rest annotate them. If they stop adding up, a seam is
+  // being decided somewhere nobody prints — which is the defect this block exists to end.
+  // FOUR TERMINAL OUTCOMES, not three: a seam that shares a matcher with an earlier one leaves the
+  // loop right there, having been neither recorded nor stood in for. Counting only the first three
+  // is what made this line report 37 of 40 the first time it ran — the accounting caught its own
+  // omission, which is the whole reason it prints a total rather than a list.
+  const accounted = covered.length + stoodIn.length + uncovered.length + shared.length;
+  console.log(`\n${accounted} of ${all.length} declared seam(s) accounted for`
+    + ` (${covered.length} recorded, ${stoodIn.length} stand-in, ${shared.length} shared,`
+    + ` ${uncovered.length} uncovered)`);
+  if (accounted !== all.length) {
+    console.log(`  WARNING: ${all.length - accounted} seam(s) reached no printed bucket`);
+  }
 })().catch((e) => { console.error(e.message); process.exit(1); });

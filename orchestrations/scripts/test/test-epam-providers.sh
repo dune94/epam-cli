@@ -371,11 +371,9 @@ RESULTEOF
 MOCKEOF
 chmod +x "$MOCK_EPAM_DIR/epam"
 
-    <<< "implement slugify" \
-    2>/dev/null \
-    EPAM_CLI="$MOCK_EPAM_DIR/epam" \
-    ORCH_JSON_RESULT="$AIRUN_ORCH_RESULT" \
-    ) || true
+# (An orphaned continuation stood here: a `<<< ... ) || true` tail whose opening command had been
+#  deleted, so the file has had a syntax error at this point and has never run to completion. That
+#  is why it measured 0% — not because nothing exercised it, but because bash refused it outright.)
 
 # Source the script's run_provider_once in a subshell with mock epam
 airun_result=$(bash -c "
@@ -435,8 +433,24 @@ _ext_skip_result=$(bash -c '
     set -euo pipefail
     SCRIPT="'"$SCRIPTS_DIR"'/claude.sh"
     # Extract the function
-    awk "/^run_external_verification\(\)/{found=1} found{print; if(/^\}$/ && found>1){exit} found++}" "$SCRIPT" > /tmp/_rev.sh
-    source /tmp/_rev.sh
+    # THE REAL FUNCTION, FROM THE REAL FILE.
+    #
+    # This used to awk the function body out of claude.sh into /tmp and source the fragment,
+    # with hand-written stubs standing in for log/success/warning/error. Two things were
+    # wrong with it. The extraction stops at the first line that is exactly "}", so it can
+    # truncate the body; and a fragment plus four stubs is not the code the pipeline runs —
+    # test 12 wrote no stubs at all, so the first log() call killed it under set -e and the
+    # assertion reported an empty result for a function that was never entered.
+    #
+    # claude.sh returns early when sourced, so the whole file can be loaded: the real
+    # function, with the real helpers it calls.
+    set +e
+    source "'"$SCRIPTS_DIR"'/claude.sh" >/dev/null 2>&1
+    # AND set +e AGAIN, AFTER. claude.sh runs `set -euo pipefail` at file scope, so sourcing it
+    # re-arms -e regardless of what was set before. run_external_verification returning 1 on a
+    # failing testCommand — the case test 14 exists to check — then killed the subshell outright,
+    # and the assertion saw an empty result rather than the failure it was looking for.
+    set +e
     VERIFICATION_FAILURE=""
     # Use a temp dir that has no package.json
     TMP_PROJ=$(mktemp -d)
@@ -464,14 +478,24 @@ echo "13. run_external_verification: passes when testCommand exits 0"
 
 _ext_pass_result=$(bash -c '
     SCRIPT="'"$SCRIPTS_DIR"'/claude.sh"
-    awk "/^run_external_verification\(\)/{found=1} found{print; if(/^\}$/ && found>1){exit} found++}" "$SCRIPT" > /tmp/_rev.sh
-
-    # Minimal stubs for sourcing the function
-    log() { :; }
-    success() { :; }
-    warning() { :; }
-    error() { :; }
-    source /tmp/_rev.sh
+    # THE REAL FUNCTION, FROM THE REAL FILE.
+    #
+    # This used to awk the function body out of claude.sh into /tmp and source the fragment,
+    # with hand-written stubs standing in for log/success/warning/error. Two things were
+    # wrong with it. The extraction stops at the first line that is exactly "}", so it can
+    # truncate the body; and a fragment plus four stubs is not the code the pipeline runs —
+    # test 12 wrote no stubs at all, so the first log() call killed it under set -e and the
+    # assertion reported an empty result for a function that was never entered.
+    #
+    # claude.sh returns early when sourced, so the whole file can be loaded: the real
+    # function, with the real helpers it calls.
+    set +e
+    source "'"$SCRIPTS_DIR"'/claude.sh" >/dev/null 2>&1
+    # AND set +e AGAIN, AFTER. claude.sh runs `set -euo pipefail` at file scope, so sourcing it
+    # re-arms -e regardless of what was set before. run_external_verification returning 1 on a
+    # failing testCommand — the case test 14 exists to check — then killed the subshell outright,
+    # and the assertion saw an empty result rather than the failure it was looking for.
+    set +e
 
     VERIFICATION_FAILURE=""
     TMP_PROJ=$(mktemp -d)
@@ -499,13 +523,24 @@ echo "14. run_external_verification: sets VERIFICATION_FAILURE on test failure"
 
 _ext_fail_result=$(bash -c '
     SCRIPT="'"$SCRIPTS_DIR"'/claude.sh"
-    awk "/^run_external_verification\(\)/{found=1} found{print; if(/^\}$/ && found>1){exit} found++}" "$SCRIPT" > /tmp/_rev.sh
-
-    log() { :; }
-    success() { :; }
-    warning() { :; }
-    error() { :; }
-    source /tmp/_rev.sh
+    # THE REAL FUNCTION, FROM THE REAL FILE.
+    #
+    # This used to awk the function body out of claude.sh into /tmp and source the fragment,
+    # with hand-written stubs standing in for log/success/warning/error. Two things were
+    # wrong with it. The extraction stops at the first line that is exactly "}", so it can
+    # truncate the body; and a fragment plus four stubs is not the code the pipeline runs —
+    # test 12 wrote no stubs at all, so the first log() call killed it under set -e and the
+    # assertion reported an empty result for a function that was never entered.
+    #
+    # claude.sh returns early when sourced, so the whole file can be loaded: the real
+    # function, with the real helpers it calls.
+    set +e
+    source "'"$SCRIPTS_DIR"'/claude.sh" >/dev/null 2>&1
+    # AND set +e AGAIN, AFTER. claude.sh runs `set -euo pipefail` at file scope, so sourcing it
+    # re-arms -e regardless of what was set before. run_external_verification returning 1 on a
+    # failing testCommand — the case test 14 exists to check — then killed the subshell outright,
+    # and the assertion saw an empty result rather than the failure it was looking for.
+    set +e
 
     VERIFICATION_FAILURE=""
     TMP_PROJ=$(mktemp -d)
@@ -514,8 +549,11 @@ _ext_fail_result=$(bash -c '
     echo '"'"'{"stories":[{"id":"T-003","technicalNotes":{"testCommand":"echo FAIL_OUTPUT && exit 1"}}]}'"'"' > "$PRD"
     PRD_FILE="$PRD"
     MAIN_PRD_FILE=""
-    run_external_verification "T-003" /dev/null || true
-    echo "rc_is_nonzero:$([[ $? -ne 0 ]] && echo yes || echo no)"
+    # NO APOSTROPHES IN HERE: this payload is single-quoted, so one would close the quoting.
+    # `cmd || true` then $? reads the status of true, never the status of the command.
+    run_external_verification "T-003" /dev/null
+    _rev_rc=$?
+    echo "rc_is_nonzero:$([[ $_rev_rc -ne 0 ]] && echo yes || echo no)"
     echo "has_failure_section:$([[ "${VERIFICATION_FAILURE}" == *"Verification Failure"* ]] && echo yes || echo no)"
     echo "has_output:$([[ "${VERIFICATION_FAILURE}" == *"FAIL_OUTPUT"* ]] && echo yes || echo no)"
     rm -rf "$TMP_PROJ" "$PRD"

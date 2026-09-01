@@ -265,8 +265,11 @@ RESJSON
 bash -c '
     SCRIPT="'"$SCRIPTS_DIR"'/claude.sh"
     # Extract append_cost_record (multiline function — stop at closing brace on its own line)
-    awk "/^append_cost_record\(\)/{found=1} found{print; if(/^\}$/ && found>1){exit} found++}" "$SCRIPT" \
-      > /tmp/_acr.sh 2>/dev/null || true
+    # THE REAL FUNCTION, FROM THE REAL FILE — see the note at the verification tests.
+    # The awk extraction stops at the first line that is exactly "}", so it truncated
+    # append_cost_record mid-body and the part that reads the actual cost never loaded.
+    source "'"$SCRIPTS_DIR"'/claude.sh" >/dev/null 2>&1
+    set +e
 
     # Stubs required by append_cost_record
     log()     { :; }
@@ -278,7 +281,6 @@ bash -c '
     AGENT_ID="typescript-engineer"
     AGENT_NAME="typescript-engineer"
 
-    source /tmp/_acr.sh 2>/dev/null || true
 
     COST_OUT="'"$COST_JSONL"'"
     # Redirect cost record output to our temp file
@@ -287,7 +289,6 @@ bash -c '
 
     # If function writes directly to PHASE_COST_FILE, check that env var path
     PHASE_COST_FILE="$COST_OUT"
-    source /tmp/_acr.sh 2>/dev/null || true
     append_cost_record "HW-004" "completed" "2026-06-10T10:00:00-04:00" "2026-06-10T10:01:00-04:00" \
         "/dev/null" "'"$RESULT_JSON"'" 2>/dev/null || true
 ' 2>/dev/null || true
@@ -296,8 +297,11 @@ bash -c '
 COST_JSONL2=$(mktemp /tmp/cost2_XXXXXX.jsonl)
 bash -c '
     SCRIPT="'"$SCRIPTS_DIR"'/claude.sh"
-    awk "/^append_cost_record\(\)/{found=1} found{print; if(/^\}$/ && found>1){exit} found++}" "$SCRIPT" \
-      > /tmp/_acr2.sh 2>/dev/null || true
+    # THE REAL FUNCTION, FROM THE REAL FILE — see the note at the verification tests.
+    # The awk extraction stops at the first line that is exactly "}", so it truncated
+    # append_cost_record mid-body and the part that reads the actual cost never loaded.
+    source "'"$SCRIPTS_DIR"'/claude.sh" >/dev/null 2>&1
+    set +e
 
     log()     { :; }
     success() { :; }
@@ -315,7 +319,6 @@ bash -c '
     INVOKE_MODE="epam-run"
     STORY_PROMPT_TOKENS="0"
 
-    source /tmp/_acr2.sh 2>/dev/null || true
     append_cost_record "HW-004" "completed" "2026-06-10T10:00:00-04:00" "2026-06-10T10:01:00-04:00" \
         "/dev/null" "'"$RESULT_JSON"'" 2>/dev/null || true
 ' 2>/dev/null || true
@@ -375,14 +378,18 @@ chmod +x "$MOCK_EPAM_DIR/epam"
 #  deleted, so the file has had a syntax error at this point and has never run to completion. That
 #  is why it measured 0% — not because nothing exercised it, but because bash refused it outright.)
 
-# Source the script's run_provider_once in a subshell with mock epam
-airun_result=$(bash -c "
-    EPAM_CLI='$MOCK_EPAM_DIR/epam'
-    ORCH_JSON_RESULT='$AIRUN_ORCH_RESULT'
-    export EPAM_CLI ORCH_JSON_RESULT
-    EPAM_CLI='$MOCK_EPAM_DIR/epam' \
-    ORCH_JSON_RESULT='$AIRUN_ORCH_RESULT' \
-" 2>/dev/null) || true
+# INVOKE THE SCRIPT. THE OLD BLOCK INVOKED NOTHING.
+#
+# This built a bash -c string that exported EPAM_CLI and ORCH_JSON_RESULT and then ended on a
+# dangling continuation, so no command ever ran and airun_result was always empty. The comment said
+# it sourced run_provider_once — a function ai-run.sh has not had for some time: the file is now a
+# 19-line shim that execs llm-handler.sh, the single hub, which owns the pino-tolerant extraction
+# this test exists to guard ("Capture to temp file so pino JSON lines on stdout do not corrupt jq
+# parsing", llm-handler.sh:378).
+#
+# Running the shim end to end keeps the original guard pointed at the code that now implements it.
+airun_result=$(EPAM_CLI="$MOCK_EPAM_DIR/epam" ORCH_JSON_RESULT="$AIRUN_ORCH_RESULT" \
+    timeout 120 bash "$AIRUN_SCRIPT" --provider openrouter < "$AIRUN_PROMPT" 2>/dev/null) || true
 
 assert_eq "$airun_result" "slugify implemented" "ai-run openrouter+pino: result text extracted correctly"
 
@@ -573,19 +580,44 @@ echo ""
 # ─────────────────────────────────────────────────────────────────
 echo "15. No unconditional Anthropic calls (static analysis)"
 
-_anthropic_files=$(grep -rl "@anthropic-ai/sdk\|ANTHROPIC_API_KEY\|anthropic_api_key" \
-    "$SCRIPTS_DIR" --include="*.js" --include="*.ts" --include="*.sh" 2>/dev/null \
-    | grep -v "node_modules\|test-epam-providers\|\.env\|sandbox-invoke")
+# A COMMENT IS NOT A CALL.
+#
+# This grepped whole files, comments included, and demanded a guard token somewhere in the same
+# file. lib/runner-settings.sh names ANTHROPIC_API_KEY only in prose explaining why the runner
+# REMOVES it — Claude Code prefers the key over the OAuth credentials on disk, so with it present
+# the subscription never pays, and seven runs billed the wrong account before the credits ran out.
+# The file that fixes that was reported as the violation. Comments are stripped before the scan, so
+# the check reads code.
+_scan_unguarded_anthropic() {
+    local _dir="$1" _f _hits=0
+    for _f in $(grep -rl "@anthropic-ai/sdk\|ANTHROPIC_API_KEY\|anthropic_api_key" \
+            "$_dir" --include="*.js" --include="*.ts" --include="*.sh" 2>/dev/null \
+            | grep -v "node_modules\|test-epam-providers\|\.env\|sandbox-invoke"); do
+        # Strip shell and C-style comments, then ask again.
+        if ! sed -e 's/#.*//' -e 's://.*::' "$_f" 2>/dev/null \
+                | grep -q "@anthropic-ai/sdk\|ANTHROPIC_API_KEY\|anthropic_api_key"; then
+            continue
+        fi
+        if ! grep -q "EPAM_ORCHESTRATION_PROVIDER\|isNonAnthropic\|No ANTHROPIC\|no.*anthropic" "$_f" 2>/dev/null; then
+            echo "  UNGUARDED: $_f" >&2
+            _hits=$((_hits + 1))
+        fi
+    done
+    echo "$_hits"
+}
 
-_unguarded=0
-for _f in $_anthropic_files; do
-    if ! grep -q "EPAM_ORCHESTRATION_PROVIDER\|isNonAnthropic\|No ANTHROPIC\|no.*anthropic" "$_f" 2>/dev/null; then
-        echo "  UNGUARDED: $_f"
-        _unguarded=$((_unguarded + 1))
-    fi
-done
+# POSITIVE CONTROL FIRST. A checker that reports zero is indistinguishable from one that scans
+# nothing, and this one now skips more than it used to.
+_ctl_dir=$(mktemp -d)
+printf '%s\n' '#!/usr/bin/env bash' 'export ANTHROPIC_API_KEY=sk-real' > "$_ctl_dir/offender.sh"
+_ctl=$(_scan_unguarded_anthropic "$_ctl_dir" 2>/dev/null)
+[ "${_ctl:-0}" -ge 1 ] && pass "the Anthropic scan detects a genuine unguarded call" \
+    || fail "the Anthropic scan found nothing in a planted offender — it proves nothing (got: ${_ctl:-0})"
+rm -rf "$_ctl_dir"
 
-[ "$_unguarded" -eq 0 ] && pass "No unconditional Anthropic SDK calls in orchestration scripts" \
+_unguarded=$(_scan_unguarded_anthropic "$SCRIPTS_DIR")
+
+[ "${_unguarded:-0}" -eq 0 ] && pass "No unconditional Anthropic SDK calls in orchestration scripts" \
     || fail "$_unguarded file(s) call Anthropic SDK without non-Anthropic provider guard"
 
 echo ""

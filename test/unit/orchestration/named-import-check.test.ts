@@ -18,7 +18,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -109,35 +109,26 @@ describe('run_named_import_check — REAL execution against the exact live defec
           ],
         }),
       );
-      const fnBody = extractFunctionByLineAnchor('run_named_import_check');
-      const scriptPath = join(dir, 'run.sh');
+      // SOURCED, NOT COPIED. This harness had to declare SCRIPT_DIR itself, and the comment it
+      // carried records what happened when it did not: the check shells to
+      // lib/handlers/named-import-check.py, the path resolved to "/lib/handlers/...", python failed,
+      // and every execution case failed for a reason that had nothing to do with the check. Sourcing
+      // claude.sh supplies SCRIPT_DIR, log and warning from the file itself, so they cannot drift.
       const outLog = join(dir, 'out.log');
-      writeFileSync(
-        scriptPath,
-        [
-          `VERIFICATION_FAILURE=""`,
-          `log() { echo "$1"; }`,
-          `warning() { echo "$1"; }`,
-          `PRD_FILE="${prdFile}"`,
-          // THE CHECK NOW SHELLS TO ITS HANDLER, so the harness must say where handlers live.
-          // The python was extracted to lib/handlers/named-import-check.py and the function
-          // invokes `python3 "$SCRIPT_DIR/lib/handlers/..."`. SCRIPT_DIR was never defined here,
-          // so the path resolved to "/lib/handlers/...", python failed, and every execution case
-          // failed for a reason that had nothing to do with the check being tested.
-          //
-          // Pointed at the REAL scripts directory: stubbing the handler would prove the stub, and
-          // the point of these cases is that they run the actual matcher.
-          `SCRIPT_DIR="${join(REPO_ROOT, 'orchestrations/scripts')}"`,
-          opts.autoFix ? `EPAM_AUTO_FIX_NAMED_IMPORTS="true"` : '',
-          fnBody,
-          `run_named_import_check "${dir}" "${outLog}" "SKY-999"`,
-          `echo "RC=$?"`,
-          `cat "${outLog}" 2>/dev/null || true`,
-        ]
-          .filter(Boolean)
-          .join('\n'),
-      );
-      const output = execFileSync('bash', [scriptPath], { encoding: 'utf8' });
+      const res = spawnSync('bash', ['-c',
+        `. ${JSON.stringify(join(REPO_ROOT, 'orchestrations/scripts/claude.sh'))} >/dev/null 2>&1
+         set +e
+         VERIFICATION_FAILURE=""
+         run_named_import_check "${dir}" "${outLog}" "SKY-999"
+         echo "RC=$?"
+         cat "${outLog}" 2>/dev/null || true`], {
+        encoding: 'utf8', timeout: 180_000, cwd: REPO_ROOT,
+        env: { ...process.env, NODE_BIN: process.execPath, PRD_FILE: prdFile,
+          EPAM_PROJECT_CONFIG_DIR: join(REPO_ROOT, 'orchestrations/projects/mock3'),
+          EPAM_COVERAGE_GATED: '0',
+          ...(opts.autoFix ? { EPAM_AUTO_FIX_NAMED_IMPORTS: 'true' } : {}) },
+      });
+      const output = `${res.stdout ?? ''}${res.stderr ?? ''}`;
       const rc = parseInt(output.match(/RC=(\d+)/)?.[1] ?? '-1', 10);
       const fileContents: Record<string, string> = {};
       for (const relPath of Object.keys(opts.files)) {

@@ -12,7 +12,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -32,11 +32,23 @@ function runBump(storyId: string, events: Array<{ story_id: string; timestamp: s
     if (events.length > 0) {
       writeFileSync(join(dir, 'iteration-exhaustion.jsonl'), events.map(e => JSON.stringify(e)).join('\n') + '\n');
     }
-    const fnBody = extractFunctionBody(claudeSrc, '_iteration_exhaustion_bump');
-    const scriptPath = join(dir, 'run.sh');
-    const envLines = Object.entries(envOverrides).map(([k, v]) => `${k}="${v}"`).join('\n');
-    writeFileSync(scriptPath, `LOG_DIR="${dir}"\n${envLines}\n${fnBody}\n_iteration_exhaustion_bump "${storyId}"\n`);
-    return Number(execFileSync('bash', [scriptPath], { encoding: 'utf8' }).trim());
+    // SOURCED, NOT COPIED. LOG_DIR and the overrides are passed as environment rather than written
+    // into a script beside a copied body, so the function under test is the one in claude.sh.
+    const res = spawnSync('bash', ['-c',
+      `. ${JSON.stringify(join(REPO_ROOT, 'orchestrations/scripts/claude.sh'))} >/dev/null 2>&1
+       set +e
+       # AFTER sourcing: claude.sh assigns LOG_DIR unconditionally at file scope, so passing it as
+       # environment is silently overwritten and the function reads the REAL log tree — which has
+       # exhaustion events in it, and answered 60 where the fixture says 0.
+       LOG_DIR=${JSON.stringify(dir)}
+       ${Object.entries(envOverrides).map(([k, v]) => `${k}=${JSON.stringify(String(v))}`).join('\n       ')}
+       _iteration_exhaustion_bump "${storyId}"`], {
+      encoding: 'utf8', timeout: 180_000, cwd: REPO_ROOT,
+      env: { ...process.env, NODE_BIN: process.execPath, LOG_DIR: dir,
+        EPAM_PROJECT_CONFIG_DIR: join(REPO_ROOT, 'orchestrations/projects/mock3'),
+        EPAM_COVERAGE_GATED: '0', ...envOverrides },
+    });
+    return Number((res.stdout ?? '').trim());
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

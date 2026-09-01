@@ -81,7 +81,7 @@
       "maxToolCalls": 8,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "top",
+      "ladder": "highest",
       "temperature": "0.1",
       "produces": "review-feedback",
       "template": "team-lead-review",
@@ -107,7 +107,7 @@
       "maxOutputTokens": 32768,
       "reasoningEffort": "high",
       "timeoutSecs": 600,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "review-feedback",
       "consumes": [
         {
@@ -126,7 +126,7 @@
       "maxOutputTokens": 32768,
       "reasoningEffort": "high",
       "timeoutSecs": 360,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "diagnosis",
       "template": "failure-analyst",
       "consumes": [
@@ -145,7 +145,7 @@
       "maxOutputTokens": 32768,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "repro-test",
       "consumes": [
         {
@@ -174,7 +174,7 @@
       "maxOutputTokens": 32768,
       "reasoningEffort": "medium",
       "timeoutSecs": 600,
-      "ladder": "mid",
+      "ladder": "high",
       "produces": "test-criteria",
       "consumes": [
         {
@@ -193,7 +193,7 @@
       "maxOutputTokens": 16384,
       "reasoningEffort": "medium",
       "timeoutSecs": 300,
-      "ladder": "base",
+      "ladder": "medium",
       "produces": "estimate",
       "consumes": [
         {
@@ -215,7 +215,7 @@
       "reasoningEffort": "high",
       "temperature": "0.7",
       "timeoutSecs": 360,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "change-verdict",
       "consumes": [
         {
@@ -232,7 +232,7 @@
       "reasoningEffort": "high",
       "temperature": "0.7",
       "timeoutSecs": 240,
-      "ladder": "base",
+      "ladder": "medium",
       "produces": "change-summary",
       "consumes": [
         {
@@ -250,7 +250,7 @@
       "reasoningEffort": "high",
       "temperature": "0.7",
       "timeoutSecs": 360,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "diagnosis",
       "template": "failure-analyst",
       "consumes": [
@@ -275,7 +275,7 @@
       "maxOutputTokens": 16384,
       "reasoningEffort": "low",
       "timeoutSecs": 90,
-      "ladder": "base",
+      "ladder": "medium",
       "produces": "ac-classification",
       "consumes": [
         {
@@ -293,7 +293,7 @@
       "maxOutputTokens": 32768,
       "reasoningEffort": "medium",
       "timeoutSecs": 180,
-      "ladder": "mid",
+      "ladder": "high",
       "produces": "verification-criteria",
       "consumes": [
         {
@@ -311,7 +311,7 @@
       "maxOutputTokens": 16384,
       "reasoningEffort": "high",
       "timeoutSecs": 300,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "codeline-selection",
       "consumes": [
         {
@@ -326,7 +326,7 @@
     },
     "roster-review": {
       "_what": "Falsifies the claims in a generated agent roster before any implementer inherits them.",
-      "ladder": "top",
+      "ladder": "highest",
       "reasoningEffort": "high",
       "temperature": "0.1",
       "maxOutputTokens": 65536,
@@ -346,7 +346,7 @@
     },
     "code-graph-detective": {
       "_what": "Investigates one codeline and reports where the work actually lands.",
-      "ladder": "top",
+      "ladder": "highest",
       "reasoningEffort": "high",
       "temperature": "0.7",
       "maxOutputTokens": 32768,
@@ -370,7 +370,7 @@
     },
     "guard-vocabulary": {
       "_what": "Derives the vocabulary the verification-criteria guard enforces. A guard armed with the wrong terms reports clean.",
-      "ladder": "top",
+      "ladder": "highest",
       "reasoningEffort": "high",
       "temperature": "0.1",
       "maxOutputTokens": 32768,
@@ -387,7 +387,7 @@
     },
     "estate-survey": {
       "_what": "Surveys every codeline BEFORE the roster is minted: which ones the work actually reaches, and which need their own investigator. Breadth, never fix sites.",
-      "ladder": "top",
+      "ladder": "highest",
       "reasoningEffort": "high",
       "temperature": "0.7",
       "maxOutputTokens": 32768,
@@ -406,7 +406,7 @@
     },
     "story-writer": {
       "_what": "Implements a story: writes the code that satisfies its criteria. The archetype every minted -engineer is an instance of.",
-      "ladder": "top",
+      "ladder": "highest",
       "reasoningEffort": "high",
       "temperature": "0.2",
       "maxOutputTokens": 32768,
@@ -458,7 +458,7 @@
       "maxOutputTokens": 16384,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "vc-coverage-report",
       "consumes": [
         {
@@ -476,7 +476,7 @@
       "maxOutputTokens": 16384,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "mid",
+      "ladder": "high",
       "produces": "qa-verdict",
       "consumes": [
         {
@@ -491,7 +491,7 @@
       "maxOutputTokens": 16384,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "qa-verdict",
       "consumes": [
         {
@@ -509,7 +509,7 @@
       "maxOutputTokens": 16384,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "qa-verdict",
       "consumes": [
         {
@@ -524,7 +524,7 @@
       "maxOutputTokens": 16384,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "qa-verdict",
       "consumes": [
         {
@@ -542,7 +542,7 @@
       "maxOutputTokens": 16384,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "mid",
+      "ladder": "high",
       "produces": "qa-verdict",
       "consumes": [
         {
@@ -557,7 +557,7 @@
       "maxOutputTokens": 16384,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "mid",
+      "ladder": "high",
       "produces": "qa-verdict",
       "consumes": [
         {
@@ -569,7 +569,7 @@
     },
     "prompt-builder": {
       "_what": "Provisions this project's prompt library: reads the generic templates and decorates each one for the project and the roster just minted. Runs at mint time, as part of the same stage that creates the agents the prompts are for — the only stage that knows both what the project is and who will work on it.",
-      "ladder": "mid",
+      "ladder": "high",
       "reasoningEffort": "high",
       "temperature": "0.2",
       "maxOutputTokens": 65536,
@@ -597,7 +597,7 @@
     },
     "codeline-bridge-agent": {
       "_what": "Extracts the exported surface of a completed codeline so a later lane's detective can read it. Producers run before consumers precisely so this exists when it is needed.",
-      "ladder": "mid",
+      "ladder": "high",
       "reasoningEffort": "high",
       "temperature": "0.1",
       "maxOutputTokens": 32768,
@@ -616,7 +616,7 @@
     },
     "qa-gate:e2e": {
       "_what": "Browser end-to-end routing check for one route.",
-      "ladder": "top",
+      "ladder": "highest",
       "reasoningEffort": "high",
       "temperature": "0.1",
       "maxOutputTokens": 32768,
@@ -637,7 +637,7 @@
       "_why_maxOutputTokens": "The mint now reads the roster it is adding to — all 57 canonical agents by name, plus whatever this project has minted — so its prompt and the reasoning it has to do both grew. It also emits a 150-300 word systemPrompt per proposed role. Raised with its siblings that handle the roster; a truncated proposal is refused by mergeProjectAgents and the attempt is spent either way.",
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "agent-roster",
       "consumes": [
         {
@@ -653,7 +653,7 @@
       "maxOutputTokens": 32768,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "mid",
+      "ladder": "high",
       "produces": "role-assignments",
       "consumes": [
         {
@@ -671,7 +671,7 @@
       "maxOutputTokens": 32768,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "spec-assignments",
       "consumes": [
         {
@@ -687,7 +687,7 @@
       "maxOutputTokens": 32768,
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "story-specification",
       "consumes": [
         {
@@ -703,7 +703,7 @@
       "maxOutputTokens": 16384,
       "reasoningEffort": "medium",
       "timeoutSecs": 600,
-      "ladder": "mid",
+      "ladder": "high",
       "produces": "ticket-link-evidence",
       "consumes": [
         {
@@ -720,7 +720,7 @@
       "_why_maxOutputTokens": "DOUBLED WITH THE ARTEFACT IT HANDLES. roster-specialiser was raised to 65536 so it could emit all 57 canonical agents in one file; this seam handles that same artefact and was left at 32768. On 2026-08-24 two review batches were TRUNCATED mid-JSON (62,648 and 38,432 bytes) and reported as unexamined, which is indistinguishable from a malformed reply, so the judge was retried identically and failed the same way. A budget belongs to the artefact, not to one seam: a reviewer quotes canonical AND derived text, so it needs at least what the writer needs.",
       "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "mid",
+      "ladder": "high",
       "produces": "agent-skill-augmentation",
       "consumes": [
         {
@@ -736,7 +736,7 @@
       "maxOutputTokens": 16384,
       "reasoningEffort": "medium",
       "timeoutSecs": 600,
-      "ladder": "mid",
+      "ladder": "high",
       "produces": "story-model-assignments",
       "consumes": [
         {
@@ -751,7 +751,7 @@
     },
     "prompt-review": {
       "_what": "Falsifies what a generated project prompt claims about this project, before any agent inherits it.",
-      "ladder": "mid",
+      "ladder": "high",
       "reasoningEffort": "high",
       "temperature": "0.1",
       "maxOutputTokens": 4096,
@@ -783,7 +783,7 @@
     "survey-review": {
       "_what": "Falsifies what the estate survey claims about the codelines, before a roster is minted from it.",
       "_why": "The survey decided scope and seeded every investigator brief, and NOTHING consumed it for review — no seam declared it as an input, so its claims reached the roster unchallenged. A codeline was reported in_scope on a file it does not contain and an implementer was briefed accordingly. A generated prompt already gets this treatment; the survey had none.",
-      "ladder": "top",
+      "ladder": "highest",
       "reasoningEffort": "high",
       "temperature": "0.1",
       "maxOutputTokens": 32768,
@@ -815,7 +815,7 @@
       "maxOutputTokens": 32768,
       "reasoningEffort": "high",
       "timeoutSecs": 600,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "runtime-boundary-findings",
       "consumes": [
         {
@@ -829,7 +829,7 @@
     "roster-specialiser": {
       "_what": "Specialises the canonical roster into this project's own roster, writing it with its tools.",
       "_why": "The canonical roster belongs to no project, so running it unchanged gave every project the same personas — a reviewer judged one codeline while describing another. This is the derivation step, and it is agentic because deciding what an agent must know about a codeline is judgement, not substitution.",
-      "ladder": "top",
+      "ladder": "highest",
       "reasoningEffort": "high",
       "timeoutSecs": 1800,
       "maxOutputTokens": 65536,
@@ -851,7 +851,7 @@
     "project-roster-review": {
       "_what": "Falsifies the project roster against canonical before any agent is invoked from it.",
       "_why": "An unreviewed roster is a run whose agent identities nobody vouched for. Given BOTH the derivation and its source, so it can check that a rule was not weakened rather than that the text reads well.",
-      "ladder": "top",
+      "ladder": "highest",
       "reasoningEffort": "high",
       "timeoutSecs": 1800,
       "maxOutputTokens": 65536,
@@ -874,7 +874,7 @@
       "maxOutputTokens": 16384,
       "reasoningEffort": "medium",
       "timeoutSecs": 60,
-      "ladder": "base",
+      "ladder": "medium",
       "produces": "topology",
       "consumes": [
         {
@@ -1264,5 +1264,6 @@
     "story-specification",
     "ticket-link-evidence",
     "vc-coverage-report"
-  ]
+  ],
+  "_ladderTierNames": "Tier names come from the provider set (config/llm-defaults.<set>.json ladders), never from this file. They were base/mid/top here while every set declares medium/high/highest, so all 40 seams asked for a tier nothing defined, resolved no model from their ladder, and ran on whatever the environment happened to carry. Renamed 2026-09-01 to the ladder config names, preserving order: base->medium, mid->high, top->highest."
 }

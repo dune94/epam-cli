@@ -3,24 +3,30 @@
     {
       "codeline": "gotransit",
       "state": "in_scope",
-      "evidence": "Located the Go-Checkout email/confirm-email validation. src/components/pages/CheckoutPage/CheckoutForm.tsx has two FormInput fields named 'email' and 'confirmEmail'. The confirmEmail field's validate rule at line 305-309 does `if (email && value && value !== email) return t(\"TRM774\")` — a case-sensitive strict inequality check, matching the ticket's described bug (uppercase vs lowercase flagged as mismatch). TRM774 is the dictionary term linked in the ticket's documents (2.2.4 GO Dictionary of Terms Part 3#TRM774), confirming this is the exact error message referenced. Also checked CheckoutFormProvider.tsx which sets default form values (email/confirmEmail from user.email, no case transform) and confirmed the existing test file src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx already has a test asserting TRM774 appears on mismatch (line 248-259), which would need an added case-insensitive-match test.",
+      "evidence": "Searched for confirmEmail/checkout email references and found src/components/pages/CheckoutPage/CheckoutForm.tsx, which renders the 'email' and 'confirmEmail' FormInput fields. The confirmEmail field's validate rule (line 305-309) does `if (email && value && value !== email) { return t(\"TRM774\"); }` — a case-sensitive strict string comparison, exactly matching the ticket's description of the Go-Checkout page flagging same-email-different-casing as a mismatch. TRM774 is the dictionary term referenced in one of the linked ticket documents. Also opened types.ts confirming ICheckoutFormValues has email/confirmEmail as plain strings, and CheckoutForm.spec.tsx which has an existing test 'should trigger validation error on blur only when confirmEmail field is not empty' exercising this validation path with getEmail()/getConfirmEmail() helpers.",
       "surfaces": [
         "src/components/pages/CheckoutPage"
       ],
       "filesRead": [
         "src/components/pages/CheckoutPage/CheckoutForm.tsx",
-        "src/components/pages/CheckoutPage/CheckoutFormProvider.tsx",
+        "src/components/pages/CheckoutPage/types.ts",
         "src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx"
       ],
       "evidenceGap": false
     }
   ],
-  "recommendedInvestigators": [],
+  "recommendedInvestigators": [
+    {
+      "codeline": "gotransit",
+      "focus": "Confirm whether any other email-comparison logic exists beyond CheckoutForm.tsx (e.g. server-side/API validation of email/confirmEmail on submit) that would also need case-insensitive treatment, and check EMAIL_REGEX/EMAIL_INPUT_MAX_LENGTH constants for any casing-related assumptions.",
+      "why": "The bug site found in CheckoutForm.tsx is a client-side react-hook-form validate rule; there may be additional validation (e.g. in an API route or shared checkout schema) that duplicates this comparison and was not fully surveyed."
+    }
+  ],
   "recommendedWriters": [
     {
       "codeline": "gotransit",
-      "focus": "Update the confirmEmail validate rule in CheckoutForm.tsx to perform a case-insensitive comparison between email and confirmEmail (e.g. normalize casing before comparing), and add/adjust unit tests in CheckoutForm.spec.tsx covering mixed-case matches (should pass) and genuine mismatches (should still show TRM774).",
-      "why": "The exact comparison causing the bug (`value !== email`, case-sensitive) is pinpointed at CheckoutForm.tsx's confirmEmail validate rule, and an existing test suite already exercises this validation path, so a writer can both fix and extend coverage in one pass."
+      "focus": "Change the confirmEmail validate rule's equality check in CheckoutForm.tsx to compare emails case-insensitively (e.g. normalize casing before comparing), and update/add test coverage in CheckoutForm.spec.tsx for mixed-case matching emails passing validation and genuinely different emails still failing.",
+      "why": "CheckoutForm.tsx:306 contains the exact strict `value !== email` comparison causing the reported case-sensitivity bug, and CheckoutForm.spec.tsx already has an existing test suite structure for this validation path that a fix should extend."
     }
   ],
   "violations": [],

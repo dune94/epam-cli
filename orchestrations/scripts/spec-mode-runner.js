@@ -4745,15 +4745,36 @@ async function reviewProjectRoster({
   // NO DEFAULT anywhere in this path. A model whose capacity is undeclared is refused by name, so
   // the answer is to declare it, never to invent one here.
   const _budgetFromModel = (function () {
-    const model = String(process.env.EPAM_MODEL || process.env.AI_MODEL || '').trim();
-    if (!model) return { error: 'no model is resolved for this seam (EPAM_MODEL/AI_MODEL are empty), so its input capacity cannot be read' };
+    // THE SEAM'S MODEL, FROM THE LADDER IT DECLARES — not from bare environment.
+    //
+    // Reading process.env.EPAM_MODEL was wrong: it is not set at this point in a run, so every
+    // review refused to size itself and the mint failed three attempts running. My regression,
+    // live 2026-09-01. seamInvocationEnv only resolves a model when EPAM_MODEL_LADDER_* are already
+    // exported, which they are not here either.
+    //
+    // The seam declares its ladder position (project-roster-review: "top") and the provider set
+    // declares that tier's start model. Both are config, both are readable without a run.
+    let model = String(process.env.EPAM_MODEL || process.env.AI_MODEL || '').trim();
     let overrides = {};
+    let settings = null;
     try {
       const resolver = require(require('path').join(__dirname, 'lib/llm-settings-resolve.js'));
-      const settings = resolver.resolveLlmSettings({ projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR });
+      settings = resolver.resolveLlmSettings({ projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR });
       overrides = (settings && settings.modelOverrides) || {};
     } catch (e) {
-      return { error: 'the model overrides could not be read: ' + ((e && e.message) || e) };
+      return { error: 'the provider set could not be read: ' + ((e && e.message) || e) };
+    }
+    if (!model) {
+      try {
+        const reg = require(require('path').join(__dirname, '../agents/invocation-profiles.json'));
+        const tier = ((reg.profiles || reg)['project-roster-review'] || {}).ladder;
+        const ladder = tier && settings && settings.ladders ? settings.ladders[tier] : null;
+        model = String((ladder && ladder.startModel) || '').trim();
+      } catch (e) { /* reported below */ }
+    }
+    if (!model) {
+      return { error: "no model resolves for project-roster-review — neither the environment nor the "
+        + "ladder tier it declares yields one" };
     }
     let hit = null;
     for (const [name, ov] of Object.entries(overrides)) {

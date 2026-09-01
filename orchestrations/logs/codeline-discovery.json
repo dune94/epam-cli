@@ -3,19 +3,18 @@
     {
       "name": "gotransit",
       "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
-      "reason": "Owns the Go-Checkout page's email/confirm-email fields and the case-sensitive equality check that causes the reported mismatch.",
-      "evidence": "src/components/pages/CheckoutPage/CheckoutForm.tsx:306 — confirmEmail field's `validate` rule reads `if (email && value && value !== email) { return t(\"TRM774\"); }`, a case-sensitive string comparison between the confirmEmail and email fields",
+      "reason": "This repo implements the Go-Checkout page's Email and Confirm Email fields, including the exact case-sensitive comparison the ticket describes.",
+      "evidence": "src/components/pages/CheckoutPage/CheckoutForm.tsx line ~305: `validate: (value: string) => { if (email && value && value !== email) { return t(\"TRM774\"); } }` — a case-sensitive `!==` comparison between `email` and `confirmEmail`",
       "facts": [
         {
-          "text": "Tests run via `npm test` (jest); CheckoutForm's confirm-email validation is covered by src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx, which already exercises the confirmEmail field.",
-          "source": "package.json scripts.test: \"jest\"; src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx"
+          "text": "Tests run with `jest` (`npm run test`); a spec file already exists for this exact form at `src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx`, so a fix here should extend that file rather than create a new one.",
+          "source": "package.json scripts.test: \"jest\"; and file src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx"
         },
         {
-          "text": "The pre-commit hook rejects any commit unless the current branch name matches `^(feature|bugfix|tech|release|hotfix)\\/[a-zA-Z0-9.-]+(\\/[a-z0-9-]+)?$`, and also runs `npx lint-staged`.",
+          "text": "A pre-commit hook enforces both `npx lint-staged` and a branch-name pattern `^(feature|bugfix|tech|release|hotfix)\\/[a-zA-Z0-9.-]+(\\/[a-z0-9-]+)?$` — commits on a non-conforming branch name are rejected.",
           "source": ".husky/pre-commit"
         }
-      ],
-      "modelName": "nextgotransit"
+      ]
     }
   ]
 }

@@ -4,7 +4,7 @@
       "name": "checkout-forms-engineer",
       "kind": "implementer",
       "codeline": "",
-      "rationale": "The ticket AMSD-1919 pinpoints a concrete, uncovered bug in CheckoutForm.tsx's confirmEmail validate rule (case-sensitive value !== email check returning TRM774), and this role is scoped narrowly to that checkout form logic rather than duplicating the general frontend/UI/TypeScript remit already covered elsewhere on the team.",
+      "rationale": "AMSD-1919 pins the defect to a concrete line — CheckoutForm.tsx's confirmEmail validate rule doing `value !== email` — so this project needs an implementer who owns react-hook-form validation logic in the checkout flow to correct that specific case-sensitive comparison.",
       "surfaces": [
         "profiles.json",
         "kb",
@@ -13,10 +13,10 @@
       ]
     },
     {
-      "name": "checkout-page-detective",
+      "name": "gotransit-checkout-detective",
       "kind": "investigator",
       "codeline": "gotransit",
-      "rationale": "The survey's lead about the confirmEmail check in CheckoutForm.tsx needs an investigator who actually reads this repository's current imports and validate logic before the implementer relies on it, since a prior pass mis-cited packages that aren't actually imported there.",
+      "rationale": "The survey flagged that the client-side fix in CheckoutForm.tsx may not be the only place this equality check lives, so gotransit needs its own investigator to confirm or rule out duplicate server-side or shared-schema validation before the implementer's fix is considered complete.",
       "surfaces": [
         "profiles.json",
         "kb",
@@ -25,30 +25,16 @@
       ]
     }
   ],
-  "rejected": [
-    {
-      "name": "checkout-form-engineer",
-      "reason": "brief names 1 path(s) that do not exist in any codeline: React/Next.js"
-    }
-  ],
+  "rejected": [],
   "unchanged": [],
   "projectRoles": [
     "checkout-forms-engineer"
   ],
   "projectInvestigators": [
-    "checkout-page-detective"
+    "gotransit-checkout-detective"
   ],
-  "rejectedAcrossAttempts": [
-    {
-      "name": "checkout-page-detective",
-      "reason": "brief names 1 path(s) that do not exist in codeline 'gotransit': lodash.isequal/lodash.isstring"
-    },
-    {
-      "name": "checkout-form-engineer",
-      "reason": "brief names 1 path(s) that do not exist in any codeline: React/Next.js"
-    }
-  ],
-  "proposed": 4,
-  "attempts": 2,
+  "proposed": 2,
+  "rejectedAcrossAttempts": [],
+  "attempts": 1,
   "protectedRoles": 21
 }

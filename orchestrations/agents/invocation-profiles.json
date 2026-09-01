@@ -866,7 +866,9 @@
       ],
       "template": "project-roster-review",
       "layer": "bootstrap",
-      "_why_bootstrap": "reviews that roster, in the same stage. A prompt that runs before the project prompt layer exists cannot be a project prompt."
+      "_why_bootstrap": "reviews that roster, in the same stage. A prompt that runs before the project prompt layer exists cannot be a project prompt.",
+      "reviewBatchChars": 300000,
+      "_why_reviewBatchChars": "How much CANONICAL+DERIVED text one review call may carry. It was a literal 60000 in spec-mode-runner.js while the commit that added it said the batches were sized by a declared budget — so the number was guessed in code and declared nowhere. Declared here beside timeoutSecs and maxOutputTokens, which is where this seam states everything else about itself. 300000 covers the whole roster (50 personas, ~276KB of canonical+derived prose) in ONE call: every extra batch is another chance for a flaky answer, and the aggregation used to discard the whole review when it got one."
     },
     "topology-router": {
       "_what": "Chooses the execution topology for a phase: single, parallel or sequential worktrees.",

@@ -4704,7 +4704,31 @@ async function reviewProjectRoster({
     };
   }
 
-  const _budget = Math.max(4000, Number(process.env.EPAM_ROSTER_REVIEW_BATCH_CHARS || '60000'));
+  // THE BUDGET IS DECLARED BY THE SEAM, NOT GUESSED HERE.
+  //
+  // This was a literal 60000 with an env override, while the commit that introduced it stated the
+  // batches were 'sized by a declared budget, not guessed'. They were guessed. project-roster-review
+  // declares timeoutSecs, maxOutputTokens and reasoningEffort in invocation-profiles.json; the
+  // batch budget belongs beside them, in the one place this seam describes itself.
+  //
+  // NO DEFAULT. A seam that declares no budget is a seam nobody sized, and picking a number here
+  // is how the literal got in the first time.
+  const _seamProfile = (function () {
+    try {
+      const reg = require(require('path').join(__dirname, '../agents/invocation-profiles.json'));
+      return (reg.profiles || reg)['project-roster-review'] || {};
+    } catch (e) { return {}; }
+  }());
+  const _declaredBudget = Number(process.env.EPAM_ROSTER_REVIEW_BATCH_CHARS || _seamProfile.reviewBatchChars);
+  if (!Number.isFinite(_declaredBudget) || _declaredBudget < 4000) {
+    return {
+      verdict: 'review_failed',
+      findings: [],
+      reason: 'project-roster-review declares no usable reviewBatchChars in invocation-profiles.json, '
+        + 'so the review cannot be sized. Declare it beside timeoutSecs.',
+    };
+  }
+  const _budget = _declaredBudget;
   const _batches = [];
   let _cur = [];
   let _size = 0;

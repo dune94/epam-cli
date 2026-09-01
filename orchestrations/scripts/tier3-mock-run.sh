@@ -97,12 +97,16 @@ fail()    {
 PRD_ARG=""
 PROJECT_ROOT_ARG=""
 PHASE_ARG=""
+# WHICH PROJECT, when the PRD cannot say. A Jira run's PRD is synthesized during ingest at the very
+# path given to --prd, so there is nothing to read at launch. Same flag orchestrate.sh already takes.
+PROJECT_ARG=""
 while [[ $# -gt 0 ]]; do
   case $1 in
     --prd)          PRD_ARG="$2"; shift 2 ;;
     --project-root)  PROJECT_ROOT_ARG="$2"; shift 2 ;;
+    --project)      PROJECT_ARG="$2"; shift 2 ;;
     --phase)        PHASE_ARG="$2"; shift 2 ;;
-    *)              fail "Unknown argument: $1. Usage: --prd <path> --project-root <path> --phase <phase>" ;;
+    *)              fail "Unknown argument: $1. Usage: --prd <path> --project-root <path> --phase <phase> [--project <name>]" ;;
   esac
 done
 [ -z "$PRD_ARG" ] && fail "--prd <path> is required"
@@ -138,12 +142,7 @@ LOG_FILE="/tmp/tier3-mock-run-$(date +%Y%m%dT%H%M%S)-$$.log"
 #
 # A PRD that names no project is refused rather than guessed: guessing is precisely how a run ends
 # up configured from a project nobody chose.
-_prd_project="$("${NODE_BIN:-node}" -e '
-  const prd = require(process.argv[1]);
-  const name = prd && prd.project && prd.project.name;
-  process.stdout.write(typeof name === "string" ? name.trim() : "");
-' "$PRD_ARG" 2>/dev/null || printf '')"
-[ -z "$_prd_project" ] && fail "the PRD at $PRD_ARG names no project (project.name), so there is no configuration to load for it"
+_prd_project="$(resolve_run_project "$PRD_ARG" "$PROJECT_ARG")" || exit 1
 _epam_cfg_dir="$(project_config_dir "$_prd_project" "$REPO_ROOT")" || exit 1
 export EPAM_PROJECT_CONFIG_DIR="$_epam_cfg_dir"
 info "Project config: $EPAM_PROJECT_CONFIG_DIR"

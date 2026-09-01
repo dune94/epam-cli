@@ -132,6 +132,8 @@ WORKSPACE="${SEED_ONLY_DIR:-$MOCK_WORKSPACE_ROOT/$ORCH_RUN_ID/workspace}"
 CODELINE_ROOT="$WORKSPACE/codelines"
 CLONE="$CODELINE_ROOT/mock-hello-world"
 SYNTH_PRD="$WORKSPACE/synthesized-prd.json"
+# The PRD above does not exist yet — ingest writes it — so the project is declared, not read.
+MOCK_PROJECT="hello-dolly"
 
 echo ""
 echo "════════════════════════════════════════════════════════════════════"
@@ -262,7 +264,7 @@ else
 fi
 
 bash "$SCRIPT_DIR/tier3-mock-run.sh" \
-  --prd "$SYNTH_PRD" --project-root "$CLONE" --phase core
+  --prd "$SYNTH_PRD" --project "$MOCK_PROJECT" --project-root "$CLONE" --phase core
 _exit=$?
 
 echo ""

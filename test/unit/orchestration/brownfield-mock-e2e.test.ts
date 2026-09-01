@@ -223,6 +223,10 @@ function runFullPipeline(opts: { prdPath: string; projectRoot: string; env: Node
   const result = spawnSync('bash', [
     TIER3_MOCK_RUN,
     '--prd', opts.prdPath,
+    // The PRD at that path does not exist yet: this run's ingest synthesizes it there. So the
+    // project is DECLARED, exactly as production declares it by pointing at a project's own
+    // canonical prd.json. hello-dolly is what this mock has always configured from.
+    '--project', 'hello-dolly',
     '--project-root', opts.projectRoot,
     '--phase', PHASE,
   ], {

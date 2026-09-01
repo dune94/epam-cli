@@ -991,6 +991,63 @@ function declaredModels() {
   return _ladderModels;
 }
 
+// A REPLAYED ACTION ACTS ON THIS RUN'S PROJECT, WHATEVER PROJECT IT WAS RECORDED AGAINST.
+//
+// refreshEntities rewrites a capture's stale agent names and a foreign stack's models so a replay
+// SPEAKS about this run. It only ever touched cap.body, the text — so for a seam that answers by
+// talking it was enough, and for one that answers by DOING it did nothing at all, because there the
+// arguments are the answer.
+//
+// roster-specialiser writes its roster with a tool call naming the project it was recorded against:
+//
+//   write_file { path: ".../orchestrations/projects/metrolinx/roster.json" }
+//
+// Replayed into a rehearsal of another project, that writes into metrolinx's config directory — a
+// project nobody asked for — while the contract looks under the project actually running, finds
+// nothing, and refuses three attempts. The run halts at mint with "the agent wrote no roster",
+// naming a destination three stages downstream of the cause. Writing somewhere else is the worse
+// half: a rehearsal that mutates another project's config is not a rehearsal, and it is silent.
+//
+// The rule is positional, not a list of known projects: whatever sits in the project segment of a
+// path becomes the project this run is for. Nothing to keep in step as projects come and go.
+function retargetProject(cap, project) {
+  if (!cap || !project) return cap;
+  const seg = /orchestrations\/projects\/[^/]+\//g;
+  const to = `orchestrations/projects/${project}/`;
+  const swap = (t) => String(t).replace(seg, to);
+  const moved = [];
+  const note = (before, after) => { if (before !== after) moved.push(true); };
+
+  let turns = cap.turns;
+  if (Array.isArray(turns)) {
+    turns = turns.map((t) => {
+      if (!t) return t;
+      const body = swap(t.body || '');
+      note(t.body || '', body);
+      const calls = (t.calls || []).map((c) => {
+        if (!c || !c.input) return c;
+        const raw = JSON.stringify(c.input);
+        const next = swap(raw);
+        note(raw, next);
+        try { return { ...c, input: JSON.parse(next) }; } catch { return c; }
+      });
+      return { ...t, body, calls };
+    });
+  }
+  const body = swap(cap.body || '');
+  note(cap.body || '', body);
+  const calls = (cap.calls || []).map((c) => {
+    if (!c || !c.input) return c;
+    const raw = JSON.stringify(c.input);
+    const next = swap(raw);
+    note(raw, next);
+    try { return { ...c, input: JSON.parse(next) }; } catch { return c; }
+  });
+  if (!moved.length) return cap;
+  return { ...cap, body, calls, ...(Array.isArray(turns) ? { turns } : {}),
+    retargeted: moved.length };
+}
+
 function refreshEntities(cap) {
   if (!cap || !cap.body) return cap;
   const declared = [...projectEntities()];
@@ -1267,6 +1324,14 @@ function endsInToolCall(cap, seam) {
       cap = null;
     }
     if (cap) {
+      // Retarget BEFORE refreshing entities: both rewrite the same capture, and the paths are what
+      // decide where a replayed write actually lands.
+      const _proj = path.basename(process.env.EPAM_PROJECT_CONFIG_DIR || '');
+      const _re = retargetProject(cap, _proj);
+      if (_re && _re.retargeted) {
+        stale.push(`${seam}  <- ${cap.file}: ${_re.retargeted} path(s) retargeted to project '${_proj}'`);
+      }
+      cap = _re;
       const fresh = refreshEntities(cap);
       if (fresh.refreshed) { stale.push(`${seam}  <- ${cap.file}: ${fresh.refreshed.join(', ')}`); }
       cap = fresh;

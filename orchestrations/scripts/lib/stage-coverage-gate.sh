@@ -18,6 +18,35 @@
 #        reported so the operator can see what was waived
 #     1  the stage must not run
 
+# DOES THIS RUN SPEND? THE GATE PROTECTS MONEY, AND NOTHING ELSE.
+#
+# Its whole justification is cost: "untested code is the most expensive thing this pipeline runs".
+# A rehearsal answered by MockServer spends nothing, so that justification does not reach it — and
+# enforcing there is a DEADLOCK, not merely over-strict. The launch stage sits at 2.3% because its
+# code is inline, inline code only executes when the script RUNS, and the one mechanism that runs it
+# without spending is a free rehearsal. Refusing the rehearsal for being under-covered leaves no way
+# for it ever to become covered. That is this file's own warning, one level up: a gate nobody can
+# satisfy is worse than no gate, because it teaches people to route around it.
+#
+# ASKED THROUGH THE PREDICATE THAT ALREADY OWNS THIS. free_run_requested() is one environment
+# variable set by whoever launches a free run. A second notion of "free" here would drift from that
+# one, and the two would disagree exactly when it mattered.
+#
+#   0  the run can spend — enforce
+#   1  the run spends nothing — measure and report
+_coverage_gate_run_spends() {
+    if ! command -v free_run_requested >/dev/null 2>&1; then
+        local _guard
+        _guard="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/free-run-guard.sh"
+        # UNABLE TO PROVE A RUN IS FREE MEANS IT SPENDS, which is the guard's own default and the
+        # only safe direction: a missing file must never buy an exemption.
+        [ -f "$_guard" ] || return 0
+        . "$_guard"
+    fi
+    free_run_requested && return 1
+    return 0
+}
+
 require_stage_coverage() {
     local _stage="${1:-}"
     if [ -z "$_stage" ]; then
@@ -82,7 +111,7 @@ require_stage_coverage() {
         # NO MEASUREMENT IS NOT FULL COVERAGE. It is the state before anyone ran the suite, and it
         # is exactly the state in which a stage must not be allowed to spend.
         echo "[coverage-gate] $_stage: coverage could not be determined — $_err" >&2
-        if [ "$_blocker" = "true" ]; then
+        if [ "$_blocker" = "true" ] && _coverage_gate_run_spends; then
             echo "[coverage-gate] HALTING: the blocker is on and nothing was measured. Unmeasured is not covered." >&2
             return 1
         fi
@@ -100,6 +129,10 @@ require_stage_coverage() {
 
     if [ "$_blocker" = "true" ]; then
         echo "[coverage-gate] $_stage: ${_pct}% covered, below the ${_threshold}% this project declares." >&2
+        if ! _coverage_gate_run_spends; then
+            echo "[coverage-gate] this run spends nothing — the shortfall is REPORTED, not enforced. A free rehearsal is how inline code gets executed and measured at all." >&2
+            return 0
+        fi
         echo "[coverage-gate] HALTING before the stage runs. Untested code is the most expensive thing this pipeline executes: the cost is paid before the defect is reachable." >&2
         return 1
     fi
@@ -129,6 +162,13 @@ require_all_stage_coverage() {
     # fourteen processes one question each costs fourteen, and the measurement itself is now the
     # cheap part. The handler persists the report, so the per-stage gates later in the run read it.
     _stages="$("${NODE_BIN:-node}" "$_handler" --all 2>/dev/null)"
+    if [ -z "$_stages" ] && ! _coverage_gate_run_spends; then
+        # A REHEARSAL IS HOW THE MEASUREMENT GETS TAKEN. Refusing to start one because no
+        # measurement exists is the deadlock in its purest form: the data cannot appear until the
+        # run that produces it is allowed to happen, and it spends nothing either way.
+        echo "[coverage-gate] no stage coverage could be measured — this run spends nothing, so it PROCEEDS UNMEASURED" >&2
+        return 0
+    fi
     if [ -z "$_stages" ]; then
         echo "[coverage-gate] no stage coverage could be measured — refusing to start a pipeline whose coverage is unknown. Unmeasured is not covered." >&2
         return 1

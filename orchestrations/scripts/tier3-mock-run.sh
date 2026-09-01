@@ -24,6 +24,21 @@
 # nothing is hardcoded here that would diverge per mock scenario.
 # ──────────────────────────────────────────────────────────────────────────────
 
+# THIS RUN SPENDS NOTHING, AND SAYS SO BEFORE ANYTHING ELSE READS IT.
+#
+# free-run-guard.sh substitutes a placeholder for every key-shaped variable and then re-checks in a
+# child process, refusing to launch while a real vendor key is still reachable. It is armed by this
+# one declaration — and until now NOTHING in the tree set it. Not a launcher, not a project env
+# file: the only matches were in the guard's own unit test. So the seal had never fired in a real
+# invocation, and every mock run executed with live credentials reachable, protected only by the
+# base URL pointing at MockServer. The registry already says that is not enough: "A free rehearsal
+# that can reach a paid vendor is not a free rehearsal."
+#
+# IT IS FIRST IN THE FILE because the coverage gate below asks whether this run can spend before
+# deciding whether to halt on a shortfall. A declaration made after the thing that reads it is not
+# a declaration.
+export EPAM_FREE_RUN=1
+
 # A launcher decides what a run costs. It does not get to do that untested.
 _scg_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/stage-coverage-gate.sh"
 # shellcheck source=/dev/null

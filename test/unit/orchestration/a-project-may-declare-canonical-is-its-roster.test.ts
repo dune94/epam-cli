@@ -1,3 +1,12 @@
+// THE STUB EMITS WHAT THE REVIEWER REALLY EMITS.
+//
+// These stubs returned { verdict: "approved" } — a value the roster reviewer has never produced.
+// Its prompt declares "sound" and "defects_found". The gate was written against the fictional
+// word and these tests agreed with it, so both were wrong together and the pair passed: no
+// roster could be approved in a real run, and nothing here noticed. Live 2026-09-01, a review
+// returning "sound" with zero findings had its roster discarded and the metrolinx run halted.
+//
+// A stub is only evidence if it says what the producer says.
 import { describe, it, expect } from 'vitest'
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -40,7 +49,7 @@ describe('a project may declare that canonical is its roster', () => {
     const roster = await buildProjectRoster({
       canonicalPath, logDir, projectConfigDir: projectDir,
       produce: async () => { produceCalls += 1 },
-      review: async () => { reviewCalls += 1; return { verdict: 'approved' } },
+      review: async () => { reviewCalls += 1; return { verdict: 'sound' } },
       attempts: 3, log: () => {},
     })
     rmSync(dir, { recursive: true, force: true })
@@ -75,7 +84,7 @@ describe('a project may declare that canonical is its roster', () => {
           'beta-agent': entry('beta-agent', 'Specialised beta persona for this project, at length.'),
         } }, null, 2))
       },
-      review: async () => ({ verdict: 'approved' }),
+      review: async () => ({ verdict: 'sound' }),
       attempts: 3, log: () => {},
     })
     rmSync(dir, { recursive: true, force: true })
@@ -88,7 +97,7 @@ describe('a project may declare that canonical is its roster', () => {
     try {
       await buildProjectRoster({
         canonicalPath, logDir, projectConfigDir: projectDir,
-        produce: async () => {}, review: async () => ({ verdict: 'approved' }),
+        produce: async () => {}, review: async () => ({ verdict: 'sound' }),
         attempts: 1, log: () => {},
       })
     } catch (e: any) { threw = e }

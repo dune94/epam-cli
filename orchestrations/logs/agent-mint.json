@@ -1,10 +1,10 @@
 {
   "minted": [
     {
-      "name": "checkout-payments-engineer",
+      "name": "checkout-forms-engineer",
       "kind": "implementer",
       "codeline": "",
-      "rationale": "AMSD-1919 requires an actual code change to the case-sensitive confirmEmail validate rule in CheckoutForm.tsx, and this checkout-page/payment surface (react-hook-form plus the Stripe Elements wiring in CheckoutPaymentMethodsProvider.tsx) is a distinct implementation domain from the rest of the site.",
+      "rationale": "The ticket AMSD-1919 pinpoints a concrete, uncovered bug in CheckoutForm.tsx's confirmEmail validate rule (case-sensitive value !== email check returning TRM774), and this role is scoped narrowly to that checkout form logic rather than duplicating the general frontend/UI/TypeScript remit already covered elsewhere on the team.",
       "surfaces": [
         "profiles.json",
         "kb",
@@ -13,10 +13,10 @@
       ]
     },
     {
-      "name": "checkout-flow-detective",
+      "name": "checkout-page-detective",
       "kind": "investigator",
       "codeline": "gotransit",
-      "rationale": "The confirmEmail case-sensitivity bug spans a provider/consumer split between CheckoutFormProvider.tsx and CheckoutForm.tsx, so the implementer needs a dedicated reader of this exact directory's real files and test layout rather than the two nonexistent paths cited in the prior attempt.",
+      "rationale": "The survey's lead about the confirmEmail check in CheckoutForm.tsx needs an investigator who actually reads this repository's current imports and validate logic before the implementer relies on it, since a prior pass mis-cited packages that aren't actually imported there.",
       "surfaces": [
         "profiles.json",
         "kb",
@@ -25,22 +25,27 @@
       ]
     }
   ],
-  "rejected": [],
+  "rejected": [
+    {
+      "name": "checkout-form-engineer",
+      "reason": "brief names 1 path(s) that do not exist in any codeline: React/Next.js"
+    }
+  ],
   "unchanged": [],
   "projectRoles": [
-    "checkout-payments-engineer"
+    "checkout-forms-engineer"
   ],
   "projectInvestigators": [
-    "checkout-flow-detective"
+    "checkout-page-detective"
   ],
   "rejectedAcrossAttempts": [
     {
-      "name": "checkout-payments-engineer",
-      "reason": "brief names 1 path(s) that do not exist in any codeline: utils/ecommerce/checkout/"
+      "name": "checkout-page-detective",
+      "reason": "brief names 1 path(s) that do not exist in codeline 'gotransit': lodash.isequal/lodash.isstring"
     },
     {
-      "name": "checkout-flow-detective",
-      "reason": "brief names 2 path(s) that do not exist in codeline 'gotransit': interface/ecommerce/cart.ts, interface/contentstack.ts"
+      "name": "checkout-form-engineer",
+      "reason": "brief names 1 path(s) that do not exist in any codeline: React/Next.js"
     }
   ],
   "proposed": 4,

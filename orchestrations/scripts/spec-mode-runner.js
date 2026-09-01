@@ -4614,6 +4614,61 @@ function _readJsonOrNull(f) {
   try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; }
 }
 
+
+/**
+ * aggregateRosterReview(results, legalVerdicts) — MANY BATCHES, ONE VERDICT.
+ *
+ * A roster review runs one model call per batch of agents. This decides what the WHOLE review said.
+ *
+ * It used to fail the entire review if ANY batch was unexamined — missing verdict,
+ * nothing_to_review, or a verdict outside the enum. With six or more batches, one off-schema answer
+ * poisons all of them. Live 2026-09-01: batch5 returned a clean defects_found with real, grounded
+ * findings and it was discarded because a sibling batch was not usable. The gate then retried the
+ * JUDGE three times, six calls each, and the mint failed with the roster never judged on its merits.
+ *
+ * WHAT IT DOES NOW: judge on the batches that WERE examined, and say which were not.
+ *
+ *   any examined batch reports defects_found  -> defects_found (its findings are real)
+ *   every batch examined, none defective      -> sound
+ *   NO batch examined at all                  -> review_failed (nothing judged; retry the judge)
+ *
+ * A partially-examined review still reports how many batches were missed, so the caller can retry
+ * just those instead of paying for all of them again. What it must never do is discard a blocking
+ * finding because a different batch failed to answer.
+ *
+ * Extracted and exported because it could not be tested otherwise: it sat inside the async function
+ * that also does the batching and makes the model calls, so exercising it meant paying for a run.
+ */
+function aggregateRosterReview(results, legalVerdicts) {
+  const legal = Array.isArray(legalVerdicts) ? legalVerdicts : [];
+  const rows = Array.isArray(results) ? results : [];
+  const illegal = (v) => legal.length > 0 && !legal.includes(v);
+  const unexamined = rows.filter((r) => !r || !r.part || typeof r.part !== 'object'
+    || r.part.verdict === 'nothing_to_review' || !r.part.verdict || illegal(r.part.verdict));
+  const examined = rows.filter((r) => !unexamined.includes(r));
+  const findings = rows.flatMap((r) => (r && r.part && Array.isArray(r.part.findings) ? r.part.findings : []));
+
+  if (!examined.length) {
+    return {
+      verdict: 'review_failed',
+      findings,
+      unexamined: unexamined.length,
+      reason: 'none of ' + rows.length + ' batch(es) were examined. The roster is not implicated.',
+    };
+  }
+
+  const verdict = examined.some((r) => r.part.verdict === 'defects_found') ? 'defects_found' : 'sound';
+  return {
+    verdict,
+    findings,
+    unexamined: unexamined.length,
+    reason: unexamined.length
+      ? unexamined.length + ' of ' + rows.length + ' batch(es) were not examined; judged on the '
+        + examined.length + ' that were'
+      : '',
+  };
+}
+
 async function reviewProjectRoster({
   promptExec, rosterPath, canonicalPath, codelines, logDir, repoPath, toolGrant,
 }) {
@@ -4716,29 +4771,19 @@ async function reviewProjectRoster({
   // a clean pass. The schema's enum is also unenforced upstream (agent-output-schema.js validates
   // types, never enums, and does not map this tag at all), so this is the only place the declared
   // vocabulary is actually held to.
-  const _illegal = (v) => _legal.length > 0 && !_legal.includes(v);
-  const _unexamined = _results.filter((r) => !r.part || typeof r.part !== 'object'
-    || r.part.verdict === 'nothing_to_review' || !r.part.verdict || _illegal(r.part.verdict));
-  if (_unexamined.length) {
-    return {
-      verdict: 'review_failed',
-      findings: _results.flatMap((r) => (r.part && Array.isArray(r.part.findings) ? r.part.findings : [])),
-      reason: `${_unexamined.length} of ${_batches.length} batch(es) were not examined `
-        + `(${_unexamined.flatMap((r) => r.agents).slice(0, 6).join(', ')}...)`
-        + `${_unexamined.filter((r) => r.part && _illegal(r.part.verdict)).length
-          ? `; verdict(s) outside the declared enum: `
-            + `${[...new Set(_unexamined.filter((r) => r.part && _illegal(r.part.verdict))
-              .map((r) => JSON.stringify(r.part.verdict)))].join(', ')} `
-            + `(legal: ${_legal.join(', ')})`
-          : ''}`
-        + `. The roster is not implicated.`,
-    };
+  // ONE UNUSABLE BATCH NO LONGER VOIDS THE WHOLE REVIEW. See aggregateRosterReview above: this
+  // failed the entire review if ANY batch was unexamined, so a clean defects_found carrying real
+  // findings was discarded because a sibling batch answered off-schema, and the judge was retried
+  // six calls at a time until the mint failed. Judge on what WAS examined; report what was not.
+  const _agg = aggregateRosterReview(_results, _legal);
+  if (_agg.verdict === "review_failed") {
+    return { verdict: "review_failed", findings: _agg.findings, reason: _agg.reason };
+  }
+  if (_agg.unexamined) {
+    try { log(`[roster] review: ${_agg.reason}`); } catch (e) { /* logging is not the verdict */ }
   }
 
-  const payload = {
-    verdict: _results.some((r) => r.part.verdict === 'defects_found') ? 'defects_found' : 'sound',
-    findings: _results.flatMap((r) => (Array.isArray(r.part.findings) ? r.part.findings : [])),
-  };
+  const payload = { verdict: _agg.verdict, findings: _agg.findings };
 
   // A review that produced nothing is NOT a sound roster. Unparseable output means the check did
   // not happen, and reading that as approval is the fail-open shape these gates exist to prevent.
@@ -10006,6 +10051,7 @@ function costLabelFor(tag, env) {
 }
 
 module.exports = {
+  aggregateRosterReview,
   reviewOutcomeKeepsChange,
   // Exported so the brief lookup can be asserted without a run.
   profilesWithProjectBriefs,

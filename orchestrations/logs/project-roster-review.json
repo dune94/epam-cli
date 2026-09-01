@@ -2,35 +2,100 @@
   "verdict": "defects_found",
   "findings": [
     {
-      "agent": "typescript-engineer",
+      "agent": "openspec-agent",
       "severity": "blocking",
-      "claim": "Derived Scaffold Immutability Rule: \"NEVER create, overwrite, or modify package.json, tsconfig.json, jest.config.js, or .gitignore outside of an explicit dependency-install step covered by the MANDATORY DEPENDENCY CHECK above.\"",
-      "checked": "Diffed this section against the canonical typescript-engineer's Scaffold Immutability Rule, which reads: \"NEVER create, overwrite, or modify package.json, tsconfig.json, vitest.config.ts, or .gitignore in any phase after scaffold. These files are owned exclusively by the scaffold phase. If your story appears to require dependency changes, add a comment in the code explaining what is needed — do NOT run npm install or touch package.json.\" Also read src/pages/api/v1/search.ts to confirm the codeline facts elsewhere in the brief are otherwise accurately grounded, so this is not a case of the whole section being fabricated — only this one clause was altered.",
-      "found": "Canonical states an unconditional, unqualified prohibition: after scaffold, an implementer must NEVER touch package.json even to add a dependency the story needs — the required action is to add a code comment instead and leave the file alone ('do NOT run npm install or touch package.json'). The derived version deletes that sentence and replaces it with a carve-out that legitimizes exactly the action canonical forbids: package.json/tsconfig.json/jest.config.js may be modified whenever it happens 'as an explicit dependency-install step covered by the MANDATORY DEPENDENCY CHECK' — and the MANDATORY DEPENDENCY CHECK earlier in the same derived brief is unconditional (applies to any missing package, any phase). An implementer following the derived brief will run npm install and edit package.json post-scaffold for any missing dependency; an implementer following canonical would not — it would add a comment and leave package.json to the scaffold phase alone. This is a forbidding rule that was softened into its own exception.",
-      "remedy": "Keep the canonical carve-out absolute: after the scaffold phase, package.json/tsconfig.json/jest.config.js/.gitignore must never be modified, even to add a dependency the story needs — add an explanatory code comment instead of running npm install, matching canonical's 'do NOT run npm install or touch package.json.' The MANDATORY DEPENDENCY CHECK section should be scoped to apply only during/at scaffold time, not as a blanket license for later phases to edit these files."
+      "claim": "A child story whose technicalNotes.files list contains only *.spec.tsx/*.spec.ts files (e.g. src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx) must receive the project's read-only investigator role, never the same role as the paired implementation story.",
+      "checked": "Read roster.json's minted agents for this project: checkout-forms-engineer (kind: 'implementer', ancestor: typescript-engineer) and checkout-page-detective (kind: 'investigator', ancestor: code-graph-detective) — the only two project-specific roles minted for AMSD-1919. Then read code-graph-detective's canonical persona in orchestrations/agents/profiles.json to see what the 'investigator' lineage is actually built to do.",
+      "found": "checkout-page-detective's own persona states it investigates 'without editing' the test file, and its ancestor code-graph-detective's contract is exclusively to emit a JSON array of {file, function, reason} locationHint objects during the specification pass — it has no file-writing output at all, let alone a test-file deliverable. The canonical openspec-agent rule assigns test-file-only child stories to 'test-engineer' specifically because that role's job is to write the test file. The derived rule redirects that same deliverable to the project's investigator role, which is read-only by design and structurally cannot produce a *.spec.tsx file. Meanwhile the roster's own generic 'test-engineer' seam is correctly specialized in this same batch for Jest/RTL and CAN write the file — so the rule steers the deliverable away from the one role built to do it, toward one that cannot.",
+      "remedy": "Test-file-only child stories should be assigned this project's generic test-engineer seam (already correctly specialized for Jest + React Testing Library), not checkout-page-detective/the investigator role. Reserve the investigator role for read-only research stories, never for a story whose deliverable is a file."
     },
     {
-      "agent": "code-graph-detective",
+      "agent": "speckit-agent",
       "severity": "blocking",
-      "claim": "This has already played out on this codeline: for AMSD-2041 (a Contentstack live-preview ticket), the tool traced the symptom through src/pages/_app.tsx's onEntryChange subscription, src/context/ContentstackContext.tsx, src/hooks/useContent.ts (the hook 147+ components use to read Contentstack data), and src/services/pageService.ts's PageService.getPageEntry / getSinglePageEntry (which delegates to getSingleEntry/getSingletonEntry in src/services/contentstack.ts) to find the real reactive-data pipeline, rather than stopping at the component that merely renders the page.",
-      "checked": "grep -rn \"onEntryChange\" across the whole repo (all .ts/.tsx, node_modules excluded); grep -n \"getPageEntry\\|getSinglePageEntry\\|getSingleEntry\\b\" src/services/pageService.ts src/services/contentstack.ts; read src/pages/_app.tsx and src/context/ContentstackContext.tsx in full; grep -n \"^\\s*async \\|^export \" src/services/pageService.ts to enumerate every actual PageService method.",
-      "found": "onEntryChange appears nowhere in the repository. src/context/ContentstackContext.tsx contains no subscription or live-preview logic at all — it is a plain React Context populated once via useMemo from a defaultContent prop passed in from _app.tsx, with no listener or reactive mechanism. PageService has no method named getPageEntry or getSinglePageEntry — its real methods are getAllPublishedPages, getHeaderAndFooter, getStaticUpdates, getPageLevelServiceAlerts, getCookiesBanner, getGlobalDictionary, getPageSpecificData, getStationDetailPages, getServiceUpdatesPage, getPagesBaseURLs, getSingletonSlug, findSingletonSlug, getAllLineColors. src/services/contentstack.ts does export getSingleEntry, getEntry, findSingletonEntry, getSingletonEntry, but nothing in pageService.ts calls getSingleEntry, and no getSinglePageEntry exists to do so. This entire passage is a fabricated trace presented as an already-proven result — directly violating this same brief's own 'CRITICAL: Never invent a module or symbol name' rule and its instruction to output only symbols actually surfaced by the tool.",
-      "remedy": "Remove the fabricated AMSD-2041 walkthrough, or replace it with a real trace actually produced by codegraph-agent-query.sh against this codeline and verified against the source, using real symbol names (e.g. a correctly named PageService method such as getPageSpecificData, and confirming whether any reactive live-preview pipeline actually exists in this codebase before describing one).",
-      "verification": {
-        "kind": "not_mechanically_checkable",
-        "codeline": "gotransit",
-        "subject": "onEntryChange / PageService.getPageEntry / PageService.getSinglePageEntry",
-        "expected": "absent",
-        "briefAsserts": "present"
-      }
+      "claim": "any sub-story whose sole deliverable is a *.spec.tsx test file must be assigned this project's investigator role; implementation sub-stories must be assigned this project's implementer role.",
+      "checked": "Same check as openspec-agent: cross-referenced roster.json's minted 'investigator' role (checkout-page-detective, ancestor code-graph-detective) against code-graph-detective's canonical persona in orchestrations/agents/profiles.json.",
+      "found": "Identical defect to openspec-agent's ROLE ASSIGNMENT RULE: the investigator lineage (code-graph-detective → checkout-page-detective) is a read-only, no-write research role whose sole output is a JSON locationHint array, not test files. Assigning it as the executor for a sub-story whose 'sole deliverable is a *.spec.tsx test file' hands the deliverable to a role that cannot produce it, while the roster's own properly-specialized test-engineer seam (Jest/RTL) sits unused for that purpose.",
+      "remedy": "Sub-stories whose sole deliverable is a test file should be assigned this project's test-engineer seam, not the investigator role."
     },
     {
-      "agent": "code-graph-detective",
+      "agent": "review-ranger",
+      "severity": "blocking",
+      "claim": "Canonical GROUNDING RULES: \"When the tool list is empty or you could not inspect the tree, report `warn`, set the analysed/scanned count to reflect what you actually examined, and say plainly that the assessment was limited... Cite a real file path and line for every finding. If you cannot confirm the path exists, do not report it.\"",
+      "checked": "Compared the derived agent's '## GROUNDING RULES' block against the canonical text supplied in the review batch, sentence by sentence.",
+      "found": "Derived text reads: \"When the tool list is empty or you could not inspect the tree, report `warn` and say plainly that the assessment was limited... Cite a real file path and line for every finding.\" The instruction to set the analysed/scanned count to reflect what was actually examined is gone, and the explicit prohibition \"If you cannot confirm the path exists, do not report it\" is gone. Only sast-sentinel in this same batch kept both sentences verbatim, confirming this was dropped rather than being an unavoidable trim.",
+      "remedy": "Restore both sentences: require the analysed/scanned count to reflect actual examination, and explicitly forbid reporting a finding whose path cannot be confirmed."
+    },
+    {
+      "agent": "mutant-hunter",
+      "severity": "blocking",
+      "claim": "Canonical GROUNDING RULES: \"When the tool list is empty or you could not inspect the tree, report `warn`, set the analysed/scanned count to reflect what you actually examined, and say plainly that the assessment was limited... Cite a real file path and line for every finding. If you cannot confirm the path exists, do not report it.\"",
+      "checked": "Compared the derived agent's '## GROUNDING RULES' block against the canonical text.",
+      "found": "Derived text is trimmed to: \"When the tool list is empty or you could not inspect the tree, report `warn`.\" and \"Cite a real file path and line for every finding.\" Both the requirement to set the analysed count accurately and say the assessment was limited, and the explicit ban on reporting an unconfirmed path, are missing.",
+      "remedy": "Restore the dropped clauses so the mutation gate cannot report a fabricated mutationScore off an unexamined tree."
+    },
+    {
+      "agent": "perf-sentinel",
+      "severity": "blocking",
+      "claim": "Canonical GROUNDING RULES: \"When the tool list is empty or you could not inspect the tree, report `warn`, set the analysed/scanned count to reflect what you actually examined, and say plainly that the assessment was limited... Cite a real file path and line for every finding. If you cannot confirm the path exists, do not report it.\"",
+      "checked": "Compared the derived agent's '## GROUNDING RULES' block against the canonical text (this is separate from the earlier, intact 'When tool access is unavailable' JSONL-shape section).",
+      "found": "Derived final GROUNDING RULES block reads only: \"When the tool list is empty or you could not inspect the tree, report `warn`.\" and \"Cite a real file path and line for every finding.\" The accurate-count requirement and the explicit \"do not report it\" prohibition are both gone.",
+      "remedy": "Restore both dropped clauses in the final GROUNDING RULES section."
+    },
+    {
+      "agent": "spec-validator",
+      "severity": "blocking",
+      "claim": "Canonical GROUNDING RULES: \"When the tool list is empty or you could not inspect the tree, report `warn`, set the analysed/scanned count to reflect what you actually examined, and say plainly that the assessment was limited... Cite a real file path and line for every finding. If you cannot confirm the path exists, do not report it.\"",
+      "checked": "Compared the derived agent's '## GROUNDING RULES' block against the canonical text.",
+      "found": "Derived text is trimmed identically to mutant-hunter/perf-sentinel: \"report `warn`\" with no accuracy requirement on the count, and \"Cite a real file path\" with no explicit prohibition on reporting an unconfirmed one.",
+      "remedy": "Restore the dropped clauses so a spec-compliance verdict cannot be issued against acceptance criteria nobody actually checked."
+    },
+    {
+      "agent": "fuzz-weaver",
+      "severity": "blocking",
+      "claim": "Canonical GROUNDING RULES: \"Before marking any case a `vulnerability`, verify the file exists and cite the exact path and line. A `fail` verdict requires a confirmed file path on disk.\"",
+      "checked": "Compared the derived agent's '## GROUNDING RULES' block against the canonical text.",
+      "found": "Derived text keeps \"Before marking any case a `vulnerability`, verify the file exists and cite the exact path and line.\" but drops the following sentence \"A `fail` verdict requires a confirmed file path on disk.\" — the explicit tie between a fail verdict and a confirmed on-disk path is gone, for the exact agent canonical calls out as having \"previously invented vulnerabilities in files that did not exist.\"",
+      "remedy": "Restore \"A `fail` verdict requires a confirmed file path on disk\" verbatim."
+    },
+    {
+      "agent": "sast-sentinel",
       "severity": "advisory",
-      "claim": "src/hooks/useContent.ts (the hook 147+ components use to read Contentstack data)",
-      "checked": "grep -rl for imports of hooks/useContent and useContent( calls across src/**/*.{ts,tsx}, node_modules excluded.",
-      "found": "Actual usage is 123 files importing from \"hooks/useContent\" (131 if counting any file merely mentioning the word), not '147+' — the figure appears inflated and sits inside the same fabricated passage as the blocking finding above.",
-      "remedy": "Drop the specific count or replace it with a verified figure from an actual grep/codegraph query."
+      "claim": "Canonical named blocker rules both end: \"GROUNDING REQUIREMENT: paste the exact search/grep output ... into the finding's description. Do not report this rule without that evidence.\"",
+      "checked": "Compared the TOP-LEVEL-LISTENER and PROMISE-NO-REJECT rule definitions in the derived agent against canonical, sentence by sentence.",
+      "found": "Both derived rule definitions keep the GROUNDING REQUIREMENT sentence but drop the trailing \"Do not report this rule without that evidence.\" This is a narrower loss than in the other agents above, since sast-sentinel's general GROUNDING RULES section (unlike theirs) was kept fully intact and still forbids reporting anything unconfirmed — so the per-rule enforcement is redundant but not the sole safeguard.",
+      "remedy": "Restore the trailing sentence on both named rules for consistency with the rest of the retained grounding language."
+    },
+    {
+      "agent": "discovery-vocabulary-agent",
+      "severity": "blocking",
+      "claim": "A word naming a component of a listed candidate (e.g. 'checkout', 'confirmEmail') is never filler.",
+      "checked": "Read orchestrations/projects/metrolinx/prd.json, story AMSD-1919 (title, description, ticketComments) and grepped for the literal strings 'confirmEmail' and 'Confirm Email'.",
+      "found": "The ticket text contains 'Confirm Email' (two words, title case) twice, in the title and description, but the camelCase identifier 'confirmEmail' never occurs anywhere in the story's title, description, or comments — it is only a source-code field name (CheckoutForm.tsx's useWatch<ICheckoutFormValues, \"confirmEmail\">). The example therefore contradicts the persona's own hard rule stated two sentences later in the same brief: 'Every term you return must appear in the ticket text you were given. Do not invent vocabulary, do not generalise to words that are not there.' An agent following this worked example would whitelist a term that is not literally present in the ticket, which is exactly the failure this agent exists to prevent.",
+      "remedy": "Replace the example with a term that actually appears in the ticket text (e.g. 'checkout', 'email', or the two-word 'confirm email'), or drop 'confirmEmail' entirely so the brief does not contradict its own must-appear-in-ticket-text rule."
+    },
+    {
+      "agent": "guard-vocabulary-agent",
+      "severity": "advisory",
+      "claim": "where a CodeGraph index and query command are given, use them — do not assert a term is meaningful, check it; a candidate resolving to nothing is noise and belongs in the blacklist however technical it looks; a rare but meaningless token ... is promoted, not diluted, by a BM25/IDF ranker, so blacklist it with confidence when it resolves to nothing.",
+      "checked": "Compared the derived 'Verifying a term against the index' section line-by-line against the canonical text's equivalent section.",
+      "found": "Canonical explicitly branches on tool availability and ends with: 'When no index is available to you, say what you can support from the evidence you were given and no more. An honest short list beats a padded one.' The derived brief keeps only the index-available branch and drops this fallback sentence entirely, leaving the agent with no instruction for the no-index case.",
+      "remedy": "Restore an explicit no-index fallback, e.g. 'When no CodeGraph index is available, support every term only from the supplied code evidence and statements, and keep the list short rather than padding it.'"
+    },
+    {
+      "agent": "roster-reviewer",
+      "severity": "advisory",
+      "claim": "PRESENCE IS NOT CAPABILITY — resolve the actual exported interface/entry point/option inside the installed artefact at the version this project pins, not merely that the package name appears in package.json.",
+      "checked": "Compared the derived 'PRESENCE IS NOT CAPABILITY' paragraph against the canonical's fuller version of the same paragraph.",
+      "found": "Canonical's paragraph ends with an explicit instruction for claims that cannot be settled with available tools: 'If no tool available to you can settle a claim, report it as unverified and say what would settle it — never upgrade an unchecked claim to a sound one, and never downgrade one you simply could not reach to a defect.' The derived brief omits this sentence, leaving no guidance on how to treat a claim that resolution tools cannot reach.",
+      "remedy": "Add back the fallback instruction: report unreachable claims as unverified and state what would settle them, without treating 'could not verify' as equivalent to either 'sound' or 'defect'."
+    },
+    {
+      "agent": "checkout-page-detective",
+      "severity": "blocking",
+      "claim": "CANONICAL (verbatim-identical to code-graph-detective's canonical): 'OUTPUT — a JSON array of locationHint objects, most-likely first: [{\"file\":...,\"function\":...,\"reason\":...}]. ... PRESCRIBE THE MINIMAL FIX (mandatory `fix` field).' and 'TOOL — codegraph-agent-query.sh ... METHOD — ITERATE, don't one-shot. Call the tool 5-10 times...'",
+      "checked": "Compared checkout-page-detective's CANONICAL block against its DERIVED block, and cross-checked against code-graph-detective's derived block (same canonical ancestor, in this same batch) which does preserve the contract. Also verified in the repo that the codegraph tool referenced by the canonical exists at /home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh.",
+      "found": "checkout-page-detective's derived brief never mentions codegraph-agent-query.sh, the explore/callers/callees/impact subcommands, or the iterate-until-convergence method at all. Its output instruction is entirely prose: 'Report exactly what comparison logic exists today, which translation/error keys are referenced..., and which imports the file actually uses' — there is no JSON locationHint array and no mandatory `fix` field anywhere in the derived text. This is a sibling agent to code-graph-detective sharing the identical canonical ancestor, yet code-graph-detective's derived brief correctly preserves both the tool-driven method and the JSON+fix output contract (see its own derived block in this batch), proving the omission here is not an inherited/unavoidable simplification but a dropped requirement specific to this entry.",
+      "remedy": "Restore the OUTPUT contract (JSON array of locationHint objects with file/function/reason) and the mandatory `fix` field, and require use of codegraph-agent-query.sh via the explore/callers/callees iterate method, the same way code-graph-detective's derived brief does — otherwise any downstream stage expecting structured locationHints from this agent will receive unparseable prose instead."
     }
   ]
 }

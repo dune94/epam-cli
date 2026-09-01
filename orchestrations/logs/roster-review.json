@@ -1,38 +1,7 @@
 {
-  "verdict": "defects_found",
-  "findings": [
-    {
-      "agent": "checkout-flow-detective",
-      "severity": "advisory",
-      "claim": "note which other consumers (CheckoutFormContainer.tsx, CheckoutPaymentMethodsProvider.tsx) read or depend on that form state",
-      "checked": "Read src/components/pages/CheckoutPage/CheckoutPaymentMethodsProvider.tsx in full and grepped it for `email`, `confirmEmail`, `useFormContext`, `useWatch`.",
-      "found": "CheckoutPaymentMethodsProvider.tsx has no reference to email, confirmEmail, useFormContext, useWatch, or ICheckoutFormValues anywhere. It only consumes `cart` (for price/currency) and `useNextLocale()` to configure the Stripe <Elements> provider. It does not read or depend on the email/confirmEmail form state at all. CheckoutFormContainer.tsx, by contrast, does reference `email` at lines 145, 174, 192, 213 — that half of the claim holds.",
-      "remedy": "Drop CheckoutPaymentMethodsProvider.tsx from the list of consumers of the email/confirmEmail form state, or rephrase to note it only receives cart/locale props and has no coupling to the email fields.",
-      "verification": {
-        "kind": "not_mechanically_checkable",
-        "codeline": "gotransit",
-        "subject": "email/confirmEmail form-state usage in CheckoutPaymentMethodsProvider.tsx",
-        "expected": "absent",
-        "briefAsserts": "present"
-      }
-    },
-    {
-      "agent": "checkout-payments-fixer",
-      "severity": "advisory",
-      "claim": "The confirmEmail field's react-hook-form validate rule lives at CheckoutForm.tsx:305-311 and currently does a raw `value !== email` comparison (confirmed by reading the file)",
-      "checked": "Read src/components/pages/CheckoutPage/CheckoutForm.tsx lines 289-322.",
-      "found": "The validate function (`if (email && value && value !== email) { return t(\"TRM774\"); }`) spans lines 305-309, not 305-311. Lines 310-311 are the closing `}}` of the rules prop and the start of the unrelated renderLabel prop, not part of the validate rule.",
-      "remedy": "State the validate rule's line range as CheckoutForm.tsx:305-309.",
-      "verification": {
-        "kind": "not_mechanically_checkable",
-        "codeline": "gotransit",
-        "subject": "line range of confirmEmail validate rule in CheckoutForm.tsx",
-        "expected": "absent",
-        "briefAsserts": "present"
-      }
-    }
-  ],
+  "verdict": "sound",
+  "findings": [],
   "refuted": [],
   "reviewed": 2,
-  "cycles": 2
+  "cycles": 1
 }

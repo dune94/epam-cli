@@ -5,16 +5,12 @@
     "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
     "facts": [
       {
-        "text": "Tests run via `jest`, and `pretest` runs `npm run build:config` (esbuild bundling `next.config.source.ts` to `next.config.js`) before tests execute — this build step must succeed or `npm test` fails before any test runs.",
-        "source": "package.json scripts: \"pretest\": \"npm run build:config\", \"test\": \"jest\""
+        "text": "Tests run via `npm test` (jest); CheckoutForm's confirm-email validation is covered by src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx, which already exercises the confirmEmail field.",
+        "source": "package.json scripts.test: \"jest\"; src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx"
       },
       {
-        "text": "A pre-commit hook enforces a strict branch-naming pattern and will reject the commit if the current branch doesn't match `^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$`.",
-        "source": ".husky/pre-commit: valid_branch_regex=\"^(feature|bugfix|tech|release|hotfix)\\/[a-zA-Z0-9.-]+(\\/[a-z0-9-]+)?$\""
-      },
-      {
-        "text": "Component-level tests for this exact page already exist at `src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx` and `Checkout.spec.tsx`, so the fix's regression coverage belongs there.",
-        "source": "file listing: next.gotransit.com/src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx and Checkout.spec.tsx"
+        "text": "The pre-commit hook rejects any commit unless the current branch name matches `^(feature|bugfix|tech|release|hotfix)\\/[a-zA-Z0-9.-]+(\\/[a-z0-9-]+)?$`, and also runs `npx lint-staged`.",
+        "source": ".husky/pre-commit"
       }
     ]
   }

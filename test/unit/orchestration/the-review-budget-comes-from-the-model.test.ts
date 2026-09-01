@@ -27,10 +27,16 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
+// THE CANONICAL ROSTER, NOT THE MINTED ONE.
+//
+// agents/profiles.json is REGENERATED: restored from profiles.json.original at every
+// pre-run-reset and rewritten by the mint during a run. A test that measures it measures
+// whatever the last run happened to produce, so the same assertion passes or fails depending on
+// run state. profiles.json.original is the immutable source and is what a fresh run starts from.
 const REPO = process.cwd();
 const CONFIG = join(REPO, 'orchestrations/config');
 const RUNNER = readFileSync(join(REPO, 'orchestrations/scripts/spec-mode-runner.js'), 'utf8');
-const PROFILES = join(REPO, 'orchestrations/agents/profiles.json');
+const PROFILES = join(REPO, 'orchestrations/agents/profiles.json.original');
 const REGISTRY = join(REPO, 'orchestrations/agents/invocation-profiles.json');
 
 const sets = readdirSync(CONFIG).filter((f) => /^llm-defaults\..*\.json$/.test(f));

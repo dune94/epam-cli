@@ -438,7 +438,18 @@ function seamInvocationEnv(agent, agentsDir, opts) {
   // seamPattern, so it stays correct for a minted agent whose name nobody wrote down anywhere.
   env.EPAM_SEAM = seam;
 
-  if (profile.reasoningEffort) env.EPAM_REASONING_EFFORT = String(profile.reasoningEffort);
+  // REASONING EFFORT BELONGS TO THE LADDER, NOT THE SEAM.
+  //
+  // This exported profile.reasoningEffort, and next_ladder_step then treated the rung's configured
+  // level as a floor — so the seam's flat value won whenever it was higher, which for 33 of 41
+  // seams meant "high" on every rung. The ladder declares rungs[0].reasoningEffort so the cheap
+  // entry rung is cheap; that declaration could never take effect while this line existed.
+  //
+  // A seam is ASSIGNED to a ladder. It does not renegotiate what that ladder costs — the rule
+  // already settled for iterations (no seam carries its own maxIterations literal), now applied to
+  // effort. Operator decision 2026-09-01. The field is gone from the seam declarations too: a
+  // field that is read by nothing but still written reads as live, which is how base/mid/top
+  // survived across all 40 seams unnoticed.
   if (profile.temperature !== undefined && profile.temperature !== '') {
     env.EPAM_TEMPERATURE = String(profile.temperature);
   }

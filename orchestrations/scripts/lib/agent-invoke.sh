@@ -35,7 +35,13 @@ AGENT_PROFILES_REGISTRY="${AGENT_PROFILES_REGISTRY:-$(cd "$_AGENT_INVOKE_DIR/../
 # ladder instead, and checked below against the resolved value rather than the declaration.
 # Dropping it from this list without that check would reinstate exactly what this file
 # exists to prevent: "a reviewer running at 4096 tokens for months without anyone noticing".
-AGENT_INVOKE_REQUIRED_KEYS="maxOutputTokens reasoningEffort timeoutSecs captureCost"
+# reasoningEffort is NOT here either, for the same reason and by the same rule, extended on
+# 2026-09-01: a rung is (model, effort, room to work), and effort is the rung's to set. A seam
+# declared a flat value, seam-invocation exported it, and next_ladder_step treated the rung's
+# configured level as a FLOOR — so the seam won whenever it was higher, which for 33 of 41 seams
+# meant "high" on every rung and made the ladder's cheap entry rung cost the same as its ceiling.
+# It is still REQUIRED; it is required of the ladder instead, which declares it per rung.
+AGENT_INVOKE_REQUIRED_KEYS="maxOutputTokens timeoutSecs captureCost"
 
 # agent_profile_get <role> <key> — resolved value (profile overrides defaults).
 # Prints nothing and returns 1 if the role is unknown.
@@ -178,7 +184,13 @@ invoke_agent() {
             } catch (_) { process.stdout.write(""); }
           ' "$_AGENT_INVOKE_DIR" "$role" 2>/dev/null || printf '')
     fi
-    _effort=$(agent_profile_get   "$role" reasoningEffort)
+    # FROM THE LADDER, NOT THE PROFILE. This read the seam's declared reasoningEffort and exported
+    # it below, which is the channel by which a seam overrode the rung it was climbing. The value
+    # now arrives already resolved: claude.sh derives it from the rung's own declaration
+    # (EPAM_RUNG<N>_REASONING_EFFORT, read from the ladder config) before invoking anything.
+    # Empty is correct when no ladder has spoken yet — the per-role override below and a learned
+    # KB constraint can still set it, and claude.sh decides when neither does.
+    _effort="${EPAM_REASONING_EFFORT:-}"
     _timeout=$(agent_profile_get  "$role" timeoutSecs)
     _capture=$(agent_profile_get  "$role" captureCost)
     _tools=$(agent_profile_get    "$role" allowedTools  || echo "")

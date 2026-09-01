@@ -6655,7 +6655,19 @@ next_ladder_step() {
         2) _rung_effort="${EPAM_RUNG2_REASONING_EFFORT:-high}" ;;
         *) _rung_effort="${EPAM_RUNG3_REASONING_EFFORT:-high}" ;;
     esac
-    _next_effort=$(max_effort "$_effort" "$_rung_effort")
+    # THE RUNG DECIDES. This was max_effort("$_effort", "$_rung_effort") — the rung's level was a
+    # FLOOR, so whatever effort arrived could only ever be raised. What arrived was the SEAM's flat
+    # declaration, and 33 of 41 seams declare "high", so the ladder's rung-0 "medium" never applied
+    # anywhere. The cheap entry rung was never cheap.
+    #
+    # Measured 2026-09-01 on metrolinx: prompt-builder enters on claude-haiku-4-5 and each call took
+    # ~68s to emit ~2000 tokens of what its own registry entry calls "largely RESTATEMENT". Not
+    # haiku being slow — haiku reasoning hard, because the seam had overridden the rung. Across 39
+    # generated prompts at 2-3 calls each, that is the stage's ~1.5 hours.
+    #
+    # Operator decision 2026-09-01: a seam is ASSIGNED to a ladder and does not renegotiate what
+    # that ladder costs — the rule already settled for iterations, now applied to effort.
+    _next_effort="$_rung_effort"
 
     # When the model cannot move, effort is the only lever left — so it must rise.
     if [ "$_next_model" = "$_model" ] && [ "$_rung" -gt 0 ]; then

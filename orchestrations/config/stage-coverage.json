@@ -15,7 +15,8 @@
     "launch": [
       "^orchestrations/scripts/(tier[0-9].*|orchestrate|run-agent-orchestration|run-bounded|kill-tier3-run)\\.sh$",
       "^orchestrations/scripts/(mock-epam-run|run-suite-sharded|run-shell-tests|run-hello-world.*|run-travel-app-test)\\.sh$",
-      "^orchestrations/scripts/lib/(flags|node-bin|build-freshness|dist-freshness|free-run-guard|contamination-exit)\\.sh$"
+      "^orchestrations/scripts/lib/(flags|node-bin|build-freshness|dist-freshness|free-run-guard|contamination-exit)\\.sh$",
+      "^orchestrations/scripts/lib/orchestration-[a-z-]+\\\\.sh$"
     ],
     "ingest": [
       "^orchestrations/scripts/(ingest-jira-tickets|contextualize-stories)\\.sh$",
@@ -106,5 +107,6 @@
     "coverage/lcov.shell.info": [
       ".sh"
     ]
-  }
+  },
+  "_launchLibraries": "Inline blocks extracted from run-agent-orchestration.sh so they can be called by a test live in lib/orchestration-*.sh. They are launch code wherever they sit: moving a line into a library must not move it into another stage, or the refactor would flatter one stage at another expense while ALL CODE IS IN PLAY quietly stopped being true."
 }

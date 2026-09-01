@@ -1,0 +1,22 @@
+{
+  "codelines": [
+    {
+      "codeline": "mocka",
+      "state": "not_investigated",
+      "evidence": "the survey returned no entry for this codeline",
+      "surfaces": [],
+      "filesRead": []
+    },
+    {
+      "codeline": "mockb",
+      "state": "not_investigated",
+      "evidence": "the survey returned no entry for this codeline",
+      "surfaces": [],
+      "filesRead": []
+    }
+  ],
+  "recommendedInvestigators": [],
+  "recommendedWriters": [],
+  "violations": [],
+  "ran": true
+}

@@ -1,26 +1,34 @@
 {
   "codelines": [
     {
-      "name": "gotransit",
-      "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
-      "reason": "Contains the Go-Checkout page's Email/Confirm Email validation logic, which is exactly what the ticket describes as broken.",
-      "evidence": "src/components/pages/CheckoutPage/CheckoutForm.tsx:306 — validate: (value: string) => { if (email && value && value !== email) { return t(\"TRM774\"); } }",
+      "name": "mocka",
+      "path": "/home/bradleyjerome/projects/mock3/mock-a",
+      "reason": "MOCK3-1 covers the senior-fare boundary bug, and this repository's src/fares.ts contains the fare rule where riders aged 65 and over should pay the concession fare but age > 65 excludes exactly 65.",
+      "evidence": "ticket component \"mocka\"; src/fares.ts: \"if (rider.age > 65) return CONCESSION_FARE_CENTS;\" under the comment \"Riders aged 65 AND OVER pay the concession fare.\"",
       "facts": [
         {
-          "text": "Tests run via `jest` (npm script `test`).",
-          "source": "package.json scripts.test: \"jest\""
+          "text": "Tests are run with vitest via the package.json script \"test\": \"vitest run\"; the build check is \"build\": \"tsc --noEmit\" and lint is a no-op (\"lint\": \"echo no-lint-configured\").",
+          "source": "package.json: \"scripts\": { \"test\": \"vitest run\", \"lint\": \"echo no-lint-configured\", \"build\": \"tsc --noEmit\" }"
         },
         {
-          "text": "A matching spec file already exists for this component at src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx; a case-insensitivity fix should be covered there.",
-          "source": "find output: next.gotransit.com/src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx"
+          "text": "Source lives in src/fares.ts and its tests in test/fares.test.ts; the existing suite has no case for a rider aged exactly 65, only age 70 (\"charges the concession fare well past the senior boundary\"), so the boundary bug is untested.",
+          "source": "test/fares.test.ts: \"expect(fareFor({ age: 70, hasPass: false })).toBe(CONCESSION_FARE_CENTS);\""
+        }
+      ]
+    },
+    {
+      "name": "mockb",
+      "path": "/home/bradleyjerome/projects/mock3/mock-b",
+      "reason": "MOCK3-2 covers the departure board omitting the final stop, and this repository's src/schedule.ts contains formatStops looping to stops.length - 1, dropping the last stop, while totalMinutes is computed independently and stays correct.",
+      "evidence": "ticket component \"mockb\"; src/schedule.ts: \"for (let i = 0; i < stops.length - 1; i++)\" in formatStops",
+      "facts": [
+        {
+          "text": "Tests are run with vitest via the package.json script \"test\": \"vitest run\"; the build check is \"build\": \"tsc --noEmit\" and lint is a no-op (\"lint\": \"echo no-lint-configured\").",
+          "source": "package.json: \"scripts\": { \"test\": \"vitest run\", \"lint\": \"echo no-lint-configured\", \"build\": \"tsc --noEmit\" }"
         },
         {
-          "text": "A pre-commit hook (husky) runs `npx lint-staged` and also rejects commits unless the current branch name matches ^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$ — the commit is rejected outright on a non-conforming branch name.",
-          "source": ".husky/pre-commit"
-        },
-        {
-          "text": "Lint is run separately via `eslint src/ migration-scripts/ next.config.source.ts postbuild.ts next-sitemap.config.ts --ext .ts,.tsx,.js,.jsx` (npm script `lint`).",
-          "source": "package.json scripts.lint"
+          "text": "Source lives in src/schedule.ts and its tests in test/schedule.test.ts; the existing formatStops tests only assert the arrow separator and the first stop's name, never that the last stop appears, which is why the omission passes the suite.",
+          "source": "test/schedule.test.ts: \"expect(formatStops(LINE)).toContain('->');\" and \"expect(formatStops(LINE)).toContain('Union');\""
         }
       ]
     }

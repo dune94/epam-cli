@@ -266,16 +266,45 @@ const REPORT = process.env.STAGE_COVERAGE_REPORT || path.join(REPO, 'coverage/st
  * how a run pays for code nobody tested.
  */
 function sourcesNewerThanCoverage(cfg) {
-  let lcovMtime;
-  try { lcovMtime = fs.statSync(LCOV).mtimeMs; } catch { return null; }
-  // The OLDER of the two instruments decides: shell coverage measured last week does not become
-  // current because the JS suite ran this morning.
-  try { lcovMtime = Math.min(lcovMtime, fs.statSync(LCOV_SHELL).mtimeMs); } catch { /* absent */ } // absence is handled elsewhere
+  // EACH INSTRUMENT IS JUDGED AGAINST THE FILES IT MEASURES, AND NO OTHERS.
+  //
+  // This used to take the OLDER of the two reports as one deadline for every in-scope file. The
+  // intent was right — shell coverage measured last week does not become current because the JS
+  // suite ran this morning — but the two measure disjoint sets. A .sh file newer than lcov.info
+  // marked the whole report stale, though lcov.info has never held a line of shell, and the only
+  // way to clear it was a full JS suite run. In a tree this shell-heavy that is most edits: the
+  // loop meant to make coverage cheap became the slowest thing here, and the way out was to stop
+  // measuring. The rule below is strictly narrower and strictly correct.
+  const declared = (cfg && cfg.instruments) || null;
+  if (!declared) {
+    // NO GUESSING WHICH REPORT COVERS WHAT. Without the declaration the safe answer is the old
+    // one: every file judged against the older report.
+    let deadline;
+    try { deadline = fs.statSync(LCOV).mtimeMs; } catch { return null; }
+    try { deadline = Math.min(deadline, fs.statSync(LCOV_SHELL).mtimeMs); } catch { /* absent */ }
+    const moved = [];
+    for (const f of projectFiles(cfg)) {
+      let st; try { st = fs.statSync(f); } catch { continue; }
+      if (st.mtimeMs > deadline) moved.push(f.replace(`${REPO}/`, ''));
+    }
+    return moved;
+  }
+
+  const deadlineFor = new Map();
+  for (const [rel, exts] of Object.entries(declared)) {
+    let m;
+    try { m = fs.statSync(path.join(REPO, rel)).mtimeMs; } catch { return null; }
+    for (const e of exts) deadlineFor.set(e, m);
+  }
+
   const moved = [];
   for (const f of projectFiles(cfg)) {
-    let st;
-    try { st = fs.statSync(f); } catch { continue; }
-    if (st.mtimeMs > lcovMtime) moved.push(f.replace(`${REPO}/`, ''));
+    let st; try { st = fs.statSync(f); } catch { continue; }
+    const ext = path.extname(f);
+    const deadline = deadlineFor.get(ext);
+    // AN EXTENSION NOTHING MEASURES CANNOT BE VOUCHED FOR. Treat it as moved rather than as
+    // covered: silence here is exactly how untested code accumulates.
+    if (deadline === undefined || st.mtimeMs > deadline) moved.push(f.replace(`${REPO}/`, ''));
   }
   return moved;
 }
@@ -414,8 +443,23 @@ function refuseEmpty(stage) {
     + 'nothing to measure. Fix the declaration; a stage with no code must not be scored 0%.', 4);
 }
 
+// A STAGE IS REFUSED ONLY FOR ITS OWN FILES.
+//
+// A stage's percentage comes from that stage's files and nothing else, so its freshness depends on
+// those files and nothing else. This used to weigh every in-scope file against every question:
+// edit one handler and `stage-coverage.js launch` — a stage made entirely of shell, whose own
+// report was measured minutes ago — refused, citing a JavaScript file it does not contain. The gate
+// asks this per stage, so one edit anywhere turned every answer into "re-run the whole suite",
+// which is how a measurement loop stops being used at all.
+//
+// --all above is deliberately NOT narrowed: pre-flight must still refuse while ANY stage is
+// unmeasurable, because before money moves, unmeasured is not covered.
 const movedSinceSuite = sourcesNewerThanCoverage(cfg);
-if (movedSinceSuite && movedSinceSuite.length) refuseStaleCoverage(movedSinceSuite);
+if (movedSinceSuite && movedSinceSuite.length) {
+  const mine = new Set(filesForStage(cfg, arg).map((f) => f.replace(`${REPO}/`, '')));
+  const relevant = movedSinceSuite.filter((f) => mine.has(f));
+  if (relevant.length) refuseStaleCoverage(relevant);
+}
 
 const cached = fromReport(cfg, arg);
 if (cached) {

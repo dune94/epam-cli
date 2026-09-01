@@ -1,26 +1,14 @@
 {
   "minted": [
     {
-      "name": "checkout-form-engineer",
+      "name": "stand-in-engineer",
       "kind": "implementer",
-      "codeline": "",
-      "rationale": "The ticket AMSD-1919 isolates a concrete, reproducible bug to one validate function in CheckoutForm.tsx, and no existing agent (frontend-engineer, typescript-engineer, billing-engineer) is briefed specifically on this checkout-form validation path or the TRM774 case-sensitivity behavior it must fix.",
+      "codeline": "stand-in reply for the agent-mint seam, long enough to satisfy the contract's declared minimum so the consumer judges the WIRING rather than the prose",
+      "rationale": "stand-in reply for the agent-mint seam, long enough to satisfy the contract's declared minimum so the consumer judges the WIRING rather than the prose",
       "surfaces": [
         "profiles.json",
         "kb",
         "project-roles",
-        "project-profiles"
-      ]
-    },
-    {
-      "name": "checkout-flow-detective",
-      "kind": "investigator",
-      "codeline": "gotransit",
-      "rationale": "The reported case-sensitivity bug in AMSD-1919 is isolated to a single validate rule in CheckoutForm.tsx, so an investigator who knows this exact directory (CheckoutForm.tsx, CheckoutFormProvider.tsx, types.ts, and the confirmed __tests__/CheckoutForm.spec.tsx test file) can hand the implementer a precise, re-verified account of the current logic and test coverage before any code changes.",
-      "surfaces": [
-        "profiles.json",
-        "kb",
-        "project-investigators",
         "project-profiles"
       ]
     }
@@ -28,18 +16,11 @@
   "rejected": [],
   "unchanged": [],
   "projectRoles": [
-    "checkout-form-engineer"
+    "stand-in-engineer"
   ],
-  "projectInvestigators": [
-    "checkout-flow-detective"
-  ],
-  "rejectedAcrossAttempts": [
-    {
-      "name": "checkout-flow-detective",
-      "reason": "brief names 1 path(s) that do not exist in codeline 'gotransit': __tests__/CheckoutForm.spec.tsx"
-    }
-  ],
-  "proposed": 3,
-  "attempts": 2,
+  "projectInvestigators": [],
+  "proposed": 1,
+  "rejectedAcrossAttempts": [],
+  "attempts": 1,
   "protectedRoles": 21
 }

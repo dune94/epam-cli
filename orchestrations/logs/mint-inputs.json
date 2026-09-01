@@ -1,14 +1,19 @@
 {
   "codelines": [
     {
-      "name": "gotransit",
-      "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
-      "declaredDependencies": 149
+      "name": "mocka",
+      "path": "/home/bradleyjerome/projects/mock3/mock-a",
+      "declaredDependencies": 2
+    },
+    {
+      "name": "mockb",
+      "path": "/home/bradleyjerome/projects/mock3/mock-b",
+      "declaredDependencies": 2
     }
   ],
-  "codelineRepo": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
-  "declaredDependencies": 149,
-  "documentsLinked": 4,
-  "documentsFetched": 4,
+  "codelineRepo": "/home/bradleyjerome/projects/mock3/mock-a",
+  "declaredDependencies": 2,
+  "documentsLinked": 0,
+  "documentsFetched": 0,
   "documentsUnfetched": []
 }

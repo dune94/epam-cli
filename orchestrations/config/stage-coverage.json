@@ -96,5 +96,15 @@
   "_whatIsExcluded": "node_modules is vendored, dist is build output, archived and .parked are not source. NOTHING ELSE. An exclusion is a denominator choice, and a denominator I choose is one I can flatter — /tools/ was excluded here for one commit and that was already one too many.",
   "_howOwnershipIsDecided": "Declared, in order, and matched first-wins. A derivation was tried and discarded: attributing a file to the nearest preceding step_emit put 140 files in step-18 because that is where their name first appears in the orchestrator, which is arbitrary. A bad derivation is an invented denominator wearing a derivation's clothes. These are the stages the pipeline actually performs, and the audit proves every file lands in exactly one.",
   "_whyNoCatchAll": "The last pattern was ^orchestrations/scripts/.*$ — a catch-all, so no file could ever be unassigned and the completeness check could never fail. A check that cannot fail is not a check; it is a denominator arranged to flatter. Every stage now claims files deliberately, and an unclaimed file is a real finding: nobody has said which stage runs it, so nothing gates it.",
-  "$scope": "src/ is OUT OF SCOPE (operator decision 2026-08-31). It is the epam CLI — a separate product from the orchestration pipeline. The pipeline executes dist/epam.js, so src/ is not dead, but it is not what this coverage baseline governs. Removing it from roots keeps the invariant intact: every line under the declared roots belongs to exactly one stage, and stage lines still equal project lines."
+  "$scope": "src/ is OUT OF SCOPE (operator decision 2026-08-31). It is the epam CLI — a separate product from the orchestration pipeline. The pipeline executes dist/epam.js, so src/ is not dead, but it is not what this coverage baseline governs. Removing it from roots keeps the invariant intact: every line under the declared roots belongs to exactly one stage, and stage lines still equal project lines.",
+  "_whichInstrumentMeasuresWhat": "A report can only go stale against files it actually contains. lcov.info holds no shell and lcov.shell.info holds no JavaScript, so judging every file against the OLDER of the two made one .sh edit demand a full JS re-measure — hundreds of seconds, for a report that never covered the edited file. Declared here rather than in the handler because `extensions` is already declared here, and the two must not be able to disagree. An extension listed in `extensions` but in no instrument is refused: nothing measures it, so nothing can vouch for it.",
+  "instruments": {
+    "coverage/lcov.info": [
+      ".js",
+      ".ts"
+    ],
+    "coverage/lcov.shell.info": [
+      ".sh"
+    ]
+  }
 }

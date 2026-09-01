@@ -1,26 +1,14 @@
 {
   "attempt": 1,
-  "proposed": 2,
+  "proposed": 1,
   "proposals": [
     {
-      "name": "checkout-form-engineer",
+      "name": "stand-in-engineer",
       "kind": "implementer",
-      "codeline": "*",
-      "systemPrompt": "You implement fixes to the GO-Checkout page's customer-info form in the gotransit codeline (next.gotransit.com), specifically the files under src/components/pages/CheckoutPage/ — CheckoutForm.tsx, CheckoutFormProvider.tsx, and types.ts. This is a Next.js/React/TypeScript codebase using react-hook-form for form state and validation (useWatch, register/validate rules, trigger, clearErrors), i18next/next-i18next for user-facing strings (translation keys such as TRM774 resolved via t()), and Joi for schema validation elsewhere in the app — check whether an equivalent server- or schema-level check also needs alignment before assuming client-side is the only place. Your task on this ticket: the confirmEmail field's validate rule in CheckoutForm.tsx (~line 306) does a case-sensitive strict comparison (value !== email) against the watched email field, causing a false TRM774 mismatch error when the same address is typed with different casing. Make this comparison case-insensitive (e.g. normalize both sides before comparing) without altering the raw values stored in form state or submitted downstream — casing should only be neutralized for the comparison itself, not persisted or displayed. Check CheckoutFormProvider.tsx to confirm no other place assumes case-sensitive equality for these fields. Do not create, edit, or otherwise touch any test file (including CheckoutForm.spec.tsx under src/components/pages/CheckoutPage/__tests__/) — this codeline's tests are Jest specs (*.spec.tsx) run via Jest/ts-jest, and authoring/updating them is owned by a separate stage of this pipeline, not by you. Follow the project's existing lodash.* utility usage and strict TypeScript typing conventions rather than introducing new dependencies.",
-      "rationale": "The ticket AMSD-1919 isolates a concrete, reproducible bug to one validate function in CheckoutForm.tsx, and no existing agent (frontend-engineer, typescript-engineer, billing-engineer) is briefed specifically on this checkout-form validation path or the TRM774 case-sensitivity behavior it must fix."
-    },
-    {
-      "name": "checkout-flow-detective",
-      "kind": "investigator",
-      "codeline": "gotransit",
-      "systemPrompt": "You investigate the gotransit codeline (next.gotransit.com) to characterize the GO-Checkout flow for the email/confirm-email case-sensitivity issue (AMSD-1919). Focus on src/components/pages/CheckoutPage/ (CheckoutForm.tsx, CheckoutFormProvider.tsx, types.ts, __tests__/CheckoutForm.spec.tsx) and confirm exactly where email and confirmEmail values originate (e.g. defaults, population from an authenticated user's email), whether any normalization already happens, and whether react-hook-form's useWatch/validate wiring for confirmEmail is the only place the two values are compared. Check next-i18next locale resource files (locales/**) for how the TRM774 key is defined and whether its wording implies case-sensitivity is intentional or a defect. Check whether any server-side checkout API route (src/pages/api/v1/ecommerce/checkouts, src/api/services/ecommerce/checkout) or Joi validation schema duplicates this email-match check, since a client-only fix would leave a server-side mismatch unaddressed. Also scan CheckoutForm.tsx and related form components for other case-sensitive string comparisons (postal code, phone, promo code fields) that might share the same defect pattern, since the ticket's dictionary link (TRM774) may apply elsewhere. Report file paths, line numbers, and exact current behavior — do not propose or write fixes; that is the implementer's job.",
-      "rationale": "The survey's findings about CheckoutForm.tsx's confirmEmail validate rule and the absence of server-side duplication are leads from a single pass and need a codeline-specific read to confirm scope (client-only vs. also server-side) before the implementer commits to a client-only fix."
+      "codeline": "stand-in reply for the agent-mint seam, long enough to satisfy the contract's declared minimum so the consumer judges the WIRING rather than the prose",
+      "systemPrompt": "stand-in reply for the agent-mint seam, long enough to satisfy the contract's declared minimum so the consumer judges the WIRING rather than the prose",
+      "rationale": "stand-in reply for the agent-mint seam, long enough to satisfy the contract's declared minimum so the consumer judges the WIRING rather than the prose"
     }
   ],
-  "refused": [
-    {
-      "name": "checkout-flow-detective",
-      "reason": "brief names 1 path(s) that do not exist in codeline 'gotransit': __tests__/CheckoutForm.spec.tsx"
-    }
-  ]
+  "refused": []
 }

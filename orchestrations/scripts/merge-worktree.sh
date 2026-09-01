@@ -166,12 +166,12 @@ merge_output=$(mktemp)
 # shellcheck disable=SC2064
 trap "rm -f $merge_output" EXIT
 
-if ! git merge --no-commit --no-ff "$BRANCH_NAME" 2>&1 | tee "$merge_output"; then
-    # Merge command failed - could be conflicts or other error
-    merge_failed=true
-else
-    merge_failed=false
-fi
+# THE MERGE HAPPENS IN THIS CONDITION — the branches only recorded its result, into a variable
+# nothing ever read. The verdict is taken below from the merge output itself, by looking for
+# CONFLICT, so the recording was dead while the command is essential. Kept as a bare command with
+# its status deliberately discarded: a non-zero merge is EXPECTED here (that is what a conflict
+# looks like) and is judged on the next lines.
+git merge --no-commit --no-ff "$BRANCH_NAME" 2>&1 | tee "$merge_output" || true
 
 # Check for conflicts in output
 if grep -qi "CONFLICT\|Automatic merge failed" "$merge_output"; then

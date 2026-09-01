@@ -667,7 +667,6 @@ while IFS= read -r sid; do
 
   # Phase and position
   phase="${STORY_PHASE[$sid]:-unknown}"
-  position="${STORY_POSITION[$sid]:-1}"
 
   # Count unresolved dependencies
   dep_unresolved=0

@@ -55,7 +55,8 @@ fi
 PHASE_ID=$1
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
-export PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
+PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
+export PROJECT_ROOT
 PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
 COST_LOG="${COST_LOG:-$AUTOMATION_DIR/logs/phase-cost.jsonl}"
 GATE_LOG="${GATE_LOG:-$AUTOMATION_DIR/logs/phase-gates.jsonl}"
@@ -81,7 +82,6 @@ echo ""
 stories_complete=true
 deliverables_present=true
 tests_passing=true
-cost_within_threshold=true   # false only when variance >= GATE_ESCALATE_THRESHOLD
 cost_tier="ok"               # ok | warn | escalate
 declare -a issues=()
 
@@ -216,7 +216,6 @@ if [ -f "$COST_LOG" ]; then
 
         # Tiered decision
         if (( $(echo "$variance_pct >= $GATE_ESCALATE_THRESHOLD" | bc -l) )); then
-            cost_within_threshold=false
             cost_tier="escalate"
             error "Cost variance: ${variance_pct}% -- EXCEEDS escalate threshold (${GATE_ESCALATE_THRESHOLD}%)"
             issues+=("{\"type\":\"cost_overrun\",\"description\":\"Variance ${variance_pct}% exceeds escalate threshold ${GATE_ESCALATE_THRESHOLD}%\",\"severity\":\"blocker\",\"variance_pct\":${variance_pct},\"threshold\":${GATE_ESCALATE_THRESHOLD},\"auto_approved\":false}")

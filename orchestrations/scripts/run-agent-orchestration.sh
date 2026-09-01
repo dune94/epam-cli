@@ -1672,6 +1672,9 @@ hot_swap_story_model_if_unstable() {
         for map_pair in "${map_pairs[@]}"; do
             map_from="${map_pair%%=*}"
             map_to="${map_pair#*=}"
+            # The pattern is a GLOB from the provider map and must stay unquoted: quoting it would match the
+            # literal characters, and no mapping would ever fire.
+            # shellcheck disable=SC2254
             case "$new_model" in
                 $map_from) new_provider="$map_to"; break ;;
             esac
@@ -5696,6 +5699,10 @@ else
         # PIPESTATUS[0], not the pipeline status: without pipefail this is tee's, always 0, so a
         # failed coordinator read as a success and every story kept whatever model it had.
         _mc_rc="${PIPESTATUS[0]}"
+        # Every line here forwards a value to the child process, and each expansion deliberately reads
+        # the OUTER value — which IS the value being forwarded. shellcheck is right about the shape and
+        # wrong about the intent; rewriting it risks silently dropping a credential the child needs.
+        # shellcheck disable=SC2097,SC2098
         ACTIVITY_FILE="${ACTIVITY_FILE:-$LOG_DIR/agent-activity.jsonl}" LOG_DIR="$LOG_DIR" \
           "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/emit-cost.js" "$_mc_cost" prd-model-coordinator 2>/dev/null || true
         rm -f "$_mc_cost" 2>/dev/null || true

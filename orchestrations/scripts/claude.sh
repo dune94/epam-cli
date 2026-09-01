@@ -2430,7 +2430,8 @@ build_implementation_prompt() {
     local files
     files=$(story_declared_files "$story_json" | paste -sd', ' -)
 
-    local dependencies=$(echo "$story_json" | jq -r \
+    local dependencies
+    dependencies=$(echo "$story_json" | jq -r \
         '(.dependencies // .technicalNotes.dependsOn // []) | join(", ")')
 
     # In worktree mode, rewrite ALL occurrences of the main repo absolute path in the
@@ -3152,7 +3153,8 @@ build_generator_prompt() {
     technical_notes=$(echo "$story_json" | jq -r '.technicalNotes // empty')
     local files
     files=$(echo "$story_json" | jq -r '.technicalNotes.files // [] | join(", ")')
-    local dependencies=$(echo "$story_json" | jq -r \
+    local dependencies
+    dependencies=$(echo "$story_json" | jq -r \
         '(.dependencies // .technicalNotes.dependsOn // []) | join(", ")')
 
     # Rewrite main-repo absolute paths to worktree path in all prompt fields
@@ -5979,6 +5981,9 @@ run_planning_phase() {
     declared_files_raw=$(jq -r --arg id "$story_id" \
         '.stories[] | select(.id == $id) | .technicalNotes.files // [] | .[]' \
         "$prd_target" 2>/dev/null || echo "")
+    # These are forwarded to the child process invoked below. shellcheck cannot see the consumer,
+    # so it reports them unused; removing them would take the values away from the child.
+    # shellcheck disable=SC2034
     declared_files=$(jq -r --arg id "$story_id" \
         '.stories[] | select(.id == $id) | .technicalNotes.files // [] | .[]' \
         "$prd_target" 2>/dev/null | sed 's/^/  - /' || echo "")
@@ -6599,7 +6604,6 @@ next_effort() {
         [ -z "$first" ] && first="$lvl"
         if [ "$found" = 1 ]; then echo "$lvl"; return; fi
         [ "$lvl" = "$cur" ] && found=1
-        prev="$lvl"
     done
     # at the top, or unrecognised: saturate at the top / start at the second level
     if [ "$found" = 1 ]; then echo "$cur"; else echo "$first"; fi
@@ -8184,8 +8188,6 @@ PYEOF
                         local kb_dir
                         kb_dir="$(dirname "$SCRIPT_DIR")/agents"
                         local kb_file; kb_file=$(_kb_file_for_story "$story_id" "$kb_dir")
-                        local kb_ts
-                        kb_ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "unknown")
                         # NO TRUNCATION — entries are single actionable rules, and a rule
                         # carrying a regex, path or command is destroyed by a character cut.
                         # Length is a REJECTION criterion upstream (the note goes back for
@@ -10405,6 +10407,10 @@ $_kb_section"
                 # silently stayed at the floor. Persisting it is the only way the value travels
                 # upward. See lib/story-retry-state.sh for the measured cost.
                 write_story_effective_iterations "$LOG_DIR" "$story_id" "$_effective_max_iterations"
+                # Every line here forwards a value to the child process, and each expansion deliberately reads
+                # the OUTER value — which IS the value being forwarded. shellcheck is right about the shape and
+                # wrong about the intent; rewriting it risks silently dropping a credential the child needs.
+                # shellcheck disable=SC2097,SC2098
                 if echo "$prompt" | \
                         EPAM_DANGEROUS_SKIP_APPROVAL=1 \
                         EPAM_AGENT_ROLE="${_story_agent_role}" \
@@ -11364,13 +11370,14 @@ build_kb_prompt_section() {
     local story_id=$1
     local retry_count=${2:-0}
     local next_kb_id=${3:-KB-001}
-    local today
-    today=$(date +'%Y-%m-%d')
 
     local kb_entries
     kb_entries=$(get_relevant_kb_entries "$story_id")
 
     local retry_note=""
+    # These are forwarded to the child process invoked below. shellcheck cannot see the consumer,
+    # so it reports them unused; removing them would take the values away from the child.
+    # shellcheck disable=SC2034
     [ "$retry_count" -gt 0 ] && \
         retry_note="**This is retry attempt ${retry_count}** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed."
 
@@ -12052,7 +12059,8 @@ main() {
             local filtered_stories=()
             while IFS= read -r sid; do
                 [ -z "$sid" ] && continue
-                local story_group=$(jq -r --arg id "$sid" \
+                local story_group
+                story_group=$(jq -r --arg id "$sid" \
                     '.stories[] | select(.id == $id) | .agentGroup // "main"' "$PRD_FILE")
                 if [ "$story_group" = "$WORKTREE_MODE" ]; then
                     filtered_stories+=("$sid")

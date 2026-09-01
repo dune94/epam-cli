@@ -185,6 +185,9 @@ _provider_for_model() {
     IFS='|' read -ra _pairs <<< "$_map"
     for _pair in "${_pairs[@]}"; do
         _pat="${_pair%%=*}"; _prov="${_pair#*=}"
+        # The pattern is a GLOB from the provider map and must stay unquoted: quoting it would match the
+        # literal characters, and no mapping would ever fire.
+        # shellcheck disable=SC2254
         case "$_m" in $_pat) echo "$_prov"; return ;; esac
     done
     echo "${EPAM_ORCHESTRATION_PROVIDER:-claude}"
@@ -405,7 +408,11 @@ while IFS= read -r story_id; do
         '.stories[] | select(.id == $id) | .title' "$PRD_FILE")
     STORY_AGENT=$(jq -r --arg id "$story_id" \
         '.stories[] | select(.id == $id) | .agentRole // "unknown"' "$PRD_FILE")
-    export STORY_COMPLETED=$(jq -r --arg id "$story_id" \
+    # These are forwarded to the child process invoked below. shellcheck cannot see the consumer,
+    # so it reports them unused; removing them would take the values away from the child.
+    # shellcheck disable=SC2034
+    STORY_COMPLETED=$(jq -r --arg id "$story_id" \
+    export STORY_COMPLETED
         '.stories[] | select(.id == $id) | .completed' "$PRD_FILE")
 
     # B26 — review keys on CHANGES, not on `completed`.

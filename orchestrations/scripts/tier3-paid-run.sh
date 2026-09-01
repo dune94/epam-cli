@@ -91,6 +91,9 @@ fi
 . "$SCRIPT_DIR/lib/pre-run-reset-gate.sh"
 pre_run_reset_or_abort --prd "$PRD_FILE"
 
+# These are forwarded to the child process invoked below. shellcheck cannot see the consumer,
+# so it reports them unused; removing them would take the values away from the child.
+# shellcheck disable=SC2034
 OPENROUTER_API_KEY="$OPENROUTER_API_KEY" \
 EPAM_API_KEY_OPENROUTER="$OPENROUTER_API_KEY" \
 OPENAI_API_KEY="${OPENAI_API_KEY:-}" \

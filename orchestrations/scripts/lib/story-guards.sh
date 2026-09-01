@@ -178,6 +178,10 @@ validate_mid_execution_splits() {
 
     log "  [split-gate] Running speckit on mid-execution splits: $_new_split_ids"
     set +e
+    # Every line here forwards a value to the child process, and each expansion deliberately reads
+    # the OUTER value — which IS the value being forwarded. shellcheck is right about the shape and
+    # wrong about the intent; rewriting it risks silently dropping a credential the child needs.
+    # shellcheck disable=SC2097,SC2098
     PRD_FILE="$PRD_FILE" OUTPUT_DIR="$LOG_DIR" \
         AI_RUNNER_CMD="$AI_RUNNER_CMD" \
         EPAM_ORCHESTRATION_PROVIDER="${ORCH_GATE_PROVIDER:-${EPAM_ORCHESTRATION_PROVIDER:-}}" \

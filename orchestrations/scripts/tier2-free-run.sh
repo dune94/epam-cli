@@ -93,6 +93,10 @@ python3 "$SCRIPT_DIR/lib/handlers/prd-set-model-for-provider.py" "$PRD_FILE" "$F
 . "$SCRIPT_DIR/lib/pre-run-reset-gate.sh"
 pre_run_reset_or_abort --prd "$PRD_FILE"
 
+# Every line here forwards a value to the child process, and each expansion deliberately reads
+# the OUTER value — which IS the value being forwarded. shellcheck is right about the shape and
+# wrong about the intent; rewriting it risks silently dropping a credential the child needs.
+# shellcheck disable=SC2097,SC2098
 OPENROUTER_API_KEY="$OPENROUTER_API_KEY" \
 EPAM_API_KEY_OPENROUTER="$OPENROUTER_API_KEY" \
 PRD_FILE="$PRD_FILE" \

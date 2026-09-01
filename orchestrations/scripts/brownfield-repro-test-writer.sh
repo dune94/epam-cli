@@ -142,6 +142,9 @@ TEST_FILES=(); FIX_FILES=()
 for f in "${_CHANGED[@]}"; do
     [ -z "$f" ] && continue
     case "$f" in node_modules/*|*/node_modules/*|dist/*|build/*|coverage/*|.git/*|.epam/*) continue ;; esac
+    # The pattern is a GLOB from the provider map and must stay unquoted: quoting it would match the
+    # literal characters, and no mapping would ever fire.
+    # shellcheck disable=SC2254
     case "$f" in
         *.test.*|*.spec.*|*/__tests__/*|*_test.*) TEST_FILES+=("$f") ;;
         *) FIX_FILES+=("$f") ;;

@@ -1230,8 +1230,27 @@ if (require.main !== module) return;
     const _promptReviewEnabled = String(process.env.EPAM_PROMPT_REVIEW_ENABLED ?? '1') !== '0';
     // Hoisted so the reviewer is handed exactly the codelines the generator was — a reviewer
     // checking claims against different facts than the writer saw is not a review.
-    const _codelineContext = codelines
-      .map((c) => `- ${(c && c.name) || c}`).join('\n');
+    // THE GENERATOR IS GIVEN VERIFIED FACTS, OR TOLD IT HAS NONE.
+    //
+    // This passed a bare name per codeline while project-prompt-generation.json instructs the
+    // generator to "name no file, symbol, package or command that does not appear in the context
+    // you were given". With no files in the context, the only compliant answer was to name nothing,
+    // and the model resolved it the other way: the team-lead-review prompt asserted "Form
+    // components are typically in src/components/Checkout/", which does not exist. prompt-review
+    // rejected all three attempts and the mint died (metrolinx AMSD-1919, 2026-09-01).
+    //
+    // codeline-facts.json and the survey's surfaces were already computed by this point and went
+    // nowhere. Surfaces are checked against disk before being named, so the context cannot itself
+    // become the source of a fabrication.
+    const { buildCodelineContext } = require('./lib/codeline-context.js');
+    const _factsFile = projectConfigDir
+      ? path.join(projectConfigDir, 'codeline-facts.json') : null;
+    const _surveyed = (survey && survey.ran && Array.isArray(survey.codelines))
+      ? survey.codelines.map((c) => ({ codeline: c.codeline, surfaces: c.surfaces || [] }))
+      : [];
+    const _codelineContext = buildCodelineContext({
+      codelines, factsFile: _factsFile, surveyed: _surveyed,
+    });
     const _built = await buildProjectPrompts({
       templatesDir,
       bootstrapFile,
@@ -1244,9 +1263,8 @@ if (require.main !== module) return;
         `Project config: ${projectConfigDir}`,
         `Tickets in scope: ${stories.map((t) => `${t.jiraKey || t.id}: ${t.title || ''}`).join(' | ')}`,
       ].join('\n'),
-      codelineContext: codelines
-        .map((c) => `- ${c.name} (${c.path})${c.dependencies && c.dependencies.length ? ` deps: ${c.dependencies.join(', ')}` : ''}`)
-        .join('\n'),
+      // The same text the reviewer is handed, so the generator and its judge see one context.
+      codelineContext: _codelineContext,
       mintedRoles: _mintedDetail.length
         ? _mintedDetail.map((m) => `- ${m.name} [${m.kind}] — ${m.rationale || ''}`).join('\n')
         : '(none minted this run)',

@@ -1,5 +1,5 @@
 {
-  "id": "jira-sourced-1788291889335",
+  "id": "jira-sourced-1788294560024",
   "title": "metrolinx",
   "version": "1.0.0",
   "lastUpdated": "2026-09-01",
@@ -31,7 +31,7 @@
       "codeline": "gotransit",
       "status": "pending",
       "completed": false,
-      "agentRole": null,
+      "agentRole": "checkout-forms-engineer",
       "agentGroup": "main",
       "effort": "medium",
       "estimate": null,
@@ -83,7 +83,10 @@
           "author": "V-NandaKumar KR",
           "created": "2026-07-28T12:55:49.205-0400"
         }
-      ]
+      ],
+      "agentRoles": {
+        "gotransit": "checkout-forms-engineer"
+      }
     }
   ],
   "currentIteration": 1

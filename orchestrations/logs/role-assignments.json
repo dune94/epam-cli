@@ -1,0 +1,8 @@
+[
+  {
+    "storyId": "AMSD-1919",
+    "codeline": "gotransit",
+    "agentRole": "checkout-forms-engineer",
+    "reason": "The bug is in the Email/Confirm Email validation logic on the Go-Checkout page, which is checkout form code owned by the checkout-forms-engineer."
+  }
+]

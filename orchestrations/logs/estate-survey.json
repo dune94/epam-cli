@@ -3,14 +3,15 @@
     {
       "codeline": "gotransit",
       "state": "in_scope",
-      "evidence": "Grepped for confirmEmail/ConfirmEmail across src, found the Go-Checkout page's email/confirm-email fields in CheckoutForm.tsx. Read lines 255-324: the confirmEmail FormInput's `validate` rule (line 305-309) does `if (email && value && value !== email) return t(\"TRM774\")` — a direct, case-sensitive string comparison with no normalization, matching the ticket's description of the bug and the TRM774 dictionary-term reference in the linked docs. CheckoutFormProvider.tsx sets the default/initial values for email and confirmEmail fields. types.ts declares confirmEmail: string on the form's value type. CheckoutForm.spec.tsx (line 248-259) has an existing test 'should trigger validation error on blur only when confirmEmail field is not empty' asserting the TRM774 error text appears, showing there's already test scaffolding for this exact validation path.",
+      "evidence": "Located the Go-Checkout page's Email/Confirm Email fields in CheckoutForm.tsx. The confirmEmail FormInput's `validate` rule (line 306) does `if (email && value && value !== email) return t(\"TRM774\");` — a strict, case-sensitive string comparison. TRM774 is the exact dictionary term ID referenced in the ticket's linked Confluence page ('2.2.4 GO Dictionary of Terms... #TRM774'), confirming this is the mismatch error message in question. Also read CheckoutFormProvider.tsx which seeds `confirmEmail: user.email` as default form state, and the existing spec file CheckoutForm.spec.tsx which has a test 'should trigger validation error on blur only when confirmEmail field is not empty' exercising this validate function with different emails (scooby@dooby.com vs shaggy@dooby.com) — no existing test covers case-only differences.",
       "surfaces": [
         "src/components/pages/CheckoutPage"
       ],
       "filesRead": [
         "src/components/pages/CheckoutPage/CheckoutForm.tsx",
+        "src/components/pages/CheckoutPage/types.ts",
         "src/components/pages/CheckoutPage/CheckoutFormProvider.tsx",
-        "src/components/pages/CheckoutPage/types.ts"
+        "src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx"
       ],
       "evidenceGap": false
     }
@@ -19,8 +20,8 @@
   "recommendedWriters": [
     {
       "codeline": "gotransit",
-      "focus": "Make the confirmEmail validation rule in the Go-Checkout form compare email and confirmEmail case-insensitively (and update/add coverage in CheckoutForm.spec.tsx for mixed-case matching inputs, e.g. uppercase in one field vs lowercase in the other, no longer triggering the TRM774 mismatch error)",
-      "why": "The exact comparison logic (`value !== email`) and its existing TRM774-asserting test are both directly readable in CheckoutForm.tsx and CheckoutForm.spec.tsx, so this codeline needs someone who can both edit the validation and adjust/extend the existing test rather than someone who only reads it"
+      "focus": "Make the confirmEmail validate rule in CheckoutForm.tsx case-insensitive when comparing against the email field, and extend CheckoutForm.spec.tsx with a test case for same email in differing letter casing (e.g. uppercase vs lowercase) producing no validation error.",
+      "why": "The exact fix site (a strict `value !== email` comparison at CheckoutForm.tsx:306) and its existing test scaffolding (CheckoutForm.spec.tsx, which already has a mismatch test using two different emails) are both identified and ready for a single, self-contained code+test change in this one codeline."
     }
   ],
   "violations": [],

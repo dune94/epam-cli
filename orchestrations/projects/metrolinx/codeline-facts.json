@@ -5,8 +5,16 @@
     "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
     "facts": [
       {
-        "text": "`npm test` (jest) will fail unless `next.config.js` has been generated first, because `pretest` runs `npm run build:config`, which bundles `next.config.source.ts` into `next.config.js` via esbuild.",
-        "source": "package.json scripts: \"pretest\": \"npm run build:config\", \"build:config\": \"esbuild next.config.source.ts --bundle --outfile=next.config.js --platform=node --external:./node_modules/* --target=es2020 --minify\""
+        "text": "Tests run via `jest` (npm run test); `test:coverage-check` runs `jest --coverage` after `npm run build:config`.",
+        "source": "package.json scripts: \"test\": \"jest\", \"pretest:coverage-check\": \"npm run build:config\", \"test:coverage-check\": \"jest --coverage\""
+      },
+      {
+        "text": "A pre-commit hook (husky) runs `npx lint-staged` and then rejects the commit unless the current branch name matches `^(feature|bugfix|tech|release|hotfix)\\/[a-zA-Z0-9.-]+(\\/[a-z0-9-]+)?$`.",
+        "source": ".husky/pre-commit"
+      },
+      {
+        "text": "lint-staged runs `npm run check-types` on any staged .ts/.tsx file, plus eslint and prettier --write on staged .ts/.js/.tsx/.jsx files.",
+        "source": ".lintstagedrc.js"
       }
     ]
   }

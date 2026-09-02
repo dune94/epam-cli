@@ -523,7 +523,25 @@ fi
 # Absence is the correct state at this point in a run. The seams refuse until the roster exists,
 # which is what makes "derived every launch" enforceable rather than aspirational.
 _ROSTER_FILE="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/roster.json}"
-if [ -n "$_ROSTER_FILE" ] && [ -f "$_ROSTER_FILE" ]; then
+# A RESUME IS NOT THE NEXT RUN, so the argument above does not reach it.
+#
+# The rule this block enforces is right for a NEW launch: a roster that survives is a stored
+# artefact with a lifetime, and the next run's agents would be whoever the LAST run derived. A
+# resume is the SAME run continuing from its own checkpoint. The roster it holds was derived by
+# this run, reviewed at this run's pause, and shown to the operator for approval — which is the
+# whole purpose of pausing there. Deleting it makes the checkpoint meaningless.
+#
+# Same distinction the fetched-documents block above already draws for this run's own state.
+#
+# THREE COSTS, all of which landed before this was noticed. A paid roster-specialiser call, ~13
+# minutes of wall clock. A roster that differs from the reviewed one, so the operator approved
+# something the run then replaced. And every roster-keyed prompt invalidated, forcing a stage the
+# checkpoint existed to skip — 17 of 39 regenerated on the 2026-09-01 resume for no other reason.
+# The log said both things at once: "roster carried over from <run> — reviewed in that run, not
+# re-reviewed here", immediately followed by the specialiser accepting a freshly derived roster.
+if [ "${_IS_RESUMED_RUN:-0}" = "1" ] && [ -n "$_ROSTER_FILE" ] && [ -f "$_ROSTER_FILE" ]; then
+    info "  Resuming — keeping this run's own reviewed roster; it is not re-derived"
+elif [ -n "$_ROSTER_FILE" ] && [ -f "$_ROSTER_FILE" ]; then
     if rm -f "$_ROSTER_FILE" 2>/dev/null && [ ! -f "$_ROSTER_FILE" ]; then
         info "  Cleared the project roster — this run derives its own from canonical"
     else

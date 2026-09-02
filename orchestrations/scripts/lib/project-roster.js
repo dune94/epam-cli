@@ -401,6 +401,43 @@ async function buildProjectRoster({
   const canonical = JSON.parse(fs.readFileSync(copyPath, 'utf8'));
 
   const outPath = projectRosterPath(projectConfigDir);
+
+  // A SETTLED ROSTER ON DISK IS THE ONE THE OPERATOR APPROVED. REUSE IT.
+  //
+  // THE FILE'S PRESENCE IS THE SIGNAL, and no run id is needed to read it. pre-run-reset deletes
+  // this file on every NEW launch — "derived every launch" is enforced there — and keeps it only
+  // when EPAM_RESUME_RUN is set. So a roster still on disk when this runs can only have been kept
+  // by a resume, which means it is THIS run's roster, reviewed at THIS run's pause. The reset owns
+  // the lifetime; this honours what it left.
+  //
+  // Without this the resume said one thing and did another:
+  //
+  //   [mint-step] roster carried over from <run> — reviewed in that run, not re-reviewed here
+  //   [mint-step] [roster] accepted 48 agent(s)      <- the specialiser had just run again
+  //
+  // and the derive loop below unlinks outPath at the start of every attempt, so the approved
+  // roster was destroyed before the call that replaced it. Three costs, all of which landed on
+  // 2026-09-01: a paid specialiser call at ~13 minutes, a roster differing from the reviewed one,
+  // and 17 of 39 roster-keyed prompts needlessly regenerated.
+  //
+  // HELD TO THE SAME CONTRACT as anything else that reaches disk: a stored roster that no longer
+  // satisfies it is not silently trusted — it falls through and is derived again.
+  if (fs.existsSync(outPath)) {
+    try {
+      const _settled = JSON.parse(fs.readFileSync(outPath, 'utf8'));
+      const _canonForCheck = JSON.parse(fs.readFileSync(copyPath, 'utf8'));
+      const _ok = checkRoster(_settled, _canonForCheck);
+      if (_ok.ok) {
+        log(`[roster] reusing the settled roster on disk — ${Object.keys(_settled.agents).length} `
+          + 'agent(s), reviewed at this run\'s pause, not re-derived');
+        return _settled;
+      }
+      log(`[roster] the roster on disk does not satisfy the contract (${_ok.reason}) — deriving`);
+    } catch (e) {
+      log(`[roster] the roster on disk could not be read (${(e && e.message) || e}) — deriving`);
+    }
+  }
+
   // DECLARED MODE, DECIDED BEFORE ANY MODEL TIME IS SPENT.
   const mode = readRosterMode(projectConfigDir);
   if (mode === 'canonical') {

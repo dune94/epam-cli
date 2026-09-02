@@ -31,7 +31,7 @@
  */
 import { describe, it, expect, afterAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, chmodSync, rmSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, chmodSync, rmSync, readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -120,23 +120,66 @@ describe('REVIEWERS TOO', () => {
   }
 });
 
+
+/** The rungs a tier declares, from whichever provider set declares that tier. */
+function ladderRungs(tier: string): any[] {
+  const dir = join(process.cwd(), 'orchestrations/config');
+  for (const f of readdirSync(dir).filter((x) => /^llm-defaults\..*\.json$/.test(x))) {
+    const c = JSON.parse(readFileSync(join(dir, f), 'utf8'));
+    const t = (c.ladders || {})[tier];
+    if (t && Array.isArray(t.rungs) && t.rungs.length) return t.rungs;
+  }
+  return [];
+}
+
+/** The strongest tier the project declares — last in its own declared order. */
+function strongestTier(): string {
+  const dir = join(process.cwd(), 'orchestrations/config');
+  for (const f of readdirSync(dir).filter((x) => /^llm-defaults\..*\.json$/.test(x))) {
+    const c = JSON.parse(readFileSync(join(dir, f), 'utf8'));
+    const order = Array.isArray(c.ladderTierOrder) ? c.ladderTierOrder : Object.keys(c.ladders || {});
+    if (order.length) return String(order[order.length - 1]).toLowerCase();
+  }
+  return '';
+}
+
 describe('NO LOW OR MEDIUM INFERENCE ON THESE SEAMS', () => {
   // Operator, 2026-08-12: writer, reviewer and self-heal get the highest ladder, and medium is
   // a waste on seams whose output decides whether work is accepted or a model is escalated.
   for (const role of [...DIAGNOSTICIANS, ...REVIEWERS]) {
-    it(`${role} runs at high or max effort`, () => {
+    it(`${role} runs at high or max effort — asked of the LADDER, which owns it`, () => {
+      // THE SEAM NO LONGER DECLARES AN EFFORT, and must not: commit fb16b266 made the ladder own
+      // reasoningEffort, because a flat per-seam value overrode the rung's own level and made the
+      // cheap entry rung cost the same as the ceiling. This test asserted p.reasoningEffort and so
+      // broke with that change — I shipped fb16b266 reporting it clean, having run 22 files that
+      // did not include this one.
+      //
+      // The REQUIREMENT is unchanged and still worth guarding: a seam that decides whether work is
+      // accepted, or whether a model escalates, must not run cheap. It is now a property of the
+      // ladder that seam climbs, so that is what is asked.
       const p = profiles()[role];
       expect(p, `${role} is not in the registry`).toBeTruthy();
-      expect(['high', 'max'], `${role} runs at ${p.reasoningEffort}`).toContain(p.reasoningEffort);
+      expect(p.reasoningEffort,
+        `${role} declares its own reasoningEffort again — the ladder owns it`).toBeUndefined();
+
+      const rungs = ladderRungs(p.ladder);
+      expect(rungs.length, `${role} climbs '${p.ladder}', which declares no rungs`).toBeGreaterThan(0);
+      const top = rungs[rungs.length - 1];
+      expect(['high', 'max', 'xhigh'],
+        `${role} tops out at '${top.reasoningEffort}' on the '${p.ladder}' ladder`)
+        .toContain(top.reasoningEffort);
     });
 
-    it(`${role} climbs the highest ladder`, () => {
-      // A POSITION, not a tier name, since 2026-08-16. The engine holds no tier vocabulary —
-      // the project declares ladderTierOrder and 'top' resolves to whatever it calls its
-      // strongest tier. The intent is unchanged and is what matters: these seams decide
-      // whether work is accepted or a model is escalated, so none of them may run cheap.
+    it(`${role} climbs the project's strongest ladder`, () => {
+      // WAS `.toBe('top')` — a POSITION, while the registry declares TIER NAMES. Every one of these
+      // seams says 'highest', so this assertion was already failing before today; it is not part of
+      // the effort change. The intent is what matters: the strongest tier the project declares,
+      // whatever that project calls it. Resolved from the declaration, never a literal.
+      const strongest = strongestTier();
+      expect(strongest, 'no provider set declares a ladder tier order').toBeTruthy();
       expect(String(profiles()[role].ladder || '').toLowerCase(),
-        `${role} is on the '${profiles()[role].ladder}' ladder`).toBe('top');
+        `${role} is on '${profiles()[role].ladder}', not the strongest declared tier '${strongest}'`)
+        .toBe(strongest);
     });
   }
 });

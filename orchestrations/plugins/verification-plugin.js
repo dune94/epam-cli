@@ -23,14 +23,29 @@ const PLUGIN_API_VERSION = '1.0.0';
 const MANIFEST_REL = join('.epam', 'verification.json');
 
 /** Read the project's declared verification, or null when it has not declared one. */
-function readManifest(projectRoot) {
+function readManifest(projectRoot, section) {
   const path = join(projectRoot, MANIFEST_REL);
   if (!existsSync(path)) return { ok: false, reason: 'no verification manifest declared' };
   try {
     const parsed = JSON.parse(readFileSync(path, 'utf8'));
-    const command = parsed && parsed.typecheck && parsed.typecheck.command;
+    // THE SECTION ASKED FOR, NOT ALWAYS TYPECHECK.
+    //
+    // This read parsed.typecheck.command unconditionally. baseline_new_failures is called with
+    // section="test" from the external-verification path, so the "test baseline" ran the TYPECHECK
+    // command: its output carries no suite failures, the parse finds none, the node call exits
+    // non-zero, and the caller's `rm -f "$baseline_cache"` deletes the cache. With no cache nothing
+    // is subtracted and every PRE-EXISTING suite failure is charged to the story.
+    //
+    // Live 2026-09-02 (AMSD-1919): no baseline-failures-* had ever been written on that machine for
+    // any section. A pre-existing flake in FullScheduleTable/SearchBox.spec.tsx was blamed on a
+    // one-line CheckoutForm.tsx change and the writer exhausted its retries against it. The project
+    // had declared a `test` section all along; nothing read it.
+    //
+    // Defaults to typecheck so every existing caller keeps its behaviour.
+    const _section = (typeof section === 'string' && section.trim()) ? section.trim() : 'typecheck';
+    const command = parsed && parsed[_section] && parsed[_section].command;
     if (typeof command !== 'string' || command.trim() === '') {
-      return { ok: false, reason: 'verification manifest declares no typecheck command' };
+      return { ok: false, reason: `verification manifest declares no ${_section} command` };
     }
     return { ok: true, command, manifest: parsed };
   } catch (e) {
@@ -103,8 +118,8 @@ function detectVerification(projectRoot) {
  * ${PROJECT_ROOT} in the command is substituted, so a manifest can be written once and remain
  * valid whether the project is checked out in the main repo or a worktree.
  */
-function runVerification(projectRoot, timeoutMs) {
-  const m = readManifest(projectRoot);
+function runVerification(projectRoot, timeoutMs, section) {
+  const m = readManifest(projectRoot, section);
   if (!m.ok) return { status: 'unknown', reason: m.reason };
   const command = m.command.replace(/\$\{PROJECT_ROOT\}/g, projectRoot);
   try {

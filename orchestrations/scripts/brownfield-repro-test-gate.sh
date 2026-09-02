@@ -61,7 +61,7 @@ fi
 
 # Split changed files into test vs fix (non-test).
 mapfile -t _CHANGED < <(git -C "$PROJECT_ROOT" diff --name-only "$BASELINE_SHA" HEAD 2>/dev/null)
-TEST_FILES=(); FIX_FILES=()
+TEST_FILES=(); FIX_FILES=(); _CANDIDATES=()
 for f in "${_CHANGED[@]}"; do
     [ -z "$f" ] && continue
     # Never treat dependency/build output as a fix file (a real repo gitignores
@@ -69,11 +69,26 @@ for f in "${_CHANGED[@]}"; do
     case "$f" in
         node_modules/*|*/node_modules/*|dist/*|build/*|coverage/*|.git/*) continue ;;
     esac
-    case "$f" in
-        *.test.*|*.spec.*|*/__tests__/*|*_test.*) TEST_FILES+=("$f") ;;
-        *) FIX_FILES+=("$f") ;;
-    esac
+    _CANDIDATES+=("$f")
 done
+
+# WHAT IS A TEST IS THE PROJECT'S DECLARATION, NOT THIS SCRIPT'S.
+#
+# This loop used to classify with its own four globs. That hardcoded stack filenames in engine
+# code, and put a SECOND copy of the convention beside the writer's — two copies that drift, so the
+# writer can produce a file this gate refuses. Live 2026-09-02 (AMSD-1919) they disagreed over
+# .spec.ts vs .spec.tsx and a fix shipped with no test at all.
+#
+# .epam/verification.json test.testFilePattern already declared it. It is also stricter: a fixture
+# or mock inside __tests__/ no longer counts as "ships a test", which the old globs allowed.
+_ccf_out=$(printf '%s\n' "${_CANDIDATES[@]}" \
+    | "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/classify-changed-files.js" "$PROJECT_ROOT" 2>&1) || {
+    block "the project declares no test-file convention, so this gate cannot tell a test from a fix: $_ccf_out"
+}
+while IFS=$'\t' read -r _verdict _cf; do
+    [ -n "$_cf" ] || continue
+    if [ "$_verdict" = "TEST" ]; then TEST_FILES+=("$_cf"); else FIX_FILES+=("$_cf"); fi
+done <<< "$_ccf_out"
 
 if [ "${#TEST_FILES[@]}" -eq 0 ]; then
     block "no test file accompanies the change — every brownfield change must ship a test that reproduces the fixed behavior."

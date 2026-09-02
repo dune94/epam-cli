@@ -138,18 +138,28 @@ BASELINE_SHA=$(git -C "$PROJECT_ROOT" rev-parse --verify --quiet "origin/${BASEL
 
 # ── Classify changed files (same rule as the repro-gate) ────────────────────
 mapfile -t _CHANGED < <(git -C "$PROJECT_ROOT" diff --name-only "$BASELINE_SHA" HEAD 2>/dev/null)
-TEST_FILES=(); FIX_FILES=()
+TEST_FILES=(); FIX_FILES=(); _CANDIDATES=()
 for f in "${_CHANGED[@]}"; do
     [ -z "$f" ] && continue
     case "$f" in node_modules/*|*/node_modules/*|dist/*|build/*|coverage/*|.git/*|.epam/*) continue ;; esac
     # The pattern is a GLOB from the provider map and must stay unquoted: quoting it would match the
     # literal characters, and no mapping would ever fire.
     # shellcheck disable=SC2254
-    case "$f" in
-        *.test.*|*.spec.*|*/__tests__/*|*_test.*) TEST_FILES+=("$f") ;;
-        *) FIX_FILES+=("$f") ;;
-    esac
+    # WHAT IS A TEST IS THE PROJECT'S DECLARATION, NOT THIS SCRIPT'S. See
+    # lib/handlers/classify-changed-files.js — the gate asks the same question of the same
+    # declaration, so the writer can no longer produce a file the gate refuses.
+    _CANDIDATES+=("$f")
 done
+
+_ccf_out=$(printf '%s\n' "${_CANDIDATES[@]}" \
+    | "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/classify-changed-files.js" "$PROJECT_ROOT" 2>&1) || {
+    warning "[repro-test-writer] the project declares no test-file convention — cannot tell a test from a fix: $_ccf_out"
+    exit 1
+}
+while IFS=$'\t' read -r _verdict _cf; do
+    [ -n "$_cf" ] || continue
+    if [ "$_verdict" = "TEST" ]; then TEST_FILES+=("$_cf"); else FIX_FILES+=("$_cf"); fi
+done <<< "$_ccf_out"
 [ "${#TEST_FILES[@]}" -gt 0 ] && { log "a test already accompanies the change (${TEST_FILES[0]}) — nothing to write"; exit 0; }
 [ "${#FIX_FILES[@]}" -gt 0 ] || { log "no fix files in the diff — nothing to test"; exit 0; }
 
@@ -296,13 +306,30 @@ if [ -z "$_primary_fix" ]; then
 fi
 # grep -c already prints "0" on no match (and exits 1) — use `|| true` so the non-zero
 # exit doesn't append a SECOND "0" (which broke the integer test: "0\n0" is not an int).
-_spec_ct=$(git -C "$PROJECT_ROOT" ls-files '*.spec.ts' '*.spec.tsx' 2>/dev/null | grep -c . || true)
-_test_ct=$(git -C "$PROJECT_ROOT" ls-files '*.test.ts' '*.test.tsx' 2>/dev/null | grep -c . || true)
-if [ "${_spec_ct:-0}" -ge "${_test_ct:-0}" ] && [ "${_spec_ct:-0}" -gt 0 ]; then _ext="spec.ts"; else _ext="test.ts"; fi
-_target_rel="${_primary_fix%.*}.${_ext}"
-# An existing example test (prefer one near the fix dir; else the largest/any) to teach the framework + mocking style.
-_example_rel=$(git -C "$PROJECT_ROOT" ls-files "$(dirname "$_primary_fix")/*.spec.ts" "$(dirname "$_primary_fix")/*.test.ts" 2>/dev/null | head -1)
-[ -z "$_example_rel" ] && _example_rel=$(git -C "$PROJECT_ROOT" ls-files '*.spec.ts' '*.test.ts' 2>/dev/null | head -1)
+# THE CONVENTION BELONGS TO THE PLUGIN, NOT TO THIS SCRIPT.
+#
+# This block used to decide the target itself:
+#
+#     if [ spec_count >= test_count ]; then _ext="spec.ts"; else _ext="test.ts"; fi
+#     _target_rel="${_primary_fix%.*}.${_ext}"
+#
+# Two faults. It hardcoded stack filenames in engine code, which is not permitted — a stack fact
+# lives in a plugin or in project config. And it counted *.spec.ts and *.spec.tsx TOGETHER and
+# then kept only "spec.ts", so a .tsx React component was given a .spec.ts target. Live
+# 2026-09-02 (AMSD-1919): the agent wrote CheckoutForm.spec.tsx — correct, its test carries JSX —
+# and this stage, waiting on CheckoutForm.spec.ts, reported "no valid test after 3 attempts" while
+# escalating three models against a file already on disk under the right name.
+#
+# codeline-context-plugin.js owns SOURCE_EXTENSIONS and TEST_EXTENSIONS and measures both against
+# the codeline. We ask it. If it cannot answer we FAIL — guessing a convention is the bug.
+_ntp_out=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/new-test-path.js" "$PROJECT_ROOT" "$_primary_fix" 2>&1) || {
+    warning "[repro-test-writer] could not resolve a test path from the codeline plugin: $_ntp_out"
+    exit 1
+}
+_target_rel=$(printf '%s\n' "$_ntp_out" | sed -n 's/^TARGET=//p' | head -1)
+_example_rel=$(printf '%s\n' "$_ntp_out" | sed -n 's/^EXAMPLE=//p' | head -1)
+[ -n "$_target_rel" ] || { warning "[repro-test-writer] the plugin returned no target path"; exit 1; }
+_ext="${_target_rel##*.}"
 _example_block=""
 if [ -n "$_example_rel" ] && [ -f "$PROJECT_ROOT/$_example_rel" ]; then
     _example_block=$'\n## Example test from THIS repo (mirror its framework, imports, and mocking style EXACTLY)\nFile: '"$_example_rel"$'\n```\n'"$(head -80 "$PROJECT_ROOT/$_example_rel")"$'\n```\n'

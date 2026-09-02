@@ -5302,7 +5302,22 @@ run_external_verification() {
         # WHOLE, never head+tail. The middle of a failure dump is where the first
         # error usually is; cutting it out and printing "[... output truncated ...]"
         # told the writer something was missing without telling it what.
-        local _test_head="$_new_test_failures"
+        # BOUND WHAT THE ANALYST IS HANDED, ON ENTRY BOUNDARIES.
+        #
+        # This text is embedded whole into the FailureAnalyst prompt. It is the new-failure delta,
+        # which is small when the baseline builds — and the ENTIRE suite output when it does not.
+        # Live 2026-09-02 (AMSD-1919) it reached ~1,092,054 tokens against a 1,000,000 limit, so
+        # every analyst call failed on SIZE and the ladder escalated claude-sonnet-5 ->
+        # claude-opus-4-8 -> claude-opus-5 against an input no model could accept.
+        #
+        # The window is declared (config/evidence-windows.json: failureExcerptLines) and entries are
+        # dropped WHOLE, per the project's own failurePattern. A half-failure tells the analyst
+        # something is wrong without telling it what.
+        local _test_head
+        _test_head=$(printf '%s' "$_new_test_failures" \
+            | "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/bound-failures.js" "$PROJECT_ROOT" test 2>/dev/null) \
+            || _test_head="$_new_test_failures"
+        [ -n "$_test_head" ] || _test_head="$_new_test_failures"
         local _test_tail=""
         VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe orchestrator ran `%s` after your files were written and it failed (exit code %d). The failures below are the ones YOUR CHANGES INTRODUCED — failures the codeline already had have been subtracted and are not your responsibility. Fix these.\n\n```\n%s%s\n```\n' \
             "$test_cmd" "$test_exit" "$_test_head" "$_test_tail")

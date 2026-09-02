@@ -5,17 +5,22 @@
 # names no tool, extension, directory or runtime path. Undeclared -> non-zero with a reason.
 _run_project_verification() {
     local _root="${1:-$PROJECT_ROOT}"
+    # THE SECTION IS THE CALLER'S, NOT AN ASSUMPTION. Without it every baseline ran the manifest's
+    # typecheck command -- including the one asked for section="test" -- so the suite baseline was
+    # never built, its cache was deleted, and every pre-existing suite failure was charged to the
+    # story. Live 2026-09-02 (AMSD-1919). Empty means "the plugin's default", which is typecheck.
+    local _section="${2:-}"
     local _auto="${AUTOMATION_DIR:-$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")}"
     local _plugin="${_auto}/plugins/verification-plugin.js"
     local _node="${NODE_CMD:-${NODE_BIN:-node}}"
     if [ ! -f "$_plugin" ]; then echo "verification plugin missing at $_plugin"; return 2; fi
     "$_node" -e '
       const p = require(process.argv[1]);
-      const r = p.runVerification(process.argv[2]);
+      const r = p.runVerification(process.argv[2], undefined, process.argv[3] || undefined);
       if (r.status === "unknown") { console.log("verification not declared: " + r.reason); process.exit(2); }
       if (r.output) console.log(r.output);
       process.exit(r.status === "pass" ? 0 : (r.exitCode || 1));
-    ' "$_plugin" "$_root"
+    ' "$_plugin" "$_root" "$_section"
 }
 
 # tsc-baseline-gate.sh — shared "new errors only" tsc filtering, used by
@@ -101,7 +106,7 @@ baseline_new_failures() {
                     # the exact inverse of this gate. Capture first, parse second.
                     local _base_out
                     _base_out=$(mktemp)
-                    _run_project_verification "$wt_dir" > "$_base_out" 2>&1 || true
+                    _run_project_verification "$wt_dir" "$section" > "$_base_out" 2>&1 || true
                     if "$_node" -e '
                             const fs = require("fs");
                             const p = require(process.argv[1]);

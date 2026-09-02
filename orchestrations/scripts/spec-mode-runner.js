@@ -3428,6 +3428,40 @@ async function surveyEstate({
   const _named = _cls.map((c) => (typeof c === 'string' ? { name: c } : c)).filter((c) => c && c.name);
   if (!_named.length) return { codelines: [], recommendedInvestigators: [], recommendedWriters: [], violations: [], ran: false };
 
+  // THIS RUN SURVEYS THE ESTATE ONCE.
+  //
+  // The call was moved out of the mint's else-branch because every path that declined to mint also
+  // silently declined to survey. That was right — a seam's invocation must not be conditional on
+  // another seam's branch — but making it UNCONDITIONAL was the wrong correction. The condition it
+  // actually needs is not another seam's branch; it is whether THIS RUN has already surveyed.
+  //
+  // THE FILE'S PRESENCE IS THE SIGNAL, exactly as for the settled roster. pre-run-reset deletes
+  // estate-survey.json on every NEW launch and keeps it only when EPAM_RESUME_RUN is set
+  // ("Resuming — keeping this run's own fetched documents and estate survey"), so a survey still on
+  // disk here can only have been kept by a resume. The reset owns the lifetime; this honours what
+  // it left, and no run id is consulted.
+  //
+  // THE COST WAS NEVER THE ONE CALL. The survey feeds codelineContext, and codelineContext is part
+  // of the prompt cache key — sha({template, generatorBody, projectContext, codelineContext}). A
+  // second observation moves that key, so ALL 39 project prompts miss and regenerate. Measured on
+  // the 2026-09-02 resume of 20260902T022134Z: roster correctly reused, roles digest stable, and
+  // reused: 0 prompts. The checkpoint skipped the mint and paid for the whole prompt stage anyway.
+  //
+  // NOT TRUSTED BLINDLY: a file that will not parse, or carries no codelines, is observed again
+  // rather than believed — a corrupt artefact must not silently disable the survey for the run.
+  if (logDir) {
+    try {
+      const _keptPath = path.join(logDir, 'estate-survey.json');
+      if (fs.existsSync(_keptPath)) {
+        const _kept = JSON.parse(fs.readFileSync(_keptPath, 'utf8'));
+        if (_kept && Array.isArray(_kept.codelines) && _kept.codelines.length) {
+          console.warn('spec-mode: estate survey already done for this run — reusing it, not re-observing');
+          return _kept;
+        }
+      }
+    } catch { /* unreadable or malformed: fall through and survey again */ }
+  }
+
   const prompt = buildSurveyPrompt({ codelines: _named, tickets, referencedDocs, declaredDependencies });
 
   // THE IDENTITY IS THE SEAM. This paired 'estate-surveyor' with EPAM_SEAM 'estate-survey',

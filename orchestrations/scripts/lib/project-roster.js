@@ -469,6 +469,27 @@ async function buildProjectRoster({
       continue;
     }
 
+    // THE MINT'S AGENTS BELONG TO EVERY MODE, NOT JUST canonical.
+    //
+    // This merge existed only on the `mode === 'canonical'` early return, so a project that
+    // declares no rosterMode — the default, 'derive' — re-derived its roster from canonical and
+    // dropped every agent the mint had created. Third reader left behind by ba9cee7's move of the
+    // briefs to <project>/agent-profiles.json; candidateRoles and the assignment check were the
+    // first two, and each was found by a dead run rather than by a test.
+    //
+    // IT ONLY BITES ON RESUME. A first run mints the agent and writes its assignment in the same
+    // step, so the roster holds it. A resume sets EPAM_SKIP_AGENT_MINT=1 and rebuilds the roster
+    // here — and the assignment written hours earlier suddenly names a role that does not exist.
+    // Live 2026-09-01, run 20260901T224029Z: "1 assignment(s) name a role that is not in the
+    // settled roster: AMSD-1919/gotransit -> checkout-form-engineer". The brief had been on disk
+    // since 18:43:59; this rebuilt the roster at 20:33:19 without reading it.
+    //
+    // BEFORE the contract check, exactly as canonical mode does it. Merging afterwards would be
+    // the "cheaper path that skipped the check" that branch warns about — a second, unvalidated
+    // way for a roster to reach disk. withMintedAgents is idempotent and canonical still wins a
+    // name collision, so a mint can never shadow a process role.
+    roster = withMintedAgents(roster, projectConfigDir);
+
     const contract = checkRoster(roster, canonical);
     if (!contract.ok) {
       lastReason = contract.reason;
@@ -476,6 +497,11 @@ async function buildProjectRoster({
       try { fs.unlinkSync(outPath); } catch { /* nothing to remove */ }
       continue;
     }
+
+    // THE FILE IS THE SETTLED ROSTER. The assignment check in mint-agents-step reads roster.json
+    // from disk, not the value returned here, so a merge that is not persisted fixes nothing —
+    // the returned roster would hold the agent and the run would still refuse the assignment.
+    fs.writeFileSync(outPath, JSON.stringify(roster, null, 2));
 
     // REVIEWED AGAINST BOTH. With only the roster a reviewer can judge plausibility; falsifying
     // "is this ancestor close" and "was inherited structure quietly changed" needs the source.

@@ -4411,12 +4411,27 @@ run_dependency_check() {
     _changed=$(git -C "$project_root" status --porcelain 2>/dev/null \
         | sed 's/^...//' | sed 's/^.* -> //' | tr '\n' '\036')
 
+    # THE LINES THIS CHANGE ADDED — raw, never parsed here.
+    #
+    # An undeclared import is the story's only when the change INTRODUCED it; a file merely touched
+    # may have carried one since before the run. The plugin decides which specifiers those lines
+    # contain, using the importPattern the project declares — a second copy of that pattern here
+    # would be a project fact living outside config or a plugin, and the two would drift.
+    #
+    # Untracked files count whole: every line of a file this change created is an added line.
+    local _added
+    _added=$( { git -C "$project_root" diff --unified=0 2>/dev/null
+                git -C "$project_root" diff --cached --unified=0 2>/dev/null; } \
+              | grep '^+' | grep -v '^+++' | sed 's/^+//'
+              git -C "$project_root" ls-files --others --exclude-standard 2>/dev/null \
+              | while IFS= read -r _uf; do [ -f "$project_root/$_uf" ] && cat "$project_root/$_uf" 2>/dev/null; done )
+
     local _out
-    _out=$(EPAM_SCAN_CHANGED_FILES="$_changed" "$_node" -e '
+    _out=$(EPAM_SCAN_CHANGED_FILES="$_changed" EPAM_SCAN_ADDED_LINES="$_added" "$_node" -e '
       const p = require(process.argv[1]);
       const changed = String(process.env.EPAM_SCAN_CHANGED_FILES || "")
         .split("").map((s) => s.trim()).filter(Boolean);
-      const r = p.scanImports(process.argv[2], process.env, { changedFiles: changed });
+      const r = p.scanImports(process.argv[2], process.env, { changedFiles: changed, introducedLines: String(process.env.EPAM_SCAN_ADDED_LINES || "").split("\n") });
       if (r.status === "unknown") { console.log("UNKNOWN\t" + r.reason); process.exit(0); }
       for (const f of r.findings) console.log(f.verdict + "\t" + f.specifier + "\t" + f.file);
       // Only when it could have changed the answer. A clean scan stays silent — a note on every

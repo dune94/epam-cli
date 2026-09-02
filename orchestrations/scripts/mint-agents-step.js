@@ -1203,6 +1203,47 @@ if (require.main !== module) return;
         'prompts are the only ones ever rendered, and the template is never executed.');
     }
 
+    // PROMPTS ARE PROVISIONED ONCE, BEFORE PAUSE 1. A RESUME NEVER REBUILDS THEM.
+    //
+    // Operator rule, 2026-09-02: duplication of a process after a pause is not permitted. This
+    // call had no resume guard at all, so every resume re-provisioned all 39 prompts — and the
+    // cache could not absorb it, because the cache key includes mintedRoles and a resume SKIPS the
+    // mint, so that string becomes the literal '(none minted this run)' instead of the roster.
+    // Every entry therefore missed. Measured on the 2026-09-02 resume of 20260902T022134Z: roles
+    // digest 1dad7a5a… at pause 1 against cba40c8d… on the resume, 9 entries reused and 30
+    // rebuilt, for prompts already sitting complete on disk.
+    //
+    // THE INSTALLED PROMPTS ARE THE SIGNAL, as with the settled roster. pre-run-reset keeps
+    // <project>/prompts/ intact on a resume, so a populated directory here means this run already
+    // provisioned them and the operator reviewed what they produced at the pause.
+    //
+    // NOT A CACHE, A SKIP. Reusing them "cheaply" would still resolve every seam, re-render every
+    // generator prompt and re-derive the key; the rule is that the stage does not run.
+    // A FLAG, NOT AN EARLY RETURN. This block is a bare `{ }` inside the step, and returning from
+    // it would abandon everything after — linkPromptsToRoster above all, which checks that every
+    // minted agent's seam actually has a prompt in THIS project. That check is data-only, costs
+    // nothing, and is exactly what a resume still needs: skipping the BUILD must not skip the
+    // verification that what is on disk covers the roster.
+    let _skipProvisioning = false;
+    const _resumingRun = String(process.env.EPAM_RESUME_RUN || '').trim();
+    if (_resumingRun) {
+      const _installedDir = path.join(projectConfigDir, 'prompts');
+      let _installed = [];
+      try {
+        _installed = fs.readdirSync(_installedDir).filter((f) => f.endsWith('.json'));
+      } catch { _installed = []; }
+      if (_installed.length) {
+        process.stderr.write(
+          `[mint-step] prompts already provisioned for this run (${_installed.length} on disk) — `
+          + 'not rebuilt; a resume repeats no stage it has already completed\n');
+        _skipProvisioning = true;
+      }
+      // Empty is NOT silently accepted: something cleared them, and continuing without saying so
+      // would look identical to a run that never provisioned any.
+      process.stderr.write(
+        '[mint-step] resuming, but no prompts are installed — provisioning them now\n');
+    }
+
     // THE PROVISIONING MODE IS THE PROJECT'S DECISION, and no mode was being passed at all —
     // so every project silently got 'generate', including the ones whose prompts are meant to
     // stay identical to the generic text. metrolinx is a copy-mode project that the next mint
@@ -1251,7 +1292,9 @@ if (require.main !== module) return;
     const _codelineContext = buildCodelineContext({
       codelines, factsFile: _factsFile, surveyed: _surveyed,
     });
-    const _built = await buildProjectPrompts({
+    const _built = _skipProvisioning
+      ? { copied: [], generated: [] }
+      : await buildProjectPrompts({
       templatesDir,
       bootstrapFile,
       // The seam registry decides what needs a project copy — a seam that runs a template needs
@@ -1376,9 +1419,14 @@ if (require.main !== module) return;
       }) : undefined,
       log: (m) => process.stderr.write(`${m}\n`),
     });
-    process.stderr.write(
-      `[mint-step] ✓ prompts provisioned (${promptMode}): ${_built.copied.length} copied (bootstrap), ` +
-      `${_built.generated.length} generated → ${path.join(projectConfigDir, 'prompts')}\n`);
+    // SAY WHICH IT WAS. Reporting "0 copied, 0 generated" for a skip reads as a provisioning run
+    // that produced nothing — the same sentence for two opposite states, which is how a stage that
+    // silently did nothing goes unnoticed for weeks.
+    if (!_skipProvisioning) {
+      process.stderr.write(
+        `[mint-step] ✓ prompts provisioned (${promptMode}): ${_built.copied.length} copied (bootstrap), ` +
+        `${_built.generated.length} generated → ${path.join(projectConfigDir, 'prompts')}\n`);
+    }
 
     // ── LINK THE PROMPTS TO THE AGENTS JUST MINTED ────────────────────────────
     //

@@ -271,20 +271,26 @@ $_PRIOR_ISSUES"
     fi
 fi
 
+# THE CRITERIA THIS REVIEW JUDGES AGAINST. Brownfield anchors on verification criteria; the
+# builder is shared with team-lead-review.sh so both reviewers quote the same wording.
+# shellcheck source=lib/review-criteria.sh
+. "$SCRIPT_DIR/lib/review-criteria.sh"
+_REVIEW_VC_BLOCK=$(review_vc_block "$STORY_ID" "$PRD_FILE")
+
 # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
 _tpl_vals=$(mktemp "${TMPDIR:-/tmp}/code-review-cycle-vals-XXXXXX.json")
 jq_vals --arg iteration "$ITERATION" \
       --arg prior_context "$_PRIOR_CONTEXT" \
       --arg project_root "$PROJECT_ROOT" \
       --arg review_profile "$_REVIEW_PROFILE" \
-      --arg story_acs "$_STORY_ACS" \
+      --arg vc_block "$_REVIEW_VC_BLOCK" \
       --arg story_agent "$STORY_AGENT" \
       --arg story_description "$_STORY_DESC" \
       --arg story_diff "$_STORY_DIFF" \
       --arg story_files "$_STORY_FILES" \
       --arg story_id "$STORY_ID" \
       --arg story_title "$STORY_TITLE" \
-      '{"__ITERATION__":$iteration,"__PRIOR_CONTEXT__":$prior_context,"__PROJECT_ROOT__":$project_root,"__REVIEW_PROFILE__":$review_profile,"__STORY_ACS__":$story_acs,"__STORY_AGENT__":$story_agent,"__STORY_DESCRIPTION__":$story_description,"__STORY_DIFF__":$story_diff,"__STORY_FILES__":$story_files,"__STORY_ID__":$story_id,"__STORY_TITLE__":$story_title}' > "$_tpl_vals" 2>/dev/null
+      '{"__VC_BLOCK__":$vc_block,"__ITERATION__":$iteration,"__PRIOR_CONTEXT__":$prior_context,"__PROJECT_ROOT__":$project_root,"__REVIEW_PROFILE__":$review_profile,"__STORY_AGENT__":$story_agent,"__STORY_DESCRIPTION__":$story_description,"__STORY_DIFF__":$story_diff,"__STORY_FILES__":$story_files,"__STORY_ID__":$story_id,"__STORY_TITLE__":$story_title}' > "$_tpl_vals" 2>/dev/null
 if ! _REVIEW_PROMPT=$(render_engine_prompt code-review-cycle "$_tpl_vals"); then
     echo "[code-review-cycle] cannot render its prompt — refusing to run with no instructions" >&2
     rm -f "$_tpl_vals"; exit 1

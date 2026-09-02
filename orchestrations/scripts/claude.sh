@@ -7754,7 +7754,6 @@ $(cat "$_fa_vendor_contract")
           "__SKILL_NOTE_MAX__":$skill_note_max,
           "__STORY_ID__":$story_id,
           "__STORY_ROLE__":$story_role,
-          "__STORY_ACS__":$story_acs,
           "__SKILL_ADDENDUM__":$skill_addendum,
           "__DEPENDENCY_CONTRACTS__":$dependency_contracts,
           "__VERIFICATION_FAILURE__":$verification_failure,

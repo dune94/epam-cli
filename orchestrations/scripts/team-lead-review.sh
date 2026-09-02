@@ -63,6 +63,8 @@ REVIEW_LOG="${REVIEW_LOG:-$AUTOMATION_DIR/logs/code-reviews.jsonl}"
 # AGENT_PROFILES_FILE default any more: that default named the engine's own roster.
 # shellcheck source=lib/roster-read.sh
 . "$SCRIPT_DIR/lib/roster-read.sh"
+# shellcheck source=lib/review-criteria.sh
+. "$SCRIPT_DIR/lib/review-criteria.sh"
 # shellcheck source=lib/render-engine-prompt.sh
 . "$SCRIPT_DIR/lib/render-engine-prompt.sh"
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
@@ -664,7 +666,8 @@ $(render_engine_prompt story-diff-not-inlined "$_sdni_vals" excluded)"
 
     _review_fix_analysis_block=$([ -n "$STORY_FIX_ANALYSIS" ] && printf '\nROOT CAUSE ANALYSIS & PRESCRIBED MINIMAL FIX (from prior code investigation — the plan of record the implementer was given):\n%s\n\nThe acceptance criteria describe the desired BEHAVIOR to verify; they are NOT a blueprint. The correct implementation is the minimal fix above. Judge the diff against BOTH.\n' "$STORY_FIX_ANALYSIS" || true)
     _review_uncovered_block=$([ -n "$STORY_UNCOVERED_VC" ] && printf '\n%s\n' "$STORY_UNCOVERED_VC" || true)
-    _review_vc_block=$([ -n "$STORY_VC" ] && printf '\nVERIFICATION CRITERIA (the observable checks this change MUST satisfy — judge the diff against every one):\n%s\n' "$STORY_VC" || true)
+    # ONE BUILDER, SHARED WITH code-review-cycle.sh — see lib/review-criteria.sh.
+    _review_vc_block=$(review_vc_block "$story_id" "$PRD_FILE")
     _review_codegraph_block=$([ -n "$_review_codegraph_tool" ] && printf '\nEXISTING-CODE TOOL (call the codegraph_query tool directly, NOT via Bash, to check whether a helper already exists before accepting hand-rolled logic):\n  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter (symbol + import path)\n  codegraph_query(mode="query", args="<SymbolName>")        # exact definition site\n' || true)
     _review_learned_block=$([ -n "$_review_kb" ] && printf '\nLEARNED REVIEW RULES (from prior runs — apply these):\n%s\n' "$_review_kb" || true)
 
@@ -725,7 +728,7 @@ $(render_engine_prompt story-diff-not-inlined "$_sdni_vals" excluded)"
         --arg prior_review "${_review_prior_block:-}" \
         '{"__REVIEW_PROFILE__":$profile,"__BLOCKER_DISCIPLINE__":$blocker,
           "__TEST_OWNERSHIP__":$ownership,"__STORY_ID__":$story_id,"__STORY_TITLE__":$title,
-          "__STORY_DESC__":$desc,"__STORY_ACS__":$acs,"__STORY_DIFF__":$diff,
+          "__STORY_DESC__":$desc,"__STORY_DIFF__":$diff,
           "__STORY_FILES__":$files,"__TEST_FILES__":$test_files,"__PROJECT_ROOT__":$project_root,
           "__FIX_ANALYSIS_BLOCK__":$fix_analysis,"__UNCOVERED_VC_BLOCK__":$uncovered,
           "__VC_BLOCK__":$vc,"__CODEGRAPH_TOOL_BLOCK__":$codegraph,

@@ -193,7 +193,14 @@ _is_testable_source() {
             "$PROJECT_ROOT" $(git -C "$PROJECT_ROOT" ls-files 2>/dev/null) 2>/dev/null || echo "")
     fi
     [ -z "$_TESTABLE_SET" ] && return 1
-    printf '%s\n' "$_TESTABLE_SET" | grep -Fxq "$_f"
+    # A HERESTRING, NOT A PIPE. `grep -q` exits the instant it matches, closing the pipe while
+    # printf is still writing; on a real codeline the set is thousands of lines, so printf dies of
+    # SIGPIPE and `set -o pipefail` takes that as the pipeline status — 141. A successful match was
+    # reported as a failure, every file was judged "not testable source", and the repro-test writer
+    # skipped with "nothing to test". Live 2026-09-02 (AMSD-1919, 3,070-line set, target at line
+    # 1696): a brownfield fix shipped with no bug-reproduction test. A herestring has no second
+    # process to kill, so grep's own status is the answer.
+    grep -Fxq -- "$_f" <<< "$_TESTABLE_SET"
 }
 
 # WHICH FILE CARRIES THE FEATURE — ASKED, NOT GUESSED BY POSITION.

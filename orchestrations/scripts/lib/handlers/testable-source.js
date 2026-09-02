@@ -149,5 +149,5 @@ function main() {
   return 0;
 }
 
-if (require.main === module) process.exit(main());
+if (require.main === module) process.exitCode = main();
 module.exports = { testable, declaredExtensions, excludedNames };

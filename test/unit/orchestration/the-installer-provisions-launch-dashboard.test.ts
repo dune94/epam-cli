@@ -194,7 +194,10 @@ describe('the installer provisions launch-dashboard', () => {
     // its own by trying the next declared candidate — never require a human to notice and re-run
     // with a different value by hand.
     const port = 18109;
-    await serveHealth(port);
+    // The retry also steps the PORT by the same offset as the subnet (found live: a second
+    // install can collide on the port alone, independent of the subnet) — so the attempt that
+    // actually succeeds (the second one, offset 10) tries port+10, not the .env-declared port.
+    await serveHealth(port + 10);
     const f = fixture({ port });
     // ONLY the launch-dashboard compose call is rejected-then-retried — the observability stack's
     // OWN unrelated `up -d` (docker-compose.observability.yml) runs earlier in install.sh and must

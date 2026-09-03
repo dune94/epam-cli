@@ -1,4 +1,9 @@
 version: '3.8'
+# name: the DEV project identity — a hand-run `docker compose up` here (no -p flag) would
+# otherwise default to the directory basename ("epam-cli"). Naming it explicitly is what lets
+# install.sh's isolated "test-install-amsd-pipeline-*" project names (lib/isolated-compose-
+# identity.sh) be STRUCTURALLY unable to collide with this one, by construction, not by luck.
+name: dev-amsd-pipeline
 # Slim observability stack: Langfuse + agent-monitor only.
 # Avoids the full epam-cli stack (no hydra/kratos/backend-stub).
 #
@@ -26,6 +31,16 @@ networks:
     ipam:
       config:
         - subnet: ${EPAM_OBS_SUBNET:-172.31.0.0/16}
+
+# EVERY PUBLISHED PORT IS OVERRIDABLE, for the same reason the subnet is: a second install on this
+# machine (or this install colliding with an already-running one) needs somewhere else to go.
+# install.sh already isolates the compose PROJECT NAME and the SUBNET deterministically per
+# destination — found 2026-09-03 that the four hardcoded host ports below (8123, 3100, 8092, 3001)
+# were the one thing that still collided even with both of those isolated: a fresh install's
+# observability stack failed with "port is already allocated" against an already-running one on
+# this exact machine. EPAM_OBS_CLICKHOUSE_PORT / EPAM_OBS_LANGFUSE_PORT / EPAM_OBS_DASHBOARD_PORT /
+# EPAM_OBS_GRAFANA_PORT close that; the defaults are unchanged so a normal single-install machine
+# needs no new configuration.
 
 services:
 
@@ -55,7 +70,7 @@ services:
   clickhouse:
     image: clickhouse/clickhouse-server:24
     ports:
-      - "8123:8123"
+      - "${EPAM_OBS_CLICKHOUSE_PORT:-8123}:8123"
       # Port 9000 intentionally NOT exposed — conflicts with SonarQube on host.
       # Langfuse connects via internal Docker network (clickhouse:9000).
     # BOUNDED HERE, IN THE TRACKED FILE — never in the override.
@@ -89,10 +104,10 @@ services:
   langfuse-server:
     image: langfuse/langfuse:2
     ports:
-      - "3100:3000"
+      - "${EPAM_OBS_LANGFUSE_PORT:-3100}:3000"
     environment:
       DATABASE_URL: postgres://epam:epam_dev@postgres:5432/epam
-      NEXTAUTH_URL: http://localhost:3100
+      NEXTAUTH_URL: http://localhost:${EPAM_OBS_LANGFUSE_PORT:-3100}
       NEXTAUTH_SECRET: langfuse-dev-secret-change-in-production
       SALT: langfuse-dev-salt-change-in-production
       CLICKHOUSE_URL: http://clickhouse:8123
@@ -137,7 +152,7 @@ services:
   agent-monitor:
     image: nginx:alpine
     ports:
-      - "8092:80"
+      - "${EPAM_OBS_DASHBOARD_PORT:-8092}:80"
     volumes:
       - ./orchestrations/dashboards/nginx-main.conf:/etc/nginx/nginx.conf
       - ./orchestrations/dashboards/nginx.conf:/etc/nginx/conf.d/default.conf
@@ -164,7 +179,7 @@ services:
   grafana:
     image: grafana/grafana:11.4.0
     ports:
-      - "3001:3000"
+      - "${EPAM_OBS_GRAFANA_PORT:-3001}:3000"
     environment:
       # Community "Infinity" plugin — reads arbitrary JSON/JSONL over HTTP,
       # so Grafana queries the SAME endpoints agent-monitor already serves

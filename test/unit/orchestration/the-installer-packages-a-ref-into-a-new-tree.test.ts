@@ -117,13 +117,32 @@ describe('install.sh --dest packages a ref into a NEW tree', () => {
       'packaged something despite the ref not existing').toBe(false);
   });
 
-  it('refuses --dest when not run from inside a git checkout', () => {
+  /** A bare install.sh, deliberately NOT inside any git checkout — the exact "only this one file"
+   * scenario --repo's self-clone exists for. */
+  function bareInstallerNoCheckout() {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'installer-nogit-'));
     fs.mkdirSync(path.join(dir, 'orchestrations-installer/lib'), { recursive: true });
     fs.copyFileSync(path.join(REPO, INSTALLER_REL), path.join(dir, INSTALLER_REL));
     fs.chmodSync(path.join(dir, INSTALLER_REL), 0o755);
+    return dir;
+  }
+
+  it('NOTHING PRE-EXISTING REQUIRED: outside any checkout, --repo clones itself — never a manual git clone', () => {
+    // --repo points at a REAL local repo, not the real GitHub network: proves the self-clone
+    // mechanism itself works, fast and offline, without this test depending on network access.
+    const sourceRepo = fixtureRepo();
+    const dir = bareInstallerNoCheckout();
     const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'installer-dest-'));
-    expect(() => run(dir, ['--dest', dest, '--no-docker'])).toThrow();
+    const out = run(dir, ['--dest', dest, '--repo', sourceRepo, '--ref', 'v1.0-test', '--no-docker']);
+    expect(fs.existsSync(path.join(dest, 'a-real-pipeline-file.txt')),
+      `self-clone + package did not produce a working tree:\n${out.slice(-800)}`).toBe(true);
+    expect(fs.existsSync(path.join(dest, '.env')), 'the install did not proceed after self-cloning').toBe(true);
+  });
+
+  it('an unreachable --repo fails loudly, never silently proceeding with nothing', () => {
+    const dir = bareInstallerNoCheckout();
+    const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'installer-dest-'));
+    expect(() => run(dir, ['--dest', dest, '--repo', '/no/such/path/exists', '--no-docker'])).toThrow();
   });
 
   it('with no --dest, behaves exactly as before — configures the tree it is sitting in', () => {

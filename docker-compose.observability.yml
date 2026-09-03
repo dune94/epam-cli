@@ -11,6 +11,22 @@ version: '3.8'
 #   Open: http://localhost:3100  (Langfuse — login: dev@epam-cli.local / dev1234)
 #   Open: http://localhost:8092  (Agent monitor dashboard)
 
+# THE SUBNET IS DECLARED, because a VPN makes docker unable to choose one.
+#
+# Docker refuses any candidate address pool that conflicts with an existing route. A full-tunnel
+# VPN installs 0.0.0.0/1 and 128.0.0.0/1, which together cover the entire IPv4 space — so EVERY
+# pool conflicts and the daemon reports "all predefined address pools have been fully subnetted"
+# while 26 of its 32 pools are unused. The message names exhaustion; the cause is a route.
+#
+# Naming the subnet skips the pool search entirely. It is overridable so a machine where this range
+# is genuinely in use can move it without editing this file, and it is the reason an install
+# succeeds on a corporate laptop with the VPN up — which is the normal case, not the exception.
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${EPAM_OBS_SUBNET:-172.31.0.0/16}
+
 services:
 
   postgres:

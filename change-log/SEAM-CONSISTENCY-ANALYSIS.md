@@ -60,13 +60,24 @@ Raw sweeps inflate here, so each stage is recorded:
 | Vendor-literal fallback `${X:-<vendor>}` | 44 | first honest-looking number |
 | — minus **binary-name defaults** | −25 | `EPAM_CLI:-epam`, `CLAUDE_CMD:-claude`, `AI_RUNNER_CMD` — these name an **executable**, not a provider. Correct as written. |
 | — minus two miscounts | −2 | `claude.sh:6400` (binary lookup), `lib/sandbox-invoke.sh:97` (`EPAM_SANDBOX_TARGET_CMD`, a command) |
-| **True swap-unsafe provider resolutions** | **17** | |
+| True swap-unsafe provider resolutions (first pass) | 17 | |
+| — minus one further correction | −1 | `tier2-free-run.sh:56` (`FREE_PROVIDER:-openrouter`) is a standalone free-tier test harness, not a real seam — declared as an exact-match exemption, not deleted from scope |
+| **True swap-unsafe provider resolutions** | **16** | |
 
 Corpus: 142 shell, 118 JS, 110 Python files (venvs excluded).
 
 ---
 
-## 4. The 17 swap-unsafe seams
+## 4. The 16 swap-unsafe seams
+
+**Corrected 2026-09-03, count was 17.** `tier2-free-run.sh:56`'s `FREE_PROVIDER:-openrouter` was
+misclassified below as swap-unsafe. It is a standalone test harness for OpenRouter's free-tier
+models specifically, run against its own throwaway PRD (`hello-world-prd.json`) — unrelated to any
+client run's `EPAM_PROVIDER_SET`. Hardcoding `openrouter` there is the entire point of the script,
+the same way a plugin is allowed a stack fact that engine code is not. Declared as an exact-match
+exemption in `orchestrations/config/provider-swap-exemptions.json`, consulted by
+`scan-provider-swap-unsafe.js` — not deleted from the scanner's scope, so a genuinely new defect
+elsewhere in that file, or the same variable defaulting to a different vendor, is still caught.
 
 | # | file:line | resolves | baked vendor | reachable? |
 |---|---|---|---|---|
@@ -75,11 +86,10 @@ Corpus: 142 shell, 118 JS, 110 Python files (venvs excluded).
 | 3–6 | `run-agent-orchestration.sh:8286,8337,8361,8367` | `epam run --provider` for gates | `openrouter` | when `ORCH_GATE_PROVIDER` unset |
 | 7 | `code-review-cycle.sh:137` | `--provider` for code review | `claude` | when `EPAM_ORCHESTRATION_PROVIDER` unset |
 | 8–9 | `team-lead-review.sh:186,195` | reviewer provider | `claude` | when the map misses / var unset |
-| 10 | `tier2-free-run.sh:56` | `FREE_PROVIDER` | `openrouter` | default path of the free tier |
-| 11 | `tier3-skyscanner-app-run.sh:296` | `EPAM_FINAL_FALLBACK_PROVIDER` | `openrouter` | default |
-| 12 | `tier3-travel-app-run.sh:281` | `EPAM_FINAL_FALLBACK_PROVIDER` | `openrouter` | default |
-| 13 | `update-monitor.sh:132` | `PROVIDER` from positional `$5` | `claude` | when arg omitted |
-| 14–17 | `claude.sh:1632, 9441, 9521, 10151` | `STORY_PROVIDER` | **`codex`** | when `STORY_PROVIDER` unset |
+| 10 | `tier3-skyscanner-app-run.sh:296` | `EPAM_FINAL_FALLBACK_PROVIDER` | `openrouter` | default |
+| 11 | `tier3-travel-app-run.sh:281` | `EPAM_FINAL_FALLBACK_PROVIDER` | `openrouter` | default |
+| 12 | `update-monitor.sh:132` | `PROVIDER` from positional `$5` | `claude` | when arg omitted |
+| 13–16 | `claude.sh:1632, 9441, 9521, 10151` | `STORY_PROVIDER` | **`codex`** | when `STORY_PROVIDER` unset |
 
 ### 4.1 The worst of them
 
@@ -89,7 +99,7 @@ Corpus: 142 shell, 118 JS, 110 Python files (venvs excluded).
 **`CPA_PROVIDER` (site 1).** Assigned nowhere in the entire tree, so the fallback is not a fallback
 — it is the only path. Contextualisation always resolves `openrouter` regardless of the active set.
 
-**Sites 11–12.** `tier3-skyscanner-app-run.sh:218` and `tier3-travel-app-run.sh:216` additionally do
+**Sites 10–11.** `tier3-skyscanner-app-run.sh:218` and `tier3-travel-app-run.sh:216` additionally do
 `export EPAM_ORCHESTRATION_PROVIDER="openrouter"` unconditionally. **Those two projects cannot hot-swap
 at all** — the launcher overwrites the choice before the run starts. `tier3-metrolinx-run.sh` does
 not do this; it exports the variable but never assigns it (line 337), so metrolinx inherits whatever
@@ -185,7 +195,7 @@ Three reasons, all structural rather than anyone's oversight:
 3. **Nothing detects it.** There is no guard, scan or test that fails when a seam resolves a vendor
    without consulting the active set. `$spendProbeWhy` records this exact class being found and fixed
    once, but that fix was applied to the spend probe alone and never generalised into a check — so
-   the class returned in 17 other places, silently.
+   the class returned in 16 other places, silently.
 
 ---
 
@@ -195,7 +205,7 @@ Three reasons, all structural rather than anyone's oversight:
 |---|---|---|
 | **Blocks a swap outright** | 1, 11, 12 (+ the two launcher `export`s) | The set is overwritten or never consulted; a swap cannot reach these at all |
 | **Silently wrong on exhaustion** | 3–6, 7, 8, 9 | Falls to a literal exactly when the operator swapped away from it |
-| **Points at a non-existent set** | 14–17 | `codex` is selectable by no set |
+| **Points at a non-existent set** | 13–16 | `codex` is selectable by no set |
 | **Structural, not yet biting** | `provider_to_cli()`, the 7 branch sites | Correct today; makes an 11th provider an engine change |
 | **Declared inconsistency** | openrouter `finalFallback` absent; mockserver → paid `claude` | Both are declaration-level, both currently unresolved |
 
@@ -207,12 +217,12 @@ Three reasons, all structural rather than anyone's oversight:
    the active set. Without it the count regresses — it already has, once.
 2. **Fix the three swap-blockers** (sites 1, 11, 12 and the two launcher exports).
 3. **Fix the eight exhaustion-path seams** (3–9) — these are the ones that bite during a real swap.
-4. **Retire `:-codex`** (14–17) or declare a set that can select it.
+4. **Retire `:-codex`** (13–16) or declare a set that can select it.
 5. **Resolve the two declared inconsistencies** — decide whether openrouter should have a
    `finalFallback`, and whether mockserver may reach paid `claude`.
 6. **Move `provider_to_cli()`'s mapping into the declaration**, closing the engine-branch class.
 
-Steps 2–4 are ~17 sites and should ship together with the detector from step 1 as a test, so the
+Steps 2–4 are ~16 sites and should ship together with the detector from step 1 as a test, so the
 class cannot come back a third time.
 
 ---

@@ -39,6 +39,10 @@ function fixture(): string {
 const write = (d: string, name: string, body: string) =>
   writeFileSync(join(d, 'orchestrations/scripts', name), body);
 
+const writeExemptions = (d: string, exemptions: unknown[]) =>
+  writeFileSync(join(d, 'orchestrations/config/provider-swap-exemptions.json'),
+    JSON.stringify({ exemptions }));
+
 describe('provider-swap-unsafe scanner', () => {
   it('flags a provider variable defaulting to a vendor literal', () => {
     const d = fixture();
@@ -115,6 +119,44 @@ describe('provider-swap-unsafe scanner', () => {
     rmSync(d, { recursive: true, force: true });
   });
 
+  it('does NOT flag a site matching a declared exemption exactly', () => {
+    const d = fixture();
+    write(d, 'free.sh', '\n\n\n\n\n\nFREE_PROVIDER="${FREE_PROVIDER:-openrouter}"\n'); // line 7
+    writeExemptions(d, [{ file: 'orchestrations/scripts/free.sh', line: 7, var: 'FREE_PROVIDER', literal: 'openrouter', why: 'test' }]);
+    const r = run(d);
+    expect(r.out.trim()).toBe('');
+    rmSync(d, { recursive: true, force: true });
+  });
+
+  it('STILL FLAGS the same shape at a DIFFERENT line — an exemption is exact, never a filename blanket', () => {
+    // The whole risk of an exemption list: it must not become "this file is exempt". A second,
+    // genuinely new defect in the SAME file at a DIFFERENT line must still be caught.
+    const d = fixture();
+    write(d, 'free.sh', 'FREE_PROVIDER="${FREE_PROVIDER:-openrouter}"\nOTHER_PROVIDER="${OTHER_PROVIDER:-claude}"\n');
+    writeExemptions(d, [{ file: 'orchestrations/scripts/free.sh', line: 1, var: 'FREE_PROVIDER', literal: 'openrouter', why: 'test' }]);
+    const r = run(d);
+    expect(r.out).toMatch(/free\.sh:2\tOTHER_PROVIDER\tclaude/);
+    rmSync(d, { recursive: true, force: true });
+  });
+
+  it('STILL FLAGS the same variable at the exempted line if the LITERAL changed — exact-match, not line-only', () => {
+    const d = fixture();
+    write(d, 'free.sh', 'FREE_PROVIDER="${FREE_PROVIDER:-claude}"\n'); // literal changed from openrouter
+    writeExemptions(d, [{ file: 'orchestrations/scripts/free.sh', line: 1, var: 'FREE_PROVIDER', literal: 'openrouter', why: 'test' }]);
+    const r = run(d);
+    expect(r.out).toMatch(/free\.sh:1\tFREE_PROVIDER\tclaude/);
+    rmSync(d, { recursive: true, force: true });
+  });
+
+  it('treats a MISSING exemptions file as zero exemptions, not an error', () => {
+    const d = fixture();
+    write(d, 'x.sh', 'STORY_PROVIDER="${STORY_PROVIDER:-codex}"\n');
+    const r = run(d); // no writeExemptions() call — file genuinely absent
+    expect(r.status).toBe(0);
+    expect(r.out).toMatch(/x\.sh:1\tSTORY_PROVIDER\tcodex/);
+    rmSync(d, { recursive: true, force: true });
+  });
+
   it('reports nothing, not everything, when providers.json is absent', () => {
     // NO GUESSED VENDOR LIST. A tree that cannot declare its vendors cannot be judged by this
     // scanner — reporting nothing is correct, the same shape as testable-source.js refusing to
@@ -130,10 +172,10 @@ describe('provider-swap-unsafe scanner', () => {
 });
 
 describe('provider-swap-unsafe scanner, against the real tree', () => {
-  it('finds exactly the 17 seams the analysis verified by hand', () => {
+  it('finds exactly 16 — the 17 the analysis verified by hand, minus tier2-free-run.sh (exempt)', () => {
     const r = run(ROOT);
     const lines = r.out.trim().split('\n').filter(Boolean);
-    expect(lines.length, `found:\n${r.out}`).toBe(17);
+    expect(lines.length, `found:\n${r.out}`).toBe(16);
   });
 
   it('names the worst three from the analysis: CPA_PROVIDER, STORY_PROVIDER:-codex, the assignment form', () => {
@@ -141,6 +183,13 @@ describe('provider-swap-unsafe scanner, against the real tree', () => {
     expect(r.out).toMatch(/contextualize-stories\.sh:783\tCPA_PROVIDER\topenrouter/);
     expect(r.out).toMatch(/claude\.sh:1632\tSTORY_PROVIDER\tcodex/);
     expect(r.out).toMatch(/update-monitor\.sh:132\tPROVIDER\tclaude/);
+  });
+
+  it('does NOT flag tier2-free-run.sh — a standalone free-tier test harness, not a real seam', () => {
+    // change-log/SEAM-CONSISTENCY-ANALYSIS.md originally counted this among the 17; it does not
+    // belong there. FREE_PROVIDER:-openrouter is the entire point of the script.
+    const r = run(ROOT);
+    expect(r.out).not.toMatch(/tier2-free-run\.sh/);
   });
 
   it('never flags a binary-name default in the real tree', () => {

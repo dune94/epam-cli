@@ -49,6 +49,28 @@ function knownVendors(root) {
 }
 
 /**
+ * Seams DECLARED as not-a-defect, from orchestrations/config/provider-swap-exemptions.json.
+ *
+ * A MISSING file is zero exemptions, not an error — the exemption list is optional, unlike the
+ * vendor list. Each entry is matched EXACTLY (file, line, var, literal) so this can never become
+ * a blanket "this file is exempt": a genuinely new defect at a different line, or the same
+ * variable defaulting to a different vendor, is still flagged. See the file's own $careful.
+ */
+function exemptions(root) {
+  const p = path.join(root, 'orchestrations/config/provider-swap-exemptions.json');
+  const out = new Set();
+  try {
+    const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+    for (const e of (Array.isArray(j.exemptions) ? j.exemptions : [])) {
+      if (e && e.file && e.line && e.var && e.literal) {
+        out.add(`${e.file}:${e.line}:${e.var}:${e.literal}`);
+      }
+    }
+  } catch { /* absent or unreadable — zero exemptions */ }
+  return out;
+}
+
+/**
  * `${VAR:-LITERAL}` wherever it appears — assignment, case subject, or inline argument are the
  * same textual shape once the surrounding syntax is stripped, so one pattern finds all three.
  * LITERAL may itself be another `${...}` fallback (nested), in which case only the innermost
@@ -70,6 +92,7 @@ const ASSIGNMENT = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=.*:-([A-Za-z][A-Z
 
 function findings(root) {
   const vendors = knownVendors(root);
+  const exempt = exemptions(root);
   const out = [];
   if (vendors.size === 0) return out;
   for (const d of SCRIPT_DIRS) {
@@ -113,10 +136,12 @@ function findings(root) {
       }
     }
   }
-  return out;
+  // FILTERED AT THE END, once, against the exact-match key — not inline at each push site, so
+  // there is exactly one place the exemption rule is applied regardless of which pattern found it.
+  return out.filter((f) => !exempt.has(`${f.file}:${f.line}:${f.varName}:${f.literal}`));
 }
 
-module.exports = { findings, knownVendors, isBinaryName };
+module.exports = { findings, knownVendors, isBinaryName, exemptions };
 
 if (require.main === module) {
   const root = process.argv[2] || process.cwd();

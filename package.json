@@ -47,7 +47,8 @@
     "lint:pipeline": "eslint --config orchestrations/eslint.pipeline.config.mjs orchestrations/scripts orchestrations/plugins",
     "test:shell": "bash test/shell/helpers/run-bats.sh test/shell/",
     "coverage:persist": "node orchestrations/scripts/lib/handlers/stage-coverage.js --persist > /dev/null && node orchestrations/scripts/lib/handlers/stage-coverage.js --all",
-    "coverage:shell": "bash orchestrations/scripts/tools/shell-coverage.sh"
+    "coverage:shell": "bash orchestrations/scripts/tools/shell-coverage.sh",
+    "npm-package:sync": "bash npm-package/sync-install-sh.sh"
   },
   "keywords": [
     "ai",

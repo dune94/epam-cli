@@ -27,7 +27,11 @@ function writeStatus(dir, id, body) {
   fs.renameSync(tmp, target);
 }
 
-function createRunner({ spoolDir, providerSet, launcher, dry = false, pollMs = 1000 }) {
+function createRunner({ spoolDir, providerSet, launcher, dry = false, pollMs = 1000,
+                       // Default FALSE: the only production caller is a daemon whose sole job is this
+                       // timer. An embedding caller that must not have its event loop held open can
+                       // opt in, but that is the unusual case and it should have to say so.
+                       unrefPoll = false }) {
   // NO VENDOR DEFAULT. A guessed provider is how MiniMax reached a claude run.
   if (!providerSet || !String(providerSet).trim()) {
     throw new Error('the runner needs a provider set — refusing to guess a vendor');
@@ -127,7 +131,14 @@ function createRunner({ spoolDir, providerSet, launcher, dry = false, pollMs = 1
   function start() {
     if (timer) return;
     timer = setInterval(() => { tick().catch(() => {}); }, pollMs);
-    timer.unref?.();
+    // NOT UNREF'D. This timer is the only thing holding runner-host.js open, so unref'ing it told
+    // node the process was free to exit — and it did, instantly, having just printed "watching".
+    // A run created in the UI then sat at "pending" forever with no error anywhere.
+    //
+    // unref() belongs on a timer that is incidental to a process doing other work. Here the timer
+    // IS the work. A caller that embeds the runner and wants it not to hold its own loop open can
+    // ask, but a daemon must never be given that by default.
+    if (unrefPoll) timer.unref?.();
   }
   function stop() { if (timer) { clearInterval(timer); timer = null; } }
 

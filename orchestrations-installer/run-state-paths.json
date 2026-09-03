@@ -1,0 +1,9 @@
+{
+  "$comment": "Paths install.sh's --dest update NEVER overwrites, regardless of what a given ref's git history happens to track at that path. Declared, not hardcoded in install.sh's own packaging logic: a new run-state location needs an entry here, not a script edit. Checked 2026-09-03: orchestrations/logs/ alone carried 5,268 tracked files, several genuinely shaped like real run evidence (agent-mint.json, .rejection-AMSD-1919, agent-io/AMSD-1919/fix-plan) rather than app code — a fresh 'update' extraction into an existing install would have silently overwritten a colleague's real run history with whatever that ref's git history happened to hold at the same path.",
+  "paths": [
+    "orchestrations/logs",
+    "orchestrations/projects/*/runs",
+    "launch-dashboard/data",
+    "launch-dashboard/spool"
+  ]
+}

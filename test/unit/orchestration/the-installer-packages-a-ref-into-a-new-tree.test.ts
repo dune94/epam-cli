@@ -43,9 +43,10 @@ function fixtureRepo() {
   const installerSrc = fs.readFileSync(path.join(REPO, INSTALLER_REL), 'utf8');
   fs.writeFileSync(path.join(dir, INSTALLER_REL), installerSrc);
   fs.chmodSync(path.join(dir, INSTALLER_REL), 0o755);
-  for (const f of ['container-runtime.sh', 'wait-for-health.sh', 'isolated-compose-identity.sh', 'generate-env-example.sh']) {
+  for (const f of ['container-runtime.sh', 'wait-for-health.sh', 'isolated-compose-identity.sh', 'generate-env-example.sh', 'preserve-run-state.sh']) {
     fs.copyFileSync(path.join(REPO, 'orchestrations-installer/lib', f), path.join(dir, 'orchestrations-installer/lib', f));
   }
+  fs.copyFileSync(path.join(REPO, 'orchestrations-installer/run-state-paths.json'), path.join(dir, 'orchestrations-installer/run-state-paths.json'));
   for (const f of ['provider-sets.json', 'llm-defaults.claude.json', 'env-vars.json']) {
     const src = path.join(REPO, 'orchestrations/config', f);
     if (fs.existsSync(src)) fs.copyFileSync(src, path.join(dir, 'orchestrations/config', f));
@@ -61,6 +62,17 @@ function fixtureRepo() {
   git(dir, ['tag', 'v1.0-test']);
 
   return dir;
+}
+
+/** Commits a second version — including a file at a RUN-STATE path (simulating this repo's own
+ * real history, where orchestrations/logs/ carries thousands of tracked files) — and tags it. */
+function addSecondVersion(repoDir: string) {
+  fs.writeFileSync(path.join(repoDir, 'a-real-pipeline-file.txt'), 'version 2 of the app code\n');
+  fs.mkdirSync(path.join(repoDir, 'orchestrations/logs'), { recursive: true });
+  fs.writeFileSync(path.join(repoDir, 'orchestrations/logs/committed-fixture.json'), 'from v2.0 of the ref');
+  git(repoDir, ['add', '-A']);
+  git(repoDir, ['commit', '-q', '-m', 'v2']);
+  git(repoDir, ['tag', 'v2.0-test']);
 }
 
 function run(repoDir: string, args: string[]) {
@@ -118,5 +130,40 @@ describe('install.sh --dest packages a ref into a NEW tree', () => {
     const repo = fixtureRepo();
     const out = run(repo, ['--no-docker']);
     expect(fs.existsSync(path.join(repo, '.env')), `no --dest must install in place:\n${out.slice(-800)}`).toBe(true);
+  });
+
+  it('AN UPDATE never destroys run evidence, even on a direct filename collision', () => {
+    // The exact scenario found 2026-09-03: a colleague's install has real live data at a path the
+    // newer ref's git history ALSO tracks something at. Re-running --dest against the SAME
+    // destination with a newer --ref must not let the ref's committed content win.
+    const repo = fixtureRepo();
+    const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'installer-update-dest-'));
+
+    // First install, v1.0.
+    run(repo, ['--dest', dest, '--ref', 'v1.0-test', '--no-docker']);
+    expect(fs.existsSync(path.join(dest, 'a-real-pipeline-file.txt'))).toBe(true);
+
+    // The colleague actually uses it: real run evidence accumulates, AT THE SAME PATH the next
+    // version's git history will also carry a committed file.
+    fs.mkdirSync(path.join(dest, 'orchestrations/logs'), { recursive: true });
+    fs.writeFileSync(path.join(dest, 'orchestrations/logs/committed-fixture.json'),
+      'THIS COLLEAGUE\'S OWN REAL RUN DATA — must survive an update');
+    fs.writeFileSync(path.join(dest, 'orchestrations/logs/only-this-colleague-has-this.json'),
+      'never existed in any git ref');
+
+    // A newer version is released and the colleague updates.
+    addSecondVersion(repo);
+    const out = run(repo, ['--dest', dest, '--ref', 'v2.0-test', '--no-docker']);
+
+    // App code DID update.
+    expect(fs.readFileSync(path.join(dest, 'a-real-pipeline-file.txt'), 'utf8'),
+      `code was not updated:\n${out.slice(-800)}`).toContain('version 2');
+    // Run evidence at the SAME path the ref also tracks something at — untouched.
+    expect(fs.readFileSync(path.join(dest, 'orchestrations/logs/committed-fixture.json'), 'utf8'),
+      'the update overwrote real run evidence with the ref\'s own committed content')
+      .toContain('THIS COLLEAGUE\'S OWN REAL RUN DATA');
+    // A file that exists ONLY on this install, nowhere in git history — still there.
+    expect(fs.existsSync(path.join(dest, 'orchestrations/logs/only-this-colleague-has-this.json')),
+      'a file with no counterpart in the ref was deleted by the update').toBe(true);
   });
 });

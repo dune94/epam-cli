@@ -22,7 +22,7 @@
  * shipped unnoticed.
  *
  * This file tests, with REAL execution (mocked fetch, not just type
- * assertions): QwenProvider requests and parses real cost (complete +
+ * assertions): OpenRouterProvider requests and parses real cost (complete +
  * stream); MiniMaxProvider's defensive parse behaves correctly whether or
  * not a cost field is present; AgentRunner's cross-turn accumulation
  * correctly refuses to report a partial sum as if it were the whole
@@ -30,7 +30,7 @@
  * production (the exact gap that caused the live bug).
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { createQwenProvider } from '../../../src/providers/qwen/QwenProvider.js';
+import { createOpenRouterProvider } from '../../../src/providers/openrouter/OpenRouterProvider.js';
 import { MiniMaxProvider } from '../../../src/providers/minimax/MiniMaxProvider.js';
 import { calculateCost } from '../../../src/billing/pricing.js';
 import { AgentRunner } from '../../../src/agent/AgentRunner.js';
@@ -52,7 +52,7 @@ function stubFetch(responses: Array<Record<string, any>>) {
   return { getBodies: () => bodies };
 }
 
-describe('QwenProvider (OpenRouter) — real cost capture', () => {
+describe('OpenRouterProvider (OpenRouter) — real cost capture', () => {
   afterEach(() => {
     delete process.env.OPENROUTER_API_KEY;
     vi.unstubAllGlobals();
@@ -63,7 +63,7 @@ describe('QwenProvider (OpenRouter) — real cost capture', () => {
     const { getBodies } = stubFetch([
       { choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 5, cost: 0.001234 } },
     ]);
-    const provider = createQwenProvider()!;
+    const provider = createOpenRouterProvider()!;
     await provider.complete({ messages: [{ role: 'user', content: 'hi' }], model: 'z-ai/glm-5.1', stream: false });
     expect(getBodies()[0].usage).toEqual({ include: true });
   });
@@ -73,7 +73,7 @@ describe('QwenProvider (OpenRouter) — real cost capture', () => {
     stubFetch([
       { choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }], usage: { prompt_tokens: 100, completion_tokens: 50, cost: 0.0042 } },
     ]);
-    const provider = createQwenProvider()!;
+    const provider = createOpenRouterProvider()!;
     const result = await provider.complete({ messages: [{ role: 'user', content: 'hi' }], model: 'z-ai/glm-5.1', stream: false });
     expect(result.usage.costUsd).toBe(0.0042);
     expect(result.usage.inputTokens).toBe(100);
@@ -85,7 +85,7 @@ describe('QwenProvider (OpenRouter) — real cost capture', () => {
     stubFetch([
       { choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 5 } },
     ]);
-    const provider = createQwenProvider()!;
+    const provider = createOpenRouterProvider()!;
     const result = await provider.complete({ messages: [{ role: 'user', content: 'hi' }], model: 'z-ai/glm-5.1', stream: false });
     expect(result.usage.costUsd).toBeUndefined();
   });
@@ -119,7 +119,7 @@ describe('QwenProvider (OpenRouter) — real cost capture', () => {
         } as unknown as Response;
       }),
     );
-    const provider = createQwenProvider()!;
+    const provider = createOpenRouterProvider()!;
     const result = await provider.stream(
       { messages: [{ role: 'user', content: 'hi' }], model: 'z-ai/glm-5.1', stream: true },
       () => {},
@@ -155,7 +155,7 @@ describe('MiniMaxProvider (direct API) — defensive cost parse, estimate-only b
 describe('calculateCost() — every model family this codebase actually uses in production', () => {
   // Found live 2026-07-13: glm-5.1/MiniMax-M3/kimi-k2 were completely absent
   // from this table, so calculateCost() silently returned 0 for 100% of a
-  // real run's calls. These are the exact models used across the qwen and
+  // real run's calls. These are the exact models used across the openrouter and
   // minimax providers today — every one must resolve to a non-zero rate.
   it.each([
     ['z-ai/glm-5.1', 1_000_000, 1_000_000],

@@ -1,0 +1,51 @@
+# refused: the generated prompt dropped placeholder(s) the template requires: __PERSONA__. The evidence they carry would silently never reach the agent.
+# template: survey-review   attempt: 1/3
+# required placeholders: __CODELINE_BLOCK__, __PERSONA__, __SURVEY_BLOCK__, __TICKET_BLOCK__, __TOOL_LINE__
+# ---------------- model reply below, verbatim ----------------
+You are reviewing an estate survey for the mock3 project. This project consists of two codelines:
+
+- mocka (/home/bradleyjerome/projects/mock3/mock-a): A TypeScript project with vitest. Contains fare calculation logic, particularly src/fares.ts for age-based fare rules. MOCK3-1 requires verification that riders aged exactly 65 receive the adult fare.
+- mockb (/home/bradleyjerome/projects/mock3/mock-b): A TypeScript project with vitest. Contains schedule display logic, particularly src/schedule.ts for stop rendering. MOCK3-2 requires verification that the departure board includes the final stop.
+
+A roster of agents is about to be minted from this survey, and every claim below will be inherited as a brief and re-checked by nothing.
+
+THE SURVEY UNDER REVIEW:
+__SURVEY_BLOCK__
+
+THE CODELINES IN SCOPE, and where each is checked out:
+__CODELINE_BLOCK__
+
+THE WORK THE PROJECT WAS ASKED TO DO:
+__TICKET_BLOCK__
+
+__TOOL_LINE__
+
+# What is in scope
+
+ONE QUESTION ONLY: does the survey state anything about these repositories that is FALSE?
+
+A claim is in scope when you can check it by opening a repository. Open them and check.
+
+- a file named in `filesRead` that the codeline does not contain
+- a file, module, function or symbol said to exist where it does not
+- a claim attributed to the WRONG codeline — the commonest and most damaging error, because the brief built from it sends an implementer into a repository that has no such code. For example: claiming src/fares.ts is in mockb when it's actually in mocka.
+- a dependency, script, framework or command the codeline does not declare (both mocka and mockb declare vitest and typescript)
+- a codeline reported in_scope on evidence that belongs to a different one
+
+A codeline reported no_work_found or not_investigated is making a WEAK claim, not a false one.
+Check it only if you can show the work plainly does reach it.
+
+# What is NOT in scope
+
+Do not judge whether the survey looked hard enough, chose the right focus, or recommended the
+right team. Do not propose better wording. Do not supply a FIX SITE of your own — naming which
+file to edit is not yours to say here any more than it was the surveyor's, and a fix site you add
+for a repository you swept from the outside is how one codeline's file ends up in another's work.
+
+# Evidence
+
+For each finding, say what you CHECKED and what you FOUND, naming the repository and the path you
+opened. A finding without a check is an opinion, and an opinion about a survey is not a defect.
+
+If every claim checks out, return no findings. An empty finding list from a review that RAN is the
+correct answer for a sound survey.

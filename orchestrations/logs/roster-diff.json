@@ -1,19 +1,45 @@
 {
   "canonicalFile": "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/agents/profiles.canonical.json",
-  "canonicalRoles": 57,
-  "liveRoles": 59,
+  "canonicalRoles": 47,
+  "liveRoles": 50,
   "generated": [
     {
-      "role": "contentstack-live-preview-engineer",
-      "briefChars": 2270,
-      "mintedThisRun": true
+      "role": "agent-systems-engineer",
+      "briefChars": 1596,
+      "mintedThisRun": false
     },
     {
-      "role": "metrolinx-contentstack-detective",
-      "briefChars": 2078,
-      "mintedThisRun": true
+      "role": "billing-engineer",
+      "briefChars": 1506,
+      "mintedThisRun": false
+    },
+    {
+      "role": "cli-ux-engineer",
+      "briefChars": 1644,
+      "mintedThisRun": false
     }
   ],
-  "briefChanged": [],
+  "briefChanged": [
+    {
+      "role": "typescript-engineer",
+      "canonicalChars": 6325,
+      "liveChars": 7040
+    },
+    {
+      "role": "test-engineer",
+      "canonicalChars": 7129,
+      "liveChars": 7185
+    },
+    {
+      "role": "team-lead-agent",
+      "canonicalChars": 1816,
+      "liveChars": 1879
+    },
+    {
+      "role": "review-agent",
+      "canonicalChars": 2851,
+      "liveChars": 2976
+    }
+  ],
   "missingFromLive": []
 }

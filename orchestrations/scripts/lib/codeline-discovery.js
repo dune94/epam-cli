@@ -78,8 +78,8 @@ const argv    = process.argv.slice(2);
 const getArg  = (flag, def = '') => { const i = argv.indexOf(flag); return i !== -1 ? argv[i + 1] : def; };
 const DRY_RUN = argv.includes('--dry-run') || process.env.CODELINE_DISCOVERY_DRY_RUN === '1';
 // Explicit provider. These called ai-run.sh with --model but NO --provider, so
-// provider came only from ambient env — e.g. `--provider qwen --model claude-haiku`.
-// NO VENDOR NAMED HERE. This ended in `|| 'qwen'`, so a project that configured nothing had its
+// provider came only from ambient env — e.g. `--provider openrouter --model claude-haiku`.
+// NO VENDOR NAMED HERE. This ended in `|| 'openrouter'`, so a project that configured nothing had its
 // discovery call routed to a vendor it never chose — and the run looked configured. An absent
 // provider is a configuration gap, and the call refuses rather than picking someone.
 const PROVIDER = getArg('--provider',
@@ -87,6 +87,25 @@ const PROVIDER = getArg('--provider',
 // No literal fallback: see lib/seam-model.js. Discovery picking the wrong codeline is already
 // a known failure chain; doing it on an unchosen model makes the cause untraceable.
 const { resolveOrRefuse } = require('./seam-model.js');
+
+/**
+ * THIS SEAM'S MODEL, FROM ITS OWN LADDER.
+ *
+ * Replaces process.env.ORCH_GATE_MODEL — a RUN-WIDE PIN that reached every seam unable to
+ * resolve one itself, which was all of them outside the story path. `.env` set it to
+ * z-ai/glm-5.2, so a mockserver run asked for an OpenRouter model and nothing else could
+ * supply a different answer.
+ *
+ * Returns '' when the ladder cannot answer, so resolveOrRefuse still REFUSES rather than
+ * substituting: "we could not tell" is never "it is fine".
+ */
+function seamLadderModel(seam) {
+  try {
+    const { seamInvocationEnv } = require('./seam-invocation.js');
+    const env = seamInvocationEnv(seam, undefined, { sourceEnv: process.env }) || {};
+    return env.EPAM_MODEL || '';
+  } catch { return ''; }
+}
 // RESOLVED WHERE IT IS USED, not at import. Resolving here ran the refusal the moment anything
 // required this module — so the prompt builder could not be exercised by a test without a full
 // project environment, and the one part of this file that decides which client repository gets
@@ -95,7 +114,7 @@ let _model = null;
 const MODEL = () => {
   if (_model) return _model;
   _model = resolveOrRefuse({ seam: 'codeline-discovery',
-    sources: [getArg('--model', ''), process.env.ORCH_GATE_MODEL, process.env.EPAM_MODEL] });
+    sources: [getArg('--model', ''), seamLadderModel('codeline-discovery'), process.env.EPAM_MODEL] });
   return _model;
 };
 
@@ -308,9 +327,50 @@ function dropUngroundedCodelines(parsed) {
 // out of it. The vocabulary agent shares this seam deliberately — the same provider, the same
 // retry and ladder budget, the same stderr capture. A second hand-rolled spawn would be a
 // second set of failure modes to discover in production.
+/**
+ * THE FIRST BALANCED OBJECT, NOT THE WIDEST SPAN BETWEEN BRACES.
+ *
+ * This was a greedy /{...}/ match — first '{' to LAST '}'. A model that fences its JSON, or writes a
+ * sentence containing a brace afterwards, produced a match spanning both and JSON.parse threw.
+ *
+ * Live 2026-08-27, run 20260827T143143Z: fenced JSON, "Unexpected non-whitespace character after
+ * JSON at position 958", the throw escaped the retry loop and killed the run — which then reported
+ * "codeline scope could not be resolved", the consequence rather than the cause.
+ *
+ * Scans for balance and respects strings and escapes, so a '}' inside a value cannot end the object.
+ * Returns '' when there is no object: absent stays absent rather than becoming a guess.
+ */
+function extractJsonObject(text) {
+  const s = String(text == null ? '' : text);
+  const start = s.indexOf('{');
+  if (start < 0) return '';
+  let depth = 0; let inStr = false; let esc = false;
+  for (let i = start; i < s.length; i += 1) {
+    const c = s[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === '\\') esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') { inStr = true; continue; }
+    if (c === '{') depth += 1;
+    else if (c === '}') { depth -= 1; if (depth === 0) return s.slice(start, i + 1); }
+  }
+  return '';
+}
+
 function callLlm(prompt, opts = {}) {
   const tmpPrompt = `/tmp/codeline-discovery-prompt-${process.pid}.txt`;
   fs.writeFileSync(tmpPrompt, prompt);
+  // KEPT WHERE THE TRACE CAN REACH IT. This seam spawns its runner directly rather than going
+  // through runAgentForJson, so nothing recorded its prompt and it was the last agent still
+  // tracing in=4ch after every other had one. Keyed by the agent name, because this seam declares
+  // requiredKeys rather than a tag.
+  try {
+    // eslint-disable-next-line global-require
+    require('./agent-reply-log.js').recordAgentPrompt(opts.costAgent || 'codeline-discovery', prompt);
+  } catch { /* a trace field, never the run */ }
   const debug = process.env.DEBUG_CODELINE_DISCOVERY === '1';
   // COST IS RECORDED, NOT ASSUMED. Discovery makes two model calls per run — the vocabulary
   // agent and the matcher, one of them at effort:high with a 16k output budget — and neither
@@ -334,9 +394,29 @@ function callLlm(prompt, opts = {}) {
     // call failed is the only thing that makes the fallback judgeable.
     const _errFile = `${tmpPrompt}.err`;
 
+    // A FLAG WITH NO VALUE IS NOT AN EMPTY ARGUMENT — IT IS NO ARGUMENT.
+    //
+    // PROVIDER defaults to '' when neither ORCH_GATE_PROVIDER nor EPAM_ORCHESTRATION_PROVIDER is
+    // set, and interpolating that into a command STRING made the shell collapse the gap, so the
+    // vector that arrived was:
+    //
+    //     --provider  --model  claude-sonnet-5
+    //
+    // llm-handler.sh took '--model' as the provider's value and met the model name as a bare word:
+    // "unknown option 'claude-sonnet-5'", exit 2. Discovery saw no output and reported "the answer
+    // was EMPTY ... a transport or budget failure, not a format one" — sending an operator to
+    // timeouts and credits for a fault that was one empty string, three attempts earlier.
+    //
+    // Omitting the flag is right rather than inventing a value: the handler resolves the provider
+    // from the active set when it is not told one (`if [ -n "$PRIMARY_PROVIDER" ]`). Values are
+    // quoted, so a future empty or spaced one cannot shift the vector again.
+    const _flag = (name, value) => (String(value == null ? '' : value).trim()
+      ? ` --${name} ${JSON.stringify(String(value).trim())}`
+      : '');
+    const _flags = _flag('provider', PROVIDER) + _flag('model', MODEL());
     const cmd = debug
-      ? `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL()} < ${tmpPrompt}`
-      : `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL()} < ${tmpPrompt} 2>${_errFile}`;
+      ? `bash ${AI_RUN_SH}${_flags} < ${tmpPrompt}`
+      : `bash ${AI_RUN_SH}${_flags} < ${tmpPrompt} 2>${_errFile}`;
     const raw = execSync(cmd, {
       encoding:   'utf8',
       // Covers BOTH passes: plan-execute puts a plan call (up to
@@ -379,12 +459,18 @@ function callLlm(prompt, opts = {}) {
           ..._base,
           EPAM_AGENT_NAME: 'codeline-discovery',
           ORCH_JSON_RESULT: _costFile,
+          // THIS FILE EMITS ITS OWN COST ROW (_emitDiscoveryCost below), so the hub must not
+          // write a second one for the same call. Both fired: run 5 on 2026-08-26 recorded 5
+          // rows for 4 calls, and discovery was the one still doubled after spec-mode-runner
+          // was fixed. See lib/cost-record.sh and the same declaration in spec-mode-runner.js.
+          EPAM_COST_RECORDED_BY_CALLER: '1',
           ...(() => {
             try {
               // (agent, agentsDir, opts) — the options are the THIRD argument. Passing them
               // second hands an object where a directory path is expected.
               return require('./seam-invocation.js')
-                .seamInvocationEnv('codeline-discovery', undefined, { env: _base });
+                .seamInvocationEnv('codeline-discovery', undefined,
+                    { env: _base, rung: Number(opts && opts.rung) || 0 });
             } catch { return {}; }
           })(),
         };
@@ -429,10 +515,10 @@ function callLlm(prompt, opts = {}) {
 
     if (opts.rawText) return raw;
 
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error(`No JSON in LLM response: ${raw.slice(0, 200)}`);
+    const jsonText = extractJsonObject(raw);
+    if (!jsonText) throw new Error(`No JSON in LLM response: ${raw.slice(0, 200)}`);
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    const parsed = JSON.parse(jsonText);
     if (debug) log(`DEBUG parsed codelines: ${JSON.stringify(parsed.codelines)}`);
     // The model decides WHICH repositories are in scope and why. It does not get to name
     // them: a codeline name is a primary key (byCodeline, the KB stores, story.codelines,
@@ -456,6 +542,8 @@ function callLlm(prompt, opts = {}) {
 // migration has to be provable byte-for-byte — which means a test must be able to call the
 // builder. An unguarded IIFE runs a whole discovery pass the moment anything requires this.
 module.exports = {
+  // Exported so the extraction rule is assertable without a model call.
+  extractJsonObject,
   buildDiscoveryPrompt, buildRepoManifest };
 
 if (require.main !== module) return;
@@ -510,7 +598,9 @@ if (require.main !== module) return;
     what: 'codeline-discovery',
     attempts: Number(process.env.EPAM_CONTENT_RETRY_ATTEMPTS || 3),
     log,
-    call: (note) => callLlm(note ? `${note}${prompt}` : prompt, { manifest }),
+    // ATTEMPT N RUNS RUNG N-1. This re-invoked the same model each time, so a refusal was
+    // handed back to the one model that had just produced it — half a retry.
+    call: (note, attempt) => callLlm(note ? `${note}${prompt}` : prompt, { manifest, rung: Math.max(0, (attempt || 1) - 1) }),
     parse: (answer) => {
       const picked = (answer && answer.codelines) || [];
       if (!picked.length) {

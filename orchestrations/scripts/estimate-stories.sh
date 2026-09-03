@@ -22,6 +22,13 @@
 #   0 - Success
 #   1 - Error (missing files, invalid data)
 
+
+# THE PIPELINE DOES NOT RUN CODE NOBODY HAS TESTED. This stage asks how much of the code it is
+# about to execute has a test behind it, and halts when the project says it must.
+_scg_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/stage-coverage-gate.sh"
+# shellcheck source=/dev/null
+[ -f "$_scg_lib" ] && . "$_scg_lib" && require_stage_coverage cpa || exit 1
+
 set -euo pipefail
 
 # ────────────────────────────────────────────
@@ -171,10 +178,10 @@ declare -A PRICING_INPUT=( [high]=15.00 [medium]=3.00 [low]=0.80 )
 declare -A PRICING_CACHED=( [high]=1.50 [medium]=0.30 [low]=0.08 )
 declare -A PRICING_OUTPUT=( [high]=75.00 [medium]=15.00 [low]=4.00 )
 
-# Qwen effort-tier fallback (only used when model not in model-pricing.json)
-declare -A QWEN_PRICING_INPUT=( [high]=1.25 [medium]=0.40 [low]=0.1875 )
-declare -A QWEN_PRICING_CACHED=( [high]=0.25 [medium]=0.08 [low]=0.0375 )
-declare -A QWEN_PRICING_OUTPUT=( [high]=3.75 [medium]=1.60 [low]=1.125 )
+# OpenRouter effort-tier fallback (only used when model not in model-pricing.json)
+declare -A OPENROUTER_PRICING_INPUT=( [high]=1.25 [medium]=0.40 [low]=0.1875 )
+declare -A OPENROUTER_PRICING_CACHED=( [high]=0.25 [medium]=0.08 [low]=0.0375 )
+declare -A OPENROUTER_PRICING_OUTPUT=( [high]=3.75 [medium]=1.60 [low]=1.125 )
 
 # lookup_model_pricing <model-name>
 # Returns "input_per_M|cached_per_M|output_per_M" reading from model-pricing.json.
@@ -478,8 +485,40 @@ while IFS= read -r sid; do
     IFS='|' read -r s_id s_title s_hours s_priority s_type s_role s_deps s_skills s_files s_provider s_skill_csv <<< "$story_data"
     s_model=$(jq -r --arg id "$sid" '.stories[] | select(.id == $id) | .model // ""' "$PRD_FILE")
 
-    # Effort tier
-    effort=$(get_effort_tier "$s_hours")
+    # Effort tier.
+    #
+    # A STORY THAT DECLARES ITS EFFORT IS BELIEVED. This read humanHours alone, and a story carrying
+    # `effort: "high"` with no humanHours fell to 0 hours, scored the "low" tier, and forecast ZERO
+    # minutes, ZERO tokens and ZERO cost — a confident statement that the run is free, which is the
+    # worst answer this script can give. Brownfield tickets routinely carry an effort label and no
+    # hours estimate at all.
+    #
+    # Hours still win when present: they are the more specific fact.
+    effort=""
+    if [ -n "$s_hours" ] && [ "$s_hours" != "0" ] && [ "$s_hours" != "null" ]; then
+        effort=$(get_effort_tier "$s_hours")
+    else
+        _declared=$(jq -r --arg id "$sid" '.stories[] | select(.id == $id) | .effort // ""' "$PRD_FILE")
+        case "$_declared" in
+            low|medium|high) effort="$_declared" ;;
+            *) effort=$(get_effort_tier "$s_hours") ;;
+        esac
+        unset _declared
+    fi
+
+    # A ZERO FORECAST IS NOT A CHEAP STORY, IT IS AN UNKNOWN ONE.
+    #
+    # The cost model multiplies by hours, so a story carrying no humanHours forecasts zero minutes,
+    # zero tokens and zero cost — a confident statement that this story is free. That is the worst
+    # answer this script can give, and it is silent: the row prints, the totals add up, and the
+    # operator approves a run whose cost was never estimated.
+    #
+    # No number is invented here. The story is NAMED on stderr so the total is known to be an
+    # underestimate, and by which stories.
+    if [ -z "$s_hours" ] || [ "$s_hours" = "0" ] || [ "$s_hours" = "null" ]; then
+        echo "[estimate] $sid: no humanHours — its forecast is 0 and the run total is an UNDERESTIMATE by this story" >&2
+        UNESTIMATED_STORIES="${UNESTIMATED_STORIES:-}${UNESTIMATED_STORIES:+ }$sid"
+    fi
 
     # Phase and position
     phase="${STORY_PHASE[$sid]:-unknown}"
@@ -588,10 +627,10 @@ while IFS= read -r sid; do
     else
         # Fallback: effort-tier pricing keyed by provider
         case "$s_provider" in
-            qwen)
-                price_input="${QWEN_PRICING_INPUT[$effort]}"
-                price_cached="${QWEN_PRICING_CACHED[$effort]}"
-                price_output="${QWEN_PRICING_OUTPUT[$effort]}"
+            openrouter)
+                price_input="${OPENROUTER_PRICING_INPUT[$effort]}"
+                price_cached="${OPENROUTER_PRICING_CACHED[$effort]}"
+                price_output="${OPENROUTER_PRICING_OUTPUT[$effort]}"
                 ;;
             *)
                 price_input="${PRICING_INPUT[$effort]}"
@@ -637,11 +676,8 @@ while IFS= read -r sid; do
     cache_pct=$(echo "scale=0; ($cache_ratio * 100) / 1" | bc)
 
     # Model name by effort (and provider)
-    if [ "$s_provider" = "qwen" ]; then
+    if [ "$s_provider" = "openrouter" ]; then
         case "$effort" in
-            low)    model_name="Qwen3.6 Flash" ;;
-            medium) model_name="Qwen3.7 Plus" ;;
-            high)   model_name="Qwen3.7 Max" ;;
         esac
     else
         case "$effort" in

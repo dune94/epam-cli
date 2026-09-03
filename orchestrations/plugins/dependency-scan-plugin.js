@@ -333,6 +333,7 @@ function scanImports(projectRoot, env = process.env, opts = {}) {
   const { cfg } = m;
 
   let pattern;
+  let _introducedSet = null;
   try { pattern = new RegExp(cfg.importPattern, 'g'); } catch (e) {
     return { status: 'unknown', reason: `importPattern is not a valid expression: ${e && e.message}` };
   }
@@ -352,14 +353,55 @@ function scanImports(projectRoot, env = process.env, opts = {}) {
       const spec = match.slice(1).find((g) => g);
       if (!spec) continue;
       const verdict = classifySpecifier(projectRoot, spec, env);
-      // An installed-but-undeclared package is reported only when THIS story touched the file
-      // importing it. Otherwise it is pre-existing estate condition, and reporting it every run
-      // buries the finding that matters. changedFiles absent = report nothing on that basis,
-      // since "we cannot tell what changed" must not manufacture findings.
-      const rel = file.slice(projectRoot.length + 1);
-      const touched = Array.isArray(opts.changedFiles)
-        && opts.changedFiles.some((c) => rel === c || rel.startsWith(`${c}/`));
-      if (verdict === 'installed_undeclared' && !touched) continue;
+      // AN INSTALLED-BUT-UNDECLARED PACKAGE IS THE STORY'S ONLY WHEN THE CHANGE ADDED THE IMPORT.
+      //
+      // This tested whether the story TOUCHED THE FILE. Touching a file is not introducing an
+      // import. A one-line edit to a file that has carried an undeclared import since before the
+      // run made that pre-existing debt the story's problem — unfixable without editing outside
+      // the story's scope, so the writer could only fail or overreach.
+      //
+      // Live 2026-09-02, AMSD-1919. The writer made exactly the prescribed change —
+      // `value !== email` to `value.toLowerCase() !== email.toLowerCase()` — in CheckoutForm.tsx,
+      // which has imported rc-tooltip since before v1.5 with that package declared in no
+      // package.json, in FOUR files across the repo, none of them ours. The gate blamed the edit.
+      // The writer "fixed" it by adding rc-tooltip to package.json, which is scope creep a reviewer
+      // should refuse, the scan failed anyway, and it burned retries out of twelve against
+      // something it should never have been asked to fix. A gate that over-gates is worse than no
+      // gate: it blocks a correct fix and teaches the writer to widen its blast radius.
+      //
+      // The comment this replaces already had the principle right — "otherwise it is pre-existing
+      // estate condition, and reporting it every run buries the finding that matters" — and then
+      // implemented a test that cannot tell the two apart.
+      //
+      // WHAT IS STILL CAUGHT, which is the whole point of the gate: an agent that imports a package
+      // it never declared. That import appears on an ADDED line, so it is in introducedSpecifiers.
+      //
+      // ABSENT MEANS REPORT NOTHING, the same stance the file-level test already took: a caller
+      // that cannot compute the diff must not have the gate degrade into a whole-repo audit that
+      // blocks every story.
+      // THE SPECIFIERS THE CHANGE INTRODUCED, extracted with THIS scan's own importPattern.
+      //
+      // The caller hands over the ADDED lines of the diff, never a parsed list: the pattern is
+      // declared in the project's dependency-check.json and compiled above, and a second copy in
+      // the caller would be a project fact living outside config or a plugin. Resolved once.
+      if (_introducedSet === null) {
+        _introducedSet = new Set();
+        const lines = Array.isArray(opts.introducedLines) ? opts.introducedLines : null;
+        if (lines) {
+          const p2 = new RegExp(cfg.importPattern, 'g');
+          for (const line of lines) {
+            let m2;
+            p2.lastIndex = 0;
+            while ((m2 = p2.exec(String(line))) !== null) {
+              const sp = m2.slice(1).find((g) => g);
+              if (sp) _introducedSet.add(sp);
+            }
+          }
+        }
+      }
+      const introduced = Array.isArray(opts.introducedLines)
+        && _introducedSet.has(spec);
+      if (verdict === 'installed_undeclared' && !introduced) continue;
       if (verdict === 'unknown_external' || verdict === 'malformed' || verdict === 'installed_undeclared') {
         const key = `${verdict}:${spec}`;
         if (!seen.has(key)) {

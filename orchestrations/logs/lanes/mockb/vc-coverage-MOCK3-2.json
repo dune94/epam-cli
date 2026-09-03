@@ -1,1 +1,6 @@
-[{"covered":true,"case":"names the final stop","why":"The test asserts formatStops(LINE) contains 'Eglinton', the last stop in the multi-stop array, so it would fail if the final stop were omitted from the rendered string.","vc":"The rendered departure-board string for a line with multiple stops includes the name of the last stop on that line, confirming the previously-omitted final stop now appears."},{"covered":false,"case":"","why":"The only arrow-related assertion checks for the substring '->' without surrounding spaces and does not verify that every consecutive pair of stops is separated by ' -> '.","vc":"The rendered departure-board string displays each pair of consecutive stops separated by the arrow separator ' -> '."},{"covered":true,"case":"handles an empty line","why":"The test calls formatStops([]) and asserts the result is an empty string, which would fail if the function raised an error or returned a non-string.","vc":"Rendering a line with no stops yields a string without raising an error."}]
+{
+  "state": "not_checked",
+  "story": "MOCK3-2",
+  "results": [],
+  "reason": "this story committed no test file — nothing to check the verification criteria against"
+}

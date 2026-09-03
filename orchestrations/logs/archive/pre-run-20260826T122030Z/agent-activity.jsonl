@@ -1,0 +1,1 @@
+{"event_id":"evt-cost-20260826122030694-248024","timestamp":"2026-08-26T12:20:30.694Z","agent":"ac-classification","story_id":null,"phase":null,"type":"cost_snapshot","model":"claude-haiku-4-5-20251001","provider":"qwen","detail":{"costUsd":0.0001,"tokensIn":1304,"tokensOut":8,"tokensCached":32,"costUnknown":false,"costIsEstimate":false,"turns":1,"source":"spec-mode-runner"}}

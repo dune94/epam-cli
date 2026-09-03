@@ -16,6 +16,12 @@
 # Usage:
 #   bash orchestrations/scripts/tier1-mock-run.sh
 # ──────────────────────────────────────────────────────────────────────────────
+
+# A launcher decides what a run costs. It does not get to do that untested.
+_scg_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/stage-coverage-gate.sh"
+# shellcheck source=/dev/null
+[ -f "$_scg_lib" ] && . "$_scg_lib" && require_stage_coverage launch || exit 1
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -75,7 +81,7 @@ git -C "$HW_REPO" clean -fd --quiet 2>/dev/null || true
 # ── 3. Run the pipeline ────────────────────────────────────────────────────────
 info "Launching pipeline (log: $LOG_FILE)..."
 info "  OPENROUTER_BASE_URL=$MOCK_URL (story agents → mock)"
-info "  ORCH_GATE_PROVIDER=qwen (coordinator calls → mock, all skipped anyway)"
+info "  ORCH_GATE_PROVIDER=openrouter (coordinator calls → mock, all skipped anyway)"
 
 # ── Pre-flight assessment ─────────────────────────────────────────────────────
 # Every launcher runs this. It was wired into two of eight, and the two being run daily
@@ -97,11 +103,11 @@ echo ""
 pre_run_reset_or_abort --prd "$PRD_FILE"
 
 cd "$REPO_ROOT"
-OPENROUTER_API_KEY="mock-key" \
+export OPENROUTER_API_KEY="mock-key" \
 OPENROUTER_BASE_URL="$MOCK_URL" \
 EPAM_API_KEY_OPENROUTER="mock-key" \
-ORCH_GATE_PROVIDER="qwen" \
-ORCH_GATE_MODEL="mock-gate" \
+ORCH_GATE_PROVIDER="openrouter" \
+# ORCH_GATE_MODEL removed: a run-wide pin. The seam ladder decides.
 PRD_FILE="$PRD_FILE" \
 SKIP_REGRESSION_GUARD=true \
 SKIP_CPA=1 \

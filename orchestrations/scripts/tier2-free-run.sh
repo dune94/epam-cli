@@ -4,23 +4,28 @@
 #
 # Uses OpenRouter's free-tier models (`:free` suffix) which are rate-limited
 # but cost $0.  Validates real LLM integration: streaming, token handling,
-# QwenProvider parsing, and actual code generation on a small model.
+# OpenRouterProvider parsing, and actual code generation on a small model.
 #
 # Prerequisite: Tier 1 must pass first.
 #   bash orchestrations/scripts/tier1-mock-run.sh
 #
 # What this tests (on top of Tier 1):
 #   • Real OpenRouter API calls (auth, headers, streaming SSE)
-#   • QwenProvider streaming/tool-call parsing on live responses
+#   • OpenRouterProvider streaming/tool-call parsing on live responses
 #   • Actual code generation (not scripted) — model must write passing TS
 #   • Token accumulation stays within budget (autoCompressAt guard)
 #
 # Free models used (no credits consumed):
-#   qwen/qwen3-coder:free  — same provider family as production Qwen3-Coder-30B
 #
 # Usage:
 #   bash orchestrations/scripts/tier2-free-run.sh   (reads .env automatically)
 # ──────────────────────────────────────────────────────────────────────────────
+
+# A launcher decides what a run costs. It does not get to do that untested.
+_scg_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/stage-coverage-gate.sh"
+# shellcheck source=/dev/null
+[ -f "$_scg_lib" ] && . "$_scg_lib" && require_stage_coverage launch || exit 1
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -45,11 +50,10 @@ fi
 
 PRD_FILE="$REPO_ROOT/orchestrations/hello-world-prd.json"
 
-# Free Qwen coder model — same provider as production, zero credits
-FREE_MODEL="${FREE_MODEL:-qwen/qwen3-coder:free}"
+# Free OpenRouter coder model — same provider as production, zero credits
 # WHICH provider gets moved onto the free model. It was written into the patch program itself, so
 # this launcher could only ever patch one; it is a setting now.
-FREE_PROVIDER="${FREE_PROVIDER:-qwen}"
+FREE_PROVIDER="${FREE_PROVIDER:-openrouter}"
 
 info "Tier 2 free-model run"
 info "  Model: $FREE_MODEL (zero credits)"
@@ -89,6 +93,10 @@ python3 "$SCRIPT_DIR/lib/handlers/prd-set-model-for-provider.py" "$PRD_FILE" "$F
 . "$SCRIPT_DIR/lib/pre-run-reset-gate.sh"
 pre_run_reset_or_abort --prd "$PRD_FILE"
 
+# Every line here forwards a value to the child process, and each expansion deliberately reads
+# the OUTER value — which IS the value being forwarded. shellcheck is right about the shape and
+# wrong about the intent; rewriting it risks silently dropping a credential the child needs.
+# shellcheck disable=SC2097,SC2098
 OPENROUTER_API_KEY="$OPENROUTER_API_KEY" \
 EPAM_API_KEY_OPENROUTER="$OPENROUTER_API_KEY" \
 PRD_FILE="$PRD_FILE" \

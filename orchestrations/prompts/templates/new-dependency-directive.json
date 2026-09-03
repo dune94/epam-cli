@@ -2,7 +2,7 @@
   "$why": [
     "Moved out of claude.sh on 2026-08-19, and corrected in the same move.",
     "",
-    "The shell string it replaces told the writer: 'import it directly and continue -- missing imports are detected and installed automatically after your change; this does not need your permission or a separate step.' Live metrolinx AMSD-2041 followed that instruction exactly. Nothing installed anything: the automatic path fires only when the PROJECT declares autoInstall, and this one does not. The manifest gained a dependency, the lockfile never moved, and the branch cannot be installed from a clean checkout -- while the type check, the tests and the build all passed against a vendor directory left over from an earlier run.",
+    "The shell string it replaces told the writer: 'import it directly and continue -- missing imports are detected and installed automatically after your change; this does not need your permission or a separate step.' A live brownfield run followed that instruction exactly. Nothing installed anything: the automatic path fires only when the PROJECT declares autoInstall, and this one does not. The manifest gained a dependency, the lockfile never moved, and the branch cannot be installed from a clean checkout -- while the type check, the tests and the build all passed against a vendor directory left over from an earlier run.",
     "",
     "The directive exists because agents used to STALL, asking permission for a dependency in an unattended run. That problem is real, so this still says 'do not stop to ask'. What changed is the second half: the writer is told to run the install itself, and told why -- so the manifest and the lockfile are written together by the one tool that keeps them consistent.",
     "",
@@ -20,5 +20,9 @@
     "__INSTALL_COMMAND__",
     "__LOCKFILE_NOTE__"
   ],
-  "body": "## Adding a New Dependency\nIf the change genuinely requires a package this project does not yet declare, add it and continue — do not stop to ask whether this is allowed, and do not look for a worse solution that avoids it.\n\nAdd it by running:\n\n    __INSTALL_COMMAND__\n__LOCKFILE_NOTE__"
+  "body": "## Adding a New Dependency\nIf the change genuinely requires a package this project does not yet declare, add it and continue — do not stop to ask whether this is allowed, and do not look for a worse solution that avoids it.\n\nAdd it by running:\n\n    __INSTALL_COMMAND__\n__LOCKFILE_NOTE__",
+  "mayBeEmpty": [
+    "__LOCKFILE_NOTE__"
+  ],
+  "$mayBeEmptyWhy": "__LOCKFILE_NOTE__ is the note about this ecosystem's lockfile, and there is not always one to give. Its caller in claude.sh sets it to '' and continues with the warning 'the writer gets no lockfile note' — the author's own handled branch, not a failed lookup. Undeclared, the renderer refused the whole directive and the writer was refused with it: on 2026-08-28 mock3 reached the writer for the first time, created the story branch bugfix/AI-MOCK3-2, and stopped there."
 }

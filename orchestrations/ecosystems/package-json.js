@@ -10,6 +10,25 @@
  * Adding an ecosystem is a NEW FILE here and nothing else. Nothing in the engine names a stack.
  */
 module.exports = {
+  /**
+   * WHICH SCRIPTS VERIFY A PROJECT OF THIS STACK, in the order a human would try them.
+   *
+   * These lived in verification-plugin.js, whose own docstring says "the engine never learns the
+   * tool's name" while it carried three lists of npm script names. A stack fact belongs to the
+   * stack: one file per manifest kind, so a project on a stack this repo has never seen is a new
+   * file here and no engine change anywhere.
+   *
+   * Measured live 2026-08-28: "[tsc-verify] MOCK3-1: the project declares no typecheck command",
+   * on a repository that type-checks under a script name no list here happened to include. Adding
+   * a name is now a one-line edit in the stack's own file, and a project may still override
+   * everything through .epam/verification.json, which remains authoritative.
+   */
+  verificationScripts: {
+    typecheck: ['typecheck', 'type-check', 'tsc', 'check-types', 'lint:types'],
+    test: ['test', 'tests', 'test:unit', 'jest', 'vitest'],
+    lint: ['lint', 'lint:js', 'lint:src', 'eslint'],
+  },
+
   // WHAT A CODELINE OF THIS ECOSYSTEM DECLARES ABOUT ITSELF.
   //
   // These three blocks were heredocs inside run-agent-orchestration.sh, written into EVERY client

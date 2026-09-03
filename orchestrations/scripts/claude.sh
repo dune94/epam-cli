@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# The run's spend figure comes from the ACTIVE SET, not a vendor hardcoded here.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/spend-probe.sh" 2>/dev/null || true
+
+# How much evidence each agent is shown, by name — see config/evidence-windows.json.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/evidence-windows.sh" 2>/dev/null || true
+
 # EPAM CLI Orchestration Script - AI-driven development loop
 # This script orchestrates Claude Code CLI for autonomous story implementation
 #
@@ -71,6 +77,8 @@ source "$SCRIPT_DIR/lib/story-retry-state.sh"
 # line inside it makes those probes fail on a library they have no reason to carry.
 source "$SCRIPT_DIR/lib/jq-vals.sh"
 . "$SCRIPT_DIR/lib/agent-io.sh"
+# shellcheck source=lib/runner-settings.sh
+. "$SCRIPT_DIR/lib/runner-settings.sh"
 . "$SCRIPT_DIR/lib/agent-ladder.sh"
 PROGRESS_LOG="$LOG_DIR/progress.txt"
 AGENTS_FILE="$AUTOMATION_DIR/agents/AGENTS.md"
@@ -178,7 +186,6 @@ load_env_file() {
 # Save caller-set gate overrides BEFORE loading .env so tier-script values survive.
 # .env contains stale defaults; the tier script intentionally overrides them at runtime.
 _claude_pre_gate_provider="${ORCH_GATE_PROVIDER:-}"
-_claude_pre_gate_model="${ORCH_GATE_MODEL:-}"
 _claude_pre_orch_provider="${EPAM_ORCHESTRATION_PROVIDER:-}"
 # Launcher-provided temperature floor (e.g. tier3-travel-app-run.sh's project-wide
 # GLM pin) — captured once here so the per-story reset below can restore it
@@ -191,10 +198,9 @@ load_env_file "$PROJECT_ROOT/.env"
 
 # Restore: tier-script values win over .env defaults
 [ -n "$_claude_pre_gate_provider" ] && ORCH_GATE_PROVIDER="$_claude_pre_gate_provider"
-[ -n "$_claude_pre_gate_model"    ] && ORCH_GATE_MODEL="$_claude_pre_gate_model"
 [ -n "$_claude_pre_orch_provider" ] && EPAM_ORCHESTRATION_PROVIDER="$_claude_pre_orch_provider"
-unset _claude_pre_gate_provider _claude_pre_gate_model _claude_pre_orch_provider
-export ORCH_GATE_PROVIDER ORCH_GATE_MODEL EPAM_ORCHESTRATION_PROVIDER
+unset _claude_pre_gate_provider _claude_pre_gate_model_REMOVED _claude_pre_orch_provider
+export ORCH_GATE_PROVIDER EPAM_ORCHESTRATION_PROVIDER
 
 # Load EPAM_PROJECT_CONFIG_DIR/llm-settings.json (schema:
 # orchestrations/config/llm-settings.schema.json) as FALLBACK DEFAULTS for the
@@ -203,7 +209,7 @@ export ORCH_GATE_PROVIDER ORCH_GATE_MODEL EPAM_ORCHESTRATION_PROVIDER
 # a project .env file, or the launch shell all still win). This must run
 # before MAX_RETRIES is read a few lines down, so it's called immediately.
 load_llm_settings_json() {
-    local _settings_file="${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json"
+    local _settings_file="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/llm-settings.json}"
     # NOTE: no early return when the project has no settings file. The engine-wide budget
     # defaults below must still be applied — returning here left every budget unset and the
     # literals in the case statement were the only thing filling them in.
@@ -349,7 +355,7 @@ CONTROL_PLANE_PORT="${CONTROL_PLANE_PORT:-8094}"
 # Worktree configuration (set by --worktree flag)
 WORKTREE_MODE=""        # "primary", "independent", or "" for main
 MAIN_PRD_FILE=""        # Points to main repo's prd.json when in worktree mode
-REVIEW_PHASE=""         # Phase name for --review-phase mode
+export REVIEW_PHASE=""         # Phase name for --review-phase mode
 CURRENT_PHASE=""        # Current phase being executed (for cost tracking)
 
 # Configuration
@@ -361,7 +367,7 @@ RETRY_DELAY=5
 ORCH_MODE="${ORCH_MODE:-bash}"
 # SDK invocation mode — when 1, routes Claude provider calls through invoke.py
 # using the Anthropic Python SDK instead of the claude CLI.
-# All other providers (opencode, codex, copilot, openai, qwen, cursor) are unaffected.
+# All other providers (opencode, codex, copilot, openai, openrouter, cursor) are unaffected.
 # Requires: pip install -r orchestrations/scripts/requirements.txt
 # and ANTHROPIC_API_KEY to be set in the environment.
 EPAM_SDK_INVOKE="${EPAM_SDK_INVOKE:-0}"
@@ -375,7 +381,7 @@ INVOKE_PYTHON="${INVOKE_PYTHON:-$SCRIPT_DIR/.venv/bin/python3}"
 # These map to a model and a max-turns cap for the Claude CLI invocation.
 # Env-overridable, not hardcoded to one provider's model: a project whose
 # story's aiProvider is never "codex" (e.g. Metrolinx, which routes brownfield
-# work through minimax/qwen) still got "gpt-5-codex" here as the CONFIG
+# work through minimax/openrouter) still got "gpt-5-codex" here as the CONFIG
 # DEFAULT resolve_model_from_story() falls back to before overriding from the
 # story's own .model field — harmless when the story sets .model, but a real
 # footgun for any invocation path that reaches this default without one
@@ -527,19 +533,16 @@ resolve_effort_settings() {
     case "$effort" in
         low)
             STORY_MODEL="$EFFORT_MODEL_LOW"
-            STORY_MAX_TURNS=""
             STORY_MAX_ITERATIONS="${EPAM_EFFORT_LOW_MAX_ITERATIONS}"
             STORY_MAX_OUTPUT_TOKENS="${EPAM_EFFORT_LOW_MAX_OUTPUT_TOKENS}"
             ;;
         high)
             STORY_MODEL="$EFFORT_MODEL_HIGH"
-            STORY_MAX_TURNS=""
             STORY_MAX_ITERATIONS="${EPAM_EFFORT_HIGH_MAX_ITERATIONS}"
             STORY_MAX_OUTPUT_TOKENS="${EPAM_EFFORT_MEDIUM_MAX_OUTPUT_TOKENS}"
             ;;
         *)  # medium (default)
             STORY_MODEL="$EFFORT_MODEL_MEDIUM"
-            STORY_MAX_TURNS=""
             STORY_MAX_ITERATIONS="${EPAM_EFFORT_MEDIUM_MAX_ITERATIONS}"
             STORY_MAX_OUTPUT_TOKENS="${EPAM_EFFORT_MEDIUM_MAX_OUTPUT_TOKENS}"
             ;;
@@ -553,7 +556,7 @@ resolve_effort_settings() {
     # named it, but read at a glance mid-run it looked like a third model
     # was in rotation and costing money. resolve_model_from_story() now
     # always logs whichever model actually ends up used.
-    log "  Effort[$effort] -> turns=${STORY_MAX_TURNS:-unlimited} maxIter=${STORY_MAX_ITERATIONS} maxOutTok=${STORY_MAX_OUTPUT_TOKENS}"
+    log "  Effort[$effort] -> maxIter=${STORY_MAX_ITERATIONS} maxOutTok=${STORY_MAX_OUTPUT_TOKENS}"
 }
 
 # resolve_generator_settings <story_id>
@@ -795,12 +798,11 @@ _iteration_exhaustion_bump() {
 # with a diff" instead makes the reset a no-op (a broken file also has a
 # diff), which defeats the point.
 #
-# The signal that actually distinguishes them: LAST_ATTEMPT_TSC_PASSED (set
-# right after run_tsc_verification, above) is real, already-computed evidence
-# the WHOLE tree is at least type/syntax-correct — not a guess. If it passed,
-# preserve the entire diff wholesale, declared or not. If it failed, there is
-# positive evidence the tree is bad — reset to baseline rather than gamble on
-# which files are safe.
+# That was once answered by a compiler signal (LAST_ATTEMPT_TSC_PASSED, set after
+# run_tsc_verification): preserve the whole diff if the tree type-checked, reset it if not. That
+# design is GONE, and the paragraphs below say why — a partially-complete multi-file change is
+# correct progress and a compile error at the same time, so it preserved only work that was already
+# coherent. The signal is no longer computed; the predicate is the spec's changeRequired.
 #
 # The third case is `unknown`: an earlier gate rejected the attempt before the
 # tsc gate could run, so nothing is known either way. Treating that as failure
@@ -1083,7 +1085,7 @@ _coupled_pair_gate_for_story() {
     # The gate had therefore never once run.
     #
     # Two candidates, same order as the plugin: project config, then the codeline copy.
-    local _manifest="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+    local _manifest="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/dependency-check.json}"
     [ -f "$_manifest" ] || _manifest="${PROJECT_ROOT}/.epam/dependency-check.json"
     [ -f "$_report_file" ] || return 0
 
@@ -1147,7 +1149,7 @@ _plan_fidelity_gate_for_story() {
     if [ ! -s "$_changed_list" ]; then rm -f "$_changed_list"; return 0; fi
 
     # Two candidates, same order as the dependency plugin and the coupled-pair gate.
-    local _manifest="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+    local _manifest="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/dependency-check.json}"
     [ -f "$_manifest" ] || _manifest="${PROJECT_ROOT}/.epam/dependency-check.json"
 
     local _gate_out _gate_rc=0
@@ -1338,7 +1340,6 @@ _brownfield_rung_bump() {
 }
 
 # resolve_model_from_story <story_id>
-# For epam-run providers (copilot/openai/qwen/cursor), the prd.json story carries
 # a .model field directly.  If set, it overrides the effort-based STORY_MODEL.
 # _tc_writer_phase — which phase the TC writer is generating for.
 #
@@ -1393,7 +1394,7 @@ resolve_model_from_story() {
             _rmfs_kind=$(jq -r --arg id "$story_id" \
                 '.stories[] | select(.id == $id) | .storyKind // ""' \
                 "$prd_target" 2>/dev/null || echo "")
-            _rmfs_high="${ESCALATION_MODEL_HIGH:-${ORCH_GATE_MODEL:-}}"
+            _rmfs_high="${ESCALATION_MODEL_HIGH:-${EPAM_MODEL:-}}"
             if [ "$_rmfs_kind" = "novel" ] && [ -n "$_rmfs_high" ] && [ "$_rmfs_high" != "$STORY_MODEL" ]; then
                 log "  Model[novel-brownfield] -> $_rmfs_high (was $STORY_MODEL; novel code does not start on the cheapest rung)"
                 STORY_MODEL="$_rmfs_high"
@@ -1546,7 +1547,7 @@ resolve_planner_settings() {
     done
     unset IFS
     if [ "$_auto_ok" = "1" ]; then
-        local _auto_planner="${EPAM_PLANNER_MODEL_HIGH_TIER:-${ORCH_GATE_MODEL:-}}"
+        local _auto_planner="${EPAM_PLANNER_MODEL_HIGH_TIER:-${EPAM_MODEL:-}}"
         if [ -n "$_auto_planner" ]; then
             STORY_PLANNER_MODEL="$_auto_planner"
             log "  PlannerModel[auto/high-tier: $STORY_PLANNER_MODEL] -> planning turn, then execution on $STORY_MODEL"
@@ -1640,10 +1641,15 @@ provider_to_cli() {
         opencode)                    echo "opencode" ;;
         codex)                       echo "codex" ;;
         codemie-claude)              echo "codemie-claude" ;;
-        copilot|openai|qwen|cursor|minimax)  echo "$EPAM_CLI" ;;
+        # Plain Claude Code. Added 2026-08-25 for the mockserver set, which runs it
+        # redirected at MockServer via ANTHROPIC_BASE_URL. It was previously listed in
+        # providers.json with NO case arm — a PRD could name it, pass the gate, and die
+        # here at runtime. Now it is genuinely accepted, so the gate and the engine agree.
+        claude)                      echo "claude" ;;
+        copilot|openai|openrouter|cursor|minimax)  echo "$EPAM_CLI" ;;
         epam)                        echo "$EPAM_CLI" ;;
         *)
-            error "Unknown aiProvider '$1' — set aiProvider in prd.json to one of: opencode|codex|copilot|openai|qwen|cursor|minimax|codemie-claude"
+            error "Unknown aiProvider '$1' — set aiProvider in prd.json to one of: opencode|codex|copilot|openai|openrouter|cursor|minimax|codemie-claude|claude"
             return 1
             ;;
     esac
@@ -1865,7 +1871,6 @@ check_prerequisites() {
     fi
 
     # Check for Claude CLI only when actually needed (provider=claude or codemie-claude)
-    # For qwen/openai/copilot/cursor/codex all traffic goes through epam CLI or ai-run.sh
     if command -v "$CLAUDE_CMD" &> /dev/null; then
         : # claude is available — all paths work
     else
@@ -1908,21 +1913,11 @@ get_story_title() {
 }
 
 # Get story priority (high=1, medium=2, low=3)
-get_story_priority() {
-    local story_id=$1
-    local priority=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .priority // "medium"' "$PRD_FILE")
-    case $priority in
-        high) echo 1 ;;
-        medium) echo 2 ;;
-        low) echo 3 ;;
-        *) echo 2 ;;
-    esac
-}
-
 # Check if story exists
 story_exists() {
     local story_id=$1
-    local exists=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .id' "$PRD_FILE")
+    local exists
+    exists=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .id' "$PRD_FILE")
     [ -n "$exists" ]
 }
 
@@ -1953,7 +1948,8 @@ get_story_dependencies() {
 # Check if all dependencies are satisfied (completed)
 are_dependencies_satisfied() {
     local story_id=$1
-    local deps=$(get_story_dependencies "$story_id")
+    local deps
+    deps=$(get_story_dependencies "$story_id")
 
     if [ -z "$deps" ]; then
         return 0  # No dependencies
@@ -2003,7 +1999,8 @@ check_plan_mode_required() {
 run_plan_mode() {
     local story_id="$1"
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
-    local plan_log="$CLAUDE_OUTPUT_DIR/${story_id}_plan_$(date +'%Y%m%d_%H%M%S').log"
+    local plan_log
+    plan_log="$CLAUDE_OUTPUT_DIR/${story_id}_plan_$(date +'%Y%m%d_%H%M%S').log"
     local plan_json="${plan_log%.log}_result.json"
     local messages_jsonl="${MESSAGES_JSONL:-$LOG_DIR/agent-messages.jsonl}"
 
@@ -2032,6 +2029,7 @@ run_plan_mode() {
     if [ "${EPAM_SDK_INVOKE:-0}" = "1" ] && [ -f "$INVOKE_PY" ]; then
         # SDK path: extended thinking enabled for plan mode (high-complexity reasoning)
         if echo "$plan_prompt" | "$INVOKE_PYTHON" "$INVOKE_PY" \
+                --cache-system \
                 --model "$STORY_MODEL" \
                 --thinking-budget 8000 \
                 --output "$plan_json" 2>/dev/null; then
@@ -2040,7 +2038,8 @@ run_plan_mode() {
     else
         # Route through ai-run.sh with the configured orchestration provider
         local _orch_provider="${EPAM_ORCHESTRATION_PROVIDER:-}"
-        local _orch_model="${ORCH_GATE_MODEL:-}"
+        local _orch_model
+        _orch_model="$(seam_model_or_fail "phase-assessment" 2>/dev/null || true)"
         if [ -z "$_orch_provider" ]; then
             warning "Plan mode: EPAM_ORCHESTRATION_PROVIDER not set — skipping plan"
         # AI_GATE_ALLOW_TOOLS=1: the plan_prompt below explicitly instructs the
@@ -2139,8 +2138,10 @@ log_to_monitor() {
     fi
 
     local lane="${WORKTREE_MODE:-main}"
-    local role=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .agentRole // ""' "$PRD_FILE" 2>/dev/null || echo "")
-    local timestamp=$(date -Iseconds)
+    local role
+    role=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .agentRole // ""' "$PRD_FILE" 2>/dev/null || echo "")
+    local timestamp
+    timestamp=$(date -Iseconds)
 
     # Use flock to prevent race conditions
     (
@@ -2186,7 +2187,8 @@ get_prioritized_stories() {
     local result=()
 
     # Get phases in order
-    local phases=$(get_phases)
+    local phases
+    phases=$(get_phases)
 
     if [ -z "$phases" ]; then
         # No phases defined, fall back to all incomplete stories sorted by priority
@@ -2200,7 +2202,8 @@ get_prioritized_stories() {
         [ -z "$phase" ] && continue
 
         # Get stories in this phase
-        local phase_stories=$(get_phase_stories "$phase")
+        local phase_stories
+        phase_stories=$(get_phase_stories "$phase")
 
         # For each story in the phase, check if it's incomplete and dependencies are met
         while IFS= read -r story_id; do
@@ -2224,7 +2227,8 @@ list_phases() {
     echo -e "${MAGENTA}=== Implementation Phases ===${NC}"
     echo ""
 
-    local phases=$(get_phases)
+    local phases
+    phases=$(get_phases)
 
     if [ -z "$phases" ]; then
         echo -e "${YELLOW}No phases defined in implementationOrder${NC}"
@@ -2236,7 +2240,8 @@ list_phases() {
 
         local total=0
         local completed=0
-        local stories=$(get_phase_stories "$phase")
+        local stories
+        stories=$(get_phase_stories "$phase")
 
         while IFS= read -r story_id; do
             [ -z "$story_id" ] && continue
@@ -2261,11 +2266,13 @@ list_phases() {
         # Show stories in phase
         while IFS= read -r story_id; do
             [ -z "$story_id" ] && continue
-            local title=$(get_story_title "$story_id")
+            local title
+            title=$(get_story_title "$story_id")
             if is_story_completed "$story_id"; then
                 echo -e "    ${GREEN}+${NC} $story_id: $title"
             else
-                local deps=$(get_story_dependencies "$story_id" | tr '\n' ',' | sed 's/,$//')
+                local deps
+                deps=$(get_story_dependencies "$story_id" | tr '\n' ',' | sed 's/,$//')
                 local deps_info=""
                 if [ -n "$deps" ]; then
                     if are_dependencies_satisfied "$story_id"; then
@@ -2283,14 +2290,16 @@ list_phases() {
 
 # Get project context for Claude
 get_project_context() {
-    local stack=$(jq -r '.project.stack | to_entries | map("\(.key): \(.value)") | join(", ")' "$PRD_FILE" 2>/dev/null || echo "")
+    local stack
+    stack=$(jq -r '.project.stack | to_entries | map("\(.key): \(.value)") | join(", ")' "$PRD_FILE" 2>/dev/null || echo "")
     # Project-level criteria are optional. When absent this used to emit the
     # heading followed by a bare "- ", which reads to the agent as "there is a
     # criterion here" while carrying none — observed live 2026-07-29, where the
     # story ALSO had no acceptance criteria of its own, so the prompt asserted
     # constraints twice and supplied none. An absent section is honest; an empty
     # one is misleading.
-    local criteria=$(jq -r '(.acceptanceCriteria // []) | join("\n- ")' "$PRD_FILE" 2>/dev/null || echo "")
+    local criteria
+    criteria=$(jq -r '(.acceptanceCriteria // []) | join("\n- ")' "$PRD_FILE" 2>/dev/null || echo "")
 
     cat << EOF
 Project: $(jq -r '.project.name' "$PRD_FILE")
@@ -2395,12 +2404,17 @@ story_declared_files() {
 
 build_implementation_prompt() {
     local story_id=$1
-    local story_json=$(get_story_details "$story_id")
+    local story_json
+    story_json=$(get_story_details "$story_id")
 
-    local title=$(echo "$story_json" | jq -r '.title')
-    local description=$(echo "$story_json" | jq -r '.description')
-    local acceptance_criteria=$(echo "$story_json" | jq -r '.acceptanceCriteria | join("\n- ")')
-    local technical_notes=$(echo "$story_json" | jq -r '.technicalNotes // empty')
+    local title
+    title=$(echo "$story_json" | jq -r '.title')
+    local description
+    description=$(echo "$story_json" | jq -r '.description')
+    local acceptance_criteria
+    acceptance_criteria=$(echo "$story_json" | jq -r '.acceptanceCriteria | join("\n- ")')
+    local technical_notes
+    technical_notes=$(echo "$story_json" | jq -r '.technicalNotes // empty')
     # Prefer THIS lane's resolved paths. The flat technicalNotes.files array is shared
     # by every codeline, but separate repositories spell the same file differently —
     # live 2026-08-03 the detective's root-cause fix site resolved on one lane of three,
@@ -2408,13 +2422,15 @@ build_implementation_prompt() {
     # then blocked for. spec-mode-runner resolves each declared path against each
     # codeline's own checkout and persists technicalNotes.perCodeline.<codeline>.files;
     # falling back to the flat array keeps older PRDs working unchanged.
-    local _cl_name=$(_current_lane "$story_json")
+    local _cl_name
+    _cl_name=$(_current_lane "$story_json")
     local _lane="$_cl_name"
     # Lane-resolved, de-duplicated, one definition — see story_declared_files.
     local files
     files=$(story_declared_files "$story_json" | paste -sd', ' -)
 
-    local dependencies=$(echo "$story_json" | jq -r \
+    local dependencies
+    dependencies=$(echo "$story_json" | jq -r \
         '(.dependencies // .technicalNotes.dependsOn // []) | join(", ")')
 
     # In worktree mode, rewrite ALL occurrences of the main repo absolute path in the
@@ -3114,22 +3130,30 @@ fi)" \
           --arg story_id "$story_id" \
           --arg title "$title" \
           --arg files "$files" \
-          '{"__SPEC_REALITY_WARNING__":$spec_reality_warning,"__WRITE_FIRST_LINES__":$write_first_lines,"__STRING_INVARIANTS_BLOCK__":$string_invariants_block,"__REVIEW_FEEDBACK__":$review_feedback,"__SKILL_NOTE_BLOCK__":$skill_note_block,"__VERIFICATION_CRITERIA__":$verification_criteria,"__CODELINE_FACTS_BLOCK__":$codeline_facts_block,"__PROJECT_TOOLS_BLOCK__":$project_tools_block,"__TEST_OWNERSHIP_BLOCK__":$test_ownership_block,"__CODEGRAPH_TOOL_BLOCK__":$codegraph_tool_block,"__UNCOVERED_VC_BLOCK__":$uncovered_vc_block,"__BROWNFIELD_TEST_POLICY__":$brownfield_test_policy,"__NEW_DEPENDENCY_DIRECTIVE__":$new_dependency_directive,"__TC_FACTS__":$tc_facts,"__TC_MOCK_STRATEGY__":$tc_mock_strategy,"__TC_BANNED__":$tc_banned,"__TECHNICAL_NOTES__":$technical_notes,"__EXISTING_FILE_CONTENTS__":$existing_file_contents,"__DEPENDENCY_CONTRACTS__":$dependency_contracts,"__MODULE_RESOLUTION__":$module_resolution,"__CROSS_CODELINE_CONTRACT__":$cross_codeline_contract,"__WRITE_FIRST_LINES_2__":$write_first_lines_2,"__CONDITIONAL_SECTION__":$conditional_section,"__CONDITIONAL_SECTION_2__":$conditional_section_2,"__TC_FACTS_2__":$tc_facts_2,"__WRITE_FIRST_DIRECTIVE__":$write_first_directive,"__DEPENDENCIES__":$dependencies,"__ACCEPTANCE_CRITERIA__":$acceptance_criteria,"__AGENT_INPUTS__":$agent_inputs,"__DESCRIPTION__":$description,"__STORY_ID__":$story_id,"__TITLE__":$title,"__FILES__":$files}' > "$_sw_vals"
+          '{"__SPEC_REALITY_WARNING__":$spec_reality_warning,"__WRITE_FIRST_LINES__":$write_first_lines,"__STRING_INVARIANTS_BLOCK__":$string_invariants_block,"__REVIEW_FEEDBACK__":$review_feedback,"__SKILL_NOTE_BLOCK__":$skill_note_block,"__VERIFICATION_CRITERIA__":$verification_criteria,"__CODELINE_FACTS_BLOCK__":$codeline_facts_block,"__PROJECT_TOOLS_BLOCK__":$project_tools_block,"__TEST_OWNERSHIP_BLOCK__":$test_ownership_block,"__CODEGRAPH_TOOL_BLOCK__":$codegraph_tool_block,"__UNCOVERED_VC_BLOCK__":$uncovered_vc_block,"__BROWNFIELD_TEST_POLICY__":$brownfield_test_policy,"__NEW_DEPENDENCY_DIRECTIVE__":$new_dependency_directive,"__TC_FACTS__":$tc_facts,"__TC_MOCK_STRATEGY__":$tc_mock_strategy,"__TC_BANNED__":$tc_banned,"__TECHNICAL_NOTES__":$technical_notes,"__EXISTING_FILE_CONTENTS__":$existing_file_contents,"__DEPENDENCY_CONTRACTS__":$dependency_contracts,"__MODULE_RESOLUTION__":$module_resolution,"__CROSS_CODELINE_CONTRACT__":$cross_codeline_contract,"__WRITE_FIRST_LINES_2__":$write_first_lines_2,"__CONDITIONAL_SECTION__":$conditional_section,"__CONDITIONAL_SECTION_2__":$conditional_section_2,"__TC_FACTS_2__":$tc_facts_2,"__WRITE_FIRST_DIRECTIVE__":$write_first_directive,"__DEPENDENCIES__":$dependencies,"__AGENT_INPUTS__":$agent_inputs,"__DESCRIPTION__":$description,"__STORY_ID__":$story_id,"__TITLE__":$title,"__FILES__":$files}' > "$_sw_vals"
     render_engine_prompt story-writer-main "$_sw_vals"
     rm -f "$_sw_vals"
 }
 
 build_generator_prompt() {
     local story_id=$1
-    local story_json=$(get_story_details "$story_id")
-    local _lane=$(_current_lane "$story_json")
+    local story_json
+    story_json=$(get_story_details "$story_id")
+    local _lane
+    _lane=$(_current_lane "$story_json")
 
-    local title=$(echo "$story_json" | jq -r '.title')
-    local description=$(echo "$story_json" | jq -r '.description')
-    local acceptance_criteria=$(echo "$story_json" | jq -r '.acceptanceCriteria | join("\n- ")')
-    local technical_notes=$(echo "$story_json" | jq -r '.technicalNotes // empty')
-    local files=$(echo "$story_json" | jq -r '.technicalNotes.files // [] | join(", ")')
-    local dependencies=$(echo "$story_json" | jq -r \
+    local title
+    title=$(echo "$story_json" | jq -r '.title')
+    local description
+    description=$(echo "$story_json" | jq -r '.description')
+    local acceptance_criteria
+    acceptance_criteria=$(echo "$story_json" | jq -r '.acceptanceCriteria | join("\n- ")')
+    local technical_notes
+    technical_notes=$(echo "$story_json" | jq -r '.technicalNotes // empty')
+    local files
+    files=$(echo "$story_json" | jq -r '.technicalNotes.files // [] | join(", ")')
+    local dependencies
+    dependencies=$(echo "$story_json" | jq -r \
         '(.dependencies // .technicalNotes.dependsOn // []) | join(", ")')
 
     # Rewrite main-repo absolute paths to worktree path in all prompt fields
@@ -4111,7 +4135,7 @@ run_vendor_integrity_check() {
     [ "${#tampered[@]}" -eq 0 ] && return 0
 
     local details
-    details=$(head -20 <<< "$(printf '%s\n' "${tampered[@]}")")
+    details=$(head -n "$(evidence_window tamperedFileLines)" <<< "$(printf '%s\n' "${tampered[@]}")")
     VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nFile(s) inside a vendored/third-party dependency directory were modified — this is never legitimate (only NEW dependencies should be added via the manifest, never an existing installed package edited directly). Revert this change and fix the ACTUAL problem (e.g. wrong package.json config, missing devDependency) instead:\n\n%s\n' "$details")
     {
         echo ""
@@ -4161,7 +4185,7 @@ run_vendor_integrity_check() {
 # and inventing them is worse than saying nothing.
 _module_resolution_context() {
     local _repo="${1:-$PROJECT_ROOT}"
-    local _cfg="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+    local _cfg="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/dependency-check.json}"
     [ -f "$_cfg" ] || _cfg="$_repo/.epam/dependency-check.json"
     [ -f "$_cfg" ] || return 0
 
@@ -4387,12 +4411,27 @@ run_dependency_check() {
     _changed=$(git -C "$project_root" status --porcelain 2>/dev/null \
         | sed 's/^...//' | sed 's/^.* -> //' | tr '\n' '\036')
 
+    # THE LINES THIS CHANGE ADDED — raw, never parsed here.
+    #
+    # An undeclared import is the story's only when the change INTRODUCED it; a file merely touched
+    # may have carried one since before the run. The plugin decides which specifiers those lines
+    # contain, using the importPattern the project declares — a second copy of that pattern here
+    # would be a project fact living outside config or a plugin, and the two would drift.
+    #
+    # Untracked files count whole: every line of a file this change created is an added line.
+    local _added
+    _added=$( { git -C "$project_root" diff --unified=0 2>/dev/null
+                git -C "$project_root" diff --cached --unified=0 2>/dev/null; } \
+              | grep '^+' | grep -v '^+++' | sed 's/^+//'
+              git -C "$project_root" ls-files --others --exclude-standard 2>/dev/null \
+              | while IFS= read -r _uf; do [ -f "$project_root/$_uf" ] && cat "$project_root/$_uf" 2>/dev/null; done )
+
     local _out
-    _out=$(EPAM_SCAN_CHANGED_FILES="$_changed" "$_node" -e '
+    _out=$(EPAM_SCAN_CHANGED_FILES="$_changed" EPAM_SCAN_ADDED_LINES="$_added" "$_node" -e '
       const p = require(process.argv[1]);
       const changed = String(process.env.EPAM_SCAN_CHANGED_FILES || "")
         .split("").map((s) => s.trim()).filter(Boolean);
-      const r = p.scanImports(process.argv[2], process.env, { changedFiles: changed });
+      const r = p.scanImports(process.argv[2], process.env, { changedFiles: changed, introducedLines: String(process.env.EPAM_SCAN_ADDED_LINES || "").split("\n") });
       if (r.status === "unknown") { console.log("UNKNOWN\t" + r.reason); process.exit(0); }
       for (const f of r.findings) console.log(f.verdict + "\t" + f.specifier + "\t" + f.file);
       // Only when it could have changed the answer. A clean scan stays silent — a note on every
@@ -4611,7 +4650,7 @@ run_anti_pattern_check() {
     local project_root="$1"
     local output_file="${2:-/dev/null}"
     local story_id="${3:-}"
-    local rules_file="${EPAM_PROJECT_CONFIG_DIR:-}/anti-patterns.json"
+    local rules_file="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/anti-patterns.json}"
     [ -f "$rules_file" ] || return 0
 
     local owned_files_json="[]"
@@ -5036,7 +5075,8 @@ run_external_verification() {
     # implement `-u` (confirmed live: `env -u FOO bash -c '...'` silently
     # produced none of the command's effects). A prefixed `unset` string has
     # no dependency on any external binary and can't be shadowed this way.
-    local _orch_env_file="$(dirname "$AUTOMATION_DIR")/.env"
+    local _orch_env_file
+    _orch_env_file="$(dirname "$AUTOMATION_DIR")/.env"
     local _orch_env_unset_prefix=""
     if [ -f "$_orch_env_file" ]; then
         while IFS='=' read -r _envkey _envval; do
@@ -5206,7 +5246,7 @@ run_external_verification() {
         {
             echo ""
             echo "=== External verification TIMED OUT after ${_test_timeout}s ==="
-            echo "$test_output" | head -60
+            echo "$test_output" | head -n "$(evidence_window testOutputLines)"
         } >> "$output_file"
         return 1
     fi
@@ -5262,14 +5302,29 @@ run_external_verification() {
         # WHOLE, never head+tail. The middle of a failure dump is where the first
         # error usually is; cutting it out and printing "[... output truncated ...]"
         # told the writer something was missing without telling it what.
-        local _test_head="$_new_test_failures"
+        # BOUND WHAT THE ANALYST IS HANDED, ON ENTRY BOUNDARIES.
+        #
+        # This text is embedded whole into the FailureAnalyst prompt. It is the new-failure delta,
+        # which is small when the baseline builds — and the ENTIRE suite output when it does not.
+        # Live 2026-09-02 (AMSD-1919) it reached ~1,092,054 tokens against a 1,000,000 limit, so
+        # every analyst call failed on SIZE and the ladder escalated claude-sonnet-5 ->
+        # claude-opus-4-8 -> claude-opus-5 against an input no model could accept.
+        #
+        # The window is declared (config/evidence-windows.json: failureExcerptLines) and entries are
+        # dropped WHOLE, per the project's own failurePattern. A half-failure tells the analyst
+        # something is wrong without telling it what.
+        local _test_head
+        _test_head=$(printf '%s' "$_new_test_failures" \
+            | "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/bound-failures.js" "$PROJECT_ROOT" test 2>/dev/null) \
+            || _test_head="$_new_test_failures"
+        [ -n "$_test_head" ] || _test_head="$_new_test_failures"
         local _test_tail=""
         VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe orchestrator ran `%s` after your files were written and it failed (exit code %d). The failures below are the ones YOUR CHANGES INTRODUCED — failures the codeline already had have been subtracted and are not your responsibility. Fix these.\n\n```\n%s%s\n```\n' \
             "$test_cmd" "$test_exit" "$_test_head" "$_test_tail")
         {
             echo ""
             echo "=== External verification failed (exit $test_exit) ==="
-            echo "$test_output" | head -60
+            echo "$test_output" | head -n "$(evidence_window testOutputLines)"
         } >> "$output_file"
         return 1
     fi
@@ -5315,7 +5370,7 @@ _attempt_change_summary() {
                            [ -n "$_u" ] || continue
                            printf ' %s | new file\n' "$_u"
                        done
-                   fi; } | grep -vE '^[[:space:]]*$' | head -60 )
+                   fi; } | grep -vE '^[[:space:]]*$' | head -n "$(evidence_window changedFileLines)" )
     fi
 
     if [ -z "$(printf '%s' "$_stat" | tr -d '[:space:]')" ]; then
@@ -5385,6 +5440,9 @@ _run_declared_lint_gate() {
     fi
 
     local _dl_out _dl_rc=0
+    # The project DECLARES its command as a string, so running it means eval. The file list after it
+    # is a quoted array, which is the part that must not be re-split.
+    # shellcheck disable=SC2294
     _dl_out=$(cd "$PROJECT_ROOT" && eval "$_cmd" "${_dl_files[@]}" 2>&1) || _dl_rc=$?
 
     if [ "$_dl_rc" -eq 127 ]; then
@@ -5405,7 +5463,7 @@ _run_declared_lint_gate() {
     export DETERMINISTIC_CHECK_FAILURE
     STORY_REJECTION_KEY="lint:${story_id}"
     VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe repository lints with `%s` and it rejects your change:\n\n```\n%s\n```\n\nFix these before the change can be committed.\n' \
-        "$_cmd" "$(printf '%s' "$_dl_out" | head -40)")
+        "$_cmd" "$(printf '%s' "$_dl_out" | head -n "$(evidence_window lintOutputLines)")")
     export VERIFICATION_FAILURE
     printf '%s\n' "$_dl_out" >> "$output_file" 2>/dev/null || true
     return 1
@@ -5561,7 +5619,7 @@ run_repo_lint_verification() {
 
     error "  [repo-lint] $story_id: the repository's own eslint rejects ${#_files[@]} changed file(s) —"
     error "  [repo-lint]   the pre-commit hook will refuse this commit and lint-staged will REVERT the work."
-    printf '%s\n' "$_lint_output" | head -40 >&2
+    printf '%s\n' "$_lint_output" | head -n "$(evidence_window lintOutputLines)" >&2
 
     # THE CHANNEL THE WRITER ACTUALLY READS.
     #
@@ -5618,7 +5676,7 @@ run_repo_lint_verification() {
         echo "These violations are in files THIS story changed. They are not optional:"
         echo "the hook rejects the commit and lint-staged then reverts your work away."
         echo ""
-        printf '%s\n' "$_lint_output" | head -40
+        printf '%s\n' "$_lint_output" | head -n "$(evidence_window lintOutputLines)"
     } >> "$output_file" 2>/dev/null || true
     return 1
 }
@@ -5683,7 +5741,7 @@ _verification_plugin_call() {
 _project_dep_config_value() {
     local _root="${1:-$PROJECT_ROOT}" _key="$2"
     local _cfg="$_root/.epam/dependency-check.json"
-    [ -f "$_cfg" ] || _cfg="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+    [ -f "$_cfg" ] || _cfg="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/dependency-check.json}"
     [ -f "$_cfg" ] || return 0
     jq -r --arg k "$_key" '.[$k] // empty' "$_cfg" 2>/dev/null
 }
@@ -5712,35 +5770,31 @@ _project_test_command() {
 
 # This story's declared files that the PROJECT recognises as test files, space separated.
 _project_owned_test_files() {
-    local _root="$1" _sid="$2" _prd="$3"
-    local _plugin="${AUTOMATION_DIR}/plugins/verification-plugin.js"
-    local _node="${NODE_CMD:-${NODE_BIN:-node}}"
-    [ -f "$_plugin" ] && [ -f "$_prd" ] || return 0
-    "$_node" -e '
-      const fs = require("fs");
-      const p = require(process.argv[1]);
-      const [, , , root, sid, prdPath] = process.argv;
-      let prd; try { prd = JSON.parse(fs.readFileSync(prdPath, "utf8")); } catch { process.exit(0); }
-      const s = (prd.stories || []).find((x) => x && x.id === sid);
-      const files = (s && s.technicalNotes && s.technicalNotes.files) || [];
-      const owned = files.filter((f) => p.isTestFile(root, f) === true);
-      if (owned.length) console.log(owned.join(" "));
-    ' "$_plugin" "$_root" "$_sid" "$_prd" 2>/dev/null
+    # THE PLUGIN ANSWERS THIS. Both of these used to be node programs written inside bash
+    # single-quoted strings — unrunnable on their own, untestable, with stderr sent to /dev/null.
+    # The first one destructured its arguments one position too far, so it read the STORY ID as the
+    # repo root and got undefined for the PRD; readFileSync(undefined) threw, the catch exited 0,
+    # and it printed nothing for every story of every project since it was written. Nothing failed
+    # visibly: claude.sh scopes verification only when this returns files, so external verification
+    # always ran the whole suite (live 2026-09-02: 746 suites / 3,385 tests and 10,731MB to validate
+    # one line).
+    #
+    # _verification_plugin_call is the ONE generic invoker. Adding a capability is a function in the
+    # plugin and a call here — never another program embedded in a string.
+    local _out
+    _out=$(_verification_plugin_call ownedTestFiles "$1" "$2" "$3") || return 0
+    [ "$_out" = "unknown" ] && return 0      # no declared convention: cannot answer, so scope nothing
+    printf '%s' "$_out"
 }
 
-# The declared scoped-run command with {files} substituted, or empty when undeclared.
 _project_scoped_test_command() {
-    local _root="$1" _files="$2"
-    local _plugin="${AUTOMATION_DIR}/plugins/verification-plugin.js"
-    local _node="${NODE_CMD:-${NODE_BIN:-node}}"
-    [ -f "$_plugin" ] || return 0
-    "$_node" -e '
-      const p = require(process.argv[1]);
-      const m = p.readTestManifest(process.argv[2]);
-      if (!m || !m.ok) process.exit(0);
-      const tpl = m.manifest && m.manifest.test && m.manifest.test.scopedCommand;
-      if (typeof tpl === "string" && tpl.trim()) console.log(tpl.replace(/\{files\}/g, process.argv[3]));
-    ' "$_plugin" "$_root" "$_files" 2>/dev/null
+    # The template is the project's own declaration (.epam/verification.json test.scopedCommand);
+    # the plugin substitutes the file list. Empty when undeclared, so the caller runs the full
+    # suite — correct, and never silent.
+    local _out
+    _out=$(_verification_plugin_call scopedTestCommand "$1" "$2") || return 0
+    [ "$_out" = "unknown" ] && return 0
+    printf '%s' "$_out"
 }
 
 run_tsc_verification() {
@@ -5841,7 +5895,7 @@ run_tsc_verification() {
         {
             echo ""
             echo "=== the project type check failed (exit $_tsc_exit) — new errors introduced by this story ==="
-            echo "$_new_errors" | head -60
+            echo "$_new_errors" | head -n "$(evidence_window typecheckErrorLines)"
         } >> "$output_file"
         return 1
     fi
@@ -5955,6 +6009,9 @@ run_planning_phase() {
     declared_files_raw=$(jq -r --arg id "$story_id" \
         '.stories[] | select(.id == $id) | .technicalNotes.files // [] | .[]' \
         "$prd_target" 2>/dev/null || echo "")
+    # These are forwarded to the child process invoked below. shellcheck cannot see the consumer,
+    # so it reports them unused; removing them would take the values away from the child.
+    # shellcheck disable=SC2034
     declared_files=$(jq -r --arg id "$story_id" \
         '.stories[] | select(.id == $id) | .technicalNotes.files // [] | .[]' \
         "$prd_target" 2>/dev/null | sed 's/^/  - /' || echo "")
@@ -5983,7 +6040,8 @@ $(cat "$_cf")
           --arg title "${title}" \
           --arg ac "${ac}" \
           '{"__DECLARED_PATHS__":$declared_paths,"__DEPENDENCY_CONTRACTS__":$dependency_contracts,"__CROSS_CODELINE_CONTRACT__":$cross_codeline_contract,"__STORY_ID__":$story_id,"__TITLE__":$title,"__AC__":$ac}' > "$_cp_vals"
-    local planning_prompt="$(render_engine_prompt plan-producer "$_cp_vals")"
+    local planning_prompt
+    planning_prompt="$(render_engine_prompt plan-producer "$_cp_vals")"
     rm -f "$_cp_vals"
 
     local plan_result_file
@@ -5991,9 +6049,9 @@ $(cat "$_cf")
     local plan_text=""
 
     local plan_constitution="${AGENT_CONSTITUTION}${DYNAMIC_CONSTITUTION}"
-    local plan_permissions=("--dangerously-skip-permissions" "--append-system-prompt" "$plan_constitution")
     if [ "${EPAM_SDK_INVOKE:-0}" = "1" ] && [ -f "$INVOKE_PY" ]; then
         echo "$planning_prompt" | "$INVOKE_PYTHON" "$INVOKE_PY" \
+            --cache-system \
             --model "$planner_model" \
             --system-prompt "$plan_constitution" \
             --output "$plan_result_file" 2>/dev/null || true
@@ -6001,7 +6059,7 @@ $(cat "$_cf")
     else
         # Route through ai-run.sh with the configured orchestration provider
         local _orch_provider="${EPAM_ORCHESTRATION_PROVIDER:-}"
-        local _orch_model="${planner_model:-${ORCH_GATE_MODEL:-}}"
+        local _orch_model="${planner_model:-${EPAM_MODEL:-}}"
         if [ -n "$_orch_provider" ]; then
             # PLANNING SAMPLING, not the writer's. The planning turn wants determinism and
             # structure; execution sampling is per-model and, for some models, the opposite
@@ -6092,7 +6150,8 @@ $(cat "$_contract_file")
           --arg plan_text "${plan_text}" \
           --arg story_id "${story_id}" \
           '{"__DECLARED_OUTPUT_FILES__":$declared_output_files,"__DEPENDENCY_CONTRACTS__":$dependency_contracts,"__PLAN_TEXT__":$plan_text,"__STORY_ID__":$story_id}' > "$_cp_vals"
-    local review_prompt="$(render_engine_prompt plan-reviewer "$_cp_vals")"
+    local review_prompt
+    review_prompt="$(render_engine_prompt plan-reviewer "$_cp_vals")"
     rm -f "$_cp_vals"
 
     # Tool access (HEAL-BLIND, 2026-07-31): this gate exists specifically to
@@ -6115,13 +6174,13 @@ $(cat "$_contract_file")
     # nothing on stdin — which is exactly how the writer burned 8 attempts at $0 cost.
     review_output=$(echo "$review_prompt" | \
         AI_PROVIDER="$_orch_provider" \
-        AI_MODEL="${ORCH_GATE_MODEL:-}" \
+        AI_MODEL="${EPAM_MODEL:-}" \
         EPAM_CLI="$EPAM_CLI" \
         AI_GATE_ALLOW_TOOLS=1 \
         EPAM_ALLOWED_TOOLS="$ORCH_GATE_ALLOWED_TOOLS" \
         EPAM_MAX_TOOL_CALLS="${PLAN_REVIEW_MAX_TOOL_CALLS:-24}" \
         bash "$SCRIPT_DIR/ai-run.sh" --provider "$_orch_provider" \
-        ${ORCH_GATE_MODEL:+--model "$ORCH_GATE_MODEL"} \
+        ${EPAM_MODEL:+--model "$EPAM_MODEL"} \
         2>/dev/null || echo "")
 
     # Robust JSON extraction (not a flat-object regex — see the identical bug
@@ -6149,13 +6208,14 @@ $(cat "$_contract_file")
           --arg plan_text "${plan_text}" \
           --arg story_id "${story_id}" \
           '{"__CORRECTIONS__":$corrections,"__PLAN_TEXT__":$plan_text,"__STORY_ID__":$story_id}' > "$_cp_vals"
-    local corrective_prompt="$(render_engine_prompt plan-corrective "$_cp_vals")"
+    local corrective_prompt
+    corrective_prompt="$(render_engine_prompt plan-corrective "$_cp_vals")"
     rm -f "$_cp_vals"
 
     local corrected_plan
     corrected_plan=$(echo "$corrective_prompt" | \
         AI_PROVIDER="$_orch_provider" \
-        AI_MODEL="${STORY_PLANNER_MODEL:-${ORCH_GATE_MODEL:-}}" \
+        AI_MODEL="${STORY_PLANNER_MODEL:-${EPAM_MODEL:-}}" \
         EPAM_CLI="$EPAM_CLI" \
         bash "$SCRIPT_DIR/ai-run.sh" --provider "$_orch_provider" \
         ${STORY_PLANNER_MODEL:+--model "$STORY_PLANNER_MODEL"} \
@@ -6197,8 +6257,112 @@ COORDINATOR_ESCALATE="yes"
 COORDINATOR_FAILURE_CLASS="unknown"
 COORDINATOR_PROMPT_AMENDMENT=""
 
+# classify_invocation_refusal <attempt-output-file> <exit-code>
+#
+# TRUE when the CLI refused its own command line -- an argument it will refuse identically forever.
+#
+# 2026-08-28: every writer attempt died in milliseconds on
+#   error: option '--autocompact <auto|tokens>' argument '80000' is invalid.
+# The coordinator called all twelve "unknown", escalated haiku -> sonnet-5 and reset the worktree
+# between each, because no raw output file existed and absent was read as "no evidence". The
+# evidence was in the attempt's own output log the whole time, identical every time.
+#
+# Retrying is for conditions that might differ next time. This is not one of them: report the
+# offending option and stop, so the operator fixes the flag instead of paying for eleven repeats.
+# require_profile <persona-key> <profiles-file>
+#
+# THE BRIEF, OR NOTHING — never prose written here.
+#
+# Three call sites carried `[ -z "$x" ] && x="You are a ..."`, so a missing roster entry silently
+# substituted a persona that no prompt file holds, no review ever saw, and no project can
+# specialise. All three keys exist in both roster sources, which means the fallback could only fire
+# when the roster was BROKEN — exactly when running anyway is worst, and the resulting verdict is
+# one nobody can audit or reproduce.
+#
+# The pipeline already knows the right answer: runtime-boundary refuses "with no instructions", and
+# team-lead-review refuses rather than review on an empty brief. A gate that declines is
+# recoverable. A gate that invents its own instructions is not.
+require_profile() {
+    local _key="${1:-}" _file="${2:-}"
+    local _brief=""
+    [ -n "$_key" ] || { error "  [profile] no persona key given — refusing to invent one"; return 1; }
+    if [ -n "$_file" ] && [ -f "$_file" ]; then
+        _brief=$(jq -r --arg k "$_key" '.[$k] // ""' "$_file" 2>/dev/null || echo "")
+    fi
+    if [ -z "$_brief" ] || [ "$_brief" = "null" ]; then
+        error "  [profile] '${_key}' has no brief in ${_file:-<no profiles file>} — refusing to run it on"
+        error "  [profile] prose written in this script. Mint the roster, or restore profiles.json."
+        return 1
+    fi
+    printf '%s' "$_brief"
+}
+
+classify_invocation_refusal() {
+    local _out="${1:-}" _exit="${2:-1}"
+    [ "$_exit" -ne 0 ] || return 1
+    [ -n "$_out" ] && [ -f "$_out" ] || return 1
+
+    # The CLI's own argument-parser wording. Anchored on "option ... argument ... invalid" rather
+    # than on any one flag: the next flag to move its accepted range must land here too.
+    local _line
+    _line=$(grep -m1 -aE "^error: (option|unknown option|required option)" "$_out" 2>/dev/null || true)
+    [ -n "$_line" ] || return 1
+
+    local _opt
+    # NO `| head -1`: under pipefail head closes the pipe, grep dies of SIGPIPE and the assignment
+    # fails on a line that matched perfectly well. grep -m1 already stops at the first match, so the
+    # head was redundant as well as harmful. Caught by sigpipe-under-pipefail.bats — a suite that had
+    # never executed until the day this line was written.
+    _opt=$(printf '%s' "$_line" | grep -oE -m1 -- "--[a-z0-9-]+" || true)
+    warning "  Coordinator[L1]: the CLI REFUSED its own command line -- ${_opt:-<option>} is not"
+    warning "    acceptable to the installed binary, so every retry fails identically before any"
+    warning "    token is sent. Not retryable. Fix the flag, then re-run."
+    warning "    ${_line}"
+    return 0
+}
+
 # classify_failure_class <raw_file> <result_json> <exit_code>
 # Layer 1: rule-based triage. Sets COORDINATOR_FAILURE_CLASS and COORDINATOR_ESCALATE.
+# resolve_model_override <model> <provider> <settings-file>...
+#
+# THE FIRST FILE THAT DECLARES THIS MODEL WINS -- per MODEL, not per FILE.
+#
+# Overrides live in the active stack, and a project may override for its own reasons, so the caller
+# passes project first and stack second. The precedence used to be applied to the FILE: if the
+# project declared any modelOverrides at all, the stack's were never read. mock3 declares overrides
+# for the models of the stack it was written against; run on claude, none matched, and the stack's
+# own claude entries were skipped, so the value fell through to defaultAutoCompressAt: 80000 and the
+# CLI rejected the argument outright -- twelve attempts, no tokens, a whole writer leg (2026-08-28).
+#
+# A project's silence about THIS model is not an instruction to ignore the stack's answer for it.
+#
+# Emits the matching override object as compact JSON, or nothing.
+resolve_model_override() {
+    local _model="${1:-}" _provider="${2:-}"
+    shift 2 || true
+    local _f _json
+    for _f in "$@"; do
+        [ -n "$_f" ] && [ -f "$_f" ] || continue
+        # A "$"-prefixed key is a documentation note, not an override. Indexing .value.matchOn on a
+        # string aborts the whole query, and a swallowed error reads as "no overrides on this file".
+        _json=$(jq -c --arg provider "$_provider" --arg model "$_model" '
+            (.modelOverrides // {}) | to_entries
+            | map(select(.value | type == "object"))
+            | map(select(
+                (.value.matchOn == "provider" and .value.matchValue == $provider)
+                or (.value.matchOn == "model" and (.value.matchSubstring // null) != null
+                    and (.value.matchSubstring as $sub | $model | contains($sub)))
+              ))
+            | (.[0].value // empty)
+        ' "$_f" 2>/dev/null)
+        if [ -n "$_json" ] && [ "$_json" != "null" ]; then
+            printf '%s' "$_json"
+            return 0
+        fi
+    done
+    return 0
+}
+
 classify_failure_class() {
     local raw_file="${1:-}"
     local result_json="${2:-}"
@@ -6237,8 +6401,19 @@ classify_failure_class() {
             warning "  Coordinator[Diag]: epam binary not found on PATH — check EPAM_CLI or PATH"
             _diag_ok=false
         fi
-        # 2. Check OpenRouter key validity (fast: uses cached auth endpoint)
-        local _or_key="${OPENROUTER_API_KEY:-${EPAM_API_KEY_OPENROUTER:-}}"
+        # 2. Check the stack's credential, IF this stack has one to check.
+        #
+        # This curled a vendor auth endpoint unconditionally and, finding no key for that
+        # vendor, declared "provider will fail on any API call" — on a codemie or mockserver
+        # run, where that vendor is not used at all. A diagnostic that reports a healthy run as
+        # broken is worse than none. The set declares whether it has a checkable credential
+        # endpoint (provider-sets.json spendProbe); a set declaring none is skipped, not failed.
+        local _or_key=""
+        if [ -n "$(spend_probe_read)" ]; then
+            _or_key="${OPENROUTER_API_KEY:-${EPAM_API_KEY_OPENROUTER:-}}"
+        else
+            log "  Coordinator[Diag]: this provider set declares no credential endpoint — skipping the vendor key check"
+        fi
         if [ -n "$_or_key" ]; then
             local _key_status
             _key_status=$(curl -s --max-time 5 \
@@ -6451,13 +6626,15 @@ effort_is_higher() {
 next_effort() {
     # One notch up the CONFIGURED ladder, saturating at its top. The level names live in
     # config (effortLadder), so a vendor adding a level is a config change, not a code change.
+    # Set for the child process invoked below, or read by a script that sources this file.
+    # ShellCheck cannot see the consumer, so it reports these unused; removing them takes the value away.
+    # shellcheck disable=SC2034
     local cur="${1:-}" prev="" lvl found=0 first=""
     local IFS='|'
     for lvl in ${EPAM_EFFORT_LADDER:-low|medium|high|max}; do
         [ -z "$first" ] && first="$lvl"
         if [ "$found" = 1 ]; then echo "$lvl"; return; fi
         [ "$lvl" = "$cur" ] && found=1
-        prev="$lvl"
     done
     # at the top, or unrecognised: saturate at the top / start at the second level
     if [ "$found" = 1 ]; then echo "$cur"; else echo "$first"; fi
@@ -6501,7 +6678,19 @@ next_ladder_step() {
         2) _rung_effort="${EPAM_RUNG2_REASONING_EFFORT:-high}" ;;
         *) _rung_effort="${EPAM_RUNG3_REASONING_EFFORT:-high}" ;;
     esac
-    _next_effort=$(max_effort "$_effort" "$_rung_effort")
+    # THE RUNG DECIDES. This was max_effort("$_effort", "$_rung_effort") — the rung's level was a
+    # FLOOR, so whatever effort arrived could only ever be raised. What arrived was the SEAM's flat
+    # declaration, and 33 of 41 seams declare "high", so the ladder's rung-0 "medium" never applied
+    # anywhere. The cheap entry rung was never cheap.
+    #
+    # Measured 2026-09-01 on metrolinx: prompt-builder enters on claude-haiku-4-5 and each call took
+    # ~68s to emit ~2000 tokens of what its own registry entry calls "largely RESTATEMENT". Not
+    # haiku being slow — haiku reasoning hard, because the seam had overridden the rung. Across 39
+    # generated prompts at 2-3 calls each, that is the stage's ~1.5 hours.
+    #
+    # Operator decision 2026-09-01: a seam is ASSIGNED to a ladder and does not renegotiate what
+    # that ladder costs — the rule already settled for iterations, now applied to effort.
+    _next_effort="$_rung_effort"
 
     # When the model cannot move, effort is the only lever left — so it must rise.
     if [ "$_next_model" = "$_model" ] && [ "$_rung" -gt 0 ]; then
@@ -6739,9 +6928,9 @@ get_model_ladder_step() {
 # and returns the provider for a model name, matched via bash glob patterns —
 # no hardcoded vendor/model names in this function. Per-project tier scripts
 # supply their own map (e.g. tier3-travel-app-run.sh sets
-# "zhipuai/*=qwen|moonshotai/*=qwen|z-ai/*=qwen|glm-*=qwen|kimi-*=qwen|deepseek/*=qwen|MiniMax-*=minimax"
+# "zhipuai/*=openrouter|moonshotai/*=openrouter|z-ai/*=openrouter|glm-*=openrouter|kimi-*=openrouter|deepseek/*=openrouter|MiniMax-*=minimax"
 # because this project routes all OpenRouter-hosted vendors through the
-# "qwen" provider umbrella and MiniMax direct-API models through "minimax").
+# "openrouter" provider umbrella and MiniMax direct-API models through "minimax").
 # Root cause this replaces: the escalation-ladder code used to hardcode this
 # exact vendor-name case statement twice inline (found live, 2026-07-06) —
 # a project using different model vendors/providers would get silently wrong
@@ -6774,7 +6963,7 @@ resolve_model_provider() {
 # ten of twelve writer attempts asked the minimax provider for z-ai/glm-5.2:
 #
 #   minimax + MiniMax-M3    exit=0  413 bytes
-#   qwen    + z-ai/glm-5.2  exit=0  410 bytes
+#   openrouter    + z-ai/glm-5.2  exit=0  410 bytes
 #   minimax + z-ai/glm-5.2  exit=1  0 bytes   "All providers exhausted"
 #
 # Zero bytes and a non-zero exit read as an environment crash, so the coordinator spent the rest
@@ -6809,8 +6998,13 @@ assess_model_escalation() {
     [ "${EPAM_MODEL_COORDINATOR_ENABLED:-0}" != "1" ] && return
 
     local gate_provider="${ORCH_GATE_PROVIDER:-}"
-    local gate_model="${ORCH_GATE_MODEL:-}"
-    [ -z "$gate_provider" ] && return
+    local gate_model="${EPAM_MODEL:-}"
+    # A capability that silently does not run is indistinguishable from one that ran and found
+    # nothing. Say which happened.
+    if [ -z "$gate_provider" ]; then
+        log "  [ModelEscalation] no gate provider configured — SKIPPING escalation assessment; this run performs none"
+        return
+    fi
 
     # Read failure evidence (cap at 3000 chars to stay within gate model budget)
     local result_text=""
@@ -6856,7 +7050,7 @@ assess_model_escalation() {
       --arg story_title "$story_title" \
       --arg current_model "$current_model" \
       --arg target_model "$target_model" \
-      --arg coordinator_failure_class "$coordinator_failure_class" \
+      --arg coordinator_failure_class "$COORDINATOR_FAILURE_CLASS" \
           '{"__RESULT_TEXT__":$result_text,"__LOG_TAIL__":$log_tail,"__TEST_FAILURE_SNIPPET__":$test_failure_snippet,"__PRIOR_FAILURE_SUMMARY__":$prior_failure_summary,"__STORY_ID__":$story_id,"__STORY_TITLE__":$story_title,"__CURRENT_MODEL__":$current_model,"__TARGET_MODEL__":$target_model,"__COORDINATOR_FAILURE_CLASS__":$coordinator_failure_class}' > "$_cp_vals"
     coordinator_prompt="$(render_engine_prompt inference-ladder-coordinator "$_cp_vals")"
     rm -f "$_cp_vals"
@@ -6915,7 +7109,16 @@ run_prd_change_reviewer() {
 
     local gate_provider="${ORCH_GATE_PROVIDER:-}"
     if [ -z "$gate_provider" ]; then
-        echo "pass"
+        # A GATE THAT CANNOT JUDGE DOES NOT PASS. This emitted a literal "pass", so with no gate
+        # provider configured every KB/PRD/profile write was AUTO-APPROVED and the caller read a
+        # manufactured verdict as a real one — indistinguishable from a review that ran and found
+        # nothing wrong.
+        #
+        # 'unreviewed' is the honest answer and callers already understand it:
+        # reviewOutcomeKeepsChange() accepts only an explicit pass, so the change reverts rather
+        # than standing on a judgement nobody made.
+        error "  [PRD-ChangeReviewer] no gate provider configured — NOT reviewing; returning 'unreviewed' so the change is not kept on an unmade judgement" >&2
+        echo "unreviewed"
         return 0
     fi
     # KB/PRD/profile writes are persistent and must be reviewed by the highest-quality
@@ -6932,9 +7135,8 @@ run_prd_change_reviewer() {
     [ "$change_type" = "kb_entry" ] && _profile_key="kb-change-reviewer"
     local reviewer_profile=""
     if [ -f "$profiles_file" ]; then
-        reviewer_profile=$(jq -r --arg k "$_profile_key" '.[$k] // ""' "$profiles_file" 2>/dev/null || echo "")
+        reviewer_profile=$(require_profile "$_profile_key" "$profiles_file" || true)
     fi
-    [ -z "$reviewer_profile" ] && reviewer_profile="You are a change reviewer. Validate the proposed change and emit {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}."
 
     local review_prompt
     # RENDERED FROM THE TEMPLATE LAYER. Values go via a FILE, never argv: before/after carry
@@ -7029,8 +7231,17 @@ run_prd_change_summarizer() {
     local issues="$3"
     local rejected_text="$4"
 
-    local gate_provider="${ORCH_GATE_PROVIDER:-}"
+    # THE SAME CHAIN ITS FAMILY USES. ac-gate.js, codeline-discovery.js and cpa-inference.js all
+    # consult EPAM_ORCHESTRATION_PROVIDER before giving up; this one read ORCH_GATE_PROVIDER alone,
+    # so a run that set the orchestration provider and not the gate provider lost EVERY rewrite.
+    local gate_provider="${ORCH_GATE_PROVIDER:-${EPAM_ORCHESTRATION_PROVIDER:-}}"
     if [ -z "$gate_provider" ]; then
+        # DEGRADING IS FINE; DEGRADING IN SILENCE IS NOT. This returned the rejected text with no
+        # diagnostic and exit 0, and the caller assigns the result as the rewritten value
+        # (current=$(run_prd_change_summarizer ...)) — so the content a reviewer had just rejected
+        # flowed onward as though it had been fixed. The text is still returned, because the caller
+        # must not be left with nothing; what changes is that the skip is now visible.
+        error "  [PRD-Summarizer] no provider resolved (ORCH_GATE_PROVIDER and EPAM_ORCHESTRATION_PROVIDER are both unset) — skipping the rewrite; the REJECTED text is being returned unchanged" >&2
         printf '%s' "$rejected_text"
         return 0
     fi
@@ -7385,9 +7596,12 @@ run_failure_analyst() {
     [ -z "${VERIFICATION_FAILURE:-}" ] && return 0
 
     local gate_provider="${ORCH_GATE_PROVIDER:-}"
-    # Failure analyst uses ESCALATION_MODEL (z-ai/glm-5.2) when set — never qwen chat models;
+    # Failure analyst uses ESCALATION_MODEL (z-ai/glm-5.2) when set — never openrouter chat models;
     # falls back to ORCH_GATE_MODEL only when no escalation model is configured.
-    local gate_model="${ESCALATION_MODEL:-${ORCH_GATE_MODEL:-}}"
+    # THE SEAM'S LADDER, not a run-wide pin. ORCH_GATE_MODEL reached every seam that could
+    # not resolve one itself; .env set it to z-ai/glm-5.2, so a mockserver run asked for an
+    # OpenRouter model. An unresolvable seam yields empty and the caller refuses, as before.
+    local gate_model="${ESCALATION_MODEL:-$(seam_model_or_fail "agent-failure-analyst" 2>/dev/null || true)}"
     if [ -z "$gate_provider" ]; then
         log "  [FailureAnalyst] No gate provider configured — skipping self-heal analysis"
         return 0
@@ -7429,9 +7643,8 @@ run_failure_analyst() {
     # Load failure-analyst profile from profiles.json (role-level instructions)
     local analyst_profile=""
     if [ -f "$profiles_file" ]; then
-        analyst_profile=$(jq -r '."failure-analyst" // ""' "$profiles_file" 2>/dev/null || echo "")
+        analyst_profile=$(require_profile "failure-analyst" "$profiles_file" || true)
     fi
-    [ -z "$analyst_profile" ] && analyst_profile="You are a self-healing pipeline analyst. Diagnose the exact root cause of the test failure and prescribe the minimum fix so the NEXT retry succeeds."
 
     # Dependency contract injection (added 2026-07-07): same ground-truth
     # mechanism already proven for build_implementation_prompt() — the
@@ -7564,7 +7777,6 @@ $(cat "$_fa_vendor_contract")
           "__SKILL_NOTE_MAX__":$skill_note_max,
           "__STORY_ID__":$story_id,
           "__STORY_ROLE__":$story_role,
-          "__STORY_ACS__":$story_acs,
           "__SKILL_ADDENDUM__":$skill_addendum,
           "__DEPENDENCY_CONTRACTS__":$dependency_contracts,
           "__VERIFICATION_FAILURE__":$verification_failure,
@@ -8018,8 +8230,6 @@ PYEOF
                         local kb_dir
                         kb_dir="$(dirname "$SCRIPT_DIR")/agents"
                         local kb_file; kb_file=$(_kb_file_for_story "$story_id" "$kb_dir")
-                        local kb_ts
-                        kb_ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "unknown")
                         # NO TRUNCATION — entries are single actionable rules, and a rule
                         # carrying a regex, path or command is destroyed by a character cut.
                         # Length is a REJECTION criterion upstream (the note goes back for
@@ -8908,6 +9118,11 @@ run_retry_extension_coordinator() {
     local evidence
     evidence=$(compute_retry_extension_evidence "$story_id")
     if [ -z "$evidence" ] || ! echo "$evidence" | jq empty 2>/dev/null; then
+        # UNREADABLE EVIDENCE IS NOT "NO EXTENSION WARRANTED". Both answer 0, and the caller
+        # cannot tell them apart — the same defect fixed two branches below, where a missing
+        # provider also returned a believable 0. Say which happened; the value is unchanged so
+        # no run behaves differently, but a 0 that nobody decided is now visible.
+        log "  [RetryExtension] retry-extension evidence for ${story_id} is missing or not valid JSON — returning 0 because it could not be READ, not because none was warranted"
         echo 0
         return 0
     fi
@@ -8938,18 +9153,22 @@ run_retry_extension_coordinator() {
     fi
 
     local gate_provider="${ORCH_GATE_PROVIDER:-}"
-    local gate_model="${ORCH_GATE_MODEL:-}"
+    local gate_model="${EPAM_MODEL:-}"
     if [ -z "$gate_provider" ]; then
+        # 0 is a plausible answer — "no extension is warranted" — and was returned without any
+        # coordination happening. Same shape as the fabricated "pass" above: a value nobody
+        # decided, arriving where a decision is expected.
+        log "  [RetryExtension] no gate provider configured — SKIPPING coordination; returning 0 because none was DECIDED, not because none was warranted"
         echo 0
         return 0
     fi
 
-    local profiles_file="$(dirname "$SCRIPT_DIR")/agents/profiles.json"
+    local profiles_file
+    profiles_file="$(dirname "$SCRIPT_DIR")/agents/profiles.json"
     local coordinator_profile=""
     if [ -f "$profiles_file" ]; then
-        coordinator_profile=$(jq -r '."retry-extension-coordinator" // ""' "$profiles_file" 2>/dev/null || echo "")
+        coordinator_profile=$(require_profile "retry-extension-coordinator" "$profiles_file" || true)
     fi
-    [ -z "$coordinator_profile" ] && coordinator_profile="You are the retry-extension coordinator. Given hard evidence about a story's self-heal history, decide whether one more bounded batch of retries is pragmatic."
 
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
     local ac_count
@@ -9084,10 +9303,6 @@ implement_story() {
     # this story has ever called verify_story_deliverables itself.
     LAST_VERIFIED_TOUCHED_FILES=""
     LAST_VERIFIED_UNCHANGED_FILES=""
-    # `unknown`, not `false` — a story that has not yet run tsc has produced no evidence in
-    # either direction, and `false` is read downstream as a conviction. See the tri-state
-    # assignment after the tsc gate below.
-    LAST_ATTEMPT_TSC_PASSED=unknown
     # Which rung's contribution the NEXT attribution call should credit
     # changes to (backlog #113) — updated every rung transition, read at the
     # NEXT one and again at the story's own success path.
@@ -9116,16 +9331,20 @@ implement_story() {
     # reset between stories, so a stale amendment from story A could otherwise
     # leak into story B's first attempt.
     COORDINATOR_PROMPT_AMENDMENT=""
-    local output_file="$CLAUDE_OUTPUT_DIR/${story_id}_$(date +'%Y%m%d_%H%M%S').log"
-    local story_started_at=$(date -Iseconds)
+    local output_file
+    output_file="$CLAUDE_OUTPUT_DIR/${story_id}_$(date +'%Y%m%d_%H%M%S').log"
+    local story_started_at
+    story_started_at=$(date -Iseconds)
 
-    local title=$(get_story_title "$story_id")
+    local title
+    title=$(get_story_title "$story_id")
     log "Implementing story: $story_id - $title"
     update_monitor_status "start" "$story_id"
 
     # Check dependencies first
     if ! are_dependencies_satisfied "$story_id"; then
-        local deps=$(get_story_dependencies "$story_id" | tr '\n' ',' | sed 's/,$//')
+        local deps
+        deps=$(get_story_dependencies "$story_id" | tr '\n' ',' | sed 's/,$//')
         error "Cannot implement $story_id - dependencies not satisfied: $deps"
         return 1
     fi
@@ -9221,7 +9440,7 @@ implement_story() {
     # For epam-run providers, prd.json .model field overrides effort-based model
     case "${STORY_PROVIDER:-codex}" in
         codex) resolve_codex_model_settings "$story_id" ;;
-        copilot|openai|qwen|cursor|minimax) resolve_model_from_story "$story_id" ;;
+        copilot|openai|openrouter|cursor|minimax) resolve_model_from_story "$story_id" ;;
     esac
     # prd-model-coordinator's .reasoningEffort field overrides the "low" reset above
     resolve_reasoning_effort_from_story "$story_id"
@@ -9285,9 +9504,19 @@ implement_story() {
         )
     fi
     local model_flag=()
-    local turns_flag=()
-    [ -n "${STORY_MODEL:-}" ]     && model_flag=(--model "$STORY_MODEL")
-    [ -n "${STORY_MAX_TURNS:-}" ] && turns_flag=(--max-turns "$STORY_MAX_TURNS")
+    [ -n "${STORY_MODEL:-}" ] && model_flag=(--model "$STORY_MODEL")
+
+    # THE CAPS THIS PATH NEVER HAD. `--max-turns` was built here from STORY_MAX_TURNS, and
+    # BOTH halves were dead: the flag no longer exists in Claude Code (the env var
+    # CLAUDE_CODE_MAX_TURNS replaced it), and STORY_MAX_TURNS was hardcoded "" in every effort
+    # branch so it was never emitted. A flag that cannot fire is not a cap — which is how one
+    # seam ran 1,486 generations in 44 minutes with nothing able to stop it.
+    #
+    # What replaces it names no knob: the runner's DECLARATION says which env vars and flags it
+    # takes, and apply_runner_settings passes exactly those. A runner that declares nothing
+    # gets nothing, so every other path behaves exactly as before.
+    RUNNER_FLAGS=()
+    apply_runner_settings "$(basename "${CLAUDE_CMD:-}")" "${EPAM_PROJECT_CONFIG_DIR:-}" || true
     local story_cli
     story_cli=$(provider_to_cli "${STORY_PROVIDER:-codex}")
 
@@ -9374,7 +9603,8 @@ implement_story() {
                         # de-escalating a struggling story. Operator rule: a retry never lowers
                         # effort. Rung 0 still ASSIGNS, because it is the story's starting point
                         # and must not inherit the previous story's ceiling.
-                        export EPAM_REASONING_EFFORT="$(max_effort "${EPAM_REASONING_EFFORT:-}" "${EPAM_RUNG1_REASONING_EFFORT:-medium}")"
+                        EPAM_REASONING_EFFORT="$(max_effort "${EPAM_REASONING_EFFORT:-}" "${EPAM_RUNG1_REASONING_EFFORT:-medium}")"
+                        export EPAM_REASONING_EFFORT
                         export EPAM_TEMPERATURE="${EPAM_RUNG1_TEMPERATURE:-0}"
                         _rung_iter_bump=$(( $(_brownfield_rung_bump "$story_id") + $(_iteration_exhaustion_bump "$story_id") ))
                         STORY_ITERATION_BUMP_TOTAL=$(( ${STORY_ITERATION_BUMP_TOTAL:-0} + _rung_iter_bump ))
@@ -9483,7 +9713,8 @@ implement_story() {
                                 fi
                             fi
                         fi
-                        export EPAM_REASONING_EFFORT="$(max_effort "${EPAM_REASONING_EFFORT:-}" "${EPAM_RUNG2_REASONING_EFFORT:-high}")"
+                        EPAM_REASONING_EFFORT="$(max_effort "${EPAM_REASONING_EFFORT:-}" "${EPAM_RUNG2_REASONING_EFFORT:-high}")"
+                        export EPAM_REASONING_EFFORT
                         export EPAM_TEMPERATURE="${EPAM_RUNG2_TEMPERATURE:-0.3}"
                         _rung_iter_bump=$(( $(_brownfield_rung_bump "$story_id") + $(_iteration_exhaustion_bump "$story_id") ))
                         STORY_ITERATION_BUMP_TOTAL=$(( ${STORY_ITERATION_BUMP_TOTAL:-0} + _rung_iter_bump ))
@@ -9569,7 +9800,8 @@ implement_story() {
                                 fi
                             fi
                         fi
-                        export EPAM_REASONING_EFFORT="$(max_effort "${EPAM_REASONING_EFFORT:-}" "${EPAM_RUNG3_REASONING_EFFORT:-high}")"
+                        EPAM_REASONING_EFFORT="$(max_effort "${EPAM_REASONING_EFFORT:-}" "${EPAM_RUNG3_REASONING_EFFORT:-high}")"
+                        export EPAM_REASONING_EFFORT
                         export EPAM_TEMPERATURE="${EPAM_RUNG3_TEMPERATURE:-0.7}"
                         _rung_iter_bump=$(( $(_brownfield_rung_bump "$story_id") + $(_iteration_exhaustion_bump "$story_id") ))
                         STORY_ITERATION_BUMP_TOTAL=$(( ${STORY_ITERATION_BUMP_TOTAL:-0} + _rung_iter_bump ))
@@ -9908,7 +10140,8 @@ $_kb_section"
         local invoke_success=false
         # Track the raw output file across all provider branches for coordinator triage
         local attempt_raw_file="${json_result_file%.json}_raw.json"
-        local attempt_started_at=$(date -Iseconds)
+        local attempt_started_at
+        attempt_started_at=$(date -Iseconds)
 
         # Optional per-story wall-clock timeout — set EPAM_STORY_TIMEOUT_SECS in the tier script.
         # No default: if unset, no timeout is applied (behaviour is unchanged).
@@ -9955,12 +10188,12 @@ $_kb_section"
             codemie-claude)
                 # codemie-claude: same invocation pattern as claude — --print --output-format json
                 if echo "$prompt" | "${_timeout_prefix[@]}" codemie-claude --print --output-format json \
-                        "${model_flag[@]}" "${turns_flag[@]}" "${effective_permissions[@]}" \
+                        "${model_flag[@]}" "${RUNNER_FLAGS[@]}" "${effective_permissions[@]}" \
                         2>>"$output_file" > "$json_result_file"; then
                     invoke_success=true
                 fi
                 ;;
-            copilot|openai|qwen|cursor|minimax)
+            copilot|openai|openrouter|cursor|minimax)
                 # epam-run providers: invoke via `epam run --provider X --model M --json`
                 # EPAM_CLI can be overridden with a mock for zero-token testing.
                 # Explicitly forward API keys so subshells that didn't inherit them still work.
@@ -10084,19 +10317,33 @@ $_kb_section"
                 local _effective_max_iterations="${STORY_MAX_ITERATIONS:-6}"
                 local _effective_compress_at="${EPAM_AUTO_COMPRESS_AT:-}"
                 local _effective_compress_every_n="${EPAM_AUTO_COMPRESS_EVERY_N_ITERATIONS:-}"
-                local _model_override_settings_file="${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json"
-                if [ -f "$_model_override_settings_file" ]; then
-                    local _override_json
-                    _override_json=$(jq -c --arg provider "${STORY_PROVIDER:-}" --arg model "${STORY_MODEL:-}" '
-                        (.modelOverrides // {}) | to_entries
-                        | map(select(
-                            (.value.matchOn == "provider" and .value.matchValue == $provider)
-                            or (.value.matchOn == "model" and (.value.matchSubstring // null) != null
-                                and (.value.matchSubstring as $sub | $model | contains($sub)))
-                          ))
-                        | (.[0].value // empty)
-                    ' "$_model_override_settings_file" 2>/dev/null)
-                    if [ -n "$_override_json" ] && [ "$_override_json" != "null" ]; then
+                # THE OVERRIDES LIVE WITH THE MODELS — in the active STACK, not the project.
+                #
+                # This read only the project's llm-settings.json. The 2026-08-25 migration moved
+                # modelOverrides out of project files into config/llm-defaults.<set>.json, because
+                # a per-model setting belongs to the model and a model belongs to a stack. The
+                # reader was left behind, so effort, temperature and compaction overrides reached
+                # NOTHING on any run — the same defect seam-invocation.js had for iteration
+                # budgets, in a second reader.
+                #
+                # The project file is still preferred when it declares overrides: a project may
+                # legitimately override for its own reasons, and that is the layer where such a
+                # decision belongs.
+                  # BOTH LAYERS, IN ORDER -- the project first, then the active stack. Asking which
+                  # FILE to read skipped the stack whenever the project declared any override at
+                  # all; resolve_model_override asks which file declares THIS MODEL.
+                  local _proj_override_file="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/llm-settings.json}"
+                  local _stack_override_file
+                  _stack_override_file="$("${NODE_BIN:-node}" -e '
+                      try {
+                        const { activeSetFile } = require(process.argv[1] + "/lib/llm-settings-resolve.js");
+                        process.stdout.write(activeSetFile() || "");
+                      } catch (_) { process.stdout.write(""); }
+                  ' "$SCRIPT_DIR" 2>/dev/null || printf '')"
+                  local _override_json
+                  _override_json=$(resolve_model_override "${STORY_MODEL:-}" "${STORY_PROVIDER:-}" \
+                      "$_proj_override_file" "$_stack_override_file")
+                  if [ -n "$_override_json" ] && [ "$_override_json" != "null" ]; then
                         local _ov_effort _ov_temp _ov_iter _ov_compress_at _ov_compress_n _ov_top_p _ov_temp_locked _ov_provider_order
                         _ov_effort=$(jq -r '.reasoningEffort // empty' <<<"$_override_json")
                         _ov_top_p=$(jq -r '.topP // empty' <<<"$_override_json")
@@ -10107,7 +10354,7 @@ $_kb_section"
                         _ov_compress_at=$(jq -r '.autoCompressAt // empty' <<<"$_override_json")
                         _ov_compress_n=$(jq -r '.autoCompressEveryNIterations // empty' <<<"$_override_json")
                         # FLOOR, not overwrite — see max_effort(). The rung's escalation must survive.
-                        [ -n "$_ov_effort" ] && export EPAM_REASONING_EFFORT="$(max_effort "${EPAM_REASONING_EFFORT:-}" "$_ov_effort")"
+                        [ -n "$_ov_effort" ] && EPAM_REASONING_EFFORT="$(max_effort "${EPAM_REASONING_EFFORT:-}" "$_ov_effort")"
 
                         # OPERATOR RULE (2026-08-10): a retry must ALWAYS raise reasoning effort
                         # when the model is NOT escalating. A rung spans two attempts, so the
@@ -10190,7 +10437,6 @@ $_kb_section"
                         [ -n "$_ov_compress_n" ] && _effective_compress_every_n="$_ov_compress_n"
                         log "  ModelOverride[${STORY_MODEL:-$STORY_PROVIDER}]: effort=${_ov_effort:-unchanged} temp=${_ov_temp:-unchanged} maxIter=${_effective_max_iterations} compaction=$([ -n "$_effective_compress_every_n" ] && echo "every ${_effective_compress_every_n} iter" || echo "token-threshold") (tokenThreshold=${_effective_compress_at:-none})"
                     fi
-                fi
                 # TELL THE WATCHDOG WHAT WE ACTUALLY GRANTED.
                 #
                 # The parent sizes the story's wall from iterations x secondsPerIteration, but
@@ -10199,6 +10445,10 @@ $_kb_section"
                 # silently stayed at the floor. Persisting it is the only way the value travels
                 # upward. See lib/story-retry-state.sh for the measured cost.
                 write_story_effective_iterations "$LOG_DIR" "$story_id" "$_effective_max_iterations"
+                # Every line here forwards a value to the child process, and each expansion deliberately reads
+                # the OUTER value — which IS the value being forwarded. shellcheck is right about the shape and
+                # wrong about the intent; rewriting it risks silently dropping a credential the child needs.
+                # shellcheck disable=SC2097,SC2098
                 if echo "$prompt" | \
                         EPAM_DANGEROUS_SKIP_APPROVAL=1 \
                         EPAM_AGENT_ROLE="${_story_agent_role}" \
@@ -10224,9 +10474,9 @@ $_kb_section"
                         OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
                         EPAM_API_KEY_OPENROUTER="${EPAM_API_KEY_OPENROUTER:-}" \
                         OPENROUTER_BASE_URL="${OPENROUTER_BASE_URL:-}" \
-                        EPAM_QWEN_MODEL_OVERRIDE="${EPAM_QWEN_MODEL_OVERRIDE:-}" \
+                        EPAM_OPENROUTER_MODEL_OVERRIDE="${EPAM_OPENROUTER_MODEL_OVERRIDE:-}" \
                         DASHSCOPE_API_KEY="${DASHSCOPE_API_KEY:-}" \
-                        EPAM_API_KEY_QWEN="${EPAM_API_KEY_QWEN:-}" \
+                        EPAM_API_KEY_OPENROUTER="${EPAM_API_KEY_OPENROUTER:-}" \
                         MINIMAX_API_KEY="${MINIMAX_API_KEY:-}" \
                         EPAM_API_KEY_MINIMAX="${EPAM_API_KEY_MINIMAX:-}" \
                         MINIMAX_BASE_URL="${MINIMAX_BASE_URL:-}" \
@@ -10264,6 +10514,7 @@ $_kb_section"
                         STORY_PRECOUNT_TOKENS="${precount:-0}"
                     fi
                     if echo "$prompt" | "${_timeout_prefix[@]}" "$INVOKE_PYTHON" "$INVOKE_PY" \
+                            --cache-system \
                             "${sdk_model_arg[@]}" "${sdk_think_arg[@]}" \
                             --system-prompt "$effective_constitution" \
                             --output "$json_result_file" 2>>"$output_file"; then
@@ -10271,7 +10522,7 @@ $_kb_section"
                     fi
                 else
                     if echo "$prompt" | "${_timeout_prefix[@]}" "$CLAUDE_CMD" --print --output-format json \
-                            "${model_flag[@]}" "${turns_flag[@]}" "${effective_permissions[@]}" \
+                            "${model_flag[@]}" "${RUNNER_FLAGS[@]}" "${effective_permissions[@]}" \
                             2>>"$output_file" > "$json_result_file"; then
                         invoke_success=true
                     fi
@@ -10293,6 +10544,7 @@ $_kb_section"
                         STORY_PRECOUNT_TOKENS="${precount:-0}"
                     fi
                     if echo "$prompt" | "${_timeout_prefix[@]}" "$INVOKE_PYTHON" "$INVOKE_PY" \
+                            --cache-system \
                             "${sdk_model_arg[@]}" \
                             --system-prompt "$effective_constitution" \
                             --output "$json_result_file" 2>>"$output_file"; then
@@ -10300,7 +10552,7 @@ $_kb_section"
                     fi
                 else
                     if echo "$prompt" | "${_timeout_prefix[@]}" "$CLAUDE_CMD" --print --output-format json \
-                            "${model_flag[@]}" "${turns_flag[@]}" "${effective_permissions[@]}" \
+                            "${model_flag[@]}" "${RUNNER_FLAGS[@]}" "${effective_permissions[@]}" \
                             2>>"$output_file" > "$json_result_file"; then
                         invoke_success=true
                     fi
@@ -10449,13 +10701,19 @@ $_kb_section"
         # story rejected by verify_story_deliverables for being INCOMPLETE never reaches the tsc
         # gate above, so its two correct fix sites were recorded as type-failures and erased at
         # the next rung transition — four attempts re-deriving the same files from an empty tree.
-        if [ "$_invoke_success_before_tsc" = true ] && [ "$invoke_success" = true ]; then
-            LAST_ATTEMPT_TSC_PASSED=true
-        elif [ "$_invoke_success_before_tsc" = true ]; then
-            LAST_ATTEMPT_TSC_PASSED=false
-        else
-            LAST_ATTEMPT_TSC_PASSED=unknown
-        fi
+        # THE COMPILER SIGNAL IS GONE ON PURPOSE — DO NOT PUT IT BACK.
+        #
+        # A tri-state LAST_ATTEMPT_TSC_PASSED was computed here for _selective_worktree_reset, to
+        # decide whether the current diff was safe to preserve. That function no longer asks the
+        # question: keep/discard is a SPEC question, not a compiler one. For any multi-file change a
+        # partially-complete edit is correct progress AND a compile error at once, so the compiler
+        # could only preserve work that was already coherent — precisely the work that never needed
+        # preserving. Live 2026-08-10: 25 file writes across five invocations, zero survivors, on a
+        # story with 13 interdependent fix sites. The predicate is now the spec's changeRequired.
+        #
+        # The variable outlived its consumer: assigned in three places, read in none, while the
+        # comments here still called it the deciding signal. Removed rather than rewired — rewiring
+        # it would restore the behaviour that destroyed those 25 writes.
 
         # The repository's OWN lint, before the commit rather than at Step 20. A violation here
         # is fatal at commit time (husky rejects, lint-staged reverts the work), so it has to be
@@ -10534,6 +10792,14 @@ $_kb_section"
             [ ! -f "$_raw_for_coord" ] && _raw_for_coord=""
 
             # Layer 1: rule-based triage (always runs)
+            # A REFUSED COMMAND LINE ENDS THE STORY -- it cannot differ on the next attempt.
+            # Checked before the coordinator, whose evidence is the raw output file that a refused
+            # invocation never produces; the attempt log always exists and carries the error.
+            if classify_invocation_refusal "$output_file" "$exit_code"; then
+                COORDINATOR_FAILURE_CLASS="invocation"
+                COORDINATOR_ESCALATE="no"
+                return 1
+            fi
             classify_failure_class "$_raw_for_coord" "$json_result_file" "$exit_code" "$story_id"
 
             # Work carryover: verify_story_deliverables() (called above, on
@@ -10805,7 +11071,8 @@ Apply the above diagnosis AND fix the deterministic check violation — both mus
 update_story_status() {
     local story_id=$1
     local status=$2  # "completed" or "failed"
-    local timestamp=$(date -Iseconds)
+    local timestamp
+    timestamp=$(date -Iseconds)
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
     local lock_file="${prd_target}.lock"
 
@@ -10870,12 +11137,18 @@ append_cost_record() {
 
     # Read story metadata from prd.json
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
-    local title=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .title // "unknown"' "$prd_target")
-    local agent_id=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .agentRole // "unknown"' "$prd_target")
-    local forecast_hours=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .estimatedHours // 0' "$prd_target")
-    local forecast_cost=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .estimatedCost // 0' "$prd_target" 2>/dev/null || echo 0)
-    local story_effort=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .effort // "medium"' "$prd_target")
-    local story_type=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .storyType // "implementation"' "$prd_target")
+    local title
+    title=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .title // "unknown"' "$prd_target")
+    local agent_id
+    agent_id=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .agentRole // "unknown"' "$prd_target")
+    local forecast_hours
+    forecast_hours=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .estimatedHours // 0' "$prd_target")
+    local forecast_cost
+    forecast_cost=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .estimatedCost // 0' "$prd_target" 2>/dev/null || echo 0)
+    local story_effort
+    story_effort=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .effort // "medium"' "$prd_target")
+    local story_type
+    story_type=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .storyType // "implementation"' "$prd_target")
     # A result file that predates this attempt belongs to the previous one; reading it would
     # bill this attempt for a call it never made. See result_is_from_this_attempt.
     if [ -n "$json_result_file" ] && ! result_is_from_this_attempt "$json_result_file" "$started_at"; then
@@ -10897,8 +11170,10 @@ append_cost_record() {
     fi
 
     # Compute elapsed minutes
-    local start_epoch=$(date -d "$started_at" +%s 2>/dev/null || echo 0)
-    local end_epoch=$(date -d "$ended_at" +%s 2>/dev/null || echo 0)
+    local start_epoch
+    start_epoch=$(date -d "$started_at" +%s 2>/dev/null || echo 0)
+    local end_epoch
+    end_epoch=$(date -d "$ended_at" +%s 2>/dev/null || echo 0)
     local elapsed_minutes=0
     if [ "$start_epoch" -gt 0 ] && [ "$end_epoch" -gt 0 ]; then
         elapsed_minutes=$(echo "scale=2; ($end_epoch - $start_epoch) / 60" | bc 2>/dev/null || echo "0")
@@ -10922,8 +11197,10 @@ append_cost_record() {
         # Turn count: Claude CLI reports num_turns/turns; AgentRunner reports iterations
         task_turns=$(jq -r '.num_turns // .turns // .usage.turns // .iterations // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
         # Cache tokens (Claude CLI only; no-op for epam output)
-        local cache_create=$(jq -r '.usage.cache_creation_input_tokens // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
-        local cache_read=$(jq -r '.usage.cache_read_input_tokens // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
+        local cache_create
+        cache_create=$(jq -r '.usage.cache_creation_input_tokens // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
+        local cache_read
+        cache_read=$(jq -r '.usage.cache_read_input_tokens // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
         tokens_in=$(( ${tokens_in:-0} + ${cache_create:-0} + ${cache_read:-0} ))
         # epam's own providers are OpenAI-shaped: prompt_tokens ALREADY INCLUDES the cached
         # portion, so this one is recorded and never added — adding it would double-count every
@@ -11137,13 +11414,14 @@ build_kb_prompt_section() {
     local story_id=$1
     local retry_count=${2:-0}
     local next_kb_id=${3:-KB-001}
-    local today
-    today=$(date +'%Y-%m-%d')
 
     local kb_entries
     kb_entries=$(get_relevant_kb_entries "$story_id")
 
     local retry_note=""
+    # These are forwarded to the child process invoked below. shellcheck cannot see the consumer,
+    # so it reports them unused; removing them would take the values away from the child.
+    # shellcheck disable=SC2034
     [ "$retry_count" -gt 0 ] && \
         retry_note="**This is retry attempt ${retry_count}** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed."
 
@@ -11203,8 +11481,10 @@ build_kb_prompt_section() {
 update_agents_file() {
     local story_id=$1
     local status=$2
-    local title=$(get_story_title "$story_id")
-    local phase=$(get_story_phase "$story_id")
+    local title
+    title=$(get_story_title "$story_id")
+    local phase
+    phase=$(get_story_phase "$story_id")
 
     if [ ! -f "$AGENTS_FILE" ]; then
         mkdir -p "$(dirname "$AGENTS_FILE")"
@@ -11230,7 +11510,8 @@ EOF
 
 # Increment iteration counter
 increment_iteration() {
-    local current=$(jq -r '.currentIteration' "$PRD_FILE")
+    local current
+    current=$(jq -r '.currentIteration' "$PRD_FILE")
     local next=$((current + 1))
     jq ".currentIteration = $next" "$PRD_FILE" > "$PRD_FILE.tmp" && mv "$PRD_FILE.tmp" "$PRD_FILE"
 }
@@ -11241,8 +11522,10 @@ show_status() {
     echo -e "${MAGENTA}=== PRD Status ===${NC}"
     echo ""
 
-    local total=$(jq '.stories | length' "$PRD_FILE")
-    local completed=$(jq '[.stories[] | select(.completed == true)] | length' "$PRD_FILE")
+    local total
+    total=$(jq '.stories | length' "$PRD_FILE")
+    local completed
+    completed=$(jq '[.stories[] | select(.completed == true)] | length' "$PRD_FILE")
     local pending=$((total - completed))
 
     echo -e "Project: ${CYAN}$(jq -r '.project.name' "$PRD_FILE")${NC}"
@@ -11252,27 +11535,33 @@ show_status() {
     echo ""
 
     # Show next recommended story
-    local next=$(get_next_story)
+    local next
+    next=$(get_next_story)
     if [ -n "$next" ]; then
         echo -e "Next recommended: ${WHITE}$next${NC} - $(get_story_title "$next")"
-        local phase=$(get_story_phase "$next")
+        local phase
+        phase=$(get_story_phase "$next")
         [ -n "$phase" ] && echo -e "                 Phase: ${CYAN}$phase${NC}"
     fi
     echo ""
 
     echo -e "${CYAN}Stories by Phase:${NC}"
 
-    local phases=$(get_phases)
+    local phases
+    phases=$(get_phases)
     if [ -n "$phases" ]; then
         while IFS= read -r phase; do
             [ -z "$phase" ] && continue
             echo -e "\n  ${WHITE}$phase:${NC}"
 
-            local stories=$(get_phase_stories "$phase")
+            local stories
+            stories=$(get_phase_stories "$phase")
             while IFS= read -r story_id; do
                 [ -z "$story_id" ] && continue
-                local title=$(get_story_title "$story_id")
-                local priority=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .priority // "medium"' "$PRD_FILE")
+                local title
+                title=$(get_story_title "$story_id")
+                local priority
+                priority=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .priority // "medium"' "$PRD_FILE")
                 local priority_badge=""
                 case $priority in
                     high) priority_badge=" ${RED}[H]${NC}" ;;
@@ -11284,7 +11573,8 @@ show_status() {
                 elif are_dependencies_satisfied "$story_id"; then
                     echo -e "    ${YELLOW}o${NC} $story_id: $title$priority_badge ${CYAN}(ready)${NC}"
                 else
-                    local deps=$(get_story_dependencies "$story_id" | tr '\n' ',' | sed 's/,$//')
+                    local deps
+                    deps=$(get_story_dependencies "$story_id" | tr '\n' ',' | sed 's/,$//')
                     echo -e "    ${RED}x${NC} $story_id: $title$priority_badge ${RED}(blocked: $deps)${NC}"
                 fi
             done <<< "$stories"
@@ -11330,14 +11620,16 @@ dry_run() {
             continue
         fi
 
-        local phase=$(get_story_phase "$story_id")
+        local phase
+        phase=$(get_story_phase "$story_id")
         local phase_info=""
         [ -n "$phase" ] && phase_info=" ${CYAN}[$phase]${NC}"
 
         if is_story_completed "$story_id"; then
             echo -e "  ${YELLOW}x${NC} $story_id - $(get_story_title "$story_id")$phase_info [ALREADY COMPLETED]"
         elif ! are_dependencies_satisfied "$story_id"; then
-            local deps=$(get_story_dependencies "$story_id" | tr '\n' ',' | sed 's/,$//')
+            local deps
+            deps=$(get_story_dependencies "$story_id" | tr '\n' ',' | sed 's/,$//')
             echo -e "  ${RED}x${NC} $story_id - $(get_story_title "$story_id")$phase_info [BLOCKED: $deps]"
         else
             echo -e "  ${CYAN}$order.${NC} $story_id - $(get_story_title "$story_id")$phase_info"
@@ -11489,7 +11781,8 @@ run_implementation() {
         if [ -x "$dep_checker" ]; then
             # Use dedicated dependency checker for better validation and output
             if ! PRD_FILE="$PRD_FILE" "$dep_checker" "$story_id" 2>&1; then
-                local deps=$(get_story_dependencies "$story_id" | tr '\n' ',' | sed 's/,$//')
+                local deps
+                deps=$(get_story_dependencies "$story_id" | tr '\n' ',' | sed 's/,$//')
                 warning "Story $story_id blocked by dependencies: $deps - skipping"
                 log_to_monitor "dependency_blocked" "$story_id" "Blocked by dependencies: $deps"
                 skipped=$((skipped + 1))
@@ -11498,7 +11791,8 @@ run_implementation() {
         else
             # Fallback to inline dependency check
             if ! are_dependencies_satisfied "$story_id"; then
-                local deps=$(get_story_dependencies "$story_id" | tr '\n' ',' | sed 's/,$//')
+                local deps
+                deps=$(get_story_dependencies "$story_id" | tr '\n' ',' | sed 's/,$//')
                 warning "Story $story_id blocked by dependencies: $deps - skipping"
                 log_to_monitor "dependency_blocked" "$story_id" "Blocked by dependencies: $deps"
                 skipped=$((skipped + 1))
@@ -11794,7 +12088,8 @@ main() {
 
     # If phase filter specified, get stories for that phase
     if [ -n "$phase_filter" ]; then
-        local phase_stories=$(get_phase_stories "$phase_filter")
+        local phase_stories
+        phase_stories=$(get_phase_stories "$phase_filter")
         if [ -z "$phase_stories" ]; then
             error "Phase '$phase_filter' not found or has no stories"
             echo ""
@@ -11808,7 +12103,8 @@ main() {
             local filtered_stories=()
             while IFS= read -r sid; do
                 [ -z "$sid" ] && continue
-                local story_group=$(jq -r --arg id "$sid" \
+                local story_group
+                story_group=$(jq -r --arg id "$sid" \
                     '.stories[] | select(.id == $id) | .agentGroup // "main"' "$PRD_FILE")
                 if [ "$story_group" = "$WORKTREE_MODE" ]; then
                     filtered_stories+=("$sid")
@@ -11998,7 +12294,8 @@ run_pre_phase_assessment() {
 
     cd "$PROJECT_ROOT"
     local _orch_provider="${EPAM_ORCHESTRATION_PROVIDER:-}"
-    local _orch_model="${ORCH_GATE_MODEL:-}"
+    local _orch_model
+    _orch_model="$(seam_model_or_fail "phase-assessment" 2>/dev/null || true)"
     if [ -z "$_orch_provider" ]; then
         warning "Pre-phase assessment: EPAM_ORCHESTRATION_PROVIDER not set — skipping (non-critical)"
     # AI_GATE_ALLOW_TOOLS=1: the prompt above instructs the agent to run real
@@ -12037,6 +12334,20 @@ run_pre_phase_assessment() {
         warning "Pre-phase assessment failed for '$phase_id' (non-critical, continuing)"
     fi
 }
+
+# RUNNING IS OPT-IN — the guard mock-expectations.js and agent-check.js already carry.
+#
+# This file is 12,219 lines and 155 functions, and its tests reach them by COPYING function bodies
+# into `bash -c "<string>"` harnesses. bash then attributes every traced line to that string, so the
+# writer stage reads 21% while its tests exist and pass: there is no file for the coverage to land on.
+#
+# Sourced, this defines the functions and stops. Executed, `main "$@"` runs exactly as before —
+# `return` outside a function succeeds only in a sourced file, which is how the two are told apart.
+# Nothing above this line changes, so an executed run reaches main having done identically what it
+# did before.
+if (return 0 2>/dev/null); then
+    return 0
+fi
 
 # Run main
 main "$@"

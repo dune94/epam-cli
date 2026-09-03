@@ -18,13 +18,26 @@
 
 import { describe, it, expect } from 'vitest';
 import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
 const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
+
+// THE CHECK'S LOGIC LIVES IN ITS HANDLER NOW.
+//
+// run_named_import_check() used to carry its python inline; it was extracted to
+// lib/handlers/named-import-check.py and the shell function delegates. These assertions still
+// read the SHELL body, so they reported a check that had merely moved as a check that had
+// vanished — five failures describing nothing wrong.
+//
+// The rules they encode are real and still worth asserting, so they are asserted where the code
+// actually is. Read from the path the shell invokes rather than a name written here, so moving
+// it again fails loudly instead of silently passing.
+const NAMED_IMPORT_HANDLER = join(REPO_ROOT, 'orchestrations/scripts/lib/handlers/named-import-check.py');
+const handlerSrc = readFileSync(NAMED_IMPORT_HANDLER, 'utf8');
 
 function extractFunctionByLineAnchor(name: string): string {
   const lines = claudeSrc.split('\n');
@@ -54,11 +67,11 @@ describe('run_named_import_check — design (static)', () => {
   });
 
   it('auto-fix only fires on an UNAMBIGUOUS case-insensitive match (exactly one candidate)', () => {
-    expect(body).toMatch(/len\(case_matches\) == 1/);
+    expect(handlerSrc).toMatch(/len\(case_matches\) == 1/);
   });
 
   it('auto-fix is scoped to files the current story owns', () => {
-    expect(body).toMatch(/os\.path\.normpath\(fpath\) in owned_files/);
+    expect(handlerSrc).toMatch(/os\.path\.normpath\(fpath\) in owned_files/);
   });
 
   it('the actual matching logic is a generic regex/set operation, not a literal identifier comparison', () => {
@@ -66,8 +79,8 @@ describe('run_named_import_check — design (static)', () => {
     // documentation purposes — same convention already used by
     // run_relative_import_check. What must never happen is the CHECK ITSELF
     // comparing against a literal class/identifier string.
-    expect(body).toMatch(/imported_name in exports/);
-    expect(body).toMatch(/e\.lower\(\) == imported_name\.lower\(\)/);
+    expect(handlerSrc).toMatch(/imported_name in exports/);
+    expect(handlerSrc).toMatch(/e\.lower\(\) == imported_name\.lower\(\)/);
   });
 });
 
@@ -96,26 +109,26 @@ describe('run_named_import_check — REAL execution against the exact live defec
           ],
         }),
       );
-      const fnBody = extractFunctionByLineAnchor('run_named_import_check');
-      const scriptPath = join(dir, 'run.sh');
+      // SOURCED, NOT COPIED. This harness had to declare SCRIPT_DIR itself, and the comment it
+      // carried records what happened when it did not: the check shells to
+      // lib/handlers/named-import-check.py, the path resolved to "/lib/handlers/...", python failed,
+      // and every execution case failed for a reason that had nothing to do with the check. Sourcing
+      // claude.sh supplies SCRIPT_DIR, log and warning from the file itself, so they cannot drift.
       const outLog = join(dir, 'out.log');
-      writeFileSync(
-        scriptPath,
-        [
-          `VERIFICATION_FAILURE=""`,
-          `log() { echo "$1"; }`,
-          `warning() { echo "$1"; }`,
-          `PRD_FILE="${prdFile}"`,
-          opts.autoFix ? `EPAM_AUTO_FIX_NAMED_IMPORTS="true"` : '',
-          fnBody,
-          `run_named_import_check "${dir}" "${outLog}" "SKY-999"`,
-          `echo "RC=$?"`,
-          `cat "${outLog}" 2>/dev/null || true`,
-        ]
-          .filter(Boolean)
-          .join('\n'),
-      );
-      const output = execFileSync('bash', [scriptPath], { encoding: 'utf8' });
+      const res = spawnSync('bash', ['-c',
+        `. ${JSON.stringify(join(REPO_ROOT, 'orchestrations/scripts/claude.sh'))} >/dev/null 2>&1
+         set +e
+         VERIFICATION_FAILURE=""
+         run_named_import_check "${dir}" "${outLog}" "SKY-999"
+         echo "RC=$?"
+         cat "${outLog}" 2>/dev/null || true`], {
+        encoding: 'utf8', timeout: 180_000, cwd: REPO_ROOT,
+        env: { ...process.env, NODE_BIN: process.execPath, PRD_FILE: prdFile,
+          EPAM_PROJECT_CONFIG_DIR: join(REPO_ROOT, 'orchestrations/projects/mock3'),
+          EPAM_COVERAGE_GATED: '0',
+          ...(opts.autoFix ? { EPAM_AUTO_FIX_NAMED_IMPORTS: 'true' } : {}) },
+      });
+      const output = `${res.stdout ?? ''}${res.stderr ?? ''}`;
       const rc = parseInt(output.match(/RC=(\d+)/)?.[1] ?? '-1', 10);
       const fileContents: Record<string, string> = {};
       for (const relPath of Object.keys(opts.files)) {

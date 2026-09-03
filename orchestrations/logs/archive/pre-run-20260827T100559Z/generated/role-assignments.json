@@ -1,0 +1,14 @@
+[
+  {
+    "storyId": "MOCK3-1",
+    "codeline": "mocka",
+    "agentRole": "fare-rules-engineer",
+    "reason": "The bug is in the fare rules' age-based concession boundary logic, which is this role's domain."
+  },
+  {
+    "storyId": "MOCK3-2",
+    "codeline": "mockb",
+    "agentRole": "transit-schedule-engineer",
+    "reason": "The bug is in formatStops on the departure board rendering, which falls under transit schedule display logic."
+  }
+]

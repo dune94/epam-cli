@@ -978,7 +978,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-09 16:15:07
 - **Phase**: hello_world_test
 - **Status**: failed
@@ -1014,7 +1013,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-09 19:05:11
 - **Phase**: hello_world_test
 - **Status**: failed
@@ -1044,7 +1042,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-09 19:24:44
 - **Phase**: hello_world_test
 - **Status**: failed
@@ -1074,7 +1071,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-09 19:38:57
 - **Phase**: hello_world_test
 - **Status**: failed
@@ -1104,7 +1100,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-09 19:48:53
 - **Phase**: hello_world_test
 - **Status**: failed
@@ -1134,7 +1129,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-09 19:59:03
 - **Phase**: hello_world_test
 - **Status**: failed
@@ -1164,7 +1158,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-09 20:08:05
 - **Phase**: hello_world_test
 - **Status**: failed
@@ -1218,7 +1211,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-10 07:20:20
 - **Phase**: hello_world_test
 - **Status**: completed
@@ -1254,7 +1246,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-10 10:28:06
 - **Phase**: hello_world_test
 - **Status**: completed
@@ -1290,7 +1281,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-10 11:48:37
 - **Phase**: hello_world_test
 - **Status**: completed
@@ -1356,7 +1346,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: failed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-10 20:30:13
 - **Phase**: hello_world_test
 - **Status**: failed
@@ -1386,7 +1375,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: failed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-11 07:21:40
 - **Phase**: hello_world_test
 - **Status**: failed
@@ -1416,7 +1404,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: failed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-11 09:20:43
 - **Phase**: hello_world_test
 - **Status**: failed
@@ -1452,7 +1439,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-11 13:10:23
 - **Phase**: hello_world_test
 - **Status**: completed
@@ -1482,7 +1468,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-11 13:14:19
 - **Phase**: hello_world_test
 - **Status**: completed
@@ -1512,7 +1497,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-11 13:15:52
 - **Phase**: hello_world_test
 - **Status**: completed
@@ -1542,7 +1526,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-11 13:22:02
 - **Phase**: hello_world_test
 - **Status**: completed
@@ -1590,7 +1573,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: failed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-11 14:18:32
 - **Phase**: hello_world_test
 - **Status**: failed
@@ -1620,7 +1602,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-11 14:25:28
 - **Phase**: hello_world_test
 - **Status**: completed
@@ -1650,7 +1631,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: failed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-11 15:01:31
 - **Phase**: hello_world_test
 - **Status**: failed
@@ -1680,7 +1660,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-11 15:12:25
 - **Phase**: hello_world_test
 - **Status**: completed
@@ -1716,7 +1695,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-11 16:08:36
 - **Phase**: hello_world_test
 - **Status**: failed
@@ -1740,7 +1718,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: failed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-11 18:28:24
 - **Phase**: hello_world_test
 - **Status**: failed
@@ -1770,7 +1747,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-12 06:35:53
 - **Phase**: hello_world_test
 - **Status**: completed
@@ -1800,7 +1776,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-12 06:37:05
 - **Phase**: hello_world_test
 - **Status**: completed
@@ -1854,7 +1829,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: failed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-12 08:04:12
 - **Phase**: hello_world_test
 - **Status**: failed
@@ -1884,7 +1858,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: failed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-12 08:11:21
 - **Phase**: hello_world_test
 - **Status**: completed
@@ -1914,7 +1887,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: failed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-12 08:16:51
 - **Phase**: hello_world_test
 - **Status**: completed
@@ -1944,7 +1916,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-12 08:23:12
 - **Phase**: hello_world_test
 - **Status**: completed
@@ -1986,7 +1957,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-12 08:37:47
 - **Phase**: hello_world_test
 - **Status**: completed
@@ -2022,7 +1992,6 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/HW-005_*.log
 
-## HW-006: Implement slugify() utility via Qwen/OpenRouter
 - **Date**: 2026-06-12 08:49:29
 - **Phase**: hello_world_test
 - **Status**: completed
@@ -14555,4 +14524,184 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Phase**: core
 - **Status**: completed
 - **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-21 15:44:49
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-21 16:57:52
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-21 20:33:42
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-21 21:07:42
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-21 21:13:46
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-21 21:23:19
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-21 21:46:58
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-22 01:38:14
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+- **Date**: 2026-08-22 01:55:20
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## MOCK3-1: Riders aged exactly 65 are charged the adult fare
+- **Date**: 2026-08-28 10:09:52
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-1_*.log
+
+## MOCK3-2: The departure board omits the final stop
+- **Date**: 2026-08-28 10:10:01
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-2_*.log
+
+## MOCK3-1: Riders aged exactly 65 are charged the adult fare
+- **Date**: 2026-08-28 10:14:27
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-1_*.log
+
+## MOCK3-2: The departure board omits the final stop
+- **Date**: 2026-08-28 10:14:35
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-2_*.log
+
+## MOCK3-2: The departure board omits the final stop
+- **Date**: 2026-08-28 11:28:51
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-2_*.log
+
+## MOCK3-1: Riders aged exactly 65 are charged the adult fare
+- **Date**: 2026-08-28 14:58:27
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-1_*.log
+
+## MOCK3-2: The departure board omits the final stop
+- **Date**: 2026-08-28 14:58:27
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-2_*.log
+
+## MOCK3-2: The departure board omits the final stop
+- **Date**: 2026-08-28 15:14:54
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-2_*.log
+
+## MOCK3-1: Riders aged exactly 65 are charged the adult fare
+- **Date**: 2026-08-28 15:14:54
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-1_*.log
+
+## MOCK3-1: Riders aged exactly 65 are charged the adult fare
+- **Date**: 2026-08-28 15:34:28
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK3-1_*.log
+
+## MOCK3-1: Riders aged exactly 65 are charged the adult fare
+- **Date**: 2026-08-28 15:37:15
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK3-1_*.log
+
+## MOCK3-2: The departure board omits the final stop
+- **Date**: 2026-08-28 15:37:33
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK3-2_*.log
+
+## MOCK3-2: The departure board omits the final stop
+- **Date**: 2026-08-28 15:40:19
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK3-2_*.log
+
+## MOCK3-2: The departure board omits the final stop
+- **Date**: 2026-08-28 15:54:18
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK3-2_*.log
+
+## MOCK3-1: Riders aged exactly 65 are charged the adult fare
+- **Date**: 2026-08-28 15:54:33
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK3-1_*.log
+
+## MOCK3-1: Riders aged exactly 65 are charged the adult fare
+- **Date**: 2026-08-29 16:46:15
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-1_*.log
+
+## MOCK3-2: The departure board omits the final stop
+- **Date**: 2026-08-29 16:46:21
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/MOCK3-2_*.log
+
+## AMSD-1919: Go-Checkout Page - Email & Confirm Email Case Sensitivity
+- **Date**: 2026-09-02 17:44:27
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-1919_*.log
+
+## AMSD-1919: Go-Checkout Page - Email & Confirm Email Case Sensitivity
+- **Date**: 2026-09-02 22:16:12
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-1919_*.log
+
+## AMSD-1919: Go-Checkout Page - Email & Confirm Email Case Sensitivity
+- **Date**: 2026-09-03 00:50:04
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-1919_*.log
+
+## AMSD-1919: Go-Checkout Page - Email & Confirm Email Case Sensitivity
+- **Date**: 2026-09-03 01:14:54
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-1919_*.log
 

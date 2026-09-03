@@ -10,7 +10,7 @@
   "configuration": {
     "budget": 5,
     "aiRuntime": {
-      "provider": "qwen",
+      "provider": "openrouter",
       "defaultModel": "z-ai/glm-5.1"
     }
   },

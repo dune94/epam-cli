@@ -35,7 +35,11 @@ function extractBlock(startAnchor: string, endAnchor: string): string {
 describe('AC-write reviewPrdChange consumer — retry-on-violation (static)', () => {
   const block = extractBlock(
     "} else if (anyFieldChanged) {",
-    "outcome: reviewResult.verdict === 'fail' ? 'reverted' : 'pass',"
+    // ANCHORED ON THE STABLE PREFIX, NOT THE WHOLE EXPRESSION. The full line changed when a
+    // THIRD outcome was added ('unreviewed' — an unjudged review is neither a revert nor a
+    // pass), and this suite stopped LOADING AT ALL: 5 assertions silently gone, reported as
+    // one collection error rather than five failures.
+    "outcome: reviewResult.verdict === 'fail' ? 'reverted'"
   );
 
   it('retries up to 3 total attempts on a fail verdict', () => {
@@ -72,7 +76,19 @@ describe('AC-write reviewPrdChange consumer — retry-on-violation (static)', ()
   });
 
   it('still reverts (unchanged existing behavior) when all attempts are exhausted', () => {
-    expect(block).toMatch(/if \(reviewResult\.verdict === 'fail'\) \{/);
+    // THE REQUIREMENT is that exhausted attempts revert. The guard used to spell that
+    // `verdict === 'fail'`; it is now `!reviewOutcomeKeepsChange(verdict)`, a named predicate that
+    // ALSO reverts on 'unreviewed' — an unjudged change must not stand either. That is strictly
+    // stronger, so the assertion is on the requirement rather than on the old spelling.
+    expect(block, 'the revert is no longer guarded by anything that covers a failing verdict')
+      .toMatch(/if \(!reviewOutcomeKeepsChange\(reviewResult\.verdict\)\)|if \(reviewResult\.verdict === 'fail'\)/);
+    // And the predicate really does reject a failure — asserted on behaviour, not on its name.
+    const predicate = src.slice(src.indexOf('function reviewOutcomeKeepsChange('));
+    const body = predicate.slice(0, predicate.indexOf('\n}') + 2);
+    // eslint-disable-next-line no-new-func
+    const keeps = new Function(`${body}; return reviewOutcomeKeepsChange;`)();
+    expect(keeps('fail'), "a 'fail' verdict would KEEP the change").toBe(false);
+    expect(keeps('unreviewed'), "an unjudged change would be kept").toBe(false);
     expect(block).toMatch(/REJECTED \$\{agent\}'s changes to \$\{story\.id\} after \$\{acReviewAttempts\} attempt\(s\)/);
   });
 });

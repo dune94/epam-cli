@@ -62,7 +62,7 @@ function sseText(res, content) {
 
 function sseToolCalls(res, files) {
   const id = `mock-${Date.now()}`;
-  // Build all tool_calls in a single delta chunk — QwenProvider accumulates by index.
+  // Build all tool_calls in a single delta chunk — OpenRouterProvider accumulates by index.
   const toolCalls = files.map((f, i) => ({
     index: i,
     id: `call_mock_${i}_${Date.now()}`,

@@ -1,0 +1,146 @@
+### truncations — every matching line
+
+orchestrations/scripts/spec-mode-runner.js:2885:      console.warn(`spec-mode: VC guard flagged mechanism in ${storyId} VC: [${f.reason}] "${String(f.criterion).slice(0, 80)}"`);
+orchestrations/scripts/spec-mode-runner.js:2906:    .replace(/\s+/g, ' ').trim().slice(0, 160);
+orchestrations/scripts/spec-mode-runner.js:3692:    .slice(0, 300).map((d) => `- ${d}`).join('\n');
+orchestrations/scripts/spec-mode-runner.js:4699:        + `(${_unexamined.flatMap((r) => r.agents).slice(0, 6).join(', ')}...)`
+orchestrations/scripts/spec-mode-runner.js:5178:    const mech = findVcMechanism(vc, story && story.id, vocabulary).map((f) => f.reason + `: "${String(f.criterion).slice(0, 80)}"`);
+orchestrations/scripts/spec-mode-runner.js:5239:    console.warn(`spec-mode: \u26a0\ufe0f VC still flagged for ${story && story.id} after ${maxCycles} cycle(s) — dropping ${flagged.length} flagged criterion/criteria, retaining ${clean.length} clean. Dropped: ${flagged.map((c) => `"${String(c).slice(0, 60)}"`).join(' | ')}`);
+orchestrations/scripts/spec-mode-runner.js:5246:    console.warn(`spec-mode: ⚠️ VC review DISPUTED for ${story && story.id} — the reviewer flagged ${unattributable ? 'the set' : `${flagged.length}/${vc.length}`} criteria, not a clear minority. Keeping the ${guardClean.length} the deterministic guard certified; deleting half a set is a rewrite, not a correction. Flags: ${lastFlags.slice(0, 3).join(' | ')}`);
+orchestrations/scripts/spec-mode-runner.js:5255:  console.warn(`spec-mode: ⚠️ VC could not be made mechanism-free for ${story && story.id} after ${maxCycles} cycle(s) — using conservative fallback VC${unattributable ? ' (a flag named no specific criterion, so nothing could be safely retained)' : ''}. Last flags: ${lastFlags.slice(0, 3).join(' | ')}`);
+orchestrations/scripts/spec-mode-runner.js:6369:        console.warn(`spec-mode: ⚠️ code-graph-detective produced NO parseable JSON for ${story.id} (attempt ${attempt}/${maxAttempts}) even after the extraction phase. Phase-1 head: "${String(out || '').slice(0, 140).replace(/\s+/g, ' ').trim()}"`);
+orchestrations/scripts/spec-mode-runner.js:6596:      console.warn(`spec-mode: ticket link entry has no usable url (${JSON.stringify(l).slice(0, 120)}) — skipped`);
+orchestrations/scripts/spec-mode-runner.js:6605:      if (!r || r.isError) throw new Error((r && String(r.content || '').slice(0, 200)) || 'fetch failed');
+orchestrations/scripts/spec-mode-runner.js:6731:    const when = l.created ? ` on ${String(l.created).slice(0, 10)}` : '';
+orchestrations/scripts/spec-mode-runner.js:6817:    for (const q of (Array.isArray(d.quotes) ? d.quotes : []).slice(0, 6)) lines.push(`    "${q}"`);
+orchestrations/scripts/spec-mode-runner.js:6967:      + detectiveFindings.slice(0, 5).map((f) => `- ${f.file}${f.function ? ` :: ${f.function}` : ''}${f.reason ? ` — ${f.reason}` : ''}`).join('\n') + '\n'
+orchestrations/scripts/spec-mode-runner.js:7168:          `spec-mode: ⚠️ ${story.id} — fixSiteAnalysis does not cover ${story.fixSiteAnalysisCoverage.uncoveredVerificationCriteria.length} verification criterion/criteria (e.g. "${String(story.fixSiteAnalysisCoverage.uncoveredVerificationCriteria[0] || '').slice(0, 100)}"). The prescribed fix may be structurally incomplete.`
+orchestrations/scripts/spec-mode-runner.js:7274:      console.warn(`spec-mode: AC guard stripped prescriptive AC in ${storyId}: [${f.reason}] "${String(f.criterion).slice(0, 80)}"`);
+orchestrations/scripts/spec-mode-runner.js:8573:    .slice(0, 3);
+orchestrations/scripts/codegraph-preflight-index.sh:52:  [ "$(head -c 15 "$db" 2>/dev/null)" = "SQLite format 3" ]
+orchestrations/scripts/brownfield-repro-test-gate.sh:196:        printf '%s\n' "$_LAST_TEST_OUTPUT" | head -15 | sed 's/^/    /' >&2
+orchestrations/scripts/claude.sh:4109:    details=$(head -20 <<< "$(printf '%s\n' "${tampered[@]}")")
+orchestrations/scripts/claude.sh:4478:          console.log(s.startsWith("@") ? parts.slice(0,2).join("/") : parts[0]);
+orchestrations/scripts/claude.sh:5204:            echo "$test_output" | head -60
+orchestrations/scripts/claude.sh:5267:            echo "$test_output" | head -60
+orchestrations/scripts/claude.sh:5305:        _untracked=$(git -C "$PROJECT_ROOT" ls-files --others --exclude-standard 2>/dev/null | head -40)
+orchestrations/scripts/claude.sh:5313:                   fi; } | grep -vE '^[[:space:]]*$' | head -60 )
+orchestrations/scripts/claude.sh:5387:        printf '%s\n' "$_dl_out" | head -10 >&2
+orchestrations/scripts/claude.sh:5397:    printf '%s\n' "$_dl_out" | head -40 >&2
+orchestrations/scripts/claude.sh:5403:        "$_cmd" "$(printf '%s' "$_dl_out" | head -40)")
+orchestrations/scripts/claude.sh:5559:    printf '%s\n' "$_lint_output" | head -40 >&2
+orchestrations/scripts/claude.sh:5616:        printf '%s\n' "$_lint_output" | head -40
+orchestrations/scripts/claude.sh:5839:            echo "$_new_errors" | head -60
+orchestrations/scripts/claude.sh:7664:        error "  [FailureAnalyst] cannot build prompt: $(cat "$_analyst_values_err" 2>/dev/null | head -c 500)"
+orchestrations/scripts/agent-check.js:578:        return { ok: false, why: `its roster fails the roster contract (${n} problem(s)): ${String(v.reason).slice(0, 160)}` };
+orchestrations/scripts/agent-check.js:581:    } catch (e) { return { ok: false, why: `its roster could not be checked: ${e.message.slice(0, 90)}` }; }
+orchestrations/scripts/agent-check.js:673:      : `the call failed: ${String(e.message).slice(0, 110)}`;
+orchestrations/scripts/kb-replay.js:149:      eps.slice(0, 4).forEach(e => console.log(`  [${sig}] ${String(e.diagnosis).slice(0, 100)}`));
+orchestrations/scripts/generate-qa-report.sh:45:      grep '^#' "$0" | head -20 | sed 's/^# \?//'
+orchestrations/scripts/synthesize-prd-from-jira.js:358:  lastUpdated:   new Date().toISOString().slice(0, 10),
+orchestrations/scripts/brownfield-repro-test-writer.sh:210:        "$PRD_FILE" 2>/dev/null | head -20)
+orchestrations/scripts/brownfield-repro-test-writer.sh:213:        "$PRD_FILE" 2>/dev/null | head -20)
+orchestrations/scripts/brownfield-repro-test-writer.sh:289:    _example_block=$'\n## Example test from THIS repo (mirror its framework, imports, and mocking style EXACTLY)\nFile: '"$_example_rel"$'\n```\n'"$(head -80 "$PROJECT_ROOT/$_example_rel")"$'\n```\n'
+orchestrations/scripts/brownfield-repro-test-writer.sh:567:                  --arg failure_json "$(printf '%s' "$json" | head -c 1200)" \
+orchestrations/scripts/lib/kb-cli.js:176:  return crypto.createHash('sha256').update(canon).digest('hex').slice(0, 32);
+orchestrations/scripts/lib/codegraph-context.js:158:    warn(`query failed for ${path.basename(repoPath)}: ${e.message.slice(0, 120)}`);
+orchestrations/scripts/lib/codegraph-context.js:183:    warn(`explore failed: ${e.message.slice(0, 120)}`);
+orchestrations/scripts/lib/kb-store.js:117:    raw: raw ? String(raw).slice(0, 2000) : null,
+orchestrations/scripts/lib/kb-store.js:203:        `admission checks: ${String(err && err.message).slice(0, 200)}\n`);
+orchestrations/scripts/lib/kb-store.js:240:  .replace(/^-+|-+$/g, '').slice(0, 60) || 'constraint';
+orchestrations/scripts/lib/cpa-inference.js:320:    const reason = result.error?.message || (result.stderr || '').slice(0, 200) || `exit ${result.status}`;
+orchestrations/scripts/lib/cpa-inference.js:342:    process.stderr.write(`WARN: JSON parse failed: ${e.message}\nRaw (first 400): ${rawText.slice(0, 400)}\n`);
+orchestrations/scripts/lib/content-retry.js:57:      __PREVIOUS_ANSWER__: _text(raw).slice(0, 2000),
+orchestrations/scripts/lib/content-retry.js:82:    + `--- what it actually returned (first 2000 chars) ---\n${text.slice(0, 2000)}\n---`;
+orchestrations/scripts/lib/ac-gate.js:182:  if (!m) throw new Error(`No JSON in ${what} response: ${raw.slice(0, 200)}`);
+orchestrations/scripts/lib/ac-gate.js:300:      reason: `AC gate could not reach a verdict — the call or its parse failed: ${e.message.slice(0, 150)}${_why(_errFile)}`,
+orchestrations/scripts/lib/ac-gate.js:461:    process.stderr.write(`[ac-gate]   ${issue.jiraKey} — ${(issue.title || '').slice(0, 60)}\n`);
+orchestrations/scripts/lib/git-ops.sh:169:        printf '%s\n' "$_stderr" | head -20 | sed 's/^/[git-add]   /' >&2
+orchestrations/scripts/lib/semble-context.js:78:      warn(`No JSON in semble output: ${raw.slice(0, 200)}`);
+orchestrations/scripts/lib/semble-context.js:83:    warn(`semble search failed: ${e.message.slice(0, 200)}`);
+orchestrations/scripts/lib/semble-context.js:112:  log(`Searching "${QUERY.slice(0, 80)}..." in ${REPO_PATH} (top ${LIMIT})`);
+orchestrations/scripts/lib/cassette-store.js:107:  const digest = crypto.createHash('sha256').update(String(seam)).digest('hex').slice(0, 16);
+orchestrations/scripts/lib/cassette-store.js:108:  return `${encoded.slice(0, 180)}--${digest}`;
+orchestrations/scripts/lib/codeline-discovery.js:491:    if (!jsonText) throw new Error(`No JSON in LLM response: ${raw.slice(0, 200)}`);
+orchestrations/scripts/lib/jira-client.js:111:          const e = new Error(`Jira API ${res.statusCode}: ${raw.slice(0, 200)}`);
+orchestrations/scripts/lib/webhook-queue.js:130:    lastUpdated: new Date().toISOString().slice(0, 10),
+orchestrations/scripts/lib/agent-io.js:39:  return String(text == null ? '' : text).replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 120);
+orchestrations/scripts/lib/kb-synthesizer.js:150:        detail: (r.stderr || '').slice(0, 400) || null });
+orchestrations/scripts/lib/kb-synthesizer.js:175:    reason: String(parsed.reason || 'synthesised from repeated failures').slice(0, 300),
+orchestrations/scripts/lib/kb-synthesizer.js:200:        detail: String((e && e.message) || e).slice(0, 400),
+orchestrations/scripts/lib/llm-call.js:114:  if (start === -1) throw new Error(`[llm-call] ${opts.seam || 'call'} returned no JSON: ${trimmed.slice(0, 200)}`);
+orchestrations/scripts/llm-handler.sh:223:            echo "[llm-handler] $(basename "$CLAUDE_CMD") produced no output: $(head -c 400 "$_cc_err")" >&2
+orchestrations/scripts/mock-expectations.js:342:      candidates.push({ body, file: `langfuse:${t.id.slice(0, 12)}`, parsed, toolCalls,
+orchestrations/scripts/mock-expectations.js:1304:  uncovered.slice(0, 20).forEach((u) => console.log(`  ${u}`));
+orchestrations/scripts/preflight-static.sh:76:  catch(e){ bad.push(f+" (load error: "+e.message.slice(0,50)+")"); continue; }
+orchestrations/scripts/code-review-cycle.sh:222:            _STORY_DIFF=$(head -2000 <<< "$_diff_full")
+orchestrations/scripts/codegraph-agent-query.sh:60:if [ -f "$_db" ] && [ "$(head -c 15 "$_db" 2>/dev/null)" = "SQLite format 3" ]; then
+orchestrations/scripts/codegraph-agent-query.sh:165:      | sort -u | head -40
+orchestrations/scripts/agent-attempt-analyst.sh:210:_trimmed="$(printf '%s' "$_note" | head -c 800)"
+orchestrations/scripts/agent-attempt-analyst.sh:214:    [ -s "$_analyst_err" ] && log "  runner stderr: $(head -c 400 "$_analyst_err" | tr '\n' ' ')"
+orchestrations/scripts/generate-run-narrative.sh:46:      grep '^#' "$0" | head -20 | sed 's/^# \?//'
+orchestrations/scripts/rehearse.sh:101:        process.stdout.write(require("crypto").createHash("sha256").update(s).digest("hex").slice(0,16));
+orchestrations/scripts/run-agent-orchestration.sh:1466:        _files=$(story_outputs_files "$PROJECT_ROOT" "$LOG_DIR" 2>/dev/null | head -20)
+orchestrations/scripts/run-agent-orchestration.sh:1522:    _lf_findings=$(head -25 <<< "$_lf_all")
+orchestrations/scripts/run-agent-orchestration.sh:1692:            head -c 8000 "$_qg_log" 2>/dev/null | \
+orchestrations/scripts/run-agent-orchestration.sh:8586:                head -c 8000 "$_lint_log" 2>/dev/null | \
+orchestrations/scripts/run-agent-orchestration.sh:9220:$(echo "$_tsc_out" | head -40)"
+orchestrations/scripts/run-agent-orchestration.sh:9262:            _spec_diff_patch=$(cd "$PROJECT_ROOT" && "$_spec_git_bin" diff -U2 "$_spec_diff_ref" -- . ${_spec_ex[0]+"${_spec_ex[@]}"} 2>/dev/null | head -400 || echo "")
+orchestrations/scripts/run-agent-orchestration.sh:9517:                _diff_patch=$(cd "$PROJECT_ROOT" && "$_git_bin" diff -U3 "$_diff_ref" -- . ${_rr_ex[0]+"${_rr_ex[@]}"} 2>/dev/null | head -300 || echo "")
+orchestrations/scripts/run-agent-orchestration.sh:9584:                _changed_src=$(story_outputs_sources "$PROJECT_ROOT" "$LOG_DIR" 2>/dev/null | head -10 || echo "")
+orchestrations/scripts/run-agent-orchestration.sh:9587:                                   grep -vE "$_STORY_OUTPUTS_TEST_RE" | head -10 || echo "")
+orchestrations/scripts/run-agent-orchestration.sh:9612:$(head -100 "$PROJECT_ROOT/$_f" 2>/dev/null || echo '(unreadable)')${_mut_src_marker}"
+orchestrations/scripts/run-agent-orchestration.sh:9643:$(head -60 "$_tf" 2>/dev/null || echo '(unreadable)')${_mut_test_marker}"
+orchestrations/scripts/run-agent-orchestration.sh:9881:                  --arg story_diff "$(git -C "$PROJECT_ROOT" diff "${_rev_base:-HEAD~1}" HEAD 2>/dev/null | head -2000)" \
+orchestrations/scripts/run-agent-orchestration.sh:10582:            failure_excerpt=$(head -150 <<< "$_failure_excerpt_full")
+orchestrations/scripts/run-agent-orchestration.sh:11019:                     "- \(.title)"' "$PRD_FILE" 2>/dev/null | head -10 || true)
+orchestrations/plugins/dependency-contract-plugin.js:109:          snippet: lines[i].trim().slice(0, 200),
+orchestrations/plugins/dependency-scan-plugin.js:279:  const topSegment = spec.startsWith('@') ? spec.split('/').slice(0, 2).join('/') : spec.split('/')[0];
+src/agent/LoopDetector.ts:61:  return createHash('sha256').update(stableStringify(data)).digest('hex').slice(0, 12);
+src/agent/LoopDetector.ts:169:    return hashPayload(errorLines.length > 0 ? errorLines : content.slice(0, 500));
+src/agent/profiles/ProfileLoader.ts:57:        .slice(0, 3);
+src/agent/squad/SquadRunner.ts:77:      const taskId = TaskRegistry.register(`Squad: ${CODER_ROLE.name} - ${coderTask.description.slice(0, 60)}...`);
+src/agent/squad/SquadRunner.ts:93:      const taskId = TaskRegistry.register(`Squad: ${TESTER_ROLE.name} - ${testerTask.description.slice(0, 60)}...`);
+src/agent/AgentRunner.ts:377:          `${partial.slice(0, 200)}${partial.length > 200 ? '…' : ''}`
+src/tools/gitingest/GitIngest.ts:84:      logger.debug({ stderr: stderr.slice(0, 500) }, 'GitIngest stderr');
+src/tools/approval/ApprovalGate.ts:22:  const inputPreview = JSON.stringify(input, null, 2).split('\n').slice(0, 10).join('\n');
+src/tools/builtin/ReadFile.ts:161:        const digest = createHash('sha256').update(fullText).digest('hex').slice(0, 16);
+src/cli/output/StreamWriter.ts:18:    const preview = inputStr.length > 80 ? inputStr.slice(0, 80) + '...' : inputStr;
+src/cli/output/StreamWriter.ts:24:      process.stderr.write(chalk.red(`[${toolName} error] ${result.slice(0, 200)}\n`));
+src/cli/output/StreamWriter.ts:26:      const preview = result.length > 100 ? result.slice(0, 100) + '...' : result;
+src/cli/repl/Repl.ts:764:      for (const code of codes.slice(0, 3)) {
+src/cli/repl/SlashCommands.ts:269:          ? lastUser.content.slice(0, 80) + (lastUser.content.length > 80 ? '…' : '')
+src/cli/repl/SlashCommands.ts:390:        const slots = parts.slice(0, 5).map(p => {
+src/cli/repl/SlashCommands.ts:441:          if (rec.lastError) statusDetail += chalk.dim(`  (${rec.lastError.slice(0, 60)})`);
+src/cli/repl/SlashCommands.ts:443:          statusDetail += chalk.dim(`  (${rec.lastError.slice(0, 60)})`);
+src/cli/repl/commands/UserCommand.ts:137:  return s.slice(0, 6) + '…' + s.slice(-4);
+src/cli/repl/commands/ProviderCommand.ts:198:          console.log(chalk.dim(`COPILOT_GITHUB_TOKEN is set (${envToken.slice(0, 15)}…)`));
+src/cli/repl/commands/TeamCommand.ts:108:        for (const session of team.sharedSessions.slice(0, 5)) {
+src/cli/repl/commands/TeamCommand.ts:129:          for (const code of allCodes.slice(0, 5)) {
+src/cli/repl/commands/TeamCommand.ts:158:          for (const f of incomingBundles.slice(0, 3)) {
+src/cli/repl/commands/StashCommand.ts:42:  const ts = now.toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
+src/cli/repl/commands/StatusCommand.ts:52:    for (const tool of tools.slice(0, 5)) {
+src/cli/repl/commands/AgentCommand.ts:231:      console.log(chalk.dim(`    ${prompt.slice(0, 72)}…`));
+src/cli/repl/commands/AgentCommand.ts:238:        console.log(chalk.dim(`    ${prompt.slice(0, 72)}…`));
+src/cli/repl/commands/TasksCommand.ts:35:      for (const tool of tools.slice(0, 8)) {
+src/cli/repl/commands/RemoteCommand.ts:194:                const display = oneLine.length > 120 ? oneLine.slice(0, 117) + '…' : oneLine;
+src/cli/repl/commands/RemoteCommand.ts:283:  const tokenPrefix = lockState.claimToken.slice(0, 8);
+src/cli/repl/commands/MCPQueryCommand.ts:141:    for (const item of result.items.slice(0, 5) as Record<string, unknown>[]) {
+src/cli/repl/commands/ImportCommand.ts:121:          ? turn.userMessage.slice(0, 120) + '…'
+src/cli/repl/commands/ImportCommand.ts:127:          ? turn.assistantResponse.slice(0, 200) + '…'
+src/cli/commands/provider.ts:20:  return `${secret.slice(0, 4)}...${secret.slice(-4)}`;
+src/cli/commands/import.ts:87:            ? turn.userMessage.slice(0, 120) + '…'
+src/cli/commands/import.ts:91:            ? turn.assistantResponse.slice(0, 200) + '…'
+src/cli/commands/doctor.ts:98:          const masked = `${envKey.slice(0, 4)}...${envKey.slice(-4)}`;
+src/cli/commands/doctor.ts:110:                ? `${record.secret.slice(0, 4)}...${record.secret.slice(-4)}`
+src/cli/commands/keys.ts:38:      const masked = key.slice(0, 8) + '...' + key.slice(-4);
+src/cli/commands/new.ts:85:      lastUpdated: new Date().toISOString().slice(0, 10),
+src/cli/commands/profile.ts:90:          const preview = profile.systemPromptAppend.slice(0, 80);
+src/scaffold/ManifestAnalyzer.ts:196:    `${phaseName} failed to produce valid JSON. Raw output preview: ${raw.slice(0, 200)}`,
+src/mcp/MCPAutoQuery.ts:84:    for (const item of result.items.slice(0, 3)) {
+src/constraints/sessionPrompt.ts:9:  return Buffer.from(projectRoot).toString('base64').replace(/[^a-zA-Z0-9]/g, '').slice(0, 16);
+src/providers/replay/ReplayProvider.ts:53:  const digest = createHash('sha256').update(seam).digest('hex').slice(0, 16);
+src/providers/replay/ReplayProvider.ts:54:  return `${encoded.slice(0, 180)}--${digest}`;
+src/providers/codex/CodexProvider.ts:127:      const display = inner.length > 100 ? inner.slice(0, 97) + '…' : inner;
+src/providers/codex/CodexProvider.ts:136:      const preview = out.length > 80 ? out.slice(0, 77) + '…' : out;
+src/logging/AgentActivityLogger.ts:72:      event_id: `evt-${Date.now()}-${randomUUID().slice(0, 8)}`,

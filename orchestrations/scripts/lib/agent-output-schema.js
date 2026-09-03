@@ -220,4 +220,103 @@ function validateTaggedOutput(tag, parsed) {
   return checkItem(parsed, schema, tag, null);
 }
 
-module.exports = { validateTaggedOutput, TAG_TO_TOOL, itemSchemaFor };
+
+/**
+ * validateDeclaredOutput(seam, parsed) — the contract for seams whose shape is DECLARED rather
+ * than bound to a tool schema.
+ *
+ * Eleven seams had nothing checking their output at all. A bad answer from any of them flowed
+ * on looking authoritative — the same class that let the roster-specialiser's prose ("I need to
+ * create a valid JSON file. Let me fix the formatting:") reach a contract check on a paid run.
+ *
+ * The required keys come from config/seam-output-contracts.json, which takes them from the shape
+ * the seam's PROMPT already states — so the contract and the prompt cannot drift apart. Only the
+ * key a consumer cannot proceed without is required: demanding every optional field would reject
+ * valid answers, and the defect being caught is an answer that is not the artefact at all.
+ *
+ * NOTE ON WHERE THE PROMPT LIVES. An agent runs its PROJECT's generated copy, not the template.
+ * A separate test holds the generator to the template's shape; this function validates the reply.
+ */
+function declaredContracts() {
+  const fs = require('fs');
+  const path = require('path');
+  const file = process.env.EPAM_SEAM_CONTRACTS
+    || path.join(__dirname, '..', '..', 'config', 'seam-output-contracts.json');
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')).seams || {}; } catch { return {}; }
+}
+
+function validateDeclaredOutput(seam, parsed) {
+  const c = declaredContracts()[seam];
+  if (!c || c.kind !== 'declared') {
+    return { ok: true, reason: '', declared: false };
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return {
+      ok: false,
+      declared: true,
+      fatal: true,
+      reason: `${seam}: expected a JSON object, got ${Array.isArray(parsed) ? 'an array' : typeof parsed}. `
+        + 'An answer that is not the artefact is not a partial answer.',
+    };
+  }
+  const missing = (c.requiredKeys || []).filter(
+    (k) => !Object.prototype.hasOwnProperty.call(parsed, k));
+  if (missing.length) {
+    return {
+      ok: false,
+      declared: true,
+      fatal: true,
+      reason: `${seam}: the reply is missing ${missing.join(', ')} — the field(s) its consumer `
+        + `reads. Its prompt states: ${(c.knownKeys || []).join(', ')}`,
+    };
+  }
+  return { ok: true, reason: '', declared: true };
+}
+
+/**
+ * unwrapEnvelope(payload, key) — the answer a model wrapped in a one-element array.
+ *
+ * The agent-mint asked for {"proposedAgents": [...]} and received
+ *
+ *     [{"proposedAgents":[{"name":"commerce-checkout-engineer", ...}]}]
+ *
+ * The parse looked for the key at the top level, found an Array, and rejected it — three times,
+ * because a content retry cannot change a shape the model considers correct. A live brownfield run
+ * died there on 2026-08-29, after discovery, minting and a grounded roster review had all worked.
+ *
+ * ONE element only. A two-element array is a model that answered twice and there is no way to know
+ * which it meant, so it is refused exactly as before. Every field is still validated afterwards:
+ * this removes an envelope, never a check.
+ */
+function unwrapEnvelope(payload, key) {
+  // AN ENVELOPE IS NOT ALWAYS EXACTLY ONE ELEMENT DEEP.
+  //
+  // This required `length === 1`, so a model that emitted its answer beside a note, or put it
+  // second, or nested it one layer further, was told its key was absent when it was present.
+  // A live run halted on that reading after discovery, minting and a grounded roster
+  // review had all succeeded — the whole ticket abandoned over packaging.
+  //
+  // Removing an envelope is not accepting a wrong answer: every field is still validated by the
+  // caller exactly as before. This decides only WHERE the answer is, and it refuses to decide
+  // when the payload gives two candidates, because that is an ambiguity nobody declared.
+  if (!key || !Array.isArray(payload)) return payload;
+
+  const holdsKey = (v) => v && typeof v === 'object' && !Array.isArray(v)
+    && Object.prototype.hasOwnProperty.call(v, key);
+
+  const found = [];
+  const visit = (node, depth) => {
+    if (!Array.isArray(node) || depth > 2) return;
+    for (const el of node) {
+      if (holdsKey(el)) found.push(el);
+      else if (Array.isArray(el)) visit(el, depth + 1);
+    }
+  };
+  visit(payload, 0);
+
+  // Exactly one element carries the key: that element IS the answer. None, or several, and the
+  // payload comes back untouched so the caller rejects it — never invented, never merged.
+  return found.length === 1 ? found[0] : payload;
+}
+
+module.exports = { unwrapEnvelope, validateTaggedOutput, validateDeclaredOutput, declaredContracts, TAG_TO_TOOL, itemSchemaFor };

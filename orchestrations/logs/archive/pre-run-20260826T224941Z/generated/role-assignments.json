@@ -1,0 +1,14 @@
+[
+  {
+    "storyId": "MOCK3-1",
+    "codeline": "mocka",
+    "agentRole": "fare-schedule-engineer",
+    "reason": "This is the only offered role, and it directly names fare-rule logic which matches the concession/adult fare boundary bug described."
+  },
+  {
+    "storyId": "MOCK3-2",
+    "codeline": "mockb",
+    "agentRole": "fare-schedule-engineer",
+    "reason": "fare-schedule-engineer is the only role offered, so it must own this departure-board formatting fix as well."
+  }
+]

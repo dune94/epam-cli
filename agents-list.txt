@@ -7,9 +7,9 @@ Descriptions are genuine summaries of each profile's actual instructions, not ex
 MODEL/LADDER — verified against actual invocation code, not assumed:
   [GATE]   Runs via run_orch_prompt()/run_orch_prompt_with_tools() (run-agent-orchestration.sh)
            or claude.sh's equivalent gate call — always uses ORCH_GATE_MODEL/ORCH_GATE_PROVIDER.
-           Current run's value: z-ai/glm-5.1 via qwen (fixed, does not escalate).
+           Current run's value: z-ai/glm-5.1 via openrouter (fixed, does not escalate).
   [SPEC]   Runs via spec-mode-runner.js — uses SPEC_MODE_OPENSPEC_MODEL/SPEC_MODE_SPECKIT_MODEL.
-           Current run's value: z-ai/glm-5.1 via qwen (same value as GATE this run, different
+           Current run's value: z-ai/glm-5.1 via openrouter (same value as GATE this run, different
            env var / invocation path — set independently).
   [LADDER] A real PRD story assigned to this role. Starts at the story's assigned model
            (defaults to ORCH_MINI_MODEL=MiniMax-M2.5 if unset) and escalates on retry via

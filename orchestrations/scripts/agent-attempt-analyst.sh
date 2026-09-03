@@ -19,8 +19,14 @@
 # Exit contract (B30, 2026-07-25) — deliberately three-valued, because "produced
 # no corrective" is a LEGITIMATE outcome for provider/infra/timeout and must stay
 # distinguishable from a BROKEN analyst:
-#   0 + output    -> corrective prescribed
-#   0 + no output -> deliberate skip (provider/infra/timeout: no behaviour to fix)
+#   0 + marker    -> analysed; the corrective is recorded as a KB EPISODE, not returned as prose
+#   0 + no marker -> deliberate skip (provider/infra/timeout: no behaviour to fix)
+#
+# THE CORRECTIVE IS NOT ON STDOUT. It used to be returned for the caller to prepend to the next
+# attempt; that is a self-heal push into a prompt, which is banned. Nothing has been written to
+# stdout since, so a caller distinguishing "analysed" from "skipped" by the presence of output
+# would read every success as a skip. The caller declares SELF_HEAL_ANALYSED_MARKER and this
+# script echoes it on stderr when it actually analyses.
 #   2             -> the analyst itself failed; the caller must RECORD that the
 #                    next attempt is running with no corrective guidance
 #
@@ -30,6 +36,13 @@
 # analyst was indistinguishable from a working one in both logs and dashboard,
 # and every retry silently re-ran the identical prompt. Not blocking the caller
 # is not the same as not telling anyone.
+
+# THE PIPELINE DOES NOT RUN CODE NOBODY HAS TESTED. This stage asks how much of the code it is
+# about to execute has a test behind it, and halts when the project says it must.
+_scg_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/stage-coverage-gate.sh"
+# shellcheck source=/dev/null
+[ -f "$_scg_lib" ] && . "$_scg_lib" && require_stage_coverage selfheal || exit 1
+
 set -uo pipefail
 
 FAILURE_CLASS="${1:-}"
@@ -61,7 +74,7 @@ if [ -f "$_ml_lib" ]; then
     # shellcheck source=lib/model-ladders.sh
     . "$_ml_lib" || true
     command -v export_model_ladders >/dev/null 2>&1 \
-        && export_model_ladders "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json}" || true
+        && export_model_ladders "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/llm-settings.json}}" || true
 fi
 # ask must come BEFORE any model is resolved below: seam_ladder_export sets EPAM_MODEL, and
 # a later assignment that wins makes the whole thing decorative.
@@ -119,7 +132,7 @@ if [ -n "$_rung_model" ]; then
     export EPAM_TEMPERATURE="$_rung_temperature"
     warning "analyst inherits the failing rung: model=$_rung_model provider=$_rung_provider effort=${_rung_effort:-unset} temp=${_rung_temperature:-unset}"
 fi
-_model="${AGENT_ANALYST_MODEL:-${_rung_model:-${ESCALATION_MODEL:-${ORCH_GATE_MODEL:-${EPAM_MODEL:-}}}}}"
+_model="${AGENT_ANALYST_MODEL:-${_rung_model:-${ESCALATION_MODEL:-${EPAM_MODEL:-${EPAM_MODEL:-}}}}}"
 _provider="${AGENT_ANALYST_PROVIDER:-${_rung_provider:-${ORCH_GATE_PROVIDER:-${EPAM_ORCHESTRATION_PROVIDER:-}}}}"
 if [ -z "$_model" ]; then
     # A diagnosis produced by a guessed model is worse than an honest absence: it reads as
@@ -184,6 +197,19 @@ _emit_fa() { bash "$SCRIPT_DIR/update-monitor.sh" event "$1" "$2" "$_fa_sid" "ma
 _emit_fa "self_heal_start" "failure-analyst diagnosing ${FAILURE_CLASS}${_fa_sid:+ for ${_fa_sid}}"
 
 log "diagnosing ${FAILURE_CLASS} via ${_model}"
+
+# THE CALLER DECLARES HOW IT WILL RECOGNISE A REAL ANALYSIS, and this echoes it back.
+
+# self-heal.js used to decide by regex-matching the sentence above, so rewording one line
+
+# of prose turned every successful analysis into a "decline" — the same indistinguishable
+
+# state recorded live on 2026-08-27 as seven refusals with zero episodes and zero rc=2.
+
+# One string, chosen by the reader, and the prose is free to change.
+
+[ -n "${SELF_HEAL_ANALYSED_MARKER:-}" ] && printf '%s\n' "$SELF_HEAL_ANALYSED_MARKER" >&2
+
 # Keep the runner's stderr: it is the only evidence of WHY self-heal failed, and
 # both call sites used to discard it along with everything else.
 _analyst_err="$(mktemp 2>/dev/null || echo /tmp/agent-analyst-err.$$)"

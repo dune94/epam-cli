@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# A service URL has one home: config/services.json, read through this helper.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/service-urls.sh" 2>/dev/null || true
+
+# How much evidence each agent is shown, by name — see config/evidence-windows.json.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/evidence-windows.sh" 2>/dev/null || true
+
 # Master orchestration script for parallel multi-agent execution
 # Coordinates worktree-based parallel Claude agents across all EPAM CLI project phases
 
@@ -112,30 +118,15 @@ _parse_failing_test_files() {
         | sort -u
 }
 
-# _halt_recovery_state <story_id> — report the recovery state ACTUALLY observed for this story.
+# _halt_recovery_state now lives in lib/halt-recovery.sh so the message an operator acts on can be
+# executed by a test. See that file.
 #
-# The halt used to assert "failed after its retries and self-heal completed" and "recovery is
-# exhausted" unconditionally. Live metrolinx AMSD-2041, 2026-08-19: a gate failed one story at
-# attempt 2 of 12, the ladder had not left its first rung, and the writer was mid-way through
-# addressing the reviewer's findings — and the run reported exhaustion. That message is the
-# evidence an operator reads when deciding whether to retry, and it said the opposite of the truth.
-#
-# HALTING IS STILL THE MANDATE: let recovery run, then stop. What must not happen is CLAIMING
-# exhaustion without checking. story_ladder_exhausted() already existed and was already used
-# elsewhere in this file; the halt simply never asked it.
-_halt_recovery_state() {
-    local _story="${1:-}"
-    local _used _max="${MAX_RETRIES:-11}"
-    _used="$(read_story_retry_count "${LOG_DIR:-}" "$_story" 2>/dev/null || echo 0)"
-    case "$_used" in (''|*[!0-9]*) _used=0 ;; esac
-    if story_ladder_exhausted "${LOG_DIR:-}" "$_story" "$_max" 2>/dev/null; then
-        error "[orch]   recovery is exhausted for '${_story}' — ${_used} of $((_max + 1)) attempt(s) used and the model ladder reached its top rung."
-        error "[orch]   Another lane would reproduce the same failure at full ladder price."
-    else
-        error "[orch]   recovery was NOT exhausted for '${_story}': ${_used} of $((_max + 1)) attempt(s) used, ladder still below its top rung."
-        error "[orch]   The story failed on a gate verdict, not on running out of attempts — read the last gate message before assuming the work cannot converge."
-    fi
-}
+# RESOLVED FROM BASH_SOURCE, NOT SCRIPT_DIR. This sits above the line that defines SCRIPT_DIR, so
+# "$SCRIPT_DIR/lib/..." expanded to "/lib/..." and every run died at startup with
+# "No such file or directory". bash -n cannot see it — the path is only wrong at runtime — and a
+# unit test cannot either, because tests source the lib directly. The free rehearsal caught it.
+# shellcheck source=lib/halt-recovery.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/halt-recovery.sh"
 
 _run_project_verification() {
     local _root="${1:-$PROJECT_ROOT}"
@@ -156,6 +147,8 @@ _run_project_verification() {
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/seam-ladder.sh
 source "$SCRIPT_DIR/lib/seam-ladder.sh"
+# The pipeline does not run code nobody has tested. Every stage below asks this first.
+source "$SCRIPT_DIR/lib/stage-coverage-gate.sh"
 # shellcheck source=lib/render-engine-prompt.sh
 source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
@@ -284,7 +277,7 @@ if command -v export_model_ladders >/dev/null 2>&1; then
     # outcome: no chains, and every seam declining or falling back.
     if ! export_model_ladders "$(command -v project_settings_file >/dev/null 2>&1 \
             && project_settings_file "${EPAM_PROJECT_CONFIG_DIR:-}" \
-            || echo "${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json")"; then
+            || echo "${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/llm-settings.json}")"; then
         echo "[orch] WARNING: no ladder chains exported (see [model-ladders] above) — seams will have no resolvable model" >&2
     fi
 else
@@ -297,14 +290,28 @@ fi
 # Load project .env so API keys are available to all subprocesses (worktrees, epam-run, etc.)
 # Preserve caller-set gate overrides so tier scripts can override .env defaults.
 _pre_gate_provider="${ORCH_GATE_PROVIDER:-}"
-_pre_gate_model="${ORCH_GATE_MODEL:-}"
 _env_file="$(dirname "$AUTOMATION_DIR")/.env"
-if [ -f "$_env_file" ]; then set -a; . "$_env_file"; set +a; fi
+# PARSED, NOT EXECUTED. `set -a; . "$_env_file"` RUNS the file, and this repo's .env begins
+# with a bare `cd` — which means "go to $HOME". That is precisely the defect
+# lib/env-file.sh was written to prevent, and this was the last site still doing it.
+#
+# It also made every cost guard useless: keys unset before launch were RESTORED here, so a
+# run told to use MockServer called the real API with a real key (2026-08-25, unapproved).
+#
+# Verified equivalent BEFORE the change: both mechanisms produce the SAME 80 variables from
+# the real .env. Only the executable side effects are lost, which is the point.
+# PRESERVE MODE: a value the CALLER set wins over .env. That is what this block already
+# wanted — the line below it hand-restores two variables for exactly this reason — but it
+# only protected those two, so every other caller-set value was silently overwritten.
+#
+# It is also the cost guard. Keys scrubbed before launch were RESTORED here, so a run told
+# to use MockServer called the real API with a real key (2026-08-25, unapproved spend).
+# With preserve, a placeholder set by the caller survives and cannot authenticate.
+if [ -f "$_env_file" ]; then load_env_file_safe "$_env_file" preserve; fi
 unset _env_file
 # Restore caller overrides (tier scripts set these intentionally; .env has stale defaults)
 [ -n "$_pre_gate_provider" ] && ORCH_GATE_PROVIDER="$_pre_gate_provider"
-[ -n "$_pre_gate_model"    ] && ORCH_GATE_MODEL="$_pre_gate_model"
-unset _pre_gate_provider _pre_gate_model
+unset _pre_gate_provider
 # When PRD_FILE is an external path (e.g. a test-app), derive PROJECT_ROOT from
 # the directory two levels above the PRD file (prd sits in <root>/orchestrations/ normally,
 # but for test apps it sits directly in the app root — detect via presence of package.json).
@@ -370,6 +377,20 @@ fi
 # "unchanged", minted nothing, and the run died at assignment — while also writing into the
 # client's own agents directory. Unset, this is exactly the previous path.
 EPAM_AGENTS_DIR="${EPAM_AGENTS_DIR:-$AUTOMATION_DIR/agents}"
+
+# THE ROSTER FILE, DEFINED ONCE — IT NEVER WAS.
+#
+# AGENT_PROFILES_FILE is read in three places in this script and assigned in none, so it was empty
+# on every path that did not inherit it from a caller. In a codeline lane that meant: profiles_backup
+# became the bare string '.original', the canonical looked missing, `cp "" .original` failed the
+# phase; and PROFILES_REL, built by realpath-ing the same empty string, rendered post-failure-analyst
+# with an empty value, which the prompt layer correctly refuses. Both lanes died in the pre-phase
+# skill assessment, and the message the operator saw was about a missing canonical roster.
+#
+# Derived here from the directory that is already resolved, so every reader gets the same answer and
+# a caller that exports its own still wins.
+AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$EPAM_AGENTS_DIR/profiles.json}"
+export AGENT_PROFILES_FILE
 # The roster is the only source of an agent's identity — lib/roster-read.sh. The default this
 # replaces named the engine's own roster, which is what a client codeline's reviewer inherited.
 # shellcheck source=lib/roster-read.sh
@@ -399,14 +420,26 @@ case "$PROFILES_REL" in
 esac
 # Select wrapper script based on PROVIDER override or CLAUDE_CMD
 case "${EPAM_ORCHESTRATION_PROVIDER:-${CLAUDE_CMD}}" in
-    codemie-claude) CLAUDE_SH="$SCRIPT_DIR/codemie-claude.sh" ;;
+    # Repointed 2026-08-25 at the MAINTAINED script. codemie-claude.sh was a fork of
+    # claude.sh that had fallen 10,712 lines behind, and it set STORY_MAX_TURNS=10/30 —
+    # a flag Claude Code 2.1.245 no longer accepts, so it would have failed outright.
+    # Provider selection still comes from config; only the wrapper mapping changed.
+    codemie-claude) CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
     copilot)        CLAUDE_SH="$SCRIPT_DIR/copilot.sh" ;;
     openai)         CLAUDE_SH="$SCRIPT_DIR/openai.sh" ;;
-    qwen)           CLAUDE_SH="$SCRIPT_DIR/qwen.sh" ;;
+    # this was always an alias. What made the rename urgent is that the dispatch REJECTED
+    # openrouter, so the value the operator asked for could not be set at all: a run launched
+    # with it died at startup with "Unknown EPAM_ORCHESTRATION_PROVIDER 'openrouter'".
+    openrouter)     CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
     cursor)         CLAUDE_SH="$SCRIPT_DIR/cursor.sh" ;;
     codex)          CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
+    # Plain Claude Code, the same maintained script every other provider uses. Reached by
+    # the mockserver set, which redirects it at MockServer via ANTHROPIC_BASE_URL — a
+    # rehearsal must not go through the codemie wrapper, whose --base-url selects an SSO
+    # profile and would demand credentials the mock has no business holding.
+    claude)         CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
     *)
-        error "Unknown EPAM_ORCHESTRATION_PROVIDER '${EPAM_ORCHESTRATION_PROVIDER:-}'. Set it to one of: qwen|openai|copilot|cursor|codex|codemie-claude|claude in your .env file."
+        error "Unknown EPAM_ORCHESTRATION_PROVIDER '${EPAM_ORCHESTRATION_PROVIDER:-}'. Set it to one of: openrouter|openai|copilot|cursor|codex|codemie-claude|claude in your .env file."
         exit 1
         ;;
 esac
@@ -455,6 +488,24 @@ export AGENT_IO_DIR="${AGENT_IO_DIR:-$LOG_DIR/agent-io}"
 # exists to remove.
 . "$SCRIPT_DIR/lib/phase-exit.sh" || { echo "[preflight] lib/phase-exit.sh failed to load — refusing to run" >&2; exit 1; }
 . "$SCRIPT_DIR/lib/cost-ledger.sh"
+
+# ── A FREE RUN MUST BE INCAPABLE OF BILLING ──────────────────────────────────
+# Gated here because this is the earliest point that knows BOTH the provider set and the project,
+# and it is before any seam runs.
+#
+# On 2026-08-25 a run was launched as "mocked, cannot cost anything" and every seam called the
+# real Anthropic API. The assurance rested on a dry run showing the mock redirect resolved, and on
+# no key being present in the LAUNCHER. Neither was what mattered: a live child had
+# ANTHROPIC_BASE_URL=UNSET and a real sk-ant- key, while MockServer sat at zero requests.
+#
+# The set declares whether it can spend. A set whose runner is plain `claude` pointed at a mock
+# has no business holding a vendor key, so this REFUSES rather than trusting the redirect.
+. "$SCRIPT_DIR/lib/free-run-guard.sh" 2>/dev/null || true
+if declare -f free_run_requested >/dev/null 2>&1 && free_run_requested; then
+    echo "[free-run-guard] EPAM_FREE_RUN is set — this run reaches no vendor; sealing credentials" >&2
+    scrub_paid_keys "$(dirname "$AUTOMATION_DIR")/.env" "$AUTOMATION_DIR/jira/.env"
+    assert_no_paid_key "${EPAM_PROJECT_CONFIG_DIR:-}" "$(dirname "$AUTOMATION_DIR")/.env" || exit 1
+fi
 if [ -n "${EPAM_RUN_MODE:-}" ]; then
     apply_run_mode "$EPAM_RUN_MODE" || exit 1
 fi
@@ -465,7 +516,7 @@ export PHASE
 [ -n "${OPENROUTER_BASE_URL:-}" ] && export OPENROUTER_BASE_URL
 [ -n "${OPENROUTER_API_KEY:-}" ] && export OPENROUTER_API_KEY
 [ -n "${EPAM_API_KEY_OPENROUTER:-}" ] && export EPAM_API_KEY_OPENROUTER
-[ -n "${EPAM_QWEN_MODEL_OVERRIDE:-}" ] && export EPAM_QWEN_MODEL_OVERRIDE
+[ -n "${EPAM_OPENROUTER_MODEL_OVERRIDE:-}" ] && export EPAM_OPENROUTER_MODEL_OVERRIDE
 # Propagate MiniMax key to all subprocesses
 [ -n "${MINIMAX_API_KEY:-}" ] && export MINIMAX_API_KEY
 [ -n "${EPAM_API_KEY_MINIMAX:-}" ] && export EPAM_API_KEY_MINIMAX
@@ -475,14 +526,13 @@ export PHASE
 [ -n "${EPAM_FINAL_FALLBACK_MODEL:-}" ] && export EPAM_FINAL_FALLBACK_MODEL
 [ -n "${EPAM_FINAL_FALLBACK_PROVIDER:-}" ] && export EPAM_FINAL_FALLBACK_PROVIDER
 [ -n "${ORCH_GATE_PROVIDER:-}" ] && export ORCH_GATE_PROVIDER
-[ -n "${ORCH_GATE_MODEL:-}" ] && export ORCH_GATE_MODEL
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
 if [ -n "${CLAUDE_CMD:-}" ]; then
     CLAUDE_CMD="$CLAUDE_CMD"
 elif [ "${EPAM_ORCHESTRATION_PROVIDER:-}" = "codex" ]; then
     CLAUDE_CMD="codex"
-elif [ "${EPAM_ORCHESTRATION_PROVIDER:-}" = "qwen" ]; then
-    CLAUDE_CMD="qwen"
+# THE openrouter BRANCH IS GONE, NOT RENAMED. It selected a `openrouter` BINARY; openrouter never had one
+# which is claude. Renaming it would have named a binary that does not exist either.
 else
     CLAUDE_CMD="claude"
 fi
@@ -1048,6 +1098,9 @@ resolve_codeline_node() {
 ensure_node_modules_healthy() {
     local codeline_root="$1"
     local node_bin="$2"
+    # Set for the child process invoked below, or read by a script that sources this file.
+    # ShellCheck cannot see the consumer, so it reports these unused; removing them takes the value away.
+    # shellcheck disable=SC2034
     local test_bin="$3"   # legacy: an arbitrary .bin entry, no longer trusted
 
     # Probe the runner the PROJECT DECLARES, not whatever sorts first in
@@ -1092,7 +1145,7 @@ resolve_prompt_provider() {
         return
     fi
     case "$(basename "$CLAUDE_CMD")" in
-        codex|openai|qwen|cursor|copilot|codemie-claude) echo "$(basename "$CLAUDE_CMD")" ;;
+        codex|openai|openrouter|cursor|copilot|codemie-claude) echo "$(basename "$CLAUDE_CMD")" ;;
         *) echo "claude" ;;
     esac
 }
@@ -1196,160 +1249,10 @@ _emit_agent() {
 # run_orch_prompt <prompt> [agent_type] [story_id]
 # Runs a pipeline agent prompt, tracks cost to phase-cost.jsonl (GAP-P22),
 # and returns the text output.
-run_orch_prompt() {
-    # Bound the LOOP, not only the clock. Without this a gate agent — especially
-    # one with tools, as the phase assessment has — can explore indefinitely and is
-    # only stopped by its timeout. Live 2026-07-25 that produced a ZERO-BYTE log
-    # killed at 120s, then again at 300s after the timeout was raised: a stall, not
-    # slowness, and raising the clock merely spent longer failing.
-    #
-    # An iteration cap fails fast and deterministically. Generous by default so QA
-    # gates that legitimately read source files are not strangled; override per
-    # site where a gate genuinely needs more.
-    local EPAM_MAX_ITERATIONS="${ORCH_GATE_MAX_ITERATIONS:-25}"
-    export EPAM_MAX_ITERATIONS
-    local prompt_text="$1"
-    local agent_type="${2:-pipeline}"
-    local story_id="${3:-pipeline}"
-    local provider_hint
-    provider_hint="$(resolve_prompt_provider)"
-    # ORCH_GATE_PROVIDER overrides the story-agent provider for coordinator/gate calls.
-    # Set to "openai" to use GPT-4o as coordinator while qwen handles story agents.
-    local gate_provider="${ORCH_GATE_PROVIDER:-$provider_hint}"
-
-    if [ ! -x "$AI_RUNNER_CMD" ]; then
-        error "ai runner not executable: $AI_RUNNER_CMD"
-        return 1
-    fi
-
-    # THE SEAM DECIDES, IF THE REGISTRY KNOWS THIS AGENT.
-    #
-    # Two invocation paths ran side by side and the registry governed only one of them: the
-    # spec pass resolved a seam and climbed a ladder, while everything invoked here took a
-    # single fixed gate model. So the six QA sentinels declared 'ladder: top' and never used
-    # it — the registry was describing a pipeline the runtime did not run, and the ladder
-    # tests all passed because they check the DECLARATION is coherent, never that anything
-    # reads it.
-    #
-    # seam_ladder_export is the shell counterpart of seam-invocation.js and reads the SAME
-    # registry, so a seam means the same thing whichever language invokes it. An agent the
-    # registry does not know is left exactly as it was: this widens what the registry governs,
-    # it does not force every caller through it.
-    local _seam_err; _seam_err=$(mktemp "${TMPDIR:-/tmp}/seam-err-XXXXXX")
-    # NOT SILENCED. This was `2>/dev/null || true`, and what it swallowed was resolveSeam's own
-    # error — the registry refusing to guess. skills_audit, tools_audit, story_recovery and
-    # lint-fixer all threw it, and all four ran with no ladder, no reasoning effort and no tool
-    # grant while every log line looked normal. Three of them hold Bash and WriteFile.
-    #
-    # It stays non-fatal: a seam is configuration, and refusing to run a gate because the registry
-    # is incomplete would take down more than it protects. But it says the agent's name, once, so
-    # the next unregistered caller is visible instead of merely unconfigured.
-    if ! seam_ladder_export "$agent_type" 2>"$_seam_err"; then
-        warning "run_orch_prompt: no seam configured for '$agent_type' — running with no ladder, effort or tool grant from the registry"
-        [ -s "$_seam_err" ] && sed 's/^/  [seam] /' "$_seam_err" >&2
-    fi
-    rm -f "$_seam_err"
-    # THE LADDER IS THE ONLY SOURCE. seam_ladder_export just set EPAM_MODEL from this agent's
-    # ladder position. What stood here was `${EPAM_MODEL:-${ORCH_GATE_MODEL:-<a vendor model>}}` —
-    # a run-wide pin that silently outranked the seam, behind a literal that always answered. So
-    # an agent declared at the base of the ladder ran on whatever the run had pinned, and the
-    # ladder never had to work: two of its three positions resolved no model for months and
-    # nothing noticed, because the literal covered it.
-    #
-    # No substitution. An unresolvable model is a configuration fault in the registry or in the
-    # project's llm-settings.json, and running the wrong model is worse than not running.
-    #
-    # ONE EXCEPTION, AND IT IS STILL THE LADDER: a caller retrying this agent sets
-    # ORCH_AGENT_MODEL_CLIMB to the next rung of THIS agent's own chain (seam_next_model). That is
-    # not a second source — it is the same ladder, one step along. It is read after the seam
-    # resolves, because seam_ladder_export overwrites EPAM_MODEL and would clobber it.
-    local gate_model
-    if [ -n "${ORCH_AGENT_MODEL_CLIMB:-}" ]; then
-        gate_model="$ORCH_AGENT_MODEL_CLIMB"
-    elif ! gate_model=$(seam_model_or_fail "$agent_type"); then
-        error "run_orch_prompt: refusing to invoke '${agent_type}' with no model resolved from the ladder"
-        return 1
-    fi
-    local model_args=(--model "$gate_model")
-
-    local started_at
-    started_at=$(date -Iseconds)
-    local json_result_file
-    json_result_file=$(mktemp /tmp/orch-prompt-XXXXXX.json)
-
-    # Run with JSON output so we can capture cost/token data.
-    # Hard timeout guards against API hangs that block indefinitely (observed
-    # live: spec-validator stalled 55 min with zero output on two consecutive
-    # runs). EPAM_GATE_TIMEOUT_SECS defaults to 600 (10 min) — enough for any
-    # real gate response; exit 124 from timeout is treated as a failure.
-    local _gate_timeout="${EPAM_GATE_TIMEOUT_SECS:-600}"
-    local _rc=0
-    echo "$prompt_text" | \
-        AI_PROVIDER="$gate_provider" \
-        AI_MODEL="$gate_model" \
-        CLAUDE_CMD="$CLAUDE_CMD" \
-        EPAM_CLI="${EPAM_CLI:-epam}" \
-        ORCH_JSON_RESULT="$json_result_file" \
-        timeout "${_gate_timeout}" \
-        "$AI_RUNNER_CMD" --provider "$gate_provider" "${model_args[@]}" || _rc=$?
-    if [ "$_rc" -eq 124 ]; then
-        warning "run_orch_prompt: gate agent timed out after ${_gate_timeout}s (${agent_type}/${story_id}) — treating as failure"
-    fi
-
-    # Extract cost/token data and emit pipeline cost record
-    if [ -f "$json_result_file" ] && [ -s "$json_result_file" ]; then
-        local cost tokens_in tokens_out turns
-        cost=$(jq -r '.cost_usd // .total_cost_usd // 0'                    "$json_result_file" 2>/dev/null || echo "0")
-        tokens_in=$(jq -r '.usage.inputTokens // .usage.input_tokens // 0'  "$json_result_file" 2>/dev/null || echo "0")
-        tokens_out=$(jq -r '.usage.outputTokens // .usage.output_tokens // 0' "$json_result_file" 2>/dev/null || echo "0")
-        turns=$(jq -r '.iterations // .num_turns // 1'                       "$json_result_file" 2>/dev/null || echo "1")
-        # Compute cost from pricing table if provider returned 0
-        if [ "${cost:-0}" = "0" ] && { [ "${tokens_in:-0}" -gt 0 ] || [ "${tokens_out:-0}" -gt 0 ]; }; then
-            local _pricing_file="$SCRIPT_DIR/model-pricing.json"
-            if [ -f "$_pricing_file" ]; then
-                cost=$(python3 "$SCRIPT_DIR/lib/handlers/model-call-cost.py" "$_pricing_file" "${gate_model:-}" "${tokens_in:-0}" "${tokens_out:-0}"
-2>/dev/null || echo "0")
-            fi
-        fi
-        append_pipeline_cost_record \
-            "$agent_type" "$story_id" "$gate_model" "$started_at" \
-            "${cost:-0}" "${tokens_in:-0}" "${tokens_out:-0}" "${turns:-1}"
-        # Emit cost_snapshot so agent-activity dashboard shows tokens + cost per gate call
-        local _phase_id
-        _phase_id=$(jq -r '.phase // empty' "${MONITOR_FILE:-$SCRIPT_DIR/../logs/agent-status.json}" 2>/dev/null || true)
-        jq -cn \
-            --arg ts "$(date -Iseconds)" \
-            --arg agent "$agent_type" \
-            --arg story "${story_id:-}" \
-            --arg phase "${_phase_id:-}" \
-            --arg model "$gate_model" \
-            --arg provider "$gate_provider" \
-            --argjson cost "${cost:-0}" \
-            --argjson tin "${tokens_in:-0}" \
-            --argjson tout "${tokens_out:-0}" \
-            --argjson turns "${turns:-1}" \
-            '{
-              event_id: ("evt-cost-" + ($ts | gsub("[^0-9]";""))) ,
-              timestamp: $ts,
-              agent: $agent,
-              story_id: (if $story == "" then null else $story end),
-              phase: (if $phase == "" then null else $phase end),
-              type: "cost_snapshot",
-              model: $model,
-              provider: $provider,
-              detail: {
-                costUsd: $cost,
-                tokensIn: $tin,
-                tokensOut: $tout,
-                turns: $turns,
-                source: "run_orch_prompt"
-              }
-            }' >> "${ACTIVITY_FILE:-$SCRIPT_DIR/../logs/agent-activity.jsonl}" 2>/dev/null || true
-        rm -f "$json_result_file"
-    fi
-
-    return $_rc
-}
+# run_orch_prompt now lives in lib/orch-prompt.sh so a test can reach it without running the
+# pipeline. See that file for why. Sourced here, at the point it used to be defined.
+# shellcheck source=lib/orch-prompt.sh
+. "$SCRIPT_DIR/lib/orch-prompt.sh"
 
 # run_orch_prompt_with_tools <prompt> [agent_type] [story_id]
 # Identical to run_orch_prompt but enables ReadFile + Bash tool access for the agent.
@@ -1462,7 +1365,7 @@ _lint_fix_findings_directly() {
     # grep reading a FILE still dies on SIGPIPE when head exits after 25 lines: a lint log with
     # more than 25 findings killed the caller. Collect first, take second.
     _lf_all=$(grep -oE '^[^ ]+\.[A-Za-z]+:[0-9]+:[0-9]+ +[^ ]+ +.*' "$_lf_log" 2>/dev/null || true)
-    _lf_findings=$(head -25 <<< "$_lf_all")
+    _lf_findings=$(head -n "$(evidence_window lintFindingLines)" <<< "$_lf_all")
     [ -n "$_lf_findings" ] || return 1
 
     # Scope: ONLY the files the gate flagged. Nothing else is touched.
@@ -1491,7 +1394,8 @@ _lint_fix_findings_directly() {
               --arg project_root "${PROJECT_ROOT}" \
               --arg lf_files "${_lf_files}" \
               '{"__LF_FINDINGS__":$lf_findings,"__PROJECT_ROOT__":$project_root,"__LF_FILES__":$lf_files}' > "$_cp_vals"
-        local _lf_prompt="$(render_engine_prompt lint-fixer "$_cp_vals")"
+        local _lf_prompt
+        _lf_prompt="$(render_engine_prompt lint-fixer "$_cp_vals")"
         rm -f "$_cp_vals"
 
         AI_GATE_ALLOW_TOOLS=1 \
@@ -1542,145 +1446,13 @@ _lint_fix_findings_directly() {
     warning "  [lint-fix] could not repair in place — falling through to gate remediation"
     return 1
 }
+# runtime_boundary_verdict now lives in lib/gate-verdicts.sh so its fail/warn/pass rules — and
+# the grounding check that decides whether a fail may block — can be executed by a test.
+# shellcheck source=lib/gate-verdicts.sh
+. "$SCRIPT_DIR/lib/gate-verdicts.sh"
 
-_run_qa_gate_with_retry() {
-    local _qg_prompt="$1" _qg_agent="$2" _qg_phase="$3" _qg_log="$4"
-    local _qg_max="${QA_GATE_MAX_RETRIES:-2}"
-    local _qg_attempt=0
-    local _saved_gate_model="${ORCH_GATE_MODEL:-}"
-    # Derive short agent slug for file-recovery search (strip "qa-gate:" prefix)
-    local _qg_slug="${_qg_agent#qa-gate:}"
-    while [ "$_qg_attempt" -lt "$_qg_max" ]; do
-        rm -f "$_qg_log"
-        local _qg_eff_prompt="$_qg_prompt"
-        if [ "$_qg_attempt" -ge 1 ]; then
-            # CLIMB THIS GATE'S OWN CHAIN. This assigned ORCH_GATE_MODEL, which run_orch_prompt
-            # stopped reading when the ladder became the only source — so the retry silently
-            # re-ran the SAME model and the escalation was gone. It was also one run-wide "high"
-            # model every gate jumped to regardless of where it started, which is a pin.
-            ORCH_AGENT_MODEL_CLIMB=$(seam_next_model "$_qg_agent" "$(seam_model_or_fail "$_qg_agent" 2>/dev/null)")
-            export ORCH_AGENT_MODEL_CLIMB
-            local _qg_retry_prefix
-            if echo "$_qg_prompt" | grep -q "Do NOT attempt to call any shell commands"; then
-                _qg_retry_prefix="RETRY (attempt $(( _qg_attempt + 1 ))): The previous invocation produced no structured output. Re-analyze the pre-injected evidence already present in this prompt and emit your JSON verdict now. Do NOT call any tools. Do NOT use WriteFile — output your JSON as plain text in this message."
-            else
-                # Detect WriteFile-instead-of-stdout failure: log is tiny and contains
-                # the tool confirmation phrase but no JSON fields.
-                local _qg_log_size=0
-                [ -f "$_qg_log" ] && _qg_log_size=$(wc -c < "$_qg_log" 2>/dev/null || echo 0)
-                if [ "${_qg_log_size:-0}" -lt 200 ] && grep -q "has been written" "$_qg_log" 2>/dev/null; then
-                    _qg_retry_prefix="RETRY (attempt $(( _qg_attempt + 1 ))): CRITICAL — your previous response used WriteFile to write your output to a file. That file was NOT read by the pipeline. You MUST emit your JSON verdict as plain text in this message — do NOT use WriteFile, do NOT write to any file. Use ReadFile to read source files, then emit your findings directly here."
-                else
-                    _qg_retry_prefix="RETRY (attempt $(( _qg_attempt + 1 ))): Your previous answer was REJECTED because it ${_qg_schema_reason:-timed out or produced no structured output}. Use ReadFile and Bash tools to read the relevant source files now, then emit your JSON findings directly in your response — do NOT use WriteFile."
-                fi
-            fi
-            _qg_eff_prompt="$_qg_retry_prefix
-
-$_qg_prompt"
-        fi
-        # SELF-HEAL (brownfield only — greenfield flow deliberately unchanged).
-        #
-        # Every gate already had retry + ladder escalation, and none had this.
-        # Live 2026-07-26: perf-sentinel failed IDENTICALLY twice — both attempts
-        # returned only "The file has been written successfully." — because
-        # nothing diagnosed attempt 1, so attempt 2 differed only by model.
-        # fuzz-weaver produced a 0-byte log in the same run. Two of six quality
-        # gates reviewed nothing and the phase still passed.
-        #
-        # The repro-test-writer hit the same failure class that day and RECOVERED
-        # on attempt 2, because its failure was recorded as an episode, diagnosed
-        # and compiled into an enforced constraint. That machinery is proven; the
-        # gates simply never called it.
-        if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ "$_qg_attempt" -ge 1 ] \
-           && [ -f "$SCRIPT_DIR/lib/kb-apply.sh" ]; then
-            # shellcheck disable=SC1090
-            . "$SCRIPT_DIR/lib/kb-apply.sh" || true
-            # "produced no output" carries no error string to key on, so give the
-            # episode an explicit class — otherwise it can never be looked up,
-            # which is exactly why the write-tool failure was never learned from.
-            local _qg_class="no_structured_output"
-            if [ -f "$_qg_log" ] && grep -q "has been written" "$_qg_log" 2>/dev/null; then
-                _qg_class="answered_via_write_tool"
-            fi
-            head -c 8000 "$_qg_log" 2>/dev/null | \
-                FAILURE_CLASS="$_qg_class" \
-                kb_record_episode "${_qg_phase:-}" "$_qg_slug" "gate produced no verdict" "$_qg_class" || true
-            kb_apply_constraints "$_qg_slug" "story:${_qg_phase:-}" || true
-        fi
-
-        # Same allowlist as run_orch_prompt_with_tools: this path calls
-        # run_orch_prompt directly, so wiring only the helper would leave every
-        # actual gate invocation unrestricted.
-        # EPAM_AGENT_NAME/STORY_ID name the Langfuse trace. Without them every
-        # trace in a run renders as `llm-stream (uuid)` with no agent and no
-        # prompt — 35 identical unreadable rows, which is how a hung call went
-        # unnoticed behind a generic "timed out" message.
-        AI_GATE_ALLOW_TOOLS=1 EPAM_ALLOWED_TOOLS="${ORCH_GATE_ALLOWED_TOOLS}" \
-            EPAM_AGENT_NAME="$_qg_agent" EPAM_STORY_ID="${_qg_phase:-}" \
-            run_orch_prompt "$_qg_eff_prompt" "$_qg_agent" "$_qg_phase" 2>&1 | tee "$_qg_log"
-        # VALIDATE the verdict rather than grepping for the word.
-        #
-        # This was `grep -qE '"(verdict|findings|agent|summary)"'`, so any text
-        # containing the word "verdict" counted as a completed review — a
-        # truncated report, a fragment of reasoning, a verdict of "maybe".
-        # Live 2026-07-26: two gates "reviewed" a change while emitting 40 bytes
-        # of write-tool echo between them.
-        #
-        # Validated AFTER the call, not via provider-level strict json_schema:
-        # these gates need tools to read source and strict schema suppresses
-        # tool calling (SCHEMA-1). The reason is fed back into the retry so
-        # attempt 2 is told what was wrong instead of just getting a bigger model.
-        _qg_schema_reason=""
-        if [ -f "$SCRIPT_DIR/lib/gate_verdict_schema.py" ]; then
-            _qg_schema_reason=$(python3 "$SCRIPT_DIR/lib/gate_verdict_schema.py" \
-                                  "$_qg_agent" "$_qg_log" 2>/dev/null) || true
-        fi
-        if [ -z "$_qg_schema_reason" ] \
-           && grep -qE '"(verdict|findings|agent|summary)"' "$_qg_log" 2>/dev/null; then
-            ORCH_GATE_MODEL="$_saved_gate_model"
-            unset ORCH_AGENT_MODEL_CLIMB
-            return 0
-        fi
-        [ -n "$_qg_schema_reason" ] && \
-            warning "  [qa-gate] ${_qg_agent}: rejected — ${_qg_schema_reason}"
-        # ── WriteFile recovery: model wrote JSON to a file instead of emitting it ──
-        # Search project root for a recently-written JSON file containing this
-        # gate's structured output. If found, append its content to the log so
-        # the normal grep check picks it up on the next iteration OR after the loop.
-        local _qg_recovered=""
-        _qg_recovered=$(find "${OUTPUT_DIR:-${PROJECT_ROOT:-$PWD}}" \
-            -maxdepth 4 -name "*.json" -newer "$_qg_log" \
-            2>/dev/null | \
-            xargs grep -l "\"${_qg_slug}\"\|\"verdict\"\|\"summary\"" 2>/dev/null | \
-            head -1 || true)
-        if [ -z "$_qg_recovered" ]; then
-            # Also check current directory and /tmp for files written in last 5 min
-            _qg_recovered=$(find . /tmp -maxdepth 2 -name "*.json" \
-                -newer "$_qg_log" \
-                2>/dev/null | \
-                xargs grep -l "\"${_qg_slug}\"" 2>/dev/null | \
-                head -1 || true)
-        fi
-        if [ -n "$_qg_recovered" ]; then
-            warning "  [qa-gate] $_qg_agent wrote output to file instead of stdout — recovering from: $_qg_recovered"
-            cat "$_qg_recovered" >> "$_qg_log"
-            if grep -qE '"(verdict|findings|agent|summary)"' "$_qg_log" 2>/dev/null; then
-                ORCH_GATE_MODEL="$_saved_gate_model"
-                unset ORCH_AGENT_MODEL_CLIMB
-                return 0
-            fi
-        fi
-        if [ "$(( _qg_attempt + 1 ))" -lt "$_qg_max" ]; then
-            warning "  [qa-gate] $_qg_agent attempt $(( _qg_attempt + 1 )) produced no structured output — retrying with escalated model"
-        else
-            warning "  [qa-gate] $_qg_agent all $(( _qg_attempt + 1 )) attempt(s) exhausted with no structured output"
-        fi
-        _qg_attempt=$(( _qg_attempt + 1 ))
-    done
-    ORCH_GATE_MODEL="$_saved_gate_model"
-    unset ORCH_AGENT_MODEL_CLIMB
-    return 1
-}
+# _run_qa_gate_with_retry now lives in lib/gate-verdicts.sh, beside the verdict rules it feeds,
+# so a gate becoming a decision can be executed by a test. Sourced above with that file.
 
 stop_dashboards_watch() {
     if [ "$DASHBOARD_WATCH_OWNED" != "true" ] || [ -z "$DASHBOARD_WATCH_PID" ]; then
@@ -1756,7 +1528,7 @@ stop_control_plane() {
 # combination for the full timeout window again.
 #
 # Root cause this addresses (found live, 2026-07-07): a story ended up with
-# aiProvider="qwen" (OpenRouter) paired with model="MiniMax-M3" (a MiniMax-
+# aiProvider="openrouter" (OpenRouter) paired with model="MiniMax-M3" (a MiniMax-
 # native model) after spec-mode's LLM model-review step changed .model without
 # syncing .aiProvider — see resolveModelProvider()'s docstring in
 # spec-mode-runner.js for the full story. That specific mismatch is now fixed
@@ -1903,6 +1675,9 @@ hot_swap_story_model_if_unstable() {
         for map_pair in "${map_pairs[@]}"; do
             map_from="${map_pair%%=*}"
             map_to="${map_pair#*=}"
+            # The pattern is a GLOB from the provider map and must stay unquoted: quoting it would match the
+            # literal characters, and no mapping would ever fire.
+            # shellcheck disable=SC2254
             case "$new_model" in
                 $map_from) new_provider="$map_to"; break ;;
             esac
@@ -2058,7 +1833,8 @@ run_story_recovery_analyst() {
           --arg log_tail "${_log_tail}" \
           --arg story_id "${story_id}" \
           '{"__STORY_JSON__":$story_json,"__LOG_TAIL__":$log_tail,"__STORY_ID__":$story_id}' > "$_cp_vals"
-    local _prompt="$(render_engine_prompt story-recovery-analyst "$_cp_vals")"
+    local _prompt
+    _prompt="$(render_engine_prompt story-recovery-analyst "$_cp_vals")"
     rm -f "$_cp_vals"
 
     local _analyst_response="" _sra_attempt=0
@@ -2948,7 +2724,8 @@ _run_codeline_bridge() {
         --arg bcl "${_bcl}" \
         --arg bwt "${_bwt}" \
         '{"__BRIDGE_PROFILE__":$bridge_profile,"__BRIDGE_OUT__":$bridge_out,"__BPRD__":$bprd,"__BCL__":$bcl,"__BWT__":$bwt}' > "$_cp_vals"
-  local _base_prompt="$(render_engine_prompt codeline-bridge "$_cp_vals")"
+  local _base_prompt
+  _base_prompt="$(render_engine_prompt codeline-bridge "$_cp_vals")"
   rm -f "$_cp_vals"
 
   local _bridge_attempt=0 _bridge_ok=0 _corrective_note=""
@@ -2966,7 +2743,6 @@ _run_codeline_bridge() {
     # contract to BRIDGE_OUT_FILE — the read-only allowlist would let it read
     # but never persist its own output. Found live (2026-07-31 agent audit):
     # this call went through plain run_orch_prompt with no tool grant at all,
-    # under the pipeline's actual qwen/openai gate providers that means
     # --no-tools — the same class of gap already fixed once for
     # code-graph-detective/failure-analyst. Budgeted like every other
     # tool-bearing gate call in this file.
@@ -3817,6 +3593,11 @@ _run_agent_mint() {
   # It lived inside the Jira branch, so a project with an authored PRD never got one — the same
   # shape as the mint itself and as codeline discovery. Paired with the mint here because both
   # prepare the roster's working conditions and both are needed by every project.
+  # Guarded so an unloaded library is skipped rather than fatal: an undefined function
+  # returns 127, and `|| exit 1` on that silently killed the enclosing block wherever a
+  # harness runs this code with the gate library absent. The orchestrator sources it at the
+  # top, and pre-flight is what actually gates a run.
+  declare -f require_stage_coverage >/dev/null && { require_stage_coverage ingest || exit 1; }
   if "$NODE_BIN" "$SCRIPT_DIR/lib/handlers/run-jira-pipeline.js" "$_prd"; then
     log "[mint] Scaffold phase present for the pre-phase skill assessment"
   else
@@ -3843,6 +3624,11 @@ _run_agent_mint() {
     # persona for it — and there is no engine roster to fall back to any more.
     #
     # Roster-only: no survey, no proposals, no role assignment. Just canonical -> this project.
+    # Guarded so an unloaded library is skipped rather than fatal: an undefined function
+    # returns 127, and `|| exit 1` on that silently killed the enclosing block wherever a
+    # harness runs this code with the gate library absent. The orchestrator sources it at the
+    # top, and pre-flight is what actually gates a run.
+    declare -f require_stage_coverage >/dev/null && { require_stage_coverage mint || exit 1; }
     log "[mint] Deriving this project's roster (roster-only — nothing is minted)..."
     EPAM_ROSTER_ONLY=1 "$NODE_BIN" "$SCRIPT_DIR/mint-agents-step.js" \
         --prd "$_prd" \
@@ -3875,9 +3661,104 @@ _run_agent_mint() {
 
 # ── Jira ingest flow ───────────────────────────────────────────────────────────
 # JIRA_PIPELINE=1: pull tickets, run AC gate, synthesize PRD, then route codelines.
+
+# PAUSE 1 of 2 — A HUMAN REVIEW POINT ON EVERY PATH, NOT JUST THE INGESTING ONE.
+#
+# This lived inline inside _run_jira_pipeline, so it was reachable only by a project that
+# ingests from a tracker. A project that AUTHORS its PRD takes the other _run_agent_mint call
+# site and ran straight past it into the spec phase: on 2026-08-27 mock3 was launched with
+# EPAM_PAUSE_AFTER_AGENT_MINT=1 correctly set and present in the process environment, and never
+# stopped — the operator was promised a review point that the shape of their project could not
+# reach. The pause is about the roster and the assignments, which every path produces.
+#
+# Defined ONCE and called from both sites: the review point and the checkpoint it writes are one
+# behaviour, and two copies is how the two paths drifted apart in the first place.
+_pause_after_agent_mint() {
+  # PAUSE 1 of 2 — the roster is minted and every story assigned, and nothing has been
+  # specified or written yet. Which roles exist, how they are briefed, and which story each
+  # owns shape every later stage, and they are cheap to correct here and expensive to correct
+  # after the spec pass has built on them.
+  if command -v should_pause_after_agent_mint >/dev/null 2>&1 && should_pause_after_agent_mint; then
+    local _rckpt=""
+    if _rckpt=$(save_run_checkpoint "${PHASE:-core}" post-roster 2>&1); then
+      info "[orch] post-roster checkpoint saved: ${_rckpt}"
+    else
+      warning "[orch] could not save the post-roster checkpoint: ${_rckpt}"
+    fi
+    echo ""
+    echo -e "${GREEN}╔════════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║  PAUSED — agents minted and assigned, spec NOT started             ║${NC}"
+    echo -e "${GREEN}╚════════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "  RUN NUMBER:  ${GREEN}${ORCH_RUN_ID:-unknown}${NC}"
+    echo -e "  Roster:      ${EPAM_AGENTS_DIR}/profiles.json"
+    echo -e "  Implementers:  ${EPAM_PROJECT_CONFIG_DIR:-${EPAM_AGENTS_DIR}}/project-roles.json"
+    echo -e "  Investigators: ${EPAM_PROJECT_CONFIG_DIR:-${EPAM_AGENTS_DIR}}/project-investigators.json"
+    echo -e "  Minted:      ${LOG_DIR}/agent-mint.json"
+    echo -e "  Assignments: ${LOG_DIR}/role-assignments.json"
+    echo -e "  ${GREEN}WHAT WAS GENERATED (vs canonical): ${LOG_DIR}/roster-diff.md${NC}"
+    echo -e "  What the mint could SEE:            ${LOG_DIR}/mint-inputs.json"
+    echo -e "  ${GREEN}ROSTER REVIEW:                      ${LOG_DIR}/roster-review.json${NC}"
+    if [ -f "${LOG_DIR}/roster-review.json" ] && command -v jq >/dev/null 2>&1; then
+      _rv=$(jq -r '.verdict // "?"' "${LOG_DIR}/roster-review.json" 2>/dev/null)
+      _rn=$(jq -r '.findings | length' "${LOG_DIR}/roster-review.json" 2>/dev/null)
+      _rb=$(jq -r '[.findings[]? | select(.severity=="blocking")] | length' "${LOG_DIR}/roster-review.json" 2>/dev/null)
+      if [ "${_rb:-0}" != "0" ]; then
+        echo -e "     ${RED}verdict: ${_rv} — ${_rn} finding(s), ${_rb} BLOCKING${NC}"
+      else
+        echo -e "     verdict: ${_rv} — ${_rn} finding(s)"
+      fi
+      jq -r '.findings[]? | "       [\(.severity)] \(.agent): \(.found)"' "${LOG_DIR}/roster-review.json" 2>/dev/null | head -8
+    fi
+    if [ -f "${LOG_DIR}/mint-inputs.json" ] && command -v jq >/dev/null 2>&1; then
+      _mi_repo=$(jq -r '.codelineRepo // "NONE"' "${LOG_DIR}/mint-inputs.json" 2>/dev/null)
+      _mi_deps=$(jq -r '.declaredDependencies // 0' "${LOG_DIR}/mint-inputs.json" 2>/dev/null)
+      _mi_df=$(jq -r '.documentsFetched // 0' "${LOG_DIR}/mint-inputs.json" 2>/dev/null)
+      _mi_dl=$(jq -r '.documentsLinked // 0' "${LOG_DIR}/mint-inputs.json" 2>/dev/null)
+      echo -e "     codeline repo:  ${_mi_repo}"
+      echo -e "     declared deps:  ${_mi_deps}"
+      if [ "${_mi_df}" != "${_mi_dl}" ]; then
+        echo -e "     ${RED}documents:      ${_mi_df} of ${_mi_dl} fetched — the roster was derived WITHOUT them${NC}"
+      else
+        echo -e "     documents:      ${_mi_df} of ${_mi_dl} fetched"
+      fi
+    fi
+    echo ""
+    echo -e "  Inspect and EDIT if needed:"
+    # The set is declared by operator_reviewable_inputs and kept by save_run_checkpoint. Printing a
+    # second hand-kept list here is how the banner came to offer files the checkpoint never saved.
+    while IFS=$'\t' read -r _ri_path _ri_what; do
+        [ -n "$_ri_path" ] || continue
+        echo -e "    ${_ri_path}   (${_ri_what})"
+    done < <(operator_reviewable_inputs "${_synth_prd}")
+    echo ""
+    echo -e "  Then CONTINUE into the spec phase with:"
+    echo -e "    ${GREEN}EPAM_RESUME_RUN=${ORCH_RUN_ID:-<run-id>} ${TIER3_LAUNCHER:-<your launcher>} --yes${NC}"
+    echo ""
+    echo -e "  Resume re-reads those files and VALIDATES your edits (every story assigned, every"
+    echo -e "  role real and not a canonical process role). It does not re-mint and does not"
+    echo -e "  re-assign over your changes."
+    echo ""
+    # END THE RUN — exit, not return.
+    #
+    # This said `return 0` under this same comment. `return` leaves the FUNCTION; the caller carries
+    # on. On the ingesting path the call happened to be the last thing before an exit, so it halted
+    # by accident and looked correct for as long as nobody called it from anywhere else.
+    #
+    # Live 2026-08-28 on a PAID run: the banner printed with its resume instructions, the operator
+    # was told the run had stopped, and it went straight into the spec pass and was making model
+    # calls when it was killed by hand. Pause 2, three thousand lines below, has always used exit.
+    #
+    # The operator restarts with the command above; resume validates the roster rather than
+    # regenerating it, so hand edits survive.
+    exit 0
+  fi
+}
+
 _run_jira_pipeline() {
   local _jira_dir="$AUTOMATION_DIR/jira"
-  local _log_file="/tmp/orch-$(date +%Y%m%dT%H%M%S).log"
+  local _log_file
+  _log_file="/tmp/orch-$(date +%Y%m%dT%H%M%S).log"
 
   local _missing=()
   [ -z "${JIRA_URL:-}"         ] && _missing+=("JIRA_URL")
@@ -3992,73 +3873,7 @@ _run_jira_pipeline() {
   # into a roster that was never minted.
   _run_agent_mint "$_synth_prd" "$_log_file" || return 1
 
-  # PAUSE 1 of 2 — the roster is minted and every story assigned, and nothing has been
-  # specified or written yet. Which roles exist, how they are briefed, and which story each
-  # owns shape every later stage, and they are cheap to correct here and expensive to correct
-  # after the spec pass has built on them.
-  if command -v should_pause_after_agent_mint >/dev/null 2>&1 && should_pause_after_agent_mint; then
-    local _rckpt=""
-    if _rckpt=$(save_run_checkpoint "${PHASE:-core}" post-roster 2>&1); then
-      info "[orch] post-roster checkpoint saved: ${_rckpt}"
-    else
-      warning "[orch] could not save the post-roster checkpoint: ${_rckpt}"
-    fi
-    echo ""
-    echo -e "${GREEN}╔════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║  PAUSED — agents minted and assigned, spec NOT started             ║${NC}"
-    echo -e "${GREEN}╚════════════════════════════════════════════════════════════════════╝${NC}"
-    echo ""
-    echo -e "  RUN NUMBER:  ${GREEN}${ORCH_RUN_ID:-unknown}${NC}"
-    echo -e "  Roster:      ${EPAM_AGENTS_DIR}/profiles.json"
-    echo -e "  Implementers:  ${EPAM_PROJECT_CONFIG_DIR:-${EPAM_AGENTS_DIR}}/project-roles.json"
-    echo -e "  Investigators: ${EPAM_PROJECT_CONFIG_DIR:-${EPAM_AGENTS_DIR}}/project-investigators.json"
-    echo -e "  Minted:      ${LOG_DIR}/agent-mint.json"
-    echo -e "  Assignments: ${LOG_DIR}/role-assignments.json"
-    echo -e "  ${GREEN}WHAT WAS GENERATED (vs canonical): ${LOG_DIR}/roster-diff.md${NC}"
-    echo -e "  What the mint could SEE:            ${LOG_DIR}/mint-inputs.json"
-    echo -e "  ${GREEN}ROSTER REVIEW:                      ${LOG_DIR}/roster-review.json${NC}"
-    if [ -f "${LOG_DIR}/roster-review.json" ] && command -v jq >/dev/null 2>&1; then
-      _rv=$(jq -r '.verdict // "?"' "${LOG_DIR}/roster-review.json" 2>/dev/null)
-      _rn=$(jq -r '.findings | length' "${LOG_DIR}/roster-review.json" 2>/dev/null)
-      _rb=$(jq -r '[.findings[]? | select(.severity=="blocking")] | length' "${LOG_DIR}/roster-review.json" 2>/dev/null)
-      if [ "${_rb:-0}" != "0" ]; then
-        echo -e "     ${RED}verdict: ${_rv} — ${_rn} finding(s), ${_rb} BLOCKING${NC}"
-      else
-        echo -e "     verdict: ${_rv} — ${_rn} finding(s)"
-      fi
-      jq -r '.findings[]? | "       [\(.severity)] \(.agent): \(.found)"' "${LOG_DIR}/roster-review.json" 2>/dev/null | head -8
-    fi
-    if [ -f "${LOG_DIR}/mint-inputs.json" ] && command -v jq >/dev/null 2>&1; then
-      _mi_repo=$(jq -r '.codelineRepo // "NONE"' "${LOG_DIR}/mint-inputs.json" 2>/dev/null)
-      _mi_deps=$(jq -r '.declaredDependencies // 0' "${LOG_DIR}/mint-inputs.json" 2>/dev/null)
-      _mi_df=$(jq -r '.documentsFetched // 0' "${LOG_DIR}/mint-inputs.json" 2>/dev/null)
-      _mi_dl=$(jq -r '.documentsLinked // 0' "${LOG_DIR}/mint-inputs.json" 2>/dev/null)
-      echo -e "     codeline repo:  ${_mi_repo}"
-      echo -e "     declared deps:  ${_mi_deps}"
-      if [ "${_mi_df}" != "${_mi_dl}" ]; then
-        echo -e "     ${RED}documents:      ${_mi_df} of ${_mi_dl} fetched — the roster was derived WITHOUT them${NC}"
-      else
-        echo -e "     documents:      ${_mi_df} of ${_mi_dl} fetched"
-      fi
-    fi
-    echo ""
-    echo -e "  Inspect and EDIT if needed:"
-    echo -e "    ${EPAM_AGENTS_DIR}/profiles.json         (each role's brief)"
-    echo -e "    ${EPAM_PROJECT_CONFIG_DIR:-${EPAM_AGENTS_DIR}}/project-roles.json   (implementers — may author code, may own a story)"
-    echo -e "    ${EPAM_PROJECT_CONFIG_DIR:-${EPAM_AGENTS_DIR}}/project-investigators.json   (investigators — read-only, one per codeline)"
-    echo -e "    ${_synth_prd}   (each story's agentRole)"
-    echo ""
-    echo -e "  Then CONTINUE into the spec phase with:"
-    echo -e "    ${GREEN}EPAM_RESUME_RUN=${ORCH_RUN_ID:-<run-id>} ${TIER3_LAUNCHER:-<your launcher>} --yes${NC}"
-    echo ""
-    echo -e "  Resume re-reads those files and VALIDATES your edits (every story assigned, every"
-    echo -e "  role real and not a canonical process role). It does not re-mint and does not"
-    echo -e "  re-assign over your changes."
-    echo ""
-    # END the run. The operator restarts it with the command above; resume validates the
-    # roster rather than regenerating it, so hand edits survive.
-    return 0
-  fi
+  _pause_after_agent_mint
 
   _run_codeline_loop "$_synth_prd" "$_log_file"
 }
@@ -4120,43 +3935,10 @@ resume_spec_output_present() {
     "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/resume-spec-output-present.js" "$_prd" 2>/dev/null
 }
 
-if is_parent && [ -n "${EPAM_RESUME_RUN:-}" ]; then
-    # The roster and its briefs are stored against the run that minted them, so a resumed run
-    # must BE that run — otherwise the store reads as another run's and is not re-applied.
-    export ORCH_RUN_ID="$EPAM_RESUME_RUN"
-
-    if ! restore_run_checkpoint "$EPAM_RESUME_RUN"; then
-        error "[orch] cannot resume run '${EPAM_RESUME_RUN}' — refusing to continue against un-restored state."
-        error "[orch] available checkpoints: $(list_run_checkpoints | tr '\n' ' ' 2>/dev/null || echo none)"
-        exit 1
-    fi
-
-    if ! _resume_env=$(resume_skip_env "$EPAM_RESUME_RUN"); then
-        error "[orch] cannot determine what to skip for run '${EPAM_RESUME_RUN}' — refusing to guess."
-        exit 1
-    fi
-    while IFS= read -r _assign; do
-        [ -n "$_assign" ] || continue
-        export "${_assign?}"
-        info "[orch]   resume: ${_assign}"
-    done <<< "$_resume_env"
-    # Skipping the spec pass is only safe while its output still exists. restore_run_checkpoint
-    # and resume_skip_env both refuse rather than guess; this is the third case and was the
-    # silent one. Gated on the skip actually being in force — a resume that is about to RUN the
-    # spec pass has nothing to protect.
-    if [ "${EPAM_SPEC_MODE:-1}" = "0" ] && ! resume_spec_output_present "$PRD_FILE"; then
-        error "[orch] resume '${EPAM_RESUME_RUN}' skips the spec pass (EPAM_SPEC_MODE=0), but the PRD"
-        error "[orch] at ${PRD_FILE} carries none of its output — no fixSiteAnalysis, no"
-        error "[orch] verificationCriteria, no declared files, no specification block."
-        error "[orch] Something overwrote the PRD after the spec pass ran. Running now would hand the"
-        error "[orch] writer a story with nothing to aim at — measured 2026-08-10 at \$11.76 and no code."
-        error "[orch] Recover with ONE of:"
-        error "[orch]   - restore the PRD that carries the spec (git, or a run archive), then resume again"
-        error "[orch]   - re-run the spec pass for this run: EPAM_SPEC_MODE=1 with the same EPAM_RESUME_RUN"
-        exit 1
-    fi
-    success "[orch] RESUMED run ${EPAM_RESUME_RUN} — continuing from its checkpoint"
-fi
+# Resume — the block lives in lib/orchestration-resume.sh so its refusals can be tested.
+# shellcheck source=lib/orchestration-resume.sh
+. "$SCRIPT_DIR/lib/orchestration-resume.sh"
+apply_resume_if_requested
 
 if is_parent; then
   if [ "${JIRA_PIPELINE:-0}" = "1" ]; then
@@ -4177,6 +3959,11 @@ if is_parent; then
     #
     # HALTS on failure. A run that proceeds with an unresolved scope writes to whichever single
     # repository it happens to land on.
+    # Guarded so an unloaded library is skipped rather than fatal: an undefined function
+    # returns 127, and `|| exit 1` on that silently killed the enclosing block wherever a
+    # harness runs this code with the gate library absent. The orchestrator sources it at the
+    # top, and pre-flight is what actually gates a run.
+    declare -f require_stage_coverage >/dev/null && { require_stage_coverage discovery || exit 1; }
     if ! bash "$SCRIPT_DIR/resolve-codeline-scope.sh" --prd "$PRD_FILE"; then
       error "[orch] codeline scope could not be resolved — refusing to run against an unknown scope"
       exit 1
@@ -4186,6 +3973,10 @@ if is_parent; then
 
     # THE MINT, on this path too. Scope is resolved above, so the codelines it needs exist.
     _run_agent_mint "$PRD_FILE" "${LOG_DIR:-}/orchestration.log" || exit 1
+
+    # THE SAME REVIEW POINT THE INGESTING PATH GETS. A project that authors its PRD produces a
+    # roster and assignments exactly as one that ingests does, so it stops here too.
+    _pause_after_agent_mint
 
     # Canonical PRD flow: if the PRD defines multiple codelines, route them.
     # Single-codeline PRDs fall through to the normal phase execution below.
@@ -4243,94 +4034,10 @@ resolve_orch_mode() {
     fi
 }
 
-# Parse arguments
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --phase)
-            if [ -z "$2" ] || [[ "$2" == --* ]]; then
-                error "--phase requires a phase name"
-                exit 1
-            fi
-            PHASE="$2"
-            shift 2
-            ;;
-        --reset)
-            RESET_STORIES=true
-            shift
-            ;;
-        --dry-run)
-            DRY_RUN=true
-            shift
-            ;;
-        --skip-cleanup)
-            SKIP_CLEANUP=true
-            shift
-            ;;
-        --sandbox)
-            EPAM_SANDBOX=true
-            shift
-            ;;
-        --allow-network)
-            EPAM_SANDBOX_ALLOW_NETWORK=true
-            shift
-            ;;
-        --mode)
-            if [ -z "${2:-}" ] || [[ "${2:-}" == --* ]]; then
-                error "--mode requires a value: bash|hybrid"
-                exit 1
-            fi
-            if [[ "$2" != "bash" && "$2" != "hybrid" ]]; then
-                error "Invalid --mode: $2 (must be 'bash' or 'hybrid')"
-                exit 1
-            fi
-            ORCH_MODE="$2"
-            shift 2
-            ;;
-        --help|-h)
-            cat << EOF
-Usage: $(basename "$0") [OPTIONS]
-
-Orchestrates parallel execution of stories using git worktrees.
-Runs setup stories on main, then launches primary and independent agents
-in parallel, waits for completion, and runs review.
-
-Options:
-  --phase NAME        Phase to execute (default: phase_wearables_test)
-  --mode MODE         Orchestration mode: bash (default) or hybrid
-  --reset             Reset all story completed flags before running (clean re-run)
-  --dry-run           Show execution plan without running
-  --skip-cleanup      Don't cleanup worktrees on exit (for debugging)
-  --sandbox           Run each agent invocation inside a Docker/Podman container
-                      (filesystem isolation, resource limits, no privilege escalation)
-  --allow-network     Used with --sandbox: documents intent to allow full network
-                      (network is always required for LLM API calls)
-  --help              Show this help message
-
-Timeout env vars:
-  STORY_TIMEOUT_SECS      Override flat timeout per story (skips effort-based scaling)
-  EPAM_PAUSE_ON_TIMEOUT   "true" = pause for operator on double timeout (default: false)
-  EPAM_MAX_PAUSE_SECS     Hard ceiling on pause duration (default: 300s); auto-resumes
-
-Sandbox env vars (used with --sandbox):
-  EPAM_SANDBOX_IMAGE   Container image  (default: epam-cli-sandbox:latest)
-  EPAM_SANDBOX_CPUS    CPU limit        (default: 2)
-  EPAM_SANDBOX_MEMORY  Memory limit     (default: 4g)
-
-Examples:
-  $(basename "$0")                                    # Run test phase
-  $(basename "$0") --phase phase11_wearable_foundation
-  $(basename "$0") --dry-run                          # Preview plan
-  $(basename "$0") --skip-cleanup                     # Keep worktrees
-
-EOF
-            exit 0
-            ;;
-        *)
-            error "Unknown option: $1"
-            exit 1
-            ;;
-    esac
-done
+# Parse arguments — the loop lives in lib/orchestration-args.sh so it can be called by a test.
+# shellcheck source=lib/orchestration-args.sh
+. "$SCRIPT_DIR/lib/orchestration-args.sh"
+parse_orchestration_args "$@"
 
 # derive_sandbox_base_image <prd_file>
 # Maps a project's OWN project.stack.language/.runtime (already written by
@@ -4500,6 +4207,11 @@ print_step_checklist
 # ── Step 0: Specification pre-pass (OpenSpec/Speckit) ─────────────────────────
 run_specification_pass() {
     local phase_id="$1"
+    # Guarded so an unloaded library is skipped rather than fatal: an undefined function
+    # returns 127, and `|| exit 1` on that silently killed the enclosing block wherever a
+    # harness runs this code with the gate library absent. The orchestrator sources it at the
+    # top, and pre-flight is what actually gates a run.
+    declare -f require_stage_coverage >/dev/null && { require_stage_coverage spec || return 1; }
     local spec_runner="$SCRIPT_DIR/spec-mode-runner.js"
     if [ ! -f "$spec_runner" ]; then
         info "Step 1: Specification runner not found (${spec_runner##*/}) — skipping"
@@ -4539,8 +4251,10 @@ run_specification_pass() {
     # count per agent; model comes from the same env vars the runner itself
     # uses (SPEC_MODE_OPENSPEC_MODEL/SPEC_MODE_SPECKIT_MODEL).
     local _spec_summary="$LOG_DIR/spec-summary.json"
-    local _openspec_model="$(seam_model_or_fail "spec-agent")"
-    local _speckit_model="$(seam_model_or_fail "spec-agent")"
+    local _openspec_model
+    _openspec_model="$(seam_model_or_fail "spec-agent")"
+    local _speckit_model
+    _speckit_model="$(seam_model_or_fail "spec-agent")"
     local _openspec_count=0 _speckit_count=0
     if [ -f "$_spec_summary" ]; then
         _openspec_count=$(jq -r '.stats.agents.openspec // 0' "$_spec_summary" 2>/dev/null || echo 0)
@@ -4685,7 +4399,7 @@ if [ "$PHASE" != "infra_test" ]; then
             echo -e "  $(basename "$0") --phase infra_test"
             echo ""
             echo -e "${YELLOW}If infra_test has been run but status not updated, check:${NC}"
-            echo -e "  curl -s http://localhost:8090/api/stories | jq '[.[] | select(.phase==\"infra_test\") | {id,status,completed}]'"
+            echo -e "  curl -s $(service_url storyApi)/api/stories | jq '[.[] | select(.phase==\"infra_test\") | {id,status,completed}]'"
             echo ""
             exit 1
         fi
@@ -4821,12 +4535,47 @@ _wt_stories_list=""
 [ -n "$independent_stories" ] && _wt_stories_list="${_wt_stories_list}${independent_stories}"$'\n'
 _wt_count=$(echo "$_wt_stories_list" | grep -c '[^[:space:]]') || _wt_count=0
 
+# THE TOPOLOGY A PROJECT ALREADY KNOWS, DECLARED RATHER THAN INFERRED.
+#
+# The router asks a model which execution topology a phase should use — single, parallel or
+# sequential worktrees. That is worth a call when the answer is genuinely uncertain, and it is spend
+# with no decision in it when the operator already knows: an estate that always runs sequentially
+# pays per phase to be told so, and a project with no minted router prompt fails its seam check over
+# a question a declaration answers.
+#
+# EPAM_TOPOLOGY is that declaration. Set, it is used and no model is asked; unset, the router runs
+# exactly as before and the count heuristic still backs it. Declared in the project's own config.env
+# like every other project decision, so no engine change is needed to express one.
+#
+# Precedence, highest first: the operator's declaration, the router's answer, the count heuristic.
+_topology_declared="${EPAM_TOPOLOGY:-}"
+case "$_topology_declared" in
+    single|parallel|sequential) ;;
+    "") ;;
+    *)
+        warning "[orch] EPAM_TOPOLOGY='${_topology_declared}' is not one of single, parallel, sequential — ignoring it and asking the router"
+        _topology_declared=""
+        ;;
+esac
+
 _router_js="$SCRIPT_DIR/lib/topology-router.js"
 _topology_decision=""
 _topology_reason=""
 _topology_source="heuristic"
 
-if [ -f "$_router_js" ] && command -v node &>/dev/null; then
+if [ -n "$_topology_declared" ]; then
+    _topology_decision="$_topology_declared"
+    _topology_source="declared"
+    _topology_reason="declared by the project as EPAM_TOPOLOGY"
+elif [ "${EPAM_TOPOLOGY_ROUTER:-1}" = "0" ]; then
+    # THE ROUTER, TURNED OFF, WITHOUT PINNING A SHAPE.
+    #
+    # EPAM_TOPOLOGY pins the answer; this declines to ASK while leaving the answer to the count
+    # heuristic, which is deterministic and free. A project that does not want to pay a model per
+    # phase to be told what a comparison already knows says so here, and the heuristic below runs
+    # exactly as it does whenever the router returns nothing.
+    _topology_source="heuristic"
+elif [ -f "$_router_js" ] && command -v node &>/dev/null; then
     # Build JSON payload: story metadata from PRD
     _story_ids_json=$(echo "$_wt_stories_list" | grep '[^[:space:]]' | \
         jq -R . | jq -s 'map(select(. != ""))' 2>/dev/null || echo "[]")
@@ -4850,10 +4599,21 @@ if [ -f "$_router_js" ] && command -v node &>/dev/null; then
                 | { id, filesExist: (.technicalNotes.filesExist // 0),
                     estimatedTurns: (.estimatedTurns // null) }
             ]
-        }' 2>/dev/null || echo '{"phase":"","stories":[],"cpaSignals":[]}')
+        }' 2>/dev/null || echo '')
+
+        # AN INPUT NOBODY PRODUCED IS NOT AN INPUT. This fell back to
+        # '{"phase":"","stories":[],"cpaSignals":[]}' when jq could not build the payload — a
+        # well-formed object with nothing in it. topology-router.js then refused to render
+        # ("EMPTY values for: __PHASE__"), its stderr went to /dev/null, and the heuristic ran
+        # with nobody aware the model router had been skipped. The heuristic is a fine outcome;
+        # being unable to tell it apart from a model decision is not.
+        if [ -z "$_stories_payload" ]; then
+            warning "  [topology-router] could not build its input from the PRD — SKIPPING the model router; the topology below is the heuristic's, not a model's"
+        fi
 
     _router_started=$(date -Iseconds)
-    _router_out=$(echo "$_stories_payload" | \
+    _router_out=""
+    [ -n "$_stories_payload" ] && _router_out=$(echo "$_stories_payload" | \
         ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-${EPAM_API_KEY_ANTHROPIC:-}}" \
         node "$_router_js" 2>/dev/null || echo "")
 
@@ -5147,13 +4907,20 @@ run_pre_phase_assessment() {
     # shellcheck disable=SC2287
     local _pfa_facts_file; _pfa_facts_file=$(mktemp "${TMPDIR:-/tmp}/pfa-facts-XXXXXX.txt")
     printf '%s' "${_pfa_facts:-}" > "$_pfa_facts_file"
+      # THE GLOBALS, NOT LOWERCASE NAMES THAT EXIST NOWHERE. `prd_rel` and `profiles_rel`
+      # are assigned in no line of this script; the values live in PRD_REL and
+      # PROFILES_REL, computed near the top. Reading the lowercase names handed the
+      # renderer two empty strings, and it correctly refused to render an analyst that
+      # would then report on files it had not been told about — killing both lanes in
+      # the pre-phase skill assessment. One call site three lines below already used
+      # the globals, which is why only these two failed.
     _ap_vals=$(mktemp "${TMPDIR:-/tmp}/post-failure-analyst-vals-XXXXXX.json")
     jq_vals \
           --rawfile pfa_facts "$_pfa_facts_file" \
           --arg pfa_tool_budget "$_pfa_tool_budget" \
           --arg phase_id "$phase_id" \
-          --arg prd_rel "$prd_rel" \
-          --arg profiles_rel "$profiles_rel" \
+          --arg prd_rel "${PRD_REL}" \
+          --arg profiles_rel "${PROFILES_REL}" \
           '{"__PFA_FACTS__":$pfa_facts,"__PFA_TOOL_BUDGET__":$pfa_tool_budget,"__PHASE_ID__":$phase_id,"__PRD_REL__":$prd_rel,"__PROFILES_REL__":$profiles_rel}' > "$_ap_vals"
     # The codeline's own facts — this template declares them and nothing supplied them.
     # Stack facts are the RENDERER's job — engine-prompt.js adds exactly the stack
@@ -5236,7 +5003,7 @@ run_pre_phase_assessment() {
         # is what makes the deterministic apply safe, and removing the writes is
         # what makes the schema safe: a schema over an agent that still exhausts
         # returns a valid EMPTY object, which is a loud failure turned silent.
-        EPAM_ALLOWED_WRITE_PATHS="" \
+        export EPAM_ALLOWED_WRITE_PATHS="" \
         EPAM_MAX_TOOL_CALLS="${_pfa_tool_budget}" \
         EPAM_RESPONSE_SCHEMA="${_pfa_schema:-}" \
         # ITS OWN IDENTITY. This passed "team-lead-agent", so the pre-phase skill assessment
@@ -5471,7 +5238,7 @@ run_hybrid_precoordination() {
     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/hybrid-prephase-coordinator-vals-XXXXXX.json")
     jq_vals \
           --arg phase_id "$phase_id" \
-          --arg prd_rel "$prd_rel" \
+          --arg prd_rel "${PRD_REL}" \
           '{"__PHASE_ID__":$phase_id,"__PRD_REL__":$prd_rel}' > "$_cp_vals"
     coord_prompt="$(render_engine_prompt hybrid-prephase-coordinator "$_cp_vals")"
     rm -f "$_cp_vals"
@@ -5628,12 +5395,22 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
         fi
     fi
     _rg_vendored="$(printf '%s' "$_rg_facts" | python3 "$SCRIPT_DIR/lib/handlers/json-field.py" installDir 2>/dev/null || echo "")"
+    # WHY IT IS NOT READY, NOT MERELY THAT IT IS NOT.
+    #
+    # "declares a test script but it could not be run" names no cause, so diagnosing it means
+    # re-deriving four values by hand from outside the run. Each is known here; stating the one
+    # that failed turns an afternoon of bisecting into a line of output.
     _rg_ready=1
-    [ "$_rg_test_declared" -eq 1 ] || _rg_ready=0
+    _rg_notready=""
+    [ "$_rg_test_declared" -eq 1 ] || { _rg_ready=0; _rg_notready="no test command detected"; }
     # Only an ecosystem that vendors in-repo needs its interpreter and its install present before
     # the tests can be trusted. Requiring them of every ecosystem is what skipped the guard.
     if [ -n "$_rg_vendored" ] && [ "$_rg_vendored" != "null" ]; then
-      { [ -n "$_rg_node" ] && [ -n "$_rg_bin" ]; } || _rg_ready=0
+      if [ -z "$_rg_node" ]; then
+          _rg_ready=0; _rg_notready="no node could be resolved for this codeline"
+      elif [ -z "$_rg_bin" ]; then
+          _rg_ready=0; _rg_notready="${_rg_vendored}/.bin holds no executable — dependencies not installed"
+      fi
     fi
     if [ "$_rg_ready" -eq 1 ]; then
         step_emit "5" "running" "Step 5: Regression guard"
@@ -5781,6 +5558,7 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
         if [ "$_rg_test_declared" -eq 1 ]; then
             step_emit "5" "fail" "Step 5: Regression guard" "declares a test script but it could not be run"
             error "Step 5: Regression guard COULD NOT RUN — $_rg_root declares a test script but it could not be executed"
+            error "  Reason: ${_rg_notready:-unknown}"
             error "  test command: ${_rg_test_cmd:-<none declared>}   package manager: ${_rg_pm:-<none detected>}   vendored: ${_rg_vendored:-<none>}"
             error "  The baseline is therefore UNVERIFIED: a break introduced by an earlier phase would not be caught."
             error "  This is an environment failure, not an absence of tests — check the codeline's node_modules install."
@@ -5840,6 +5618,46 @@ else
         ] | length
     ' "$_mc_prd_target" 2>/dev/null || echo 0)
 
+    # RUNS WHETHER OR NOT A FIELD WAS MISSING.
+    #
+    # This sat inside the `else` below — the branch taken only when model/aiProvider/
+    # reasoningEffort were ABSENT. So COMPLETE-BUT-WRONG was never checked: a story carrying a
+    # model on no declared ladder had all three fields, took the fast path, and the guard written
+    # to catch exactly that value was skipped. The operator saw the reassuring line, "All pending
+    # stories already have model/aiProvider/reasoningEffort".
+    #
+    # Live 2026-09-02: AMSD-1919 carried MiniMax-M3 on the claude set and pre-flight refused two
+    # launches. A check that only runs when something is ABSENT cannot catch something WRONG.
+    # A MODEL ON NO LADDER CANNOT ESCALATE — CAUGHT HERE, NOT NEXT RUN.
+    #
+    # The coordinator writes its assignment straight into the PRD, and nothing looked at it
+    # until the NEXT run's pre-flight, which then refused to start. Live 2026-08-28: mock3's two
+    # stories were assigned MiniMax-M3 on a claude stack, EPAM_MODEL_PROVIDER_MAP routed
+    # MiniMax-* to the minimax provider, and the writer spent twelve attempts against a model
+    # this stack does not declare. The following run would not start at all.
+    #
+    # The permitted set is the project's own declared ladder — read, never listed. An assignment
+    # outside it is corrected to that ladder's opening model and said out loud: the run keeps
+    # moving on a model that can actually escalate, and the deviation is visible rather than
+    # discovered a run later.
+    if command -v jq >/dev/null 2>&1; then
+        _mc_allowed="$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/ladder-models.js" 2>/dev/null || echo "")"
+        if [ -n "$_mc_allowed" ]; then
+            _mc_fixed=$(jq -r --argjson allowed "$_mc_allowed" '
+                [ .stories[]? | select((.model // "") != "" and ((.model) as $m | $allowed | index($m) | not)) | .id ]
+                | join(", ")' "$_mc_prd_target" 2>/dev/null || echo "")
+            if [ -n "$_mc_fixed" ]; then
+                _mc_start=$(printf '%s' "$_mc_allowed" | jq -r '.[0] // empty')
+                warning "  [prd-model-coordinator] assigned a model on no declared ladder for: ${_mc_fixed}"
+                warning "    corrected to '${_mc_start}' — a model off the ladder has no successor and cannot escalate"
+                _mc_tmp=$(mktemp)
+                jq --argjson allowed "$_mc_allowed" --arg start "$_mc_start" '
+                    .stories |= map(if ((.model // "") != "" and ((.model) as $m | $allowed | index($m) | not))
+                                    then .model = $start else . end)'                         "$_mc_prd_target" > "$_mc_tmp" 2>/dev/null && mv "$_mc_tmp" "$_mc_prd_target" || rm -f "$_mc_tmp"
+            fi
+        fi
+    fi
+
     if [ "${_mc_missing_count:-0}" -eq 0 ]; then
         info "  [prd-model-coordinator] All pending stories already have model/aiProvider/reasoningEffort"
     else
@@ -5858,11 +5676,25 @@ else
         _mc_role_file=$(mktemp "${TMPDIR:-/tmp}/mc-role-XXXXXX.txt")
         jq -r '.["prd-model-coordinator"] // ""' "$_mc_profiles_file" > "$_mc_role_file" 2>/dev/null || : > "$_mc_role_file"
         _cp_vals=$(mktemp "${TMPDIR:-/tmp}/prd-model-coordinator-vals-XXXXXX.json")
-        jq_vals \
-              --rawfile profile "$_mc_role_file" \
-              --arg mc_prd_target "$_mc_prd_target" \
-              --arg mc_phase "$_mc_phase" \
-              '{"__PROFILE__":$profile,"__MC_PRD_TARGET__":$mc_prd_target,"__MC_PHASE__":$mc_phase}' > "$_cp_vals"
+          # THE STACK'S OWN VOCABULARY, NOT THE PERSONA'S. The persona named MiniMax-M3 and
+          # {minimax, openrouter} in prose, so on the claude stack the coordinator wrote a model no claude
+          # ladder declares into every story -- no successor, so no escalation, and the NEXT run
+          # refused to start (2026-08-28). Read from the resolved set, so a project declaring other
+          # models or runners needs no change here.
+          _mc_models=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/ladder-models.js" 2>/dev/null || echo "")
+          _mc_providers=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/ladder-providers.js" 2>/dev/null || echo "")
+          if [ -z "$_mc_models" ] || [ "$_mc_models" = "[]" ] || [ -z "$_mc_providers" ] || [ "$_mc_providers" = "[]" ]; then
+              # Refuse rather than render an empty vocabulary: an unconstrained coordinator invents
+              # names this stack cannot route, which is the defect this replaced.
+              error "[prd-model-coordinator] the resolved provider set declares no models or no providers -- refusing to run it."
+          fi
+          jq_vals \
+                --rawfile profile "$_mc_role_file" \
+                --arg mc_prd_target "$_mc_prd_target" \
+                --arg mc_phase "$_mc_phase" \
+                --arg mc_models "$_mc_models" \
+                --arg mc_providers "$_mc_providers" \
+                '{"__PROFILE__":$profile,"__MC_PRD_TARGET__":$mc_prd_target,"__MC_PHASE__":$mc_phase,"__MC_PERMITTED_MODELS__":$mc_models,"__MC_PERMITTED_PROVIDERS__":$mc_providers}' > "$_cp_vals"
         _mc_prompt="$(render_engine_prompt prd-model-coordinator "$_cp_vals")"
         rm -f "$_cp_vals"
         rm -f "$_mc_role_file"
@@ -5898,18 +5730,22 @@ else
             ORCH_JSON_RESULT="$_mc_cost" \
             AI_GATE_ALLOW_TOOLS=1 \
             ${ORCH_GATE_PROVIDER:+AI_PROVIDER="$ORCH_GATE_PROVIDER"} \
-            ${ORCH_GATE_MODEL:+AI_MODEL="$ORCH_GATE_MODEL"} \
+            ${EPAM_MODEL:+AI_MODEL="$EPAM_MODEL"} \
             EPAM_DANGEROUS_SKIP_APPROVAL=1 \
             EPAM_MAX_TOOL_CALLS="${PRD_MODEL_COORDINATOR_MAX_TOOL_CALLS:-12}" \
             CLAUDE_CMD="$CLAUDE_CMD" \
             EPAM_CLI="${EPAM_CLI:-epam}" \
             "$AI_RUNNER_CMD" \
                 ${ORCH_GATE_PROVIDER:+--provider "$ORCH_GATE_PROVIDER"} \
-                ${ORCH_GATE_MODEL:+--model "$ORCH_GATE_MODEL"} \
+                ${EPAM_MODEL:+--model "$EPAM_MODEL"} \
             2>&1 | tee -a "$LOG_DIR/prd-model-coordinator-${_mc_phase}.log")
         # PIPESTATUS[0], not the pipeline status: without pipefail this is tee's, always 0, so a
         # failed coordinator read as a success and every story kept whatever model it had.
         _mc_rc="${PIPESTATUS[0]}"
+        # Every line here forwards a value to the child process, and each expansion deliberately reads
+        # the OUTER value — which IS the value being forwarded. shellcheck is right about the shape and
+        # wrong about the intent; rewriting it risks silently dropping a credential the child needs.
+        # shellcheck disable=SC2097,SC2098
         ACTIVITY_FILE="${ACTIVITY_FILE:-$LOG_DIR/agent-activity.jsonl}" LOG_DIR="$LOG_DIR" \
           "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/emit-cost.js" "$_mc_cost" prd-model-coordinator 2>/dev/null || true
         rm -f "$_mc_cost" 2>/dev/null || true
@@ -5918,6 +5754,7 @@ else
         fi
 
         _mc_assigned_count=$(echo "$_mc_result" | python3 "$SCRIPT_DIR/lib/handlers/mc-assigned-count.py" 2>/dev/null || echo 0)
+
 
         _mc_prd_after=$(cat "$_mc_prd_target" 2>/dev/null || echo "{}")
         # Gate on whether the PRD FILE actually changed, not the agent's own
@@ -5954,7 +5791,7 @@ else
             printf '%s' "$_mc_prd_before" > "$_mc_before_file"
             printf '%s' "$_mc_prd_after" > "$_mc_after_file"
             _mc_verdict=$(python3 "$SCRIPT_DIR/lib/handlers/mc-review.py" "$_mc_before_file" "$_mc_after_file" \
-                "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json}" \
+                "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/llm-settings.json}}" \
                 2>"$_mc_verdict_stderr"
 )
             rm -f "$_mc_before_file" "$_mc_after_file"
@@ -7071,6 +6908,15 @@ else
                 if [ "$_tc_attempt" -ge 1 ]; then
                     _tc_bn_err=""
                     _tc_bn_err=$(bash -n "$_tc_path" 2>&1 || true)
+                    # A CLEAN SYNTAX CHECK IS AN ANSWER, NOT AN ABSENCE. `bash -n` prints nothing when the
+                    # file parses, which is the USUAL case here: this retry fires because the previous attempt
+                    # failed, and most failures are not syntactic. The empty value made the retry-prefix render
+                    # refuse, the handler below fell back to the ORIGINAL prompt, and the retry then repeated
+                    # the identical call that had just failed — an unwinnable loop, reported only as "could not
+                    # render the retry prefix". Same idiom as the analyst's "(empty — it produced nothing)":
+                    # say what was observed rather than nothing at all.
+                    [ -n "${_tc_bn_err//[[:space:]]/}" ] || \
+                        _tc_bn_err="(the file parses cleanly — the previous attempt did not fail on syntax)"
                     _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
                     jq_vals \
                           --arg tc_bn_err "${_tc_bn_err}" \
@@ -7280,7 +7126,6 @@ run_phase_assessment() {
     local assessment_log="$LOG_DIR/assessment-${phase_id}.log"
 
     local _pa_attempt=0 _pa_success=0 _pa_raw=""
-    local _saved_pa_model="${ORCH_GATE_MODEL:-}"
     local _saved_gate_timeout="${EPAM_GATE_TIMEOUT_SECS:-}"
     # No tools needed anymore (see comment above) — this is now a pure
     # text-in/JSON-out judgment call, same class as openspec/speckit. The
@@ -7322,7 +7167,6 @@ run_phase_assessment() {
         fi
         _pa_attempt=$(( _pa_attempt + 1 ))
     done
-    ORCH_GATE_MODEL="$_saved_pa_model"
     unset ORCH_AGENT_MODEL_CLIMB
     EPAM_GATE_TIMEOUT_SECS="$_saved_gate_timeout"
 
@@ -7942,6 +7786,11 @@ _review_approval_is_giveup() {
 
 while true; do
     _review_fp_now="$(_review_tree_fingerprint)"
+    # Guarded so an unloaded library is skipped rather than fatal: an undefined function
+    # returns 127, and `|| exit 1` on that silently killed the enclosing block wherever a
+    # harness runs this code with the gate library absent. The orchestrator sources it at the
+    # top, and pre-flight is what actually gates a run.
+    declare -f require_stage_coverage >/dev/null && { require_stage_coverage gates || exit 1; }
     if "$SCRIPT_DIR/team-lead-review.sh" "$PHASE"; then
         if _review_approval_is_giveup "${_review_prev_blocker:-0}" "${_review_prev_fp:-}" "$_review_fp_now"; then
             error "Step 3.6: review APPROVED after a blocker-level rejection, with the codeline UNCHANGED since that rejection."
@@ -8372,7 +8221,7 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
             if [ -f "$SCRIPT_DIR/lib/kb-apply.sh" ]; then
                 # shellcheck disable=SC1090
                 . "$SCRIPT_DIR/lib/kb-apply.sh"
-                head -c 8000 "$_lint_log" 2>/dev/null | \
+                head -c "$(evidence_window lintLogChars)" "$_lint_log" 2>/dev/null | \
                     kb_record_episode "${_phase:-${PHASE:-core}}" "lint-gate" "lint gate failed" || true
             fi
             info "  [lint-gate:analyst] Extracting grounded finding from lint log..."
@@ -8434,7 +8283,7 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
                 # silently lose tool access the same way codeline-bridge-agent
                 # did. See gate-finding-analyst-dual-mechanism.test.ts.
                 _lga_raw="$(echo "$_lga_prompt" | \
-                    timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-qwen}" \
+                    timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-openrouter}" \
                         --model "${_lga_model}" \
                         --json - 2>>"$_lint_rem_log" || echo "")"
                 if [ -n "$_lga_raw" ]; then
@@ -8485,7 +8334,7 @@ if m:
                         rm -f "$_rp_vals"
                     fi
                     _lrem_raw="$(echo "$_lrem_prompt" | \
-                        timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-qwen}" \
+                        timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-openrouter}" \
                             --model "${_lrem_model}" \
                             --json - 2>>"$_lint_rem_log" || echo "")"
                     if [ -n "$_lrem_raw" ]; then
@@ -8498,8 +8347,7 @@ if m:
                 _lint_ac_tmp="$(mktemp)"
                 echo "$_lint_ac_raw" > "$_lint_ac_tmp"
                 _lint_acs_added="$( ( flock -w 10 200 || { error "  [lint-gate:remediator] Could not acquire lock on ${MAIN_PRD_FILE:-$PRD_FILE}"; return 1; }
-                python3 "$SCRIPT_DIR/lib/handlers/lint-ac.py" "${MAIN_PRD_FILE:-$PRD_FILE}" "$_lint_story_id" "$_lint_ac_tmp"
-                2>/dev/null || echo "0"
+                python3 "$SCRIPT_DIR/lib/handlers/lint-ac.py" "${MAIN_PRD_FILE:-$PRD_FILE}" "$_lint_story_id" "$_lint_ac_tmp" 2>/dev/null || echo "0"
                 ) 200>"${MAIN_PRD_FILE:-$PRD_FILE}.lock" )"
                 rm -f "$_lint_ac_tmp"
                 if [ "${_lint_acs_added:-0}" -gt 0 ]; then
@@ -8510,13 +8358,13 @@ if m:
                 # Agent 3: profile-augmentor — 1 retry on empty output
                 info "  [lint-gate:augmentor] Recording lint anti-pattern in profile..."
                 _laug_raw="$(echo "$_lint_finding_raw" | \
-                    timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-qwen}" \
+                    timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-openrouter}" \
                         --model "$(seam_model_or_fail "gate-finding-analyst")" \
                         --json - 2>>"$_lint_rem_log" || echo "")"
                 if [ -z "$_laug_raw" ]; then
                     warning "  [lint-gate:augmentor] attempt 1 returned no output — retrying"
                     echo "$_lint_finding_raw" | \
-                        timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-qwen}" \
+                        timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-openrouter}" \
                             --model "$(seam_model_or_fail "story-ac-remediator")" \
                             --json - 2>>"$_lint_rem_log" || true
                 fi
@@ -8818,15 +8666,28 @@ step_emit "23"  "skip" "Step 23: Browser E2E" "SKIP_TESTING_GATES=true"
                 failed=1
                 continue
             fi
-            if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$story_log" 2>/dev/null; then
-                error "  Step 4.6: $route reported FAIL for $story_id"
-                e2e_route_failed=$((e2e_route_failed + 1))
-                failed=1
-            elif grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$story_log" 2>/dev/null; then
-                warning "  Step 4.6: $route reported WARN for $story_id"
-            else
-                success "  Step 4.6: $route PASS for $story_id"
-            fi
+            # ABSENCE OF "fail" IS NOT SUCCESS. This read the log for fail, then warn, and called
+            # everything else a PASS — so an empty log, an unparseable reply or a verdict this
+            # gate has never emitted was reported to the operator in the same words as an
+            # approval. See qa_gate_verdict_of in lib/gate-verdicts.sh.
+            case "$(qa_gate_verdict_of "$story_log")" in
+                fail)
+                    error "  Step 4.6: $route reported FAIL for $story_id"
+                    e2e_route_failed=$((e2e_route_failed + 1))
+                    failed=1
+                    ;;
+                warn)
+                    warning "  Step 4.6: $route reported WARN for $story_id"
+                    ;;
+                pass)
+                    success "  Step 4.6: $route PASS for $story_id"
+                    ;;
+                *)
+                    error "  Step 4.6: $route produced NO verdict for $story_id — treating as a failure, because a gate that did not judge has not approved anything"
+                    e2e_route_failed=$((e2e_route_failed + 1))
+                    failed=1
+                    ;;
+            esac
         done <<< "$phase_ids"
 
         if [ $e2e_route_runs -eq 0 ]; then
@@ -8903,8 +8764,7 @@ $sast_prompt"
             local _semgrep_rc=$?
             set -e
             if [ -f "$semgrep_json" ] && [ -s "$semgrep_json" ]; then
-                semgrep_summary=$(python3 "$SCRIPT_DIR/lib/handlers/semgrep-summary.py" "$semgrep_json"
-2>/dev/null || echo "(semgrep unavailable)")
+                semgrep_summary=$(python3 "$SCRIPT_DIR/lib/handlers/semgrep-summary.py" "$semgrep_json" 2>/dev/null || echo "(semgrep unavailable)")
             else
                 semgrep_summary="(semgrep produced no output — exit code $_semgrep_rc)"
             fi
@@ -8978,8 +8838,7 @@ $sast_prompt"
             # hardcoded file names, no assumption beyond "this is a tsconfig.json".
             if [ $_tsc_rc -ne 0 ] && echo "$_tsc_out" | grep -q "error TS18003"; then
                 local _placeholder_created=""
-                _placeholder_created=$(python3 "$SCRIPT_DIR/lib/handlers/tsconfig-strictness.py" "$PROJECT_ROOT"
-2>/dev/null || echo "")
+                _placeholder_created=$(python3 "$SCRIPT_DIR/lib/handlers/tsconfig-strictness.py" "$PROJECT_ROOT" 2>/dev/null || echo "")
 
                 if [ -n "$_placeholder_created" ]; then
                     warning "  [scaffold-self-heal] tsconfig.json include glob matched zero files (TS18003) — created minimal placeholder: $_placeholder_created"
@@ -9006,7 +8865,7 @@ $sast_prompt"
                 local _err_count
                 _err_count=$(echo "$_tsc_out" | { grep -c "error TS" 2>/dev/null || true; })
                 tsc_summary="tsc: FAIL (exit $_tsc_rc) — $_err_count error(s)
-$(echo "$_tsc_out" | head -40)"
+$(echo "$_tsc_out" | head -n "$(evidence_window typecheckLines)")"
             fi
         else
             tsc_summary="(tsc oracle skipped — node or tsc binary not found at $PROJECT_ROOT)"
@@ -9052,8 +8911,7 @@ $(echo "$_tsc_out" | head -40)"
             set -e
             # Also inject content of expected files listed in technicalNotes.files
             local _spec_file_excerpts=""
-            _spec_file_excerpts=$(python3 "$SCRIPT_DIR/lib/handlers/phase-story-summary.py" "$PRD_FILE" "$phase_id" "$PROJECT_ROOT"
-2>/dev/null || echo "(file oracle unavailable)")
+            _spec_file_excerpts=$(python3 "$SCRIPT_DIR/lib/handlers/phase-story-summary.py" "$PRD_FILE" "$phase_id" "$PROJECT_ROOT" 2>/dev/null || echo "(file oracle unavailable)")
             _spec_impl_evidence="## Implementation Evidence (pre-computed — do NOT call any tools)
 
 ### Git diff since phase start ($phase_id)
@@ -9113,8 +8971,7 @@ $spec_prompt"
             local _oracle_rc=$?
             set -e
             if [ -f "$oracle_json" ]; then
-                oracle_summary=$(python3 "$SCRIPT_DIR/lib/handlers/vitest-oracle-summary.py" "$oracle_json"
-2>/dev/null || echo "(oracle unavailable)")
+                oracle_summary=$(python3 "$SCRIPT_DIR/lib/handlers/vitest-oracle-summary.py" "$oracle_json" 2>/dev/null || echo "(oracle unavailable)")
             else
                 oracle_summary="(vitest ran but produced no JSON output — exit code $_oracle_rc)"
             fi
@@ -9192,8 +9049,13 @@ $spec_prompt"
                 _failing_logs+=("$sast_log")
                 _log_labels+=("sast-sentinel")
             else
+                # THE RECORD SAID warn AND THE OPERATOR WAS TOLD "PASS". blockerCount could not
+                # be parsed and the raw verdict held no "fail", so nothing was READ — on the
+                # security gate, of all of them. The step stays a warn, which is the policy
+                # already chosen here; what changes is that the sentence matches it. A gate whose
+                # findings could not be parsed has not cleared anything.
                 step_emit "22a" "warn" "Step 22a: SAST sentinel" "no parseable findings"
-                success "  SAST sentinel: PASS (no parseable findings)"
+                warning "  SAST sentinel: findings could not be parsed and no fail verdict was present — NOT a pass; nothing was checked"
             fi
         elif [ "$_sast_blockers" -gt 0 ]; then
             step_emit "22a" "fail" "Step 22a: SAST sentinel"
@@ -9230,8 +9092,7 @@ $spec_prompt"
         # spec-validator "fail" verdict (e.g. SKY-004 missing /search, /cheapest,
         # dashboard) was silently downgraded to a non-blocking warning on every
         # run, never once actually parsed. Fixed: double-quote so bash expands it.
-        _spec_failing=$(python3 "$SCRIPT_DIR/lib/handlers/spec-extractor.py" "$spec_log"
-2>/dev/null || echo "error")
+        _spec_failing=$(python3 "$SCRIPT_DIR/lib/handlers/spec-extractor.py" "$spec_log" 2>/dev/null || echo "error")
         if [ "$_spec_failing" = "no-data" ] || [ "$_spec_failing" = "no-json" ] || [ "$_spec_failing" = "error" ]; then
             step_emit "22b" "warn" "Step 22b: Spec validator" "no story data"
             warning "  Spec validator: WARN — agent returned no story data (oracle injection needed)"
@@ -9398,7 +9259,7 @@ $review_prompt"
                         fi
                         _src_content="$_src_content
 --- $_f ---
-$(head -100 "$PROJECT_ROOT/$_f" 2>/dev/null || echo '(unreadable)')${_mut_src_marker}"
+$(head -n "$(evidence_window mutationSourceLines)" "$PROJECT_ROOT/$_f" 2>/dev/null || echo '(unreadable)')${_mut_src_marker}"
                     done <<< "$_changed_src"
                 fi
                 # The tests to judge are THIS RUN'S tests. This used to be
@@ -9429,7 +9290,7 @@ $(head -100 "$PROJECT_ROOT/$_f" 2>/dev/null || echo '(unreadable)')${_mut_src_ma
                     fi
                     _test_content="$_test_content
 --- $_tf ---
-$(head -60 "$_tf" 2>/dev/null || echo '(unreadable)')${_mut_test_marker}"
+$(head -n "$(evidence_window mutationTestLines)" "$_tf" 2>/dev/null || echo '(unreadable)')${_mut_test_marker}"
                 done <<< "$_test_files"
                 _cp_vals=$(mktemp "${TMPDIR:-/tmp}/qa-evidence-labels-vals-XXXXXX.json")
                 jq_vals \
@@ -9489,8 +9350,7 @@ $mutant_prompt"
                 # pipeline. Same "quote it, then verify the quote" pattern now
                 # applied here: require at least one blocker finding whose
                 # codeSnippet is a literal substring of the real file on disk.
-                _review_grounded=$(python3 "$SCRIPT_DIR/lib/handlers/review.py" "$review_log" "$PROJECT_ROOT"
-2>/dev/null || echo "0")
+                _review_grounded=$(python3 "$SCRIPT_DIR/lib/handlers/review.py" "$review_log" "$PROJECT_ROOT" 2>/dev/null || echo "0")
                 if [ "${_review_grounded:-0}" -gt 0 ]; then
                     step_emit "22c" "fail" "Step 22c: Review ranger"
                     error "  Review-ranger: FAIL — confirmed blocker (codeSnippet verified against the real file)"
@@ -9529,8 +9389,7 @@ $mutant_prompt"
                 # originalCode is a literal substring of the real file on disk
                 # (catches a fabricated file/line/code claim, same "quote it,
                 # verify it" pattern as review-ranger/perf-sentinel).
-                _mutant_grounded=$(python3 "$SCRIPT_DIR/lib/handlers/mutant.py" "$mutant_log" "$PROJECT_ROOT"
-2>/dev/null || echo "0")
+                _mutant_grounded=$(python3 "$SCRIPT_DIR/lib/handlers/mutant.py" "$mutant_log" "$PROJECT_ROOT" 2>/dev/null || echo "0")
                 if [ "${_mutant_grounded:-0}" -gt 0 ]; then
                     step_emit "22d" "fail" "Step 22d: Mutant hunter"
                     error "  Mutant-hunter: FAIL — confirmed surviving mutation (originalCode verified against the real file, survived count self-consistent)"
@@ -9693,10 +9552,33 @@ $perf_prompt"
         local _rb_exit=0
         wait $_rb_pid || _rb_exit=$?
         { [ $_rb_exit -eq 0 ] && _emit_agent complete "runtime-boundary"; } || _emit_agent fail "runtime-boundary" "exit $_rb_exit"
-        if [ $_rb_exit -eq 0 ]; then
-            step_emit "22g" "pass" "Step 22g: Runtime boundary"
+        # THE EXIT CODE ONLY SAYS THE AGENT RAN. What it FOUND is in the log, and until
+        # 2026-08-28 nothing read it: a grounded report that the change cannot execute printed
+        # "pass" here because the process exited 0.
+        if [ $_rb_exit -ne 0 ]; then
+            # No structured output after retries. A gate that could not run is not a confirmed
+            # failure, and is not a pass either.
+            step_emit "22g" "warn" "Step 22g: Runtime boundary" "no structured output (exit ${_rb_exit})"
+            warning "  Runtime-boundary: no structured output after all retries — non-blocking warn"
         else
-            step_emit "22g" "fail" "Step 22g: Runtime boundary" "exit ${_rb_exit}"
+            case "$(runtime_boundary_verdict "$_rb_log" "$PROJECT_ROOT")" in
+                fail)
+                    step_emit "22g" "fail" "Step 22g: Runtime boundary"
+                    error "  Runtime-boundary: FAIL — the change cannot execute as this codeline is configured."
+                    error "    See ${_rb_log}"
+                    failed=1
+                    _failing_logs+=("$_rb_log")
+                    _log_labels+=("runtime-boundary")
+                    ;;
+                warn)
+                    step_emit "22g" "warn" "Step 22g: Runtime boundary" "findings not grounded in real files"
+                    warning "  Runtime-boundary: WARN — findings could not be grounded in real files (non-blocking)"
+                    ;;
+                *)
+                    step_emit "22g" "pass" "Step 22g: Runtime boundary"
+                    success "  Runtime-boundary: PASS"
+                    ;;
+            esac
         fi
 
         # Evaluate Phase C results
@@ -9727,8 +9609,7 @@ $perf_prompt"
                 #     were actually demonstrated against the real source, not merely asserted.
                 local _node_bin
                 _node_bin=$(detect_node 2>/dev/null || true)
-                _fuzz_grounded=$(python3 "$SCRIPT_DIR/lib/handlers/fuzz-verify.py" "$fuzz_log" "$PROJECT_ROOT" "${_node_bin:-}"
-2>/dev/null || echo "0")
+                _fuzz_grounded=$(python3 "$SCRIPT_DIR/lib/handlers/fuzz-verify.py" "$fuzz_log" "$PROJECT_ROOT" "${_node_bin:-}" 2>/dev/null || echo "0")
                 if [ "${_fuzz_grounded:-0}" -gt 0 ]; then
                     step_emit "22e" "fail" "Step 22e: Fuzz-weaver"
                     error "  Fuzz-weaver: FAIL — ${_fuzz_grounded} confirmed vulnerability/vulnerabilities (verified by actually running the agent's own test against the real code)"
@@ -9775,8 +9656,7 @@ $perf_prompt"
                 # content — same "quote it, then we verify the quote"
                 # pattern already used for the code-graph-detective's
                 # brokenLine field.
-                _perf_grounded=$(python3 "$SCRIPT_DIR/lib/handlers/perf.py" "$perf_log" "$PROJECT_ROOT"
-2>/dev/null || echo "0")
+                _perf_grounded=$(python3 "$SCRIPT_DIR/lib/handlers/perf.py" "$perf_log" "$PROJECT_ROOT" 2>/dev/null || echo "0")
                 if [ "${_perf_grounded:-0}" -gt 0 ]; then
                     step_emit "22f" "fail" "Step 22f: Perf sentinel"
                     error "  Perf-sentinel: FAIL — confirmed performance blocker (codeSnippet verified against the real file)"
@@ -9886,7 +9766,8 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                 local _finding_json="" _gfa_attempt=0
                 while [ "$_gfa_attempt" -lt 2 ] && [ -z "$_finding_json" ]; do
                     local _gfa_prompt="$_finding_prompt"
-                    local _gfa_model="$(seam_model_or_fail "gate-finding-analyst")"
+                    local _gfa_model
+                    _gfa_model="$(seam_model_or_fail "gate-finding-analyst")"
                     if [ "$_gfa_attempt" -ge 1 ]; then
                         [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _gfa_model="${ESCALATION_MODEL_HIGH}"
                         _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
@@ -9898,10 +9779,12 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                         rm -f "$_rp_vals"
                     fi
                     local _gfa_raw
+                    # Set for the child process invoked below, or for a script that sources this file. The
+                    # analyser cannot see the consumer, so it reports these unused; removing them takes the value away.
+                    # shellcheck disable=SC2034
                     _gfa_raw=$(echo "$_gfa_prompt" | \
                         AI_GATE_ALLOW_TOOLS=1 \
                         # NO PROVIDER DEFAULT. This read `:-minimax`, which no configuration
-                        # asks for — every project config.env and every launcher sets qwen. So
                         # the literal was both unreachable in practice and wrong when reached,
                         # and routing the same model through another provider is a different
                         # setup, not a detail (MiniMax direct vs via a gateway differed 99.8%
@@ -10010,7 +9893,8 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                 local _ac_result="" _acr_attempt=0
                 while [ "$_acr_attempt" -lt 2 ] && [ -z "$_ac_result" ]; do
                     local _acr_prompt="$_ac_prompt"
-                    local _acr_model="$(seam_model_or_fail "story-ac-remediator")"
+                    local _acr_model
+                    _acr_model="$(seam_model_or_fail "story-ac-remediator")"
                     if [ "$_acr_attempt" -ge 1 ]; then
                         [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _acr_model="${ESCALATION_MODEL_HIGH}"
                         _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
@@ -10042,8 +9926,7 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                 echo "$_ac_result" > "$_ac_result_tmp"
                 local _acs_added
                 _acs_added=$( ( flock -w 10 200 || { error "  [story-ac-remediator] Could not acquire lock on ${MAIN_PRD_FILE:-$PRD_FILE}"; return 1; }
-                python3 "$SCRIPT_DIR/lib/handlers/ac-apply.py" "${MAIN_PRD_FILE:-$PRD_FILE}" "$_story_id" "$_ac_result_tmp"
-                2>/dev/null || echo 0
+                python3 "$SCRIPT_DIR/lib/handlers/ac-apply.py" "${MAIN_PRD_FILE:-$PRD_FILE}" "$_story_id" "$_ac_result_tmp" 2>/dev/null || echo 0
                 ) 200>"${MAIN_PRD_FILE:-$PRD_FILE}.lock" )
                 rm -f "$_ac_result_tmp"
 
@@ -10345,7 +10228,7 @@ _failure_is_tolerated() {
             # HERESTRING, NOT A PIPE. `printf ... | head -150` kills this script: head takes its
             # lines and exits, printf gets SIGPIPE and dies 141, pipefail promotes it and set -e
             # ends the run -- silently. Measured at 141; it is what killed run 5 in the reviewer.
-            failure_excerpt=$(head -150 <<< "$_failure_excerpt_full")
+            failure_excerpt=$(head -n "$(evidence_window failureExcerptLines)" <<< "$_failure_excerpt_full")
             failure_excerpt="${failure_excerpt}
 [TRUNCATED — ${_failure_excerpt_lines} total lines, only the first 150 shown.]"
         else
@@ -10481,7 +10364,7 @@ _emit_unfixed_bug_list() {
 # (openspec → story agent → QA gates) in a bug_fix sub-phase.
 # Round 1 uses the original story model; round 2 escalates to
 # ESCALATION_MODEL (same model the InferenceLadder uses, default z-ai/glm-5.2)
-# via the qwen (OpenRouter) provider.
+# via the openrouter (OpenRouter) provider.
 # If the escalated model cannot fix it → hard fail with structured bug list.
 # UNIT_TEST_BUG_DEPTH env var prevents recursive bug story creation.
 run_unit_tests_gate() {
@@ -10850,18 +10733,9 @@ fi
 assert_no_story_ids_lost "presplit" "Step 24: Final post-phase assessment"
 assert_no_story_ids_gained "post-parallel" "Step 24: Final post-phase assessment"
 
-# ──────────────────────────────────────────────
-# Step 7: Load Phase Graph into Neo4j
-# ──────────────────────────────────────────────
-LOAD_GRAPH_SH="$SCRIPT_DIR/load-phase-graph.sh"
-if [ -f "$LOAD_GRAPH_SH" ]; then
-    log "Step 7: Loading phase graph into Neo4j..."
-    if PHASE="$PHASE" bash "$LOAD_GRAPH_SH" --phase "$PHASE" >> "$LOG_DIR/neo4j-import.log" 2>&1; then
-        success "Step 7: Phase graph loaded — Bloom: http://localhost:7474/browser/bloom"
-    else
-        warning "Step 7: Neo4j graph load skipped (Neo4j may not be running)"
-    fi
-fi
+# Step 7 (Neo4j phase-graph load) REMOVED 2026-08-31 at the operator's instruction. It loaded the
+# phase graph into a Neo4j instance nobody reads, warned and continued whenever Neo4j was absent —
+# which was always — and its only consumer was a Bloom URL. Gone with load-phase-graph.sh.
 
 # ──────────────────────────────────────────────
 # Step 7.5: Write cross-phase handoff document

@@ -56,7 +56,7 @@ if [ -f "$_ml_lib" ]; then
     # shellcheck source=lib/model-ladders.sh
     . "$_ml_lib" || true
     command -v export_model_ladders >/dev/null 2>&1 \
-        && export_model_ladders "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json}" || true
+        && export_model_ladders "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/llm-settings.json}}" || true
 fi
 # ask must come BEFORE any model is resolved below: seam_ladder_export sets EPAM_MODEL, and
 # a later assignment that wins makes the whole thing decorative.
@@ -205,6 +205,10 @@ if [ "$_rc2" -ne 0 ]; then
 fi
 
 if [ -n "$_dirty" ]; then
+    # The expansion is split into separate arguments ON PURPOSE: this passes a LIST — file paths or
+    # pids — to a command that takes them as individual operands. Quoting it would hand over one
+    # argument containing spaces, which is not the same call.
+    # shellcheck disable=SC2046
     git -C "$PROJECT_ROOT" add -- $(printf '%s\n' "$_dirty" | tr '\n' ' ') 2>/dev/null || true
     # Ticket-ID-first message — same commitlint-compatibility fix as
     # brownfield-repro-test-writer.sh's identical commit call (found live

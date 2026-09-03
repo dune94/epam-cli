@@ -5,17 +5,22 @@
 # names no tool, extension, directory or runtime path. Undeclared -> non-zero with a reason.
 _run_project_verification() {
     local _root="${1:-$PROJECT_ROOT}"
+    # THE SECTION IS THE CALLER'S, NOT AN ASSUMPTION. Without it every baseline ran the manifest's
+    # typecheck command -- including the one asked for section="test" -- so the suite baseline was
+    # never built, its cache was deleted, and every pre-existing suite failure was charged to the
+    # story. Live 2026-09-02 (AMSD-1919). Empty means "the plugin's default", which is typecheck.
+    local _section="${2:-}"
     local _auto="${AUTOMATION_DIR:-$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")}"
     local _plugin="${_auto}/plugins/verification-plugin.js"
     local _node="${NODE_CMD:-${NODE_BIN:-node}}"
     if [ ! -f "$_plugin" ]; then echo "verification plugin missing at $_plugin"; return 2; fi
     "$_node" -e '
       const p = require(process.argv[1]);
-      const r = p.runVerification(process.argv[2]);
+      const r = p.runVerification(process.argv[2], undefined, process.argv[3] || undefined);
       if (r.status === "unknown") { console.log("verification not declared: " + r.reason); process.exit(2); }
       if (r.output) console.log(r.output);
       process.exit(r.status === "pass" ? 0 : (r.exitCode || 1));
-    ' "$_plugin" "$_root"
+    ' "$_plugin" "$_root" "$_section"
 }
 
 # tsc-baseline-gate.sh — shared "new errors only" tsc filtering, used by
@@ -74,7 +79,8 @@ baseline_new_failures() {
             if [ ! -f "$baseline_cache" ]; then
                 local wt_dir
                 wt_dir=$(mktemp -d)
-                if git -C "$project_root" worktree add --detach "$wt_dir" "$baseline_sha" >/dev/null 2>&1; then
+                _wt_err=$(git -C "$project_root" worktree add --detach "$wt_dir" "$baseline_sha" 2>&1) && _wt_ok=1 || _wt_ok=0
+                if [ "$_wt_ok" = "1" ]; then
                     # VENDOR DIRECTORIES ARE GITIGNORED, so `worktree add` — which checks out only
                     # tracked files — leaves them absent. Without them the checker cannot resolve
                     # anything, the baseline comes back empty, and every current error looks NEW:
@@ -85,6 +91,23 @@ baseline_new_failures() {
                     # landed, the checker could not resolve anything at baseline, and its failure
                     # set came back wrong — so every current failure looked new. Basename is the
                     # link name inside the worktree; the source is already absolute.
+                    # THE PROJECT'S DECLARATION IS GITIGNORED, so a worktree does not carry it.
+                    #
+                    # .epam/ is provisioned by the pipeline and is UNTRACKED in the client repo
+                    # (confirmed: `git ls-files .epam` returns 0). `worktree add` checks out only
+                    # TRACKED files, so the baseline checkout had no verification.json — which meant
+                    # runVerification could not read a command (the baseline suite never ran, in
+                    # 420ms) and parseFailures returned null, so the node call exited 3 and the
+                    # caller's `rm -f "$baseline_cache"` deleted the cache. No baseline-failures-*
+                    # file has ever existed on this machine, for any section, and every PRE-EXISTING
+                    # failure was therefore charged to the story — which is what blocked AMSD-1919
+                    # through all 12 writer retries against a flake it never touched.
+                    #
+                    # Same reason the vendor dirs below are linked in: a checkout does not bring
+                    # what git does not track.
+                    if [ -d "$project_root/.epam" ]; then
+                        cp -r "$project_root/.epam" "$wt_dir/.epam" 2>/dev/null || true
+                    fi
                     local _vd
                     while IFS= read -r _vd; do
                         [ -n "$_vd" ] && [ -e "$_vd" ] \
@@ -101,7 +124,7 @@ baseline_new_failures() {
                     # the exact inverse of this gate. Capture first, parse second.
                     local _base_out
                     _base_out=$(mktemp)
-                    _run_project_verification "$wt_dir" > "$_base_out" 2>&1 || true
+                    _run_project_verification "$wt_dir" "$section" > "$_base_out" 2>&1 || true
                     if "$_node" -e '
                             const fs = require("fs");
                             const p = require(process.argv[1]);
@@ -112,10 +135,25 @@ baseline_new_failures() {
                           ' "$_plugin" "$wt_dir" "$section" "$_base_out" > "$baseline_cache" 2>/dev/null; then
                         :
                     else
+                        # LOUD, NOT SILENT. The cache could not be produced, so there is no baseline
+                        # to subtract — every PRE-EXISTING failure is about to be charged to this
+                        # story. That is a gate reporting a verdict it did not earn. Live
+                        # 2026-09-02 (AMSD-1919): no baseline-failures-* had ever been written on
+                        # this machine, and the run spent ~20 minutes discovering it indirectly
+                        # while the writer retried against a flake it could not fix.
+                        echo "[baseline-gate] CANNOT BUILD a ${section} baseline at ${baseline_sha:0:12} —" >&2
+                        echo "[baseline-gate] nothing will be subtracted, so PRE-EXISTING ${section} failures" >&2
+                        echo "[baseline-gate] will be attributed to this story. This is not a pass." >&2
                         rm -f "$baseline_cache"
                     fi
                     rm -f "$_base_out"
                     git -C "$project_root" worktree remove --force "$wt_dir" >/dev/null 2>&1 || true
+                fi
+                if [ "${_wt_ok:-0}" != "1" ]; then
+                    echo "[baseline-gate] CANNOT CHECK OUT the ${section} baseline ${baseline_sha:0:12}:" >&2
+                    echo "[baseline-gate]   ${_wt_err:-unknown}" >&2
+                    echo "[baseline-gate] no baseline will be subtracted — PRE-EXISTING failures will be" >&2
+                    echo "[baseline-gate] attributed to this story. This is not a pass." >&2
                 fi
                 rm -rf "$wt_dir" 2>/dev/null || true
             fi

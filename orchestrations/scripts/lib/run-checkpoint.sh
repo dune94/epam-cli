@@ -2,6 +2,17 @@
 
 # Modes are declared once, in config/run-modes.json — see lib/run-modes.sh.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/run-modes.sh"
+# A LIBRARY SOURCES WHAT IT CALLS.
+#
+# should_pause_before_writer and should_pause_after_agent_mint call is_truthy, which lives in
+# flags.sh. run-agent-orchestration.sh happens to source flags.sh one line earlier;
+# mock1-paused-run.sh does not — so in a script whose entire purpose is a PAUSED run, is_truthy was
+# undefined, both pause checks returned non-zero, and neither pause fired. Nothing reported it: an
+# undefined function in a boolean test simply reads as false.
+#
+# Sourcing it here fixes every caller, including the next one, instead of relying on each to
+# remember an order nothing enforces.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/flags.sh"
 # Run checkpoints — pause after the spec pass, resume at implementation.
 #
 # WHY. The spec pass is the expensive half of a run: ~12 agent calls, ~50 minutes
@@ -136,12 +147,39 @@ _is_known_stage() {
 # that an earlier checkpoint holds none of what the writer consumes. That reasoning still
 # holds for the WRITER — and the roster pause is not about the writer. It is about the
 # agents themselves, which did not used to be generated at all.
+# A PAUSE THE RUN HAS ALREADY BEEN THROUGH MUST NOT FIRE AGAIN.
+#
+# The settings live in the project's config.env, so they are set for EVERY run of that project --
+# including the resume whose whole purpose is to continue PAST the pause the operator just reviewed.
+# Read as a bare env check, pause 1 was a trap with no exit: resume, re-pause, resume, re-pause.
+#
+# It went unnoticed because the pause used `return` where it meant `exit`, so the resume "continued"
+# by accident. Fixing the halt turned an accident that behaved correctly into a stall that could not.
+#
+# Skipping too little wastes the pause; skipping too much silently drops work that was never done --
+# so the test is the stage the resumed run actually REACHED, ranked by _stage_rank, against the stage
+# this pause guards. An unknown or unreadable stage ranks 0 and so skips NOTHING: a failed lookup
+# must never be the reason a human review point is bypassed.
+#
+# _pause_already_passed <stage-this-pause-guards>
+_pause_already_passed() {
+    local _guards="${1:-}"
+    # The SNAPSHOT, not a fresh reading. EPAM_RESUMED_FROM_STAGE is published by resume_skip_env at
+    # startup and inherited by every lane; a fresh run never sets it, so nothing is ever skipped.
+    # Re-deriving here is the trap described above: the run would test state it had just written.
+    local _reached="${EPAM_RESUMED_FROM_STAGE:-}"
+    [ -n "$_reached" ] || return 1
+    [ "$(_stage_rank "${_reached}")" -ge "$(_stage_rank "${_guards}")" ]
+}
+
+# The stage each pause guards is the SAME string it hands save_run_checkpoint at that point, which is
+# what makes the comparison meaningful rather than a second, drifting spelling of the same fact.
 should_pause_before_writer() {
-    is_truthy "${EPAM_PAUSE_BEFORE_WRITER:-}"
+    is_truthy "${EPAM_PAUSE_BEFORE_WRITER:-}" && ! _pause_already_passed pre-writer
 }
 
 should_pause_after_agent_mint() {
-    is_truthy "${EPAM_PAUSE_AFTER_AGENT_MINT:-}"
+    is_truthy "${EPAM_PAUSE_AFTER_AGENT_MINT:-}" && ! _pause_already_passed post-roster
 }
 
 # resume_skip_env <run-id> — emit the env assignments a resume must apply, derived from
@@ -232,6 +270,15 @@ resume_skip_env() {
             return 1
             ;;
     esac
+    # THE STAGE THIS RESUME STARTED FROM, published once so the pauses can compare against it.
+    #
+    # It cannot be re-derived later: pause 2 saves the pre-writer checkpoint and then asks whether
+    # the run has already passed pre-writer, so a live read answers with the file it wrote three
+    # lines earlier and the pause skips itself. Free rehearsal, 2026-08-28 — it went into the writer
+    # unattended, which is the one thing that pause exists to prevent.
+    #
+    # Emitted here because this runs ONCE, in the parent, before any lane exists.
+    echo "EPAM_RESUMED_FROM_STAGE=${_stage}"
     run_mode_env "$_mode"
 }
 
@@ -242,6 +289,34 @@ resume_skip_env() {
 # always has its payload already on disk. Saving again later in the same run overwrites
 # the earlier checkpoint and advances its recorded stage — the newest one is the most
 # valuable, because it has paid for the most.
+# THE FILES THE OPERATOR MAY EDIT AT A PAUSE — declared once, read by everyone who needs them.
+#
+# Pause 1 prints these under "Inspect and EDIT if needed" and promises the resume will not write
+# over the changes. The checkpoint has to keep them for that promise to be checkable: without a copy
+# there is no before to compare against and nothing to restore from, so "your edits survived" can be
+# asserted but never shown. Found 2026-08-28, on a rehearsal, when an assignments file changed
+# across a resume and the change could not be characterised.
+#
+# One declaration because two hand-kept lists drift -- resume_skip_env, in this same file, carries
+# the comment about the last time that happened here.
+#
+# Emits: <path>\t<what it is>, one per line. Callers filter for existence; a file that a given
+# stage has not produced yet is not an error.
+#
+#   operator_reviewable_inputs [prd-path]
+operator_reviewable_inputs() {
+    local _cfg="${EPAM_PROJECT_CONFIG_DIR:-${EPAM_AGENTS_DIR:-}}"
+    local _prd="${1:-${PRD_FILE:-}}"
+    [ -n "${EPAM_AGENTS_DIR:-}" ] && printf '%s\t%s\n' \
+        "${EPAM_AGENTS_DIR}/profiles.json" "each role's brief"
+    if [ -n "$_cfg" ]; then
+        printf '%s\t%s\n' "${_cfg}/project-roles.json" "implementers — may author code"
+        printf '%s\t%s\n' "${_cfg}/project-investigators.json" "investigators — read-only"
+    fi
+    [ -n "$_prd" ] && printf '%s\t%s\n' "$_prd" "each story's agentRole"
+    return 0
+}
+
 save_run_checkpoint() {
     local _phase="${1:-${PHASE:-main}}"
     local _stage="${2:-post-spec}"
@@ -266,8 +341,22 @@ save_run_checkpoint() {
         cp "$AGENT_PROFILES_FILE" "$_dir/profiles.json" || return 1
     fi
 
+    # THE REVIEWABLE FILES, KEPT VERBATIM. Required, not forensic: this is the copy that makes an
+    # operator's edit at the pause recoverable if a later stage writes over it.
+    mkdir -p "$_dir/reviewed" || return 1
+    local _rp _rd
+    while IFS=$'\t' read -r _rp _rd; do
+        [ -n "$_rp" ] && [ -f "$_rp" ] || continue
+        cp "$_rp" "$_dir/reviewed/$(basename "$_rp")" || return 1
+    done < <(operator_reviewable_inputs)
+
     # Best-effort extras: useful for forensics, never required for a resume.
+    # role-assignments.json is here because the resume REWRITES it in place (annotating each entry
+    # "pre-assigned (validated, not regenerated)"), and without the before there is no way to show
+    # the validation preserved what the operator set.
     if [ -n "${LOG_DIR:-}" ] && [ -d "${LOG_DIR}" ]; then
+        [ -f "$LOG_DIR/role-assignments.json" ] \
+            && cp "$LOG_DIR/role-assignments.json" "$_dir/reviewed/role-assignments.json" 2>/dev/null || true
         for _extra in story-ids-presplit.txt phase-baseline-sha.txt; do
             [ -f "$LOG_DIR/$_extra" ] && cp "$LOG_DIR/$_extra" "$_dir/$_extra" 2>/dev/null || true
         done
@@ -301,6 +390,20 @@ save_run_checkpoint() {
 _CKPT_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _CKPT_MERGE_JQ="$_CKPT_LIB_DIR/jq/checkpoint-merge.jq"
 _CKPT_SPEC_JQ="$_CKPT_LIB_DIR/jq/checkpoint-spec-count.jq"
+
+# _operator_edited <live-file> <copy-handed-to-the-operator>
+#
+# True when the live file differs from the bytes the pause presented -- that is, a human changed it
+# at the review point. A byte comparison, not a heuristic: reviewed/ holds exactly what was shown.
+#
+# Everything the pause offers for editing is offered because changing it is the POINT of stopping,
+# so a difference here outranks a copy the run took before the human had looked at it.
+_operator_edited() {
+    local _live="${1:-}" _shown="${2:-}"
+    [ -n "$_live" ] && [ -f "$_live" ] || return 1
+    [ -n "$_shown" ] && [ -f "$_shown" ] || return 1   # nothing was shown: nothing to have edited
+    ! cmp -s "$_live" "$_shown"
+}
 
 restore_run_checkpoint() {
     local _rid="${1:-}"
@@ -398,13 +501,38 @@ restore_run_checkpoint() {
         _live_spec=$(jq '[.stories[]? | ((.verificationCriteria // []) | length) + ((.fixSiteAnalysis // []) | length)] | add // 0' "$PRD_FILE" 2>/dev/null || echo 0)
     fi
     _ckpt_spec=$(jq '[.stories[]? | ((.verificationCriteria // []) | length) + ((.fixSiteAnalysis // []) | length)] | add // 0' "$_dir/prd.json" 2>/dev/null || echo 0)
-    if [ "${_live_spec:-0}" -gt "${_ckpt_spec:-0}" ]; then
+    # AND A RESTORE NEVER UNDOES THE OPERATOR.
+    #
+    # Spec items cannot see a role reassignment: an edited PRD carries exactly as many as the
+    # checkpoint, so the rule above says "not backwards -- copy" and the edit is silently gone.
+    # Measured 2026-08-28 on a rehearsal: a story reassigned at pause 1 was back to its old role
+    # after the resume, while the banner promised "it does not re-assign over your changes".
+    local _rev="$_dir/reviewed"
+    [ -d "$_rev" ] || _rev="${EPAM_PROJECT_CONFIG_DIR:-${PROJECT_CONFIG_DIR:-}}/runs/$_rid/checkpoint/reviewed"
+
+    # AN EDIT IS A CHANGE, NOT A LOSS.
+    #
+    # "Different from what the operator was shown" also describes a PRD that was emptied or damaged
+    # after the pause — which is the exact failure this restore exists to repair, and keeping it
+    # would reintroduce that failure while fixing its opposite. An operator retunes an assignment;
+    # they do not delete the story list. So an edit is honoured only while the stories survive it.
+    local _live_stories=0 _kept_stories=0
+    _live_stories=$(jq '(.stories // []) | length' "$PRD_FILE" 2>/dev/null || echo 0)
+    _kept_stories=$(jq '(.stories // []) | length' "$_dir/prd.json" 2>/dev/null || echo 0)
+    if _operator_edited "$PRD_FILE" "$_rev/prd.json" \
+       && [ "${_live_stories:-0}" -ge "${_kept_stories:-0}" ]; then
+        echo "[checkpoint] KEEPING the PRD on disk: it was EDITED at the pause, after this checkpoint was taken." >&2
+    elif [ "${_live_spec:-0}" -gt "${_ckpt_spec:-0}" ]; then
         echo "[checkpoint] KEEPING the PRD on disk: it carries ${_live_spec} spec item(s) and the checkpoint carries ${_ckpt_spec} — restoring would discard the spec pass this resume is meant to skip past" >&2
     else
         cp "$_dir/prd.json" "$PRD_FILE" || return 1
     fi
     if [ -f "$_dir/profiles.json" ] && [ -n "${AGENT_PROFILES_FILE:-}" ]; then
-        cp "$_dir/profiles.json" "$AGENT_PROFILES_FILE" || return 1
+        if _operator_edited "$AGENT_PROFILES_FILE" "$_rev/profiles.json"; then
+            echo "[checkpoint] KEEPING the roster on disk: it was EDITED at the pause." >&2
+        else
+            cp "$_dir/profiles.json" "$AGENT_PROFILES_FILE" || return 1
+        fi
     fi
 
     # COUNTED FROM THE PRD BEING RESTORED, not from the metadata. A merged lane restore carries

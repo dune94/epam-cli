@@ -1,0 +1,51 @@
+{
+  "runId": "20260828T132745Z",
+  "phase": "core",
+  "startedAt": "2026-08-28T13:28:05.675Z",
+  "stories": [
+    {
+      "storyId": "MOCK3-1",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "notes": "",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Defect: the comparison rider.age > 65 in fareFor excludes age 65 from the concession tier. Changing to >= fixes the boundary. VCs are derived from the acceptance criteria and observe only the function's return value.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-28T13:28:26.820Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Defect: the comparison rider.age > 65 in fareFor excludes age 65 from the concession tier. Changing to >= fixes the boundary. VCs are derived from the acceptance criteria and observe only the function's return value.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-28T13:28:30.986Z"
+        }
+      ]
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1,
+      "speckit": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 2
+  },
+  "completedAt": "2026-08-28T13:28:41.190Z",
+  "storyCount": 1
+}

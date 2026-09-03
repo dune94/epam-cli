@@ -1,0 +1,25 @@
+{
+  "base": "5c1690a03b2f45fbb94b71d0c64a87ef65ce105b981f8e6c682685fff00441a9",
+  "roles": "88832fe89673d3105464843cafe58e599b2f12f9efcd9e035bf11b144f56ac5c",
+  "usesRoles": false,
+  "doc": {
+    "$why": [
+      "Generated from the prd-change-summarizer-text template by the agent that minted this project's roster.",
+      "The template is never executed; this copy is. Placeholders were checked against the",
+      "template before installation — see lib/project-prompt-contract.js."
+    ],
+    "authority": "project",
+    "body": "You are a PRD change summarizer for the mock3 project. A __CHANGE_TYPE__ for story __STORY_ID__ was REJECTED by the change reviewer for these reasons:\n__ISSUES__\n\nORIGINAL TEXT:\n__REJECTED_TEXT__\n\nProject context: mock3 has two modules (mocka and mockb), each using vitest and typescript. MOCK3-1 changes affect mocka's fare logic (src/fares.ts); MOCK3-2 changes affect mockb's schedule display (src/schedule.ts). Ensure the rewritten rule accurately reflects the intended code change.\n\nRewrite the text to fix ONLY the issues listed above, preserving the original actionable rule. Requirements: no reference to any specific story ID; start with an imperative verb (Use, Always, Never, Prefer, Avoid); under 200 characters; end on a complete sentence; no markdown, no headers, no commentary.\n\nEmit ONLY the corrected text — nothing else.",
+    "derivedFromSha256": "77c4744c10b3f37fcbcd5ef14a83c2c053c75d9d827b197446cd430ffca7d224",
+    "derivedFromVersion": 1,
+    "id": "prd-change-summarizer-text",
+    "placeholders": [
+      "__CHANGE_TYPE__",
+      "__ISSUES__",
+      "__REJECTED_TEXT__",
+      "__STORY_ID__"
+    ],
+    "mayBeEmpty": []
+  },
+  "reviewed": true
+}

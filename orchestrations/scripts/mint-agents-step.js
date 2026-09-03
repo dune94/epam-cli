@@ -23,6 +23,15 @@
 
 'use strict';
 
+// HOW LONG A LOCAL TOOL MAY TAKE IS DECLARED, not written here. This was the literal 20000 at
+// two call sites — one decision with two homes, so a codeline large enough to need longer got a
+// truncated scan in both, and raising it meant finding both.
+function localToolTimeoutMs(configPath) {
+  try {
+    return JSON.parse(require('fs').readFileSync(configPath, 'utf8')).timeouts.localToolMs;
+  } catch { return undefined; }
+}
+
 const fs = require('fs');
 const path = require('path');
 const { execFileSync, spawnSync } = require('child_process');
@@ -203,7 +212,7 @@ function declaredDependencies(repoPath) {
   try {
     const out = execFileSync(process.execPath, [
       path.join(__dirname, 'lib', 'handlers', 'codeline-ecosystem.js'), repoPath,
-    ], { encoding: 'utf8', timeout: 20000 });
+    ], { encoding: 'utf8', timeout: localToolTimeoutMs(path.join(__dirname, '..', 'config', 'spec-mode-defaults.json')) });
     const facts = JSON.parse(out);
     if (!facts.manifest) {
       process.stderr.write(
@@ -528,7 +537,48 @@ function validateWorkflow(profilesPath, registryPath) {
   return true;
 }
 
-module.exports = { resolveRepoPath, rosterAgents, resolveCodelines, declaredDependencies, writeRosterDiff, mintTools, provisionPlugins, writeAgentSeamCrossReference, validateWorkflow };
+/**
+ * WHY THE MINT IS BEING SKIPPED, IN WORDS THAT ARE TRUE.
+ *
+ * One hardcoded sentence served two conditions: "mint skipped (EPAM_SKIP_AGENT_MINT=1) — resuming
+ * from a checkpoint". So a roster-only run announced a flag it was never given, and a
+ * start-at-the-beginning run announced a checkpoint that did not exist — three times in the paid
+ * run of 2026-08-28, on a run that had nothing to resume.
+ *
+ * The skip itself is correct; only the justification was false. A false reason is worse than
+ * silence, because a reason gets believed: the roster review then declined itself citing "the run
+ * being resumed" of a run that never existed, and nobody questioned it for months.
+ *
+ * THE ONLY THING THAT MAKES A RUN A RESUME IS EPAM_RESUME_RUN. Everything else is a mode.
+ */
+function mintSkipReason(env) {
+  const e = env || process.env;
+  const rosterOnly = String(e.EPAM_ROSTER_ONLY || '') === '1';
+  const skipMint = String(e.EPAM_SKIP_AGENT_MINT || '') === '1';
+  if (!rosterOnly && !skipMint) return '';
+  const resumeOf = String(e.EPAM_RESUME_RUN || '').trim();
+  const mode = rosterOnly
+    ? 'roster-only mode — identities are derived, nothing is minted'
+    : 'mint skipped (EPAM_SKIP_AGENT_MINT=1)';
+  return resumeOf ? mode + '; resuming ' + resumeOf + ' from its checkpoint' : mode;
+}
+
+/**
+ * WHY THE ROSTER REVIEW IS NOT RUNNING.
+ *
+ * Operator ruling, 2026-08-28: skipping the review when the mint was skipped is CORRECT — there is
+ * nothing minted to review. The defect was the sentence "reviewed in the run being resumed", said
+ * on runs that resumed nothing, which turned a sound decision into an unfalsifiable one.
+ */
+function rosterReviewSkipReason(env) {
+  const e = env || process.env;
+  const resumeOf = String(e.EPAM_RESUME_RUN || '').trim();
+  return resumeOf
+    ? 'roster carried over from ' + resumeOf + ' — reviewed in that run, not re-reviewed here'
+    : 'roster not re-reviewed — the mint did not run, so nothing was minted to review';
+}
+
+module.exports = { mintSkipReason, rosterReviewSkipReason, resolveRepoPath, rosterAgents, resolveCodelines, declaredDependencies, writeRosterDiff, mintTools, provisionPlugins, writeAgentSeamCrossReference, validateWorkflow };
 
 if (require.main !== module) return;
 
@@ -607,11 +657,19 @@ if (require.main !== module) return;
     // THE AGENT WRITES THE FILE. The pipeline hands it the canonical copy and a destination,
     // then judges the artefact — it does not compose personas itself, because deciding what an
     // agent must know about a codeline is judgement, not substitution.
-    const produce = async ({ canonicalCopyPath, outPath, refusal }) => {
+    const produce = async ({ canonicalCopyPath, outPath, refusal, attempt }) => {
       process.env.EPAM_AGENT_NAME = 'roster-specialiser';
       // The SAME context the prompt builder is given, computed the same way — a derivation that
       // sees different facts than its sibling stage is two projects, not one.
       const prompt = renderSpecialisation({
+        // THE VOCABULARY THE ANSWER IS JUDGED AGAINST. Read from the registry rather than written
+        // out here: a hand-kept second copy of a closed list only ever drifts from the list.
+        __DECLARED_SEAMS__: (() => {
+          try {
+            const _reg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'agents', 'invocation-profiles.json'), 'utf8'));
+            return Object.keys(_reg.profiles || {}).sort().map((s) => `- ${s}`).join('\n');
+          } catch { return ''; }
+        })(),
         __CANONICAL_COPY_PATH__: canonicalCopyPath,
         __OUT_PATH__: outPath,
         __PROJECT_CONTEXT__: [
@@ -639,7 +697,11 @@ if (require.main !== module) return;
       // AGENTS_DIR, not LOG_DIR: seamInvocationEnv reads the invocation registry from the
       // directory it is given, and handed the log folder it found none and resolved no ladder.
       const seamEnv = {
-        ...seamInvocationEnv('roster-specialiser', AGENTS_DIR),
+        // ATTEMPT N RUNS RUNG N-1. buildProjectRoster has always handed `attempt` to this producer
+        // and it was destructured away, so all three attempts re-ran the same model: the refusal
+        // was fed back to the one model that had just produced it. Fifth site of that same shape.
+        ...seamInvocationEnv('roster-specialiser', AGENTS_DIR,
+          { rung: Math.max(0, (Number(attempt) || 1) - 1) }),
         EPAM_AGENT_NAME: 'roster-specialiser',
       };
       // The tool CHANNEL and the tool LIST travel together: granting one without the other gives
@@ -680,19 +742,6 @@ if (require.main !== module) return;
     process.stderr.write(`[mint-step] project roster: ${Object.keys(roster.agents).length} agent(s)\n`);
   };
 
-  // ROSTER-ONLY: derive the roster and stop.
-  //
-  // A writer-style resume skips the mint on purpose, and every launch runs the pre-run reset.
-  // The launcher calls this step in roster-only mode on those paths: identities are derived,
-  // nothing is re-minted, and no role accumulates a near-duplicate. Placed here because
-  // everything the stage needs is already resolved, and everything below costs model time this
-  // path is explicitly avoiding.
-  if (String(process.env.EPAM_ROSTER_ONLY || '') === '1') {
-    process.stderr.write('[mint-step] roster-only: deriving this project\'s roster, minting nothing\n');
-    await runRosterStage([]);
-    return { rosterOnly: true };
-  }
-
   const docs = await referencedDocs(LOG_DIR, stories);
   const fetchedDocs = docs.filter((d) => d && d.fetchStatus === 'fetched').length;
 
@@ -706,6 +755,57 @@ if (require.main !== module) return;
     documentsFetched: fetchedDocs,
     documentsUnfetched: docs.filter((d) => d && d.fetchStatus !== 'fetched').map((d) => ({ url: d.url, status: d.fetchStatus })),
   }, null, 2));
+
+  // ESTATE SURVEY — ITS OWN STEP, NOT THE MINT'S.
+  //
+  // This call used to sit inside the mint's else-branch, so every path that declined to mint
+  // also silently declined to survey: EPAM_SKIP_AGENT_MINT=1 meant 'skip the mint' and
+  // delivered 'skip discovery too', with nothing saying so. A seam's invocation must not be
+  // conditional on another seam's branch — the survey observes the estate, which is worth
+  // doing whether or not a roster is being minted from it, and the mint below simply reads
+  // what it produced.
+
+  // DET-1: LOOK AT THE CODE BEFORE ASSEMBLING THE TEAM.
+  //
+  // Everything the mint has had until now — the ticket, its documents, the declared
+  // dependencies — is a CLAIM about the estate. None of it is an observation of it, which is
+  // how briefs came to own modules nobody had searched for, and how scope came to be taken
+  // from ticket labels that are routinely wrong about which repositories are involved.
+  //
+  // The survey is cheap by construction: it decides where to look, not what to change. Its
+  // failure is not fatal — an estate that cannot be surveyed is the state the roster was
+  // minted in until today.
+  process.env.EPAM_AGENT_NAME = 'estate-survey';
+  const survey = await spec.surveyEstate({
+    promptExec,
+    tickets: stories,
+    referencedDocs: docs,
+    declaredDependencies: deps,
+    codelines,
+    toolGrant,
+    logDir: LOG_DIR,
+    repoPath: REPO_PATH,
+  });
+  if (survey.ran) {
+    for (const c of survey.codelines) {
+      process.stderr.write(`[mint-step]   survey: ${c.codeline} — ${c.state}` +
+        `${c.surfaces && c.surfaces.length ? ` (${c.surfaces.join(', ')})` : ''}\n`);
+    }
+    for (const r of survey.recommendedInvestigators) {
+      process.stderr.write(`[mint-step]   survey recommends an investigator for ${r.codeline}: ${r.focus}\n`);
+    }
+  } else {
+    process.stderr.write('[mint-step]   survey did not run — the roster is minted from the ticket alone\n');
+  }
+
+  // ROSTER-ONLY: derive the roster and stop.
+  //
+  // A writer-style resume skips the mint on purpose, and every launch runs the pre-run reset.
+  // The launcher calls this step in roster-only mode on those paths: identities are derived,
+  // nothing is re-minted, and no role accumulates a near-duplicate. Placed here because
+  // everything the stage needs is already resolved, and everything below costs model time this
+  // path is explicitly avoiding.
+
 
   // NO ROSTER DRIFT ACROSS RUNS OR CODELINES (operator direction, 2026-08-07).
   //
@@ -732,8 +832,17 @@ if (require.main !== module) return;
     process.stderr.write(
       `[mint-step] roster already minted in THIS run (${thisRunId}): ${existingRoles.join(', ')} ` +
       '— reusing exactly what was reviewed at the pause.\n');
-  } else if (process.env.EPAM_SKIP_AGENT_MINT === '1') {
-    process.stderr.write('[mint-step] mint skipped (EPAM_SKIP_AGENT_MINT=1) — resuming from a checkpoint\n');
+  } else if (process.env.EPAM_SKIP_AGENT_MINT === '1'
+             || String(process.env.EPAM_ROSTER_ONLY || '') === '1') {
+    // ROSTER-ONLY DECLINES THE MINT, NOT THE REST OF THE STEP.
+    //
+    // This used to return outright, several hundred lines above role assignment and prompt
+    // provisioning — so a run that skipped the mint also silently skipped both. Neither mints
+    // anything: assignment maps existing roles to stories, and provisioning in copy mode is a
+    // file copy costing no model call. Live 2026-08-27: mock3 reached agent-check with
+    // topology-router.json missing, because the only thing that provisions it sits past that
+    // return.
+    process.stderr.write(`[mint-step] ${mintSkipReason(process.env)}\n`);
   } else {
     // Start from the BASE roster, never a mutated one. Anything a previous run minted is
     // cleared before this run proposes: registry, stored briefs and live entries. Canonical
@@ -749,38 +858,6 @@ if (require.main !== module) return;
     // Agent identity reaches ai-run.sh through EPAM_AGENT_NAME and is what makes a cost row
     // attributable. Two distinct agents run here, so each names itself rather than sharing one
     // label — an anonymous or shared identity is how per-agent spend becomes unreadable.
-    // DET-1: LOOK AT THE CODE BEFORE ASSEMBLING THE TEAM.
-    //
-    // Everything the mint has had until now — the ticket, its documents, the declared
-    // dependencies — is a CLAIM about the estate. None of it is an observation of it, which is
-    // how briefs came to own modules nobody had searched for, and how scope came to be taken
-    // from ticket labels that are routinely wrong about which repositories are involved.
-    //
-    // The survey is cheap by construction: it decides where to look, not what to change. Its
-    // failure is not fatal — an estate that cannot be surveyed is the state the roster was
-    // minted in until today.
-    process.env.EPAM_AGENT_NAME = 'estate-survey';
-    const survey = await spec.surveyEstate({
-      promptExec,
-      tickets: stories,
-      referencedDocs: docs,
-      declaredDependencies: deps,
-      codelines,
-      toolGrant,
-      logDir: LOG_DIR,
-      repoPath: REPO_PATH,
-    });
-    if (survey.ran) {
-      for (const c of survey.codelines) {
-        process.stderr.write(`[mint-step]   survey: ${c.codeline} — ${c.state}` +
-          `${c.surfaces && c.surfaces.length ? ` (${c.surfaces.join(', ')})` : ''}\n`);
-      }
-      for (const r of survey.recommendedInvestigators) {
-        process.stderr.write(`[mint-step]   survey recommends an investigator for ${r.codeline}: ${r.focus}\n`);
-      }
-    } else {
-      process.stderr.write('[mint-step]   survey did not run — the roster is minted from the ticket alone\n');
-    }
     // FALSIFY THE SURVEY BEFORE ANYTHING IS MINTED FROM IT.
     //
     // The survey seeds every investigator brief and scoped the whole run, and nothing reviewed it
@@ -993,7 +1070,7 @@ if (require.main !== module) return;
   }
   if (_mintWasSkipped) {
     process.stderr.write(
-      '[mint-step] resumed roster — reviewed in the run being resumed, not re-reviewed here\n');
+      `[mint-step] ${rosterReviewSkipReason(process.env)}\n`);
   }
 
   // Still defective after the full correction budget. With the pause on, the operator sees it
@@ -1042,7 +1119,30 @@ if (require.main !== module) return;
   //
   // Every assignment must name a role that exists in the settled roster. The check is cheap
   // and mechanical, and it fails the step rather than handing a lane a name with no brief.
-  const _finalRoles = new Set(Object.keys(JSON.parse(fs.readFileSync(PROFILES_PATH, 'utf8'))));
+  // THE SETTLED ROSTER IS roster.json, WHICH IS WHAT THIS MESSAGE HAS ALWAYS CLAIMED.
+  //
+  // This read the ENGINE's agents/profiles.json. ba9cee7 (2026-08-22) stopped the mint writing
+  // there — one project's agents were reaching another's roster — moving the briefs to
+  // <project>/agent-profiles.json and the settled roster to <project>/roster.json. This reader
+  // was left behind, so it checked assignments against a file the mint no longer touches and
+  // rejected every project role.
+  //
+  // mock3 run 8: the roster held fare-schedule-logic-engineer as an implementer,
+  // project-roles.json registered it, agent-profiles.json carried its brief — and this threw
+  // "names a role that is not in the settled roster" for the one agent the run had just minted.
+  // Second reader left behind by that move; candidateRoles in spec-mode-runner was the first.
+  //
+  // Falls back to the engine profiles when no project roster exists, so a run without one
+  // behaves exactly as it did before.
+  // eslint-disable-next-line global-require
+  const { projectRosterPath } = require('./lib/project-roster.js');
+  let _finalRoles;
+  try {
+    const _rosterFile = projectRosterPath(process.env.EPAM_PROJECT_CONFIG_DIR || '');
+    _finalRoles = new Set(Object.keys(JSON.parse(fs.readFileSync(_rosterFile, 'utf8')).agents || {}));
+  } catch {
+    _finalRoles = new Set(Object.keys(JSON.parse(fs.readFileSync(PROFILES_PATH, 'utf8'))));
+  }
   const _orphaned = assignment.assigned
     .filter((a) => a && a.agentRole && !_finalRoles.has(a.agentRole))
     .map((a) => `${a.storyId}${a.codeline ? `/${a.codeline}` : ''} -> ${a.agentRole}`);
@@ -1103,6 +1203,47 @@ if (require.main !== module) return;
         'prompts are the only ones ever rendered, and the template is never executed.');
     }
 
+    // PROMPTS ARE PROVISIONED ONCE, BEFORE PAUSE 1. A RESUME NEVER REBUILDS THEM.
+    //
+    // Operator rule, 2026-09-02: duplication of a process after a pause is not permitted. This
+    // call had no resume guard at all, so every resume re-provisioned all 39 prompts — and the
+    // cache could not absorb it, because the cache key includes mintedRoles and a resume SKIPS the
+    // mint, so that string becomes the literal '(none minted this run)' instead of the roster.
+    // Every entry therefore missed. Measured on the 2026-09-02 resume of 20260902T022134Z: roles
+    // digest 1dad7a5a… at pause 1 against cba40c8d… on the resume, 9 entries reused and 30
+    // rebuilt, for prompts already sitting complete on disk.
+    //
+    // THE INSTALLED PROMPTS ARE THE SIGNAL, as with the settled roster. pre-run-reset keeps
+    // <project>/prompts/ intact on a resume, so a populated directory here means this run already
+    // provisioned them and the operator reviewed what they produced at the pause.
+    //
+    // NOT A CACHE, A SKIP. Reusing them "cheaply" would still resolve every seam, re-render every
+    // generator prompt and re-derive the key; the rule is that the stage does not run.
+    // A FLAG, NOT AN EARLY RETURN. This block is a bare `{ }` inside the step, and returning from
+    // it would abandon everything after — linkPromptsToRoster above all, which checks that every
+    // minted agent's seam actually has a prompt in THIS project. That check is data-only, costs
+    // nothing, and is exactly what a resume still needs: skipping the BUILD must not skip the
+    // verification that what is on disk covers the roster.
+    let _skipProvisioning = false;
+    const _resumingRun = String(process.env.EPAM_RESUME_RUN || '').trim();
+    if (_resumingRun) {
+      const _installedDir = path.join(projectConfigDir, 'prompts');
+      let _installed = [];
+      try {
+        _installed = fs.readdirSync(_installedDir).filter((f) => f.endsWith('.json'));
+      } catch { _installed = []; }
+      if (_installed.length) {
+        process.stderr.write(
+          `[mint-step] prompts already provisioned for this run (${_installed.length} on disk) — `
+          + 'not rebuilt; a resume repeats no stage it has already completed\n');
+        _skipProvisioning = true;
+      }
+      // Empty is NOT silently accepted: something cleared them, and continuing without saying so
+      // would look identical to a run that never provisioned any.
+      process.stderr.write(
+        '[mint-step] resuming, but no prompts are installed — provisioning them now\n');
+    }
+
     // THE PROVISIONING MODE IS THE PROJECT'S DECISION, and no mode was being passed at all —
     // so every project silently got 'generate', including the ones whose prompts are meant to
     // stay identical to the generic text. metrolinx is a copy-mode project that the next mint
@@ -1111,7 +1252,7 @@ if (require.main !== module) return;
     if (!promptMode) {
       throw new Error(
         'cannot build project prompts: EPAM_PROMPT_PROVISION_MODE is unset. Declare it in the '
-        + "project's config.env as 'copy' (install the generic templates as they are) or "
+        + "project's env as 'copy' (install the generic templates as they are) or "
         + "'generate' (specialise each one for this project). There is no engine default: "
         + 'picking one silently is how a project ends up running prompts nobody chose.');
     }
@@ -1122,12 +1263,38 @@ if (require.main !== module) return;
 
     process.env.EPAM_AGENT_NAME = 'prompt-builder';
     // Opt-in per project; the registry's prompt-review.enabledBy names this variable.
-    const _promptReviewEnabled = String(process.env.EPAM_PROMPT_REVIEW_ENABLED || '') === '1';
+    // ON UNLESS A PROJECT EXPLICITLY TURNS IT OFF.
+    //
+    // This required an opt-in flag no project ever set, so every generated prompt in every run was
+    // installed UNREVIEWED — the one artefact every downstream agent inherits whole was the only
+    // one nobody checked. Absence of a flag is not a decision to skip the review.
+    const _promptReviewEnabled = String(process.env.EPAM_PROMPT_REVIEW_ENABLED ?? '1') !== '0';
     // Hoisted so the reviewer is handed exactly the codelines the generator was — a reviewer
     // checking claims against different facts than the writer saw is not a review.
-    const _codelineContext = codelines
-      .map((c) => `- ${(c && c.name) || c}`).join('\n');
-    const _built = await buildProjectPrompts({
+    // THE GENERATOR IS GIVEN VERIFIED FACTS, OR TOLD IT HAS NONE.
+    //
+    // This passed a bare name per codeline while project-prompt-generation.json instructs the
+    // generator to "name no file, symbol, package or command that does not appear in the context
+    // you were given". With no files in the context, the only compliant answer was to name nothing,
+    // and the model resolved it the other way: the team-lead-review prompt asserted "Form
+    // components are typically in src/components/Checkout/", which does not exist. prompt-review
+    // rejected all three attempts and the mint died (metrolinx AMSD-1919, 2026-09-01).
+    //
+    // codeline-facts.json and the survey's surfaces were already computed by this point and went
+    // nowhere. Surfaces are checked against disk before being named, so the context cannot itself
+    // become the source of a fabrication.
+    const { buildCodelineContext } = require('./lib/codeline-context.js');
+    const _factsFile = projectConfigDir
+      ? path.join(projectConfigDir, 'codeline-facts.json') : null;
+    const _surveyed = (survey && survey.ran && Array.isArray(survey.codelines))
+      ? survey.codelines.map((c) => ({ codeline: c.codeline, surfaces: c.surfaces || [] }))
+      : [];
+    const _codelineContext = buildCodelineContext({
+      codelines, factsFile: _factsFile, surveyed: _surveyed,
+    });
+    const _built = _skipProvisioning
+      ? { copied: [], generated: [] }
+      : await buildProjectPrompts({
       templatesDir,
       bootstrapFile,
       // The seam registry decides what needs a project copy — a seam that runs a template needs
@@ -1139,9 +1306,8 @@ if (require.main !== module) return;
         `Project config: ${projectConfigDir}`,
         `Tickets in scope: ${stories.map((t) => `${t.jiraKey || t.id}: ${t.title || ''}`).join(' | ')}`,
       ].join('\n'),
-      codelineContext: codelines
-        .map((c) => `- ${c.name} (${c.path})${c.dependencies && c.dependencies.length ? ` deps: ${c.dependencies.join(', ')}` : ''}`)
-        .join('\n'),
+      // The same text the reviewer is handed, so the generator and its judge see one context.
+      codelineContext: _codelineContext,
       mintedRoles: _mintedDetail.length
         ? _mintedDetail.map((m) => `- ${m.name} [${m.kind}] — ${m.rationale || ''}`).join('\n')
         : '(none minted this run)',
@@ -1157,7 +1323,16 @@ if (require.main !== module) return;
       // tools. Granting the channel without the list, or the list without the channel, both
       // produce an agent that quietly has nothing.
       runText: (prompt, meta) => {
-        const seamEnv = seamInvocationEnv('prompt-builder', path.join(engineRoot, 'orchestrations', 'agents'));
+        // THE RETRY CLIMBS. Attempt N runs rung N-1 of the ladder this seam declares.
+        //
+        // This called seamInvocationEnv with no rung on every attempt, so all three attempts ran
+        // the same model: `meta.attempt` arrived here and was used for the log filename and
+        // nothing else. Run 20260827T092415Z aborted on 'tc-writer' after three refusals from one
+        // model, with sonnet and opus unused in the chain the seam had already published.
+        // Feeding the refusal back is the other half of a retry; without the climb it asks the
+        // same model to notice what it just missed.
+        const _rung = Math.max(0, (Number((meta && meta.attempt) || 1) || 1) - 1);
+        const seamEnv = seamInvocationEnv('prompt-builder', path.join(engineRoot, 'orchestrations', 'agents'), { rung: _rung });
         if (seamEnv.EPAM_ALLOWED_TOOLS) seamEnv.AI_GATE_ALLOW_TOOLS = '1';
         // THE REVIEWER WILL RUN THIS MODEL. Captured at the moment the generator resolves it,
         // because a DECLARED tier and a RESOLVED model are not the same fact: both seams declare
@@ -1217,8 +1392,22 @@ if (require.main !== module) return;
               return JSON.parse(fs.readFileSync(path.join(AGENTS_DIR, 'profiles.json'), 'utf8'))['prompt-review'] || '';
             } catch { return ''; }
           })(),
+          // THE ROSTER, so a claim naming an agent can be CHECKED rather than refused. Built from the
+          // same minted detail the generator is handed, so the two cannot disagree about who exists.
+          __ROSTER_BLOCK__: (Array.isArray(_mintedDetail) && _mintedDetail.length
+            ? _mintedDetail.map((m) => `- ${m.name}${m.kind ? ` [${m.kind}]` : ''}`).join('\n')
+            : '- (this project minted no agents of its own)'),
           __PROMPT_ID__: id,
-          __TEMPLATE_BODY__: (template && template.body) || '',
+          // A MULTI-BODY TEMPLATE HAS NO .body, AND THE REVIEWER MUST SEE THE SOURCE.
+          //
+          // 21 templates carry `bodies` instead of `body`. This read .body — undefined for every one
+          // of them — so the reviewer was handed an EMPTY source and asked to check a generated prompt
+          // against nothing. It cannot evidence a false claim that way, and would return a clean
+          // verdict that means nothing while costing a model call.
+          //
+          // Same shape as the join(undefined) comma that aborted runs 9 and 10. Uses the SAME helper
+          // the generator and the contract check use, so the readers cannot drift again.
+          __TEMPLATE_BODY__: require('./lib/project-prompt-builder.js').templateBodyText(template),
           __GENERATED_BODY__: (generated && generated.body) || '',
           __CODELINE_BLOCK__: _codelineContext,
           __TICKET_BLOCK__: (Array.isArray(stories) ? stories : [])
@@ -1230,9 +1419,14 @@ if (require.main !== module) return;
       }) : undefined,
       log: (m) => process.stderr.write(`${m}\n`),
     });
-    process.stderr.write(
-      `[mint-step] ✓ prompts provisioned (${promptMode}): ${_built.copied.length} copied (bootstrap), ` +
-      `${_built.generated.length} generated → ${path.join(projectConfigDir, 'prompts')}\n`);
+    // SAY WHICH IT WAS. Reporting "0 copied, 0 generated" for a skip reads as a provisioning run
+    // that produced nothing — the same sentence for two opposite states, which is how a stage that
+    // silently did nothing goes unnoticed for weeks.
+    if (!_skipProvisioning) {
+      process.stderr.write(
+        `[mint-step] ✓ prompts provisioned (${promptMode}): ${_built.copied.length} copied (bootstrap), ` +
+        `${_built.generated.length} generated → ${path.join(projectConfigDir, 'prompts')}\n`);
+    }
 
     // ── LINK THE PROMPTS TO THE AGENTS JUST MINTED ────────────────────────────
     //

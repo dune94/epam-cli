@@ -1,0 +1,84 @@
+# refused: the generated prompt dropped placeholder(s) the template requires: __CANONICAL_COPY_PATH__, __CODELINE_CONTEXT__, __DECLARED_SEAMS__, __OUT_PATH__, __PREVIOUS_REFUSAL__, __PROJECT_CONTEXT__, __STACK__. The evidence they carry would silently never reach the agent.
+# template: roster-specialisation   attempt: 1/3
+# required placeholders: __CANONICAL_COPY_PATH__, __OUT_PATH__, __PROJECT_CONTEXT__, __CODELINE_CONTEXT__, __STACK__, __PREVIOUS_REFUSAL__, __DECLARED_SEAMS__
+# ---------------- model reply below, verbatim ----------------
+You are specialising a generic agent roster for ONE project. The roster you produce IS this project's roster: every agent in this run gets its identity from the file you write, and nothing falls back to the generic source if you leave something out.
+
+## What you are given
+
+The canonical roster, verbatim, at:
+
+  /home/bradleyjerome/projects/ai/epam-cli/orchestrations/agents/profiles.canonical.json
+
+Read it with your tools. Each key is an agent name; each value is that agent's generic persona — what it does, stated without reference to any codebase.
+
+The project:
+AMSD-1919: Go-Checkout Page - Email & Confirm Email Case Sensitivity. A bug fix targeting the checkout form component's email field validation, specifically the case-sensitive comparison behavior at src/components/pages/CheckoutPage/CheckoutForm.tsx (the TRM774 check referenced in the survey). The fix involves modifying the confirmEmail validation rule to handle mixed-case email input correctly, ensuring that user-entered email text matches the expected format regardless of case.
+
+The codelines it works on:
+gotransit (/home/bradleyjerome/projects/metrolinx/next.gotransit.com) — a Next.js + TypeScript application. Tests run via jest (npm test), using ts-jest and jest-environment-jsdom, with @testing-library/react and @testing-library/jest-dom. The component under fix has an existing spec file at src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx to extend. A pre-commit hook (husky) enforces branch naming (^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$) and commit-msg linting (commitlint).
+
+The stack in use:
+@algolia/autocomplete-js, @azure/search-documents, @contentstack/utils, @googlemaps/js-api-loader, @hookform/error-message, @metrolinx/cx-shared, @react-aria/focus, @stripe/react-stripe-js, @stripe/stripe-js, @uniformdev/context, @uniformdev/context-gtag, @uniformdev/context-react, akamai-edgegrid, algoliasearch, aria-hidden, axios, body-scroll-lock, busboy, classnames, cloudinary, contentstack, core-js, country-state-city, date-fns, html-react-parser, i18next, joi, jsonwebtoken, lodash.capitalize, lodash.chunk, lodash.clonedeep, lodash.debounce, lodash.filter, lodash.isempty, lodash.isequal, lodash.isnil, lodash.isnumber, lodash.isobject, lodash.isstring, lodash.isundefined, lodash.keyby, lodash.mergewith, lodash.noop, lodash.omit, lodash.omitby, lodash.orderby, lodash.reject, micro, next, next-auth, next-i18next, next-sitemap, object-hash, pino, qs, react, react-autosuggest, react-beforeunload, react-dom, react-dropzone, react-error-boundary, react-focus-lock, react-hook-form, react-i18next, react-select, react-youtube, resize-observer-polyfill, swiper, swr, uuid (runtime); @commitlint/cli, @contentstack/management, @next/bundle-analyzer, @tailwindcss/aspect-ratio, @tailwindcss/line-clamp, @testing-library/jest-dom, @testing-library/react, @testing-library/user-event, @trivago/prettier-plugin-sort-imports, @types/*, @typescript-eslint/eslint-plugin, @typescript-eslint/parser, @uniformdev/cli, autoprefixer, babel-jest, commitlint-config-jira, commitlint-plugin-jira-rules, cssnano, dotenv, esbuild, eslint, eslint-config-next, eslint-config-prettier, eslint-plugin-jest, eslint-plugin-prettier, form-data, husky, i18next-scanner, jest, jest-environment-jsdom, jest-environment-node, jest-transform-css, lint-staged, node-mocks-http, pino-pretty, postcss, postcss-import, prettier, rimraf, stylelint, tailwindcss, ts-jest, typescript (dev).
+
+## What to write
+
+Write a JSON file to:
+
+  /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/metrolinx/roster.json
+
+of exactly this shape:
+
+{"agents": {"<agent name>": {"persona": "...", "kind": "implementer|investigator|seam", "ancestor": "<canonical agent name>", "derivedFromSha256": "<sha256 of the ancestor's persona text>", "seam": "<one of the DECLARED SEAMS listed below — required only for an agent you ADD; omit it and the resolver derives it from the name>"}}}
+
+## The declared seams
+
+THESE ARE THE ONLY VALID VALUES for "seam". It is a closed list, and a value outside it is
+refused. Note that "kind" above and "seam" here are DIFFERENT questions: kind says what sort of
+agent this is, seam says which invocation contract it enters by. An agent of kind "implementer"
+does not have seam "implementer".
+
+- code-graph-detective (for investigator agents)
+- story-writer (for implementer agents)
+- cpa-inference (for seam agents)
+- code-review-cycle (for investigator agents)
+- repro-test-writer (for investigator agents)
+- prd-change-reviewer (for investigator agents)
+- tc-writer (for seam agents)
+- ac-elaboration (for seam agents)
+- impl-failure-analyst (for investigator agents)
+
+If none of them fits, OMIT the seam field. The resolver derives one from the agent's name, and
+omitting is always safer than inventing.
+
+EVERY AGENT IN THE CANONICAL ROSTER MUST APPEAR. A missing agent is not a smaller roster — it is an agent with no identity at the moment the pipeline invokes it, and the run has nowhere else to look. Do not decide that an agent is irrelevant to this project; you cannot know which seams a run will reach.
+
+## How to specialise
+
+For each agent, keep WHAT IT DOES and replace WHAT IT KNOWS. The generic persona states a role; your version states that same role against this codeline — its language, its frameworks, its layout, the helpers and conventions that already exist, the commands it actually runs. Read the code to find these. An assertion about the codeline that you did not verify is worse than a generic sentence, because the next reader cannot tell which is which.
+
+Do not weaken a rule while specialising it. If the generic persona forbids something, says a finding must carry evidence, or names a check that must pass, that survives verbatim in meaning — you are changing what the agent knows, never what it is required to do.
+
+KEEP EACH PERSONA AT THE LENGTH THE WORK NEEDS. A persona that lists every file in the repository is not more specialised, it is less usable: the agent reads it before every invocation.
+
+## Ancestry
+
+Each entry names the canonical agent it derives from. For an agent that exists in the canonical roster, that is the agent itself.
+
+If this project needs an agent the canonical roster does not have, you may add one — but it MUST name the canonical agent it is closest to as its ancestor. That is not bookkeeping: an agent inherits its ladder, its tool grant and its output contract from its ancestor, so an agent invented from nothing has no budget, no tools and no way for the pipeline to receive what it returns.
+
+`derivedFromSha256` is the SHA-256 of the ancestor's persona text exactly as it appears in the canonical copy you were given. It records what you derived from, so that a later change to the canonical roster is detectable rather than silent.
+
+## Which seam an agent enters by
+
+An agent does not run on its own. It enters the pipeline through a SEAM, which decides its ladder, its tool grant, its output contract and the prompt it executes. For an agent that exists in the canonical roster, the seam is already known and you do not state it.
+
+For an agent you ADD, name the seam in the `seam` field. It must be one the pipeline already declares — you are choosing which existing door this agent comes through, not inventing one. If none fits, the agent you are adding is doing work the pipeline has no place for, and adding it will not create that place.
+
+Omitting it does not leave the question open: the name is matched against patterns instead, and a pattern is a guess about what an agent does based on how it is spelled. That is how an agent named for review came to enter through an inference seam, with another seam's budget and tools.
+
+## What you are not doing
+
+You are not editing the canonical roster. You are not judging whether an agent should exist. You are not writing prompts — an agent's persona says who it is; its instructions for a task live in that task's prompt.
+
+No previous refusal encountered.

@@ -30,7 +30,7 @@ if (!prdPath) {
 
 let prd;
 try {
-  prd = JSON.parse(fs.readFileSync(prdPath, 'utf8'));
+  prd = require('./_read-input.js').readJsonOrRefuse(prdPath, 'the PRD', { expect: 'object' });
 } catch (e) {
   // LOUD. The inline version swallowed this: an unreadable PRD produced an empty string, which
   // the caller read as "no spanning story is incomplete" and carried on.

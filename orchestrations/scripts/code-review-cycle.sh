@@ -14,6 +14,7 @@
 #   0 - Review approved or max iterations reached
 #   1 - Review failed (errors during review)
 #   2 - Agent has not responded to feedback yet
+#   3 - Nothing was reviewed (story not complete) — NOT an approval
 
 set -euo pipefail
 
@@ -22,7 +23,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
-MAGENTA='\033[0;35m'
+export MAGENTA='\033[0;35m'
 NC='\033[0m'
 
 log()     { echo -e "${CYAN}[REVIEW-CYCLE]${NC} $1"; }
@@ -84,7 +85,7 @@ if [ -f "$_ml_lib" ]; then
     # shellcheck source=lib/model-ladders.sh
     . "$_ml_lib" || true
     command -v export_model_ladders >/dev/null 2>&1 \
-        && export_model_ladders "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json}" || true
+        && export_model_ladders "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/llm-settings.json}}" || true
 fi
 # ask must come BEFORE any model is resolved below: seam_ladder_export sets EPAM_MODEL, and
 # a later assignment that wins makes the whole thing decorative.
@@ -103,7 +104,12 @@ command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "$_SEAM_NAME
 
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
-PRD_FILE="$AUTOMATION_DIR/prd.json"
+# THE CALLER'S PRD, not a global one. This was assigned unconditionally, so whatever PRD the run
+# was launched with was discarded in favour of orchestrations/prd.json — which holds
+# {"stories":[],"implementationOrder":{}}. Every story therefore looked absent, and the paths
+# below turned that into a clean exit. orchestrate.sh settled the same question with ${PRD_FILE:-}
+# after a hardcoded default synthesised one project's PRD into another's.
+PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
 REVIEW_LOG="${REVIEW_LOG:-$AUTOMATION_DIR/logs/code-reviews.jsonl}"
 MESSAGES_DIR="${MESSAGES_DIR:-$AUTOMATION_DIR/logs/messages}"
 # shellcheck source=lib/roster-read.sh
@@ -112,7 +118,10 @@ AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
 # THE SEAM DECIDES. seam_ladder_export set EPAM_MODEL to the first rung of the chain this
 # seam's archetype declares; the literal that stood here overrode it silently, so editing the
 # declared tier moved no model. An operator value still wins; the unremovable default is gone.
-ORCH_GATE_MODEL="${ORCH_GATE_MODEL:-${EPAM_MODEL:-}}"
+# THE SEAM'S LADDER, not a run-wide pin. ORCH_GATE_MODEL reached every seam that could not
+# resolve a model itself, and .env pinned it to z-ai/glm-5.2 — which is why a mockserver run
+# asked for an OpenRouter model. Empty when the ladder cannot answer, so callers refuse.
+_CRC_MODEL="${EPAM_MODEL:-$(seam_model_or_fail "code-review-cycle" 2>/dev/null || true)}"
 
 run_review_prompt() {
     local prompt_text="$1"
@@ -121,12 +130,12 @@ run_review_prompt() {
         return 0
     fi
     echo "$prompt_text" | \
-        AI_MODEL="$ORCH_GATE_MODEL" \
+        AI_MODEL="$_CRC_MODEL" \
         CLAUDE_CMD="${CLAUDE_CMD:-claude}" \
         EPAM_CLI="${EPAM_CLI:-epam}" \
         EPAM_MAX_OUTPUT_TOKENS="${CODE_REVIEW_MAX_OUTPUT_TOKENS:-32768}" \
         "$AI_RUNNER_CMD" --provider "${EPAM_ORCHESTRATION_PROVIDER:-claude}" \
-            --model "$ORCH_GATE_MODEL" 2>&1
+            --model "$_CRC_MODEL" 2>&1
 }
 
 log "Code Review Cycle for Story: $STORY_ID (Iteration $ITERATION/$MAX_ITERATIONS)"
@@ -142,14 +151,22 @@ STORY_COMPLETED=$(jq -r --arg id "$STORY_ID" \
 STORY_PHASE=$(jq -r --arg id "$STORY_ID" \
     '.implementationOrder | to_entries[] | select(.value[] | contains($id)) | .key' "$PRD_FILE")
 
-if [ "$STORY_AGENT" = "unknown" ]; then
-    error "Story not found or no agent assigned: $STORY_ID"
+# EMPTY IS ABSENT. `.agentRole // "unknown"` supplies its default when the key is NULL — not when
+# the selector matches no story at all, which yields an empty string. Testing only for "unknown"
+# let a story that is not in the PRD fall through to the completed check below, where it was
+# reported as "not completed yet" and exited 0.
+if [ -z "$STORY_AGENT" ] || [ "$STORY_AGENT" = "unknown" ] || [ "$STORY_AGENT" = "null" ]; then
+    error "Story not found in $PRD_FILE, or it has no agent assigned: $STORY_ID"
     exit 1
 fi
 
+# A REVIEW THAT DID NOT RUN IS NOT AN APPROVED REVIEW. This exited 0, which is the code this
+# script documents as "Review approved or max iterations reached" — so a caller reading the exit
+# status could not tell a passed review from one that never happened. Skipping an incomplete story
+# is correct; saying "approved" about it is not.
 if [ "$STORY_COMPLETED" != "true" ]; then
-    warning "Story not completed yet, skipping review"
-    exit 0
+    warning "Story not completed yet, skipping review (nothing was reviewed)"
+    exit 3
 fi
 
 log "Story: $STORY_TITLE"
@@ -209,6 +226,9 @@ _STORY_FILES=$(jq -r --arg id "$STORY_ID" \
 # truncation is now an EXPLICIT marker in the reviewer's own input.
 _STORY_DIFF=""
 if [ -d "$PROJECT_ROOT/.git" ]; then
+    # The expansion is split into separate arguments ON PURPOSE: this passes a LIST to a command
+    # that takes them as individual operands. Quoting it would hand over one argument with spaces.
+    # shellcheck disable=SC2046
     _diff_full=$(git -C "$PROJECT_ROOT" diff HEAD~5 HEAD -- \
         $(echo "$_STORY_FILES") 2>/dev/null || true)
     [ -z "$_diff_full" ] && \
@@ -251,20 +271,26 @@ $_PRIOR_ISSUES"
     fi
 fi
 
+# THE CRITERIA THIS REVIEW JUDGES AGAINST. Brownfield anchors on verification criteria; the
+# builder is shared with team-lead-review.sh so both reviewers quote the same wording.
+# shellcheck source=lib/review-criteria.sh
+. "$SCRIPT_DIR/lib/review-criteria.sh"
+_REVIEW_VC_BLOCK=$(review_vc_block "$STORY_ID" "$PRD_FILE")
+
 # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
 _tpl_vals=$(mktemp "${TMPDIR:-/tmp}/code-review-cycle-vals-XXXXXX.json")
 jq_vals --arg iteration "$ITERATION" \
       --arg prior_context "$_PRIOR_CONTEXT" \
       --arg project_root "$PROJECT_ROOT" \
       --arg review_profile "$_REVIEW_PROFILE" \
-      --arg story_acs "$_STORY_ACS" \
+      --arg vc_block "$_REVIEW_VC_BLOCK" \
       --arg story_agent "$STORY_AGENT" \
       --arg story_description "$_STORY_DESC" \
       --arg story_diff "$_STORY_DIFF" \
       --arg story_files "$_STORY_FILES" \
       --arg story_id "$STORY_ID" \
       --arg story_title "$STORY_TITLE" \
-      '{"__ITERATION__":$iteration,"__PRIOR_CONTEXT__":$prior_context,"__PROJECT_ROOT__":$project_root,"__REVIEW_PROFILE__":$review_profile,"__STORY_ACS__":$story_acs,"__STORY_AGENT__":$story_agent,"__STORY_DESCRIPTION__":$story_description,"__STORY_DIFF__":$story_diff,"__STORY_FILES__":$story_files,"__STORY_ID__":$story_id,"__STORY_TITLE__":$story_title}' > "$_tpl_vals" 2>/dev/null
+      '{"__VC_BLOCK__":$vc_block,"__ITERATION__":$iteration,"__PRIOR_CONTEXT__":$prior_context,"__PROJECT_ROOT__":$project_root,"__REVIEW_PROFILE__":$review_profile,"__STORY_AGENT__":$story_agent,"__STORY_DESCRIPTION__":$story_description,"__STORY_DIFF__":$story_diff,"__STORY_FILES__":$story_files,"__STORY_ID__":$story_id,"__STORY_TITLE__":$story_title}' > "$_tpl_vals" 2>/dev/null
 if ! _REVIEW_PROMPT=$(render_engine_prompt code-review-cycle "$_tpl_vals"); then
     echo "[code-review-cycle] cannot render its prompt — refusing to run with no instructions" >&2
     rm -f "$_tpl_vals"; exit 1
@@ -289,7 +315,7 @@ if [ "$_RAW_VERDICT" = "changes_requested" ]; then
         ISSUES+=("$_issue")
     done < <(echo "$_REVIEW_JSON" | jq -c '.issues[]?' 2>/dev/null)
 fi
-REVIEW_STATUS="${_RAW_VERDICT}"
+export REVIEW_STATUS="${_RAW_VERDICT}"
 
 ISSUE_COUNT=${#ISSUES[@]}
 

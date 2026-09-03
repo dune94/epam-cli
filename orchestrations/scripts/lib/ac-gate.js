@@ -102,13 +102,69 @@ const AUTO_ELABORATE     = process.env.AC_GATE_AUTO_ELABORATE === '1';
 const BROWNFIELD         = process.env.EPAM_BROWNFIELD === '1';
 const DEFAULT_CODELINE   = process.env.JIRA_DEFAULT_CODELINE || '';
 // Explicit provider. These called ai-run.sh with --model but NO --provider, so
-// provider came only from ambient env — e.g. `--provider qwen --model claude-haiku`.
-const PROVIDER = getArg('--provider', process.env.ORCH_GATE_PROVIDER || process.env.EPAM_ORCHESTRATION_PROVIDER || 'qwen');
+// provider came only from ambient env — e.g. `--provider openrouter --model claude-haiku`.
+// NO VENDOR OF ITS OWN. This ended in `|| 'openrouter'` — a hardcoded last resort firing under
+// exactly the condition that killed discovery: the project env not reaching the child. Where
+// discovery DIED, this succeeded against the wrong vendor, so a run launched as claude spent
+// on another stack with nothing in the log saying so.
+//
+// Empty is the correct answer: llm-handler.sh resolves the provider from the ACTIVE SET when
+// it is not told one, and the flag is omitted below rather than passed empty.
+const PROVIDER = getArg('--provider',
+  process.env.ORCH_GATE_PROVIDER || process.env.EPAM_ORCHESTRATION_PROVIDER || '');
+
+// A FLAG WITH NO VALUE IS NOT AN EMPTY ARGUMENT — IT IS NO ARGUMENT, and the flag then swallows
+// whatever follows. codeline-discovery.js emitted `--provider --model X` this way; the hub read
+// '--model' as the provider and rejected the model name as an unknown option. Quoted, so a value
+// with a space cannot split either.
+const flagArg = (name, value) => (String(value == null ? '' : value).trim()
+  ? ` --${name} ${JSON.stringify(String(value).trim())}`
+  : '');
 // No literal fallback: see lib/seam-model.js. An AC classification produced by a model the
 // run never chose still reads as authoritative.
 const { resolveOrRefuse } = require('./seam-model.js');
+
+/**
+ * THIS SEAM'S MODEL, FROM ITS OWN LADDER.
+ *
+ * Replaces process.env.ORCH_GATE_MODEL — a RUN-WIDE PIN that reached every seam unable to
+ * resolve one itself, which was all of them outside the story path. `.env` set it to
+ * z-ai/glm-5.2, so a mockserver run asked for an OpenRouter model and nothing else could
+ * supply a different answer.
+ *
+ * Returns '' when the ladder cannot answer, so resolveOrRefuse still REFUSES rather than
+ * substituting: "we could not tell" is never "it is fine".
+ */
+/**
+ * The timeout this seam DECLARES, in milliseconds.
+ *
+ * seamInvocationEnv already resolves it — EPAM_TIMEOUT_SECS, from the seam's timeoutSecs in
+ * invocation-profiles.json, capped by EPAM_SEAM_TIMEOUT_CAP_SECS. This file resolved it and then
+ * ignored it, bounding the call with its own literal instead: a seam could declare 1800s and be
+ * killed at 360s by the code invoking it. The ladder is the source of truth; reading anything else
+ * here makes the declaration decorative.
+ *
+ * No fallback number. A seam that declares no timeout gets none from this file, and the caller is
+ * left to fail with the reason rather than run under a bound nobody chose.
+ */
+function seamDeclaredTimeoutMs(seam) {
+  try {
+    const { seamInvocationEnv } = require('./seam-invocation.js');
+    const env = seamInvocationEnv(seam, undefined, { sourceEnv: process.env }) || {};
+    const secs = Number(env.EPAM_TIMEOUT_SECS);
+    return Number.isFinite(secs) && secs > 0 ? secs * 1000 : undefined;
+  } catch { return undefined; }
+}
+
+function seamLadderModel(seam) {
+  try {
+    const { seamInvocationEnv } = require('./seam-invocation.js');
+    const env = seamInvocationEnv(seam, undefined, { sourceEnv: process.env }) || {};
+    return env.EPAM_MODEL || '';
+  } catch { return ''; }
+}
 const MODEL   = resolveOrRefuse({ seam: 'ac-gate',
-  sources: [getArg('--model', ''), process.env.ORCH_GATE_MODEL, process.env.EPAM_MODEL] });
+  sources: [getArg('--model', ''), seamLadderModel('ac-classification'), process.env.EPAM_MODEL] });
 
 const ISSUES_PATH = getArg('--issues');
 const OUT_PATH    = getArg('--out', '');   // write JSON results to file instead of stdout
@@ -253,10 +309,11 @@ function classifyWithLLM(issue, knownCodelines) {
 
   try {
     // Use ai-run.sh for provider-agnostic LLM call with proper env/key routing
-    const cmd = `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>${_errFile}`;
+    const cmd = `bash ${AI_RUN_SH}${flagArg('provider', PROVIDER)}`
+      + `${flagArg('model', MODEL)} < ${tmpPrompt} 2>${_errFile}`;
     const raw = execSync(cmd, {
       encoding: 'utf8',
-      timeout: Number(process.env.AC_GATE_TIMEOUT_MS || 360000),
+      timeout: seamDeclaredTimeoutMs('ac-classification'),
       env: seamEnv('ac-classification', _costFile),
     }).trim();
 
@@ -325,10 +382,11 @@ function classifyCodelineOnly(issue, knownCodelines) {
   const _errFile = `${tmpPrompt}.err`;
   fs.writeFileSync(tmpPrompt, prompt);
   try {
-    const cmd = `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>${_errFile}`;
+    const cmd = `bash ${AI_RUN_SH}${flagArg('provider', PROVIDER)}`
+      + `${flagArg('model', MODEL)} < ${tmpPrompt} 2>${_errFile}`;
     const raw = execSync(cmd, {
       encoding: 'utf8',
-      timeout: Number(process.env.AC_GATE_TIMEOUT_MS || 360000),
+      timeout: seamDeclaredTimeoutMs('ac-classification'),
       env: seamEnv('ac-classification', _costFile),
     }).trim();
     if (!raw) throw new Error(`Empty response from ai-run.sh${_why(_errFile)}`);
@@ -382,8 +440,9 @@ function elaborateAcs(issue) {
   const _errFile = `${tmpPrompt}.err`;
   fs.writeFileSync(tmpPrompt, prompt);
   try {
-    const cmd = `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>${_errFile}`;
-    const raw = execSync(cmd, { encoding: 'utf8', timeout: Number(process.env.AC_GATE_TIMEOUT_MS || 360000), env: seamEnv('ac-elaboration', _costFile) }).trim();
+    const cmd = `bash ${AI_RUN_SH}${flagArg('provider', PROVIDER)}`
+      + `${flagArg('model', MODEL)} < ${tmpPrompt} 2>${_errFile}`;
+    const raw = execSync(cmd, { encoding: 'utf8', timeout: seamDeclaredTimeoutMs('ac-classification'), env: seamEnv('ac-elaboration', _costFile) }).trim();
     if (!raw) throw new Error(`Empty elaboration response${_why(_errFile)}`);
     const parsed = parseLooseJson(raw, 'elaboration');
     return Array.isArray(parsed.enrichedAcs) && parsed.enrichedAcs.length > 0

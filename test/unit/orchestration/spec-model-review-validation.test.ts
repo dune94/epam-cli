@@ -104,8 +104,23 @@ describe('isValidModelString — real execution against the exact hallucinated d
     expect(isValidModelString('z-ai/glm-5.2', 'MiniMax-M3', knownValidModels)).toBe(true);
   });
 
-  it('accepts the unchanged current model even if not in the allow-list (no-op is always safe)', () => {
-    expect(isValidModelString('some-unlisted-model', 'some-unlisted-model', knownValidModels)).toBe(true);
+  it('REJECTS the unchanged current model when the ladder is known — being current is not a reason', () => {
+    // This used to accept anything equal to currentModel, ahead of consulting the ladder at all, so
+    // a story that had somehow acquired a foreign model perpetuated it on every pass. MiniMax-M3
+    // rode that rule through a run whose set declares a Claude ladder, and the writer then spent
+    // twelve attempts per story on a model the set cannot route.
+    //
+    // Where the ladder is known, the ladder decides.
+    expect(isValidModelString('some-unlisted-model', 'some-unlisted-model', knownValidModels))
+      .toBe(false);
+  });
+
+  it('but a no-op IS still accepted when no ladder could be resolved at all', () => {
+    // The concession survives exactly where it is safe: with an empty permitted set there is nothing
+    // to check against, and refusing everything would strand a project whose ladder did not resolve.
+    expect(isValidModelString('some-unlisted-model', 'some-unlisted-model', new Set())).toBe(true);
+    expect(isValidModelString('a-different-model', 'some-unlisted-model', new Set()),
+      'an empty ladder became a licence to propose anything').toBe(false);
   });
 
   it('rejects non-string values (null, undefined, numbers, objects)', () => {
@@ -117,7 +132,7 @@ describe('isValidModelString — real execution against the exact hallucinated d
 
   it('rejects other plausible-looking but unlisted org/model combinations', () => {
     // Same failure shape as the live bug: valid-looking org prefix, wrong model
-    expect(isValidModelString('qwen/MiniMax-M3', 'MiniMax-M3', knownValidModels)).toBe(false);
+    expect(isValidModelString('openrouter/MiniMax-M3', 'MiniMax-M3', knownValidModels)).toBe(false);
     expect(isValidModelString('moonshotai/glm-5.2', 'MiniMax-M3', knownValidModels)).toBe(false);
   });
 
@@ -127,7 +142,7 @@ describe('isValidModelString — real execution against the exact hallucinated d
   // own upgradeModel/miniModel params, so isValidModelString() accepted it as
   // "known valid" by construction. Assigned to SKY-001, failed 8/8 attempts
   // (wrong provider/model pairing), aborted the phase. Anthropic/Claude models
-  // are never a valid assignment in this pipeline (qwen/minimax-routed by
+  // are never a valid assignment in this pipeline (openrouter/minimax-routed by
   // design) — checked independently of currentModel/knownValidModels so this
   // holds even if a story's current model was already corrupted.
   it('rejects any anthropic/* model even when it is the (unset-default-corrupted) upgradeModel', () => {

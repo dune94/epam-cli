@@ -1,0 +1,32 @@
+# refused: the generated prompt dropped placeholder(s) the template requires: __ROLE_BLOCK__, __STORY_BLOCK__. The evidence they carry would silently never reach the agent.
+# template: assign-agent-roles   attempt: 1/3
+# required placeholders: __ROLE_BLOCK__, __STORY_BLOCK__
+# ---------------- model reply below, verbatim ----------------
+Assign an implementation agent role to every story below.
+
+AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
+nothing else; the name you return must match one of them verbatim:
+- fare-rules-engineer [implementer] — mocka's src/fares.ts
+- schedule-display-engineer [implementer] — mockb's src/schedule.ts
+- mocka-detective [investigator] — investigates mocka's fare boundary bug
+- mockb-detective [investigator] — investigates mockb's stop-rendering bug
+
+STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
+- MOCK3-1 (mocka): Riders aged exactly 65 are charged the adult fare
+- MOCK3-2 (mockb): The departure board omits the final stop
+
+Pick the role whose stated expertise actually covers the work the story describes. If two
+roles could plausibly own a story, prefer the one whose brief names the surface the story
+touches.
+
+THE UNIT OF ASSIGNMENT IS A (STORY, CODELINE) PAIR, NOT A STORY. A story listing three
+codelines needs THREE assignments — the repositories differ, so the right owner can differ.
+Count the codelines listed against each story and return exactly that many assignments for it,
+naming the codeline on every one. A story is not assigned until every codeline it lists is.
+
+THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
+the one whose brief names those files or directories. A role whose brief is about settings in
+a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
+a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
+no source files, and all such a role can produce is a configuration note. Where the story needs
+both console configuration and code, the assignment goes to the role that authors the code, and the configuration work is part of that story rather than a reason to reassign it.

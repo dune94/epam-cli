@@ -1,0 +1,212 @@
+{
+  "$comment": "THE MOCKSERVER PROVIDER SET — the CodeMie stack, answered by MockServer instead of a model. Same ladders and same budgets, so a rehearsal exercises the chain a paid run would climb; only the ENDPOINT differs.",
+  "$proven": "2026-08-25: plain `claude` honours ANTHROPIC_BASE_URL, reaches MockServer (POST /v1/messages in its request log) and PARSES the SSE it serves — is_error:false, result:'OK', stop_reason:'end_turn', RC=0.",
+  "$whyNotTheWrapper": "This runs PLAIN `claude`, not codemie-claude. The wrapper's --base-url selects an SSO PROFILE rather than redirecting, and fails with 'SSO credentials not found' for any URL it has no credentials for. A mocked run must authenticate against NOTHING, so it bypasses the wrapper entirely.",
+  "$whyTheSameLadders": "Deliberately identical to the codemie set. A rehearsal on different models proves the harness, not the run. Sharing the ladder means a mocked run climbs the chain a paid run would.",
+  "ladderTierOrder": [
+    "medium",
+    "high",
+    "highest"
+  ],
+  "ladders": {
+    "medium": {
+      "$why": "Enters cheap and tops out at Sonnet-5. A `mid` seam never reaches Opus: 14 seams resolve here, and measured turn counts are p50 4, p90 24 — work that does not need a frontier model.",
+      "startModel": "claude-haiku-4-5-20251001",
+      "modelLadder": [
+        {
+          "from": "claude-haiku-4-5-20251001",
+          "to": "claude-sonnet-5"
+        }
+      ],
+      "rungs": [
+        {
+          "rung": 0,
+          "maxIterations": 40,
+          "reasoningEffort": "medium"
+        },
+        {
+          "rung": 1,
+          "maxIterations": 120,
+          "reasoningEffort": "high"
+        }
+      ]
+    },
+    "high": {
+      "$why": "Same ENTRY as medium, higher CEILING. That is the 'different entry, same ceiling' rule applied between high and highest: what separates the tiers is how far they may climb, not where they start.",
+      "startModel": "claude-haiku-4-5-20251001",
+      "modelLadder": [
+        {
+          "from": "claude-haiku-4-5-20251001",
+          "to": "claude-sonnet-5"
+        },
+        {
+          "from": "claude-sonnet-5",
+          "to": "claude-opus-5"
+        }
+      ],
+      "rungs": [
+        {
+          "rung": 0,
+          "maxIterations": 40,
+          "reasoningEffort": "medium"
+        },
+        {
+          "rung": 1,
+          "maxIterations": 250,
+          "reasoningEffort": "high"
+        },
+        {
+          "rung": 2,
+          "maxIterations": 300,
+          "reasoningEffort": "high"
+        }
+      ]
+    },
+    "highest": {
+      "$why": "Skips Haiku. 25 seams resolve here and would waste a rung proving a small model cannot do the work. Same ceiling as high, entered two rungs up.",
+      "startModel": "claude-sonnet-5",
+      "modelLadder": [
+        {
+          "from": "claude-sonnet-5",
+          "to": "claude-opus-4-8"
+        },
+        {
+          "from": "claude-opus-4-8",
+          "to": "claude-opus-5"
+        }
+      ],
+      "rungs": [
+        {
+          "rung": 0,
+          "maxIterations": 250,
+          "reasoningEffort": "high"
+        },
+        {
+          "rung": 1,
+          "maxIterations": 250,
+          "reasoningEffort": "high"
+        },
+        {
+          "rung": 2,
+          "maxIterations": 300,
+          "reasoningEffort": "xhigh"
+        }
+      ]
+    }
+  },
+  "modelOverrides": {
+    "$whyAutoCompress": "150000 against a 200000 window is an OVERFLOW GUARD near the ceiling, never a token-saving device: compaction rewrites the prefix and destroys the prompt cache. Measured input is p50 13.3k, p90 19k, max 25.9k — about 13% of the window — so this should never fire. If it does, something has gone wrong upstream and that is worth knowing.",
+    "$whyNoTemperature": "codemie-claude exposes no temperature flag and Claude Code has no supported lever for it. Declaring one would be decoration. Deliberation is controlled by reasoningEffort and thinking instead.",
+    "$whyAdaptive": "Thinking is held STABLE per model. Anthropic's docs list effort and thinking-parameter changes as cache invalidators, so a config that changes between attempts discards the cache every retry — the opposite of what a 1h TTL is for.",
+    "claude-haiku-4-5": {
+      "matchOn": "model",
+      "matchSubstring": "claude-haiku-4-5",
+      "thinking": "adaptive",
+      "promptCacheTtl": "1h",
+      "autoCompressAt": 150000,
+      "maxOutputTokens": 32000,
+      "miniTier": true,
+      "charsPerToken": 4
+    },
+    "claude-sonnet-5": {
+      "matchOn": "model",
+      "matchSubstring": "claude-sonnet-5",
+      "thinking": "adaptive",
+      "promptCacheTtl": "1h",
+      "autoCompressAt": 150000,
+      "maxOutputTokens": 64000,
+      "charsPerToken": 4
+    },
+    "claude-opus-4-8": {
+      "matchOn": "model",
+      "matchSubstring": "claude-opus-4-8",
+      "thinking": "adaptive",
+      "promptCacheTtl": "1h",
+      "autoCompressAt": 150000,
+      "maxOutputTokens": 64000,
+      "charsPerToken": 4
+    },
+    "claude-opus-5": {
+      "matchOn": "model",
+      "matchSubstring": "claude-opus-5",
+      "thinking": "adaptive",
+      "promptCacheTtl": "1h",
+      "autoCompressAt": 150000,
+      "maxOutputTokens": 64000,
+      "charsPerToken": 4
+    },
+    "$miniTierWhy": "miniTier marks the cheap, fast rung — the models that are quick but limited in generation capacity. It was decided in engine code by sniffing vendor naming habits (-mini, -flash, -haiku, minimax-m2), which breaks in both directions: a cheap model named differently read as capable, and a capable model containing -flash read as cheap. The set that declares the model declares its tier.",
+    "$whyCharsPerToken": "INPUT CAPACITY IN CHARACTERS. autoCompressAt is the models input ceiling in TOKENS; callers that must size a payload measure it in characters. The ratio belongs with the model, because it is a property of that models tokenizer, not of any caller. Declared so a caller derives its budget instead of inventing one: the roster review carried a literal 60000 in code, which split a 276KB roster into six calls and failed the whole review whenever any one of them answered off-schema."
+  },
+  "finalFallback": {
+    "$why": "Applies after ladder exhaustion. The PROVIDER is plain `claude`, not codemie-claude: this set was built by copying the codemie one, and the paid wrapper came with it. A fallback is the one place a run reaches when everything else has failed — precisely where an escape to a paid provider would be least noticed and most expensive.",
+    "model": "claude-sonnet-5",
+    "provider": "claude"
+  },
+  "runners": {
+    "claude": {
+      "$why": "Plain Claude Code. No CodeMie, no SSO, no spend.",
+      "$whyNoBaseUrlFlag": "--base-url is ABSENT on purpose: on the wrapper it means 'use this SSO profile'. The redirect is ANTHROPIC_BASE_URL, which plain claude honours.",
+      "alwaysFlags": [],
+      "env": {
+        "ANTHROPIC_BASE_URL": "mockBaseUrl"
+      },
+      "flags": {
+        "--effort": "reasoningEffort",
+        "--autocompact": "autoCompressAt"
+      },
+      "$whyFlags": "Checked against the installed CLI's own --help, not assumed: --effort takes (low, medium, high, xhigh, max) and --autocompact takes auto or a token count. These were declared as CLAUDE_CODE_* env vars that the CLI does not document and that nothing exported.",
+      "$whyNoTurnCap": "maxIterations is deliberately absent. It binds the ReAct loop in src/agent/AgentRunner.ts, which only the `epam run` arm enters; a --print call has no turn cap and the loop is Claude Code's own. Declaring one here would name a knob nothing can turn.",
+      "$whyNoOutputCap": "maxOutputTokens is deliberately unmapped: the installed CLI documents no flag or env for it. It stays declared in modelOverrides so the intent is visible, and is not routed anywhere pretending to work.",
+      "$whyEnvKept": "ANTHROPIC_BASE_URL is a real, load-bearing env var: it is the mock redirect. It was declared here and never exported, so a free run would have looked redirected and reached the paid endpoint.",
+      "$whyNoSilentFlag": "-s is codemie-claude's silent flag and plain `claude` REJECTS it: `echo x | claude -s --print` exits 1 with \"error: unknown option '-s'\". Proven by running it, 2026-08-26, after a --help probe proved nothing (--help and --version short-circuit before option validation, so an invalid flag exits 0 there too). With -s declared, the hub passed it to plain claude, the call failed, and the arm's 2>/dev/null hid the reason — codeline-discovery reported only 'Empty response from ai-run.sh' and the mock3 run aborted with 'codeline scope could not be resolved'. The codemie runner keeps -s: codemie-claude --help documents it as -s, --silent.",
+      "unsetEnv": [
+        "CODEMIE_API_KEY",
+        "CODEMIE_AUTH_TOKEN",
+        "CODEMIE_KEY",
+        "CODEMIE_TOKEN",
+        "COPILOT_API_KEY",
+        "COPILOT_AUTH_TOKEN",
+        "COPILOT_KEY",
+        "COPILOT_TOKEN",
+        "CURSOR_API_KEY",
+        "CURSOR_AUTH_TOKEN",
+        "CURSOR_KEY",
+        "CURSOR_TOKEN",
+        "DASHSCOPE_API_KEY",
+        "DASHSCOPE_AUTH_TOKEN",
+        "DASHSCOPE_KEY",
+        "DASHSCOPE_TOKEN",
+        "EPAM_API_KEY_ANTHROPIC",
+        "EPAM_API_KEY_CLAUDE",
+        "EPAM_API_KEY_CODEMIE",
+        "EPAM_API_KEY_COPILOT",
+        "EPAM_API_KEY_CURSOR",
+        "EPAM_API_KEY_DASHSCOPE",
+        "EPAM_API_KEY_GEMINI",
+        "EPAM_API_KEY_MINIMAX",
+        "EPAM_API_KEY_OPENAI",
+        "EPAM_API_KEY_OPENROUTER",
+        "GEMINI_API_KEY",
+        "GEMINI_AUTH_TOKEN",
+        "GEMINI_KEY",
+        "GEMINI_TOKEN",
+        "MINIMAX_API_KEY",
+        "MINIMAX_AUTH_TOKEN",
+        "MINIMAX_KEY",
+        "MINIMAX_TOKEN",
+        "OPENAI_API_KEY",
+        "OPENAI_AUTH_TOKEN",
+        "OPENAI_KEY",
+        "OPENAI_TOKEN",
+        "OPENROUTER_API_KEY",
+        "OPENROUTER_AUTH_TOKEN",
+        "OPENROUTER_KEY",
+        "OPENROUTER_TOKEN"
+      ],
+      "$whyUnsetEnv": "A REHEARSAL MUST NOT BE ABLE TO SPEND SOMEWHERE ELSE. Under this set the writer once ran provider=minimax with MINIMAX_API_KEY present: the mockBaseUrl redirect covers Anthropic traffic and nothing else, so any other vendor's credential is a live route out. Those are removed. ANTHROPIC_API_KEY and CLAUDE_* are deliberately NOT removed: Claude Code falls back to the OAuth credentials on disk when it finds no key, and that bills for real — the exact inversion this is meant to prevent, recorded in seam-the-subscription-pays-not-the-api-key. The operator's fake key stays, and the redirect is what makes it harmless. The vendors come from llm-channel.json's credentialPattern, so one added there is covered without editing this."
+    }
+  },
+  "mockBaseUrl": "http://localhost:1080",
+  "$mockBaseUrl": "Where MockServer listens. Declared here so no script spells it — the same rule every other value in this layer follows."
+}

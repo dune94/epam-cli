@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# test-epam-providers.sh — Zero-token tests for copilot/openai/qwen/cursor orchestration.
+# test-epam-providers.sh — Zero-token tests for copilot/openai/openrouter/cursor orchestration.
 #
 # Tests:
 #   1. provider_to_cli returns correct CLI name for each provider
 #   2. normalize_provider_json correctly maps epam-run JSON to orchestration schema
 #   3. mock-epam-run.sh correctly captures --provider and --model flags
 #   4. resolve_model_from_story reads .model field from prd.json
-#   5. run-agent-orchestration.sh routes copilot/openai/qwen/cursor to correct scripts
+#   5. run-agent-orchestration.sh routes copilot/openai/openrouter/cursor to correct scripts
 #
 # No real API calls are made.  EPAM_CLI is set to the mock.
 #
@@ -52,7 +52,7 @@ _result=$(
         source /tmp/_ptc.sh
         echo "copilot=$(provider_to_cli copilot)"
         echo "openai=$(provider_to_cli openai)"
-        echo "qwen=$(provider_to_cli qwen)"
+        echo "openrouter=$(provider_to_cli openrouter)"
         echo "cursor=$(provider_to_cli cursor)"
         echo "codex=$(provider_to_cli codex)"
         # unknown provider — should fail
@@ -62,7 +62,7 @@ _result=$(
 
 assert_eq "$(echo "$_result" | grep '^copilot='   | cut -d= -f2)" "epam" "provider_to_cli copilot → epam"
 assert_eq "$(echo "$_result" | grep '^openai='    | cut -d= -f2)" "epam" "provider_to_cli openai  → epam"
-assert_eq "$(echo "$_result" | grep '^qwen='      | cut -d= -f2)" "epam" "provider_to_cli qwen    → epam"
+assert_eq "$(echo "$_result" | grep '^openrouter='      | cut -d= -f2)" "epam" "provider_to_cli openrouter    → epam"
 assert_eq "$(echo "$_result" | grep '^cursor='    | cut -d= -f2)" "epam" "provider_to_cli cursor  → epam"
 assert_eq "$(echo "$_result" | grep '^codex='     | cut -d= -f2)" "codex"  "provider_to_cli codex   → codex"
 assert_eq "$(echo "$_result" | grep '^unknown='   | cut -d= -f2)" "error" "provider_to_cli unknown → error (no silent claude fallback)"
@@ -154,7 +154,7 @@ echo ""
 # ─────────────────────────────────────────────────────────────────
 echo "5. run-agent-orchestration.sh routing"
 
-for provider in copilot openai qwen cursor; do
+for provider in copilot openai openrouter cursor; do
     expected="$SCRIPTS_DIR/$provider.sh"
     selected=$(bash -c '
         EPAM_ORCHESTRATION_PROVIDER="'"$provider"'"
@@ -163,7 +163,7 @@ for provider in copilot openai qwen cursor; do
             codemie-claude) echo "$SCRIPT_DIR/codemie-claude.sh" ;;
             copilot)        echo "$SCRIPT_DIR/copilot.sh" ;;
             openai)         echo "$SCRIPT_DIR/openai.sh" ;;
-            qwen)           echo "$SCRIPT_DIR/qwen.sh" ;;
+            openrouter)           echo "$SCRIPT_DIR/openrouter.sh" ;;
             cursor)         echo "$SCRIPT_DIR/cursor.sh" ;;
             *)              echo "$SCRIPT_DIR/claude.sh" ;;
         esac
@@ -245,8 +245,7 @@ cat > "$PRD_WITH_EST" <<'PRDJSON'
     {
       "id": "HW-004",
       "title": "Implement formatDate()",
-      "aiProvider": "qwen",
-      "model": "qwen/qwen3-coder",
+      "aiProvider": "openrouter",
       "effort": "low",
       "estimatedHours": 0.05,
       "estimatedCost": 0.0082
@@ -266,8 +265,11 @@ RESJSON
 bash -c '
     SCRIPT="'"$SCRIPTS_DIR"'/claude.sh"
     # Extract append_cost_record (multiline function — stop at closing brace on its own line)
-    awk "/^append_cost_record\(\)/{found=1} found{print; if(/^\}$/ && found>1){exit} found++}" "$SCRIPT" \
-      > /tmp/_acr.sh 2>/dev/null || true
+    # THE REAL FUNCTION, FROM THE REAL FILE — see the note at the verification tests.
+    # The awk extraction stops at the first line that is exactly "}", so it truncated
+    # append_cost_record mid-body and the part that reads the actual cost never loaded.
+    source "'"$SCRIPTS_DIR"'/claude.sh" >/dev/null 2>&1
+    set +e
 
     # Stubs required by append_cost_record
     log()     { :; }
@@ -279,7 +281,6 @@ bash -c '
     AGENT_ID="typescript-engineer"
     AGENT_NAME="typescript-engineer"
 
-    source /tmp/_acr.sh 2>/dev/null || true
 
     COST_OUT="'"$COST_JSONL"'"
     # Redirect cost record output to our temp file
@@ -288,7 +289,6 @@ bash -c '
 
     # If function writes directly to PHASE_COST_FILE, check that env var path
     PHASE_COST_FILE="$COST_OUT"
-    source /tmp/_acr.sh 2>/dev/null || true
     append_cost_record "HW-004" "completed" "2026-06-10T10:00:00-04:00" "2026-06-10T10:01:00-04:00" \
         "/dev/null" "'"$RESULT_JSON"'" 2>/dev/null || true
 ' 2>/dev/null || true
@@ -297,8 +297,11 @@ bash -c '
 COST_JSONL2=$(mktemp /tmp/cost2_XXXXXX.jsonl)
 bash -c '
     SCRIPT="'"$SCRIPTS_DIR"'/claude.sh"
-    awk "/^append_cost_record\(\)/{found=1} found{print; if(/^\}$/ && found>1){exit} found++}" "$SCRIPT" \
-      > /tmp/_acr2.sh 2>/dev/null || true
+    # THE REAL FUNCTION, FROM THE REAL FILE — see the note at the verification tests.
+    # The awk extraction stops at the first line that is exactly "}", so it truncated
+    # append_cost_record mid-body and the part that reads the actual cost never loaded.
+    source "'"$SCRIPTS_DIR"'/claude.sh" >/dev/null 2>&1
+    set +e
 
     log()     { :; }
     success() { :; }
@@ -313,11 +316,9 @@ bash -c '
     PHASE_COST_FILE="'"$COST_JSONL2"'"
     STORY_EFFORT="low"
     STORY_TYPE="implementation"
-    RESOLVED_MODEL="qwen/qwen3-coder"
     INVOKE_MODE="epam-run"
     STORY_PROMPT_TOKENS="0"
 
-    source /tmp/_acr2.sh 2>/dev/null || true
     append_cost_record "HW-004" "completed" "2026-06-10T10:00:00-04:00" "2026-06-10T10:01:00-04:00" \
         "/dev/null" "'"$RESULT_JSON"'" 2>/dev/null || true
 ' 2>/dev/null || true
@@ -337,11 +338,11 @@ rm -f "$PRD_WITH_EST" "$RESULT_JSON" "$COST_JSONL" "$COST_JSONL2"
 echo ""
 
 # ─────────────────────────────────────────────────────────────────
-# Test 9: ai-run.sh qwen path — pino lines mixed with result JSON
+# Test 9: ai-run.sh openrouter path — pino lines mixed with result JSON
 # This covers the "Invalid numeric literal at line 2, column 4" jq
 # error when epam run --json emits pino log lines alongside result.
 # ─────────────────────────────────────────────────────────────────
-echo "9. ai-run.sh qwen path: pino log lines mixed in stdout → result extracted"
+echo "9. ai-run.sh openrouter path: pino log lines mixed in stdout → result extracted"
 
 AIRUN_SCRIPT="$SCRIPTS_DIR/ai-run.sh"
 AIRUN_PROMPT=$(mktemp /tmp/airun_prompt_XXXXXX.txt)
@@ -360,8 +361,7 @@ PINOEOF
 cat <<'RESULTEOF'
 {
   "result": "slugify implemented",
-  "model": "qwen/qwen3-coder-30b-a3b-instruct",
-  "provider": "qwen",
+  "provider": "openrouter",
   "usage": {
     "inputTokens": 1200,
     "outputTokens": 90,
@@ -374,40 +374,39 @@ RESULTEOF
 MOCKEOF
 chmod +x "$MOCK_EPAM_DIR/epam"
 
-airun_result=$(bash "$AIRUN_SCRIPT" --provider qwen --model "qwen/qwen3-coder-30b-a3b-instruct" \
-    <<< "implement slugify" \
-    2>/dev/null \
-    EPAM_CLI="$MOCK_EPAM_DIR/epam" \
-    ORCH_JSON_RESULT="$AIRUN_ORCH_RESULT" \
-    ) || true
+# (An orphaned continuation stood here: a `<<< ... ) || true` tail whose opening command had been
+#  deleted, so the file has had a syntax error at this point and has never run to completion. That
+#  is why it measured 0% — not because nothing exercised it, but because bash refused it outright.)
 
-# Source the script's run_provider_once in a subshell with mock epam
-airun_result=$(bash -c "
-    EPAM_CLI='$MOCK_EPAM_DIR/epam'
-    ORCH_JSON_RESULT='$AIRUN_ORCH_RESULT'
-    export EPAM_CLI ORCH_JSON_RESULT
-    AI_PROVIDER=qwen AI_MODEL='qwen/qwen3-coder-30b-a3b-instruct' \
-    EPAM_CLI='$MOCK_EPAM_DIR/epam' \
-    ORCH_JSON_RESULT='$AIRUN_ORCH_RESULT' \
-    bash '$AIRUN_SCRIPT' --provider qwen --model 'qwen/qwen3-coder-30b-a3b-instruct' <<< 'implement slugify'
-" 2>/dev/null) || true
+# INVOKE THE SCRIPT. THE OLD BLOCK INVOKED NOTHING.
+#
+# This built a bash -c string that exported EPAM_CLI and ORCH_JSON_RESULT and then ended on a
+# dangling continuation, so no command ever ran and airun_result was always empty. The comment said
+# it sourced run_provider_once — a function ai-run.sh has not had for some time: the file is now a
+# 19-line shim that execs llm-handler.sh, the single hub, which owns the pino-tolerant extraction
+# this test exists to guard ("Capture to temp file so pino JSON lines on stdout do not corrupt jq
+# parsing", llm-handler.sh:378).
+#
+# Running the shim end to end keeps the original guard pointed at the code that now implements it.
+airun_result=$(EPAM_CLI="$MOCK_EPAM_DIR/epam" ORCH_JSON_RESULT="$AIRUN_ORCH_RESULT" \
+    timeout 120 bash "$AIRUN_SCRIPT" --provider openrouter < "$AIRUN_PROMPT" 2>/dev/null) || true
 
-assert_eq "$airun_result" "slugify implemented" "ai-run qwen+pino: result text extracted correctly"
+assert_eq "$airun_result" "slugify implemented" "ai-run openrouter+pino: result text extracted correctly"
 
 # Test 10: ORCH_JSON_RESULT file populated with normalized JSON
 if [ -f "$AIRUN_ORCH_RESULT" ] && [ -s "$AIRUN_ORCH_RESULT" ]; then
     orch_cost=$(jq -r '.cost_usd // 0' "$AIRUN_ORCH_RESULT" 2>/dev/null || echo "0")
     orch_tokens=$(jq -r '.usage.inputTokens // 0' "$AIRUN_ORCH_RESULT" 2>/dev/null || echo "0")
-    assert_eq "$orch_cost"   "0.0028" "ai-run qwen ORCH_JSON_RESULT: cost_usd = 0.0028"
-    assert_eq "$orch_tokens" "1200"   "ai-run qwen ORCH_JSON_RESULT: usage.inputTokens = 1200"
+    assert_eq "$orch_cost"   "0.0028" "ai-run openrouter ORCH_JSON_RESULT: cost_usd = 0.0028"
+    assert_eq "$orch_tokens" "1200"   "ai-run openrouter ORCH_JSON_RESULT: usage.inputTokens = 1200"
 else
-    pass "ai-run qwen ORCH_JSON_RESULT: (skipped — result file not populated in subshell)"
-    pass "ai-run qwen ORCH_JSON_RESULT tokens: (skipped)"
+    pass "ai-run openrouter ORCH_JSON_RESULT: (skipped — result file not populated in subshell)"
+    pass "ai-run openrouter ORCH_JSON_RESULT tokens: (skipped)"
 fi
 
-# Test 11: ai-run.sh qwen path — empty result → exits non-zero, no garbage output
+# Test 11: ai-run.sh openrouter path — empty result → exits non-zero, no garbage output
 echo ""
-echo "11. ai-run.sh qwen path: mock epam emitting empty JSON → exits 1"
+echo "11. ai-run.sh openrouter path: mock epam emitting empty JSON → exits 1"
 MOCK_EPAM_EMPTY_DIR=$(mktemp -d /tmp/mock_epam_empty_XXXXXX)
 cat > "$MOCK_EPAM_EMPTY_DIR/epam" <<'EMPTYEOF'
 #!/usr/bin/env bash
@@ -419,13 +418,13 @@ chmod +x "$MOCK_EPAM_EMPTY_DIR/epam"
 empty_rc=0
 empty_out=$(bash -c "
     EPAM_CLI='$MOCK_EPAM_EMPTY_DIR/epam' \
-    AI_PROVIDER=qwen \
-    bash '$AIRUN_SCRIPT' --provider qwen <<< 'prompt'
+    AI_PROVIDER=openrouter \
+    bash '$AIRUN_SCRIPT' --provider openrouter <<< 'prompt'
 " 2>/dev/null) || empty_rc=$?
 
-assert_eq "$empty_out" "" "ai-run qwen empty-result: no garbage output to stdout"
-[ "$empty_rc" -ne 0 ] && pass "ai-run qwen empty-result: exits non-zero" \
-                       || fail "ai-run qwen empty-result: exits non-zero (got $empty_rc)"
+assert_eq "$empty_out" "" "ai-run openrouter empty-result: no garbage output to stdout"
+[ "$empty_rc" -ne 0 ] && pass "ai-run openrouter empty-result: exits non-zero" \
+                       || fail "ai-run openrouter empty-result: exits non-zero (got $empty_rc)"
 
 rm -f "$AIRUN_PROMPT" "$AIRUN_ORCH_RESULT"
 rm -rf "$MOCK_EPAM_DIR" "$MOCK_EPAM_EMPTY_DIR"
@@ -441,8 +440,24 @@ _ext_skip_result=$(bash -c '
     set -euo pipefail
     SCRIPT="'"$SCRIPTS_DIR"'/claude.sh"
     # Extract the function
-    awk "/^run_external_verification\(\)/{found=1} found{print; if(/^\}$/ && found>1){exit} found++}" "$SCRIPT" > /tmp/_rev.sh
-    source /tmp/_rev.sh
+    # THE REAL FUNCTION, FROM THE REAL FILE.
+    #
+    # This used to awk the function body out of claude.sh into /tmp and source the fragment,
+    # with hand-written stubs standing in for log/success/warning/error. Two things were
+    # wrong with it. The extraction stops at the first line that is exactly "}", so it can
+    # truncate the body; and a fragment plus four stubs is not the code the pipeline runs —
+    # test 12 wrote no stubs at all, so the first log() call killed it under set -e and the
+    # assertion reported an empty result for a function that was never entered.
+    #
+    # claude.sh returns early when sourced, so the whole file can be loaded: the real
+    # function, with the real helpers it calls.
+    set +e
+    source "'"$SCRIPTS_DIR"'/claude.sh" >/dev/null 2>&1
+    # AND set +e AGAIN, AFTER. claude.sh runs `set -euo pipefail` at file scope, so sourcing it
+    # re-arms -e regardless of what was set before. run_external_verification returning 1 on a
+    # failing testCommand — the case test 14 exists to check — then killed the subshell outright,
+    # and the assertion saw an empty result rather than the failure it was looking for.
+    set +e
     VERIFICATION_FAILURE=""
     # Use a temp dir that has no package.json
     TMP_PROJ=$(mktemp -d)
@@ -470,14 +485,24 @@ echo "13. run_external_verification: passes when testCommand exits 0"
 
 _ext_pass_result=$(bash -c '
     SCRIPT="'"$SCRIPTS_DIR"'/claude.sh"
-    awk "/^run_external_verification\(\)/{found=1} found{print; if(/^\}$/ && found>1){exit} found++}" "$SCRIPT" > /tmp/_rev.sh
-
-    # Minimal stubs for sourcing the function
-    log() { :; }
-    success() { :; }
-    warning() { :; }
-    error() { :; }
-    source /tmp/_rev.sh
+    # THE REAL FUNCTION, FROM THE REAL FILE.
+    #
+    # This used to awk the function body out of claude.sh into /tmp and source the fragment,
+    # with hand-written stubs standing in for log/success/warning/error. Two things were
+    # wrong with it. The extraction stops at the first line that is exactly "}", so it can
+    # truncate the body; and a fragment plus four stubs is not the code the pipeline runs —
+    # test 12 wrote no stubs at all, so the first log() call killed it under set -e and the
+    # assertion reported an empty result for a function that was never entered.
+    #
+    # claude.sh returns early when sourced, so the whole file can be loaded: the real
+    # function, with the real helpers it calls.
+    set +e
+    source "'"$SCRIPTS_DIR"'/claude.sh" >/dev/null 2>&1
+    # AND set +e AGAIN, AFTER. claude.sh runs `set -euo pipefail` at file scope, so sourcing it
+    # re-arms -e regardless of what was set before. run_external_verification returning 1 on a
+    # failing testCommand — the case test 14 exists to check — then killed the subshell outright,
+    # and the assertion saw an empty result rather than the failure it was looking for.
+    set +e
 
     VERIFICATION_FAILURE=""
     TMP_PROJ=$(mktemp -d)
@@ -505,13 +530,24 @@ echo "14. run_external_verification: sets VERIFICATION_FAILURE on test failure"
 
 _ext_fail_result=$(bash -c '
     SCRIPT="'"$SCRIPTS_DIR"'/claude.sh"
-    awk "/^run_external_verification\(\)/{found=1} found{print; if(/^\}$/ && found>1){exit} found++}" "$SCRIPT" > /tmp/_rev.sh
-
-    log() { :; }
-    success() { :; }
-    warning() { :; }
-    error() { :; }
-    source /tmp/_rev.sh
+    # THE REAL FUNCTION, FROM THE REAL FILE.
+    #
+    # This used to awk the function body out of claude.sh into /tmp and source the fragment,
+    # with hand-written stubs standing in for log/success/warning/error. Two things were
+    # wrong with it. The extraction stops at the first line that is exactly "}", so it can
+    # truncate the body; and a fragment plus four stubs is not the code the pipeline runs —
+    # test 12 wrote no stubs at all, so the first log() call killed it under set -e and the
+    # assertion reported an empty result for a function that was never entered.
+    #
+    # claude.sh returns early when sourced, so the whole file can be loaded: the real
+    # function, with the real helpers it calls.
+    set +e
+    source "'"$SCRIPTS_DIR"'/claude.sh" >/dev/null 2>&1
+    # AND set +e AGAIN, AFTER. claude.sh runs `set -euo pipefail` at file scope, so sourcing it
+    # re-arms -e regardless of what was set before. run_external_verification returning 1 on a
+    # failing testCommand — the case test 14 exists to check — then killed the subshell outright,
+    # and the assertion saw an empty result rather than the failure it was looking for.
+    set +e
 
     VERIFICATION_FAILURE=""
     TMP_PROJ=$(mktemp -d)
@@ -520,8 +556,11 @@ _ext_fail_result=$(bash -c '
     echo '"'"'{"stories":[{"id":"T-003","technicalNotes":{"testCommand":"echo FAIL_OUTPUT && exit 1"}}]}'"'"' > "$PRD"
     PRD_FILE="$PRD"
     MAIN_PRD_FILE=""
-    run_external_verification "T-003" /dev/null || true
-    echo "rc_is_nonzero:$([[ $? -ne 0 ]] && echo yes || echo no)"
+    # NO APOSTROPHES IN HERE: this payload is single-quoted, so one would close the quoting.
+    # `cmd || true` then $? reads the status of true, never the status of the command.
+    run_external_verification "T-003" /dev/null
+    _rev_rc=$?
+    echo "rc_is_nonzero:$([[ $_rev_rc -ne 0 ]] && echo yes || echo no)"
     echo "has_failure_section:$([[ "${VERIFICATION_FAILURE}" == *"Verification Failure"* ]] && echo yes || echo no)"
     echo "has_output:$([[ "${VERIFICATION_FAILURE}" == *"FAIL_OUTPUT"* ]] && echo yes || echo no)"
     rm -rf "$TMP_PROJ" "$PRD"
@@ -541,19 +580,44 @@ echo ""
 # ─────────────────────────────────────────────────────────────────
 echo "15. No unconditional Anthropic calls (static analysis)"
 
-_anthropic_files=$(grep -rl "@anthropic-ai/sdk\|ANTHROPIC_API_KEY\|anthropic_api_key" \
-    "$SCRIPTS_DIR" --include="*.js" --include="*.ts" --include="*.sh" 2>/dev/null \
-    | grep -v "node_modules\|test-epam-providers\|\.env\|sandbox-invoke")
+# A COMMENT IS NOT A CALL.
+#
+# This grepped whole files, comments included, and demanded a guard token somewhere in the same
+# file. lib/runner-settings.sh names ANTHROPIC_API_KEY only in prose explaining why the runner
+# REMOVES it — Claude Code prefers the key over the OAuth credentials on disk, so with it present
+# the subscription never pays, and seven runs billed the wrong account before the credits ran out.
+# The file that fixes that was reported as the violation. Comments are stripped before the scan, so
+# the check reads code.
+_scan_unguarded_anthropic() {
+    local _dir="$1" _f _hits=0
+    for _f in $(grep -rl "@anthropic-ai/sdk\|ANTHROPIC_API_KEY\|anthropic_api_key" \
+            "$_dir" --include="*.js" --include="*.ts" --include="*.sh" 2>/dev/null \
+            | grep -v "node_modules\|test-epam-providers\|\.env\|sandbox-invoke"); do
+        # Strip shell and C-style comments, then ask again.
+        if ! sed -e 's/#.*//' -e 's://.*::' "$_f" 2>/dev/null \
+                | grep -q "@anthropic-ai/sdk\|ANTHROPIC_API_KEY\|anthropic_api_key"; then
+            continue
+        fi
+        if ! grep -q "EPAM_ORCHESTRATION_PROVIDER\|isNonAnthropic\|No ANTHROPIC\|no.*anthropic" "$_f" 2>/dev/null; then
+            echo "  UNGUARDED: $_f" >&2
+            _hits=$((_hits + 1))
+        fi
+    done
+    echo "$_hits"
+}
 
-_unguarded=0
-for _f in $_anthropic_files; do
-    if ! grep -q "EPAM_ORCHESTRATION_PROVIDER\|isNonAnthropic\|No ANTHROPIC\|no.*anthropic" "$_f" 2>/dev/null; then
-        echo "  UNGUARDED: $_f"
-        _unguarded=$((_unguarded + 1))
-    fi
-done
+# POSITIVE CONTROL FIRST. A checker that reports zero is indistinguishable from one that scans
+# nothing, and this one now skips more than it used to.
+_ctl_dir=$(mktemp -d)
+printf '%s\n' '#!/usr/bin/env bash' 'export ANTHROPIC_API_KEY=sk-real' > "$_ctl_dir/offender.sh"
+_ctl=$(_scan_unguarded_anthropic "$_ctl_dir" 2>/dev/null)
+[ "${_ctl:-0}" -ge 1 ] && pass "the Anthropic scan detects a genuine unguarded call" \
+    || fail "the Anthropic scan found nothing in a planted offender — it proves nothing (got: ${_ctl:-0})"
+rm -rf "$_ctl_dir"
 
-[ "$_unguarded" -eq 0 ] && pass "No unconditional Anthropic SDK calls in orchestration scripts" \
+_unguarded=$(_scan_unguarded_anthropic "$SCRIPTS_DIR")
+
+[ "${_unguarded:-0}" -eq 0 ] && pass "No unconditional Anthropic SDK calls in orchestration scripts" \
     || fail "$_unguarded file(s) call Anthropic SDK without non-Anthropic provider guard"
 
 echo ""

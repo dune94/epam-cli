@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Five names on ONE line. A sweep that removed this because CYAN was unused took GREEN, RED,
+# YELLOW and NC with it, and every script here died on `GREEN: unbound variable` under set -u.
+# shellcheck disable=SC2034
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
 # ──────────────────────────────────────────────────────────────────────────────
 # generate-run-narrative.sh — Post-run prose narrative generator.
 #
@@ -16,6 +20,13 @@
 #   - python3 in PATH
 #   - Run log must be from a COMPLETE successful run (script will refuse otherwise)
 # ──────────────────────────────────────────────────────────────────────────────
+
+# THE PIPELINE DOES NOT RUN CODE NOBODY HAS TESTED. This stage asks how much of the code it is
+# about to execute has a test behind it, and halts when the project says it must.
+_scg_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/stage-coverage-gate.sh"
+# shellcheck source=/dev/null
+[ -f "$_scg_lib" ] && . "$_scg_lib" && require_stage_coverage reporting || exit 1
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -29,7 +40,6 @@ if [ -z "$PRD_FILE" ]; then
 fi
 
 # ── Colors ────────────────────────────────────────────────────────────────────
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
 info()  { echo -e "${YELLOW}[narrative]${NC} $*" >&2; }
 ok()    { echo -e "${GREEN}[narrative] ✓${NC} $*" >&2; }
 fail()  { echo -e "${RED}[narrative] ✗${NC} $*" >&2; exit 1; }

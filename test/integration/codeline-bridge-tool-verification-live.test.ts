@@ -8,7 +8,7 @@
  * writing BRIDGE_OUT_FILE "exactly once using WriteFile" — but the call site
  * (`run-agent-orchestration.sh:2446`, via plain `run_orch_prompt`) granted no
  * tools at all. Under the pipeline's actual configured gate providers
- * (qwen/openai) that means `--no-tools`. Live-corroborated: an archived
+ * (openrouter/openai) that means `--no-tools`. Live-corroborated: an archived
  * agent-activity.jsonl showed repeated retry cost entries for the same
  * story/lane — the exact signature of an agent told to WriteFile with
  * nothing to do it with. Same bug class as HEAL-BLIND (failure-analyst).
@@ -41,7 +41,7 @@ const CLI = join(REPO_ROOT, 'dist/epam.js');
 const NODE_BIN = process.env.NODE_BIN || process.execPath;
 const PROFILES_FILE = join(REPO_ROOT, 'orchestrations/agents/profiles.json');
 
-const GATE_PROVIDER = process.env.ORCH_GATE_PROVIDER || 'qwen';
+const GATE_PROVIDER = process.env.ORCH_GATE_PROVIDER || 'openrouter';
 const GATE_MODEL = process.env.ORCH_GATE_MODEL || 'z-ai/glm-5.2';
 const hasKey = !!(process.env.OPENROUTER_API_KEY || process.env.EPAM_API_KEY_OPENROUTER);
 

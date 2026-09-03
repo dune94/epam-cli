@@ -1,0 +1,236 @@
+{
+  "$schema": "../../config/llm-settings.schema.json",
+  "_cacheNotes": {
+    "measured_2026_08_10": "Prompt-cache utilisation measured per ROUTE (identical prefix, sticky session_id): MiniMax-M3 direct 99.8%; z-ai/glm-5.2 (CoreWeave) 99.6%; moonshotai/kimi-k3 (Moonshot AI) 98.2%; minimax/minimax-m2 (Novita) caches; moonshotai/kimi-k2.5 (Novita) 0%. glm-5.2 escalates straight to kimi-k3 because k2.5 is the one rung that repurchases the whole prefix every turn. Caching on OpenRouter requires session_id for sticky routing — without it consecutive turns can land on different upstream providers and no cache is reused."
+  },
+  "_laddersMovedToSet": "ladders, ladderTierOrder and modelOverrides REMOVED 2026-08-25. A ladder names MODELS and models belong to a STACK, so the stack declares them and every project inherits. While a project declared its own, project-overrides-set meant EPAM_PROVIDER_SET=codemie changed the provider and left the models behind — a run pointed at codemie-claude still asking for MiniMax-M3. See config/llm-defaults.<set>.json.",
+  "_samplingNotes": {
+    "measured_2026_08_10": "Per-model sampling, not per-rung. MiniMax M3: low temperature + top_p 0.85 for code precision. GLM-5.2: lock top_p 0.95 and move temperature only (vendor: never tune both). Kimi K3: temperature fixed at 1.0 on Moonshot's platform (OpenRouter third-party hosts such as Chutes accept other values, so behaviour varies by upstream provider) — temperatureLocked marks it so the retry invariant escalates reasoningEffort instead. 'max' effort is supported by GLM-5.2 and Kimi K3 and is the rung above 'high'.",
+    "provider_pinning_2026_08_10": "OpenRouter load-balances a slug across upstream hosts. session_id keeps ONE conversation on one host (caching works either way), but the host CHOSEN varies between sessions and hosts differ in price, cache size and parameter semantics. Measured kimi-k3, identical 2-turn prefix: unpinned -> DigitalOcean, cached 12,288, turn-2 $0.00747; pinned to Moonshot AI -> cached 13,568, turn-2 $0.00440 (41% cheaper). Moonshot fixes temperature at 1.0 while third-party hosts accept other values, so pinning is what makes temperatureLocked a fact rather than a hedge."
+  },
+  "brownfield": {
+    "maxScaledIterations": 150,
+    "minOutputTokens": 24576
+  },
+  "compaction": {
+    "_note": "Compaction is an OVERFLOW guard, not a token-saving device. compressHistory REPLACES the message array with a summary, which destroys the cacheable prefix — and a stable prefix is ~99% discounted on every route that caches (measured 2026-08-10: MiniMax-M3 99.8%, glm-5.2 99.6%, kimi-k3 98.2%). The every-N-iterations trigger fired regardless of context size, so a writer sitting at 40K tokens forfeited the discount on everything accumulated. Removed for caching models; autoCompressAt raised toward the real window. kimi-k2.5 keeps aggressive compaction because it caches 0% — there is nothing for it to lose.",
+    "defaultAutoCompressAt": 80000,
+    "defaultAutoCompressEveryNIterations": null
+  },
+  "costControls": {
+    "$maxToolCallsNote": "Raised 300 -> 600 on 2026-08-09. Measured live: one attempt recorded 318 tool_run events and read_file alone reached 202 in an earlier run, so 300 was being reached mid-attempt on a 12-file brownfield story. The budget bounds TOOL calls, not spend — storyBudgetHardLimitUsd ($15.00) is the actual cost stop, and it is unchanged.",
+    "maxToolCallsPerStory": 600,
+    "storyBudgetHardLimitUsd": 15,
+    "storyBudgetWarningUsd": 3.5
+  },
+  "effortLadder": [
+    "low",
+    "medium",
+    "high",
+    "max"
+  ],
+  "ladderTierOrder": [
+    "medium",
+    "high",
+    "highest"
+  ],
+  "ladders": {
+    "high": {
+      "$why": "Same ENTRY as medium, higher CEILING. That is the 'different entry, same ceiling' rule applied between high and highest: what separates the tiers is how far they may climb, not where they start.",
+      "modelLadder": [
+        {
+          "from": "claude-haiku-4-5-20251001",
+          "to": "claude-sonnet-5"
+        },
+        {
+          "from": "claude-sonnet-5",
+          "to": "claude-opus-5"
+        }
+      ],
+      "rungs": [
+        {
+          "maxIterations": 40,
+          "reasoningEffort": "medium",
+          "rung": 0
+        },
+        {
+          "maxIterations": 250,
+          "reasoningEffort": "high",
+          "rung": 1
+        },
+        {
+          "maxIterations": 300,
+          "reasoningEffort": "high",
+          "rung": 2
+        }
+      ],
+      "startModel": "claude-haiku-4-5-20251001"
+    },
+    "highest": {
+      "$why": "Skips Haiku. 25 seams resolve here and would waste a rung proving a small model cannot do the work. Same ceiling as high, entered two rungs up.",
+      "modelLadder": [
+        {
+          "from": "claude-sonnet-5",
+          "to": "claude-opus-4-8"
+        },
+        {
+          "from": "claude-opus-4-8",
+          "to": "claude-opus-5"
+        }
+      ],
+      "rungs": [
+        {
+          "maxIterations": 250,
+          "reasoningEffort": "high",
+          "rung": 0
+        },
+        {
+          "maxIterations": 250,
+          "reasoningEffort": "high",
+          "rung": 1
+        },
+        {
+          "maxIterations": 300,
+          "reasoningEffort": "xhigh",
+          "rung": 2
+        }
+      ],
+      "startModel": "claude-sonnet-5"
+    },
+    "medium": {
+      "$why": "Enters cheap and tops out at Sonnet-5. A `mid` seam never reaches Opus: 14 seams resolve here, and measured turn counts are p50 4, p90 24 — work that does not need a frontier model.",
+      "modelLadder": [
+        {
+          "from": "claude-haiku-4-5-20251001",
+          "to": "claude-sonnet-5"
+        }
+      ],
+      "rungs": [
+        {
+          "maxIterations": 40,
+          "reasoningEffort": "medium",
+          "rung": 0
+        },
+        {
+          "maxIterations": 120,
+          "reasoningEffort": "high",
+          "rung": 1
+        }
+      ],
+      "startModel": "claude-haiku-4-5-20251001"
+    }
+  },
+  "modelOverrides": {
+    "$whyAdaptive": "Thinking is held STABLE per model. Anthropic's docs list effort and thinking-parameter changes as cache invalidators, so a config that changes between attempts discards the cache every retry — the opposite of what a 1h TTL is for.",
+    "$whyAutoCompress": "150000 against a 200000 window is an OVERFLOW GUARD near the ceiling, never a token-saving device: compaction rewrites the prefix and destroys the prompt cache. Measured input is p50 13.3k, p90 19k, max 25.9k — about 13% of the window — so this should never fire. If it does, something has gone wrong upstream and that is worth knowing.",
+    "$whyNoTemperature": "codemie-claude exposes no temperature flag and Claude Code has no supported lever for it. Declaring one would be decoration. Deliberation is controlled by reasoningEffort and thinking instead.",
+    "claude-haiku-4-5": {
+      "autoCompressAt": 150000,
+      "matchOn": "model",
+      "matchSubstring": "claude-haiku-4-5",
+      "maxOutputTokens": 32000,
+      "promptCacheTtl": "1h",
+      "thinking": "adaptive"
+    },
+    "claude-opus-4-8": {
+      "autoCompressAt": 150000,
+      "matchOn": "model",
+      "matchSubstring": "claude-opus-4-8",
+      "maxOutputTokens": 64000,
+      "promptCacheTtl": "1h",
+      "thinking": "adaptive"
+    },
+    "claude-opus-5": {
+      "autoCompressAt": 150000,
+      "matchOn": "model",
+      "matchSubstring": "claude-opus-5",
+      "maxOutputTokens": 64000,
+      "promptCacheTtl": "1h",
+      "thinking": "adaptive"
+    },
+    "claude-sonnet-5": {
+      "autoCompressAt": 150000,
+      "matchOn": "model",
+      "matchSubstring": "claude-sonnet-5",
+      "maxOutputTokens": 64000,
+      "promptCacheTtl": "1h",
+      "thinking": "adaptive"
+    }
+  },
+  "planning": {
+    "_note": "Which ladder tiers get an automatic planning turn, and the sampling that turn uses. The tier list was hardcoded to 'high', so adding the highest tier silently removed its planner. Planning wants determinism and structure (vendor guidance across MiniMax M3, GLM-5.2 and Kimi K3 agrees on this even where they disagree on execution): lower temperature, tighter top_p, maximum reasoning effort. Execution sampling stays per-model in modelOverrides.",
+    "autoPlannerTiers": [
+      "high",
+      "highest"
+    ],
+    "reasoningEffort": "max",
+    "temperature": 0.3,
+    "topP": 0.9
+  },
+  "retries": {
+    "maxRetries": 11,
+    "selfHeal": {
+      "enabled": true,
+      "extensionMax": 2
+    }
+  },
+  "rungs": [
+    {
+      "iterationBump": 0,
+      "outputTokenBump": null,
+      "reasoningEffort": "high",
+      "retryRange": [
+        0,
+        1
+      ],
+      "rung": 0,
+      "temperature": 0.2
+    },
+    {
+      "iterationBump": 20,
+      "outputTokenBump": 8192,
+      "reasoningEffort": "high",
+      "retryRange": [
+        2,
+        3
+      ],
+      "rung": 1,
+      "temperature": 0.4
+    },
+    {
+      "iterationBump": 40,
+      "outputTokenBump": 16384,
+      "reasoningEffort": "high",
+      "retryRange": [
+        4,
+        5
+      ],
+      "rung": 2,
+      "temperature": 0.6
+    },
+    {
+      "iterationBump": 60,
+      "outputTokenBump": 24576,
+      "reasoningEffort": "max",
+      "retryRange": [
+        6,
+        7
+      ],
+      "rung": 3,
+      "temperature": 0.8
+    }
+  ],
+  "temperatureFloor": 0.2,
+  "timeouts": {
+    "_note": "storyTimeoutSecs is the FLOOR. The effective wall is derived from the attempt's own iteration budget (secondsPerIteration x maxIterations), capped at storyTimeoutMaxSecs. Measured 2026-08-10: kimi-k3 allows 150 iterations +30 rung bump = 180, against a fixed 1800s wall = 10s per turn including tool execution. 10 of 23 invocations were SIGKILLed mid-flight having produced nothing, and those were the most expensive attempts of the run. A budget the clock cannot honour is not a budget.",
+    "_note2": "TWO SCOPES, TWO WALLS. storyTimeoutSecs/storyTimeoutMaxSecs bound ONE ATTEMPT: iterations x secondsPerIteration + perAttemptOverheadSecs. storyWallMaxSecs bounds the WHOLE STORY, which runs up to retries.maxRetries+1 attempts inside one watchdog window. Measured 2026-08-12: wall 1 ran 1780s for TWO attempts — writer 829s + 631s, planning 62s, analyst 120s, gates 111s, verification 27s — against an 1800s wall that also claimed to bound EIGHT. The iteration budget predicted the writer well (1440s vs 1460s actual); what it cannot express is the overhead per attempt and the number of attempts. perAttemptOverheadSecs=180 is the measured ~160s/attempt rounded up. storyWallMaxSecs is the operator ceiling on a single story.",
+    "_noteTest": "Wall clock for ONE test-suite invocation. The call-site default of 300s does not cover this codeline: 245 jest test files under jest-environment-jsdom, plus a pretest step that runs esbuild over next.config.source.ts before a single test executes. When `timeout` kills the suite the run reports FAILING TESTS, not a timeout, so an under-sized wall reads as a defect in the story's code.",
+    "gateTimeoutSecs": 2400,
+    "perAttemptOverheadSecs": 180,
+    "secondsPerIteration": 12,
+    "storyTimeoutMaxSecs": 5400,
+    "storyTimeoutSecs": 1800,
+    "storyWallMaxSecs": 10800,
+    "testTimeoutSecs": 1000
+  }
+}

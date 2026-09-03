@@ -41,7 +41,6 @@
 # first time this was written. A library configures nothing about its host.
 
 _perim_log()  { echo "[write-perimeter] $*"; }
-_perim_warn() { echo "[write-perimeter] WARN: $*" >&2; }
 
 # The branch this project treats as its integration line. Configured per project
 # (JIRA_BASELINE_BRANCH); no branch name is hardcoded here.

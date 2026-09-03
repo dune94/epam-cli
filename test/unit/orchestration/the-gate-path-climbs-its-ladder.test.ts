@@ -25,7 +25,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const ROOT = join(__dirname, '../../..');
-const ORCH = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
+// run_orch_prompt now lives in lib/orch-prompt.sh: it was moved out of the 11,213-line
+// orchestrator so a test could reach it without running the pipeline. Same function, new home.
+const ORCH = join(ROOT, 'orchestrations/scripts/lib/orch-prompt.sh');
 const SEAM_LADDER = join(ROOT, 'orchestrations/scripts/lib/seam-ladder.sh');
 
 /** Extract run_orch_prompt's model-resolution region from the shipped script. */

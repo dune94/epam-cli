@@ -1,0 +1,3 @@
+{"storyId":"AMSD-2041","failureClass":"quality","model":"MiniMax-M3","attempt":0,"exitCode":1,"rawBytes":30786,"outputTokens":37523,"maxIterations":32,"timestamp":"2026-08-21T15:43:05Z"}
+{"storyId":"AMSD-2041","failureClass":"quality","model":"z-ai/glm-5.2","attempt":2,"exitCode":1,"rawBytes":12188,"outputTokens":81158,"maxIterations":97,"timestamp":"2026-08-21T16:14:10Z"}
+{"storyId":"AMSD-2041","failureClass":"quality","model":"moonshotai/kimi-k3","attempt":2,"exitCode":1,"rawBytes":274,"outputTokens":81158,"maxIterations":150,"timestamp":"2026-08-21T16:44:29Z"}

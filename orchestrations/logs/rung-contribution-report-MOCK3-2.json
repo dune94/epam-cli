@@ -1,7 +1,7 @@
 [
   {
-    "rung": "1",
-    "model": "z-ai/glm-5.2",
+    "rung": "2",
+    "model": "claude-sonnet-5",
     "files": [
       ".epam/verification.json"
     ]

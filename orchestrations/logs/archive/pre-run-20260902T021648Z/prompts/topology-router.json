@@ -1,0 +1,20 @@
+{
+  "$why": [
+    "Generated from the topology-router template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "You are selecting an execution topology for orchestration phase \"__PHASE__\".\n\nStories to classify:\n__STORIES__\n__CPA_SIGNALS__\n\nContext for the Metrolinx gotransit project:\n- Next.js TypeScript codebase with React Hook Form for form validation\n- Tests run via `npm run test` (Jest); coverage check via `test:coverage-check` with pretest build step\n- Pre-commit hook enforces branch naming: `^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$`\n- Target component: CheckoutForm.tsx in src/components/pages/CheckoutPage\n- Stack: form validation rules are typically defined inline or in shared validators; case-sensitivity issues in email rules are localized fixes with no cascading impact\n\nRules:\n- single: 0-1 worktree stories, OR one high-effort story that needs focused attention\n- parallel: 2-4 independent stories with no shared file scope\n- sequential: stories with overlapping file scope, tight coupling, or shared state risk\n\nOverlapping file scope outranks story count. Stories that edit the same file must not run in parallel worktrees, even when there are only two or three of them: the count alone cannot see that, and parallel worktrees over a shared file produce a merge conflict the run cannot resolve.\n\nRespond with ONLY this JSON object. No prose, no markdown fences:\n{\"topology\":\"single|parallel|sequential\",\"reason\":\"<one sentence naming the deciding factor>\"}",
+  "derivedFromSha256": "b4c3438df71eb71922697b957dbb1f6d448451bac32e3948af4d507c1b54fa34",
+  "derivedFromVersion": 1,
+  "id": "topology-router",
+  "placeholders": [
+    "__CPA_SIGNALS__",
+    "__PHASE__",
+    "__STORIES__"
+  ],
+  "mayBeEmpty": [
+    "__CPA_SIGNALS__"
+  ]
+}

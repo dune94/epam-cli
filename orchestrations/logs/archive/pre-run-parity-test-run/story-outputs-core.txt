@@ -1,3 +1,0 @@
-.env.local.sample
-src/pages/_app.tsx
-src/services/contentstack.ts

@@ -1,0 +1,26 @@
+{
+  "base": "904b95919300c71fc36b1e9d928c872e13899015ba730903d4a62892a3ee5e62",
+  "roles": "88832fe89673d3105464843cafe58e599b2f12f9efcd9e035bf11b144f56ac5c",
+  "usesRoles": true,
+  "doc": {
+    "$why": [
+      "Generated from the codeline-bridge template by the agent that minted this project's roster.",
+      "The template is never executed; this copy is. Placeholders were checked against the",
+      "template before installation — see lib/project-prompt-contract.js."
+    ],
+    "authority": "project",
+    "body": "__BRIDGE_PROFILE__\n\n## Variables for this run\n\n- BRIDGE_SRC_CODELINE: __BCL__\n- BRIDGE_SRC_DIR: __BWT__\n- BRIDGE_OUT_FILE: __BRIDGE_OUT__\n- BRIDGE_PRD_FILE: __BPRD__\n\n## Project context: mock3\n\nThis project contains two interdependent codelines:\n\n**mocka** (/home/bradleyjerome/projects/mock3/mock-a)\n- Dependencies: vitest, typescript\n- Contains fare calculation logic in src/fares.ts\n- Supports MOCK3-1 (age boundary for riders aged exactly 65)\n- Roles: mocka-detective (investigator), fare-rules-engineer (implementer)\n\n**mockb** (/home/bradleyjerome/projects/mock3/mock-b)\n- Dependencies: vitest, typescript\n- Contains schedule rendering in src/schedule.ts\n- Supports MOCK3-2 (departure board omitting final stop)\n- Roles: mockb-detective (investigator), schedule-display-engineer (implementer)\n\n## Extraction task\n\nExtract the exported API surface from the '__BCL__' codeline files and write the cross-codeline contract to __BRIDGE_OUT__. This contract captures all public types, functions, and interfaces that other codelines depend on or may depend on in future work.\n\nFocus on:\n- Public exports in TypeScript (exported functions, types, interfaces, constants)\n- Module structure and entry points\n- Any types referenced by __BPRD__\n\nThe extracted contract enables __BPRD__ work to proceed with a concrete understanding of what '__BCL__' provides, preventing integration surprises when lanes converge.",
+    "derivedFromSha256": "ac6209cc602f168e39ad8e6459ba79e96693037da4798d4b4719e1d64a772eed",
+    "derivedFromVersion": 1,
+    "id": "codeline-bridge",
+    "placeholders": [
+      "__BCL__",
+      "__BPRD__",
+      "__BRIDGE_OUT__",
+      "__BRIDGE_PROFILE__",
+      "__BWT__"
+    ],
+    "mayBeEmpty": []
+  },
+  "reviewed": true
+}

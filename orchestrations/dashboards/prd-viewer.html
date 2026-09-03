@@ -472,12 +472,12 @@ function modelInfo(story) {
   // For non-Claude providers, the .model field is irrelevant — use provider as the model display
   if (provider === 'opencode') return { label:'OPENCODE', cls:'opencode', turns:'—' };
   if (provider === 'codex')    return { label:'CODEX',    cls:'codex',   turns:'—' };
-  // Qwen-routed providers can serve any model (deepseek, kimi-k2, etc.) —
+  // OpenRouter-routed providers can serve any model (deepseek, kimi-k2, etc.) —
   // show the actual model name; only color it as the named 'deepseek' CSS
   // class when it truly is deepseek, otherwise hash to the generic palette
-  // (found live 2026-07-13: a qwen-routed kimi-k2 model was correctly
+  // (found live 2026-07-13: a openrouter-routed kimi-k2 model was correctly
   // LABELED "KIMI-K2" but still hardcoded to the deepseek color).
-  if (provider === 'qwen') {
+  if (provider === 'openrouter') {
     const m = (story.model || 'deepseek').split('/').pop();
     const isDeepseek = m.startsWith('deepseek');
     const label = isDeepseek ? 'DEEPSEEK' : m.toUpperCase().substring(0, 10);

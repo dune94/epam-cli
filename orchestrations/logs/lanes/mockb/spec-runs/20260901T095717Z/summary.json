@@ -1,0 +1,51 @@
+{
+  "runId": "20260901T095717Z",
+  "phase": "core",
+  "startedAt": "2026-09-01T09:58:50.243Z",
+  "stories": [
+    {
+      "storyId": "MOCK-HW-1",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "notes": "",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-09-01T09:59:25.220Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-09-01T09:59:38.372Z"
+        }
+      ]
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1,
+      "speckit": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 2
+  },
+  "completedAt": "2026-09-01T10:00:05.883Z",
+  "storyCount": 1
+}

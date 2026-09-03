@@ -85,7 +85,24 @@ _epam_write_verification_manifest() {
       const out = path.join(root, ".epam", "verification.json");
       let existing = {};
       try { existing = JSON.parse(fs.readFileSync(out, "utf8")) || {}; } catch { existing = {}; }
+      // MERGE PER SECTION, NOT PER FILE.
+      //
+      // This was a flat { ...d, ...existing }, so a codeline that already had a `test` section kept
+      // it WHOLE — and every real codeline already has one. A newly detected key could therefore
+      // never reach any of them: next.gotransit.com carried a test section with no scopedCommand,
+      // so story-scoped verification stayed off and a one-line change ran all 746 suites (live
+      // 2026-09-02, AMSD-1919: 10,731MB of an 11,264MB cap, a 70-second suite past 10 minutes).
+      //
+      // Per-key precedence keeps the original intent: a hand-tuned command still wins over
+      // detection, while keys nobody set are filled in.
       const merged = { ...d, ...existing };
+      for (const k of Object.keys(d)) {
+        const det = d[k]; const ex = existing[k];
+        if (det && ex && typeof det === "object" && typeof ex === "object"
+            && !Array.isArray(det) && !Array.isArray(ex)) {
+          merged[k] = { ...det, ...ex };
+        }
+      }
       fs.mkdirSync(path.join(root, ".epam"), { recursive: true });
       fs.writeFileSync(out, JSON.stringify(merged, null, 2) + "\n");
     ' "$_plugin" "$_root" 2>/dev/null || true

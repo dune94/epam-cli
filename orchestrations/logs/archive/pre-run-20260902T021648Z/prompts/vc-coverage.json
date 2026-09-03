@@ -1,0 +1,17 @@
+{
+  "$why": [
+    "Generated from the vc-coverage template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "You are checking whether a test suite covers ONE specific requirement.\n\n## The requirement\n__VERIFICATION_CRITERION__\n\n## The test file (complete)\n```\n__TEST_SOURCE__\n```\n\nAnswer ONE question: does this test file contain a case that would FAIL if this\nrequirement were violated?\n\nJudge the ASSERTIONS, not the titles. A test whose name mentions the same words\nis irrelevant if it does not actually exercise the requirement — in particular a\nrequirement stating something must NOT happen is not covered by a test asserting\nthat it DOES happen, however similar the wording.\n\n## Project context: gotransit (Next.js + TypeScript + React Hook Form)\n\nThis project uses jest for testing. Tests are run via `npm run test` and configured by jest.config.js; coverage is checked via `test:coverage-check` which runs `jest --coverage` after building config.\n\nThe ticket targets CheckoutForm.tsx (around line 307) where the confirmEmail validation rule needs fixing for case sensitivity handling. Form validation uses react-hook-form. Tests typically use @testing-library/react and @testing-library/user-event to simulate user interactions and assert validation behavior.\n\nWhen a test validates email fields in CheckoutForm:\n- Look for assertions that check whether validation passes or fails for specific email inputs\n- A test covers the requirement only if it would actually FAIL when the case-sensitivity bug exists or is fixed — a passing assertion that just invokes validation without checking its outcome does not constitute coverage\n- Email comparison in the confirmEmail field often involves asserting that the rule detects mismatches between email and confirmEmail; case-sensitivity bugs manifest as false positives (accepting mismatched case as valid) or false negatives (rejecting matching case as invalid)\n\nOutput ONLY this JSON, nothing else:\n{\"covered\": true|false, \"case\": \"<the test case name that covers it, or empty>\", \"why\": \"<one sentence>\"}",
+  "derivedFromSha256": "79377c166256044a0c88d4179fdbfbc9d800d74e6cdd9ee4ecc0db817527f795",
+  "derivedFromVersion": 1,
+  "id": "vc-coverage",
+  "placeholders": [
+    "__TEST_SOURCE__",
+    "__VERIFICATION_CRITERION__"
+  ],
+  "mayBeEmpty": []
+}

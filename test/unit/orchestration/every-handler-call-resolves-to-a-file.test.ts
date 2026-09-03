@@ -68,6 +68,12 @@ function handlerRefs(): Ref[] {
       const matches = [
         ...line.matchAll(/(?:\$\{?SCRIPT_DIR[^}\/]*\}?|orchestrations\/scripts)\/((?:\.\.\/)*lib\/handlers\/[\w.-]+\.(?:py|js))/g),
         ...line.matchAll(/dirname "\$\{BASH_SOURCE\[0\]\}"\)\/(handlers\/[\w.-]+\.(?:py|js))/g),
+        // A THIRD SPELLING, and the safest one: $(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd).
+        // It resolves symlinks and yields an absolute path, so library files prefer it — and the
+        // scan could not see it, reporting a live working call site as an orphan. Exactly the
+        // failure the block above already describes: a scan scoped to one spelling of a path
+        // finds only the call sites written in that spelling.
+        ...line.matchAll(/cd "\$\(dirname "\$\{BASH_SOURCE\[0\]\}"\)"[^)]*\)\/(handlers\/[\w.-]+\.(?:py|js))/g),
       ];
       for (const m of matches) {
         refs.push({

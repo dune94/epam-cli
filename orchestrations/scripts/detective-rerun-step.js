@@ -61,6 +61,10 @@ function codelinesFromPrd(prd) {
 
 /** Codelines a story is actually in scope for. */
 function storyCodelines(story) {
+  // A STORY THAT IS NOT THERE HAS NO CODELINES. This dereferenced whatever it was handed, so a
+  // malformed PRD — a null in the stories array, a story a failed step never finished writing —
+  // threw here instead of being reported as a story with no codelines.
+  if (!story || typeof story !== 'object') return [];
   const list = Array.isArray(story.codelines) ? story.codelines.filter(Boolean) : [];
   if (list.length) return list;
   return story.codeline ? [story.codeline] : [];
@@ -141,6 +145,8 @@ function sitesMissingTheField(sites) {
  * unchanged rather than regenerated.
  */
 function rebuildFlat(story) {
+  // Same as storyCodelines: nothing to rebuild from a story that is not an object.
+  if (!story || typeof story !== 'object') return [];
   const per = story.fixSiteAnalysisPerCodeline || {};
   const known = new Set(Object.keys(per));
   const untouched = (Array.isArray(story.fixSiteAnalysis) ? story.fixSiteAnalysis : [])

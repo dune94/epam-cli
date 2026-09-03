@@ -1,0 +1,463 @@
+[
+  {
+    "id": "prompt-builder-code-review-cycle-class-malformed",
+    "scope": {
+      "agent_role": "prompt-builder:code-review-cycle"
+    },
+    "trigger": {
+      "signature": "class:malformed"
+    },
+    "enforcement": {
+      "kind": "response_schema",
+      "name": "code_review_verdict",
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "verdict",
+          "issues",
+          "summary"
+        ],
+        "properties": {
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "changes_requested"
+            ]
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "severity",
+                "file",
+                "line",
+                "description",
+                "evidence",
+                "suggestedFix"
+              ],
+              "properties": {
+                "severity": {
+                  "type": "string"
+                },
+                "file": {
+                  "type": "string"
+                },
+                "line": {
+                  "type": "integer"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "evidence": {
+                  "type": "string"
+                },
+                "suggestedFix": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "summary": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "reason": "Binding the output space makes prose or restated prompt text unemittable; the reply can only be the required verdict object.",
+    "origin_episodes": [
+      "evt-1787844230647-558838"
+    ],
+    "ttl_cycles": 20,
+    "status": "active",
+    "cycles_idle": 17
+  },
+  {
+    "id": "prompt-builder-tc-writer-class-malformed",
+    "scope": {
+      "agent_role": "prompt-builder:tc-writer"
+    },
+    "trigger": {
+      "signature": "class:malformed"
+    },
+    "enforcement": {
+      "kind": "response_schema",
+      "name": "tc_writer_story_facts",
+      "schema": {
+        "type": "object",
+        "minProperties": 1,
+        "additionalProperties": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "verifiedAt",
+            "sourceFiles",
+            "facts",
+            "mockStrategy",
+            "bannedPatterns"
+          ],
+          "properties": {
+            "verifiedAt": {
+              "type": "string"
+            },
+            "sourceFiles": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "facts": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "mockStrategy": {
+              "type": "string"
+            },
+            "bannedPatterns": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "reason": "Provider-enforced schema makes prose, fences and narration physically unemittable; the reply can only be the keyed story-facts object.",
+    "origin_episodes": [
+      "evt-1787844413561-239277"
+    ],
+    "ttl_cycles": 20,
+    "status": "active",
+    "cycles_idle": 17
+  },
+  {
+    "id": "prompt-builder-cpa-inference-class-malformed",
+    "scope": {
+      "agent_role": "prompt-builder:cpa-inference"
+    },
+    "trigger": {
+      "signature": "class:malformed"
+    },
+    "enforcement": {
+      "kind": "response_schema",
+      "name": "cpa_inference_prompt_build",
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "__SECTIONS__",
+          "__SYSTEM_PROMPT__"
+        ],
+        "properties": {
+          "__SECTIONS__": {
+            "type": "string",
+            "minLength": 1
+          },
+          "__SYSTEM_PROMPT__": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "reason": "Provider-bound output space makes prose, fences and tool-call wrappers unrepresentable; only the two required placeholder strings can be emitted.",
+    "origin_episodes": [
+      "evt-1787844526557-189362"
+    ],
+    "ttl_cycles": 20,
+    "status": "active",
+    "cycles_idle": 17
+  },
+  {
+    "id": "prompt-builder-code-graph-detective-class-malformed",
+    "scope": {
+      "agent_role": "prompt-builder:code-graph-detective"
+    },
+    "trigger": {
+      "signature": "class:malformed"
+    },
+    "enforcement": {
+      "kind": "response_schema",
+      "name": "code_graph_detective_findings",
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "file"
+          ],
+          "additionalProperties": true,
+          "properties": {
+            "file": {
+              "type": "string"
+            },
+            "function": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string"
+            },
+            "brokenLine": {
+              "type": "string"
+            },
+            "fix": {
+              "type": "string"
+            },
+            "helper": {
+              "type": "string"
+            },
+            "changeRequired": {
+              "type": "string"
+            },
+            "requiredPackages": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "deliveryRole": {
+              "type": "string"
+            },
+            "runsIn": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "reason": "Binds the reply to the declared code-graph-detective array contract, so prose, explanation or a WriteFile tool-call wrapper cannot be emitted instead.",
+    "origin_episodes": [
+      "evt-1787844931297-716561"
+    ],
+    "ttl_cycles": 20,
+    "status": "active",
+    "cycles_idle": 17
+  },
+  {
+    "id": "prompt-builder-spec-coordinator-class-malformed",
+    "scope": {
+      "agent_role": "prompt-builder:spec-coordinator"
+    },
+    "trigger": {
+      "signature": "class:malformed"
+    },
+    "enforcement": {
+      "kind": "response_schema",
+      "name": "spec_coordinator_assignments",
+      "schema": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "storyId",
+            "agents",
+            "notes",
+            "priority"
+          ],
+          "properties": {
+            "storyId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "agents": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "notes": {
+              "type": "string"
+            },
+            "priority": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "reason": "Binding the output space makes prose, fences or tool-call wrappers unemittable; the malformed reply cannot recur.",
+    "origin_episodes": [
+      "evt-1787845431561-284405"
+    ],
+    "ttl_cycles": 20,
+    "status": "active",
+    "cycles_idle": 17
+  },
+  {
+    "id": "prompt-builder-skill-assessment-prephase-class-malformed",
+    "scope": {
+      "agent_role": "prompt-builder:skill-assessment-prephase"
+    },
+    "trigger": {
+      "signature": "class:malformed"
+    },
+    "enforcement": {
+      "kind": "response_schema",
+      "name": "prephase_diagnosis",
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "diagnosis",
+          "target",
+          "ac_patches",
+          "tc_patches",
+          "skill_note",
+          "reason"
+        ],
+        "properties": {
+          "diagnosis": {
+            "type": "string",
+            "minLength": 1
+          },
+          "target": {
+            "type": "string",
+            "minLength": 1
+          },
+          "ac_patches": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "tc_patches": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "skill_note": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "reason": "Binding the output space makes fences, prose and tool-call wrappers physically unemittable, so the required diagnosis object is the only possible reply.",
+    "origin_episodes": [
+      "evt-1787845539098-225795"
+    ],
+    "ttl_cycles": 20,
+    "status": "active",
+    "cycles_idle": 17
+  },
+  {
+    "id": "prompt-builder-prompt-review-class-malformed",
+    "scope": {
+      "agent_role": "prompt-builder:prompt-review"
+    },
+    "trigger": {
+      "signature": "class:malformed"
+    },
+    "enforcement": {
+      "kind": "response_schema",
+      "name": "prompt_review",
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "falseClaims"
+        ],
+        "properties": {
+          "falseClaims": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "claim"
+              ],
+              "properties": {
+                "claim": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "evidence": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "reason": "Binding the reply to the falseClaims object makes echoing prompt prose unemittable; the parser accepts objects with claim.",
+    "origin_episodes": [
+      "evt-1787845677573-417664"
+    ],
+    "ttl_cycles": 20,
+    "status": "active",
+    "cycles_idle": 17
+  },
+  {
+    "id": "prompt-builder-assign-agent-roles-class-malformed",
+    "scope": {
+      "agent_role": "prompt-builder:assign-agent-roles"
+    },
+    "trigger": {
+      "signature": "class:malformed"
+    },
+    "enforcement": {
+      "kind": "response_schema",
+      "name": "agent_role_assignments",
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "assignments"
+        ],
+        "properties": {
+          "assignments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "storyId",
+                "codeline",
+                "role"
+              ],
+              "properties": {
+                "storyId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "codeline": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "role": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "reason": "Malformed free-form output (fences/prose) has no prompt knob; binding the output space forces conforming structured assignments the agent cannot wrap or narrate.",
+    "origin_episodes": [
+      "evt-1787858615624-780629"
+    ],
+    "ttl_cycles": 20,
+    "status": "active",
+    "cycles_idle": 17
+  }
+]

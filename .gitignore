@@ -102,3 +102,4 @@ __pycache__/
 # so the recording is reproducible from Langfuse rather than carried in this repo. Tracking a
 # specific cassette is a deliberate decision about client content, not a default.
 orchestrations/cassettes/
+agent-replies/

@@ -18,9 +18,10 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import fs from 'fs';
 import path from 'path';
+import { orchestratorSource } from '../../helpers/orchestrator-source';
 
 const ORCH_SCRIPT   = path.resolve(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
-const AI_RUN        = path.resolve(__dirname, '../../../orchestrations/scripts/ai-run.sh');
+const AI_RUN        = path.resolve(__dirname, '../../../orchestrations/scripts/llm-handler.sh');
 const PROFILES      = path.resolve(__dirname, '../../../orchestrations/agents/profiles.json');
 const TC_WRITER     = path.resolve(__dirname, '../../../orchestrations/scripts/post-impl-tc-writer.sh');
 const TIER3_RUNNER  = path.resolve(__dirname, '../../../orchestrations/scripts/tier3-travel-app-run.sh');
@@ -28,9 +29,41 @@ const PRD_REMEDIATE = path.resolve(__dirname, '../../../orchestrations/scripts/p
 const PRD_REMEDIATE_IMPL = path.resolve(__dirname, '../../../orchestrations/scripts/_prd_remediate_impl.py');
 const MONITOR_HTML  = path.resolve(__dirname, '../../../orchestrations/dashboards/monitor.html');
 
-const orchSrc   = fs.readFileSync(ORCH_SCRIPT, 'utf8');
+// Reads the orchestrator AND the libs lifted out of it: run_orch_prompt and the gate verdict
+// logic now live under lib/. The property is about the SHIPPED path, not about which file
+// happens to hold a function today. See test/helpers for the single definition.
+const orchSrc = orchestratorSource();
+
+// THE ORCHESTRATOR IS NO LONGER ONE FILE.
+//
+// Its embedded python heredocs were extracted into lib/handlers/*.py. Assertions that the
+// pipeline CONTAINS a piece of logic kept reading run-agent-orchestration.sh alone and reported
+// the logic as deleted when it had only moved — five of them here. What these assertions are
+// about is whether the pipeline still does the thing, so they read the pipeline: the
+// orchestrator plus the handlers it dispatches to.
+//
+// This is additive. orchSrc keeps its meaning for the assertions that are genuinely about the
+// orchestrator file itself, and nothing that passes today changes.
+const orchCorpus = (() => {
+  const H = path.resolve(__dirname, '../../../orchestrations/scripts/lib/handlers');
+  const out = [orchSrc];
+  const walk = (d: string) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const q = path.join(d, e.name);
+      if (e.isDirectory()) walk(q); else out.push(fs.readFileSync(q, 'utf8'));
+    }
+  };
+  try { walk(H); } catch { /* no handlers dir: the corpus is just the orchestrator */ }
+  return out.join('\n');
+})();
 const aiRunSrc  = fs.readFileSync(AI_RUN, 'utf8');
 const tcSrc     = fs.readFileSync(TC_WRITER, 'utf8');
+// The TC writer's exit/staleness logic was a python heredoc inside post-impl-tc-writer.sh and is
+// now lib/handlers/tc-apply-to-prd.py. The BEHAVIOUR is unchanged — these assertions are about
+// whether a failed agent's stale output can still reach the PRD, the same question wherever the
+// code lives.
+const tcApplySrc = fs.readFileSync(
+  path.resolve(__dirname, '../../../orchestrations/scripts/lib/handlers/tc-apply-to-prd.py'), 'utf8');
 const tier3Src  = fs.readFileSync(TIER3_RUNNER, 'utf8');
 const monitorSrc = fs.readFileSync(MONITOR_HTML, 'utf8');
 
@@ -240,9 +273,13 @@ describe('Warn paths — grounding downgrades hallucinated fails', () => {
     // agent embedded raw newlines inside JSON string values — json.loads raised
     // "Invalid control character" and the gate fell through to "no story data" warn.
     // Fix: targeted regex patterns on individual lines, bypassing full JSON parsing.
-    const specIdx = orchSrc.indexOf('SPEC_EXTRACTOR_PY');
-    expect(specIdx, 'SPEC_EXTRACTOR_PY heredoc not found').toBeGreaterThan(-1);
-    const block = orchSrc.slice(specIdx, specIdx + 2800);
+    // THE HEREDOC IS A HANDLER. SPEC_EXTRACTOR_PY was extracted to
+    // lib/handlers/spec-extractor.py (dispatched at run-agent-orchestration.sh:9270). Hunting
+    // the old marker reported the extractor as missing rather than as moved, and a gate
+    // reported missing reads as a gate that is gone.
+    const block = fs.readFileSync(
+      path.resolve(__dirname, '../../../orchestrations/scripts/lib/handlers/spec-extractor.py'), 'utf8');
+    expect(block.length, 'lib/handlers/spec-extractor.py is empty').toBeGreaterThan(0);
 
     // Must NOT use json.loads on the full blob (the root cause of the bug)
     expect(block).not.toMatch(/json\.loads\s*\(\s*text\b/);
@@ -268,7 +305,7 @@ describe('Warn paths — grounding downgrades hallucinated fails', () => {
 
   it('fuzz-weaver grounding uses python3 file-existence check', () => {
     expect(orchSrc).toMatch(/_fuzz_grounded=\$\(python3/);
-    expect(orchSrc).toMatch(/os\.path\.exists/);
+    expect(orchCorpus).toMatch(/os\.path\.exists/);
   });
 
   it('perf-sentinel grounding uses python3 with a codeSnippet field', () => {
@@ -284,21 +321,21 @@ describe('Warn paths — grounding downgrades hallucinated fails', () => {
   });
 
   it('perf-sentinel grounding: requires a blocker finding whose codeSnippet is verified against the real file', () => {
-    expect(orchSrc).toMatch(/if snippet in real_content:/);
-    expect(orchSrc).toMatch(/if str\(f\.get\("severity", ""\)\)\.lower\(\) != "blocker":/);
+    expect(orchCorpus).toMatch(/if snippet in real_content:/);
+    expect(orchCorpus).toMatch(/if str\(f\.get\("severity", ""\)\)\.lower\(\) != "blocker":/);
   });
 
   it('perf-sentinel: a finding with no codeSnippet or a nonexistent file is never grounded', () => {
-    expect(orchSrc).toMatch(/if not file_rel or not snippet:/);
-    expect(orchSrc).toMatch(/except Exception:\s*\n\s*continue/);
+    expect(orchCorpus).toMatch(/if not file_rel or not snippet:/);
+    expect(orchCorpus).toMatch(/except Exception:\s*\n\s*continue/);
   });
 
   it('fuzz-weaver grounding counts only vulnerability-status cases', () => {
-    expect(orchSrc).toMatch(/case\.get\("status"\) != "vulnerability"/);
+    expect(orchCorpus).toMatch(/case\.get\("status"\) != "vulnerability"/);
   });
 
   it('fuzz-weaver grounding checks file exists under PROJECT_ROOT/src', () => {
-    expect(orchSrc).toMatch(/os\.path\.join\(project_root, "src", os\.path\.basename\(f\)\)/);
+    expect(orchCorpus).toMatch(/os\.path\.join\(project_root, "src", os\.path\.basename\(f\)\)/);
   });
 });
 
@@ -589,19 +626,19 @@ describe('Step 10: TC writer gate', () => {
   });
 
   it('TC writer script checks agent exit BEFORE file existence', () => {
-    const exitCheckIdx = tcSrc.indexOf('if tc_exit != 0:');
-    const fileCheckIdx = tcSrc.indexOf('if not os.path.exists(tc_file):');
+    const exitCheckIdx = tcApplySrc.indexOf('if tc_exit != 0:');
+    const fileCheckIdx = tcApplySrc.indexOf('if not os.path.exists(tc_file):');
     expect(exitCheckIdx).toBeGreaterThan(-1);
     expect(fileCheckIdx).toBeGreaterThan(-1);
     expect(exitCheckIdx).toBeLessThan(fileCheckIdx);
   });
 
   it('TC writer rejects stale file when agent failed', () => {
-    expect(tcSrc).toMatch(/stale TC file exists but will NOT be used/);
+    expect(tcApplySrc).toMatch(/stale TC file exists but will NOT be used/);
   });
 
   it('TC writer exits 1 when agent failed, regardless of file state', () => {
-    const exitBlock = tcSrc.match(/if tc_exit != 0:([\s\S]*?)if not os\.path\.exists/)?.[1] ?? '';
+    const exitBlock = tcApplySrc.match(/if tc_exit != 0:([\s\S]*?)if not os\.path\.exists/)?.[1] ?? '';
     expect(exitBlock).toMatch(/sys\.exit\(1\)/);
   });
 
@@ -827,7 +864,7 @@ describe('Step 22a: SAST sentinel', () => {
 
   it('uses blockerCount from summary, not raw verdict:fail', () => {
     expect(orchSrc).toMatch(/_sast_blockers/);
-    expect(orchSrc).toMatch(/summary.*blockerCount|blockerCount.*summary/);
+    expect(orchCorpus).toMatch(/summary.*blockerCount|blockerCount.*summary/);
   });
 
   it('blockerCount=0 path calls step_emit pass with count annotation', () => {
@@ -839,7 +876,19 @@ describe('Step 22a: SAST sentinel', () => {
   });
 
   it('TypeScript compiler oracle is injected before SAST prompt', () => {
-    expect(orchSrc).toMatch(/TypeScript Compiler Results.*hard evidence/s);
+    // PROMPT TEXT LIVES IN THE PROMPT LAYER.
+    //
+    // This oracle was inline in the orchestrator and moved to the immutable templates, which is
+    // where every prompt now belongs. Reading the shell file reported the oracle as removed,
+    // when what changed is that it stopped being hardcoded in engine code.
+    const TEMPLATES = path.resolve(__dirname, '../../../orchestrations/prompts/templates');
+    const carriers = fs.readdirSync(TEMPLATES)
+      .filter((f) => f.endsWith('.json'))
+      .filter((f) => /TypeScript Compiler Results[\s\S]*hard evidence/.test(
+        fs.readFileSync(path.join(TEMPLATES, f), 'utf8')));
+    expect(carriers.length,
+      'no template carries the TypeScript compiler oracle — the SAST agent would judge with no '
+      + 'compiler evidence and its findings would be unfalsifiable').toBeGreaterThan(0);
   });
 
   it('SAST uses _run_qa_gate_with_retry for file access (retry-enabled, AI_GATE_ALLOW_TOOLS=1 inside helper)', () => {
@@ -1046,7 +1095,7 @@ describe('Step 22f: Perf sentinel', () => {
   });
 
   it('grounding: a blocker finding missing file/codeSnippet is skipped, not crashed on', () => {
-    expect(orchSrc).toMatch(/if not file_rel or not snippet:\s*\n\s*continue/);
+    expect(orchCorpus).toMatch(/if not file_rel or not snippet:\s*\n\s*continue/);
   });
 
   it('label references "Perf" or "sentinel"', () => {
@@ -1137,6 +1186,8 @@ describe('Tool access contract — QA gate agents have file access', () => {
   });
 
   it('_run_qa_gate_with_retry is defined before it is first used (at the sast call site)', () => {
+    // Definition-before-use still holds, and still by position: the lib is spliced in at its
+    // source line, exactly where bash pulls it in, so this means what it always meant.
     const defIdx = orchSrc.indexOf('_run_qa_gate_with_retry()');
     const useIdx = orchSrc.indexOf('_run_qa_gate_with_retry "$sast_prompt"');
     expect(defIdx).toBeGreaterThan(-1);
@@ -1222,8 +1273,24 @@ describe('Pipeline step checklist — ordering and heartbeat', () => {
 
   it('openspec/speckit sub-steps (1a/1b) show the actual configured model, not a hardcoded one', () => {
     const fn = orchSrc.match(/print_step_checklist\(\)\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
-    expect(fn).toMatch(/1a.*SPEC_MODE_OPENSPEC_MODEL/);
-    expect(fn).toMatch(/1b.*SPEC_MODE_SPECKIT_MODEL/);
+    expect(fn.length, 'print_step_checklist did not extract — the assertions here are vacuous')
+      .toBeGreaterThan(0);
+    // THE REQUIREMENT SURVIVED; THE MECHANISM CHANGED.
+    //
+    // This asserted the row read $SPEC_MODE_OPENSPEC_MODEL. That variable was retired on
+    // 2026-08-25 when the ladder became the only source of a model, so the assertion pinned a
+    // mechanism the pipeline deliberately replaced — and a test that ratifies the old design
+    // fails for being right. What it is FOR is that the row shows a resolved model rather than
+    // a literal, and that is now satisfied by seam_model_or_fail, which refuses rather than
+    // guessing.
+    const row = fn.split('\n').find((l) => /_checklist_row\s+"1a"/.test(l)) ?? '';
+    expect(row, 'no checklist row for sub-step 1a').not.toBe('');
+    expect(row, 'the 1a row does not resolve its model from the ladder')
+      .toMatch(/seam_model_or_fail|SPEC_MODE_OPENSPEC_MODEL/);
+    const row1b = fn.split('\n').find((l) => /_checklist_row\s+"1b"/.test(l)) ?? '';
+    expect(row1b, 'no checklist row for sub-step 1b').not.toBe('');
+    expect(row1b, 'the 1b row does not resolve its model from the ladder')
+      .toMatch(/seam_model_or_fail|SPEC_MODE_SPECKIT_MODEL/);
   });
 
   it('run_specification_pass emits live step_emit calls for 0a/0b (not just the pre-scan row) with model + story count parsed from spec-summary.json', () => {

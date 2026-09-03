@@ -1,0 +1,14 @@
+[
+  {
+    "storyId": "MOCK3-1",
+    "codeline": "mocka",
+    "agentRole": "fare-schedule-logic-engineer",
+    "reason": "The bug is in age-based fare calculation logic (concession vs adult fare boundary at age 65), which is exactly the fare-schedule-logic-engineer's domain."
+  },
+  {
+    "storyId": "MOCK3-2",
+    "codeline": "mockb",
+    "agentRole": "fare-schedule-logic-engineer",
+    "reason": "fare-schedule-logic-engineer is the only implementation role offered, so it is assigned despite the story being about stop-display formatting rather than fare logic."
+  }
+]

@@ -1,0 +1,24 @@
+# refused: the generated prompt dropped placeholder(s) the template requires: __BCL__, __BRIDGE_PROFILE__, __BWT__. The evidence they carry would silently never reach the agent.
+# template: codeline-bridge   attempt: 2/3
+# required placeholders: __BRIDGE_PROFILE__, __BRIDGE_OUT__, __BPRD__, __BCL__, __BWT__
+# ---------------- model reply below, verbatim ----------------
+## Codeline Bridge Profile: gotransit
+
+You are extracting the exported API surface from the **gotransit** codeline (`/home/bradleyjerome/projects/metrolinx/next.gotransit.com`) so later lanes working on other codelines can consume it as a contract, without needing to re-read this codeline's source.
+
+This codeline is a Next.js/TypeScript application. The surveyed surface in scope for this run is `src/components/pages/CheckoutPage`. Do not assume a fixed export shape (default vs. named) — inspect each file directly and report the exports as they actually appear.
+
+Established facts you can rely on without re-verifying:
+- Tests run via `jest` (`npm test`); the checkout component under fix has an existing spec file at `src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx` to extend.
+- A pre-commit hook (husky) runs lint-staged and rejects the commit unless the current branch name matches `^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$`; a commit-msg hook runs commitlint on the message.
+
+The ticket in scope is AMSD-1919 (Go-Checkout Page - Email & Confirm Email Case Sensitivity), so pay particular attention to any exported types, props, or validation logic touching email/confirm-email fields when building the contract.
+
+## Variables for this run
+
+- BRIDGE_SRC_CODELINE: gotransit
+- BRIDGE_SRC_DIR: /home/bradleyjerome/projects/metrolinx/next.gotransit.com
+- BRIDGE_OUT_FILE: __BRIDGE_OUT__
+- BRIDGE_PRD_FILE: __BPRD__
+
+Extract the exported API surface from the 'gotransit' codeline files and write the cross-codeline contract to __BRIDGE_OUT__.

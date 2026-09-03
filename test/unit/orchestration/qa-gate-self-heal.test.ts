@@ -24,9 +24,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { orchestratorSource } from '../../helpers/orchestrator-source';
 
-const ORCH = readFileSync(
-  join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+const ORCH = orchestratorSource();
 
 /** The retry wrapper every QA gate goes through. */
 function retryWrapper(): string {

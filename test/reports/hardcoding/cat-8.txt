@@ -1,0 +1,15 @@
+### domain vocabularies — every matching line
+
+orchestrations/scripts/spec-mode-runner.js:3145:const FIX_SITE_KEYS = ['file', 'files', 'function', 'fix', 'patch', 'locationHint', 'lineRange', 'diff'];
+orchestrations/scripts/spec-mode-runner.js:7414:  const fallback = ['openspec', 'speckit'];
+orchestrations/scripts/lib/constraint-compiler.js:32:const SUPPORTED = ['gate', 'param', 'tool_scope', 'pre_exec_block', 'response_schema', 'effort_tier'];
+orchestrations/scripts/lib/project-roster.js:108:  const KNOWN = ['derive', 'canonical'];
+orchestrations/scripts/lib/brownfield-context.js:184:    const _fields = ['summary', 'description', 'labels'].concat(_points ? [_points] : []).join(',');
+orchestrations/plugins/verification-plugin.js:58:    const named = ['typecheck', 'type-check', 'tsc', 'check-types', 'lint:types']
+orchestrations/plugins/verification-plugin.js:220:    const named = ['test', 'tests', 'test:unit', 'jest', 'vitest']
+orchestrations/plugins/codegraph-plugin.js:39:const MODES = ['explore', 'query', 'callers', 'callees', 'impact', 'helpers', 'show'];
+src/cli/repl/commands/InviteCommand.ts:55:    const validRoles = ['member', 'viewer', 'admin'];
+src/cli/repl/commands/UserCommand.ts:105:const KNOWN_PROVIDERS = ['anthropic', 'openai', 'gemini', 'codex', 'copilot', 'codemie'];
+src/cli/commands/provider.ts:14:const SUPPORTED_PROVIDERS: ProviderName[] = ['anthropic', 'openai', 'gemini'];
+src/cli/commands/doctor.ts:88:      const providerNames: ProviderName[] = ['anthropic', 'openai', 'gemini'];
+src/cli/commands/keys.ts:10:const PROVIDERS = ['anthropic', 'openai', 'gemini'];

@@ -6,6 +6,19 @@
 module.exports = {
   precedence: 80,
   file: 'composer.json',
+  // THE EXTENSIONS THIS ECOSYSTEM SOURCE IS WRITTEN IN.
+  //
+  // Only package-json.js declared these, so lib/handlers/testable-source.js resolved an EMPTY
+  // set for every other ecosystem and found no file testable on a Python, Go, Rust, Ruby, Java
+  // or PHP codeline. brownfield-repro-test-writer.sh then reported "nothing sensible to test" —
+  // indistinguishable from a correct decision — so bug-reproduction tests silently never
+  // happened outside Node. That is the exact Node-only defect testable-source.js was written to
+  // remove, surviving one layer further down because the DATA it reads was never filled in.
+  codelineManifests: {
+    dependencyCheck: {
+      scanFileExtensions: [".php"],
+    },
+  },
   stack: 'php',
   installDir: 'vendor',
   protectedFiles: ['composer.json', 'composer.lock'],

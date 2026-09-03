@@ -316,7 +316,7 @@ OpenAI Codex is OpenAI's AI coding assistant CLI, integrated directly with ChatG
    - ✅ Fully implementable: `epam provider login <provider>`
    - Already exists in EPAM CLI: `epam keys anthropic`, `epam provider login anthropic`
    - Storage: OS credential manager (KeychainKeyStore.ts)
-   - Providers: Anthropic, OpenAI, Google Gemini, Qwen
+   - Providers: Anthropic, OpenAI, Google Gemini, OpenRouter
 
 2. **Env Var Fallback**
    - ✅ Fully implementable: `EPAM_API_KEY_ANTHROPIC`, `EPAM_API_KEY_OPENAI`, etc.
@@ -388,7 +388,7 @@ OpenAI Codex is OpenAI's AI coding assistant CLI, integrated directly with ChatG
 **Approach:**
 1. **Manual API Key Entry (Primary)** — `epam provider login <provider>`
    - Leverage existing KeychainKeyStore.ts
-   - Support: Anthropic, OpenAI, Google Gemini, Qwen
+   - Support: Anthropic, OpenAI, Google Gemini, OpenRouter
    - Already implemented; expand with better UX (validation, friendly error messages)
 
 2. **Browser PKCE Flow (Where Available)** — `epam provider login <provider> --browser`

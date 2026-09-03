@@ -23,14 +23,29 @@ const PLUGIN_API_VERSION = '1.0.0';
 const MANIFEST_REL = join('.epam', 'verification.json');
 
 /** Read the project's declared verification, or null when it has not declared one. */
-function readManifest(projectRoot) {
+function readManifest(projectRoot, section) {
   const path = join(projectRoot, MANIFEST_REL);
   if (!existsSync(path)) return { ok: false, reason: 'no verification manifest declared' };
   try {
     const parsed = JSON.parse(readFileSync(path, 'utf8'));
-    const command = parsed && parsed.typecheck && parsed.typecheck.command;
+    // THE SECTION ASKED FOR, NOT ALWAYS TYPECHECK.
+    //
+    // This read parsed.typecheck.command unconditionally. baseline_new_failures is called with
+    // section="test" from the external-verification path, so the "test baseline" ran the TYPECHECK
+    // command: its output carries no suite failures, the parse finds none, the node call exits
+    // non-zero, and the caller's `rm -f "$baseline_cache"` deletes the cache. With no cache nothing
+    // is subtracted and every PRE-EXISTING suite failure is charged to the story.
+    //
+    // Live 2026-09-02 (AMSD-1919): no baseline-failures-* had ever been written on that machine for
+    // any section. A pre-existing flake in FullScheduleTable/SearchBox.spec.tsx was blamed on a
+    // one-line CheckoutForm.tsx change and the writer exhausted its retries against it. The project
+    // had declared a `test` section all along; nothing read it.
+    //
+    // Defaults to typecheck so every existing caller keeps its behaviour.
+    const _section = (typeof section === 'string' && section.trim()) ? section.trim() : 'typecheck';
+    const command = parsed && parsed[_section] && parsed[_section].command;
     if (typeof command !== 'string' || command.trim() === '') {
-      return { ok: false, reason: 'verification manifest declares no typecheck command' };
+      return { ok: false, reason: `verification manifest declares no ${_section} command` };
     }
     return { ok: true, command, manifest: parsed };
   } catch (e) {
@@ -48,6 +63,24 @@ function readManifest(projectRoot) {
  * renames its checker, pins a version, or wraps it in a monorepo runner keeps working, because
  * the engine never learns the tool's name.
  */
+/**
+ * The script names this stack verifies with — read from the ecosystem file that owns them.
+ *
+ * A gate that carries its own copy is the engine learning a tool's name, which this file's own
+ * docstring forbids. Absent or unreadable, the caller gets an empty list and reports "not declared"
+ * rather than guessing: a check that cannot run must never read as a pass.
+ */
+function verificationScriptNames(kind) {
+  try {
+    // eslint-disable-line
+    const eco = require(join(__dirname, '..', 'ecosystems', 'package-json.js'));
+    const names = eco && eco.verificationScripts && eco.verificationScripts[kind];
+    return Array.isArray(names) ? names : [];
+  } catch {
+    return [];
+  }
+}
+
 function detectVerification(projectRoot) {
   const pkgPath = join(projectRoot, 'package.json');
   if (existsSync(pkgPath)) {
@@ -55,7 +88,7 @@ function detectVerification(projectRoot) {
     try { pkg = JSON.parse(readFileSync(pkgPath, 'utf8')); } catch { pkg = null; }
     const scripts = (pkg && pkg.scripts) || {};
     // The project's OWN script name, in the order a human would try them.
-    const named = ['typecheck', 'type-check', 'tsc', 'check-types', 'lint:types']
+    const named = verificationScriptNames('typecheck')
       .find((s) => typeof scripts[s] === 'string' && scripts[s].trim() !== '');
     if (named) {
       const runner = existsSync(join(projectRoot, 'pnpm-lock.yaml')) ? 'pnpm'
@@ -85,8 +118,8 @@ function detectVerification(projectRoot) {
  * ${PROJECT_ROOT} in the command is substituted, so a manifest can be written once and remain
  * valid whether the project is checked out in the main repo or a worktree.
  */
-function runVerification(projectRoot, timeoutMs) {
-  const m = readManifest(projectRoot);
+function runVerification(projectRoot, timeoutMs, section) {
+  const m = readManifest(projectRoot, section);
   if (!m.ok) return { status: 'unknown', reason: m.reason };
   const command = m.command.replace(/\$\{PROJECT_ROOT\}/g, projectRoot);
   try {
@@ -217,7 +250,7 @@ function detectTests(projectRoot) {
     let pkg = null;
     try { pkg = JSON.parse(readFileSync(pkgPath, 'utf8')); } catch { pkg = null; }
     const scripts = (pkg && pkg.scripts) || {};
-    const named = ['test', 'tests', 'test:unit', 'jest', 'vitest']
+    const named = verificationScriptNames('test')
       .find((s) => typeof scripts[s] === 'string' && scripts[s].trim() !== '');
     if (named) {
       const runner = existsSync(join(projectRoot, 'pnpm-lock.yaml')) ? 'pnpm'
@@ -226,6 +259,18 @@ function detectTests(projectRoot) {
       return {
         test: {
           command: `${runner} ${named}`,
+          // RUN ONLY WHAT THE STORY OWNS.
+          //
+          // Without this claude.sh falls back to the whole suite, and its own comment says so: "A
+          // project that declares neither runs its whole suite, which is correct and never silent."
+          // Live 2026-09-02 (AMSD-1919): validating ONE line in CheckoutForm.tsx ran all 746 suites
+          // / 3,385 tests, pinned the run at 10,731MB of an 11,264MB cap with 15 jest workers at
+          // ~700-780MB each, and stretched a ~70-second suite past 10 minutes under constant
+          // reclaim. The story's own suite is a single file.
+          //
+          // Built from the SAME runner and script the full command uses, so there is no second
+          // guess at the tool's name. `--` passes the file list through npm/yarn/pnpm to the runner.
+          scopedCommand: `${runner} ${named} -- {files}`,
           testFilePattern: '\\.(test|spec)\\.[jt]sx?$',
           // A failing SUITE is the stable identity, not a test name: runners report the suite
           // path consistently and individual case names churn. Subtracting on this is what lets
@@ -259,7 +304,7 @@ function detectLint(projectRoot) {
     let pkg = null;
     try { pkg = JSON.parse(readFileSync(pkgPath, 'utf8')); } catch { pkg = null; }
     const scripts = (pkg && pkg.scripts) || {};
-    const named = ['lint', 'lint:js', 'lint:src', 'eslint']
+    const named = verificationScriptNames('lint')
       .find((s) => typeof scripts[s] === 'string' && scripts[s].trim() !== '');
     if (named) {
       const runner = existsSync(join(projectRoot, 'pnpm-lock.yaml')) ? 'pnpm'
@@ -408,6 +453,52 @@ const verifyTypecheckTool = {
   },
 };
 
+/**
+ * WHICH TEST FILES DOES THIS STORY OWN.
+ *
+ * Lived as a node script written inside a bash single-quoted string in claude.sh. That is not a
+ * program anyone can run, test, or read a stack trace from, and its stderr went to /dev/null — so
+ * when it destructured `const [, , , root, sid, prdPath]` while the caller passed the args one
+ * position earlier, `root` received the STORY ID, `prdPath` was undefined, readFileSync(undefined)
+ * threw, the catch exited 0, and it printed nothing. For every story of every project, since it was
+ * written.
+ *
+ * Nothing failed visibly. claude.sh scopes verification only when this returns files, so external
+ * verification always ran the WHOLE suite: live 2026-09-02 (AMSD-1919) one line in CheckoutForm.tsx
+ * ran 746 suites / 3,385 tests, 15 jest workers at ~700-780MB, pinning the run at 10,731MB of an
+ * 11,264MB cap. The story had declared its own spec file all along.
+ *
+ * It belongs here because deciding what a test file IS is this plugin's job already (isTestFile
+ * reads the project's declared testFilePattern). The engine asks; it holds no convention.
+ *
+ * Returns a space-joined list, '' when the story owns none, and null when the project declares no
+ * convention — null is "cannot answer", never "no test files".
+ */
+function ownedTestFiles(projectRoot, storyId, prdPath) {
+  let prd;
+  try { prd = JSON.parse(readFileSync(prdPath, 'utf8')); } catch { return null; }
+  const story = ((prd && prd.stories) || []).find((s) => s && s.id === storyId);
+  const files = (story && story.technicalNotes && story.technicalNotes.files) || [];
+  if (isTestFile(projectRoot, 'probe.spec.ts') === null) return null;   // no declared convention
+  return files.filter((f) => isTestFile(projectRoot, f) === true).join(' ');
+}
+
+/**
+ * THE PROJECT'S OWN COMMAND FOR RUNNING JUST THOSE FILES.
+ *
+ * Same story: an inline node script in claude.sh. The template is the project's declaration
+ * (.epam/verification.json test.scopedCommand, e.g. "npm run test -- {files}"); this only
+ * substitutes. Empty when the project declares none, so the caller runs the full suite — which is
+ * correct and, unlike the failure above, never silent.
+ */
+function scopedTestCommand(projectRoot, filesJoined) {
+  if (!filesJoined || !String(filesJoined).trim()) return '';
+  const m = readTestManifest(projectRoot);
+  const tpl = m && m.ok && m.manifest && m.manifest.test && m.manifest.test.scopedCommand;
+  if (typeof tpl !== 'string' || !tpl.trim()) return '';
+  return tpl.replace(/\{files\}/g, String(filesJoined));
+}
+
 module.exports = {
   pluginApiVersion: PLUGIN_API_VERSION,
   tools: [verifyTypecheckTool],
@@ -421,6 +512,8 @@ module.exports = {
   parseFailures,
   newFailures,
   isTestFile,
+  ownedTestFiles,
+  scopedTestCommand,
   repoHasTests,
   MANIFEST_REL,
 };

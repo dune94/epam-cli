@@ -1,0 +1,32 @@
+{
+  "base": "e0f289ac5a730b0e8ac284bb7e90fce4087efffadfcb810ccb286f741e02ac1c",
+  "roles": "88832fe89673d3105464843cafe58e599b2f12f9efcd9e035bf11b144f56ac5c",
+  "usesRoles": true,
+  "doc": {
+    "$why": [
+      "Generated from the code-review-cycle template by the agent that minted this project's roster.",
+      "The template is never executed; this copy is. Placeholders were checked against the",
+      "template before installation — see lib/project-prompt-contract.js."
+    ],
+    "authority": "project",
+    "body": "__REVIEW_PROFILE__\n\n---\nREVIEW TASK (Iteration __ITERATION__): Story __STORY_ID__ — __STORY_TITLE__\nAGENT: __STORY_AGENT__\n\nDESCRIPTION: __STORY_DESCRIPTION__\n\nACCEPTANCE CRITERIA:\n__STORY_ACS__\n\nRELEVANT FILES: __STORY_FILES__\n\nGIT DIFF:\n```diff\n__STORY_DIFF__\n```\n__PRIOR_CONTEXT__\nPROJECT ROOT: __PROJECT_ROOT__\n\nThis project has two independent codelines, each with its own vitest + TypeScript toolchain: `mock-a` (fare logic, `src/fares.ts`) and `mock-b` (schedule/departure-board rendering, `src/schedule.ts`). Run each codeline's own `vitest` and `tsc` from its own directory — do not assume a shared root config or a single combined test run covers both.\n\nFor MOCK3-1 (mock-a / src/fares.ts): the bug is riders aged exactly 65 being charged the adult fare. Read the actual comparison operator used against the age boundary (e.g. `>` vs `>=`) — do not trust the story description's phrasing of the boundary, verify it against the code and any existing tests that assert behavior at age 65 itself, not just ages clearly above or below it.\n\nFor MOCK3-2 (mock-b / src/schedule.ts): the bug is the departure board omitting the final stop. Read the loop bounds in the stop-rendering code (e.g. `<` vs `<=`, or a slice/length off-by-one) and check whether existing tests assert on the *last* element of the rendered stop list, not just count or ordering of earlier stops.\n\nReview the implementation against each acceptance criterion.\nCheck: TypeScript strict compliance, test coverage, error handling, security.\n\nRespond with ONLY a JSON object:\n{\"verdict\":\"approved\",\"issues\":[],\"summary\":\"...\"}\n  OR\n{\"verdict\":\"changes_requested\",\"issues\":[{\"severity\":\"blocker|major|minor\",\"file\":\"...\",\"line\":0,\"description\":\"...\",\"evidence\":\"<path>:<line> you read, or the command you ran and its result\",\"suggestedFix\":\"...\"}],\"summary\":\"...\"}\n\nEvery issue MUST carry an `evidence` field: the exact thing you READ that establishes it — `<path>:<line>` you opened, or the command you ran and what it returned. Not a restatement of the claim, not a plan reference: what you looked at. An issue without evidence is DISCARDED before it reaches anyone, so an unsupported finding is worse than no finding — it costs you the issue. If a claim is about a library's API, the evidence is that library's installed types or source in this repository, and the installed contract beats the plan.",
+    "derivedFromSha256": "c2359d728e1ab884cbe27a7a2b3d8cd9df54844c9e18d2e712d966828c986612",
+    "derivedFromVersion": 1,
+    "id": "code-review-cycle",
+    "placeholders": [
+      "__ITERATION__",
+      "__PRIOR_CONTEXT__",
+      "__PROJECT_ROOT__",
+      "__REVIEW_PROFILE__",
+      "__STORY_ACS__",
+      "__STORY_AGENT__",
+      "__STORY_DESCRIPTION__",
+      "__STORY_DIFF__",
+      "__STORY_FILES__",
+      "__STORY_ID__",
+      "__STORY_TITLE__"
+    ],
+    "mayBeEmpty": []
+  },
+  "reviewed": true
+}

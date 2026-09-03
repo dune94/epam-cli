@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { parseMarkupToolCalls, stripThinkingBlocks, createQwenProvider, OPENROUTER_BASE_URL } from '../../../src/providers/qwen/QwenProvider.js';
+import { parseMarkupToolCalls, stripThinkingBlocks, createOpenRouterProvider, OPENROUTER_BASE_URL } from '../../../src/providers/openrouter/OpenRouterProvider.js';
 
 describe('parseMarkupToolCalls', () => {
   it('returns empty toolUses and original text when input has no markup', () => {
@@ -24,7 +24,7 @@ describe('parseMarkupToolCalls', () => {
       name: 'write_file',
       input: { path: 'src/greet.ts', content: "export const greet = () => 'hello';" },
     });
-    expect(result.toolUses[0].id).toMatch(/^qwen_markup_/);
+    expect(result.toolUses[0].id).toMatch(/^openrouter_markup_/);
     expect(result.cleanText).not.toContain('<function=');
     expect(result.cleanText).toContain("I'll create the file.");
   });
@@ -53,7 +53,7 @@ describe('parseMarkupToolCalls', () => {
     expect(result.toolUses[0].id).not.toBe(result.toolUses[1].id);
   });
 
-  it('removes stray </tool_call> artifact appended by Qwen', () => {
+  it('removes stray </tool_call> artifact appended by OpenRouter', () => {
     const text = '<function=write_file><parameter=path>greet.ts</parameter><parameter=content>export const x = 1;</parameter></function>\n</tool_call>';
     const result = parseMarkupToolCalls(text);
     expect(result.toolUses).toHaveLength(1);
@@ -123,7 +123,7 @@ describe('stripThinkingBlocks', () => {
   });
 });
 
-describe('createQwenProvider — OPENROUTER_BASE_URL override', () => {
+describe('createOpenRouterProvider — OPENROUTER_BASE_URL override', () => {
   afterEach(() => {
     delete process.env.OPENROUTER_API_KEY;
     delete process.env.OPENROUTER_BASE_URL;
@@ -131,14 +131,14 @@ describe('createQwenProvider — OPENROUTER_BASE_URL override', () => {
 
   it('uses default OpenRouter base URL when OPENROUTER_BASE_URL is not set', () => {
     process.env.OPENROUTER_API_KEY = 'test-key';
-    const provider = createQwenProvider();
+    const provider = createOpenRouterProvider();
     expect(JSON.stringify(provider)).toContain(OPENROUTER_BASE_URL);
   });
 
   it('uses OPENROUTER_BASE_URL override when set — enables mock server', () => {
     process.env.OPENROUTER_API_KEY = 'mock-key';
     process.env.OPENROUTER_BASE_URL = 'http://localhost:4000/v1';
-    const provider = createQwenProvider();
+    const provider = createOpenRouterProvider();
     expect(JSON.stringify(provider)).toContain('http://localhost:4000/v1');
     expect(JSON.stringify(provider)).not.toContain(OPENROUTER_BASE_URL);
   });
@@ -152,7 +152,7 @@ describe('createQwenProvider — OPENROUTER_BASE_URL override', () => {
  * Off by default: not universally available for every model, so it must be a
  * deliberate opt-in, never a silent default.
  */
-describe('QwenProvider — EPAM_OPENROUTER_EXACTO suffix', () => {
+describe('OpenRouterProvider — EPAM_OPENROUTER_EXACTO suffix', () => {
   afterEach(() => {
     delete process.env.OPENROUTER_API_KEY;
     delete process.env.EPAM_OPENROUTER_EXACTO;
@@ -180,7 +180,7 @@ describe('QwenProvider — EPAM_OPENROUTER_EXACTO suffix', () => {
   it('does NOT append :exacto by default', async () => {
     process.env.OPENROUTER_API_KEY = 'test-key';
     const { getLastBody } = stubFetchCapturingBody();
-    const provider = createQwenProvider();
+    const provider = createOpenRouterProvider();
     await provider.complete({ messages: [{ role: 'user', content: 'hi' }], model: 'z-ai/glm-5.2', stream: false });
     expect(getLastBody().model).toBe('z-ai/glm-5.2');
   });
@@ -189,7 +189,7 @@ describe('QwenProvider — EPAM_OPENROUTER_EXACTO suffix', () => {
     process.env.OPENROUTER_API_KEY = 'test-key';
     process.env.EPAM_OPENROUTER_EXACTO = 'true';
     const { getLastBody } = stubFetchCapturingBody();
-    const provider = createQwenProvider();
+    const provider = createOpenRouterProvider();
     await provider.complete({ messages: [{ role: 'user', content: 'hi' }], model: 'z-ai/glm-5.2', stream: false });
     expect(getLastBody().model).toBe('z-ai/glm-5.2:exacto');
   });
@@ -198,7 +198,7 @@ describe('QwenProvider — EPAM_OPENROUTER_EXACTO suffix', () => {
     process.env.OPENROUTER_API_KEY = 'test-key';
     process.env.EPAM_OPENROUTER_EXACTO = 'true';
     const { getLastBody } = stubFetchCapturingBody();
-    const provider = createQwenProvider();
+    const provider = createOpenRouterProvider();
     await provider.complete({
       messages: [{ role: 'user', content: 'hi' }],
       model: 'z-ai/glm-5.2:exacto',
@@ -211,7 +211,7 @@ describe('QwenProvider — EPAM_OPENROUTER_EXACTO suffix', () => {
     process.env.OPENROUTER_API_KEY = 'test-key';
     process.env.EPAM_OPENROUTER_EXACTO = '1';
     const { getLastBody } = stubFetchCapturingBody();
-    const provider = createQwenProvider();
+    const provider = createOpenRouterProvider();
     await provider.complete({ messages: [{ role: 'user', content: 'hi' }], model: 'z-ai/glm-5.2', stream: false });
     expect(getLastBody().model).toBe('z-ai/glm-5.2');
   });

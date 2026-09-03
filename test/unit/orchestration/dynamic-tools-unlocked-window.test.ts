@@ -34,7 +34,7 @@ import { describe, it, expect } from 'vitest';
 import {
   readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync, statSync,
 } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -103,28 +103,22 @@ describe('run_dynamic_tools_in_unlocked_window — REAL execution', () => {
   }
 
   function run(dir: string): { stdout: string; exitCode: number } {
-    const fnBody = extractFunctionByLineAnchor('run_dynamic_tools_in_unlocked_window');
-    const scriptPath = join(dir, 'run.sh');
+    // SOURCED, NOT COPIED. log and warning were stubbed here; sourced, they come from claude.sh,
+    // so a message the real function emits cannot differ from the one this test sees.
     const outputFile = join(dir, 'output.log');
-    writeFileSync(
-      scriptPath,
-      [
-        `log() { echo "LOG: $*"; }`,
-        `warning() { echo "WARN: $*"; }`,
-        fnBody,
-        `run_dynamic_tools_in_unlocked_window "${dir}" "${outputFile}"`,
-        `echo "EXIT:$?"`,
-      ].join('\n')
-    );
     writeFileSync(outputFile, '');
-    let stdout = '';
-    let exitCode = 0;
-    try {
-      stdout = execFileSync('bash', [scriptPath], { encoding: 'utf8' });
-    } catch (e: any) {
-      stdout = (e.stdout ?? '').toString() + (e.stderr ?? '').toString();
-      exitCode = e.status ?? -1;
-    }
+    const scriptBody = `set +e
+      run_dynamic_tools_in_unlocked_window "${dir}" "${outputFile}"
+      echo "EXIT:$?"`;
+    const res = spawnSync('bash', ['-c',
+      `. ${JSON.stringify(join(REPO_ROOT, 'orchestrations/scripts/claude.sh'))} >/dev/null 2>&1\n${scriptBody}`], {
+      encoding: 'utf8', timeout: 180_000, cwd: REPO_ROOT,
+      env: { ...process.env, NODE_BIN: process.execPath,
+        EPAM_PROJECT_CONFIG_DIR: join(REPO_ROOT, 'orchestrations/projects/mock3'),
+        EPAM_COVERAGE_GATED: '0' },
+    });
+    const stdout = `${res.stdout ?? ''}${res.stderr ?? ''}`;
+    const exitCode = res.status ?? -1;
     let outputLog = '';
     try {
       outputLog = readFileSync(outputFile, 'utf8');

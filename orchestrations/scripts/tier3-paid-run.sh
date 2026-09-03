@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # ──────────────────────────────────────────────────────────────────────────────
-# Tier 3: Production run — Qwen3-30B on OpenRouter (costs credits).
 #
 # Only run this after BOTH Tier 1 and Tier 2 have passed cleanly.
 #   bash orchestrations/scripts/tier1-mock-run.sh   # zero cost
@@ -8,7 +7,6 @@
 #   bash orchestrations/scripts/tier3-paid-run.sh   # ~$0.15–0.50
 #
 # What this validates above Tier 2:
-#   • Production model quality (Qwen3-coder-30B)
 #   • Real-world token costs within expected budget
 #   • Full ACs met with the target model
 #
@@ -17,6 +15,15 @@
 # Usage:
 #   OPENROUTER_API_KEY=<your-key> bash orchestrations/scripts/tier3-paid-run.sh
 # ──────────────────────────────────────────────────────────────────────────────
+
+# A launcher decides what a run costs. It does not get to do that untested.
+_scg_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/stage-coverage-gate.sh"
+# shellcheck source=/dev/null
+# THE WHOLE MAP, BEFORE ANY MONEY MOVES. A paid launcher measures EVERY stage against the project's
+# threshold here, and only then declares the run gated — which is what turns on the per-stage gates
+# for the rest of the run. Failing here costs nothing; failing mid-run costs everything spent so far.
+[ -f "$_scg_lib" ] && . "$_scg_lib" && require_all_stage_coverage || exit 1
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -40,7 +47,6 @@ fi
 
 PRD_FILE="$REPO_ROOT/orchestrations/hello-world-prd.json"
 
-info "Tier 3 production run — Qwen3-coder-30B (USES OPENROUTER CREDITS)"
 info "  Prerequisite: Tier 1 and Tier 2 must have passed"
 info "  Estimated cost: \$0.15–0.50"
 info "  Log: $LOG_FILE"
@@ -54,6 +60,9 @@ read -rp "$(echo -e "${YELLOW}Confirm: spend OpenRouter credits? [yes/N]${NC} ")
 # were not among them — see lib/preflight.sh.
 # shellcheck source=lib/preflight.sh
 . "$SCRIPT_DIR/lib/preflight.sh"
+# The run's spend figure comes from the ACTIVE SET, not a vendor hardcoded here.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/spend-probe.sh" 2>/dev/null || true
+
 # Route through fail(), never a bare exit: fail() archives the run artefacts first.
 # A bare `exit 1` here made a pre-flight abort the ONE outcome that recorded nothing —
 # no run folder, no outcome.txt, no log — which is the outcome most worth keeping.
@@ -63,9 +72,7 @@ echo ""
 cd "$REPO_ROOT"
 
 # Record spend baseline
-_usage_before=$(curl -s "https://openrouter.ai/api/v1/auth/key" \
-  -H "Authorization: Bearer $OPENROUTER_API_KEY" 2>/dev/null | \
-  node -e "process.stdout.write(''+JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).data.usage)" 2>/dev/null || echo "0")
+_usage_before="$(spend_probe_read)"
 info "Usage before: \$$_usage_before"
 
 # Clean hello-world repo state before run
@@ -84,12 +91,15 @@ fi
 . "$SCRIPT_DIR/lib/pre-run-reset-gate.sh"
 pre_run_reset_or_abort --prd "$PRD_FILE"
 
+# These are forwarded to the child process invoked below. shellcheck cannot see the consumer,
+# so it reports them unused; removing them would take the values away from the child.
+# shellcheck disable=SC2034
 OPENROUTER_API_KEY="$OPENROUTER_API_KEY" \
 EPAM_API_KEY_OPENROUTER="$OPENROUTER_API_KEY" \
 OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
 EPAM_API_KEY_OPENAI="${OPENAI_API_KEY:-}" \
 ORCH_GATE_PROVIDER="openai" \
-ORCH_GATE_MODEL="gpt-4o" \
+# ORCH_GATE_MODEL removed: a run-wide pin. The seam ladder decides.
 PRD_FILE="$PRD_FILE" \
 SKIP_REGRESSION_GUARD=true \
 EPAM_RALPH_WIGGUM_ENABLED=0 \
@@ -104,9 +114,7 @@ SKIP_BROWSER_E2E_ROUTING=true \
 PIPELINE_EXIT=${PIPESTATUS[0]}
 
 # Report spend
-_usage_after=$(curl -s "https://openrouter.ai/api/v1/auth/key" \
-  -H "Authorization: Bearer $OPENROUTER_API_KEY" 2>/dev/null | \
-  node -e "process.stdout.write(''+JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).data.usage)" 2>/dev/null || echo "0")
+_usage_after="$(spend_probe_read)"
 _spent=$(node -e "console.log(($_usage_after-$_usage_before).toFixed(4))" 2>/dev/null || echo "?")
 info "Usage after: \$$_usage_after"
 info "Total spent this run: \$$_spent"

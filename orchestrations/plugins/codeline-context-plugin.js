@@ -487,6 +487,110 @@ const resolvePackageSymbolTool = {
   },
 };
 
+/**
+ * WHERE A **NEW** TEST FOR THIS SOURCE SHOULD BE WRITTEN.
+ *
+ * candidateTestPaths answers "which test already exists". This answers the other question, and it
+ * belongs here for the same reason: it is a fact about a STACK's conventions, and a stack fact lives
+ * in a plugin, never in engine code.
+ *
+ * brownfield-repro-test-writer.sh used to decide this itself with literals:
+ *
+ *     if [ spec_count >= test_count ]; then _ext="spec.ts"; else _ext="test.ts"; fi
+ *
+ * which hardcoded stack filenames in the engine AND collapsed .ts/.tsx into one, so a .tsx React
+ * component was given a .spec.ts target. Live 2026-09-02 (AMSD-1919): the agent wrote the correct
+ * .spec.tsx, the stage waited on .spec.ts, and reported "no valid test after 3 attempts" while
+ * escalating three models against a file that was already on disk.
+ *
+ * Three decisions, each MEASURED against this codeline rather than assumed:
+ *   marker    (.spec vs .test) — whichever this repo actually uses more
+ *   extension                  — the SOURCE file's own, because a .tsx component's test carries JSX
+ *                                and will not compile as .ts
+ *   directory                  — the first candidate layout whose parent directory exists, so the
+ *                                test lands where this repo already keeps its tests
+ */
+function newTestPath(projectRoot, sourceFile) {
+  const rel = String(sourceFile || '').replace(/^\/+/, '');
+  if (!rel) return '';
+  const dir = path.dirname(rel);
+  const ext = path.extname(rel);
+  const base = path.basename(rel, ext);
+
+  // MARKER BY PREVALENCE, counted on disk. No literal wins by being written first.
+  const counts = new Map(TEST_EXTENSIONS.map((m) => [m, 0]));
+  const walk = (d, depth) => {
+    if (depth > 6) return;
+    let entries;
+    try { entries = fs.readdirSync(path.join(projectRoot, d), { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (e.name === 'node_modules' || e.name === '.git') continue;
+      const next = d ? path.join(d, e.name) : e.name;
+      if (e.isDirectory()) { walk(next, depth + 1); continue; }
+      for (const m of TEST_EXTENSIONS) {
+        for (const se of SOURCE_EXTENSIONS) {
+          if (e.name.endsWith(`${m}${se}`)) counts.set(m, counts.get(m) + 1);
+        }
+      }
+    }
+  };
+  walk('', 0);
+  let marker = TEST_EXTENSIONS[0];
+  let best = -1;
+  for (const m of TEST_EXTENSIONS) {
+    if (counts.get(m) > best) { best = counts.get(m); marker = m; }
+  }
+
+  // EXTENSION: the source's own. This is the half the engine used to discard.
+  const useExt = SOURCE_EXTENSIONS.includes(ext) ? ext : (SOURCE_EXTENSIONS[0] || ext);
+
+  // DIRECTORY: the first candidate layout this repo already has a home for.
+  const shapes = [
+    path.join(dir, '__tests__', `${base}${marker}${useExt}`),
+    path.join(dir, `${base}${marker}${useExt}`),
+  ];
+  for (const cand of shapes) {
+    const parent = path.dirname(path.join(projectRoot, cand));
+    try { if (fs.existsSync(parent)) return cand; } catch { /* fall through */ }
+  }
+  return shapes[shapes.length - 1];
+}
+
+/**
+ * AN EXISTING TEST TO MIRROR, nearest the source first. The engine used to glob for this with
+ * '*.spec.ts' / '*.test.ts' literals, which both hardcoded a stack fact and could never surface a
+ * .tsx example. Markers and extensions come from this plugin's own declarations.
+ */
+function exampleTestFile(projectRoot, sourceFile) {
+  const rel = String(sourceFile || '').replace(/^\/+/, '');
+  const preferDir = path.dirname(rel);
+  const hits = [];
+  const walk = (d, depth) => {
+    if (depth > 6) return;
+    let entries;
+    try { entries = fs.readdirSync(path.join(projectRoot, d), { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (e.name === 'node_modules' || e.name === '.git') continue;
+      const next = d ? path.join(d, e.name) : e.name;
+      if (e.isDirectory()) { walk(next, depth + 1); continue; }
+      for (const m of TEST_EXTENSIONS) {
+        for (const se of SOURCE_EXTENSIONS) {
+          if (e.name.endsWith(`${m}${se}`)) hits.push(next);
+        }
+      }
+    }
+  };
+  walk('', 0);
+  if (!hits.length) return '';
+  const near = hits.filter((h) => path.dirname(h) === preferDir
+    || path.dirname(h) === path.join(preferDir, '__tests__'));
+  return (near[0] || hits[0]);
+}
+
 module.exports = {
   tools: [resolveTestFileTool, codelineFactsTool, gitStateTool, checkAntiPatternsTool, resolvePackageSymbolTool],
+  // Asked by the engine, which may hold no convention of its own.
+  newTestPath,
+  candidateTestPaths,
+  exampleTestFile,
 };

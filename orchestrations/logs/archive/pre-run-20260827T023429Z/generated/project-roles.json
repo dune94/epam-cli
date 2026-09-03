@@ -1,0 +1,6 @@
+{
+  "_what": "This project's own implementation roles, written by the agent mint. Read by the write perimeter (which roles may author code) and by role assignment (which roles may own a story). Canonical process roles are never listed here.",
+  "roles": [
+    "fare-rules-engineer"
+  ]
+}

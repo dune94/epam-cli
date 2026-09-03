@@ -1,0 +1,32 @@
+{
+  "$why": [
+    "Moved out of lib/topology-router.js on 2026-08-25.",
+    "",
+    "The prompt was built by string concatenation in code, so it was invisible to the prompt",
+    "layer: it could not be reviewed, versioned or provisioned per project. It also could not",
+    "run at all — topology-router was never one of the declared seams, so its model never",
+    "resolved and the LLM path threw at module load. Every topology decision in every run has",
+    "been the count heuristic.",
+    "",
+    "NO PROJECT FACT APPEARS HERE. The stories, the phase and the CPA signals arrive as values.",
+    "What stays is the decision rule, which is a fact about orchestration, not about a codebase."
+  ],
+  "id": "topology-router",
+  "version": 1,
+  "description": "Choose the execution topology for a phase, given each story's effort, role, dependencies and cost signals.",
+  "placeholders": [
+    "__PHASE__",
+    "__STORIES__",
+    "__CPA_SIGNALS__"
+  ],
+  "seams": [
+    "topology-router"
+  ],
+  "body": "You are selecting an execution topology for orchestration phase \"__PHASE__\".\n\nStories to classify:\n__STORIES__\n__CPA_SIGNALS__\n\nRules:\n- single: 0-1 worktree stories, OR one high-effort story that needs focused attention\n- parallel: 2-4 independent stories with no shared file scope\n- sequential: stories with overlapping file scope, tight coupling, or shared state risk\n\nOverlapping file scope outranks story count. Stories that edit the same file must not run in\nparallel worktrees, even when there are only two or three of them: the count alone cannot see\nthat, and parallel worktrees over a shared file produce a merge conflict the run cannot resolve.\n\nRespond with ONLY this JSON object. No prose, no markdown fences:\n{\"topology\":\"single|parallel|sequential\",\"reason\":\"<one sentence naming the deciding factor>\"}",
+  "mayBeEmpty": [
+    "__CPA_SIGNALS__"
+  ],
+  "$mayBeEmptyWhy": "A phase can genuinely have no cost signals — CPA runs per story and a phase may hold none yet. Absent is a REAL state here, not a failed lookup, so the section renders blank rather than the render refusing. Every other placeholder must be supplied: an empty story list or phase name would mean the caller asked about nothing.",
+  "derivedFromSha256": "f58fca79c296ddb8d611bbad77d522568e7075201ea5056b21fbf4b18b7fc124",
+  "authority": "project"
+}

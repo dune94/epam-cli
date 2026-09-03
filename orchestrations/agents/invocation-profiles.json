@@ -79,9 +79,8 @@
       "_what": "Reviews the story's code change AND its test; emits a verdict.",
       "maxOutputTokens": 32768,
       "maxToolCalls": 8,
-      "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "top",
+      "ladder": "highest",
       "temperature": "0.1",
       "produces": "review-feedback",
       "template": "team-lead-review",
@@ -105,9 +104,8 @@
     "code-review-cycle": {
       "_what": "Per-iteration code review pass.",
       "maxOutputTokens": 32768,
-      "reasoningEffort": "high",
       "timeoutSecs": 600,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "review-feedback",
       "consumes": [
         {
@@ -124,9 +122,8 @@
     "agent-failure-analyst": {
       "_what": "Diagnoses a no-output/failed agent attempt, prescribes a corrective directive.",
       "maxOutputTokens": 32768,
-      "reasoningEffort": "high",
       "timeoutSecs": 360,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "diagnosis",
       "template": "failure-analyst",
       "consumes": [
@@ -143,9 +140,8 @@
     "repro-test-writer": {
       "_what": "Writes the bug-reproducing test for a brownfield fix.",
       "maxOutputTokens": 32768,
-      "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "repro-test",
       "consumes": [
         {
@@ -162,14 +158,18 @@
       ],
       "template": "repro-test-writer",
       "toolGrant": "write",
-      "_outputIsArtefact": "Writes a test FILE (toolGrant write, produces \"repro-test\"). Its success is the file existing and failing on the pre-fix baseline, which the repro gate checks — not a parsed response."
+      "_outputIsArtefact": "Writes a test FILE (toolGrant write, produces \"repro-test\"). Its success is the file existing and failing on the pre-fix baseline, which the repro gate checks — not a parsed response.",
+      "microQuestion": {
+        "$why": "This seam asks one narrow question mid-work — which of the touched files carries the behaviour a test should exercise. The answer is a single path, so it needs a fraction of the seam budget. It was written at the call site as EPAM_MAX_ITERATIONS=3 EPAM_MAX_OUTPUT_TOKENS=256, which outranked this declaration, appeared in no cost estimate, and meant changing the seam budget silently did nothing to that call.",
+        "$whyNoMaxIterations": "THE LADDER OWNS THE ITERATION BUDGET, AND THIS SEAM IS NO EXCEPTION. A literal 3 here outranked the ladder for one call — the same defect as the literals this block replaced, only moved from the call site into the declaration. Output SIZE is a property of the question (one filename, so 256 tokens); how many turns it may take is not. The seam’s ladder rung supplies EPAM_MAX_ITERATIONS, and nothing here overrides it.",
+        "maxOutputTokens": 256
+      }
     },
     "tc-writer": {
       "_what": "Writes post-implementation test criteria into the PRD.",
       "maxOutputTokens": 32768,
-      "reasoningEffort": "medium",
       "timeoutSecs": 600,
-      "ladder": "mid",
+      "ladder": "high",
       "produces": "test-criteria",
       "consumes": [
         {
@@ -186,9 +186,8 @@
     "cpa-inference": {
       "_what": "Produces the cost/effort estimate for a story.",
       "maxOutputTokens": 16384,
-      "reasoningEffort": "medium",
       "timeoutSecs": 300,
-      "ladder": "base",
+      "ladder": "medium",
       "produces": "estimate",
       "consumes": [
         {
@@ -207,10 +206,9 @@
     "prd-change-reviewer": {
       "_what": "Reviews a proposed PRD mutation before it is applied.",
       "maxOutputTokens": 32768,
-      "reasoningEffort": "high",
       "temperature": "0.7",
       "timeoutSecs": 360,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "change-verdict",
       "consumes": [
         {
@@ -224,10 +222,9 @@
     "prd-change-summarizer": {
       "_what": "Summarizes a rewrite for the change log.",
       "maxOutputTokens": 16384,
-      "reasoningEffort": "high",
       "temperature": "0.7",
       "timeoutSecs": 240,
-      "ladder": "base",
+      "ladder": "medium",
       "produces": "change-summary",
       "consumes": [
         {
@@ -242,10 +239,9 @@
     "impl-failure-analyst": {
       "_what": "Diagnoses why an implementation attempt failed.",
       "maxOutputTokens": 32768,
-      "reasoningEffort": "high",
       "temperature": "0.7",
       "timeoutSecs": 360,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "diagnosis",
       "template": "failure-analyst",
       "consumes": [
@@ -268,9 +264,8 @@
     "ac-classification": {
       "_what": "Classifies acceptance criteria.",
       "maxOutputTokens": 16384,
-      "reasoningEffort": "low",
       "timeoutSecs": 90,
-      "ladder": "base",
+      "ladder": "medium",
       "produces": "ac-classification",
       "consumes": [
         {
@@ -286,9 +281,8 @@
     "ac-elaboration": {
       "_what": "Elaborates an acceptance criterion into verification criteria.",
       "maxOutputTokens": 32768,
-      "reasoningEffort": "medium",
       "timeoutSecs": 180,
-      "ladder": "mid",
+      "ladder": "high",
       "produces": "verification-criteria",
       "consumes": [
         {
@@ -304,9 +298,8 @@
     "codeline-discovery": {
       "_what": "Picks which local codeline a Jira ticket belongs to.",
       "maxOutputTokens": 16384,
-      "reasoningEffort": "high",
       "timeoutSecs": 300,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "codeline-selection",
       "consumes": [
         {
@@ -321,8 +314,7 @@
     },
     "roster-review": {
       "_what": "Falsifies the claims in a generated agent roster before any implementer inherits them.",
-      "ladder": "top",
-      "reasoningEffort": "high",
+      "ladder": "highest",
       "temperature": "0.1",
       "maxOutputTokens": 65536,
       "_why_maxOutputTokens": "DOUBLED WITH THE ARTEFACT IT HANDLES. roster-specialiser was raised to 65536 so it could emit all 57 canonical agents in one file; this seam handles that same artefact and was left at 32768. On 2026-08-24 two review batches were TRUNCATED mid-JSON (62,648 and 38,432 bytes) and reported as unexamined, which is indistinguishable from a malformed reply, so the judge was retried identically and failed the same way. A budget belongs to the artefact, not to one seam: a reviewer quotes canonical AND derived text, so it needs at least what the writer needs.",
@@ -341,8 +333,7 @@
     },
     "code-graph-detective": {
       "_what": "Investigates one codeline and reports where the work actually lands.",
-      "ladder": "top",
-      "reasoningEffort": "high",
+      "ladder": "highest",
       "temperature": "0.7",
       "maxOutputTokens": 32768,
       "timeoutSecs": 900,
@@ -365,8 +356,7 @@
     },
     "guard-vocabulary": {
       "_what": "Derives the vocabulary the verification-criteria guard enforces. A guard armed with the wrong terms reports clean.",
-      "ladder": "top",
-      "reasoningEffort": "high",
+      "ladder": "highest",
       "temperature": "0.1",
       "maxOutputTokens": 32768,
       "timeoutSecs": 900,
@@ -382,8 +372,7 @@
     },
     "estate-survey": {
       "_what": "Surveys every codeline BEFORE the roster is minted: which ones the work actually reaches, and which need their own investigator. Breadth, never fix sites.",
-      "ladder": "top",
-      "reasoningEffort": "high",
+      "ladder": "highest",
       "temperature": "0.7",
       "maxOutputTokens": 32768,
       "timeoutSecs": 900,
@@ -401,8 +390,7 @@
     },
     "story-writer": {
       "_what": "Implements a story: writes the code that satisfies its criteria. The archetype every minted -engineer is an instance of.",
-      "ladder": "top",
-      "reasoningEffort": "high",
+      "ladder": "highest",
       "temperature": "0.2",
       "maxOutputTokens": 32768,
       "timeoutSecs": 900,
@@ -451,9 +439,8 @@
     "vc-coverage": {
       "_what": "Judges whether the written tests cover each verification criterion.",
       "maxOutputTokens": 16384,
-      "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "vc-coverage-report",
       "consumes": [
         {
@@ -469,9 +456,8 @@
     "qa-gate:sast": {
       "_what": "Static application security scan over the change.",
       "maxOutputTokens": 16384,
-      "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "mid",
+      "ladder": "high",
       "produces": "qa-verdict",
       "consumes": [
         {
@@ -484,9 +470,8 @@
     "qa-gate:spec-validator": {
       "_what": "Checks the change satisfies the story’s acceptance criteria.",
       "maxOutputTokens": 16384,
-      "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "qa-verdict",
       "consumes": [
         {
@@ -502,9 +487,8 @@
     "qa-gate:review-ranger": {
       "_what": "Reviews the change for defects the team-lead review may not reach.",
       "maxOutputTokens": 16384,
-      "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "qa-verdict",
       "consumes": [
         {
@@ -517,9 +501,8 @@
     "qa-gate:mutant-hunter": {
       "_what": "Assesses whether the tests would fail if the change were broken.",
       "maxOutputTokens": 16384,
-      "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "qa-verdict",
       "consumes": [
         {
@@ -535,9 +518,8 @@
     "qa-gate:fuzz-weaver": {
       "_what": "Probes the change with adversarial inputs.",
       "maxOutputTokens": 16384,
-      "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "mid",
+      "ladder": "high",
       "produces": "qa-verdict",
       "consumes": [
         {
@@ -550,9 +532,8 @@
     "qa-gate:perf-sentinel": {
       "_what": "Assesses the change for runtime and startup cost.",
       "maxOutputTokens": 16384,
-      "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "mid",
+      "ladder": "high",
       "produces": "qa-verdict",
       "consumes": [
         {
@@ -564,8 +545,7 @@
     },
     "prompt-builder": {
       "_what": "Provisions this project's prompt library: reads the generic templates and decorates each one for the project and the roster just minted. Runs at mint time, as part of the same stage that creates the agents the prompts are for — the only stage that knows both what the project is and who will work on it.",
-      "ladder": "top",
-      "reasoningEffort": "high",
+      "ladder": "high",
       "temperature": "0.2",
       "maxOutputTokens": 65536,
       "_why_maxOutputTokens": "DOUBLED WITH THE ARTEFACT IT HANDLES. roster-specialiser was raised to 65536 so it could emit all 57 canonical agents in one file; this seam handles that same artefact and was left at 32768. On 2026-08-24 two review batches were TRUNCATED mid-JSON (62,648 and 38,432 bytes) and reported as unexamined, which is indistinguishable from a malformed reply, so the judge was retried identically and failed the same way. A budget belongs to the artefact, not to one seam: a reviewer quotes canonical AND derived text, so it needs at least what the writer needs.",
@@ -587,12 +567,12 @@
       "template": "project-prompt-generation",
       "toolGrant": "read-only",
       "_outputIsArtefact": "Writes the project prompt FILES themselves (produces=project-prompts, via project-prompt-builder.js). Its output IS the minted prompt layer on disk, so the artefact is the deliverable.",
-      "_why_ladder": "Operator decision 2026-08-22. Specialising a prompt is largely RESTATEMENT — keep the rule, replace the generic noun with this project's — and the ceiling rung buys nothing for that, the same argument that put the TC writer on medium. The judgement half (what an agent must know about this codeline) is covered by the review pass, which runs on the generator's own rung."
+      "_why_ladder": "Operator decision 2026-08-22. Specialising a prompt is largely RESTATEMENT — keep the rule, replace the generic noun with this project's — and the ceiling rung buys nothing for that, the same argument that put the TC writer on medium. The judgement half (what an agent must know about this codeline) is covered by the review pass, which runs on the generator's own rung.",
+      "$whyLadder": "Moved off 'top' 2026-08-26 (operator decision, cost). This seam DECORATES a template — it reads the generic body and rewrites it for this project. It judges nothing, so the rule that a reviewer runs on the writer's rung does not bind it. Measured that day: 29 calls, $5.48, 80% of a run's cost before a story was touched, and a measured haiku-vs-sonnet comparison put sonnet at ~11x the cost per unit of output. 'mid' starts on the cheap rung and escalates.\n\nSAFE BECAUSE THE OUTPUT IS CHECKED, NOT TRUSTED: project-prompt-contract.js refuses a generation that drops a placeholder, a paired output tag or an output field, feeds the reason back, and reviewPrompt runs a second adversarial pass. A weaker model that fumbles is caught and escalated, never shipped. The residual risk is a prompt that is structurally valid and substantively worse, which only the review pass can see — watch the refusal counts in the log."
     },
     "codeline-bridge-agent": {
       "_what": "Extracts the exported surface of a completed codeline so a later lane's detective can read it. Producers run before consumers precisely so this exists when it is needed.",
-      "ladder": "mid",
-      "reasoningEffort": "high",
+      "ladder": "high",
       "temperature": "0.1",
       "maxOutputTokens": 32768,
       "timeoutSecs": 900,
@@ -610,8 +590,7 @@
     },
     "qa-gate:e2e": {
       "_what": "Browser end-to-end routing check for one route.",
-      "ladder": "top",
-      "reasoningEffort": "high",
+      "ladder": "highest",
       "temperature": "0.1",
       "maxOutputTokens": 32768,
       "timeoutSecs": 900,
@@ -629,9 +608,8 @@
       "_what": "Proposes the roster of agents this project needs, from its tickets and its codelines.",
       "maxOutputTokens": 65536,
       "_why_maxOutputTokens": "The mint now reads the roster it is adding to — all 57 canonical agents by name, plus whatever this project has minted — so its prompt and the reasoning it has to do both grew. It also emits a 150-300 word systemPrompt per proposed role. Raised with its siblings that handle the roster; a truncated proposal is refused by mergeProjectAgents and the attempt is spent either way.",
-      "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "agent-roster",
       "consumes": [
         {
@@ -645,9 +623,8 @@
     "role-assigner": {
       "_what": "Assigns every story one of the minted roles.",
       "maxOutputTokens": 32768,
-      "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "mid",
+      "ladder": "high",
       "produces": "role-assignments",
       "consumes": [
         {
@@ -663,9 +640,8 @@
     "spec-coordinator": {
       "_what": "Assigns the spec work for a phase, then reviews the specs and the model choices it produced.",
       "maxOutputTokens": 32768,
-      "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "spec-assignments",
       "consumes": [
         {
@@ -679,9 +655,8 @@
     "spec-agent": {
       "_what": "Writes one story's specification — the openspec or speckit author.",
       "maxOutputTokens": 32768,
-      "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "story-specification",
       "consumes": [
         {
@@ -695,9 +670,8 @@
     "ticket-links": {
       "_what": "Reads the documents linked on a ticket and extracts what they say verbatim.",
       "maxOutputTokens": 16384,
-      "reasoningEffort": "medium",
       "timeoutSecs": 600,
-      "ladder": "mid",
+      "ladder": "high",
       "produces": "ticket-link-evidence",
       "consumes": [
         {
@@ -712,9 +686,8 @@
       "_what": "Augments every agent profile with this project's skills before a phase runs. Writes profiles.json.",
       "maxOutputTokens": 65536,
       "_why_maxOutputTokens": "DOUBLED WITH THE ARTEFACT IT HANDLES. roster-specialiser was raised to 65536 so it could emit all 57 canonical agents in one file; this seam handles that same artefact and was left at 32768. On 2026-08-24 two review batches were TRUNCATED mid-JSON (62,648 and 38,432 bytes) and reported as unexamined, which is indistinguishable from a malformed reply, so the judge was retried identically and failed the same way. A budget belongs to the artefact, not to one seam: a reviewer quotes canonical AND derived text, so it needs at least what the writer needs.",
-      "reasoningEffort": "high",
       "timeoutSecs": 900,
-      "ladder": "mid",
+      "ladder": "high",
       "produces": "agent-skill-augmentation",
       "consumes": [
         {
@@ -728,9 +701,8 @@
     "prd-model-coordinator": {
       "_what": "Assigns every pending story its model, provider and reasoning effort, and writes them into the PRD.",
       "maxOutputTokens": 16384,
-      "reasoningEffort": "medium",
       "timeoutSecs": 600,
-      "ladder": "mid",
+      "ladder": "high",
       "produces": "story-model-assignments",
       "consumes": [
         {
@@ -745,13 +717,9 @@
     },
     "prompt-review": {
       "_what": "Falsifies what a generated project prompt claims about this project, before any agent inherits it.",
-      "optIn": true,
-      "enabledBy": "EPAM_PROMPT_REVIEW_ENABLED",
-      "_optInNote": "DECLARED, BUILT, AND NOT INVOKED BY DEFAULT. project-prompt-builder.js calls this behind an optional `reviewPrompt` parameter; a project turns it on by setting EPAM_PROMPT_REVIEW_ENABLED=1 in its config.env. Marked here because without the mark this seam is indistinguishable from one that always runs — it carries a template, a produces and three required inputs like any other — and an audit had to read the call site to discover that no project had ever switched it on.",
-      "ladder": "mid",
-      "reasoningEffort": "high",
+      "ladder": "high",
       "temperature": "0.1",
-      "maxOutputTokens": 32768,
+      "maxOutputTokens": 4096,
       "timeoutSecs": 900,
       "toolGrant": "read-only",
       "produces": "prompt-verdict",
@@ -773,13 +741,14 @@
         }
       ],
       "template": "prompt-review",
-      "_why_ladder": "Operator decision 2026-08-22. Specialising a prompt is largely RESTATEMENT — keep the rule, replace the generic noun with this project's — and the ceiling rung buys nothing for that, the same argument that put the TC writer on medium. The judgement half (what an agent must know about this codeline) is covered by the review pass, which runs on the generator's own rung."
+      "_why_ladder": "Operator decision 2026-08-22. Specialising a prompt is largely RESTATEMENT — keep the rule, replace the generic noun with this project's — and the ceiling rung buys nothing for that, the same argument that put the TC writer on medium. The judgement half (what an agent must know about this codeline) is covered by the review pass, which runs on the generator's own rung.",
+      "_whyAlwaysOn": "ON BY DEFAULT. This was declared opt-in behind EPAM_PROMPT_REVIEW_ENABLED and no project ever set it, so the one artefact every downstream agent inherits WHOLE — its prompt — was the only generated thing installed unexamined. Operator, 2026-08-27: prompt review is the single review that makes the most sense. A run that wants it off says so; absence is no longer silence.",
+      "_whyMaxOutputTokens": "4096, down from 32768. The deliverable is a JSON block that is 52 characters when clean and a few hundred when it has findings; 32768 was room to narrate, and the model used it — 3,366 output tokens per call, of which the consumer reads about 13. The budget still holds a verdict with several evidenced findings many times over, and no longer pays for prose that is discarded unread."
     },
     "survey-review": {
       "_what": "Falsifies what the estate survey claims about the codelines, before a roster is minted from it.",
       "_why": "The survey decided scope and seeded every investigator brief, and NOTHING consumed it for review — no seam declared it as an input, so its claims reached the roster unchallenged. A codeline was reported in_scope on a file it does not contain and an implementer was briefed accordingly. A generated prompt already gets this treatment; the survey had none.",
-      "ladder": "top",
-      "reasoningEffort": "high",
+      "ladder": "highest",
       "temperature": "0.1",
       "maxOutputTokens": 32768,
       "timeoutSecs": 900,
@@ -808,9 +777,8 @@
       "_what": "Asks whether a change can execute in the runtime it targets, given the codeline's own configuration.",
       "_why": "Live metrolinx AMSD-2041: two defects survived three runs and three implementations because no seam owned execution. A page-level module imported a service that throws at load in a context where its credentials are absent, and the codeline's configuration forbade the embedding the feature required. The code reviewer judges the diff; SAST judges vulnerabilities; the client/server scanner reads changed files only. This asks the question none of them asks.",
       "maxOutputTokens": 32768,
-      "reasoningEffort": "high",
       "timeoutSecs": 600,
-      "ladder": "top",
+      "ladder": "highest",
       "produces": "runtime-boundary-findings",
       "consumes": [
         {
@@ -824,11 +792,11 @@
     "roster-specialiser": {
       "_what": "Specialises the canonical roster into this project's own roster, writing it with its tools.",
       "_why": "The canonical roster belongs to no project, so running it unchanged gave every project the same personas — a reviewer judged one codeline while describing another. This is the derivation step, and it is agentic because deciding what an agent must know about a codeline is judgement, not substitution.",
-      "ladder": "top",
-      "reasoningEffort": "high",
+      "ladder": "highest",
       "timeoutSecs": 1800,
       "maxOutputTokens": 65536,
-    "_why_maxOutputTokens": "THE WHOLE CANONICAL ROSTER IS ONE ARTEFACT. This seam must emit every canonical agent in a single file — the contract in project-roster.js refuses a subset — and 57 specialised personas measure ~51k tokens. At the 32768 every other seam uses it produced 38 of 57 and stopped, which the roster contract then refused, so the stage burned its attempts on a budget that could not hold the answer.",      "toolGrant": "write",
+      "_why_maxOutputTokens": "THE WHOLE CANONICAL ROSTER IS ONE ARTEFACT. This seam must emit every canonical agent in a single file — the contract in project-roster.js refuses a subset — and 57 specialised personas measure ~51k tokens. At the 32768 every other seam uses it produced 38 of 57 and stopped, which the roster contract then refused, so the stage burned its attempts on a budget that could not hold the answer.",
+      "toolGrant": "write",
       "produces": "project-roster",
       "consumes": [
         {
@@ -845,8 +813,7 @@
     "project-roster-review": {
       "_what": "Falsifies the project roster against canonical before any agent is invoked from it.",
       "_why": "An unreviewed roster is a run whose agent identities nobody vouched for. Given BOTH the derivation and its source, so it can check that a rule was not weakened rather than that the text reads well.",
-      "ladder": "top",
-      "reasoningEffort": "high",
+      "ladder": "highest",
       "timeoutSecs": 1800,
       "maxOutputTokens": 65536,
       "_why_maxOutputTokens": "DOUBLED WITH THE ARTEFACT IT HANDLES. roster-specialiser was raised to 65536 so it could emit all 57 canonical agents in one file; this seam handles that same artefact and was left at 32768. On 2026-08-24 two review batches were TRUNCATED mid-JSON (62,648 and 38,432 bytes) and reported as unexamined, which is indistinguishable from a malformed reply, so the judge was retried identically and failed the same way. A budget belongs to the artefact, not to one seam: a reviewer quotes canonical AND derived text, so it needs at least what the writer needs.",
@@ -861,6 +828,33 @@
       "template": "project-roster-review",
       "layer": "bootstrap",
       "_why_bootstrap": "reviews that roster, in the same stage. A prompt that runs before the project prompt layer exists cannot be a project prompt."
+    },
+    "topology-router": {
+      "_what": "Chooses the execution topology for a phase: single, parallel or sequential worktrees.",
+      "_why": "Declared 2026-08-25. It was calling an LLM while matching NO seam, so resolveOrRefuse could never answer and the call threw at module load — every topology decision in every run was the count heuristic, silently. The count cannot see shared file scope, so four stories editing one file went to parallel worktrees.",
+      "maxOutputTokens": 16384,
+      "timeoutSecs": 60,
+      "ladder": "medium",
+      "produces": "topology",
+      "consumes": [
+        {
+          "kind": "story-set",
+          "required": true
+        },
+        {
+          "kind": "estimate"
+        }
+      ],
+      "template": "topology-router",
+      "toolGrant": "none",
+      "$whyOutputBudget": "The base position's declared budget, shared with every peer at this rung. It was 1024, and reasoning tokens are billed as output: a medium-effort call could exhaust the budget before emitting a topology at all, and a truncated answer falls back to the count heuristic that cannot see shared file scope — the exact failure this agent was declared to fix."
+    },
+    "kb-synthesizer": {
+      "_what": "Synthesises repeated healing events into KB entries.",
+      "_why": "It made LLM calls while declaring nothing, so its timeout and output budget lived as literals in lib/kb-synthesizer.js and no run could see or change them. Declared here with the values it was already using, so the numbers are visible and the code reads them instead of carrying its own.",
+      "ladder": "medium",
+      "timeoutSecs": 180,
+      "maxOutputTokens": 32768
     }
   },
   "_seamResolution": [
@@ -1003,16 +997,8 @@
     "fuzz-weaver": "repro-test-writer",
     "perf-sentinel": "code-review-cycle",
     "spec-validator": "prd-change-reviewer",
-    "doc-coordinator": "cpa-inference",
-    "docstring-agent": "cpa-inference",
-    "api-doc-generator": "tc-writer",
     "guide-author": "tc-writer",
-    "architecture-doc-agent": "cpa-inference",
     "changelog-agent": "cpa-inference",
-    "doc-reviewer": "code-review-cycle",
-    "doc-index-builder": "tc-writer",
-    "doc-search-agent": "cpa-inference",
-    "doc-site-builder": "tc-writer",
     "grooming-coordinator": "cpa-inference",
     "readiness-checker": "prd-change-reviewer",
     "dedup-detector": "prd-change-reviewer",
@@ -1072,16 +1058,8 @@
     "fuzz-weaver": "derived",
     "perf-sentinel": "derived",
     "spec-validator": "derived",
-    "doc-coordinator": "derived",
-    "docstring-agent": "derived",
-    "api-doc-generator": "derived",
     "guide-author": "derived",
-    "architecture-doc-agent": "derived",
     "changelog-agent": "derived",
-    "doc-reviewer": "derived",
-    "doc-index-builder": "derived",
-    "doc-search-agent": "derived",
-    "doc-site-builder": "derived",
     "grooming-coordinator": "derived",
     "readiness-checker": "derived",
     "dedup-detector": "derived",
@@ -1109,7 +1087,15 @@
     "contentstack-live-preview-engineer": "derived",
     "metrolinx-contentstack-detective": "derived"
   },
-  "_ladderPositions": "A seam declares a POSITION in the project’s ladderTierOrder (base|mid|top), never a tier NAME. The project owns its tier vocabulary; the engine owns none. Converted 2026-08-15 after twenty seams asking for a literal HIGHEST ran unladdered on a project that declared only high and medium.",
+  "_ladderPositions": {
+    "$why": "A seam declares a POSITION in the project’s ladderTierOrder (base|mid|top), never a tier NAME. The project owns its tier vocabulary; the engine owns none. Converted 2026-08-15 after twenty seams asking for a literal HIGHEST ran unladdered on a project that declared only high and medium.",
+    "$namesWhy": "Machine-readable because two readers need the same answer and both used to restate it: resolveTierPosition, which maps a position onto a project's tier order, and seamLadderFor, which refuses a project override that is not a position. Restated in code, a position added to one and not the other resolves for a seam and is rejected for a project.",
+    "names": [
+      "base",
+      "mid",
+      "top"
+    ]
+  },
   "_defaultSeam": "REMOVED 2026-08-16. A project may declare EPAM_DEFAULT_SEAM in its config if it wants unmatched agents absorbed; the engine declares none, so an unmatched agent fails the mint loudly and is fixed with one line rather than discovered mid-run.",
   "_seamPatternForm": "Each rule matches a role word as a whole name OR as a suffix: (^|-)word$. They were all -word$, so a minted agent named for its role alone -- \"generator\", \"reviewer\", \"analyst\" -- matched nothing. While the engine carried a defaultSeam that was invisible: the agent silently became a planning agent. Minting models produce bare role names routinely, so the suffix-only form made the pattern set depend on a naming habit nothing enforces.",
   "_addedSeams": "codeline-bridge-agent and qa-gate:e2e added 2026-08-16. Both were invoked BY NAME by run-agent-orchestration.sh and had no profile at all, so each ran with no ladder, no effort and no tool grant -- the same gap lint-fixer had. Found by the prompt-chain test, which asks that every seam a template names actually exists.",
@@ -1136,5 +1122,107 @@
     "model-authored, so the NAME is never ours to rely on; the kind is stated outright.",
     "These rules already named the seam, so labelling them with the kind they represent adds no new",
     "mapping. A separate kind->seam table would be a second place to keep correct."
-  ]
+  ],
+  "$engineConsumesWhy": "What the ENGINE reads out of an agent, as opposed to what another AGENT reads. The registry could say what a seam produces and what a seam consumes, and what the engine PRODUCES, but had no way to say what the engine CONSUMES. So twenty-one artefacts that the orchestrator parses inline or reads from disk appeared to have no consumer at all, and an audit driven by these declarations would certify a pipeline that drops them. Each entry carries the token it is read as and the files that read it, so a declaration cannot outlive the code it describes.",
+  "engineConsumes": {
+    "ac-classification": {
+      "readsAs": "ac-classification",
+      "readBy": [
+        "orchestrations/scripts/agent-check.js",
+        "orchestrations/scripts/lib/ac-gate.js",
+        "orchestrations/scripts/pre-run-reset.sh",
+        "orchestrations/scripts/spec-mode-runner.js"
+      ]
+    },
+    "agent-roster": {
+      "readsAs": "agent-roster",
+      "readBy": [
+        "orchestrations/scripts/claude.sh",
+        "orchestrations/scripts/detective-rerun-step.js",
+        "orchestrations/scripts/lib/agent-kinds.js",
+        "orchestrations/scripts/lib/agent-roster.js"
+      ]
+    },
+    "change-verdict": {
+      "readsAs": "change-verdict",
+      "readBy": [
+        "orchestrations/scripts/claude.sh"
+      ]
+    },
+    "codeline-selection": {
+      "readsAs": "codeline-discovery.json",
+      "readBy": [
+        "orchestrations/scripts/ingest-jira-tickets.sh",
+        "orchestrations/scripts/lib/handlers/apply-codeline-scope.js",
+        "orchestrations/scripts/lib/handlers/codeline-discovery-exports.js",
+        "orchestrations/scripts/mint-agents-step.js"
+      ]
+    },
+    "gate-verdict": {
+      "readsAs": "gate-verdict",
+      "readBy": [
+        "orchestrations/scripts/ingest-jira-tickets.sh",
+        "orchestrations/scripts/lib/handlers/ac-gate-verdicts.js"
+      ]
+    },
+    "guard-vocabulary": {
+      "readsAs": "guard-vocabulary",
+      "readBy": [
+        "orchestrations/scripts/claude.sh",
+        "orchestrations/scripts/lib/agent-output-schema.js",
+        "orchestrations/scripts/lib/guard-vocabulary.js",
+        "orchestrations/scripts/lib/project-prompt-contract.js"
+      ]
+    },
+    "prompt-verdict": {
+      "readsAs": "prompt-verdict",
+      "readBy": [
+        "orchestrations/scripts/lib/project-prompt-builder.js"
+      ]
+    },
+    "role-assignments": {
+      "readsAs": "role-assignments",
+      "readBy": [
+        "orchestrations/scripts/agent-check.js",
+        "orchestrations/scripts/mint-agents-step.js",
+        "orchestrations/scripts/pre-run-reset.sh",
+        "orchestrations/scripts/run-agent-orchestration.sh"
+      ]
+    },
+    "roster-verdict": {
+      "readsAs": "roster-verdict",
+      "readBy": [
+        "orchestrations/scripts/agent-check.js"
+      ]
+    },
+    "survey-verdict": {
+      "readsAs": "survey-verdict",
+      "readBy": [
+        "orchestrations/scripts/agent-check.js"
+      ]
+    },
+    "topology": {
+      "readsAs": "topology",
+      "readBy": [
+        "orchestrations/scripts/lib/eslint-baseline-gate.sh",
+        "orchestrations/scripts/lib/llm-call.js",
+        "orchestrations/scripts/lib/seam-invocation.js",
+        "orchestrations/scripts/lib/topology-router.js"
+      ]
+    }
+  },
+  "$unconsumedOutputsWhy": "Agent output that NOTHING has been shown to read — neither a seam nor the engine. Each one is a model call whose answer is discarded, which is the rule against unused agent output. Listed rather than hidden so the count is visible and cannot grow silently; a test holds it at this number. Removing an entry means a consumer was found or the call was stopped.",
+  "_unconsumedOutputs": [
+    "agent-skill-augmentation",
+    "change-summary",
+    "project-prompts",
+    "qa-verdict",
+    "runtime-boundary-findings",
+    "spec-assignments",
+    "story-model-assignments",
+    "story-specification",
+    "ticket-link-evidence",
+    "vc-coverage-report"
+  ],
+  "_ladderTierNames": "Tier names come from the provider set (config/llm-defaults.<set>.json ladders), never from this file. They were base/mid/top here while every set declares medium/high/highest, so all 40 seams asked for a tier nothing defined, resolved no model from their ladder, and ran on whatever the environment happened to carry. Renamed 2026-09-01 to the ladder config names, preserving order: base->medium, mid->high, top->highest."
 }

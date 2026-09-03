@@ -151,7 +151,7 @@ story_outputs_files() {
         fi
         command -v warning >/dev/null 2>&1 && \
             warning "  no writer-output manifest at $manifest — falling back to the baseline diff for scope"
-        STORY_OUTPUTS_SOURCE="baseline diff"
+        export STORY_OUTPUTS_SOURCE="baseline diff"
         raw=$( { git -C "$project_root" diff --name-only --diff-filter=ACMRT "$baseline" 2>/dev/null
                  git -C "$project_root" ls-files --others --exclude-standard 2>/dev/null; } )
     fi
@@ -183,7 +183,27 @@ story_outputs_tests_for() {
     local project_root="$1" story_id="$3"
     [ -n "$project_root" ] && [ -d "$project_root/.git" ] || return 0
     [ -n "$story_id" ] || return 0
-    git -C "$project_root" log --grep="^${story_id}: story complete" \
+    # EVERY COMMIT OF THE STORY, not the one that says "story complete".
+    #
+    # The writer no longer produces a single commit: the fix and the bug-reproducing test land
+    # separately, and the fix's subject is free-form. Measured 2026-08-28 on the first fully green
+    # paid run — MOCK3-1's fix was "Fix: correct fare boundary for riders aged exactly 65" with no
+    # marker, and MOCK3-2's marker commit carried only its source. Both stories reported "no test
+    # file in the writer manifest — coverage NOT checked" while their tests sat on the branch. The
+    # gate ran, warned, and measured nothing, on a run reported green.
+    #
+    # The story-id PREFIX is the attribution the commit convention already requires, and it keeps
+    # the property this function exists for: one story never sees another's test.
+    #
+    # Scoped to the phase baseline where one is recorded, so a previous run's commit for the same
+    # story id cannot be mistaken for this run's work.
+    local _range=""
+    if [ -n "${2:-}" ] && [ -f "$2/phase-baseline-sha.txt" ]; then
+        local _base; _base=$(tr -d '[:space:]' < "$2/phase-baseline-sha.txt" 2>/dev/null)
+        [ -n "$_base" ] && git -C "$project_root" rev-parse --verify --quiet "$_base" >/dev/null 2>&1 \
+            && _range="${_base}..HEAD"
+    fi
+    git -C "$project_root" log ${_range:+"$_range"} --grep="^${story_id}:" \
         --pretty=format: --name-only 2>/dev/null \
         | grep -E "$_STORY_OUTPUTS_TEST_RE" 2>/dev/null | sort -u || true
 }

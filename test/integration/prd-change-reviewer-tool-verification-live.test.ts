@@ -41,7 +41,7 @@ const CLI = join(REPO_ROOT, 'dist/epam.js');
 const NODE_BIN = process.env.NODE_BIN || process.execPath;
 const PROFILES_FILE = join(REPO_ROOT, 'orchestrations/agents/profiles.json');
 
-const GATE_PROVIDER = process.env.ORCH_GATE_PROVIDER || 'qwen';
+const GATE_PROVIDER = process.env.ORCH_GATE_PROVIDER || 'openrouter';
 const GATE_MODEL = process.env.ORCH_GATE_MODEL || 'z-ai/glm-5.2';
 const hasKey = !!(process.env.OPENROUTER_API_KEY || process.env.EPAM_API_KEY_OPENROUTER);
 

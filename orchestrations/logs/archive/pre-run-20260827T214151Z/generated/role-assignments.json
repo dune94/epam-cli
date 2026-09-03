@@ -1,0 +1,14 @@
+[
+  {
+    "storyId": "MOCK3-1",
+    "codeline": "mocka",
+    "agentRole": "fare-rules-engineer",
+    "reason": "This is a fare calculation boundary bug (age-based concession eligibility), squarely within fare rules logic."
+  },
+  {
+    "storyId": "MOCK3-2",
+    "codeline": "mockb",
+    "agentRole": "schedule-display-engineer",
+    "reason": "The bug is in formatStops, a departure board display rendering function, which is schedule display surface."
+  }
+]

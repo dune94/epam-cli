@@ -1,32 +1,14 @@
 {
-  "id": "test-ownership",
-  "layer": "project",
-  "version": 1,
-  "description": "Who owns the test for a brownfield fix. ONE policy, rendered into BOTH the writer and the reviewer, so neither can hold a belief the other contradicts.",
   "$why": [
-    "This lived as a heredoc in claude.sh — the WRITER's prompt builder — and nowhere else.",
-    "team-lead-review.sh had never heard of it and was told 'Check: ... test coverage', so it",
-    "raised a blocker for missing tests. Commit 33ee47b then hardened the writer's side of the",
-    "same contradiction — 'a BLOCKER is a required deliverable ... the only way to resolve it is",
-    "to CREATE it' — leaving the writer ORDERED TO CREATE WHAT IT IS FORBIDDEN TO CREATE. Live in",
-    "the 2026-08-12 prompt, twenty lines apart. That is an unwinnable gate, and it is why the",
-    "writer 'over-reached' on every run: it was obeying instructions.",
-    "",
-    "A policy declared in one agent's prompt is not a policy, it is a private belief. Declared",
-    "here, both agents render from the same source and change together.",
-    "",
-    "The file patterns are NOT decoration: without them \"a test file\" is left to the agent to",
-    "interpret. An existing test asserts they are present, and caught their loss the moment this",
-    "policy was first extracted."
+    "Generated from the test-ownership template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
   ],
+  "authority": "project",
+  "body": "## Tests are NOT your job this turn\nA dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix to the CheckoutPage component for the email case sensitivity issue.\n\nThis project runs tests via `npm test` (Jest). The existing spec file at `src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx` will be extended by the test-writer agent after your fix, and your change will be reviewed separately from those tests.\n\nThis is not a suggestion you can trade against a review comment: the reviewer has been given the same rule and will not reject you for absent tests. If a prior review comment appears to demand a test, it is stale — resolve it by making the fix correct, and say in your final message that test authorship belongs to the test-writer.\n\nAdding a test here wastes your turn budget and has caused repeated failures. Your pre-commit hooks (husky) will run lint-staged, but they enforce branch naming and commit message format — not test presence.\n\n## Test authorship is NOT this agent's responsibility\nThe implementer you are reviewing was explicitly forbidden to write, edit or create any test file (*.test.*, *.spec.*, __tests__/). A dedicated test-writer agent runs after the fix commits and owns that work, and its output is reviewed separately.\n\nTherefore: NEVER raise a blocker, or any finding, for absent or insufficient tests on the implementer's change. It could not have satisfied it, so the story cannot progress — that is an unwinnable gate, and it has cost whole runs.\n\nJudge the FIX: does it address the email case sensitivity root cause in the CheckoutPage, is it the smallest change that does so, does it preserve what the existing code guaranteed. Test coverage is checked elsewhere via `npm test` and by the test-writer's own review of the spec file at `src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx`.",
+  "derivedFromSha256": "718d345b313ca29f806483c8edb402501ed9adff35cc839900684adcad79594b",
+  "derivedFromVersion": 1,
+  "id": "test-ownership",
   "placeholders": [],
-  "bodies": {
-    "writer": "## Tests are NOT your job this turn\nA dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix.\n\nThis is not a suggestion you can trade against a review comment: the reviewer has been given the same rule and will not reject you for absent tests. If a prior review comment appears to demand a test, it is stale — resolve it by making the fix correct, and say in your final message that test authorship belongs to the test-writer.\n\nAdding a test here wastes your turn budget and has caused repeated failures.",
-    "reviewer": "## Test authorship is NOT this agent's responsibility\nThe implementer you are reviewing was explicitly forbidden to write, edit or create any test file (*.test.*, *.spec.*, __tests__/). A dedicated test-writer agent runs after the fix commits and owns that work, and its output is reviewed separately.\n\nTherefore: NEVER raise a blocker, or any finding, for absent or insufficient tests on the implementer's change. It could not have satisfied it, so the story cannot progress — that is an unwinnable gate, and it has cost whole runs.\n\nJudge the FIX: does it address the prescribed root cause, is it the smallest change that does so, does it preserve what the existing code guaranteed. Test coverage is checked elsewhere, by the coverage gate and by the test-writer's own review."
-  },
-  "seams": [
-    "team-lead-review"
-  ],
-  "derivedFromSha256": "b6716867d034b94ad12e903e064a9959b778b91e7297b4a099ad820ae6b06400",
-  "authority": "project"
+  "mayBeEmpty": []
 }

@@ -42,6 +42,21 @@ if (!repo) {
   process.stderr.write('[codeline-ecosystem] usage: <repo> [estate-root]\n');
   process.exit(1);
 }
+// A REPOSITORY THAT IS NOT THERE IS NOT A REPOSITORY WITHOUT A MANIFEST.
+//
+// Handed a path that does not exist, this returned {"stack":"","manifest":"",...} — the same
+// answer it gives for a real checkout carrying no manifest of any known ecosystem. The caller
+// chooses install and test commands from that, so the two must not be one answer: "there is
+// nothing to detect here" and "I was pointed at nothing" lead to different actions.
+const _repoStat = (() => { try { return fs.statSync(repo); } catch { return null; } })();
+if (!_repoStat || !_repoStat.isDirectory()) {
+  process.stderr.write(
+    `[codeline-ecosystem] ${repo} is ${_repoStat ? 'not a directory' : 'not there'} — this is NOT `
+    + 'the same as a repository with no recognised manifest, and an empty ecosystem here would be '
+    + 'read as one. The caller picks install and test commands from this answer.\n');
+  process.exit(2);
+}
+
 const estate = process.argv[3] || '';
 // argv[4]: optional comma-separated test files, to be turned into a runnable command.
 

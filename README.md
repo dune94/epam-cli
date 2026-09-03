@@ -24,7 +24,7 @@ A multi-LLM AI coding assistant CLI with agent orchestration, provider failover 
 | **Anthropic** | claude-opus-4, claude-sonnet-5, claude-haiku-4-5 (see `src/billing/pricing.ts` for the full, current model list) | API Key |
 | **OpenAI** | gpt-5.x, gpt-5-codex, o-series | API Key |
 | **Google** | gemini-2.5-pro/flash, gemini-3-pro-preview | API Key |
-| **Qwen** | OpenRouter routing alias — NOT literal Alibaba Qwen models; routes to Moonshot Kimi-K2 / Z-AI GLM / DeepSeek depending on `EPAM_MODEL_PROVIDER_MAP` | API Key |
+| **OpenRouter** | OpenRouter routing alias — NOT literal Alibaba OpenRouter models; routes to Moonshot Kimi-K2 / Z-AI GLM / DeepSeek depending on `EPAM_MODEL_PROVIDER_MAP` | API Key |
 | **MiniMax** | MiniMax-M series | API Key |
 | **Codemie** | claude-sonnet, EPAM-hosted | SSO OAuth |
 | **Codex** | gpt-5-codex family | CLI Auth |
@@ -134,7 +134,7 @@ EPAM CLI v1 uses a **bridge model** for provider authentication (see [DEC-005](.
 
 - **Device Flow** (RFC 8628) — For EPAM backend (`epam login`)
 - **Browser PKCE** — For SSO providers (Codemie: `epam provider login codemie --browser`)
-- **API Keys** — For direct provider access (Anthropic, OpenAI, Gemini, Qwen, MiniMax: `epam provider login <provider>`)
+- **API Keys** — For direct provider access (Anthropic, OpenAI, Gemini, OpenRouter, MiniMax: `epam provider login <provider>`)
 - **CLI Auth** — For Codex, Copilot, Cursor (uses each tool's own CLI credentials: `epam provider login <codex|copilot|cursor>`)
 
 **v1 Bridge Model:**
@@ -304,7 +304,7 @@ Top-level commands currently registered in the CLI (`src/cli/commands/`):
 - `config` - show/get/set/path for resolved/global config
 - `context` - show/init/edit `.epam/context.md`
 - `keys` - BYOK key store (`anthropic`, `openai`, `gemini`)
-- `provider` - provider credential flows (`anthropic`, `openai`, `gemini`, `qwen`, `minimax`, `codemie`, `codex`, `copilot`, `cursor`)
+- `provider` - provider credential flows (`anthropic`, `openai`, `gemini`, `openrouter`, `minimax`, `codemie`, `codex`, `copilot`, `cursor`)
 - `history` - recent session IDs
 - `report` - burn-up report from session history
 - `replay` - replay previous sessions

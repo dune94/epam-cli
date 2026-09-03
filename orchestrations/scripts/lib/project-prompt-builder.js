@@ -47,15 +47,45 @@ const readJson = (p) => JSON.parse(fs.readFileSync(p, 'utf8'));
  */
 const { refusalBlock } = require('./refusal-block.js');
 
+/**
+ * The template's body as one string — the SAME expression checkGeneratedPrompt uses, so the text
+ * the generator is shown and the text its output is judged against cannot drift apart.
+ */
+function templateBodyText(template) {
+  if (!template) return '';
+  if (typeof template.body === 'string' && template.body) return template.body;
+  const bodies = template.bodies && typeof template.bodies === 'object' ? template.bodies : {};
+  return Object.values(bodies).filter((b) => typeof b === 'string').join('\n');
+}
+
 function renderGeneratorPrompt({ generatorBody, template, projectContext, codelineContext, mintedRoles, refusal }) {
   let out = generatorBody
-    .split('__TEMPLATE_ID__').join(template.id)
-    .split('__TEMPLATE_DESCRIPTION__').join(template.description || '')
-    .split('__TEMPLATE_BODY__').join(template.body)
-    .split('__TEMPLATE_PLACEHOLDERS__').join((template.placeholders || []).join(', ') || '(none)')
-    .split('__PROJECT_CONTEXT__').join(projectContext || '')
-    .split('__CODELINE_CONTEXT__').join(codelineContext || '')
-    .split('__MINTED_ROLES__').join(mintedRoles || '')
+    .split('__GEN_TEMPLATE_ID__').join(template.id)
+    .split('__GEN_TEMPLATE_DESCRIPTION__').join(template.description || '')
+    // A MULTI-BODY TEMPLATE HAS NO .body, AND join(undefined) IS A COMMA.
+    //
+    // 21 templates carry `bodies` instead of `body`. This read template.body — undefined for every
+    // one of them — and String.prototype.join(undefined) falls back to its DEFAULT separator, so
+    // the generator prompt received the single character "," where the template should have been.
+    // The model was asked to rewrite a comma, could not possibly preserve the placeholders it had
+    // never seen, and the shape guard refused all three attempts for "dropped placeholder(s)".
+    //
+    // That aborted mock3 runs 9 and 10 at skill-assessment-prephase, each after ~29 single-body
+    // templates had generated cleanly — and it was invisible because the refusal named the
+    // placeholders rather than the empty input that caused them to be missing.
+    //
+    // Joined the way checkGeneratedPrompt already joins them, so the text the model is given and
+    // the text its output is checked against are the same text. Two readers of one template that
+    // disagree is the defect this whole file keeps meeting.
+    .split('__GEN_TEMPLATE_PLACEHOLDERS__').join((template.placeholders || []).join(', ') || '(none)')
+    // THE SAME LIST THE CONTRACT CHECK WILL JUDGE IT AGAINST, from the same function, so the
+    // generator cannot be refused for losing a field it was never told about.
+    .split('__GEN_TEMPLATE_OUTPUT_FIELDS__').join(
+      // eslint-disable-next-line global-require
+      (require('./project-prompt-contract.js').outputFieldsIn(templateBodyText(template)) || []).join(', ') || '(none)')
+    .split('__GEN_PROJECT_CONTEXT__').join(projectContext || '')
+    .split('__GEN_CODELINE_CONTEXT__').join(codelineContext || '')
+    .split('__GEN_MINTED_ROLES__').join(mintedRoles || '')
     // THE RETRY MUST BE TOLD WHY — re-sending an identical instruction gets an identical answer,
     // and the refusal is the only new information the next attempt has. The words that carry it
     // are the GENERATOR PROMPT'S, not this file's: they used to be appended here in JavaScript,
@@ -64,7 +94,24 @@ function renderGeneratorPrompt({ generatorBody, template, projectContext, codeli
     //
     // An absent refusal substitutes empty, so a first attempt carries no heading for a refusal
     // that never happened.
-    .split('__PREVIOUS_REFUSAL__').join(refusalBlock(refusal, 'prompt'));
+    .split('__GEN_PREVIOUS_REFUSAL__').join(refusalBlock(refusal, 'prompt'));
+
+  // THE TEMPLATE BODY GOES IN LAST, AND THIS ORDER IS THE WHOLE POINT.
+  //
+  // Three of the generator's own placeholders — __PROJECT_CONTEXT__, __CODELINE_CONTEXT__ and
+  // __PREVIOUS_REFUSAL__ — are ALSO placeholders in templates it has to specialise. The body was
+  // embedded first and the value substitutions then ran across the entire string, so the embedded
+  // template's own placeholders were replaced with real project text before the model ever saw
+  // them. It was then refused for "dropping" placeholders it was never shown.
+  //
+  // Live 2026-08-27: roster-specialisation refused on exactly those three, on every attempt and on
+  // every rung, because no model can reproduce a token that is not in its input. Same shape as the
+  // join(undefined) comma that aborted runs 9 and 10 — the input was wrong, and the refusal
+  // described the output.
+  //
+  // Substituted last, the body is inert text by the time it arrives: nothing after this line can
+  // reach inside it.
+  out = out.split('__GEN_TEMPLATE_BODY__').join(templateBodyText(template));
   return out;
 }
 
@@ -144,7 +191,7 @@ async function buildProjectPrompts({
     log('[prompt-builder] prompt review ENABLED — each generated prompt is falsified before install');
   } else {
     log('[prompt-builder] prompt review is OFF — generated prompts are installed NOT REVIEWED '
-      + '(set EPAM_PROMPT_REVIEW_ENABLED=1 in the project config to turn it on)');
+      + '(this project set EPAM_PROMPT_REVIEW_ENABLED=0 — review is ON by default)');
   }
 
   const boot = readJson(bootstrapFile);
@@ -331,6 +378,66 @@ async function buildProjectPrompts({
   // that. One line here answers it instead of another run spent guessing.
   log(`[prompt-builder] templates read from ${templatesDir}`);
 
+  // ── REUSE: DO NOT PAY TWICE FOR THE SAME PROMPT ──────────────────────────────────────────
+  //
+  // The pre-run reset deletes <project>/prompts every run, so every prompt was regenerated from
+  // unchanged immutable templates. Measured on mock3 run 9: 29 prompts, $5.48 — 89% of the run's
+  // cost, before a single story was touched.
+  //
+  // The obstacle is __MINTED_ROLES__: the mint invents new role names every run, so a digest over
+  // all inputs never matches. But of run 9's 31 generated prompts only FOUR embed a minted role
+  // name. Whether a template's OUTPUT depends on the roster is a fact about that template, and it
+  // is knowable — after generating once, by looking at what it produced.
+  //
+  // Each entry records both digests and which one governs it: a prompt naming a minted role is
+  // regenerated when the roster changes, one that does not is reused. Nothing is guessed — a
+  // template not in the cache is always generated.
+  //
+  // The cache lives OUTSIDE prompts/ so the reset's clean slate is untouched. This is memoisation
+  // on an exact key, not surviving state.
+  const cacheDir = path.join(outDir, '..', '.prompt-cache');
+  const sha = (t) => crypto.createHash('sha256').update(String(t)).digest('hex');
+  const baseDigest = (t) => sha(JSON.stringify({ t, generatorBody, projectContext, codelineContext }));
+  const rolesDigest = sha(String(mintedRoles || ''));
+  const usesRoles = (doc, roles) => {
+    const names = String(roles || '').match(/[a-z][a-z0-9]*(?:-[a-z0-9]+)+/g) || [];
+    const body = JSON.stringify(doc);
+    return names.some((n) => body.includes(n));
+  };
+  const cacheRead = (id) => {
+    try { return JSON.parse(fs.readFileSync(path.join(cacheDir, `${id}.json`), 'utf8')); }
+    catch { return null; }
+  };
+  const cacheWrite = (id, entry) => {
+    try {
+      fs.mkdirSync(cacheDir, { recursive: true });
+      fs.writeFileSync(path.join(cacheDir, `${id}.json`), JSON.stringify(entry, null, 2) + '\n');
+    } catch { /* a cache that cannot be written costs money, never correctness */ }
+  };
+
+  // THE REVIEWER'S OWN PROMPT IS PROVISIONED FIRST, because it cannot review anything until it
+  // exists. In run 20260827T151832Z it was generated 32nd of 39: the first 31 prompts were
+  // handed to a reviewer whose prompt was not on disk yet, the render failed, and every one of
+  // them was installed UNREVIEWED — while the log said review was enabled.
+  //
+  // Ordering only. Nothing is skipped and nothing is generated twice; the reviewer is simply
+  // built before the artefacts it must judge.
+  // WHICH prompt is the reviewer's is DERIVED, never named here: it is the template run by the
+  // seam that produces the prompt verdict. A literal would put a seam's identity in engine code
+  // and go stale the moment the seam is renamed.
+  const _reviewerTemplate = (() => {
+    try {
+      const _reg = registryFile && fs.existsSync(registryFile) ? readJson(registryFile) : null;
+      for (const prof of Object.values((_reg && _reg.profiles) || {})) {
+        if (prof && prof.produces === 'prompt-verdict' && prof.template) return prof.template;
+      }
+    } catch { /* absent stays absent — provisioning order is then unchanged */ }
+    return '';
+  })();
+  if (_reviewerTemplate) {
+    generated = [...generated].sort((a, b) => (a === _reviewerTemplate ? -1
+      : b === _reviewerTemplate ? 1 : 0));
+  }
   for (const id of generated) {
     const template = readJson(path.join(templatesDir, `${id}.json`));
     // Per-template, only when it could matter: a template whose seam name differs from its id is
@@ -338,6 +445,30 @@ async function buildProjectPrompts({
     if (Array.isArray(template.seams) && template.seams.some((sm) => sm !== template.id)) {
       log(`[prompt-builder] ${id}: template declares seams ${JSON.stringify(template.seams)}`);
     }
+    // REUSE, before any model time is spent.
+    const _base = baseDigest(template);
+    const _hit = cacheRead(id);
+    // A CACHE ENTRY IS ONLY A HIT IF IT PASSED THE GATES THAT APPLY NOW.
+    //
+    // The key was (template, generatorBody, contexts) and said nothing about REVIEW. So when
+    // review was finally switched on, 39 entries written while it was off were reused verbatim —
+    // never regenerated, therefore never reviewed — and the run logged "prompt review ENABLED"
+    // while reviewing almost nothing.
+    //
+    // Memoisation on inputs must also be keyed on the gates the artefact passed. An entry made
+    // without review is a MISS while review is on; one made WITH review stays a hit, so the cache
+    // keeps paying for itself.
+    const _reviewNow = typeof reviewPrompt === 'function';
+    if (_hit && _reviewNow && _hit.reviewed !== true) {
+      log(`[prompt-builder] ${id}: cached copy predates prompt review — regenerating so it is reviewed`);
+    }
+    if (_hit && (!_reviewNow || _hit.reviewed === true) && _hit.base === _base && (!_hit.usesRoles || _hit.roles === rolesDigest)) {
+      fs.writeFileSync(path.join(outDir, `${id}.json`), JSON.stringify(_hit.doc, null, 2) + '\n');
+      built.push(id);
+      log(`[prompt-builder] reused ${id} (inputs unchanged${_hit.usesRoles ? ', roster unchanged' : ''})`);
+      continue;
+    }
+
     let refusal = '';
     let callFailure = '';
     let installed = false;
@@ -402,10 +533,52 @@ async function buildProjectPrompts({
         fs.writeFileSync(path.join(outDir, `${id}.json`), JSON.stringify(doc, null, 2) + '\n');
         built.push(id);
         installed = true;
+        // Whether this template's OUTPUT depends on the roster is decided by looking at what it
+        // produced, not guessed from what it was handed.
+        cacheWrite(id, { base: _base, roles: rolesDigest, usesRoles: usesRoles(doc, mintedRoles), doc,
+          // The gate this artefact passed, so a later run cannot reuse an unreviewed prompt.
+          reviewed: typeof reviewPrompt === 'function' });
         log(`[prompt-builder] generated ${id} (attempt ${attempt}/${attempts})`);
         break;
       }
       refusal = verdict.reason;
+      // THE REFUSED TEXT IS THE ONLY EVIDENCE OF WHY, AND IT WAS THROWN AWAY.
+      //
+      // The log records WHICH placeholders went missing; the model's actual answer — the thing
+      // that would say whether it emitted JSON, truncated, or rewrote the body — was discarded
+      // the moment the verdict came back. Run 20260827T092415Z aborted on 'tc-writer' after three
+      // refusals and left nothing to read, so the cause had to be inferred from the symptom. The
+      // comment at the top of this file records the same blindness misdiagnosing runs 9 and 10.
+      //
+      // Generated output must be persisted — a refused artefact most of all, because it is the
+      // only one nobody can regenerate by rerunning a step that now succeeds.
+      try {
+        const refusedDir = path.join(outDir, '.refused');
+        fs.mkdirSync(refusedDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(refusedDir, `${id}.attempt-${attempt}.txt`),
+          `# refused: ${verdict.reason}\n`
+          + `# template: ${id}   attempt: ${attempt}/${attempts}\n`
+          + `# required placeholders: ${(template.placeholders || []).join(', ') || '(none)'}\n`
+          + `# ---------------- model reply below, verbatim ----------------\n`
+          + body);
+      } catch (e) {
+        // Never let evidence-keeping break the build it is evidence about.
+        log(`[prompt-builder] (could not persist refused ${id} attempt ${attempt}: ${e.message})`);
+      }
+      // THE ANALYST SEES THE REFUSED PROMPT ITSELF, not just which placeholder went missing.
+      // Seven generations were refused across runs 13 and 14 and none reached self-heal.
+      try {
+        // eslint-disable-next-line global-require
+        const _sh = require('./self-heal.js').selfHeal({
+          agent: `prompt-builder:${id}`, reason: verdict.reason, output: body,
+    // The rung that produced it — without this the analyst declines and heals nothing.
+    model: process.env.EPAM_MODEL || '', provider: process.env.AI_PROVIDER || '',
+    projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR || '',
+          context: `template ${id} requires: ${(template.placeholders || []).join(', ')}`,
+        });
+        if (_sh.rc === 2) log(`[prompt-builder] self-heal analyst FAILED for ${id} — attempt ${attempt + 1} has no corrective`);
+      } catch { /* a diagnostic must never fail the run it is diagnosing */ }
       log(`[prompt-builder] ! ${id} attempt ${attempt}/${attempts} refused: ${verdict.reason}`);
     }
 
@@ -424,4 +597,7 @@ async function buildProjectPrompts({
   return { copied, generated: built };
 }
 
-module.exports = { buildProjectPrompts, renderGeneratorPrompt, provisioningList };
+module.exports = { buildProjectPrompts, renderGeneratorPrompt, provisioningList,
+  // Exported so the prompt REVIEWER reads a template the same way the generator and the
+  // contract check do. Three readers of one shape is how the last three of these drifted.
+  templateBodyText };

@@ -405,10 +405,10 @@ describe('lib/tc-writer-gate.sh — _tc_writer_gate_maybe_mark_very_high_complex
   }
 
   it('REPRODUCES the exact live scenario: 20 facts + 19 bannedPatterns (combined 39) exceeds the default threshold (30) — assigns ceiling model + skipLadder', () => {
-    const { prd } = run({ facts: 20, bannedPatterns: 19, ceilingModel: 'z-ai/glm-5.1', ceilingProvider: 'qwen' });
+    const { prd } = run({ facts: 20, bannedPatterns: 19, ceilingModel: 'z-ai/glm-5.1', ceilingProvider: 'openrouter' });
     const story = prd.stories.find((s: any) => s.id === 'SKY-VH');
     expect(story.model).toBe('z-ai/glm-5.1');
-    expect(story.aiProvider).toBe('qwen');
+    expect(story.aiProvider).toBe('openrouter');
     expect(story.skipLadder).toBe(true);
     expect(story.specification.veryHighComplexity.reason).toMatch(/facts=20/);
     expect(story.specification.veryHighComplexity.reason).toMatch(/bannedPatterns=19/);
@@ -487,7 +487,7 @@ describe('_tc_writer_gate_maybe_upgrade_model — skips when skipLadder already 
       stories: [{
         id: 'SKY-VH2',
         model: 'moonshotai/kimi-k2',
-        aiProvider: 'qwen',
+        aiProvider: 'openrouter',
         skipLadder: true,
         technicalNotes: { files: ['src/client.test.ts'] },
         testCriteria: { facts: Array.from({ length: 19 }, (_, i) => `fact-${i}`) },

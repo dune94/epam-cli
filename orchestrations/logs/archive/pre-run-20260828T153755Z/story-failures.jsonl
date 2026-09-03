@@ -1,0 +1,7 @@
+{"storyId":"MOCK3-2","failureClass":"unknown","model":"MiniMax-M3","attempt":0,"exitCode":1,"rawBytes":14,"outputTokens":0,"maxIterations":16,"timestamp":"2026-08-28T15:28:05Z"}
+{"storyId":"MOCK3-2","failureClass":"unknown","model":"MiniMax-M3","attempt":1,"exitCode":1,"rawBytes":14,"outputTokens":0,"maxIterations":21,"timestamp":"2026-08-28T15:28:12Z"}
+{"storyId":"MOCK3-2","failureClass":"unknown","model":"MiniMax-M3","attempt":2,"exitCode":1,"rawBytes":14,"outputTokens":0,"maxIterations":26,"timestamp":"2026-08-28T15:28:18Z"}
+{"storyId":"MOCK3-2","failureClass":"unknown","model":"MiniMax-M3","attempt":3,"exitCode":1,"rawBytes":14,"outputTokens":0,"maxIterations":31,"timestamp":"2026-08-28T15:28:24Z"}
+{"storyId":"MOCK3-2","failureClass":"unknown","model":"MiniMax-M3","attempt":4,"exitCode":1,"rawBytes":14,"outputTokens":0,"maxIterations":36,"timestamp":"2026-08-28T15:28:30Z"}
+{"storyId":"MOCK3-2","failureClass":"unknown","model":"MiniMax-M3","attempt":5,"exitCode":1,"rawBytes":14,"outputTokens":0,"maxIterations":41,"timestamp":"2026-08-28T15:28:36Z"}
+{"storyId":"MOCK3-2","failureClass":"unknown","model":"MiniMax-M3","attempt":6,"exitCode":1,"rawBytes":14,"outputTokens":0,"maxIterations":46,"timestamp":"2026-08-28T15:28:43Z"}

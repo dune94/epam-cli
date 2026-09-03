@@ -3,272 +3,306 @@
   "vocabulary": {
     "blacklist": [
       {
-        "term": "part",
-        "reason": "Indicates this is part 1 of a series; carries no signal about which repo to modify"
+        "term": "as",
+        "reason": "User-story template filler ('AS a… I WANT… SO THAT'); appears identically in every agile ticket and carries no signal about which repository to modify."
       },
       {
-        "term": "see",
-        "reason": "Generic verb in acceptance criteria; appears in neither repo as an identifier"
+        "term": "a",
+        "reason": "Grammatical article; no selection signal across any candidate."
       },
       {
-        "term": "how",
-        "reason": "Grammatical filler describing the request, not software"
-      },
-      {
-        "term": "will",
-        "reason": "Auxiliary verb with no discriminating value"
-      },
-      {
-        "term": "be",
-        "reason": "Used as auxiliary verb in the ticket; no selection signal"
-      },
-      {
-        "term": "shown",
-        "reason": "Generic verb describing display, not a component or identifier in either candidate"
-      },
-      {
-        "term": "original",
-        "reason": "Process/workflow label for estimates; not a software term in either repo"
-      },
-      {
-        "term": "requirements",
-        "reason": "Process/workflow section header; not a software identifier"
-      },
-      {
-        "term": "bullet",
-        "reason": "Formatting descriptor; no discriminating value"
-      },
-      {
-        "term": "points",
-        "reason": "Formatting descriptor; no discriminating value"
-      },
-      {
-        "term": "notes",
-        "reason": "Process/workflow section header; not a software identifier"
-      },
-      {
-        "term": "assumptions",
-        "reason": "Process/workflow section header; not a software identifier"
-      },
-      {
-        "term": "limitation",
-        "reason": "Process/workflow word describing a constraint on the request, not a software component"
-      },
-      {
-        "term": "might",
-        "reason": "Modal verb with no selection signal"
-      },
-      {
-        "term": "not",
-        "reason": "Negation filler"
-      },
-      {
-        "term": "possible",
-        "reason": "Generic descriptor of feasibility; not a software term"
-      },
-      {
-        "term": "total",
-        "reason": "Process/workflow label for estimates; not a software identifier"
-      },
-      {
-        "term": "estimate",
-        "reason": "Process/workflow word for project planning; not a software term in either candidate"
-      },
-      {
-        "term": "ability",
-        "reason": "Generic noun describing a capability request; not a software identifier"
-      },
-      {
-        "term": "website",
-        "reason": "Generic descriptor; both candidates serve a website and the word names nothing specific in either repo"
-      },
-      {
-        "term": "entries",
-        "reason": "Generic content term; does not name a component, file, or feature in either candidate"
-      },
-      {
-        "term": "author",
-        "reason": "Generic role name; not a software identifier in either repo"
-      },
-      {
-        "term": "pages",
-        "reason": "Generic noun; while both repos may have pages, the word itself does not discriminate between them"
-      },
-      {
-        "term": "content",
-        "reason": "Generic term appearing in both candidate contexts (cx-azure has 'Customer Experience', metrolinx-starter is a content site); carries no separating signal"
-      },
-      {
-        "term": "so",
-        "reason": "Conjunction filler"
-      },
-      {
-        "term": "that",
-        "reason": "Grammatical filler"
+        "term": "i",
+        "reason": "First-person pronoun from the user-story template; not a software component or identifier in any listed candidate."
       },
       {
         "term": "want",
-        "reason": "User-story verb with no discriminating value"
+        "reason": "User-story template verb; appears in every story ticket and cannot discriminate between repositories."
+      },
+      {
+        "term": "to",
+        "reason": "Infinitive marker / preposition; ubiquitous in prose and in every candidate codebase."
+      },
+      {
+        "term": "so",
+        "reason": "User-story template conjunction ('SO THAT'); process language, not software vocabulary."
+      },
+      {
+        "term": "that",
+        "reason": "User-story template conjunction; no selection signal."
       },
       {
         "term": "can",
-        "reason": "Modal verb with no selection signal"
+        "reason": "Modal verb; appears in generic descriptions across all candidates."
       },
       {
-        "term": "as",
-        "reason": "User-story filler word"
+        "term": "see",
+        "reason": "Generic verb ('can see how'); not a component, endpoint, or identifier in any candidate."
+      },
+      {
+        "term": "how",
+        "reason": "Interrogative adverb; no discrimination between repositories."
+      },
+      {
+        "term": "will",
+        "reason": "Modal verb; generic future-tense filler."
+      },
+      {
+        "term": "be",
+        "reason": "Auxiliary verb; appears throughout English prose and all candidate code."
+      },
+      {
+        "term": "shown",
+        "reason": "Generic past participle ('will be shown'); describes the request, not the software."
+      },
+      {
+        "term": "on",
+        "reason": "Preposition; no selection signal."
+      },
+      {
+        "term": "the",
+        "reason": "Definite article; no selection signal."
+      },
+      {
+        "term": "in",
+        "reason": "Preposition; no selection signal."
+      },
+      {
+        "term": "of",
+        "reason": "Preposition; no selection signal."
+      },
+      {
+        "term": "for",
+        "reason": "Preposition; no selection signal."
+      },
+      {
+        "term": "and",
+        "reason": "Conjunction; no selection signal."
+      },
+      {
+        "term": "not",
+        "reason": "Negation; generic qualifier with no repository discrimination."
+      },
+      {
+        "term": "might",
+        "reason": "Modal verb expressing uncertainty; process language, not software vocabulary."
+      },
+      {
+        "term": "possible",
+        "reason": "Generic adjective ('Might not be possible'); describes the limitation note, not a candidate component."
+      },
+      {
+        "term": "author",
+        "reason": "User persona ('Content Author'); a role description, not a software component or identifier in any listed candidate repository."
+      },
+      {
+        "term": "website",
+        "reason": "Generic descriptor; every candidate is a web property or web service, so this term cannot separate one from another."
+      },
+      {
+        "term": "ability",
+        "reason": "Generic descriptor ('ability to preview'); restates the request, not a software entity."
+      },
+      {
+        "term": "part",
+        "reason": "Generic qualifier in the title ('part 1'); not a component or identifier in any candidate."
+      },
+      {
+        "term": "notes",
+        "reason": "Process section heading; workflow language unrelated to code structure."
+      },
+      {
+        "term": "assumptions",
+        "reason": "Process section heading; workflow language unrelated to code structure."
+      },
+      {
+        "term": "limitation",
+        "reason": "Process section heading; workflow language unrelated to code structure."
+      },
+      {
+        "term": "bullet",
+        "reason": "Formatting instruction ('Bullet points'); not a software term in any candidate."
+      },
+      {
+        "term": "points",
+        "reason": "Formatting instruction ('Bullet points'); not a software term in any candidate."
+      },
+      {
+        "term": "acceptance",
+        "reason": "Process section heading ('Acceptance Criteria'); workflow language, not code vocabulary."
+      },
+      {
+        "term": "criteria",
+        "reason": "Process section heading ('Acceptance Criteria'); workflow language, not code vocabulary."
+      },
+      {
+        "term": "original",
+        "reason": "Estimate qualifier ('Original Total Estimate'); process metadata, not a software identifier."
+      },
+      {
+        "term": "total",
+        "reason": "Estimate type ('Original Total Estimate'); process metadata, not a software identifier."
+      },
+      {
+        "term": "estimate",
+        "reason": "Process word for story-point estimation; describes project management, not software structure in any candidate."
       }
     ],
     "whitelist": [
       {
         "term": "mx",
-        "reason": "Component tag and product abbreviation in the ticket; could name a feature or module in the software"
+        "reason": "Component label in the ticket title and description ('[MX]', 'the MX Homepage'); a product/component abbreviation that must survive filtering to target the correct repository."
       },
       {
         "term": "cms",
-        "reason": "Names the system being targeted for modification; could be a real component or integration in either candidate"
+        "reason": "System name ('Content Management System'); central to this ticket — the preview feature lives inside the CMS, and cx-shared references Contentstack, a CMS product."
       },
       {
         "term": "preview",
-        "reason": "Next.js (metrolinx-starter) has a built-in preview/draft mode; strong discriminator for the Next.js candidate"
-      },
-      {
-        "term": "draft",
-        "reason": "Relates to Next.js preview/draft mode; could name a feature or state in the software"
+        "reason": "Core feature name ('Live Preview'); names the software capability being implemented and will match preview-related code in the target repo."
       },
       {
         "term": "live",
-        "reason": "'Live Preview' is a feature name in the ticket; could correspond to a feature or component in the software"
+        "reason": "Part of the feature name 'Live Preview'; distinguishes this real-time preview capability from static build previews."
+      },
+      {
+        "term": "content",
+        "reason": "CMS content concept; also appears in the Contentstack Migration Tool in cx-shared. Names a data domain in the software, not just the persona 'Content Author'."
       },
       {
         "term": "homepage",
-        "reason": "Page name that may exist as a route or component in the Next.js source"
+        "reason": "Specific page name ('MX Homepage'); a route/page component in the front-end candidates that must be matched to target the correct repo."
       },
       {
         "term": "discover",
-        "reason": "Page name that may exist as a route or component in the Next.js source"
+        "reason": "Page/section name ('Discover Article pages'); a named page in the front-end candidates — a route or component identifier, not generic vocabulary."
       },
       {
         "term": "article",
-        "reason": "Content-type name that may exist as a model or component in the software"
+        "reason": "Content type ('Discover Article pages'); a CMS content model / front-end page type that names something in the software."
       },
       {
-        "term": "fe",
-        "reason": "Abbreviation for Frontend in estimates; abbreviations are protected per the rules"
+        "term": "pages",
+        "reason": "Software concept ('Homepage', 'Discover Article pages', 'protected pages'); names route-level or page-level components in the front-end candidates."
       },
       {
-        "term": "be",
-        "reason": "Abbreviation for Backend in estimates; abbreviations are protected per the rules"
+        "term": "draft",
+        "reason": "CMS draft state ('draft entries'); a content lifecycle status that exists in CMS-backed code and must be matched to find the right repository."
       },
       {
-        "term": "dam",
-        "reason": "Abbreviation for Digital Asset Management in estimates; abbreviations are protected per the rules"
+        "term": "entries",
+        "reason": "CMS data entity ('draft entries in CMS'); a content model concept that names something in the software."
       },
       {
         "term": "protected",
-        "reason": "Technical term for page access control; could name an access-control feature or flag in the software"
+        "reason": "Access-control concept ('protected pages and content'); names a permission/auth state in the software that affects which pages can be previewed."
+      },
+      {
+        "term": "fe",
+        "reason": "Frontend estimate abbreviation ('Original FE Estimate: 8'); per the rules, abbreviations that name a component are never blacklisted — FE identifies the front-end repositories."
+      },
+      {
+        "term": "dam",
+        "reason": "Digital Asset Management abbreviation ('Original DAM Estimate: 0'); per the rules, abbreviations that name a component are never blacklisted — DAM identifies asset-management-related code."
+      },
+      {
+        "term": "be",
+        "reason": "Backend estimate abbreviation ('Original BE Estimate: 0'); per the rules, abbreviations that name a component are never blacklisted — BE identifies the back-end/API repositories."
       }
     ]
   },
   "termsDropped": [
     {
-      "term": "content",
-      "reason": "Generic term appearing in both candidate contexts (cx-azure has 'Customer Experience', metrolinx-starter is a content site); carries no separating signal"
-    },
-    {
       "term": "part",
-      "reason": "Indicates this is part 1 of a series; carries no signal about which repo to modify"
+      "reason": "Generic qualifier in the title ('part 1'); not a component or identifier in any candidate."
     },
     {
       "term": "author",
-      "reason": "Generic role name; not a software identifier in either repo"
+      "reason": "User persona ('Content Author'); a role description, not a software component or identifier in any listed candidate repository."
     },
     {
       "term": "want",
-      "reason": "User-story verb with no discriminating value"
-    },
-    {
-      "term": "entries",
-      "reason": "Generic content term; does not name a component, file, or feature in either candidate"
-    },
-    {
-      "term": "pages",
-      "reason": "Generic noun; while both repos may have pages, the word itself does not discriminate between them"
+      "reason": "User-story template verb; appears in every story ticket and cannot discriminate between repositories."
     },
     {
       "term": "that",
-      "reason": "Grammatical filler"
+      "reason": "User-story template conjunction; no selection signal."
     },
     {
       "term": "will",
-      "reason": "Auxiliary verb with no discriminating value"
+      "reason": "Modal verb; generic future-tense filler."
     },
     {
       "term": "shown",
-      "reason": "Generic verb describing display, not a component or identifier in either candidate"
+      "reason": "Generic past participle ('will be shown'); describes the request, not the software."
     },
     {
       "term": "website",
-      "reason": "Generic descriptor; both candidates serve a website and the word names nothing specific in either repo"
+      "reason": "Generic descriptor; every candidate is a web property or web service, so this term cannot separate one from another."
+    },
+    {
+      "term": "acceptance",
+      "reason": "Process section heading ('Acceptance Criteria'); workflow language, not code vocabulary."
+    },
+    {
+      "term": "criteria",
+      "reason": "Process section heading ('Acceptance Criteria'); workflow language, not code vocabulary."
     },
     {
       "term": "original",
-      "reason": "Process/workflow label for estimates; not a software term in either repo"
-    },
-    {
-      "term": "requirements",
-      "reason": "Process/workflow section header; not a software identifier"
+      "reason": "Estimate qualifier ('Original Total Estimate'); process metadata, not a software identifier."
     },
     {
       "term": "bullet",
-      "reason": "Formatting descriptor; no discriminating value"
+      "reason": "Formatting instruction ('Bullet points'); not a software term in any candidate."
     },
     {
       "term": "points",
-      "reason": "Formatting descriptor; no discriminating value"
+      "reason": "Formatting instruction ('Bullet points'); not a software term in any candidate."
     },
     {
       "term": "ability",
-      "reason": "Generic noun describing a capability request; not a software identifier"
+      "reason": "Generic descriptor ('ability to preview'); restates the request, not a software entity."
     },
     {
       "term": "notes",
-      "reason": "Process/workflow section header; not a software identifier"
+      "reason": "Process section heading; workflow language unrelated to code structure."
     },
     {
       "term": "assumptions",
-      "reason": "Process/workflow section header; not a software identifier"
+      "reason": "Process section heading; workflow language unrelated to code structure."
     },
     {
       "term": "limitation",
-      "reason": "Process/workflow word describing a constraint on the request, not a software component"
+      "reason": "Process section heading; workflow language unrelated to code structure."
     },
     {
       "term": "might",
-      "reason": "Modal verb with no selection signal"
+      "reason": "Modal verb expressing uncertainty; process language, not software vocabulary."
     },
     {
       "term": "possible",
-      "reason": "Generic descriptor of feasibility; not a software term"
+      "reason": "Generic adjective ('Might not be possible'); describes the limitation note, not a candidate component."
     },
     {
       "term": "total",
-      "reason": "Process/workflow label for estimates; not a software identifier"
+      "reason": "Estimate type ('Original Total Estimate'); process metadata, not a software identifier."
     },
     {
       "term": "estimate",
-      "reason": "Process/workflow word for project planning; not a software term in either candidate"
+      "reason": "Process word for story-point estimation; describes project management, not software structure in any candidate."
     }
   ],
   "termsUsed": [
     "live",
     "preview",
+    "content",
     "draft",
+    "entries",
     "homepage",
     "discover",
     "article",
-    "acceptance",
-    "criteria",
+    "pages",
+    "requirements",
     "protected"
   ]
 }

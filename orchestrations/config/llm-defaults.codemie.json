@@ -1,0 +1,162 @@
+{
+  "$comment": "THE CODEMIE PROVIDER SET — which models this stack runs, and what each is allowed to spend. Set-INDEPENDENT budgets (effortTiers, roleOverrides, outputTokenFloors) stay in llm-defaults.json and are shared by every set, so swapping providers never changes how much budget a TIER gets — only which models serve it.",
+  "$measured": "Every model value here was MEASURED against the live CodeMie proxy on 2026-08-25, not taken from documentation: contextWindow and maxOutputTokens come from the probe's own modelUsage block. sonnet-4-6 reported 32000 max output; sonnet-5, opus-4-8 and opus-5 all reported 64000. claude-sonnet-4-6 was DROPPED for that reason — half the output ceiling at a slightly higher per-token cost makes it strictly dominated by sonnet-5.",
+  "ladderTierOrder": [
+    "medium",
+    "high",
+    "highest"
+  ],
+  "ladders": {
+    "medium": {
+      "$why": "Enters cheap and tops out at Sonnet-5. A `mid` seam never reaches Opus: 14 seams resolve here, and measured turn counts are p50 4, p90 24 — work that does not need a frontier model.",
+      "startModel": "claude-haiku-4-5-20251001",
+      "modelLadder": [
+        {
+          "from": "claude-haiku-4-5-20251001",
+          "to": "claude-sonnet-5"
+        }
+      ],
+      "rungs": [
+        {
+          "rung": 0,
+          "maxIterations": 40,
+          "reasoningEffort": "medium"
+        },
+        {
+          "rung": 1,
+          "maxIterations": 120,
+          "reasoningEffort": "high"
+        }
+      ]
+    },
+    "high": {
+      "$why": "Same ENTRY as medium, higher CEILING. That is the 'different entry, same ceiling' rule applied between high and highest: what separates the tiers is how far they may climb, not where they start.",
+      "startModel": "claude-haiku-4-5-20251001",
+      "modelLadder": [
+        {
+          "from": "claude-haiku-4-5-20251001",
+          "to": "claude-sonnet-5"
+        },
+        {
+          "from": "claude-sonnet-5",
+          "to": "claude-opus-5"
+        }
+      ],
+      "rungs": [
+        {
+          "rung": 0,
+          "maxIterations": 40,
+          "reasoningEffort": "medium"
+        },
+        {
+          "rung": 1,
+          "maxIterations": 250,
+          "reasoningEffort": "high"
+        },
+        {
+          "rung": 2,
+          "maxIterations": 300,
+          "reasoningEffort": "high"
+        }
+      ]
+    },
+    "highest": {
+      "$why": "Skips Haiku. 25 seams resolve here and would waste a rung proving a small model cannot do the work. Same ceiling as high, entered two rungs up.",
+      "startModel": "claude-sonnet-5",
+      "modelLadder": [
+        {
+          "from": "claude-sonnet-5",
+          "to": "claude-opus-4-8"
+        },
+        {
+          "from": "claude-opus-4-8",
+          "to": "claude-opus-5"
+        }
+      ],
+      "rungs": [
+        {
+          "rung": 0,
+          "maxIterations": 250,
+          "reasoningEffort": "high"
+        },
+        {
+          "rung": 1,
+          "maxIterations": 250,
+          "reasoningEffort": "high"
+        },
+        {
+          "rung": 2,
+          "maxIterations": 300,
+          "reasoningEffort": "xhigh"
+        }
+      ]
+    }
+  },
+  "modelOverrides": {
+    "$whyAutoCompress": "150000 against a 200000 window is an OVERFLOW GUARD near the ceiling, never a token-saving device: compaction rewrites the prefix and destroys the prompt cache. Measured input is p50 13.3k, p90 19k, max 25.9k — about 13% of the window — so this should never fire. If it does, something has gone wrong upstream and that is worth knowing.",
+    "$whyNoTemperature": "codemie-claude exposes no temperature flag and Claude Code has no supported lever for it. Declaring one would be decoration. Deliberation is controlled by reasoningEffort and thinking instead.",
+    "$whyAdaptive": "Thinking is held STABLE per model. Anthropic's docs list effort and thinking-parameter changes as cache invalidators, so a config that changes between attempts discards the cache every retry — the opposite of what a 1h TTL is for.",
+    "claude-haiku-4-5": {
+      "matchOn": "model",
+      "matchSubstring": "claude-haiku-4-5",
+      "thinking": "adaptive",
+      "promptCacheTtl": "1h",
+      "autoCompressAt": 150000,
+      "maxOutputTokens": 32000,
+      "miniTier": true,
+      "charsPerToken": 4
+    },
+    "claude-sonnet-5": {
+      "matchOn": "model",
+      "matchSubstring": "claude-sonnet-5",
+      "thinking": "adaptive",
+      "promptCacheTtl": "1h",
+      "autoCompressAt": 150000,
+      "maxOutputTokens": 64000,
+      "charsPerToken": 4
+    },
+    "claude-opus-4-8": {
+      "matchOn": "model",
+      "matchSubstring": "claude-opus-4-8",
+      "thinking": "adaptive",
+      "promptCacheTtl": "1h",
+      "autoCompressAt": 150000,
+      "maxOutputTokens": 64000,
+      "charsPerToken": 4
+    },
+    "claude-opus-5": {
+      "matchOn": "model",
+      "matchSubstring": "claude-opus-5",
+      "thinking": "adaptive",
+      "promptCacheTtl": "1h",
+      "autoCompressAt": 150000,
+      "maxOutputTokens": 64000,
+      "charsPerToken": 4
+    },
+    "$miniTierWhy": "miniTier marks the cheap, fast rung — the models that are quick but limited in generation capacity. It was decided in engine code by sniffing vendor naming habits (-mini, -flash, -haiku, minimax-m2), which breaks in both directions: a cheap model named differently read as capable, and a capable model containing -flash read as cheap. The set that declares the model declares its tier.",
+    "$whyCharsPerToken": "INPUT CAPACITY IN CHARACTERS. autoCompressAt is the models input ceiling in TOKENS; callers that must size a payload measure it in characters. The ratio belongs with the model, because it is a property of that models tokenizer, not of any caller. Declared so a caller derives its budget instead of inventing one: the roster review carried a literal 60000 in code, which split a 276KB roster into six calls and failed the whole review whenever any one of them answered off-schema."
+  },
+  "finalFallback": {
+    "$why": "Applies after ladder exhaustion — the one point where the ladder has nothing left to say. Sonnet-5 differs from the top rung on high and highest, so it is a real second answer rather than a retry of the model that just failed.",
+    "model": "claude-sonnet-5",
+    "provider": "codemie-claude"
+  },
+  "runners": {
+    "codemie-claude": {
+      "$whyAlwaysFlags": "-s is a CORRECTNESS requirement, not a preference. Without it the wrapper opens an INTERACTIVE menu about the Claude Code version gap and exits 13 — in a pipeline that is a HANG, not a failure: the run waits for a keypress until its timeout.",
+      "$whyNoBaseUrl": "--base-url is deliberately absent. It selects an SSO PROFILE rather than redirecting: pointing it elsewhere fails with 'SSO credentials not found'. Declaring it would break the run, not redirect it.",
+      "alwaysFlags": [
+        "-s"
+      ],
+      "env": {},
+      "$whyNoTimeoutFlag": "No --timeout mapping. The wall is ALREADY enforced as a command prefix around the wrapper (claude.sh: `timeout $EPAM_STORY_TIMEOUT_SECS codemie-claude ...`), and it is DERIVED from the attempt's own iteration budget rather than fixed — a fixed wall once SIGKILLed 10 of 23 invocations mid-flight, the most expensive attempts of that run. Passing a second timeout would raise the question of which wins and which an operator reads. One wall.",
+      "flags": {
+        "--effort": "reasoningEffort",
+        "--autocompact": "autoCompressAt"
+      },
+      "$whyFlags": "Checked against the installed CLI's own --help, not assumed: --effort takes (low, medium, high, xhigh, max) and --autocompact takes auto or a token count. These were declared as CLAUDE_CODE_* env vars that the CLI does not document and that nothing exported.",
+      "$whyNoTurnCap": "maxIterations is deliberately absent. It binds the ReAct loop in src/agent/AgentRunner.ts, which only the `epam run` arm enters; a --print call has no turn cap and the loop is Claude Code's own. Declaring one here would name a knob nothing can turn.",
+      "$whyNoOutputCap": "maxOutputTokens is deliberately unmapped: the installed CLI documents no flag or env for it. It stays declared in modelOverrides so the intent is visible, and is not routed anywhere pretending to work."
+    }
+  }
+}

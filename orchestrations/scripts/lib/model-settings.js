@@ -11,7 +11,7 @@
  *
  * The matching rule is the project's, not this file's. An entry declares how it matches:
  *
- *   { "matchOn": "provider", "matchValue": "qwen",     ... }
+ *   { "matchOn": "provider", "matchValue": "openrouter",     ... }
  *   { "matchOn": "model",    "matchSubstring": "M3",   ... }
  *
  * DECLARATION ORDER, FIRST MATCH WINS — so MiniMax-M2.5 and MiniMax-M3 can carry different

@@ -4,6 +4,7 @@ import { resolveConfig } from '../../config/ConfigResolver.js';
 import { AuthManager } from '../../auth/AuthManager.js';
 import { resolveProviderCredential } from '../../auth/ProviderCredentialStore.js';
 import type { ProviderName } from '../../auth/types.js';
+import { PROVIDER_NAMES } from '../../auth/types.js';
 
 async function check(
   name: string,
@@ -85,7 +86,8 @@ export function createDoctorCommand(): Command {
       // Provider Auth section (EPAM-047)
       console.log();
       console.log(chalk.bold('Provider Auth:'));
-      const providerNames: ProviderName[] = ['anthropic', 'openai', 'gemini'];
+      // The list has ONE home — see PROVIDER_NAMES in auth/types.ts.
+      const providerNames: readonly ProviderName[] = PROVIDER_NAMES;
       for (const name of providerNames) {
         const envKeyMap: Record<ProviderName, string | undefined> = {
           anthropic: process.env.EPAM_API_KEY_ANTHROPIC,

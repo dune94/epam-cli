@@ -35,6 +35,12 @@
 # had been silently reading an unrelated, empty orchestrations/logs the whole
 # time for any such run).
 # ──────────────────────────────────────────────────────────────────────────────
+
+# The reset deletes a run's working state. Untested code doing that is how finished work disappears.
+_scg_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/stage-coverage-gate.sh"
+# shellcheck source=/dev/null
+[ -f "$_scg_lib" ] && . "$_scg_lib" && require_stage_coverage reset || exit 1
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -236,7 +242,7 @@ for f in "${CLEARABLE_LOGS[@]}"; do
   fp="$LOG_DIR/$f"
   if [ -f "$fp" ] && [ -s "$fp" ]; then
     cp "$fp" "$ARCHIVE_DIR/$f"
-    > "$fp"
+    : > "$fp"
     ARCHIVED=$((ARCHIVED+1))
   fi
 done
@@ -338,6 +344,25 @@ done < <(find "$LOG_DIR" -type f \( -name '*.log' -o -name 'story-outputs-*.txt'
 # BY PATTERN, NOT BY NAME. This reset has now been caught twice enumerating specific names —
 # '*.count' while .model and .iterbump survived, and the PRD/roster while review feedback
 # survived. A feedback artefact added tomorrow is covered without anyone remembering this code.
+# IS THIS A CONTINUATION? ASKED ONCE, HERE, BEFORE ANYTHING ACTS ON THE ANSWER.
+#
+# The run-state clearing below deletes estate-survey.json, referenced-docs.json and
+# ticket-documents.json. Whether this is a resume used to be worked out ~190 lines LATER, so that
+# clearing could not see it: every resume deleted the artefacts the run had already produced.
+# estate-survey.json is read back by surveyHypothesisBlock and injected into code-graph-detective,
+# so the survey was paid for, shown to a human at the pause, and thrown away by the act of
+# resuming — after which the detective rediscovered an estate that had already been surveyed.
+#
+# This is deliberately NOT _IS_RESUME, which is a broader question answered further down and is
+# also true for EPAM_SKIP_AGENT_MINT=1. A skip-mint run is a FRESH run: it keeps the ROSTER the
+# mint last produced, because nothing is going to rebuild it, but its LOG_DIR artefacts belong to
+# a PREVIOUS run and must still be cleared — a stale survey matched by codeline name (api, web,
+# src) is how one project's evidence reached another project's prompts.
+_IS_RESUMED_RUN=0
+if [ -n "${EPAM_RESUME_RUN:-}" ]; then
+    _IS_RESUMED_RUN=1
+fi
+
 _RUN_ARTIFACT_DIR="${LOG_DIR:-}"
 if [ -n "$_RUN_ARTIFACT_DIR" ] && [ -d "$_RUN_ARTIFACT_DIR" ]; then
     # EVERYWHERE A LANE CAN READ ONE, not just the parent directory.
@@ -360,6 +385,42 @@ if [ -n "$_RUN_ARTIFACT_DIR" ] && [ -d "$_RUN_ARTIFACT_DIR" ]; then
         fail_contamination "$_RA_LEFT run-scoped review artefact(s) could NOT be cleared in $_RUN_ARTIFACT_DIR — a run started now would act on a previous run's findings"
     elif [ "$_RA_CLEARED" -gt 0 ]; then
         info "  Cleared $_RA_CLEARED run-scoped review artefact(s) — no prior run's findings reach this one"
+    fi
+fi
+
+# FETCHED TICKET DOCUMENTS — one project's client documentation must never reach another's.
+#
+# mint-agents-step.js reads $LOG_DIR/referenced-docs.json (then ticket-documents.json) and hands
+# whatever it finds to the estate survey, the mint and the roster review. LOG_DIR is SHARED across
+# projects, and nothing cleared these files — so on 2026-08-26 a mock3 run opened its roster-review
+# prompt with two Contentstack pages fetched for METROLINX on 2026-08-07, nineteen days earlier.
+# Forty-one mentions of another client's CMS, paid for on every affected seam, in a project that
+# has nothing to do with it.
+#
+# Third time the reset has been caught missing shared state after review artefacts and the
+# published agent-input store. The rule that keeps being relearned: anything a later step READS
+# out of LOG_DIR is run state, and run state is cleared here.
+if [ "${_IS_RESUMED_RUN:-0}" = "1" ]; then
+    info "  Resuming — keeping this run's own fetched documents and estate survey"
+elif [ -n "${_RUN_ARTIFACT_DIR:-}" ] && [ -d "$_RUN_ARTIFACT_DIR" ]; then
+    _TD_CLEARED=0
+    # estate-survey.json joins them: surveyHypothesisBlock (spec-mode-runner.js) reads it back out
+    # of LOG_DIR and injects the survey's EVIDENCE into a prompt, matched by codeline NAME. A stale
+    # survey therefore feeds outdated evidence to the same project, and two projects sharing a
+    # codeline name — api, web, src — feed each other's. Found 2026-08-26 by the seam test that
+    # asserts the rule rather than the instance, immediately after the Contentstack document leak
+    # was fixed. Fourth artefact of this class.
+    for _td in referenced-docs.json ticket-documents.json estate-survey.json; do
+        while IFS= read -r _f; do
+            [ -n "$_f" ] || continue
+            rm -f "$_f" 2>/dev/null && _TD_CLEARED=$((_TD_CLEARED+1)) || true
+        done <<< "$(find "$_RUN_ARTIFACT_DIR" -type f -name "$_td" 2>/dev/null)"
+    done
+    _TD_LEFT=$(find "$_RUN_ARTIFACT_DIR" -type f \( -name 'referenced-docs.json' -o -name 'ticket-documents.json' -o -name 'estate-survey.json' \) 2>/dev/null | wc -l)
+    if [ "$_TD_LEFT" -gt 0 ]; then
+        fail_contamination "$_TD_LEFT fetched-document cache(s) could NOT be cleared in $_RUN_ARTIFACT_DIR — a run started now would put another project's documents in its prompts"
+    elif [ "$_TD_CLEARED" -gt 0 ]; then
+        info "  Cleared $_TD_CLEARED cross-run artefact(s) — no other run's documents or survey evidence reach this run's prompts"
     fi
 fi
 
@@ -462,7 +523,25 @@ fi
 # Absence is the correct state at this point in a run. The seams refuse until the roster exists,
 # which is what makes "derived every launch" enforceable rather than aspirational.
 _ROSTER_FILE="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/roster.json}"
-if [ -n "$_ROSTER_FILE" ] && [ -f "$_ROSTER_FILE" ]; then
+# A RESUME IS NOT THE NEXT RUN, so the argument above does not reach it.
+#
+# The rule this block enforces is right for a NEW launch: a roster that survives is a stored
+# artefact with a lifetime, and the next run's agents would be whoever the LAST run derived. A
+# resume is the SAME run continuing from its own checkpoint. The roster it holds was derived by
+# this run, reviewed at this run's pause, and shown to the operator for approval — which is the
+# whole purpose of pausing there. Deleting it makes the checkpoint meaningless.
+#
+# Same distinction the fetched-documents block above already draws for this run's own state.
+#
+# THREE COSTS, all of which landed before this was noticed. A paid roster-specialiser call, ~13
+# minutes of wall clock. A roster that differs from the reviewed one, so the operator approved
+# something the run then replaced. And every roster-keyed prompt invalidated, forcing a stage the
+# checkpoint existed to skip — 17 of 39 regenerated on the 2026-09-01 resume for no other reason.
+# The log said both things at once: "roster carried over from <run> — reviewed in that run, not
+# re-reviewed here", immediately followed by the specialiser accepting a freshly derived roster.
+if [ "${_IS_RESUMED_RUN:-0}" = "1" ] && [ -n "$_ROSTER_FILE" ] && [ -f "$_ROSTER_FILE" ]; then
+    info "  Resuming — keeping this run's own reviewed roster; it is not re-derived"
+elif [ -n "$_ROSTER_FILE" ] && [ -f "$_ROSTER_FILE" ]; then
     if rm -f "$_ROSTER_FILE" 2>/dev/null && [ ! -f "$_ROSTER_FILE" ]; then
         info "  Cleared the project roster — this run derives its own from canonical"
     else
@@ -535,7 +614,7 @@ _PROJECT_CFG_DIR="${EPAM_PROJECT_CONFIG_DIR:-}"
 # runs are gone" — and the resumed run died at assignment with no agent. Any roster reset added
 # later must read _IS_RESUME rather than re-deriving this.
 _IS_RESUME=0
-if [ -n "${EPAM_RESUME_RUN:-}" ]; then
+if [ "${_IS_RESUMED_RUN:-0}" = "1" ]; then
     _IS_RESUME=1
     _PROJECT_CFG_DIR=""
     info "  Resuming ${EPAM_RESUME_RUN} — keeping the roster this run already minted and reviewed"
@@ -633,6 +712,17 @@ if [ -n "${_PROJECT_CFG_DIR:-}" ] && [ -d "$_PROJECT_CFG_DIR/prompts" ]; then
         mkdir -p "$ARCHIVE_DIR/prompts" 2>/dev/null || true
         cp -p "$_PROJECT_CFG_DIR/prompts/"*.json "$ARCHIVE_DIR/prompts/" 2>/dev/null || true
     fi
+    # THE REFUSED ATTEMPTS TOO — and they are the ones worth keeping. An INSTALLED prompt can be
+    # regenerated by rerunning a step that now succeeds; a REFUSED one exists only in the run that
+    # failed, and it is the only text that says why the contract was not met. The glob above is
+    # *.json at depth 1, so these .txt files under .refused/ were archived by nothing and deleted
+    # by the rm -rf below — the evidence for a prompt defect destroyed by the next launch, which
+    # is the failure this whole archive block exists to prevent.
+    if [ -d "$_PROJECT_CFG_DIR/prompts/.refused" ]; then
+        mkdir -p "$ARCHIVE_DIR/prompts/.refused" 2>/dev/null || true
+        cp -p "$_PROJECT_CFG_DIR/prompts/.refused/"* "$ARCHIVE_DIR/prompts/.refused/" 2>/dev/null || true
+        info "  Archived $(find "$_PROJECT_CFG_DIR/prompts/.refused" -type f 2>/dev/null | wc -l | tr -d '[:space:]') refused prompt attempt(s) before the wipe"
+    fi
     rm -rf "$_PROJECT_CFG_DIR/prompts" && mkdir -p "$_PROJECT_CFG_DIR/prompts"
     [ "${_PROMPTS_N:-0}" -gt 0 ] \
         && info "  Cleared ${_PROMPTS_N} project prompt(s) — each was specialised for a roster this run has not minted"
@@ -688,7 +778,17 @@ fi
 # The PRD is ingested: the tracker supplies the work and the project's config supplies the
 # identity, both re-read every run. A run that ingests cannot inherit, and a run that does not
 # ingest has no PRD to restore from a template either.
-if [ "$_IS_RESUME" = "1" ]; then
+# THE PRD IS RESTORED FOR EVERY FRESH RUN, INCLUDING ONE THAT SKIPS THE MINT.
+#
+# This read _IS_RESUME, which EPAM_SKIP_AGENT_MINT=1 also sets. That exemption exists for the
+# ROSTER, where it is right — nothing rebuilds a roster the mint did not mint. The PRD is rebuilt
+# from an authored file that is always present, so it does not need the exemption and must not
+# borrow it: a fresh skip-mint run inherited whatever the previous run had written.
+#
+# Live 2026-08-27, the first mock3 launch: this printed "Resume — keeping the runtime PRD" on a
+# FRESH run, and scope resolution then found the previous run's two codelines already declared and
+# skipped codeline-discovery entirely — one of the two agents that run existed to exercise.
+if [ "${_IS_RESUMED_RUN:-0}" = "1" ]; then
     info "  Resume — keeping the runtime PRD as the run left it"
 elif [ "${JIRA_PIPELINE:-0}" = "1" ]; then
     # AN INGESTING PROJECT REBUILDS ITS PRD FROM THE TRACKER, so there is nothing to restore and
@@ -712,7 +812,7 @@ fi
 
 # Clear stale lock files
 for lf in "$LOG_DIR"/*.lock; do
-  [ -f "$lf" ] && > "$lf"
+  [ -f "$lf" ] && : > "$lf"
 done
 
 [ "$ARCHIVED" -gt 0 ] \
@@ -770,6 +870,10 @@ fi
 # shellcheck source=lib/kb-canonical.sh
 . "$SCRIPT_DIR/lib/kb-canonical.sh"
 kb_restore_canonical "$REPO_ROOT/orchestrations"
+# AND THE LAUNCHING PROJECT'S OWN KB — deleted outright. The line above resets only the ENGINE KB;
+# the project's KB.md and kb/ were touched by nothing, so a run inherited the previous run's
+# conclusions about a different ticket.
+kb_delete_project_kb
 
 # ── Step 4: Reset agent-status.json ──────────────────────────────────────────
 info "Resetting agent-status.json..."

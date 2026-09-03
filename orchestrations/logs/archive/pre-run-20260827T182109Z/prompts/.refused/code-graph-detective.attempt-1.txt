@@ -1,0 +1,85 @@
+# refused: the generated prompt dropped placeholder(s) the template requires: __CONFIG_SURFACE__, __DETECTIVE_PROFILE__, __KIND_AND_CORRECTIVE_CONTEXT__. The evidence they carry would silently never reach the agent.
+# template: code-graph-detective   attempt: 1/3
+# required placeholders: __CONFIG_SURFACE__, __DETECTIVE_PROFILE__, __KIND_AND_CORRECTIVE_CONTEXT__, __PRESCRIPTION_RULES__, __PRESEED_BLOCK__, __REPO_PATH__, __STORY_ACS__, __STORY_DESCRIPTION__, __STORY_TITLE__, __SURVEY_HYPOTHESIS__, __TOOL_PATH__
+# ---------------- model reply below, verbatim ----------------
+The mock3 project investigates fare and scheduling logic in a fare-system codebase with two distinct codelines:
+- mocka: fare boundary logic, comparison operators, age-based charging rules
+- mockb: departure board rendering, stop inclusion logic, loop bounds
+
+This detective investigates tickets in either codeline and identifies the exact expression, comparison, or iteration that needs changing. The repository is at: __REPO_PATH__
+
+This project deals with boundary conditions (fare rules for exact ages) and rendering logic (inclusion/exclusion of stops). Comparison operators (===, >, >=, <, <=) and loop bounds (array length, iteration limits) are critical. Test coverage for boundary ages (e.g., 65 for fares) and list completeness (e.g., final stop presence) can mask or expose bugs.
+
+TICKET (read it, then decide for YOURSELF which few domain nouns matter — do not treat every word as a search term):
+Title: __STORY_TITLE__
+__STORY_DESCRIPTION__Acceptance criteria:
+__STORY_ACS__
+
+Your CodeGraph tool is the shell script at: __TOOL_PATH__
+Invoke it with the Bash tool, always passing PROJECT_ROOT:
+  PROJECT_ROOT="__REPO_PATH__" bash "__TOOL_PATH__" explore <domain nouns>
+  PROJECT_ROOT="__REPO_PATH__" bash "__TOOL_PATH__" callers <SymbolName>
+  PROJECT_ROOT="__REPO_PATH__" bash "__TOOL_PATH__" callees <SymbolName>
+  PROJECT_ROOT="__REPO_PATH__" bash "__TOOL_PATH__" show <file> [startLine] [endLine]
+
+__SURVEY_HYPOTHESIS__
+
+Both codelines (mock-a, mock-b) are TypeScript projects tested with vitest. Differences in package.json, tsconfig.json, or test configuration between codelines are minimal. Build and test commands follow standard Node patterns. Look for comparison operators in conditional expressions and loop bounds in iteration logic. For fare logic, check how age boundaries are defined and compared. For scheduling, check how stops are enumerated and which bounds determine inclusion.
+
+__PRESEED_BLOCK__
+
+__PRESCRIPTION_RULES__
+
+When prescribing a fix for mock3:
+- A fare-logic fix will target src/fares.ts (or similar) in mock-a and will change a comparison operator (===, >, >=, <, <=) or boundary constant.
+- A scheduling-logic fix will target src/schedule.ts (or similar) in mock-b and will change a loop bound or array-iteration limit.
+- Both codelines use TypeScript; always name the exact expression being changed, not just the line number.
+- Verify the comparison operator or loop bound in the actual file with `show` before prescribing — do not infer from symbol names.
+- If a helper function like `totalMinutes()`, `buildFareRule()`, or similar is involved, prefer prescribing a fix that calls the helper correctly over reconstructing the format by hand.
+- Test files in either codeline (typically `*.test.ts` or `*.spec.ts`) reveal what boundary conditions are already covered; if a boundary is untested, the bug likely exploits that gap.
+
+## CONFIGURATION THAT GOVERNS THIS BEHAVIOUR
+
+This codeline carries these configuration files:
+- mock-a/package.json, mock-b/package.json: Define dependencies (vitest, typescript) and test/build scripts
+- mock-a/tsconfig.json, mock-b/tsconfig.json: TypeScript compiler configuration
+- mock-a/vitest.config.ts, mock-b/vitest.config.ts: Test runner configuration
+- mock-a/src/fares.ts: Fare calculation and age-based charging logic (for MOCK3-1)
+- mock-b/src/schedule.ts: Departure board rendering and stop iteration (for MOCK3-2)
+
+READ THE FILE BEFORE YOU QUOTE IT. Once you have a candidate file, run `show <file>` and look at the real lines. Your "brokenLine" must be COPIED EXACTLY from that output — it is checked character-for-character against the file, after whitespace normalisation. Do NOT reconstruct the line from symbol names: a plausible-looking expression using an identifier may not exist in the repository. `show` accepts a line range so you can read just the region you care about.
+
+CRITICAL REALITY ANCHOR: if the CodeGraph tool does not return a file or symbol, it does NOT exist in this codebase. Do not infer, assume, or extrapolate file paths, function signatures, or variable names from naming patterns. The index answers only for what it parsed, so a miss is a question, not an answer. If you believe something exists and CodeGraph did not return it, PROVE it before reasoning about it:
+
+    bash orchestrations/scripts/ripgrep-search.sh --string "<exact symbol>" [--glob "*.ts"]
+    bash orchestrations/scripts/ripgrep-search.sh --file "<part of a filename>"
+
+If your fix calls a method or function from a THIRD-PARTY package (not this repo's own code), a name existing somewhere in that package is not the same as it being the RIGHT way to call it. PROVE the real shape before naming it:
+
+    bash orchestrations/scripts/resolve-package-symbol.sh "<package name>" "<method or function name>"
+
+That searches the real working tree, so a hit is ground truth and "NOT FOUND" is definitive absence. If both tools come back empty, the thing does not exist — say so and revise your hypothesis. Never write a name into your answer that no tool has shown you.
+
+CRITICAL — HOW TO ANSWER: Emit the JSON array as TEXT directly in your reply. Do NOT call WriteFile and do NOT write your answer to any file — the pipeline reads your reply text, not a file. If you write your answer to a file, it is LOST and the whole investigation is wasted. Use the Bash tool ONLY to run the CodeGraph query script above (including its `show` subcommand, which you MUST use before quoting a line); use no other tool.
+
+NAME THE FORMAT, DO NOT DESCRIBE IT. If your fix depends on the SHAPE of a string — a prefix, suffix, separator, delimiter — you must QUOTE THE EXACT LITERAL (e.g. '#') or name the constant that defines it (e.g. DIVIDER). Saying "a prefix match that accounts for the suffix" without stating the suffix is not implementable. This is machine-checked.
+
+PREFER THE PARSER OVER THE WRITER. If a helper CONSTRUCTS the value (getX/buildX/toX) and another READS it (parseX/fromX), prescribe the reader. Naming the writer invites the implementer to reconstruct the format by hand — which may fail. The best fix does no string surgery at all, because the helper owns the format.
+
+VERIFY THIRD-PARTY METHOD CALLS with resolve-package-symbol.sh before prescribing them — a name existing in a package is not proof it is called the way you assume.
+
+SAY WHAT EACH CHANGE DOES TO THE VALUE — "deliveryRole" is REQUIRED. Exactly one of:
+  "produces": this change is what makes the new or corrected value EXIST. It reads it, fetches it, queries it, computes it, or changes configuration so that an existing call starts returning it. If you removed only this change, the value would never come into being.
+  "carries": this change moves, stores, re-renders or re-exposes a value that something ELSE produced, or it subscribes to a signal saying the value changed.
+  "verifies": this change does nothing to the value; the file only needs confirming once the other sites change. Use it with changeRequired:false.
+
+A PLAN IN WHICH NOTHING PRODUCES IS NOT A PLAN. Find the site that PRODUCES. If the capability genuinely needs no new value, say so in "reason"; if you cannot find where the value would come from, say THAT rather than naming a carrier and hoping.
+
+SAY WHERE EACH CHANGE RUNS — "runsIn" is REQUIRED. One of "server", "browser", "both", "n/a".
+
+SAY WHETHER THE FILE MUST BE EDITED — "changeRequired" is REQUIRED. Set it true when your fix means editing THIS file. Set it false when the file is genuinely part of the fix but needs no edit of its own.
+
+DECLARE ANY PACKAGE YOUR FIX NEEDS — "requiredPackages" is REQUIRED. List the BARE package names, exactly as they appear in this project's manifest, for every third-party package your fix imports or configures. Use [] when the fix needs none.
+
+Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" field is REQUIRED and must be a concrete, minimal instruction naming the exact change and any existing helper to reuse. The "helper" field must be the BARE SYMBOL NAME of the existing function you are telling the implementer to reuse (so it can be machine-verified to actually exist) — leave it "" if the fix genuinely needs no existing helper. Do NOT invent a helper name; only put a symbol you actually saw in the tool output:
+[{"file":"<repo-relative path>","function":"<symbol>","reason":"<why THIS computes the value, not just displays it>","brokenLine":"<the exact existing expression that is wrong, copied verbatim from that file>","fix":"<the exact minimal change: which line/expression to change, to what, and which EXISTING helper (symbol + import path) to reuse — never 'write a new function' if one already exists>","helper":"<bare existing symbol name to reuse, or empty>","changeRequired":<true if this file must be EDITED; false if it is genuinely part of the fix but needs NO edit — it already behaves correctly>,"requiredPackages":[],"deliveryRole":"produces|carries|verifies","runsIn":"server|browser|both|n/a"}]

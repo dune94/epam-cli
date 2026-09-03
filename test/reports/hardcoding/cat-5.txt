@@ -1,0 +1,83 @@
+### numeric thresholds — every matching line
+
+orchestrations/scripts/spec-mode-runner.js:578:function acquireFileLock(lockPath, timeoutMs = 30000, staleMs = 30000) {
+orchestrations/scripts/check-phase-gate.sh:263:    error "  To override: GATE_ESCALATE_THRESHOLD=200 $0 $PHASE_ID"
+orchestrations/scripts/claude.sh:575:        log "  GeneratorMode: enabled (agentRole=generator) — maxIter=3 maxOutTok=16384"
+orchestrations/scripts/claude.sh:610:            log "  TestEngineerEffortFloor: low -> medium (maxIter=10 maxOutTok=6144) -- test-writing needs more research/verification turns than impl at the same tier"
+orchestrations/scripts/claude.sh:615:            log "  TestEngineerEffortFloor: medium -> high (maxIter=15 maxOutTok=6144)"
+orchestrations/scripts/list-messages.sh:38:LIMIT=50
+orchestrations/scripts/agent-check.js:647:      maxBuffer: 10 * 1024 * 1024,
+orchestrations/scripts/lib/handlers/scan-duplicated-literals.js:33:const MIN_LEN = 12;
+orchestrations/scripts/lib/codegraph-context.js:146:function queryCodeGraph(keywords, repoPath, limit = 10) {
+orchestrations/scripts/lib/codegraph-context.js:168:function exploreCodeGraph(query, repoPath, { maxFiles = 4, maxChars = 12000 } = {}) {
+orchestrations/scripts/lib/codeline-score.js:45:const DEFAULT_TERM_QUERY_LIMIT = 200;
+orchestrations/scripts/lib/topology-router.js:28:const TIMEOUT_MS = 12000;
+orchestrations/scripts/lib/codeline-discovery.js:410:      maxBuffer:  10 * 1024 * 1024,
+orchestrations/scripts/lib/jira-client.js:171:async function searchIssues(jql, maxResults = 50, fields = []) {
+orchestrations/scripts/lib/jira-client.js:188:  let path = `/rest/agile/1.0/board/${boardId}/issue?maxResults=100`
+orchestrations/scripts/lib/seam-invocation.js:498:    ], { encoding: 'utf8', timeout: 20000 });
+orchestrations/scripts/cassette-export.js:56:    const j = await api(`/api/public/traces?sessionId=${encodeURIComponent(session)}&limit=100&page=${page}`);
+orchestrations/scripts/cassette-export.js:130:    const j = await api('/api/public/sessions?limit=25');
+orchestrations/scripts/mock-expectations.js:308:  const list = await get(`/api/public/traces?name=${encodeURIComponent(seam)}&limit=100`);
+orchestrations/scripts/estimate-stories.sh:146:TOKENS_PER_MIN_LOW=8000
+orchestrations/scripts/estimate-stories.sh:147:TOKENS_PER_MIN_MED=12000
+orchestrations/scripts/estimate-stories.sh:148:TOKENS_PER_MIN_HIGH=18000
+orchestrations/scripts/run-agent-orchestration.sh:9110:                --timeout=60 \
+orchestrations/scripts/run-agent-orchestration.sh:11052:        error "Override: GATE_ESCALATE_THRESHOLD=200 $0 --phase NEXT_PHASE"
+orchestrations/plugins/codegraph-plugin.js:280:          timeout: 30000,
+orchestrations/plugins/dependency-contract-plugin.js:42:const MAX_FILES = 400;
+src/observability/TracedProvider.ts:223:  private static readonly MAX_CAPTURE_CHARS = 200_000;
+src/agent/AgentHandoff.ts:55:        maxIterations: 10,
+src/agent/PlanMode.ts:264:          maxIterations: 20,
+src/agent/RalphWiggumLoop.types.ts:113:  agentTimeout: 120000,
+src/agent/RalphWiggumLoop.ts:139:              timeout: 10000,
+src/agent/RalphWiggumLoop.ts:318:        maxIterations: 10,
+src/agent/RalphWiggumLoop.ts:450:            timeout: 10000,
+src/agent/squad/SquadRunner.ts:190:      maxIterations: 20,
+src/config/ProjectConfig.ts:55:      maxIterations: 20,
+src/tools/gitingest/GitIngest.ts:50:    await execFileAsync('gitingest', ['--help'], { timeout: 5000 });
+src/tools/gitingest/GitIngest.ts:79:      timeout: 120_000, // 2 minute timeout for large repos
+src/tools/gitingest/GitIngest.ts:80:      maxBuffer: 50 * 1024 * 1024, // 50MB buffer
+src/tools/gitingest/GitIngest.ts:165:    { cwd: projectRoot, timeout: 10_000 },
+src/tools/builtin/Search.ts:84:      let result = await execa(rgBinary, args, { reject: false, timeout: 10000 });
+src/tools/builtin/Search.ts:120:          { reject: false, timeout: 5000 })).exitCode === 0;
+src/tools/builtin/Search.ts:130:          result = await execa('git', gitArgs, { reject: false, timeout: 10000 });
+src/tools/builtin/Search.ts:144:          result = await execa('grep', grepArgs, { reject: false, timeout: 10000 });
+src/remote/RemoteSessionAPI.ts:27:    const windowMs = 60 * 1000; // 1 minute
+src/cli/repl/Repl.ts:557:          timeout: 300000,
+src/cli/repl/Repl.ts:577:          timeout: 300000,
+src/cli/repl/PromptZone.ts:34:      timeout: 500,
+src/cli/repl/commands/UserCommand.ts:117:        const ghToken = execSync('gh auth token 2>/dev/null', { stdio: ['ignore','pipe','ignore'], timeout: 2000 })
+src/cli/repl/commands/ProviderCommand.ts:231:        const { exitCode } = await execa('codex', [], { stdio: 'inherit', timeout: 300_000, reject: false });
+src/cli/repl/commands/ProviderCommand.ts:242:          stdio: 'inherit', cwd: process.cwd(), timeout: 300_000, reject: false,
+src/cli/repl/commands/DashboardCommand.ts:67:        const result = await execa(bin as string, args as string[], { reject: false, timeout: 5000 });
+src/cli/repl/commands/AddDirCommand.ts:6:const MAX_FILES = 200;
+src/cli/commands/health-check-claude.ts:44:      timeout: 30000,
+src/cli/commands/health-check-proxy.ts:37:        max_tokens: 1024,
+src/cli/commands/provider.ts:59:  const result = await sso.authenticate({ codeMieUrl, timeout: 120000 });
+src/cli/commands/replay.ts:154:  const maxLen = 60;
+src/memory/MemoryLoader.ts:7:const LINE_WARNING_THRESHOLD = 200;
+src/context/RedisSessionStore.ts:28:      connectTimeout: 3000,
+src/context/SessionStore.ts:158:  limit = 20
+src/scaffold/ScaffoldRunner.ts:131:      maxIterations: 25,
+src/scaffold/ScaffoldRunner.ts:133:      maxOutputTokens: 16384,
+src/scaffold/ManifestAnalyzer.ts:20:  maxTokens = 16384,
+src/scaffold/ProjectScaffolder.ts:424:      maxIterations: 25,
+src/scaffold/ProjectScaffolder.ts:426:      maxOutputTokens: 16384,
+src/mcp/StdioTransport.ts:11:const INIT_TIMEOUT_MS = 15_000;
+src/mcp/StdioTransport.ts:12:const REQUEST_TIMEOUT_MS = 30_000;
+src/mcp/MCPClient.ts:310:      timeout: 5000,
+src/mcp/MCPClient.ts:318:      timeout: 5000,
+src/mcp/MCPClient.ts:326:      timeout: 5000,
+src/billing/types.ts:20:    maxContextTokens: 100000,
+src/billing/types.ts:21:    maxOutputTokens: 4096,
+src/billing/types.ts:22:    rateLimit: { requestsPerMinute: 10, tokensPerDay: 100000 },
+src/billing/types.ts:28:    maxContextTokens: 200000,
+src/billing/types.ts:29:    maxOutputTokens: 8192,
+src/billing/types.ts:30:    rateLimit: { requestsPerMinute: 60, tokensPerDay: 1000000 },
+src/billing/types.ts:36:    maxContextTokens: 200000,
+src/billing/types.ts:37:    maxOutputTokens: 16384,
+src/billing/types.ts:38:    rateLimit: { requestsPerMinute: 300, tokensPerDay: 10000000 },
+src/providers/codex/CodexProvider.ts:300:        timeout: 5000,
+src/providers/codex/CodexProvider.ts:319:        timeout: 300000,
+src/providers/copilot/CopilotProvider.ts:164:      const token = execSync('gh auth token 2>/dev/null', { stdio: ['ignore', 'pipe', 'ignore'], timeout: 2000 })

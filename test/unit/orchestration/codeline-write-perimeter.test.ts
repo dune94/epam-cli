@@ -154,9 +154,29 @@ describe('a story branch is where edits are allowed to land', () => {
 describe('only agents that author code may write', () => {
   const may = (role: string) => sh(`perimeter_role_may_write ${JSON.stringify(role)}`).status === 0;
 
-  it('the writer may', () => {
-    expect(may('writer')).toBe(true);
-    expect(may('typescript-engineer')).toBe(true);
+  it('the writer may, and so does an implementer the project declares', () => {
+    // AUTHORSHIP IS A PROPERTY OF THE AGENT, READ FROM THE PROJECT ROSTER.
+    //
+    // This asserted `typescript-engineer` may write, unconditionally. That was true when
+    // canonical engineering roles were implicitly authors; the perimeter now reads each agent's
+    // `kind` from <project>/roster.json, and NO project declares typescript-engineer — so the
+    // refusal was correct and the assertion was pinning the retired design. Naming a canonical
+    // role here also hardcodes one project's vocabulary into the engine's own suite.
+    expect(may('writer'), 'an authoring seam was refused').toBe(true);
+
+    const dir = mkdtempSync(join(tmpdir(), 'perim-roster-')); dirs.push(dir);
+    writeFileSync(join(dir, 'roster.json'), JSON.stringify({
+      agents: {
+        'a-declared-implementer': {
+          kind: 'implementer', persona: 'authors code for this project',
+          ancestor: 'canonical', derivedFromSha256: '0'.repeat(64),
+        },
+      },
+    }, null, 2));
+    const withProject = (role: string) =>
+      sh(`perimeter_role_may_write ${JSON.stringify(role)}`, { EPAM_PROJECT_CONFIG_DIR: dir }).status === 0;
+    expect(withProject('a-declared-implementer'),
+      'an agent the project declares an implementer cannot write').toBe(true);
   });
 
   it('agents that only form judgements may NOT — all six bash holders', () => {

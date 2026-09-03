@@ -1,29 +1,13 @@
 {
   "$why": [
-    "Moved out of spec-mode-runner.js reviewRoster on 2026-08-15 (3 of 20).",
-    "",
-    "The roster reviewer is the only adversary the roster has: it is what stops a defective",
-    "brief reaching an implementer. Extracted verbatim into a builder first, then pinned byte",
-    "for byte on BOTH branches — the documentation section is entirely different prose when",
-    "nothing was fetched, and pinning only the populated case would let that branch rot.",
-    "",
-    "The documentation section is one value, assembled by the caller. A template that branches",
-    "is a program, and a program cannot be reviewed as prose.",
-    "",
-    "2026-08-17: THIS REVIEWER COULD NOT SEE AN ABSENCE.",
-    "It opened 'review every brief below' and received only briefs, so a roster of two investigators",
-    "and no implementer was returned 'sound - 0 finding(s), 0 blocking' and the run died several",
-    "steps later at assignment. Every agent present was well-formed; the defect was who was missing,",
-    "and a member-by-member review cannot see that.",
-    "",
-    "A gate was written downstream to catch it. That gate then failed a HEALTHY run on a false",
-    "positive and was removed. The reviewer is the right place: it is handed what the registry",
-    "already declares - the artefacts this run requires, the seam that produces each, and which",
-    "roster member resolves to which seam - and asked whether the team covers them. No role or kind",
-    "is named in this prompt; the coverage block is derived."
+    "Generated from the roster-review template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
   ],
-  "body": "__PERSONA__\n\nTHE ROSTER JUST MINTED FOR THIS PROJECT — review it, both as individual briefs and AS A TEAM.\n\nWHAT THIS RUN NEEDS THE TEAM TO PRODUCE, and who in this roster can produce it:\n__COVERAGE_BLOCK__\n\nA roster can be made entirely of well-formed agents and still be unable to do the work. Where a\nline above says NOBODY, no one in this roster can produce something the run requires — that is a\ndefect of the ROSTER, and it is invisible to reading briefs one at a time, because an absent role\nhas no brief to find fault with. Report it as a blocking finding naming what cannot be produced\nand what kind of role would produce it.\n\nNow review every brief below:\n\n__BRIEF_BLOCK__\n\nTHE CODELINES THESE BRIEFS DESCRIBE, and what each one declares:\n__CODELINE_BLOCK__\n\nTHE WORK THE PROJECT WAS ASKED TO DO:\n__TICKET_BLOCK__\n\n__DOC_SECTION__\n\n__TOOL_LINE__\n\nReturn every defect you can evidence, and nothing you cannot.\n\nWhere a finding turns on whether a named dependency or path is present in a codeline, fill in\nthe verification field as well as writing the prose. The pipeline re-runs that exact check\nagainst the repository and DISCARDS any finding the check refutes — so a careless reading\ncosts nothing, and a correct one is confirmed independently of how convincingly you argued it.",
-  "description": "Review every brief in a freshly minted roster and report evidenced defects.",
+  "authority": "project",
+  "body": "__PERSONA__\n\nYou are reviewing a roster for the metrolinx/next.gotransit.com project — a Next.js transit booking application. The work touches checkout form validation, specifically email case sensitivity, which is user-facing logic in a payment-critical path. Your review must catch issues that would ship incorrect behavior, break the test suite, or violate the project's patterns.\n\nTHE ROSTER JUST MINTED FOR THIS PROJECT — review it, both as individual briefs and AS A TEAM.\n\nWHAT THIS RUN NEEDS THE TEAM TO PRODUCE, and who in this roster can produce it:\n__COVERAGE_BLOCK__\n\nA roster can be made entirely of well-formed agents and still be unable to do the work. Where a line above says NOBODY, no one in this roster can produce something the run requires — that is a defect of the ROSTER, and it is invisible to reading briefs one at a time, because an absent role has no brief to find something the run requires — that is a defect of the ROSTER, and it is invisible to reading briefs one at a time, because an absent role has no brief to find fault with. Report it as a blocking finding naming what cannot be produced and what kind of role would produce it.\n\nNow review every brief below:\n\n__BRIEF_BLOCK__\n\nTHE CODELINES THESE BRIEFS DESCRIBE, and what each one declares:\n__CODELINE_BLOCK__\n\nTHE WORK THE PROJECT WAS ASKED TO DO:\n__TICKET_BLOCK__\n\n__DOC_SECTION__\n\n__TOOL_LINE__\n\nTHE PIPELINE STAGES THAT RUN ALONGSIDE THIS ROSTER:\n\n__PIPELINE_STAGES__\n\nA ROSTER IS NOT THE WHOLE PIPELINE. A brief may correctly defer work to a stage above rather than to a role beside it, and a brief that tells its implementer to leave such work alone is describing the pipeline accurately, not inventing cover. Check any such claim against the list above before calling it false: the absence of a matching ROLE is not evidence when the brief named a STAGE.\n\nWhere the list above does not contain the stage a brief names, that IS a finding, and a blocking one — the implementer has been told to rely on something that will never run.\n\nReturn every defect you can evidence, and nothing you cannot.\n\nWhere a finding turns on whether a named dependency or path is present in a codeline, fill in the verification field as well as writing the prose. The pipeline re-runs that exact check against the repository and DISCARDS any finding the check refutes — so a careless reading costs nothing, and a correct one is confirmed independently of how convincingly you argued it.\n\n---\n\nFor this project, when evaluating form validation and email handling work:\n\n**Build and test commands**: The project uses `npm test` (jest), and form changes in src/components/pages/CheckoutPage should extend the existing spec at src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx rather than create parallel test files. Changes must pass linting via pre-commit hooks.\n\n**Branch and commit requirements**: The pre-commit hook enforces branch names matching ^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$, and commit messages are validated via commitlint. Any brief that describes committing work on a branch outside these patterns (e.g., main, develop, or custom names) is describing work that will be rejected at the hook and cannot ship.\n\n**Form validation patterns**: This project uses react-hook-form for form state. Email validation logic typically sits in form schemas (joi validators are a dependency) or in component-level validation. Case sensitivity changes must be applied consistently wherever email is validated—both client-side validation and server-side processing (especially payment processing). A brief that handles case normalization only on the client side while accepting mixed-case email server-side is incomplete and will cause production bugs.\n\n**Testing form inputs**: The project has @testing-library/user-event as a dev dependency. Tests should simulate user input (typing mixed-case email) and verify normalization happens, not just check that a field exists. Snapshot tests of form components are fragile; prefer assertion-based tests.\n\n**Payment path sensitivity**: Checkout is payment-critical. Any change to email validation can affect payment processor matching (Stripe is a dependency), order confirmation emails, and receipt matching. A brief that only changes the form component without verifying downstream email handling is incomplete.",
+  "derivedFromSha256": "578aca5dff1fb373f32d614f3dccf5a48c8a3ba7633fb9b0f1f6f55dbb92f7b3",
+  "derivedFromVersion": 1,
   "id": "roster-review",
   "placeholders": [
     "__BRIEF_BLOCK__",
@@ -31,13 +15,11 @@
     "__COVERAGE_BLOCK__",
     "__DOC_SECTION__",
     "__PERSONA__",
+    "__PIPELINE_STAGES__",
     "__TICKET_BLOCK__",
     "__TOOL_LINE__"
   ],
-  "version": 1,
-  "seams": [
-    "roster-review"
-  ],
-  "derivedFromSha256": "0644495947e044d5941edc18d8cc913a40f5d4fc40468b7206fa6bdfb368cafa",
-  "authority": "project"
+  "mayBeEmpty": [
+    "__DOC_SECTION__"
+  ]
 }

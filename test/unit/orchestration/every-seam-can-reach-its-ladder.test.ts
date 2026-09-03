@@ -30,12 +30,37 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { stackNames } from '../../support/llm-settings';
 
 const ROOT = join(__dirname, '../../..');
 const REGISTRY = join(ROOT, 'orchestrations/agents/invocation-profiles.json');
 const PROJECTS = join(ROOT, 'orchestrations/projects');
 
 const norm = (s: string) => String(s).toUpperCase().replace(/[^A-Z0-9]/g, '_');
+
+// A PROJECT NO LONGER DECLARES ITS OWN LADDERS — IT RESOLVES THEM.
+//
+// ladders and ladderTierOrder moved into config/llm-defaults.<set>.json on 2026-08-25. Reading
+// the project file directly found neither, so all four projects reported that no seam could
+// reach any ladder — a total pipeline failure that was really a reader left behind. Production
+// resolves through lib/llm-settings-resolve.js, so the check does too.
+//
+// And it now runs for EVERY declared stack, not just the default one: a stack is hot-swappable
+// only if a swap cannot leave a seam without a chain, and the whole point of the migration was
+// that the ladder travels with the stack.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { resolveLlmSettings } = require(join(ROOT, 'orchestrations/scripts/lib/llm-settings-resolve.js'));
+
+function resolved(projectDir: string, set: string): any {
+  const prior = process.env.EPAM_PROVIDER_SET;
+  process.env.EPAM_PROVIDER_SET = set;
+  try {
+    return { ...readJson(join(projectDir, 'llm-settings.json')), ...resolveLlmSettings({ projectConfigDir: projectDir }) };
+  } finally {
+    if (prior === undefined) delete process.env.EPAM_PROVIDER_SET;
+    else process.env.EPAM_PROVIDER_SET = prior;
+  }
+}
 const readJson = (p: string) => JSON.parse(readFileSync(p, 'utf8'));
 
 /**
@@ -69,8 +94,7 @@ function projectsWithSettings(): Array<{ name: string; file: string }> {
     .filter((p) => existsSync(p.file));
 }
 
-function declaredTiers(file: string): Record<string, any> {
-  const doc = readJson(file);
+function declaredTiers(doc: any): Record<string, any> {
   const ladders = doc.ladders || doc.tiers || {};
   const out: Record<string, any> = {};
   for (const [k, v] of Object.entries(ladders)) out[norm(k)] = v;
@@ -90,11 +114,11 @@ describe('the engine states which ladder positions it needs', () => {
 describe('every project declares every ladder its seams will climb', () => {
   const required = requiredPositions();
 
-  for (const p of projectsWithSettings()) {
-    it(`${p.name} resolves every position: ${required.join(', ')}`, () => {
-      const doc = readJson(p.file);
+  for (const p of projectsWithSettings()) for (const set of stackNames()) {
+    it(`${p.name} on the ${set} stack resolves every position: ${required.join(', ')}`, () => {
+      const doc = resolved(join(PROJECTS, p.name), set);
       const order: string[] = (doc.ladderTierOrder || []).map((t: string) => String(t).toLowerCase());
-      const declared = declaredTiers(p.file);
+      const declared = declaredTiers(doc);
       const unresolved = required
         .map((pos) => ({ pos, tier: resolvePosition(pos, order) }))
         .filter(({ tier }) => !tier || !(norm(tier) in declared))
@@ -105,17 +129,18 @@ describe('every project declares every ladder its seams will climb', () => {
         + 'continues past').toEqual([]);
     });
 
-    it(`${p.name}'s declared ladders each contain at least one hop`, () => {
+    it(`${p.name} on the ${set} stack declares ladders that each contain at least one hop`, () => {
       // A tier that exists but is empty is the same failure with a friendlier name: the
       // seam resolves, finds nothing to climb to, and cannot escalate when it fails.
-      const declared = declaredTiers(p.file);
-      const order: string[] = (readJson(p.file).ladderTierOrder || []).map((t: string) => String(t).toLowerCase());
+      const doc = resolved(join(PROJECTS, p.name), set);
+      const declared = declaredTiers(doc);
+      const order: string[] = (doc.ladderTierOrder || []).map((t: string) => String(t).toLowerCase());
       const needed = new Set(required.map((pos) => norm(resolvePosition(pos, order))));
       const empty = Object.entries(declared)
         .filter(([t]) => needed.has(t))
         .filter(([, v]: any) => !Array.isArray(v?.modelLadder) || v.modelLadder.length === 0)
         .map(([t]) => t);
-      expect(empty, `${p.name} declares empty ladder(s): ${empty.join(', ')}`).toEqual([]);
+      expect(empty, `${p.name} on ${set} declares empty ladder(s): ${empty.join(', ')}`).toEqual([]);
     });
   }
 });

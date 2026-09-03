@@ -77,6 +77,18 @@ function parseCostRecord(text) {
     usage.cached_input_tokens ?? usage.cachedInputTokens
     ?? usage.cache_read_input_tokens ?? 0);
 
+  // CACHE CREATION IS BILLED, AND AT A PREMIUM. The argument the comment above makes for cache
+  // READS applies here, and this was hardcoded to 0 at the emitter so the ledger could not see it
+  // at all. A trivial "say ok" probe on 2026-08-26 reported cache_creation_input_tokens: 16827 —
+  // creation dwarfing a nine-token prompt — while every row of that day's mock3 ledger recorded
+  // cache_create_tokens: 0.
+  //
+  // Both TTL buckets are summed when the provider breaks them out: which bucket they land in
+  // changes the price, not whether it was paid.
+  const _cc = usage.cache_creation && typeof usage.cache_creation === 'object' ? usage.cache_creation : null;
+  const tokensCacheCreate = num(usage.cache_creation_input_tokens ?? usage.cacheCreationInputTokens)
+    || (_cc ? num(_cc.ephemeral_1h_input_tokens) + num(_cc.ephemeral_5m_input_tokens) : 0);
+
   // Says whether the number above is the provider's REAL billed cost or a local pricing-table
   // guess. Omitted by producers that do not distinguish the two, and null is not false — an
   // estimate presented as confirmed spend is the thing this field exists to prevent.
@@ -87,9 +99,10 @@ function parseCostRecord(text) {
   // $0.0000. Recording that as free under-reports exactly on the TOP ladder rung,
   // which is only reached when a story is already burning money. Flag it so a
   // dashboard can show "unknown", never a confident $0.00.
-  const costUnknown = costUsd === 0 && (tokensIn > 0 || tokensOut > 0 || tokensCached > 0);
+  const costUnknown = costUsd === 0
+    && (tokensIn > 0 || tokensOut > 0 || tokensCached > 0 || tokensCacheCreate > 0);
 
-  return { costUsd, tokensIn, tokensOut, tokensCached, costUnknown, costIsEstimate };
+  return { costUsd, tokensIn, tokensOut, tokensCached, tokensCacheCreate, costUnknown, costIsEstimate };
 }
 
 /** Build a cost_snapshot event identical in shape to the bash emitter's. */
@@ -109,6 +122,7 @@ function buildCostSnapshot({ agent, storyId, phase, model, provider, cost, turns
       tokensIn: cost.tokensIn,
       tokensOut: cost.tokensOut,
       tokensCached: cost.tokensCached || 0,
+      tokensCacheCreate: cost.tokensCacheCreate || 0,
       costUnknown: !!cost.costUnknown,
       // null when the producer did not say. Kept distinct from false so "we know this is billed"
       // never gets confused with "nobody told us".
@@ -141,7 +155,7 @@ function buildCostSnapshot({ agent, storyId, phase, model, provider, cost, turns
  * Field names match append_cost_record's record exactly, so both producers land in one uniform
  * stream: a consumer must never need to know which side of the pipeline paid.
  */
-function appendLedgerRecord({ ledgerFile, agent, storyId, phase, model, cost, turns, startedAt, endedAt }) {
+function appendLedgerRecord({ ledgerFile, agent, storyId, phase, model, cost, turns, startedAt, endedAt, rung }) {
   try {
     if (!ledgerFile) return null;
     const now = new Date().toISOString();
@@ -173,7 +187,7 @@ function appendLedgerRecord({ ledgerFile, agent, storyId, phase, model, cost, tu
       task_tokens_out: cost.tokensOut,
       task_turns: turns || 1,
       cache_read_tokens: cost.tokensCached || 0,
-      cache_create_tokens: 0,
+      cache_create_tokens: cost.tokensCacheCreate || 0,
       // Distinguishable from a story's terminal states, so consumers filtering on
       // completed/failed are unaffected by these appearing in the same file.
       status: 'agent',
@@ -188,7 +202,11 @@ function appendLedgerRecord({ ledgerFile, agent, storyId, phase, model, cost, tu
       // Recorded so a $0.00 from a provider with no price table stays visibly different from a
       // call that genuinely cost nothing — the same distinction costUnknown draws in the event.
       costUnknown: !!cost.costUnknown,
-      attempt: null,
+      // THE RUNG THIS CALL RAN ON. Hardcoded null, so an escalation left no trace: a seam that
+      // climbed haiku -> sonnet -> opus recorded three rows that looked like three identical
+      // calls, and "did the retry escalate?" was unanswerable from the ledger. Supplied by the
+      // seam via EPAM_LADDER_RUNG; absent stays null rather than guessing rung 0.
+      attempt: rung === undefined || rung === null || rung === '' ? null : Number(rung),
     };
     // One line, well under PIPE_BUF, opened O_APPEND: concurrent lanes interleave records rather
     // than corrupting them. Nothing here is free text, so the record cannot grow past that bound.
@@ -204,9 +222,93 @@ function appendLedgerRecord({ ledgerFile, agent, storyId, phase, model, cost, tu
  * Best-effort: never throws, never blocks the caller.
  * @returns {object|null} the emitted event, or null if there was nothing to emit.
  */
+/**
+ * THE COMPLETION, OUT OF WHATEVER SHAPE THE RUNNER RETURNED IT IN.
+ *
+ * The cost seam already reads the provider's whole JSON to count tokens, so the reply has been in
+ * that string all along while every trace recorded out=4ch. Runners shape the result differently,
+ * exactly as they shape usage differently — which is why the token parser above already accepts
+ * input_tokens, inputTokens and input. This reads text with the same tolerance, and returns empty
+ * rather than inventing something when there is genuinely no text to find.
+ */
+function replyTextFrom(j) {
+  if (!j || typeof j !== 'object') return '';
+  if (typeof j.result === 'string' && j.result) return j.result;
+  if (typeof j.completion === 'string' && j.completion) return j.completion;
+  if (Array.isArray(j.content)) {
+    const parts = j.content
+      .map((b) => (b && typeof b.text === 'string' ? b.text : ''))
+      .filter(Boolean);
+    if (parts.length) return parts.join('\n');
+  }
+  if (Array.isArray(j.choices) && j.choices.length) {
+    const m = j.choices[0] && j.choices[0].message;
+    if (m && typeof m.content === 'string' && m.content) return m.content;
+  }
+  if (typeof j.text === 'string' && j.text) return j.text;
+  return '';
+}
+
+function _parsedResult(text) {
+  try { return JSON.parse(text); } catch { return null; }
+}
+
+/**
+ * THE PROMPT OF THE CALL IN FLIGHT, WHEREVER IT CAME FROM.
+ *
+ * A caller that already holds the prompt passes it and wins. Everything else reads the file the
+ * invoker named in the environment — because most emitters never see a prompt at all, which is why
+ * every trace recorded in=4ch and why wiring the one site that HAD a prompt changed nothing.
+ *
+ * Never throws, and returns empty rather than inventing a prompt: an uncaptured call must not look
+ * like a call made with nothing.
+ */
+function promptForTrace(explicit, agent) {
+  if (typeof explicit === 'string' && explicit) return explicit;
+  try {
+    // eslint-disable-next-line global-require
+    const { PROMPT_FILE_ENV, promptFileForTag } = require('./agent-reply-log.js');
+    // The environment first: same-process callers have it, and it is the freshest answer.
+    let f = process.env[PROMPT_FILE_ENV] || '';
+    if (!f && agent) {
+      // ACROSS A PROCESS BOUNDARY, VIA THE SEAM'S OWN TAG. The shell edge emits from a sibling
+      // process that never saw the variable — which is why the prompts were on disk and every
+      // trace still read in=4ch. Which tag this agent writes under is DECLARED, not guessed:
+      // the contract registry already says so, so no mapping is kept here.
+      // eslint-disable-next-line global-require
+      const { declaredContracts } = require('./agent-output-schema.js');
+      const c = (declaredContracts() || {})[agent];
+      if (c && c.tag) f = promptFileForTag(c.tag);
+      // A SEAM NEED NOT DECLARE A TAG. codeline-discovery declares requiredKeys instead, so there
+      // is no tag to key on — and it was the one agent still recording in=4ch after every other
+      // had a prompt. Its own name is the key then: unique by construction, and the emitter
+      // already has it.
+      if (!f) f = promptFileForTag(agent);
+    }
+    if (!f) {
+      // SAY WHY THE FIELD IS EMPTY. A trace that silently records in=4ch is exactly the condition
+      // this whole seam exists to end, so when the prompt cannot be found the reason is stated
+      // once, on stderr, naming the agent — never swallowed.
+      if (process.env.EPAM_TRACE_DEBUG) {
+        process.stderr.write(`[trace] no prompt found for '${agent || '(no agent)'}'\n`);
+      }
+      return '';
+    }
+    return fs.readFileSync(f, 'utf8');
+  } catch (e) {
+    if (process.env.EPAM_TRACE_DEBUG) {
+      process.stderr.write(`[trace] prompt lookup failed for '${agent || '(no agent)'}': ${e.message}\n`);
+    }
+    return '';
+  }
+}
+
 function emitCostSnapshot({
-  resultFile, activityFile, ledgerFile, agent, storyId, phase, model, provider, turns, startedAt,
+  resultFile, activityFile, ledgerFile, agent, storyId, phase, model, provider, turns, startedAt, endedAt, rung,
   logDir,
+  // The PROMPT, when the caller has it: the cost seam never sees the prompt, only the caller
+  // that built it does, so it is offered here rather than guessed at downstream.
+  input,
 }) {
   try {
     if (!resultFile || !activityFile) return null;
@@ -245,6 +347,27 @@ function emitCostSnapshot({
       } catch { /* diagnostics must never break a call */ }
     }
 
+    // OBSERVABILITY RIDES THE COST SEAM, because it is the one place every call already passes
+    // with its model, tokens, cost and timing resolved. Tracing used to live in the TypeScript
+    // provider decorator, which only the `epam` arm reaches — so a stack that executes a vendor
+    // binary directly traced nothing. Emitted here, it covers every arm without naming one.
+    // Fire-and-forget by contract: lib/langfuse-emit.js never throws and never fails a call.
+    try {
+      // eslint-disable-next-line global-require
+      require('./langfuse-emit.js').emitGeneration({
+        agent, storyId, phase, model, provider, turns, rung,
+        startedAt, endedAt,
+        // The words, not just the price. Read from the result this function already holds.
+        output: replyTextFrom(_parsedResult(raw)),
+        // And the prompt. The caller passes it when it has one; otherwise it is read from the
+        // pointer the invoker left, which is the only channel that crosses to the shell edge.
+        input: promptForTrace(input, agent),
+        costUsd: cost.costUsd, tokensIn: cost.tokensIn, tokensOut: cost.tokensOut,
+        cacheRead: cost.tokensCached, cacheCreate: cost.tokensCacheCreate,
+        costIsEstimate: cost.costIsEstimate,
+      });
+    } catch { /* observability must never break the call it observes */ }
+
     const evt = buildCostSnapshot({ agent, storyId, phase, model, provider, cost, turns });
     fs.appendFileSync(activityFile, JSON.stringify(evt) + '\n');
 
@@ -254,7 +377,7 @@ function emitCostSnapshot({
     appendLedgerRecord({
       ledgerFile: ledgerFile || process.env.PHASE_COST_FILE
         || path.join(process.env.LOG_DIR || path.join(__dirname, '..', 'logs'), 'phase-cost.jsonl'),
-      agent, storyId, phase, model, cost, turns, startedAt,
+      agent, storyId, phase, model, cost, turns, startedAt, rung,
     });
     return evt;
   } catch {
@@ -262,4 +385,8 @@ function emitCostSnapshot({
   }
 }
 
-module.exports = { parseCostRecord, buildCostSnapshot, appendLedgerRecord, emitCostSnapshot };
+module.exports = {
+  parseCostRecord, buildCostSnapshot, appendLedgerRecord, emitCostSnapshot,
+  replyTextFrom,
+  promptForTrace,
+};

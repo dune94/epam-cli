@@ -94,3 +94,43 @@ project_settings_file() {
     [ -n "$_dir" ] || return 1
     printf '%s' "$_dir/llm-settings.json"
 }
+
+# resolve_run_project <prd-path> [declared-name] — WHICH PROJECT IS THIS RUN?
+#
+# A PRD names its project, and when there IS a PRD that is the answer. A Jira-driven run has none at
+# launch: ingest synthesizes it at the very path handed to --prd, so reading that file at startup
+# finds nothing and refuses the run before it can create what was being read. Two mock launchers hit
+# exactly that. The paid metrolinx launcher escaped only by shape — it points at the project's
+# canonical prd.json, which pre-exists because pre-run-reset restores it.
+#
+# So the caller declares the project when there is no PRD to read, exactly as orchestrate.sh has
+# always taken --project <name>.
+#
+# BOTH ABSENT IS REFUSED. This file's rule is NO DEFAULT: a launcher that cannot say which project
+# it is running must stop, because these run against client repositories.
+#
+# A DISAGREEMENT IS REFUSED TOO. Silently preferring the PRD or the flag is the same defect wearing
+# a different hat — a run configured from a project nobody chose, announced in one line nobody reads
+# twice.
+resolve_run_project() {
+    local _prd="${1:-}" _declared="${2:-}" _named=""
+    if [ -n "$_prd" ] && [ -f "$_prd" ]; then
+        _named="$("${NODE_BIN:-node}" -e '
+          try {
+            const prd = require(process.argv[1]);
+            const n = prd && prd.project && prd.project.name;
+            process.stdout.write(typeof n === "string" ? n.trim() : "");
+          } catch (e) { process.stdout.write(""); }
+        ' "$_prd" 2>/dev/null || printf '')"
+    fi
+
+    if [ -n "$_named" ] && [ -n "$_declared" ] && [ "$_named" != "$_declared" ]; then
+        echo "[project-config] the PRD at $_prd names project '$_named' but '$_declared' was declared — refusing to choose between them" >&2
+        return 1
+    fi
+    [ -n "$_named" ] && { printf '%s' "$_named"; return 0; }
+    [ -n "$_declared" ] && { printf '%s' "$_declared"; return 0; }
+
+    echo "[project-config] no project for this run: the PRD at ${_prd:-(none)} names none — it may not be written yet, as a Jira run synthesizes it during ingest — and none was declared with --project" >&2
+    return 1
+}

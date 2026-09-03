@@ -1,0 +1,6 @@
+AMSD-1919 writer output (run 20260902T022134Z)
+commit: 46986cb3
+repo:   /home/bradleyjerome/projects/metrolinx/next.gotransit.com
+branch: bugfix/AI-AMSD-1919
+tag:    epam-amsd-1919-writer-output (local, never pushed)
+fix:    CheckoutForm.tsx:306 case-insensitive email compare

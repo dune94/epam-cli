@@ -8,7 +8,7 @@ import { OpenAIProvider } from './openai/OpenAIProvider.js';
 import { GeminiProvider } from './gemini/GeminiProvider.js';
 import { ProxyProvider } from './proxy/ProxyProvider.js';
 import { CodexProvider } from './codex/CodexProvider.js';
-import { QwenProvider, createQwenProvider } from './qwen/QwenProvider.js';
+import { OpenRouterProvider, createOpenRouterProvider } from './openrouter/OpenRouterProvider.js';
 import { MiniMaxProvider, createMiniMaxProvider } from './minimax/MiniMaxProvider.js';
 import { createReplayProvider } from './replay/ReplayProvider.js';
 import { CursorProvider, createCursorProvider } from './cursor/CursorProvider.js';
@@ -413,11 +413,11 @@ export class ProviderChain implements LLMProvider {
         return new AnthropicProvider(apiKey);
       case 'openai':    return new OpenAIProvider(apiKey);
       case 'gemini':    return new GeminiProvider(apiKey);
-      case 'qwen': {
+      case 'openrouter': {
         const openRouterKey = process.env.OPENROUTER_API_KEY ?? process.env.EPAM_API_KEY_OPENROUTER;
         const baseURL = process.env.OPENROUTER_BASE_URL || undefined;
-        if (openRouterKey) return new QwenProvider({ apiKey: openRouterKey, openRouterMode: true, baseURL });
-        return new QwenProvider({ apiKey, baseURL });
+        if (openRouterKey) return new OpenRouterProvider({ apiKey: openRouterKey, openRouterMode: true, baseURL });
+        return new OpenRouterProvider({ apiKey, baseURL });
       }
       case 'minimax': {
         const minimaxKey = process.env.MINIMAX_API_KEY ?? process.env.EPAM_API_KEY_MINIMAX ?? apiKey;

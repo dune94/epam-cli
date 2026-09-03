@@ -73,22 +73,86 @@ function _text(raw) {
  * EMPTY AND MALFORMED ARE DIFFERENT FAILURES and must not report identically: one is a transport
  * or budget problem, the other a contract problem, and they are fixed in different places.
  */
-function _giveUpMessage(what, budget, raw, reason) {
+/**
+ * THE REPLY THAT FAILED IS THE ONLY EVIDENCE OF WHY — so it is written whole.
+ *
+ * The give-up message carries the first 2000 characters and the rest was discarded. On 2026-08-29
+ * the agent-mint rejected `[{"proposedAgents":[...]}]` three times; a fix to unwrap that envelope
+ * was written and committed, the next paid run failed identically, and whether the array held ONE
+ * element (the fix should have fired) or several (it correctly refuses) could not be established
+ * because nothing kept the reply. The next step had to be a guess — and guessing is what made the
+ * two fixes before it wrong.
+ */
+function _persistRejected(logDir, what, text) {
+  // A CALLER THAT FORGOT TO SAY WHERE IS NOT A REASON TO DISCARD THE EVIDENCE.
+  //
+  // metrolinx AMSD-1919 died three times on 2026-08-29 with a 3885-character reply the log
+  // excerpted at 2000. This returned empty because its caller passed no logDir, so the one
+  // artefact that could say whether the envelope held one element or several was never written,
+  // and the diagnosis needed a second PAID run to see what the first already knew.
+  if (!text) return '';
+  let dir = logDir;
+  if (!dir) dir = process.env.OUTPUT_DIR || '';
+  if (!dir) dir = require('path').join(require('os').tmpdir(), 'epam-rejected');
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const slug = String(what).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const file = path.join(dir, `rejected-${slug}-${stamp}.txt`);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(file, text);
+    return file;
+  } catch {
+    return '';
+  }
+}
+
+function _giveUpMessage(what, budget, raw, reason, logDir) {
   const text = _text(raw);
   const shape = text.trim().length === 0
     ? 'the answer was EMPTY (no text at all — a transport or budget failure, not a format one)'
     : `the answer was ${text.length} characters long and did not parse`;
+  const kept = _persistRejected(logDir, what, text);
   return `${what}: gave up after ${budget} attempt(s). ${shape}. Last rejection: ${reason}.\n`
-    + `--- what it actually returned (first 2000 chars) ---\n${text.slice(0, 2000)}\n---`;
+    + `--- what it actually returned (first 2000 chars) ---\n${text.slice(0, 2000)}\n---`
+    + (kept ? `\n--- the FULL reply is kept at ${kept} ---` : '');
 }
 
-function retryUntilParsed({ call, parse, attempts = 3, what = 'response', log = () => {} }) {
+function retryUntilParsed({ call, parse, attempts = 3, what = 'response', log = () => {}, logDir = '' }) {
   const budget = Math.max(1, Number(attempts) || 1);
   let raw = '';
   let reason = '';
 
   for (let attempt = 1; attempt <= budget; attempt += 1) {
-    raw = call(_correctionNote(attempt, reason, raw));
+    // THE ATTEMPT TRAVELS WITH THE CALL, so a caller can climb its ladder.
+    //
+    // This passed only the correction note, so every caller re-invoked the SAME model and the
+    // retry was the same coin flipped again. Live 2026-08-27: prompt-builder refused a template
+    // three times, attempts 1 and 2 dropping the identical placeholders, and the run died with
+    // two stronger rungs unused. Telling a model what it got wrong is half a retry; the other
+    // half is asking a model that can do better.
+    //
+    // The rung is the CALLER'S decision — only it knows which seam it speaks for — so this
+    // hands over the attempt number and nothing else.
+    // A CALL THAT THREW IS AN ATTEMPT, NOT THE END OF THE RUN.
+    //
+    // Live 2026-08-27, run 20260827T143143Z: the discovery agent wrapped its JSON in markdown
+    // fences, callLlm ran JSON.parse on it, threw, and the exception escaped this loop and
+    // killed the process — on attempt ONE of three, at the most ordinary failure a model has.
+    // The run then reported "codeline scope could not be resolved", naming the consequence
+    // and not the cause.
+    //
+    // A throw costs one attempt and is fed back like any other refusal. Nothing here knows
+    // about JSON: whatever the reason, the loop exists for an answer that came back unusable.
+    try {
+      raw = call(_correctionNote(attempt, reason, raw), attempt);
+    } catch (e) {
+      raw = '';
+      reason = `the call itself failed: ${(e && e.message) || e}`;
+      log(`[content-retry] ${what}: attempt ${attempt}/${budget} CALL FAILED — ${reason}`);
+      continue;
+    }
     const verdict = parse(raw) || { ok: false, reason: 'the parser returned nothing' };
     if (verdict.ok) {
       if (attempt > 1) log(`[content-retry] ${what}: recovered on attempt ${attempt}`);
@@ -96,9 +160,29 @@ function retryUntilParsed({ call, parse, attempts = 3, what = 'response', log = 
     }
     reason = verdict.reason || 'unusable';
     log(`[content-retry] ${what}: attempt ${attempt}/${budget} rejected — ${reason}`);
+    // EVERY AGENT REACHES THE ANALYST, AND IT IS SENT WHAT CAME BACK.
+    //
+    // A refusal was fed back to the model and nothing else happened: the episode was never
+    // recorded and no constraint was ever synthesised from it. agent-attempt-analyst.sh has
+    // existed for that since it was written and had ONE caller out of forty seams.
+    //
+    // `raw` is the point — the bytes the agent actually produced. A reason string says which
+    // rule was broken; only the output says why the agent broke it.
+    try {
+      // eslint-disable-next-line global-require
+      const _sh = require('./self-heal.js').selfHeal({
+        agent: what, reason, output: raw, context: _correctionNote(attempt, reason, raw),
+        model: process.env.EPAM_MODEL || '', provider: process.env.AI_PROVIDER || '',
+        projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR || '',
+      });
+      if (_sh.rc === 2) {
+        // Reported, never inferred: the next attempt runs with no corrective guidance.
+        log(`[content-retry] ${what}: self-heal analyst FAILED — attempt ${attempt + 1} has no corrective`);
+      }
+    } catch { /* a diagnostic must never fail the run it is diagnosing */ }
   }
 
-  throw new Error(_giveUpMessage(what, budget, raw, reason));
+  throw new Error(_giveUpMessage(what, budget, raw, reason, logDir));
 }
 
 /**
@@ -112,13 +196,31 @@ function retryUntilParsed({ call, parse, attempts = 3, what = 'response', log = 
  * Deliberately a separate function rather than a sync/async hybrid: a function that sometimes
  * returns a promise is a bug waiting for the one caller that forgets to await it.
  */
-async function retryUntilParsedAsync({ call, parse, attempts = 3, what = 'response', log = () => {} }) {
+async function retryUntilParsedAsync({ call, parse, attempts = 3, what = 'response', log = () => {}, logDir = '' }) {
   const budget = Math.max(1, Number(attempts) || 1);
   let raw = '';
   let reason = '';
 
   for (let attempt = 1; attempt <= budget; attempt += 1) {
-    raw = await call(_correctionNote(attempt, reason, raw));
+    // THE ATTEMPT TRAVELS WITH THE CALL, so a caller can climb its ladder.
+    //
+    // This passed only the correction note, so every caller re-invoked the SAME model and the
+    // retry was the same coin flipped again. Live 2026-08-27: prompt-builder refused a template
+    // three times, attempts 1 and 2 dropping the identical placeholders, and the run died with
+    // two stronger rungs unused. Telling a model what it got wrong is half a retry; the other
+    // half is asking a model that can do better.
+    //
+    // The rung is the CALLER'S decision — only it knows which seam it speaks for — so this
+    // hands over the attempt number and nothing else.
+    // Same guard as the sync twin: a throwing call costs one attempt, never the run.
+    try {
+      raw = await call(_correctionNote(attempt, reason, raw), attempt);
+    } catch (e) {
+      raw = '';
+      reason = `the call itself failed: ${(e && e.message) || e}`;
+      log(`[content-retry] ${what}: attempt ${attempt}/${budget} CALL FAILED — ${reason}`);
+      continue;
+    }
     const verdict = parse(raw) || { ok: false, reason: 'the parser returned nothing' };
     if (verdict.ok) {
       if (attempt > 1) log(`[content-retry] ${what}: recovered on attempt ${attempt}`);
@@ -126,8 +228,33 @@ async function retryUntilParsedAsync({ call, parse, attempts = 3, what = 'respon
     }
     reason = verdict.reason || 'unusable';
     log(`[content-retry] ${what}: attempt ${attempt}/${budget} rejected — ${reason}`);
+    // EVERY AGENT REACHES THE ANALYST, AND IT IS SENT WHAT CAME BACK.
+    //
+    // A refusal was fed back to the model and nothing else happened: the episode was never
+    // recorded and no constraint was ever synthesised from it. agent-attempt-analyst.sh has
+    // existed for that since it was written and had ONE caller out of forty seams.
+    //
+    // `raw` is the point — the bytes the agent actually produced. A reason string says which
+    // rule was broken; only the output says why the agent broke it.
+    try {
+      // eslint-disable-next-line global-require
+      const _sh = require('./self-heal.js').selfHeal({
+        agent: what, reason, output: raw, context: _correctionNote(attempt, reason, raw),
+        model: process.env.EPAM_MODEL || '', provider: process.env.AI_PROVIDER || '',
+        projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR || '',
+      });
+      if (_sh.rc === 2) {
+        // Reported, never inferred: the next attempt runs with no corrective guidance.
+        log(`[content-retry] ${what}: self-heal analyst FAILED — attempt ${attempt + 1} has no corrective`);
+      }
+    } catch { /* a diagnostic must never fail the run it is diagnosing */ }
   }
-  throw new Error(_giveUpMessage(what, budget, raw, reason));
+  throw new Error(_giveUpMessage(what, budget, raw, reason, logDir));
 }
 
-module.exports = { retryUntilParsed, retryUntilParsedAsync };
+module.exports = {
+  retryUntilParsed,
+  retryUntilParsedAsync,
+  // Exported so a test can prove the evidence is kept, without paying for a run.
+  _persistRejected,
+};

@@ -76,7 +76,7 @@ ledger_model() { jq -r 'select(.type=="cost_snapshot") | .model' "$ACTIVITY_FILE
             | grep -vE '^[[:space:]]*#')
     [ -n "$block" ]
     named=""
-    for m in 'z-ai/' 'glm-' 'kimi' 'MiniMax' 'qwen' 'gpt-'; do
+    for m in 'z-ai/' 'glm-' 'kimi' 'MiniMax' 'openrouter' 'gpt-'; do
         printf '%s' "$block" | grep -qF -- "$m" && named="$named $m"
     done
     [ -z "$named" ] || { echo "the cost record names:$named"; false; }

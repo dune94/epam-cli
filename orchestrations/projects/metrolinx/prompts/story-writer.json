@@ -1,30 +1,14 @@
 {
-  "id": "story-writer",
-  "layer": "project",
-  "version": 1,
-  "description": "The story writer prompt. Its INPUT FRAMINGS live here: the authority under which each declared input is read.",
   "$why": [
-    "The writer used to receive eleven other agents outputs, each wrapped in prose written inline",
-    "in claude.sh alongside thirty conditionals deciding what to include. That made every consumer",
-    "an author of its producers meaning, and the two renderings of the detectives answer drifted",
-    "apart within an hour of a field being added to one of them.",
-    "",
-    "The facts now come from the producer. What stays with the READER is the AUTHORITY: the same",
-    "finding is a plan of record to the writer and evidence to judge against for the reviewer.",
-    "That authority is prompt text, so it lives in a prompt document — not in a shell string, and",
-    "not in the invocation registry. The archetypes consumes[].framing names the body to render.",
-    "",
-    "Extracted verbatim from claude.sh on 2026-08-13; the writer-prompt captures prove the words",
-    "did not change in the move."
+    "Generated from the story-writer template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
   ],
+  "authority": "project",
+  "body": "## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)\nA code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.\n\nThe Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.\n\nHARD RULES:\n- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.\n- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.\n\nThis ticket (AMSD-1919) concerns email/confirm-email case sensitivity on the Go-Checkout page, in the gotransit codeline (`src/components/pages/CheckoutPage`). Before touching anything, check whether the mismatch/comparison logic lives in `CheckoutForm.tsx` itself or in a shared validation/formatter util it imports — if a shared normalizer (e.g. a lowercase/trim helper) already exists elsewhere in the repo, reuse it rather than writing inline `.toLowerCase()`/`.trim()` comparisons in the component.\n\nAfter making the change, run the existing test suite with `npm test` (this project's `package.json` defines `\"test\": \"jest\"`). Extend the existing spec at `src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx` with cases covering the case-sensitivity fix rather than creating a new spec file.\n\nBefore committing, note that a husky pre-commit hook runs lint-staged and will reject the commit unless the current branch name matches `^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$`, and a commit-msg hook runs commitlint against the commit message — make sure any commit you create satisfies both.\n\n## What Your Last Attempt Did\nThis is a diffstat, not a judgement — it is what is on disk, unedited. It is EVIDENCE, not an instruction: it does not tell you the work was right, and it does not tell you to undo it. Read it to see what you already changed, so you extend that work rather than rediscovering it or repeating it.",
+  "derivedFromSha256": "f3a1152250a807e5f064f852e854a593dfcc2ed3f89e020fdfdb1bc1c0854a6b",
+  "derivedFromVersion": 1,
+  "id": "story-writer",
   "placeholders": [],
-  "bodies": {
-    "fix-plan": "## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)\nA code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.\n\nThe Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.\n\nHARD RULES:\n- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.\n- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.",
-    "attempt-evidence": "## What Your Last Attempt Did\nThis is a diffstat, not a judgement — it is what is on disk, unedited. It is EVIDENCE, not an instruction: it does not tell you the work was right, and it does not tell you to undo it. Read it to see what you already changed, so you extend that work rather than rediscovering it or repeating it."
-  },
-  "seams": [
-    "story-writer"
-  ],
-  "derivedFromSha256": "617d10962cb8eff3992ef53742caccd5ab6462b51c0254cbe488e767bc0b1b56",
-  "authority": "project"
+  "mayBeEmpty": []
 }

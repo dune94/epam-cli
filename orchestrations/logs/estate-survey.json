@@ -1,42 +1,31 @@
 {
   "codelines": [
     {
-      "codeline": "metrolinx",
+      "codeline": "gotransit",
       "state": "in_scope",
-      "evidence": "Opened src/services/contentstack.ts (lines 1-95). The Contentstack Stack is initialized at line 91 via `contentstack.Stack(options)` where `options` (lines 78-90) contains api_key, delivery_token, environment, branch, and fetchOptions — but NO `live_preview` block. Searched for `live_preview`, `preview_token`, `onEntryChange`, and `live-preview-utils` across the entire repo: all returned zero matches in source files (only orchestration log hits). The manifest lists `contentstack` and `@contentstack/utils` but NOT `@contentstack/live-preview-utils`. The codebase uses a `ContentstackFactory` class (line 109) with `createContentTypeQuery` and `createContentTypeEntryQuery` methods for data fetching, and components consume data via a `useContent` hook. Homepage is at src/components/pages/Homepage.tsx (renders ContentStackHomePageHeroBanner, HomepageComponentMapper, ContentstackRecentNews). Page service functions `getPageEntry` and `getSinglePageEntry` exist in src/services/pageService.ts. None of these are wired to any live-preview callback. The three integration points from the docs (live_preview config in Stack(), @contentstack/live-preview-utils init with onEntryChange, and page-level onEntryChange subscription) are all absent, confirming this work has not been started.",
+      "evidence": "grep found confirmEmail usage in CheckoutForm.tsx; read the validate rule at line 305-309, which already uses value.toLowerCase() !== email.toLowerCase() as of commit 6134337f (current HEAD on this branch), matching the AMSD-1919 ticket description. Checked CheckoutForm.spec.tsx and found existing tests for mismatch (line 248-259, TRM774 error) but no test asserting that differing-case duplicates of the same address pass validation.",
       "surfaces": [
-        "src/services/contentstack.ts",
-        "src/services/pageService.ts",
-        "src/components/pages/Homepage.tsx",
-        "src/components/contentstack/"
+        "src/components/pages/CheckoutPage"
       ],
       "filesRead": [
-        "src/services/contentstack.ts",
-        "src/components/contentstack/ContentStackHomePageHeroBanner/ContentStackHomePageHeroBanner.tsx",
-        "src/interface/content/page.ts",
-        "src/components/contentstack/ContentstackQuote/ContentstackQuote.tsx",
-        "src/components/contentstack/ContentstackText/ContentstackText.tsx",
-        "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
-        "src/components/contentstack/ContentStackStaticMaps/ContentStackStaticMaps.tsx",
-        "src/components/contentstack/ContentStackGallery/ContentStackGallery.tsx",
-        "src/components/contentstack/ContentStackValues/ContentStackValues.tsx",
-        "src/utils/events.ts"
+        "src/components/pages/CheckoutPage/CheckoutForm.tsx",
+        "src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx"
       ],
       "evidenceGap": false
     }
   ],
   "recommendedInvestigators": [
     {
-      "codeline": "metrolinx",
-      "focus": "Examine how the Contentstack Stack is configured in src/services/contentstack.ts, how the ContentstackFactory and its query methods feed data into page components, and how the useContent hook distributes content to Homepage and Discover Article page components. Determine where @contentstack/live-preview-utils init() and onEntryChange would integrate with the existing data-fetch flow (server-side vs client-side rendering, getStaticProps/getServerSideProps usage, and the useContent hook's reactivity model). Also check whether the app uses Next.js App Router or Pages Router, since the linked doc targets CSR App Router.",
-      "why": "The Stack config at line 91 of contentstack.ts has no live_preview block, onEntryChange is absent everywhere, and @contentstack/live-preview-utils is not in the manifest. The data-fetch architecture (ContentstackFactory → getEntry/getSingleEntry → useContent hook) needs to be understood to determine how live-preview real-time updates would propagate to the Homepage and Discover Article pages."
+      "codeline": "gotransit",
+      "focus": "Verify the existing case-insensitive fix in CheckoutForm.tsx's confirmEmail validate rule is complete and correctly wired (e.g. check EMAIL_REGEX handling, trimming/whitespace edge cases) and confirm no other place in the checkout flow re-compares email/confirmEmail case-sensitively (e.g. submission payload assembly or server-side validation).",
+      "why": "The fix is already committed but there is no dedicated regression test for the case-insensitive behavior, and it's worth confirming no other comparison site was missed."
     }
   ],
   "recommendedWriters": [
     {
-      "codeline": "metrolinx",
-      "focus": "Must be able to: (1) add a live_preview config block (preview_token, enable, host) to the existing contentstack.Stack() options in src/services/contentstack.ts, introducing a new environment variable for the preview token; (2) install @contentstack/live-preview-utils, create an initialization module that calls ContentstackLivePreview.init() with stackSdk, ssr flag, and editButton config, and exports onEntryChange; (3) wire onEntryChange into the data-fetch paths for the Homepage and Discover Article pages so that draft entry changes trigger a re-fetch and re-render. Must understand Next.js routing model (Pages vs App Router), environment variable management, and the existing ContentstackFactory/useContent pattern to integrate without breaking existing SSR/SSG data flows.",
-      "why": "All three integration points from the Contentstack Live Preview docs are absent: no live_preview in Stack config, no @contentstack/live-preview-utils package, and no onEntryChange subscription anywhere. This is the sole codeline in scope and all implementation work lands here."
+      "codeline": "gotransit",
+      "focus": "Add a regression test in CheckoutForm.spec.tsx (or Checkout.spec.tsx) asserting that entering the same email address with different casing in email/confirmEmail does NOT trigger the TRM774 mismatch error, complementing the existing mismatch test.",
+      "why": "CheckoutForm.spec.tsx has a test for genuine mismatches (TRM774) but nothing verifying the case-insensitive success path that the fix in commit 6134337f is meant to guarantee."
     }
   ],
   "violations": [],

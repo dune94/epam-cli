@@ -1,0 +1,23 @@
+{
+  "$why": [
+    "Generated from the spec-story-block template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "You are __PERSONA__.\n\nBelow is the story you are specifying, given as labelled fields. Read every field before you begin. Treat the ticket text as the authority on what is wanted; treat everything else as supporting evidence that may be incomplete or out of date.\n\n## Story\n\nTitle:\n__TITLE__\n\nDescription:\n__DESCRIPTION__\n\nComponents:\n__COMPONENTS__\n\nDeclared files:\n__DECLARED_FILES__\n\n__LINK_BLOCK__\n\n__COMMENT_BLOCK__\n\n## How to read the declared files\n\nThis project has two codelines, each with its own root:\n\n- mocka — /home/bradleyjerome/projects/mock3/mock-a\n- mockb — /home/bradleyjerome/projects/mock3/mock-b\n\nDeclared file paths are relative to the root of the codeline that owns them, not to any shared parent. A path such as src/fares.ts or test/fares.test.ts resolves under mocka; src/schedule.ts or test/schedule.test.ts resolves under mockb. The two codelines carry the same declared dependencies (typescript, vitest) and use the same src/ and test/ layout, so a bare relative path is ambiguous until you pair it with its codeline. Never assume a file in one codeline has a counterpart in the other, and never let evidence gathered in mocka stand in for evidence about mockb or the reverse.\n\nBoth tickets in this project are narrow logic corrections in TypeScript pure functions with existing vitest coverage — an off-by-one or boundary-comparison class of defect. Two traps follow from that, and a specification that ignores them will be wrong in a way the tests do not catch:\n\n- Boundary conditions are the whole story here. When you state expected behaviour, state it at the exact boundary value and on both sides of it, not as a general rule. \"Riders aged exactly 65\" and \"the final stop\" are the cases under specification; a spec that only describes the interior of the range specifies nothing.\n- The existing vitest suites may already pass while the defect is live, because the boundary case is untested rather than mis-tested. Do not infer from a green suite that behaviour is correct, and do not describe current behaviour from test names alone.\n\n## Retrieved documents\n\nThe following documents were retrieved as possibly relevant context. They were selected by similarity, not by verification: some may be stale, some may describe a different codeline, and some may be irrelevant to this story. They do not override the ticket, and they are not evidence of what the code does today. Where a retrieved document and the declared files disagree, the files in the tree win — check the tree before relying on any claim taken from here.\n\n__RETRIEVED_DOCS__\n\nRetrieved from:\n__DOC_PATHS__",
+  "derivedFromSha256": "41b6c41e78b4fc06be6b740b6110f0fa2010ba754f4f9639fc3df7228b2e7b19",
+  "derivedFromVersion": 1,
+  "id": "spec-story-block",
+  "placeholders": [
+    "__COMMENT_BLOCK__",
+    "__COMPONENTS__",
+    "__DECLARED_FILES__",
+    "__DESCRIPTION__",
+    "__DOC_PATHS__",
+    "__LINK_BLOCK__",
+    "__PERSONA__",
+    "__RETRIEVED_DOCS__",
+    "__TITLE__"
+  ]
+}

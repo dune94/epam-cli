@@ -1,0 +1,21 @@
+{
+  "_what": "What each codeline IS and what an agent working inside it needs to know that the source does not say. Produced by the codeline-discovery agent during THIS run and rewritten every run — never accumulated, so nothing here is older than the run that wrote it. The engine splits this per codeline into each worktree's .epam/.",
+  "_shape": "Codeline names are TOP-LEVEL keys, because the engine extracts one with jq '.[$cl]'. Nesting them under another key parses fine and yields nothing for every codeline.",
+  "gotransit": {
+    "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
+    "facts": [
+      {
+        "text": "Tests run with Jest via `npm test` (`test\": \"jest\"`), and there is a separate `test:coverage-check` (`jest --coverage`) script.",
+        "source": "package.json scripts.test = \"jest\", scripts[\"test:coverage-check\"] = \"jest --coverage\""
+      },
+      {
+        "text": "A pre-commit hook runs `npx lint-staged` and then rejects the commit unless the current branch name matches `^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$`.",
+        "source": ".husky/pre-commit"
+      },
+      {
+        "text": "The package requires Node 22.x.",
+        "source": "package.json engines.node = \"22.x\""
+      }
+    ]
+  }
+}

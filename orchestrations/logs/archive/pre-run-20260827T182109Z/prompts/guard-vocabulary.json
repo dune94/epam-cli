@@ -1,0 +1,28 @@
+{
+  "$why": [
+    "Generated from the guard-vocabulary template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "__PERSONA_PREFIX__GUARD SEAM: __SEAM__\n\nThis project spans two independent codelines:\n- mocka at /home/bradleyjerome/projects/mock3/mock-a (TypeScript + vitest)\n- mockb at /home/bradleyjerome/projects/mock3/mock-b (TypeScript + vitest)\n\nEach codeline is tested independently with `vitest`. Typical workflow: read the test files first to understand the test structure and age/stop coverage, then inspect the implementation.\n\nTHE RULE THIS GUARD ENFORCES:\n__RULE__\n\nTHE STATEMENTS THE GUARD WILL CHECK:\n__STATEMENT_LIST__\n\nDECLARED MANIFEST (the files this story says it will touch):\n__MANIFEST__\n\n__DOC_SECTION__CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):\n__EVIDENCE__\n\nSTORY CONTEXT:\nTitle: __STORY_TITLE__\nDescription: __STORY_DESCRIPTION__\n__CODEGRAPH_SECTION__\n\nWhen reading the codebase: TypeScript types are strict, so check explicit comparison operators (>= vs >, == vs ===) and array indexing boundaries carefully. For MOCK3-1 (fare logic), the boundary is age exactly 65; for MOCK3-2 (departure board), check whether loop iteration includes or excludes the final element, and whether totalMinutes() uses zero-based or one-based indexing.",
+  "derivedFromSha256": "0d6528c4becd35c59315fd3ec95de7f16112cc789b5a3d484ec2e2871e257060",
+  "derivedFromVersion": 1,
+  "id": "guard-vocabulary",
+  "placeholders": [
+    "__CODEGRAPH_SECTION__",
+    "__DOC_SECTION__",
+    "__EVIDENCE__",
+    "__MANIFEST__",
+    "__PERSONA_PREFIX__",
+    "__RULE__",
+    "__SEAM__",
+    "__STATEMENT_LIST__",
+    "__STORY_DESCRIPTION__",
+    "__STORY_TITLE__"
+  ],
+  "mayBeEmpty": [
+    "__CODEGRAPH_SECTION__",
+    "__DOC_SECTION__"
+  ]
+}

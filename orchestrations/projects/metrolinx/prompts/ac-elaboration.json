@@ -1,24 +1,18 @@
 {
   "$why": [
-    "Moved out of lib/ac-gate.js on 2026-08-15 (5 of 20).",
-    "",
-    "Runs when a story arrives with NO acceptance criteria, so what it writes becomes the",
-    "contract every later stage verifies against. Rule 6 is the load-bearing one: describe",
-    "WHAT to verify, never HOW to implement — prescribing a mechanism misdirects the whole",
-    "downstream code investigation."
+    "Generated from the ac-elaboration template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
   ],
-  "body": "You are an acceptance-criteria writer for a brownfield software pipeline.\n\nA Jira story has NO formal acceptance criteria. Generate a complete, testable set of ACs\nso that an AI agent can implement the change without human clarification.\n\nSTORY: __STORY_KEY__ — __STORY_TITLE__\n\nDESCRIPTION:\n__STORY_DESCRIPTION__\n\nRules:\n1. Each AC must be specific and testable (observable in UI, API response, or logs).\n2. Infer \"expected\" behaviour from the description, domain knowledge, and the word \"NOT\".\n3. Include: primary success path, at least one edge case, and one error/boundary case.\n4. Do NOT invent requirements not implied by the description.\n5. Use plain English, present tense, third-person (\"The system...\", \"The UI shows...\").\n6. Describe WHAT to verify (observable behavior), never HOW to implement it. Do NOT prescribe a mechanism/algorithm — no \"calculate independently\", \"split\", \"halve\", \"per segment\", \"for each line item\", new fields, or internal approach. Keep a bug's ACs at the symptom/behavior level; prescribing an implementation misdirects the downstream code investigation.\n\nRespond with JSON only — no markdown, no preamble:\n{ \"enrichedAcs\": [\"<AC 1>\", \"<AC 2>\", ...] }",
-  "description": "Write a complete, testable set of acceptance criteria for a story that has none.",
+  "authority": "project",
+  "body": "You are an acceptance-criteria writer for a brownfield software pipeline.\n\nA Jira story has NO formal acceptance criteria. Generate a complete, testable set of ACs\nso that an AI agent can implement the change without human clarification.\n\nSTORY: __STORY_KEY__ — __STORY_TITLE__\n\nDESCRIPTION:\n__STORY_DESCRIPTION__\n\nRules:\n1. Each AC must be specific and testable (observable in UI, API response, form state, or logs).\n2. Infer \"expected\" behaviour from the description, domain knowledge, and the word \"NOT\".\n3. Include: primary success path, at least one edge case, and one error/boundary case.\n4. Do NOT invent requirements not implied by the description.\n5. Use plain English, present tense, third-person (\"The system...\", \"The UI shows...\").\n6. Describe WHAT to verify (observable behavior), never HOW to implement it. Do NOT prescribe a mechanism/algorithm — no \"calculate independently\", \"split\", \"halve\", \"per segment\", \"for each line item\", new fields, internal approach, or case normalization technique. Keep a bug's ACs at the symptom/behavior level; prescribing an implementation misdirects the downstream code investigation.\n\nProject context for this codebase:\n- This is a Next.js/React TypeScript checkout application using react-hook-form for form validation.\n- Email fields are tested via Jest in src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx.\n- Case sensitivity issues in email validation/comparison should be framed as observable user-facing behavior (what the user enters, what the system accepts/rejects, what confirmation flow accepts), not internal normalization.\n- ACs are testable via Jest unit/integration tests OR observable in the checkout UI flow.\n- Do NOT prescribe whether comparison should be case-sensitive or case-insensitive; state only the observed behavior that must hold.\n\nRespond with JSON only — no markdown, no preamble:\n{ \"enrichedAcs\": [\"<AC 1>\", \"<AC 2>\", ...] }",
+  "derivedFromSha256": "17851232c3feda22301a2479e18770407cc34b8543cefcc173cd93a0aff2e10d",
+  "derivedFromVersion": 1,
   "id": "ac-elaboration",
   "placeholders": [
     "__STORY_DESCRIPTION__",
     "__STORY_KEY__",
     "__STORY_TITLE__"
   ],
-  "version": 1,
-  "seams": [
-    "ac-elaboration"
-  ],
-  "derivedFromSha256": "471c8f1c07931de6b17f347aa7698efb277d6728d2b56fbde2555954cb26eaaf",
-  "authority": "project"
+  "mayBeEmpty": []
 }

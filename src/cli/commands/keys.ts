@@ -6,8 +6,10 @@ import {
   deleteApiKey,
   listStoredProviders,
 } from '../../billing/KeychainKeyStore.js';
+import { PROVIDER_NAMES } from '../../auth/types.js';
 
-const PROVIDERS = ['anthropic', 'openai', 'gemini'];
+// The list has ONE home — see PROVIDER_NAMES in auth/types.ts.
+const PROVIDERS = PROVIDER_NAMES;
 
 export function createKeysCommand(): Command {
   const keysCmd = new Command('keys').description('Manage BYOK (bring-your-own-key) API keys');
@@ -16,7 +18,8 @@ export function createKeysCommand(): Command {
     .command('set <provider> <key>')
     .description(`Set API key for a provider (${PROVIDERS.join(', ')})`)
     .action(async (provider: string, key: string) => {
-      if (!PROVIDERS.includes(provider)) {
+      // widened: PROVIDERS is the readonly ProviderName tuple, and `provider` arrives as a string
+      if (!(PROVIDERS as readonly string[]).includes(provider)) {
         console.error(
           chalk.red(`Unknown provider: ${provider}. Use one of: ${PROVIDERS.join(', ')}`)
         );

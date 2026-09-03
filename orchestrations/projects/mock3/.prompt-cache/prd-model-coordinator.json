@@ -1,0 +1,24 @@
+{
+  "base": "2b3d7c3dc83073c7e0ae7d0acd5f407323e99cdee2de2da9584ab111f2dd1162",
+  "roles": "88832fe89673d3105464843cafe58e599b2f12f9efcd9e035bf11b144f56ac5c",
+  "usesRoles": false,
+  "doc": {
+    "$why": [
+      "Generated from the prd-model-coordinator template by the agent that minted this project's roster.",
+      "The template is never executed; this copy is. Placeholders were checked against the",
+      "template before installation — see lib/project-prompt-contract.js."
+    ],
+    "authority": "project",
+    "body": "__PROFILE__\n\nThis model-coordination pass covers the mock3 PRD, where mocka and mockb are both vitest + typescript codelines. Favor models and reasoning effort suited to precise, narrowly-scoped fixes: an investigator pass to confirm exact code behavior before an implementer edits it.\n\nPRD file: __MC_PRD_TARGET__\nPhase: __MC_PHASE__\n\nAssign model, aiProvider, and reasoningEffort to every pending story in this phase that is missing one or more of these fields. Write the updated PRD back to the file, then emit the JSON summary.",
+    "derivedFromSha256": "2256fe8b3cde59fed36608ad759ef441f4e38c7715131af419b13674a9b706a9",
+    "derivedFromVersion": 1,
+    "id": "prd-model-coordinator",
+    "placeholders": [
+      "__MC_PHASE__",
+      "__MC_PRD_TARGET__",
+      "__PROFILE__"
+    ],
+    "mayBeEmpty": []
+  },
+  "reviewed": true
+}

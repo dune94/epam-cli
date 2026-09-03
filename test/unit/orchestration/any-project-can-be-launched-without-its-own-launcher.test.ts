@@ -18,6 +18,7 @@
  * These tests describe the generic launcher: it takes the project as an ARGUMENT, loads that
  * project's data, and refuses clearly when asked for one that does not exist. It names no project.
  */
+import { gatedRunEnv } from '../../helpers/gated-run-env';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { spawnSync } from 'child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, readdirSync } from 'fs';
@@ -39,7 +40,10 @@ afterEach(() => { rmSync(work, { recursive: true, force: true }); });
 function describeRun(args: string[], env: Record<string, string> = {}) {
   return spawnSync('bash', [LAUNCHER, ...args, '--describe'], {
     encoding: 'utf8',
-    env: { ...process.env, ...env },
+    // A paid launcher gates the whole coverage map before it spends. This test is about launching,
+    // not coverage, so it supplies that precondition the way it supplies a PRD — with a real,
+    // passing measurement the gate evaluates in full.
+    env: { ...process.env, ...gatedRunEnv(), ...env },
   });
 }
 

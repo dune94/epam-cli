@@ -25,6 +25,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const sanity = require('./constraint-sanity.js');
+const { evidenceWindow } = require('./evidence-windows.js');
 
 const SCRIPT_DIR = __dirname;
 const SCHEMA_PY = path.join(SCRIPT_DIR, 'kb_schema.py');
@@ -114,7 +115,7 @@ function quarantine({ outcome, signature, agent_role, reason, detail, raw }) {
     ts: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
     outcome, signature: signature || null, agent_role: agent_role || null,
     reason: reason || null, detail: detail || null,
-    raw: raw ? String(raw).slice(0, 2000) : null,
+    raw: raw ? String(raw).slice(0, evidenceWindow('quarantineRawChars')) : null,
   };
   fs.appendFileSync(quarantinePath(), JSON.stringify(rec) + '\n');
   return rec;

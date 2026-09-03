@@ -77,7 +77,7 @@ _apply_local_dependency_overrides() {
     local _proj_root="$1"
     local _codeline_name
     _codeline_name="$(basename "$_proj_root")"
-    local _config="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+    local _config="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/dependency-check.json}"
     [ -f "$_config" ] || return 0
 
     local _overrides_json
@@ -151,6 +151,26 @@ if [ -z "$KEY" ]; then
 fi
 
 MARKER_FILE="$STATE_DIR/${KEY}.sha"
+
+# A RESUME NEVER DISCARDS THE WORK IT IS RESUMING.
+#
+# Everything below MOVES THE BRANCH POINTER — `git reset --hard` discards commits, not merely
+# working-tree edits. On a fresh launch that is the point: a commit from an incomplete run is
+# provisional. On a RESUME it is a contradiction — the checkpoint records the writer as
+# completed, so the resume SKIPS the writer, and this then deletes the writer's commit with
+# nothing left to recreate it. Live 2026-09-02: run 20260902T022134Z's fix (46986cb3) was erased
+# by a launch and survived only because the object was still reachable through the reflog.
+#
+# A deliberate redo from a clean baseline is still available, and unchanged: launch WITHOUT
+# EPAM_RESUME_RUN and this reset applies exactly as before.
+#
+# The dependency overrides still run — they are node_modules state, not history, and their own
+# comment requires them on every call.
+if [ -n "${EPAM_RESUME_RUN:-}" ]; then
+    log "resume of run '${EPAM_RESUME_RUN}' — not resetting $PROJECT_ROOT (a resume never discards the work it resumes)"
+    _apply_local_dependency_overrides "$PROJECT_ROOT"
+    exit 0
+fi
 
 # ── Baseline branch takes PRECEDENCE over the verified marker ────────────────
 # The true pre-run state is the baseline branch (JIRA_BASELINE_BRANCH, e.g.

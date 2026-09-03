@@ -93,8 +93,32 @@ list_survivors() {
     _lines="$(printf '%s\n' "$_lines" | grep -F -- "$MATCH_ROOT" || true)"
     [ -z "$_lines" ] && return 0
   fi
-  printf '%s\n' "$_lines" | awk '{print $1}' | grep -vx "$$" | grep -vx "${PPID:-0}" || true
+  # THE RUN IDENTIFIES ITSELF. Every process a run spawns carries ORCH_RUN_ID in its environment,
+  # and reading that does not depend on anyone remembering to add a script name to a regex.
+  #
+  # Live 2026-08-31: this reported "✓ Done — verified no orchestration processes remain" while five
+  # processes were alive and BILLING — an llm-handler.sh chain with a live `claude --print` on the
+  # roster-specialiser seam, reparented to /init when their parent died. The check itself was
+  # sound; it could not SEE them, because orphan_pattern lists launcher scripts and llm-handler.sh
+  # — the hub every model call goes through — was not among them.
+  #
+  # Scoped to THIS run's id. Sweeping every ORCH_RUN_ID would make the killer take down a
+  # neighbouring run, which is a worse failure than the one being fixed.
+  local _by_id=""
+  if [ -n "${ORCH_RUN_ID:-}" ]; then
+    local _p
+    for _p in /proc/[0-9]*; do
+      [ -r "$_p/environ" ] || continue
+      if tr '\0' '\n' < "$_p/environ" 2>/dev/null | grep -qx "ORCH_RUN_ID=${ORCH_RUN_ID}"; then
+        _by_id="${_by_id}$(basename "$_p")
+"
+      fi
+    done
+  fi
+  { printf '%s\n' "$_lines" | awk '{print $1}'; printf '%s' "$_by_id"; } \
+    | grep -E '^[0-9]+$' | grep -vx "$$" | grep -vx "${PPID:-0}" | sort -u || true
 }
+
 
 # ── Process-group kill for every known runner pidfile ────────────────────────
 # Explicit TIER3_PID_FILE first (honoured for back-compat), then every
@@ -156,8 +180,9 @@ sleep 1
 remaining="$(list_survivors)"
 if [ -n "$remaining" ]; then
   echo "[kill-tier3] ✗ FAILED — these processes SURVIVED the kill and may still be billing:" >&2
-  # shellcheck disable=SC2086
-  ps -o pid,pgid,etime,args -p $(echo "$remaining" | tr '\n' ' ') 2>/dev/null >&2 || echo "$remaining" >&2
+  # ps accepts a COMMA-SEPARATED list, so the pids are passed as one quoted argument instead of
+  # relying on the shell to split an unquoted expansion — which breaks the moment one is empty.
+  ps -o pid,pgid,etime,args -p "$(echo "$remaining" | tr '\n' ',' | sed 's/,$//')" 2>/dev/null >&2 || echo "$remaining" >&2
   echo "[kill-tier3] The run is NOT stopped. Investigate before launching anything else." >&2
   exit 1
 fi

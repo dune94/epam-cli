@@ -1,0 +1,36 @@
+{"phase_id":"core","timestamp":"2026-08-22T23:24:53-04:00","story":"S-1","verdict":"approved","review_status":"approved","issues":[],"issues_found":0,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:24:53-04:00","review_status":"approved","verdict":"approved","issues_found":0,"stories_reviewed":1,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:24:55-04:00","story":"S-1","verdict":"approved","review_status":"approved","issues":[],"issues_found":0,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:24:55-04:00","review_status":"approved","verdict":"approved","issues_found":0,"stories_reviewed":1,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:24:57-04:00","story":"S-1","verdict":"approved","review_status":"approved","issues":[],"issues_found":0,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:24:57-04:00","review_status":"approved","verdict":"approved","issues_found":0,"stories_reviewed":1,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:24:59-04:00","story":"S-1","verdict":"approved","review_status":"approved","issues":[],"issues_found":0,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:24:59-04:00","review_status":"approved","verdict":"approved","issues_found":0,"stories_reviewed":1,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:25:03-04:00","story":"S-1","verdict":"approved","review_status":"approved","issues":[],"issues_found":0,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:25:03-04:00","review_status":"approved","verdict":"approved","issues_found":0,"stories_reviewed":1,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:25:06-04:00","story":"S-1","verdict":"approved","review_status":"approved","issues":[],"issues_found":0,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:25:06-04:00","review_status":"approved","verdict":"approved","issues_found":0,"stories_reviewed":1,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:25:07-04:00","story":"S-1","verdict":"approved","review_status":"approved","issues":[],"issues_found":0,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:25:07-04:00","review_status":"approved","verdict":"approved","issues_found":0,"stories_reviewed":1,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:25:09-04:00","story":"S-1","verdict":"approved","review_status":"approved","issues":[],"issues_found":0,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:25:09-04:00","review_status":"approved","verdict":"approved","issues_found":0,"stories_reviewed":1,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:25:10-04:00","story":"S-1","verdict":"changes_requested","review_status":"changes_requested","issues":[{"severity":"blocker","description":"review-agent output had no parseable verdict — the change was NOT reviewed; blocking rather than auto-approving."}],"issues_found":1,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:25:10-04:00","review_status":"changes_requested","verdict":"changes_requested","issues_found":1,"stories_reviewed":1,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:26:47-04:00","story":"S-1","verdict":"approved","review_status":"approved","issues":[],"issues_found":0,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:26:47-04:00","review_status":"approved","verdict":"approved","issues_found":0,"stories_reviewed":1,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:26:49-04:00","story":"S-1","verdict":"approved","review_status":"approved","issues":[],"issues_found":0,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:26:49-04:00","review_status":"approved","verdict":"approved","issues_found":0,"stories_reviewed":1,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:26:51-04:00","story":"S-1","verdict":"approved","review_status":"approved","issues":[],"issues_found":0,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:26:51-04:00","review_status":"approved","verdict":"approved","issues_found":0,"stories_reviewed":1,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:26:53-04:00","story":"S-1","verdict":"approved","review_status":"approved","issues":[],"issues_found":0,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:26:53-04:00","review_status":"approved","verdict":"approved","issues_found":0,"stories_reviewed":1,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:26:56-04:00","story":"S-1","verdict":"approved","review_status":"approved","issues":[],"issues_found":0,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:26:56-04:00","review_status":"approved","verdict":"approved","issues_found":0,"stories_reviewed":1,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:26:59-04:00","story":"S-1","verdict":"approved","review_status":"approved","issues":[],"issues_found":0,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:26:59-04:00","review_status":"approved","verdict":"approved","issues_found":0,"stories_reviewed":1,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:27:01-04:00","story":"S-1","verdict":"approved","review_status":"approved","issues":[],"issues_found":0,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:27:01-04:00","review_status":"approved","verdict":"approved","issues_found":0,"stories_reviewed":1,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:27:02-04:00","story":"S-1","verdict":"approved","review_status":"approved","issues":[],"issues_found":0,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:27:02-04:00","review_status":"approved","verdict":"approved","issues_found":0,"stories_reviewed":1,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:27:04-04:00","story":"S-1","verdict":"changes_requested","review_status":"changes_requested","issues":[{"severity":"blocker","description":"review-agent output had no parseable verdict — the change was NOT reviewed; blocking rather than auto-approving."}],"issues_found":1,"reviewer":"team-lead-agent"}
+{"phase_id":"core","timestamp":"2026-08-22T23:27:04-04:00","review_status":"changes_requested","verdict":"changes_requested","issues_found":1,"stories_reviewed":1,"reviewer":"team-lead-agent"}

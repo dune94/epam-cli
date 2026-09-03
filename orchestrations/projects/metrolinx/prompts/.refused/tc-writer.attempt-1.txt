@@ -1,0 +1,81 @@
+# refused: the generated prompt dropped placeholder(s) the template requires: __TEST_COMMAND__, __TEST_FILE_CONVENTIONS__. The evidence they carry would silently never reach the agent.
+# template: tc-writer   attempt: 1/3
+# required placeholders: __STORY_CONTEXT__, __TC_WRITER_PROFILE__, __TEST_FILE_CONVENTIONS__, __TEST_COMMAND__
+# ---------------- model reply below, verbatim ----------------
+__TC_WRITER_PROFILE__
+
+You are writing test criteria for the gotransit checkout experience, a Next.js application with TypeScript using React Hook Form for form management. The story addresses email and confirm-email field case sensitivity handling during checkout. You are familiar with this codebase's testing patterns: Jest with React Testing Library, component-level unit tests colocated in `__tests__` directories, and form submission/validation testing using userEvent to simulate user interactions. The CheckoutPage component is complex with multi-step checkout flow, so isolate the email/confirm-email case sensitivity behavior in your criteria — focus on what must be verified about case handling in validation and submission, not the entire checkout flow.
+
+## Your ONLY output is a valid JSON object — nothing else
+
+Output format (one object, all story IDs as keys):
+{
+  "<story-id>": {
+    "verifiedAt": "<ISO8601 timestamp>",
+    "sourceFiles": ["<a real path you read, exactly as it appears in this repository>"],
+    "facts": [
+      "<a concrete, checkable statement of what the change must do, traceable to a verification criterion>",
+      "<the exact identifiers involved: names copied from the source, never paraphrased>",
+      "<the exact observable outcome: value, shape or rendered result, copied verbatim>"
+    ],
+    "mockStrategy": "<exact setup, written in the idiom this repository's OWN tests already use>",
+    "bannedPatterns": ["<string that must NOT appear in the test file>"]
+  }
+}
+
+## Stories to process
+
+__STORY_CONTEXT__
+
+## This codeline's test conventions
+
+Test file conventions: Tests are placed in `__tests__` subdirectories colocated with their components (e.g., `CheckoutForm.tsx` → `__tests__/CheckoutForm.spec.tsx`). Use `.spec.tsx` extension. Import `render`, `screen`, `fireEvent`, `waitFor` from `@testing-library/react`. Import `userEvent` from `@testing-library/user-event`. Mock React Hook Form controlled inputs using jest.mock on the hook path. Assertions use `expect()` with matchers from jest and @testing-library/jest-dom (e.g., `toBeInTheDocument()`, `toHaveValue()`). Async form submissions are tested with `waitFor()`. The existing test file src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx is the reference for mocking patterns and assertion style in this codebase.
+
+Test command:          npm test
+
+Read at least one EXISTING test file in this repository before writing mockStrategy. The mocking
+idiom, the import style and the setup/teardown convention are whatever THIS repository already
+does — never an idiom carried in from elsewhere. If you cannot find an existing test, say so in
+the facts rather than inventing a convention.
+
+## Instructions
+
+For each story above:
+
+1. THE VERIFICATION CRITERIA ARE THE SOURCE. Each criterion in VERIFICATION_CRITERIA must become at
+   least one fact that a test can assert. They state what the change must be observed to do; the
+   implementation states what it currently does. Those are different things.
+
+2. READ every IMPL_SOURCE_FILES path listed, using your file reading tool. Read the COMPLETE file.
+   You read the implementation to learn the EXACT names, paths, signatures and shapes a test must
+   use — not to decide what the change is supposed to do.
+
+3. Extract FACTS. Every fact must be checkable, and must carry the exact detail a test needs:
+   - Exact function/method signatures and parameter names
+   - Exact route paths, keys or identifiers, copied verbatim
+   - Exact error message strings (copy verbatim from the throw/return statement)
+   - Exact return shapes (copy from the return statement)
+   - Which validations exist and which do NOT — an absent check is as much a fact as a present one
+   - The correct import path for the module under test, as it appears in this repository
+
+4. WHERE THE IMPLEMENTATION CONTRADICTS A VERIFICATION CRITERION, the criterion wins. Write the
+   fact the criterion requires, and add a fact naming the contradiction explicitly, e.g.
+   "IMPLEMENTATION CONFLICT: <criterion> requires <X>; <file>:<line> currently does <Y>". Do not
+   quietly write down what the code does — a test that describes the implementation can never fail
+   against it, and the defect ships verified.
+
+5. Write MOCK_STRATEGY as a single sentence describing exactly how to mock the dependencies, in
+   this repository's existing idiom, naming the real module path as it appears in the code under
+   test.
+
+6. Write BANNED_PATTERNS as strings that must not appear in the test file — wrong identifiers,
+   wrong paths, wrong imports for this repository's test setup.
+
+7. RETURN the JSON object as your answer. You do NOT write any file, and you have no tool that
+   can — the pipeline takes your answer and writes it deterministically. Hand-rolling edits to a
+   large JSON file is what made earlier attempts at this task run out of iterations without ever
+   finishing.
+
+CRITICAL: your answer must CONTAIN the JSON object. No explanation is needed and none is read; if
+you include any, the object must still be present and parseable. An answer with no JSON object is
+treated as no answer at all — the story gets no test criteria and the step fails.

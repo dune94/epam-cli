@@ -1,7 +1,7 @@
 {
-  "runId": "20260818T101809Z",
+  "runId": "20260901T100123Z",
   "phase": "core",
-  "baseline": "spec-runs/20260818T101809Z/prd.before.json",
+  "baseline": "spec-runs/20260901T100123Z/prd.before.json",
   "baselineCopy": "spec-baseline.json",
-  "createdAt": "2026-08-18T11:13:59.834Z"
+  "createdAt": "2026-09-01T10:03:06.377Z"
 }

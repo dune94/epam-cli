@@ -1,0 +1,24 @@
+{
+  "$why": [
+    "Generated from the guard-vocabulary template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "__PERSONA_PREFIX__GUARD SEAM: __SEAM__\n\nTHE RULE THIS GUARD ENFORCES:\n__RULE__\n\nTHE STATEMENTS THE GUARD WILL CHECK:\n__STATEMENT_LIST__\n\nDECLARED MANIFEST (the files this story says it will touch):\n__MANIFEST__\n\n__DOC_SECTION__CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):\n__EVIDENCE__\n\nSTORY CONTEXT:\nTitle: __STORY_TITLE__\nDescription: __STORY_DESCRIPTION__\n__CODEGRAPH_SECTION__\nPROJECT GROUNDING (mock3)\n\nThis repository is a two-codeline TypeScript workspace, both codelines tested with vitest:\n- codeline `mocka` at /home/bradleyjerome/projects/mock3/mock-a — fare logic in src/fares.ts, tests in test/fares.test.ts\n- codeline `mockb` at /home/bradleyjerome/projects/mock3/mock-b — schedule rendering in src/schedule.ts (including the `formatStops` function), tests in test/schedule.test.ts\n\nNote the naming split: the codeline is named `mocka`/`mockb`, but the directory on disk is `mock-a`/`mock-b`. Both spellings can legitimately appear in the vocabulary you derive — take whichever form the evidence and manifest actually use, and do not silently normalise one into the other. A guard that greps for `mocka` will not match a path written `mock-a`.\n\nThe two tickets in scope are boundary-condition defects: MOCK3-1 concerns riders aged exactly 65 being charged the adult fare (an off-by-one on a comparison), and MOCK3-2 concerns the departure board omitting the final stop (an off-by-one on a loop bound). Vocabulary for stories like these tends to be numeric and operator-shaped — an exact age boundary, a comparison direction, a last-element inclusion. Such terms are only usable by a guard if the evidence shows the exact literal, operator or identifier as it appears in the source; a paraphrase like \"the boundary check\" is not vocabulary, it is description.\n\nTRAPS SPECIFIC TO THIS STACK\n\n- Do not supply vitest or TypeScript vocabulary from memory. Matcher names, helper names, import specifiers, `describe`/`it` block titles and exported symbol names are only vocabulary if they appear in the CODE EVIDENCE above. This repository's declared dependencies are vitest and typescript, but that tells you which library is present — not which of its identifiers this code actually uses.\n- Do not invent fixture names, test-case titles or exported function names for src/fares.ts, test/fares.test.ts, src/schedule.ts or test/schedule.test.ts beyond what the evidence shows. `formatStops` is confirmed by the story context for mockb; anything else must come from the evidence.\n- A single-line pure-function fix produces a very small diff. That makes the vocabulary correspondingly narrow: prefer a short list of terms that genuinely occur over a padded list, because every unverified term is a way for the guard to miss or misfire.",
+  "derivedFromSha256": "0d6528c4becd35c59315fd3ec95de7f16112cc789b5a3d484ec2e2871e257060",
+  "derivedFromVersion": 1,
+  "id": "guard-vocabulary",
+  "placeholders": [
+    "__CODEGRAPH_SECTION__",
+    "__DOC_SECTION__",
+    "__EVIDENCE__",
+    "__MANIFEST__",
+    "__PERSONA_PREFIX__",
+    "__RULE__",
+    "__SEAM__",
+    "__STATEMENT_LIST__",
+    "__STORY_DESCRIPTION__",
+    "__STORY_TITLE__"
+  ]
+}

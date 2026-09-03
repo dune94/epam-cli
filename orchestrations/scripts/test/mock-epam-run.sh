@@ -16,14 +16,15 @@ set -euo pipefail
 # Parse flags
 provider=""
 model=""
-json_mode=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         run) shift ;;                          # epam run ...
         --provider) provider="$2"; shift 2 ;;
         --model) model="$2"; shift 2 ;;
-        --json) json_mode=true; shift ;;
+        # --json is accepted and ignored: this mock always emits JSON, so the flag set a variable
+        # nothing read. Saying so beats keeping a dead assignment to satisfy the analyser.
+        --json) shift ;;
         -) shift; cat > /dev/null ;;           # consume stdin
         *) shift ;;
     esac

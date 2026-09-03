@@ -49,7 +49,7 @@
 _eslint_lintable_exts() {
     local _root="${1:-$PROJECT_ROOT}"
     local _cfg="$_root/.epam/dependency-check.json"
-    [ -f "$_cfg" ] || _cfg="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+    [ -f "$_cfg" ] || _cfg="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/dependency-check.json}"
     [ -f "$_cfg" ] || return 0
     jq -r '.scanFileExtensions[]? // empty' "$_cfg" 2>/dev/null | sed 's/^\.//' | tr '\n' ' '
 }
@@ -108,7 +108,7 @@ _eslint_tree_globs() {
 _eslint_vendor_dir_names() {
     local _root="${1:-$PROJECT_ROOT}"
     local _cfg="$_root/.epam/dependency-check.json"
-    [ -f "$_cfg" ] || _cfg="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+    [ -f "$_cfg" ] || _cfg="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/dependency-check.json}"
     [ -f "$_cfg" ] || return 0
     jq -r '.vendorDirs[]? // empty' "$_cfg" 2>/dev/null | while IFS= read -r _d; do
         [ -n "$_d" ] && basename "$_d"
@@ -118,7 +118,7 @@ _eslint_vendor_dir_names() {
 _eslint_vendor_dirs() {
     local _root="${1:-$PROJECT_ROOT}"
     local _cfg="$_root/.epam/dependency-check.json"
-    [ -f "$_cfg" ] || _cfg="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+    [ -f "$_cfg" ] || _cfg="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/dependency-check.json}"
     [ -f "$_cfg" ] || return 0
     jq -r '.vendorDirs[]? // empty' "$_cfg" 2>/dev/null | while IFS= read -r _d; do
         [ -n "$_d" ] && [ -d "$_root/$_d" ] && echo "$_root/$_d"
@@ -130,7 +130,7 @@ _eslint_vendor_dirs() {
 _eslint_source_roots() {
     local _root="${1:-$PROJECT_ROOT}"
     local _cfg="$_root/.epam/dependency-check.json"
-    [ -f "$_cfg" ] || _cfg="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+    [ -f "$_cfg" ] || _cfg="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/dependency-check.json}"
     [ -f "$_cfg" ] || return 0
     jq -r '.moduleRoots[]? // empty' "$_cfg" 2>/dev/null | grep -v '^$' | tr '\n' ' '
 }

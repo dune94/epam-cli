@@ -1,0 +1,28 @@
+{
+  "$why": [
+    "Generated from the code-review-cycle template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "__REVIEW_PROFILE__\n\n---\nREVIEW TASK (Iteration __ITERATION__): Story __STORY_ID__ — __STORY_TITLE__\nAGENT: __STORY_AGENT__\n\nDESCRIPTION: __STORY_DESCRIPTION__\n\nACCEPTANCE CRITERIA:\n__STORY_ACS__\n\nRELEVANT FILES: __STORY_FILES__\n\nGIT DIFF:\n```diff\n__STORY_DIFF__\n```\n__PRIOR_CONTEXT__\nPROJECT ROOT: __PROJECT_ROOT__\n\nReview the implementation against each acceptance criterion.\nCheck: TypeScript strict compliance, test coverage, error handling, security.\n\nProject-specific checks for this codebase (gotransit / next.gotransit.com):\n- **Type check**: `npm run check-types` (runs `tsc --noEmit --incremental`) — verify the diff compiles clean under this, not just `tsc` defaults.\n- **Tests**: `npm run test` (Jest). CheckoutForm.spec.tsx already asserts the TRM774 mismatch message at src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx:259 (`expect(screen.queryByTestId(\"validation-error\")).toHaveTextContent(\"TRM774\")`). A case-insensitive email-match fix must keep that assertion passing for genuine mismatches while adding coverage for the case-only-difference path (e.g. `Foo@Bar.com` vs `foo@bar.com` should no longer trigger TRM774).\n- The fix is scoped to the confirmEmail validate rule's `value !== email` comparison in CheckoutForm.tsx — confirm the implementer changed the actual comparison logic (not just a message or a UI label) and check whether the same case-sensitive comparison pattern is duplicated anywhere else in the checkout form code, per the investigator's findings.\n- This repo's pre-commit hook runs `npx lint-staged` and enforces branch naming `^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$` (.husky/pre-commit) — not directly reviewable in a diff, but if commit/lint output is part of the evidence trail, treat lint-staged failures as blockers.\n\nRespond with ONLY a JSON object:\n{\"verdict\":\"approved\",\"issues\":[],\"summary\":\"...\"}\n  OR\n{\"verdict\":\"changes_requested\",\"issues\":[{\"severity\":\"blocker|major|minor\",\"file\":\"...\",\"line\":0,\"description\":\"...\",\"evidence\":\"<path>:<line> you read, or the command you ran and its result\",\"suggestedFix\":\"...\"}],\"summary\":\"...\"}\n\nEvery issue MUST carry an `evidence` field: the exact thing you READ that establishes it — `<path>:<line>` you opened, or the command you ran and what it returned. Not a restatement of the claim, not a plan reference: what you looked at. An issue without evidence is DISCARDED before it reaches anyone, so an unsupported finding is worse than no finding — it costs you the issue. If a claim is about a library's API, the evidence is that library's installed types or source in this repository, and the installed contract beats the plan.\n\n[coverage-gate] writer: no pre-flight has gated this run — standing down\n  [provider] 'openrouter' is not routable by the 'claude' set — using 'claude'.\n  [provider] The set is the launch's own choice; the env value was left by something else.\n  [provider] 'openrouter' is not routable by the 'claude' set — using 'claude'.",
+  "derivedFromSha256": "c2359d728e1ab884cbe27a7a2b3d8cd9df54844c9e18d2e712d966828c986612",
+  "derivedFromVersion": 1,
+  "id": "code-review-cycle",
+  "placeholders": [
+    "__ITERATION__",
+    "__PRIOR_CONTEXT__",
+    "__PROJECT_ROOT__",
+    "__REVIEW_PROFILE__",
+    "__STORY_ACS__",
+    "__STORY_AGENT__",
+    "__STORY_DESCRIPTION__",
+    "__STORY_DIFF__",
+    "__STORY_FILES__",
+    "__STORY_ID__",
+    "__STORY_TITLE__"
+  ],
+  "mayBeEmpty": [
+    "__PRIOR_CONTEXT__"
+  ]
+}

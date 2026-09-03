@@ -1,0 +1,14 @@
+[
+  {
+    "storyId": "MOCK3-1",
+    "codeline": "mocka",
+    "agentRole": "fare-rules-engineer",
+    "reason": "This is a fare-rule boundary bug (age-based concession threshold), squarely within the fare-rules-engineer's ownership of fare calculation logic."
+  },
+  {
+    "storyId": "MOCK3-2",
+    "codeline": "mockb",
+    "agentRole": "fare-rules-engineer",
+    "reason": "fare-rules-engineer is the only available role and must author the code fix, even though the defect is in stop-display formatting rather than fare logic."
+  }
+]

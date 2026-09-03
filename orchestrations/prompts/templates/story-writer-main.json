@@ -48,7 +48,6 @@
     "__TC_FACTS_2__",
     "__WRITE_FIRST_DIRECTIVE__",
     "__DEPENDENCIES__",
-    "__ACCEPTANCE_CRITERIA__",
     "__AGENT_INPUTS__",
     "__DESCRIPTION__",
     "__STORY_ID__",
@@ -56,5 +55,30 @@
     "__FILES__"
   ],
   "version": 1,
-  "body": "__SPEC_REALITY_WARNING____WRITE_FIRST_DIRECTIVE__\n\n__WRITE_FIRST_LINES__\n---\n\nImplement user story __STORY_ID__: __TITLE__\n\n## Story Description\n__DESCRIPTION__\n\n## Acceptance Criteria\n- __ACCEPTANCE_CRITERIA__\n__STRING_INVARIANTS_BLOCK__\n__AGENT_INPUTS__\n__REVIEW_FEEDBACK__\n__SKILL_NOTE_BLOCK__\n__VERIFICATION_CRITERIA__\n__CODELINE_FACTS_BLOCK__\n__PROJECT_TOOLS_BLOCK__\n__TEST_OWNERSHIP_BLOCK__\n__CODEGRAPH_TOOL_BLOCK__\n__UNCOVERED_VC_BLOCK__\n__BROWNFIELD_TEST_POLICY__\n__NEW_DEPENDENCY_DIRECTIVE__\n__TC_FACTS__\n__TC_MOCK_STRATEGY__\n__TC_BANNED__\n\n## Technical Notes\n__TECHNICAL_NOTES__\n__EXISTING_FILE_CONTENTS__\n\n## Files to Create/Modify (EXACT ABSOLUTE PATHS — start here; this list is not exhaustive)\nThese are the files the analysis identified. Use these exact paths for them. The list is a\nSTARTING POINT, not a fence: it is derived from the ticket and may be incomplete or may name\na path this repository spells differently. If your change genuinely requires another file in\nthis repository, write it — the only files closed to you are ones another story OWNS, and\nattempting one of those returns a specific refusal saying so. Do NOT work around a refusal by\nrepeatedly rewriting a file you can already write; that is never the fix. When you write a\nfile that is not listed here, say which file and why in your final message, so the reviewer\nsees the whole change.\n__FILES__\n\n## Dependencies\n__DEPENDENCIES__\n__DEPENDENCY_CONTRACTS__\n__MODULE_RESOLUTION__\n__CROSS_CODELINE_CONTRACT__\n\n## Instructions\n__WRITE_FIRST_DIRECTIVE__\n__WRITE_FIRST_LINES_2__\n__CONDITIONAL_SECTION__\n\n__CONDITIONAL_SECTION_2__\n2. Implement all acceptance criteria for this story\n__TC_FACTS_2__\n4. Do NOT create tests unless explicitly required in acceptance criteria\n\nAfter implementation, provide a brief summary of what was created/modified."
+  "body": "__SPEC_REALITY_WARNING____WRITE_FIRST_DIRECTIVE__\n\n__WRITE_FIRST_LINES__\n---\n\nImplement user story __STORY_ID__: __TITLE__\n\n## Story Description\n__DESCRIPTION__\n\n## Acceptance Criteria\n__STRING_INVARIANTS_BLOCK__\n__AGENT_INPUTS__\n__REVIEW_FEEDBACK__\n__SKILL_NOTE_BLOCK__\n__VERIFICATION_CRITERIA__\n__CODELINE_FACTS_BLOCK__\n__PROJECT_TOOLS_BLOCK__\n__TEST_OWNERSHIP_BLOCK__\n__CODEGRAPH_TOOL_BLOCK__\n__UNCOVERED_VC_BLOCK__\n__BROWNFIELD_TEST_POLICY__\n__NEW_DEPENDENCY_DIRECTIVE__\n__TC_FACTS__\n__TC_MOCK_STRATEGY__\n__TC_BANNED__\n\n## Technical Notes\n__TECHNICAL_NOTES__\n__EXISTING_FILE_CONTENTS__\n\n## Files to Create/Modify (EXACT ABSOLUTE PATHS — start here; this list is not exhaustive)\nThese are the files the analysis identified. Use these exact paths for them. The list is a\nSTARTING POINT, not a fence: it is derived from the ticket and may be incomplete or may name\na path this repository spells differently. If your change genuinely requires another file in\nthis repository, write it — the only files closed to you are ones another story OWNS, and\nattempting one of those returns a specific refusal saying so. Do NOT work around a refusal by\nrepeatedly rewriting a file you can already write; that is never the fix. When you write a\nfile that is not listed here, say which file and why in your final message, so the reviewer\nsees the whole change.\n__FILES__\n\n## Dependencies\n__DEPENDENCIES__\n__DEPENDENCY_CONTRACTS__\n__MODULE_RESOLUTION__\n__CROSS_CODELINE_CONTRACT__\n\n## Instructions\n__WRITE_FIRST_DIRECTIVE__\n__WRITE_FIRST_LINES_2__\n__CONDITIONAL_SECTION__\n\n__CONDITIONAL_SECTION_2__\n2. Implement all acceptance criteria for this story\n__TC_FACTS_2__\n4. Do NOT create tests unless explicitly required in acceptance criteria\n\nAfter implementation, provide a brief summary of what was created/modified.",
+  "mayBeEmpty": [
+    "__SPEC_REALITY_WARNING__",
+    "__STRING_INVARIANTS_BLOCK__",
+    "__AGENT_INPUTS__",
+    "__REVIEW_FEEDBACK__",
+    "__SKILL_NOTE_BLOCK__",
+    "__CODELINE_FACTS_BLOCK__",
+    "__TEST_OWNERSHIP_BLOCK__",
+    "__CODEGRAPH_TOOL_BLOCK__",
+    "__UNCOVERED_VC_BLOCK__",
+    "__BROWNFIELD_TEST_POLICY__",
+    "__NEW_DEPENDENCY_DIRECTIVE__",
+    "__TC_FACTS__",
+    "__TC_MOCK_STRATEGY__",
+    "__TC_BANNED__",
+    "__EXISTING_FILE_CONTENTS__",
+    "__DEPENDENCY_CONTRACTS__",
+    "__CROSS_CODELINE_CONTRACT__",
+    "__WRITE_FIRST_LINES__",
+    "__VERIFICATION_CRITERIA__",
+    "__WRITE_FIRST_LINES_2__"
+  ],
+  "$mayBeEmptyWhy": "Each is a section build_implementation_prompt initialises empty and fills only on a condition, so absent is a REAL state: no prior review (every first attempt), no persisted skill notes, no codegraph plugin, a greenfield file, a single codeline, a non-brownfield run, all VCs covered. Without this the engine-prompt empty-payload guard (added 5f3995f, 2026-08-23) refused every writer prompt: review_feedback is empty unless review-feedback-<story>.json exists, which it cannot on a first attempt, so build_implementation_prompt returned 1 and claude.sh logged 'REFUSED — not invoking the writer' for EVERY story. The list is derived by executing the real builder against a realistic story and recording what it left empty, not chosen by hand. A second pass against the real MOCK3-1 story added __WRITE_FIRST_LINES__, __VERIFICATION_CRITERIA__, __FILES__ and __WRITE_FIRST_LINES_2__: a story that declares no verification criteria and no files is a real state the PRD produces today, and the write-first lines are conditional on it.",
+  "$mayBeEmptyReview": "Two entries deserve a second look when anyone next touches this: __AGENT_INPUTS__ (empty may mean 'this role declares no inputs' OR that the agent-inputs lookup returned nothing) and __TEST_OWNERSHIP_BLOCK__ (empty on non-brownfield runs, and test ownership is a policy the operator has been explicit about). Both are listed because production genuinely emits them empty today; neither should be treated as settled.",
+  "$whyFilesIsNotOptional": "__FILES__ was briefly listed here and is deliberately NOT. A live haiku call on 2026-08-26 was given a writer prompt with no files and answered: 'I need clarification on the file paths ... the working directory is empty. Could you provide the actual absolute file paths?' A writer with nowhere to write cannot act, so an empty __FILES__ must REFUSE rather than render. The story that produced it (MOCK3-1) was PRE-SPEC — canonical stories carry no technicalNotes, and the spec pass adds them before the writer runs — so refusing here also catches the real defect of invoking the writer before elaboration."
 }

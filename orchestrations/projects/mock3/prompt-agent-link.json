@@ -86,51 +86,33 @@
       ]
     },
     "review-ranger": {
-      "seam": "code-review-cycle",
+      "seam": "qa-gate:review-ranger",
       "prompts": [
-        "code-review-cycle"
+        "qa-review-ranger"
       ]
     },
     "mutant-hunter": {
-      "seam": "repro-test-writer",
+      "seam": "qa-gate:mutant-hunter",
       "prompts": [
-        "repro-test-writer"
+        "qa-mutant-hunter"
       ]
     },
     "fuzz-weaver": {
-      "seam": "repro-test-writer",
+      "seam": "qa-gate:fuzz-weaver",
       "prompts": [
-        "repro-test-writer"
+        "qa-fuzz-weaver"
       ]
     },
     "perf-sentinel": {
-      "seam": "code-review-cycle",
+      "seam": "qa-gate:perf-sentinel",
       "prompts": [
-        "code-review-cycle"
+        "qa-perf-sentinel"
       ]
     },
     "spec-validator": {
-      "seam": "prd-change-reviewer",
+      "seam": "qa-gate:spec-validator",
       "prompts": [
-        "prd-change-reviewer"
-      ]
-    },
-    "doc-coordinator": {
-      "seam": "cpa-inference",
-      "prompts": [
-        "cpa-inference"
-      ]
-    },
-    "docstring-agent": {
-      "seam": "cpa-inference",
-      "prompts": [
-        "cpa-inference"
-      ]
-    },
-    "api-doc-generator": {
-      "seam": "tc-writer",
-      "prompts": [
-        "tc-writer"
+        "qa-spec-validator"
       ]
     },
     "guide-author": {
@@ -139,40 +121,10 @@
         "tc-writer"
       ]
     },
-    "architecture-doc-agent": {
-      "seam": "cpa-inference",
-      "prompts": [
-        "cpa-inference"
-      ]
-    },
     "changelog-agent": {
       "seam": "cpa-inference",
       "prompts": [
         "cpa-inference"
-      ]
-    },
-    "doc-reviewer": {
-      "seam": "code-review-cycle",
-      "prompts": [
-        "code-review-cycle"
-      ]
-    },
-    "doc-index-builder": {
-      "seam": "tc-writer",
-      "prompts": [
-        "tc-writer"
-      ]
-    },
-    "doc-search-agent": {
-      "seam": "cpa-inference",
-      "prompts": [
-        "cpa-inference"
-      ]
-    },
-    "doc-site-builder": {
-      "seam": "tc-writer",
-      "prompts": [
-        "tc-writer"
       ]
     },
     "grooming-coordinator": {
@@ -343,22 +295,10 @@
         "code-review-cycle"
       ]
     },
-    "typescript-logic-fixer": {
-      "seam": "story-writer",
+    "runtime-boundary": {
+      "seam": "qa-gate:runtime-boundary",
       "prompts": [
-        "story-writer"
-      ]
-    },
-    "fares-investigator": {
-      "seam": "code-graph-detective",
-      "prompts": [
-        "code-graph-detective"
-      ]
-    },
-    "schedule-investigator": {
-      "seam": "code-graph-detective",
-      "prompts": [
-        "code-graph-detective"
+        "runtime-boundary-review"
       ]
     }
   },
@@ -371,7 +311,12 @@
     "impl-failure-analyst",
     "prd-change-reviewer",
     "prd-model-coordinator",
-    "repro-test-writer",
+    "qa-gate:fuzz-weaver",
+    "qa-gate:mutant-hunter",
+    "qa-gate:perf-sentinel",
+    "qa-gate:review-ranger",
+    "qa-gate:runtime-boundary",
+    "qa-gate:spec-validator",
     "story-writer",
     "tc-writer"
   ],
@@ -483,6 +428,18 @@
     ],
     "survey-review": [
       "survey-review"
+    ],
+    "qa-gate:runtime-boundary": [
+      "runtime-boundary-review"
+    ],
+    "roster-specialiser": [
+      "roster-specialisation"
+    ],
+    "project-roster-review": [
+      "project-roster-review"
+    ],
+    "topology-router": [
+      "topology-router"
     ]
   }
 }

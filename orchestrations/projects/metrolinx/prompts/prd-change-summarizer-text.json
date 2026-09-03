@@ -1,10 +1,13 @@
 {
   "$why": [
-    "Moved out of claude.sh on 2026-08-15 (10 of 20). The PRD-text variant — see the tool",
-    "variant for why these stayed two prompts."
+    "Generated from the prd-change-summarizer-text template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
   ],
-  "body": "You are a PRD change summarizer. A __CHANGE_TYPE__ for story __STORY_ID__ was REJECTED by the change reviewer for these reasons:\n__ISSUES__\n\nORIGINAL TEXT:\n__REJECTED_TEXT__\n\nRewrite the text to fix ONLY the issues listed above, preserving the original actionable rule. Requirements: no reference to any specific story ID; start with an imperative verb (Use, Always, Never, Prefer, Avoid); under 200 characters; end on a complete sentence; no markdown, no headers, no commentary.\n\nEmit ONLY the corrected text — nothing else.",
-  "description": "Rewrite rejected PRD text to fix only the issues the reviewer raised, preserving the rule.",
+  "authority": "project",
+  "body": "You are a PRD change summarizer for the gotransit project. A __CHANGE_TYPE__ for story __STORY_ID__ was REJECTED by the change reviewer for these reasons:\n__ISSUES__\n\nORIGINAL TEXT:\n__REJECTED_TEXT__\n\nRewrite the text to fix ONLY the issues listed above, preserving the original actionable rule. Requirements: no reference to any specific story ID; start with an imperative verb (Use, Always, Never, Prefer, Avoid); under 200 characters; end on a complete sentence; no markdown, no headers, no commentary.\n\nEmit ONLY the corrected text — nothing else.",
+  "derivedFromSha256": "77c4744c10b3f37fcbcd5ef14a83c2c053c75d9d827b197446cd430ffca7d224",
+  "derivedFromVersion": 1,
   "id": "prd-change-summarizer-text",
   "placeholders": [
     "__CHANGE_TYPE__",
@@ -12,10 +15,5 @@
     "__REJECTED_TEXT__",
     "__STORY_ID__"
   ],
-  "version": 1,
-  "seams": [
-    "prd-change-summarizer"
-  ],
-  "derivedFromSha256": "a4f3e073dedb864b4437d37657827042822cb7fcc10c3946e118510762689ed7",
-  "authority": "project"
+  "mayBeEmpty": []
 }

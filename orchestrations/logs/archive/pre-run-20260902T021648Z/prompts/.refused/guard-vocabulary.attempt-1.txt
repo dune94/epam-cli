@@ -1,0 +1,43 @@
+# refused: the generated prompt dropped placeholder(s) the template requires: __CODEGRAPH_SECTION__, __DOC_SECTION__, __EVIDENCE__, __MANIFEST__, __PERSONA_PREFIX__, __RULE__, __SEAM__, __STATEMENT_LIST__, __STORY_DESCRIPTION__, __STORY_TITLE__. The evidence they carry would silently never reach the agent.
+# template: guard-vocabulary   attempt: 1/3
+# required placeholders: __CODEGRAPH_SECTION__, __DOC_SECTION__, __EVIDENCE__, __MANIFEST__, __PERSONA_PREFIX__, __RULE__, __SEAM__, __STATEMENT_LIST__, __STORY_DESCRIPTION__, __STORY_TITLE__
+# ---------------- model reply below, verbatim ----------------
+Based on my review of the repository, here's the specialized prompt:
+
+Checkout Email Validation Specialist | GUARD SEAM: CheckoutForm email confirmation matching
+
+THE RULE THIS GUARD ENFORCES:
+Email addresses must be compared case-insensitively when validating the confirm email field against the primary email field. RFC 5321 specifies that email domains are case-insensitive; common practice treats the entire address as case-insensitive for user-facing validation.
+
+THE STATEMENTS THE GUARD WILL CHECK:
+- The confirmEmail validate function must perform case-insensitive string comparison against the email field
+- Email comparison must normalize case (lowercase both values) before equality check
+- Test coverage must verify that email variations with different cases (e.g., "Test@Example.com" vs "test@example.com") are treated as matching
+- The validation error message TRM774 must not be shown when emails differ only in case
+
+DECLARED MANIFEST (the files this story says it will touch):
+src/components/pages/CheckoutPage/CheckoutForm.tsx
+src/components/pages/CheckoutPage/__tests__/Checkout.spec.tsx
+
+CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):
+In src/components/pages/CheckoutPage/CheckoutForm.tsx, lines 305-309, the confirmEmail field validation currently performs a case-sensitive equality check:
+```
+validate: (value: string) => {
+  if (email && value && value !== email) {
+    return t("TRM774");
+  }
+}
+```
+This uses the strict inequality operator (!==) which is case-sensitive. The validation must be updated to `value.toLowerCase() !== email.toLowerCase()` to properly handle email case-insensitivity.
+
+The email field itself uses EMAIL_REGEX defined in src/constants/common.ts line 60: `/^(?!.{101})[^@\s]+@[^@\s]+\.[^@\s]+$/`, which validates format but does not normalize case.
+
+The test suite in src/components/pages/CheckoutPage/__tests__/Checkout.spec.tsx includes email input tests (lines 73-74, 107-108, 118-119) but does not currently test case-sensitivity scenarios.
+
+Dependencies: react-hook-form (useFormContext, useWatch) for form state management; react-hook-form's validate function callback for custom validation logic; jest and @testing-library/react for testing.
+
+Build and test commands per package.json: `npm run test` runs jest; `npm run test:coverage-check` runs coverage checks.
+
+STORY CONTEXT:
+Title: Go‑Checkout Page - Email & Confirm Email Case Sensitivity
+Description: Ensure email confirmation validation treats "Test@Example.com" and "test@example.com" as matching addresses by performing case-insensitive string comparison in the confirmEmail field's validate function.

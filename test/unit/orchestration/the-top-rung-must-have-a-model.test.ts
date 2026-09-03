@@ -34,20 +34,33 @@ import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+// LADDERS AND MODEL OVERRIDES MOVED TO THE STACK. The 2026-08-25 migration took them out of each
+// project's llm-settings.json and into config/llm-defaults.<set>.json — a ladder names MODELS and
+// a model belongs to a STACK. This file read the project copy, which now carries only a note
+// saying so, so every lookup came back empty. See test/support/llm-settings.ts.
+import { stackSettings, defaultStack } from '../../support/llm-settings'
+const REPO_ROOT_CFG = join(__dirname, '../../../orchestrations/config');
+
 const ROOT = join(__dirname, '../../..');
 const CPA = join(ROOT, 'orchestrations/scripts/contextualize-stories.sh');
-const SETTINGS = join(ROOT, 'orchestrations/projects/metrolinx/llm-settings.json');
+// THIS SUITE IS ABOUT ONE STACK'S LADDER, so it names that stack rather than inheriting
+// whichever set happens to be default. Pointing it at the default made it assert an
+// openrouter-shaped vocabulary against whatever ladder the default set declares.
+const SUITE_STACK = 'openrouter';
+const SETTINGS = join(REPO_ROOT_CFG, `llm-defaults.${SUITE_STACK}.json`);
+const PROJECT_SETTINGS = join(ROOT, 'orchestrations/projects/metrolinx/llm-settings.json');
 
 /** Extract the real function, terminating AFTER its embedded python heredoc. */
 function extractFn(): string {
   const src = readFileSync(CPA, 'utf8').split('\n');
   const start = src.findIndex((l) => l.startsWith('compute_escalation_profile() {'));
   expect(start, 'compute_escalation_profile not found').toBeGreaterThan(-1);
-  // A `}` at column 0 also occurs INSIDE the heredoc (it emits JSON), so the function's
-  // real end is the first one AFTER the heredoc terminator.
-  const pyEnd = src.findIndex((l, i) => i > start && l === 'PYEOF');
-  expect(pyEnd, 'PYEOF terminator not found').toBeGreaterThan(start);
-  const end = src.findIndex((l, i) => i > pyEnd && l.startsWith('}'));
+  // THE HEREDOC IS A HANDLER NOW. The function embedded a python heredoc that emitted JSON,
+  // so its own `}` had to be found after the PYEOF terminator. The python moved to
+  // lib/handlers/story-contextualization.py and the function is a three-line call — there is
+  // no PYEOF, and demanding one reported the function as missing rather than as moved.
+  const end = src.findIndex((l, i) => i > start && l.startsWith('}'));
+  expect(end, 'the function has no closing brace').toBeGreaterThan(start);
   return src.slice(start, end + 1).join('\n');
 }
 
@@ -57,15 +70,28 @@ function profile(env: Record<string, string>) {
   try {
     const script = join(dir, 'run.sh');
     writeFileSync(script, [
+      // The function shells out to $SCRIPT_DIR/lib/handlers/story-contextualization.py, so the
+      // lifted copy needs the same two paths the real script sets before calling it.
+      `SCRIPT_DIR=${JSON.stringify(join(ROOT, 'orchestrations/scripts'))}`,
+      `CAL_FILE=${JSON.stringify(join(dir, 'calibration.json'))}`,
       `. ${JSON.stringify(join(ROOT, 'orchestrations/scripts/lib/model-ladders.sh'))}`,
-      `export_model_ladders ${JSON.stringify(SETTINGS)}`,
+      // PRODUCTION'S CALL SHAPE. export_model_ladders takes a PROJECT settings file and
+      // resolves the stack half itself, keyed on EPAM_PROVIDER_SET. Handed the stack file
+      // directly it resolved dirname() — the config dir — as the project, fell back to the
+      // DEFAULT set, and exported a chain in a different vocabulary than the one asserted.
+      `export_model_ladders ${JSON.stringify(PROJECT_SETTINGS)}`,
       extractFn(),
       'compute_escalation_profile "high" "0.5" "20000" "${EPAM_MODEL:-}"',
     ].join('\n'));
     const res = spawnSync('bash', [script], {
       encoding: 'utf8',
       cwd: ROOT,
-      env: { ...process.env, ...env },
+      env: {
+        ...process.env,
+        EPAM_PROVIDER_SET: SUITE_STACK,
+        NODE_BIN: process.env.NODE_BIN || `${process.env.HOME}/.nvm/versions/node/v20.20.0/bin/node`,
+        ...env,
+      },
     });
     try { return JSON.parse(res.stdout || '{}'); } catch { return {}; }
   } finally {
@@ -87,12 +113,25 @@ function declaredRungs(): string[] {
 /** A tier the project actually declares — never a name written here. */
 const A_TIER = Object.keys(JSON.parse(readFileSync(SETTINGS, 'utf8')).ladders)[0];
 
-const BASE = {
-  ORCH_GATE_MODEL: 'z-ai/glm-5.2',
-  ESCALATION_MODEL: 'z-ai/glm-5.2',
-  ESCALATION_MODEL_HIGH: 'MiniMax-M3',
-  EPAM_MODEL: 'MiniMax-M3',
-};
+// DERIVED, NEVER WRITTEN. These were four model-name literals — the same vocabulary the
+// assertions below insist the FUNCTION must not invent. A rename in the stack file turned
+// them into models no ladder declares, and the suite failed for a reason unrelated to what
+// it tests. The stack declares its own start and top; the harness reads them.
+const BASE = (() => {
+  const tier = JSON.parse(readFileSync(SETTINGS, 'utf8')).ladders[A_TIER];
+  const hops = tier.modelLadder ?? [];
+  const start = tier.startModel ?? hops[0]?.from;
+  // The profile's top entry is the hop taken FROM the high-escalation model, so the high
+  // model is the second-to-last rung — set it to the last one and there is nothing beyond
+  // it to price, which is the very emptiness these assertions treat as the defect.
+  const high = hops[hops.length - 1]?.from ?? start;
+  return {
+    ORCH_GATE_MODEL: start,
+    ESCALATION_MODEL: start,
+    ESCALATION_MODEL_HIGH: high,
+    EPAM_MODEL: high,
+  };
+})();
 
 describe('compute_escalation_profile resolves every rung it prices', () => {
   it('produces a profile at all — otherwise the assertions below prove nothing', () => {

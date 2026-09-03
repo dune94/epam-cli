@@ -127,8 +127,8 @@ describe('extractTaggedJson', () => {
     expect(extractTaggedJson(text, 'SPEC_AGENT')).toEqual(good);
   });
 
-  it('normalizes <_TAG> underscore-prefix variant that Qwen emits to distinguish from template echo', () => {
-    // Qwen outputs empty template block first, then its real content with <_TAG> opening
+  it('normalizes <_TAG> underscore-prefix variant that OpenRouter emits to distinguish from template echo', () => {
+    // OpenRouter outputs empty template block first, then its real content with <_TAG> opening
     const realPayload = [{ storyId: 'HW-001', agents: ['openspec'], priority: 'high' }];
     const text = [
       '<SPEC_ASSIGNMENTS>',
@@ -190,12 +190,12 @@ describe('extractTaggedJson', () => {
 
 describe('resolvePromptProvider', () => {
   it('returns AI_PROVIDER when set (highest priority)', () => {
-    expect(resolvePromptProvider({ AI_PROVIDER: 'openai', EPAM_ORCHESTRATION_PROVIDER: 'qwen' }))
+    expect(resolvePromptProvider({ AI_PROVIDER: 'openai', EPAM_ORCHESTRATION_PROVIDER: 'openrouter' }))
       .toBe('openai');
   });
 
   it('falls back to EPAM_ORCHESTRATION_PROVIDER when AI_PROVIDER unset', () => {
-    expect(resolvePromptProvider({ EPAM_ORCHESTRATION_PROVIDER: 'qwen' })).toBe('qwen');
+    expect(resolvePromptProvider({ EPAM_ORCHESTRATION_PROVIDER: 'openrouter' })).toBe('openrouter');
   });
 
   it('detects codex from CLAUDE_CMD ending with "codex"', () => {
@@ -211,9 +211,9 @@ describe('resolvePromptProvider', () => {
     expect(() => resolvePromptProvider({})).toThrow('No AI provider configured');
   });
 
-  it('uses qwen when EPAM_ORCHESTRATION_PROVIDER=qwen and no AI_PROVIDER', () => {
-    expect(resolvePromptProvider({ EPAM_ORCHESTRATION_PROVIDER: 'qwen', CLAUDE_CMD: 'claude' }))
-      .toBe('qwen');
+  it('uses openrouter when EPAM_ORCHESTRATION_PROVIDER=openrouter and no AI_PROVIDER', () => {
+    expect(resolvePromptProvider({ EPAM_ORCHESTRATION_PROVIDER: 'openrouter', CLAUDE_CMD: 'claude' }))
+      .toBe('openrouter');
   });
 });
 
@@ -221,46 +221,46 @@ describe('resolvePromptProvider', () => {
 
 describe('resolvePromptExec', () => {
   it('includes --provider arg', () => {
-    const exec = resolvePromptExec('/path/ai-run.sh', { AI_PROVIDER: 'qwen' });
+    const exec = resolvePromptExec('/path/ai-run.sh', { AI_PROVIDER: 'openrouter' });
     expect(exec.args).toContain('--provider');
-    expect(exec.args).toContain('qwen');
+    expect(exec.args).toContain('openrouter');
   });
 
   it('includes --model arg when AI_MODEL is set', () => {
     const exec = resolvePromptExec('/path/ai-run.sh', {
-      AI_PROVIDER: 'qwen',
-      AI_MODEL: 'qwen/qwen3-coder-30b-a3b-instruct',
+      AI_PROVIDER: 'openrouter',
+      AI_MODEL: 'openrouter/model3-coder-30b-a3b-instruct',
     });
     expect(exec.args).toContain('--model');
-    expect(exec.args).toContain('qwen/qwen3-coder-30b-a3b-instruct');
+    expect(exec.args).toContain('openrouter/model3-coder-30b-a3b-instruct');
   });
 
   it('falls back to ORCH_GATE_MODEL when AI_MODEL not set', () => {
     const exec = resolvePromptExec('/path/ai-run.sh', {
-      AI_PROVIDER: 'qwen',
-      ORCH_GATE_MODEL: 'qwen/qwen3-coder-flash',
+      AI_PROVIDER: 'openrouter',
+      ORCH_GATE_MODEL: 'openrouter/model3-coder-flash',
     });
     expect(exec.args).toContain('--model');
-    expect(exec.args).toContain('qwen/qwen3-coder-flash');
+    expect(exec.args).toContain('openrouter/model3-coder-flash');
   });
 
   it('omits --model when neither AI_MODEL nor ORCH_GATE_MODEL is set', () => {
-    const exec = resolvePromptExec('/path/ai-run.sh', { AI_PROVIDER: 'qwen' });
+    const exec = resolvePromptExec('/path/ai-run.sh', { AI_PROVIDER: 'openrouter' });
     expect(exec.args).not.toContain('--model');
   });
 
   it('AI_MODEL takes priority over ORCH_GATE_MODEL', () => {
     const exec = resolvePromptExec('/path/ai-run.sh', {
-      AI_PROVIDER: 'qwen',
-      AI_MODEL: 'qwen/qwen3-coder-30b-a3b-instruct',
-      ORCH_GATE_MODEL: 'qwen/qwen3-coder-flash',
+      AI_PROVIDER: 'openrouter',
+      AI_MODEL: 'openrouter/model3-coder-30b-a3b-instruct',
+      ORCH_GATE_MODEL: 'openrouter/model3-coder-flash',
     });
     const modelIdx = exec.args.indexOf('--model');
-    expect(exec.args[modelIdx + 1]).toBe('qwen/qwen3-coder-30b-a3b-instruct');
+    expect(exec.args[modelIdx + 1]).toBe('openrouter/model3-coder-30b-a3b-instruct');
   });
 
   it('sets cmd to provided aiRunnerCmd', () => {
-    const exec = resolvePromptExec('/custom/path/ai-run.sh', { AI_PROVIDER: 'qwen' });
+    const exec = resolvePromptExec('/custom/path/ai-run.sh', { AI_PROVIDER: 'openrouter' });
     expect(exec.cmd).toBe('/custom/path/ai-run.sh');
   });
 });

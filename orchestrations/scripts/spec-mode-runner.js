@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+const { evidenceWindow } = require('./lib/evidence-windows.js');
+const { recordAgentReply, recordAgentPrompt } = require('./lib/agent-reply-log.js');
+// Local tool caps are DECLARED — config/tool-timeouts.json. A literal here would be a
+// second home for a decision that already has one.
+const { toolTimeoutMs } = require('./lib/tool-timeouts.js');
 // ─────────────────────────────────────────────────────────────────────────────
 // spec-mode-runner.js — Collaborative specification elaboration pipeline
 //
@@ -20,6 +25,7 @@ const path = require('node:path');
 const { renderEngineTemplate } = require('./lib/engine-prompt.js');
 const os = require('node:os');
 const { spawn, execSync } = require('node:child_process');
+const { unwrapEnvelope } = require('./lib/agent-output-schema.js');
 // Lazily loaded: this file is executed from an ISOLATED COPY by some callers
 // (see guarded-step-retry-history.test.ts), so a hard top-level require of a
 // sibling lib would break them at load time rather than at use.
@@ -127,6 +133,70 @@ try {
 let _semble;
 let _codegraph;
 
+/**
+ * ONE PLACE A SEARCH QUERY IS BUILT FROM A STORY.
+ *
+ * Two functions did this with their own inline stopword regex and their own fixed prefix, and
+ * the copies had already drifted: one said "processes resolves", the other "processes
+ * calculates resolves". Retrieval quality therefore differed by which path reached it, and
+ * nothing said so.
+ *
+ * The vocabulary and the caps are DECLARED (config/spec-mode-defaults.json retrieval). A
+ * language's stopwords are an input: a ticket in another language keeps every filler word and
+ * loses nothing meaningful, which is a configuration problem, not an engine one.
+ */
+/**
+ * Numbers that decide behaviour, from the declaration. They were named constants here, which
+ * reads like configuration and is not: changing one meant a code edit and a rebuild, and no
+ * deployment could differ.
+ */
+function policyConfig() {
+  try {
+    const file = process.env.EPAM_SPEC_MODE_DEFAULTS
+      || path.join(__dirname, '..', 'config', 'spec-mode-defaults.json');
+    return JSON.parse(fs.readFileSync(file, 'utf8')).policy || {};
+  } catch { return {}; }
+}
+
+function retrievalConfig() {
+  try {
+    const file = process.env.EPAM_SPEC_MODE_DEFAULTS
+      || path.join(__dirname, '..', 'config', 'spec-mode-defaults.json');
+    return JSON.parse(fs.readFileSync(file, 'utf8')).retrieval || {};
+  } catch { return {}; }
+}
+
+/**
+ * NEVER MID-TERM. Slicing at a character count can cut a word in half, and half a word matches
+ * nothing — the query silently narrows and the caller sees a smaller result set, not an error.
+ */
+function capAtWord(text, limit) {
+  const s = String(text || '');
+  const n = Number(limit);
+  if (!Number.isFinite(n) || n <= 0 || s.length <= n) return s;
+  const cut = s.slice(0, n);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace > 0 ? cut.slice(0, lastSpace) : cut).trim();
+}
+
+/** Domain terms of a title: declared stopwords removed, capped at a word boundary. */
+function retrievalTerms(title) {
+  const r = retrievalConfig();
+  const words = Array.isArray(r.stopwords) ? r.stopwords : [];
+  let out = String(title || '');
+  if (words.length) {
+    const escaped = words.map((w) => String(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    out = out.replace(new RegExp(`\\b(${escaped})\\b`, 'gi'), '');
+  }
+  return capAtWord(out.replace(/\s+/g, ' ').trim(), r.termChars);
+}
+
+/** The declared prefix plus a story's domain terms, capped. */
+function buildRetrievalQuery(title) {
+  const r = retrievalConfig();
+  return capAtWord(`${String(r.queryPrefix || '').trim()} ${retrievalTerms(title)}`.trim(), r.queryChars);
+}
+
 function fetchCodeGraphContext(story) {
   if (process.env.CODEGRAPH_ENABLED !== '1') return null;
   try {
@@ -151,12 +221,10 @@ function fetchCodeGraphContext(story) {
       if (!_codegraph.isCodeGraphIndexed(repoPath)) return null;
     }
 
-    const domainTerms = story.title
-      .replace(/\b(the|a|an|is|not|for|in|of|and|or|to|as|at|by|be|was|are|it|its|that|this|with)\b/gi, '')
-      .trim()
-      .slice(0, 200);
-    const query = `applies handles processes resolves ${domainTerms}`.slice(0, 300);
-    const output = _codegraph.exploreCodeGraph(query, repoPath, { maxFiles: 4, maxChars: 12000 });
+    const query = buildRetrievalQuery(story.title);
+    const _rc = retrievalConfig();
+    const output = _codegraph.exploreCodeGraph(query, repoPath,
+      { maxFiles: _rc.maxFiles, maxChars: _rc.maxChars });
     return output || null;
   } catch { return null; }
 }
@@ -171,7 +239,10 @@ function fetchSembleContext(story) {
     const isBrownfield = process.env.EPAM_BROWNFIELD === '1';
 
     // Symptom query — same in both modes; finds code near the described behavior
-    const symptomQuery = [story.title, ...(story.acceptanceCriteria || []).slice(0, 3)].join(' ').slice(0, 400);
+    const _r = retrievalConfig();
+    const symptomQuery = capAtWord(
+      [story.title, ...(story.acceptanceCriteria || []).slice(0, _r.acsInSymptomQuery)].join(' '),
+      _r.symptomQueryChars);
     const symptomResult = _semble.sembleSearch(symptomQuery, repoPath, 8, 20);
 
     if (!isBrownfield) {
@@ -181,11 +252,7 @@ function fetchSembleContext(story) {
     }
 
     // Brownfield Semble fallback: two queries (symptom + service-boundary).
-    const domainTerms = story.title
-      .replace(/\b(the|a|an|is|not|for|in|of|and|or|to|as|at|by|be|was|are|it|its|that|this|with)\b/gi, '')
-      .trim()
-      .slice(0, 200);
-    const pathQuery = `applies handles processes calculates resolves ${domainTerms}`.slice(0, 400);
+    const pathQuery = buildRetrievalQuery(story.title);
     const pathResult = _semble.sembleSearch(pathQuery, repoPath, 5, 30);
 
     const seen = new Set();
@@ -546,7 +613,8 @@ function releaseFileLock(lockPath) {
 // Tool-use produces API-enforced valid JSON arguments — eliminates the M3
 // unescaped-char / truncation parse failures seen with raw JSON output.
 
-const MINIMAX_BASE_URL = 'https://api.minimaxi.chat/v1';
+// MINIMAX_BASE_URL removed with callMiniMaxWithTool: no vendor endpoint is named outside
+// the handler and the provider sets.
 
 const TOOL_SPEC_ASSIGNMENTS = {
   name: 'submit_assignments',
@@ -744,76 +812,17 @@ const TOOL_MODEL_REVIEW = {
 // itemsKey: if set, extracts result[itemsKey] (for array-returning tools); otherwise returns full args.
 const MINIMAX_TOOL_TIMEOUT_MS = parseInt(process.env.MINIMAX_TOOL_TIMEOUT_MS || '180000', 10);
 
-async function callMiniMaxWithTool(prompt, toolDef, logPath, itemsKey) {
-  const apiKey = process.env.MINIMAX_API_KEY || process.env.EPAM_API_KEY_MINIMAX;
-  if (!apiKey) throw new Error('callMiniMaxWithTool: no API key (MINIMAX_API_KEY / EPAM_API_KEY_MINIMAX)');
-  // The caller's explicit AI_MODEL, else this seam's ladder position. No vendor name here.
-  const model = process.env.AI_MODEL || seamStartModel('spec-coordinator');
-  if (!model) throw new Error('callMiniMaxWithTool: no model resolved from the spec-coordinator seam ladder');
-  const baseURL = process.env.MINIMAX_BASE_URL || MINIMAX_BASE_URL;
-
-  const body = {
-    model,
-    messages: [{ role: 'user', content: prompt }],
-    max_tokens: 4096,
-    temperature: 0.2,
-    tools: [{ type: 'function', function: toolDef }],
-    tool_choice: { type: 'function', function: { name: toolDef.name } },
-  };
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), MINIMAX_TOOL_TIMEOUT_MS);
-
-  let res;
-  try {
-    res = await fetch(`${baseURL}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timer);
-  }
-
-  if (!res.ok) throw new Error(`MiniMax API error: ${res.status} ${await res.text()}`);
-
-  const data = await res.json();
-  const rawText = data.choices?.[0]?.message?.content || '';
-  const tc = data.choices?.[0]?.message?.tool_calls?.[0];
-  const argsRaw = tc?.function?.arguments || '{}';
-
-  if (logPath) {
-    fs.writeFileSync(logPath, `# Prompt\n${prompt}\n\n# Tool call args (raw)\n${argsRaw}\n\n# Text output\n${rawText}\n`);
-  }
-
-  // Parse args — fall back to jsonrepair on truncated/malformed output from M3
-  let args;
-  try {
-    args = JSON.parse(argsRaw);
-  } catch (parseErr) {
-    if (_jsonrepair) {
-      try {
-        args = JSON.parse(_jsonrepair(argsRaw));
-        console.warn(`callMiniMaxWithTool: jsonrepair recovered truncated args for tool ${toolDef.name}`);
-      } catch {
-        console.warn(`callMiniMaxWithTool: failed to parse tool args even with jsonrepair (tool=${toolDef.name}): ${parseErr.message}`);
-        return null;
-      }
-    } else {
-      console.warn(`callMiniMaxWithTool: failed to parse tool args (tool=${toolDef.name}): ${parseErr.message}`);
-      return null;
-    }
-  }
-
-  return itemsKey ? (args[itemsKey] ?? null) : args;
-}
+// callMiniMaxWithTool DELETED 2026-08-25.
+//
+// It fetched the vendor's /chat/completions endpoint directly and read MINIMAX_API_KEY itself
+// — a second channel around the central handler. MiniMax still runs; it goes through the
+// handler like every other provider.
 
 // Unified agent runner: tool-use for MiniMax, raw JSON for all other providers.
 // Ladder: if minimax times out or returns null, escalates to SPEC_PASS_LADDER_PROVIDER
 // (default: openai via OpenRouter) using the raw JSON + jsonrepair path.
 //
-// Fast-path: set SPEC_MODE_PROVIDER=qwen to skip MiniMax entirely.
+// Fast-path: set SPEC_MODE_PROVIDER=openrouter to skip MiniMax entirely.
 //   SPEC_MODE_OPENSPEC_MODEL — model for openspec calls (default: z-ai/glm-5.2)
 //   SPEC_MODE_SPECKIT_MODEL  — model for speckit calls  (default: z-ai/glm-5.2)
 //   SPEC_MODE_MODEL          — fallback for all other spec-mode calls (default: z-ai/glm-5.2)
@@ -1235,7 +1244,32 @@ function specAgentEnv(env = process.env, repoPath = '') {
  * three retries reproduced it because nothing told the model it had failed. The reason
  * this returns is the only thing that makes attempt 2 different from attempt 1.
  */
-function _validatedOrNull(parsed, tag) {
+function _validatedOrNull(parsed, tag, seam) {
+  // THE SEAM'S DECLARED CONTRACT, FIRST.
+  //
+  // Nine seams declare the key their consumer cannot proceed without, taken from the shape their
+  // own prompt states. A breach DROPS the reply rather than logging and continuing: the tagged
+  // schema path below stays diagnostic because an unproven validator must not halt a run, but a
+  // declared contract is not unproven — it says the consumer has nothing to read.
+  //
+  // Wired here because a validator nobody calls is not a contract. validateDeclaredOutput shipped
+  // with fatal:true and no caller, which is the plan-fidelity-gate defect: a library with a test
+  // and no call site looks covered while the run behaves as though the check does not exist.
+  const _seam = seam || process.env.EPAM_AGENT_NAME || '';
+  if (_seam) {
+    try {
+      // eslint-disable-next-line global-require
+      const d = require('./lib/agent-output-schema.js').validateDeclaredOutput(_seam, parsed);
+      if (d.declared && !d.ok) {
+        console.warn(`spec-mode: ${d.reason}`);
+        return null;
+      }
+    } catch (e) {
+      // Say so loudly rather than treating an unavailable validator as a pass.
+      console.warn(`spec-mode: declared-contract validator unavailable (${e.message}) — ${_seam} NOT validated`);
+    }
+  }
+
   let v;
   try {
     // eslint-disable-next-line global-require
@@ -1275,13 +1309,97 @@ function withToolGrant(env, toolGrant) {
   return env;
 }
 
+/**
+ * THE OUTPUT CONTRACT, IN THE PROMPT, DERIVED FROM THE DECLARED SCHEMA.
+ *
+ * These seams bind their output with EPAM_RESPONSE_SCHEMA. That variable is read in exactly one
+ * place — src/agent/AgentRunner.ts, the ReAct loop reached through the `epam run` arm — so on any
+ * stack whose runner is a one-shot (claude, codemie: `claude --print`) it binds NOTHING, and the
+ * prompt is then the only channel the contract has.
+ *
+ * On 2026-08-26 that cost a run: roster-review returned three correct, evidenced findings as
+ * markdown, the extractor found no <ROSTER_REVIEW> tag, and mint-agents-step refused to continue
+ * on an unreviewed roster. PROJECT_AGENTS failed the same way in the same run ("Unexpected token
+ * 'B', \"Both repos\"...") and only survived because its caller could recover. Nothing had asked
+ * the model for a tag; the schema's own description says "Do not answer in prose" and the model
+ * never saw it.
+ *
+ * Rendered FROM the tool definition rather than written beside it, so a schema change cannot
+ * leave the prompt describing the old shape. Appended on every stack: where the provider does
+ * bind the schema this is merely redundant, and redundant is the cheap side of this trade.
+ */
+function outputContractFor(toolDef, tag) {
+  if (!toolDef || !tag) return '';
+  const p = (toolDef.parameters && toolDef.parameters.properties) || {};
+  const required = (toolDef.parameters && toolDef.parameters.required) || [];
+  const field = (name, spec, indent, requiredHere) => {
+    const pad = ' '.repeat(indent);
+    // The REQUIRED list that governs THIS object. Array items carry their own; using the
+    // parent's marked every item field "(optional)" when five of them are mandatory, which
+    // reads as permission to omit exactly the evidence a finding is worthless without.
+    const req = (requiredHere || []).includes(name) ? '' : '   (optional)';
+    let line = `${pad}"${name}": <${spec.type || 'value'}>`;
+    if (Array.isArray(spec.enum)) line += ` one of ${spec.enum.map((e) => JSON.stringify(e)).join(' | ')}`;
+    if (spec.description) line += `\n${pad}   // ${spec.description}`;
+    return line + req;
+  };
+  const lines = [];
+  for (const [name, spec] of Object.entries(p)) {
+    if (spec && spec.type === 'array' && spec.items && spec.items.properties) {
+      lines.push(`  "${name}": [ {`);
+      const itemReq = spec.items.required || [];
+      for (const [k, v] of Object.entries(spec.items.properties)) lines.push(field(k, v, 6, itemReq) + ',');
+      lines.push('  } ]');
+    } else {
+      lines.push(field(name, spec || {}, 2, required) + ',');
+    }
+  }
+  return [
+    '',
+    '# Output — THIS IS A CONTRACT, NOT A PREFERENCE',
+    '',
+    `Emit EXACTLY one <${tag}> block and nothing else that matters. Prose outside it is DISCARDED`,
+    'unread, however correct it is — the pipeline parses the block and never the commentary.',
+    '',
+    `<${tag}>`,
+    '{',
+    ...lines,
+    '}',
+    `</${tag}>`,
+    '',
+    toolDef.description ? `${toolDef.description}` : '',
+    '',
+  ].join('\n');
+}
+
 async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey, storyId = '', repoPath = '', envOverride = null) {
+  // EVERY SEAM THAT DECLARES A SHAPE BINDS IT, NOT JUST THE ONES THAT REMEMBERED TO.
+  //
+  // EPAM_RESPONSE_SCHEMA was set at a handful of call sites by hand, so most seams asked for their
+  // shape in prose and nothing enforced it. The tool definition is already here — every caller
+  // passes one — so the binding is derived from it rather than repeated per call site, and a seam
+  // added tomorrow is bound without anyone remembering to do it.
+  //
+  // A caller that set it explicitly still wins.
+  if (toolDef && toolDef.parameters) {
+    const _bound = schemaEnv(toolDef);
+    if (_bound) {
+      envOverride = { EPAM_RESPONSE_SCHEMA: _bound, ...(envOverride || {}) };
+    }
+  }
+  // The contract travels with the prompt, for every stack. See outputContractFor above.
+  prompt = `${prompt}${outputContractFor(toolDef, tag)}`;
+  // THE PROMPT AS SENT, kept where the cost seam can reach it. Recorded AFTER the output
+  // contract is appended, because that is the prompt the model actually received — a trace
+  // of the prompt before its contract would not reproduce the call.
+  recordAgentPrompt(tag, prompt);
   // envOverride: per-agent tool grant. Most spec-mode agents share specAgentEnv's
   // read-only set; an agent with a different need (the ticket-link agent must FETCH a
   // document, not just read the repo) supplies its own here rather than widening the
   // shared grant for everyone.
   const provider = (process.env.AI_PROVIDER || process.env.EPAM_ORCHESTRATION_PROVIDER || '').toLowerCase();
-  const ladderProvider = (process.env.SPEC_PASS_LADDER_PROVIDER || 'qwen').toLowerCase();
+  // SPEC_PASS_LADDER_PROVIDER removed with the minimax branch: it defaulted to the literal
+  // 'openrouter', so a failure on one vendor was answered by a vendor named in code.
 
   // Fast-path: bypass MiniMax entirely when SPEC_MODE_PROVIDER is set.
   // Detects openspec vs speckit from logPath to pick the right model.
@@ -1307,39 +1425,25 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
     // SPEC_MODE_MAX_OUTPUT_TOKENS is spec-only; it doesn't affect implementation runs.
     const specEnv = Object.assign(specAgentEnv(process.env, repoPath), envOverride || {});
     const output = await runClaude(directExec, prompt, logPath, specEnv, { costAgent: costLabelFor(tag, specEnv), costStoryId: storyId });
-    return _validatedOrNull(extractTaggedJson(output, tag), tag);
+    // KEEP THE REPLY BEFORE ANYTHING INTERPRETS IT. A live run halted on a shape
+  // nobody could establish, because the log excerpts at 2000 chars, the rejection persister
+  // needed a logDir nobody passed, and Langfuse records no completions at all. Written here,
+  // at the one funnel every agent's raw text passes through, it cannot be forgotten per seam.
+  recordAgentReply(tag, output);
+  return _validatedOrNull(extractTaggedJson(output, tag), tag, specEnv && specEnv.EPAM_AGENT_NAME);
   }
 
-  if (provider === 'minimax') {
-    let result = null;
-    try {
-      result = await callMiniMaxWithTool(prompt, toolDef, logPath, itemsKey);
-    } catch (err) {
-      const isTimeout = err.name === 'AbortError' || /aborted/i.test(err.message);
-      console.warn(`spec-mode: minimax tool-use failed (${err.message})${isTimeout ? ' — laddering to ' + ladderProvider : ''}`);
-      if (!isTimeout) throw err; // hard failure (no API key etc.) — don't ladder, surface the error
-    }
-    if (result !== null) return result;
-    // null = parse failed or aborted — ladder to fallback provider only if fast
-    // NOTE: OpenAI ladder via epam CLI spawns detached grandchildren that survive
-    // the 120s SIGKILL, causing indefinite hangs. Skip ladder when disabled.
-    if (process.env.SPEC_PASS_SKIP_LADDER === '1') {
-      console.warn(`spec-mode: minimax returned null — ladder disabled, using fallback spec`);
-      return null;
-    }
-    console.warn(`spec-mode: minimax returned null — laddering to ${ladderProvider}`);
-    const ladderTimeout = parseInt(process.env.SPEC_PASS_LADDER_TIMEOUT_MS || String(runClaudeTimeoutMs()), 10);
-    // FIX: build a new execSpec for the ladder. The original execSpec has
-    // '--provider minimax' baked into its args. Passing AI_PROVIDER=openai via
-    // env overrides is insufficient — ai-run.sh reads the --provider CLI flag,
-    // which always wins. Without this fix the ladder calls MiniMax again.
-    const ladderExec = { cmd: execSpec.cmd, args: ['--provider', ladderProvider] };
-    const output = await Promise.race([
-      runClaude(ladderExec, prompt, logPath, envOverride || {}, { costAgent: costLabelFor(tag, envOverride), costStoryId: storyId }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error(`ladder hard-timeout after ${ladderTimeout}ms`)), ladderTimeout + 5000))
-    ]);
-    return _validatedOrNull(extractTaggedJson(output, tag), tag);
-  }
+  // THE MINIMAX SPECIAL CASE IS GONE.
+  //
+  // This branch fetched https://api.minimaxi.chat/v1/chat/completions directly, reading
+  // MINIMAX_API_KEY itself — a second channel that bypassed the central handler entirely, so a
+  // run that had chosen another provider set could still reach MiniMax from here. It existed
+  // for API-enforced tool JSON; the handler's minimax arm already sets EPAM_MINIMAX_JSON_MODE=1,
+  // which buys the same guarantee through the one channel.
+  //
+  // Its ladder-to-'openrouter' fallback goes with it: a vendor named in code cannot be the answer to
+  // another vendor failing. MiniMax still runs — it falls through to the path below, which
+  // dispatches through the handler like every other provider.
 
   // Non-minimax: existing raw text path with tag extraction + jsonrepair
   //
@@ -1350,6 +1454,11 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
   // classify a URL from its address; its `quotes` field could never be populated, which is
   // the whole reason the step exists. Silent, and invisible in the output.
   const output = await runClaude(execSpec, prompt, logPath, envOverride || {}, { costAgent: costLabelFor(tag, envOverride), costStoryId: storyId });
+  // KEEP THE REPLY BEFORE ANYTHING INTERPRETS IT. A live run halted on a shape
+  // nobody could establish, because the log excerpts at 2000 chars, the rejection persister
+  // needed a logDir nobody passed, and Langfuse records no completions at all. Written here,
+  // at the one funnel every agent's raw text passes through, it cannot be forgotten per seam.
+  recordAgentReply(tag, output);
   return _validatedOrNull(extractTaggedJson(output, tag), tag);
 }
 
@@ -1845,7 +1954,9 @@ async function run() {
           });
         }
 
-        if (reviewResult.verdict === 'fail') {
+        // 'unreviewed' reverts too: the attempts above produced no judgement, and an unjudged
+        // change must not stand. The event below keeps rejection and silence tellable apart.
+        if (!reviewOutcomeKeepsChange(reviewResult.verdict)) {
           console.warn(`spec-mode: prd-change-reviewer REJECTED ${agent}'s changes to ${story.id} after ${acReviewAttempts} attempt(s): ${reviewResult.issues.join('; ') || 'no details'} — reverting`);
           story.acceptanceCriteria = beforeSnapshot.acceptanceCriteria;
           story.description = beforeSnapshot.description;
@@ -1858,7 +1969,7 @@ async function run() {
           changes.acceptanceChanged = false;
           changes.splitCount = 0;
           afterSnapshot = captureStorySnapshot(story);
-          appendSpecPassEvent(logDir, { storyId: story.id, phase: opts.phase, event: 'reviewer_rejected', decision: 'rejected', details: { agent, attempts: acReviewAttempts, reasons: reviewResult.issues } });
+          appendSpecPassEvent(logDir, { storyId: story.id, phase: opts.phase, event: reviewResult.verdict === 'fail' ? 'reviewer_rejected' : 'reviewer_unjudged', decision: reviewResult.verdict === 'fail' ? 'rejected' : 'unreviewed', details: { agent, attempts: acReviewAttempts, reasons: reviewResult.issues } });
         } else {
           appendSpecPassEvent(logDir, { storyId: story.id, phase: opts.phase, event: 'reviewer_accepted', decision: 'accepted', details: { agent, attempts: acReviewAttempts } });
         }
@@ -2272,7 +2383,6 @@ async function run() {
   //   catches false negatives the rules missed. LLM decision is final.
   // Both passes write to story.specification.modelUpgrade for full auditability.
   // Fallback default MUST stay within this pipeline's configured model ladder
-  // (MiniMax/qwen-routed models only — Anthropic models are never permitted
   // here). A prior default of 'anthropic/claude-sonnet-4-6' meant ANY
   // invocation that forgot to export ORCH_UPGRADE_MODEL (e.g. a hand-rolled
   // launcher that didn't replicate tier3-travel-app-run.sh's full env-var
@@ -2555,7 +2665,7 @@ function verifyDetectiveHelper(helper, repoPath) {
       ['-rEl', '--include=*.ts', '--include=*.tsx',
         '--exclude-dir=node_modules', '--exclude-dir=.git',
         `(function|const|class|type|interface|enum)[[:space:]]+${sym}\\b`, repoPath],
-      { encoding: 'utf8', timeout: 15000 }
+      { encoding: 'utf8', timeout: toolTimeoutMs('codegraphQuery') }
     );
     return res.status === 0 && String(res.stdout || '').trim().length > 0;
   } catch { return null; }
@@ -2576,7 +2686,7 @@ function verifyDetectiveHelper(helper, repoPath) {
 // part that actually needs a model. Best-effort by construction: a missing
 // tool, a broken index or a slow query degrades to "no pre-seed" and never
 // breaks the spec pass.
-const DETECTIVE_PRESEED_MAX_CHARS = 8000;
+// DECLARED — config/spec-mode-defaults.json policy.detectivePreseedMaxChars.
 function precomputeDetectiveExplore(repoPath, story, toolPath, env = process.env, vocabulary = null) {
   if (env.CODEGRAPH_DETECTIVE_PRESEED === '0') return '';
   if (!repoPath || !toolPath || !story) return '';
@@ -2590,19 +2700,20 @@ function precomputeDetectiveExplore(repoPath, story, toolPath, env = process.env
       'bash', [toolPath, 'explore', ...terms],
       {
         encoding: 'utf8',
-        timeout: Number(env.CODEGRAPH_DETECTIVE_PRESEED_TIMEOUT_MS || '60000'),
+        timeout: (Number(env.CODEGRAPH_DETECTIVE_PRESEED_TIMEOUT_MS) || seamDeclares('code-graph-detective').timeoutMs),
         env: Object.assign({}, env, { PROJECT_ROOT: repoPath }),
       },
     );
     if (res.status !== 0) return '';
     const out = String(res.stdout || '').trim();
     if (!out) return '';
-    if (out.length <= DETECTIVE_PRESEED_MAX_CHARS) return out;
+    const _preseedCap = policyConfig().detectivePreseedMaxChars;
+    if (!Number.isFinite(_preseedCap) || out.length <= _preseedCap) return out;
     // Say so — a silently truncated ranking reads as a complete one. The notice
     // counts against the cap: the point is a bounded block, not a bounded body
     // with an unbounded footer.
     const notice = '\n… (truncated — re-run explore yourself if you need the rest)';
-    return out.slice(0, DETECTIVE_PRESEED_MAX_CHARS - notice.length) + notice;
+    return out.slice(0, _preseedCap - notice.length) + notice;
   } catch { return ''; }
 }
 
@@ -2810,7 +2921,7 @@ function findVcMechanism(vc, storyId, vocabulary) {
 // passing findVcMechanism — see vc-fallback-grounded-in-detective.test.ts.
 function safeFallbackVc(story, findings) {
   const subject = String((story && (story.title || story.description)) || 'the behavior described in the ticket')
-    .replace(/\s+/g, ' ').trim().slice(0, 160);
+    .replace(/\s+/g, ' ').trim().slice(0, evidenceWindow('vcSubjectChars'));
   const located = Array.isArray(findings) ? findings.find((f) => f && f.file) : null;
   const locationNote = located ? ` (located near ${located.file}${located.function ? `, ${located.function}` : ''})` : '';
   return [
@@ -2953,11 +3064,7 @@ async function deriveGuardVocabulary({ promptExec, rule, statements, story, find
     .map((d) => `- ${d.url}\n${d.quotes.map((q) => `    "${String(q).replace(/\s+/g, ' ')}"`).join('\n')}`)
     .join('\n');
 
-  const profiles = (() => {
-    try {
-      return JSON.parse(fs.readFileSync(path.join(automationDirFromLogDir(logDir), 'agents', 'profiles.json'), 'utf8'));
-    } catch { return {}; }
-  })();
+  const profiles = profilesWithProjectBriefs(logDir);
   const persona = profiles['guard-vocabulary-agent'] || '';
 
   const prompt = buildGuardVocabularyPrompt({ persona, seam, rule, _statements, manifest, docBlock, evidence, story, codegraphTool, repoPath });
@@ -3321,6 +3428,40 @@ async function surveyEstate({
   const _named = _cls.map((c) => (typeof c === 'string' ? { name: c } : c)).filter((c) => c && c.name);
   if (!_named.length) return { codelines: [], recommendedInvestigators: [], recommendedWriters: [], violations: [], ran: false };
 
+  // THIS RUN SURVEYS THE ESTATE ONCE.
+  //
+  // The call was moved out of the mint's else-branch because every path that declined to mint also
+  // silently declined to survey. That was right — a seam's invocation must not be conditional on
+  // another seam's branch — but making it UNCONDITIONAL was the wrong correction. The condition it
+  // actually needs is not another seam's branch; it is whether THIS RUN has already surveyed.
+  //
+  // THE FILE'S PRESENCE IS THE SIGNAL, exactly as for the settled roster. pre-run-reset deletes
+  // estate-survey.json on every NEW launch and keeps it only when EPAM_RESUME_RUN is set
+  // ("Resuming — keeping this run's own fetched documents and estate survey"), so a survey still on
+  // disk here can only have been kept by a resume. The reset owns the lifetime; this honours what
+  // it left, and no run id is consulted.
+  //
+  // THE COST WAS NEVER THE ONE CALL. The survey feeds codelineContext, and codelineContext is part
+  // of the prompt cache key — sha({template, generatorBody, projectContext, codelineContext}). A
+  // second observation moves that key, so ALL 39 project prompts miss and regenerate. Measured on
+  // the 2026-09-02 resume of 20260902T022134Z: roster correctly reused, roles digest stable, and
+  // reused: 0 prompts. The checkpoint skipped the mint and paid for the whole prompt stage anyway.
+  //
+  // NOT TRUSTED BLINDLY: a file that will not parse, or carries no codelines, is observed again
+  // rather than believed — a corrupt artefact must not silently disable the survey for the run.
+  if (logDir) {
+    try {
+      const _keptPath = path.join(logDir, 'estate-survey.json');
+      if (fs.existsSync(_keptPath)) {
+        const _kept = JSON.parse(fs.readFileSync(_keptPath, 'utf8'));
+        if (_kept && Array.isArray(_kept.codelines) && _kept.codelines.length) {
+          console.warn('spec-mode: estate survey already done for this run — reusing it, not re-observing');
+          return _kept;
+        }
+      }
+    } catch { /* unreadable or malformed: fall through and survey again */ }
+  }
+
   const prompt = buildSurveyPrompt({ codelines: _named, tickets, referencedDocs, declaredDependencies });
 
   // THE IDENTITY IS THE SEAM. This paired 'estate-surveyor' with EPAM_SEAM 'estate-survey',
@@ -3600,7 +3741,7 @@ async function mintProjectAgents({
   // came back empty, and the repo path given was the estate root rather than a repository —
   // so the mint invented a vendor and briefed every role on the wrong product's APIs.
   const depBlock = (Array.isArray(declaredDependencies) ? declaredDependencies : [])
-    .slice(0, 300).map((d) => `- ${d}`).join('\n');
+    .slice(0, evidenceWindow('declaredDependenciesInPrompt')).map((d) => `- ${d}`).join('\n');
 
   // ONE ROSTER, ALL CODELINES. The first mint saw a single repository while three were in
   // scope, and wrote that one repository's absolute path into every brief.
@@ -3911,19 +4052,33 @@ Do not propose a role that duplicates one of the canonical roles already listed 
   let _mintAttempt = 0;
   const proposals = await retryUntilParsedAsync({
     what: 'agent-mint proposals',
+    // Keep the WHOLE rejected reply. The excerpt in the log cut off at 2000 characters, so when
+    // this rejected `[{"proposedAgents":[...]}]` three times on 2026-08-29 there was no way to tell
+    // whether the envelope held one element or several — and the next step had to be a guess.
+    logDir,
     attempts: Number(process.env.EPAM_CONTENT_RETRY_ATTEMPTS || 3),
     log: (m) => process.stderr.write(`${m}\n`),
-    call: async () => {
+    // ATTEMPT N RUNS RUNG N-1. This re-invoked the same model on every attempt, so a
+    // refusal was fed back to the one model that had just produced it — half a retry.
+    // The seam env is rebuilt per attempt so the ladder it declares is actually climbed.
+    call: async (note, attempt) => {
       _mintAttempt += 1;
       return runAgentForJson(
         promptExec, prompt, TOOL_PROJECT_AGENTS, 'PROJECT_AGENTS',
         logDir ? path.join(logDir, `project-agents-mint${_mintAttempt > 1 ? `-parse${_mintAttempt}` : ''}.log`) : null,
         null, '', repoPath || '',
-        _mintEnv,
+        // The declared ladder, climbed: rung 0 on attempt 1, rung 1 on attempt 2, and so on.
+        { ..._mintEnv, ...seamInvocationEnv('agent-mint', logDir, { rung: Math.max(0, (attempt || 1) - 1) }) },
       );
     },
-    parse: (payload) => {
+    parse: (payloadIn) => {
+      let payload = payloadIn;
       if (!payload) return { ok: false, reason: 'the response could not be parsed as JSON at all' };
+      // A model may wrap its answer in a one-element array; that is still the answer. Every field
+      // below is validated exactly as before — this removes an envelope, not a check. metrolinx
+      // AMSD-1919 died on this shape three times on 2026-08-29, after discovery, minting and a
+      // grounded roster review had all succeeded.
+      payload = unwrapEnvelope(payload, 'proposedAgents');
       if (!Array.isArray(payload.proposedAgents)) {
         return { ok: false, reason: 'the response had no "proposedAgents" array' };
       }
@@ -4056,10 +4211,35 @@ const TOOL_ROLE_ASSIGNMENTS = {
  * not exist — and the identical mistake in the write perimeter handed the detective write
  * access, which the perimeter suite caught.
  */
+/**
+ * THE BRIEFS MOVED PER PROJECT; THIS FILTER DID NOT FOLLOW THEM.
+ *
+ * A registered role is only a candidate if its BRIEF exists — a role with no brief would run with
+ * an empty system prompt. That check read the ENGINE's agents/profiles.json. mergeProjectAgents
+ * deliberately stopped writing there ("every project shares it, so one project's agents were
+ * reaching another's roster") and now writes <project>/agent-profiles.json, so the filter matched
+ * nothing and every mint looked like no mint at all.
+ *
+ * Live 2026-08-26, mock3 run 5: the mint created transit-logic-engineer, wrote its brief to the
+ * project file and registered it in the project's project-roles.json — and assignAgentRoles threw
+ * "no project implementation roles are registered for this project — nothing was minted", after
+ * paying for the mint AND the roster review. projectRoles() already resolves per project; only
+ * this half was left behind.
+ *
+ * Both files are consulted: a project brief takes precedence, and the engine's own roles still
+ * resolve for a run that has them (epam-cli orchestrates itself).
+ */
 function candidateRoles(profiles, agentsDir) {
   let registered = [];
   try { registered = require('./lib/agent-roster.js').projectRoles(agentsDir); } catch { registered = []; }
-  return registered.filter((r) => Object.prototype.hasOwnProperty.call(profiles || {}, r));
+  const known = Object.assign({}, profiles || {});
+  try {
+    const _pp = path.join(process.env.EPAM_PROJECT_CONFIG_DIR || '', 'agent-profiles.json');
+    const _doc = JSON.parse(fs.readFileSync(_pp, 'utf8'));
+    // The file wraps its map: { _what, profiles, runId }. Older copies are the bare map.
+    Object.assign(known, (_doc && _doc.profiles) || _doc || {});
+  } catch { /* a project with no minted briefs yet has none to add */ }
+  return registered.filter((r) => Object.prototype.hasOwnProperty.call(known, r));
 }
 
 /**
@@ -4224,12 +4404,77 @@ function rosterCoverageBlock(minted, registry) {
   return lines.join('\n');
 }
 
+/**
+ * THE STAGES THAT RUN ALONGSIDE THE ROSTER, read from the seam registry.
+ *
+ * Run 20260827T100559Z died here. Both implementer briefs said a dedicated pipeline stage writes
+ * test files — TRUE, those seams are declared — and the roster reviewer, holding only the roster,
+ * the codelines, the tickets and the coverage, concluded "no such role exists in this roster" and
+ * blocked twice. The gate was right to refuse evidence it did not have; it was simply never given
+ * it. A reviewer asked to falsify a claim about the PIPELINE must be shown the pipeline.
+ *
+ * Derived, never listed: each seam and what it declares it produces, straight from the registry.
+ * Adding or removing a seam changes this block with no edit here and none in the template.
+ */
+function pipelineStagesBlock() {
+  const unreadable = '- (the seam registry could not be read — treat any claim about a pipeline '
+    + 'stage as UNVERIFIABLE rather than false)';
+  try {
+    // eslint-disable-next-line global-require
+    const { registryPath } = require(path.join(__dirname, 'lib', 'seam-invocation.js'));
+    const reg = JSON.parse(fs.readFileSync(registryPath(), 'utf8'));
+    const rows = Object.entries(reg.profiles || {})
+      .map(([seam, prof]) => `- ${seam}${prof && prof.produces ? ` — produces ${prof.produces}` : ''}`)
+      .sort();
+    // ABSENT IS NOT EMPTY. A blank list would read as "the pipeline has no stages", licensing
+    // exactly the false finding this block exists to prevent.
+    return rows.length ? rows.join('\n') : unreadable;
+  } catch {
+    return unreadable;
+  }
+}
+
+/**
+ * THE BRIEFS A LOOKUP SHOULD SEE: the canonical roster, with this project's minted briefs on top.
+ *
+ * Three call sites each read ONLY orchestrations/agents/profiles.json, which holds the canonical
+ * roles. A project's minted investigators are written to <project>/agent-profiles.json (moved there
+ * so one project's agents could not reach another's roster), so every one of them resolved the
+ * right NAME from the registry, found no brief, and fell through to
+ * "NO INVESTIGATOR ... none is bound to this codeline" — a message about binding, reporting a
+ * failure of location.
+ *
+ * Live 2026-08-27, run 20260827T125654Z: both lanes reported it while the project file held both
+ * briefs, written 27 minutes earlier. The generic detective ran in place of the one briefed on that
+ * repository's own layout, and because falling back is legitimate for a codeline that minted none,
+ * nothing looked wrong.
+ *
+ * One definition, because three copies is how the first fix reached one of them and not the others.
+ */
+function profilesWithProjectBriefs(logDir) {
+  let out = {};
+  try {
+    out = JSON.parse(fs.readFileSync(
+      path.join(automationDirFromLogDir(logDir), 'agents', 'profiles.json'), 'utf8'));
+  } catch { out = {}; }
+  try {
+    // eslint-disable-next-line global-require
+    const _r = require('./lib/agent-roster.js');
+    const pp = JSON.parse(fs.readFileSync(
+      _r.projectProfilesPath(path.join(automationDirFromLogDir(logDir), 'agents')), 'utf8'));
+    // The project's own briefs WIN: a name it minted is its own, whatever the canonical set says.
+    out = { ...out, ...(pp.profiles || pp) };
+  } catch { /* a project with no minted briefs keeps the canonical set, exactly as before */ }
+  return out;
+}
+
 function buildRosterReviewPrompt({ persona, briefBlock, clBlock, ticketBlock, docBlock, toolLine, coverageBlock }) {
   // RENDERED FROM THE TEMPLATE LAYER. The documentation section is assembled here because it
   // is conditional prose — present, it points the reviewer at the vendor's own text; absent,
   // it tells the reviewer that any vendor claim is unverifiable. A template cannot branch.
   return renderEngineTemplate('roster-review', {
     __PERSONA__: persona,
+    __PIPELINE_STAGES__: pipelineStagesBlock(),
     __BRIEF_BLOCK__: briefBlock,
     __COVERAGE_BLOCK__: coverageBlock || '- (coverage could not be derived)',
     __CODELINE_BLOCK__: clBlock || '- (none resolved)',
@@ -4330,11 +4575,16 @@ async function reviewSurvey({
       what: 'survey-review',
       attempts: Number(process.env.EPAM_CONTENT_RETRY_ATTEMPTS || 3),
       log: (m) => process.stderr.write(`${m}\n`),
-      call: async (note) => runAgentForJson(
+      // ATTEMPT N RUNS RUNG N-1. This re-invoked the same model on every attempt, so a
+      // refusal was fed back to the one model that had just produced it — half a retry.
+      // The seam env is rebuilt per attempt so the ladder it declares is actually climbed.
+      call: async (note, attempt) => runAgentForJson(
         promptExecFor({ promptExec }), note ? `${note}${prompt}` : prompt,
         TOOL_SURVEY_REVIEW, 'SURVEY_REVIEW',
         logDir ? path.join(logDir, 'survey-review.log') : null,
-        null, '', repoPath || '', env,
+        null, '', repoPath || '',
+        // The declared ladder, climbed: rung 0 on attempt 1, rung 1 on attempt 2, and so on.
+        { ...env, ...seamInvocationEnv('survey-review', logDir, { rung: Math.max(0, (attempt || 1) - 1) }) },
       ),
       parse: (payload) => {
         if (!payload) return { ok: false, reason: 'the response could not be parsed as JSON at all — a review must arrive inside its tags, not as prose' };
@@ -4398,6 +4648,88 @@ function _readJsonOrNull(f) {
   try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; }
 }
 
+
+/**
+ * aggregateRosterReview(results, legalVerdicts) — MANY BATCHES, ONE VERDICT.
+ *
+ * A roster review runs one model call per batch of agents. This decides what the WHOLE review said.
+ *
+ * It used to fail the entire review if ANY batch was unexamined — missing verdict,
+ * nothing_to_review, or a verdict outside the enum. With six or more batches, one off-schema answer
+ * poisons all of them. Live 2026-09-01: batch5 returned a clean defects_found with real, grounded
+ * findings and it was discarded because a sibling batch was not usable. The gate then retried the
+ * JUDGE three times, six calls each, and the mint failed with the roster never judged on its merits.
+ *
+ * WHAT IT DOES NOW: judge on the batches that WERE examined, and say which were not.
+ *
+ *   any examined batch reports defects_found  -> defects_found (its findings are real)
+ *   every batch examined, none defective      -> sound
+ *   NO batch examined at all                  -> review_failed (nothing judged; retry the judge)
+ *
+ * A partially-examined review still reports how many batches were missed, so the caller can retry
+ * just those instead of paying for all of them again. What it must never do is discard a blocking
+ * finding because a different batch failed to answer.
+ *
+ * Extracted and exported because it could not be tested otherwise: it sat inside the async function
+ * that also does the batching and makes the model calls, so exercising it meant paying for a run.
+ */
+function aggregateRosterReview(results, legalVerdicts) {
+  const legal = Array.isArray(legalVerdicts) ? legalVerdicts : [];
+  const rows = Array.isArray(results) ? results : [];
+  const illegal = (v) => legal.length > 0 && !legal.includes(v);
+  const unexamined = rows.filter((r) => !r || !r.part || typeof r.part !== 'object'
+    || r.part.verdict === 'nothing_to_review' || !r.part.verdict || illegal(r.part.verdict));
+  const examined = rows.filter((r) => !unexamined.includes(r));
+  const findings = rows.flatMap((r) => (r && r.part && Array.isArray(r.part.findings) ? r.part.findings : []));
+
+  if (!examined.length) {
+    return {
+      verdict: 'review_failed',
+      findings,
+      unexamined: unexamined.length,
+      reason: 'none of ' + rows.length + ' batch(es) were examined. The roster is not implicated.',
+    };
+  }
+
+  const verdict = examined.some((r) => r.part.verdict === 'defects_found') ? 'defects_found' : 'sound';
+  return {
+    verdict,
+    findings,
+    unexamined: unexamined.length,
+    reason: unexamined.length
+      ? unexamined.length + ' of ' + rows.length + ' batch(es) were not examined; judged on the '
+        + examined.length + ' that were'
+      : '',
+  };
+}
+
+
+/**
+ * seamDeclares(seam) — THE VALUES A SEAM STATES ABOUT ITSELF.
+ *
+ * invocation-profiles.json is the source of truth for a seam's timeout and output budget, and
+ * seamInvocationEnv already resolves both (EPAM_TIMEOUT_SECS, EPAM_MAX_OUTPUT_TOKENS). Call sites
+ * in this file resolved them and then bounded the call with their own literals instead:
+ *
+ *   code-graph-detective declares 900s and 32768 tokens; the code used 450000ms and 24576
+ *   cpa-inference declares 300s;                          the code used 120000ms
+ *
+ * A declaration the caller overrides is decorative. Returns undefined for anything undeclared —
+ * no number is invented here, because inventing one is the defect.
+ */
+function seamDeclares(seam) {
+  try {
+    const { seamInvocationEnv } = require('./lib/seam-invocation.js');
+    const env = seamInvocationEnv(seam, undefined, { sourceEnv: process.env }) || {};
+    const secs = Number(env.EPAM_TIMEOUT_SECS);
+    const out = Number(env.EPAM_MAX_OUTPUT_TOKENS);
+    return {
+      timeoutMs: Number.isFinite(secs) && secs > 0 ? secs * 1000 : undefined,
+      maxOutputTokens: Number.isFinite(out) && out > 0 ? String(out) : undefined,
+    };
+  } catch (e) { return {}; }
+}
+
 async function reviewProjectRoster({
   promptExec, rosterPath, canonicalPath, codelines, logDir, repoPath, toolGrant,
 }) {
@@ -4433,7 +4765,88 @@ async function reviewProjectRoster({
     };
   }
 
-  const _budget = Math.max(4000, Number(process.env.EPAM_ROSTER_REVIEW_BATCH_CHARS || '60000'));
+  // THE BUDGET COMES FROM THE MODEL THIS SEAM IS RUNNING ON.
+  //
+  // It was a literal 60000 in this file. Replacing that with a number on the seam was no better:
+  // a seam ESCALATES through a ladder, so one figure is wrong the moment it moves from haiku to
+  // sonnet. The constraint was never a property of the seam at all — it is the model's input
+  // capacity, and the ladder already declares it per model as autoCompressAt (the guard below the
+  // context window), alongside charsPerToken for callers that measure payloads in characters.
+  //
+  // budget = autoCompressAt x charsPerToken, for the model actually resolved. No safety factor is
+  // applied because autoCompressAt IS the guard — 150000 against a 200000 window.
+  //
+  // NO DEFAULT anywhere in this path. A model whose capacity is undeclared is refused by name, so
+  // the answer is to declare it, never to invent one here.
+  const _budgetFromModel = (function () {
+    // THE SEAM'S MODEL, FROM THE LADDER IT DECLARES — not from bare environment.
+    //
+    // Reading process.env.EPAM_MODEL was wrong: it is not set at this point in a run, so every
+    // review refused to size itself and the mint failed three attempts running. My regression,
+    // live 2026-09-01. seamInvocationEnv only resolves a model when EPAM_MODEL_LADDER_* are already
+    // exported, which they are not here either.
+    //
+    // The seam declares its ladder position (project-roster-review: "top") and the provider set
+    // declares that tier's start model. Both are config, both are readable without a run.
+    let model = String(process.env.EPAM_MODEL || process.env.AI_MODEL || '').trim();
+    let overrides = {};
+    let settings = null;
+    try {
+      const resolver = require(require('path').join(__dirname, 'lib/llm-settings-resolve.js'));
+      settings = resolver.resolveLlmSettings({ projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR });
+      overrides = (settings && settings.modelOverrides) || {};
+    } catch (e) {
+      return { error: 'the provider set could not be read: ' + ((e && e.message) || e) };
+    }
+    if (!model) {
+      try {
+        const reg = require(require('path').join(__dirname, '../agents/invocation-profiles.json'));
+        const tier = ((reg.profiles || reg)['project-roster-review'] || {}).ladder;
+        const ladder = tier && settings && settings.ladders ? settings.ladders[tier] : null;
+        model = String((ladder && ladder.startModel) || '').trim();
+      } catch (e) { /* reported below */ }
+    }
+    if (!model) {
+      return { error: "no model resolves for project-roster-review — neither the environment nor the "
+        + "ladder tier it declares yields one" };
+    }
+    let hit = null;
+    for (const [name, ov] of Object.entries(overrides)) {
+      if (name.startsWith('$') || !ov || typeof ov !== 'object') continue;
+      const needle = ov.matchSubstring || name;
+      if (needle && model.includes(needle)) { hit = { name, ov }; break; }
+    }
+    if (!hit) return { error: "no model override matches '" + model + "', so its input capacity is undeclared" };
+    const tokens = Number(hit.ov.autoCompressAt);
+    const cpt = Number(hit.ov.charsPerToken);
+    if (!Number.isFinite(tokens) || tokens <= 0) return { error: "'" + hit.name + "' declares no autoCompressAt" };
+    if (!Number.isFinite(cpt) || cpt <= 0) return { error: "'" + hit.name + "' declares no charsPerToken" };
+    return { chars: Math.floor(tokens * cpt), model: hit.name };
+  }());
+
+  if (_budgetFromModel.error) {
+    return {
+      verdict: 'review_failed',
+      findings: [],
+      reason: 'the roster review cannot be sized: ' + _budgetFromModel.error
+        + '. Declare autoCompressAt and charsPerToken for it in the active provider set.',
+    };
+  }
+
+  // A batch must hold at least the LARGEST SINGLE PAIR or none can be formed. Derived from the
+  // pairs in hand, never a floor picked in code.
+  const _largestPair = _pairs.reduce((m, pr) =>
+    Math.max(m, pr.derived.length + pr.canonical.length + pr.name.length + 200), 0);
+  if (_budgetFromModel.chars < _largestPair) {
+    return {
+      verdict: 'review_failed',
+      findings: [],
+      reason: _budgetFromModel.model + ' allows ' + _budgetFromModel.chars
+        + ' chars, smaller than the largest agent pair of ' + _largestPair
+        + ' chars, so no batch can be formed.',
+    };
+  }
+  const _budget = _budgetFromModel.chars;
   const _batches = [];
   let _cur = [];
   let _size = 0;
@@ -4500,29 +4913,19 @@ async function reviewProjectRoster({
   // a clean pass. The schema's enum is also unenforced upstream (agent-output-schema.js validates
   // types, never enums, and does not map this tag at all), so this is the only place the declared
   // vocabulary is actually held to.
-  const _illegal = (v) => _legal.length > 0 && !_legal.includes(v);
-  const _unexamined = _results.filter((r) => !r.part || typeof r.part !== 'object'
-    || r.part.verdict === 'nothing_to_review' || !r.part.verdict || _illegal(r.part.verdict));
-  if (_unexamined.length) {
-    return {
-      verdict: 'review_failed',
-      findings: _results.flatMap((r) => (r.part && Array.isArray(r.part.findings) ? r.part.findings : [])),
-      reason: `${_unexamined.length} of ${_batches.length} batch(es) were not examined `
-        + `(${_unexamined.flatMap((r) => r.agents).slice(0, 6).join(', ')}...)`
-        + `${_unexamined.filter((r) => r.part && _illegal(r.part.verdict)).length
-          ? `; verdict(s) outside the declared enum: `
-            + `${[...new Set(_unexamined.filter((r) => r.part && _illegal(r.part.verdict))
-              .map((r) => JSON.stringify(r.part.verdict)))].join(', ')} `
-            + `(legal: ${_legal.join(', ')})`
-          : ''}`
-        + `. The roster is not implicated.`,
-    };
+  // ONE UNUSABLE BATCH NO LONGER VOIDS THE WHOLE REVIEW. See aggregateRosterReview above: this
+  // failed the entire review if ANY batch was unexamined, so a clean defects_found carrying real
+  // findings was discarded because a sibling batch answered off-schema, and the judge was retried
+  // six calls at a time until the mint failed. Judge on what WAS examined; report what was not.
+  const _agg = aggregateRosterReview(_results, _legal);
+  if (_agg.verdict === "review_failed") {
+    return { verdict: "review_failed", findings: _agg.findings, reason: _agg.reason };
+  }
+  if (_agg.unexamined) {
+    try { log(`[roster] review: ${_agg.reason}`); } catch (e) { /* logging is not the verdict */ }
   }
 
-  const payload = {
-    verdict: _results.some((r) => r.part.verdict === 'defects_found') ? 'defects_found' : 'sound',
-    findings: _results.flatMap((r) => (Array.isArray(r.part.findings) ? r.part.findings : [])),
-  };
+  const payload = { verdict: _agg.verdict, findings: _agg.findings };
 
   // A review that produced nothing is NOT a sound roster. Unparseable output means the check did
   // not happen, and reading that as approval is the fail-open shape these gates exist to prevent.
@@ -4696,10 +5099,21 @@ async function reviewRoster({
   // WHAT THE TEAM MUST BE ABLE TO PRODUCE, derived from the registry and handed to the reviewer.
   // Without it the reviewer sees only briefs and cannot report the one defect that has no brief:
   // a role nobody minted. See rosterCoverageBlock.
+  // A FAILED DERIVATION IS NOT AN ABSENT ONE. This swallowed the error and left the block empty,
+  // so the render refused — "was given EMPTY values for: __COVERAGE_BLOCK__" — and the roster
+  // review did not happen at all. Worse, an empty block would tell the reviewer that NOTHING is
+  // required, which is the opposite of what a failed lookup means. Say which of the two happened,
+  // the way the analyst says "(empty — it produced nothing)".
   let coverageBlock = '';
   try {
     coverageBlock = rosterCoverageBlock(_minted, readRegistryForCoverage());
-  } catch { coverageBlock = ''; }
+  } catch (e) {
+    coverageBlock = `(the required-roles coverage could not be derived: ${(e && e.message) || e}. `
+      + 'Treat this as UNKNOWN coverage, not as "nothing is required".)';
+  }
+  if (!String(coverageBlock).trim()) {
+    coverageBlock = '(the registry declares no required roles for this project.)';
+  }
 
   const prompt = buildRosterReviewPrompt({
     persona, briefBlock, clBlock, ticketBlock, docBlock, toolLine, coverageBlock,
@@ -5097,7 +5511,7 @@ async function _vcLlmCall(prompt, cycle, logPath, storyId = '', role = 'openspec
     PROJECT_ROOT: repoPath,
   } : {};
   return runClaude(exec, prompt, logPath, {
-    EPAM_MAX_OUTPUT_TOKENS: process.env.CODEGRAPH_DETECTIVE_MAX_OUTPUT_TOKENS || '24576',
+    EPAM_MAX_OUTPUT_TOKENS: process.env.CODEGRAPH_DETECTIVE_MAX_OUTPUT_TOKENS || seamDeclares('code-graph-detective').maxOutputTokens,
     EPAM_MAX_ITERATIONS: '2',
     // VC production is a RESTATE task, not a reasoning task: describe the observable
     // outcome faithfully, do NOT reason toward an implementation. High reasoning
@@ -5108,7 +5522,7 @@ async function _vcLlmCall(prompt, cycle, logPath, storyId = '', role = 'openspec
     EPAM_TEMPERATURE: process.env.VC_LLM_TEMPERATURE || '0',
     EPAM_REASONING_EFFORT: process.env.VC_LLM_REASONING_EFFORT || 'low',
     ...toolEnv,
-  }, { costAgent: 'vc-agent', costStoryId: storyId, salvageOutputOnFailure: true, timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '450000') });
+  }, { costAgent: 'vc-agent', costStoryId: storyId, salvageOutputOnFailure: true, timeoutMs: (Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS) || seamDeclares('code-graph-detective').timeoutMs) });
 }
 /**
  * Extracted verbatim so its migration can be proven byte-for-byte.
@@ -5834,12 +6248,7 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
   // Ensure the index exists (and is git-clean-protected) before the agent queries it.
   try { if (!_codegraph) _codegraph = require('./lib/codegraph-context'); _codegraph.ensureIndexed(repoPath); } catch { /* tool self-heals too */ }
 
-  const profiles = (() => {
-    try {
-      const p = path.join(automationDirFromLogDir(logDir), 'agents', 'profiles.json');
-      return JSON.parse(fs.readFileSync(p, 'utf8'));
-    } catch { return {}; }
-  })();
+  const profiles = profilesWithProjectBriefs(logDir);
   // THE CODELINE'S OWN DETECTIVE, WHEN ONE WAS MINTED FOR IT.
   //
   // The roster mints one investigator per codeline, briefed on that repository's layout,
@@ -6054,7 +6463,7 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
         // the source of the detective's non-determinism). Floor it high so the
         // model has room to think AND write. Same class as claude.sh's
         // resolve_brownfield_effort_floor (24576) for the impl agent.
-        EPAM_MAX_OUTPUT_TOKENS: process.env.CODEGRAPH_DETECTIVE_MAX_OUTPUT_TOKENS || '24576',
+        EPAM_MAX_OUTPUT_TOKENS: process.env.CODEGRAPH_DETECTIVE_MAX_OUTPUT_TOKENS || seamDeclares('code-graph-detective').maxOutputTokens,
         // STRUCTURAL guard: the detective is read-only — it queries CodeGraph via
         // Bash and outputs JSON. Restricting it to `bash` means it CANNOT reach
         // write_file, so it can never "answer" by writing a file and losing its
@@ -6127,7 +6536,7 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
         // in-pipeline: glm-5.1 hung 6 min producing nothing while the pipeline
         // hammered the same OpenRouter key) fails FAST and escalates up the
         // ladder, instead of burning the full RUNCLAUDE_TIMEOUT_MS per attempt.
-        timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '450000'),
+        timeoutMs: (Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS) || seamDeclares('code-graph-detective').timeoutMs),
       });
       let findings = parseFindings(out);
       const _phase1Findings = Array.isArray(findings) ? findings.length : 0;
@@ -6141,9 +6550,9 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
         const extractLog = logPath ? logPath.replace(/\.log$/, '-extract.log') : null;
         const out2 = await runClaude(exec, extractPrompt, extractLog, {
           // No AI_GATE_ALLOW_TOOLS → ai-run.sh adds --no-tools → pure extraction.
-          EPAM_MAX_OUTPUT_TOKENS: process.env.CODEGRAPH_DETECTIVE_MAX_OUTPUT_TOKENS || '24576',
+          EPAM_MAX_OUTPUT_TOKENS: process.env.CODEGRAPH_DETECTIVE_MAX_OUTPUT_TOKENS || seamDeclares('code-graph-detective').maxOutputTokens,
           EPAM_MAX_ITERATIONS: '2',
-        }, { salvageOutputOnFailure: true, costAgent: 'code-graph-detective', costStoryId: story && story.id ? story.id : '', timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '450000') });
+        }, { salvageOutputOnFailure: true, costAgent: 'code-graph-detective', costStoryId: story && story.id ? story.id : '', timeoutMs: (Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS) || seamDeclares('code-graph-detective').timeoutMs) });
         findings = parseFindings(out2);
         if (findings && findings.length) {
           console.warn(`spec-mode: code-graph-detective phase-2 extraction recovered ${findings.length} fix-site(s) for ${story.id} from a narrative phase-1 answer.`);
@@ -6184,6 +6593,22 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
       });
       if (findings === null) {
         console.warn(`spec-mode: ⚠️ code-graph-detective produced NO parseable JSON for ${story.id} (attempt ${attempt}/${maxAttempts}) even after the extraction phase. Phase-1 head: "${String(out || '').slice(0, 140).replace(/\s+/g, ' ').trim()}"`);
+        // SELF-HEAL BEFORE THE NEXT ATTEMPT, WITH THE OUTPUT THAT FAILED.
+        //
+        // This seam is named in agent-attempt-analyst.sh's own header as its next caller — it never
+        // became one. It climbs its ladder and appends a fixed retry note, but the episode was never
+        // recorded and no constraint was ever synthesised from what the model actually returned.
+        try {
+          // eslint-disable-next-line global-require
+          const _sh = require('./lib/self-heal.js').selfHeal({
+            agent: 'code-graph-detective', storyId: (story && story.id) || '',
+            reason: 'no parseable JSON after the extraction phase', output: out, logDir,
+    // attemptModel is the rung this attempt actually ran on — the analyst heals on it.
+    model: attemptModel || '', provider: process.env.AI_PROVIDER || '',
+    projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR || '',
+          });
+          if (_sh.rc === 2) console.warn(`spec-mode: self-heal analyst FAILED for ${story.id} — attempt ${attempt + 1} has no corrective guidance`);
+        } catch { /* a diagnostic must never fail the run it is diagnosing */ }
         continue; // retry — this is the silent-failure mode we must not accept
       }
       if (findings.length === 0) {
@@ -6216,7 +6641,7 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
           const res = require('child_process').spawnSync('python3', [
             path.join(__dirname, 'lib', 'fix_prescription_check.py'),
             repoPath, f.helper || '', f.fix,
-          ], { encoding: 'utf8', timeout: 30000 });
+          ], { encoding: 'utf8', timeout: toolTimeoutMs('codegraphExplore') });
           f.prescriptionNote = String(res.stdout || '').trim();
           f.prescriptionUnderspecified = res.status === 1;
           if (f.prescriptionNote) {
@@ -6520,11 +6945,7 @@ async function reviewTicketLinks({ promptExec, story, logDir, docPaths = [] }) {
   const links = Array.isArray(story && story.ticketLinks) && story.ticketLinks.length ? story.ticketLinks : [];
   if (!links.length) return [];
 
-  const profiles = (() => {
-    try {
-      return JSON.parse(fs.readFileSync(path.join(automationDirFromLogDir(logDir), 'agents', 'profiles.json'), 'utf8'));
-    } catch { return {}; }
-  })();
+  const profiles = profilesWithProjectBriefs(logDir);
   const persona = profiles['ticket-link-agent'] || '';
 
   const linkBlock = links.map((l, i) => {
@@ -6599,7 +7020,17 @@ async function reviewTicketLinks({ promptExec, story, logDir, docPaths = [] }) {
     return normaliseTicketLinks(payload);
   } catch (err) {
     console.warn(`spec-mode: ticket-link review unavailable for ${story && story.id} (${err && err.message}) — proceeding without documentation evidence`);
-    return [];
+    // "NO DOCUMENTS WERE LINKED" AND "THE LINKED ONES COULD NOT BE READ" ARE DIFFERENT
+    // ANSWERS, and this returned the first for both. referencedDocsBlock([]) renders an
+    // empty string, so the agent writing the spec was told the ticket carried no
+    // documentation — while the warning above went only to the console. The caller holds
+    // `links`, so it knows documents existed and yielded nothing; that fact travels.
+    return links.length ? [{
+      relevant: true,
+      unreadable: true,
+      url: `(${links.length} document(s) linked on this ticket)`,
+      reason: String((err && err.message) || err),
+    }] : [];
   }
 }
 
@@ -6609,6 +7040,17 @@ function referencedDocsBlock(docs) {
   const list = Array.isArray(docs) ? docs.filter((d) => d && d.relevant) : [];
   if (!list.length) return '';
   const lines = [];
+  // A LOOKUP THAT FAILED IS NOT AN ABSENCE. Rendering nothing here would tell the agent the ticket
+  // carried no documentation, and it would specify accordingly — confidently, and on nothing.
+  const unreadable = list.filter((d) => d.unreadable);
+  if (unreadable.length) {
+    lines.push('\n## DOCUMENTATION LINKED ON THIS TICKET COULD NOT BE READ');
+    for (const d of unreadable) {
+      lines.push(`- ${d.url}${d.reason ? ` — ${d.reason}` : ''}`);
+    }
+    lines.push('  Do not treat this as an absence of documentation. Specify only what the ticket '
+      + 'itself supports, and say where documentation would have been needed.');
+  }
   const contradictions = list.filter((d) => d.contradictsStory);
   if (contradictions.length) {
     lines.push('\n## DOCUMENTATION CONTRADICTS THIS STORY — resolve before specifying');
@@ -6619,7 +7061,7 @@ function referencedDocsBlock(docs) {
   lines.push('\n## REFERENCED DOCUMENTATION (quoted from sources linked on the ticket — authoritative over assumption)');
   for (const d of list) {
     lines.push(`- ${d.url} [${d.classification}]${d.reason ? ` — ${d.reason}` : ''}`);
-    for (const q of (Array.isArray(d.quotes) ? d.quotes : []).slice(0, 6)) lines.push(`    "${q}"`);
+    for (const q of (Array.isArray(d.quotes) ? d.quotes : []).slice(0, evidenceWindow('quotesPerDocument'))) lines.push(`    "${q}"`);
     if (d.scopeCaveat) lines.push(`    SCOPE CAVEAT: ${d.scopeCaveat}`);
   }
   return lines.join('\n') + '\n';
@@ -6769,7 +7211,7 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, fo
   }
   const fixSiteBlock = detectiveFindings.length
     ? `\n\nLOCATED FIX SITE(S) — traced in this repository before you were asked. Anchor every criterion to the behaviour THIS code produces:\n`
-      + detectiveFindings.slice(0, 5).map((f) => `- ${f.file}${f.function ? ` :: ${f.function}` : ''}${f.reason ? ` — ${f.reason}` : ''}`).join('\n') + '\n'
+      + detectiveFindings.slice(0, evidenceWindow('fixSitesInPrompt')).map((f) => `- ${f.file}${f.function ? ` :: ${f.function}` : ''}${f.reason ? ` — ${f.reason}` : ''}`).join('\n') + '\n'
     : '';
   // detectiveFindings, not story.fixSiteAnalysis: the field is not set until later.
   const declaredFileBlock = manifestFileExcerpts(story, prd, { located: detectiveFindings });
@@ -7333,7 +7775,9 @@ function estimateStoryTokens(story, contractDir) {
 // deterministic post-hoc check below (checkSplitMandateViolation), so the two
 // can never drift apart. Fully generic: no project/domain names, just AC count
 // and impl/test file shape — applies identically to any project's stories.
-const SPLIT_MANDATE_AC_THRESHOLD = 12;
+// The split threshold is DECLARED — config/spec-mode-defaults.json policy.splitMandateAcThreshold.
+// Exposed as a getter on the exports below so a reader always sees the current declaration
+// rather than a value frozen at module load.
 
 function storyRequiresSplit(snapshot) {
   // Brownfield: a story IS the ticket, so there is nothing to subdivide.
@@ -7360,8 +7804,9 @@ function storyRequiresSplit(snapshot) {
   const files = snapshot.technicalNotes?.files || [];
   const testFiles = files.filter((f) => f.endsWith('.test.ts') || f.endsWith('.spec.ts'));
   const implFiles = files.filter((f) => !f.endsWith('.test.ts') && !f.endsWith('.spec.ts'));
-  if (acCount > SPLIT_MANDATE_AC_THRESHOLD) {
-    return { required: true, reason: `${acCount} acceptance criteria (> ${SPLIT_MANDATE_AC_THRESHOLD})` };
+  const _splitAt = policyConfig().splitMandateAcThreshold;
+  if (Number.isFinite(_splitAt) && acCount > _splitAt) {
+    return { required: true, reason: `${acCount} acceptance criteria (> ${_splitAt})` };
   }
   if (testFiles.length > 0 && implFiles.length > 0) {
     return { required: true, reason: `combines ${implFiles.length} implementation file(s) and ${testFiles.length} test file(s)` };
@@ -7664,9 +8109,9 @@ function assertNoStoryIdsLost(beforeIds, afterIds, contextLabel) {
 // Root cause this fixes (found live, 2026-07-07): spec-mode's LLM model-review
 // step (below) can override a story's .model field (e.g. moonshotai/kimi-k2 ->
 // MiniMax-M3) but never touched .aiProvider — a story ended up with
-// aiProvider="qwen" (correct for the OLD model) paired with model="MiniMax-M3"
+// aiProvider="openrouter" (correct for the OLD model) paired with model="MiniMax-M3"
 // (which needs the "minimax" provider), silently sending a MiniMax-native model
-// name to the OpenRouter-routed qwen provider. That request never resolves
+// name to the OpenRouter-routed openrouter provider. That request never resolves
 // correctly and hangs until the pipeline's 600s watchdog kills it — the actual
 // root cause of SKY-002-test/SKY-003-test repeatedly stalling with zero output
 // in that day's live run, misread at first as a flaky-API/network issue.
@@ -8563,11 +9008,55 @@ function readAgentRawOutput(logPath) {
   } catch { return ''; }
 }
 
-function extractTaggedJson(text, tag) {
+/**
+ * THE FIRST COMPLETE JSON VALUE IN A STRING, OR NULL.
+ *
+ * JSON.parse rejects the whole text when anything follows the value — "Extra data" — and the caller
+ * is then told there was no answer at all. On one live ticket that cost TWO paid runs:
+ * run_orch_prompt captures the runner with `2>&1 | tee`, so a provider-substitution notice the
+ * PIPELINE ITSELF printed landed after the reviewer's JSON and the roster specialiser failed 3 of 3.
+ *
+ * Routing that notice to stderr did not fix it — 2>&1 merges the streams — which is exactly why the
+ * tolerance belongs here and not in whichever component prints something next. Any banner,
+ * deprecation warning or progress line from anything, ever, is covered by this.
+ *
+ * String- and escape-aware, so a brace inside a quoted value cannot end the scan early. Stops at
+ * the first balanced value; anything after it is ignored, never merged, because a second value is
+ * not part of the first answer.
+ */
+function _firstCompleteJsonValue(text) {
+  const start = text.search(/[{[]/);
+  if (start < 0) return null;
+  const open = text[start];
+  const close = open === '{' ? '}' : ']';
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i += 1) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') { inString = true; continue; }
+    if (ch === open) depth += 1;
+    else if (ch === close) {
+      depth -= 1;
+      if (depth === 0) {
+        try { return JSON.parse(text.slice(start, i + 1)); } catch { return null; }
+      }
+    }
+  }
+  return null;
+}
+
+function _extractTaggedJsonRaw(text, tag) {
   if (!text) return null;
 
   // Normalize variant opening tags that models sometimes emit:
-  //   <_TAG>  →  <TAG>   (Qwen adds leading underscore to distinguish from template echo)
+  //   <_TAG>  →  <TAG>   (OpenRouter adds leading underscore to distinguish from template echo)
   //   <-TAG>  →  <TAG>   (similar dash-prefix variant)
   text = text.replace(new RegExp(`<[_\\-]${tag}>`, 'g'), `<${tag}>`);
 
@@ -8578,6 +9067,33 @@ function extractTaggedJson(text, tag) {
     try {
       return JSON.parse(jsonText);
     } catch (err) {
+      // A COMPLETE VALUE FOLLOWED BY ANYTHING IS STILL COMPLETE — tried BEFORE repair, because
+      // this is exact where repair guesses: jsonrepair folds "answer + trailing notice" into a
+      // TWO-ELEMENT ARRAY, and the consumer then rejects element 1.
+      //
+      // A TOOL-CALL WRAPPER IS NOT THE ANSWER, THOUGH. Matching one here returned it whole and
+      // unwrapToolCallJson never ran, so a working recovery path died to an eager fallback. The
+      // test is by SHAPE, matching the rest of this file: a call wrapper names what it invokes and
+      // carries its payload under arguments.
+      // A TOOL CALL IS ANSWERED BY THE TOOL-CALL RECOVERY, NOT BY EITHER FALLBACK. Asked here
+      // rather than guessed at: wrappers carry their payload under arguments, input OR content,
+      // and a key list would miss the next spelling. unwrapToolCallJson already decides this, so
+      // it decides it once. Tried EARLIER this ran after the fallbacks and they returned the
+      // wrapper whole, so a working recovery path died to an eager guess.
+      // ONLY WHEN THERE IS MARKUP TO UNWRAP. unwrapToolCallJson is eager — handed plain text it
+      // will treat a bare array's single element as a payload and hand back the element, which
+      // silently turns a list answer into one item. A tool call always arrives inside a tag; the
+      // test is for markup, not for a list of wrapper NAMES, which would miss the next spelling.
+      const hasMarkup = /<[A-Za-z_][\w.:-]*(\s[^>]*)?>/.test(text);
+      const viaToolCall = hasMarkup ? unwrapToolCallJson(text) : null;
+      if (viaToolCall !== null) return viaToolCall;
+
+      // A COMPLETE VALUE FOLLOWED BY ANYTHING IS STILL COMPLETE — before repair, because this is
+      // exact where repair guesses: jsonrepair folds "answer + trailing notice" into a TWO-ELEMENT
+      // ARRAY and the consumer then rejects element 1.
+      const firstValue = _firstCompleteJsonValue(jsonText);
+      if (firstValue !== null) return firstValue;
+
       // Try jsonrepair for M3-style malformed JSON (truncated strings, unescaped chars, double braces).
       // Only attempt repair when text looks like JSON (starts with { or [) to avoid
       // jsonrepair turning arbitrary plain text into a JSON string.
@@ -8625,8 +9141,53 @@ function extractTaggedJson(text, tag) {
   const unwrapped = unwrapToolCallJson(text);
   if (unwrapped !== null) return unwrapped;
 
+  // LAST RESORT: A COMPLETE VALUE FOLLOWED BY ANYTHING IS STILL COMPLETE.
+  //
+  // The pipeline concatenates stdout and stderr before any consumer parses, so its own notices
+  // land after the answer; jsonrepair then folds "answer + notice" into a TWO-ELEMENT ARRAY and
+  // the consumer rejects element 1. Taking the first balanced value fixes that exactly.
+  //
+  // AFTER tool-call recovery, deliberately. Tried earlier it matched the WRAPPER of a
+  // <function_calls> payload and returned it whole, so the arguments inside were never
+  // unwrapped — a working recovery path broken by a fallback that ran too eagerly.
+  const firstValue = _firstCompleteJsonValue(text);
+  if (firstValue !== null) return firstValue;
+
   return null;
 }
+
+/**
+ * EVERY AGENT'S REPLY, IN EVERY SHAPE A PROVIDER CAN RETURN IT.
+ *
+ * The pipeline's contract is a tagged block. Since --json-schema was wired into the claude arm a
+ * provider may return the object BARE, and a model may wrap either form in a single-element array.
+ * v1.5 passed --json-schema zero times, so that shape never arrived and nothing had to handle it.
+ *
+ * metrolinx AMSD-1919 died three times in the agent-mint on exactly this:
+ *   [{"proposedAgents":[{"name":"gotransit-checkout-investigator", ...}]}]
+ * rejected as "no proposedAgents array". The first fix was applied at ONE call site, which is no
+ * fix at all — every seam extracts the same way.
+ *
+ * ONE element only. Two means the model answered twice and there is no way to know which it meant,
+ * so that is still refused, and every field is validated afterwards exactly as before. This removes
+ * an envelope, never a check.
+ */
+function extractTaggedJson(text, tag) {
+  // EXTRACTION EXTRACTS. IT DOES NOT GUESS WHICH VALUE THE CALLER WANTED.
+  //
+  // This used to strip a one-element array here — blindly, because at this point nothing knows
+  // which key the consumer is looking for. That contradicted the contract a caller already
+  // depends on ("returns last parseable match when the model echoes an empty template block"),
+  // which requires the list to survive, and it silently changed the shape every seam receives.
+  //
+  // Removing an envelope needs to know what is inside it, so it happens where the key IS known:
+  // unwrapEnvelope(payload, key) in lib/agent-output-schema.js, which unwraps only when exactly
+  // one element carries that key and leaves the payload untouched otherwise. One place, and it
+  // can tell an envelope from an answer.
+  return _extractTaggedJsonRaw(text, tag);
+}
+
+
 
 // READ AT CALL TIME, not at module load.
 //
@@ -8662,9 +9223,44 @@ function runClaudeTimeoutMs(env) {
     + 'one rather than letting a call run unbounded or be cut off by a number nobody chose.');
 }
 
+/** The --model value out of an execSpec's argv, or '' when it names none. */
+function _modelFromArgs(execSpec) {
+  const args = execSpec && Array.isArray(execSpec.args) ? execSpec.args : null;
+  if (!args) return '';
+  const i = args.indexOf('--model');
+  return i >= 0 && i + 1 < args.length ? String(args[i + 1]) : '';
+}
+
 function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
   return new Promise((resolve, reject) => {
     const env = { ...process.env, ...envOverrides };
+
+    // THE SEAM'S RESOLVED MODEL MUST REACH THE RUNNER, OR THE LADDER IS DECORATION.
+    //
+    // resolvePromptExec builds the execSpec ONCE at startup from process.env, where AI_MODEL and
+    // EPAM_MODEL are both empty — so argv carries no --model. The hub only reads AI_MODEL, and
+    // nothing bridged EPAM_MODEL to it. Every runClaude seam therefore ran on Claude Code's OWN
+    // default model, not the rung its ladder resolved, and could not escalate: there was no
+    // starting rung to escalate from.
+    //
+    // Proven three ways on 2026-08-26: the seam resolved claude-haiku-4-5 while argv held only
+    // ["--provider","claude"]; a stubbed runner with EPAM_MODEL set in the env received no
+    // --model at all; and the same call with --model passed explicitly received it intact. So the
+    // plumbing was sound and the value was simply never put in. It is why moving prompt-builder to
+    // the cheap rung changed nothing and cost stayed at $0.111/call against haiku's measured
+    // $0.039, and why every cost row carried a blank model.
+    //
+    // argv WINS. A caller that named a model meant it; this only fills the gap when none was
+    // named, so per-call overrides and the escalation ladder both keep working.
+    if (!env.AI_MODEL && !_modelFromArgs(execSpec) && env.EPAM_MODEL) {
+      env.AI_MODEL = env.EPAM_MODEL;
+    }
+
+    // THIS RUNNER KEEPS ITS OWN COST LEDGER, so the hub must not write a second row for the same
+    // call. Both fired before, and the 2026-08-26 mock3 ledger held 10 rows for 5 calls — a naive
+    // sum reported $2.57 against $1.29 actually billed. The hub still records for every caller
+    // that does NOT set this.
+    env.EPAM_COST_RECORDED_BY_CALLER = '1';
     // Name the agent from the label it already declares for cost tracking.
     // Only the detective ever set EPAM_AGENT_NAME explicitly, so every other
     // spec-mode agent's plan record and Langfuse trace was anonymous — written
@@ -8696,6 +9292,9 @@ function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
       if (!_costFile) return;
       try {
         emitCostSnapshot({
+          // The prompt this call actually ran on. Only the caller that built it has it — the cost
+          // seam downstream never sees it, which is why every trace recorded in=4ch.
+          input: typeof prompt === 'string' ? prompt : '',
           startedAt: _callStartedAt,
           logDir: process.env.LOG_DIR || process.env.EPAM_PROJECT_OUTPUT_DIR || '',
           resultFile: _costFile,
@@ -8704,8 +9303,24 @@ function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
           agent: opts.costAgent || envOverrides.SPEC_AGENT_NAME || 'spec-mode-agent',
           storyId: opts.costStoryId || '',
           phase: process.env.PHASE || '',
-          model: envOverrides.AI_MODEL || execSpec?.model || process.env.SPEC_MODE_MODEL || '',
+          // THE MODEL IS IN argv, NOT ON THE OBJECT. execSpec is { cmd, args: ['--provider', p,
+          // '--model', m] } — it has no .model property, so this resolved to '' for every call that
+          // did not also set AI_MODEL in its env. 37 of 38 rows in the 2026-08-26 mock3 ledger carried
+          // no model, which makes "what did each model cost" unanswerable from the ledger — on the
+          // tracking the operator calls priority #1.
+          //
+          // indexOf guarded: absent, it returns -1 and args[0] would record '--provider' as the model.
+          // READ THE DERIVED ENV, NOT THE CALLER'S RAW INPUT. The bridge above writes AI_MODEL
+          // onto `env` (process.env + overrides) when a seam supplied only EPAM_MODEL. This read
+          // `envOverrides`, which never receives it — so a seam that resolved its rung correctly
+          // and ran on the right model still recorded a BLANK one. All 7 prompt-builder rows in
+          // run 20260827T092415Z, $0.32 of spend, with no way to say what it bought.
+          model: env.AI_MODEL || envOverrides.AI_MODEL || _modelFromArgs(execSpec)
+            || execSpec?.model || process.env.SPEC_MODE_MODEL || '',
           provider: execSpec?.provider || process.env.SPEC_MODE_PROVIDER || process.env.EPAM_ORCHESTRATION_PROVIDER || '',
+          // Which rung of its ladder this call ran on. Read from the seam's env, which is where
+          // seamInvocationEnv stamps it — the emitting process's own env never carries it.
+          rung: env.EPAM_LADDER_RUNG,
         });
       } catch { /* cost emission must never break the agent call */ }
       try { fs.unlinkSync(_costFile); } catch { /* ignore */ }
@@ -8791,9 +9406,39 @@ function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
         if (opts.salvageOutputOnFailure && output) {
           return resolve(output);
         }
-        return reject(new Error(`prompt runner exited with code ${code}`));
+        // A FAILING CALL SAID SOMETHING, AND IT IS THE PART WORTH KEEPING.
+        //
+        // This rejected with the exit code alone and dropped everything the child wrote. The roster
+        // specialiser then failed three attempts out of three, across three PAID runs, reporting
+        // only "prompt runner exited with code 1" — no log, no captured reply, nothing on disk. The
+        // cause is still unknown, which is the price of discarding evidence at the one moment it
+        // matters. The reply of a failing call is worth more than the reply of a passing one.
+        const _said = finishOutput();
+        if (_said) {
+          try { recordAgentReply(`${opts.costAgent || "agent"}-FAILED`, _said); } catch { /* never */ }
+        }
+        return reject(new Error(`prompt runner exited with code ${code}`
+          + (_said ? `: ${_said.slice(-1200)}` : " (the runner wrote nothing at all)")));
       }
-      resolve(output);
+      // A SUCCESSFUL REPLY IS STDOUT. STDERR IS THE RUNNER TALKING, NOT THE MODEL.
+      //
+      // This resolved `output` — stdout AND stderr — so every line the child logged to stderr
+      // became part of what the pipeline believed the agent said. .env carries
+      // EPAM_ORCHESTRATION_PROVIDER=openrouter from the openrouter stack; under
+      // EPAM_PROVIDER_SET=claude that is unroutable, so llm-handler.sh:62 warned correctly to
+      // stderr on EVERY call, and those two lines were welded onto EVERY reply of the run.
+      // Measured 2026-09-01: 4 of 4 generated metrolinx prompts carried them in the prompt BODY,
+      // cached and marked reviewed:true. mock3, cached before the stray variable existed, has 0 of
+      // 39. Worse than the noise is the parse: a JSON verdict with log lines appended does not
+      // parse, and "no parseable verdict" is a failure this pipeline has died on more than once.
+      //
+      // The other paths are UNCHANGED and deliberately so. The failure, timeout and salvage
+      // branches above still carry both streams: on 2026-07-23 the code-graph-detective emitted
+      // perfect fix-site JSON, exited non-zero, and this function discarded all of it. The reply of
+      // a failing call is evidence, and stderr is the useful half of it. The log file written above
+      // also keeps both, so nothing is lost for diagnosis — only the value handed to the caller as
+      // "what the model answered" is narrowed to what the model actually wrote.
+      resolve(stdout.trim());
     });
     proc.unref(); // don't keep Node alive waiting for the child
     proc.stdin?.on('error', () => { /* suppress EPIPE when process is killed before stdin flush */ });
@@ -8807,7 +9452,7 @@ function resolvePromptProvider(env = process.env) {
     || (/codex$/.test(env.CLAUDE_CMD || '') ? 'codex' : null);
   if (!provider) {
     throw new Error(
-      'No AI provider configured. Set AI_PROVIDER or EPAM_ORCHESTRATION_PROVIDER (e.g. EPAM_ORCHESTRATION_PROVIDER=qwen).'
+      'No AI provider configured. Set AI_PROVIDER or EPAM_ORCHESTRATION_PROVIDER (e.g. EPAM_ORCHESTRATION_PROVIDER=openrouter).'
     );
   }
   return provider;
@@ -8815,7 +9460,15 @@ function resolvePromptProvider(env = process.env) {
 
 function resolvePromptExec(aiRunnerCmd, env = process.env) {
   const provider = resolvePromptProvider(env);
-  const gateModel = env.AI_MODEL || env.ORCH_GATE_MODEL || '';
+  // THREE SOURCES, MOST SPECIFIC FIRST — and none of them may displace another.
+  //   AI_MODEL        the model this one call was told to use
+  //   ORCH_GATE_MODEL the model the GATE declares for itself, independent of the writer's
+  //   EPAM_MODEL      the model the ladder resolved for the run
+  // The ladder bridge added EPAM_MODEL by REPLACING ORCH_GATE_MODEL rather than falling
+  // through to it, so a gate carrying only its own declared model emitted no --model at
+  // all and ran on whatever the runner defaults to. A gate judging on a model nobody chose
+  // is not the gate that was configured.
+  const gateModel = env.AI_MODEL || env.ORCH_GATE_MODEL || env.EPAM_MODEL || '';
   const modelArgs = gateModel ? ['--model', gateModel] : [];
   return { cmd: aiRunnerCmd, args: ['--provider', provider, ...modelArgs] };
 }
@@ -8882,6 +9535,27 @@ function seamStartModel(agent) {
  */
 function buildKnownValidModels(upgradeModel, miniModel) {
   const known = new Set();
+
+  // ONE ANSWER TO "WHICH MODELS MAY A STORY BE ASSIGNED", NOT TWO.
+  //
+  // This read EPAM_MODEL_LADDER_* from the environment alone. In a process where those were never
+  // exported the set came back EMPTY, and isValidModelString's remaining rule is
+  // `model === currentModel` — so a story already carrying a foreign model kept it. That is how a
+  // mockserver rehearsal, whose set declares a Claude ladder, assigned MiniMax-M3 and spent twelve
+  // writer attempts per story on a model the set cannot route.
+  //
+  // lib/handlers/ladder-models.js already answers this question correctly from the ACTIVE SET, and
+  // pre-flight already trusts it. Asked here too, so the assignment is bounded by the same ladder
+  // the run is actually climbing rather than by whatever happens to be in the environment.
+  try {
+    // eslint-disable-next-line global-require
+    const { execFileSync } = require('child_process');
+    const out = execFileSync(process.execPath,
+      [path.join(__dirname, 'lib', 'handlers', 'ladder-models.js')],
+      { encoding: 'utf8', timeout: 20000 });
+    for (const m of JSON.parse(out || '[]')) if (m && String(m).trim()) known.add(String(m).trim());
+  } catch { /* the environment below still answers, exactly as before */ }
+
   for (const [key, value] of Object.entries(process.env)) {
     if (!/^EPAM_MODEL_LADDER(_[A-Z0-9_]+)?$/.test(key) || !value) continue;
     if (key.endsWith('_TIER_ORDER')) continue;
@@ -8902,7 +9576,6 @@ function buildKnownValidModels(upgradeModel, miniModel) {
 // Anthropic/Claude models are never permitted as a story-agent assignment in
 // this pipeline (this engine IS Claude Code — running Claude AS a story
 // agent inside its own orchestration is not a supported configuration; the
-// pipeline is qwen/minimax-routed by design). This is an absolute rule, not
 // just a preference for what the default should be — checked independently
 // of currentModel/knownValidModels so it still holds even if a story's
 // current model was somehow already corrupted to an Anthropic model by an
@@ -8912,7 +9585,20 @@ const DISALLOWED_MODEL_PATTERN = /^anthropic\/|claude/i;
 function isValidModelString(model, currentModel, knownValidModels) {
   if (typeof model !== 'string') return false;
   if (DISALLOWED_MODEL_PATTERN.test(model)) return false;
-  return model === currentModel || knownValidModels.has(model);
+  if (knownValidModels.has(model)) return true;
+
+  // "IT IS ALREADY THE CURRENT MODEL" IS NOT A REASON TO KEEP IT.
+  //
+  // This accepted anything equal to currentModel, ahead of consulting the ladder at all — so a
+  // story that had somehow acquired a foreign model perpetuated it on every pass. MiniMax-M3 rode
+  // that rule through a run whose set declares a Claude ladder, and the writer then spent twelve
+  // attempts per story on a model the set cannot route.
+  //
+  // The concession stays only where it is safe: when the permitted set is EMPTY nothing can be
+  // checked against it, and refusing everything there would strand a project whose ladder could
+  // not be resolved. Where the ladder IS known, it decides.
+  if (knownValidModels.size === 0) return model === currentModel;
+  return false;
 }
 
 // buildGateExec <aiRunnerCmd>
@@ -8922,7 +9608,7 @@ function isValidModelString(model, currentModel, knownValidModels) {
 // run_prd_change_reviewer.
 function buildGateExec(aiRunnerCmd, env = process.env) {
   // NO PROVIDER DEFAULT. `|| 'minimax'` named a provider no configuration asks for — every
-  // project config.env and every launcher sets qwen — so it was unreachable in practice and
+  // project config.env and every launcher sets openrouter — so it was unreachable in practice and
   // wrong when reached. Routing the same model through a different provider is a different
   // setup, not a detail. Unset now fails at the call instead of routing somewhere unchosen.
   const provider = env.ORCH_GATE_PROVIDER || '';
@@ -8994,6 +9680,24 @@ function capReviewSnapshot(snapshot) {
 // accepted. Non-blocking by design: any call failure or unconfigured gate
 // defaults to "pass" (matches claude.sh's run_prd_change_reviewer contract) —
 // this is a quality gate, not a hard dependency for the spec pass to function.
+/**
+ * DOES THIS REVIEW OUTCOME LET THE CHANGE STAND?
+ *
+ * Only an explicit pass does. 'fail' reverts — and so does 'unreviewed', because a reviewer that
+ * could not judge after its retries has told us nothing, and "we could not tell" is not "it is
+ * fine".
+ *
+ * The unjudged case used to fall through to acceptance: the loop retried twice, wrote a
+ * `reviewer_unjudged` event, and then `if (verdict === 'fail')` simply did not match, so the
+ * change was kept. That event is written and read by NOTHING — a logged block that does not block.
+ *
+ * Exported because the call site is buried in a 10,000-line runner, and a decision that cannot be
+ * asserted on its own gets restated slightly differently the next time it is needed.
+ */
+function reviewOutcomeKeepsChange(verdict) {
+  return verdict === 'pass';
+}
+
 async function reviewPrdChange({ aiRunnerCmd, profiles, storyId, changeType, before, after, logDir, splitOccurred }) {
   const gateProvider = process.env.ORCH_GATE_PROVIDER || '';
   if (!gateProvider) return { verdict: 'pass', issues: [] };
@@ -9057,15 +9761,39 @@ async function reviewPrdChange({ aiRunnerCmd, profiles, storyId, changeType, bef
   }
 }
 
-// Returns true when a model string is mini/nano/flash/haiku tier — fast but limited generation capacity.
-function isMiniTierModel(model) {
+// A MODEL'S TIER IS DECLARED BY THE SET THAT DECLARES THE MODEL.
+//
+// This read the tier off the model's NAME — '-mini', '-nano', '-flash', '-haiku',
+// 'minimax-m2' — which is a vendor's naming habit encoded as engine logic. It broke silently
+// in both directions: a cheap model a vendor named differently read as capable, and a capable
+// model whose name happened to contain '-flash' read as cheap. The answer feeds story model
+// assignment, so a wrong tier sends work to the wrong rung and nothing says so.
+//
+// `miniTier: true` now sits beside the other per-model facts in the set's modelOverrides.
+// UNDECLARED IS NOT MINI: guessing is what this replaced, so an unknown model is treated as
+// capable rather than assumed cheap.
+function isMiniTierModel(model, setName) {
   if (!model || typeof model !== 'string') return false;
   const m = model.toLowerCase();
-  // Named mini model from env var always qualifies
+
+  // An operator naming the mini model explicitly still wins — unchanged.
   const miniModelEnv = (process.env.ORCH_MINI_MODEL || '').toLowerCase();
   if (miniModelEnv && m === miniModelEnv) return true;
-  return m.includes('-mini') || m.includes('-nano') || m.includes('-flash') || m.includes('-haiku')
-      || m.startsWith('minimax-m2') || m.startsWith('minimax/minimax-m2');
+
+  try {
+    // eslint-disable-next-line global-require
+    const { activeSet } = require('./lib/llm-settings-resolve.js');
+    const set = setName || (activeSet() && activeSet().name);
+    if (!set) return false;
+    const file = path.join(__dirname, '..', 'config', `llm-defaults.${set}.json`);
+    const declared = JSON.parse(fs.readFileSync(file, 'utf8')).modelOverrides || {};
+    for (const [key, v] of Object.entries(declared)) {
+      if (key.startsWith('$') || !v || v.miniTier !== true) continue;
+      const needle = String(v.matchSubstring || key).toLowerCase();
+      if (needle && m.includes(needle)) return true;
+    }
+  } catch { /* no readable declaration is not a licence to guess */ }
+  return false;
 }
 
 // VERY_HIGH_AC_THRESHOLD (2026-07-15): a story this far past the normal
@@ -9483,6 +10211,26 @@ function costLabelFor(tag, env) {
 }
 
 module.exports = {
+  aggregateRosterReview,
+  reviewOutcomeKeepsChange,
+  // Exported so the brief lookup can be asserted without a run.
+  profilesWithProjectBriefs,
+  // Exported for orchestrations/scripts/agent-check.js. The harness must append the SAME output
+  // contract runAgentForJson appends, or it checks a different invocation than the one that runs:
+  // on a one-shot runner (claude, codemie) the prompt is the ONLY channel the contract has, so
+  // without this the model is never told its shape, answers in prose, and a healthy seam reports
+  // "it did not examine anything". Re-implementing it in the harness would be a second copy to
+  // keep right — the defect this file keeps meeting.
+  outputContractFor,
+  // Exported so the stage list the roster reviewer is given can be asserted directly. The defect
+  // it fixes was invisible precisely because nothing could look at what the reviewer was handed.
+  pipelineStagesBlock,
+  // Exported for the same reason as outputContractFor: agent-check discovers a seam's output
+  // contract from the (TOOL_X, 'TAG') pair at its call site, and can only render it if the
+  // definition is reachable. TOOL_TICKET_LINKS was the one binding left unexported, so
+  // ticket-links reported "the reply carries no JSON" while production appended its contract
+  // correctly — a harness failure indistinguishable from a broken agent.
+  TOOL_TICKET_LINKS,
   reviewSurvey,
   rosterCoverageBlock,
   runClaudeTimeoutMs,
@@ -9564,6 +10312,10 @@ module.exports = {
   capSplitACs,
   validateSplitFileCoherence,
   storyRequiresSplit,
+  splitIsMandated: storyRequiresSplit,
+  // A GETTER, not a copy: reading the declaration at access time means a test or a project that
+  // changes it is answered honestly, instead of by whatever was loaded first.
+  get SPLIT_MANDATE_AC_THRESHOLD() { return policyConfig().splitMandateAcThreshold; },
   checkSplitMandateViolation,
   isSplitDelegationAc,
   correctSplitChildAgentRoleIfTestOnly,
@@ -9572,7 +10324,6 @@ module.exports = {
   assertNoStoryIdsLost,
   resolveModelProvider,
   isSplitDelegationOnlyChange,
-  SPLIT_MANDATE_AC_THRESHOLD,
   applySpecChanges,
   mergeLocationHintFiles,
   buildPerCodelineManifest,
@@ -9630,6 +10381,14 @@ module.exports = {
   buildKnownValidModels,
   isValidModelString,
   isMiniTierModel,
+  // exported so the WIRING is testable, not just the validator it calls
+  _validatedOrNull,
+  // exported so the retrieval vocabulary is tested by EXECUTION, not by re-implementing it
+  // in a harness — a shim that strips its own stopwords proves only that the shim works.
+  retrievalConfig,
+  retrievalTerms,
+  buildRetrievalQuery,
+  capAtWord,
   modelComplexitySignals,
   MAX_ACS_PER_STORY,
   MAX_CHILDREN_PER_SPLIT,

@@ -7,7 +7,7 @@
  * explicit correction: "i need both mocks to run the real pipeline start to
  * finish... the purpose is to mock the pipeline not go down happy path."
  * See mock1's header for the full invocation contract (real gates, real
- * agents via OpenRouter's qwen provider, cost/isolation warnings — same
+ * agents via OpenRouter's openrouter provider, cost/isolation warnings — same
  * here). This file adds two REAL topology scenarios:
  *
  *   1. Incident-shape: implementationOrder has ZERO main-branch stories and
@@ -286,7 +286,7 @@ describe.skipIf(!RUN_REAL)('Mock 2 — REAL run-agent-orchestration.sh, parallel
       EPAM_BROWNFIELD: '1',
       JIRA_BASELINE_BRANCH: 'main',
       EPAM_DANGEROUS_SKIP_APPROVAL: '1',
-      ORCH_GATE_PROVIDER: 'qwen',
+      ORCH_GATE_PROVIDER: 'openrouter',
       ORCH_GATE_MODEL: 'z-ai/glm-5.1',
       // Same fidelity gaps found and fixed via mock1 (see brownfield-mock-e2e.test.ts):
       // real Metrolinx config sets a genuinely different escalation-tier model and
@@ -333,7 +333,7 @@ describe.skipIf(!RUN_REAL)('Mock 2 — REAL run-agent-orchestration.sh, parallel
       EPAM_BROWNFIELD: '1',
       JIRA_BASELINE_BRANCH: 'main',
       EPAM_DANGEROUS_SKIP_APPROVAL: '1',
-      ORCH_GATE_PROVIDER: 'qwen',
+      ORCH_GATE_PROVIDER: 'openrouter',
       ORCH_GATE_MODEL: 'z-ai/glm-5.1',
       // Same fidelity gaps found and fixed via mock1 (see brownfield-mock-e2e.test.ts):
       // real Metrolinx config sets a genuinely different escalation-tier model and

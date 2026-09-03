@@ -66,11 +66,13 @@ describe('one ecosystem registry serves every scanner', () => {
   // tests cover that.
 
 
-  it('neither scanner writes a manifest filename of its own', () => {
+  it('the scanner writes no manifest filename of its own', () => {
     // A second table is how the first drift happened. Any manifest filename appearing as a literal
     // outside the registry is a table forming again.
     const files = ecosystems().MANIFESTS.map((m: { file: string }) => m.file);
-    for (const scanner of ['codeline-discovery.js', 'codeline-structure.js']) {
+    // codeline-structure.js was the second scanner here. Its caller was removed by 033f0d84 and
+    // the file outlived it, so it was deleted rather than kept as a table nothing consults.
+    for (const scanner of ['codeline-discovery.js']) {
       const src = readFileSync(join(LIB, scanner), 'utf8')
         .split('\n')
         .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))     // comments explain the drift; they are not it

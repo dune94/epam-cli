@@ -1,0 +1,218 @@
+{
+  "$schema": "../../config/llm-settings.schema.json",
+  "_ladderTierOrder": "Lowest to highest. Consumers compare tiers through this; the engine holds no ordering of its own, so adding a tier is a change here and nowhere else.",
+  "brownfield": {
+    "maxScaledIterations": 150,
+    "minOutputTokens": 24576
+  },
+  "compaction": {
+    "defaultAutoCompressAt": 80000,
+    "defaultAutoCompressEveryNIterations": 20
+  },
+  "costControls": {
+    "maxToolCallsPerStory": 120,
+    "storyBudgetHardLimitUsd": 2,
+    "storyBudgetWarningUsd": 0.5
+  },
+  "ladderTierOrder": [
+    "medium",
+    "high",
+    "highest"
+  ],
+  "ladders": {
+    "high": {
+      "modelLadder": [
+        {
+          "from": "MiniMax-M2.5",
+          "to": "MiniMax-M3"
+        },
+        {
+          "from": "MiniMax-M3",
+          "to": "z-ai/glm-5.2"
+        },
+        {
+          "from": "zhipuai/glm-z1-9b",
+          "to": "zhipuai/glm-z1-32b"
+        },
+        {
+          "from": "zhipuai/glm-z1-32b",
+          "to": "z-ai/glm-5.2"
+        },
+        {
+          "from": "z-ai/glm-5.1",
+          "to": "z-ai/glm-5.2"
+        },
+        {
+          "from": "z-ai/glm-5.2",
+          "to": "moonshotai/kimi-k2.5"
+        },
+        {
+          "from": "moonshotai/kimi-k2.5",
+          "to": "moonshotai/kimi-k3"
+        }
+      ],
+      "startModel": "MiniMax-M3"
+    },
+    "highest": {
+      "_why": "Declared 2026-08-15. Twenty seams in invocation-profiles.json ask for ladder HIGHEST and this project declared only high and medium, so every one of them ran with no escalation chain — seam-invocation reported \"EPAM_MODEL_LADDER_HIGHEST is unset\" and continued. Built from this project's own models: start at the strongest rather than climbing to it, and let the top hop reach the ceiling directly.",
+      "modelLadder": [
+        {
+          "from": "MiniMax-M2.5",
+          "to": "MiniMax-M3"
+        },
+        {
+          "from": "MiniMax-M3",
+          "to": "z-ai/glm-5.2"
+        },
+        {
+          "from": "zhipuai/glm-z1-9b",
+          "to": "zhipuai/glm-z1-32b"
+        },
+        {
+          "from": "zhipuai/glm-z1-32b",
+          "to": "z-ai/glm-5.2"
+        },
+        {
+          "from": "z-ai/glm-5.1",
+          "to": "z-ai/glm-5.2"
+        },
+        {
+          "from": "z-ai/glm-5.2",
+          "to": "moonshotai/kimi-k3"
+        },
+        {
+          "from": "moonshotai/kimi-k2.5",
+          "to": "moonshotai/kimi-k3"
+        }
+      ],
+      "startModel": "z-ai/glm-5.2"
+    },
+    "medium": {
+      "modelLadder": [
+        {
+          "from": "MiniMax-M2.5",
+          "to": "MiniMax-M3"
+        },
+        {
+          "from": "MiniMax-M3",
+          "to": "z-ai/glm-5.2"
+        },
+        {
+          "from": "zhipuai/glm-z1-9b",
+          "to": "zhipuai/glm-z1-32b"
+        },
+        {
+          "from": "zhipuai/glm-z1-32b",
+          "to": "z-ai/glm-5.2"
+        },
+        {
+          "from": "z-ai/glm-5.1",
+          "to": "z-ai/glm-5.2"
+        }
+      ],
+      "startModel": "MiniMax-M2.5"
+    }
+  },
+  "modelOverrides": {
+    "glm-5.2": {
+      "autoCompressAt": 128000,
+      "autoCompressEveryNIterations": 20,
+      "matchOn": "model",
+      "matchSubstring": "glm-5.2",
+      "maxIterations": 120,
+      "reasoningEffort": "high"
+    },
+    "kimi-k2.5": {
+      "autoCompressAt": 128000,
+      "autoCompressEveryNIterations": 20,
+      "matchOn": "model",
+      "matchSubstring": "kimi-k2.5",
+      "maxIterations": 60,
+      "reasoningEffort": "medium",
+      "temperature": 0.7
+    },
+    "kimi-k3": {
+      "autoCompressAt": 400000,
+      "autoCompressEveryNIterations": 30,
+      "matchOn": "model",
+      "matchSubstring": "kimi-k3",
+      "maxIterations": 150,
+      "reasoningEffort": "high",
+      "temperature": 1
+    },
+    "minimax-m2.5": {
+      "autoCompressAt": 64000,
+      "autoCompressEveryNIterations": 15,
+      "matchOn": "model",
+      "matchSubstring": "MiniMax-M2.5",
+      "maxIterations": 45,
+      "reasoningEffort": "medium"
+    },
+    "minimax-m3": {
+      "autoCompressAt": 128000,
+      "autoCompressEveryNIterations": 25,
+      "matchOn": "model",
+      "matchSubstring": "MiniMax-M3",
+      "maxIterations": 120,
+      "reasoningEffort": "high"
+    }
+  },
+  "retries": {
+    "maxRetries": 7,
+    "selfHeal": {
+      "enabled": true,
+      "extensionMax": 2
+    }
+  },
+  "rungs": [
+    {
+      "iterationBump": 0,
+      "outputTokenBump": null,
+      "reasoningEffort": "low",
+      "retryRange": [
+        0,
+        1
+      ],
+      "rung": 0,
+      "temperature": 0
+    },
+    {
+      "iterationBump": 10,
+      "outputTokenBump": 8192,
+      "reasoningEffort": "medium",
+      "retryRange": [
+        2,
+        3
+      ],
+      "rung": 1,
+      "temperature": 0.2
+    },
+    {
+      "iterationBump": 20,
+      "outputTokenBump": 16384,
+      "reasoningEffort": "high",
+      "retryRange": [
+        4,
+        5
+      ],
+      "rung": 2,
+      "temperature": 0.5
+    },
+    {
+      "iterationBump": 30,
+      "outputTokenBump": 24576,
+      "reasoningEffort": "high",
+      "retryRange": [
+        6,
+        7
+      ],
+      "rung": 3,
+      "temperature": 0.7
+    }
+  ],
+  "temperatureFloor": 0,
+  "timeouts": {
+    "gateTimeoutSecs": 2400,
+    "storyTimeoutSecs": 1800
+  }
+}

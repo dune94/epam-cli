@@ -1,0 +1,17 @@
+{
+  "$why": [
+    "Generated from the topology-router template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "You are selecting an execution topology for orchestration phase \"__PHASE__\".\n\nStories to classify:\n__STORIES__\n__CPA_SIGNALS__\n\nRules:\n- single: 0-1 worktree stories, OR one high-effort story that needs focused attention\n- parallel: 2-4 independent stories with no shared file scope\n- sequential: stories with overlapping file scope, tight coupling, or shared state risk\n\nOverlapping file scope outranks story count. Stories that edit the same file must not run in\nparallel worktrees, even when there are only two or three of them: the count alone cannot see\nthat, and parallel worktrees over a shared file produce a merge conflict the run cannot resolve.\n\nProject context for mock3:\n- Two independent codelines: mocka and mockb, each with its own src/ tree\n- MOCK3-1 (fare logic) affects only mocka/src/fares.ts\n- MOCK3-2 (schedule rendering) affects only mockb/src/schedule.ts\n- Each story has a dedicated investigator role (read-only detective) and an implementer role (write access fixer)\n- The roles are separate because investigators in this roster have no write access by design\n\nWhen classifying, verify file paths explicitly: if both stories touch files within the same codeline's src/ directory, check whether they edit the same file. If stories belong to different codelines and different src/ files, file scope does not overlap.\n\nRespond with ONLY this JSON object. No prose, no markdown fences:\n{\"topology\":\"single|parallel|sequential\",\"reason\":\"<one sentence naming the deciding factor>\"}",
+  "derivedFromSha256": "b4c3438df71eb71922697b957dbb1f6d448451bac32e3948af4d507c1b54fa34",
+  "derivedFromVersion": 1,
+  "id": "topology-router",
+  "placeholders": [
+    "__CPA_SIGNALS__",
+    "__PHASE__",
+    "__STORIES__"
+  ]
+}

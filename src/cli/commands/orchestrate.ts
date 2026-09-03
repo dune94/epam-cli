@@ -24,7 +24,7 @@ export function createOrchestrateCommand(): Command {
     .option('--worktree', 'Enable git worktree parallel execution')
     .option('--skip-cpa', 'Skip the CPA pre-pass estimate gate')
     .option('--strict-cpa', 'Halt orchestration on CPA review gates')
-    .option('--provider <name>', 'Orchestration provider: claude, copilot, openai, qwen, cursor, codemie-claude')
+    .option('--provider <name>', 'Orchestration provider: claude, copilot, openai, openrouter, cursor, codemie-claude')
     .option('--prd <path>', 'Path to PRD JSON file (default: orchestrations/prd.json)')
     .option('--output-dir <path>', 'Directory for all generated logs and outputs')
     .option('--epam-cli <path>', 'Path to epam CLI binary (default: epam; use mock for testing)')

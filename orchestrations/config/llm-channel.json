@@ -1,0 +1,49 @@
+{
+  "$comment": "THE ONE CHANNEL. Every LLM call in the pipeline must resolve its provider, model, base URL and credential in exactly one place, and issue its request from exactly one place. Eight independent channels were confirmed on 2026-08-25, each with its own credential read and its own endpoint; the free-run seal held at one of them. This file declares what counts as a channel so the invariant is scanned, not asserted by hand.",
+  "$why": "Declared rather than hardcoded in the scanner: which module is the gateway, and which sites are still being migrated, are facts about this deployment's progress — not about how to detect a channel.",
+  "gateway": "orchestrations/scripts/llm-handler.sh",
+  "credentialPattern": "(ANTHROPIC|OPENAI|OPENROUTER|MINIMAX|CLAUDE|GEMINI|DASHSCOPE|CURSOR|COPILOT|CODEMIE)[A-Z_]*(API_KEY|_KEY|TOKEN)",
+  "endpointPattern": "api\\.anthropic\\.com|api\\.openai\\.com|openrouter\\.ai|api\\.minimaxi\\.chat|dashscope\\.aliyun|generativelanguage\\.googleapis\\.com|models\\.github\\.ai|api\\.githubcopilot\\.com",
+  "scanRoots": [
+    "orchestrations/scripts",
+    "src"
+  ],
+  "excludePattern": "node_modules|\\.venv|site-packages|/test/|\\.test\\.|change-log|dist/",
+  "$migration": "Each entry is a channel confirmed on 2026-08-25 that has NOT yet been collapsed into the gateway. The ratchet fails if this list GROWS. Removing an entry is the migration.",
+  "unmigrated": [
+    "orchestrations/scripts/claude.sh",
+    "orchestrations/scripts/contextualize-stories.sh",
+    "orchestrations/scripts/invoke.py",
+    "orchestrations/scripts/lib/free-run-guard.sh",
+    "orchestrations/scripts/lib/spend-probe.sh",
+    "orchestrations/scripts/lib/topology-router.js",
+    "orchestrations/scripts/orchestrate.sh",
+    "orchestrations/scripts/post-impl-tc-writer.sh",
+    "orchestrations/scripts/preflight-check.sh",
+    "orchestrations/scripts/run-agent-orchestration.sh",
+    "orchestrations/scripts/spec-mode-runner.js",
+    "orchestrations/scripts/tier1-mock-run.sh",
+    "orchestrations/scripts/tier1-ollama-run.sh",
+    "orchestrations/scripts/tier2-free-run.sh",
+    "orchestrations/scripts/tier3-metrolinx-run.sh",
+    "orchestrations/scripts/tier3-paid-run.sh",
+    "orchestrations/scripts/tier3-skyscanner-app-run.sh",
+    "orchestrations/scripts/tier3-travel-app-run.sh",
+    "orchestrations/scripts/tools/diagnosis-groundedness-check.py",
+    "orchestrations/scripts/writer-retest.sh",
+    "src/cli/repl/commands/ProviderCommand.ts",
+    "src/cli/repl/commands/UserCommand.ts",
+    "src/config/EnvVarOverrides.ts",
+    "src/providers/ProviderChain.ts",
+    "src/providers/copilot/CopilotProvider.ts",
+    "src/providers/cursor/CursorProvider.ts",
+    "src/providers/minimax/MiniMaxProvider.ts"
+  ],
+  "$resolved": [
+    "orchestrations/scripts/lib/topology-router.js — collapsed onto the hub 2026-08-25; seam declared, prompt templated, no credential read",
+    "orchestrations/scripts/lib/semantic-search.js — DELETED 2026-08-25; dead code, never executed, hardcoded api.openai.com",
+    "spec-mode-runner.js — direct MiniMax fetch + callMiniMaxWithTool DELETED 2026-08-25; minimax falls through to the handler",
+    "post-impl-tc-writer.sh — routed through the handler 2026-08-25; openrouter literal and OPENROUTER->OPENAI key cross-wiring removed",
+    "tools/diagnosis-groundedness-check.py — judge routed through the handler 2026-08-25; OpenRouterModel and gpt-4o-mini literal removed"
+  ]
+}

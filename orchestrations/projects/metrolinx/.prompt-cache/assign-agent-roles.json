@@ -1,0 +1,23 @@
+{
+  "base": "49534c1e0496fa6923a3e121dab9f4648083e40f48f1cb63b273d5f858518deb",
+  "roles": "cba40c8d074c4d64c77797ecd197364528d4ecd811556b555399fa30d17d8b6b",
+  "usesRoles": false,
+  "doc": {
+    "$why": [
+      "Generated from the assign-agent-roles template by the agent that minted this project's roster.",
+      "The template is never executed; this copy is. Placeholders were checked against the",
+      "template before installation — see lib/project-prompt-contract.js."
+    ],
+    "authority": "project",
+    "body": "Assign an implementation agent role to every story below.\n\nAVAILABLE ROLES — these are this project's own engineering roles. Choose from these and\nnothing else; the name you return must match one of them verbatim:\n__ROLE_BLOCK__\n\nSTORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:\n__STORY_BLOCK__\n\nPick the role whose stated expertise actually covers the work the story describes. If two\nroles could plausibly own a story, prefer the one whose brief names the surface the story\ntouches.\n\nTHE UNIT OF ASSIGNMENT IS A (STORY, CODELINE) PAIR, NOT A STORY. A story listing three\ncodelines needs THREE assignments — the repositories differ, so the right owner can differ.\nCount the codelines listed against each story and return exactly that many assignments for it,\nnaming the codeline on every one. A story is not assigned until every codeline it lists is.\n\nTHE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —\nthe one whose brief names those files or directories. A role whose brief is about settings in\na vendor's console, or about documentation, cannot deliver a story here: the agent's output is\na change in a repository. Live 2026-08-07: this story went to the one role of three that owned\nno source files, and all such a role can produce is a configuration note. Where the story needs\nboth console configuration and code, the assignment goes to the role that authors the code, and the configuration work is part of that story rather than a reason to reassign it.\n\nPROJECT CONTEXT — gotransit (next.gotransit.com):\n\nThis run has one codeline in scope, gotransit, and one ticket, AMSD-1919 (Go-Checkout Page —\nEmail & Confirm Email Case Sensitivity). The survey confirms the relevant surface is\nsrc/components/pages/CheckoutPage. Two facts about this codeline to keep in mind when judging\nwhich role can actually deliver the work:\n\n- Tests run via `jest` (`npm test`), and the component this fix touches already has a spec\n  file at src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx — the role you\n  assign should be one that edits and extends specs alongside component code, not one that\n  only tests manually or out-of-repo.\n- Commits on this repo go through husky git hooks: a pre-commit hook runs lint-staged, and a\n  commit-msg hook runs commitlint (`npx --no-install commitlint --edit \"$1\"`) against the\n  commit message. A role assigned here will need a commit message that satisfies commitlint,\n  not just code that passes lint-staged.\n\nSince only one codeline is in scope, every story below needs exactly one assignment — do not\nsplit AMSD-1919 across codelines that aren't listed.",
+    "derivedFromSha256": "db4f9512aafcf3adafbdafcef9cf260adc8f49be576f18a2b82d8df9a0bc940b",
+    "derivedFromVersion": 1,
+    "id": "assign-agent-roles",
+    "placeholders": [
+      "__ROLE_BLOCK__",
+      "__STORY_BLOCK__"
+    ],
+    "mayBeEmpty": []
+  },
+  "reviewed": true
+}

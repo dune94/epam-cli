@@ -1,56 +1,14 @@
 {
   "results": [
     {
-      "storyId": "AMSD-2041",
+      "storyId": "AMSD-1919",
       "codeline": "gotransit",
-      "status": "rejected-regression",
-      "before": 4,
-      "after": 4,
-      "missingField": [
-        "src/services/contentstack.ts",
-        "src/context/ContentstackContext.tsx",
-        "src/services/pageService.ts",
-        "src/hooks/useContent.ts"
-      ],
-      "regressions": [
-        {
-          "kind": "fix-verified-lost",
-          "file": "src/context/ContentstackContext.tsx",
-          "detail": "the named helper was verified to exist before and is not verified now"
-        },
-        {
-          "kind": "site-lost",
-          "file": "src/services/pageService.ts",
-          "detail": "the previous prescription had a fix site here and the replacement has none"
-        }
-      ]
+      "status": "failed",
+      "before": 0,
+      "after": 0,
+      "missingField": [],
+      "error": "project-authority prompt missing: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/metrolinx/prompts/code-graph-detective.json. Mint it from orchestrations/prompts/templates/code-graph-detective.json — the template is NEVER executed directly."
     }
   ],
-  "unresolved": [
-    {
-      "storyId": "AMSD-2041",
-      "codeline": "gotransit",
-      "status": "rejected-regression",
-      "before": 4,
-      "after": 4,
-      "missingField": [
-        "src/services/contentstack.ts",
-        "src/context/ContentstackContext.tsx",
-        "src/services/pageService.ts",
-        "src/hooks/useContent.ts"
-      ],
-      "regressions": [
-        {
-          "kind": "fix-verified-lost",
-          "file": "src/context/ContentstackContext.tsx",
-          "detail": "the named helper was verified to exist before and is not verified now"
-        },
-        {
-          "kind": "site-lost",
-          "file": "src/services/pageService.ts",
-          "detail": "the previous prescription had a fix site here and the replacement has none"
-        }
-      ]
-    }
-  ]
+  "unresolved": []
 }

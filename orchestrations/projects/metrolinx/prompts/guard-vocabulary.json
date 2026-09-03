@@ -1,14 +1,13 @@
 {
   "$why": [
-    "Moved out of spec-mode-runner.js deriveGuardVocabulary on 2026-08-15 (4 of 20).",
-    "",
-    "The terms this returns feed a BM25/IDF ranker, so the prompt decides what the search",
-    "amplifies and what it demotes. It carries FOUR conditional sections — persona,",
-    "documentation, evidence and the CodeGraph verify block — each assembled by the caller and",
-    "arriving whole or empty. A template that branches is a program."
+    "Generated from the guard-vocabulary template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
   ],
-  "body": "__PERSONA_PREFIX__GUARD SEAM: __SEAM__\n\nTHE RULE THIS GUARD ENFORCES:\n__RULE__\n\nTHE STATEMENTS THE GUARD WILL CHECK:\n__STATEMENT_LIST__\n\nDECLARED MANIFEST (the files this story says it will touch):\n__MANIFEST__\n\n__DOC_SECTION__CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):\n__EVIDENCE__\n\nSTORY CONTEXT:\nTitle: __STORY_TITLE__\nDescription: __STORY_DESCRIPTION__\n__CODEGRAPH_SECTION__",
-  "description": "Derive the vocabulary a guard uses, verified against the repository index.",
+  "authority": "project",
+  "body": "__PERSONA_PREFIX__GUARD SEAM: __SEAM__\n\nTHE RULE THIS GUARD ENFORCES:\n__RULE__\n\nTHE STATEMENTS THE GUARD WILL CHECK:\n__STATEMENT_LIST__\n\nDECLARED MANIFEST (the files this story says it will touch):\n__MANIFEST__\n\n__DOC_SECTION__CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):\n__EVIDENCE__\n\nSTORY CONTEXT:\nTitle: __STORY_TITLE__\nDescription: __STORY_DESCRIPTION__\n__CODEGRAPH_SECTION__\n\nCODEBASE CONVENTIONS FOR GOTRANSIT:\n\nThis is a Next.js project with TypeScript. The checkout flow is in src/components/pages/CheckoutPage. Forms use react-hook-form for state management and validation, often combined with joi validators. Validation runs both client-side and on API routes (pages/api/*).\n\nEmail fields in forms use react-hook-form registration and validation rules. Look for:\n- .toLowerCase() or .toUpperCase() calls on email values\n- Email validation via joi schema (joi.string().email())\n- Email comparison operations in form handlers or API routes\n- Confirmation email sending logic\n\nTest coverage is expected in src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx. Extend this existing spec file rather than creating new test files. Use Jest's test patterns already established there.\n\nPre-commit hooks via husky will validate:\n- Branch name matches ^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$\n- Commit message passes commitlint\n\nWatch for case-sensitivity issues in:\n- Email field normalization (trim/lower/upper logic)\n- Email comparison in validation or submission handlers\n- Email state stored in form or Redux\n- Email passed to confirmation endpoints or auth functions (next-auth)\n- Test assertions that compare email strings",
+  "derivedFromSha256": "0d6528c4becd35c59315fd3ec95de7f16112cc789b5a3d484ec2e2871e257060",
+  "derivedFromVersion": 1,
   "id": "guard-vocabulary",
   "placeholders": [
     "__CODEGRAPH_SECTION__",
@@ -22,10 +21,9 @@
     "__STORY_DESCRIPTION__",
     "__STORY_TITLE__"
   ],
-  "version": 1,
-  "seams": [
-    "guard-vocabulary"
-  ],
-  "derivedFromSha256": "c166120e0d26778e9a07875e25fa6f6acc3574807ef0013d18803d2b623060cd",
-  "authority": "project"
+  "mayBeEmpty": [
+    "__CODEGRAPH_SECTION__",
+    "__DOC_SECTION__",
+    "__PERSONA_PREFIX__"
+  ]
 }

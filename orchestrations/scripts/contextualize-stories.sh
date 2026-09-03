@@ -71,7 +71,7 @@ if [ -f "$_ml_lib" ]; then
     # shellcheck source=lib/model-ladders.sh
     . "$_ml_lib" || true
     command -v export_model_ladders >/dev/null 2>&1 \
-        && export_model_ladders "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json}" || true
+        && export_model_ladders "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/llm-settings.json}}" || true
 fi
 command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "$_SEAM_NAME"
 
@@ -98,7 +98,7 @@ EXTRA_DOCS="$AUTOMATION_DIR/INSTRUCTIONS.md,$AUTOMATION_DIR/estimation.md,$AUTOM
 # Project manifest (dependency-check.json) — fed to CPA so brownfield stories
 # with empty Jira ACs can still be sized from the project's declared deps/
 # stack facts instead of defaulting to effort:low on nothing. See CPA-BF.
-MANIFEST_FILE="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+MANIFEST_FILE="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/dependency-check.json}"
 if [ -f "$MANIFEST_FILE" ]; then
   MANIFEST_JSON="$(cat "$MANIFEST_FILE")"
 else
@@ -188,10 +188,12 @@ if [ ! -f "$LIB_DIR/tfidf.js" ]; then
   error "tfidf.js not found: $LIB_DIR/tfidf.js"; exit 1
 fi
 
-# Semantic search disabled — pipeline is MiniMax/GLM/Kimi only; no OpenAI embeddings.
-# TF-IDF (tfidf.js) is used unconditionally.
-SEMANTIC_SEARCH_JS="$LIB_DIR/semantic-search.js"
-USE_SEMANTIC_RAG=false
+# TF-IDF (tfidf.js) is the retrieval, unconditionally.
+#
+# Two variables used to be assigned here and never read again: SEMANTIC_SEARCH_JS and
+# USE_SEMANTIC_RAG=false. The flag read as a deliberate switch, so the module it pointed at —
+# which hardcoded api.openai.com and read OPENAI_API_KEY — looked merely disabled rather than
+# dead. It was never executed by anything. Both are gone with it.
 info "Retrieval: TF-IDF"
 
 # Brownfield context: optional existing-repo ingestion.
@@ -341,6 +343,9 @@ while IFS= read -r phase; do
   pos=1
   while IFS= read -r sid; do
     STORY_PHASE["$sid"]="$phase"
+    # Set for the child process invoked below, or read by a script that sources this file.
+    # ShellCheck cannot see the consumer, so it reports these unused; removing them takes the value away.
+    # shellcheck disable=SC2034
     STORY_POSITION["$sid"]=$pos
     pos=$((pos + 1))
   done < <(jq -r --arg p "$phase" '.implementationOrder[$p][]' "$PRD_FILE")
@@ -587,7 +592,6 @@ while IFS= read -r sid; do
 
   s_title=$(echo "$story_json" | jq -r '.title')
   s_human_hours=$(echo "$story_json" | jq -r '.humanHours // .estimatedHours // 0')
-  s_priority=$(echo "$story_json" | jq -r '.priority // "medium"')
   s_type=$(echo "$story_json" | jq -r '.storyType // "implementation"')
   s_skills=$(echo "$story_json" | jq -r '.technicalNotes.requiredSkills | join(" ")' 2>/dev/null || echo "")
   deps_json=$(echo "$story_json" | jq -c '.dependencies // []' 2>/dev/null || echo "[]")
@@ -625,13 +629,8 @@ while IFS= read -r sid; do
       *haiku*) _model_alias="haiku" ;;
       *opus*)  _model_alias="opus"  ;;
       *sonnet*)_model_alias="sonnet";;
-      # Qwen via OpenRouter — keep calibration data separate from Claude tiers
-      *qwen3.7-max*)   _model_alias="qwen-max"   ;;
-      *qwen3.7-plus*)  _model_alias="qwen-plus"  ;;
-      *qwen3.6-flash*) _model_alias="qwen-flash" ;;
-      *qwen3-coder*)   _model_alias="qwen-coder" ;;
-      *qwen*)          _model_alias="qwen"       ;;
-      # DeepSeek via OpenRouter — tracked separately from Qwen/Claude tiers
+      # OpenRouter via OpenRouter — keep calibration data separate from Claude tiers
+      *openrouter*)          _model_alias="openrouter"       ;;
       *deepseek*)      _model_alias="deepseek"   ;;
       # OpenAI via OpenRouter — separate buckets per model family
       *gpt-4o-mini*)   _model_alias="gpt4omini"  ;;
@@ -643,7 +642,7 @@ while IFS= read -r sid; do
   else
     # Infer from effort (mirrors claude.sh resolve_model_settings logic)
     case "$f_effort" in
-      low)    _model_alias="qwen"   ;;
+      low)    _model_alias="openrouter"   ;;
       high)   _model_alias="sonnet" ;;
       *)      _model_alias="sonnet" ;;
     esac
@@ -671,7 +670,6 @@ while IFS= read -r sid; do
 
   # Phase and position
   phase="${STORY_PHASE[$sid]:-unknown}"
-  position="${STORY_POSITION[$sid]:-1}"
 
   # Count unresolved dependencies
   dep_unresolved=0
@@ -782,7 +780,7 @@ while IFS= read -r sid; do
   t_start=$(date +%s%3N)
   cpa_raw=$(echo "$inference_input" | \
     CLAUDE_CMD="${CLAUDE_CMD:-claude}" \
-    AI_PROVIDER="${CPA_PROVIDER:-${AI_PROVIDER:-qwen}}" \
+    AI_PROVIDER="${CPA_PROVIDER:-${AI_PROVIDER:-openrouter}}" \
     AI_MODEL="${CPA_MODEL:-${AI_MODEL:-${EPAM_MODEL:-}}}" \
     "$NODE_CMD" "$LIB_DIR/cpa-inference.js" 2>"$_cpa_err" || echo "")
   t_end=$(date +%s%3N)
@@ -803,6 +801,16 @@ while IFS= read -r sid; do
   fi
 
   # ── Parse CPA output ──────────────────────────────────────────────────────────
+  # AN ANSWER THAT DOES NOT PARSE HAS NO CONFIDENCE — it is not a low-confidence estimate, it is no
+  # estimate. Every `// default` below applies only when the JSON PARSES: on prose, jq exits 5 and
+  # each value comes back EMPTY, so confidence was "" rather than 0.30, no threshold compared true,
+  # and the story passed the gate in silence. A gate that cannot read the verdict has judged
+  # nothing, and treating that as a pass is the fail-open this pipeline has paid for repeatedly.
+  if ! echo "$cpa_raw" | jq -e 'type == "object"' >/dev/null 2>&1; then
+      echo "[cpa] ${story_id:-story}: the estimate did not parse as JSON — treating as NO CONFIDENCE, not as a pass" >&2
+      cpa_raw='{"confidence": 0, "riskFlags": ["cpa answer did not parse"], "reasoning": "the model returned no readable estimate"}'
+  fi
+
   confidence=$(echo "$cpa_raw" | jq -r '.confidence // 0.30')
   complexity_adj=$(echo "$cpa_raw" | jq -r '.complexityAdjustment // 1.0')
   adj_min=$(echo "$cpa_raw" | jq -r '.adjustedEstimate.aiMinutes // 0')
@@ -878,8 +886,17 @@ while IFS= read -r sid; do
   esc_total=$(ensure_leading_zero "$esc_total")
 
   # ── Gate decision ─────────────────────────────────────────────────────────────
-  # When inference was skipped (no API key), default to pass — don't penalise missing key
-  if [ "$inference_skipped" = "true" ]; then
+  # A DELIBERATE SKIP MAY PASS. A FAILED REVIEW MAY NOT.
+  #
+  # This read _inferenceSkipped alone and forced gate=pass, commented "no API key — don't penalise
+  # missing key". Every path that sets that flag in cpa-inference.js is a FAILURE — the runner was
+  # unavailable, returned nothing, or returned something unparseable — so the last gate before a run
+  # is authorised passed every story whenever its reviewer broke, reported PASS, and exited 0.
+  #
+  # _inferenceFailed distinguishes them. A review that was never attempted still passes on the
+  # formula estimate; a review that was attempted and failed does not.
+  _inference_failed=$(echo "$cpa_raw" | jq -r '._inferenceFailed // false' 2>/dev/null)
+  if [ "$inference_skipped" = "true" ] && [ "$_inference_failed" != "true" ]; then
     gate="pass"
   else
     gate=$(compute_gate "$confidence" "$flag_count" "$dep_unresolved")
@@ -1238,12 +1255,12 @@ ${_cpa_after}
 
 Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}" | \
           AI_PROVIDER="${ORCH_GATE_PROVIDER}" \
-          AI_MODEL="${ORCH_GATE_MODEL:-${EPAM_MODEL:-}}" \
+          AI_MODEL="${EPAM_MODEL:-}" \
           EPAM_CLI="${EPAM_CLI:-epam}" \
           EPAM_MAX_OUTPUT_TOKENS="${CPA_GATE_MAX_OUTPUT_TOKENS:-16384}" \
           "$_cpa_ai_runner_cmd" \
               --provider "${ORCH_GATE_PROVIDER}" \
-              --model    "${ORCH_GATE_MODEL:-${EPAM_MODEL:-}}" \
+              --model    "${EPAM_MODEL:-}" \
           2>/dev/null | \
           python3 "$SCRIPT_DIR/lib/handlers/cpa-review-verdict.py" 2>/dev/null || echo "fail")
         if [ "$_cpa_verdict" = "fail" ]; then

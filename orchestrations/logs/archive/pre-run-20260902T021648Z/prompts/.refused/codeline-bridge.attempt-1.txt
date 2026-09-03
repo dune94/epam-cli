@@ -1,0 +1,28 @@
+# refused: the generated prompt dropped placeholder(s) the template requires: __BRIDGE_PROFILE__. The evidence they carry would silently never reach the agent.
+# template: codeline-bridge   attempt: 1/3
+# required placeholders: __BRIDGE_PROFILE__, __BRIDGE_OUT__, __BPRD__, __BCL__, __BWT__
+# ---------------- model reply below, verbatim ----------------
+The gotransit codeline is a Next.js application with TypeScript and React. The primary surface for this ticket is `src/components/pages/CheckoutPage` and its exported dependencies.
+
+The ticket (AMSD-1919: Email & Confirm Email Case Sensitivity) requires extracting the CheckoutPage API surface with careful attention to email validation and handling. This codebase uses react-hook-form for form management and Joi for validation rules.
+
+Key exports to surface:
+- CheckoutPage component and its prop interfaces
+- Form field definitions, validators, and error handling
+- Email-related utility functions and validation rules from CheckoutPage and its imports
+
+Verification:
+- `npm run build:config` (prerequisite)
+- `npm run test` (jest)
+- All changes must pass `npx lint-staged` (pre-commit enforcement)
+
+Focus: How email values are processed across form input → validation → submission layers. Any case normalization or transformation of email fields must be explicitly documented.
+
+## Variables for this run
+
+- BRIDGE_SRC_CODELINE: __BCL__
+- BRIDGE_SRC_DIR: __BWT__
+- BRIDGE_OUT_FILE: __BRIDGE_OUT__
+- BRIDGE_PRD_FILE: __BPRD__
+
+Extract the exported API surface from the '__BCL__' codeline files and write the cross-codeline contract to __BRIDGE_OUT__.

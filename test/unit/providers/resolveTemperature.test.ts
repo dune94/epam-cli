@@ -6,7 +6,7 @@ import type { ProviderRequest } from '../../../src/providers/types.js';
  * resolveTemperature — closes the gap flagged this session: temperature was
  * always hardcoded to `request.temperature ?? 0.7` with no way to override it
  * per-story. Mirrors the existing request-field > env-var > default pattern
- * already used for reasoningEffort (see QwenProvider/MiniMaxProvider's
+ * already used for reasoningEffort (see OpenRouterProvider/MiniMaxProvider's
  * resolveReasoningEffort), so both knobs are wired consistently.
  *
  * Motivating use case: a model exhibiting "creative" token-selection variance

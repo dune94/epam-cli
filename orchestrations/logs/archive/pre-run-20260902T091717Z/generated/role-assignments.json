@@ -1,0 +1,8 @@
+[
+  {
+    "storyId": "AMSD-1919",
+    "codeline": "gotransit",
+    "agentRole": "checkout-form-engineer",
+    "reason": "This is a case-sensitivity bug fix in the Go-Checkout page's Email/Confirm Email validation, which is checkout form logic owned by the checkout-form-engineer."
+  }
+]

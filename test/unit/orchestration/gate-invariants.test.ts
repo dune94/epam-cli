@@ -16,9 +16,13 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { templateBody } from '../../helpers/prompt-text';
 import { join } from 'node:path';
+import { orchestratorSource } from '../../helpers/orchestrator-source';
 
 const ORCH_SCRIPT = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
-const orchSrc = readFileSync(ORCH_SCRIPT, 'utf8');
+// Reads the orchestrator AND the libs lifted out of it: run_orch_prompt and the gate verdict
+// logic now live under lib/. The property is about the SHIPPED path, not about which file
+// happens to hold a function today. See test/helpers for the single definition.
+const orchSrc = orchestratorSource();
 
 // ─── Gate decision threshold ──────────────────────────────────────────────────
 // The orch script uses python3 to extract blockerCount, then compares to 0.

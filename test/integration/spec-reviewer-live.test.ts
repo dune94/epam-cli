@@ -93,7 +93,7 @@ function reviewPrompt(): string {
 function callReviewer(): string {
   return execFileSync(
     'bash',
-    [AI_RUN, '--provider', 'qwen', '--model', process.env.SPEC_MODE_MODEL || 'z-ai/glm-5.2'],
+    [AI_RUN, '--provider', 'openrouter', '--model', process.env.SPEC_MODE_MODEL || 'z-ai/glm-5.2'],
     { input: reviewPrompt(), encoding: 'utf8', timeout: 180_000, cwd: REPO_ROOT },
   );
 }
@@ -221,7 +221,7 @@ describe.skipIf(!hasKey || !optedIn)('brownfield AC redaction is policy, not a d
 
     const raw = execFileSync(
       'bash',
-      [AI_RUN, '--provider', 'qwen', '--model', process.env.SPEC_MODE_MODEL || 'z-ai/glm-5.2'],
+      [AI_RUN, '--provider', 'openrouter', '--model', process.env.SPEC_MODE_MODEL || 'z-ai/glm-5.2'],
       { input: prompt, encoding: 'utf8', timeout: 180_000, cwd: REPO_ROOT },
     );
     const items = extractTaggedJson(raw, 'SPEC_REVIEW') as Array<{
@@ -326,7 +326,7 @@ describe.skipIf(!hasKey || !optedIn)('reviewer → gate, end to end', () => {
     ].join('\n');
     const raw = execFileSync(
       'bash',
-      [AI_RUN, '--provider', 'qwen', '--model', process.env.SPEC_MODE_MODEL || 'z-ai/glm-5.2'],
+      [AI_RUN, '--provider', 'openrouter', '--model', process.env.SPEC_MODE_MODEL || 'z-ai/glm-5.2'],
       { input: prompt, encoding: 'utf8', timeout: 180_000, cwd: REPO_ROOT },
     );
     const items = extractTaggedJson(raw, 'SPEC_REVIEW') as Array<Record<string, unknown>>;
@@ -432,7 +432,7 @@ describe.skipIf(!hasKey || !optedIn)('the quality score is stable enough to gate
     for (let i = 0; i < SAMPLES; i += 1) {
       const raw = execFileSync(
         'bash',
-        [AI_RUN, '--provider', 'qwen', '--model', process.env.SPEC_MODE_MODEL || 'z-ai/glm-5.2'],
+        [AI_RUN, '--provider', 'openrouter', '--model', process.env.SPEC_MODE_MODEL || 'z-ai/glm-5.2'],
         { input: prompt, encoding: 'utf8', timeout: 180_000, cwd: REPO_ROOT },
       );
       const items = extractTaggedJson(raw, 'SPEC_REVIEW') as Array<{

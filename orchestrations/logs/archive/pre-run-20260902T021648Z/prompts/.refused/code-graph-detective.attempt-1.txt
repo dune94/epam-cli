@@ -1,0 +1,97 @@
+# refused: the generated prompt dropped placeholder(s) the template requires: __CONFIG_SURFACE__, __DETECTIVE_PROFILE__, __KIND_AND_CORRECTIVE_CONTEXT__, __PRESCRIPTION_RULES__, __PRESEED_BLOCK__, __REPO_PATH__, __STORY_ACS__, __STORY_DESCRIPTION__, __STORY_TITLE__, __SURVEY_HYPOTHESIS__, __TOOL_PATH__. The evidence they carry would silently never reach the agent.
+# template: code-graph-detective   attempt: 1/3
+# required placeholders: __CONFIG_SURFACE__, __DETECTIVE_PROFILE__, __KIND_AND_CORRECTIVE_CONTEXT__, __PRESCRIPTION_RULES__, __PRESEED_BLOCK__, __REPO_PATH__, __STORY_ACS__, __STORY_DESCRIPTION__, __STORY_TITLE__, __SURVEY_HYPOTHESIS__, __TOOL_PATH__
+# ---------------- model reply below, verbatim ----------------
+You are investigating this ticket. The repository is at: /home/bradleyjerome/projects/metrolinx/next.gotransit.com
+
+## Ticket Context
+
+This is a brownfield Next.js/React TypeScript codebase for the GO Transit checkout and booking platform. The ticket concerns the checkout page email handling.
+
+TICKET (read it, then decide for YOURSELF which few domain nouns matter — do not treat every word as a search term):
+Title: AMSD-1919: Go‑Checkout Page - Email & Confirm Email Case Sensitivity
+Description: The checkout page email and confirmation email fields need to handle case sensitivity correctly, ensuring emails are treated uniformly regardless of whether uppercase or lowercase letters are used.
+Acceptance criteria:
+- Email input fields on the checkout page accept and normalize email values (convert to lowercase)
+- Email confirmation/verification logic treats emails case-insensitively
+- All email comparisons use normalized (lowercase) values
+- Existing tests pass and new tests cover case-insensitive email handling
+
+Your CodeGraph tool is the shell script at: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/cg
+Invoke it with the Bash tool, always passing PROJECT_ROOT:
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.gotransit.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/cg" explore <domain nouns>
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.gotransit.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/cg" callers <SymbolName>
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.gotransit.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/cg" callees <SymbolName>
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.gotransit.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/cg" show <file> [startLine] [endLine]
+
+## Investigation Hypothesis
+
+Start by exploring the CheckoutPage component in `src/components/pages/CheckoutPage` to locate email input fields and validation logic. Then search for email-related form handling (react-hook-form is used via dependencies), email validation utilities, and any email normalization or comparison logic. The fix likely involves:
+1. Finding where email values are captured from form inputs
+2. Identifying where emails are compared or validated
+3. Adding `.toLowerCase()` normalization at input capture points
+4. Ensuring all email comparisons use normalized values
+
+## Pre-seeding
+
+The codebase uses:
+- **Next.js** for SSR/routing with TypeScript
+- **react-hook-form** for form state and validation
+- **Joi** for schema validation (both server and client-side)
+- **jest** and @testing-library/react for testing
+- Checkout page already exists at `src/components/pages/CheckoutPage`
+
+Pre-commit hooks enforce branch naming: must match `^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$`
+
+## Prescription Rules
+
+1. **Email inputs in React components**: Use `value.toLowerCase()` when setting form values or normalizing on change handlers with react-hook-form's `setValue()` or field registration.
+
+2. **Email validation schemas**: If Joi schemas validate email fields, normalize the value via `.lowercase()` method on Joi schema chains (e.g., `Joi.string().email().lowercase()`), or add `.transform((val) => val?.toLowerCase())` to ensure the schema produces lowercase values.
+
+3. **Email comparisons**: Any comparison of email addresses (e.g., `emailInput === confirmedEmail`) must use `.toLowerCase()` on both sides, or better, compare pre-normalized values stored in state/form.
+
+4. **Form submission handlers**: Normalize email before sending to API: `const normalizedEmail = email.toLowerCase()` before any fetch/axios call.
+
+5. **API integration**: If the backend expects lowercase emails, ensure all email values sent in request payloads are lowercase. Check existing API call patterns in the codebase for how form data is serialized.
+
+6. **Testing**: Write tests that verify:
+   - Email input "TEST@EXAMPLE.COM" is stored/compared as "test@example.com"
+   - Email confirmation works when one field is uppercase and the other is lowercase
+   - Form submission sends lowercase email to the API
+
+## Configuration Files That Govern This Behavior
+
+- `next.config.js` — controls build output and API route handling
+- `jest.config.js` — test configuration; tests run via `npm run test`
+- `.env.local` or `.env.development` — may contain API endpoints the form posts to
+- `tailwind.config.js` — styling for checkout page (not relevant to email logic, but affects form rendering)
+
+If email validation uses API validation or server-side middleware, check API route files in `src/pages/api/` for where email is processed.
+
+READ THE FILE BEFORE YOU QUOTE IT. Once you have a candidate file, run `show <file>` and look at the real lines. Your "brokenLine" must be COPIED EXACTLY from that output — it is checked character-for-character against the file, after whitespace normalisation. Do NOT reconstruct the line from symbol names.
+
+CRITICAL REALITY ANCHOR: if the CodeGraph tool does not return a file or symbol, it does NOT exist in this codebase. Do not infer, assume, or extrapolate file paths, function signatures, or variable names from naming patterns. If you believe something exists and CodeGraph did not return it, PROVE it before reasoning about it using ripgrep-search.sh or resolve-package-symbol.sh.
+
+CRITICAL — HOW TO ANSWER: Emit the JSON array as TEXT directly in your reply. Do NOT call WriteFile and do NOT write your answer to any file — the pipeline reads your reply text, not a file. If you write your answer to a file, it is LOST and the whole investigation is wasted. Use the Bash tool ONLY to run the CodeGraph query script above (including its `show` subcommand, which you MUST use before quoting a line); use no other tool.
+
+NAME THE FORMAT, DO NOT DESCRIBE IT. If your fix depends on the SHAPE of a string — a prefix, suffix, separator, delimiter — you must QUOTE THE EXACT LITERAL or name the constant that defines it.
+
+PREFER THE PARSER OVER THE WRITER. If a helper CONSTRUCTS the value (getX/buildX/toX) and another READS it (parseX/fromX), prescribe the reader.
+
+VERIFY THIRD-PARTY METHOD CALLS with resolve-package-symbol.sh before prescribing them — a name existing in a package is not proof it is called the way you assume.
+
+SAY WHAT EACH CHANGE DOES TO THE VALUE — "deliveryRole" is REQUIRED. Exactly one of:
+  "produces" — this change is what makes the new or corrected value EXIST. It reads it, fetches it, queries it, computes it, or changes configuration so that an existing call starts returning it.
+  "carries" — this change moves, stores, re-renders or re-exposes a value that something ELSE produced, or it subscribes to a signal saying the value changed.
+  "verifies" — this change does nothing to the value; the file only needs confirming once the other sites change. Use it with changeRequired:false.
+
+A PLAN IN WHICH NOTHING PRODUCES IS NOT A PLAN. Find the site that PRODUCES the normalized email value.
+
+SAY WHERE EACH CHANGE RUNS — "runsIn" is REQUIRED. One of "server", "browser", "both", "n/a".
+
+SAY WHETHER THE FILE MUST BE EDITED — "changeRequired" is REQUIRED. Set it true when your fix means editing THIS file. Set it FALSE when the file is genuinely part of the fix but needs no edit of its own: it already does the right thing, and will simply behave correctly once the other sites change.
+
+DECLARE ANY PACKAGE YOUR FIX NEEDS — "requiredPackages" is REQUIRED and is machine-verified. List the BARE package names, exactly as they appear in this project's manifest (e.g. "react-hook-form", "joi"), for every third-party package your fix imports or configures. Use [] when the fix needs none.
+
+Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" field is REQUIRED and must be a concrete, minimal instruction naming the exact change and any existing helper to reuse. The "helper" field must be the BARE SYMBOL NAME of the existing function you are telling the implementer to reuse (so it can be machine-verified to actually exist) — leave it "" if the fix genuinely needs no existing helper. Do NOT invent a helper name; only put a symbol you actually saw in the tool output.

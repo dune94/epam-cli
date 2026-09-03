@@ -1,0 +1,1 @@
+{"event_id":"evt-1787482353779317966-28339","timestamp":"2026-08-23T06:52:33-04:00","agent":"repro-test-writer","story_id":"S1","phase":null,"type":"spec_update","model":null,"provider":null,"detail":{"lane":"main","message":"repro-test-writer committed reproducing test: src/hello.spec.ts","source":"update-monitor.sh","rawType":"spec_update","prevModel":null}}

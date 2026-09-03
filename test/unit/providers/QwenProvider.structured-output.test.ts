@@ -11,7 +11,7 @@
  * kb-synthesizer's brace-depth extractJson returning null.
  *
  * `response_format` existed in exactly ONE provider (MiniMax), and only as
- * `json_object`. The pipeline runs every metrolinx agent through `qwen`
+ * `json_object`. The pipeline runs every metrolinx agent through `openrouter`
  * (OpenRouter), which had no support at all — so `EPAM_MINIMAX_JSON_MODE=1`,
  * which ai-run.sh sets unconditionally for all providers, was a no-op for the
  * models actually in use.
@@ -25,7 +25,7 @@
  * output-budget requirement; the two interact.)
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { QwenProvider } from '../../../src/providers/qwen/QwenProvider.js';
+import { OpenRouterProvider } from '../../../src/providers/openrouter/OpenRouterProvider.js';
 
 function mockFetchOnce(payload: unknown) {
   const calls: any[] = [];
@@ -53,10 +53,10 @@ const VERDICT_SCHEMA = {
 
 afterEach(() => { vi.unstubAllGlobals(); });
 
-describe('QwenProvider — schema-bound output', () => {
+describe('OpenRouterProvider — schema-bound output', () => {
   it('sends response_format json_schema when the request declares one', async () => {
     const calls = mockFetchOnce(reply);
-    const provider = new QwenProvider({ apiKey: 'k', openRouterMode: true });
+    const provider = new OpenRouterProvider({ apiKey: 'k', openRouterMode: true });
     await provider.complete({
       messages: [{ role: 'user', content: 'review' }],
       model: 'z-ai/glm-5.2',
@@ -81,7 +81,7 @@ describe('QwenProvider — schema-bound output', () => {
     // from this pipeline. require_parameters forces routing to a provider that
     // honours it, or fails loudly.
     const calls = mockFetchOnce(reply);
-    const provider = new QwenProvider({ apiKey: 'k', openRouterMode: true });
+    const provider = new OpenRouterProvider({ apiKey: 'k', openRouterMode: true });
     await provider.complete({
       messages: [{ role: 'user', content: 'review' }], model: 'z-ai/glm-5.2', stream: false,
       maxTokens: 8000,
@@ -94,7 +94,7 @@ describe('QwenProvider — schema-bound output', () => {
 
   it('does not pin routing when no output contract is declared', async () => {
     const calls = mockFetchOnce(reply);
-    const provider = new QwenProvider({ apiKey: 'k', openRouterMode: true });
+    const provider = new OpenRouterProvider({ apiKey: 'k', openRouterMode: true });
     await provider.complete({
       messages: [{ role: 'user', content: 'x' }], model: 'z-ai/glm-5.2', stream: false,
     } as any);
@@ -103,7 +103,7 @@ describe('QwenProvider — schema-bound output', () => {
 
   it('still supports plain json_object mode', async () => {
     const calls = mockFetchOnce(reply);
-    const provider = new QwenProvider({ apiKey: 'k', openRouterMode: true });
+    const provider = new OpenRouterProvider({ apiKey: 'k', openRouterMode: true });
     await provider.complete({
       messages: [{ role: 'user', content: 'x' }], model: 'z-ai/glm-5.2',
       stream: false, responseFormat: 'json_object',
@@ -113,7 +113,7 @@ describe('QwenProvider — schema-bound output', () => {
 
   it('omits response_format entirely when none is declared', async () => {
     const calls = mockFetchOnce(reply);
-    const provider = new QwenProvider({ apiKey: 'k', openRouterMode: true });
+    const provider = new OpenRouterProvider({ apiKey: 'k', openRouterMode: true });
     await provider.complete({
       messages: [{ role: 'user', content: 'x' }], model: 'z-ai/glm-5.2', stream: false,
     } as any);

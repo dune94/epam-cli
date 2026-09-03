@@ -34,7 +34,20 @@ function callSites(): string[] {
         const rel = prefix + e.name;
         if (rel.endsWith('ai-run.sh')) continue;      // the seam itself
         const src = readFileSync(join(dir, e.name), 'utf8');
-        if (/ai-run\.sh|AI_RUNNER_CMD/.test(src)) found.push(rel);
+          // A MENTION IN A COMMENT IS NOT A CALL SITE.
+          //
+          // This matched the raw file, so three files that only DISCUSS the runner in prose
+          // ("ai-run.sh retries a FAILED call up to...") were reported as new anonymous agent
+          // call sites. The ratchet then demanded a fix to code that invokes nothing, and a
+          // genuine unnamed invocation would have been lost in that noise.
+          //
+          // Both hub names count: it was renamed ai-run.sh -> llm-handler.sh, and ai-run.sh
+          // remains as a forwarding shim, so a caller may legitimately use either.
+          const code = src
+            .split('\n')
+            .filter((l) => !/^\s*(#|\/\/|\*|\/\*)/.test(l))
+            .join('\n');
+          if (/ai-run\.sh|llm-handler\.sh|AI_RUNNER_CMD/.test(code)) found.push(rel);
       }
     }
   };
@@ -57,21 +70,19 @@ const NOT_INVOKERS: Record<string, string> = {
 };
 
 const KNOWN_UNNAMED: string[] = [
-  'agent-attempt-analyst.sh',
-  'brownfield-repro-test-writer.sh',
+  // A RATCHET: this list may only SHRINK. Every entry is a call site that invokes an agent
+  // without EPAM_AGENT_NAME, so its cost row, Langfuse trace and plan record are attributed to
+  // a default. Six entries below had been fixed and never removed, which is how a ratchet stops
+  // ratcheting — the baseline outlives the debt and the list stops meaning anything.
   'claude.sh',
-  'code-review-cycle.sh',
-  'contextualize-stories.sh',
   'lib/constraint-compiler.js',
   'lib/kb-cli.js',
   'lib/story-guards.sh',
   'orchestrate.sh',
-  'team-lead-review.sh',
   'test-engine.sh',
   'tier3-metrolinx-run.sh',
   'tier3-skyscanner-app-run.sh',
   'tier3-travel-app-run.sh',
-  'update-invalidated-tests.sh',
 ];
 
 describe('every ai-run.sh call site names its agent', () => {
@@ -84,7 +95,7 @@ describe('every ai-run.sh call site names its agent', () => {
   it('the seam names an unnamed caller rather than recording "agent"', () => {
     // The backstop that makes the list below survivable: until every site names
     // itself, ai-run.sh derives a name from the invoking script.
-    const src = readFileSync(join(SCRIPTS, 'ai-run.sh'), 'utf8');
+    const src = readFileSync(join(SCRIPTS, 'llm-handler.sh'), 'utf8');
     expect(src).toMatch(/\/proc\/\$?\{?PPID/);
   });
 

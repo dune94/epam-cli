@@ -1,22 +1,22 @@
 {
-  "startedAt": "2026-08-18T10:59:00-04:00",
+  "startedAt": "2026-08-29T16:45:23-04:00",
   "phase": "core",
   "orchMode": "bash",
   "lanes": {
     "main": {
-      "status": "done",
+      "status": "running",
       "currentStory": null,
-      "storiesCompleted": 67,
-      "storiesFailed": 0
+      "storiesCompleted": 1,
+      "storiesFailed": 2
     },
     "primary": {
-      "status": "done",
+      "status": "idle",
       "currentStory": null,
       "storiesCompleted": 0,
       "storiesFailed": 0
     },
     "independent": {
-      "status": "done",
+      "status": "idle",
       "currentStory": null,
       "storiesCompleted": 0,
       "storiesFailed": 0
@@ -24,14 +24,22 @@
   },
   "events": [
     {
+      "type": "pre_phase_assessment",
+      "story": "",
+      "lane": "main",
+      "role": "team-lead-agent",
+      "message": "Pre-phase assessment completed",
+      "timestamp": "2026-08-29T16:45:28-04:00"
+    },
+    {
       "type": "story_start",
       "story": "",
       "lane": "main",
       "role": "prd-model-coordinator",
-      "provider": "qwen",
-      "model": "MiniMax-M3",
+      "provider": "claude",
+      "model": "claude-haiku-4-5-20251001",
       "message": "Starting PRD Model Coordinator",
-      "timestamp": "2026-08-18T10:59:00-04:00"
+      "timestamp": "2026-08-29T16:45:30-04:00"
     },
     {
       "type": "story_complete",
@@ -39,1345 +47,237 @@
       "lane": "main",
       "role": "prd-model-coordinator",
       "message": "Completed PRD model assignments done",
-      "timestamp": "2026-08-18T10:59:00-04:00"
+      "timestamp": "2026-08-29T16:45:30-04:00"
     },
     {
       "type": "story_start",
       "story": "MOCK3-2",
       "lane": "main",
-      "role": "typescript-logic-fixer",
+      "role": "stand-in-engineer",
       "provider": "claude",
       "model": "MiniMax-M3",
       "message": "Starting ",
-      "timestamp": "2026-08-18T10:59:01-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "failure-analyst",
-      "lane": "main",
-      "role": "failure-analyst",
-      "provider": "minimax",
-      "model": "MiniMax-M3",
-      "message": "Starting Failure Analyst: MOCK3-2",
-      "timestamp": "2026-08-18T10:59:19-04:00"
-    },
-    {
-      "type": "self_heal_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "failure-analyst",
-      "message": "Self-heal started for MOCK3-2 (attempt 0, gate=z-ai/glm-5.2)",
-      "timestamp": "2026-08-18T10:59:19-04:00"
-    },
-    {
-      "type": "self_heal_result",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "failure-analyst",
-      "message": "Self-heal result for MOCK3-2: target=tool patches=0 profile=true — .epam/verification.json lacks typecheck entry; package.json declares build=tsc --noEmit",
-      "timestamp": "2026-08-18T11:00:27-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "failure-analyst",
-      "lane": "main",
-      "role": "failure-analyst",
-      "message": "Completed Analysis complete: MOCK3-2",
-      "timestamp": "2026-08-18T11:00:27-04:00"
-    },
-    {
-      "type": "retry",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Retry R1 Rung0: model=MiniMax-M3 (self-heal active)",
-      "timestamp": "2026-08-18T11:00:32-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "failure-analyst",
-      "lane": "main",
-      "role": "failure-analyst",
-      "provider": "minimax",
-      "model": "MiniMax-M3",
-      "message": "Starting Failure Analyst: MOCK3-2",
-      "timestamp": "2026-08-18T11:00:51-04:00"
-    },
-    {
-      "type": "self_heal_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "failure-analyst",
-      "message": "Self-heal started for MOCK3-2 (attempt 1, gate=z-ai/glm-5.2)",
-      "timestamp": "2026-08-18T11:00:51-04:00"
-    },
-    {
-      "type": "self_heal_result",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "failure-analyst",
-      "message": "Self-heal result for MOCK3-2: target=tool patches=0 profile=true — verification.json was created without the typecheck entry; package.json declares build=tsc --noEmit",
-      "timestamp": "2026-08-18T11:01:42-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "failure-analyst",
-      "lane": "main",
-      "role": "failure-analyst",
-      "message": "Completed Analysis complete: MOCK3-2",
-      "timestamp": "2026-08-18T11:01:42-04:00"
+      "timestamp": "2026-08-29T16:45:31-04:00"
     },
     {
       "type": "ladder_rung",
       "story": "MOCK3-2",
       "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "InferenceLadder Rung1/R2: MiniMax-M3→z-ai/glm-5.2 effort=max",
-      "timestamp": "2026-08-18T11:01:47-04:00"
+      "role": "stand-in-engineer",
+      "message": "InferenceLadder Rung0/R1: MiniMax-M3→MiniMax-M3 effort=max",
+      "timestamp": "2026-08-29T16:45:38-04:00"
     },
     {
-      "type": "story_complete",
+      "type": "ladder_rung",
       "story": "MOCK3-2",
       "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed ",
-      "timestamp": "2026-08-18T11:02:14-04:00"
+      "role": "stand-in-engineer",
+      "message": "InferenceLadder Rung1/R2: MiniMax-M3→MiniMax-M3 effort=max",
+      "timestamp": "2026-08-29T16:45:44-04:00"
     },
     {
-      "type": "story_start",
+      "type": "ladder_rung",
       "story": "MOCK3-2",
       "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:15-04:00"
+      "role": "stand-in-engineer",
+      "message": "InferenceLadder Rung1/R3: MiniMax-M3→MiniMax-M3 effort=max",
+      "timestamp": "2026-08-29T16:45:51-04:00"
     },
     {
-      "type": "story_complete",
+      "type": "ladder_rung",
       "story": "MOCK3-2",
       "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:15-04:00"
+      "role": "stand-in-engineer",
+      "message": "InferenceLadder Rung2/R4: MiniMax-M3→MiniMax-M3 effort=max",
+      "timestamp": "2026-08-29T16:45:57-04:00"
     },
     {
-      "type": "story_start",
+      "type": "ladder_rung",
       "story": "MOCK3-2",
       "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:15-04:00"
+      "role": "stand-in-engineer",
+      "message": "InferenceLadder Rung2/R5: MiniMax-M3→MiniMax-M3 effort=max",
+      "timestamp": "2026-08-29T16:46:03-04:00"
     },
     {
-      "type": "story_complete",
+      "type": "ladder_rung",
       "story": "MOCK3-2",
       "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:15-04:00"
+      "role": "stand-in-engineer",
+      "message": "InferenceLadder Rung3/R6: MiniMax-M3→MiniMax-M3 effort=max",
+      "timestamp": "2026-08-29T16:46:09-04:00"
     },
     {
-      "type": "story_start",
+      "type": "ladder_rung",
       "story": "MOCK3-2",
       "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:15-04:00"
+      "role": "stand-in-engineer",
+      "message": "InferenceLadder Rung3/R7: MiniMax-M3→MiniMax-M3 effort=max",
+      "timestamp": "2026-08-29T16:46:16-04:00"
     },
     {
-      "type": "story_complete",
+      "type": "story_fail",
       "story": "MOCK3-2",
       "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:15-04:00"
+      "role": "stand-in-engineer",
+      "message": "Failed after 12 attempts",
+      "timestamp": "2026-08-29T16:46:20-04:00"
     },
     {
-      "type": "story_start",
+      "type": "story_fail",
       "story": "MOCK3-2",
       "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:15-04:00"
+      "role": "stand-in-engineer",
+      "message": "exit 1",
+      "timestamp": "2026-08-29T16:46:21-04:00"
     },
     {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:15-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:15-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:15-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:15-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:15-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:15-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:15-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:15-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:16-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:17-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "MiniMax-M3",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:17-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:17-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "MiniMax-M3",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:17-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:17-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:17-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:17-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:17-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:17-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:17-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:17-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:17-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:17-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:17-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:17-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:17-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:17-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:17-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:17-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:17-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:17-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:17-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:17-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:17-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:17-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:17-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:17-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "MiniMax-M3",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "MiniMax-M3",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "MiniMax-M3",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "MiniMax-M3",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:18-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:19-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:19-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:19-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:19-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "MiniMax-M3",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:19-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:19-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "MiniMax-M3",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:19-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "MOCK3-2",
+      "type": "spec_update",
+      "story": "MOCK-HW-1",
       "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:19-04:00"
+      "role": "openspec",
+      "message": "[core] openspec started on MOCK-HW-1 (Hello world greeting should say hello dolly)",
+      "timestamp": "2026-09-01T05:58:50-04:00"
     },
     {
-      "type": "story_start",
-      "story": "MOCK3-2",
+      "type": "spec_update",
+      "story": "MOCK-HW-1",
       "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:19-04:00"
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK-HW-1 — tracing the causal fix site",
+      "timestamp": "2026-09-01T05:58:52-04:00"
     },
     {
-      "type": "story_complete",
-      "story": "MOCK3-2",
+      "type": "spec_update",
+      "story": "MOCK-HW-1",
       "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:19-04:00"
+      "role": "openspec",
+      "message": "[core] openspec updated MOCK-HW-1 acChanged=no splitCount=0",
+      "timestamp": "2026-09-01T05:59:25-04:00"
     },
     {
-      "type": "story_start",
-      "story": "MOCK3-2",
+      "type": "spec_update",
+      "story": "MOCK-HW-1",
       "lane": "main",
-      "role": "typescript-logic-fixer",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:19-04:00"
+      "role": "speckit",
+      "message": "[core] speckit started on MOCK-HW-1 (Hello world greeting should say hello dolly)",
+      "timestamp": "2026-09-01T05:59:25-04:00"
     },
     {
-      "type": "story_complete",
-      "story": "MOCK3-2",
+      "type": "spec_update",
+      "story": "MOCK-HW-1",
       "lane": "main",
-      "role": "typescript-logic-fixer",
-      "message": "Completed The departure board omits the final stop",
-      "timestamp": "2026-08-18T11:02:19-04:00"
+      "role": "speckit",
+      "message": "[core] speckit updated MOCK-HW-1 acChanged=no splitCount=0",
+      "timestamp": "2026-09-01T05:59:38-04:00"
     },
     {
-      "type": "phase_assessment",
+      "type": "spec_update",
       "story": "",
       "lane": "main",
-      "role": "team-lead-agent",
-      "message": "Running post-phase assessment",
-      "timestamp": "2026-08-18T11:02:19-04:00"
+      "role": "spec-coordinator",
+      "message": "[core] specification completed run=20260901T095717Z stories=1",
+      "timestamp": "2026-09-01T06:00:05-04:00"
     },
     {
-      "type": "story_start",
+      "type": "specification_pass",
       "story": "",
       "lane": "main",
-      "role": "review-agent",
-      "provider": "qwen",
-      "model": "MiniMax-M2.5",
-      "message": "Starting Team Lead Code Review",
-      "timestamp": "2026-08-18T11:02:51-04:00"
+      "role": "spec-coordinator",
+      "message": "Specification agents completed (OpenSpec/Speckit)",
+      "timestamp": "2026-09-01T06:00:06-04:00"
     },
     {
-      "type": "story_complete",
+      "type": "cpa_block",
       "story": "",
       "lane": "main",
-      "role": "review-agent",
-      "message": "Completed Code review approved",
-      "timestamp": "2026-08-18T11:03:23-04:00"
+      "role": "context-purveyor",
+      "message": "CPA gate BLOCKED — pipeline halted",
+      "timestamp": "2026-09-01T06:00:33-04:00"
     },
     {
-      "type": "pre_review_test_pass",
+      "type": "spec_update",
+      "story": "MOCK-HW-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on MOCK-HW-1 (Hello world greeting should say hello dolly)",
+      "timestamp": "2026-09-01T06:03:16-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK-HW-1",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on MOCK-HW-1 — tracing the causal fix site",
+      "timestamp": "2026-09-01T06:03:18-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK-HW-1",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec updated MOCK-HW-1 acChanged=no splitCount=0",
+      "timestamp": "2026-09-01T06:04:09-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK-HW-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit started on MOCK-HW-1 (Hello world greeting should say hello dolly)",
+      "timestamp": "2026-09-01T06:04:09-04:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "MOCK-HW-1",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit updated MOCK-HW-1 acChanged=no splitCount=0",
+      "timestamp": "2026-09-01T06:04:21-04:00"
+    },
+    {
+      "type": "spec_update",
       "story": "",
       "lane": "main",
-      "role": "unit-test-runner",
-      "message": "Pre-review vitest passed for core",
-      "timestamp": "2026-08-18T11:03:23-04:00"
+      "role": "spec-coordinator",
+      "message": "[core] specification completed run=20260901T100123Z stories=1",
+      "timestamp": "2026-09-01T06:05:04-04:00"
     },
     {
-      "type": "testing_gate_start",
+      "type": "specification_pass",
       "story": "",
       "lane": "main",
-      "role": "test-coordinator-agent",
-      "message": "Starting testing gates for core",
-      "timestamp": "2026-08-18T11:03:24-04:00"
+      "role": "spec-coordinator",
+      "message": "Specification agents completed (OpenSpec/Speckit)",
+      "timestamp": "2026-09-01T06:05:04-04:00"
     },
     {
-      "type": "story_start",
+      "type": "cpa_block",
       "story": "",
       "lane": "main",
-      "role": "sast-sentinel",
-      "provider": "qwen",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting SAST Sentinel",
-      "timestamp": "2026-08-18T11:03:24-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "",
-      "lane": "main",
-      "role": "spec-validator",
-      "provider": "qwen",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting Spec Validator",
-      "timestamp": "2026-08-18T11:03:24-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "",
-      "lane": "main",
-      "role": "spec-validator",
-      "message": "Completed ",
-      "timestamp": "2026-08-18T11:03:37-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "",
-      "lane": "main",
-      "role": "spec-validator",
-      "message": "Completed ",
-      "timestamp": "2026-08-18T11:03:43-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "",
-      "lane": "main",
-      "role": "review-ranger",
-      "provider": "qwen",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting Review Ranger",
-      "timestamp": "2026-08-18T11:03:43-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "",
-      "lane": "main",
-      "role": "mutant-hunter",
-      "provider": "qwen",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting Mutant Hunter",
-      "timestamp": "2026-08-18T11:03:44-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "",
-      "lane": "main",
-      "role": "mutant-hunter",
-      "message": "Completed ",
-      "timestamp": "2026-08-18T11:03:54-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "",
-      "lane": "main",
-      "role": "mutant-hunter",
-      "message": "Completed ",
-      "timestamp": "2026-08-18T11:04:45-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "",
-      "lane": "main",
-      "role": "fuzz-weaver",
-      "provider": "qwen",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting Fuzz Weaver",
-      "timestamp": "2026-08-18T11:04:46-04:00"
-    },
-    {
-      "type": "story_start",
-      "story": "",
-      "lane": "main",
-      "role": "perf-sentinel",
-      "provider": "qwen",
-      "model": "z-ai/glm-5.2",
-      "message": "Starting Perf Sentinel",
-      "timestamp": "2026-08-18T11:04:46-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "",
-      "lane": "main",
-      "role": "perf-sentinel",
-      "message": "Completed ",
-      "timestamp": "2026-08-18T11:05:28-04:00"
-    },
-    {
-      "type": "story_complete",
-      "story": "",
-      "lane": "main",
-      "role": "perf-sentinel",
-      "message": "Completed ",
-      "timestamp": "2026-08-18T11:05:28-04:00"
-    },
-    {
-      "type": "e2e_route",
-      "story": "MOCK3-2",
-      "lane": "main",
-      "role": "test-coordinator-agent",
-      "message": "Routed MOCK3-2 to lightpanda-agent (score=1, reason=complexity_low_or_medium)",
-      "timestamp": "2026-08-18T11:05:29-04:00"
-    },
-    {
-      "type": "testing_gate_pass",
-      "story": "",
-      "lane": "main",
-      "role": "test-coordinator-agent",
-      "message": "Testing gates pass for core (158304ms)",
-      "timestamp": "2026-08-18T11:06:02-04:00"
-    },
-    {
-      "type": "phase_gate_check",
-      "story": "",
-      "lane": "main",
-      "role": "team-lead-agent",
-      "message": "Checking phase gate for core",
-      "timestamp": "2026-08-18T11:06:02-04:00"
-    },
-    {
-      "type": "phase_gate_pass",
-      "story": "",
-      "lane": "main",
-      "role": "team-lead-agent",
-      "message": "Phase gate passed for core",
-      "timestamp": "2026-08-18T11:06:02-04:00"
-    },
-    {
-      "type": "orchestration_complete",
-      "story": "",
-      "lane": "main",
-      "role": "",
-      "message": "All steps finished - 67 stories completed",
-      "timestamp": "2026-08-18T11:06:03-04:00"
-    },
-    {
-      "type": "orchestration_complete",
-      "story": "",
-      "lane": "main",
-      "role": "",
-      "message": "All steps finished",
-      "timestamp": "2026-08-18T11:06:03-04:00"
+      "role": "context-purveyor",
+      "message": "CPA gate BLOCKED — pipeline halted",
+      "timestamp": "2026-09-01T06:05:19-04:00"
     }
   ],
   "stories": {
     "MOCK3-2": {
-      "status": "complete",
+      "status": "fail",
       "lane": "main",
-      "role": "typescript-logic-fixer",
-      "title": "The departure board omits the final stop",
-      "provider": "minimax",
-      "model": "z-ai/glm-5.2",
-      "updatedAt": "2026-08-18T11:02:19-04:00"
+      "role": "stand-in-engineer",
+      "title": "",
+      "provider": "claude",
+      "model": "MiniMax-M3",
+      "updatedAt": "2026-08-29T16:46:21-04:00"
     },
     "": {
       "status": "complete",
       "lane": "main",
-      "role": "perf-sentinel",
-      "title": "Perf Sentinel",
-      "provider": "qwen",
-      "model": "z-ai/glm-5.2",
-      "updatedAt": "2026-08-18T11:05:28-04:00"
-    },
-    "failure-analyst": {
-      "status": "complete",
-      "lane": "main",
-      "role": "failure-analyst",
-      "title": "Failure Analyst: MOCK3-2",
-      "provider": "minimax",
-      "model": "MiniMax-M3",
-      "updatedAt": "2026-08-18T11:01:42-04:00"
+      "role": "prd-model-coordinator",
+      "title": "PRD Model Coordinator",
+      "provider": "claude",
+      "model": "claude-haiku-4-5-20251001",
+      "updatedAt": "2026-08-29T16:45:30-04:00"
     }
-  },
-  "completedAt": "2026-08-18T11:06:03-04:00"
+  }
 }

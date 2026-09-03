@@ -138,11 +138,14 @@ setup() {
     # (two capitals, or SCREAMING_CASE) so that ordinary words which happen to be declared
     # types — Decision, Profile, Message — are not counted. No stopword list is consulted.
     #
-    # SCOPED TO REACHABLE AGENTS, deliberately. The documentation cluster (doc-coordinator and
-    # its delegates) is a built-but-unwired capability: Stage 6 never invokes it. Its entries
-    # still describe this repository, and they stay until the phase is wired and they can be
-    # rewritten against a real codeline — removing them would disable a capability rather than
-    # neutralise it. Nothing that CAN run may carry this repo's vocabulary.
+    # SCOPED TO REACHABLE AGENTS, deliberately. Nothing that CAN run may carry this repo's
+    # vocabulary.
+    #
+    # The scoping used to exist for the documentation cluster — doc-coordinator and its seven
+    # delegates — a built-but-unwired capability that Stage 6 never invoked. Those entries were
+    # REMOVED on 2026-08-31 at the operator's instruction: they were provisioned and paid for on
+    # every run and nothing ever called them. The scoping stays because the property it protects
+    # (reachable entries only) is the right one, not because anything unreachable remains.
     run "$NODE" -e '
       const fs = require("fs"), { execFileSync } = require("child_process");
       const declared = new Set();

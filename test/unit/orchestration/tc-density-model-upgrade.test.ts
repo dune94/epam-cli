@@ -85,7 +85,7 @@ describe('maybe_upgrade_model_for_tc_density — REAL execution', () => {
       writeFileSync(
         prdFile,
         JSON.stringify({
-          stories: [{ id: 'SKY-999', model: opts.currentModel, aiProvider: 'qwen', specification: {} }],
+          stories: [{ id: 'SKY-999', model: opts.currentModel, aiProvider: 'openrouter', specification: {} }],
         }),
       );
       const scriptPath = join(dir, 'run.sh');
@@ -121,10 +121,10 @@ describe('maybe_upgrade_model_for_tc_density — REAL execution', () => {
       currentModel: 'MiniMax-M3',
       tcFactsCount: 22,
       upgradeModel: 'z-ai/glm-5.1',
-      providerMap: 'MiniMax-*=minimax|z-ai/*=qwen',
+      providerMap: 'MiniMax-*=minimax|z-ai/*=openrouter',
     });
     expect(result.model).toBe('z-ai/glm-5.1');
-    expect(result.aiProvider).toBe('qwen');
+    expect(result.aiProvider).toBe('openrouter');
     expect(result.specification.tcDensityUpgrade).toMatchObject({
       from: 'MiniMax-M3',
       to: 'z-ai/glm-5.1',
@@ -178,7 +178,7 @@ describe('maybe_upgrade_model_for_tc_density — REAL execution', () => {
       providerMap: 'MiniMax-*=minimax',
     });
     expect(result.model).toBe('some-unmapped-model');
-    expect(result.aiProvider).toBe('qwen'); // unchanged from the original
+    expect(result.aiProvider).toBe('openrouter'); // unchanged from the original
   });
 
   it('is domain-agnostic: works for an arbitrary hypothetical vendor pairing, not tied to this project\'s models', () => {

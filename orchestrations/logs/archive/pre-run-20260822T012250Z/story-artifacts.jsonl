@@ -1,0 +1,11 @@
+{"storyId":"AMSD-2041","phase":"core","status":"attempt","elapsedMinutes":2.31,"costUsd":0.3759,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-21T20:31:25Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"attempt","elapsedMinutes":1.00,"costUsd":0.1243,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-21T20:33:07Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"completed","elapsedMinutes":5.78,"costUsd":0.1243,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-21T20:33:42Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"attempt","elapsedMinutes":7.26,"costUsd":0.1778,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-21T21:07:12Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"completed","elapsedMinutes":9.91,"costUsd":0.1778,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-21T21:07:41Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"attempt","elapsedMinutes":1.66,"costUsd":0.1831,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-21T21:13:15Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"completed","elapsedMinutes":3.68,"costUsd":0.1831,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-21T21:13:46Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"attempt","elapsedMinutes":5.66,"costUsd":0.8819,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-21T21:22:49Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"completed","elapsedMinutes":8.01,"costUsd":0.8819,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-21T21:23:18Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"attempt","elapsedMinutes":18.65,"costUsd":1.2729,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-21T21:46:29Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"completed","elapsedMinutes":21.75,"costUsd":1.2729,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-21T21:46:58Z"}

@@ -2,7 +2,6 @@
 # sandbox-invoke.sh — wraps a story-agent CLI invocation in a Docker/Podman
 # sandbox. Drop-in replacement for whatever CLI claude.sh would otherwise
 # call directly ($CLAUDE_CMD for the claude-compatible providers, or the
-# epam-run branch for copilot/openai/qwen/cursor/minimax) — receives the
 # same stdin/args, but executes inside an isolated container with:
 #   - PROJECT_ROOT bind-mounted read-write, EXCEPT each dir declared in
 #     .epam/dependency-check.json's "vendorDirs" (e.g. node_modules),

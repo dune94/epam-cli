@@ -38,21 +38,35 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$ROOT"
+cd "$ROOT" || exit 1
 
-# Pipeline code only. Tests are excluded: a fixture naming a client is not a shipped fact.
-mapfile -t FILES < <({
-  find orchestrations/scripts orchestrations/plugins src \
-    -type f \( -name '*.sh' -o -name '*.js' -o -name '*.ts' \) 2>/dev/null
-  # THE ENGINE'S OWN DATA. Not a project's config — orchestrations/projects/* is where a
-  # project's facts belong and is deliberately absent. These are shipped defaults that apply to
-  # every project, which is exactly what an engine fact is.
-  find orchestrations/config orchestrations/agents \
-    -type f -name '*.json' 2>/dev/null
-} | grep -vE 'node_modules|\.venv|/dist/|\.test\.|\.spec\.' \
-  | grep -vE '/(tier[0-9]+-[a-z0-9-]+-run|mock[0-9]*-[a-z-]*run)\.sh$')
+# WHAT IS SCANNED IS DECLARED — config/hardcoding-audit-scope.json.
+#
+# This swept orchestrations/config and orchestrations/agents JSON too, on the argument that a
+# shipped default is an engine fact. It made the headline number unreadable: 205 of 658 sites
+# were llm-defaults.*.json naming the models it exists to name. Those files ARE the configuration
+# the engine reads, which is the opposite of a value baked into code.
+#
+# The scope lives in config so narrowing it shows up in review. Narrowing a scanner is how a
+# scanner comes to report clean while the defect is still there, so a test asserts this one still
+# finds engine sites.
+_AUDIT_SCOPE="${EPAM_HARDCODING_AUDIT_SCOPE:-$ROOT/orchestrations/config/hardcoding-audit-scope.json}"
+mapfile -t FILES < <(
+  "${NODE_BIN:-node}" -e '
+    const fs=require("fs"),path=require("path"),cp=require("child_process");
+    const cfg=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+    const out=[];
+    for (const s of cfg.scan) {
+      const args=[s.path,"-type","f","("];
+      s.types.forEach((t,i)=>{ if(i) args.push("-o"); args.push("-name","*."+t); });
+      args.push(")");
+      try { out.push(...cp.execFileSync("find",args,{encoding:"utf8"}).trim().split("\n")); } catch {}
+    }
+    const ex=(cfg.excludePatterns||[]).map(p=>new RegExp(p));
+    process.stdout.write(out.filter(Boolean).filter(f=>!ex.some(r=>r.test(f))).join("\n"));
+  ' "$_AUDIT_SCOPE" 2>/dev/null)
 
-SCOPE_DIRS="orchestrations/scripts orchestrations/plugins src orchestrations/config orchestrations/agents"
+SCOPE_DIRS="$("${NODE_BIN:-node}" -e 'const c=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));process.stdout.write(c.scan.map(s=>s.path).join(" "))' "$_AUDIT_SCOPE" 2>/dev/null)"
 CALIBRATION="test/fixtures/hardcoding/known-hardcoding.txt"
 # Per-project LAUNCHERS are exempt, exactly as test/unit/orchestration/engine-is-generic.test.ts
 # exempts them: a launcher exists to declare ONE project's facts — its branch, its codeline
@@ -88,7 +102,7 @@ add "git branch literals" \
 
 # 3. Model identifiers in code — model choice is llm-settings.json's job.
 add "model identifiers" \
-    "[\"'](z-ai/|glm-[0-9]|kimi-k[0-9]|MiniMax-|minimax-|qwen/)[A-Za-z0-9._/-]*[\"']"
+    "[\"'](z-ai/|glm-[0-9]|kimi-k[0-9]|MiniMax-|minimax-)[A-Za-z0-9._/-]*[\"']"
 
 # 4. Hosts and ports.
 add "urls and ports" \
@@ -120,11 +134,16 @@ add "truncations" \
 add "foreign schema" \
     'customfield_[0-9]+'
 
+#    ALSO AS AN OBJECT PROPERTY, not only an assignment. `= [...]` alone missed `key: [...]`, so
+#    moving three lists out of verification-plugin.js and into the ecosystem file that owns them
+#    made them VANISH from the count while the file itself was in scope — a relocation reading as
+#    repair, which is precisely how this audit was defeated on 2026-08-23. Caught 2026-08-28 by
+#    checking the new home was still seen rather than trusting the total to fall honestly.
 # 9. A FIXED VOCABULARY OF DOMAIN VALUES used in logic — issue types, workflow states, kinds.
 #    supportedTypes = ['story','task','bug'] dropped every ticket outside it with `return null`,
 #    and KINDS/AGENT_KINDS were two copies of one vocabulary that had already drifted apart.
 add "domain vocabularies" \
-    "=[[:space:]]*\\[[[:space:]]*['\"][a-z][a-z-]{2,}['\"][[:space:]]*,[[:space:]]*['\"][a-z][a-z-]{2,}['\"]"
+    "(=|:)[[:space:]]*\\[[[:space:]]*['\"][a-z][a-z-]{2,}['\"][[:space:]]*,[[:space:]]*['\"][a-z][a-z-]{2,}['\"]"
 
 # 10. A NUMBER DECIDING SOMETHING, with no name to configure it by. Category 6 needs a knob
 #     (TIMEOUT, MAX, LIMIT); these have none, which is precisely why nobody could change them:
@@ -153,7 +172,74 @@ add "naming conventions in engine data" \
 # NO MATCHES IS AN ANSWER, NOT A FAILURE. grep exits 1 when it finds nothing, and that status
 # propagated out of --verify, so inspecting a clean category looked like the audit had broken.
 # A caller wiring this into a gate would have read "this class is clear" as "the tool failed".
-hits_for() { grep -rnE "${PATTERNS[$1]}" "${FILES[@]}" 2>/dev/null | drop_narration || true; }
+# A TRUNCATION INSIDE A DIAGNOSTIC IS NOT A DECISION ANYONE CONFIGURES.
+#
+# Category 6 exists for truncations that decide how much a MODEL sees. A cut inside a log line
+# decides how much of a message reaches a HUMAN reading stderr, and no run behaves differently for
+# it. Reviewing all 441 findings on 2026-08-28: 25 of the 144 truncations were of that shape —
+# console.warn/log/error, a shell warning()/info()/log()/error(), a `head` piped to sed or >&2 for
+# display — and counting them padded the number that hides the 110 which do change what an agent
+# reads. The same reasoning that removed `x += 1` from category 10 when it reported 304.
+#
+# ISO-date slices and file-signature reads are FORMATS, not windows: slice(0, 10) on a timestamp is
+# YYYY-MM-DD, and `head -c 15` reading "SQLite format 3" is a magic number in the literal sense.
+# Neither has another possible value, which is the test for whether a knob would mean anything.
+#
+# Narrowing only — nothing here can hide a truncation of content on its way to a model, and
+# --calibrate proves every category still sees its own example before any count is printed.
+drop_diagnostics() {
+    grep -vE ':[0-9]+:.*(console\.(warn|log|error)|^[^:]*:[0-9]+:[[:space:]]*(warning|info|log|error)[[:space:]]*\()' \
+    | grep -vE ':[0-9]+:.*(head|tail) -[0-9]+[^|]*\|[[:space:]]*(sed|cut)' \
+    | grep -vE ':[0-9]+:.*(head|tail) -[0-9]+[^>]*>&2' \
+    | grep -vE ':[0-9]+:.*(toISOString\(\)|String\([^)]*(created|updated|date|time)[^)]*\))\.slice\(0, ?(4|7|10)\)' \
+    | grep -vE ':[0-9]+:.*head -c 1[0-9][[:space:]]' \
+    || true
+}
+
+hits_for() {
+    local _out
+    _out=$(grep -rnE "${PATTERNS[$1]}" "${FILES[@]}" 2>/dev/null | drop_narration || true)
+    # Only the truncation category: elsewhere a log line naming a model or a URL is still a finding,
+    # because the LITERAL is the defect there, not the size of the window.
+    # printf '%s' drops the trailing newline and the last finding with it — every category read
+    # one lower the moment this function was introduced, which is a fake reduction and the exact
+    # thing this audit exists to make impossible.
+    # A UNIT CONVERSION DECIDES NOTHING. Category 9 asks for numbers that decide something with no
+    # name to configure them by. 1000 ms in a second, 1024 bytes in a KiB, 60 minutes in an hour,
+    # x100 for a percentage, round-to-N-decimals — none has another possible value, so a knob for it
+    # would name a fact rather than a choice. 29 of the 131 were these. The same reasoning that took
+    # this category from 304 when `x += 1` turned out to be a counter, not a decision.
+    #
+    # A bare factor keeps its finding: only these unit constants are excluded, and only where they
+    # appear AS the multiplier or divisor.
+    # A SCHEMA'S `required:` IS A LIST OF FIELD NAMES, NOT DOMAIN VALUES. Widening this category to
+    # object properties made it see JSON-schema declarations, which are the contract itself and are
+    # meant to be explicit. `enum:` is NOT excluded — that genuinely is a vocabulary, and the fact
+    # that it constrains a model's output is a reason to keep it visible, not to hide it.
+    if [ "${NAMES[$1]}" = "domain vocabularies" ]; then
+        printf '%s\n' "$_out" | grep -v '^$' \
+            | grep -vE ':[0-9]+:[[:space:]]*required:[[:space:]]*\[' \
+            || true
+        return 0
+    fi
+    if [ "${NAMES[$1]}" = "unnamed numeric decisions" ]; then
+        printf '%s\n' "$_out" | grep -v '^$' \
+            | grep -vE ':[0-9]+:.*[*/][[:space:]]*(1000|1024|60)\b' \
+            | grep -vE ':[0-9]+:.*\*[[:space:]]*100\b.*(toFixed|pct|percent|%)' \
+            | grep -vE ':[0-9]+:.*Math\.round\([^)]*\*[[:space:]]*10+\)[[:space:]]*/[[:space:]]*10+' \
+            || true
+        return 0
+    fi
+    # A CLEAN CATEGORY IS NOT A FAILURE. grep returns 1 when it matches nothing, so an empty
+    # category made `--verify N` exit non-zero — a report saying "nothing here" reported as broken.
+    # Introduced by the hits_for rewrite of 2026-08-28 and caught by this suite's own test the same
+    # day it started running.
+    if [ "${NAMES[$1]}" = "truncations" ]; then
+        printf '%s\n' "$_out" | grep -v '^$' | drop_diagnostics || true
+    else
+        printf '%s\n' "$_out" | grep -v '^$' || true
+    fi
+}
 
 case "${1:-}" in
   --scope)
@@ -200,6 +286,19 @@ case "${1:-}" in
     i=$(( ${2:?category number required} - 1 ))
     echo "### ${NAMES[$i]} — per file"; echo
     hits_for "$i" | awk -F: '{print $1}' | sort | uniq -c | sort -rn
+    ;;
+  --*)
+    # AN UNKNOWN FLAG IS REFUSED, NOT REPORTED OVER.
+    #
+    # Every unrecognised argument used to fall through to the default report, so `--calibrat` printed
+    # a full audit and an operator reading it believed calibration had passed. A typo in the one
+    # command that proves this detector can still SEE is exactly the typo that must not pass quietly.
+    echo "hardcoding-audit: unknown option '$1'" >&2
+    echo "  --scope       what this audit covers" >&2
+    echo "  --calibrate   prove every category can still see its own example" >&2
+    echo "  --verify <n>  every matching line for category n" >&2
+    echo "  --files <n>   per-file counts for category n" >&2
+    exit 2
     ;;
   *)
     echo "hardcoding audit — ${#FILES[@]} engine files (tests and PROJECT config excluded)"; echo

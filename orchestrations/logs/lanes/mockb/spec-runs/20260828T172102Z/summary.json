@@ -1,0 +1,51 @@
+{
+  "runId": "20260828T172102Z",
+  "phase": "core",
+  "startedAt": "2026-08-28T18:07:43.578Z",
+  "stories": [
+    {
+      "storyId": "MOCK3-2",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "notes": "",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-28T18:14:38.355Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Added three criteria to openspec's original three. (1) Single-stop line behavior: the off-by-one bug affects not just the final stop but also single-stop lines, which currently render empty. (2) Stop ordering: while AC1–AC2 imply order, explicit verification prevents regressions. (3) Format detail ('StopName (Xm)'): complements AC2 (arrow separator) by specifying the display format of each individual stop. All additions are observable outcomes (testable against rendered string output). No modifications to openspec's ACs—they are comprehensive and observable.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-28T18:15:51.861Z"
+        }
+      ]
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1,
+      "speckit": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 2
+  },
+  "completedAt": "2026-08-28T18:16:50.925Z",
+  "storyCount": 1
+}

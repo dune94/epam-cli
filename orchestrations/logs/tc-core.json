@@ -1,55 +1,23 @@
 {
-  "AMSD-2041": {
-    "verifiedAt": "2025-01-23T12:00:00Z",
+  "MOCK3-1": {
+    "verifiedAt": "2026-08-28T00:00:00Z",
     "sourceFiles": [
-      "src/services/contentstack.ts",
-      "src/pages/_app.tsx",
-      "src/context/contentstackContext.tsx",
-      "src/services/pageService.ts",
-      "src/components/pages/Homepage.tsx",
-      "src/hooks/useContent.ts",
-      "src/api/utils/_contentstack_getNewsArticles.ts",
-      "src/interface/content/page.ts"
+      "src/fares.ts"
     ],
     "facts": [
-      "src/pages/_app.tsx imports ContentstackLivePreview from \"@contentstack/live-preview-utils\" and calls ContentstackLivePreview.init({ stackSdk: Stack, enable: true }) inside a useEffect that runs once on mount.",
-      "src/pages/_app.tsx registers ContentstackLivePreview.onEntryChange(async () => { ... }) inside the .then() callback of init; the onEntryChange callback is async.",
-      "Inside onEntryChange, the callback reads pagePropsRef.current (a ref holding the latest pageProps) and extracts currentPage = currentProps?.content?.page?.[0], then contentTypeUid = currentPage?.content_type_uid || currentProps?.contentTypeUid, and entryUid = currentPage?.uid.",
-      "The onEntryChange callback returns early if (!contentTypeUid || !entryUid) \u2014 no preview fetch occurs when either identifier is absent.",
-      "The onEntryChange callback calls getSingleEntry({ contentTypeUid, entryUid, lang, ...config }) where config = contentstackConfig[contentTypeUid] and lang = (currentProps?.locale || \"en\") as ContentstackLocales.",
-      "On successful getSingleEntry result, the callback calls setPreviewPage([updated]) \u2014 wrapping the result in an array.",
-      "On error in the onEntryChange callback, the catch block is empty (silently ignores); published content remains visible because previewPage state is unchanged.",
-      "previewPage state is initialized as useState<IContentstackContext[\"page\"]>(pageProps?.content?.page).",
-      "The ContentstackContext.Provider value is: { ...(pageProps?.content || {}), page: previewPage || pageProps?.content?.page, setPage: setPreviewPage }.",
-      "The rendered component is <Component {...pageProps} key={path} /> \u2014 pageProps are spread directly; previewPage is NOT passed as a prop to Component.",
-      "IMPLEMENTATION CONFLICT: Verification criterion requires 'rendered Homepage shows the draft entry content' but Homepage (src/components/pages/Homepage.tsx) receives `page` via props (IHomepageProps { page: [IContentstackPage] }) from pageProps.content.page, NOT from ContentstackContext; setPreviewPage updates context state but does NOT update pageProps passed to <Component>, so Homepage will not re-render with draft content unless it reads from context.",
-      "Homepage component (src/components/pages/Homepage.tsx) does NOT call useContent() or useContext(ContentstackContext); it reads page exclusively from props.",
-      "useContent hook (src/hooks/useContent.ts) calls useContext(ContentstackContext) and exposes getContentByKey<T>(path, defaultValue) which delegates to getValue<T>(content, path, defaultValue); content is the full IContentstackContext object.",
-      "IMPLEMENTATION CONFLICT: Verification criterion requires 'page does not render draft content and continues to show published content unchanged' when in a protected or gated state, but src/pages/_app.tsx onEntryChange callback has NO check for protected/gated state before calling setPreviewPage; there is no gating logic whatsoever in the preview flow.",
-      "src/services/contentstack.ts exports `options` with live_preview: { enable: true, host: CONTENTSTACK_PREVIEW_HOST || \"api.contentstack.io\", management_token: CONTENTSTACK_MANAGEMENT_TOKEN }.",
-      "src/services/contentstack.ts exports `Stack = contentstack.Stack(options)` \u2014 the same Stack instance passed to ContentstackLivePreview.init as stackSdk.",
-      "getSingleEntry signature in src/services/contentstack.ts: export const getSingleEntry = async ({ contentTypeUid, entryUid, lang, referenceFieldPath, jsonRtePath, only, except, cachePolicy }: IContentstackGetSingleEntry): Promise<IContentstackPage>.",
-      "IContentstackContext (src/context/contentstackContext.tsx) has page?: [IContentstackPage] and setPage?: (page: [IContentstackPage]) => void.",
-      "IContentstackPage (src/interface/content/page.ts) has uid: string, title: string, url: string, _content_type_uid?: string, among other fields.",
-      "src/api/utils/_contentstack_getNewsArticles.ts exports getContentStackNewsArticles which uses Stack.ContentType(ContentTypes.NewsArticle).Query() \u2014 this is a separate code path from the preview flow and does not participate in onEntryChange.",
-      "When no preview signal is active, ContentstackLivePreview.onEntryChange callback is never invoked, previewPage remains equal to pageProps?.content?.page, and the context value's page field is pageProps?.content?.page \u2014 identical to behavior without live preview.",
-      "The useEffect in _app.tsx that sets up ContentstackLivePreview has an empty dependency array [], so init and onEntryChange registration happen exactly once per client-side mount.",
-      "pagePropsRef is a useRef updated on every render via `pagePropsRef.current = pageProps` (a render-phase assignment), so onEntryChange always reads the most recent pageProps."
+      "Function signature: fareFor(rider: Rider): number where Rider = { age: number; hasPass: boolean }",
+      "BASE_FARE_CENTS constant equals 350",
+      "CONCESSION_FARE_CENTS constant equals 175",
+      "Fare returned for any rider with hasPass=true is 0, regardless of age",
+      "Fare returned for rider with age >= 65 and hasPass=false is CONCESSION_FARE_CENTS (175)",
+      "Fare returned for rider with age < 13 and hasPass=false is CONCESSION_FARE_CENTS (175)",
+      "Fare returned for rider with age between 13 and 64 (inclusive) and hasPass=false is BASE_FARE_CENTS (350)",
+      "Senior boundary is age >= 65, not > 65 or >= 66",
+      "Child boundary is age < 13, not <= 12",
+      "Function logic order: check hasPass first (returns 0), then age >= 65 (returns 175), then age < 13 (returns 175), then BASE_FARE_CENTS (returns 350)",
+      "totalFor(riders: Rider[]): number function exists and sums fareFor results across all riders"
     ],
-    "mockStrategy": "Mock \"@contentstack/live-preview-utils\" with jest.fn() for init (returning a resolved promise) and onEntryChange (capturing the callback to invoke it manually), mock \"services/contentstack\" to provide a controlled Stack object and a jest.fn for getSingleEntry returning a predictable IContentstackPage, and render _app.tsx via @testing-library/react with a mock Component that reads from ContentstackContext \u2014 following the jest.mock factory pattern used in src/services/__tests__/contentstack.spec.ts.",
-    "bannedPatterns": [
-      "import ContentstackLivePreview from \"contentstack\"",
-      "ContentstackLivePreview.onContentChange",
-      "ContentstackLivePreview.subscribe",
-      "previewPage prop",
-      "pageProps.content.draftPage",
-      "setPage([updated])",
-      "mockContentstackLivePreview.init.mockResolvedValue",
-      "live_preview: { enable: false",
-      "getSingleEntry({ contentTypeUid, entryUid })",
-      "ContentstackContext.Consumer",
-      "Homepage reads from context",
-      "useContent() in Homepage"
-    ]
+    "mockStrategy": "Call fareFor() directly with Rider object literals { age: <number>, hasPass: <boolean> }; use imported constants BASE_FARE_CENTS and CONCESSION_FARE_CENTS in expect assertions; the vitest framework (describe, it, expect) is already in use",
+    "bannedPatterns": []
   }
 }

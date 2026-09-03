@@ -26,7 +26,7 @@
 build_is_current() {
     local _root="${1:-${REPO_ROOT:-$PWD}}"
     local _dist="$_root/dist/epam.js"
-    local _build_cmd="~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsup"
+    local _build_cmd="$HOME/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsup"
 
     if [ ! -d "$_root/src" ]; then
         return 0                     # nothing is built from here; nothing to be stale

@@ -1,0 +1,14 @@
+EPAM_FINAL_FALLBACK_MODEL=moonshotai/kimi-k3
+EPAM_FINAL_FALLBACK_PROVIDER=openrouter
+EPAM_MODEL_LADDER=
+EPAM_MODEL_LADDER_HIGH=MiniMax-M2.5=MiniMax-M3|MiniMax-M3=z-ai/glm-5.1|zhipuai/glm-z1-32b=z-ai/glm-5.1|zhipuai/glm-z1-9b=z-ai/glm-5.1|z-ai/glm-5.2=z-ai/glm-5.1|z-ai/glm-5.1=moonshotai/kimi-k3
+EPAM_MODEL_LADDER_HIGHEST=MiniMax-M2.5=MiniMax-M3|MiniMax-M3=z-ai/glm-5.1|zhipuai/glm-z1-32b=z-ai/glm-5.1|zhipuai/glm-z1-9b=z-ai/glm-5.1|z-ai/glm-5.2=z-ai/glm-5.1|z-ai/glm-5.1=moonshotai/kimi-k3
+EPAM_MODEL_LADDER_HIGHEST_START=z-ai/glm-5.1
+EPAM_MODEL_LADDER_HIGH_START=MiniMax-M3
+EPAM_MODEL_LADDER_MEDIUM=MiniMax-M2.5=MiniMax-M3|MiniMax-M3=z-ai/glm-5.2|zhipuai/glm-z1-32b=z-ai/glm-5.2|zhipuai/glm-z1-9b=z-ai/glm-5.2
+EPAM_MODEL_LADDER_MEDIUM_START=MiniMax-M2.5
+EPAM_MODEL_LADDER_TIER_ORDER=medium high highest
+EPAM_MODEL_PROVIDER_MAP=zhipuai/*=openrouter|moonshotai/*=openrouter|z-ai/*=openrouter|glm-*=openrouter|kimi-*=openrouter|deepseek/*=openrouter|MiniMax-*=minimax
+EPAM_ORCHESTRATION_PROVIDER=openrouter
+ORCH_GATE_PROVIDER=openrouter
+SPEC_MODE_PROVIDER=openrouter

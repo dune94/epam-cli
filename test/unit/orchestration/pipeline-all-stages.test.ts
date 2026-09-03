@@ -26,7 +26,7 @@ const PRD_PATH = join(REPO, 'orchestrations/travel-app-prd.canonical.json');
 const ORCH_SCRIPT = join(REPO, 'orchestrations/scripts/run-agent-orchestration.sh');
 const TIER3_SCRIPT = join(REPO, 'orchestrations/scripts/tier3-travel-app-run.sh');
 const SPEC_RUNNER = join(REPO, 'orchestrations/scripts/spec-mode-runner.js');
-const AI_RUN = join(REPO, 'orchestrations/scripts/ai-run.sh');
+const AI_RUN = join(REPO, 'orchestrations/scripts/llm-handler.sh');
 
 const prd = JSON.parse(readFileSync(PRD_PATH, 'utf8'));
 const implementationOrder: Record<string, string[]> = prd.implementationOrder ?? {};
@@ -687,15 +687,37 @@ describe('Expected output file contracts — PRD declares correct paths', () => 
 describe('spec-mode-runner.js — source code invariants', () => {
   const src = readFileSync(SPEC_RUNNER, 'utf8');
 
-  it('ladder builds a new execSpec (not reusing minimax execSpec args)', () => {
-    // The fix: ladder must NOT pass the original execSpec to runClaude.
-    // It must build { cmd: execSpec.cmd, args: ['--provider', ladderProvider] }
+  it('the runner keeps no ladder of its own — escalation belongs to the one channel', () => {
+    /*
+     * THE SECOND CHANNEL WAS REMOVED, AND THESE ASSERTIONS PINNED IT.
+     *
+     * spec-mode-runner.js carried its own escalation: build a ladderExec, race it against a
+     * timeout, hop to SPEC_PASS_LADDER_PROVIDER when MiniMax returned null. That is a second
+     * route around the central handler — every LLM call goes through llm-handler.sh, and
+     * escalation is the seam ladder's job, so a provider named in this file cannot be the
+     * answer to another provider failing.
+     *
+     * Four assertions demanded that machinery back. They now assert it stays gone: a
+     * reintroduced in-file ladder fails here, which is the guarantee actually worth holding.
+     */
+    for (const gone of [/ladderExec/, /SPEC_PASS_SKIP_LADDER/, /Promise\.race\(/, /SPEC_PASS_LADDER_PROVIDER\s*=/]) {
+      expect(src, `${gone} is back — the runner is escalating around the central handler`)
+        .not.toMatch(gone);
+    }
+  });
+
+  it('the runner dispatches through the central handler', () => {
+    expect(src, 'the spec runner no longer routes through the one channel')
+      .toMatch(/llm-handler\.sh|ai-run\.sh|runClaude\(/);
+  });
+
+  it.skip('ladder builds a new execSpec (not reusing minimax execSpec args)', () => {
     expect(src).toMatch(/ladderExec\s*=\s*\{/);
     expect(src).toMatch(/cmd:\s*execSpec\.cmd/);
     expect(src).toMatch(/args:\s*\[.*'--provider',\s*ladderProvider/);
   });
 
-  it('ladder calls runClaude with ladderExec (not original execSpec)', () => {
+  it.skip('ladder calls runClaude with ladderExec (not original execSpec)', () => {
     // After the provider bug fix, the ladder call must use ladderExec
     expect(src).toMatch(/runClaude\(ladderExec,/);
   });
@@ -722,7 +744,7 @@ describe('spec-mode-runner.js — source code invariants', () => {
     expect(src).toMatch(/VALID_AGENTS\.has\(/);
   });
 
-  it('SPEC_PASS_SKIP_LADDER env var can disable the ladder', () => {
+  it.skip('SPEC_PASS_SKIP_LADDER env var can disable the ladder', () => {
     expect(src).toMatch(/SPEC_PASS_SKIP_LADDER/);
   });
 
@@ -743,9 +765,17 @@ describe('spec-mode-runner.js — source code invariants', () => {
     expect(failBlock).not.toMatch(/SPEC_PASS_SKIP_LADDER/);
   });
 
-  it('ladder is guarded by Promise.race with a hard timeout', () => {
-    expect(src).toMatch(/Promise\.race\(/);
-    expect(src).toMatch(/ladder hard-timeout/);
+  it('a spec call cannot hang forever — the timeout is declared, not raced', () => {
+    // THE REQUIREMENT SURVIVED THE MECHANISM. This asserted a Promise.race around the in-file
+    // ladder's "ladder hard-timeout". The ladder is gone (escalation belongs to the one
+    // channel) and the race went with it — but a call that never returns is still the thing to
+    // prevent. runClaudeTimeoutMs owns that now, and reports a missing declaration itself
+    // rather than falling back to a literal.
+    expect(src, 'nothing bounds how long a spec call may run').toMatch(/runClaudeTimeoutMs/);
+    const i = src.indexOf('function runClaudeTimeoutMs');
+    expect(i, 'the timeout resolver is gone').toBeGreaterThan(-1);
+    expect(src.slice(i, i + 900), 'the timeout resolver does not resolve a timeout')
+      .toMatch(/timeoutMs|TIMEOUT/i);
   });
 });
 
@@ -764,10 +794,10 @@ describe('spec-mode-runner.js — functional: resolvePromptExec ladder contract'
 
   it('ladder execSpec built from minimax exec must NOT inherit minimax provider', () => {
     const minimaxExec = resolvePromptExec('/ai-run.sh', { AI_PROVIDER: 'minimax', AI_MODEL: 'MiniMax-M3' });
-    const ladderExec = { cmd: minimaxExec.cmd, args: ['--provider', 'qwen'] };
+    const ladderExec = { cmd: minimaxExec.cmd, args: ['--provider', 'openrouter'] };
     expect(ladderExec.args).not.toContain('minimax');
     expect(ladderExec.args).not.toContain('MiniMax-M3');
-    expect(ladderExec.args[ladderExec.args.indexOf('--provider') + 1]).toBe('qwen');
+    expect(ladderExec.args[ladderExec.args.indexOf('--provider') + 1]).toBe('openrouter');
   });
 
   it('buildAssignments rejects agent names longer than 20 chars (ENAMETOOLONG guard)', () => {
@@ -793,14 +823,32 @@ describe('run-agent-orchestration.sh — flow invariants', () => {
     expect(src).toMatch(/Specification pass FAILED[\s\S]{0,200}exit 1/);
   });
 
-  it('Step 0.7: cross-phase regression guard runs vitest before each phase', () => {
-    expect(src).toMatch(/Step 0\.7.*[Rr]egression guard/);
-    expect(src).toMatch(/vitest run/);
+  it('the regression guard runs the CODELINE\'S OWN test command before each phase', () => {
+    // NOT `vitest run`, AND THAT IS THE FIX, NOT THE REGRESSION.
+    //
+    // This pinned the step at "0.7" and its command at /vitest run/. It is Step 5, and the
+    // hardcoded runner was removed as a live defect: a `-x .bin/vitest` guard skipped the whole
+    // check on a jest repo and accepted a repair without re-running its proof
+    // (run-agent-orchestration.sh, 2026-07-22). Asserting the literal ratified the bug — a
+    // codeline that does not use vitest would pass this test and go unguarded.
+    expect(src).toMatch(/Step 5: Regression guard/);
+    expect(src, 'the guard no longer resolves the codeline\'s own test command')
+      .toMatch(/_codeline_test_command/);
+    expect(src, 'a hardcoded test runner is back in the guard').not.toMatch(/regression[\s\S]{0,200}vitest run/i);
   });
 
-  it('Step 0.7: regression guard failure exits 1 (not continues)', () => {
-    // "Regression guard FAILED" error message followed by exit 1 within a few lines
-    expect(src).toMatch(/Regression guard FAILED[\s\S]{0,400}exit 1/);
+  it('regression guard failure halts the run rather than continuing', () => {
+    const i = src.indexOf('Regression guard FAILED');
+    expect(i, 'the guard no longer reports a hard failure at all').toBeGreaterThan(-1);
+    // The window spans the explanatory block between the error and the halt — twenty lines
+    // naming the mechanism (testFailurePattern) that would legitimately have tolerated this.
+    // A window sized to the code alone measures how much comment sits in between, not whether
+    // the run stops.
+    const block = src.slice(i, src.indexOf('\nfi\n', i) + 1);
+    expect(block.length, 'the failure block did not bound — the assertion below is unanchored')
+      .toBeGreaterThan(0);
+    expect(block, 'the guard reports tests red and then carries on into the phase')
+      .toMatch(/\bexit 1\b/);
   });
 
   it('SKIP_REGRESSION_GUARD env var can bypass regression guard', () => {

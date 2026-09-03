@@ -39,7 +39,20 @@ export interface DeviceAuthorizationResponse {
   interval: number;
 }
 
-export type ProviderName = 'anthropic' | 'openai' | 'gemini';
+/**
+ * THE PROVIDERS, ONCE — as a value, because a type cannot be iterated.
+ *
+ * This was a type alone, so every caller that needed to LOOP over providers wrote the list again:
+ * provider.ts, doctor.ts, keys.ts and UserCommand.ts each carried their own copy, and by
+ * 2026-08-28 they had drifted — three listed three providers, the fourth listed six. Found by the
+ * hardcoding audit.
+ *
+ * The type is derived from the value below, so the two can never disagree: adding a provider here
+ * updates every caller and every exhaustiveness check at once.
+ */
+export const PROVIDER_NAMES = ['anthropic', 'openai', 'gemini'] as const;
+
+export type ProviderName = typeof PROVIDER_NAMES[number];
 
 export type ProviderCredentialSource =
   | 'epam_brokered_local'

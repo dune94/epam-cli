@@ -1,0 +1,29 @@
+{
+  "_what": "What each codeline IS and what an agent working inside it needs to know that the source does not say. Produced by the codeline-discovery agent during THIS run and rewritten every run — never accumulated, so nothing here is older than the run that wrote it. The engine splits this per codeline into each worktree's .epam/.",
+  "_shape": "Codeline names are TOP-LEVEL keys, because the engine extracts one with jq '.[$cl]'. Nesting them under another key parses fine and yields nothing for every codeline.",
+  "gotransit": {
+    "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
+    "facts": [
+      {
+        "text": "Tests are run with `jest`; the `pretest` script runs `npm run build:config` first (esbuild of next.config.source.ts), so a missing next.config.js will cause test failures even if the code is correct.",
+        "source": "package.json scripts: \"pretest\": \"npm run build:config\", \"test\": \"jest\""
+      },
+      {
+        "text": "Jest has a global coverage threshold of 60% for branches, functions, lines, and statements; changes that lower coverage below this will fail `test:coverage-check`.",
+        "source": "jest.config.js: coverageThreshold.global { branches: 60, functions: 60, lines: 60, statements: 60 }"
+      },
+      {
+        "text": "The husky pre-commit hook runs `npx lint-staged` and enforces branch naming with regex `^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$`; commits from branches not matching this pattern are rejected.",
+        "source": ".husky/pre-commit"
+      },
+      {
+        "text": "Commit messages must follow Jira-rules format enforced by commitlint with `commitlint-plugin-jira-rules`; the commit-msg hook runs `npx --no-install commitlint --edit`.",
+        "source": ".husky/commit-msg and commitlint.config.js { plugins: [\"commitlint-plugin-jira-rules\"], extends: [\"jira\"] }"
+      },
+      {
+        "text": "lint-staged runs `npm run check-types` (tsc --noEmit) on any staged `src/**/*.ts(x)` file, so TypeScript type errors will block the commit.",
+        "source": ".lintstagedrc.js: \"src/**/*.ts?(x)\": () => \"npm run check-types\""
+      }
+    ]
+  }
+}

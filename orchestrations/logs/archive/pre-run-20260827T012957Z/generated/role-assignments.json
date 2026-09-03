@@ -1,0 +1,14 @@
+[
+  {
+    "storyId": "MOCK3-1",
+    "codeline": "mocka",
+    "agentRole": "fare-schedule-engineer",
+    "reason": "The story is a fare-calculation boundary bug requiring an edit to the fare rule logic, which fare-schedule-engineer is the sole role able to author."
+  },
+  {
+    "storyId": "MOCK3-2",
+    "codeline": "mockb",
+    "agentRole": "fare-schedule-engineer",
+    "reason": "The story requires editing the formatStops code that renders the departure board, and fare-schedule-engineer is the only role offered capable of authoring such repository code changes."
+  }
+]

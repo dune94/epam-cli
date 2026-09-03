@@ -1,0 +1,20 @@
+{
+  "$why": [
+    "Generated from the codeline-bridge template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "__BRIDGE_PROFILE__\n\n## Variables for this run\n\n- BRIDGE_SRC_CODELINE: __BCL__\n- BRIDGE_SRC_DIR: __BWT__\n- BRIDGE_OUT_FILE: __BRIDGE_OUT__\n- BRIDGE_PRD_FILE: __BPRD__\n\nExtract the exported API surface from the '__BCL__' codeline files and write the cross-codeline contract to __BRIDGE_OUT__.\n\nThis run covers AMSD-1919 (Go-Checkout Page - Email & Confirm Email Case Sensitivity) in the gotransit codeline at /home/bradleyjerome/projects/metrolinx/next.gotransit.com. The prior survey of this codeline verified `src/components/pages/CheckoutPage` as an existing surface — focus extraction there and in any modules it imports for email/confirm-email validation, since that is where case-sensitivity handling for the checkout email fields would live.\n\nTwo established facts about this codeline to keep in mind while working:\n- A pre-commit hook runs `npx lint-staged` and rejects the commit unless the branch name matches `^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$` (source: .husky/pre-commit).\n- Tests run via `npm run test` (jest, configured by jest.config.js); `npm run test:coverage-check` runs `jest --coverage` and its pretest step runs `npm run build:config` first (source: package.json scripts).\n\nDo not run or rely on build/test commands that aren't declared above — this bridge step only extracts and records the exported surface, it does not modify code.",
+  "derivedFromSha256": "ac6209cc602f168e39ad8e6459ba79e96693037da4798d4b4719e1d64a772eed",
+  "derivedFromVersion": 1,
+  "id": "codeline-bridge",
+  "placeholders": [
+    "__BCL__",
+    "__BPRD__",
+    "__BRIDGE_OUT__",
+    "__BRIDGE_PROFILE__",
+    "__BWT__"
+  ],
+  "mayBeEmpty": []
+}

@@ -126,6 +126,10 @@ function runGate(dir: string, env: Record<string, string> = {}) {
      # Mirrors production: claude.sh sources lib/git-ops.sh, which sources lib/engine-paths.sh.
      # engine_paths_filter must be in scope or the gate's pipeline yields nothing and passes.
      . ${JSON.stringify(join(__dirname, '../../../orchestrations/scripts/lib/engine-paths.sh'))}
+     # evidence_window sizes the findings the gate reports. Undefined, \`head -n ""\` fails and the
+     # feedback renders its header over an EMPTY list — a block that looks like it blocked and names
+     # nothing the writer can fix. Same omission that hid two other guards' findings.
+     . ${JSON.stringify(join(__dirname, '../../../orchestrations/scripts/lib/evidence-windows.sh'))}
 ${shippedFn()}
      run_repo_lint_verification STORY-1 ${JSON.stringify(out)}; echo "RC=$?"
      echo "__VF_START__"; printf '%s' "\${VERIFICATION_FAILURE:-}"; echo "__VF_END__"`,

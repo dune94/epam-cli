@@ -42,8 +42,19 @@
 # can no longer do is mistake "no project" for "no ladders declared".
 export_model_ladders() {
     local _settings="${1:-${EPAM_LLM_SETTINGS_FILE:-}}"
+    # A PATH BUILT FROM AN UNSET VARIABLE IS NOT A MISSING FILE. Callers resolve this as
+    # "${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json", so an unset config dir yields
+    # /llm-settings.json — the filesystem ROOT — and "not found" then sends whoever reads it
+    # hunting for a file rather than for the variable nobody set. Name the variable instead.
+    case "$_settings" in
+        /*/*) : ;;
+        /*)
+            echo "[model-ladders] EPAM_PROJECT_CONFIG_DIR is not set, so the settings path resolved to '$_settings' at the filesystem root — no ladder chains exported. Set EPAM_PROJECT_CONFIG_DIR, or pass EPAM_LLM_SETTINGS_FILE." >&2
+            return 1
+            ;;
+    esac
     [ -n "$_settings" ] || {
-        echo "[model-ladders] no settings file given — no ladder chains exported" >&2
+        echo "[model-ladders] no settings file given, and neither EPAM_LLM_SETTINGS_FILE nor EPAM_PROJECT_CONFIG_DIR is set — no ladder chains exported" >&2
         return 1
     }
     [ -f "$_settings" ] || {
@@ -54,6 +65,61 @@ export_model_ladders() {
         echo "[model-ladders] jq not on PATH — cannot read $_settings, no ladder chains exported" >&2
         return 1
     }
+    # THE FILE THE CALLER HANDED US, VALIDATED BEFORE THE MERGE.
+    #
+    # There is a JSON check below, but it runs AFTER the resolver merges engine defaults in — and
+    # the resolver ignores a project file it cannot parse and returns the defaults, so that check
+    # only ever sees valid JSON. A malformed llm-settings.json therefore exported the engine's
+    # ladders and returned 0, and the project's own chains vanished with nothing said. A run would
+    # climb a ladder its project never declared.
+    #
+    # Checked here, on the ORIGINAL path, where a parse failure is still attributable to the caller.
+    jq -e . "$_settings" >/dev/null 2>&1 || {
+        echo "[model-ladders] settings file is not valid JSON: $_settings — refusing to export" >&2
+        echo "[model-ladders] engine defaults would silently replace this project's ladders." >&2
+        return 1
+    }
+    # THE ENGINE BASE, MERGED IN BEFORE ANYTHING IS READ.
+    #
+    # A project states only what it changes — the rule config/llm-defaults.json already applies
+    # to budgets, and which ladders were left out of. Without this, the seam layer (which
+    # resolves through lib/llm-settings-resolve.js) and this reader would answer the same
+    # question differently, and a project inheriting a chain would get one here and none there.
+    #
+    # The merge is the resolver's, not a second copy of the rule: one place decides what a
+    # project actually runs with. If node or the resolver is unavailable the raw project file is
+    # used, which is exactly the behaviour before inheritance existed — additive, never a new
+    # way to fail.
+    # ONLY MERGE WHEN THE GIVEN FILE IS THE ONE THE RESOLVER WOULD READ.
+    #
+    # The resolver takes a project DIRECTORY and reads llm-settings.json from it. Handed any other
+    # path — a fixture, a set file, a copy under a different name — it finds no project settings,
+    # returns the engine defaults, and those replaced the file the caller explicitly asked for. The
+    # caller's own ladders vanished with nothing said: "I gave you this file, you used another one."
+    #
+    # Inheritance is for a PROJECT stating only what it changes, which is exactly the case where the
+    # basename matches. Anywhere else, the explicit path is the answer.
+    local _merged=""
+    if [ "$(basename "$_settings")" != "llm-settings.json" ]; then
+        _merged=""
+    elif [ -n "${NODE_BIN:-}" ] || command -v node >/dev/null 2>&1; then
+        local _resolver
+        _resolver="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/llm-settings-resolve.js"
+        if [ -f "$_resolver" ]; then
+            _merged="$(mktemp)"
+            if "${NODE_BIN:-node}" -e '
+              const { resolveLlmSettings } = require(process.argv[1]);
+              const path = require("path");
+              const out = resolveLlmSettings({ projectConfigDir: path.dirname(process.argv[2]) });
+              process.stdout.write(JSON.stringify(out));
+            ' "$_resolver" "$_settings" > "$_merged" 2>/dev/null && [ -s "$_merged" ]; then
+                _settings="$_merged"
+            else
+                rm -f "$_merged"; _merged=""
+            fi
+        fi
+    fi
+
     jq -e . "$_settings" >/dev/null 2>&1 || {
         echo "[model-ladders] settings file is not valid JSON: $_settings — no ladder chains exported" >&2
         return 1

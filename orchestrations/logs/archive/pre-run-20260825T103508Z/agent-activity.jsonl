@@ -1,0 +1,1 @@
+{"event_id":"evt-cost-20260825092433292-666272","timestamp":"2026-08-25T09:24:33.292Z","agent":"codeline-discovery","story_id":null,"phase":null,"type":"cost_snapshot","model":"z-ai/glm-5.2","provider":"qwen","detail":{"costUsd":0.1167,"tokensIn":397902,"tokensOut":3257,"tokensCached":360832,"costUnknown":false,"costIsEstimate":false,"turns":1,"source":"spec-mode-runner"}}

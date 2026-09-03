@@ -3,7 +3,7 @@
  * and only fall back to the local price table when it does not.
  *
  * THE BUG (backlog B7 + the kimi-k3 $0 report, both the same defect):
- * QwenProvider already asks OpenRouter for real cost (`usage: { include: true }`)
+ * OpenRouterProvider already asks OpenRouter for real cost (`usage: { include: true }`)
  * and surfaces it as `response.usage.costUsd` — the amount actually charged.
  * TracedProvider then IGNORED it and recomputed from MODEL_PRICING:
  *
@@ -36,7 +36,7 @@ const UNPRICED_MODEL = 'moonshotai/kimi-k3';
 
 function fakeProvider(usage: ProviderResponse['usage']): LLMProvider {
   return {
-    name: 'qwen',
+    name: 'openrouter',
     complete: async (_req: ProviderRequest): Promise<ProviderResponse> => ({
       content: [{ type: 'text', text: 'ok' } as any],
       stopReason: 'end_turn',

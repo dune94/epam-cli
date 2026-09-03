@@ -2,7 +2,6 @@
 # ──────────────────────────────────────────────────────────────────────────────
 # Tier 1 (Ollama): Real-model pipeline validation — zero paid credits.
 #
-# Uses local Ollama (qwen2.5:1.5b) as the LLM backend. Unlike the Docker mock
 # server, Ollama actually generates responses — so it exercises error recovery,
 # RalphWiggumLoop, retry paths, and tool-call parsing in a way the mock cannot.
 #
@@ -11,7 +10,6 @@
 # without spending OpenRouter credits.
 #
 # What this validates beyond the mock:
-#   • QwenProvider model-name override (EPAM_QWEN_MODEL_OVERRIDE=qwen2.5:1.5b)
 #   • Tool-call parsing with real Ollama streaming responses
 #   • RalphWiggumLoop fires and recovers when model writes bad code
 #   • AgentRunner handles slow responses (Ollama ~2–5 tok/s on quiet machine)
@@ -21,12 +19,17 @@
 # Usage:
 #   bash orchestrations/scripts/tier1-ollama-run.sh
 # ──────────────────────────────────────────────────────────────────────────────
+
+# A launcher decides what a run costs. It does not get to do that untested.
+_scg_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/stage-coverage-gate.sh"
+# shellcheck source=/dev/null
+[ -f "$_scg_lib" ] && . "$_scg_lib" && require_stage_coverage launch || exit 1
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 OLLAMA_URL="http://127.0.0.1:11434/v1"
-OLLAMA_MODEL="qwen2.5:1.5b"
 LOG_FILE="/tmp/tier1-ollama-run-$(date +%Y%m%dT%H%M%S).log"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
@@ -79,7 +82,7 @@ success "hello-world reset to fixture-v1"
 # ── 4. Run the pipeline ────────────────────────────────────────────────────────
 info "Launching pipeline (log: $LOG_FILE)"
 info "  OPENROUTER_BASE_URL=$OLLAMA_URL"
-info "  EPAM_QWEN_MODEL_OVERRIDE=$OLLAMA_MODEL"
+info "  EPAM_OPENROUTER_MODEL_OVERRIDE=$OLLAMA_MODEL"
 info "  RalphWiggumLoop: ENABLED (1 agent, 5-min timeout)"
 info "  Expected runtime: 10–60 min on busy machine"
 echo ""
@@ -95,7 +98,7 @@ pre_run_reset_or_abort --prd "$PRD_FILE"
 OPENROUTER_API_KEY="ollama" \
 OPENROUTER_BASE_URL="$OLLAMA_URL" \
 EPAM_API_KEY_OPENROUTER="ollama" \
-EPAM_QWEN_MODEL_OVERRIDE="$OLLAMA_MODEL" \
+EPAM_OPENROUTER_MODEL_OVERRIDE="$OLLAMA_MODEL" \
 PRD_FILE="$PRD_FILE" \
 SKIP_REGRESSION_GUARD=true \
 SKIP_CPA=1 \

@@ -3,7 +3,7 @@
  * not hardcoded tier arrays. Root cause of -80% variance: estimate-stories.sh used
  * effort-tier arrays (Opus/Sonnet/Haiku rates) for models like moonshotai/kimi-k2
  * and MiniMax-M3, causing 2-10x misestimates. calibrate.py had a duplicate MODEL_PRICING
- * dict with old qwen3.7-* model names that never matched live logs.
+ * dict with old openrouter3.7-* model names that never matched live logs.
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync, existsSync, writeFileSync, unlinkSync } from 'node:fs';
@@ -85,14 +85,20 @@ describe('estimate-stories.sh pricing — data-driven', () => {
     expect(lookupCall).toBeLessThan(caseBlock);
   });
 
-  it('QWEN_PRICING tier arrays are kept as fallback only (not the primary path)', () => {
+  it('openrouter_PRICING tier arrays are kept as fallback only (not the primary path)', () => {
     // The fallback is inside an else block following the model-pricing lookup
     const modelBlock  = estimateSrc.indexOf('_model_prices=$(lookup_model_pricing');
-    const qwenPricing = estimateSrc.indexOf('QWEN_PRICING_INPUT', modelBlock);
+    // THE NAME IT ACTUALLY HAS. The lower-case spelling stopped existing when the tier arrays were
+    // renamed, so indexOf returned -1 and the assertion "must appear after the else" compared -1
+    // against a real offset. A guard that cannot find its subject proves nothing about ordering —
+    // it just fails, or worse, would have passed vacuously had the comparison run the other way.
+    const openrouterPricing = estimateSrc.indexOf('OPENROUTER_PRICING_INPUT[', modelBlock);
+    expect(openrouterPricing, 'the fallback tier array was not found at all — the shape has changed')
+      .toBeGreaterThan(-1);
     const elseBlock   = estimateSrc.indexOf('else', modelBlock);
     expect(elseBlock).toBeGreaterThan(-1);
-    // QWEN_PRICING must appear AFTER the else (inside the fallback branch)
-    expect(qwenPricing).toBeGreaterThan(elseBlock);
+    // openrouter_PRICING must appear AFTER the else (inside the fallback branch)
+    expect(openrouterPricing).toBeGreaterThan(elseBlock);
   });
 });
 
@@ -103,12 +109,12 @@ describe('calibrate.py pricing — data-driven', () => {
     expect(calibrateSrc).not.toContain('MODEL_PRICING = {');
   });
 
-  it('does not reference the old qwen3.7-max model name', () => {
-    expect(calibrateSrc).not.toContain('qwen3.7-max');
+  it('does not reference the old openrouter3.7-max model name', () => {
+    expect(calibrateSrc).not.toContain('openrouter3.7-max');
   });
 
-  it('does not reference the old qwen3.7-plus model name', () => {
-    expect(calibrateSrc).not.toContain('qwen3.7-plus');
+  it('does not reference the old openrouter3.7-plus model name', () => {
+    expect(calibrateSrc).not.toContain('openrouter3.7-plus');
   });
 
   it('loads model-pricing.json from the script directory', () => {

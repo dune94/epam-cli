@@ -19,13 +19,19 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { orchestratorSource } from '../../helpers/orchestrator-source';
 
 const ROOT = join(__dirname, '../../..');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
+// THE PROPERTY IS ABOUT THE SHIPPED CODE, WHICH NOW LIVES IN TWO FILES. run_orch_prompt was
+// moved out of the 11,213-line orchestrator into lib/orch-prompt.sh so a test could reach it
+// without running the pipeline — but the retry CALL SITES that set the climb stayed behind. A
+// test that reads only one of them checks half the path, so both are read.
 const ORCH = join(SCRIPTS, 'run-agent-orchestration.sh');
+const ORCH_PROMPT = join(SCRIPTS, 'lib/orch-prompt.sh');
 const NODE = process.execPath;
 
-const src = () => readFileSync(ORCH, 'utf8');
+const src = () => orchestratorSource();
 const code = () => src().split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
 
 /** Run a ladder expression with mock3's ladders loaded, as the engine does. */

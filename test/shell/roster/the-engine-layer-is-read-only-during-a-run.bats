@@ -13,6 +13,11 @@
 # read during a run and written only by a deliberate change to the repository.
 # ─────────────────────────────────────────────────────────────────────────────
 
+# `env` does not execute its command in every environment this suite runs in — on 2026-08-28
+# `env FOO=1 echo hello` produced no output and exited 0, so these assertions ran against
+# nothing and failed for a reason that had nothing to do with the pipeline.
+load "../helpers/env-run"
+
 setup() {
     REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
     SCRIPTS="$REPO_ROOT/orchestrations/scripts"
@@ -122,7 +127,7 @@ JS
     # resolver instead of reading it.
     # -u before the assignments: env rejects it after one, and the failure surfaced as the
     # resolver returning an error string rather than a path.
-    run env -u KB_ROOT EPAM_PROJECT_CONFIG_DIR="$BATS_TEST_TMPDIR/proj" "$NODE" -e '
+    run env_run -u KB_ROOT EPAM_PROJECT_CONFIG_DIR="$BATS_TEST_TMPDIR/proj" "$NODE" -e '
       const path = require("path");
       const store = require(process.argv[1]);
       process.stdout.write(store.rootPath ? store.rootPath() : "");
@@ -134,7 +139,7 @@ JS
 }
 
 @test "KB_ROOT still overrides — it is the deliberate escape hatch" {
-    run env EPAM_PROJECT_CONFIG_DIR="$BATS_TEST_TMPDIR/proj" KB_ROOT="$BATS_TEST_TMPDIR/explicit" \
+    run env_run EPAM_PROJECT_CONFIG_DIR="$BATS_TEST_TMPDIR/proj" KB_ROOT="$BATS_TEST_TMPDIR/explicit" \
         "$NODE" -e '
       const store = require(process.argv[1]);
       store.configure({ root: process.env.KB_ROOT });
@@ -144,7 +149,7 @@ JS
 }
 
 @test "with NO project declared the engine path remains — engine-side tooling has no project" {
-    run env -u EPAM_PROJECT_CONFIG_DIR -u KB_ROOT "$NODE" -e '
+    run env_run -u EPAM_PROJECT_CONFIG_DIR -u KB_ROOT "$NODE" -e '
       const store = require(process.argv[1]);
       process.stdout.write(store.rootPath ? store.rootPath() : "");
     ' "$SCRIPTS/lib/kb-store.js"

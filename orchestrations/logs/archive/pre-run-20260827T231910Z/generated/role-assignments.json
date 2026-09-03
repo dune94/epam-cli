@@ -1,0 +1,14 @@
+[
+  {
+    "storyId": "MOCK3-1",
+    "codeline": "mocka",
+    "agentRole": "fare-rules-engineer",
+    "reason": "This story requires fixing the age boundary condition in fare rule calculation, which is the core expertise of the fare-rules-engineer."
+  },
+  {
+    "storyId": "MOCK3-2",
+    "codeline": "mockb",
+    "agentRole": "schedule-display-engineer",
+    "reason": "This story requires fixing the formatStops rendering logic to include the final stop in the departure board display, which is the schedule-display-engineer's domain."
+  }
+]

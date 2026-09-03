@@ -1,0 +1,90 @@
+{
+  "id": "jira-sourced-1787707559376",
+  "title": "metrolinx",
+  "version": "1.0.0",
+  "lastUpdated": "2026-08-26",
+  "source": "jira",
+  "sourceProject": "AMSD",
+  "project": {
+    "name": "metrolinx",
+    "outputDirs": [
+      {
+        "codeline": "gotransit",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+      }
+    ],
+    "outputDir": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+  },
+  "implementationOrder": {
+    "scaffold": [],
+    "core": [
+      "AMSD-1919"
+    ]
+  },
+  "stories": [
+    {
+      "id": "AMSD-1919",
+      "jiraKey": "AMSD-1919",
+      "title": "Go‑Checkout Page - Email & Confirm Email Case Sensitivity",
+      "description": "  \n  On the  Go‑Checkout  page related to the  Email  and  Confirm Email  fields. When the same email is entered but with different letter casing (e.g., uppercase in one field and lowercase in the other), the system flags it as a mismatch. \n\nemail comparisons are case‑insensitive. It should not give error message for same email address regardless it is upper case or lower case.",
+      "acceptanceCriteria": [],
+      "codeline": "gotransit",
+      "status": "pending",
+      "completed": false,
+      "agentRole": null,
+      "agentGroup": "main",
+      "effort": "medium",
+      "estimate": null,
+      "acGateVerdict": "enrichable",
+      "acGateReason": "brownfield story with no acceptance criteria — AC processing skipped (VCs are derived from the description); codeline classified only",
+      "issueType": "Bug",
+      "components": [
+        "GO"
+      ],
+      "ticketComments": [
+        {
+          "text": "hi , could you please take a look. The requirements say: To continue I have to enter the same Email as in the Email field Or I will see the Emails do not match error message ( TRM774 ) when I remove focus from the field",
+          "author": "V-Svitlana Arefieva",
+          "created": "2026-03-25T04:33:23.904-0400"
+        },
+        {
+          "text": "Discussed Convert from the Bug to the User story , , please review and advise whether any changes needed on this form? To be prioritized separately by the PO team",
+          "author": "V-EPAM-Ivan Mikhailov",
+          "created": "2026-03-26T10:22:58.114-0400"
+        },
+        {
+          "text": "If we closely look this ticket today we are doing right thing, but now we want to enhance it by allowing case-insensitive check. Some orgs ignore period(.) in email address, which is not standard. As this was very basic scenario, just because there is no explicit mention to support Case-insensitive it wasn't implemented this way( AC4 ) Enhancements ~ AMD. Pls share your views.",
+          "author": "V-NandaKumar KR",
+          "created": "2026-07-28T12:55:49.205-0400"
+        }
+      ],
+      "ticketLinks": [
+        {
+          "url": "https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3561422849/Checkout.+Page+layout#AC4",
+          "context": "hi , could you please take a look. The requirements say: To continue I have to enter the same Email as in the Email field Or I will see the Emails do not match error message ( TRM774 ) when I remove focus from the field",
+          "author": "V-Svitlana Arefieva",
+          "created": "2026-03-25T04:33:23.904-0400"
+        },
+        {
+          "url": "https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3052666881/2.2.4+GO+Dictionary+of+Terms.+Part+3#TRM774",
+          "context": "hi , could you please take a look. The requirements say: To continue I have to enter the same Email as in the Email field Or I will see the Emails do not match error message ( TRM774 ) when I remove focus from the field",
+          "author": "V-Svitlana Arefieva",
+          "created": "2026-03-25T04:33:23.904-0400"
+        },
+        {
+          "url": "https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3962339955/March+26+2026",
+          "context": "Discussed Convert from the Bug to the User story , , please review and advise whether any changes needed on this form? To be prioritized separately by the PO team",
+          "author": "V-EPAM-Ivan Mikhailov",
+          "created": "2026-03-26T10:22:58.114-0400"
+        },
+        {
+          "url": "https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3561422849/Checkout.+Page+layout?xpis=eyJicmlkZ2UiOiJzbWFydExpbmtzIiwiaWQiOiIxNzg1MjUxODA4MDAzIiwic291cmNlIjoiamlyYS1KU1cifQ%3D%3D#AC4",
+          "context": "If we closely look this ticket today we are doing right thing, but now we want to enhance it by allowing case-insensitive check. Some orgs ignore period(.) in email address, which is not standard. As this was very basic scenario, just because there is no explicit mention to support Case-insensitive it wasn't implemented this way( AC4 ) Enhancements ~ AMD. Pls share your views.",
+          "author": "V-NandaKumar KR",
+          "created": "2026-07-28T12:55:49.205-0400"
+        }
+      ]
+    }
+  ],
+  "currentIteration": 1
+}

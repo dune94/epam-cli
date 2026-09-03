@@ -3,7 +3,6 @@
 IS A MODEL ALREADY PULLED IN A LOCAL OLLAMA?
 
 Reads an Ollama /api/tags response and exits 0 when the wanted model is among the installed ones.
-The match is a substring, because a tag ("qwen2.5:7b") names the same model as its bare name.
 
 Lifted out of tier1-ollama-run.sh on 2026-08-16, where it was a `python3 -c "..."` string with the
 model name interpolated into its own source — twice, once in the test and once in the message, so a

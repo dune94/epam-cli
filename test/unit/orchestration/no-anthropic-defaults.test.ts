@@ -1,7 +1,7 @@
 /**
  * No orchestration script may DEFAULT to an Anthropic model/provider.
  *
- * This pipeline runs on OpenRouter (provider `qwen`, models z-ai/glm-5.x,
+ * This pipeline runs on OpenRouter (provider `openrouter`, models z-ai/glm-5.x,
  * moonshotai/kimi-*). Found 2026-07-25 by a static parameter audit: 8 sites
  * carried `${ORCH_GATE_PROVIDER:-anthropic}` / `${ORCH_GATE_MODEL:-claude-haiku-4-5-20251001}`
  * as their fallback, including the two most consequential brownfield steps —
@@ -10,7 +10,7 @@
  * They were invisible because the tier3 runner exports both vars, so the fallback
  * only fires on some other launch path (orchestrate.sh, a direct call, a test) —
  * where it silently routes to a different vendor, or worse pairs them:
- * `epam run --provider qwen --model claude-haiku-4-5-20251001`.
+ * `epam run --provider openrouter --model claude-haiku-4-5-20251001`.
  *
  * The user's question when this class first surfaced: "why are you using claude
  * models for testing when we are not using in pipeline?" A default is a silent
@@ -33,7 +33,7 @@ function* files(dir: string): Generator<string> {
 const ANTHROPIC_DEFAULT =
   /(:-\s*(anthropic|claude-[a-z0-9.-]+)\}|\|\|\s*['"](anthropic|claude-[a-z0-9.-]+)['"])/;
 
-describe('no Anthropic defaults in a qwen/OpenRouter pipeline', () => {
+describe('no Anthropic defaults in a openrouter/OpenRouter pipeline', () => {
   it('no script falls back to an Anthropic provider or model', () => {
     const hits: string[] = [];
     for (const f of files(SCRIPTS)) {

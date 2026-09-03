@@ -1,0 +1,23 @@
+{
+  "base": "db405220d8e30f52f8ee9a32f8365a0d589672d52e32df91475d4481e27d6db5",
+  "roles": "88832fe89673d3105464843cafe58e599b2f12f9efcd9e035bf11b144f56ac5c",
+  "usesRoles": true,
+  "doc": {
+    "$why": [
+      "Generated from the assign-agent-roles template by the agent that minted this project's roster.",
+      "The template is never executed; this copy is. Placeholders were checked against the",
+      "template before installation — see lib/project-prompt-contract.js."
+    ],
+    "authority": "project",
+    "body": "Assign an implementation agent role to every story below.\n\nAVAILABLE ROLES — these are this project's own engineering roles. Choose from these and\nnothing else; the name you return must match one of them verbatim:\n__ROLE_BLOCK__\n\nSTORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:\n__STORY_BLOCK__\n\nPick the role whose stated expertise actually covers the work the story describes. If two\nroles could plausibly own a story, prefer the one whose brief names the surface the story\ntouches.\n\nTHE UNIT OF ASSIGNMENT IS A (STORY, CODELINE) PAIR, NOT A STORY. A story listing three\ncodelines needs THREE assignments — the repositories differ, so the right owner can differ.\nCount the codelines listed against each story and return exactly that many assignments for it,\nnaming the codeline on every one. A story is not assigned until every codeline it lists is.\n\nTHE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —\nthe one whose brief names those files or directories. A role whose brief is about settings in\na vendor's console, or about documentation, cannot deliver a story here: the agent's output is\na change in a repository. Live 2026-08-07: this story went to the one role of three that owned\nno source files, and all such a role can produce is a configuration note. Where the story needs\nboth console configuration and code, the assignment goes to the role that authors the code, and the configuration work is part of that story rather than a reason to reassign it.\n\nThis project has two codelines, each a small TypeScript library tested with vitest:\n- mocka (/home/bradleyjerome/projects/mock3/mock-a) — home of MOCK3-1 (riders aged exactly 65 charged adult fare), the bug lives in the fare-age comparison in src/fares.ts.\n- mockb (/home/bradleyjerome/projects/mock3/mock-b) — home of MOCK3-2 (departure board omits the final stop), the bug lives in the stop-rendering loop bound in src/schedule.ts.\n\nEach codeline pairs an investigator with an implementer: mocka-detective reads mocka's src/fares.ts and its existing tests to confirm the exact comparison operator and coverage before fare-rules-engineer edits it; mockb-detective reads mockb's src/schedule.ts and its existing tests to confirm the loop-bound mismatch and coverage before schedule-display-engineer edits it. Investigators and implementers are separate assignments on the same (story, codeline) pair — do not collapse them into one. Both codelines build and test with vitest and typescript; do not assume any other toolchain.",
+    "derivedFromSha256": "db4f9512aafcf3adafbdafcef9cf260adc8f49be576f18a2b82d8df9a0bc940b",
+    "derivedFromVersion": 1,
+    "id": "assign-agent-roles",
+    "placeholders": [
+      "__ROLE_BLOCK__",
+      "__STORY_BLOCK__"
+    ],
+    "mayBeEmpty": []
+  },
+  "reviewed": true
+}

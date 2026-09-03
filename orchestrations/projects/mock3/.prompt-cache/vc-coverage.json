@@ -1,0 +1,23 @@
+{
+  "base": "dc9817663bb4eb86680e3f41c4597fef0c62e1aa4f9d1dcd364f79066cc97f16",
+  "roles": "88832fe89673d3105464843cafe58e599b2f12f9efcd9e035bf11b144f56ac5c",
+  "usesRoles": false,
+  "doc": {
+    "$why": [
+      "Generated from the vc-coverage template by the agent that minted this project's roster.",
+      "The template is never executed; this copy is. Placeholders were checked against the",
+      "template before installation — see lib/project-prompt-contract.js."
+    ],
+    "authority": "project",
+    "body": "You are checking whether a test suite covers ONE specific requirement.\n\nThis is a mock3 project. The codebase uses vitest for testing and TypeScript for type safety. Test files use vitest's describe/it/expect APIs. When evaluating coverage, remember that:\n- A test whose name or title suggests it covers the requirement is irrelevant if its assertions do not actually exercise it\n- Boundary conditions (exact values, loop bounds, array indices) are easy to miss: a test named correctly but checking only approximate or adjacent values does not cover the actual boundary\n- Requirements that specify something must NOT happen are not covered by tests that verify something DOES happen, even if the wording overlaps\n\n## The requirement\n__VERIFICATION_CRITERION__\n\n## The test file (complete)\n```\n__TEST_SOURCE__\n```\n\nAnswer ONE question: does this test file contain a case that would FAIL if this\nrequirement were violated?\n\nJudge the ASSERTIONS, not the titles.\n\nOutput ONLY this JSON, nothing else:\n{\"covered\": true|false, \"case\": \"<the test case name that covers it, or empty>\", \"why\": \"<one sentence>\"}",
+    "derivedFromSha256": "79377c166256044a0c88d4179fdbfbc9d800d74e6cdd9ee4ecc0db817527f795",
+    "derivedFromVersion": 1,
+    "id": "vc-coverage",
+    "placeholders": [
+      "__TEST_SOURCE__",
+      "__VERIFICATION_CRITERION__"
+    ],
+    "mayBeEmpty": []
+  },
+  "reviewed": true
+}

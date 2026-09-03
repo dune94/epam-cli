@@ -1,0 +1,75 @@
+{
+  "storyId": "MOCK3-2",
+  "seam": "search-query",
+  "rule": "A search term is USEFUL when it names something that exists in the repository being searched — a symbol, function, file, module, or a domain noun the code itself uses. It is NOISE when it names the ticket's packaging rather than its subject: routing tags, brand or product labels, ticket prefixes, status words, people, or generic prose.\nReturn as BLACKLIST every candidate that names packaging rather than subject, or that resolves to nothing in the index. Return as WHITELIST the terms that name the capability or code under discussion.",
+  "statements": [
+    "The departure board omits the final stop",
+    "formatStops renders every stop except the last one, so a three-stop line shows two. The journey length reported by totalMinutes is correct, which is why the omission has gone unnoticed."
+  ],
+  "payload": {
+    "blacklist": [],
+    "whitelist": [
+      {
+        "term": "formatstops",
+        "reason": "function in src/schedule.ts:4 under discussion; confirmed via index"
+      },
+      {
+        "term": "totalminutes",
+        "reason": "function in src/schedule.ts:12 under discussion; confirmed via index"
+      },
+      {
+        "term": "stop",
+        "reason": "domain noun / Stop type (src/schedule.ts:2) and statement subject"
+      },
+      {
+        "term": "stops",
+        "reason": "parameter/array name used throughout schedule.ts and the statements"
+      },
+      {
+        "term": "departure board",
+        "reason": "domain concept named in the file's own doc comment (src/schedule.ts:1) and in the statements"
+      },
+      {
+        "term": "journey length",
+        "reason": "observable behavior described in the statements, produced by totalMinutes"
+      },
+      {
+        "term": "schedule.ts",
+        "reason": "file containing the implementation under discussion"
+      }
+    ]
+  },
+  "normalised": {
+    "blacklist": [],
+    "whitelist": [
+      {
+        "term": "formatstops",
+        "reason": "function in src/schedule.ts:4 under discussion; confirmed via index"
+      },
+      {
+        "term": "totalminutes",
+        "reason": "function in src/schedule.ts:12 under discussion; confirmed via index"
+      },
+      {
+        "term": "stop",
+        "reason": "domain noun / Stop type (src/schedule.ts:2) and statement subject"
+      },
+      {
+        "term": "stops",
+        "reason": "parameter/array name used throughout schedule.ts and the statements"
+      },
+      {
+        "term": "departure board",
+        "reason": "domain concept named in the file's own doc comment (src/schedule.ts:1) and in the statements"
+      },
+      {
+        "term": "journey length",
+        "reason": "observable behavior described in the statements, produced by totalMinutes"
+      },
+      {
+        "term": "schedule.ts",
+        "reason": "file containing the implementation under discussion"
+      }
+    ]
+  }
+}

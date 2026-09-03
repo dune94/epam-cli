@@ -24,7 +24,9 @@ while IFS= read -r line; do
 
   STORY_ID=$(echo "$line" | jq -r '.story_id')
   STARTED_AT=$(echo "$line" | jq -r '.started_at')
+  export STARTED_AT
   ENDED_AT=$(echo "$line" | jq -r '.ended_at')
+  export ENDED_AT
   RESOLVED_MODEL=$(echo "$line" | jq -r '.resolvedModel // ""')
 
   # phase-cost.jsonl also carries phase-level pipeline records (agent_type

@@ -202,15 +202,29 @@ describe('claude.sh — run_prd_change_reviewer verdict is not polluted by its o
   const body    = claudeSrc.slice(fnStart, fnEnd);
 
   it('redirects the REJECTED warning to stderr (does not pollute the captured verdict)', () => {
-    const idx = body.indexOf('REJECTED');
-    const line = body.slice(body.lastIndexOf('\n', idx), body.indexOf('\n', idx));
-    expect(line).toMatch(/>&2/);
+    // THE LOG CALL, NOT THE FIRST TIME THE WORD APPEARS. A comment in this function mentions
+    // AUTO-APPROVED while explaining the defect, and indexOf found that prose instead of the line
+    // that logs — asserting >&2 on a comment, which of course has none. A guard a comment can
+    // break is measuring text, not behaviour.
+    const lines = body.split('\n')
+      .filter((l) => /\b(log|warning|error|success)\b/.test(l) && l.includes('REJECTED')
+        && !l.trim().startsWith('#'));
+    expect(lines.length, 'no REJECTED log call found at all — the shape has changed')
+      .toBeGreaterThan(0);
+    for (const line of lines) expect(line, `this REJECTED log line pollutes the captured verdict`).toMatch(/>&2/);
   });
 
   it('redirects the APPROVED log line to stderr (does not pollute the captured verdict)', () => {
-    const idx = body.indexOf('APPROVED');
-    const line = body.slice(body.lastIndexOf('\n', idx), body.indexOf('\n', idx));
-    expect(line).toMatch(/>&2/);
+    // THE LOG CALL, NOT THE FIRST TIME THE WORD APPEARS. A comment in this function mentions
+    // AUTO-APPROVED while explaining the defect, and indexOf found that prose instead of the line
+    // that logs — asserting >&2 on a comment, which of course has none. A guard a comment can
+    // break is measuring text, not behaviour.
+    const lines = body.split('\n')
+      .filter((l) => /\b(log|warning|error|success)\b/.test(l) && l.includes('APPROVED')
+        && !l.trim().startsWith('#'));
+    expect(lines.length, 'no APPROVED log call found at all — the shape has changed')
+      .toBeGreaterThan(0);
+    for (const line of lines) expect(line, `this APPROVED log line pollutes the captured verdict`).toMatch(/>&2/);
   });
 
   it('no other warning()/log()/error()/success() call inside the function is missing >&2', () => {
@@ -316,7 +330,10 @@ describe('claude.sh — reviewer wired before skill note persistence', () => {
     // read mutable. The concern this test guards is unchanged: nothing is persisted until
     // the reviewer has passed it.
     const skillBranchIdx = claudeSrc.indexOf('_skill_review_verdict');
-    const persistIdx     = claudeSrc.indexOf('_skill_kb_file=$(_kb_file_for_story');
+    // The persist ANCHOR changed with the destination; the CONCERN did not. `_skill_kb_file`
+    // no longer exists (and did not at v1.5 either — this test had been stale, passing on
+    // nothing). `_skill_note_to_persist` is what now holds the text that gets written.
+    const persistIdx     = claudeSrc.indexOf('_skill_note_to_persist');
     expect(skillBranchIdx, 'the reviewer call is gone').toBeGreaterThan(-1);
     expect(persistIdx, 'the persist site is gone').toBeGreaterThan(-1);
     expect(skillBranchIdx, 'a note is written before the reviewer sees it').toBeLessThan(persistIdx);
@@ -340,11 +357,16 @@ describe('claude.sh — reviewer wired before skill note persistence', () => {
   it('the fallback path goes through the SAME persist code as an approved note', () => {
     // One write site, so a rescued note cannot bypass the duplicate check or the lock.
     const fallbackIdx = claudeSrc.indexOf('[unreviewed-fallback]');
-    const persistIdx  = claudeSrc.indexOf('_skill_kb_file=$(_kb_file_for_story');
+    // The DECLARATION precedes the fallback; the HANDOFF follows it. Anchoring on the first
+    // occurrence asserted the opposite of the concern — that the rescue runs before the
+    // variable exists — and would have passed only by accident.
+    const persistIdx  = claudeSrc.indexOf('REVIEWER_RETRY_TEXT="$_skill_note_to_persist"');
     expect(fallbackIdx, 'the unreviewed-fallback rescue is gone').toBeGreaterThan(-1);
     expect(persistIdx).toBeGreaterThan(fallbackIdx);
-    // and there is exactly one such site
-    expect(claudeSrc.split('_skill_kb_file=$(_kb_file_for_story').length - 1).toBe(1);
+    // ONE handoff site, so a rescued note cannot bypass the duplicate check or the lock.
+    // (The old anchor `_skill_kb_file=$(_kb_file_for_story` has not existed since before v1.5;
+    // counting it asserted "exactly one" of something that was always zero.)
+    expect(claudeSrc.split('REVIEWER_RETRY_TEXT="$_skill_note_to_persist"').length - 1).toBe(1);
   });
 });
 
@@ -363,10 +385,19 @@ describe('claude.sh — kb-change-reviewer wired before KB file append', () => {
   });
 
   it('KB file append happens after the reviewer verdict is known (approved content or fallback, either way)', () => {
+    // THE CROSS-RUN APPEND WAS REMOVED ON PURPOSE. claude.sh now says it in its own words:
+    // "Not persisted across runs ... only the cross-run write is removed" — a KB entry reaches
+    // THIS run's retry through the in-run amendment and nothing else. Asserting `>> "$kb_file"`
+    // demanded a write the design deliberately deleted.
+    //
+    // The concern survives the change: nothing acts on the entry until the verdict is known.
     const kbReviewIdx = claudeSrc.indexOf('_kb_review_verdict');
-    const kbAppendIdx2 = claudeSrc.indexOf('>> "$kb_file"', kbReviewIdx);
-    expect(kbReviewIdx).toBeGreaterThan(-1);
-    expect(kbAppendIdx2).toBeGreaterThan(kbReviewIdx);
+    expect(kbReviewIdx, 'the KB reviewer call is gone').toBeGreaterThan(-1);
+    const afterKbReview = claudeSrc.slice(kbReviewIdx);
+    expect(afterKbReview, 'the in-run application must follow the verdict')
+      .toMatch(/applied to this run only/i);
+    expect(claudeSrc, 'a cross-run KB write must not come back unreviewed')
+      .not.toMatch(/>> "\$kb_file"/);
   });
 
   // 2026-07-06: same root cause as the skill-note fallback above — a rejected
@@ -378,7 +409,12 @@ describe('claude.sh — kb-change-reviewer wired before KB file append', () => {
     const afterReview = claudeSrc.slice(kbCaseIdx, kbCaseIdx + 2200);
     expect(afterReview).toMatch(/rejected by reviewer/i);
     expect(afterReview).toMatch(/persisting raw fallback \(unreviewed\)/i);
-    expect(afterReview).toMatch(/\[unreviewed-fallback\] %s/);
+    // The '[unreviewed-fallback] %s' TAG belonged to the cross-run write, which was removed.
+    // Tagging is how an unreviewed entry stayed distinguishable in a file that outlived the
+    // run; with no such file, the distinction is the log line above. The remaining tag is the
+    // SKILL-note path, which does still hand its text on.
+    expect(claudeSrc.match(/\[unreviewed-fallback\]/g) || [],
+      'exactly one unreviewed-fallback rescue should remain — the skill-note path').toHaveLength(1);
   });
 });
 
@@ -439,20 +475,33 @@ describe('run-agent-orchestration.sh — story-recovery reviewer gate is fail-sa
     expect(h1Block).toMatch(/CORRECTION.*previous response did not contain parseable JSON/s);
   });
 
-  it('escalates to ESCALATION_MODEL_HIGH on attempt 1 (second call)', () => {
-    expect(h1Block).toMatch(/ESCALATION_MODEL_HIGH/);
-    expect(h1Block).toMatch(/_rev_attempt.*-ge 1.*ESCALATION_MODEL_HIGH|ESCALATION_MODEL_HIGH.*_rev_attempt/s);
+  it('escalates on attempt 1 — up ITS OWN seam ladder, not a run-wide pin', () => {
+    // WAS: ESCALATION_MODEL_HIGH. That was a run-wide pin behind a vendor literal —
+    // every agent escalated to the SAME model regardless of where it started, which is
+    // a pin, not a ladder. The requirement (a retry escalates) is unchanged; the remedy
+    // was replaced. Asserting the old remedy would re-enforce the defect.
+    expect(h1Block).toMatch(/seam_next_model/);
+    expect(h1Block).toMatch(/_rev_attempt.*-ge 1.*seam_next_model/s);
+    expect(h1Block, 'a run-wide escalation pin must not come back').not.toMatch(/ESCALATION_MODEL_HIGH/);
   });
 
   it('python parser no longer defaults to pass — exits without printing on unparseable input', () => {
-    const pyBlock = h1Block.slice(h1Block.indexOf('python3 -c'));
-    expect(pyBlock).not.toMatch(/get\('verdict','pass'\)/);
-    expect(pyBlock).not.toMatch(/if m else 'pass'/);
-    expect(pyBlock).toMatch(/if v in \('pass','fail'\)/);
+    // THE PARSER MOVED OUT OF THE SHELL. It was inline `python3 -c`; it is now an extracted
+    // handler. Slicing on 'python3 -c' returned -1, so this read the LAST CHARACTER of the
+    // block and matched nothing — a test that failed for the wrong reason and would have
+    // passed for the wrong reason just as easily.
+    const handler = readFileSync(
+      join(REPO, 'orchestrations/scripts/lib/handlers/run-story-recovery-analyst.py'), 'utf8');
+    expect(handler.length, 'the handler must exist — otherwise this asserts nothing').toBeGreaterThan(50);
+    expect(handler).not.toMatch(/get\('verdict','pass'\)/);
+    expect(handler).not.toMatch(/if m else 'pass'/);
+    expect(handler).toMatch(/if v in \('pass','fail'\)/);
   });
 
   it('shell pipeline fallback is `|| true` (empty capture) not `|| echo "pass"`', () => {
-    const afterPy = h1Block.slice(h1Block.indexOf('python3 -c'));
+    // Anchored on the HANDLER invocation: 'python3 -c' no longer appears, and
+    // indexOf returning -1 made this read the block's last character.
+    const afterPy = h1Block.slice(h1Block.indexOf('run-story-recovery-analyst.py'));
     expect(afterPy).not.toMatch(/\|\| echo "pass"/);
     expect(afterPy).toMatch(/\|\| true\)/);
   });
@@ -491,20 +540,31 @@ describe('run-agent-orchestration.sh — profile-augmentor reviewer gate is fail
     expect(h2Block).toMatch(/CORRECTION.*previous response did not contain parseable JSON/s);
   });
 
-  it('escalates to ESCALATION_MODEL_HIGH on attempt 1 (second call)', () => {
-    expect(h2Block).toMatch(/ESCALATION_MODEL_HIGH/);
-    expect(h2Block).toMatch(/_pa_rev_attempt.*-ge 1.*ESCALATION_MODEL_HIGH|ESCALATION_MODEL_HIGH.*_pa_rev_attempt/s);
+  it('escalates on attempt 1 — up ITS OWN seam ladder, not a run-wide pin', () => {
+    // WAS: ESCALATION_MODEL_HIGH. That was a run-wide pin behind a vendor literal —
+    // every agent escalated to the SAME model regardless of where it started, which is
+    // a pin, not a ladder. The requirement (a retry escalates) is unchanged; the remedy
+    // was replaced. Asserting the old remedy would re-enforce the defect.
+    expect(h2Block).toMatch(/seam_next_model/);
+    expect(h2Block).toMatch(/_pa_rev_attempt.*-ge 1.*seam_next_model/s);
+    expect(h2Block, 'a run-wide escalation pin must not come back').not.toMatch(/ESCALATION_MODEL_HIGH/);
   });
 
   it('python parser no longer defaults to pass — exits without printing on unparseable input', () => {
-    const pyBlock = h2Block.slice(h2Block.indexOf('python3 -c'));
-    expect(pyBlock).not.toMatch(/get\('verdict','pass'\)/);
-    expect(pyBlock).not.toMatch(/if m else 'pass'/);
-    expect(pyBlock).toMatch(/if v in \('pass','fail'\)/);
+    // Same extraction as H1 — the parser is a handler file, not inline shell.
+    const handler2 = readFileSync(
+      join(REPO, 'orchestrations/scripts/lib/handlers/run-testing-gates.py'), 'utf8');
+    expect(handler2.length, 'the handler must exist — otherwise this asserts nothing').toBeGreaterThan(50);
+    expect(handler2).not.toMatch(/get\('verdict','pass'\)/);
+    expect(handler2).not.toMatch(/if m else 'pass'/);
+    expect(handler2).toMatch(/if v in \('pass','fail'\)/);
   });
 
   it('shell pipeline fallback is `|| true` (empty capture) not `|| echo "pass"`', () => {
-    const afterPy = h2Block.slice(h2Block.indexOf('python3 -c'));
+    // Anchored on the HANDLER invocation: 'python3 -c' no longer appears, and
+    // indexOf returning -1 made this read the block's last character.
+    // H2 pipes into a DIFFERENT handler than H1 — anchoring on H1's name silently sliced to -1.
+    const afterPy = h2Block.slice(h2Block.indexOf('run-testing-gates.py'));
     expect(afterPy).not.toMatch(/\|\| echo "pass"/);
     expect(afterPy).toMatch(/\|\| true\)/);
   });

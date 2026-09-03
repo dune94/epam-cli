@@ -44,9 +44,34 @@ function ws() {
 }
 
 /** Ask the REAL perimeter whether a name may write, with these registries on disk. */
+/**
+ * THE PERIMETER READS THE PROJECT ROSTER, NOT THE ENGINE PROFILES.
+ *
+ * This exported AGENT_PROFILES_FILE and nothing else. _perimeter_project_roles resolves
+ * implementers through project-roster.js keyed on EPAM_PROJECT_CONFIG_DIR, and with that unset
+ * it returns nothing and refuses EVERY role — so the harness reported a legitimate implementer
+ * as blocked and a minted role as structurally unable to write. The guard was behaving
+ * correctly; it was being asked the question with no project.
+ *
+ * mergeProjectAgents stopped writing an engine-wide registry (one project's agents were reaching
+ * another's roster). The roster lands at <project>/roster.json, so that is what the harness
+ * supplies — the artefact production actually hands the perimeter.
+ */
+function writeRoster(dir: string, agents: Array<{ name: string; kind: string }>) {
+  writeFileSync(join(dir, 'roster.json'), JSON.stringify({
+    agents: Object.fromEntries(agents.map((a) => [a.name, {
+      kind: a.kind,
+      persona: `A ${a.kind} agent, for the perimeter to classify.`,
+      ancestor: 'canonical',
+      derivedFromSha256: '0'.repeat(64),
+    }])),
+  }, null, 2));
+}
+
 function mayWrite(dir: string, profilesPath: string, name: string) {
   const res = spawnSync('bash', ['-c',
     `set +e; export AGENT_PROFILES_FILE=${JSON.stringify(profilesPath)}; ` +
+    `export EPAM_PROJECT_CONFIG_DIR=${JSON.stringify(dir)}; ` +
     `source ${JSON.stringify(PERIM)} >/dev/null 2>&1; ` +
     `perimeter_role_may_write ${JSON.stringify(name)}; echo "RC=$?"`,
   ], { encoding: 'utf8' });
@@ -76,12 +101,20 @@ describe('the two classes go to separate registries', () => {
   // at an address nothing reads — 41 accumulated, all unreadable, KB coverage 0%.
   it('both still get a brief, and the codeline store exists', () => {
     const { dir, profilesPath } = ws();
-    roster.mergeProjectAgents({
+    const res = roster.mergeProjectAgents({
       profilesPath, agentsDir: dir, codelines: [{ name: INV.codeline }], proposals: [IMPL, INV],
     });
-    const profiles = JSON.parse(readFileSync(profilesPath, 'utf8'));
-    expect(profiles[IMPL.name]).toBeTruthy();
-    expect(profiles[INV.name], 'the detective has no brief, so it cannot investigate').toBeTruthy();
+    // THE ENGINE ROSTER IS DELIBERATELY NOT WRITTEN.
+    //
+    // This read profilesPath expecting both agents to appear there. mergeProjectAgents stopped
+    // writing orchestrations/agents/profiles.json because every project shares it, so one
+    // project's agents were reaching another's roster and a client codeline ran with this
+    // repository's own. The briefs are RETURNED to the caller, which hands them to the
+    // roster-specialiser. Asserting the old surface made a deliberate isolation fix look like
+    // a lost brief.
+    const minted = Object.fromEntries(res.minted.map((m: any) => [m.name, m]));
+    expect(minted[IMPL.name], 'the implementer has no brief').toBeTruthy();
+    expect(minted[INV.name], 'the detective has no brief, so it cannot investigate').toBeTruthy();
     // The store the seams actually read: per CODELINE. A role-keyed file was written at an
     // address nothing reads (41 accumulated, KB coverage 0%).
     expect(existsSync(roster.kbFileForCodeline(dir, INV.codeline))).toBe(true);
@@ -92,6 +125,8 @@ describe('the write perimeter refuses investigators', () => {
   it('a minted investigator may not write', () => {
     const { dir, profilesPath } = ws();
     roster.mergeProjectAgents({ profilesPath, agentsDir: dir, proposals: [IMPL, INV] });
+    // The roster the roster-specialiser produces every run, which is what the perimeter reads.
+    writeRoster(dir, [IMPL, INV].map((a) => ({ name: a.name, kind: a.kind })));
     expect(mayWrite(dir, profilesPath, IMPL.name), 'the implementer cannot write — harness wrong').toBe(true);
     expect(
       mayWrite(dir, profilesPath, INV.name),

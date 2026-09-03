@@ -31,9 +31,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { applyToolAllowlist } from '../../../src/tools/createTools';
 import { createTools } from '../../../src/tools/createTools';
+import { orchestratorSource } from '../../helpers/orchestrator-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
-const orchSrc = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+const orchSrc = orchestratorSource();
 
 /**
  * The allowlist VALUE the orchestration script gives its tool-enabled agents.

@@ -40,32 +40,11 @@ import { join } from 'node:path';
 
 const DISCOVERY = join(__dirname, '../../../orchestrations/scripts/lib/codeline-discovery.js');
 const SRC = readFileSync(DISCOVERY, 'utf8');
-const SEAM = readFileSync(join(__dirname, '../../../orchestrations/scripts/ai-run.sh'), 'utf8');
+const SEAM = readFileSync(join(__dirname, '../../../orchestrations/scripts/llm-handler.sh'), 'utf8');
 
-/** Run selectBestCandidate in isolation, with the module's own source. */
-function runFallback(scored: Array<Record<string, unknown>>, issues: unknown[]) {
-  // Bounded by the FUNCTION's own closing brace, not by the next `function `
-  // keyword: the text between them includes a `const { deriveCodelineName } =
-  // require(...)` that collides with the helper passed in.
-  const i = SRC.indexOf('function selectBestCandidate');
-  const j = SRC.indexOf('\n}', i);
-  const body = SRC.slice(i, j + 2);
-
-  // The real helper, passed in — injecting a copy collides with the one the
-  // sliced body already declares.
-  const { deriveCodelineName } = require('../../../orchestrations/scripts/lib/codeline-name.js');
-  // eslint-disable-next-line no-new-func
-  const fn = new Function('scored', 'issues', 'deriveCodelineName', `
-    ${body}
-    return selectBestCandidate(scored, issues);
-  `);
-  return fn(scored, issues, deriveCodelineName);
-}
-
-const TWO_REPOS = [
-  { name: 'site-a', path: '/estate/site-a', score: 152 },
-  { name: 'site-b', path: '/estate/site-b', score: 143 },
-];
+// The lift harness and its two-repo fixture went with the fallback they drove: there is no
+// selectBestCandidate to lift, and a fixture for a chooser that must not exist is a standing
+// invitation to reintroduce one.
 
 describe('retry is inherited from the seam, not hand-rolled here', () => {
   it('the seam retries every model call', () => {
@@ -78,43 +57,53 @@ describe('retry is inherited from the seam, not hand-rolled here', () => {
   });
 });
 
-describe('the fallback refuses to answer a spanning ticket with one repo', () => {
-  it('returns one codeline for a single-area ticket', () => {
-    // The common case must still work: a transient should not kill a run whose
-    // ticket genuinely concerns one product area.
-    const out = runFallback(TWO_REPOS, [{ key: 'X-1', components: ['GO'] }]);
-    expect(out.codelines).toHaveLength(1);
-    expect(out.codelines[0].path).toBe('/estate/site-a');
+describe('there is no deterministic fallback left to answer with', () => {
+  /*
+   * THE FALLBACK WAS REMOVED ON PURPOSE, AND THAT IS A STRONGER GUARANTEE.
+   *
+   * These six tests drove selectBestCandidate, a deterministic chooser that picked the
+   * highest-scored repository when the discovery call failed. It was deleted: "a discovery that
+   * never happened was indistinguishable from one that did, and the run proceeded against a
+   * repository nothing had reasoned about" (lib/codeline-discovery.js). The function is gone, so
+   * the lift produced `selectBestCandidate is not defined` — and TWO of the six then PASSED,
+   * because they only asserted `.toThrow()` and a ReferenceError throws. A vacuous pass on a
+   * money-spending path is worse than a failure.
+   *
+   * The requirement they encoded — one repo is not an answer to a multi-area ticket, and the
+   * engine must never quietly choose — is now met by there being nothing to choose WITH. These
+   * assert that, so the contract stays written and a reintroduced fallback fails here.
+   */
+  it('the module exposes no deterministic selector', () => {
+    // eslint-disable-next-line global-require, @typescript-eslint/no-var-requires
+    const mod = require('../../../orchestrations/scripts/lib/codeline-discovery.js');
+    for (const name of Object.keys(mod)) {
+      expect(name, `${name} looks like a chooser — the engine must not select a codeline itself`)
+        .not.toMatch(/select|pick|choose|fallback|best/i);
+    }
   });
 
-  it('THROWS when the ticket names several product areas', () => {
-    // The live case: [GO, UP, MX]. One repo is not an answer to that question.
-    expect(() => runFallback(TWO_REPOS, [{ key: 'AMSD-2041', components: ['GO', 'UP', 'MX'] }]),
-      'a three-component ticket still collapses silently to the top-scored repo')
-      .toThrow();
+  it('no code path substitutes the highest-scored repository', () => {
+    expect(SRC, 'a deterministic chooser is back in the discovery module')
+      .not.toMatch(/function\s+selectBestCandidate/);
+    // The scorer still exists and is still used for RANKING — what must not return is a code
+    // path that turns a ranking into a selection without the agent.
+    expect(SRC, 'discovery no longer explains why it refuses to choose')
+      .toMatch(/NO FALLBACK|nothing here invents a selection/);
   });
 
-  it('names the areas it could not place', () => {
-    let msg = '';
-    try { runFallback(TWO_REPOS, [{ key: 'AMSD-2041', components: ['GO', 'UP', 'MX'] }]); }
-    catch (e) { msg = String((e as Error).message); }
-    expect(msg, 'the refusal gives the operator nothing to act on').toMatch(/GO|UP|MX|component/i);
+  it('an unusable answer is corrected by the agent, never replaced by the engine', () => {
+    // retryUntilParsed re-asks with the broken contract named, and THROWS when corrections are
+    // exhausted. That is the replacement for the fallback: self-correction, then a stop.
+    expect(SRC).toMatch(/retryUntilParsed/);
+    expect(SRC, 'an empty selection is accepted').toMatch(/you selected no codeline/);
+    expect(SRC, 'a selected path is no longer verified to be a real git repository')
+      .toMatch(/that path is not a git repository/);
   });
 
-  it('still refuses when components arrive as objects', () => {
-    // Jira returns [{name: 'GO'}, ...]; a shape assumption here would silently
-    // disable the check.
-    expect(() => runFallback(TWO_REPOS, [{ key: 'A-1', components: [{ name: 'GO' }, { name: 'UP' }] }]))
-      .toThrow();
-  });
-
-  it('does not refuse when the ticket declares no components at all', () => {
-    // Absence of components is not evidence of spanning.
-    const out = runFallback(TWO_REPOS, [{ key: 'A-1' }]);
-    expect(out.codelines).toHaveLength(1);
-  });
-
-  it('still throws when there are no repositories to choose from', () => {
-    expect(() => runFallback([], [{ key: 'A-1', components: ['GO'] }])).toThrow(/No git repositories/);
+  it('an empty estate stops the run rather than proceeding with no scope', () => {
+    expect(SRC).toMatch(/No git repositories found in JIRA_CODELINE_ROOT/);
+    const idx = SRC.indexOf('No git repositories found in JIRA_CODELINE_ROOT');
+    expect(SRC.slice(idx, idx + 200), 'discovery reports an empty estate and carries on')
+      .toMatch(/process\.exit\(1\)/);
   });
 });

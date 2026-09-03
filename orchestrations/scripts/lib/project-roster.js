@@ -85,7 +85,111 @@ function copyCanonicalForRun(canonicalPath, logDir) {
 // DECLARED IN THE REGISTRY, not here. This and agent-roster.js each held the list and they
 // disagreed — 'seam' validated in one and was an unrecognised kind in the other. See
 // lib/agent-kinds.js.
-const { agentKinds } = require('./agent-kinds.js');
+const { agentKinds, kindMembership } = require('./agent-kinds.js');
+
+/**
+ * HOW THIS PROJECT GETS ITS ROSTER — DECLARED, NOT INFERRED.
+ *
+ *   derive     (default) an agent specialises canonical for this project, and it is reviewed.
+ *   canonical  canonical IS the roster: personas copied verbatim, provenance recorded, no
+ *              agent call and nothing to review.
+ *
+ * WHY THE SECOND MODE EXISTS. roster-specialiser is the most expensive seam in a run — top
+ * ladder, 65536 output tokens, up to 250 turns. A rehearsal project does not need specialised
+ * personas, and paying for them to rehearse plumbing pays for the wrong thing.
+ *
+ * WHAT IT IS NOT. 862ca17 stopped EPAM_SKIP_AGENT_MINT from silently ALSO skipping roster
+ * derivation, because skipping meant "run with no identities". This installs identities
+ * EXPLICITLY and holds them to the same contract; it only removes the model call. An unknown
+ * value is refused rather than treated as the default: a typo would quietly buy a full
+ * specialisation, or quietly stop buying one.
+ */
+function readRosterMode(projectConfigDir) {
+  const KNOWN = ['derive', 'canonical'];
+  let declared = '';
+  try {
+    const f = path.join(projectConfigDir || '', 'llm-settings.json');
+    if (fs.existsSync(f)) declared = String(JSON.parse(fs.readFileSync(f, 'utf8')).rosterMode || '').trim();
+  } catch { /* an unreadable settings file is not a declaration */ }
+  if (!declared) return 'derive';
+  if (!KNOWN.includes(declared)) {
+    throw new Error(
+      `[roster] rosterMode '${declared}' is not one of ${KNOWN.join('|')}. Refusing to guess: `
+      + 'treating an unknown value as the default would either buy a full specialisation nobody '
+      + 'asked for, or silently stop buying one that was wanted.');
+  }
+  return declared;
+}
+
+/** Canonical, in the shape the roster contract requires. Deterministic — no model involved. */
+function rosterFromCanonical(canonical) {
+  const membership = kindMembership();
+  const kindOf = (name) => {
+    for (const [kind, names] of Object.entries(membership || {})) {
+      if (Array.isArray(names) && names.includes(name)) return kind;
+    }
+    return 'seam';
+  };
+  const agents = {};
+  for (const [name, persona] of Object.entries(canonical)) {
+    if (typeof persona !== 'string' || !persona.trim()) continue;
+    agents[name] = {
+      persona,
+      kind: kindOf(name),
+      // ITS OWN ANCESTOR. Copying canonical means the ancestor IS the entry, and the digest
+      // records that nothing was changed — the same provenance a derived roster carries.
+      ancestor: name,
+      derivedFromSha256: personaDigest(persona),
+      rationale: 'canonical persona, adopted verbatim: this project declares rosterMode=canonical',
+    };
+  }
+  return { agents };
+}
+
+/**
+ * THE AGENTS THIS PROJECT MINTED, added to a canonical roster.
+ *
+ * rosterMode=canonical means "do not pay the SPECIALISER to rewrite canonical personas". It does
+ * not mean "throw away the mint": the mint is a separate, earlier, cheaper step, and what it
+ * produces — this project's implementers and per-codeline investigators — exists nowhere in
+ * canonical, because those roles are project-specific by nature.
+ *
+ * Discarding them made a project declaring this mode unrunnable. On 2026-08-26 mock3's mint
+ * created fare-schedule-engineer, registered it, role assignment gave it both stories, and the
+ * roster check refused every assignment: "2 assignment(s) name a role that is not in the settled
+ * roster". The roster held 54 agents, all kind "seam", and no implementer at all.
+ *
+ * A minted agent is its OWN ancestor with a digest over its own brief: it was not derived from a
+ * canonical persona, and recording one it never had would be a false provenance claim. Canonical
+ * wins a name collision — the mint must not shadow a process role.
+ */
+function withMintedAgents(roster, projectConfigDir) {
+  if (!projectConfigDir || !roster || !roster.agents) return roster;
+  let minted = {};
+  try {
+    const doc = JSON.parse(fs.readFileSync(path.join(projectConfigDir, 'agent-profiles.json'), 'utf8'));
+    minted = (doc && doc.profiles) || doc || {};
+  } catch { return roster; }              // a project with no minted briefs adds none
+
+  // eslint-disable-next-line global-require
+  const { kindOfAgent } = require('./agent-roster.js');
+  for (const [name, persona] of Object.entries(minted)) {
+    if (typeof persona !== 'string' || !persona.trim()) continue;
+    if (roster.agents[name]) continue;    // canonical wins; the mint never shadows a process role
+    let kind = '';
+    try { kind = kindOfAgent(name, projectConfigDir); } catch { kind = ''; }
+    if (!kind) continue;                  // an agent in no registry has no declared kind to record
+    roster.agents[name] = {
+      persona,
+      kind,
+      ancestor: name,
+      derivedFromSha256: personaDigest(persona),
+      rationale: 'minted for this project and adopted verbatim: this project declares '
+        + 'rosterMode=canonical, which skips the specialiser, not the mint',
+    };
+  }
+  return roster;
+}
 
 /** Seam names the registry declares. Read once — this is asked for every entry in the roster. */
 let _declaredSeams;
@@ -117,6 +221,37 @@ function declaredSeams() {
  *
  * @returns {{ok: boolean, reason: string}}
  */
+/**
+ * The seam this agent's NAME resolves to, or '' when nothing does.
+ *
+ * Deliberately THE SAME resolver the runtime uses. mint-agents-step.js says why: "two
+ * implementations of 'which seam is this agent' would be two answers to one question".
+ */
+function derivedSeamFor(name) {
+  try {
+    // eslint-disable-next-line global-require
+    const { resolveSeam } = require('./seam-invocation.js');
+    return resolveSeam(name, path.join(__dirname, '..', '..', 'agents', 'invocation-profiles.json'),
+      { ignoreXref: true }) || '';
+  } catch { return ''; }
+}
+
+/**
+ * Is this agent registered as one of THIS PROJECT's own — an implementer or an investigator?
+ *
+ * Read from the kind registries the mint writes, which is the same source kindOfAgent uses. A
+ * name that is in none of them is not a minted agent, whatever its roster entry claims.
+ */
+function isRegisteredProjectAgent(name) {
+  if (!name) return false;
+  try {
+    // eslint-disable-next-line global-require
+    const { kindOfAgent } = require('./agent-roster.js');
+    const dir = process.env.EPAM_PROJECT_CONFIG_DIR || '';
+    return Boolean(dir && kindOfAgent(name, dir));
+  } catch { return false; }
+}
+
 function checkEntry(name, entry, canonical) {
   if (!entry || typeof entry !== 'object') return { ok: false, reason: 'not an object' };
   if (typeof entry.persona !== 'string' || !entry.persona.trim()) {
@@ -131,11 +266,35 @@ function checkEntry(name, entry, canonical) {
   if (typeof entry.ancestor !== 'string' || !entry.ancestor.trim()) {
     return { ok: false, reason: 'no canonical ancestor named' };
   }
-  if (!Object.prototype.hasOwnProperty.call(canonical, entry.ancestor)) {
-    return { ok: false, reason: `ancestor '${entry.ancestor}' is not in canonical` };
-  }
-  if (entry.derivedFromSha256 !== personaDigest(canonical[entry.ancestor])) {
-    return { ok: false, reason: `provenance digest does not match ancestor '${entry.ancestor}'` };
+  // AN AGENT THIS PROJECT MINTED DESCENDS FROM NOTHING IN CANONICAL, AND SAYS SO.
+  //
+  // The rule above is right for a DERIVED agent: it names the canonical role whose ladder, tool
+  // grant and output contract it inherits. A minted agent has no such ancestor — it is a role
+  // this project needed and canonical never had — so its honest provenance is itself.
+  //
+  // This used to pass by accident: until 2026-08-22 (ba9cee7) the mint wrote into the engine's
+  // profiles.json, so minted agents WERE in the canonical copy. Isolating that file — one
+  // project's agents were reaching another's roster — removed the accident and nothing replaced
+  // it, so every minted agent became a contract violation. mock3 run 7: "ancestor
+  // 'fare-rules-engineer' is not in canonical".
+  //
+  // Stated as an exemption rather than bypassed by adding these agents after the check: a
+  // contract that says every agent needs a canonical ancestor, while some quietly do not, is a
+  // contract nobody can rely on. Registration is what earns it — an agent claiming self-ancestry
+  // without being in a kind registry is still refused, so this cannot become "anything may skip
+  // the check".
+  const _selfMinted = entry.ancestor === name && isRegisteredProjectAgent(name);
+  if (!_selfMinted) {
+    if (!Object.prototype.hasOwnProperty.call(canonical, entry.ancestor)) {
+      return { ok: false, reason: `ancestor '${entry.ancestor}' is not in canonical` };
+    }
+    if (entry.derivedFromSha256 !== personaDigest(canonical[entry.ancestor])) {
+      return { ok: false, reason: `provenance digest does not match ancestor '${entry.ancestor}'` };
+    }
+  } else if (entry.derivedFromSha256 !== personaDigest(entry.persona)) {
+    // The digest still has to be real: self-ancestry means the digest is over its OWN brief, so a
+    // changed brief with a stale digest is caught exactly as it is for a derived agent.
+    return { ok: false, reason: `provenance digest does not match its own brief for minted '${name}'` };
   }
   // A SEAM BINDING IS CHECKED WHERE THE ROSTER IS WRITTEN, not where it is first used. A seam the
   // registry does not declare would otherwise pass review, land on disk, and throw at whichever
@@ -145,7 +304,27 @@ function checkEntry(name, entry, canonical) {
       return { ok: false, reason: 'seam is present but empty — omit it, or name one' };
     }
     if (!declaredSeams().has(entry.seam)) {
-      return { ok: false, reason: `seam '${entry.seam}' is not declared in the registry` };
+      // THE RESOLVER ALREADY KNOWS. An agent's seam is derivable from its NAME — the registry's
+      // seamPatterns map `(^|-)engineer$` to story-writer and carry `kind: "implementer"` while
+      // doing it. So a `seam` field is a second answer to a question already settled, and this
+      // check failed whole mints over which FIELD a correct word sat in.
+      //
+      // Live 2026-08-31, metrolinx AMSD-1919: two agents minted, roster review sound, then
+      // "seam 'implementer' is not declared in the registry" — where `implementer` is the very
+      // kind the matching pattern declares, and both names resolved cleanly.
+      const derived = derivedSeamFor(name);
+      // Naming the KIND is not an invented seam: it is the right word in the wrong field, and the
+      // run must not die for it while the name resolves on its own.
+      if (agentKinds().includes(entry.seam) && derived) return { ok: true, reason: '' };
+      // Otherwise refused — but a refusal the producer cannot act on earns the same answer again,
+      // because the retry re-asks the same model with the same brief.
+      return {
+        ok: false,
+        reason: `seam '${entry.seam}' is not declared in the registry`
+          + (derived
+            ? ` — this agent's name resolves to '${derived}'; use that, or omit the field`
+            : ' — omit the field and let the resolver derive it from the name'),
+      };
     }
   }
   return { ok: true, reason: '' };
@@ -220,7 +399,62 @@ async function buildProjectRoster({
   if (typeof produce !== 'function') throw new Error('[roster] produce is required');
   const copyPath = copyCanonicalForRun(canonicalPath, logDir);
   const canonical = JSON.parse(fs.readFileSync(copyPath, 'utf8'));
+
   const outPath = projectRosterPath(projectConfigDir);
+
+  // A SETTLED ROSTER ON DISK IS THE ONE THE OPERATOR APPROVED. REUSE IT.
+  //
+  // THE FILE'S PRESENCE IS THE SIGNAL, and no run id is needed to read it. pre-run-reset deletes
+  // this file on every NEW launch — "derived every launch" is enforced there — and keeps it only
+  // when EPAM_RESUME_RUN is set. So a roster still on disk when this runs can only have been kept
+  // by a resume, which means it is THIS run's roster, reviewed at THIS run's pause. The reset owns
+  // the lifetime; this honours what it left.
+  //
+  // Without this the resume said one thing and did another:
+  //
+  //   [mint-step] roster carried over from <run> — reviewed in that run, not re-reviewed here
+  //   [mint-step] [roster] accepted 48 agent(s)      <- the specialiser had just run again
+  //
+  // and the derive loop below unlinks outPath at the start of every attempt, so the approved
+  // roster was destroyed before the call that replaced it. Three costs, all of which landed on
+  // 2026-09-01: a paid specialiser call at ~13 minutes, a roster differing from the reviewed one,
+  // and 17 of 39 roster-keyed prompts needlessly regenerated.
+  //
+  // HELD TO THE SAME CONTRACT as anything else that reaches disk: a stored roster that no longer
+  // satisfies it is not silently trusted — it falls through and is derived again.
+  if (fs.existsSync(outPath)) {
+    try {
+      const _settled = JSON.parse(fs.readFileSync(outPath, 'utf8'));
+      const _canonForCheck = JSON.parse(fs.readFileSync(copyPath, 'utf8'));
+      const _ok = checkRoster(_settled, _canonForCheck);
+      if (_ok.ok) {
+        log(`[roster] reusing the settled roster on disk — ${Object.keys(_settled.agents).length} `
+          + 'agent(s), reviewed at this run\'s pause, not re-derived');
+        return _settled;
+      }
+      log(`[roster] the roster on disk does not satisfy the contract (${_ok.reason}) — deriving`);
+    } catch (e) {
+      log(`[roster] the roster on disk could not be read (${(e && e.message) || e}) — deriving`);
+    }
+  }
+
+  // DECLARED MODE, DECIDED BEFORE ANY MODEL TIME IS SPENT.
+  const mode = readRosterMode(projectConfigDir);
+  if (mode === 'canonical') {
+    const roster = withMintedAgents(rosterFromCanonical(canonical), projectConfigDir);
+    // HELD TO THE SAME CONTRACT. A cheaper path that skipped the check would be a second,
+    // unvalidated way for a roster to reach disk — which is the shape of every defect this
+    // library exists to prevent.
+    const contract = checkRoster(roster, canonical);
+    if (!contract.ok) {
+      throw new Error(`[roster] canonical does not satisfy the roster contract: ${contract.reason}`);
+    }
+    fs.writeFileSync(outPath, JSON.stringify(roster, null, 2));
+    const _minted = Object.values(roster.agents).filter((a) => a.rationale && a.rationale.startsWith('minted')).length;
+    log(`[roster] rosterMode=canonical — ${Object.keys(roster.agents).length} persona(s) adopted verbatim`
+        + `${_minted ? ` (${_minted} minted for this project)` : ''}, no specialiser call`);
+    return roster;
+  }
 
   let lastReason = '';
   for (let attempt = 1; attempt <= attempts; attempt++) {
@@ -248,6 +482,19 @@ async function buildProjectRoster({
     if (!fs.existsSync(outPath)) {
       lastReason = `the agent wrote no roster at ${outPath}`;
       log(`[roster] attempt ${attempt}/${attempts} REFUSED: ${lastReason}`);
+      // SELF-HEAL, WITH THE ROSTER THE AGENT ACTUALLY WROTE. Reading it back is the only way
+      // the analyst can see WHY the contract failed rather than which clause reported it.
+      try {
+        let _produced = '';
+        try { _produced = fs.readFileSync(outPath, 'utf8'); } catch { _produced = ''; }
+        // eslint-disable-next-line global-require
+        const _sh = require('./self-heal.js').selfHeal({
+          agent: 'roster-specialiser', reason: lastReason, output: _produced, logDir,
+    model: process.env.EPAM_MODEL || '', provider: process.env.AI_PROVIDER || '',
+    projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR || '',
+        });
+        if (_sh.rc === 2) log(`[roster] self-heal analyst FAILED — attempt ${attempt + 1} has no corrective`);
+      } catch { /* a diagnostic must never fail the run it is diagnosing */ }
       continue;
     }
     let roster;
@@ -259,6 +506,27 @@ async function buildProjectRoster({
       continue;
     }
 
+    // THE MINT'S AGENTS BELONG TO EVERY MODE, NOT JUST canonical.
+    //
+    // This merge existed only on the `mode === 'canonical'` early return, so a project that
+    // declares no rosterMode — the default, 'derive' — re-derived its roster from canonical and
+    // dropped every agent the mint had created. Third reader left behind by ba9cee7's move of the
+    // briefs to <project>/agent-profiles.json; candidateRoles and the assignment check were the
+    // first two, and each was found by a dead run rather than by a test.
+    //
+    // IT ONLY BITES ON RESUME. A first run mints the agent and writes its assignment in the same
+    // step, so the roster holds it. A resume sets EPAM_SKIP_AGENT_MINT=1 and rebuilds the roster
+    // here — and the assignment written hours earlier suddenly names a role that does not exist.
+    // Live 2026-09-01, run 20260901T224029Z: "1 assignment(s) name a role that is not in the
+    // settled roster: AMSD-1919/gotransit -> checkout-form-engineer". The brief had been on disk
+    // since 18:43:59; this rebuilt the roster at 20:33:19 without reading it.
+    //
+    // BEFORE the contract check, exactly as canonical mode does it. Merging afterwards would be
+    // the "cheaper path that skipped the check" that branch warns about — a second, unvalidated
+    // way for a roster to reach disk. withMintedAgents is idempotent and canonical still wins a
+    // name collision, so a mint can never shadow a process role.
+    roster = withMintedAgents(roster, projectConfigDir);
+
     const contract = checkRoster(roster, canonical);
     if (!contract.ok) {
       lastReason = contract.reason;
@@ -266,6 +534,11 @@ async function buildProjectRoster({
       try { fs.unlinkSync(outPath); } catch { /* nothing to remove */ }
       continue;
     }
+
+    // THE FILE IS THE SETTLED ROSTER. The assignment check in mint-agents-step reads roster.json
+    // from disk, not the value returned here, so a merge that is not persisted fixes nothing —
+    // the returned roster would hold the agent and the run would still refuse the assignment.
+    fs.writeFileSync(outPath, JSON.stringify(roster, null, 2));
 
     // REVIEWED AGAINST BOTH. With only the roster a reviewer can judge plausibility; falsifying
     // "is this ancestor close" and "was inherited structure quietly changed" needs the source.
@@ -286,20 +559,22 @@ async function buildProjectRoster({
           verdict = { verdict: 'review_failed', reason: `the review call failed: ${(e && e.message) || e}` };
         }
 
-        if (verdict && verdict.verdict === 'approved') { approved = true; break; }
+        const _cls = classifyReviewVerdict(verdict);
+        if (_cls.outcome === 'approved') { approved = true; break; }
 
         // A REVIEW THAT FAILED IS NOT A ROSTER THAT FAILED. 'nothing_to_review' means the reviewer
         // did not look — it returned its own plan, once — and the schema distinguishes that from
         // examined-and-defective on purpose. Retry the judge; leave the artefact alone.
-        if (verdict && verdict.verdict === 'review_failed') {
-          reviewReason = verdict.reason || 'the review did not examine the roster';
+        if (_cls.outcome === 'review_failed' || _cls.outcome === 'unrecognised') {
+          reviewReason = verdict.reason || _cls.reason;
           log(`[roster] review did not examine the roster (${r}/${attempts}): ${reviewReason}`);
           continue;
         }
 
         // Examined, and found wanting. THAT implicates the roster.
-        lastReason = (verdict && (verdict.reason || (verdict.findings || []).join('; ')))
-          || 'review returned no verdict';
+        // The findings themselves, not "[object Object]": the next attempt can only fix what it
+        // is told, and joining an array of objects tells it nothing.
+        lastReason = _cls.reason || 'review returned no verdict';
         log(`[roster] attempt ${attempt}/${attempts} REJECTED by review: ${lastReason}`);
         break;
       }
@@ -384,7 +659,68 @@ function agentsOfKind(kind, projectConfigDir) {
   return Object.keys(doc.agents).filter((n) => doc.agents[n] && doc.agents[n].kind === kind).sort();
 }
 
+
+/**
+ * classifyReviewVerdict — WHAT reviewProjectRoster SAID, MAPPED TO WHAT THE GATE DOES.
+ *
+ * The vocabulary here is the one THIS GATE'S CALLER emits, which is not the one the model emits.
+ * The model answers `sound` / `defects_found`; reviewProjectRoster aggregates those and returns
+ * `approved`, `changes_requested` or `review_failed`. The gate receives the second set.
+ *
+ * I got this wrong on 2026-09-01 and it cost a run. Seeing `approved` in the gate and `sound` in
+ * the captured model output, I concluded the gate read a verdict nothing emits and rewrote it to
+ * accept the MODEL's words. It then recognised none of its caller's, so a clean review came back
+ * `approved`, fell through to the unrecognised branch, and the mint failed three attempts running.
+ * The original check was right; the lesson is to read the CALLER, not the transcript.
+ *
+ * Both vocabularies are accepted now, because the boundary has been crossed both ways in this
+ * file's history and neither spelling should be able to fail silently again:
+ *
+ *   approved | sound                          -> approved
+ *   changes_requested | defects_found+blocking -> rejected (reason carries the findings)
+ *   defects_found with only advisory findings  -> approved (notes are not blockers)
+ *   review_failed | nothing_to_review          -> review_failed (the JUDGE did not look)
+ *   anything else                              -> unrecognised, never an approval, and it says so
+ */
+function classifyReviewVerdict(verdict) {
+  const v = verdict && typeof verdict === 'object' ? verdict.verdict : undefined;
+  const findings = (verdict && Array.isArray(verdict.findings)) ? verdict.findings : [];
+  const blocking = findings.filter((f) => f && f.severity === 'blocking');
+  const describe = (list) => list
+    .map((f) => `${f.agent || 'roster'}: ${f.claim || f.found || f.remedy || 'no detail given'}`)
+    .join('; ');
+
+  if (v === 'approved' || v === 'sound') return { outcome: 'approved', reason: '' };
+
+  if (v === 'changes_requested') {
+    return {
+      outcome: 'rejected',
+      reason: (verdict && verdict.reason) || describe(blocking.length ? blocking : findings)
+        || 'the review requested changes without naming one',
+    };
+  }
+
+  if (v === 'defects_found') {
+    return blocking.length
+      ? { outcome: 'rejected', reason: describe(blocking) }
+      : { outcome: 'approved', reason: findings.length ? describe(findings) : '' };
+  }
+
+  if (v === 'review_failed' || v === 'nothing_to_review') {
+    return {
+      outcome: 'review_failed',
+      reason: (verdict && verdict.reason) || 'the reviewer did not examine the roster',
+    };
+  }
+
+  return {
+    outcome: 'unrecognised',
+    reason: `the review answered '${String(v)}', which this gate does not recognise — it handles `
+      + 'approved | sound | changes_requested | defects_found | review_failed | nothing_to_review',
+  };
+}
 module.exports = {
+  classifyReviewVerdict,
   buildProjectRoster,
   loadRoster,
   personaFor,

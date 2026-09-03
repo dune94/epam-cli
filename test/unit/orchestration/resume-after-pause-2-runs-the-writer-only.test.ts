@@ -116,7 +116,14 @@ describe('single-lane and parent-only runs are unchanged', () => {
     // before the mint. See resume-does-not-re-ingest-over-the-spec. The set is still asserted
     // exactly — nothing further may be skipped at post-roster.
     const env = skipEnv(runDir('post-roster'));
-    expect(env.sort()).toEqual(['EPAM_SKIP_AGENT_MINT=1', 'EPAM_SKIP_JIRA_INGEST=1']);
+    // The set of SKIPS is still asserted exactly — that is the requirement this test states.
+    // resume_skip_env also publishes the stage the resume started from, which is a fact about
+    // the resume rather than something skipped: the pauses compare against it instead of
+    // re-deriving it from a tree the run is actively writing to, which is how pause 2 came to
+    // skip itself (2026-08-28).
+    const skips = env.filter((a: string) => /^(EPAM_)?SKIP_/.test(a)).sort();
+    expect(skips).toEqual(['EPAM_SKIP_AGENT_MINT=1', 'EPAM_SKIP_JIRA_INGEST=1']);
+    expect(env).toContain('EPAM_RESUMED_FROM_STAGE=post-roster');
   });
 
   it('no checkpoint at all still refuses rather than guessing', () => {

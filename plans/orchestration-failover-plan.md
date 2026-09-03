@@ -21,7 +21,7 @@ Ensure `orchestrations/scripts/run-agent-orchestration.sh` can anticipate token-
 
 3. **run_with_token_guard Helper**  
    - Wrap each `CLAUDE_SH` invocation (sequential runs ~519-520 and both worktree launches 549-587) with a helper that: (a) executes the story under the primary provider, (b) tails the per-story JSONL cost output, (c) updates an in-memory ledger, and (d) classifies the status (OK / nearing limit / exhausted).  
-   - When the helper detects a token-limit exit code or ledger overflow, it looks up the backup tuple and immediately retries with `EPAM_ORCHESTRATION_PROVIDER` / `MODEL_OVERRIDE` pointing to the backup. Because provider selection already funnels through the wrapper mapping, the retry path works uniformly for codemie-claude, copilot, openai, qwen, cursor, claude, etc.
+   - When the helper detects a token-limit exit code or ledger overflow, it looks up the backup tuple and immediately retries with `EPAM_ORCHESTRATION_PROVIDER` / `MODEL_OVERRIDE` pointing to the backup. Because provider selection already funnels through the wrapper mapping, the retry path works uniformly for codemie-claude, copilot, openai, openrouter, cursor, claude, etc.
 
 4. **Shared Ledger + Cutover Automation**  
    - Before launching parallel worktrees (lines 356-403), persist the provider plan and ledger to `logs/agent-status.json`.  

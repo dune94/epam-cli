@@ -62,14 +62,29 @@ const DOMAIN_SUFFIX = /\.(com|org|net|io|dev|co|ai|app)$/i;
  */
 function deriveCodelineNames(parsed) {
   if (!parsed || !Array.isArray(parsed.codelines)) return parsed;
+
+  // basename of each checkout directory — trailing separators stripped, so a path written with or
+  // without one yields the same identity.
+  const dirOf = (cl) => String(cl.path).replace(/[/\\]+$/, '').split(/[/\\]/).pop() || '';
+  const eligible = parsed.codelines.filter((cl) => cl && typeof cl === 'object' && cl.path);
+
+  // A NAME IS A PRIMARY KEY, so uniqueness is decided across the whole set — one codeline cannot
+  // see that another has taken its name. Where the short form collides, EVERY member of that
+  // collision keeps its decoration: picking a winner would make the key depend on discovery order,
+  // and a key that changes between a mint and a resume is the failure this guards.
+  const shortOf = new Map(eligible.map((cl) => [cl, deriveCodelineName(dirOf(cl))]));
+  const taken = new Map();
+  for (const n of shortOf.values()) taken.set(n, (taken.get(n) || 0) + 1);
+  const contested = new Set([...taken].filter(([, count]) => count > 1).map(([n]) => n));
+
   return {
     ...parsed,
     codelines: parsed.codelines.map((cl) => {
       if (!cl || typeof cl !== 'object' || !cl.path) return cl;
-      // basename of the checkout directory — trailing separators stripped, so a path written
-      // with or without one yields the same identity.
-      const dir = String(cl.path).replace(/[/\\]+$/, '').split(/[/\\]/).pop() || '';
-      const derived = deriveCodelineName(dir);
+      const short = shortOf.get(cl);
+      const derived = contested.has(short)
+        ? deriveCodelineName(dirOf(cl), { keepDecoration: true })
+        : short;
       if (!derived) return cl;
       return cl.name === derived
         ? cl
@@ -78,14 +93,15 @@ function deriveCodelineNames(parsed) {
   };
 }
 
-function deriveCodelineName(dirName) {
+function deriveCodelineName(dirName, { keepDecoration = false } = {}) {
   const base = String(dirName || '').replace(DOMAIN_SUFFIX, '');
   const parts = base.split(/[.\-_\s]+/).filter(Boolean);
 
-  // Strip decoration only while something identifying survives.
+  // Strip decoration only while something identifying survives — and only while it is not the
+  // word telling two repositories apart. The set-wide pass says so with keepDecoration.
   const kept = [];
   for (const p of parts) {
-    if (DECORATION.has(p.toLowerCase()) && parts.length > 1) continue;
+    if (!keepDecoration && DECORATION.has(p.toLowerCase()) && parts.length > 1) continue;
     kept.push(p);
   }
   const words = kept.length ? kept : parts;

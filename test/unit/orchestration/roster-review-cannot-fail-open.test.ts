@@ -19,10 +19,22 @@
  * fail-open shape" — but it only catches a THROWN error, and runAgentForJson returns null on
  * unparseable output instead of throwing, so it never fired.
  */
-import { describe, it, expect, afterAll } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mkdtempSync, writeFileSync, readFileSync, chmodSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { provisionProject, cleanupProvisioned } from '../../support/provisioned-project';
+
+// A SEAM PROMPT RENDERS FROM THE PROJECT'S COPY, SO THIS FILE SUPPLIES A PROJECT.
+//
+// prompt-library takes a seam-declared prompt only from <project>/prompts and refuses to execute
+// a template — a project without a copy is a provisioning defect that must surface as one. No
+// project in a fresh checkout has generated prompts, so every case here failed on that refusal
+// rather than on what it asserts. The temp project is provisioned by COPYING the template, the
+// way topology-router's harness does: specialisation is the mint's job, not a test's.
+beforeAll(() => { process.env.EPAM_PROJECT_CONFIG_DIR = provisionProject(['roster-review']); });
+afterAll(() => { delete process.env.EPAM_PROJECT_CONFIG_DIR; cleanupProvisioned(); });
+
 
 const spec = require('../../../orchestrations/scripts/spec-mode-runner.js');
 
@@ -47,8 +59,23 @@ function runnerEmitting(raw: string) {
 async function review(raw: string) {
   const dir = mkdtempSync(join(tmpdir(), 'review-log-')); dirs.push(dir);
   const profilesPath = join(dir, 'profiles.json');
-  writeFileSync(profilesPath, JSON.stringify(
-    Object.fromEntries(MINTED.map((m) => [m.name, 'a brief '.repeat(30)]))));
+  // THE REVIEWER'S OWN BRIEF, FROM THE CANONICAL SOURCE.
+  //
+  // reviewRoster reads profiles['roster-reviewer'] and passes it as __PERSONA__ with no default,
+  // unlike every sibling field which carries a "- (none ...)" fallback. Empty therefore means the
+  // brief never arrived, and the prompt layer refuses rather than rendering a blank section for
+  // an agent to answer about. The fixture supplied briefs for the MINTED agents only, so the
+  // reviewer itself had none and every case failed on the refusal. Read from the canonical
+  // roster rather than written here: a brief invented in a test proves the test's own text.
+  const canonicalProfiles = JSON.parse(readFileSync(
+    join(__dirname, '../../../orchestrations/agents/profiles.json'), 'utf8'));
+  expect(canonicalProfiles['roster-reviewer'],
+    'the canonical roster declares no roster-reviewer brief — reviewRoster cannot render at all')
+    .toBeTruthy();
+  writeFileSync(profilesPath, JSON.stringify({
+    ...Object.fromEntries(MINTED.map((m) => [m.name, 'a brief '.repeat(30)])),
+    'roster-reviewer': canonicalProfiles['roster-reviewer'],
+  }));
   delete process.env.SPEC_MODE_PROVIDER;
   return spec.reviewRoster({
     promptExec: runnerEmitting(raw), minted: MINTED, codelines: CODELINES,
@@ -105,12 +132,26 @@ describe('THE DEFECT: a review that produced nothing must not read as clean', ()
 });
 
 describe('nothing to review is not the same as a failed review', () => {
-  it('an empty roster is sound — there is genuinely nothing to check', async () => {
+  it('an empty roster is NOT settled — it owes a review the moment it gains an agent', async () => {
+    // THIS ASSERTED THE FAIL-OPEN THIS FILE EXISTS TO PREVENT.
+    //
+    // It expected 'sound' for an empty roster. reviewRoster answers 'nothing_to_review', and
+    // rosterReviewIsRequired deliberately groups that with 'not_run' and 'review_failed':
+    // "an empty roster owes a review the moment it gains an agent. Treating it as settled is
+    // how a vacuous pass returns by the back door." Calling it sound would let a roster reach
+    // the operator labelled clean with nothing having checked it — the live 2026-08-08 case.
+    // eslint-disable-next-line global-require, @typescript-eslint/no-var-requires
+    const rosterLib = require('../../../orchestrations/scripts/lib/agent-roster.js');
     const r = await spec.reviewRoster({
       promptExec: runnerEmitting(CLEAN), minted: [], codelines: CODELINES,
       profiles: {}, logDir: undefined, repoPath: '',
     });
-    expect(r.verdict).toBe('sound');
+    expect(r.verdict).toBe('nothing_to_review');
     expect(r.reviewed).toBe(0);
+    expect(r.findings).toEqual([]);
+    // The distinction that matters: nothing to review is not a FAILED review, but it is not a
+    // settled one either. The engine must still require one.
+    expect(rosterLib.rosterReviewIsRequired({ verdict: r.verdict }),
+      'an empty roster was treated as settled — the vacuous pass is back').toBe(true);
   }, 60_000);
 });

@@ -1,0 +1,11 @@
+{
+  "enrichedAcs": [
+    "The CMS displays a preview control for draft content that renders the draft as it will appear when published.",
+    "The preview reflects unsaved changes made to the draft without requiring the user to save the draft first.",
+    "The preview updates to reflect edits as the user continues modifying the draft content, without requiring a full page reload.",
+    "The preview renders the current saved state of the draft when no unsaved changes have been made.",
+    "When the draft content is empty or contains only whitespace, the preview displays an appropriate empty or placeholder state rather than an error.",
+    "The system does not allow a user without preview permission to access the draft preview; the preview control is hidden or disabled for that user.",
+    "When the draft is in a state that cannot be previewed, the system displays an informative message instead of rendering a broken or incomplete preview."
+  ]
+}

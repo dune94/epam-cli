@@ -21,6 +21,9 @@
 # Exit: always 0 (best-effort). The repro-gate is the enforcer. Escape: EPAM_SKIP_REPRO_TEST_WRITER=1.
 set -uo pipefail
 
+# How much evidence each agent is shown, by name — see config/evidence-windows.json.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/evidence-windows.sh" 2>/dev/null || true
+
 # _run_project_verification <project_root>
 # Runs the project's declared check (.epam/verification.json) via the verification plugin.
 # The engine names no tool, extension, directory or runtime path. Undeclared -> non-zero with a
@@ -86,7 +89,7 @@ if [ -f "$_ml_lib" ]; then
     # shellcheck source=lib/model-ladders.sh
     . "$_ml_lib" || true
     command -v export_model_ladders >/dev/null 2>&1 \
-        && export_model_ladders "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json}" || true
+        && export_model_ladders "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/llm-settings.json}}" || true
 fi
 # ask must come BEFORE any model is resolved below: seam_ladder_export sets EPAM_MODEL, and
 # a later assignment that wins makes the whole thing decorative.
@@ -135,15 +138,28 @@ BASELINE_SHA=$(git -C "$PROJECT_ROOT" rev-parse --verify --quiet "origin/${BASEL
 
 # ── Classify changed files (same rule as the repro-gate) ────────────────────
 mapfile -t _CHANGED < <(git -C "$PROJECT_ROOT" diff --name-only "$BASELINE_SHA" HEAD 2>/dev/null)
-TEST_FILES=(); FIX_FILES=()
+TEST_FILES=(); FIX_FILES=(); _CANDIDATES=()
 for f in "${_CHANGED[@]}"; do
     [ -z "$f" ] && continue
     case "$f" in node_modules/*|*/node_modules/*|dist/*|build/*|coverage/*|.git/*|.epam/*) continue ;; esac
-    case "$f" in
-        *.test.*|*.spec.*|*/__tests__/*|*_test.*) TEST_FILES+=("$f") ;;
-        *) FIX_FILES+=("$f") ;;
-    esac
+    # The pattern is a GLOB from the provider map and must stay unquoted: quoting it would match the
+    # literal characters, and no mapping would ever fire.
+    # shellcheck disable=SC2254
+    # WHAT IS A TEST IS THE PROJECT'S DECLARATION, NOT THIS SCRIPT'S. See
+    # lib/handlers/classify-changed-files.js — the gate asks the same question of the same
+    # declaration, so the writer can no longer produce a file the gate refuses.
+    _CANDIDATES+=("$f")
 done
+
+_ccf_out=$(printf '%s\n' "${_CANDIDATES[@]}" \
+    | "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/classify-changed-files.js" "$PROJECT_ROOT" 2>&1) || {
+    warning "[repro-test-writer] the project declares no test-file convention — cannot tell a test from a fix: $_ccf_out"
+    exit 1
+}
+while IFS=$'\t' read -r _verdict _cf; do
+    [ -n "$_cf" ] || continue
+    if [ "$_verdict" = "TEST" ]; then TEST_FILES+=("$_cf"); else FIX_FILES+=("$_cf"); fi
+done <<< "$_ccf_out"
 [ "${#TEST_FILES[@]}" -gt 0 ] && { log "a test already accompanies the change (${TEST_FILES[0]}) — nothing to write"; exit 0; }
 [ "${#FIX_FILES[@]}" -gt 0 ] || { log "no fix files in the diff — nothing to test"; exit 0; }
 
@@ -180,11 +196,21 @@ _is_testable_source() {
     local _f="$1"
     if [ "$_TESTABLE_RESOLVED" -eq 0 ]; then
         _TESTABLE_RESOLVED=1
+        # The expansion is split into separate arguments ON PURPOSE: this passes a LIST to a command
+        # that takes them as individual operands. Quoting it would hand over one argument with spaces.
+        # shellcheck disable=SC2046
         _TESTABLE_SET=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/testable-source.js" \
             "$PROJECT_ROOT" $(git -C "$PROJECT_ROOT" ls-files 2>/dev/null) 2>/dev/null || echo "")
     fi
     [ -z "$_TESTABLE_SET" ] && return 1
-    printf '%s\n' "$_TESTABLE_SET" | grep -Fxq "$_f"
+    # A HERESTRING, NOT A PIPE. `grep -q` exits the instant it matches, closing the pipe while
+    # printf is still writing; on a real codeline the set is thousands of lines, so printf dies of
+    # SIGPIPE and `set -o pipefail` takes that as the pipeline status — 141. A successful match was
+    # reported as a failure, every file was judged "not testable source", and the repro-test writer
+    # skipped with "nothing to test". Live 2026-09-02 (AMSD-1919, 3,070-line set, target at line
+    # 1696): a brownfield fix shipped with no bug-reproduction test. A herestring has no second
+    # process to kill, so grep's own status is the answer.
+    grep -Fxq -- "$_f" <<< "$_TESTABLE_SET"
 }
 
 # WHICH FILE CARRIES THE FEATURE — ASKED, NOT GUESSED BY POSITION.
@@ -207,14 +233,27 @@ _choose_target() {
     local _sites _vcs _cands _ask _ans
     _sites=$(jq -r --arg id "$STORY_ID" \
         '(.stories[]? | select(.id == $id) | .fixSiteAnalysis // [])[] | "  - \(.file): \(.finding // .reason // .change // "")"' \
-        "$PRD_FILE" 2>/dev/null | head -20)
+        "$PRD_FILE" 2>/dev/null | head -n "$(evidence_window fixSitesForReproWriter)")
     _vcs=$(jq -r --arg id "$STORY_ID" \
         '(.stories[]? | select(.id == $id) | .verificationCriteria // [])[] | "  - \(if type=="object" then (.criterion // .text // tostring) else tostring end)"' \
-        "$PRD_FILE" 2>/dev/null | head -20)
+        "$PRD_FILE" 2>/dev/null | head -n "$(evidence_window vcsForReproWriter)")
     _cands=$(printf '  - %s\n' "${FIX_FILES[@]}")
     _ask=$(printf 'A change was made and must now be covered by ONE test.\n\nFiles this change touched:\n%s\n\nThe plan'"'"'s sites and what each does:\n%s\n\nWhat the test must prove:\n%s\n\nWhich ONE of the touched files carries the behaviour a test would exercise to prove those criteria? Not the file that merely configures or wires it — the one whose logic would be wrong if the criteria failed.\n\nReply with the file path only, exactly as listed above. No prose.\n' \
         "$_cands" "${_sites:-  (none recorded)}" "${_vcs:-  (none recorded)}")
-    _ans=$(printf '%s' "$_ask" | EPAM_MAX_ITERATIONS=3 EPAM_MAX_OUTPUT_TOKENS=256 \
+    # THE BUDGET IS DECLARED, NOT WRITTEN HERE. These were literals at this call site, so they
+    # outranked the seam's own declaration, never reached a cost estimate, and made changing the
+    # declared budget a no-op for this one call.
+    _mq_file="${EPAM_AGENTS_DIR:-$SCRIPT_DIR/../agents}/invocation-profiles.json"
+    # THE LADDER OWNS THE ITERATION BUDGET. This read a declared maxIterations, which outranked
+    # the seam's own ladder rung for this one call — the same defect as the literals it replaced,
+    # only moved into the declaration. EPAM_MAX_ITERATIONS is left exactly as the ladder set it.
+    # Output SIZE is still the question's own property: one filename needs 256 tokens, not 32k.
+    _mq_toks=$(jq -r '.profiles["repro-test-writer"].microQuestion.maxOutputTokens // empty' "$_mq_file" 2>/dev/null)
+    if [ -z "$_mq_toks" ]; then
+        warning "repro-test-writer declares no microQuestion budget — skipping the target question rather than inventing one"
+        return 1
+    fi
+    _ans=$(printf '%s' "$_ask" | EPAM_MAX_OUTPUT_TOKENS="$_mq_toks" \
         "$AI_RUNNER_CMD" 2>/dev/null | tr -d '\r' | grep -oE '[A-Za-z0-9_./-]+\.[A-Za-z]+' | head -1)
     [ -n "$_ans" ] || return 1
     _is_testable_source "$_ans" || { warning "target choice '"'"'$_ans'"'"' is not testable source — ignoring"; return 1; }
@@ -267,13 +306,30 @@ if [ -z "$_primary_fix" ]; then
 fi
 # grep -c already prints "0" on no match (and exits 1) — use `|| true` so the non-zero
 # exit doesn't append a SECOND "0" (which broke the integer test: "0\n0" is not an int).
-_spec_ct=$(git -C "$PROJECT_ROOT" ls-files '*.spec.ts' '*.spec.tsx' 2>/dev/null | grep -c . || true)
-_test_ct=$(git -C "$PROJECT_ROOT" ls-files '*.test.ts' '*.test.tsx' 2>/dev/null | grep -c . || true)
-if [ "${_spec_ct:-0}" -ge "${_test_ct:-0}" ] && [ "${_spec_ct:-0}" -gt 0 ]; then _ext="spec.ts"; else _ext="test.ts"; fi
-_target_rel="${_primary_fix%.*}.${_ext}"
-# An existing example test (prefer one near the fix dir; else the largest/any) to teach the framework + mocking style.
-_example_rel=$(git -C "$PROJECT_ROOT" ls-files "$(dirname "$_primary_fix")/*.spec.ts" "$(dirname "$_primary_fix")/*.test.ts" 2>/dev/null | head -1)
-[ -z "$_example_rel" ] && _example_rel=$(git -C "$PROJECT_ROOT" ls-files '*.spec.ts' '*.test.ts' 2>/dev/null | head -1)
+# THE CONVENTION BELONGS TO THE PLUGIN, NOT TO THIS SCRIPT.
+#
+# This block used to decide the target itself:
+#
+#     if [ spec_count >= test_count ]; then _ext="spec.ts"; else _ext="test.ts"; fi
+#     _target_rel="${_primary_fix%.*}.${_ext}"
+#
+# Two faults. It hardcoded stack filenames in engine code, which is not permitted — a stack fact
+# lives in a plugin or in project config. And it counted *.spec.ts and *.spec.tsx TOGETHER and
+# then kept only "spec.ts", so a .tsx React component was given a .spec.ts target. Live
+# 2026-09-02 (AMSD-1919): the agent wrote CheckoutForm.spec.tsx — correct, its test carries JSX —
+# and this stage, waiting on CheckoutForm.spec.ts, reported "no valid test after 3 attempts" while
+# escalating three models against a file already on disk under the right name.
+#
+# codeline-context-plugin.js owns SOURCE_EXTENSIONS and TEST_EXTENSIONS and measures both against
+# the codeline. We ask it. If it cannot answer we FAIL — guessing a convention is the bug.
+_ntp_out=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/new-test-path.js" "$PROJECT_ROOT" "$_primary_fix" 2>&1) || {
+    warning "[repro-test-writer] could not resolve a test path from the codeline plugin: $_ntp_out"
+    exit 1
+}
+_target_rel=$(printf '%s\n' "$_ntp_out" | sed -n 's/^TARGET=//p' | head -1)
+_example_rel=$(printf '%s\n' "$_ntp_out" | sed -n 's/^EXAMPLE=//p' | head -1)
+[ -n "$_target_rel" ] || { warning "[repro-test-writer] the plugin returned no target path"; exit 1; }
+_ext="${_target_rel##*.}"
 _example_block=""
 if [ -n "$_example_rel" ] && [ -f "$PROJECT_ROOT/$_example_rel" ]; then
     _example_block=$'\n## Example test from THIS repo (mirror its framework, imports, and mocking style EXACTLY)\nFile: '"$_example_rel"$'\n```\n'"$(head -80 "$PROJECT_ROOT/$_example_rel")"$'\n```\n'
@@ -426,6 +482,8 @@ _ladder_skip_reason() {
 _provider_for_model() {
     local _m="$1" _map="${EPAM_MODEL_PROVIDER_MAP:-}" _pair _pat _prov
     IFS='|' read -ra _pairs <<< "$_map"
+    # The pattern is a GLOB and must stay unquoted: quoting it matches the literal characters.
+    # shellcheck disable=SC2254
     for _pair in "${_pairs[@]}"; do _pat="${_pair%%=*}"; _prov="${_pair#*=}"; case "$_m" in $_pat) echo "$_prov"; return 0 ;; esac; done
     echo ""
 }
@@ -436,7 +494,7 @@ _provider_for_model() {
 # retry (ladder up the HIGH ladder on escalation), and on a no-file/max-iter failure run the
 # reusable agent-attempt-analyst to diagnose WHY and prepend a tailored corrective directive
 # to the next attempt — instead of blindly re-running the same prompt.
-_base_provider="${SPEC_MODE_PROVIDER:-${EPAM_ORCHESTRATION_PROVIDER:-qwen}}"
+_base_provider="${SPEC_MODE_PROVIDER:-${EPAM_ORCHESTRATION_PROVIDER:-openrouter}}"
 # THE SEAM DECIDES, NOT THIS FILE. seam_ladder_export (line ~61) sets EPAM_MODEL to the first rung
 # of the chain this seam's archetype declares. The literal that stood here overrode that silently:
 # the seam asked for its ladder, and the answer was thrown away one variable later, so changing the
@@ -554,7 +612,7 @@ _validate_written_test() {
             log "written test FAILS against the committed fix (${_failed}/${total}) — rejecting so the writer can retry"
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/repro-feedback-vals-XXXXXX.json")
             jq_vals \
-                  --arg failure_json "$(printf '%s' "$json" | head -c 1200)" \
+                  --arg failure_json "$(printf '%s' "$json" | head -c "$(evidence_window reproFailureJsonChars)")" \
                   --arg failed "${_failed}" \
                   --arg total "${total}" \
                   '{"__FAILURE_JSON__":$failure_json,"__FAILED__":$failed,"__TOTAL__":$total}' > "$_cp_vals"

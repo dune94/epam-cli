@@ -1,0 +1,18 @@
+{
+  "$why": [
+    "Generated from the prd-model-coordinator template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "__PROFILE__\n\nThis project coordinates work across two codelines: mocka (fare logic) and mockb (schedule rendering). Each ticket is paired with an investigator role (to verify the exact problem via code inspection) and an implementer role (to author the fix).\n\nInvestigators work in: mocka (fares.ts for fare-rule comparisons), mockb (schedule.ts for stop-rendering loops). Both codelines use vitest for testing and typescript for type safety.\n\nImplementers must change only the scoped file in their codeline:\n- fare-boundary-engineer: src/fares.ts (MOCK3-1 fare-rule boundary)\n- departure-board-engineer: src/schedule.ts (MOCK3-2 stop-rendering loop bound)\n\nPRD file: __MC_PRD_TARGET__\nPhase: __MC_PHASE__\n\nAssign model, aiProvider, and reasoningEffort to every pending story in this phase that is missing one or more of these fields. Write the updated PRD back to the file, then emit the JSON summary.\n\nWhen assigning:\n- Investigators: prioritize reasoning effort high enough to read code accurately and spot off-by-one boundaries.\n- Implementers: choose models that excel at precise, minimal edits to a single file without touching surrounding logic.",
+  "derivedFromSha256": "2256fe8b3cde59fed36608ad759ef441f4e38c7715131af419b13674a9b706a9",
+  "derivedFromVersion": 1,
+  "id": "prd-model-coordinator",
+  "placeholders": [
+    "__MC_PHASE__",
+    "__MC_PRD_TARGET__",
+    "__PROFILE__"
+  ],
+  "mayBeEmpty": []
+}

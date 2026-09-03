@@ -28,7 +28,16 @@
 
 setup() {
     REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-    SETTINGS="$REPO_ROOT/orchestrations/projects/metrolinx/llm-settings.json"
+    # THE LADDERS MOVED OUT OF THE PROJECT. Until the 2026-08-25 migration each project's
+    # llm-settings.json carried its own `ladders`; they now live in the active provider set
+    # (config/llm-defaults.<set>.json), because a per-model setting belongs to the model and a model
+    # belongs to a stack. metrolinx declares none, so `jq .ladders` returned empty here and the
+    # vacuity guard failed on an architecture working exactly as intended — unnoticed, because no
+    # runner executed .bats files until 2026-08-28.
+    #
+    # The requirement is unchanged: a POSITION indexes into ladderTierOrder, and the two
+    # vocabularies must stay distinct. Only the file that owns the tiers has moved.
+    SETTINGS="$REPO_ROOT/orchestrations/config/llm-defaults.$(jq -r '.defaultSet' "$REPO_ROOT/orchestrations/config/provider-sets.json").json"
     REGISTRY="$REPO_ROOT/orchestrations/agents/invocation-profiles.json"
 }
 

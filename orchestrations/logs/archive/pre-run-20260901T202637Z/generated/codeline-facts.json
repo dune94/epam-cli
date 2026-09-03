@@ -1,0 +1,13 @@
+{
+  "_what": "What each codeline IS and what an agent working inside it needs to know that the source does not say. Produced by the codeline-discovery agent during THIS run and rewritten every run — never accumulated, so nothing here is older than the run that wrote it. The engine splits this per codeline into each worktree's .epam/.",
+  "_shape": "Codeline names are TOP-LEVEL keys, because the engine extracts one with jq '.[$cl]'. Nesting them under another key parses fine and yields nothing for every codeline.",
+  "gotransit": {
+    "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
+    "facts": [
+      {
+        "text": "`npm test` (jest) will fail unless `next.config.js` has been generated first, because `pretest` runs `npm run build:config`, which bundles `next.config.source.ts` into `next.config.js` via esbuild.",
+        "source": "package.json scripts: \"pretest\": \"npm run build:config\", \"build:config\": \"esbuild next.config.source.ts --bundle --outfile=next.config.js --platform=node --external:./node_modules/* --target=es2020 --minify\""
+      }
+    ]
+  }
+}

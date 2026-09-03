@@ -1,0 +1,3469 @@
+{
+  "$why": "Tests that were RED at the measured baseline. A permanently failing test protects nothing — it is indistinguishable from a deleted one except that it costs time and memory, and it hides the tests that do work. Archived, not deleted: each file is intact, tracked in git, and restored by moving it back under test/. Every entry records what it was failing with, so a file can be triaged later without re-running the suite to find out.",
+  "$restoring": "git mv test/archived/<path> test/<path> — then run the shard it belongs to.",
+  "measuredAt": "20260828T002656Z",
+  "archived": 353,
+  "survivors": 845,
+  "files": [
+    {
+      "file": "test/unit/orchestration/worktree-path-and-commit.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/worktree-path-and-commit.test.ts",
+      "failures": 8,
+      "signatures": [
+        "expected '<v>' to contain '<v>'",
+        "expected -N to be greater than -N",
+        "expected '<v>' to match /git -C.*wt_path.*commit/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/tc-writer-retry-block.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/tc-writer-retry-block.test.ts",
+      "failures": 3,
+      "signatures": [
+        "expected '<v>' to contain '<v>'",
+        "expected '<v>' to be '<v>' // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/every-gate-tells-the-writer-why.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/every-gate-tells-the-writer-why.test.ts",
+      "failures": 4,
+      "signatures": [
+        "expected '<v>' to contain '<v>'",
+        "expected +N not to be +N // Object.is equality",
+        "live N-N-N: attempts N and N produced the identical violation because of this: expected '<v>' not to"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/profile-augmentor-disk-verified.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/profile-augmentor-disk-verified.test.ts",
+      "failures": 3,
+      "signatures": [
+        "expected '<v>' to contain '<v>'",
+        "expected '<v>' to match /unchanged on disk.*treating as no-op/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/scaffold-tsconfig-self-heal.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/scaffold-tsconfig-self-heal.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to contain '<v>'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/testing-gates.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/testing-gates.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to contain '<v>'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/write-first-brownfield-directive.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/write-first-brownfield-directive.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to contain '<v>'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/openspec-semantic-split.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/openspec-semantic-split.test.ts",
+      "failures": 6,
+      "signatures": [
+        "expected '<v>' to contain '<v>'",
+        "expected -N to be greater than N",
+        "expected '<v>' to match /technicalNotes\\.files.*frontend.*tem…/i"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/classify-failure-class.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/classify-failure-class.test.ts",
+      "failures": 4,
+      "signatures": [
+        "expected '<v>' to contain '<v>'",
+        "expected '<v>' to be '<v>' // Object.is equality",
+        "expected '<v>' to match /WriteFile/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-committed-change-uses-every-required-helper.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-committed-change-uses-every-required-helper.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to contain '<v>'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/codeline-worktree.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/codeline-worktree.test.ts",
+      "failures": 7,
+      "signatures": [
+        "expected '<v>' to contain '<v>'",
+        "expected -N to be greater than -N",
+        "ENOENT: no such file or directory, open '<v>'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/teardown-and-restore.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/teardown-and-restore.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to contain '<v>'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/failure-analyst-contract-injection.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/failure-analyst-contract-injection.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to contain '<v>'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/fix-site-analysis-injection.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/fix-site-analysis-injection.test.ts",
+      "failures": 3,
+      "signatures": [
+        "expected '<v>' to contain '<v>'",
+        "expected '<v>'s spend fig…' to match /mode=\\\\\"<v>\"/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/generator-mode-budget.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/generator-mode-budget.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to contain '<v>'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/a-run-that-spent-money-cannot-record-nothing.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/a-run-that-spent-money-cannot-record-nothing.test.ts",
+      "failures": 4,
+      "signatures": [
+        "expected '<v>' to contain '<v>'",
+        "a run that spent money reported nothing and said nothing: expected '<v>' to contain '<v>'",
+        "the ledger check computes a cost of its own: expected '<v>' not to match /total_cost_usd\\s*\\+|sum|ac"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/integration/proxy-health-check.test.ts",
+      "archivedTo": "test/archived/integration/proxy-health-check.test.ts",
+      "failures": 4,
+      "signatures": [
+        "expected '<v>' to contain '<v>'",
+        "expected +N to be N // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/brownfield-pipeline.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/brownfield-pipeline.test.ts",
+      "failures": 12,
+      "signatures": [
+        "expected '<v>' to contain '<v>'",
+        "ENOENT: no such file or directory, open '<v>'",
+        "expected -N to be greater than N"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/tc-writer-gate.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/tc-writer-gate.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to contain '<v>'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/failure-analyst-json-retry.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/failure-analyst-json-retry.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to contain '<v>'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/codegraph-block-respects-coverage-gap.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/codegraph-block-respects-coverage-gap.test.ts",
+      "failures": 5,
+      "signatures": [
+        "expected '<v>' to contain '<v>'",
+        "expected '<v>' to match /do NOT search/i",
+        "expected '<v>' to match /CodeGraph Tool/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/cross-story-contract-and-import-check.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/cross-story-contract-and-import-check.test.ts",
+      "failures": 17,
+      "signatures": [
+        "expected '<v>' to contain '<v>'",
+        "expected N to be +N // Object.is equality",
+        "expected -N to be greater than -N"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/pipeline-regression.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/pipeline-regression.test.ts",
+      "failures": 7,
+      "signatures": [
+        "expected '<v>' to contain '<v>'",
+        "expected -N to be greater than -N",
+        "expected null not to be null"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/planner-prompt-inputs.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/planner-prompt-inputs.test.ts",
+      "failures": 3,
+      "signatures": [
+        "expected '<v>' to contain '<v>'",
+        "expected '<v>' to match /exact/i"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/minimax-tool-call.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/minimax-tool-call.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to contain '<v>'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-detective-rerun-wrapper-loads-config-as-data.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-detective-rerun-wrapper-loads-config-as-data.test.ts",
+      "failures": 10,
+      "signatures": [
+        "expected '<v>' to contain '<v>'",
+        "expected N to be +N // Object.is equality",
+        "expected N to be N // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/story-agent-activity-events.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/story-agent-activity-events.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to contain '<v>'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/mock-completeness-check.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/mock-completeness-check.test.ts",
+      "failures": 6,
+      "signatures": [
+        "expected '<v>' to contain '<v>'",
+        "expected N to be +N // Object.is equality",
+        "expected '<v>' to contain '<v>'testFileExtensions\\'<v>'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/agent-profile-wiring.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/agent-profile-wiring.test.ts",
+      "failures": 4,
+      "signatures": [
+        "expected '<v>' to contain '<v>'",
+        "expected '<v>' to match /TC_WRITER_PROFILE.*You are the TC wr…/i",
+        "expected '<v>' to match /AGENT_PROFILES_FILE/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/cpa-escalation-profile.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/cpa-escalation-profile.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to contain '<v>'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/skill-note-prompt-injection.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/skill-note-prompt-injection.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to contain '<v>'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/brownfield-repro-test-writer.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/brownfield-repro-test-writer.test.ts",
+      "failures": 4,
+      "signatures": [
+        "expected N to be +N // Object.is equality",
+        "position '<v>' resolves to no tier this project declares: expected '<v>' to be truthy"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/audit-steps-scope.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/audit-steps-scope.test.ts",
+      "failures": 8,
+      "signatures": [
+        "expected N to be +N // Object.is equality",
+        "pythonN: can'<v>'/lib/handlers/tool-scripts-health.py': [Errno N] No such file or directory",
+        "expected '<v>' to match /duplicates_removed/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/tc-writer-story-scope.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/tc-writer-story-scope.test.ts",
+      "failures": 7,
+      "signatures": [
+        "expected N to be +N // Object.is equality",
+        "expected '<v>' to match /story_filter = '<v>'/",
+        "expected '<v>' to match /check_ids = \\[story_filter\\] if story…/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/story-recovery-analyst.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/story-recovery-analyst.test.ts",
+      "failures": 5,
+      "signatures": [
+        "expected N to be +N // Object.is equality",
+        "expected [ '<v>', …(N) ] to deeply equal [ '<v>' ]",
+        "expected '<v>' to match /\"<v>\" \\/\\/ \"<v>\"/\\"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/tc-writer-target-story-not-in-implementation-order.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/tc-writer-target-story-not-in-implementation-order.test.ts",
+      "failures": 7,
+      "signatures": [
+        "expected N to be +N // Object.is equality",
+        "expected '<v>' to match /if story_filter and story_filter not …/",
+        "expected '<v>' to match /phase_ids = set\\(phase_ids_list\\)/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/mock1-paused-run.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/mock1-paused-run.test.ts",
+      "failures": 14,
+      "signatures": [
+        "expected N to be +N // Object.is equality",
+        "--seed failed: [mockN-paused] cannot determine the mock project config dir — set EPAM_PROJECT_CONFIG",
+        "the launcher cannot say where it would put the workspace: expected '<v>' not to be '<v>' // Object.i"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/escalation-line-coverage.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/escalation-line-coverage.test.ts",
+      "failures": 5,
+      "signatures": [
+        "expected N to be +N // Object.is equality",
+        "expected '<v>'t open file \\'<v>' to match /owned by SKY-N-impl/",
+        "expected '<v>'t open file \\'<v>' to match /Auto-corrected/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/skill-note-anti-pattern-gate.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/skill-note-anti-pattern-gate.test.ts",
+      "failures": 8,
+      "signatures": [
+        "expected N to be +N // Object.is equality",
+        "expected N to be N // Object.is equality",
+        "expected -N to be greater than N"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/vc-coverage-check.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/vc-coverage-check.test.ts",
+      "failures": 8,
+      "signatures": [
+        "expected N to be +N // Object.is equality",
+        "the uncovered criterion was not reported: expected '<v>' to match /UNCOVERED/",
+        "expected '<v>' to match /VC_UNCOVERED=N of N/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/anti-pattern-check.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/anti-pattern-check.test.ts",
+      "failures": 4,
+      "signatures": [
+        "expected N to be +N // Object.is equality",
+        "expected '<v>' to match /management_token/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/relative-import-sibling-escalation.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/relative-import-sibling-escalation.test.ts",
+      "failures": 3,
+      "signatures": [
+        "expected N to be +N // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/tc-writer-invalid-escape-repair.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/tc-writer-invalid-escape-repair.test.ts",
+      "failures": 12,
+      "signatures": [
+        "expected N to be +N // Object.is equality",
+        "expected -N to be greater than -N",
+        "expected '<v>' to match /tc_raw = f\\.read\\(\\)/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/agent-tool-access.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/agent-tool-access.test.ts",
+      "failures": 8,
+      "signatures": [
+        "expected -N to be greater than -N",
+        "anchor not found for \"<v>\" — source may have moved/changed:",
+        "expected N to be greater than or equal to N"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/tc-writer-skips-delegated-parents.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/tc-writer-skips-delegated-parents.test.ts",
+      "failures": 7,
+      "signatures": [
+        "expected -N to be greater than -N",
+        "expected [] to include '<v>'",
+        "expected '<v>' to match /s\\.get\\('<v>'\\) == '<v>'/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/tc-writer-exit-code-bug.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/tc-writer-exit-code-bug.test.ts",
+      "failures": 6,
+      "signatures": [
+        "expected -N to be greater than -N",
+        "expected false to be true // Object.is equality",
+        "expected '<v>' to match /cd \"<v>\" &&/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/kb-change-reviewer-profile-injection.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/kb-change-reviewer-profile-injection.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected -N to be greater than -N"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/failure-analyst.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/failure-analyst.test.ts",
+      "failures": 5,
+      "signatures": [
+        "expected -N to be greater than -N",
+        "expected '<v>'s spend fig…'<v>'unset _claude_pre_gate_provider _clau…'",
+        "expected '<v>' to match /gate_model.*ORCH_GATE_MODEL/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/prd-change-reviewer-spec-pass-tool-access.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/prd-change-reviewer-spec-pass-tool-access.test.ts",
+      "failures": 5,
+      "signatures": [
+        "expected -N to be greater than -N",
+        "prd-change-reviewer: no model resolved from its seam ladder"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/heredoc-backtick-safety.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/heredoc-backtick-safety.test.ts",
+      "failures": 4,
+      "signatures": [
+        "expected -N to be greater than -N",
+        "expected '<v>' to match /assessment_prompt=\\$\\(cat << PROMPT_H…/",
+        "expected '<v>' to match /\\$\\{phase_id\\}/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/tc-writer-impl-source-files.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/tc-writer-impl-source-files.test.ts",
+      "failures": 3,
+      "signatures": [
+        "expected -N to be greater than -N",
+        "expected '<v>' to match /impl_src = list\\(impl_files\\)/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/orchestrate-launcher.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/orchestrate-launcher.test.ts",
+      "failures": 8,
+      "signatures": [
+        "expected -N to be greater than -N",
+        "expected N to be greater than or equal to N",
+        "expected '<v>' to match /issuetype/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/self-heal-all-phases.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/self-heal-all-phases.test.ts",
+      "failures": 6,
+      "signatures": [
+        "expected -N to be greater than -N",
+        "expected '<v>'s spend fig…'<v>'unset _claude_pre_gate_provider _clau…'",
+        "expected '<v>' to match /gate_model.*ORCH_GATE_MODEL/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/codegraph-integration.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/codegraph-integration.test.ts",
+      "failures": 9,
+      "signatures": [
+        "expected -N to be greater than -N",
+        "ENOENT: no such file or directory, open '<v>'",
+        "scoreRepos not found — the invariant cannot be checked"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/plan-review-tool-access.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/plan-review-tool-access.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected -N to be greater than -N"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/skills-coordinator-audit.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/skills-coordinator-audit.test.ts",
+      "failures": 11,
+      "signatures": [
+        "expected -N to be greater than -N",
+        "expected +N to be N // Object.is equality",
+        "Command failed: bash <tmp> <tmp>"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/ensure-node-modules-healthy.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/ensure-node-modules-healthy.test.ts",
+      "failures": 4,
+      "signatures": [
+        "expected -N to be greater than -N",
+        "expected '<v>' to match /pm_cmd=\"<v>\"/",
+        "expected '<v>' to match /package\\.json/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/review-test-coverage-grounding.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/review-test-coverage-grounding.test.ts",
+      "failures": 5,
+      "signatures": [
+        "expected -N to be greater than -N",
+        "expected '<v>' to match /[Bb]efore flagging ANY .*missing/",
+        "expected '<v>' to match /missing.*and.*inadequate.*(differen…/is"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/tc-writer-ordering-and-null-handling.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/tc-writer-ordering-and-null-handling.test.ts",
+      "failures": 3,
+      "signatures": [
+        "expected -N to be greater than -N",
+        "expected '<v>' to match /skipped\\.append/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/reviewer-summarizer-retry.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/reviewer-summarizer-retry.test.ts",
+      "failures": 6,
+      "signatures": [
+        "expected -N to be greater than -N",
+        "expected '<v>' to be '<v>' // Object.is equality",
+        "expected -N to be greater than N"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/deterministic-check-free-retry.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/deterministic-check-free-retry.test.ts",
+      "failures": 4,
+      "signatures": [
+        "expected '<v>' to be '<v>' // Object.is equality",
+        "expected ' if [ \"<v>\"\\$\\{_ex…/",
+        "expected [ …(N) ] to include '<v>'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/step-0.9-retry-guard.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/step-0.9-retry-guard.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to be '<v>' // Object.is equality",
+        "expected '<v>' to match /ALLOWED_FIELDS = \\{'<v>', 'aiProvid…/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-roster-review-prompt-is-a-template.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-roster-review-prompt-is-a-template.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to be '<v>' // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/spec-validator-grounding.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/spec-validator-grounding.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to be '<v>' // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/gate-remediation-eligibility.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/gate-remediation-eligibility.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to be '<v>' // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/spec-pass-self-heal.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/spec-pass-self-heal.test.ts",
+      "failures": 4,
+      "signatures": [
+        "expected '<v>' to be '<v>' // Object.is equality",
+        "prd-change-reviewer: no model resolved from its seam ladder"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/plan-then-execute-complexity-adaptive.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/plan-then-execute-complexity-adaptive.test.ts",
+      "failures": 4,
+      "signatures": [
+        "expected '<v>' to be '<v>' // Object.is equality",
+        "expected N to be N // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/synthesize-prd-agent-group-default.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/synthesize-prd-agent-group-default.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to be '<v>' // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/prd-template-per-project.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/prd-template-per-project.test.ts",
+      "failures": 4,
+      "signatures": [
+        "expected '<v>' to be '<v>' // Object.is equality",
+        "run NTNZ ran hello-dolly and produced project.name \"<v>\" because this resolved to a built-in canonic",
+        "silently inheriting another project'<v>'CHOSEN=<none>\\n' to match /canonical|identity|template/i"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/jira-synth-prd-path-override.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/jira-synth-prd-path-override.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to be '<v>' // Object.is equality",
+        "expected '<v>' to match /_synth_prd=\"<v>\""
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/integration/roster-review.test.ts",
+      "archivedTo": "test/archived/integration/roster-review.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to be '<v>' // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-one-door-nothing-walked-through.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-one-door-nothing-walked-through.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to be '<v>' // Object.is equality",
+        "EPAM_REASONING_EFFORT is still set at the call site — the registry is not the source of truth: expec"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/skill-note-format-check.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/skill-note-format-check.test.ts",
+      "failures": 3,
+      "signatures": [
+        "expected '<v>' to be '<v>' // Object.is equality",
+        "expected false to be true // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/agents-dir-honours-the-perimeter.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/agents-dir-honours-the-perimeter.test.ts",
+      "failures": 4,
+      "signatures": [
+        "expected '<v>' to be '<v>' // Object.is equality",
+        "expected undefined to be '<v>' // Object.is equality",
+        "the roster would still be read from and written to the shared agents directory: expected undefined t"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/coordinator-guidance-trim-window.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/coordinator-guidance-trim-window.test.ts",
+      "failures": 6,
+      "signatures": [
+        "expected '<v>' to be '<v>' // Object.is equality",
+        "expected '<v>' to match /## Heading N/",
+        "expected '<v>'s spend fig…' to match /heading_idxs\\[-KEEP\\] if len\\(heading…/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/integration/per-codeline-detective.test.ts",
+      "archivedTo": "test/archived/integration/per-codeline-detective.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to be '<v>' // Object.is equality",
+        ".toMatch() expects to receive a string, but got undefined"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/skill-note-persist-simple.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/skill-note-persist-simple.test.ts",
+      "failures": 4,
+      "signatures": [
+        "expected '<v>' to be '<v>' // Object.is equality",
+        "expected '<v>'t open file \\'<v>' to match /Refusing to persist.*contradicts a kn…/",
+        "expected '<v>' to match /Skill note appended to \\[writer\\] pro…/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/jira-prd-template-passthrough.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/jira-prd-template-passthrough.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to be '<v>' // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-estate-survey-prompt-is-a-template.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-estate-survey-prompt-is-a-template.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to be '<v>' // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/retry-extension-log-contamination.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/retry-extension-log-contamination.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to be '<v>' // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/watchdog-timeout-failure-propagation.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/watchdog-timeout-failure-propagation.test.ts",
+      "failures": 4,
+      "signatures": [
+        "expected '<v>' to be '<v>' // Object.is equality",
+        "expected 'skipping story and continuing\"<v>\"failed\"/",
+        "expected '<v>' to match /return N/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/pre-run-reset-clears-both-registries.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/pre-run-reset-clears-both-registries.test.ts",
+      "failures": 3,
+      "signatures": [
+        "Command failed: bash <tmp>"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/deterministic-contract-generation.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/deterministic-contract-generation.test.ts",
+      "failures": 5,
+      "signatures": [
+        "Command failed: bash <tmp>",
+        "expected '<v>' to match /cfg\\['<v>'\\]/",
+        "expected '<v>' to contain '<v>'sourceExtensions\\'<v>'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/dynamic-tool-recipe-test-cmd-guard.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/dynamic-tool-recipe-test-cmd-guard.test.ts",
+      "failures": 3,
+      "signatures": [
+        "Command failed: bash <tmp>"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/step-0.5-retry-guard.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/step-0.5-retry-guard.test.ts",
+      "failures": 4,
+      "signatures": [
+        "Command failed: bash <tmp>",
+        "expected '<v>' to match /PFA_PRD_DIFF_PY/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/assignments-do-not-survive-a-run.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/assignments-do-not-survive-a-run.test.ts",
+      "failures": 3,
+      "signatures": [
+        "Command failed: bash <tmp>"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/team-lead-review-external-project-root.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/team-lead-review-external-project-root.test.ts",
+      "failures": 3,
+      "signatures": [
+        "Command failed: bash <tmp>"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/resume-keeps-its-roster.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/resume-keeps-its-roster.test.ts",
+      "failures": 3,
+      "signatures": [
+        "Command failed: bash <tmp>"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/spec-reviewer-knows-its-lane.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/spec-reviewer-knows-its-lane.test.ts",
+      "failures": 3,
+      "signatures": [
+        "Command failed: bash <tmp>"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/contextualize-stories-manifest-input.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/contextualize-stories-manifest-input.test.ts",
+      "failures": 3,
+      "signatures": [
+        "Command failed: bash <tmp>"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/a-prescribed-file-is-never-a-finding.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/a-prescribed-file-is-never-a-finding.test.ts",
+      "failures": 7,
+      "signatures": [
+        "ENOENT: no such file or directory, open '<v>'",
+        "expected '<v>' to match /What may be a BLOCKER/",
+        "expected '<v>' to match /IS IT INSIDE THE PLAN/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/a-mock-must-name-a-module-the-code-uses.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/a-mock-must-name-a-module-the-code-uses.test.ts",
+      "failures": 2,
+      "signatures": [
+        "ENOENT: no such file or directory, open '<v>'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-mint-step-provisions-prompts.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-mint-step-provisions-prompts.test.ts",
+      "failures": 6,
+      "signatures": [
+        "ENOENT: no such file or directory, open '<v>'",
+        "expected '<v>' to match /prompts provisioned/",
+        "expected '<v>' to match /EPAM_PROMPT_PROVISION_MODE/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/rung-contribution-attribution.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/rung-contribution-attribution.test.ts",
+      "failures": 4,
+      "signatures": [
+        "ENOENT: no such file or directory, open '<v>'",
+        "expected false to be true // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-detective-prompt-is-a-file.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-detective-prompt-is-a-file.test.ts",
+      "failures": 7,
+      "signatures": [
+        "ENOENT: no such file or directory, open '<v>'",
+        "project-authority prompt missing: <path> Mint it from orchestrations/prompts/templates/code-graph-de",
+        "this project has no copy of it: expected [Function] to not throw an error but '<v>' was thrown"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/tier3-mock-run.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/tier3-mock-run.test.ts",
+      "failures": 9,
+      "signatures": [
+        "ENOENT: no such file or directory, open '<v>'",
+        "\u001b[N;Nm[tierN-mock] ✗\u001b[Nm the PRD at <tmp> names no project (project.name), so there is no configurat",
+        "expected '<v>' to match /failed after self-healing retry/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/prd-bootstrap-outputdir.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/prd-bootstrap-outputdir.test.ts",
+      "failures": 4,
+      "signatures": [
+        "ENOENT: no such file or directory, open '<v>'",
+        "metrolinx has no prd.canonical.json, so synthesize falls back to travel-app-prd.canonical.json and i",
+        "JIRA_PRD_TEMPLATE unset — synthesize falls back to travel-app: expected null to be truthy"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-next-attempt-knows-what-the-last-one-did.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-next-attempt-knows-what-the-last-one-did.test.ts",
+      "failures": 2,
+      "signatures": [
+        "ENOENT: no such file or directory, open '<v>'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/test-ownership-is-declared-once.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/test-ownership-is-declared-once.test.ts",
+      "failures": 2,
+      "signatures": [
+        "ENOENT: no such file or directory, open '<v>'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/resume-refuses-to-run-without-the-spec-it-skips.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/resume-refuses-to-run-without-the-spec-it-skips.test.ts",
+      "failures": 11,
+      "signatures": [
+        "Command failed: bash -c set -u"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/lane-prd-round-trip-preserves-per-codeline.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/lane-prd-round-trip-preserves-per-codeline.test.ts",
+      "failures": 11,
+      "signatures": [
+        "Command failed: bash -c set -u"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/integration/jira-comment-link-to-agent.test.ts",
+      "archivedTo": "test/archived/integration/jira-comment-link-to-agent.test.ts",
+      "failures": 3,
+      "signatures": [
+        "[engine-prompt] '<v>' is a seam-declared prompt — an agent executes it, so it renders from THIS PROJ"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-coordinator-prompts-are-templates.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-coordinator-prompts-are-templates.test.ts",
+      "failures": 3,
+      "signatures": [
+        "[engine-prompt] '<v>' is a seam-declared prompt — an agent executes it, so it renders from THIS PROJ"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/integration/agent-seam-under-slowness.test.ts",
+      "archivedTo": "test/archived/integration/agent-seam-under-slowness.test.ts",
+      "failures": 5,
+      "signatures": [
+        "[engine-prompt] '<v>' is a seam-declared prompt — an agent executes it, so it renders from THIS PROJ",
+        "the runner never started — this is not a timeout test: expected false to be true // Object.is equali",
+        "nothing was written, so a run cannot be diagnosed afterwards: expected false to be true // Object.is"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-cpa-prompts-are-templates.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-cpa-prompts-are-templates.test.ts",
+      "failures": 4,
+      "signatures": [
+        "[engine-prompt] '<v>' is a seam-declared prompt — an agent executes it, so it renders from THIS PROJ",
+        "expected undefined to be '<v>' // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/ticket-link-answer-shapes.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/ticket-link-answer-shapes.test.ts",
+      "failures": 3,
+      "signatures": [
+        "[engine-prompt] '<v>' is a seam-declared prompt — an agent executes it, so it renders from THIS PROJ"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-guard-vocabulary-prompt-is-a-template.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-guard-vocabulary-prompt-is-a-template.test.ts",
+      "failures": 3,
+      "signatures": [
+        "[engine-prompt] '<v>' is a seam-declared prompt — an agent executes it, so it renders from THIS PROJ"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/integration/mint-project-agents.test.ts",
+      "archivedTo": "test/archived/integration/mint-project-agents.test.ts",
+      "failures": 5,
+      "signatures": [
+        "expected N to be N // Object.is equality",
+        "expected undefined to be truthy",
+        "expected '<v>' not to match /ALREADY EXIST/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/cpa-effort-tier-upgrades-iterations.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/cpa-effort-tier-upgrades-iterations.test.ts",
+      "failures": 3,
+      "signatures": [
+        "expected N to be N // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/effort-budget-full-pipeline-amsd2041.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/effort-budget-full-pipeline-amsd2041.test.ts",
+      "failures": 4,
+      "signatures": [
+        "expected N to be N // Object.is equality",
+        "expected N to be greater than or equal to N"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/gate-remediation-profile-target.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/gate-remediation-profile-target.test.ts",
+      "failures": 6,
+      "signatures": [
+        "expected N to be N // Object.is equality",
+        "expected 'info \"<v>\"typescript-enginee…/\\",
+        "expected '<v>' to match /\\$\\{_story_agent_role\\}/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/skill-note-dedup-truncation.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/skill-note-dedup-truncation.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected false to be true // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/codeline-loop-prd-merge-back.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/codeline-loop-prd-merge-back.test.ts",
+      "failures": 5,
+      "signatures": [
+        "expected false to be true // Object.is equality",
+        "Cannot read properties of undefined (reading '<v>')",
+        "expected null to be '<v>' // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/spec-reviewer-filesystem-access.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/spec-reviewer-filesystem-access.test.ts",
+      "failures": 3,
+      "signatures": [
+        "expected false to be true // Object.is equality",
+        "the instruction refers to evidence \"<v>\" — if the evidence is never injected, the reviewer is told t"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/skill-note-imperative-normalization.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/skill-note-imperative-normalization.test.ts",
+      "failures": 3,
+      "signatures": [
+        "expected false to be true // Object.is equality",
+        "expected '<v>' to match /NORMALIZED_RC=N/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/integration/codeline-write-perimeter.test.ts",
+      "archivedTo": "test/archived/integration/codeline-write-perimeter.test.ts",
+      "failures": 4,
+      "signatures": [
+        "expected false to be true // Object.is equality",
+        "expected '<v>' to match /perimeter_apply/",
+        "locking before the reset would leave a dirty tree frozen in place: expected -N to be greater than N"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/tools-coordinator-audit.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/tools-coordinator-audit.test.ts",
+      "failures": 4,
+      "signatures": [
+        "expected +N to be N // Object.is equality",
+        "expected [] to have a length of N but got +N",
+        "expected '<v>' to match /echo \"<v>\" > \"<v>\"/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/retry-extension-coordinator.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/retry-extension-coordinator.test.ts",
+      "failures": 3,
+      "signatures": [
+        "expected +N to be N // Object.is equality",
+        "expected +N to be close to N.N, received difference is N.N, but expected N.<hash>"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/per-attempt-cost-tracking.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/per-attempt-cost-tracking.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected +N to be N // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/regression-guard-rg-delta.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/regression-guard-rg-delta.test.ts",
+      "failures": 9,
+      "signatures": [
+        "expected +N to be N // Object.is equality",
+        "expected '<v>' to match /STEP_EMIT: N fail/",
+        "expected '<v>' to match /STEP_EMIT: N pass/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/integration/jira-ingest-project-identity.test.ts",
+      "archivedTo": "test/archived/integration/jira-ingest-project-identity.test.ts",
+      "failures": 7,
+      "signatures": [
+        "Cannot read properties of null (reading '<v>')",
+        "ingest failed:",
+        "AC classification on a brownfield ticket with no ACs is the token waste that was already removed onc"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/review-loop-distinguishes-reviewer-failure.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/review-loop-distinguishes-reviewer-failure.test.ts",
+      "failures": 5,
+      "signatures": [
+        "Cannot read properties of null (reading '<v>')",
+        "reviewer iteration budget not found: expected null to be truthy"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/lane-prd-states-its-own-lane.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/lane-prd-states-its-own-lane.test.ts",
+      "failures": 5,
+      "signatures": [
+        "Cannot read properties of null (reading '<v>')",
+        "filter produced nothing: : expected null to be truthy"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/observability-gaps.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/observability-gaps.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected -N to be greater than N"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/spec-review-plan-alignment.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/spec-review-plan-alignment.test.ts",
+      "failures": 3,
+      "signatures": [
+        "expected -N to be greater than N",
+        "brownfield reviewCriteria block not found: expected -N to be greater than N"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/a-resume-does-not-remint-the-roster.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/a-resume-does-not-remint-the-roster.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected -N to be greater than N"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/a-plan-must-name-what-produces-the-value.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/a-plan-must-name-what-produces-the-value.test.ts",
+      "failures": 4,
+      "signatures": [
+        "project-authority prompt missing: <path> Mint it from orchestrations/prompts/templates/code-graph-de"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/highest-ladder-and-finding-verification.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/highest-ladder-and-finding-verification.test.ts",
+      "failures": 3,
+      "signatures": [
+        "expected undefined to be '<v>' // Object.is equality",
+        "roster-review is not on the configured ladder: expected undefined to be '<v>' // Object.is equality",
+        "an unknown agent still gets nothing: expected {} to not deeply equal {}"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/a-seams-tool-grant-reaches-the-agent.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/a-seams-tool-grant-reaches-the-agent.test.ts",
+      "failures": 4,
+      "signatures": [
+        "expected undefined to be '<v>' // Object.is equality",
+        "expected '<v>' to be undefined",
+        "story-writer stopped declaring tools, so the assertions below prove nothing: expected undefined to b"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/minted-agents-are-wired.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/minted-agents-are-wired.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected undefined to be '<v>' // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/roster-rationale-must-say-something.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/roster-rationale-must-say-something.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected undefined to be '<v>' // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/minting-writes-the-agent-seam-crossreference.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/minting-writes-the-agent-seam-crossreference.test.ts",
+      "failures": 5,
+      "signatures": [
+        "expected undefined to be '<v>' // Object.is equality",
+        "Cannot read properties of undefined (reading '<v>')",
+        "<path>"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/injected-file-contents-honour-a-total-budget.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/injected-file-contents-honour-a-total-budget.test.ts",
+      "failures": 11,
+      "signatures": [
+        "injection loop anchors not found in claude.sh — extraction is stale",
+        "expected [Function] to not throw an error but '<v>' was thrown",
+        "existingFileInjection.maxTotalLines is absent, so the injected block is (file count) x maxLinesPerFi"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/assessment-agent-paths-and-scope.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/assessment-agent-paths-and-scope.test.ts",
+      "failures": 4,
+      "signatures": [
+        "assessment prompt not found: expected -N to be greater than -N"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/assessment-prompt-no-example-leakage.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/assessment-prompt-no-example-leakage.test.ts",
+      "failures": 4,
+      "signatures": [
+        "assessment prompt not found: expected -N to be greater than -N"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-mint-builds-this-projects-prompts.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-mint-builds-this-projects-prompts.test.ts",
+      "failures": 6,
+      "signatures": [
+        "[prompt-builder] could not generate a valid '<v>' in N attempt(s). Last refusal: the generated promp"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/brownfield-defect-requires-repro-test.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/brownfield-defect-requires-repro-test.test.ts",
+      "failures": 2,
+      "signatures": [
+        "Command failed: bash -c"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/reviewer-diffs-against-baseline.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/reviewer-diffs-against-baseline.test.ts",
+      "failures": 2,
+      "signatures": [
+        "Command failed: bash -c"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/reviewer-reviews-committed-test.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/reviewer-reviews-committed-test.test.ts",
+      "failures": 2,
+      "signatures": [
+        "Command failed: bash -c"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/spec-validator-parsing.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/spec-validator-parsing.test.ts",
+      "failures": 7,
+      "signatures": [
+        "start marker not found",
+        "expected '<v>' to match /pythonN - \"<v>\"/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/prd-model-coordinator-deterministic-reviewer.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/prd-model-coordinator-deterministic-reviewer.test.ts",
+      "failures": 6,
+      "signatures": [
+        "Could not extract the reviewer Python block — did the marker text change?"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/run-story-watchdog-timeout-config.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/run-story-watchdog-timeout-config.test.ts",
+      "failures": 5,
+      "signatures": [
+        "expected -N to be N // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/an-unparseable-review-was-reported-as-clean.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/an-unparseable-review-was-reported-as-clean.test.ts",
+      "failures": 5,
+      "signatures": [
+        "project-authority prompt missing: <path> Mint it from orchestrations/prompts/templates/survey-review"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/perf-sentinel-codesnippet-grounding.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/perf-sentinel-codesnippet-grounding.test.ts",
+      "failures": 5,
+      "signatures": [
+        "perf-sentinel grounding python block not found — source may have moved: expected -N to be greater th"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/gates-are-reachable-and-fail-closed.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/gates-are-reachable-and-fail-closed.test.ts",
+      "failures": 5,
+      "signatures": [
+        "Command failed: bash -c SCRIPT_DIR=\"<v>\""
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/review-ranger-codesnippet-grounding.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/review-ranger-codesnippet-grounding.test.ts",
+      "failures": 5,
+      "signatures": [
+        "review-ranger grounding python block not found — source may have moved: expected -N to be greater th"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/review-tool-budget.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/review-tool-budget.test.ts",
+      "failures": 5,
+      "signatures": [
+        "stub runner was never invoked (status=N)"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/mutant-hunter-grounding.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/mutant-hunter-grounding.test.ts",
+      "failures": 5,
+      "signatures": [
+        "mutant-hunter grounding python block not found — source may have moved: expected -N to be greater th"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/prompt-scratchpad-summarization.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/prompt-scratchpad-summarization.test.ts",
+      "failures": 7,
+      "signatures": [
+        "trimmer start marker not found",
+        "expected true to be false // Object.is equality",
+        "expected '<v>'%s\\'<v>' to match /heading_idxs = \\[i for i, l in enumer…/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/regression-guard-executes.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/regression-guard-executes.test.ts",
+      "failures": 6,
+      "signatures": [
+        "expected '<v>' to match /STEP_EMIT: N fail/",
+        "expected '<v>' to match /STEP_EMIT: N pass/",
+        "expected pass, got:"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/discovery-records-what-it-spends.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/discovery-records-what-it-spends.test.ts",
+      "failures": 4,
+      "signatures": [
+        "discovery exited N: rchestrations/scripts/lib/codeline-discovery.js:N:N"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/per-model-budgets-reach-the-seam.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/per-model-budgets-reach-the-seam.test.ts",
+      "failures": 5,
+      "signatures": [
+        "no model resolved — the rest proves nothing: expected '<v>' not to be '<v>' // Object.is equality",
+        "expected undefined not to be undefined // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/plugin-tools-reachable.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/plugin-tools-reachable.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected [] to have a length of N but got +N",
+        "codegraph_query is named in [orchestrations/scripts/team-lead-review.sh] but every EPAM_ALLOWED_TOOL"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/guard-feedback-reaches-next-attempt.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/guard-feedback-reaches-next-attempt.test.ts",
+      "failures": 7,
+      "signatures": [
+        "expected +N not to be +N // Object.is equality",
+        "the amendment assignment moved: expected -N to be greater than N",
+        "the writer is rejected and the next prompt is unchanged — attempts N and N were byte-identical live "
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/preflight-catches-what-runs-caught.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/preflight-catches-what-runs-caught.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected +N not to be +N // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/ac-gate-brownfield-no-llm.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/ac-gate-brownfield-no-llm.test.ts",
+      "failures": 8,
+      "signatures": [
+        "expected N to be greater than N",
+        "the codeline question must still be asked: expected '<v>' to match /codeline/i",
+        "expected '<v>' to match /sufficiency|acceptance criteria/i"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/vc-producer-grounding.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/vc-producer-grounding.test.ts",
+      "failures": 5,
+      "signatures": [
+        "expected N to be greater than N",
+        "the model was never spawned, so ordering proves nothing: expected [ '<v>' ] to include '<v>'",
+        "the fix-site reasoning never reached the producer: expected '<v>' to contain '<v>'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/built-cli-is-not-stale.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/built-cli-is-not-stale.test.ts",
+      "failures": 3,
+      "signatures": [
+        "expected N to be greater than N",
+        "no onToolCall handler in the shipped bundle at all: expected N to be greater than N",
+        "expected '<v>'use strict\\'<v>' to match /durationMs/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/prd-model-coordinator-unreported-mutation.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/prd-model-coordinator-unreported-mutation.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to match /ALLOWED_FIELDS = \\{'<v>', 'aiProvid…/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/prd-model-coordinator.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/prd-model-coordinator.test.ts",
+      "failures": 6,
+      "signatures": [
+        "expected '<v>' to match /ALLOWED_FIELDS = \\{'<v>', 'aiProvid…/",
+        "expected '<v>' to match /before_by_id = \\{s\\['<v>'\\]: s for s i…/",
+        "expected '<v>' to match /stories added:/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/partial-work-survives-a-completeness-rejection.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/partial-work-survives-a-completeness-rejection.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected true to be false // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/npm-test-fallback-scope.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/npm-test-fallback-scope.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to match /External verification failed for SKY-…/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/external-verification-timeout.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/external-verification-timeout.test.ts",
+      "failures": 6,
+      "signatures": [
+        "expected '<v>' to match /External verification failed for SKY-…/",
+        "expected '<v>' to match /External verification passed for SKY-…/",
+        "expected '<v>' to match /External verification TIMED OUT for S…/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/no-comment-inside-line-continuation.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/no-comment-inside-line-continuation.test.ts",
+      "failures": 3,
+      "signatures": [
+        "a `\\` continuation followed by a comment ENDS the command — bash -n accepts it, and the invocation t"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/syntax-class-escalation.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/syntax-class-escalation.test.ts",
+      "failures": 3,
+      "signatures": [
+        "expected null not to be null",
+        "expected '<v>' to match /patch only the broken line range/i"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/spec-pass-timeout-retry.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/spec-pass-timeout-retry.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected null not to be null",
+        "expected '<v>' to match /return Number\\.isFinite\\(v\\) && v > N…/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/vitest-npm-install-timeouts.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/vitest-npm-install-timeouts.test.ts",
+      "failures": 5,
+      "signatures": [
+        "expected '<v>' to match /timeout \"\\$\\{EPAM_TEST_T…/node_modules\\",
+        "the gate no longer runs vitest at all: expected undefined to be truthy",
+        "expected '<v>' to match /timeout \"\\$\\{EPAM_INSTALL_TIMEOUT_SEC…/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/resolve-codeline-node.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/resolve-codeline-node.test.ts",
+      "failures": 5,
+      "signatures": [
+        "expected '<v>' to match /node-versions\\/vN\\./vN\\.",
+        "expected '<v>' to match /node-versions\\/vN\\.N\\.N/vN\\.N\\.N",
+        "N/N failed: [{\"<v>\":N,\"<v>\":false},{\"<v>\":N,\"<v>\":false},{\"<v>\":N,\"<v>\":false},{\"<v>\":N,\"<v>\":false}"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/roster-correction-is-targeted.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/roster-correction-is-targeted.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to be undefined",
+        "expected [ '<v>', …(N) ] to deeply equal [ '<v>' ]"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-vocabulary-a-run-derived-survives-the-run.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-vocabulary-a-run-derived-survives-the-run.test.ts",
+      "failures": 2,
+      "signatures": [
+        "discovery exited N: e/projects/ai/epam-cli/orchestrations/scripts/lib/codeline-discovery.js:N:N)"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/vendor-contract-generation.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/vendor-contract-generation.test.ts",
+      "failures": 5,
+      "signatures": [
+        "expected [] to deeply equal [ '<v>' ]",
+        "stdout:  stderr: <tmp> line N: SCRIPT_DIR: unbound variable",
+        "expected '<v>' to match /RC=N/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-reset-guard-protects-required-edits.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-reset-guard-protects-required-edits.test.ts",
+      "failures": 4,
+      "signatures": [
+        "expected [ '<v>' ] to deeply equal []",
+        "the guard never reset — every assertion below would pass trivially: expected [ '<v>' ] to deeply equ",
+        "expected [ '<v>', '<v>' ] to deeply equal []"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/skill-note-duplicate-fallback.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/skill-note-duplicate-fallback.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to match /unreviewed-fallback/",
+        "expected '<v>' to match /Always export a main function/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/pre-review-gate-step19.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/pre-review-gate-step19.test.ts",
+      "failures": 3,
+      "signatures": [
+        "LOG: Step N: Pre-review build gate (vitest + tsc)...",
+        "N/N failed: expected [ N, N, N, N, N, N, N, N, N, N ] to have a length of +N but got N"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/self-heal-three-bugs-2026-07-20.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/self-heal-three-bugs-2026-07-20.test.ts",
+      "failures": 3,
+      "signatures": [
+        "expected '<v>' to match /story_id.*story|story.*story_id/",
+        "expected '<v>' to match /target.*not in.*none|target.*!=.*none/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/agent-roster-is-minted-per-project.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/agent-roster-is-minted-per-project.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected null to be '<v>' // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/escalation-path-format-mismatch.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/escalation-path-format-mismatch.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>'t open file \\'<v>' to match /owned by SKY-N-impl/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-writer-prompt-loses-nothing-in-migration.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-writer-prompt-loses-nothing-in-migration.test.ts",
+      "failures": 4,
+      "signatures": [
+        "'<v>' never reached the prompt — the writer would not be told it: expected '<v>' to contain '<v>'",
+        "the harness rendered almost nothing, so every capture below would match trivially and prove nothing:",
+        "render failed: [model-ladders] settings file not found: /dev/null — no ladder chains exported"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/atomic-json-writes.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/atomic-json-writes.test.ts",
+      "failures": 7,
+      "signatures": [
+        "expected '<v>' to match /_tmp_prd_path = prd_path \\+ '<v>'/",
+        "the skill-note persistence write is gone entirely: expected -N to be greater than -N",
+        "expected '<v>' to match /_tmp_path = path \\+ '<v>'/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/every-agent-can-climb-a-ladder.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/every-agent-can-climb-a-ladder.test.ts",
+      "failures": 1,
+      "signatures": [
+        "Command failed: bash -c set -uo pipefail"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/skipping-the-mint-preserves-the-roster.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/skipping-the-mint-preserves-the-roster.test.ts",
+      "failures": 1,
+      "signatures": [
+        "Command failed: bash -c set -uo pipefail"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/hot-swap-unstable-model.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/hot-swap-unstable-model.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected [ N, N ] to deeply equal [ N, N ]"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/a-detective-rerun-keeps-what-it-did-not-investigate.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/a-detective-rerun-keeps-what-it-did-not-investigate.test.ts",
+      "failures": 3,
+      "signatures": [
+        "expected [ '<v>' ] to deeply equal [ '<v>' ]",
+        "expected [ '<v>', '<v>' ] to not include '<v>'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/review-agent-ladder-resumes.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/review-agent-ladder-resumes.test.ts",
+      "failures": 3,
+      "signatures": [
+        "expected [] to deeply equal [ '<v>', '<v>' ]",
+        "a sibling story'<v>'model-a'<v>'model-b' ]"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/guarded-step-retry-history.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/guarded-step-retry-history.test.ts",
+      "failures": 3,
+      "signatures": [
+        "Command failed: <path> <tmp>",
+        "expected '<v>'ac-review\\'<v>' to match /violationTypes:/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/regression-delta-gate-3-58.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/regression-delta-gate-3-58.test.ts",
+      "failures": 6,
+      "signatures": [
+        "expected pass:",
+        "expected the new failure to be named:",
+        "N-vs-N different tests must still fail:"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/regression-guard-retries-flakes.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/regression-guard-retries-flakes.test.ts",
+      "failures": 8,
+      "signatures": [
+        "expected pass:",
+        "a one-off flake still blocked the run:",
+        "the second retry was never attempted:"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-ac-gate-prompts-are-templates.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-ac-gate-prompts-are-templates.test.ts",
+      "failures": 2,
+      "signatures": [
+        "[ac-gate] no model resolved for this seam. Its ladder declares none, or the tier's chain is unset. R"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/brownfield-test-policy-enforcement.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/brownfield-test-policy-enforcement.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to match /Brownfield Testing Policy/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/canonical-codeline-loop.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/canonical-codeline-loop.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to contain '<v>'$OUTPUT_DIR\\'<v>'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/integration/mint-sees-the-real-stack.test.ts",
+      "archivedTo": "test/archived/integration/mint-sees-the-real-stack.test.ts",
+      "failures": 1,
+      "signatures": [
+        "the engine guessed a manifest filename — that is stack knowledge in generic code: expected [ '<v>' ]"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/cpa-model-coordinator-self-heal.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/cpa-model-coordinator-self-heal.test.ts",
+      "failures": 5,
+      "signatures": [
+        "expected '<v>' to match /ORCH_GATE_MODEL:-/",
+        "expected '<v>' to match /new_profiles/",
+        "expected '<v>' to match /_pfa_before_tmp=\\$\\(mktemp\\)/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/spec-context-combined-sources.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/spec-context-combined-sources.test.ts",
+      "failures": 1,
+      "signatures": [
+        "script output:"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/one-ladder-handler-for-every-agent.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/one-ladder-handler-for-every-agent.test.ts",
+      "failures": 3,
+      "signatures": [
+        "no models discovered from any project llm-settings.json: expected N to be greater than N",
+        "post-impl-tc-writer.sh announces seam(s) tc-writer which declare a ladder, but it neither calls the ",
+        "team-lead-review.sh reads EPAM_MODEL_LADDER_HIGH directly, pinning it to one tier regardless of what"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/one-rung-per-failed-analyst-attempt.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/one-rung-per-failed-analyst-attempt.test.ts",
+      "failures": 3,
+      "signatures": [
+        "the stub runner was never called — the harness never reached the retry loop: expected N to be greate",
+        "both escalation branches fired on the same failure: the unusable-answer branch sets analyst_json=\"<v",
+        "a failing call recorded no rung, so the analyst re-asks an unreachable model until its attempts are "
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/repro-writer-typecheck-feedback.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/repro-writer-typecheck-feedback.test.ts",
+      "failures": 2,
+      "signatures": [
+        "no writer prompt captured: expected N to be greater than N",
+        "no retry happened — cannot check feedback: expected N to be greater than N"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/client-env-boundary-plugin.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/client-env-boundary-plugin.test.ts",
+      "failures": 1,
+      "signatures": [
+        "the plugin did not flag CONTENTSTACK_LIVE_PREVIEW_ENABLED being read in client code — this is the ex"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/engine-is-generic.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/engine-is-generic.test.ts",
+      "failures": 1,
+      "signatures": [
+        "The engine must run on the NEXT UNKNOWN project unmodified. These lines name a specific client, proj"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/a-launcher-that-never-reset-anything.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/a-launcher-that-never-reset-anything.test.ts",
+      "failures": 1,
+      "signatures": [
+        "last run's assignments survived the reset (\u001b[N;Nm[pre-run-reset] ✓\u001b[Nm PRD: <tmp>"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/an-analyst-that-says-nothing-must-say-why.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/an-analyst-that-says-nothing-must-say-why.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to match /json\\.loads\\(text\\.strip\\(\\)\\)/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/dependency-repair-non-destructive.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/dependency-repair-non-destructive.test.ts",
+      "failures": 5,
+      "signatures": [
+        "there is no way to opt into a clean install at all: expected '<v>' to match /DEPS_CLEAN_INSTALL|CLEA",
+        "nothing checks whether the repair made things worse: expected '<v>' to match /_before|_prior_count|e",
+        "no before/after comparison exists: expected -N to be greater than -N"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/reviewer-no-silent-approve.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/reviewer-no-silent-approve.test.ts",
+      "failures": 2,
+      "signatures": [
+        "reviewer iteration cap not found: expected null to be truthy",
+        "expected '<v>' to match /result = \\{'<v>': 'changes_reques…/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/run-report-inputs.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/run-report-inputs.test.ts",
+      "failures": 1,
+      "signatures": [
+        "\"<v>\" is emitted but never written to $LOG_FILE, so the report shows \"<v>\" on every run: expected '<"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/discovery-produces-the-codeline-facts.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/discovery-produces-the-codeline-facts.test.ts",
+      "failures": 1,
+      "signatures": [
+        "discovery wrote no codeline facts:"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/tool-creation-retry.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/tool-creation-retry.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' not to contain '<v>'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/prompts-carry-no-client-values.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/prompts-carry-no-client-values.test.ts",
+      "failures": 1,
+      "signatures": [
+        "the live file is identical to the restore source — then it is not run state: expected '<v>' // Objec"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/review-incomplete-not-changes-requested.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/review-incomplete-not-changes-requested.test.ts",
+      "failures": 1,
+      "signatures": [
+        "the unparseable synthetic verdict was not found: expected -N to be greater than -N"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/mutant-hunter-truncation-marker.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/mutant-hunter-truncation-marker.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to match /\\[TRUNCATED — N total lines, showin…/",
+        "expected '<v>' to match /\\[TRUNCATED — N total lines, showing…/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/reviewers-use-story-outputs.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/reviewers-use-story-outputs.test.ts",
+      "failures": 1,
+      "signatures": [
+        "marker not found: You are acting as the review-ranger agent: expected -N to be greater than -N"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-last-three-prompts-are-templates.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-last-three-prompts-are-templates.test.ts",
+      "failures": 1,
+      "signatures": [
+        "tc-writer did not render: expected '<v>' not to match /__NOT_PRODUCED__/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-vc-prompts-are-templates.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-vc-prompts-are-templates.test.ts",
+      "failures": 1,
+      "signatures": [
+        "[engine-prompt] '<v>' was given EMPTY values for: __STORY_DESCRIPTION__. An empty payload renders as"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/assignment-follows-the-settled-roster.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/assignment-follows-the-settled-roster.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to match /readFileSync\\(PROFILES_PATH/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/gate-agent-tool-call-budgets.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/gate-agent-tool-call-budgets.test.ts",
+      "failures": 1,
+      "signatures": [
+        "tc-writer invocation is gone — this is anchored to nothing: expected -N to be greater than -N"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/a-tool-timeout-is-declared.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/a-tool-timeout-is-declared.test.ts",
+      "failures": 1,
+      "signatures": [
+        "these are independent decisions with no single home. Declare them in config/tool-timeouts.json and r"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-analyst-is-reached-when-healing-is-broken.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-analyst-is-reached-when-healing-is-broken.test.ts",
+      "failures": 6,
+      "signatures": [
+        "the loop never reached the deterministic-check branch — the harness is not driving the real path: ex",
+        "HealingBroken was never reached, so the situation under test did not occur: expected '<v>' to contai",
+        "no rung advance at all — the harness is not exercising the ladder: expected '<v>' to match /rung N|R"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/agent-retry-medium-low.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/agent-retry-medium-low.test.ts",
+      "failures": 3,
+      "signatures": [
+        "expected '<v>' to match /ORCH_GATE_MODEL.*ESCALATION_MODEL_HI…/s",
+        "expected '<v>' to match /_saved_pa_model[\\s\\S]{N,N}ORCH_GAT…/s",
+        "expected '<v>' to match /_tc_bn_err[\\s\\S]{N,N}_tc_run_promp…/s"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/prd-profiles-file-locking.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/prd-profiles-file-locking.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>'s spend fig…' to match /flock -w N N \\|\\| \\{ error \"  \\[Fa…/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/project-tools-lib.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/project-tools-lib.test.ts",
+      "failures": 1,
+      "signatures": [
+        "reviewer allow-list line not found: expected undefined to be truthy"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/a-generated-prompt-keeps-its-may-be-empty.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/a-generated-prompt-keeps-its-may-be-empty.test.ts",
+      "failures": 1,
+      "signatures": [
+        "mayBeEmpty names a placeholder the template body does not contain: expected [ Array(N) ] to deeply e"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/self-heal-never-silently-fails.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/self-heal-never-silently-fails.test.ts",
+      "failures": 2,
+      "signatures": [
+        "analyst swallowed a failed model call and exited N — the caller cannot tell self-heal did nothing, a",
+        "empty corrective for a correctable failure class reported as success: expected +N not to be +N // Ob"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-project-declares-what-it-owns.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-project-declares-what-it-owns.test.ts",
+      "failures": 5,
+      "signatures": [
+        "mockN declares no files: expected N to be greater than N",
+        "declared as required but absent — the declaration is a lie: expected [ '<v>' ] to deeply equal []",
+        "present in the project folder and declared nowhere: expected [ '<v>', '<v>', …(N) ] to deeply equal "
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/module-resolution-context.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/module-resolution-context.test.ts",
+      "failures": 3,
+      "signatures": [
+        "no module root named:",
+        "did not discover lib/ as a root:",
+        "expected '<v>' to match /not (a )?dependenc|never.*install|in…/i"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/tc-writer-manifest-supersedes.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/tc-writer-manifest-supersedes.test.ts",
+      "failures": 4,
+      "signatures": [
+        "the .spec.ts the run produced is invisible, so no test criteria are written for it: the given combin",
+        "the given combination of arguments (undefined and string) is invalid for this assertion. You can use",
+        "expected undefined to deeply equal [ '<v>' ]"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/vc-sufficiency-and-downstream.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/vc-sufficiency-and-downstream.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to match /verificationCriteria/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/impl-does-not-own-the-test.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/impl-does-not-own-the-test.test.ts",
+      "failures": 1,
+      "signatures": [
+        "a story with no prescribed fix lost the brownfield coverage policy: expected '<v>' to match /Brownfi"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/codegraph-show-source.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/codegraph-show-source.test.ts",
+      "failures": 3,
+      "signatures": [
+        "an unbounded dump would swamp the context window: expected N to be less than N",
+        "the tool can show source but the detective is never told: expected '<v>' to match /\\bshow\\b[^\\n]*<fi",
+        "nothing tells the model to look at the line it is about to quote: expected '<v>' to match /read the "
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/reviewer-high-effort.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/reviewer-high-effort.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to match /EPAM_REASONING_EFFORT=\"\\$\\{REVIEW_REA…/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/assessment-apply.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/assessment-apply.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to match /storyRoleAssignments/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/codeline-scope-is-resolved-however-the-prd-arrived.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/codeline-scope-is-resolved-however-the-prd-arrived.test.ts",
+      "failures": 1,
+      "signatures": [
+        "resolver exited N: [codeline-discovery] Scanning <tmp> for git repositories..."
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/agent-story-ac-remediator.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/agent-story-ac-remediator.test.ts",
+      "failures": 3,
+      "signatures": [
+        "expected '<v>' to match /setdefault\\('<v>', \\[\\…/",
+        "expected '<v>' to match /json\\.dump\\(prd, f/",
+        "expected '<v>' to match /PRD_FILE|prd.*file/i"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/manifest-schema-and-review.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/manifest-schema-and-review.test.ts",
+      "failures": 1,
+      "signatures": [
+        "<path> [\"schema: N validation errors for DependencyManifest\\nbuildArtifactDirs\\n  Extra inputs are n"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/an-unmatched-agent-fails-loudly.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/an-unmatched-agent-fails-loudly.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>'kramble-widget-flanger\\'<v>' to match /agentSeams/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-prompt-chain-keeps-its-names.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-prompt-chain-keeps-its-names.test.ts",
+      "failures": 3,
+      "signatures": [
+        "agent-name-refusal.json does not declare its seams: expected false to be true // Object.is equality",
+        "a prompt points at a seam that does not exist:",
+        "these seams have a ladder, an effort and tool grants, but no prompt in the template layer — so whate"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/spec-coordinator-review-brownfield.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/spec-coordinator-review-brownfield.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to match /\\{\"<v>\":\"<v>\",\"<v>\":\"appr…/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/mock-external-cms-apis.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/mock-external-cms-apis.test.ts",
+      "failures": 2,
+      "signatures": [
+        "the instruction does not limit itself to the declared hosts, so an agent can read it as licence to s",
+        "nothing states that other integrations keep their real coverage: expected '<v>' to match /other|rema"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/self-heal-across-failure-classes.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/self-heal-across-failure-classes.test.ts",
+      "failures": 1,
+      "signatures": [
+        "no episode was recorded — self-heal did nothing. [agent-attempt-analyst] diagnosing malformed via st"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-writer-is-told-what-it-did-on-every-retry.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-writer-is-told-what-it-did-on-every-retry.test.ts",
+      "failures": 5,
+      "signatures": [
+        "the writer was not told what its last attempt did: expected '<v>' to contain '<v>'",
+        "a new-process retry did not receive the evidence — the review-cycle gap: expected '<v>' to contain '",
+        "expected '<v>' to match /diffstat|not a judgement|evidence/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/prd-remediate-phase-transition-selfheal.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/prd-remediate-phase-transition-selfheal.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to match /\\.test\\.ts active stories using minim…/",
+        "expected '<v>' to match /using minimax/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-highest-tier-is-reachable-end-to-end.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-highest-tier-is-reachable-end-to-end.test.ts",
+      "failures": 1,
+      "signatures": [
+        "highest resolved to the medium ladder — the operator asked for the strongest chain and got the weake"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-mint-refuses-an-unbuildable-workflow.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-mint-refuses-an-unbuildable-workflow.test.ts",
+      "failures": 2,
+      "signatures": [
+        "a deliberate override was silently reverted: expected '<v>' to be '<v>' // Object.is equality",
+        "prompt-builder requires '<v>'; prompt-review requires '<v>'; roster-specialiser requires '<v>'; topo"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/nothing-extracted-is-left-unwired.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/nothing-extracted-is-left-unwired.test.ts",
+      "failures": 1,
+      "signatures": [
+        "N template(s) exist that no shipped script renders. Each is either wiring that was never finished, o"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/tsc-verify-baseline-diff.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/tsc-verify-baseline-diff.test.ts",
+      "failures": 3,
+      "signatures": [
+        "stdout: WARNING:   [tsc-verify] TEST-STORY: the project declares no typecheck command — the check co",
+        "expected '<v>' not to match /legacy\\.ts/",
+        "expected '<v>' to match /FIRST_EXIT:N/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/no-template-carries-a-project-fact.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/no-template-carries-a-project-fact.test.ts",
+      "failures": 2,
+      "signatures": [
+        "identifier(s) declared by a project appear in a generic template: BRIDGE_SRC_CODELINE, BRIDGE_SRC_DI",
+        "'<v>' is a project name in a generic template: expected '<v>' not to match /\\bmockN\\b/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-self-heal-analyst-diagnosed-blind.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-self-heal-analyst-diagnosed-blind.test.ts",
+      "failures": 1,
+      "signatures": [
+        "EPAM_REASONING_EFFORT is still set here — the profile is not the source of truth: expected '<v>' not"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/spec-agent-split-rules-brownfield.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/spec-agent-split-rules-brownfield.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to match /SPLIT RULES \\(mandatory, not optional/",
+        "expected '<v>' to match /N\\. AC count > N → you MUST propose …/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/observability/traced-provider-readable-traces.test.ts",
+      "archivedTo": "test/archived/unit/observability/traced-provider-readable-traces.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to match /EPAM_STORY_ID|storyId/",
+        "expected '<v>' to match /agentLabel[\\s\\S]{N,N}(\\?\\?|\\|\\|)/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/generation-must-keep-the-output-contract.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/generation-must-keep-the-output-contract.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to match /output|shape|contract|answer/i",
+        "no faithful generation passed — the check has become a blanket refusal: expected N to be greater tha"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/detective-fix-and-reuse-profiles.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/detective-fix-and-reuse-profiles.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to match /PRESCRIBE THE MINIMAL FIX/",
+        "expected '<v>' to match /LOCATE AN EXISTING HELPER/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/test-authorship-has-one-owner.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/test-authorship-has-one-owner.test.ts",
+      "failures": 3,
+      "signatures": [
+        "the fixture produced nothing — the assertions here would be vacuous: expected '<v>' not to be '<v>' ",
+        "with no fix site the writer is never told tests are not its job, and the brief wins: expected '<v>' ",
+        "expected '<v>' to match /\\*\\.test\\.\\*/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/known-fixes.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/known-fixes.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to match /\\.epam\\/known-fixes\\…/known-fixes\\.json",
+        "expected '<v>' to match /\"<v>\":\\s*\"<v>\"/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/review-diff-truncation-marker.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/review-diff-truncation-marker.test.ts",
+      "failures": 3,
+      "signatures": [
+        "expected '<v>' to match /\\[TRUNCATED — \\$\\{?_diff_total_lines\\…/",
+        "expected '<v>' to match /-gt N/",
+        "expected '<v>' to match /TRUNCATED — \\d+ total lines, only the…/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/deps-damage-halts-lane.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/deps-damage-halts-lane.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected a pass:",
+        "the operator is told the wrong thing: expected '<v>' to match /cannot be verified|dependencies|unus…"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-ladder-is-the-only-source-of-a-model.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-ladder-is-the-only-source-of-a-model.test.ts",
+      "failures": 1,
+      "signatures": [
+        "N agent(s) resolve no model from the ladder:: expected [ '<v>', '<v>', …(N) ] to deeply equal []"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/a-legitimately-absent-value-renders.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/a-legitimately-absent-value-renders.test.ts",
+      "failures": 1,
+      "signatures": [
+        "[engine-prompt] '<v>' was given EMPTY values for: __DESCRIPTION__. An empty payload renders as a bla"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/what-the-seam-receives.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/what-the-seam-receives.test.ts",
+      "failures": 4,
+      "signatures": [
+        "team-lead-review receives no model under '<v>': expected undefined to be truthy",
+        "the set declares these and the seam never receives them: expected [ …(N) ] to deeply equal []",
+        "team-lead-review has no redirect — it would call the live API: expected '<v>' to be truthy"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/pipeline-seams-e2e.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/pipeline-seams-e2e.test.ts",
+      "failures": 3,
+      "signatures": [
+        "the gate did not take its scope from the writer-output manifest: expected '<v>' to match /scope: N f",
+        "the inherited finding was attributed to this run: expected '<v>' to match /NEW_FINDINGS=N/",
+        "a finding introduced by this run passed the gate: expected '<v>' to match /RC=N/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/ladder-tier-classification.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/ladder-tier-classification.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to match /export ESCALATION_MODEL_HIGH=\"\\$\\{ESC…/",
+        "expected '<v>' not to be '<v>' // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/mock-metrolinx-flow-parity.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/mock-metrolinx-flow-parity.test.ts",
+      "failures": 1,
+      "signatures": [
+        "SPEC_MODE_PROVIDER is not set in metrolinx config — update this list: expected null to be truthy"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/codegraph-plugin-provisioning.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/codegraph-plugin-provisioning.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>'term…' to match /args is required/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/every-seam-script-asks-for-its-ladder.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/every-seam-script-asks-for-its-ladder.test.ts",
+      "failures": 1,
+      "signatures": [
+        "these invoke an agent and ask for no ladder: expected [ '<v>', '<v>' ] to deeply equal []"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/skill-domain-guidance-config.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/skill-domain-guidance-config.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to match /\\$_skill_domain_guidance/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/an-instance-inherits-from-its-own-archetype.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/an-instance-inherits-from-its-own-archetype.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected [ '<v>', …(N) ] to include undefined"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/roster-owns-code-and-tests.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/roster-owns-code-and-tests.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to match /the code owner is the assignee/i",
+        "expected '<v>' to match /exactly one role/i"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/kb-analyst-emits-constraint.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/kb-analyst-emits-constraint.test.ts",
+      "failures": 3,
+      "signatures": [
+        "the analyst produced no episode — its diagnosis is lost the moment it returns: expected N to be grea",
+        "no constraint synthesised — the retry would run with no enforcement at all: expected +N to be N // O",
+        "a failed analyst must remain detectable (BN): expected +N not to be +N // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/cost-attribution-per-agent.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/cost-attribution-per-agent.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to match /costAgent:\\s*tag/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/no-run-wide-gate-model-pin.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/no-run-wide-gate-model-pin.test.ts",
+      "failures": 1,
+      "signatures": [
+        "ORCH_GATE_MODEL is a run-wide pin; the seam's ladder decides: expected [ Array(N) ] to deeply equal "
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/prompt-registry.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/prompt-registry.test.ts",
+      "failures": 1,
+      "signatures": [
+        "prompt extraction found nothing — the rules below prove nothing: expected N to be greater than N"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-reviewer-actually-executes.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-reviewer-actually-executes.test.ts",
+      "failures": 5,
+      "signatures": [
+        "no prompt was ever handed to the runner — the script died first: expected N to be greater than N",
+        "the scan_secrets tool example did not reach the model intact: expected '<v>' to match /scan_secrets\\",
+        "the `name: value` example was executed instead of sent: expected '<v>' to match /name: value/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/scan-secrets-tool-tells-literal-from-reference.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/scan-secrets-tool-tells-literal-from-reference.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to match /EPAM_ALLOWED_TOOLS=\"<v>\"]*_review_plug…/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-test-gate-inherits-pre-existing-failures.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-test-gate-inherits-pre-existing-failures.test.ts",
+      "failures": 1,
+      "signatures": [
+        "_test_head assignment not found — the test is stale: expected null to be truthy"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/a-generated-project-prompt-honours-its-template.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/a-generated-project-prompt-honours-its-template.test.ts",
+      "failures": 1,
+      "signatures": [
+        "templates nothing provisions: ac-classification, ac-elaboration, ac-gate-codeline-assignment, agent-"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/spec-agent-prompt-construction.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/spec-agent-prompt-construction.test.ts",
+      "failures": 2,
+      "signatures": [
+        "promise rejected \"<v>\" instead of resolving",
+        "[engine-prompt] '<v>' was given EMPTY values for: __SPANS_SENTENCE__. An empty payload renders as a "
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/spec-contract-violation-retry.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/spec-contract-violation-retry.test.ts",
+      "failures": 1,
+      "signatures": [
+        "speckit is not told to avoid fabricating tool results — it can invent one again: expected '<v>' to m"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/prd-kept-the-previous-runs-assignments.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/prd-kept-the-previous-runs-assignments.test.ts",
+      "failures": 3,
+      "signatures": [
+        "the run inherited the previous run'<v>'transit-fare-engineer' to be undefined",
+        "a resolved codeline survived the reset: expected '<v>' to be undefined",
+        "a corrupt canonical was tolerated and the run started stale: expected +N not to be +N // Object.is e"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/every-deliberately-empty-block-is-declared.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/every-deliberately-empty-block-is-declared.test.ts",
+      "failures": 1,
+      "signatures": [
+        "this placeholder is supplied by a lookup that may fail, so empty means BROKEN, not absent. Declaring"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/prd-remediate-phase-scoped.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/prd-remediate-phase-scoped.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to match /phase_ids = set\\(d\\.get\\('implementat…/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-ladder-escalates-the-model-across-invocations.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-ladder-escalates-the-model-across-invocations.test.ts",
+      "failures": 1,
+      "signatures": [
+        "this is what the ladder did before the model was persisted: expected '<v>' to be '<v>' // Object.is "
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/story-cost-tracking.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/story-cost-tracking.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to match /variance_cost_usd|forecast_cost_usd|a…/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/minted-briefs-survive-the-restore.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/minted-briefs-survive-the-restore.test.ts",
+      "failures": 2,
+      "signatures": [
+        "the registry still names this role, so without its brief assignment refuses and resume dies: expecte",
+        "a-domain-engineer is registered but has no brief: expected undefined to be truthy"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/a-project-declares-only-its-differences.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/a-project-declares-only-its-differences.test.ts",
+      "failures": 1,
+      "signatures": [
+        "hello-dolly: ladders moved: expected { medium: { …(N) }, …(N) } to deeply equal undefined"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-search-vocabulary-agent-never-ran.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-search-vocabulary-agent-never-ran.test.ts",
+      "failures": 3,
+      "signatures": [
+        "the vocabulary agent was never invoked — the run degraded silently: expected '<v>' to match /guard-v",
+        "a null exec still skips the agent: expected '<v>' to match /guard-vocabulary/",
+        "project-authority prompt missing: <path> Mint it from orchestrations/prompts/templates/guard-vocabul"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/observability-preflight.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/observability-preflight.test.ts",
+      "failures": 2,
+      "signatures": [
+        "must not crash on an undefined command:",
+        "must not crash:"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/every-archetype-declares-what-it-makes-and-needs.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/every-archetype-declares-what-it-makes-and-needs.test.ts",
+      "failures": 1,
+      "signatures": [
+        "nothing produces:"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/tools/the-writer-is-told-it-may-fill-gaps.test.ts",
+      "archivedTo": "test/archived/unit/tools/the-writer-is-told-it-may-fill-gaps.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to match /no other story|not owned|owns/i",
+        "expected '<v>' to match /say|report|state|name/i"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/prd-remediate-deprecated-archive-skip.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/prd-remediate-deprecated-archive-skip.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to match /s\\.get\\('<v>'\\)\\s*!=\\s*'<v>'/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/ladder-covers-assigned-models.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/ladder-covers-assigned-models.test.ts",
+      "failures": 2,
+      "signatures": [
+        "Model(s) assigned to a story but missing from EPAM_MODEL_LADDER_MEDIUM: z-ai/glm-N.N — a story on th",
+        "Model(s) assigned to a story but missing from EPAM_MODEL_LADDER_HIGH: z-ai/glm-N.N: expected [ '<v>'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/no-agent-is-handed-a-blank-payload.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/no-agent-is-handed-a-blank-payload.test.ts",
+      "failures": 1,
+      "signatures": [
+        "templates exempting a placeholder they do not use: project-prompt-generation.json:__PREVIOUS_REFUSAL"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/brownfield-writer-storykind.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/brownfield-writer-storykind.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to match /FIND FIRST/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/no-project-inherits-another-projects-documents.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/no-project-inherits-another-projects-documents.test.ts",
+      "failures": 1,
+      "signatures": [
+        "a cache that survives the reset is announced as a clean slate: expected '<v>' to match /fail_contami"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/detective-twophase-and-ac-mechanism.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/detective-twophase-and-ac-mechanism.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to match /ENRICHMENT RULE/",
+        "expected '<v>' to match /Describe WHAT to verify \\(observable …/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/impl-suppress-exploration-when-helper-known.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/impl-suppress-exploration-when-helper-known.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to match /do NOT search|already identified/i",
+        "expected '<v>' to match /CodeGraph Tool|do this BEFORE writing…/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/healing-effectiveness.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/healing-effectiveness.test.ts",
+      "failures": 3,
+      "signatures": [
+        "expected '<v>' to contain '<v>'\\n- [%s] %s\\n\\'<v>'",
+        "expected '<v>' to match />>/",
+        "expected '<v>' to match />>\\s*\"<v>\"/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/a-blocker-must-be-satisfiable.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/a-blocker-must-be-satisfiable.test.ts",
+      "failures": 1,
+      "signatures": [
+        "this project has no version of it: expected [Function] to not throw an error but '<v>' was thrown"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/assessment-turn-budget.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/assessment-turn-budget.test.ts",
+      "failures": 3,
+      "signatures": [
+        "the precompute block is gone — the agent would be back to reading files itself: expected '<v>' to ma",
+        "expected '<v>' to match /EPAM_MAX_TOOL_CALLS=\"\\$\\{_pfa_tool_bu…/",
+        "no team-lead-agent call sites found — the sweep is inert: expected N to be greater than N"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/agent-invocation-params-complete.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/agent-invocation-params-complete.test.ts",
+      "failures": 3,
+      "signatures": [
+        "ai-run.sh must floor the budget so an unset site cannot fall to AgentRunner's N: expected null to be",
+        "expected '<v>' to match /EPAM_MAX_OUTPUT_TOKENS=\"\\$\\{EPAM_MAX_…/",
+        "new agent invocation site(s) — register in AGENT_SITES and confirm the budget: expected [ Array(N) ]"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/ladder-traversal.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/ladder-traversal.test.ts",
+      "failures": 6,
+      "signatures": [
+        "only reached: : expected [] to include '<v>'",
+        "four configured rungs but only N attempt(s) — the top of the ladder cannot be reached: expected +N t",
+        "expected [] to deeply equal [ '<v>', '<v>', …(N) ]"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-mint-links-prompts-to-the-agents-it-minted.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-mint-links-prompts-to-the-agents-it-minted.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected [ '<v>' ] to include '<v>'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/agent-tool-budget.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/agent-tool-budget.test.ts",
+      "failures": 3,
+      "signatures": [
+        "the prompt never tells the agent to converge: expected '<v>' to match /HARD LIMIT: \\$\\{_pfa_tool_bud",
+        "the agent is told to stop but not to return its best answer: expected '<v>' to match /BEST current a",
+        "team-lead review lost its tool budget: expected '<v>' to match /EPAM_MAX_TOOL_CALLS=/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/ticket-link-agent-wiring.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/ticket-link-agent-wiring.test.ts",
+      "failures": 1,
+      "signatures": [
+        "a documentation lookup is evidence-gathering, not a gate — it must degrade, not abort: expected '<v>"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/base-state-files-cannot-drift.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/base-state-files-cannot-drift.test.ts",
+      "failures": 3,
+      "signatures": [
+        "profiles.canonical.json is missing N role(s) that profiles.json.original restores: agent-systems-eng",
+        "expected [ '<v>', …(N) ] to deeply equal [ '<v>', …(N) ]",
+        "the same role is briefed differently in the two base files: typescript-engineer, test-engineer, team"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/discovery-multi-codeline.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/discovery-multi-codeline.test.ts",
+      "failures": 3,
+      "signatures": [
+        "nothing tells the agent a single ticket can belong to more than one repo — the AMSD-N failure, where",
+        "one reason covers every selection, so a bad pick is unattributable: expected '<v>' to match /(each|e",
+        "expected '<v>' not to match /gotransit|upexpress|metrolinx|conten…/i"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-mint-provisions-only-prompts-something-reads.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-mint-provisions-only-prompts-something-reads.test.ts",
+      "failures": 1,
+      "signatures": [
+        "N provisioned prompt(s) can never be executed — engine-prompt.js reads the template, never the proje"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-prd-change-prompts-are-templates.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-prd-change-prompts-are-templates.test.ts",
+      "failures": 1,
+      "signatures": [
+        "reviewer did not render: expected '<v>' not to match /__NOT_PRODUCED__/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/role-based-generic-escalation.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/role-based-generic-escalation.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to match /\\$\\{timeout_secs\\} \\* \\$\\{role_multip…/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/every-prompt-lives-in-the-template-layer.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/every-prompt-lives-in-the-template-layer.test.ts",
+      "failures": 2,
+      "signatures": [
+        "N multi-line literal(s) in JS are unexplained. Each is a prompt to migrate, or a non-prompt to allow",
+        "N multi-line quoted string(s) in shell are unexplained. Each is a prompt to migrate, or a non-prompt"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/prompt-values-died-at-128kb.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/prompt-values-died-at-128kb.test.ts",
+      "failures": 1,
+      "signatures": [
+        "still dies: [render-engine-prompt] FAILED to render '<v>': <path>"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-narrative-is-made-of-this-run.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-narrative-is-made-of-this-run.test.ts",
+      "failures": 5,
+      "signatures": [
+        "the generator was given a baseline that does not exist in the codeline, and the report it produced s",
+        "N% of the narrative is identical across two different runs — that text is boilerplate, not a report ",
+        "the report states date(s) that appear nowhere in this run'<v>'N July' ] to have a length of +N but g"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/brownfield-story-selectors.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/brownfield-story-selectors.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to match /phase_stories_brownfield_scope/",
+        "vc-coverage sat in the else-branch of the repro gate, so every novel story — which the gate never se"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/integration/codeline-discovery-structural.test.ts",
+      "archivedTo": "test/archived/integration/codeline-discovery-structural.test.ts",
+      "failures": 2,
+      "signatures": [
+        "discovery log:",
+        "expected '<v>' not to match /gotransit|upexpress|metrolinx|cN|c…/i"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/spec-pass-activity-events.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/spec-pass-activity-events.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' : \\'<v>',\\n      __PHASE__: opts.ph…'<v>'} catch (err) { llmDecisions = null; }'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/tsc-retry-in-loop.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/tsc-retry-in-loop.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to match /_new_errors:N:N/",
+        "expected '<v>' to match />> \"<v>\"/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/vc-form-samples.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/vc-form-samples.test.ts",
+      "failures": 1,
+      "signatures": [
+        "[engine-prompt] '<v>' was given EMPTY values for: __FLAG_LIST__, __SITE_BLOCK__. An empty payload re"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/selfheal-induced-failure-e2e.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/selfheal-induced-failure-e2e.test.ts",
+      "failures": 4,
+      "signatures": [
+        "fixture did not retry; captured N prompts: expected N to be greater than N",
+        "no episode — the diagnosis died with the attempt: expected N to be greater than N",
+        "no constraint built. quarantine: []: expected N to be greater than N"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/effort-order-is-declared-and-cpa-cannot-override-a-declared-agent.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/effort-order-is-declared-and-cpa-cannot-override-a-declared-agent.test.ts",
+      "failures": 2,
+      "signatures": [
+        "lib/effort-order.sh does not exist — effort order has no single home: expected '<v>' not to match /N",
+        "the engine uses agent name(s) agent-failure-analyst, prd-change-reviewer, story-writer, phase-assess"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/no-stack-specific-verification-in-the-engine.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/no-stack-specific-verification-in-the-engine.test.ts",
+      "failures": 1,
+      "signatures": [
+        "these run a checker the engine names. Verification is a PROJECT fact — route it through _run_project"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/writer-was-told-installs-happen-by-magic.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/writer-was-told-installs-happen-by-magic.test.ts",
+      "failures": 1,
+      "signatures": [
+        "render failed (N): [render-engine-prompt] FAILED to render '<v>': <path>"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/no-prompt-lives-outside-the-template-layer.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/no-prompt-lives-outside-the-template-layer.test.ts",
+      "failures": 1,
+      "signatures": [
+        "N line(s) of agent-directed prose live outside the template layer:"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/misleading-effort-model-log.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/misleading-effort-model-log.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to match /turns=/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/grep-count-double-echo.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/grep-count-double-echo.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to match /\\{\\s*grep -c '<v>' \\|\\| …/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/profiles-original-restore-source.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/profiles-original-restore-source.test.ts",
+      "failures": 1,
+      "signatures": [
+        "profiles.canonical.json drifted from the live profiles.json for these keys: typescript-engineer, tes"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/prd-integrity-tc-sourcefiles-severity.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/prd-integrity-tc-sourcefiles-severity.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected '<v>' to match /err\\(f\"testCriteria\\.sourceFiles refe…/",
+        "expected '<v>' to match /warn\\(f\"ACs reference import paths/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-qa-sentinel-prompts-are-templates.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-qa-sentinel-prompts-are-templates.test.ts",
+      "failures": 1,
+      "signatures": [
+        "sast-sentinel did not render: expected '<v>' not to match /__NOT_PRODUCED__/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/kb-wiring.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/kb-wiring.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to match /EPAM_MAX_ITERATIONS=\"?N/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/one-channel-or-it-is-a-leak.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/one-channel-or-it-is-a-leak.test.ts",
+      "failures": 1,
+      "signatures": [
+        "these read an LLM credential but are not declared in llm-channel.json. Route the call through llm-ha"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/lane-loop-halts-on-failure.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/lane-loop-halts-on-failure.test.ts",
+      "failures": 1,
+      "signatures": [
+        "the halt gives the operator nothing to act on: expected '<v>' to match /HALT: codeline '<v>' failed "
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/every-declared-agent-is-wired.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/every-declared-agent-is-wired.test.ts",
+      "failures": 2,
+      "signatures": [
+        "the ladder declares no iteration budgets: expected undefined to be truthy",
+        "agents with no _what: ac-classification, guard-vocabulary: expected [ '<v>', …(N) ] to deeply equal "
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/estate-survey-boundary.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/estate-survey-boundary.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected [ '<v>', '<v>', …(N) ] to deeply equal [ '<v>', '<v>', …(N) ]"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/diagnosis-groundedness-check.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/diagnosis-groundedness-check.test.ts",
+      "failures": 3,
+      "signatures": [
+        "expected '<v>' to match /from deepeval\\.models import OpenRout…/",
+        "expected '<v>' to match /EPAM_API_KEY_OPENROUTER/",
+        "expected '<v>' to match /OPENROUTER_API_KEY/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/a-retry-instruction-lives-in-the-prompt-layer.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/a-retry-instruction-lives-in-the-prompt-layer.test.ts",
+      "failures": 2,
+      "signatures": [
+        "expected [ '<v>', …(N) ] to include '<v>'",
+        "the refusal never reached the prompt: expected '<v>' to contain '<v>'"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/review-reimplement-loop.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/review-reimplement-loop.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to match /jq -c '<v>'/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/an-engine-agent-runs-with-its-declared-seam.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/an-engine-agent-runs-with-its-declared-seam.test.ts",
+      "failures": 2,
+      "signatures": [
+        "N agent(s) run with no ladder, no effort and no tool grant. Add each to profiles or agentSeams in in",
+        "skills_audit is not declared: expected N to be +N // Object.is equality"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/a-declared-seam-is-actually-asked.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/a-declared-seam-is-actually-asked.test.ts",
+      "failures": 1,
+      "signatures": [
+        "prompt-builder (mint-agents-step.js) asks for its seam but does not announce it"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/review-concision-reuse.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/review-concision-reuse.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected '<v>' to match /PROJECT_ROOT=\"<v>\"/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/a-failed-gate-call-says-why.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/a-failed-gate-call-says-why.test.ts",
+      "failures": 1,
+      "signatures": [
+        "the gate reported a failure without the reason, so a missing key, a timeout and a refusal are indist"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/spec-review-detective-correction.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/spec-review-detective-correction.test.ts",
+      "failures": 1,
+      "signatures": [
+        "must check for the unexplained_mismatch verdict: expected '<v>' to match /unexplained_mismatch/"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/detective-timeout-floor.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/detective-timeout-floor.test.ts",
+      "failures": 1,
+      "signatures": [
+        "expected NaN to be greater than N"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/agent-invoke-gateway.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/agent-invoke-gateway.test.ts",
+      "failures": 1,
+      "signatures": [
+        "prompt-review budget starves a reasoning model: expected N to be greater than or equal to N"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/commands/sync.test.ts",
+      "archivedTo": "test/archived/unit/commands/sync.test.ts",
+      "failures": null,
+      "signatures": [
+        "collection error — the file throws at import time, so none of its tests ever ran"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/ai-run-empty-and-stderr.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/ai-run-empty-and-stderr.test.ts",
+      "failures": null,
+      "signatures": [
+        "collection error — the file throws at import time, so none of its tests ever ran"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/brownfield-fixsite-gaps.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/brownfield-fixsite-gaps.test.ts",
+      "failures": null,
+      "signatures": [
+        "collection error — the file throws at import time, so none of its tests ever ran"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/detective-format-prescription.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/detective-format-prescription.test.ts",
+      "failures": null,
+      "signatures": [
+        "collection error — the file throws at import time, so none of its tests ever ran"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/detective-no-silent-failure.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/detective-no-silent-failure.test.ts",
+      "failures": null,
+      "signatures": [
+        "collection error — the file throws at import time, so none of its tests ever ran"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/impl-context-injection-bounded.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/impl-context-injection-bounded.test.ts",
+      "failures": null,
+      "signatures": [
+        "collection error — the file throws at import time, so none of its tests ever ran"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/metrolinx-codeline-context-plugin.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/metrolinx-codeline-context-plugin.test.ts",
+      "failures": null,
+      "signatures": [
+        "collection error — the file throws at import time, so none of its tests ever ran"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/next-ladder-step.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/next-ladder-step.test.ts",
+      "failures": null,
+      "signatures": [
+        "collection error — the file throws at import time, so none of its tests ever ran"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/only-project-authority-prompts-are-executed.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/only-project-authority-prompts-are-executed.test.ts",
+      "failures": null,
+      "signatures": [
+        "collection error — the file throws at import time, so none of its tests ever ran"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/phase-assessment-real-output-gate.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/phase-assessment-real-output-gate.test.ts",
+      "failures": null,
+      "signatures": [
+        "collection error — the file throws at import time, so none of its tests ever ran"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/review-verdict-json-extraction.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/review-verdict-json-extraction.test.ts",
+      "failures": null,
+      "signatures": [
+        "collection error — the file throws at import time, so none of its tests ever ran"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/ripgrep-fallback.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/ripgrep-fallback.test.ts",
+      "failures": null,
+      "signatures": [
+        "collection error — the file throws at import time, so none of its tests ever ran"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/tc-writer-mock-strategy-contract-wiring.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/tc-writer-mock-strategy-contract-wiring.test.ts",
+      "failures": null,
+      "signatures": [
+        "collection error — the file throws at import time, so none of its tests ever ran"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-planning-turn-is-configured-and-reaches-every-tier.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-planning-turn-is-configured-and-reaches-every-tier.test.ts",
+      "failures": null,
+      "signatures": [
+        "collection error — the file throws at import time, so none of its tests ever ran"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/unit/orchestration/the-project-declares-how-it-tests-itself.test.ts",
+      "archivedTo": "test/archived/unit/orchestration/the-project-declares-how-it-tests-itself.test.ts",
+      "failures": null,
+      "signatures": [
+        "collection error — the file throws at import time, so none of its tests ever ran"
+      ],
+      "measuredAt": "20260828T002656Z"
+    },
+    {
+      "file": "test/integration/ingest-carries-the-whole-ticket.test.ts",
+      "archivedTo": "test/archived/integration/ingest-carries-the-whole-ticket.test.ts",
+      "failures": null,
+      "signatures": [
+        "ac-gate exited 1 — collection/setup failure, no test result produced"
+      ],
+      "measuredAt": "20260828T002656Z"
+    }
+  ]
+}

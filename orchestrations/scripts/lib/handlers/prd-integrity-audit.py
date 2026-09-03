@@ -138,14 +138,19 @@ if deprecated_active:
 else:
     print("  ✓ No deprecated stories in active phases")
 
-# ── 7. Provider values are known — no 'openrouter' literal ──────────────────
+# ── 7. Provider values are known to the registry ────────────────────────────
+# NAMES NO VENDOR. This carried a literal vendor name in its own comment and error
+# message — a stack fact compiled into the engine. It stayed invisible while that name
+# happened not to be one config/providers.json declared: the guard checks this file
+# against whatever the registry holds, so the day the registry adopted the name, the
+# hardcode surfaced. The registry is the only place a provider is named.
 bad_providers = {}
 for s in stories:
     prov = s.get('aiProvider', '')
     if prov and prov not in KNOWN_PROVIDERS:
         bad_providers[s['id']] = prov
 if bad_providers:
-    err(f"Unknown aiProvider values (check for 'openrouter' literal): {bad_providers}")
+    err(f"aiProvider values the registry does not declare: {bad_providers}")
 else:
     print(f"  ✓ All aiProvider values are known ({sorted(KNOWN_PROVIDERS)})")
 

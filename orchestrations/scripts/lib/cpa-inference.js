@@ -29,11 +29,31 @@ const fs            = require('fs');
 // ── Configuration ──────────────────────────────────────────────────────────
 const CLAUDE_CMD = process.env.CLAUDE_CMD || 'claude';
 const AI_RUNNER_CMD = process.env.AI_RUNNER_CMD || path.resolve(__dirname, '..', 'ai-run.sh');
-// Default provider: qwen (OpenRouter). Override via CPA_PROVIDER or AI_PROVIDER env vars.
+// Default provider: openrouter (OpenRouter). Override via CPA_PROVIDER or AI_PROVIDER env vars.
+// NO VENDOR OF ITS OWN. This ended in a hardcoded vendor name, the second copy of the fallback
+// removed from ac-gate.js: it fires when the project env has not reached the child, and where a
+// missing provider should defer it instead SUCCEEDS against a stack the operator did not choose.
+// llm-handler.sh resolves the provider from the ACTIVE SET when it is not told one, so empty is
+// the correct answer and the flag is omitted rather than passed blank.
+//
+// The codex branch stays: that is not a vendor preference but a fact about the runner in hand —
+// a codex binary cannot be driven as anything else.
 const AI_PROVIDER = process.env.AI_PROVIDER
   || process.env.EPAM_ORCHESTRATION_PROVIDER
-  || (/codex$/.test(CLAUDE_CMD) ? 'codex' : 'qwen');
-const TIMEOUT_MS = parseInt(process.env.CPA_TIMEOUT_MS || '120000', 10);
+  || (/codex$/.test(CLAUDE_CMD) ? 'codex' : '');
+// The seam declares its own timeout (invocation-profiles.json: cpa-inference timeoutSecs), and
+// seamInvocationEnv resolves it. This carried a 120000 literal — 40% of the declared 300s — so the
+// declaration was decorative and the call was cut short by a number nobody chose.
+const TIMEOUT_MS = (function () {
+  const explicit = Number(process.env.CPA_TIMEOUT_MS);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  try {
+    const env = require("./seam-invocation.js").seamInvocationEnv("cpa-inference", undefined, { sourceEnv: process.env }) || {};
+    const secs = Number(env.EPAM_TIMEOUT_SECS);
+    if (Number.isFinite(secs) && secs > 0) return secs * 1000;
+  } catch (e) { /* fall through to the refusal below */ }
+  return undefined;
+}());
 
 // ── Read stdin ─────────────────────────────────────────────────────────────
 // Retrieved source chunks reach the estimator whole. They were cut at 800/1200 chars —
@@ -95,6 +115,18 @@ function buildModeSection(input = {}) {
 function buildPrompt(input) {
   const { story, kbChunks = [], codebaseSignals = {}, formulaEstimate = {},
           adjacentStories = [], systemPrompt = '', manifest } = input;
+
+  // THE PERSONA IS NOT OPTIONAL, AND AN EMPTY ONE IS WORSE THAN A MISSING FILE.
+  //
+  // Defaulting it to '' renders a blank section, the model is asked to answer as nobody in
+  // particular, and the answer comes back looking like every other answer — so the failure is
+  // invisible in the output and only shows up as degraded estimates. Refusing here, by the
+  // placeholder's own name, turns a silent quality loss into a stated one that names what to fix.
+  if (typeof systemPrompt !== 'string' || systemPrompt.trim() === '') {
+    throw new Error('cpa-inference buildPrompt: __SYSTEM_PROMPT__ is empty — the persona is not '
+      + 'optional. A blank persona renders a blank section and the agent answers as nobody in '
+      + 'particular, which cannot be seen in the output.');
+  }
 
   const storyJson = JSON.stringify({
     id:                  story.id,
@@ -228,16 +260,41 @@ function extractJSON(text) {
 }
 
 // ── Fallback (inference unavailable) ──────────────────────────────────────
+/**
+ * A REVIEW THAT DID NOT HAPPEN HAS NO CONFIDENCE.
+ *
+ * This returned confidence 0.70 with NO risk flags, so an inference that failed was indistinguishable
+ * from one that succeeded and approved. All three callers are FAILURES — the prompt runner was
+ * unavailable, it returned nothing, or its answer did not parse — and the CPA gate reads confidence
+ * and risk-flag count to decide whether a run may proceed. 0.70 with zero flags is a PASS.
+ *
+ * So the last gate before any money is spent authorised every story whenever its reviewer broke, and
+ * said so nowhere: the report read PASS, the exit code was 0, and the only trace was a reasoning
+ * string nobody gates on.
+ *
+ * The formula estimate is still carried — it is a real estimate and the caller needs it — but the
+ * confidence is what it actually is, and the reason is a RISK FLAG so it is counted rather than
+ * narrated.
+ */
 function skippedReview(formulaEstimate, reason) {
   return {
-    confidence:           0.70,
+    confidence:           0,
     complexityAdjustment: 1.0,
     adjustedEstimate:     formulaEstimate,
-    riskFlags:            [],
+    riskFlags:            [`CPA review did not happen: ${reason}`],
     missingKbCoverage:    [],
     citedSources:         [],
     reasoning:            `Inference skipped — ${reason}. Formula estimate used unchanged.`,
     _inferenceSkipped:    true,
+    // ATTEMPTED AND FAILED — not "deliberately not attempted".
+    //
+    // The shell reads _inferenceSkipped and forces gate=pass, commented "no API key — don't penalise
+    // missing key". But every caller of this function is a FAILURE: the runner was unavailable, it
+    // returned nothing, or its answer did not parse. There is no deliberate-skip path in this file at
+    // all, so that branch has been treating a broken reviewer as a missing key and authorising the
+    // run. This flag lets the gate tell the two apart; if a genuine "not configured" path is ever
+    // added, it sets _inferenceSkipped WITHOUT this.
+    _inferenceFailed:     true,
     _metrics:             { latencyMs: 0, tokensIn: 0, tokensOut: 0, tokenEfficiency: 0 },
   };
 }
@@ -290,7 +347,8 @@ async function main() {
   const _costFile = `${require('os').tmpdir()}/cpa-cost-${process.pid}-${Date.now()}.json`;
 
   const t0 = Date.now();
-  const cliArgs = ['--provider', AI_PROVIDER];
+  // A flag with no value is not an empty argument — omit it, and let the hub resolve.
+  const cliArgs = AI_PROVIDER ? ['--provider', AI_PROVIDER] : [];
   const result = spawnSync(
     AI_RUNNER_CMD,
     cliArgs,

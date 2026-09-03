@@ -12,7 +12,7 @@
 
 import type { LLMProvider, ProviderRequest, ProviderResponse, StreamHandler, Message, ContentPart } from '../types.js';
 import { resolveTemperature, resolveTopP } from '../types.js';
-import { stripThinkingBlocks, parseMarkupToolCalls } from '../qwen/QwenProvider.js';
+import { stripThinkingBlocks, parseMarkupToolCalls } from '../openrouter/OpenRouterProvider.js';
 import { logger } from '../../utils/logger.js';
 
 export const MINIMAX_BASE_URL = 'https://api.minimaxi.chat/v1';

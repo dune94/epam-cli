@@ -1,0 +1,58 @@
+{
+  "id": "jira-sourced-1788256696622",
+  "title": "mock3",
+  "version": "1.0.0",
+  "lastUpdated": "2026-09-01",
+  "source": "jira",
+  "sourceProject": "MOCK",
+  "project": {
+    "name": "mock3",
+    "outputDirs": [
+      {
+        "codeline": "mocka",
+        "path": "/home/bradleyjerome/projects/mock3/mock-a"
+      },
+      {
+        "codeline": "mockb",
+        "path": "/home/bradleyjerome/projects/mock3/mock-b"
+      }
+    ],
+    "outputDir": "/home/bradleyjerome/projects/mock3/mock-b"
+  },
+  "implementationOrder": {
+    "core": [
+      "MOCK-HW-1"
+    ]
+  },
+  "stories": [
+    {
+      "id": "MOCK-HW-1",
+      "jiraKey": "MOCK-HW-1",
+      "title": "Hello world greeting should say hello dolly",
+      "description": "The getGreeting() function in this codebase currently returns the string 'hello world'. It should instead return 'hello dolly'. Update any test that asserts the old value to match the new one. This is a customer-facing greeting shown on first load; the exact casing, spacing, and punctuation of the returned string matter and must match 'hello dolly' precisely — no trailing punctuation, no capitalization changes, no extra whitespace. Every existing test in src/hello.test.ts that currently asserts the old 'hello world' value must be updated to assert the new value instead — do not leave any stale assertion in place, and do not delete test coverage for this function. No other exported function's behavior, signature, or return type in this file may change as a side effect of this fix — the change must be scoped precisely to the string literal returned by getGreeting().",
+      "acceptanceCriteria": [],
+      "codeline": "mockb",
+      "status": "pending",
+      "completed": false,
+      "agentRole": "stand-in-engineer",
+      "agentGroup": "main",
+      "effort": "medium",
+      "estimate": null,
+      "acGateVerdict": "enrichable",
+      "acGateReason": "brownfield story with no acceptance criteria — AC processing skipped (VCs are derived from the description); codeline classified only",
+      "issueType": "Bug",
+      "components": [],
+      "ticketComments": [],
+      "ticketLinks": [],
+      "codelines": [
+        "mocka",
+        "mockb"
+      ],
+      "agentRoles": {
+        "mocka": "stand-in-engineer",
+        "mockb": "stand-in-engineer"
+      }
+    }
+  ],
+  "currentIteration": 1
+}

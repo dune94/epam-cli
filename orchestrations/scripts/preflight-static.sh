@@ -5,6 +5,15 @@
 # call, a codeline, or a dollar. This runs the checks that would have caught them.
 #
 # Exit 0 = safe to launch. Non-zero = a defect that WILL surface in a run.
+
+# THE COVERAGE GATE IS NOT HERE. This file is a STATIC SOURCE AUDIT — it reads code and reports
+# findings, and it is run at a desk as often as in a pipeline. Halting it on a coverage measurement
+# meant it printed nothing at all whenever coverage was stale, so every check it performs vanished
+# and the operator saw an empty report rather than a reason.
+#
+# The whole-map gate belongs where money moves: the tier3 launchers call require_all_stage_coverage
+# before they spend, which is also what marks the run gated for the per-stage gates.
+
 set -uo pipefail
 # NEITHER OF THESE IS WRITTEN DOWN.
 #
@@ -190,6 +199,11 @@ ratchet() {
 }
 ratchet "literal ratchet" "duplicatedLiterals" "scan-duplicated-literals.js"
 ratchet "guard calibration" "uncalibratedGuards" "scan-uncalibrated-guards.js"
+# THE SHELL ITSELF, READ STATICALLY. Coverage says how much of the engine a test has executed;
+# this says how much of it is wrong on its face, across every .sh file, needing no test written
+# first. The classes it counts have each already cost a run: an export masking a command status,
+# `A && B || C` read as if-then-else, a redirection with no command, a subshell losing an assignment.
+ratchet "shell defects" "shellDefects" "scan-shell-defects.js"
 
 # ── THE HARDCODING AUDIT CAN STILL SEE ───────────────────────────────────────
 # Not its count — that is a research number nobody should gate on, and the file says so itself.

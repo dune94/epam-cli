@@ -1,38 +1,14 @@
 {
   "minted": [
     {
-      "name": "typescript-logic-fixer",
+      "name": "checkout-payments-fixer",
       "kind": "implementer",
       "codeline": "",
-      "rationale": "Both tickets are off-by-one / boundary bugs in pure TypeScript modules with no external dependencies, so one implementer who knows the two source files and the shared vitest+typescript stack can fix both.",
+      "rationale": "AMSD-1919 requires a source-code fix to the exact case-sensitive equality check confirmed at CheckoutForm.tsx:306, and this roster currently has no implementer able to write that change since checkout-flow-detective is read-only by design.",
       "surfaces": [
         "profiles.json",
         "kb",
         "project-roles",
-        "project-profiles"
-      ]
-    },
-    {
-      "name": "fares-investigator",
-      "kind": "investigator",
-      "codeline": "mocka",
-      "rationale": "The fare bug is a one-line boundary comparison, but the implementer needs to know exactly where the age check lives, what the fare constants are, and what the existing test already covers before touching it.",
-      "surfaces": [
-        "profiles.json",
-        "kb",
-        "project-investigators",
-        "project-profiles"
-      ]
-    },
-    {
-      "name": "schedule-investigator",
-      "kind": "investigator",
-      "codeline": "mockb",
-      "rationale": "The omitted-stop bug is in a rendering loop, but the implementer needs to know the exact function signature, the data shape, and how the loop truncates before editing.",
-      "surfaces": [
-        "profiles.json",
-        "kb",
-        "project-investigators",
         "project-profiles"
       ]
     }
@@ -40,27 +16,13 @@
   "rejected": [],
   "unchanged": [],
   "projectRoles": [
-    "typescript-logic-fixer"
+    "checkout-payments-fixer"
   ],
   "projectInvestigators": [
-    "fares-investigator",
-    "schedule-investigator"
+    "checkout-flow-detective"
   ],
-  "rejectedAcrossAttempts": [
-    {
-      "name": "typescript-logic-fixer",
-      "reason": "brief names 2 path(s) that do not exist in any codeline: src/fares.test.ts, src/schedule.test.ts"
-    },
-    {
-      "name": "fares-investigator",
-      "reason": "brief names 1 path(s) that do not exist in codeline 'mocka': src/fares.test.ts"
-    },
-    {
-      "name": "schedule-investigator",
-      "reason": "brief names 1 path(s) that do not exist in codeline 'mockb': src/schedule.test.ts"
-    }
-  ],
-  "proposed": 6,
-  "attempts": 2,
+  "proposed": 1,
+  "rejectedAcrossAttempts": [],
+  "attempts": 1,
   "protectedRoles": 21
 }

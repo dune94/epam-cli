@@ -21,6 +21,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const SCRIPTS = join(__dirname, '../../../orchestrations/scripts');
+// Deliberately the orchestrator ALONE. This extracts a block by position and runs it verbatim,
+// and the KB gate block never moved — joining the extracted libs only shifts what it finds.
 const src = readFileSync(join(SCRIPTS, 'run-agent-orchestration.sh'), 'utf8');
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
@@ -42,6 +44,10 @@ function runBlock(lintLog: string, _unused?: unknown, extraEnv: Record<string, s
   const script = `
 set -euo pipefail
 SCRIPT_DIR=${JSON.stringify(SCRIPTS)}
+# THE BLOCK'S REAL DEPENDENCIES, SOURCED. It calls evidence_window to size the evidence it captures;
+# without it \`head -c ""\` fails and the episode is recorded with no signature at all — which reads
+# as "the gate does not key episodes by the tsc error" when in fact the harness was incomplete.
+. "$SCRIPT_DIR/lib/evidence-windows.sh" 2>/dev/null || true
 _lint_log=${JSON.stringify(logFile)}
 _phase=core
 PHASE=core

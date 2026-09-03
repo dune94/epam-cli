@@ -21,8 +21,7 @@
     "__SPLIT_VALUE__"
   ],
   "version": 1,
-  "body": "Assign this Jira story to a codeline. Answer with JSON only — no prose, no markdown fences.\n\nSTORY: __JIRA_KEY__ — __TITLE__\n\nDESCRIPTION:\n__DESCRIPTION__\n\nCODELINES:\n__CODELINE_LIST__\n- \"__SPLIT_VALUE__\" — the work spans multiple codelines\n\nChoose exactly one. Answer:\n{\"codeline\": \"<one of the values above>\"}\n",
-  "mayBeEmpty": [
-    "__DESCRIPTION__"
-  ]
+  "body": "Assign this Jira story to a codeline. Answer with JSON only \u2014 no prose, no markdown fences.\n\nSTORY: __JIRA_KEY__ \u2014 __TITLE__\n\nDESCRIPTION:\n__DESCRIPTION__\n\nCODELINES:\n__CODELINE_LIST__\n- \"__SPLIT_VALUE__\" \u2014 the work spans multiple codelines\n\nChoose exactly one. Answer:\n{\"codeline\": \"<one of the values above>\"}\n",
+  "mayBeEmpty": [],
+  "$whyNotMayBeEmpty": "__DESCRIPTION__ is supplied by a lookup that can fail, so empty means BROKEN, not absent. Declaring it silenced the guard for a value the agent must actually have."
 }

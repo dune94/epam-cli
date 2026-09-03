@@ -1426,7 +1426,7 @@ they name.
 | `resolve_dynamic_constitution` | Injects the constitution into every agent invocation |
 | `resolve_codex_model_settings` | Per-model overrides; silent misroute is plausible |
 | `get_next_story`, `get_story_phase`, `get_phase_stories`, `get_phases`, `list_phases` | Story selection and ordering |
-| `get_story_dependencies`, `story_exists`, `get_story_priority` | Dependency gating |
+| `get_story_dependencies`, `story_exists` | Dependency gating (`get_story_priority` was dead and is deleted) |
 | `check_prerequisites`, `check_plan_mode_required` | Pre-flight |
 | `get_next_kb_id`, `update_agents_file`, `increment_iteration` | KB and roster mutation |
 | `get_project_context`, `show_status`, `dry_run` | Lower risk |
@@ -1654,3 +1654,38 @@ stronger asymmetry — an extra injected file is expensive, a missing one is fat
 Sequence: prompt-side ranking first (reversible, no artefact change), and only move the decision
 into the review once the tool logging from TOKEN-VISIBILITY-1 shows what the writer actually
 reads. Neither before that baseline exists.
+
+---
+
+## Cost tracking: openrouter / minimax reports no spend — `pending`
+
+**Added 2026-08-26.** Cost recording is now wired at the handler, so every call on every stack
+passes a recorder. Two of three stacks are proven:
+
+| stack | records cost | evidence |
+|---|---|---|
+| claude | yes | receiver test executes the real handler; plan + execute merged |
+| codemie | yes | same arm shape as claude, same test |
+| **openrouter / minimax** | **unproven** | see below |
+
+**What is wrong.** The openrouter arm writes a normalized result to `$ORCH_JSON_RESULT`, but it
+selects only the object carrying a `.result` field:
+
+```
+jq -rs '[.[] | select(.result != null)] | last // {}' "$_epam_out"
+```
+
+`src/cli/commands/run.ts:228` emits `cost_usd`, so the number exists somewhere in the CLI's
+output — but whether it survives into the selected object has never been verified end to end.
+Memory already records MiniMax reporting **$0 tokens** (`project_minimax_token_zero`), which is
+consistent with the cost never reaching the ledger.
+
+**Why it matters.** A hot swap that loses cost visibility is not a hot swap: openrouter is the
+second fallback, and a run there would spend without a ledger entry — the exact condition that
+made the 34-minute incident unquantifiable.
+
+**How to resolve.** Drive the openrouter arm with a stubbed `epam` CLI that emits the CLI's real
+output shape (pino lines plus the result object), assert a ledger record lands with a non-zero
+`task_cost_usd`, then fix whichever of the two is at fault: the CLI not emitting cost, or the jq
+selection dropping it. Do NOT record a zero when cost is absent — a zero says the call was free.
+

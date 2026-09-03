@@ -33,7 +33,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { QwenProvider, openRouterSessionId } from '../../../src/providers/qwen/QwenProvider';
+import { OpenRouterProvider, openRouterSessionId } from '../../../src/providers/openrouter/OpenRouterProvider';
 
 const REQ = { model: 'z-ai/glm-5.2', messages: [{ role: 'user' as const, content: 'hi' }], maxTokens: 8 };
 
@@ -60,7 +60,7 @@ const headers = (i = 0) => sent[i].init.headers;
 describe('the request carries the session id OpenRouter routes on', () => {
   it('sends session_id in the body', async () => {
     process.env.EPAM_SESSION_ID = 'run-1-AMSD-2041-0';
-    await new QwenProvider({ apiKey: 'k', openRouterMode: true }).complete(REQ);
+    await new OpenRouterProvider({ apiKey: 'k', openRouterMode: true }).complete(REQ);
     expect(
       body().session_id,
       'without this every turn may re-route and no prefix is ever reused',
@@ -69,13 +69,13 @@ describe('the request carries the session id OpenRouter routes on', () => {
 
   it('sends the x-session-id header too', async () => {
     process.env.EPAM_SESSION_ID = 'run-1-AMSD-2041-0';
-    await new QwenProvider({ apiKey: 'k', openRouterMode: true }).complete(REQ);
+    await new OpenRouterProvider({ apiKey: 'k', openRouterMode: true }).complete(REQ);
     expect(headers()['x-session-id']).toBe('run-1-AMSD-2041-0');
   });
 
   it('DashScope mode sends neither — it has no such concept', async () => {
     process.env.EPAM_SESSION_ID = 'run-1-AMSD-2041-0';
-    await new QwenProvider({ apiKey: 'k', openRouterMode: false }).complete(REQ)
+    await new OpenRouterProvider({ apiKey: 'k', openRouterMode: false }).complete(REQ)
       .catch(() => { /* DashScope shape differs; only the request matters here */ });
     if (sent.length) {
       expect(body().session_id).toBeUndefined();
@@ -86,7 +86,7 @@ describe('the request carries the session id OpenRouter routes on', () => {
 
 describe('STABILITY: every turn of one attempt shares one id', () => {
   it('two calls in the same process send the same id', async () => {
-    const p = new QwenProvider({ apiKey: 'k', openRouterMode: true });
+    const p = new OpenRouterProvider({ apiKey: 'k', openRouterMode: true });
     await p.complete(REQ);
     await p.complete(REQ);
     expect(
@@ -96,8 +96,8 @@ describe('STABILITY: every turn of one attempt shares one id', () => {
   });
 
   it('and it is stable even across provider instances in one process', async () => {
-    await new QwenProvider({ apiKey: 'k', openRouterMode: true }).complete(REQ);
-    await new QwenProvider({ apiKey: 'k', openRouterMode: true }).complete(REQ);
+    await new OpenRouterProvider({ apiKey: 'k', openRouterMode: true }).complete(REQ);
+    await new OpenRouterProvider({ apiKey: 'k', openRouterMode: true }).complete(REQ);
     expect(body(0).session_id).toBe(body(1).session_id);
   });
 
@@ -138,7 +138,7 @@ describe('the cached-token figure survives the STREAM path, not just complete()'
   // Patching complete() alone left this undefined end-to-end twice in one session — once for
   // MiniMax, once here — because the CLI streams and unit tests reach complete().
   const SRC = readFileSync(
-    join(__dirname, '../../../src/providers/qwen/QwenProvider.ts'), 'utf8');
+    join(__dirname, '../../../src/providers/openrouter/OpenRouterProvider.ts'), 'utf8');
 
   it('the streaming usage parser reads prompt_tokens_details.cached_tokens', () => {
     const i = SRC.indexOf('inputTokens = parsed.usage.prompt_tokens');

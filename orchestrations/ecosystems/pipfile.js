@@ -8,6 +8,19 @@
 module.exports = {
   precedence: 15,
   file: 'Pipfile',
+  // THE EXTENSIONS THIS ECOSYSTEM SOURCE IS WRITTEN IN.
+  //
+  // Only package-json.js declared these, so lib/handlers/testable-source.js resolved an EMPTY
+  // set for every other ecosystem and found no file testable on a Python, Go, Rust, Ruby, Java
+  // or PHP codeline. brownfield-repro-test-writer.sh then reported "nothing sensible to test" —
+  // indistinguishable from a correct decision — so bug-reproduction tests silently never
+  // happened outside Node. That is the exact Node-only defect testable-source.js was written to
+  // remove, surviving one layer further down because the DATA it reads was never filled in.
+  codelineManifests: {
+    dependencyCheck: {
+      scanFileExtensions: [".py"],
+    },
+  },
   stack: 'python',
   installDir: '.venv',
   protectedFiles: ['Pipfile', 'Pipfile.lock'],

@@ -25,6 +25,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # capability that disappears without a word is the failure mode this whole change
 # exists to remove.
 . "$SCRIPT_DIR/lib/phase-exit.sh" || { echo "[preflight] lib/phase-exit.sh failed to load — refusing to run" >&2; exit 1; }
+# The run's spend figure comes from the ACTIVE SET, not a vendor hardcoded here.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/spend-probe.sh" 2>/dev/null || true
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/set-credentials.sh"
+
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # Config files are DATA: load them without executing them. See lib/env-file.sh.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/env-file.sh"
@@ -77,8 +81,10 @@ PROJECT_DIR="$(project_config_dir "$PROJECT" "$REPO_ROOT")" || {
   exit 1
 }
 export EPAM_PROJECT_CONFIG_DIR="$PROJECT_DIR"
-CONFIG="$PROJECT_DIR/config.env"
-[ -f "$CONFIG" ] || { echo "Project config not found: $CONFIG" >&2; exit 1; }
+# The project env is TWO files — the base, and the half the active provider set decides.
+# load_project_env asks the registry which they are; naming one here would load only the base
+# and silently drop the provider map and fallback model.
+[ -d "$PROJECT_DIR" ] || { echo "Project config dir not found: $PROJECT_DIR" >&2; exit 1; }
 
 # ── setsid process-group isolation ───────────────────────────────────────────
 # Ensures kill-tier3-run.sh can kill the entire tree (orch script, ai-run.sh,
@@ -95,7 +101,7 @@ fi
 # Jira connection vars for a different project.
 # Pass 1: global .env + project config → get SECRETS_FILE path
 load_env_file_safe "$REPO_ROOT/.env"
-load_env_file_safe "$CONFIG"
+load_project_env "$PROJECT_DIR" || exit 1
 # Pass 2: load secrets file (tokens, not connection config) if declared.
 # SECRETS_FILE is declared repo-relative so the config file needs no ${REPO_ROOT}
 # interpolation — a config file is DATA and must not be evaluated. Resolve it
@@ -108,7 +114,7 @@ if [ -n "${SECRETS_FILE:-}" ]; then
   [ -f "$_secrets_abs" ] && load_env_file_safe "$_secrets_abs"
 fi
 # Pass 3: re-load project config so it wins over anything in the secrets file
-load_env_file_safe "$CONFIG"
+load_project_env "$PROJECT_DIR" || exit 1
 
 LOG_FILE="/tmp/tier3-${PROJECT}-$(date +%Y%m%dT%H%M%S).log"
 TIER3_PID_FILE="${TIER3_PID_FILE:-/tmp/tier3-${PROJECT}-run.pid}"
@@ -149,7 +155,11 @@ PRD_FILE="${PRD_FILE:-$PROJECT_DIR/prd.json}"
 export PRD_FILE
 
 # ── Required key validation ───────────────────────────────────────────────────
-IFS=',' read -ra _required_keys <<< "${REQUIRED_KEYS:-}"
+# The project declares what is true of it on ANY stack; the active set declares the vendor keys
+# it cannot start without. Neither list names the other's concern, so selecting a set is never an
+# edit to a project — see lib/set-credentials.sh.
+_set_keys="$(set_required_keys)"
+IFS=',' read -ra _required_keys <<< "${REQUIRED_KEYS:-}${_set_keys:+,$_set_keys}"
 for _key in "${_required_keys[@]}"; do
   _key="${_key// /}"
   [ -z "${_key}" ] && continue
@@ -186,24 +196,25 @@ cd "$REPO_ROOT"
 # ── Export all config vars so subprocesses inherit them ───────────────────────
 set -a
 EPAM_BROWNFIELD="${EPAM_BROWNFIELD:-0}"
-EPAM_API_KEY_MINIMAX="${MINIMAX_API_KEY:-}"
-EPAM_API_KEY_OPENROUTER="${OPENROUTER_API_KEY:-}"
 set +a
+
+# Only the active stack's keys, under the names the pipeline reads. Exporting a vendor key on a
+# stack that never calls it is not merely untidy: a key present OUTRANKS the OAuth session on
+# disk, so the subscription the operator pays for goes unused while an API account is billed.
+export_set_credentials
 
 # ── Capture OpenRouter spend baseline ─────────────────────────────────────────
 _usage_before="0"
-if [ -n "${OPENROUTER_API_KEY:-}" ]; then
-  _usage_before=$(curl -s "https://openrouter.ai/api/v1/auth/key" \
-    -H "Authorization: Bearer $OPENROUTER_API_KEY" 2>/dev/null | \
-    "$NODE_BIN" -e "process.stdout.write(''+JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).data.usage)" 2>/dev/null || echo "0")
+if [ -n "$(spend_probe_read)" ]; then
+  _usage_before="$(spend_probe_read)"
   info "OpenRouter usage before: \$$_usage_before"
   echo ""
 fi
 
 # ── Greenfield setup ──────────────────────────────────────────────────────────
 if [ "${EPAM_BROWNFIELD:-0}" != "1" ]; then
-  [ -z "${OUTPUT_DIR:-}" ] && fail "OUTPUT_DIR must be set in config.env for greenfield projects"
-  [ -z "${PRD_CANONICAL:-}" ] && fail "PRD_CANONICAL must be set in config.env for greenfield projects"
+  [ -z "${OUTPUT_DIR:-}" ] && fail "OUTPUT_DIR must be set in the project env for greenfield projects"
+  [ -z "${PRD_CANONICAL:-}" ] && fail "PRD_CANONICAL must be set in the project env for greenfield projects"
   # Paths in a config file are repo-relative: a config file is DATA and cannot
   # interpolate ${REPO_ROOT}. Resolve here, where REPO_ROOT is genuinely known.
   case "$PRD_CANONICAL" in /*) ;; *) PRD_CANONICAL="$REPO_ROOT/$PRD_CANONICAL" ;; esac
@@ -382,10 +393,8 @@ for _phase in $PHASES; do
 done
 
 # ── Report spend ──────────────────────────────────────────────────────────────
-if [ -n "${OPENROUTER_API_KEY:-}" ]; then
-  _usage_after=$(curl -s "https://openrouter.ai/api/v1/auth/key" \
-    -H "Authorization: Bearer $OPENROUTER_API_KEY" 2>/dev/null | \
-    "$NODE_BIN" -e "process.stdout.write(''+JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).data.usage)" 2>/dev/null || echo "0")
+if [ -n "$(spend_probe_read)" ]; then
+  _usage_after="$(spend_probe_read)"
   _spent=$("$NODE_BIN" -e "console.log(($_usage_after-$_usage_before).toFixed(4))" 2>/dev/null || echo "?")
   info "OpenRouter usage after:   \$$_usage_after"
   info "Total spent this run:     \$$_spent"

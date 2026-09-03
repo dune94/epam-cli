@@ -37,7 +37,7 @@ epam-cli chat
 ### 1. Auto-Query (Keyword Detection)
 
 ```bash
-epam [qwen/qwen-max] › Show me authentication tickets
+epam [openrouter/model-max] › Show me authentication tickets
 
 [MCP SOURCES]
 
@@ -51,7 +51,7 @@ Based on the JIRA tickets above...
 ### 2. Explicit @mention Query
 
 ```bash
-epam [qwen/qwen-max] › @confluence auth documentation
+epam [openrouter/model-max] › @confluence auth documentation
 
 [MCP SOURCES]
 
@@ -63,7 +63,7 @@ CONFLUENCE:
 ### 3. Query All Sources
 
 ```bash
-epam [qwen/qwen-max] › @all authentication
+epam [openrouter/model-max] › @all authentication
 
 [MCP SOURCES]
 
@@ -80,7 +80,7 @@ DRAW.IO:
 ### 4. Manual MCP Command
 
 ```bash
-epam [qwen/qwen-max] › /mcp jira authentication
+epam [openrouter/model-max] › /mcp jira authentication
 
 [MCP SOURCES]
 [JIRA] 2 result(s):

@@ -1,0 +1,51 @@
+{
+  "runId": "20260828T134619Z",
+  "phase": "core",
+  "startedAt": "2026-08-28T13:46:52.316Z",
+  "stories": [
+    {
+      "storyId": "MOCK3-2",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "notes": "",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Defect: the for-loop bound `i < stops.length - 1` in formatStops skips the last stop. The fix site is formatStops itself; totalMinutes is already correct. VCs are black-box checks on the returned string ? no implementation prescription, no internal structure references, no cross-comparisons.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-28T13:47:47.227Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Defect: the for-loop bound `i < stops.length - 1` in formatStops skips the last stop. The fix site is formatStops itself; totalMinutes is already correct. VCs are black-box checks on the returned string ? no implementation prescription, no internal structure references, no cross-comparisons.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-28T13:47:54.842Z"
+        }
+      ]
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1,
+      "speckit": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 2
+  },
+  "completedAt": "2026-08-28T13:48:13.781Z",
+  "storyCount": 1
+}

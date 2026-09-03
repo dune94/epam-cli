@@ -208,7 +208,7 @@
       "effort": "low",
       "cpaConfidence": 0.52,
       "cpaGate": "review",
-      "aiProvider": "qwen",
+      "aiProvider": "openrouter",
       "model": "moonshotai/kimi-k2"
     },
     {
@@ -255,7 +255,7 @@
       "effort": "low",
       "cpaConfidence": 0.58,
       "cpaGate": "review",
-      "aiProvider": "qwen",
+      "aiProvider": "openrouter",
       "model": "moonshotai/kimi-k2",
       "dependencies": [
         "SKY-002"
@@ -314,7 +314,7 @@
       "effort": "high",
       "cpaConfidence": 0.52,
       "cpaGate": "review",
-      "aiProvider": "qwen",
+      "aiProvider": "openrouter",
       "model": "moonshotai/kimi-k2",
       "dependencies": [
         "SKY-002"

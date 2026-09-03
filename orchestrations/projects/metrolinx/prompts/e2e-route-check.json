@@ -1,25 +1,22 @@
 {
   "$why": [
-    "Moved out of run-agent-orchestration.sh on 2026-08-16.",
-    "",
-    "The browser E2E routing check for one route."
+    "Generated from the e2e-route-check template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
   ],
-  "description": "Checks one route renders and behaves in a browser E2E pass.",
-  "seams": [
-    "qa-gate:e2e"
-  ],
+  "authority": "project",
+  "body": "__AGENT_PROFILE__\n\nYou are testing the gotransit Next.js checkout flow as __ROUTE__ inside Step 4.6 Browser E2E routing checks.\n\nThis is an end-to-end browser test for src/components/pages/CheckoutPage. The component uses React Hook Form for email validation. The ticket AMSD-1919 concerns email and confirm email case sensitivity: the checkout form must treat \"User@Example.com\" and \"user@example.com\" as equivalent during validation and form submission.\n\nProject specifics for gotransit:\n- Tests run via: `npm test` (jest)\n- Spec file location: src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx\n- Form validation uses React Hook Form\n- Email inputs should normalize case-insensitively (lowercase) for comparison\n- Pre-commit hooks enforce branch naming and commit message format; do not break these\n\nWhen testing this checkout route in the browser, verify:\n1. Email input accepts mixed-case values without rejection\n2. Confirm email field validation is case-insensitive (User@Example.com matches user@example.com)\n3. Form submission succeeds when emails match regardless of case\n4. Form validation correctly fails when emails do not match (case-insensitive)\n5. Error messages are clear and present only when appropriate\n6. No console errors during email input, validation, or form submission\n7. The checkout flow completes the full happy path with case-insensitive email matching\n\nPhase: __PHASE_ID__\nStory: __STORY_ID__\nStory title: __STORY_TITLE__\nRoute reason: __ROUTE_REASON__\nComplexity score: __ROUTE_SCORE__\n\nReturn strict JSON only:\n{\n  \"agent\": \"__ROUTE__\",\n  \"storyId\": \"__STORY_ID__\",\n  \"phase\": \"__PHASE_ID__\",\n  \"verdict\": \"pass|warn|fail\",\n  \"findings\": [{\"severity\": \"blocker|major|minor\", \"message\": \"...\", \"file\": \"...\", \"line\": 0}],\n  \"summary\": \"...\"\n}",
+  "derivedFromSha256": "69cd2424bed0ddfa69a88c55cd5fe74e635161ab9ee9671cdfc2b3ecfb5a9fa4",
+  "derivedFromVersion": 1,
   "id": "e2e-route-check",
-  "version": 1,
-  "body": "__AGENT_PROFILE__\n\nYou are running as __ROUTE__ inside Step 4.6 Browser E2E routing checks.\nPhase: __PHASE_ID__\nStory: __STORY_ID__\nStory title: __STORY_TITLE__\nRoute reason: __ROUTE_REASON__\nComplexity score: __ROUTE_SCORE__\n\nReturn strict JSON only:\n{\n  \"agent\": \"__ROUTE__\",\n  \"storyId\": \"__STORY_ID__\",\n  \"phase\": \"__PHASE_ID__\",\n  \"verdict\": \"pass|warn|fail\",\n  \"findings\": [{\"severity\": \"blocker|major|minor\", \"message\": \"...\", \"file\": \"...\", \"line\": 0}],\n  \"summary\": \"...\"\n}",
   "placeholders": [
     "__AGENT_PROFILE__",
-    "__ROUTE_REASON__",
-    "__STORY_TITLE__",
-    "__ROUTE_SCORE__",
     "__PHASE_ID__",
+    "__ROUTE_REASON__",
+    "__ROUTE_SCORE__",
+    "__ROUTE__",
     "__STORY_ID__",
-    "__ROUTE__"
+    "__STORY_TITLE__"
   ],
-  "derivedFromSha256": "1657d17dcb89ab08dfe3b26799558cd96c27a6e8e90b13a85ac1cfe1759d6bd1",
-  "authority": "project"
+  "mayBeEmpty": []
 }

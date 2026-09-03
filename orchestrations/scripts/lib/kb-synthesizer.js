@@ -109,7 +109,9 @@ async function maybeSynthesize(store, {
   const r = spawnSync('bash', [cmd, ...args], {
     input: buildPrompt({ agent_role, signature, episodes }),
     encoding: 'utf8',
-    timeout: Number(process.env.KB_SYNTHESIS_TIMEOUT_MS || 180000),
+    // Declared by the seam (invocation-profiles.json: kb-synthesizer), not carried here. This was
+    // a literal, so the seam bounded its own LLM call with a number no run could see or change.
+    timeout: _seamDeclared().timeoutMs,
     // B28: an explicit budget, not the inherited default. This is a reasoning
     // model emitting schema-bound JSON — <think> tokens are billed against the
     // same allowance, so an undersized budget yields truncated output that never
@@ -117,7 +119,7 @@ async function maybeSynthesize(store, {
     env: {
       EPAM_AGENT_NAME: 'kb-synthesizer',
       ...process.env,
-      EPAM_MAX_OUTPUT_TOKENS: process.env.KB_SYNTHESIS_MAX_OUTPUT_TOKENS || '32768',
+      EPAM_MAX_OUTPUT_TOKENS: _seamDeclared().maxOutputTokens,
       // Bind this step's own output space. It is the one place an LLM re-enters
       // the self-heal loop, so it should be the LAST place a reply has to be
       // salvaged by a parser. Only the enforcement/reason pair is required —
@@ -201,6 +203,22 @@ async function maybeSynthesize(store, {
         raw: reply });
     return null;
   }
+}
+
+function _seamDeclared() {
+  const explicitT = Number(process.env.KB_SYNTHESIS_TIMEOUT_MS);
+  const explicitO = process.env.KB_SYNTHESIS_MAX_OUTPUT_TOKENS;
+  let secs; let out;
+  try {
+    const env = require("./seam-invocation.js").seamInvocationEnv("kb-synthesizer", undefined, { sourceEnv: process.env }) || {};
+    secs = Number(env.EPAM_TIMEOUT_SECS);
+    out = env.EPAM_MAX_OUTPUT_TOKENS;
+  } catch (e) { /* undeclared: the caller sees undefined and fails with the reason */ }
+  return {
+    timeoutMs: (Number.isFinite(explicitT) && explicitT > 0) ? explicitT
+      : ((Number.isFinite(secs) && secs > 0) ? secs * 1000 : undefined),
+    maxOutputTokens: explicitO || out,
+  };
 }
 
 module.exports = { maybeSynthesize, buildPrompt, extractJson, constraintSchema };

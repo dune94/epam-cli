@@ -1,0 +1,9692 @@
+#!/usr/bin/env node
+// Local tool caps are DECLARED — config/tool-timeouts.json. A literal here would be a
+// second home for a decision that already has one.
+const { toolTimeoutMs } = require('./lib/tool-timeouts.js');
+// ─────────────────────────────────────────────────────────────────────────────
+// spec-mode-runner.js — Collaborative specification elaboration pipeline
+//
+// Architecture:
+//   coordinator  →  assigns agents per story
+//   openspec     →  elaborates AC, proposes splits, adds technical depth
+//   speckit      →  reviews openspec output, adds testability/security/edge-case
+//                   criteria, flags gaps, may refine splits
+//   coordinator  →  final review pass with verdict + quality score
+//
+// Agent collaboration is SEQUENTIAL, not parallel:
+//   openspec runs first per story, then speckit receives openspec's output
+//   and builds on it. Each agent's contribution is tracked independently.
+// ─────────────────────────────────────────────────────────────────────────────
+const fs = require('node:fs');
+const path = require('node:path');
+// The prompt renderer. Required HERE, with the other top-level imports, because module-level
+// prompt constants below render at load time -- placed lower it is a temporal-dead-zone error.
+const { renderEngineTemplate } = require('./lib/engine-prompt.js');
+const os = require('node:os');
+const { spawn, execSync } = require('node:child_process');
+// Lazily loaded: this file is executed from an ISOLATED COPY by some callers
+// (see guarded-step-retry-history.test.ts), so a hard top-level require of a
+// sibling lib would break them at load time rather than at use.
+let _gv = null;
+function _guardVocabLib() {
+  if (!_gv) _gv = require('./lib/guard-vocabulary');
+  return _gv;
+}
+
+// Schema for the ticket-link agent. Structured because its output enters an evidence path:
+// a prose answer cannot be persisted, diffed, or acted on, and a paraphrase of an API
+// contract is how a wrong contract propagates (live: a callback signature was assumed,
+// asserted in the story's criteria, and refuted by a doc nobody read).
+const TOOL_TICKET_LINKS = {
+  name: 'submit_ticket_links',
+  description:
+    'Classify every URL found in the ticket, judge its relevance to this story, and for a ' +
+    'relevant document you could actually fetch, quote what it says about the implementation. ' +
+    'Do not answer in prose.',
+  parameters: {
+    type: 'object',
+    required: ['links'],
+    properties: {
+      links: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['url', 'classification', 'relevant', 'fetchStatus', 'quotes'],
+          properties: {
+            url: { type: 'string' },
+            classification: {
+              type: 'string',
+              enum: ['vendor_documentation', 'internal_wiki', 'ticket_or_board',
+                     'meeting_or_email', 'source_code', 'unreachable', 'unknown'],
+            },
+            relevant: { type: 'boolean', description: 'Does it bear on THIS story?' },
+            // WHETHER IT WAS ACTUALLY OPENED. Without this, "I read it and it says nothing
+            // relevant" and "I never opened it" are the same answer — and on 2026-08-06 a
+            // bound reply returned two bare classifications that read exactly like a
+            // completed review. An agent that could not reach a page must say so.
+            fetchStatus: {
+              type: 'string',
+              enum: ['fetched', 'unreachable', 'not_attempted'],
+              description:
+                'Did you actually open this URL? "fetched" means you read the document and '
+                + 'the quotes below come from it. Never say "fetched" for a page you did not read.',
+            },
+            reason: { type: 'string', description: 'Why relevant or not — one clause.' },
+            quotes: {
+              type: 'array',
+              // AT LEAST ONE. Optional quotes let a strict binding return two URLs and
+              // nothing else — structurally perfect, evidentially empty. A fetched document
+              // must yield a quote; an unreachable one must say why here.
+              minItems: 1,
+              description:
+                'VERBATIM quotes from the document that bear on the implementation — the real ' +
+                'signature or contract of an API the story depends on, required configuration, ' +
+                'or whether the work is code or configuration. Quote, never paraphrase.',
+              items: { type: 'string' },
+            },
+            scopeCaveat: {
+              type: 'string',
+              description:
+                'If the document targets a different framework variant, router, or version ' +
+                'than the codeline uses, say so — following it literally would be wrong.',
+            },
+            contradictsStory: {
+              type: 'string',
+              description:
+                'If the document contradicts an assumption visible in this story, state both ' +
+                'sides. This is the single most valuable thing to return.',
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+const TOOL_GUARD_VOCABULARY = (() => { try { return require('./lib/guard-vocabulary').TOOL_GUARD_VOCABULARY; } catch { return null; } })();
+const normaliseVocabulary = (...a) => _guardVocabLib().normaliseVocabulary(...a);
+const isVocabularyUsable  = (...a) => _guardVocabLib().isVocabularyUsable(...a);
+const applyVocabulary     = (...a) => _guardVocabLib().applyVocabulary(...a);
+// Cost emission for every agent this file drives — see lib/cost-emitter.js for
+// why (spec-mode previously emitted no cost at all, hiding ~68% of run spend).
+// Loaded DEFENSIVELY: cost tracking is observability, never a hard dependency of
+// running an agent. A hard require made this whole module unloadable wherever
+// lib/ isn't alongside it (e.g. tests that copy the script to a temp dir), which
+// is exactly the kind of self-inflicted breakage observability must not cause.
+let emitCostSnapshot = () => null;
+try {
+  ({ emitCostSnapshot } = require('./lib/cost-emitter'));
+} catch {
+  /* cost emitter unavailable — agents still run, cost simply isn't recorded */
+}
+
+// Semble code-context retrieval — loaded lazily so the module is optional.
+// When SEMBLE_ENABLED=1 and the binary is present, fetchSembleContext() returns
+// a formatted block of existing-code snippets to inject into the spec prompt.
+// ── Code context injection ─────────────────────────────────────────────────
+// Brownfield: CodeGraph (deterministic AST graph — exact symbols + callers +
+//   blast radius).  Falls back to Semble if CodeGraph is unavailable/unindexed.
+// Greenfield: Semble only (no graph needed; semantic similarity finds analogues).
+
+let _semble;
+let _codegraph;
+
+/**
+ * ONE PLACE A SEARCH QUERY IS BUILT FROM A STORY.
+ *
+ * Two functions did this with their own inline stopword regex and their own fixed prefix, and
+ * the copies had already drifted: one said "processes resolves", the other "processes
+ * calculates resolves". Retrieval quality therefore differed by which path reached it, and
+ * nothing said so.
+ *
+ * The vocabulary and the caps are DECLARED (config/spec-mode-defaults.json retrieval). A
+ * language's stopwords are an input: a ticket in another language keeps every filler word and
+ * loses nothing meaningful, which is a configuration problem, not an engine one.
+ */
+/**
+ * Numbers that decide behaviour, from the declaration. They were named constants here, which
+ * reads like configuration and is not: changing one meant a code edit and a rebuild, and no
+ * deployment could differ.
+ */
+function policyConfig() {
+  try {
+    const file = process.env.EPAM_SPEC_MODE_DEFAULTS
+      || path.join(__dirname, '..', 'config', 'spec-mode-defaults.json');
+    return JSON.parse(fs.readFileSync(file, 'utf8')).policy || {};
+  } catch { return {}; }
+}
+
+function retrievalConfig() {
+  try {
+    const file = process.env.EPAM_SPEC_MODE_DEFAULTS
+      || path.join(__dirname, '..', 'config', 'spec-mode-defaults.json');
+    return JSON.parse(fs.readFileSync(file, 'utf8')).retrieval || {};
+  } catch { return {}; }
+}
+
+/**
+ * NEVER MID-TERM. Slicing at a character count can cut a word in half, and half a word matches
+ * nothing — the query silently narrows and the caller sees a smaller result set, not an error.
+ */
+function capAtWord(text, limit) {
+  const s = String(text || '');
+  const n = Number(limit);
+  if (!Number.isFinite(n) || n <= 0 || s.length <= n) return s;
+  const cut = s.slice(0, n);
+  const lastSpace = cut.lastIndexOf(' ');
+  return (lastSpace > 0 ? cut.slice(0, lastSpace) : cut).trim();
+}
+
+/** Domain terms of a title: declared stopwords removed, capped at a word boundary. */
+function retrievalTerms(title) {
+  const r = retrievalConfig();
+  const words = Array.isArray(r.stopwords) ? r.stopwords : [];
+  let out = String(title || '');
+  if (words.length) {
+    const escaped = words.map((w) => String(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    out = out.replace(new RegExp(`\\b(${escaped})\\b`, 'gi'), '');
+  }
+  return capAtWord(out.replace(/\s+/g, ' ').trim(), r.termChars);
+}
+
+/** The declared prefix plus a story's domain terms, capped. */
+function buildRetrievalQuery(title) {
+  const r = retrievalConfig();
+  return capAtWord(`${String(r.queryPrefix || '').trim()} ${retrievalTerms(title)}`.trim(), r.queryChars);
+}
+
+function fetchCodeGraphContext(story) {
+  if (process.env.CODEGRAPH_ENABLED !== '1') return null;
+  try {
+    if (!_codegraph) _codegraph = require('./lib/codegraph-context');
+    const repoPath = resolveCodelinePath(story);
+    if (!repoPath || !fs.existsSync(repoPath)) return null;
+    if (!_codegraph.isCodeGraphIndexed(repoPath)) {
+      // Self-heal at the point of use instead of trusting a run-start
+      // preflight to still hold by the time the spec pass actually needs
+      // it. Found live 2026-07-23: a valid index existed right after
+      // preflight passed, but was gone minutes later by the time this
+      // function ran — something between the two silently invalidated it.
+      // Re-index on demand here so CodeGraph's contribution never silently
+      // degrades to null regardless of what happened in between.
+      console.log(`spec-mode: CodeGraph index missing/invalid for ${repoPath} at point of use — re-indexing now`);
+      try {
+        _codegraph.initCodeGraph(repoPath, { quiet: true });
+      } catch (err) {
+        console.warn(`spec-mode: CodeGraph re-index failed for ${repoPath}: ${err.message}`);
+        return null;
+      }
+      if (!_codegraph.isCodeGraphIndexed(repoPath)) return null;
+    }
+
+    const query = buildRetrievalQuery(story.title);
+    const _rc = retrievalConfig();
+    const output = _codegraph.exploreCodeGraph(query, repoPath,
+      { maxFiles: _rc.maxFiles, maxChars: _rc.maxChars });
+    return output || null;
+  } catch { return null; }
+}
+
+function fetchSembleContext(story) {
+  if (process.env.SEMBLE_ENABLED !== '1') return '';
+  try {
+    if (!_semble) _semble = require('./lib/semble-context');
+    const repoPath = resolveCodelinePath(story);
+    if (!repoPath || !fs.existsSync(repoPath)) return '';
+
+    const isBrownfield = process.env.EPAM_BROWNFIELD === '1';
+
+    // Symptom query — same in both modes; finds code near the described behavior
+    const _r = retrievalConfig();
+    const symptomQuery = capAtWord(
+      [story.title, ...(story.acceptanceCriteria || []).slice(0, _r.acsInSymptomQuery)].join(' '),
+      _r.symptomQueryChars);
+    const symptomResult = _semble.sembleSearch(symptomQuery, repoPath, 8, 20);
+
+    if (!isBrownfield) {
+      if (!symptomResult.results || symptomResult.results.length === 0) return '';
+      const block = _semble.formatAsText(symptomResult);
+      return `\nEXISTING CODE CONTEXT (from semble semantic search — use this to write precise, grounded ACs):\n${block}\n`;
+    }
+
+    // Brownfield Semble fallback: two queries (symptom + service-boundary).
+    const pathQuery = buildRetrievalQuery(story.title);
+    const pathResult = _semble.sembleSearch(pathQuery, repoPath, 5, 30);
+
+    const seen = new Set();
+    const combined = [];
+    for (const r of [...(symptomResult.results || []), ...(pathResult.results || [])]) {
+      const key = `${r.file_path}:${r.start_line}`;
+      if (!seen.has(key)) { seen.add(key); combined.push(r); }
+    }
+    if (combined.length === 0) return '';
+    const block = _semble.formatAsText({ results: combined });
+    return `\nEXISTING CODE (brownfield fallback via Semble — identify the code path that handles this behavior, then specify how to fix it; do not propose new abstractions):\n${block}\n`;
+  } catch { return ''; }
+}
+
+// getDeterministicCandidateFiles(story, topN) — brownfield only. Runs the
+// EXACT same Semble query fetchSembleContext uses, but returns raw
+// deduped file paths (ranked) instead of a formatted text block, for
+// deterministic merging into locationHint/technicalNotes.files.
+//
+// Root cause this closes (found live 2026-07-23, AMSD-1820): Semble search
+// itself reliably surfaced the real fix site (apply-report-discounts.service.ts)
+// in its top 1-2 results across multiple different real AC wordings — but
+// the MODEL's own selection of which candidates to report as locationHint
+// varied run to run even at temperature=0 (a known characteristic of many
+// hosted inference backends — batching/MoE routing/floating-point
+// non-associativity in parallel decode — not something fixable in this
+// codebase). Rather than trying to make an LLM more deterministic, remove
+// its discretion from the one step that doesn't need judgment: the top-N
+// search candidates are injected directly, unconditionally, regardless of
+// what the model itself reports. The model's own locationHint still adds
+// anything beyond the top-N (its real judgment is still used for that).
+// buildBrownfieldSearchQuery(story) — builds the code-search query from a
+// brownfield story's DOMAIN nouns, deliberately dropping symptom/presentation
+// words.
+//
+// Root cause this closes (proven live 2026-07-23, AMSD-1820, 3x reproducible):
+// a bug ticket describes a SYMPTOM ("promo code amount is NOT displayed as
+// expected ... in the email confirmation"), but the fix lives in the CAUSE —
+// a discount-matching service (apply-report-discounts.service.ts) whose code
+// says nothing about "display" or "email". Searching Semble with the raw
+// title+ACs put presentation words ("displayed", "email confirmation",
+// "as expected") at the front of the query, which pulled the ranking toward
+// the display/mapper layer and buried the actual fix site past rank 20.
+// Stripping those symptom/presentation words and keeping only the domain
+// nouns ("promo code discount amount return trip mozio dispatch report")
+// ranks the real fix site #1, deterministically. This is a general property,
+// not overfit to this ticket: for ANY "output field X is wrong" bug, the
+// causal fix site is where X is COMPUTED, and that code is described by X's
+// domain terms — never by the presentation verb ("displayed"/"shown") that
+// only the symptom uses.
+// The symptom-word list that used to live here is GONE (2026-08-08). It was unreferenced —
+// dead code — but a baked word list sitting in the engine is something the next person
+// reaches for. Word lists are DERIVED here: the guard-vocabulary agent returns them per
+// ticket, in context, and codeline discovery already reports which terms 'carry no selection
+// signal'. Where no list is needed at all, prefer the plan-alignment check's approach: look
+// only at identifier-shaped tokens, which are distinctive without any vocabulary.
+function buildBrownfieldSearchQuery(story, vocabulary) {
+  // Seeds the code-graph detective's FIRST `explore` — the query that starts the whole
+  // chain (fix sites -> manifest -> ACs -> VCs). Everything downstream inherits it.
+  //
+  // READS EVERYTHING THE STORY CARRIES. It used to read the title and the first three
+  // acceptance criteria. In brownfield the ACs are empty by design (the AC gate skips them
+  // and says "VCs are derived from the description") and technicalNotes does not exist yet,
+  // so the query was built from a headline alone while the description — the only
+  // substantive content a brownfield ticket has — was never read. Live 20260806T134550Z the
+  // detective was seeded with "go up mx live preview of content in cms".
+  //
+  // TERM SELECTION IS NOT DONE HERE. A hardcoded stopword list used to filter these tokens;
+  // it is gone. But removing filtering altogether is worse, not better: BM25/IDF demotes
+  // terms that are COMMON in the corpus and AMPLIFIES terms that are RARE, so a bracketed
+  // brand tag like "mx" — rare in any codebase — is promoted to a top discriminator.
+  // Frequency cannot separate "rare and meaningful" from "rare and meaningless".
+  //
+  // So the caller supplies a vocabulary derived by the guard-vocabulary agent and verified
+  // against the CodeGraph index (a candidate resolving to no symbol is noise however rare).
+  // With no vocabulary the query is unfiltered — this function makes no judgement of its own.
+  const parts = [story.title, story.description, ...(Array.isArray(story.acceptanceCriteria) ? story.acceptanceCriteria : [])];
+  const raw = parts.filter(Boolean).join(' ');
+  const tokens = raw.toLowerCase().replace(/[^a-z0-9\s]+/g, ' ').split(/\s+/).filter(Boolean);
+
+  const excluded = new Set(
+    (vocabulary && Array.isArray(vocabulary.blacklist) ? vocabulary.blacklist : [])
+      .map((b) => String((b && b.term) || '').toLowerCase()).filter(Boolean));
+
+  // De-dupe, preserving order. Not a judgement — it just avoids sending a token twice.
+  const seen = new Set();
+  const ordered = [];
+  for (const w of tokens) {
+    if (excluded.has(w) || seen.has(w)) continue;
+    seen.add(w); ordered.push(w);
+  }
+  // Bounded by the search backend's own query limit, not by a number picked here.
+  const cap = Number(process.env.CODEGRAPH_QUERY_MAX_CHARS || '2000');
+  let query = ordered.join(' ');
+  if (query.length > cap) query = query.slice(0, cap);
+  return query || (story.title || '');
+}
+
+function getDeterministicCandidateFiles(story, topN = 3) {
+  if (process.env.EPAM_BROWNFIELD !== '1') return [];
+  const repoPath = resolveCodelinePath(story);
+  if (!repoPath || !fs.existsSync(repoPath)) return [];
+  const symptomQuery = buildBrownfieldSearchQuery(story);
+  const ordered = [];
+  const seen = new Set();
+  const add = (f) => { if (f && !seen.has(f)) { seen.add(f); ordered.push(f); } };
+
+  // PRIMARY: CodeGraph. Deterministic (static FTS5 symbol index), structural
+  // (ranks by symbol relevance + blast radius), and — with the domain-noun
+  // query above — lands the true CAUSAL fix site at rank #1 (proven 3x live,
+  // AMSD-1820). This is the demotion of Semble from primary to fallback: it
+  // only ever carried fix-site discovery because CodeGraph was silently
+  // returning null (unindexed) for months.
+  try {
+    if (!_codegraph) _codegraph = require('./lib/codegraph-context');
+    if (process.env.CODEGRAPH_ENABLED === '1') {
+      for (const f of _codegraph.exploreCandidateFiles(symptomQuery, repoPath, topN)) add(f);
+    }
+  } catch { /* CodeGraph unavailable — Semble fallback below still applies */ }
+
+  // FALLBACK/SUPPLEMENT: Semble. Semantic (embedding) search catches concepts
+  // that aren't in any symbol name — useful when CodeGraph's lexical index is
+  // thin or unindexed. Fills remaining slots after CodeGraph's picks.
+  if (ordered.length < topN && process.env.SEMBLE_ENABLED === '1') {
+    try {
+      if (!_semble) _semble = require('./lib/semble-context');
+      // Semble's ranking is NOT stable across different -k values — always
+      // request a fixed larger k (8) and slice in JS, never pass topN as -k.
+      const result = _semble.sembleSearch(symptomQuery, repoPath, 8, 5);
+      for (const r of (result.results || [])) add(r.file_path);
+    } catch { /* both retrievers unavailable — return whatever CodeGraph gave */ }
+  }
+
+  return ordered.slice(0, topN);
+}
+
+// Returns the code context block to inject into the spec prompt.
+// Brownfield: runs BOTH CodeGraph and Semble and includes whatever each
+// finds — NOT CodeGraph-with-Semble-as-fallback. Live bug (AMSD-1820,
+// 2026-07-22): CodeGraph's FTS5/BM25 keyword search matches on symbol names,
+// so a natural-language bug title ("promo code amount NOT displayed...")
+// reliably surfaces generic files sharing common terms ("mozio", "email")
+// but not the actual fix site (apply-report-discounts.service.ts, whose
+// relevant symbols are named applyReportDiscountsService/getDiscountName —
+// none of which appear in the bug title). CodeGraph still returned SOME
+// output (16 symbols across other files), so the old "fall through to
+// Semble only when CodeGraph found nothing" logic never gave Semble a
+// chance — even though Semble's embedding search correctly ranked the real
+// fix file 3rd. Confirmed live: the agent never saw apply-report-discounts.
+// service.ts existed and wrote a brand-new, disconnected module instead.
+// Greenfield: Semble only (no existing code to search).
+/**
+ * A constraint for services this project has declared it cannot reach.
+ *
+ * Returns '' unless the project declares one, so every other project — and every
+ * run with reachable infrastructure — is completely unaffected. Narrowing what
+ * "done" means is only correct when the narrowing is true.
+ *
+ * Consumed where verification criteria are WRITTEN, not only by the test writer.
+ * A criterion demanding live behaviour cannot be satisfied by a mocked test: the
+ * writer would do as instructed and the validator would correctly report the
+ * criterion unmet — two agents in conflict, both behaving correctly, because the
+ * constraint arrived downstream of the thing that defines done.
+ *
+ * The engine never learns what any of these services ARE. It reads a flag and a
+ * host list; the vendor lives in per-project config.
+ */
+/**
+ * publishedContracts(repoPath, story) — the exported API surface of codelines
+ * that already ran, for a story that spans several.
+ *
+ * Run 9 blamed the function that DISPLAYED a value instead of the one that
+ * COMPUTED it, inside a single repository with full CodeGraph access. Across a
+ * repo boundary that failure becomes structural: for the classic FE/BE bug the
+ * frontend detective finds "we read a field and it is undefined" and prescribes
+ * a defensive check — plausible, verbatim-quotable, and papering over a cause it
+ * cannot see. The backend detective finds nothing wrong. Both succeed; the bug
+ * survives.
+ *
+ * Completed codelines already publish their surface to .contracts/<storyId>.md
+ * for STORY agents. The detective was never given it. It does not need the
+ * neighbouring codebase — only the neighbouring surface.
+ */
+function publishedContracts(repoPath, story) {
+  // A story whose codeline cannot be resolved is ordinary — mocks, greenfield,
+  // a lane not yet created. path.join(null, ...) throws, and this is called
+  // while building a prompt, so that throw takes the whole spec pass down.
+  if (!repoPath) return '';
+  const dir = path.join(repoPath, '.contracts');
+  let files = [];
+  try {
+    files = fs.readdirSync(dir).filter((f) => f.endsWith('.md'));
+  } catch { return ''; }
+  if (!files.length) return '';
+
+  const done = Array.isArray(story && story.codelines) ? story.codelines : [];
+  const parts = [];
+  for (const f of files) {
+    let body = '';
+    try { body = fs.readFileSync(path.join(dir, f), 'utf8'); } catch { continue; }
+    if (body.trim()) parts.push(`### ${f.replace(/\.md$/, '')}\n${body}`);
+  }
+  if (!parts.length) return '';
+
+  // RENDERED FROM THE TEMPLATE LAYER.
+  return renderEngineTemplate('spec-context-fragments', {
+    __SPANS_SENTENCE__: done.length ? `This story spans ${done.length} codelines (${done.join(', ')}). ` : '',
+    __CONTRACTS__: parts.join('\n\n'),
+  }, 'published_contracts')
+}
+
+/**
+ * _specAgentFailed — what to do when a spec agent throws.
+ *
+ * Both call sites used to catch the error and assign null without looking at
+ * it. The error object was discarded, so a spec agent that crashed and a
+ * provider that timed out were indistinguishable, and both were treated as
+ * transient: four
+ * attempts, then a FATAL message telling the operator to check SPEC_MODE_*
+ * models and RUNCLAUDE_TIMEOUT_MS.
+ *
+ * Live mock1 run 8: the cause was `ReferenceError: repoPath is not defined` in
+ * the prompt builder. Unconditional, identical every attempt, and nowhere in any
+ * log. The retry budget bought nothing but four times the delay.
+ *
+ * So: always surface the error, and distinguish the two cases. A provider
+ * failure is worth retrying. A programming error is not — it will fail the same
+ * way forever, and the honest response is to stop immediately with the actual
+ * stack rather than three more attempts and a misleading diagnosis.
+ */
+const _PROGRAMMING_ERRORS = [ReferenceError, TypeError, SyntaxError, RangeError];
+
+function _specAgentFailed(agent, story, err, attemptLabel) {
+  const storyId = (story && story.id) || 'unknown';
+  const isBug = _PROGRAMMING_ERRORS.some((E) => err instanceof E);
+
+  console.error(
+    `spec-mode: ${agent} threw for ${storyId} (${attemptLabel}) — ` +
+    `${err && err.name ? err.name : 'Error'}: ${err && err.message ? err.message : String(err)}`
+  );
+  if (err && err.stack) console.error(err.stack);
+
+  if (isBug) {
+    // Not a provider problem, and no number of retries changes it. Fail with the
+    // real cause instead of laundering it into "transient failure".
+    console.error(
+      `spec-mode: this is a defect in the orchestrator, not a provider failure — ` +
+      `retrying cannot help. Aborting immediately.`
+    );
+    throw err;
+  }
+  return null;
+}
+
+function unreachableExternalsConstraint(env = process.env) {
+  if (env.EPAM_MOCK_EXTERNAL_CMS_APIS !== '1') return '';
+  const hosts = String(env.EPAM_MOCK_EXTERNAL_CMS_HOSTS || '')
+    .split(',').map((h) => h.trim()).filter(Boolean);
+  if (!hosts.length) return '';
+  // RENDERED FROM THE TEMPLATE LAYER.
+  return renderEngineTemplate('spec-context-fragments', {
+    __HOSTS__: hosts.join(', '),
+  }, 'unreachable_externals')
+}
+
+function fetchExistingCodeContext(story) {
+  const isBrownfield = process.env.EPAM_BROWNFIELD === '1';
+  if (isBrownfield) {
+    const cgOutput = fetchCodeGraphContext(story);
+    const sembleOutput = fetchSembleContext(story);
+    const blocks = [];
+    if (cgOutput) {
+      blocks.push(`\nEXISTING CODE — CodeGraph static analysis (exact symbols, callers, blast radius):\n${cgOutput}\n`);
+    }
+    if (sembleOutput) {
+      blocks.push(sembleOutput);
+    }
+    return blocks.join('\n');
+  }
+  return fetchSembleContext(story);
+}
+
+function resolveCodelinePath(story) {
+  // Prefer story-level codeline → JIRA_WORKTREE_<UPPER> → JIRA_WORKTREE_<DEFAULT>
+  const cl = story.codeline || process.env.JIRA_DEFAULT_CODELINE || '';
+  if (cl) {
+    const key = `JIRA_WORKTREE_${cl.toUpperCase().replace(/[^A-Z0-9]/g, '_')}`;
+    if (process.env[key]) return process.env[key];
+  }
+  // Last resort: find any JIRA_WORKTREE_* that is set
+  for (const [k, v] of Object.entries(process.env)) {
+    if (k.startsWith('JIRA_WORKTREE_') && v) return v;
+  }
+  // Brownfield fallback (live bug, 2026-07-22): brownfield runs never set
+  // JIRA_WORKTREE_* at all — the codeline path is discovered dynamically by
+  // codeline-discovery.js and exported as PROJECT_ROOT by
+  // run-agent-orchestration.sh instead. Without this fallback,
+  // fetchExistingCodeContext() always got an empty path here, so CodeGraph/
+  // Semble never had anything to inject — confirmed live on AMSD-1820, where
+  // the spec pass's own note read "No existing code block was injected via
+  // CodeGraph or Semble, so locationHint is empty," and the agent then wrote
+  // a brand-new, disconnected module instead of fixing the real file
+  // (apply-report-discounts.service.ts) because it never saw it existed.
+  if (process.env.PROJECT_ROOT) return process.env.PROJECT_ROOT;
+  return '';
+}
+let _jsonrepair;
+try { _jsonrepair = require('jsonrepair').jsonrepair; } catch { _jsonrepair = null; }
+
+// acquireFileLock/releaseFileLock — a bash-`flock`-equivalent for this file's
+// two PRD write sites (run() and validateMidExecutionSplits()). Node has no
+// built-in flock; this uses exclusive file creation (O_EXCL via the 'wx'
+// flag) as the mutual-exclusion primitive, with a stale-lock timeout so a
+// killed process's abandoned lock file doesn't block every future run
+// forever. Added 2026-07-11 alongside the equivalent bash-side flock wraps in
+// claude.sh/run-agent-orchestration.sh -- the atomic write-then-rename fix
+// from earlier the same day prevents CORRUPTION from a killed process, but
+// does not prevent a LOST UPDATE when two processes (e.g. parallel worktree
+// stories) both read-modify-write the same PRD file around the same time.
+// staleMs is intentionally a SEPARATE threshold from timeoutMs: timeoutMs is
+// how long THIS caller is willing to wait before giving up; staleMs is how
+// old an abandoned lock file must be before we assume its owner is dead and
+// steal it. Reusing one value for both would mean a caller that waits past
+// its own timeout would end up STEALING the lock from a still-live holder
+// instead of throwing -- defeating the mutual exclusion the lock exists for.
+function acquireFileLock(lockPath, timeoutMs = 30000, staleMs = 30000) {
+  const start = Date.now();
+  for (;;) {
+    try {
+      const fd = fs.openSync(lockPath, 'wx');
+      fs.writeSync(fd, String(process.pid));
+      fs.closeSync(fd);
+      return;
+    } catch (err) {
+      if (err.code !== 'EEXIST') throw err;
+      try {
+        const stat = fs.statSync(lockPath);
+        if (Date.now() - stat.mtimeMs > staleMs) {
+          fs.unlinkSync(lockPath); // stale lock from a killed process -- steal it
+          continue;
+        }
+      } catch {
+        continue; // lock file vanished between EEXIST and stat -- retry immediately
+      }
+      if (Date.now() - start > timeoutMs) {
+        throw new Error(`Timed out waiting for lock: ${lockPath}`);
+      }
+      try { execSync('sleep 0.05'); } catch { /* ignore */ }
+    }
+  }
+}
+
+function releaseFileLock(lockPath) {
+  try { fs.unlinkSync(lockPath); } catch { /* already gone */ }
+}
+
+// ─── MiniMax tool-use definitions ────────────────────────────────────────────
+// Tool-use produces API-enforced valid JSON arguments — eliminates the M3
+// unescaped-char / truncation parse failures seen with raw JSON output.
+
+// MINIMAX_BASE_URL removed with callMiniMaxWithTool: no vendor endpoint is named outside
+// the handler and the provider sets.
+
+const TOOL_SPEC_ASSIGNMENTS = {
+  name: 'submit_assignments',
+  description: 'Submit agent assignment decisions for each story in the phase.',
+  parameters: {
+    type: 'object',
+    required: ['assignments'],
+    properties: {
+      assignments: {
+        type: 'array',
+        minItems: 1,
+        items: {
+          type: 'object',
+          required: ['storyId', 'agents'],
+          properties: {
+            storyId: { type: 'string' },
+            agents: { type: 'array', items: { type: 'string' } },
+            notes: { type: 'string' },
+            priority: { type: 'string' },
+          },
+        },
+      },
+    },
+  },
+};
+
+const TOOL_SPEC_AGENT = {
+  name: 'submit_spec_result',
+  description: 'Submit the specification analysis result for one story.',
+  parameters: {
+    type: 'object',
+    required: ['storyId', 'agent', 'acceptanceCriteria'],
+    properties: {
+      storyId: { type: 'string' },
+      agent: { type: 'string' },
+      notes: { type: 'string' },
+      storyKind: { type: 'string', enum: ['defect', 'novel'] },
+      // WHO OBSERVES IT, AND ON WHAT.
+      //
+      // Two rounds of instruction did not stop criteria that assert internal structure or an
+      // internal call path — rules produced them, and contrast pairs naming those exact shapes
+      // as forbidden produced them again on the next run. The producer is grounded in vendor
+      // documentation and source code, both implementation-shaped, and then asked to write
+      // external observations about that material. Prose could not win that argument.
+      //
+      // A declaration can. "Given the Stack initialization options object, it contains a
+      // live_preview property" has to name a person who observes an options object; "the SDK
+      // query includes those parameters" has to name a person who observes a query. Neither
+      // can be answered honestly, so the criterion is visibly wrong rather than arguably wrong.
+      //
+      // `setup` also ends a disagreement the pipeline was having with itself: the producer's
+      // samples treat "given the client is mocked ..." as acceptable while the reviewer flagged
+      // it as "prescribes mocking setup". Declared here, a precondition is a precondition.
+      verificationCriteriaDetail: {
+        type: 'array',
+        description:
+          'One entry per verification criterion, declaring who observes it and where. A '
+          + 'criterion whose observer would have to be the application itself is not observable.',
+        items: {
+          type: 'object',
+          required: ['criterion', 'observer', 'surface'],
+          properties: {
+            criterion: { type: 'string', description: 'The observable check, as a sentence.' },
+            observer: {
+              type: 'string',
+              enum: ['end user', 'tester', 'api client', 'operator'],
+              description: 'WHO sees it. If no human or client can see it, the criterion is not observable.',
+            },
+            surface: {
+              type: 'string',
+              description:
+                'WHAT they look at — the rendered page, the API response, the CLI output, the '
+                + 'generated file. Never an internal object, argument, query or call.',
+            },
+            setup: {
+              type: 'string',
+              description:
+                'Optional precondition the test establishes before observing — for example a '
+                + 'mocked client signalling a change. Preconditions are allowed and are NOT '
+                + 'implementation prescription; state them here rather than inside the criterion.',
+            },
+          },
+        },
+      },
+      acceptanceCriteria: { type: 'array', items: { type: 'string' }, minItems: 1 },
+      description: { type: 'string' },
+      title: { type: 'string' },
+      acAddedBySpeckit: { type: 'array', items: { type: 'string' } },
+      acModifiedBySpeckit: { type: 'array', items: { type: 'object' } },
+      acFlagged: { type: 'array', items: { type: 'object' } },
+      splitStories: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            title: { type: 'string' },
+            description: { type: 'string' },
+            acceptanceCriteria: { type: 'array', items: { type: 'string' }, minItems: 1 },
+            agentRole: { type: 'string' },
+            technicalNotes: { type: 'object' },
+          },
+        },
+      },
+    },
+  },
+};
+
+const TOOL_SPEC_REVIEW = {
+  name: 'submit_spec_review',
+  description: 'Submit coordinator quality review results for all stories.',
+  parameters: {
+    type: 'object',
+    required: ['items'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['storyId', 'verdict'],
+          properties: {
+            storyId: { type: 'string' },
+            verdict: { type: 'string' },
+            reviewNotes: { type: 'string' },
+            qualityScore: { type: 'number' },
+            // FLAGS CARRY SEVERITY, because presence alone cannot gate.
+            //
+            // Every flag this reviewer has ever emitted is an uncertainty disclosure —
+            // api_shape_uncertainty, human_review_recommended_by_agent,
+            // unverified_cx_shared_assumptions. It never returns "approved" on a brownfield
+            // ticket either. So a rule built on the verdict blocks every run, and a rule built
+            // on flag presence blocks every run, and the only remaining signal was a scalar
+            // nobody can interrogate. Three rules failed in turn for one reason: the reviewer
+            // had no way to say "this is a defect" as distinct from "I was not certain".
+            //
+            // Strings are still accepted so an older reviewer's output keeps parsing; a bare
+            // string is treated as advisory, because that is what all of them have been.
+            flags: {
+              type: 'array',
+              description:
+                'Each flag is either a bare string (advisory) or an object carrying severity. ' +
+                'Severity RANKS your objections for the human reading them; it does not decide ' +
+                'whether the run stops. Mark blocking when an implementer following this spec ' +
+                'would produce work that cannot function, and advisory for uncertainty about ' +
+                'what you could not see. What halts a run is a computed check or a flag this ' +
+                'project has declared blocking — not your assessment of your own output.',
+              items: {
+                oneOf: [
+                  { type: 'string' },
+                  {
+                    type: 'object',
+                    required: ['flag', 'severity'],
+                    properties: {
+                      flag: { type: 'string', description: 'Short slug naming the objection.' },
+                      severity: { type: 'string', enum: ['blocking', 'advisory'] },
+                      why: { type: 'string', description: 'What you checked, and what you found.' },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+const TOOL_MODEL_REVIEW = {
+  name: 'submit_model_review',
+  description: 'Submit final model assignment decisions for all stories.',
+  parameters: {
+    type: 'object',
+    required: ['items'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['storyId', 'finalModel'],
+          properties: {
+            storyId: { type: 'string' },
+            finalModel: { type: 'string' },
+            override: { type: 'boolean' },
+            confidence: { type: 'string' },
+            reason: { type: 'string' },
+          },
+        },
+      },
+    },
+  },
+};
+
+// Call MiniMax API directly with a tool definition — arguments are API-enforced JSON.
+// itemsKey: if set, extracts result[itemsKey] (for array-returning tools); otherwise returns full args.
+const MINIMAX_TOOL_TIMEOUT_MS = parseInt(process.env.MINIMAX_TOOL_TIMEOUT_MS || '180000', 10);
+
+// callMiniMaxWithTool DELETED 2026-08-25.
+//
+// It fetched the vendor's /chat/completions endpoint directly and read MINIMAX_API_KEY itself
+// — a second channel around the central handler. MiniMax still runs; it goes through the
+// handler like every other provider.
+
+// Unified agent runner: tool-use for MiniMax, raw JSON for all other providers.
+// Ladder: if minimax times out or returns null, escalates to SPEC_PASS_LADDER_PROVIDER
+// (default: openai via OpenRouter) using the raw JSON + jsonrepair path.
+//
+// Fast-path: set SPEC_MODE_PROVIDER=openrouter to skip MiniMax entirely.
+//   SPEC_MODE_OPENSPEC_MODEL — model for openspec calls (default: z-ai/glm-5.2)
+//   SPEC_MODE_SPECKIT_MODEL  — model for speckit calls  (default: z-ai/glm-5.2)
+//   SPEC_MODE_MODEL          — fallback for all other spec-mode calls (default: z-ai/glm-5.2)
+// storyId: cost attribution. Without it every cost_snapshot carried storyId:''
+// and spend could not be grouped by story (backlog B6).
+/**
+ * Environment for a spec-pass agent.
+ *
+ * FILESYSTEM ACCESS. openspec/speckit/coordinator decide the manifest — which files a
+ * story will touch — and then review it. They had no tools at all, so they reviewed a
+ * list of paths having never seen the repository: a manifest naming a file that does not
+ * exist reads as a perfectly reasonable path, and the reviewer can only agree. That is
+ * how a wrong-cased path reached the writer on 2026-08-04 and cost a ~2M-input-token
+ * non-converging loop. No reviewer missed it; no reviewer could look.
+ *
+ * READ-ONLY. The question a spec reviewer must answer — does this path exist, is it the
+ * right file — needs reading, not shell. Withholding bash/write keeps a review pass from
+ * mutating what it reviews. Gate agents get bash because they run checks; reviewers do not.
+ *
+ * CONFIGURABLE: SPEC_MODE_ALLOWED_TOOLS overrides the default, so a project that needs a
+ * different set changes config rather than this engine.
+ */
+/**
+ * Telling a reviewer the tools exist is only half of it — team-lead-review.sh's own note:
+ * "Both halves are required: the BLOCK tells the reviewer the tools exist, and the
+ * [instruction] makes it use them." A reviewer that MAY look will sometimes not.
+ *
+ * Every declared path is machine-checkable, so the reviewer is required to check rather
+ * than judge. Nothing here names a project, codeline or filename.
+ */
+/**
+ * Path existence is DETERMINISTIC — so a script answers it, not a model.
+ *
+ * The reviewer was given EPAM_ALLOWED_TOOLS and told to verify paths with list_files.
+ * That set an env var; it did not put the reviewer on a tool-executing path.
+ * runAgentForJson's direct-exec route is a single-shot text call with no tool loop, so the
+ * model emitted tool calls that nobody ran and never produced a verdict at all:
+ *
+ *     <tool_call>list_files path="."</arg_value><tool_call>list_files path="src"</arg_value>
+ *
+ * 87 bytes, no <SPEC_REVIEW>. Three consecutive live runs lost their review that way, and
+ * the spec-review gate downstream guarded nothing.
+ *
+ * So the facts are computed HERE and handed to the reviewer as evidence. It judges what a
+ * script cannot — whether the ACs are testable, whether the manifest is plausible for the
+ * change — and never has to discover what the filesystem already knows.
+ */
+/**
+ * Stat every declared path once. ONE source of truth for both the evidence text the
+ * reviewer reads and the missing-path list the gate enforces — two independent
+ * implementations would eventually disagree, and the gate would be enforcing something
+ * different from what the reviewer was shown.
+ *
+ * Returns [{ storyId, file, exists, neighbour, unreadable }].
+ */
+function manifestPathStatus(stories, prd) {
+  const root = (prd && prd.project && prd.project.outputDir) || process.env.PROJECT_ROOT || '.';
+  const out = [];
+  for (const story of stories || []) {
+    const files = (story.technicalNotes && story.technicalNotes.files) || [];
+    for (const f of files) {
+      const abs = path.isAbsolute(f) ? f : path.join(root, f);
+      const rec = { storyId: story.id, file: f, exists: false, neighbour: null, unreadable: false };
+      try {
+        if (fs.existsSync(abs)) rec.exists = true;
+        else {
+          // Name the real neighbour when one differs only by case or extension — that is
+          // the actionable half of a missing-path report.
+          const dir = path.dirname(abs);
+          const base = path.basename(abs).toLowerCase();
+          const stem = base.replace(/\.[^.]+$/, '');
+          rec.neighbour = fs.existsSync(dir)
+            ? (fs.readdirSync(dir).find((e) => {
+              const el = e.toLowerCase();
+              return el === base || el.replace(/\.[^.]+$/, '') === stem;
+            }) || null)
+            : null;
+        }
+      } catch { rec.unreadable = true; }
+      out.push(rec);
+    }
+  }
+  return out;
+}
+
+/**
+ * The paths that genuinely are not there — computed, never asserted by a model.
+ *
+ * Measured 2026-08-04: in one of four samples the reviewer returned the flag
+ * "missing_manifest_path" while the evidence block listed EXISTS for every path. That flag
+ * is a hard blocker, so a hallucination would halt a run whose manifest was perfectly
+ * valid, indistinguishable from a real defect. fs.existsSync cannot hallucinate, so the
+ * gate enforces THIS and treats the model's flag as corroboration.
+ */
+function manifestMissingPaths(stories, prd) {
+  return manifestPathStatus(stories, prd)
+    .filter((r) => !r.exists)
+    .map((r) => ({ storyId: r.storyId, file: r.file }));
+}
+
+/**
+ * The CONTENTS of the files a story declares, for the agent that has to reason about them.
+ *
+ * The spec agent used to receive file NAMES and a call graph, never the code. Its own
+ * output said so on every lane — "could not read the actual file contents", flagged as
+ * speckit_unread_files_caveat / derived_without_source_inspection — and it is why the VC
+ * producer wrote criteria naming mechanisms it could only guess at, which the observability
+ * guard then correctly rejected. Live 20260804T162414Z, one lane lost 4 of its 5 criteria
+ * that way.
+ *
+ * We already resolve and stat exactly these paths for manifestEvidence; reading them is the
+ * same operation.
+ *
+ * BUDGETED, because a prompt is not free. Per-file and total byte caps are configurable and
+ * a zero budget switches the block off entirely:
+ *   SPEC_FILE_EXCERPT_BYTES        per file   (default 4000)
+ *   SPEC_FILE_EXCERPT_TOTAL_BYTES  all files  (default 24000)
+ * `opts` overrides the environment, for callers that know better.
+ */
+function manifestFileExcerpts(story, prd, opts = {}, env = process.env) {
+  const perFile = opts.perFileBytes !== undefined
+    ? Number(opts.perFileBytes)
+    : Number(env.SPEC_FILE_EXCERPT_BYTES !== undefined ? env.SPEC_FILE_EXCERPT_BYTES : 4000);
+  const total = opts.totalBytes !== undefined
+    ? Number(opts.totalBytes)
+    : Number(env.SPEC_FILE_EXCERPT_TOTAL_BYTES !== undefined ? env.SPEC_FILE_EXCERPT_TOTAL_BYTES : 24000);
+  if (!(perFile > 0) || !(total > 0)) return '';
+
+  // WHERE THE FILE LIST COMES FROM.
+  //
+  // This read story.technicalNotes.files only — which is populated from the spec agent's OWN
+  // answer (mergeLocationHintFiles(payload.locationHint), further down this file). So on a
+  // first pass the list is empty and this block never renders: the mechanism for showing an
+  // agent the code it must reason about only worked after that agent had already reasoned
+  // about it. Measured on run 20260806T213050Z — DECLARED FILES absent from both agents'
+  // prompts, while 92% of the prompt was an undifferentiated CodeGraph dump.
+  //
+  // The DETECTIVE runs BEFORE the spec agent and has already located the fix site, so its
+  // findings are a first-pass source. Declared files come first when they exist; located
+  // files fill the gap when they do not.
+  const declared = (story && story.technicalNotes && story.technicalNotes.files) || [];
+  // opts.located — the detective's findings, passed IN by the caller.
+  //
+  // This first read story.fixSiteAnalysis, which is assigned ~160 lines AFTER the prompt is
+  // built (guarded by `if (detectiveFindings.length)`), so at prompt time it is empty and the
+  // block still never rendered. The unit test passed because its fixture handed the function
+  // a story that already had the field — more convenient than reality. Third time in one
+  // session that reading a later-populated field produced a green test and a dead feature.
+  const located = ((opts.located && opts.located.length ? opts.located : (story && story.fixSiteAnalysis)) || [])
+    .map((f) => (typeof f === 'string' ? f : f && f.file))
+    .filter((f) => typeof f === 'string' && f);
+  const files = [...declared, ...located];
+  if (!files.length) return '';
+  const unreadable = [];
+
+  const root = (prd && prd.project && prd.project.outputDir) || env.PROJECT_ROOT || '.';
+  const parts = [];
+  let spent = 0;
+  const seen = new Set();
+  for (const f of files) {
+    if (spent >= total) break;
+    if (seen.has(f)) continue;
+    seen.add(f);
+    const abs = path.isAbsolute(f) ? f : path.join(root, f);
+    let body;
+    try {
+      // REPORTED, never silently skipped. A `continue` here is how an empty DECLARED FILES
+      // block went unnoticed: the prompt simply had no section, which reads identically to
+      // "this story declares no files".
+      if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) { unreadable.push(f); continue; }
+      body = fs.readFileSync(abs, 'utf8');
+    } catch { unreadable.push(f); continue; }
+    const budget = Math.min(perFile, total - spent);
+    let excerpt = body;
+    let truncated = false;
+    if (excerpt.length > budget) { excerpt = excerpt.slice(0, budget); truncated = true; }
+    spent += excerpt.length;
+    parts.push(`--- ${f}${truncated ? ' (truncated)' : ''}\n${excerpt}`);
+  }
+  const missingNote = unreadable.length
+    ? `\n(could not be read at the stated path — do not reason about them: ${unreadable.join(', ')})\n`
+    : '';
+  if (!parts.length) return unreadable.length
+    ? `\n\nDECLARED FILES — nothing available.${missingNote}`
+    : '';
+  return '\n\nDECLARED FILES — the actual contents of the files this story names or the detective located. '
+    + 'Base every observable criterion on what THIS code does, not on what the title suggests:\n'
+    + parts.join('\n') + missingNote + '\n';
+}
+
+function manifestEvidence(stories, prd) {
+  const status = manifestPathStatus(stories, prd);
+  const lines = [];
+  for (const story of stories || []) {
+    const mine = status.filter((r) => r.storyId === story.id);
+    if (!mine.length) {
+      lines.push(`  ${story.id}: NO FILES DECLARED — nothing for a writer to change`);
+      continue;
+    }
+    for (const r of mine) {
+      let mark;
+      if (r.exists) mark = 'EXISTS';
+      else if (r.unreadable) mark = 'MISSING — could not read the directory';
+      else if (r.neighbour) mark = `MISSING — the directory holds "${r.neighbour}" instead`;
+      else mark = 'MISSING';
+      lines.push(`  ${story.id}: ${mark}  ${r.file}`);
+    }
+  }
+  return lines.join('\n');
+}
+
+/**
+ * What the coordinator is shown for each story.
+ *
+ * verificationCriteria USED TO BE ABSENT. They live on the story root, not inside
+ * .specification, so the reviewer received {id, title, acceptanceCriteria, specification}
+ * — and on a brownfield ticket the AC array is empty BY POLICY. It was being asked to
+ * score a specification while the only substantive artefact in it was invisible. The
+ * reviewer reported this itself: one lane's flag was "vc_not_visible_in_notes".
+ *
+ * Measured effect of adding them, same prompt four times: score spread 0.17 -> 0.08, mean
+ * 0.65 -> 0.70.
+ */
+function buildReviewPayload(stories, isBrownfieldReview, allStories = [], logDir = null, phase = 'unknown') {
+  return JSON.stringify((stories || []).map((s) => {
+    // PLAN/EXECUTION EVIDENCE — precomputed, deterministic, and NOT the verdict. A bare
+    // term-overlap check cannot tell a JUSTIFIED pivot ("useContent turned out to be a
+    // dead end; the real integration point is X") from genuine unexplained drift — only
+    // judgment can. So this hands the reviewer the raw plan text plus the deterministic
+    // signal (same architecture as MANIFEST EVIDENCE above: "it has been checked, you
+    // decide what it means") instead of asking a second, differently-fallible LLM call to
+    // re-derive what is already on disk, or asking a regex to be the final arbiter.
+    const _plan = (isBrownfieldReview && logDir) ? readLatestDetectivePlan(logDir, phase, s.id) : null;
+    const _fixSiteAnalysis = Array.isArray(s.fixSiteAnalysis) ? s.fixSiteAnalysis : [];
+    const planAlignmentEvidence = _plan
+      ? { detectivePlan: _plan, ...checkPlanExecutionAlignment(_plan, _fixSiteAnalysis) }
+      : null;
+    return {
+      id: s.id,
+      title: s.title,
+      acceptanceCriteria: s.acceptanceCriteria,
+      // The observable checks — on brownfield these ARE the deliverable under review.
+      verificationCriteria: s.verificationCriteria || [],
+      // The manifest is part of what is being reviewed; the evidence block above the prompt
+      // reports whether each of these exists.
+      technicalNotes: s.technicalNotes,
+      specification: s.specification,
+      fixSiteAnalysis: _fixSiteAnalysis,
+      planAlignmentEvidence,
+      ...(isBrownfieldReview ? {} : {
+        splitChildren: (allStories || [])
+          .filter((c) => c.specification && c.specification.createdFrom === s.id)
+          .map((c) => ({ id: c.id, title: c.title, acceptanceCriteria: c.acceptanceCriteria })),
+      }),
+    };
+  }), null, 2);
+}
+
+const MANIFEST_GROUNDING_BLOCK = [
+  'ANSWER IN THIS RESPONSE. Your <SPEC_REVIEW> verdict must appear in THIS reply — an',
+  'empty <SPEC_REVIEW></SPEC_REVIEW>, or a promise to verify and answer later, is',
+  'discarded and the review does not happen. There is no follow-up turn to come back in.',
+  '',
+  'You DO have read-only tools this turn (read_file, list_files, search). Use them for',
+  'real if something is genuinely unclear — but never narrate an imagined tool result,',
+  'and never spend the whole turn exploring and run out before writing the verdict.',
+  'Budget is small and the verdict is mandatory: gather at most what you need, then answer.',
+  '',
+  'MANIFEST EVIDENCE has already been gathered from the repository for you and appears',
+  'above. Every declared path was checked with a real filesystem stat, so re-checking',
+  'paths is wasted budget — that part is done and is more reliable than a tool call.',
+  '  - A story with any MISSING path CANNOT be implemented: the writer is sent to edit a',
+  '    file that is not there, and every retry reproduces that. Mark it needs_review, name',
+  '    the exact path in reviewNotes, and add the flag "missing_manifest_path".',
+  '  - Where the evidence names a real neighbour ("the directory holds X instead"), say so',
+  '    — that is what makes the report actionable.',
+  '  - Never silently correct a path. The manifest is the artefact under review; a',
+  '    correction living only in your prose reaches nobody.',
+  '',
+  'Judge what the evidence cannot: are the acceptance criteria testable, is the declared',
+  'file set plausible for this change, is anything obviously missing. If you are unsure,',
+  'lower qualityScore and add a flag — do not withhold the verdict. A missing review is',
+  'EVERY FLAG CARRIES A SEVERITY. It ranks your objections for whoever reads them; it does not',
+  'decide whether the run stops — a computed check or a project-declared flag does that. Mark',
+  'blocking when an implementer following this spec would produce work that CANNOT FUNCTION,',
+  'and advisory for uncertainty about what you could not see. Report both honestly: nothing is',
+  'gained by inflating uncertainty into a defect, and nothing is lost by naming a real one.',
+  'worse than an uncertain one: it means nothing was checked at all.',
+].join('\n');
+
+// Root cause fixed 2026-08-06, in two parts:
+//
+// 1. This granted a tool LIST (EPAM_ALLOWED_TOOLS) without ever setting
+//    AI_GATE_ALLOW_TOOLS, so every spec-mode call actually ran with
+//    --no-tools underneath it while being told tools existed.
+//
+// 2. Separately, and more fundamentally: the shared spawn helper never set
+//    `cwd`, so even a genuinely tool-enabled call (AI_GATE_ALLOW_TOOLS=1)
+//    resolved read_file/list_files/search against wherever the ORCHESTRATOR
+//    happened to be running from, not the target codeline — none of those
+//    tools consult PROJECT_ROOT (only the unrelated EscalateDefect.ts does).
+//    Verified live with a real fixture file: identical tool grant returned
+//    "file does not exist" without cwd set, and the file's real,
+//    unguessable content with it set (see the spawn-cwd fix docstring).
+//
+// Both together explain the fabricated <tool_call>/<tool_result> text found
+// live in a vc-agent plan for a real brownfield story — its "tool_result"
+// described a source file's contents that bore no resemblance to the real
+// file on disk. The model was told tools existed, and even when they were
+// nominally enabled they could never have found the real file.
+//
+// repoPath is REQUIRED to actually enable tools: a phase-level call
+// (SPEC_ASSIGNMENTS, SPEC_REVIEW, MODEL_REVIEW) reviews potentially many
+// stories across many codelines at once — there is no single repo a cwd
+// could correctly point at, so those stay tool-less and keep relying on
+// manifestEvidence()'s deterministic per-path checks, which is the
+// architecturally correct answer for a multi-story call, not a workaround.
+// Only a SINGLE-story, single-codeline call (SPEC_AGENT for openspec/
+// speckit) has one real repoPath to hand it, so only those get real tools.
+/**
+ * How many tool calls an ESTATE SURVEY may spend, scaled to the ground it must cover.
+ *
+ * Every spec-mode agent shared one ceiling of 8. That is a sane budget for an agent looking at
+ * one codeline and an impossible one for a survey whose own prompt says "For EVERY codeline
+ * above, OPEN IT". Live 2026-08-08 the survey ran seven distinct search patterns against three
+ * separate repositories under that ceiling, saw nothing conclusive, and reported "no existing
+ * live preview infrastructure — this is greenfield work" about a brownfield estate with 243
+ * matching source files in the first codeline alone. That verdict went into estate-survey.json,
+ * which the investigators and the detective read next.
+ *
+ * The rate is per codeline and the count comes from the caller's own list, so no estate size
+ * is written here. An explicit SPEC_MODE_MAX_TOOL_CALLS still wins — an operator capping cost
+ * must not be silently overridden.
+ */
+/**
+ * Spec-pass defaults, read from orchestrations/config beside the other operator knobs.
+ *
+ * NOT cached across calls with a baked fallback: a missing or unusable value THROWS. Falling
+ * back to a literal would put the number back in the engine and would do it silently on the
+ * one run the config failed to load — the shape of every fail-open gate found in this pipeline.
+ * Same stance as protectedRoles(): refuse rather than proceed on an assumed value.
+ */
+function specModeDefaults() {
+  const file = process.env.EPAM_SPEC_MODE_DEFAULTS_FILE
+    || path.join(__dirname, '..', 'config', 'spec-mode-defaults.json');
+  let cfg;
+  try {
+    cfg = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (e) {
+    throw new Error(`[spec-mode] cannot read tool-call budgets from ${file}: ${e.message}`);
+  }
+  const tc = (cfg && cfg.toolCalls) || {};
+  const need = (key) => {
+    const v = tc[key];
+    if (typeof v !== 'number' || !Number.isFinite(v) || v <= 0) {
+      throw new Error(`[spec-mode] ${file} — toolCalls.${key} must be a positive number, got ${JSON.stringify(v)}`);
+    }
+    return v;
+  };
+  const perSeam = tc.perSeam && typeof tc.perSeam === 'object' ? tc.perSeam : {};
+  // Passed through, not validated with need(): a call made at no seam is the only consumer, and
+  // runClaudeTimeoutMs reports a missing declaration itself with the precedence spelled out.
+  const timeouts = (cfg && cfg.timeouts && typeof cfg.timeouts === 'object') ? cfg.timeouts : {};
+  return {
+    perAgent: need('perAgent'), perCodelineSurvey: need('perCodelineSurvey'), perSeam, timeouts,
+  };
+}
+
+function surveyToolBudget(codelines, env = process.env) {
+  if (env.SPEC_MODE_MAX_TOOL_CALLS) return String(env.SPEC_MODE_MAX_TOOL_CALLS);
+  const n = Math.max(1, (Array.isArray(codelines) ? codelines : []).filter(Boolean).length);
+  const declared = parseInt(env.EPAM_SURVEY_TOOL_CALLS_PER_CODELINE || '', 10);
+  const rate = Number.isFinite(declared) && declared > 0
+    ? declared
+    : specModeDefaults().perCodelineSurvey;
+  return String(n * rate);
+}
+
+function specAgentEnv(env = process.env, repoPath = '') {
+  const out = {};
+  if (env.SPEC_MODE_MAX_OUTPUT_TOKENS) out.EPAM_MAX_OUTPUT_TOKENS = env.SPEC_MODE_MAX_OUTPUT_TOKENS;
+  // DERIVED from the codeline, not listed here. The literal that used to sit on this line
+  // granted read_file,list_files,search and nothing else, so every spec-mode agent — openspec,
+  // speckit, the reviewers — did brownfield archaeology with text search only and had no
+  // access to the symbol index, while that text search was returning "(no matches found)" for
+  // everything. A codeline provisioned with the codegraph plugin now grants codegraph_query
+  // automatically. See lib/agent-tools.js.
+  out.EPAM_ALLOWED_TOOLS = env.SPEC_MODE_ALLOWED_TOOLS
+    || require('./lib/agent-tools.js').readOnlyToolGrant([repoPath || env.PROJECT_ROOT || env.JIRA_CODELINE_ROOT || '']);
+  // Granted to every spec-mode agent. An agent told a tool list without
+  // AI_GATE_ALLOW_TOOLS runs with --no-tools underneath it (ai-run.sh's
+  // default) — it believes it can look, cannot, and fabricates
+  // <tool_call>/<tool_result> text describing files it never read. That is
+  // what produced invented source contents in a vc-agent plan.
+  //
+  // Writes are NOT prevented here. They are prevented at the filesystem by
+  // lib/codeline-write-perimeter.sh: a codeline on its baseline branch is
+  // chmod'd read-only, and only agents whose job is to author code may write
+  // at all. That holds for `bash` and for any tool added later, which a
+  // per-tool allowlist cannot. Removing tools from these agents was tried as
+  // an incident response and was the wrong layer — six other agents hold
+  // `bash` against the same repo.
+  out.AI_GATE_ALLOW_TOOLS = env.SPEC_MODE_ALLOW_TOOLS || '1';
+  out.EPAM_MAX_TOOL_CALLS = env.SPEC_MODE_MAX_TOOL_CALLS || String(specModeDefaults().perAgent);
+  // Tools resolve paths against the process cwd (see runClaude's spawn cwd).
+  // A single-story call knows its codeline; a phase-level call spans stories,
+  // so it falls back to the run's codeline root.
+  const root = repoPath || env.PROJECT_ROOT || env.JIRA_CODELINE_ROOT || '';
+  if (root) out.PROJECT_ROOT = root;
+  return out;
+}
+
+/**
+ * Refuse an answer that does not have the shape its tag promised, and say why.
+ *
+ * runAgentForJson's direct-exec path tag-parses the model's text; nothing checked the
+ * result conformed. Live 2026-08-04 a reviewer answered in prose inside an empty
+ * <SPEC_REVIEW></SPEC_REVIEW>, the parse returned null, the review was discarded, and all
+ * three retries reproduced it because nothing told the model it had failed. The reason
+ * this returns is the only thing that makes attempt 2 different from attempt 1.
+ */
+function _validatedOrNull(parsed, tag, seam) {
+  // THE SEAM'S DECLARED CONTRACT, FIRST.
+  //
+  // Nine seams declare the key their consumer cannot proceed without, taken from the shape their
+  // own prompt states. A breach DROPS the reply rather than logging and continuing: the tagged
+  // schema path below stays diagnostic because an unproven validator must not halt a run, but a
+  // declared contract is not unproven — it says the consumer has nothing to read.
+  //
+  // Wired here because a validator nobody calls is not a contract. validateDeclaredOutput shipped
+  // with fatal:true and no caller, which is the plan-fidelity-gate defect: a library with a test
+  // and no call site looks covered while the run behaves as though the check does not exist.
+  const _seam = seam || process.env.EPAM_AGENT_NAME || '';
+  if (_seam) {
+    try {
+      // eslint-disable-next-line global-require
+      const d = require('./lib/agent-output-schema.js').validateDeclaredOutput(_seam, parsed);
+      if (d.declared && !d.ok) {
+        console.warn(`spec-mode: ${d.reason}`);
+        return null;
+      }
+    } catch (e) {
+      // Say so loudly rather than treating an unavailable validator as a pass.
+      console.warn(`spec-mode: declared-contract validator unavailable (${e.message}) — ${_seam} NOT validated`);
+    }
+  }
+
+  let v;
+  try {
+    // eslint-disable-next-line global-require
+    v = require('./lib/agent-output-schema.js').validateTaggedOutput(tag, parsed);
+  } catch (e) {
+    // A missing validator must not silently disable validation — say so, loudly.
+    console.warn(`spec-mode: output validator unavailable (${e.message}) — ${tag} NOT validated`);
+    return parsed;
+  }
+  if (v.ok) return parsed;
+  console.warn(`spec-mode: ${v.reason}`);
+  // Diagnostic by default: a shape mismatch is reported and the payload still flows, so
+  // the pipeline's own recovery decides. Only a FATAL refusal (no parseable answer, or
+  // EPAM_SCHEMA_STRICT=1) drops it — an unproven validator must not halt a run.
+  return v.fatal ? null : parsed;
+}
+
+/**
+ * A TOOL GRANT REACHES AN AGENT THROUGH ITS ENVIRONMENT — one definition of how.
+ *
+ * Two exports carry a grant and they must travel together: the tool list itself, and the flag
+ * that tells the runner tools are permitted at all. Written out by hand at four call sites, and
+ * the fourth got it wrong in the way a duplicated convention always eventually is — the grant was
+ * passed as a positional argument instead, into the slot that holds the STORY ID. So the roster
+ * reviewer ran with no tools while its trace was labelled with the tool list, and it reported
+ * that it had nothing to review: a gate structurally unable to examine the thing it gates.
+ *
+ * Returns the same object, mutated, so it composes with the `{...seamInvocationEnv(), ...}` shape
+ * every call site already uses. An absent grant is left absent: a seam that was given no tools
+ * must not be handed an empty allow-list, which reads as "tools are on, and none are permitted".
+ */
+function withToolGrant(env, toolGrant) {
+  if (toolGrant) {
+    env.AI_GATE_ALLOW_TOOLS = '1';
+    env.EPAM_ALLOWED_TOOLS = toolGrant;
+  }
+  return env;
+}
+
+async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey, storyId = '', repoPath = '', envOverride = null) {
+  // envOverride: per-agent tool grant. Most spec-mode agents share specAgentEnv's
+  // read-only set; an agent with a different need (the ticket-link agent must FETCH a
+  // document, not just read the repo) supplies its own here rather than widening the
+  // shared grant for everyone.
+  const provider = (process.env.AI_PROVIDER || process.env.EPAM_ORCHESTRATION_PROVIDER || '').toLowerCase();
+  // SPEC_PASS_LADDER_PROVIDER removed with the minimax branch: it defaulted to the literal
+  // 'openrouter', so a failure on one vendor was answered by a vendor named in code.
+
+  // Fast-path: bypass MiniMax entirely when SPEC_MODE_PROVIDER is set.
+  // Detects openspec vs speckit from logPath to pick the right model.
+  const specModeProvider = (process.env.SPEC_MODE_PROVIDER || '').toLowerCase();
+  if (specModeProvider) {
+    const logName = (logPath || '').toLowerCase();
+    let specModel;
+    if (logName.includes('speckit')) {
+      specModel = process.env.SPEC_MODE_SPECKIT_MODEL || seamStartModel('spec-agent');
+    } else if (logName.includes('openspec') || logName.includes('-openspec-') || logName.includes('-spec.log')) {
+      // Brownfield investigation requires tracing call chains through unfamiliar code —
+      // use the HIGH model as the base so archaeology doesn't fall back to generation.
+      specModel = (process.env.EPAM_BROWNFIELD === '1' && process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH)
+        ? process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH
+        : process.env.SPEC_MODE_OPENSPEC_MODEL || seamStartModel('spec-agent');
+    } else {
+      specModel = process.env.SPEC_MODE_MODEL || process.env.SPEC_MODE_OPENSPEC_MODEL || seamStartModel('spec-agent');
+    }
+    console.log(`spec-mode: fast-path ${specModeProvider}/${specModel} (skipping MiniMax)`);
+    const directExec = { cmd: execSpec.cmd, args: ['--provider', specModeProvider, '--model', specModel] };
+    // Spec-mode responses are large JSON blobs — use a higher output-token budget
+    // than the implementation default (4096) so speckit never truncates mid-JSON.
+    // SPEC_MODE_MAX_OUTPUT_TOKENS is spec-only; it doesn't affect implementation runs.
+    const specEnv = Object.assign(specAgentEnv(process.env, repoPath), envOverride || {});
+    const output = await runClaude(directExec, prompt, logPath, specEnv, { costAgent: costLabelFor(tag, specEnv), costStoryId: storyId });
+    return _validatedOrNull(extractTaggedJson(output, tag), tag, specEnv && specEnv.EPAM_AGENT_NAME);
+  }
+
+  // THE MINIMAX SPECIAL CASE IS GONE.
+  //
+  // This branch fetched https://api.minimaxi.chat/v1/chat/completions directly, reading
+  // MINIMAX_API_KEY itself — a second channel that bypassed the central handler entirely, so a
+  // run that had chosen another provider set could still reach MiniMax from here. It existed
+  // for API-enforced tool JSON; the handler's minimax arm already sets EPAM_MINIMAX_JSON_MODE=1,
+  // which buys the same guarantee through the one channel.
+  //
+  // Its ladder-to-'openrouter' fallback goes with it: a vendor named in code cannot be the answer to
+  // another vendor failing. MiniMax still runs — it falls through to the path below, which
+  // dispatches through the handler like every other provider.
+
+  // Non-minimax: existing raw text path with tag extraction + jsonrepair
+  //
+  // envOverride MUST be forwarded here. It used to be honoured on the SPEC_MODE_PROVIDER
+  // fast-path only, and dropped on this path and on the minimax ladder — so an agent that
+  // supplies its own tool grant (the ticket-link agent needs fetch_url) silently got none,
+  // and ai-run.sh forces --no-tools without AI_GATE_ALLOW_TOOLS. The agent could then only
+  // classify a URL from its address; its `quotes` field could never be populated, which is
+  // the whole reason the step exists. Silent, and invisible in the output.
+  const output = await runClaude(execSpec, prompt, logPath, envOverride || {}, { costAgent: costLabelFor(tag, envOverride), costStoryId: storyId });
+  return _validatedOrNull(extractTaggedJson(output, tag), tag);
+}
+
+const args = process.argv.slice(2);
+function parseArgs(list) {
+  const parsed = { phase: null, dryRun: false };
+  for (let i = 0; i < list.length; i += 1) {
+    const arg = list[i];
+    if (arg === '--phase' && list[i + 1]) {
+      parsed.phase = list[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--dry-run') {
+      parsed.dryRun = true;
+      continue;
+    }
+    if (arg === '--help' || arg === '-h') {
+      parsed.help = true;
+      continue;
+    }
+  }
+  return parsed;
+}
+
+function usage() {
+  console.log(`Usage: npm run spec-mode -- --phase <phase>
+Options:
+  --phase <id>   Phase to run specification mode against (required)
+  --dry-run      Evaluate coordinator assignments without applying PRD changes
+`);
+}
+
+async function run() {
+  const opts = parseArgs(args);
+  if (opts.help || !opts.phase) {
+    usage();
+    if (!opts.phase) process.exitCode = 1;
+    return;
+  }
+
+  const scriptDir = __dirname;
+  const automationDir = path.resolve(scriptDir, '..');
+  const prdPath = process.env.PRD_FILE
+    ? path.resolve(process.env.PRD_FILE)
+    : path.join(automationDir, 'prd.json');
+  const logDir = process.env.OUTPUT_DIR
+    ? path.resolve(process.env.OUTPUT_DIR)
+    : path.join(automationDir, 'logs');
+  const aiRunnerCmd = process.env.AI_RUNNER_CMD || path.join(scriptDir, 'ai-run.sh');
+  const monitorScript = path.join(scriptDir, 'update-monitor.sh');
+  const promptExec = resolvePromptExec(aiRunnerCmd);
+  if (!fs.existsSync(prdPath)) {
+    console.error('spec-mode-runner: prd.json not found at', prdPath);
+    process.exit(1);
+  }
+  fs.mkdirSync(logDir, { recursive: true });
+
+  const prd = JSON.parse(fs.readFileSync(prdPath, 'utf8'));
+  const _initialStoryIds = new Set((prd.stories || []).map((s) => s.id));
+
+  // Load agent profiles — spec-coordinator-agent provides the system-level role instruction
+  const profilesPath = path.join(automationDir, 'agents', 'profiles.json');
+  let profiles = {};
+  try { profiles = JSON.parse(fs.readFileSync(profilesPath, 'utf8')); } catch { /* no profiles */ }
+  const specCoordinatorProfile = profiles['spec-coordinator-agent'] || '';
+
+  const phaseStories = Array.isArray(prd.implementationOrder?.[opts.phase])
+    ? prd.implementationOrder[opts.phase]
+    : [];
+  if (!phaseStories.length) {
+    console.log(`spec-mode: phase ${opts.phase} has no stories; skipping.`);
+    return;
+  }
+
+  const storiesById = new Map();
+  (Array.isArray(prd.stories) ? prd.stories : []).forEach((story) => {
+    if (story && story.id) storiesById.set(story.id, story);
+  });
+  const stories = phaseStories
+    .map((id) => storiesById.get(id))
+    .filter((story) => story && story.completed !== true);
+  if (!stories.length) {
+    console.log(`spec-mode: phase ${opts.phase} has no pending stories.`);
+    return;
+  }
+
+  // B5: prefer the pipeline's ONE run id. Minting a second one here split a
+  // single run across two identities in guarded-step-retries.jsonl and broke
+  // every join on runId (cost roll-ups, retry history, Langfuse sessions).
+  const runId = process.env.ORCH_RUN_ID || new Date().toISOString().replace(/[-:]/g, '').replace(/\..*/, 'Z');
+  const specRunDir = path.join(logDir, 'spec-runs', runId);
+  fs.mkdirSync(specRunDir, { recursive: true });
+  const baselinePath = path.join(specRunDir, 'prd.before.json');
+  fs.writeFileSync(baselinePath, JSON.stringify(prd, null, 2));
+  const baselineLatest = path.join(logDir, 'spec-baseline.json');
+  fs.copyFileSync(baselinePath, baselineLatest);
+
+  const pointerPath = path.join(logDir, 'spec-run-latest.json');
+  fs.writeFileSync(
+    pointerPath,
+    JSON.stringify(
+      {
+        runId,
+        phase: opts.phase,
+        baseline: path.relative(logDir, baselinePath),
+        baselineCopy: 'spec-baseline.json',
+        createdAt: new Date().toISOString()
+      },
+      null,
+      2
+    )
+  );
+
+  // ── Step 1: Coordinator assigns agents ─────────────────────────────────
+  const storiesPayload = JSON.stringify(
+    stories.map((story) => ({
+      id: story.id,
+      title: story.title,
+      description: story.description,
+      acceptanceCriteria: story.acceptanceCriteria,
+      technicalNotes: story.technicalNotes,
+      agentRole: story.agentRole,
+      agentGroup: story.agentGroup,
+      dependencies: story.dependencies || [],
+      spec: story.specification || null
+    })),
+    null,
+    2
+  );
+
+  const coordinatorPrompt = renderEngineTemplate('spec-coordinator', {
+    __PROFILE_PREFIX__: specCoordinatorProfile ? specCoordinatorProfile + '\n\n' : '',
+    __PHASE__: opts.phase,
+    __STORIES_PAYLOAD__: storiesPayload,
+  });
+
+  let assignments = null;
+  try {
+    assignments = await runAgentForJson(
+      promptExec,
+      coordinatorPrompt,
+      TOOL_SPEC_ASSIGNMENTS,
+      'SPEC_ASSIGNMENTS',
+      path.join(logDir, `spec-coordinator-${opts.phase}.log`),
+      'assignments',
+      `phase:${opts.phase}`, // phase-level agent — no single story owns it
+      // THE SEAM, asked for. This call passed no env, so it ran with no ladder, no budget
+      // and no tool grant — the settings sat in the registry reaching nothing.
+      '',
+      { ...seamInvocationEnv('spec-coordinator', logDir), EPAM_AGENT_NAME: 'spec-coordinator' },
+    );
+  } catch (error) {
+    console.warn('spec-mode: coordinator failed, falling back to default agent pair:', error.message);
+  }
+  const assignmentsMap = buildAssignments(assignments, stories, runId);
+
+  if (opts.dryRun) {
+    console.log(JSON.stringify(Object.fromEntries(assignmentsMap), null, 2));
+    return;
+  }
+
+  // ── Step 2: Sequential agent collaboration per story ───────────────────
+  const specLogPath = path.join(logDir, 'spec-phase.jsonl');
+  const summary = {
+    runId,
+    phase: opts.phase,
+    startedAt: new Date().toISOString(),
+    stories: [],
+    stats: { acceptanceUpdated: 0, splits: 0, agents: {}, agentFailures: 0, agentAttempts: 0 }
+  };
+  const newStories = [];
+
+  for (const story of stories) {
+    const assigned = assignmentsMap.get(story.id);
+    if (!assigned || !assigned.agents.length) {
+      continue;
+    }
+
+    const agentContributions = [];
+    const appliedAgents = [];
+    let openspecPayload = null;
+    const codeRefs = extractCodeRefs(story);
+    const codeHint = codeRefs.length ? ` files=${codeRefs.join(',')}` : '';
+    // Captured BEFORE either agent runs — the split-mandate check (after the
+    // agent loop below) needs the story's ORIGINAL shape, not an intermediate
+    // one, since openspec+speckit can both mutate it across two iterations.
+    const originalStorySnapshot = captureStorySnapshot(story);
+    let totalSplitCountForStory = 0;
+
+    // Run agents SEQUENTIALLY: openspec first, then speckit with openspec's output
+    for (const agent of assigned.agents) {
+      summary.stats.agentAttempts += 1;
+      const beforeSnapshot = captureStorySnapshot(story);
+      await emitMonitorEvent({
+        monitorScript,
+        type: 'spec_update',
+        message: `[${opts.phase}] ${agent} started on ${story.id} (${story.title || 'story'})${codeHint}`,
+        storyId: story.id,
+        role: agent
+      });
+
+      let agentResult;
+      try {
+        if (agent === 'speckit' && openspecPayload) {
+          // Speckit receives openspec's output for collaborative review
+          agentResult = await runSpeckitReview({
+            promptExec, story, openspecOutput: openspecPayload,
+            phase: opts.phase, runId, logDir
+          });
+        } else {
+          agentResult = await runSpecAgent({
+            promptExec, agent, story, phase: opts.phase, runId, logDir
+          });
+        }
+      } catch (err) { agentResult = _specAgentFailed(agent, story, err, 'initial'); }
+
+      // Retry on transient failure (timeout, provider outage).
+      // For openspec (the sole split authority), use a HIGH ladder:
+      //   retry 1  — same model (transient-timeout recovery)
+      //   retry 2+ — escalate to SPEC_MODE_OPENSPEC_MODEL_HIGH if configured
+      // SPEC_AGENT_MAX_RETRIES defaults to 3 for openspec, 1 for other agents.
+      const _isOpenspec = agent === 'openspec';
+      // openspec and speckit are both critical — neither may fail. Both agents get the
+      // same 3-retry budget (+ model escalation on attempt 2+). "Failures are not permitted"
+      // means: retry to success, or abort the pipeline with exit(1). Never continue silently.
+      const _specMaxRetries = parseInt(process.env.SPEC_AGENT_MAX_RETRIES || '3', 10);
+      const _openspecHighModel = process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH || process.env.SPEC_MODE_OPENSPEC_MODEL || '';
+      const _openspecBaseModel = process.env.SPEC_MODE_OPENSPEC_MODEL || '';
+      const _speckitHighModel = process.env.SPEC_MODE_SPECKIT_MODEL_HIGH || process.env.SPEC_MODE_SPECKIT_MODEL || '';
+      const _speckitBaseModel = process.env.SPEC_MODE_SPECKIT_MODEL || '';
+      let _specRetry = 0;
+      // Retry exactly when we would otherwise ABORT. These two conditions used
+      // to disagree: the loop tested `!agentResult` while the abort below tests
+      // `!agentResult || !agentResult.payload`.
+      //
+      // An unparseable answer returns a result OBJECT with no payload — live
+      // AMSD-2041 run 7, speckit replied in prose ("It seems t...") instead of
+      // JSON. That failed the abort test but never satisfied the retry test, so
+      // all three retries were skipped and the run died on the first bad roll.
+      // The budget had been inert for the single most common failure mode there
+      // is; earlier runs only recovered from this because the model happened to
+      // fail in a way that returned nothing at all.
+      const _specNeedsRetry = (r) => !r || !r.payload;
+      while (_specNeedsRetry(agentResult) && _specRetry < _specMaxRetries) {
+        _specRetry++;
+        // WHAT did it do wrong? The payload is all that comes back through the
+        // call stack, so on a parse failure the log runAgentForJson wrote is the
+        // only surviving record of the model's actual words. A contract
+        // violation is deterministic — carry a correction into the next attempt
+        // rather than re-asking the identical question, which on AMSD-2041
+        // bought three identical answers and a ladder escalation.
+        const _specRawLog = path.join(
+          logDir,
+          agent === 'speckit' ? `${story.id}-speckit-review.log` : `${story.id}-${agent}-spec.log`
+        );
+        const _specFailureKind = classifySpecFailure(readAgentRawOutput(_specRawLog));
+        const _specNote = specCorrectiveNote(_specFailureKind);
+        // For retry 2+, escalate to the HIGH model if it differs from base — both agents.
+        const _escalateOpenspec = _isOpenspec && _specRetry >= 2 && _openspecHighModel && _openspecHighModel !== _openspecBaseModel;
+        const _escalateSpeckit = !_isOpenspec && agent === 'speckit' && _specRetry >= 2 && _speckitHighModel && _speckitHighModel !== _speckitBaseModel;
+        const _escalate = _escalateOpenspec || _escalateSpeckit;
+        const _prevModel = _isOpenspec ? _openspecBaseModel : _speckitBaseModel;
+        const _nextModel = _isOpenspec ? _openspecHighModel : _speckitHighModel;
+        if (_escalate) {
+          console.warn(
+            `spec-mode: ${agent} ladder escalation for ${story.id} (attempt ${_specRetry + 1}/${_specMaxRetries + 1}) — model ${_prevModel} → ${_nextModel}`
+          );
+          appendSpecPassEvent(logDir, {
+            storyId: story.id,
+            phase: opts.phase,
+            event: 'spec_timeout_escalation',
+            decision: 'escalating',
+            details: { agent, prevModel: _prevModel, newModel: _nextModel, retry: _specRetry }
+          });
+        } else {
+          console.warn(
+            `spec-mode: ${agent} returned null for ${story.id} (attempt ${_specRetry + 1}/${_specMaxRetries + 1})` +
+            (_specFailureKind === 'empty'
+              ? ' — retrying transient failure'
+              : ` — ${_specFailureKind} contract violation, retrying WITH a correction`)
+          );
+        }
+        summary.stats.agentAttempts += 1;
+        try {
+          if (_escalateOpenspec) {
+            const _savedModel = process.env.SPEC_MODE_OPENSPEC_MODEL;
+            process.env.SPEC_MODE_OPENSPEC_MODEL = _openspecHighModel;
+            try {
+              agentResult = await runSpecAgent({ promptExec, agent, story, phase: opts.phase, runId, logDir, forcedRetryNote: _specNote });
+            } finally {
+              if (_savedModel !== undefined) process.env.SPEC_MODE_OPENSPEC_MODEL = _savedModel;
+              else delete process.env.SPEC_MODE_OPENSPEC_MODEL;
+            }
+          } else if (_escalateSpeckit) {
+            const _savedModel = process.env.SPEC_MODE_SPECKIT_MODEL;
+            process.env.SPEC_MODE_SPECKIT_MODEL = _speckitHighModel;
+            try {
+              agentResult = await runSpeckitReview({ promptExec, story, openspecOutput: openspecPayload, phase: opts.phase, runId, logDir, forcedRetryNote: _specNote });
+            } finally {
+              if (_savedModel !== undefined) process.env.SPEC_MODE_SPECKIT_MODEL = _savedModel;
+              else delete process.env.SPEC_MODE_SPECKIT_MODEL;
+            }
+          } else {
+            agentResult = agent === 'speckit' && openspecPayload
+              ? await runSpeckitReview({ promptExec, story, openspecOutput: openspecPayload, phase: opts.phase, runId, logDir, forcedRetryNote: _specNote })
+              : await runSpecAgent({ promptExec, agent, story, phase: opts.phase, runId, logDir, forcedRetryNote: _specNote });
+          }
+        } catch (err) { agentResult = _specAgentFailed(agent, story, err, `retry ${_specRetry}`); }
+      }
+
+      if (!agentResult || !agentResult.payload) {
+        // openspec/speckit failures are not permitted — hard abort so the run is clearly
+        // contaminated and must be relaunched rather than proceeding with an unreviewed PRD.
+        await emitMonitorEvent({
+          monitorScript,
+          type: 'error',
+          message: `[${opts.phase}] FATAL — ${agent} produced no parsable output for ${story.id} after ${_specRetry + 1} attempt(s)`,
+          storyId: story.id,
+          role: agent
+        });
+        console.error(
+          `spec-mode: FATAL — ${agent} returned null for ${story.id} after ${_specRetry + 1} attempt(s). ` +
+          `openspec/speckit failures are not permitted. Aborting pipeline. ` +
+          `Check SPEC_MODE_SPECKIT_MODEL/SPEC_MODE_OPENSPEC_MODEL and RUNCLAUDE_TIMEOUT_MS.`
+        );
+        process.exit(1);
+      }
+
+      let { payload } = agentResult;
+
+      // Track openspec output so speckit can use it
+      if (agent === 'openspec') {
+        openspecPayload = payload;
+      }
+
+      payload.runId = runId;
+
+      // AMSD-2041 (2026-07-31): a content-quality rejection of the AC/
+      // description rewrite below reverts story.technicalNotes wholesale back
+      // to beforeSnapshot — but technicalNotes.files here is populated from
+      // payload.locationHint, which the code-graph-detective computed
+      // independently of whatever the reviewer objected to (a symptom-worded
+      // AC, a vague description). AMSD-2041's openspec rewrite was rejected
+      // 3/3 tries; the revert below erased the detective's grounded fix-site
+      // file list along with it, leaving the implementer a rich root-cause
+      // narrative (fixSiteAnalysis, which is NOT part of this snapshot and
+      // survives) naming exact files, but an empty "Files to Create/Modify"
+      // and no injected file content — 8 attempts across 2 ladder rungs spent
+      // rediscovering by hand what was already known, each attempt allowed
+      // more iterations than the last, ballooning input tokens 32K -> 339K.
+      // Re-merged after each revert below, reusing the exact same helper
+      // applySpecChanges itself uses, so a rejected AC rewrite can never take
+      // the file list down with it.
+      const _restoreDetectiveFiles = () => {
+        story.technicalNotes = mergeLocationHintFiles(story.technicalNotes, payload.locationHint);
+      };
+
+      // Deterministic split-authority check (2026-07-13, user request):
+      // speckit no longer owns splitting — openspec is the sole authority,
+      // and checkSplitMandateViolation's forced-retry on openspec is the
+      // real backstop if it misses a mandatory split (a code-level count,
+      // not an LLM's "independent obligation" prose instruction, which is
+      // what used to grant speckit this power and is exactly the kind of
+      // unenforced instruction this pipeline replaces with deterministic
+      // checks everywhere else). This is not just a prompt update — the
+      // prompt can be ignored, so it's enforced here in code: ANY
+      // splitStories speckit emits is unconditionally dropped, regardless of
+      // whether openspec already split this story or not. This is the exact
+      // collision class (two independently-split, competing child sets for
+      // the same parent, rejected by the same-file coherence check, forcing
+      // the parent to fall back to an oversized unsplit story) that hit
+      // SKY-002 (2026-07-10) and SKY-003 (2026-07-13) live.
+      if (agent === 'speckit' && Array.isArray(payload.splitStories) && payload.splitStories.length) {
+        console.warn(`spec-mode: speckit proposed splitStories for ${story.id} — dropping (splitting is openspec's decision alone, enforced deterministically, not just by prompt instruction)`);
+        delete payload.splitStories;
+      }
+
+      // Brownfield: no agent may split, not even openspec. Guarding the split
+      // MANDATE (storyRequiresSplit) only stops the pipeline from DEMANDING a
+      // child — an agent can still volunteer one, and the result is identical:
+      // a story id that exists nowhere in the client's tracker, cannot be
+      // written back, and fragments a minimal fix across children that each
+      // fail their own deliverable check (live AMSD-2041-A, 2026-07-30).
+      // Deterministic drop, same as the speckit rule above — prompt
+      // instruction alone has already been shown insufficient here.
+      if (process.env.EPAM_BROWNFIELD === '1' && Array.isArray(payload.splitStories) && payload.splitStories.length) {
+        console.warn(`spec-mode: ${agent} proposed splitStories for ${story.id} — dropping (brownfield stories are tickets and are never split; multi-codeline work is one story with N executions)`);
+        delete payload.splitStories;
+      }
+
+      const newStoriesCountBefore = newStories.length;
+      let changes = applySpecChanges(story, payload, newStories, prd, opts.phase, runId, logDir);
+
+      let afterSnapshot = captureStorySnapshot(story);
+
+      // Reviewer gate — validates the AC/description/title rewrite (and any
+      // split children just created) before it's accepted. Runs every phase,
+      // every story: this is the spec pass's only content-quality check, since
+      // applySpecChanges itself only enforces structural caps (AC count, split
+      // depth), not whether the rewritten content is actually good.
+      // NOTE: applySpecChanges can rewrite description/title/technicalNotes
+      // independently of acceptanceChanged (that flag only tracks the AC
+      // array). Check the full snapshot, not just changes.acceptanceChanged,
+      // so a description/title-only rewrite doesn't slip through unreviewed.
+      const anyFieldChanged =
+        changes.acceptanceChanged ||
+        changes.splitCount > 0 ||
+        afterSnapshot.description !== beforeSnapshot.description ||
+        afterSnapshot.title !== beforeSnapshot.title ||
+        JSON.stringify(afterSnapshot.technicalNotes) !== JSON.stringify(beforeSnapshot.technicalNotes);
+      // A split whose ONLY substantive effect is the deterministic "Delegated
+      // to split children" placeholder has nothing left for a content
+      // reviewer to assess — applySpecChanges already verified the split's
+      // structural correctness (file coherence, depth, budget). Skip the
+      // review call entirely rather than asking an LLM to judge a
+      // machine-generated marker it has no way to recognize as one.
+      if (anyFieldChanged && isSplitDelegationOnlyChange(beforeSnapshot, afterSnapshot, changes.splitCount)) {
+        console.log(`spec-mode: skipping prd-change-reviewer for ${story.id} — split-only change (delegation marker is deterministic, already structurally verified)`);
+      } else if (anyFieldChanged) {
+        let reviewResult = await reviewPrdChange({
+          aiRunnerCmd, profiles, storyId: story.id, changeType: 'spec_pass',
+          before: beforeSnapshot, after: afterSnapshot, logDir,
+          splitOccurred: changes.splitCount > 0
+        });
+
+        // Retry-on-violation (2026-07-13): a content-quality rejection here
+        // used to just revert and move on — never tell the SAME agent what
+        // was actually wrong and let it try again. Same "detect, explain,
+        // retry" shape as checkSplitMandateViolation's existing precedent
+        // below, but an INDEPENDENT 2-attempt budget: that check catches a
+        // different violation class (a mandatory split that was skipped
+        // entirely), while this one catches rejected AC/description/title
+        // content — seeding both in the same test must show 2+1 attempts
+        // total, not one shared counter.
+        let acReviewAttempts = 1;
+        // 'unreviewed' means the GATE failed, not the content — so the retry re-runs the review
+        // rather than asking the author to fix something nobody has objected to. Without this the
+        // new verdict would simply be "not fail", which is the fail-open it replaces.
+        let acReviewUnjudged = 0;
+        while (reviewResult.verdict === 'unreviewed' && acReviewUnjudged < 2) {
+          acReviewUnjudged += 1;
+          console.warn(`spec-mode: prd-change-reviewer did not judge ${story.id} `
+            + `(${(reviewResult.issues || []).join('; ')}) — re-running the review `
+            + `(${acReviewUnjudged}/2)`);
+          // eslint-disable-next-line no-await-in-loop
+          reviewResult = await reviewPrdChange({
+            promptExec, story, changeType: 'ac-review', agent, runId, logDir, phase: opts.phase,
+          });
+        }
+        if (reviewResult.verdict === 'unreviewed') {
+          appendSpecPassEvent(logDir, {
+            storyId: story.id, phase: opts.phase, event: 'reviewer_unjudged', decision: 'unreviewed',
+            details: { agent, reasons: reviewResult.issues },
+          });
+        }
+        while (reviewResult.verdict === 'fail' && acReviewAttempts < 3) {
+          acReviewAttempts += 1;
+          const correctiveNote =
+            `CRITICAL — YOUR PREVIOUS OUTPUT WAS REJECTED BY REVIEW: ${reviewResult.issues.join('; ') || 'quality issues found'}. ` +
+            `Fix this and try again. Do not repeat the same mistake.`;
+          let retryResult;
+          try {
+            retryResult = agent === 'speckit'
+              ? await runSpeckitReview({ promptExec, story, openspecOutput: openspecPayload, phase: opts.phase, runId, logDir, forcedRetryNote: correctiveNote })
+              : await runSpecAgent({ promptExec, agent, story, phase: opts.phase, runId, logDir, forcedRetryNote: correctiveNote });
+          } catch (err) {
+            retryResult = null;
+          }
+          if (!retryResult || !retryResult.payload) break; // nothing to re-apply — fall through to revert below
+
+          // Undo the rejected attempt's effects before reapplying, so a
+          // retry never compounds on top of a rejected write.
+          story.acceptanceCriteria = beforeSnapshot.acceptanceCriteria;
+          story.description = beforeSnapshot.description;
+          story.title = beforeSnapshot.title;
+          story.technicalNotes = beforeSnapshot.technicalNotes;
+          _restoreDetectiveFiles();
+          if (newStories.length > newStoriesCountBefore) {
+            newStories.splice(newStoriesCountBefore, newStories.length - newStoriesCountBefore);
+          }
+
+          retryResult.payload.runId = runId;
+          payload = retryResult.payload;
+          if (agent === 'openspec') openspecPayload = payload;
+          changes = applySpecChanges(story, payload, newStories, prd, opts.phase, runId, logDir);
+          afterSnapshot = captureStorySnapshot(story);
+
+          reviewResult = await reviewPrdChange({
+            aiRunnerCmd, profiles, storyId: story.id, changeType: 'spec_pass',
+            before: beforeSnapshot, after: afterSnapshot, logDir,
+            splitOccurred: changes.splitCount > 0
+          });
+        }
+
+        if (reviewResult.verdict === 'fail') {
+          console.warn(`spec-mode: prd-change-reviewer REJECTED ${agent}'s changes to ${story.id} after ${acReviewAttempts} attempt(s): ${reviewResult.issues.join('; ') || 'no details'} — reverting`);
+          story.acceptanceCriteria = beforeSnapshot.acceptanceCriteria;
+          story.description = beforeSnapshot.description;
+          story.title = beforeSnapshot.title;
+          story.technicalNotes = beforeSnapshot.technicalNotes;
+          _restoreDetectiveFiles();
+          if (newStories.length > newStoriesCountBefore) {
+            newStories.splice(newStoriesCountBefore, newStories.length - newStoriesCountBefore);
+          }
+          changes.acceptanceChanged = false;
+          changes.splitCount = 0;
+          afterSnapshot = captureStorySnapshot(story);
+          appendSpecPassEvent(logDir, { storyId: story.id, phase: opts.phase, event: 'reviewer_rejected', decision: 'rejected', details: { agent, attempts: acReviewAttempts, reasons: reviewResult.issues } });
+        } else {
+          appendSpecPassEvent(logDir, { storyId: story.id, phase: opts.phase, event: 'reviewer_accepted', decision: 'accepted', details: { agent, attempts: acReviewAttempts } });
+        }
+
+        logGuardedStepRetry(logDir, {
+          timestamp: new Date().toISOString(),
+          step: 'ac-review',
+          storyId: story.id,
+          runId,
+          agent,
+          attempts: acReviewAttempts,
+          // Three outcomes, not two: an unjudged review is neither a revert nor a pass, and
+          // recording it as 'pass' made the one case worth investigating invisible in the log.
+          outcome: reviewResult.verdict === 'fail' ? 'reverted'
+            : (reviewResult.verdict === 'unreviewed' ? 'unreviewed' : 'pass'),
+          reason: (reviewResult.issues || []).join('; '),
+          // content_quality is the only vocabulary entry here — reviewPrdChange's
+          // verdict is itself an LLM judgment call over free-text issues, not a
+          // mechanical diff, so it can't be reliably subdivided further without
+          // a second LLM call.
+          violationTypes: reviewResult.verdict === 'fail' ? ['content_quality'] : []
+        });
+      }
+
+      // Log each agent's contribution as a separate JSONL entry
+      appendJsonl(specLogPath, {
+        timestamp: new Date().toISOString(),
+        phase_id: opts.phase,
+        run_id: runId,
+        story_id: story.id,
+        agent,
+        before: beforeSnapshot,
+        after: afterSnapshot,
+        notes: payload.notes || '',
+        splitStories: payload.splitStories || [],
+        acceptanceChanged: changes.acceptanceChanged
+      });
+      await emitMonitorEvent({
+        monitorScript,
+        type: 'spec_update',
+        message:
+          `[${opts.phase}] ${agent} updated ${story.id}` +
+          ` acChanged=${changes.acceptanceChanged ? 'yes' : 'no'}` +
+          ` splitCount=${changes.splitCount}${codeHint}`,
+        storyId: story.id,
+        role: agent
+      });
+
+      appliedAgents.push(agent);
+
+      // Build contribution record with actual diff data
+      const contrib = {
+        agent,
+        applied: true,
+        notes: payload.notes || '',
+        acceptanceChanged: changes.acceptanceChanged,
+        splitCount: changes.splitCount,
+        timestamp: new Date().toISOString()
+      };
+      if (changes.acceptanceChanged) {
+        contrib.acBefore = beforeSnapshot.acceptanceCriteria;
+        contrib.acAfter = afterSnapshot.acceptanceCriteria;
+        contrib.acAdded = afterSnapshot.acceptanceCriteria.filter(
+          ac => !beforeSnapshot.acceptanceCriteria.includes(ac)
+        );
+        contrib.acRemoved = beforeSnapshot.acceptanceCriteria.filter(
+          ac => !afterSnapshot.acceptanceCriteria.includes(ac)
+        );
+        summary.stats.acceptanceUpdated += 1;
+      }
+      if (changes.splitCount > 0) {
+        contrib.splitIds = (payload.splitStories || []).map(
+          (s, i) => s.id || `${story.id}-SPEC-${i + 1}`
+        );
+      }
+      agentContributions.push(contrib);
+
+      summary.stats.splits += changes.splitCount;
+      totalSplitCountForStory += changes.splitCount;
+      summary.stats.agents[agent] = (summary.stats.agents[agent] || 0) + 1;
+    }
+
+    // Deterministic split-MANDATE check — see checkSplitMandateViolation()'s
+    // comment for the live defect this catches: openspec's prompt already
+    // said "MANDATORY split required" and was ignored, so a same-run reject-
+    // and-retry is needed (user directive, 2026-07-06: "check number of ACs —
+    // if > 12 then reject and send back to coordinator" — this is the
+    // deterministic gate, not just another round of unenforced prose).
+    let mandateCheck = checkSplitMandateViolation(originalStorySnapshot, totalSplitCountForStory);
+    if (mandateCheck.violated) {
+      console.warn(
+        `spec-mode: split MANDATE violation for ${story.id}: ${mandateCheck.reason} ` +
+        `— openspec was instructed to split but did not; forcing an immediate retry`
+      );
+      appendSpecPassEvent(logDir, { storyId: story.id, phase: opts.phase, event: 'mandate_violation', decision: 'pending_retry', details: { reason: mandateCheck.reason } });
+      const forcedRetryNote =
+        `CRITICAL — YOUR PREVIOUS OUTPUT VIOLATED A MANDATORY RULE. This story ${mandateCheck.reason}, ` +
+        `which REQUIRES a split, and you did not produce one. This is NOT optional and NOT a suggestion. ` +
+        `You MUST output a non-empty "splitStories" array in your response this time.`;
+      summary.stats.agentAttempts += 1;
+      let retryResult;
+      try {
+        retryResult = await runSpecAgent({ promptExec, agent: 'openspec', story, phase: opts.phase, runId, logDir, forcedRetryNote });
+      } catch (err) {
+        retryResult = null;
+      }
+      if (retryResult && retryResult.payload) {
+        retryResult.payload.runId = runId;
+        const childrenCountBefore = newStories.length;
+        const retryChanges = applySpecChanges(story, retryResult.payload, newStories, prd, opts.phase, runId, logDir);
+        summary.stats.splits += retryChanges.splitCount;
+        totalSplitCountForStory += retryChanges.splitCount;
+
+        // Root cause of a live cascade defect (2026-07-06): a split "counts"
+        // by splitCount alone, but a LAZY/non-compliant split — every child
+        // inheriting the FULL original acceptanceCriteria array verbatim,
+        // instead of an actual partition — technically produces
+        // splitStories.length > 0 while leaving every child STILL over the
+        // AC threshold. Each child then re-triggers its OWN split-mandate
+        // violation on its own turn, recursively splitting again and again
+        // until the max-split-depth cap — SKY-001 (a simple scaffold story)
+        // cascaded into 4 stories in one run this way. Verify the CHILDREN
+        // are actually compliant, not just that splitCount > 0. If they are
+        // NOT, do not attempt a second forced retry (that's how the cascade
+        // started) — fall back to flagging, same as any other unresolved
+        // violation.
+        const newChildren = newStories.slice(childrenCountBefore).map((ns) => ns.story);
+        const nonCompliantChildren = newChildren.filter((child) => storyRequiresSplit(captureStorySnapshot(child)).required);
+        mandateCheck = checkSplitMandateViolation(originalStorySnapshot, totalSplitCountForStory);
+        if (!mandateCheck.violated && nonCompliantChildren.length > 0) {
+          console.warn(
+            `spec-mode: forced retry for ${story.id} produced a LAZY split — ${nonCompliantChildren.map((c) => c.id).join(', ')} ` +
+            `still violate(s) the split mandate (likely inherited the full AC list verbatim) — treating as unresolved, not retrying again`
+          );
+          mandateCheck = { violated: true, reason: `split produced non-compliant child/children: ${nonCompliantChildren.map((c) => c.id).join(', ')}` };
+        }
+        if (!mandateCheck.violated) {
+          console.log(`spec-mode: forced retry resolved the split MANDATE violation for ${story.id}`);
+          appendSpecPassEvent(logDir, { storyId: story.id, phase: opts.phase, event: 'mandate_violation', decision: 'resolved', details: { reason: mandateCheck.reason } });
+        } else {
+          console.warn(
+            `spec-mode: forced retry did NOT resolve the split MANDATE violation for ${story.id} ` +
+            `— flagging for the next specification pass`
+          );
+          appendSpecPassEvent(logDir, { storyId: story.id, phase: opts.phase, event: 'mandate_violation', decision: 'unresolved', details: { reason: mandateCheck.reason } });
+        }
+      } else {
+        summary.stats.agentFailures += 1;
+        console.warn(`spec-mode: forced split-mandate retry produced no parsable output for ${story.id} — flagging for the next specification pass`);
+        appendSpecPassEvent(logDir, { storyId: story.id, phase: opts.phase, event: 'mandate_violation', decision: 'unresolved', details: { reason: mandateCheck.reason } });
+      }
+    }
+
+    const specStatus = appliedAgents.length ? 'completed' : 'assigned';
+    const existingSpec = story.specification || {};
+    const existingReview = existingSpec.coordinatorReview || {};
+    const existingFlags = Array.isArray(existingReview.flags) ? existingReview.flags : [];
+    story.specification = {
+      ...existingSpec,
+      runId,
+      assignedAgents: assigned.agents,
+      coordinatorNotes: assigned.notes,
+      status: specStatus,
+      updatedAt: new Date().toISOString(),
+      appliedAgents,
+      agentContributions,
+      ...(mandateCheck.violated
+        ? {
+            coordinatorReview: {
+              ...existingReview,
+              flags: [...existingFlags, `MANDATORY split was required (${mandateCheck.reason}) but was not performed — split this story now`]
+            }
+          }
+        : {})
+    };
+    summary.stories.push({
+      storyId: story.id,
+      assignedAgents: assigned.agents,
+      appliedAgents,
+      notes: assigned.notes,
+      acceptanceUpdated: appliedAgents.length > 0,
+      status: specStatus,
+      agentContributions
+    });
+
+    // Token-budget pass: check each split child created this story iteration.
+    // If a child's estimated baseline prompt exceeds the budget, request a
+    // further split via a fresh openspec call — same forced-retry shape as the
+    // split-mandate gate above, but triggered by token count rather than AC count.
+    // Respects the global SPEC_MAX_SPLIT_DEPTH cap (no infinite re-split chains).
+    const _tokenBudget = parseInt(process.env.EPAM_TOKEN_BUDGET_PER_STORY || '100000', 10);
+    const _contractDir = path.join(path.dirname(prdPath), '.contracts');
+    const _tokenSplitMax = parseInt(process.env.SPEC_MAX_SPLIT_DEPTH || '2', 10);
+    const _childrenThisStory = newStories.filter((ns) => ns.parentId === story.id);
+    for (const { story: child } of _childrenThisStory) {
+      const _est = estimateStoryTokens(child, _contractDir);
+      if (_est <= _tokenBudget) continue;
+      if (splitDepth(child, prd) >= _tokenSplitMax) {
+        console.warn(
+          `spec-mode: token-budget: ${child.id} ~${Math.round(_est / 1000)}K tokens but at max split depth — proceeding at risk`
+        );
+        continue;
+      }
+      console.warn(
+        `spec-mode: token-budget: ${child.id} ~${Math.round(_est / 1000)}K tokens (budget ${Math.round(_tokenBudget / 1000)}K) — requesting further split`
+      );
+      const _tokenNote =
+        `IMPORTANT — Story ${child.id} is estimated at ~${Math.round(_est / 1000)}K tokens, ` +
+        `exceeding the ${Math.round(_tokenBudget / 1000)}K token budget. ` +
+        `It has ${(child.acceptanceCriteria || []).length} ACs. ` +
+        `YOU MUST split it further, separating distinct concerns (e.g. frontend/template ` +
+        `work from build/configuration work), targeting ≤8 ACs and ≤${Math.round(_tokenBudget / 1000)}K tokens per child.`;
+      summary.stats.agentAttempts += 1;
+      let _tokenRetry = null;
+      try {
+        _tokenRetry = await runSpecAgent({
+          promptExec, agent: 'openspec', story: child,
+          phase: opts.phase, runId, logDir, forcedRetryNote: _tokenNote
+        });
+      } catch (err) { _tokenRetry = null; }
+      if (_tokenRetry?.payload?.splitStories?.length) {
+        _tokenRetry.payload.runId = runId;
+        const _trc = applySpecChanges(child, _tokenRetry.payload, newStories, prd, opts.phase, runId, logDir);
+        summary.stats.splits += _trc.splitCount;
+        totalSplitCountForStory += _trc.splitCount;
+        if (_trc.splitCount > 0) {
+          console.log(`spec-mode: token-budget retry split ${child.id} into ${_trc.splitCount} child/children`);
+        }
+      }
+    }
+  }
+
+  // ── Step 3: Insert split stories into PRD ──────────────────────────────
+  if (newStories.length) {
+    const parentInsertOffsets = {};
+    for (const insert of newStories) {
+      prd.stories.push(insert.story);
+      const order = prd.implementationOrder?.[opts.phase];
+      if (Array.isArray(order)) {
+        const parentIndex = order.indexOf(insert.parentId);
+        const offset = parentInsertOffsets[insert.parentId] || 0;
+        const targetIndex = parentIndex === -1 ? order.length : parentIndex + 1 + offset;
+        order.splice(targetIndex, 0, insert.story.id);
+        parentInsertOffsets[insert.parentId] = offset + 1;
+      }
+    }
+    // Remove successfully-delegated parents from the active phase list — every
+    // parentId here had its children genuinely accepted (rejected splits are
+    // spliced out of newStories earlier, in applySpecChanges), so its own
+    // status was just marked 'deprecated' above. Leaving it in
+    // implementationOrder made downstream consumers (TC writer, the main
+    // implementation loop) treat it as still-active work with real source
+    // files, when its implementation is now entirely delegated to children.
+    const delegatedParentIds = new Set(Object.keys(parentInsertOffsets));
+    const order = prd.implementationOrder?.[opts.phase];
+    if (Array.isArray(order)) {
+      prd.implementationOrder[opts.phase] = order.filter((id) => !delegatedParentIds.has(id));
+    }
+
+    // Wire test-child dependencies onto impl siblings from the SAME split —
+    // must run after ALL children for a parent are inserted so basename
+    // matching sees every sibling, not just the first processed.
+    const byParentForWiring = new Map();
+    for (const insert of newStories) {
+      if (!byParentForWiring.has(insert.parentId)) byParentForWiring.set(insert.parentId, []);
+      byParentForWiring.get(insert.parentId).push(insert.story);
+    }
+    const wiringOrder = prd.implementationOrder?.[opts.phase];
+    for (const siblings of byParentForWiring.values()) {
+      wireSplitSiblingDependencies(siblings, prd);
+      reorderSiblingsByDependency(siblings, wiringOrder);
+    }
+  }
+
+  // ── Step 4: Coordinator review pass ────────────────────────────────────
+  const specifiedStories = stories.filter(
+    s => s.specification && s.specification.appliedAgents && s.specification.appliedAgents.length > 0
+  );
+  if (specifiedStories.length > 0) {
+    // Brownfield: no agent may split (any splitStories payload is dropped
+    // deterministically before this point — see the EPAM_BROWNFIELD guard in
+    // applySpecChanges' caller above), and preserveDefectAcceptanceCriteria
+    // forces story.acceptanceCriteria back to the ticket's immutable original
+    // on every merge regardless of what openspec/speckit proposed. So for a
+    // brownfield run, "are the ACs complete/non-overlapping" and "are splits
+    // logical" are both grading things the code already guarantees didn't
+    // happen — real agent audit, 2026-07-31 (mock1 cycle-time investigation:
+    // this call's wall time varied 17s-4m36s across otherwise-identical runs).
+    // Dropping the two moot criteria (and the always-empty splitChildren
+    // payload) narrows the prompt to what brownfield can actually judge —
+    // real technical-depth value-add and whether a story needs human eyes —
+    // without losing any judgment brownfield ever used.
+    const isBrownfieldReview = process.env.EPAM_BROWNFIELD === '1';
+    const reviewPayload = buildReviewPayload(specifiedStories, isBrownfieldReview, prd.stories || [], logDir, opts.phase);
+
+    // RENDERED FROM THE TEMPLATE LAYER. Brownfield drops the acceptance-criteria and split
+    // checks deliberately: both are moot when the AC array is empty by policy, and asked anyway
+    // the reviewer reported the empty array as a defect and lowered qualityScore for it.
+    const reviewCriteria = renderEngineTemplate(
+      'spec-review-criteria', {}, isBrownfieldReview ? 'brownfield' : 'greenfield');
+
+    const reviewPrompt = renderEngineTemplate('spec-coordinator-review', {
+      __PROFILE_PREFIX__: specCoordinatorProfile ? specCoordinatorProfile + '\n\n' : '',
+      __PHASE__: opts.phase,
+      __REVIEW_CRITERIA__: reviewCriteria,
+      __MANIFEST_EVIDENCE__: manifestEvidence(specifiedStories, prd),
+      __CODELINE_SCOPE__: codelineScopeBlock(prd, specifiedStories),
+      __MANIFEST_GROUNDING__: MANIFEST_GROUNDING_BLOCK,
+      __REVIEW_PAYLOAD__: reviewPayload,
+    });
+
+    let reviews = null;
+    try {
+      reviews = await runAgentForJson(
+        promptExec,
+        reviewPrompt,
+        TOOL_SPEC_REVIEW,
+        'SPEC_REVIEW',
+        path.join(logDir, `spec-coordinator-review-${opts.phase}.log`),
+        'items',
+        `phase:${opts.phase}`, // phase-level agent — no single story owns it
+        // THE SEAM, asked for. This call passed no env, so it ran with no ladder, no budget
+        // and no tool grant — the settings sat in the registry reaching nothing.
+        '',
+        { ...seamInvocationEnv('spec-coordinator', logDir), EPAM_AGENT_NAME: 'spec-coordinator' },
+      );
+    } catch (error) {
+      console.warn('spec-mode: coordinator review failed:', error.message);
+    }
+    if (Array.isArray(reviews)) {
+      const reviewMap = new Map();
+      reviews.forEach(r => { if (r && r.storyId) reviewMap.set(r.storyId, r); });
+      for (const story of specifiedStories) {
+        const review = reviewMap.get(story.id);
+        if (review) {
+          // The computed truth about the manifest, recorded next to the verdict. The gate
+          // blocks on THIS; the model's missing_manifest_path flag is corroboration only
+          // (measured: hallucinated in 1 of 4 samples against an all-EXISTS evidence
+          // block). Persisted, not merely logged — a fact the gate needs must be on disk.
+          story.specification.manifestCheck = {
+            missing: manifestMissingPaths([story], prd),
+            checkedAt: new Date().toISOString()
+          };
+          story.specification.coordinatorReview = {
+            // A REVIEW THAT RETURNED NOTHING IS NOT AN APPROVAL. This read `|| 'approved'`, so a
+            // coordinator review that produced prose, failed, or never really ran was written to
+            // disk as approved — and that record is read back on later passes and summarised into
+            // the run report, where nothing can tell it from a real approval. 'unreviewed' names
+            // the absence instead of silently choosing the passing side.
+            verdict: review.verdict || 'unreviewed',
+            reviewNotes: review.reviewNotes || '',
+            qualityScore: typeof review.qualityScore === 'number' ? review.qualityScore : null,
+            flags: Array.isArray(review.flags) ? review.flags : [],
+            planAlignment: review.planAlignment || 'not_applicable',
+            reviewedAt: new Date().toISOString()
+          };
+
+          // ONE bounded corrective re-invocation of the detective — not a loop, not a
+          // pipeline abort. The reviewer judged (not a regex) that the detective's answer
+          // diverged from its own plan with no stated reason; feed that judgment back as
+          // corrective context, mirroring the existing PRIOR COORDINATOR FLAGS pattern
+          // already used for openspec/speckit re-elaboration. Best-effort: a failed
+          // correction keeps the original (already-persisted) fixSiteAnalysis rather than
+          // losing it — a flagged hypothesis still beats none.
+          const _correction = detectiveCorrectionNeeded({
+            review,
+            coverage: story.fixSiteAnalysisCoverage,
+            brownfield: process.env.EPAM_BROWNFIELD === '1',
+          });
+          if (_correction.correct) {
+            console.warn(`spec-mode: re-invoking the detective once for ${story.id} — ${_correction.reasons.join('; ')}.`);
+            advanceAgentLadderEscalation(logDir, 'code-graph-detective', story.id);
+            try {
+              const _priorPlan = readLatestDetectivePlan(logDir, opts.phase, story.id);
+              const _priorFindings = Array.isArray(story.fixSiteAnalysis) ? story.fixSiteAnalysis : [];
+              const _corrected = await runCodeGraphDetective(story, logDir, {
+                correctiveContext: {
+                  priorPlan: _priorPlan,
+                  priorFindings: _priorFindings,
+                  reviewNotes: review.reviewNotes || '',
+                  // Named, not merely counted: a re-invocation told only "try again" re-samples
+                  // the same answer. These are the criteria no site addressed.
+                  uncoveredCriteria: _correction.uncovered,
+                },
+              });
+              if (Array.isArray(_corrected) && _corrected.length) {
+                story.fixSiteAnalysis = _corrected.filter((f) => f.reason);
+                story.fixSiteAnalysisCoverage = coverageForStory(story);
+                console.warn(`spec-mode: ${story.id} — detective correction produced ${story.fixSiteAnalysis.length} revised fix-site(s).`);
+              }
+            } catch (err) {
+              console.warn(`spec-mode: detective correction failed for ${story.id} (${err && err.message}) — keeping the original fixSiteAnalysis.`);
+            }
+          }
+
+          const summaryEntry = summary.stories.find(s => s.storyId === story.id);
+          if (summaryEntry) {
+            summaryEntry.coordinatorReview = story.specification.coordinatorReview;
+          }
+        }
+      }
+      summary.stats.coordinatorReviewCompleted = true;
+      summary.stats.approved = reviews.filter(r => r.verdict === 'approved').length;
+      summary.stats.needsReview = reviews.filter(r => r.verdict === 'needs_review').length;
+    }
+  }
+
+  // ── Step 5: Model adequacy re-assessment ──────────────────────────────
+  // Pass A (rule-based): score every story against measurable complexity signals.
+  // Pass B (LLM review): coordinator reviews all scores — confirms, overrides, or
+  //   catches false negatives the rules missed. LLM decision is final.
+  // Both passes write to story.specification.modelUpgrade for full auditability.
+  // Fallback default MUST stay within this pipeline's configured model ladder
+  // here). A prior default of 'anthropic/claude-sonnet-4-6' meant ANY
+  // invocation that forgot to export ORCH_UPGRADE_MODEL (e.g. a hand-rolled
+  // launcher that didn't replicate tier3-travel-app-run.sh's full env-var
+  // set) silently got an Anthropic model assigned — and because
+  // buildKnownValidModels() below includes whatever this resolves to,
+  // isValidModelString() accepted it as "known valid" by construction, so no
+  // validation ever caught it (found live 2026-07-13: SKY-001 assigned
+  // anthropic/claude-sonnet-4-6, failed 8/8 attempts, aborted the phase).
+  // The ladder's own rungs: mid is the upgrade target, base is the cheap one. Naming models
+  // here made the engine decide what "upgrade" means for a project it knows nothing about.
+  const upgradeModel = process.env.ORCH_UPGRADE_MODEL || seamStartModel('impl-failure-analyst');
+  const miniModel    = process.env.ORCH_MINI_MODEL    || seamStartModel('ac-classification');
+  // Ceiling model for veryHighComplexity stories — "the most appropriate
+  // high model," reusing the SAME strongest-configured-model concept the
+  // Rung3+ watchdog fallback already uses (EPAM_FINAL_FALLBACK_MODEL), so
+  // there's one source of truth for "what is our ceiling model" rather than
+  // two independently-configured ceilings that could drift apart. A
+  // dedicated EPAM_VERY_HIGH_COMPLEXITY_MODEL override exists for projects
+  // that want a different ceiling here than the watchdog-timeout fallback.
+  const veryHighModel    = process.env.EPAM_VERY_HIGH_COMPLEXITY_MODEL    || process.env.EPAM_FINAL_FALLBACK_MODEL    || upgradeModel;
+  const veryHighProvider = process.env.EPAM_VERY_HIGH_COMPLEXITY_PROVIDER || process.env.EPAM_FINAL_FALLBACK_PROVIDER || '';
+  const allPhaseStories = [...stories, ...newStories.map((ns) => ns.story)];
+
+  // Pass A — rule-based signals for every story that has a model assigned
+  const ruleAssessments = [];
+  for (const story of allPhaseStories) {
+    if (!story.model) continue;
+    const signals = modelComplexitySignals(story);
+    ruleAssessments.push({
+      storyId: story.id,
+      currentModel: story.model,
+      isMini: isMiniTierModel(story.model),
+      ruleRecommendation: signals.veryHighComplexity ? veryHighModel : (signals.needsUpgrade ? upgradeModel : story.model),
+      ruleUpgrade: signals.needsUpgrade,
+      ruleReason: signals.reason || 'no upgrade signal detected',
+      veryHighComplexity: signals.veryHighComplexity,
+      veryHighReason: signals.veryHighReason,
+      signals: {
+        acCount: signals.acCount,
+        singleFile: signals.isSingleFile,
+        htmlOutput: signals.hasHtmlOutput,
+        selfContained: signals.hasSelfContainedKeyword
+      }
+    });
+  }
+
+  // Pass B — LLM coordinator reviews all rule assessments
+  let finalAssessments = ruleAssessments.map((a) => ({ ...a, finalModel: a.ruleRecommendation, llmOverride: false, llmReason: '' }));
+  try {
+    const storyContextForReview = allPhaseStories
+      .filter((s) => s.model)
+      .map((s) => {
+        const ra = ruleAssessments.find((a) => a.storyId === s.id);
+        return {
+          id: s.id,
+          title: s.title,
+          description: (s.description || ''),
+          acCount: Array.isArray(s.acceptanceCriteria) ? s.acceptanceCriteria.length : 0,
+          outputFiles: (s.technicalNotes?.files || []).filter((f) => !f.endsWith('.test.ts') && !f.endsWith('.spec.ts')),
+          currentModel: s.model,
+          ruleUpgrade: ra ? ra.ruleUpgrade : false,
+          ruleReason: ra ? ra.ruleReason : '',
+          signals: ra ? ra.signals : {}
+        };
+      });
+
+    const modelReviewPrompt = renderEngineTemplate('spec-model-review', {
+      __PROFILE_PREFIX__: specCoordinatorProfile ? specCoordinatorProfile + '\n\n' : '',
+      __PHASE__: opts.phase,
+      __MINI_MODEL__: miniModel,
+      __UPGRADE_MODEL__: upgradeModel,
+      __STORY_CONTEXT__: JSON.stringify(storyContextForReview, null, 2),
+    });
+
+    let llmDecisions = null;
+    try {
+      llmDecisions = await runAgentForJson(
+        promptExec,
+        modelReviewPrompt,
+        TOOL_MODEL_REVIEW,
+        'MODEL_REVIEW',
+        path.join(logDir, `spec-model-review-${opts.phase}.log`),
+        'items',
+        `phase:${opts.phase}`, // phase-level agent — no single story owns it
+        // THE SEAM, asked for. This call passed no env, so it ran with no ladder, no budget
+        // and no tool grant — the settings sat in the registry reaching nothing.
+        '',
+        { ...seamInvocationEnv('spec-coordinator', logDir), EPAM_AGENT_NAME: 'spec-coordinator' },
+      );
+    } catch (err) { llmDecisions = null; }
+    if (Array.isArray(llmDecisions)) {
+      // Tier label → canonical model ID (LLM sometimes echoes the tier label instead of a real model string)
+      const TIER_LABEL_MAP = {
+        'standard-tier': upgradeModel,
+        'mini-tier':     miniModel,
+        'nano-tier':     miniModel,
+        'premium-tier':  process.env.ORCH_PREMIUM_MODEL || upgradeModel,
+      };
+      const resolveTierLabel = (m) => (m && TIER_LABEL_MAP[m]) ? TIER_LABEL_MAP[m] : m;
+
+      const knownValidModels = buildKnownValidModels(upgradeModel, miniModel);
+      const isValidModel = (m, currentModel) => isValidModelString(m, currentModel, knownValidModels);
+
+      const decisionMap = new Map();
+      llmDecisions.forEach((d) => { if (d && d.storyId) decisionMap.set(d.storyId, d); });
+      finalAssessments = finalAssessments.map((fa) => {
+        // veryHighComplexity is a deterministic, code-level classification —
+        // the LLM coordinator has no concept of "ceiling model, skip the
+        // ladder" and could talk itself into downgrading a story that
+        // genuinely needs it (same "code-level checks > LLM persuasion"
+        // principle already applied elsewhere in this pipeline). Bypass
+        // Pass B entirely for these stories; the rule-based ceiling
+        // assignment from Pass A is final.
+        if (fa.veryHighComplexity) return fa;
+        const decision = decisionMap.get(fa.storyId);
+        if (!decision) return fa;
+        const rawModel = decision.finalModel && decision.finalModel !== 'keep-current'
+          ? decision.finalModel
+          : fa.ruleRecommendation;
+        let llmModel = resolveTierLabel(rawModel);
+        let rejectedInvalidModel = false;
+        if (!isValidModel(llmModel, fa.currentModel)) {
+          console.warn(
+            `spec-mode: LLM model review for ${fa.storyId} returned unrecognized model "${llmModel}" — ` +
+            `ignoring and using rule-based recommendation "${fa.ruleRecommendation}" instead`
+          );
+          llmModel = fa.ruleRecommendation;
+          rejectedInvalidModel = true;
+        }
+        return {
+          ...fa,
+          finalModel: llmModel,
+          llmOverride: decision.override === true && !rejectedInvalidModel,
+          llmReason: decision.reason || '',
+          llmConfidence: decision.confidence || 'medium'
+        };
+      });
+      console.log(`spec-mode: LLM model review completed for ${llmDecisions.length} stories`);
+    }
+  } catch (err) {
+    console.warn('spec-mode: LLM model review failed, using rule-based decisions only:', err.message);
+  }
+
+  // Apply final decisions
+  const modelChanges = [];
+  for (const fa of finalAssessments) {
+    const story = allPhaseStories.find((s) => s.id === fa.storyId);
+    if (!story) continue;
+    // veryHighComplexity: mark skipLadder regardless of whether the model
+    // string itself changed (e.g. it was already assigned the ceiling
+    // model by an earlier pass) — the flag is what tells claude.sh's
+    // InferenceLadder to stop reassigning models on retry, not the model
+    // value alone.
+    if (fa.veryHighComplexity && !story.skipLadder) {
+      story.skipLadder = true;
+      console.log(`spec-mode: ${story.id} marked skipLadder=true (${fa.veryHighReason})`);
+    }
+    if (fa.finalModel !== story.model) {
+      const prev = story.model;
+      story.model = fa.finalModel;
+      // Keep aiProvider in sync with the new model — see resolveModelProvider's
+      // docstring for the live bug this fixes (stale provider + new model
+      // silently misrouting requests, causing an indefinite hang).
+      const newProvider = resolveModelProvider(fa.finalModel) || (fa.veryHighComplexity ? veryHighProvider : '');
+      if (newProvider && newProvider !== story.aiProvider) {
+        const prevProvider = story.aiProvider;
+        story.aiProvider = newProvider;
+        console.log(
+          `spec-mode: provider set ${story.id}: ${prevProvider} → ${newProvider} (model changed to ${fa.finalModel})`
+        );
+      }
+      if (!story.specification) story.specification = {};
+      story.specification.modelUpgrade = {
+        from: prev,
+        to: fa.finalModel,
+        ruleSignals: fa.signals,
+        ruleReason: fa.ruleReason,
+        llmOverride: fa.llmOverride,
+        llmReason: fa.llmReason,
+        llmConfidence: fa.llmConfidence || null,
+        veryHighComplexity: fa.veryHighComplexity || false,
+        veryHighReason: fa.veryHighReason || '',
+        upgradedAt: new Date().toISOString()
+      };
+      modelChanges.push({ storyId: story.id, from: prev, to: fa.finalModel, llmOverride: fa.llmOverride, veryHighComplexity: fa.veryHighComplexity || false });
+      console.log(`spec-mode: model set ${story.id}: ${prev} → ${fa.finalModel}${fa.llmOverride ? ' [LLM override]' : ''}${fa.veryHighComplexity ? ' [VERY HIGH COMPLEXITY — ceiling model, skipLadder]' : ''}`);
+    }
+  }
+  if (modelChanges.length > 0) {
+    summary.stats.modelUpgrades = modelChanges;
+  }
+
+  // Story-ID-loss invariant — see assertNoStoryIdsLost's docstring.
+  assertNoStoryIdsLost(_initialStoryIds, new Set((prd.stories || []).map((s) => s.id)), 'run()');
+
+  // Atomic write (write to a temp file, then rename): writeFileSync alone
+  // truncates the target before writing, so a kill mid-write leaves the PRD
+  // empty/corrupted — the same class of incident found live 2026-07-11 (a
+  // "Bad control character in string literal" PRD corruption). Locked
+  // against concurrent writers (e.g. a parallel worktree story patching the
+  // same PRD) so two writes can't interleave at the disk-write moment.
+  const _prdLockPath = `${prdPath}.lock`;
+  acquireFileLock(_prdLockPath);
+  try {
+    const _tmpPrdPath = `${prdPath}.tmp`;
+    fs.writeFileSync(_tmpPrdPath, JSON.stringify(prd, null, 2));
+    fs.renameSync(_tmpPrdPath, prdPath);
+  } finally {
+    releaseFileLock(_prdLockPath);
+  }
+  summary.completedAt = new Date().toISOString();
+  summary.storyCount = summary.stories.length;
+  fs.writeFileSync(path.join(specRunDir, 'summary.json'), JSON.stringify(summary, null, 2));
+  fs.writeFileSync(path.join(logDir, 'spec-summary.json'), JSON.stringify(summary, null, 2));
+  await emitMonitorEvent({
+    monitorScript,
+    type: 'spec_update',
+    message: `[${opts.phase}] specification completed run=${runId} stories=${summary.storyCount}`,
+    role: 'spec-coordinator'
+  });
+  console.log(`spec-mode: completed for phase ${opts.phase} (run ${runId})`);
+
+  // Abort pipeline if every agent invocation failed — indicates a broken provider/runner
+  if (summary.stats.agentAttempts > 0 && summary.stats.agentFailures === summary.stats.agentAttempts) {
+    console.error(
+      `spec-mode: FATAL — all ${summary.stats.agentAttempts} agent invocations failed for phase ${opts.phase}. ` +
+      `Check EPAM_ORCHESTRATION_PROVIDER is set and supported by ai-run.sh.`
+    );
+    process.exit(1);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Agent prompt builders
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Brownfield archaeology block — must fire for EPAM_BROWNFIELD=1 regardless of
+// which spec agent (openspec or speckit) is running the prompt. Whichever
+// agent runs must identify the existing change site before writing any AC;
+// locationHint feeds directly into the story agent's context so it opens the
+// right file. Extracted as a pure, exported function (rather than left inline
+// as a private ternary) specifically so this condition can be tested by
+// calling it, not by grepping source text for a string pattern — a static
+// regex assertion is exactly what let the original bug ship silently.
+//
+// Root cause fix (2026-07-23, live AMSD-1820 failure): this used to also
+// require `agent === 'openspec'`. The coordinator can legitimately assign
+// ONLY speckit to a story (openspec ran "0 stories" that phase) — when that
+// happens, this block never fired for that story at all: no locationHint
+// request, no CodeGraph/Semble grounding instruction, nothing. The story
+// then went to execution with zero file guidance in a large real repo, and
+// 8 real agent attempts never found the actual fix site.
+// Deterministic backstop to openspec's own defect/novel classification (STEP 3
+// of the brownfield archaeology block). When openspec classifies a story as a
+// "defect", its acceptance criteria must pass through UNCHANGED — rewriting a
+// bug's ACs bakes in a guessed fix mechanism that misdirects the implementer
+// (live AMSD-1820). This restores the story's original ACs onto the payload,
+// enforcing the instruction even when the model ignores it.
+//
+// Greenfield-safe: no-op unless env.EPAM_BROWNFIELD === '1'. "novel" brownfield
+// stories are left fully elaborated (a brownfield story is not always a bug).
+// Returns true iff openspec had actually altered the ACs (i.e. an edit was
+// redacted) — purely so the caller can log it.
+// Verify the detective's prescribed helper actually EXISTS in the repo before we
+// inject its fix as "AUTHORITATIVE — the plan of record". The detective is an LLM
+// and can hallucinate a plausible-sounding helper/symbol; making a hallucinated
+// fix authoritative misdirects harder than no fix at all. Deterministic + cheap:
+// grep the repo for a definition of the named symbol.
+//   returns true  — a helper was named AND a definition exists (trust it)
+//   returns false — a helper was named but NOT found anywhere (likely invented)
+//   returns null  — no helper named (nothing to verify; not every fix needs one)
+function verifyDetectiveHelper(helper, repoPath) {
+  if (!helper || typeof helper !== 'string') return null;
+  const sym = helper.trim().replace(/[^A-Za-z0-9_].*$/, ''); // first identifier only
+  if (!/^[A-Za-z_][A-Za-z0-9_]+$/.test(sym)) return null;
+  if (!repoPath) return null;
+  try {
+    const res = require('child_process').spawnSync(
+      'grep',
+      ['-rEl', '--include=*.ts', '--include=*.tsx',
+        '--exclude-dir=node_modules', '--exclude-dir=.git',
+        `(function|const|class|type|interface|enum)[[:space:]]+${sym}\\b`, repoPath],
+      { encoding: 'utf8', timeout: toolTimeoutMs('codegraphQuery') }
+    );
+    return res.status === 0 && String(res.stdout || '').trim().length > 0;
+  } catch { return null; }
+}
+
+// precomputeDetectiveExplore(repoPath, story, toolPath, env)
+// Runs the detective's own step-1 `explore` for it, deterministically, before
+// the model is invoked.
+//
+// The prompt says "First call: explore with the DOMAIN NOUNS only" — and that
+// call needs no judgement at all: buildBrownfieldSearchQuery() already computes
+// exactly that noun set (the stopword-stripped query proven to rank the real
+// fix site #1 rather than the display layer the symptom words describe).
+//
+// The scarce resource here is the iteration budget, not intelligence. glm-5.1
+// exhausted the cap at 10, 20, 25 and 40 — every turn spent re-deriving a query
+// we can compute for free is a turn not spent tracing callers, which is the
+// part that actually needs a model. Best-effort by construction: a missing
+// tool, a broken index or a slow query degrades to "no pre-seed" and never
+// breaks the spec pass.
+// DECLARED — config/spec-mode-defaults.json policy.detectivePreseedMaxChars.
+function precomputeDetectiveExplore(repoPath, story, toolPath, env = process.env, vocabulary = null) {
+  if (env.CODEGRAPH_DETECTIVE_PRESEED === '0') return '';
+  if (!repoPath || !toolPath || !story) return '';
+  let query = '';
+  try { query = buildBrownfieldSearchQuery(story, vocabulary) || ''; } catch { return ''; }
+  const terms = String(query).trim().split(/\s+/).filter(Boolean);
+  if (!terms.length) return '';
+  try {
+    if (!fs.existsSync(toolPath)) return '';
+    const res = require('child_process').spawnSync(
+      'bash', [toolPath, 'explore', ...terms],
+      {
+        encoding: 'utf8',
+        timeout: Number(env.CODEGRAPH_DETECTIVE_PRESEED_TIMEOUT_MS || '60000'),
+        env: Object.assign({}, env, { PROJECT_ROOT: repoPath }),
+      },
+    );
+    if (res.status !== 0) return '';
+    const out = String(res.stdout || '').trim();
+    if (!out) return '';
+    const _preseedCap = policyConfig().detectivePreseedMaxChars;
+    if (!Number.isFinite(_preseedCap) || out.length <= _preseedCap) return out;
+    // Say so — a silently truncated ranking reads as a complete one. The notice
+    // counts against the cap: the point is a bounded block, not a bounded body
+    // with an unbounded footer.
+    const notice = '\n… (truncated — re-run explore yourself if you need the rest)';
+    return out.slice(0, _preseedCap - notice.length) + notice;
+  } catch { return ''; }
+}
+
+// verifyDetectiveEvidence(brokenLine, file, repoPath)
+// Does the code the detective claims is broken actually EXIST in the file it
+// named? true = quoted and found, false = quoted and NOT found (the diagnosis
+// is about code that isn't there), null = nothing quoted / too short to prove
+// anything.
+//
+// Live metrolinx 2026-07-26. The detective returned clean JSON naming the right
+// file and a confident root cause — "the discount is applied at full value to
+// each leg, halve it with getPreciseFloatNumber". Wrong. The real defect is the
+// matcher: dispatch line-item ids are built by getDispatchLineItemKey as
+// `"<id>#return"`, so `lineItem.id === discount.lineItemId` never matches for a
+// return trip, discountsForDispatch comes back empty, the function returns
+// early and NO discount is ever set — which is precisely the ticket's symptom
+// (amount NOT DISPLAYED; a doubled amount would show a wrong number, not
+// nothing).
+//
+// Every existing guard passed it. `helper` was getPreciseFloatNumber, which
+// really exists, so verifyDetectiveHelper said true; the JSON parsed, so the
+// attempt counted as success. This agent was scored on "emitted valid JSON",
+// never on "the claim is true of the code" — the same PRODUCED-vs-VALID gap
+// behind every escaped defect here.
+//
+// So: a fix that changes existing code must quote the expression it changes,
+// and that expression must be in the file. The wrong prescription invents new
+// logic and can quote nothing; the correct one quotes a line that is really
+// there. A check, not more prompt text.
+function verifyDetectiveEvidence(brokenLine, file, repoPath) {
+  if (!brokenLine || typeof brokenLine !== 'string') return null;
+  // Strip the backticks the prompt's own example uses, then normalise
+  // whitespace: the model reformats what it quotes, and a formatting
+  // difference must never reject a genuine quote.
+  const norm = (s) => s.replace(/`/g, ' ').replace(/\s+/g, ' ').trim();
+  const needle = norm(brokenLine);
+  // A quote too short to be distinctive (`}`, `=>`) proves nothing — treat it
+  // as no claim rather than as evidence.
+  if (needle.length < minEvidenceChars()) return null;
+  if (!file || typeof file !== 'string' || !repoPath) return false;
+  try {
+    const rel = file.replace(/^\.?\//, '');
+    const abs = path.resolve(repoPath, rel);
+    // Never read outside the repo under diagnosis.
+    if (abs !== repoPath && !abs.startsWith(repoPath + path.sep)) return false;
+    if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) return false;
+    return norm(fs.readFileSync(abs, 'utf8')).includes(needle);
+  } catch { return false; }
+}
+
+// AC IMMUTABILITY (VC model): the acceptanceCriteria are the ticket's intent and
+// are NEVER mutated by the spec pass for a brownfield story — all verification
+// lives in the separate verificationCriteria (VC) layer, so ACs can't be poisoned
+// with a guessed implementation mechanism. Restores the story's original ACs onto
+// the payload. (Was defect-only; now every brownfield story per the VC design,
+// 2026-07-24.) Returns true iff openspec had altered the ACs (so the caller logs).
+function preserveDefectAcceptanceCriteria(payload, story, env = process.env) {
+  if (!payload || env.EPAM_BROWNFIELD !== '1') return false;
+  if (!story || !Array.isArray(story.acceptanceCriteria)) return false;
+  const original = story.acceptanceCriteria.slice();
+  const changed = JSON.stringify(payload.acceptanceCriteria) !== JSON.stringify(original);
+  payload.acceptanceCriteria = original;
+  return changed;
+}
+
+// SHARED verification-criteria rules — the SINGLE source of truth used verbatim by
+// BOTH the producer (openspec: archaeology STEP 3 + regenerate) AND the reviewer
+// (speckit). Keeping one text means the producer and reviewer can never disagree
+// about what counts as "observable" — the disagreement that made AMSD-1820 loop
+// forever (producer emitted an internal "confirmation data" response field as a VC;
+// reviewer flagged that same field as a mechanism; regen re-emitted it; → fallback).
+const AC_PRESCRIPTIVENESS_RULE = renderEngineTemplate('spec-authoring-rules', {}, 'ac_prescriptiveness');
+
+const SEARCH_TERM_RULE = renderEngineTemplate('spec-authoring-rules', {}, 'search_term');
+
+/**
+ * vcFormSamples(env) — worked examples of FORM for the VC producer, supplied PER PROJECT.
+ *
+ * Rules alone did not stop the same three shapes being produced and then deleted across the
+ * runs of 2026-08-06/07: an assertion about internal structure, an assertion about an internal
+ * call path, and a criterion beginning outside the boundary a test can drive. Contrast pairs
+ * teach those shapes in a way a prohibition does not.
+ *
+ * They are NOT written here. Authored examples in engine code are content in the generic
+ * pipeline — wrong for the next project, and maintained by nobody. They live in the project's
+ * own config directory, where a project's specifics belong, and a project that supplies none
+ * simply gets no examples section.
+ *
+ * EVERY NOUN IN THEM MUST BE A PLACEHOLDER. The guard-vocabulary agent's persona carried one
+ * worked example naming a real vendor callback, and the guard deleted criteria quoting that
+ * callback on three consecutive runs. An example is the strongest line in a prompt, so it is
+ * the worst place to put a real name — see the test that enforces this on whatever file a
+ * project supplies.
+ *
+ * PRODUCER ONLY. The guard derives what it enforces from VC_OBSERVABILITY_RULES plus this
+ * story's own evidence; authored examples must never reach an enforcement path.
+ */
+function vcFormSamples(env = process.env) {
+  const explicit = env.VC_FORM_SAMPLES_FILE;
+  const projectDir = env.EPAM_PROJECT_CONFIG_DIR;
+  const candidate = explicit || (projectDir ? path.join(projectDir, 'vc-form-samples.md') : '');
+  if (!candidate) return '';
+  try {
+    const text = fs.readFileSync(candidate, 'utf8').trim();
+    return text || '';
+  } catch {
+    // A project without samples is the normal case, not an error.
+    return '';
+  }
+}
+
+const VC_OBSERVABILITY_RULES = renderEngineTemplate('spec-authoring-rules', {}, 'vc_observability');
+
+// Validate + normalize the verification criteria openspec produced: an array of
+// non-empty strings. Kept separate so a malformed payload never corrupts the story.
+function normalizeVerificationCriteria(payload) {
+  // The DETAIL is the richer answer, so it wins when present. What is persisted stays an array
+  // of strings: the guard, coverage checking, the writer prompt and claude.sh all read that
+  // shape, and changing it here would be a rewrite of the contract rather than an addition.
+  const detail = vcDeclarations(payload);
+  if (detail.length) return detail.map((d) => d.criterion);
+  const vc = payload && Array.isArray(payload.verificationCriteria) ? payload.verificationCriteria : [];
+  return vc.filter((v) => typeof v === 'string' && v.trim().length > 0).map((v) => v.trim());
+}
+
+/**
+ * vcDeclarations(payload) -> [{ criterion, observer, surface, setup }]
+ *
+ * The per-criterion standard, normalised. Kept on the story rather than consumed and thrown
+ * away: "who observes this, and on what" is the most useful thing a reviewer or a human can be
+ * shown when deciding whether a criterion is worth verifying, and it is exactly what was
+ * missing when the pipeline argued with itself about whether a mocked precondition was a
+ * violation.
+ *
+ * An older string-only payload yields NOTHING here rather than fabricated declarations: an
+ * invented observer would be worse than an absent one.
+ */
+function vcDeclarations(payload) {
+  const raw = payload && Array.isArray(payload.verificationCriteriaDetail)
+    ? payload.verificationCriteriaDetail : [];
+  return raw
+    .map((d) => (d && typeof d === 'object' ? d : null))
+    .filter(Boolean)
+    .map((d) => ({
+      criterion: String(d.criterion || '').trim(),
+      observer: String(d.observer || '').trim(),
+      surface: String(d.surface || '').trim(),
+      setup: String(d.setup || '').trim(),
+    }))
+    .filter((d) => d.criterion);
+}
+
+// Thin-context signal for the sufficiency gate (step 3): a ticket has too little
+// to work with when it has NO meaningful acceptance criterion AND a short
+// description. Combined with "the detective found no fix site", this is the
+// autonomous "insufficient context — fail early" condition (no human halt).
+function isThinContext(story, env = process.env) {
+  const minAcLen = Number(env.VC_MIN_MEANINGFUL_AC_LEN || '20');
+  const minDescLen = Number(env.VC_MIN_DESCRIPTION_LEN || '120');
+  const acs = Array.isArray(story && story.acceptanceCriteria) ? story.acceptanceCriteria : [];
+  const meaningful = acs.filter((a) => typeof a === 'string' && a.trim().length >= minAcLen);
+  const descLen = String((story && story.description) || '').trim().length;
+  return meaningful.length < 1 && descLen < minDescLen;
+}
+
+// DETERMINISTIC VC guard (step 2 of the AC/VC/TC design). A VC must describe WHAT
+// a tester observes, never HOW to implement it. These patterns catch the exact
+// domain-mechanism phrasing that misdirected the fix live (AMSD-1820: "split",
+// "halve/×0.5", "calculate independently", "per segment/leg") plus new-code-
+// structure directives. Distinct from the AC prescriptiveness guard (which catches
+// test/code mechanics like vi.mock/import). Returns the flagged VCs with reasons.
+function findVcMechanism(vc, storyId, vocabulary) {
+  // PURE APPLIER — holds no terms, no patterns, no domain nouns, no stack assumptions.
+  // What counts as a violation is DERIVED per story by the guard-vocabulary agent
+  // (deriveGuardVocabulary) from VC_OBSERVABILITY_RULES plus the detective's real file
+  // reads, and persisted so a re-run applies the identical vocabulary.
+  //
+  // A hardcoded list used to live here: six regexes reverse-engineered from five sentences
+  // in one fare-discount bug, carrying client-domain nouns. It reported "clean" on VCs that
+  // plainly prescribed mechanism, because its vocabulary was about splitting and halving.
+  //
+  // NO VOCABULARY IS NOT "NOTHING TO FLAG". The caller must have aborted before reaching
+  // here; returning [] would recreate the exact silence that hid the old guard.
+  const flagged = applyVocabulary(vc, vocabulary).map((f) => ({ criterion: f.item, reason: f.reason }));
+  if (storyId) {
+    for (const f of flagged) {
+      console.warn(`spec-mode: VC guard flagged mechanism in ${storyId} VC: [${f.reason}] "${String(f.criterion).slice(0, 80)}"`);
+    }
+  }
+  return flagged;
+}
+
+// Conservative, guaranteed-mechanism-free fallback VC derived purely from the
+// ticket symptom — the never-fail branch of the autonomous flag loop (no human).
+//
+// `findings` (optional): the code-graph-detective's fixSiteAnalysis, already
+// available at the call site (runCodeGraphDetective runs BEFORE VC enforcement
+// specifically so downstream stages can ground on it — see the comment at its
+// call site). Before this fix, this was the one branch that never received it:
+// the regenerate path threads `findings` into regenerateVcViaOpenspec's prompt,
+// but the true last-resort fallback took only `story` (title/description) and
+// produced pure boilerplate even when the detective had already located a real
+// fix site with detailed reasoning, with zero reference to it in the persisted
+// VCs. A bare file-path parenthetical (no verb, no mechanism) keeps this
+// passing findVcMechanism — see vc-fallback-grounded-in-detective.test.ts.
+function safeFallbackVc(story, findings) {
+  const subject = String((story && (story.title || story.description)) || 'the behavior described in the ticket')
+    .replace(/\s+/g, ' ').trim().slice(0, 160);
+  const located = Array.isArray(findings) ? findings.find((f) => f && f.file) : null;
+  const locationNote = located ? ` (located near ${located.file}${located.function ? `, ${located.function}` : ''})` : '';
+  return [
+    `The behavior described in the ticket is observed to be correct after the change: "${subject}"${locationNote}.`,
+    `Existing behavior related to this area is unchanged (no regression).`,
+  ];
+}
+
+// Attribute each flag to the criterion it names, so a partly-flagged set can keep its
+// clean criteria instead of being discarded whole.
+//
+// WHY. The enforcement loop was all-or-nothing: one surviving flag replaced every
+// criterion with safeFallbackVc()'s two lines. Live 2026-08-04 (all three lanes) a set of
+// six lost five clean, detective-grounded criteria to punish the sixth, and the writer got
+// two tautologies that cannot fail.
+//
+// THE MAPPING IS THE REVIEWER'S OWN DECLARED FORMAT, not a guess. reviewVcViaSpeckit's
+// prompt says: `Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes
+// halving — ..."]`, and numbers the criteria `${i + 1}. ${v}` — so "VC <n>" is the
+// contract and n is 1-based. findVcMechanism's flags instead carry the criterion text
+// quoted (first 80 chars), so both forms are attributable.
+//
+// A flag matching NEITHER form is a set-level objection ("the criteria do not cover the
+// acceptance criterion"). It names no criterion, so nothing can be safely retained:
+// `unattributable` is reported and the caller falls back. Guessing there would let a real
+// coverage gap through, which is the failure this guard exists to prevent.
+function partitionFlaggedVc(vc, flags) {
+  const list = Array.isArray(vc) ? vc : [];
+  const drop = new Set();
+  let unattributable = false;
+  for (const f of (Array.isArray(flags) ? flags : [])) {
+    const s = String(f || '');
+    const byIndex = s.match(/\bVC\s*#?\s*(\d+)/i);
+    if (byIndex) {
+      const i = Number(byIndex[1]) - 1;                 // 1-based, as the prompt numbers them
+      if (i >= 0 && i < list.length) { drop.add(i); continue; }
+      unattributable = true;                            // out of range names no real criterion
+      continue;
+    }
+    // The deterministic guard's form: the criterion itself, quoted and truncated.
+    const quoted = s.match(/"([^"]{8,})"/);
+    const idx = quoted ? list.findIndex((c) => String(c).startsWith(quoted[1])) : -1;
+    if (idx >= 0) drop.add(idx); else unattributable = true;
+  }
+  if (unattributable) {
+    return { clean: [], flagged: list.slice(), unattributable: true };
+  }
+  return {
+    clean: list.filter((_, i) => !drop.has(i)),
+    flagged: list.filter((_, i) => drop.has(i)),
+    unattributable: false,
+  };
+}
+
+// Enforce clean, mechanism-free VCs with an AUTONOMOUS loop (no human):
+// deterministic guard + speckit strict review → if flagged, regenerate (with the
+// flag reasons; the caller ladder-escalates the model per cycle) → re-check → up
+// to maxCycles → if still flagged, a conservative safe-fallback VC. `regenerateVc`
+// and `reviewVc` are injected so the orchestration is unit-testable without an LLM.
+// Returns { vc, source: 'clean'|'regenerated'|'fallback', cycles, flags }.
+// deriveGuardVocabulary — the guard-vocabulary agent, invoked at a guard seam.
+//
+// Replaces the literal term lists guards used to carry. See lib/guard-vocabulary.js for
+// the full rationale; the short version is that a hardcoded list catches exactly the one
+// incident it was built from while reporting "clean" forever.
+//
+// INPUTS ARE STATE-DEPENDENT AND MANDATORY. A guard agent that is not shown what the guard
+// will actually check cannot derive anything real — it guesses from the ticket, which is
+// how fabricated file contents entered the pipeline before. For the VC guard that means
+// the criteria themselves AND the story's declared manifest, plus the detective's real
+// file findings as ground truth. Callers at other seams must pass their own equivalents.
+//
+// Runs through runAgentForJson, so it inherits exactly what every other agent gets: model
+// ladder escalation across attempts, retries, provider fallback and self-heal. Nothing
+// about resilience is re-implemented here.
+//
+// THE CODE EVIDENCE BLOCK, whole.
+//
+// This used to read `findings.slice(0, 8)` with each `reason` cut at 300 chars. Both cuts
+// removed ground truth from the only block the prompt calls ground truth — the 9th finding
+// simply did not exist to the model, and a reason naming a literal past char 300 arrived
+// severed. Extracted so it can be EXECUTED by a test; inlined, its only reachable assertion
+// was a source-text grep, which passes on a comment.
+function buildGuardEvidence(findings) {
+  return (Array.isArray(findings) ? findings : [])
+    .map((f) => `- ${f.file || ''}${f.function ? ` :: ${f.function}` : ''}${f.reason ? ` — ${String(f.reason)}` : ''}${f.helper ? ` [existing helper: ${f.helper}]` : ''}`)
+    .join('\n');
+}
+
+/**
+ * The guard-vocabulary prompt. Extracted verbatim from deriveGuardVocabulary so its
+ * migration into the template layer can be proven byte-for-byte.
+ */
+function buildGuardVocabularyPrompt({ persona, seam, rule, _statements, manifest, docBlock, evidence, story, codegraphTool, repoPath }) {
+  // RENDERED FROM THE TEMPLATE LAYER. Four sections are conditional and are assembled here:
+  // present, each points the agent at real evidence; absent, the prompt must not carry an
+  // empty heading implying evidence exists. A template cannot branch.
+  return renderEngineTemplate('guard-vocabulary', {
+    __PERSONA_PREFIX__: persona ? persona + '\n\n' : '',
+    __SEAM__: seam || 'unspecified',
+    __RULE__: rule,
+    __STATEMENT_LIST__: _statements.map((c, i) => `${i + 1}. ${c}`).join('\n'),
+    __MANIFEST__: manifest || '- (none declared)',
+    __DOC_SECTION__: docBlock
+      ? renderEngineTemplate('guard-vocabulary-documentation', { __DOC_BLOCK__: docBlock })
+      : '',
+    __EVIDENCE__: evidence || '- (none available)',
+    __STORY_TITLE__: (story && story.title) || '',
+    __STORY_DESCRIPTION__: String((story && story.description) || ''),
+    __CODEGRAPH_SECTION__: codegraphTool && repoPath
+      ? renderEngineTemplate('guard-vocabulary-codegraph', { __REPO_PATH__: repoPath, __CODEGRAPH_TOOL__: codegraphTool })
+      : '',
+  });
+}
+
+
+// Returns a normalised vocabulary, or null. NULL IS NOT "NOTHING TO FLAG" — callers must
+// treat it as "the guard could not be armed" and say so loudly.
+async function deriveGuardVocabulary({ promptExec, rule, statements, story, findings, manifestFiles, logDir, seam, repoPath, codegraphTool, referencedDocs }) {
+  const _statements = (Array.isArray(statements) ? statements : []).filter(Boolean);
+  if (!_statements.length) return null;
+
+  const evidence = buildGuardEvidence(findings);
+  const manifest = (Array.isArray(manifestFiles) ? manifestFiles : []).map((f) => `- ${f}`).join('\n');
+
+  // DOCUMENTATION LINKED ON THIS TICKET — evidence for a judgement no rule can make.
+  //
+  // A term the vendor publishes is a contract, not a choice this team made, so flagging it as
+  // "mechanism" deletes the sharpest criteria a story has. But that cuts only so far: on
+  // 20260806T204217Z a criterion asserted that "the options object passed to
+  // the SDK client constructor includes a live_preview key" — `live_preview` is in the vendor's
+  // guide, and the assertion is still about the shape of an internal object rather than
+  // anything observable. The reviewer said so and the spec gate halted the run at 0.68.
+  //
+  // Which of those two a criterion is doing requires reading it. A structural rule cannot
+  // tell them apart, and a list of allowed words is the thing this pipeline does not do. So
+  // the agent gets the documents and makes the call, with its reason recorded per term.
+  const docBlock = (Array.isArray(referencedDocs) ? referencedDocs : [])
+    .filter((d) => d && d.fetchStatus === 'fetched' && Array.isArray(d.quotes) && d.quotes.length)
+    .map((d) => `- ${d.url}\n${d.quotes.map((q) => `    "${String(q).replace(/\s+/g, ' ')}"`).join('\n')}`)
+    .join('\n');
+
+  const profiles = (() => {
+    try {
+      return JSON.parse(fs.readFileSync(path.join(automationDirFromLogDir(logDir), 'agents', 'profiles.json'), 'utf8'));
+    } catch { return {}; }
+  })();
+  const persona = profiles['guard-vocabulary-agent'] || '';
+
+  const prompt = buildGuardVocabularyPrompt({ persona, seam, rule, _statements, manifest, docBlock, evidence, story, codegraphTool, repoPath });
+
+  // Real tools when there is a repo to check against — the agent must VERIFY a candidate
+  // term, not assert it. Inherits ladder/retry/self-heal from runAgentForJson like every
+  // other agent; nothing about resilience is re-implemented here.
+  const _repo = repoPath || resolveCodelinePath(story);
+  // BIND THE SHAPE. This agent's answers came back as `submit_guard_vocabulary\n{...}` and
+  // as `<tool_call>` markup on the live run of 2026-08-06 — unparseable, so the guard
+  // reported "no usable terms after its full retry/ladder budget" and ABORTED the spec pass
+  // on every lane. The guards are right to refuse to run unarmed; the answer should never
+  // have been lost in the first place. The schema the agent is asked for is now the schema
+  // the provider enforces, from the same object.
+  // EVERY CALL SITE AT ONCE. The detective's site passed `opts.promptExec || null` and no caller
+  // ever supplied one, so this agent never ran; the null was dereferenced inside runAgentForJson
+  // and the TypeError read as a considered fallback. Resolving here means no call site can hand
+  // this agent something it cannot invoke, including the next one written.
+  const payload = await runAgentForJson(
+    promptExecFor({ promptExec }), prompt, TOOL_GUARD_VOCABULARY, 'GUARD_VOCABULARY',
+    logDir ? path.join(logDir, `${(story && story.id) || 'phase'}-guard-vocabulary.log`) : null,
+    null, (story && story.id) || '', _repo,
+    // The identity travels with the seam: ai-run.sh keys the ladder and the self-heal KB on
+    // EPAM_AGENT_NAME, so without it this agent's constraints and episodes are filed under
+    // whatever ran before it.
+    { ...seamInvocationEnv('guard-vocabulary', logDir),
+      EPAM_AGENT_NAME: 'guard-vocabulary',
+      EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_GUARD_VOCABULARY) },
+  );
+  if (!payload) return null;
+  const vocab = normaliseVocabulary(payload);
+  if (isVocabularyUsable(vocab)) return vocab;
+
+  // THE ANSWER IS NOT THROWN AWAY. An unusable vocabulary used to become a bare `null`, so the
+  // only trace of it was a caller's "no usable terms" line — and the one thing needed to say WHY
+  // (an empty blacklist? terms with no reason? a shape the normaliser dropped?) was the payload
+  // that had just been discarded. Live 2026-08-17, MOCK3-2: unusable, unexplained, unrecoverable.
+  // Same rule as the cost anomaly dump — a failure that destroys its own evidence cannot be
+  // diagnosed, only guessed at.
+  if (logDir) {
+    try {
+      const dump = path.join(logDir,
+        `vocabulary-unusable-${(story && story.id) || 'phase'}-${seam || 'unknown'}.json`);
+      if (!fs.existsSync(dump)) {
+        fs.writeFileSync(dump, JSON.stringify({
+          storyId: (story && story.id) || '', seam: seam || '', rule,
+          statements: _statements, payload, normalised: vocab,
+        }, null, 2));
+      }
+    } catch { /* diagnostics must never take the run down */ }
+  }
+  return null;
+}
+
+// ── DET-1: the estate survey — breadth before the roster ───────────────────
+//
+// The roster is minted from the ticket, the documents linked on it, and each codeline's
+// declared dependencies. Nothing has looked at the CODE. Two live consequences: briefs named
+// files the model believed should exist ("the Stack initialization module", proposed by a run
+// that had searched for nothing), and scope came from ticket labels — AMSD-2041 is titled
+// [GO, UP, MX] with four components, and nothing verified which codelines the work truly
+// touches.
+//
+// The detective already answers both questions, but it runs inside the per-story spec pass,
+// i.e. AFTER the roster it should inform. This is a cheap holistic pass that runs BEFORE.
+//
+// TWO OUTPUTS, STRUCTURALLY SEPARATE. Survey findings are evidence about the estate;
+// recommendedInvestigators is a recommendation about the TEAM. A recommendation arriving in
+// the same blob as evidence gets read as something discovered about the code.
+//
+// THE HARD CONSTRAINT: this agent reports ABOUT the estate. It may never supply a FIX SITE
+// for a codeline. A finding today carries {file, function, reason, fix} and no codeline, so
+// if this output could become one, four contamination routes open at once — a file found in
+// codeline A entering B's writer manifest, checkFixSiteCoverage passing on another repo's
+// evidence, locationHint pointing into the wrong repository, and reviewers rejecting correct
+// work over a file that is a phantom there. The schema therefore has no such fields, and
+// sanitizeSurvey() strips them if a model volunteers them anyway. Its remedy is always
+// "investigate this codeline", never "here is the answer for it".
+// THE SURVEY'S VOCABULARY, DEFINED ONCE AND NAMED BY MEANING.
+//
+// The four states were a bare array, so every consumer that needed one restated the string —
+// validateSurveyFilesRead carried 'in_scope' and 'not_investigated' of its own, and a rename in
+// the schema would have left it silently checking states that no longer exist. Naming them by
+// what they MEAN also stops a reader having to remember that "no_work_found" and
+// "not_investigated" are different claims: one looked, the other did not.
+const SURVEY_STATE = {
+  examined: 'in_scope',
+  lookedAndFoundNothing: 'no_work_found',
+  didNotLook: 'not_investigated',
+  triedAndFailed: 'failed',
+};
+const SURVEY_STATES = Object.values(SURVEY_STATE);
+
+// Fix-site vocabulary. Present so the sanitizer can PROVE the parent never emitted one —
+// three states are not enough if a fourth arrives smuggled inside a survey entry.
+const FIX_SITE_KEYS = ['file', 'files', 'function', 'fix', 'patch', 'locationHint', 'lineRange', 'diff'];
+
+const TOOL_ESTATE_SURVEY = {
+  name: 'submit_estate_survey',
+  description:
+    'Report which codelines of this estate the described work actually touches, and which ' +
+    'per-codeline investigators the team needs. Breadth, not depth: you are deciding where ' +
+    'to look, not what to change. Do not answer in prose.',
+  parameters: {
+    type: 'object',
+    required: ['codelines', 'recommendedInvestigators', 'recommendedWriters'],
+    properties: {
+      codelines: {
+        type: 'array',
+        minItems: 1,
+        description: 'One entry per codeline offered to you. Never omit one — silence is not a state.',
+        items: {
+          type: 'object',
+          required: ['codeline', 'state', 'evidence', 'filesRead'],
+          properties: {
+            codeline: { type: 'string', description: 'Exactly as named in the scope list.' },
+            state: {
+              type: 'string',
+              enum: SURVEY_STATES,
+              description:
+                'in_scope = you looked and the work reaches this codeline. no_work_found = you ' +
+                'looked and it does not — that is EVIDENCE, and it is not the same as having ' +
+                'skipped it. not_investigated = you did not look. failed = you tried and could ' +
+                'not. Never report no_work_found for a codeline you did not open.',
+            },
+            evidence: {
+              type: 'string',
+              description:
+                'What you actually checked and what you saw — a path you listed, a symbol you ' +
+                'searched for. Not an inference from the ticket text.',
+            },
+            surfaces: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                'Areas of the repository involved: directories or modules. Breadth only. NOT a ' +
+                'fix and NOT which file to change — deciding that is the per-codeline ' +
+                'investigator\'s job, working in that repository.',
+            },
+            filesRead: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                'The exact files you OPENED, as repository-relative paths. This is EVIDENCE — ' +
+                'an observation of what is there, which a later check can verify — not a list ' +
+                'of files to change. Report what you read even when you conclude the work does ' +
+                'not reach this codeline.',
+            },
+          },
+        },
+      },
+      recommendedInvestigators: {
+        type: 'array',
+        description:
+          'Which codelines need their own investigator agent, and what each should concentrate ' +
+          'on. A recommendation about the TEAM — deliberately not mixed into the findings above.',
+        items: {
+          type: 'object',
+          required: ['codeline', 'focus', 'why'],
+          properties: {
+            codeline: { type: 'string' },
+            focus: { type: 'string', description: 'What this investigator should concentrate on.' },
+            why: { type: 'string', description: 'What you saw that makes this codeline need one.' },
+          },
+        },
+      },
+      // THE SURVEY COULD ONLY EVER STAFF FOR LOOKING.
+      //
+      // recommendedInvestigators was the only team output, and it is iterated straight into the
+      // mint's context — so the mint saw N recommendations to investigate and none to build.
+      // Live 2026-08-17, run 20260817T171347Z: two stories to fix, two investigators minted,
+      // projectRoles [], and the run died at assignment with nobody to write a line of code.
+      //
+      // The coupling was perverse, which is why it surfaced only once the survey started working:
+      // a WEAK survey gave a weak investigator signal and the mint guessed 'implementer' for some
+      // roles; a CORRECT, richly investigator-focused survey made it label everything
+      // 'investigator'. Improving the survey made the roster worse.
+      //
+      // This still may never name a fix site — that constraint is what keeps one codeline's
+      // evidence out of another's writer manifest, and sanitizeSurvey strips those keys here
+      // exactly as it does above. "Someone who can write X" names no file and leaks nothing.
+      recommendedWriters: {
+        type: 'array',
+        description:
+          'Which codelines need an agent that WRITES the change, and what each should be able to '
+          + 'build. A recommendation about the TEAM, like the investigators above — and like them, '
+          + 'never a fix site: say what kind of work this codeline needs, never which file to edit.',
+        items: {
+          type: 'object',
+          required: ['codeline', 'focus', 'why'],
+          properties: {
+            codeline: { type: 'string' },
+            focus: { type: 'string', description: 'The kind of work this codeline needs written.' },
+            why: { type: 'string', description: 'What you saw that makes this codeline need one.' },
+          },
+        },
+      },
+    },
+  },
+};
+
+/**
+ * sanitizeSurvey — enforce the parent/child boundary in code, not in the prompt.
+ *
+ * Returns { codelines, recommendedInvestigators, violations }. Any fix-site-shaped key on a
+ * survey entry is REMOVED and recorded: the parent may report about an investigation, never
+ * supply findings for a codeline it did not investigate. A codeline that was offered but not
+ * reported is filled in as not_investigated — an absent entry must never read as a clean bill
+ * of health, which is the whole reason "no_work_found" and "not_investigated" are different.
+ */
+function sanitizeSurvey(payload, codelines) {
+  const offered = (Array.isArray(codelines) ? codelines : [])
+    .map((c) => (typeof c === 'string' ? c : c && c.name))
+    .filter(Boolean);
+  const violations = [];
+  const byName = new Map();
+
+  for (const raw of (payload && Array.isArray(payload.codelines) ? payload.codelines : [])) {
+    if (!raw || typeof raw.codeline !== 'string') continue;
+    // A codeline the survey invented is not a codeline. Reporting on a repository that is not
+    // in scope is the same contamination as reporting a file from the wrong one.
+    if (offered.length && !offered.includes(raw.codeline)) {
+      violations.push(`survey reported on "${raw.codeline}", which is not in scope`);
+      continue;
+    }
+    const stripped = FIX_SITE_KEYS.filter((k) => raw[k] !== undefined);
+    if (stripped.length) {
+      violations.push(
+        `survey entry for "${raw.codeline}" carried fix-site field(s) ${stripped.join(', ')} — ` +
+        'the estate survey reports WHERE TO LOOK, never what to change; dropped');
+    }
+    const _state = SURVEY_STATES.includes(raw.state) ? raw.state : SURVEY_STATE.didNotLook;
+    const _read = Array.isArray(raw.filesRead)
+      ? raw.filesRead.filter((f) => typeof f === 'string' && f.trim())
+      : [];
+    byName.set(raw.codeline, {
+      codeline: raw.codeline,
+      state: _state,
+      evidence: typeof raw.evidence === 'string' ? raw.evidence : '',
+      surfaces: Array.isArray(raw.surfaces) ? raw.surfaces.filter((s) => typeof s === 'string') : [],
+      // Evidence, kept separate from breadth: a directory exists in every codeline and proves
+      // nothing about any of them, so a brief grounded on one cannot really be checked.
+      filesRead: _read,
+      // An in_scope claim with nothing opened is an assertion, not an observation. Looking and
+      // finding nothing (no_work_found) is a real answer and is NOT flagged; neither is
+      // not_investigated, which never claimed to have looked.
+      evidenceGap: _state === 'in_scope' && _read.length === 0,
+    });
+  }
+
+  // Silence is not a state. Anything offered and unreported is explicitly not_investigated.
+  for (const name of offered) {
+    if (!byName.has(name)) {
+      byName.set(name, {
+        codeline: name, state: 'not_investigated',
+        evidence: 'the survey returned no entry for this codeline', surfaces: [], filesRead: [],
+      });
+    }
+  }
+
+  // BOTH TEAM RECOMMENDATIONS ARE SANITISED THE SAME WAY. Rebuilt field by field rather than
+  // passed through, so a fix site volunteered on either one cannot survive: only codeline, focus
+  // and why are copied, and everything else — file, function, fix, locationHint — is dropped by
+  // construction. A new team field must never become a fourth contamination route.
+  const _teamRecs = (list) =>
+    (Array.isArray(list) ? list : [])
+      .filter((r) => r && typeof r.codeline === 'string'
+        && (!offered.length || offered.includes(r.codeline)))
+      .map((r) => ({
+        codeline: r.codeline,
+        focus: typeof r.focus === 'string' ? r.focus : '',
+        why: typeof r.why === 'string' ? r.why : '',
+      }));
+
+  const recommendedInvestigators = _teamRecs(payload && payload.recommendedInvestigators);
+  const recommendedWriters = _teamRecs(payload && payload.recommendedWriters);
+
+  return {
+    codelines: [...byName.values()], recommendedInvestigators, recommendedWriters, violations,
+  };
+}
+
+/**
+ * surveyEstate — the holistic pass that runs BEFORE the roster.
+ *
+ * Runs through runAgentForJson like every other agent, so it inherits the ladder, retries,
+ * self-heal, timeout profile and cost capture. Read tools are granted over the estate root so
+ * it can VERIFY rather than infer — that grant is the entire point of running it at all.
+ *
+ * Cheap by construction: it decides WHERE to look. Deep investigation is then skipped for the
+ * codelines it reports as no_work_found, which is what keeps investigations from scaling as
+ * codelines x stories.
+ *
+ * A failure here must never stop the run. An estate that could not be surveyed is an estate
+ * the roster is minted without — exactly the state before this existed — so the caller gets
+ * an all-'failed' survey and proceeds, with the reason recorded.
+ */
+/**
+ * The estate-survey prompt, built where a test can execute it.
+ *
+ * Extracted for the same reason as buildAssignmentPrompt: this prompt's defect was in its own
+ * wording — it forbade naming a file at all, conflating evidence with prescription — and no
+ * test could see that while the string was welded inside a 150-line function.
+ */
+
+function buildSurveyPrompt({ codelines, tickets, referencedDocs, declaredDependencies } = {}) {
+  const _cls = (Array.isArray(codelines) ? codelines : []).filter(Boolean);
+  const _named = _cls.map((c) => (typeof c === 'string' ? { name: c } : c)).filter((c) => c && c.name);
+  const ticketBlock = (Array.isArray(tickets) ? tickets : []).map((t) =>
+    // WHOLE, never clipped. In brownfield the description is the only source of the
+    // verification criteria — cutting it removes the contract and the agent invents the rest.
+    // It was once cut at five different lengths across the pipeline; there is a guard test.
+    `- ${t.jiraKey || t.id || '(no key)'}: ${t.title || ''}\n    ${String(t.description || '').replace(/\s+/g, ' ')}`
+  ).join('\n');
+
+  // A FETCHED DOCUMENT IS {url, fetchStatus, path} — THE TEXT IS ON DISK.
+  //
+  // Live 2026-08-08: both vendor documents on AMSD-2041 arrived here with no quotes and no
+  // inline body, so this rendered a URL and a blank line and the surveyor was handed nothing.
+  // mintProjectAgents already reads d.path; this did not. Empty documents are exactly what
+  // led a mint to invent a vendor on 2026-08-07.
+  const docBlock = (Array.isArray(referencedDocs) ? referencedDocs : []).map((d) => {
+    if (Array.isArray(d.quotes) && d.quotes.length) {
+      return `- ${d.url || '(no url)'} [${d.fetchStatus || 'unknown'}]\n` +
+        d.quotes.map((q) => `      "${String(q).replace(/\s+/g, ' ')}"`).join('\n');
+    }
+    let body = typeof d.body === 'string' ? d.body : '';
+    if (!body && d.path) { try { body = fs.readFileSync(d.path, 'utf8'); } catch { body = ''; } }
+    // Not truncated: this is the vendor's published contract, and a cut copy is how an agent
+    // ends up inferring the rest.
+    return body
+      ? `- ${d.url || '(no url)'} [${d.fetchStatus || 'unknown'}]\n${body}`
+      : `- ${d.url || '(no url)'} (retrieved, no readable text)`;
+  }).join('\n\n');
+
+  // declaredDependencies is a FLAT ARRAY of package names, the union across the estate — the
+  // same value mintProjectAgents receives and renders as a list. Enumerating it with
+  // Object.entries produced "- 0: (none declared)" through "- 9:" on 2026-08-08, so the
+  // surveyor got zero dependency facts about an estate whose ticket turns entirely on which
+  // CMS packages are declared.
+  const depBlock = (Array.isArray(declaredDependencies) ? declaredDependencies : [])
+    .map((d) => `- ${d}`).join('\n');
+
+  // RENDERED FROM THE TEMPLATE LAYER, never from a string in this file. The conditional
+  // sections are computed here — whole, heading included, or empty — because a template that
+  // branches is a program and cannot be reviewed as prose.
+  return renderEngineTemplate('estate-survey', {
+    __TICKET_BLOCK__: ticketBlock || '- (no tickets available)',
+    __DOC_SECTION__: docBlock ? `DOCUMENTS LINKED ON THOSE TICKETS:\n${docBlock}\n` : '',
+    __DEP_SECTION__: depBlock
+      ? `WHAT EACH CODELINE DECLARES IT DEPENDS ON (its own manifest — ground truth about\nthe stack, not inference from ticket text):\n${depBlock}\n`
+      : '',
+    __CODELINE_BLOCK__: _named.map((c) => `- ${c.name}: ${c.path || '(path unknown)'}`).join('\n'),
+  });
+}
+
+async function surveyEstate({
+  promptExec, tickets, referencedDocs, codelines, logDir, repoPath, toolGrant, declaredDependencies,
+}) {
+  const _cls = (Array.isArray(codelines) ? codelines : []).filter(Boolean);
+  const _named = _cls.map((c) => (typeof c === 'string' ? { name: c } : c)).filter((c) => c && c.name);
+  if (!_named.length) return { codelines: [], recommendedInvestigators: [], recommendedWriters: [], violations: [], ran: false };
+
+  const prompt = buildSurveyPrompt({ codelines: _named, tickets, referencedDocs, declaredDependencies });
+
+  // THE IDENTITY IS THE SEAM. This paired 'estate-surveyor' with EPAM_SEAM 'estate-survey',
+  // and EPAM_SEAM is written here and read NOWHERE — resolution goes through EPAM_AGENT_NAME
+  // alone. So the seam looked declared while the agent resolved to nothing and ran with no
+  // ladder and no budget, against a profile that had been written for it all along.
+  const _env = withToolGrant(
+    { ...seamInvocationEnv('estate-survey', logDir), EPAM_AGENT_NAME: 'estate-survey' }, toolGrant);
+  // Scaled to the number of codelines this survey must open. specAgentEnv's flat ceiling of 8
+  // is a single-codeline budget; applied to an estate it produced a "greenfield" verdict about
+  // a brownfield estate because the sweep could not finish. See surveyToolBudget.
+  _env.EPAM_MAX_TOOL_CALLS = surveyToolBudget(_named, process.env);
+
+  let payload = null;
+  try {
+    payload = await runAgentForJson(
+      promptExec, prompt, TOOL_ESTATE_SURVEY, 'ESTATE_SURVEY',
+      logDir ? path.join(logDir, 'estate-survey.log') : null,
+      null, '', repoPath || '', _env,
+    );
+  } catch (err) {
+    // Never fatal: the roster was minted without any of this until today.
+    const reason = `estate survey failed: ${err && err.message}`;
+    process.stderr && process.stderr.write(`[survey] ${reason}\n`);
+    return {
+      codelines: _named.map((c) => ({ codeline: c.name, state: 'failed', evidence: reason, surfaces: [] })),
+      recommendedInvestigators: [], recommendedWriters: [], violations: [], ran: false, error: String(err && err.message),
+    };
+  }
+
+  const clean = sanitizeSurvey(payload, _named);
+  // The survey is persisted AS THE AGENT REPORTED IT. A validator used to rewrite it here,
+  // downgrading claims whose files did not exist — silently editing an agent's output, which is
+  // worse than reporting on it. Falsifying its claims is survey-review's job now, and that
+  // reviewer reports findings rather than changing what it reviewed.
+  const result = { ...clean, ran: true };
+
+  // Persisted at generation time. What the roster was grounded in has to outlive the process
+  // that produced it, or the pause has nothing to show and a later run cannot tell whether a
+  // codeline was cleared or simply skipped.
+  if (logDir) {
+    try {
+      fs.writeFileSync(path.join(logDir, 'estate-survey.json'), JSON.stringify(result, null, 2));
+    } catch { /* the run must not die for want of an audit file */ }
+  }
+  return result;
+}
+
+// ── Project agent roster ───────────────────────────────────────────────────
+//
+// The shape of a proposal. The SDK's proposeAgents() asks for exactly these three fields;
+// this binds them so the answer arrives parsed instead of as prose the pipeline has to
+// guess at (the failure that lost the guard-vocabulary answer on 2026-08-06).
+/**
+ * The permitted name shapes, in one sentence, from the same registry the mint's prompt rule is
+ * derived from. Falls back to naming no shape at all rather than inventing one: a description
+ * that guesses is how the three copies drifted apart in the first place.
+ */
+function mintNameShapeDescription() {
+  let vocab = null;
+  try {
+    vocab = require(path.join(__dirname, '..', '..', 'dist', 'sdk.js')).mintNameVocabulary();
+  } catch (_) { /* fall through */ }
+  if (!vocab || !Object.keys(vocab).length) {
+    return 'kebab-case role name, "<domain>-<suffix>", with the suffix required for its kind';
+  }
+  const parts = Object.keys(vocab).sort()
+    .map((k) => `${k}: ${vocab[k].map((sx) => `-${sx}`).join(' or ')}`);
+  return `kebab-case "<domain>-<suffix>". The suffix is fixed by the kind — ${parts.join('; ')}. `
+    + 'A name ending any other way cannot be routed to a seam.';
+}
+
+const TOOL_PROJECT_AGENTS = {
+  name: 'submit_project_agents',
+  description:
+    'Propose the project-specific engineering agent roles this codeline needs, on top of ' +
+    'the canonical core. One role per distinct domain of the project. Do not answer in prose.',
+  parameters: {
+    type: 'object',
+    required: ['proposedAgents'],
+    properties: {
+      proposedAgents: {
+        type: 'array',
+        minItems: 1,
+        items: {
+          type: 'object',
+          required: ['name', 'kind', 'codeline', 'systemPrompt', 'rationale'],
+          properties: {
+            // DERIVED, LIKE THE PROMPT'S RULE. This description used to read 'e.g.
+            // "<domain>-engineer"' — a third copy of a vocabulary the registry owns, alongside
+            // the template's own 'ending in "-engineer" or "-specialist"', which offered a shape
+            // resolveSeam throws on. Both now come from the registry's seamPatterns, so the
+            // schema cannot describe a name the pipeline refuses to route.
+            name: { type: 'string', description: mintNameShapeDescription() },
+            kind: {
+              type: 'string',
+              enum: ['implementer', 'investigator'],
+              description:
+                'implementer = authors code and can own a story. investigator = reads code and ' +
+                'reports what is there; never writes, never owns a story.',
+            },
+            codeline: {
+              type: 'string',
+              description:
+                'ALWAYS required. For an investigator: the ONE codeline it investigates, named ' +
+                'exactly as listed in scope above — the lane looks its investigator up by codeline ' +
+                'and cannot find one that names none. For an implementer, which spans the project, ' +
+                'use "*". Never leave it out: a proposal without it is rejected.',
+            },
+            systemPrompt: {
+              type: 'string',
+              description:
+                "The role's full briefing: its expertise, the conventions of THIS codeline, the " +
+                'files and directories it owns, the patterns it follows and the tools it uses.',
+            },
+            rationale: {
+              type: 'string',
+              // THE PROMPT IS THE CONTRACT. mergeProjectAgents refuses a rationale carrying
+              // fewer than EPAM_ROSTER_RATIONALE_MIN_CHARS letters/digits, so the model is told
+              // that here rather than discovering it as a rejection. Live 2026-08-07: all five
+              // agents came back with "...", which satisfied "required" and said nothing.
+              description:
+                'One sentence: why THIS project needs THIS role, referring to something stated ' +
+                'in the ticket, the documents or the declared dependencies above. A placeholder ' +
+                `("...", "-", "n/a") is refused, as is anything under ` +
+                `${Number(process.env.EPAM_ROSTER_RATIONALE_MIN_CHARS || '24')} letters and ` +
+                'digits. This is what a human reads when reviewing the roster before it is ' +
+                'given any work.',
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+/**
+ * mintProjectAgents — derive this project's own engineering roles, and wire them in.
+ *
+ * WHY IT RUNS HERE, THROUGH THIS SEAM. proposeAgents() in the SDK calls an LLMProvider
+ * directly. That is correct for `epam new`, where a human is watching the output, and wrong
+ * here: it would put the single call that decides the whole roster outside the invocation
+ * gateway — no ladder, no retry, no self-heal, no timeout budget, no cost capture. The one
+ * agent whose failure silently degrades every downstream agent would be the only agent with
+ * no resilience. So the SDK's PROMPT is reused verbatim (single definition of what a project
+ * role is) and driven through runAgentForJson, exactly like deriveGuardVocabulary.
+ *
+ * WHY IT RUNS AFTER INGEST. The inputs that make a role project-specific rather than a
+ * restatement of the canonical core are the tickets and the documents linked on them. Both
+ * exist only once ingest has run. A proposer given just a repo path proposes generic roles.
+ *
+ * Read tools are granted (repoPath) so the proposer can VERIFY the codeline's shape instead
+ * of asserting it from the ticket text alone.
+ */
+/**
+ * One survey entry, as the minter sees it.
+ *
+ * filesRead is rendered SEPARATELY from areas because they carry different weight: an area is
+ * breadth ("src/context/ is involved") and a file is an observation the reader can verify. A
+ * field collected and never shown is inert — this pipeline has produced several — so the
+ * rendering is here, where a test executes it.
+ */
+function surveyLineFor(c) {
+  const areas = c.surfaces && c.surfaces.length ? ` — areas: ${c.surfaces.join(', ')}` : '';
+  const read = c.filesRead && c.filesRead.length
+    ? `\n    files it opened: ${c.filesRead.join(', ')}`
+    : (c.evidenceGap ? '\n    files it opened: NONE — in scope is asserted, not observed here' : '');
+  return `- ${c.codeline}: ${c.state}${areas}${read}\n    evidence: ${String(c.evidence || '').replace(/\s+/g, ' ')}`;
+}
+
+/**
+ * The mint tally, reconciled so every proposal lands in exactly one bucket.
+ *
+ * The mint retries when proposals are refused. Across attempts `minted` and `unchanged`
+ * accumulate but `rejected` was replaced by the last attempt's list, so a proposal refused on
+ * attempt 1 and corrected on attempt 2 was counted in `proposed`, counted again in `minted`,
+ * and its rejection erased. Three consecutive runs printed a tally with a silent remainder
+ * (6/3/0/1, 8/5/0/0, 7/5/0/0) — the roster was right each time, the account of how it was
+ * reached was not, and the missing numbers sent me looking for agents that had never gone
+ * missing.
+ *
+ * `unaccounted` is reported rather than absorbed: padding a bucket to make the line add up
+ * would recreate the same defect more quietly.
+ */
+function reconcileMintTally(r) {
+  const res = r || {};
+  const len = (x) => (Array.isArray(x) ? x.length : 0);
+  const proposed = Number.isFinite(res.proposed) ? res.proposed : 0;
+  const minted = len(res.minted);
+  const unchanged = len(res.unchanged);
+  const rejected = len(res.rejected);
+  // Refused at some point, but not still refused: corrected on a later attempt.
+  const stillRejected = new Set((res.rejected || []).map((x) => x && x.name));
+  const superseded = (res.rejectedAcrossAttempts || [])
+    .filter((x) => x && !stillRejected.has(x.name)).length;
+  // EVERY PROPOSAL EVENT HAS EXACTLY ONE OUTCOME: minted, unchanged, or refused.
+  //
+  // This subtracted `rejected` (UNIQUE names still refused) and `superseded` as if both were
+  // buckets. `proposed` counts proposal EVENTS across attempts, so an agent refused on two
+  // attempts consumed two proposals but was subtracted once — and `superseded` double-counted,
+  // because a superseded proposal's refusal is already in rejectedAcrossAttempts and its later
+  // success is already in `minted`.
+  //
+  // Live 2026-08-17, run 20260817T162132Z: proposed=5 minted=3 rejected=1 superseded=0 left
+  // UNACCOUNTED=1, which was mockb-codebase-investigator's SECOND refusal, not a lost agent.
+  // 3 minted + 0 unchanged + 2 refusal events = 5.
+  //
+  // `rejected` and `superseded` remain in the report as descriptors — which agents are still
+  // refused, and which were corrected on a later attempt — but only refusal EVENTS are subtracted.
+  const refusalEvents = Math.max(len(res.rejectedAcrossAttempts), rejected);
+  const unaccounted = Math.max(0, proposed - minted - unchanged - refusalEvents);
+  return { proposed, minted, unchanged, rejected, superseded, unaccounted };
+}
+
+async function mintProjectAgents({
+  promptExec, tickets, referencedDocs, profilesPath, agentsDir, logDir, repoPath,
+  declaredDependencies, codelines, toolGrant, correctiveFindings, retainedAgents, estateSurvey,
+}) {
+  const { mergeProjectAgents } = require('./lib/agent-roster.js');
+  const { retryUntilParsedAsync } = require('./lib/content-retry.js');
+
+  let basePrompt = '';
+  let fixedRoles = [];
+  try {
+    const sdk = require(path.join(automationDirFromLogDir(logDir), '..', 'dist', 'sdk.js'));
+    basePrompt = sdk.getAgentProposalPrompt();
+    fixedRoles = sdk.FIXED_AGENT_ROLES || [];
+  } catch (_) {
+    try {
+      const sdk = require(path.join(__dirname, '..', '..', 'dist', 'sdk.js'));
+      basePrompt = sdk.getAgentProposalPrompt();
+      fixedRoles = sdk.FIXED_AGENT_ROLES || [];
+    } catch (e) {
+      // Loud. Minting silently from a locally-invented prompt would produce a roster that
+      // looks right and was derived from different instructions than the scaffold path.
+      throw new Error(`[mint] cannot load the agent proposal prompt from dist/sdk.js: ${e && e.message}`);
+    }
+  }
+
+  const ticketBlock = (Array.isArray(tickets) ? tickets : []).map((t) => {
+    const comps = Array.isArray(t.components) && t.components.length ? `\nComponents: ${t.components.join(', ')}` : '';
+    // THE LINK IS EVIDENCE EVEN WHEN THE FETCH FAILED. Live 2026-08-07: both linked documents
+    // came back empty, so they were dropped entirely — and the URLs themselves named the
+    // vendor the tickets never mentioned. The mint then invented a different one.
+    const links = (Array.isArray(t.ticketLinks) ? t.ticketLinks : [])
+      .map((l) => (typeof l === 'string' ? l : (l && l.url)))
+      .filter(Boolean);
+    const linkLine = links.length ? `\n  Links on this ticket: ${links.join(' , ')}` : '';
+    return `- ${t.jiraKey || t.id || ''}: ${t.title || ''}${comps}\n  ${String(t.description || '').replace(/\s+/g, ' ')}${linkLine}`;
+  }).join('\n');
+
+  // The vendor's own published contract, quoted verbatim by the link agent. This is the
+  // sharpest signal about which domains this work actually spans.
+  // QUOTES OR THE DOCUMENT ITSELF.
+  //
+  // This required d.quotes, which only the ticket-link AGENT produces — it runs in the spec
+  // pass, after this. fetchTicketDocuments returns {url, fetchStatus, path} and no quotes, so
+  // every successfully fetched document was filtered straight back out: 25KB of vendor
+  // documentation retrieved, named the real product, and reached the proposer as nothing.
+  // Verified before the run rather than discovered by it.
+  const docBlock = (Array.isArray(referencedDocs) ? referencedDocs : [])
+    .filter((d) => d && d.fetchStatus === 'fetched')
+    .map((d) => {
+      if (Array.isArray(d.quotes) && d.quotes.length) {
+        return `- ${d.url}\n${d.quotes.map((q) => `    "${String(q).replace(/\s+/g, ' ')}"`).join('\n')}`;
+      }
+      // Not truncated: this is the authoritative statement of what the work involves, and a
+      // cut copy is how a proposer ends up inferring the rest.
+      let body = typeof d.body === 'string' ? d.body : '';
+      if (!body && d.path) { try { body = fs.readFileSync(d.path, 'utf8'); } catch { body = ''; } }
+      return body ? `- ${d.url}\n${body}` : `- ${d.url} (retrieved, no readable text)`;
+    })
+    .join('\n\n');
+
+  // WHAT THE CODELINE DECLARES IT USES. Ground truth about the stack, and the correction for
+  // a specific live failure: on 2026-08-07 the tickets said only "CMS", both linked documents
+  // came back empty, and the repo path given was the estate root rather than a repository —
+  // so the mint invented a vendor and briefed every role on the wrong product's APIs.
+  const depBlock = (Array.isArray(declaredDependencies) ? declaredDependencies : [])
+    .slice(0, 300).map((d) => `- ${d}`).join('\n');
+
+  // ONE ROSTER, ALL CODELINES. The first mint saw a single repository while three were in
+  // scope, and wrote that one repository's absolute path into every brief.
+  const _cls = Array.isArray(codelines) && codelines.length
+    ? codelines
+    : (repoPath ? [{ name: '', path: repoPath, dependencies: declaredDependencies }] : []);
+  const codelineBlock = _cls.length
+    ? `THE CODELINES IN SCOPE (${_cls.length}) — one roster covers all of them:\n` + _cls.map((c) => {
+        const d = Array.isArray(c.dependencies) ? c.dependencies : [];
+        return `- ${c.name || '(unnamed)'}  at ${c.path}\n` + (d.length
+          ? `    declares: ${d.join(', ')}`
+          : '    declares: (no manifest configuration for this codeline — no dependency evidence)');
+      }).join('\n')
+    : 'THE CODELINES IN SCOPE: (none resolved)';
+
+  // A CORRECTIVE PASS IS TOLD WHAT WAS WRONG, IN THE REVIEWER'S OWN WORDS.
+  //
+  // Not "try again" — the previous roster was confident and specific, and a re-proposal with no
+  // account of the defect tends to reproduce it in new wording. Each finding carries the claim,
+  // what was checked and what was found, so the correction has the evidence rather than a verdict.
+  const _cf = Array.isArray(correctiveFindings) ? correctiveFindings : [];
+  const correctiveBlock = _cf.length
+    ? ['A PREVIOUS ROSTER FOR THIS PROJECT WAS REVIEWED AND REJECTED. These defects were found by',
+       'checking the briefs against the repositories themselves. Do not repeat them, and do not',
+       'merely reword them — a convention that is true of some codelines and not others must be',
+       'stated only for the ones that hold it, or not stated at all:',
+       '',
+       ..._cf.map((f) => [
+         `- ${f.agent || '(unnamed role)'} claimed: "${String(f.claim || '').replace(/\s+/g, ' ')}"`,
+         `    checked: ${String(f.checked || '').replace(/\s+/g, ' ')}`,
+         `    found:   ${String(f.found || '').replace(/\s+/g, ' ')}`,
+         f.remedy ? `    remedy:  ${String(f.remedy).replace(/\s+/g, ' ')}` : '',
+       ].filter(Boolean).join('\n')),
+       ''].join('\n')
+    : '';
+
+  // WHAT THE CORRECTION IS KEEPING. A targeted correction replaces only the indicted briefs,
+  // so the roles that survived are already in the roster — and a proposer not told about them
+  // re-proposes the same coverage under a new name. mergeProjectAgents is convergent and would
+  // refuse the duplicate, but the proposal budget is spent either way and the real gap goes
+  // uncovered. Naming them also lets the correction position its replacement against what
+  // already exists rather than overlapping it.
+  const _ra = Array.isArray(retainedAgents) ? retainedAgents.filter((a) => a && a.name) : [];
+  const retainedBlock = _ra.length
+    ? ['THESE ROLES ALREADY EXIST IN THIS ROSTER AND ARE BEING KEPT — they passed review. Do NOT',
+       'propose them again, and do not propose a role whose remit overlaps one of them. Propose',
+       'only what is missing or what replaces a defect named above:',
+       ..._ra.map((a) => `- ${a.name}${a.codeline && a.codeline !== '*' ? ` (codeline: ${a.codeline})` : ''}` +
+                         `${a.rationale ? ` — ${String(a.rationale).replace(/\s+/g, ' ')}` : ''}`),
+       ''].join('\n')
+    : '';
+
+  // THE ROSTER THE MINT IS ADDING TO — READ FROM THE ROSTER, NOT FROM A LIST IN CODE.
+  //
+  // The proposer used to be told which roles exist by FIXED_AGENT_ROLES: 21 hardcoded names in
+  // src/scaffold/prdTypes.ts, against a canonical roster of 57. So 39 canonical agents were
+  // invisible to it, test-engineer among them — and on 2026-08-23 the roster reviewer raised a
+  // BLOCKING finding that no test agent had been minted, while a canonical one existed the whole
+  // time. A proposer that cannot see the roster either duplicates a role under a new name or
+  // reports a gap that is already filled.
+  //
+  // Names only, deliberately: this block exists so the proposer knows what is COVERED, and 57
+  // full personas would crowd out the ticket it is supposed to be reasoning about.
+  const _existingRoster = (() => {
+    const names = new Set();
+    const addKeys = (obj) => {
+      const m = (obj && obj.agents && typeof obj.agents === 'object') ? obj.agents
+        : ((obj && obj.profiles && typeof obj.profiles === 'object') ? obj.profiles : obj);
+      for (const k of Object.keys(m || {})) if (k && typeof k === 'string') names.add(k);
+    };
+    const read = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } };
+    // The canonical roster this run restored, and whatever this project has already minted.
+    const canonical = read(profilesPath);
+    if (canonical) addKeys(canonical);
+    const cfg = process.env.EPAM_PROJECT_CONFIG_DIR;
+    if (cfg) {
+      const proj = read(path.join(cfg, 'agent-profiles.json'));
+      if (proj) addKeys(proj);
+      const roles = read(path.join(cfg, 'project-roles.json'));
+      for (const r of ((roles || {}).roles || [])) if (r) names.add(r);
+    }
+    // Anything the caller is explicitly keeping this cycle.
+    for (const a of _ra) if (a && a.name) names.add(a.name);
+    return [...names].filter((n) => !/^[_$]/.test(n)).sort();
+  })();
+
+  // PROSE LIVES IN THE PROMPT LAYER. The block is a template; only the list is computed here.
+  const existingRosterBlock = _existingRoster.length
+    ? `${renderEngineTemplate('mint-existing-roster', {
+      __ROSTER_LIST__: _existingRoster.map((n) => `- ${n}`).join('\n'),
+    })}\n`
+    : '';
+
+  // WHAT THE SURVEY ACTUALLY FOUND IN THE CODE (DET-1).
+  //
+  // The two halves stay separated exactly as the surveyor emitted them: evidence about the
+  // estate, and a recommendation about the team. Merged into one block they read as one kind
+  // of thing, and a recommendation would be inherited as a discovery.
+  //
+  // This is the only input here derived from opening the repositories. Everything else — the
+  // ticket, its documents, the declared dependencies — is a claim about the code rather than
+  // an observation of it, which is how briefs came to name modules that do not exist.
+  const _sv = estateSurvey && Array.isArray(estateSurvey.codelines) ? estateSurvey : null;
+  const _svLines = _sv ? _sv.codelines.map(surveyLineFor) : [];
+  const surveyBlock = _svLines.length
+    ? ['WHAT A SURVEY OF THESE REPOSITORIES REPORTED. These are LEADS, not settled facts.',
+       '',
+       'A single pass swept the whole estate with limited tools, and it has been wrong: on',
+       '2026-08-08 it reported that a repository contained no reference to a package that its',
+       'own source uses in twenty files, and a roster was minted on that. Treat every line',
+       'below as what the survey BELIEVES, to be confirmed by the investigator that owns the',
+       'codeline. Do NOT restate any of it in a brief as established, verified, or confirmed —',
+       'a brief is inherited whole and re-checked by nothing, so a wrong lead written as a fact',
+       'becomes an instruction.',
+       '',
+       'Propose roles for the codelines the work appears to REACH. A codeline reported',
+       'no_work_found is not confirmed clear, and one reported not_investigated or failed was',
+       'not established either way — do not treat any of the three as proof about that repo:',
+       '',
+       ..._svLines,
+       '',
+       ...(_sv.recommendedInvestigators.length
+         ? ['SEPARATELY — and this is a recommendation about the TEAM, not something discovered',
+            'about the code: a survey of the estate suggests these codelines need their own',
+            'investigator. Propose one per codeline named here, with the stated focus:',
+            '',
+            ..._sv.recommendedInvestigators.map((r) =>
+              `- ${r.codeline}: focus on ${String(r.focus || '').replace(/\s+/g, ' ')}` +
+              `${r.why ? ` (because ${String(r.why).replace(/\s+/g, ' ')})` : ''}`),
+            '']
+         : []),
+       // THE OTHER HALF OF THE TEAM, WHICH THIS PROMPT NEVER MENTIONED.
+       //
+       // The block above tells the model "Propose one per codeline named here" for investigators
+       // and said nothing whatever about the roles that write the change. That is the strongest
+       // form of the bias: an explicit instruction to staff for looking, with no counterpart.
+       //
+       // Live 2026-08-17, run 20260817T171347Z: every proposed role came back kind
+       // 'investigator', projectRoles was empty, and the run died at assignment with nobody to
+       // write a line of code. The better the survey got, the worse the roster got — a weak
+       // survey gave a weak investigator signal and the mint guessed 'implementer' for some.
+       ...(_sv.recommendedWriters && _sv.recommendedWriters.length
+         ? ['AND — also a recommendation about the TEAM — the survey reports these codelines need',
+            'work WRITTEN, not merely read. An investigator cannot change code; every story is',
+            'assigned to an implementer, so propose at least one implementer that can build this:',
+            '',
+            ..._sv.recommendedWriters.map((r) =>
+              `- ${r.codeline}: must be able to write ${String(r.focus || '').replace(/\s+/g, ' ')}` +
+              `${r.why ? ` (because ${String(r.why).replace(/\s+/g, ' ')})` : ''}`),
+            '']
+         : [])].join('\n')
+    : '';
+
+  // WHO OWNS THE TESTS. The roster does not, and a brief that says otherwise is inherited
+  // whole by an implementer that is simultaneously forbidden from writing tests.
+  //
+  // Live AMSD-2041: a minted brief read "You write Jest tests using ts-jest... Test files are
+  // colocated alongside the modules you edit", while the writer seam told that same agent
+  // "Do NOT write, edit, or create any test file". One agent, two contradictory instructions,
+  // and six consecutive quality failures were once spent fighting a test the implementer
+  // should never have written. Authorship belongs to a pipeline SEAM (repro-test-writer),
+  // which takes its own turn after the fix commits — not to any role proposed here.
+  //
+  // Stated as a rule about this pipeline, naming no framework and no file convention: which
+  // tools a project tests with is the project's business, and this says nothing about it.
+  // A BRIEF MAY NOT ASSERT A VENDOR'S API AS ITS OWN KNOWLEDGE.
+  //
+  // On 2026-08-03 a brief stated which token key a vendor's API accepts, in the form "use X,
+  // NOT Y". The claim was invented, contradicted the installed package's own types, and made a
+  // reviewer reject correct work across three codelines. On 2026-08-08 a minted brief said
+  // "preview_token (not management_token)" and named a concrete API host — the same shape,
+  // reached again by a different route, and caught by the shipped-config guard.
+  //
+  // A brief is inherited WHOLE and is not re-checked against anything, so an invented API
+  // detail in one becomes an instruction. What a repository declares is verifiable and welcome;
+  // what a remote API accepts is not, unless a fetched document says so and is credited.
+  const vendorClaimRule = [
+    'WHAT YOU MAY STATE AS FACT.',
+    '',
+    'What a repository contains or declares — you or a survey read it, and the next agent can',
+    'read it too. State it freely.',
+    '',
+    'What an external API, SDK or service accepts — its option names, field names, endpoints,',
+    'hosts, token kinds — you may NOT state as your own knowledge. If a document quoted above',
+    'says it, attribute it ("the linked documentation states..."). Otherwise instruct the role',
+    'to verify it against the installed package before relying on it.',
+    '',
+    'Never write that one API key, field or option is correct and another is wrong. A claim of',
+    'that shape is inherited as an instruction, is not re-checked by anything, and has already',
+    'caused correct work to be rejected across three codelines.',
+    '',
+  ].join('\n');
+
+  const testOwnershipRule = [
+    'WHO WRITES THE TESTS — NOT THESE ROLES.',
+    '',
+    'A dedicated agent of this pipeline writes the tests. It takes its own turn after the fix',
+    'is committed and owns the reproducing test, and the roles you propose are separately',
+    'FORBIDDEN from creating or editing any test file.',
+    '',
+    'So: do not propose a test-writing, QA or test-automation role — that work is already owned.',
+    'And a brief must not say the role writes, owns, colocates or maintains tests, in any words.',
+    'A role whose brief claims test authorship is handed two contradictory instructions and',
+    'spends its turns fighting itself. Describe what the role BUILDS.',
+    '',
+  ].join('\n');
+
+  const prompt = `${correctiveBlock}${retainedBlock}${existingRosterBlock}${surveyBlock}${vendorClaimRule}${testOwnershipRule}${basePrompt}
+
+THE WORK THIS PROJECT HAS BEEN ASKED TO DO (real tickets from the tracker):
+${ticketBlock || '- (no tickets available)'}
+
+${depBlock ? `WHAT THIS CODELINE DECLARES IT DEPENDS ON (from its own manifest — ground truth
+about the stack, not inference from the ticket text). Where a ticket names a category
+generically, these names say which product is actually in use. Do NOT propose a role built
+around a product that does not appear here:
+${depBlock}
+
+` : ''}
+${docBlock ? `DOCUMENTATION LINKED ON THESE TICKETS (fetched, quoted verbatim — the vendor's published contract):
+${docBlock}
+
+` : ''}${codelineBlock}
+${toolGrant ? renderEngineTemplate('roster-tool-grant', { __TOOL_GRANT__: toolGrant }) : `You have NO tools on this call — you cannot open these
+repositories. Reason only from what is written above, and say in the rationale when a claim
+rests on documentation rather than on this codebase.`}
+
+Propose ONE roster for the project as a whole: roles for the
+domains this work and these codebases actually span, not the domains you would expect a
+project like this to have. Where the codelines share a stack, one role covers all of them —
+do not mint near-duplicate roles per codeline.
+
+Write each brief so it stays true wherever the project is checked out. Refer to a codeline by
+its NAME, exactly as listed above, and to locations inside it by paths relative to its root.
+
+Never identify a codeline by POSITION — not "the first", not "the second", not "the one listed
+above". The order codelines are listed in is not stable between runs, so a brief written that
+way points at a different repository the moment the order changes, and nothing detects it: the
+sentence still reads correctly. Never write an absolute filesystem path either; it is specific
+to one machine. A name is the only reference that stays true.
+
+A brief may only rely on what the codelines actually declare above. If the work plainly needs
+something that is not declared, say so in the rationale rather than assuming it is present.
+
+EVERY ROLE MUST BE ABLE TO AUTHOR CODE. Each brief must name the files or directories, relative
+to a codeline root, that the role edits. A role whose work happens only in a vendor's web
+console, or only in prose, cannot implement a story: this pipeline's agents change files in a
+repository, and a story assigned to such a role produces a configuration note and no working
+software. If part of the work genuinely is console-only, that belongs in one role's brief as
+context it must WRITE CODE around — never as a role of its own.
+
+TEST RESPONSIBILITY MUST BE OWNED, EXPLICITLY. Say in the brief, for whichever role owns it,
+how this codeline's tests are written: where test files live, how they are named, and which
+runner executes them — taken from what the codelines declare above, not from habit. Work with
+no named owner for its tests arrives at review untested and cannot be approved.
+
+PROPOSE TWO CLASSES OF AGENT.
+
+IMPLEMENTERS (kind: "implementer") author code, as described above. One roster of them spans
+every codeline.
+
+Every proposal states a "codeline". An implementer spans the project and uses "*". An
+investigator names the ONE codeline it reads, exactly as spelled in scope above. There is no
+third option and no omitting it.
+
+INVESTIGATORS (kind: "investigator") read code and report what is there — they never write and
+never own a story. Propose EXACTLY ONE per codeline listed in scope. Its brief should describe how to find things
+in THAT codebase: where the modules relevant to this work live, what the layout and naming
+conventions are, and which of its declared dependencies matter here. An investigator that
+merely restates the ticket adds nothing — its value is knowing one repository well.
+
+Keep each investigator to its own codeline. It reports on the repository it was briefed for and
+says nothing about the others; a claim about a repository it has not read is a guess wearing the
+authority of an investigation.
+
+Do not propose a role that duplicates one of the canonical roles already listed above.`;
+
+  // TOOLS, OR THE INSTRUCTION TO READ IS A LIE.
+  //
+  // This ran with no tools at all: ai-run.sh forces --no-tools unless AI_GATE_ALLOW_TOOLS=1,
+  // and only EPAM_RESPONSE_SCHEMA was passed. So the agent that designs the entire roster
+  // could not open a file, while the prompt told it to read the codelines before answering —
+  // an instruction it could not follow, and an invitation to narrate an inspection that never
+  // happened. Live 2026-08-07: two briefs prescribed `preview_token`, absent from the pinned
+  // SDK, taken on the vendor documentation's word because nothing could check it.
+  //
+  // Read-only by construction: no bash, no write_file. This stage has no story scope.
+  const _mintEnv = {
+    ...seamInvocationEnv('agent-mint', logDir),
+    EPAM_AGENT_NAME: 'agent-mint',
+    EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_PROJECT_AGENTS),
+  };
+  withToolGrant(_mintEnv, toolGrant);
+  // AN UNPARSEABLE ANSWER IS NOT A DEAD RUN — AND THE RETRY BELOW CANNOT SEE ONE.
+  //
+  // The correction loop further down fires on `result.rejected.length`: proposals that PARSED and
+  // then failed the contract. A response that does not parse yields zero proposals AND zero
+  // rejections, so the loop never runs and the mint returns an empty roster.
+  //
+  // Live 2026-08-17, run 20260817T180859Z. The model answered correctly — three well-formed
+  // agents including the implementer this stage exists to produce — and 19 characters were
+  // dropped mid-stream: 'mocka-fares-investigator","rationale' arrived as 'mocka-fares-inale'.
+  // Unparseable JSON, proposed=0, and the run died with a perfect answer in the log.
+  //
+  // Same class as the discovery vocabulary agent: the call SUCCEEDS and the content is unusable,
+  // which neither ai-run.sh's transport retry nor the contract loop below covers. Corruption is
+  // transient by nature, so asking again is the entire remedy.
+  let _mintAttempt = 0;
+  const proposals = await retryUntilParsedAsync({
+    what: 'agent-mint proposals',
+    attempts: Number(process.env.EPAM_CONTENT_RETRY_ATTEMPTS || 3),
+    log: (m) => process.stderr.write(`${m}\n`),
+    call: async () => {
+      _mintAttempt += 1;
+      return runAgentForJson(
+        promptExec, prompt, TOOL_PROJECT_AGENTS, 'PROJECT_AGENTS',
+        logDir ? path.join(logDir, `project-agents-mint${_mintAttempt > 1 ? `-parse${_mintAttempt}` : ''}.log`) : null,
+        null, '', repoPath || '',
+        _mintEnv,
+      );
+    },
+    parse: (payload) => {
+      if (!payload) return { ok: false, reason: 'the response could not be parsed as JSON at all' };
+      if (!Array.isArray(payload.proposedAgents)) {
+        return { ok: false, reason: 'the response had no "proposedAgents" array' };
+      }
+      // An EMPTY array is a valid answer only if there is genuinely nothing to propose; the
+      // caller decides that. Parsing succeeded, so this is not a content-retry concern.
+      return { ok: true, value: payload.proposedAgents };
+    },
+  });
+
+  // PERSIST WHAT WAS PROPOSED, NOT A COUNT OF IT.
+  //
+  // The merged result records `proposed: 5` and the briefs themselves land in profiles.json —
+  // which is ephemeral by design and restored from canonical at the next run's start. So the
+  // full text of what the model proposed, system prompts included, survived nowhere, and a
+  // refused proposal left no trace of what it had actually said. Written BEFORE the merge, so
+  // a merge that throws still leaves the evidence behind.
+  const _persistProposals = (attempt, list, merged) => {
+    if (!logDir) return;
+    try {
+      fs.writeFileSync(
+        path.join(logDir, `agent-mint-proposals${attempt > 1 ? `-attempt${attempt}` : ''}.json`),
+        JSON.stringify({ attempt, proposed: list.length, proposals: list, refused: merged || [] }, null, 2));
+    } catch { /* the run must not die for want of an audit file */ }
+  };
+
+  _persistProposals(1, proposals);
+  let result = mergeProjectAgents({ profilesPath, agentsDir, proposals, codelines });
+  _persistProposals(1, proposals, result.rejected);
+  let attempts = 1;
+
+  // ONE REFUSAL IS NOT A DEAD RUN.
+  //
+  // Every validation here is a contract the prompt states, so a refusal means the model did not
+  // follow it — which is what a retry is for. Without this a single lazy field (the "..."
+  // rationale, a missing codeline) empties the roster, and role assignment then has no
+  // candidates at all: the failure surfaces far downstream of its cause. The re-proposal is told
+  // exactly what was refused and why. Merging is additive and convergent, so anything minted on
+  // the first attempt is kept and only the gap is re-proposed.
+  const _maxAttempts = Math.max(1, Number(process.env.EPAM_ROSTER_MINT_ATTEMPTS || '2'));
+  while (result.rejected.length && attempts < _maxAttempts) {
+    attempts += 1;
+    const refusedBlock = [
+      'YOUR PREVIOUS PROPOSAL WAS PARTLY REFUSED. Each line is a proposal that was NOT accepted,',
+      'and the reason it failed the roster contract. Re-propose those roles correcting exactly',
+      'that, and do not re-propose any role that was already accepted:',
+      '',
+      ...result.rejected.map((r) => `- ${r.name || '(unnamed)'}: ${r.reason}`),
+      '',
+    ].join('\n');
+
+    const retryPayload = await runAgentForJson(
+      promptExec, `${refusedBlock}${prompt}`, TOOL_PROJECT_AGENTS, 'PROJECT_AGENTS',
+      logDir ? path.join(logDir, `project-agents-mint-attempt${attempts}.log`) : null,
+      null, '', repoPath || '',
+      _mintEnv,
+    );
+    const retryProposals =
+      (retryPayload && Array.isArray(retryPayload.proposedAgents)) ? retryPayload.proposedAgents : [];
+    if (!retryProposals.length) break;
+
+    _persistProposals(attempts, retryProposals);
+    const retryResult = mergeProjectAgents({ profilesPath, agentsDir, proposals: retryProposals, codelines });
+    _persistProposals(attempts, retryProposals, retryResult.rejected);
+
+    result = {
+      ...retryResult,
+      minted: [...result.minted, ...retryResult.minted],
+      unchanged: [...result.unchanged, ...retryResult.unchanged],
+      // Accumulated, unlike `rejected`, which is deliberately the LAST attempt's list — what
+      // is still refused. Without this a rejection corrected on a later attempt disappears
+      // from the tally and the printed numbers stop adding up.
+      rejectedAcrossAttempts: [...(result.rejectedAcrossAttempts || result.rejected || []), ...retryResult.rejected],
+    };
+    proposals.push(...retryProposals);
+  }
+
+  return {
+    ...result,
+    proposed: proposals.length,
+    rejectedAcrossAttempts: result.rejectedAcrossAttempts || result.rejected || [],
+    attempts,
+    protectedRoles: fixedRoles.length,
+  };
+}
+
+const TOOL_ROLE_ASSIGNMENTS = {
+  name: 'submit_role_assignments',
+  description:
+    'Assign exactly one implementation agent role to every story, chosen from the roles ' +
+    'offered. Do not answer in prose and do not invent a role.',
+  parameters: {
+    type: 'object',
+    required: ['assignments'],
+    properties: {
+      assignments: {
+        type: 'array',
+        minItems: 1,
+        items: {
+          type: 'object',
+          required: ['storyId', 'agentRole', 'reason'],
+          properties: {
+            storyId: { type: 'string' },
+            codeline: {
+              type: 'string',
+              description:
+                'The codeline this assignment is for. A story that spans codelines gets ONE ' +
+                'assignment PER codeline — the repositories differ, so the right owner can differ ' +
+                'too. Omit only for a story that spans none.',
+            },
+            agentRole: { type: 'string', description: 'MUST be one of the offered roles, verbatim.' },
+            reason: { type: 'string', description: 'One sentence: why this role owns this story.' },
+          },
+        },
+      },
+    },
+  },
+};
+
+/**
+ * candidateRoles — which roles may implement a story.
+ *
+ * Read from the mint's registry (agents/project-roles.json), intersected with the roster so
+ * a registered role with no profile is never offered — the writer would run with an empty
+ * system prompt.
+ *
+ * NOT "the roster minus the canonical core". That derivation was tried and is wrong: a live
+ * roster has 38 non-canonical roles of which only about nine implement anything, the rest
+ * being engine machinery (doc-*, failure-analyst, the vocabulary agents, code-graph-detective).
+ * Offering those as implementation roles is the same class of error as offering one that does
+ * not exist — and the identical mistake in the write perimeter handed the detective write
+ * access, which the perimeter suite caught.
+ */
+function candidateRoles(profiles, agentsDir) {
+  let registered = [];
+  try { registered = require('./lib/agent-roster.js').projectRoles(agentsDir); } catch { registered = []; }
+  return registered.filter((r) => Object.prototype.hasOwnProperty.call(profiles || {}, r));
+}
+
+/**
+ * assignAgentRoles — give every story a role that actually exists.
+ *
+ * Runs after minting, because until the project's roles exist there is nothing to choose
+ * from. Synthesis deliberately leaves agentRole null; this is the only step that fills it.
+ *
+ * Refuses rather than repairs. A hallucinated role, a process role, or a story the agent
+ * simply skipped all throw — because the alternative is a story that runs with an empty
+ * system prompt or the string "unknown", which is what the 15 `.agentRole // "unknown"`
+ * consumers downstream would silently do with a null.
+ */
+// Delegates to lib/seam-invocation.js so every seam — shell or JS — resolves its ladder,
+// effort and temperature through one implementation.
+function seamInvocationEnv(seam, logDir) {
+  try {
+    return require('./lib/seam-invocation.js')
+      .seamInvocationEnv(seam, path.join(automationDirFromLogDir(logDir), 'agents'));
+  } catch { return {}; }
+}
+
+const TOOL_ROSTER_REVIEW = {
+  name: 'submit_roster_review',
+  description:
+    'Report defects in a generated agent roster. Every finding must be grounded in something you ' +
+    'checked with your tools. Do not answer in prose.',
+  parameters: {
+    type: 'object',
+    required: ['verdict', 'findings'],
+    properties: {
+      verdict: {
+        type: 'string',
+        enum: ['sound', 'defects_found', 'nothing_to_review'],
+        description: 'sound = every checkable claim held. defects_found = at least one did not.',
+      },
+      findings: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['agent', 'severity', 'claim', 'checked', 'found'],
+          properties: {
+            agent: { type: 'string', description: 'The minted agent whose brief carries the defect.' },
+            severity: {
+              type: 'string',
+              enum: ['blocking', 'advisory'],
+              description:
+                'blocking = an implementer following this brief would write code that cannot work. ' +
+                'advisory = worth fixing, but the work can proceed.',
+            },
+            claim: { type: 'string', description: "The brief's own words, quoted." },
+            checked: { type: 'string', description: 'What you did to test it — the tool and the target.' },
+            found: { type: 'string', description: 'What you actually found.' },
+            remedy: { type: 'string', description: 'What the brief should say instead.' },
+            verification: {
+              type: 'object',
+              description:
+                'When your finding rests on whether a NAMED THING is present in a codeline, state it ' +
+                'here as well as in prose, so the pipeline can re-run exactly that check itself. ' +
+                'Omit when the finding is a judgement no mechanical check settles — an ownership ' +
+                'overlap, work nobody owns, a brief that is merely vague.',
+              properties: {
+                kind: {
+                  type: 'string',
+                  enum: ['dependency_declared', 'path_exists', 'not_mechanically_checkable'],
+                  description:
+                    'dependency_declared = the subject is a dependency name. path_exists = the ' +
+                    'subject is a path relative to the codeline root. Otherwise the third.',
+                },
+                codeline: { type: 'string', description: 'Which codeline, named exactly as listed.' },
+                subject: { type: 'string', description: 'The dependency or path, exactly as it would be written.' },
+                expected: {
+                  type: 'string',
+                  enum: ['present', 'absent'],
+                  description: 'What YOU FOUND: is the subject present in that codeline, or absent?',
+                },
+                briefAsserts: {
+                  type: 'string',
+                  enum: ['present', 'absent'],
+                  description:
+                    'What THE BRIEF claims about the subject — which may differ from what you ' +
+                    'found. That difference IS the defect. If the brief turns out to be right, ' +
+                    'there is nothing to report and you should not raise a finding at all.',
+                },
+              },
+              // TWO facts, deliberately separate, because one field cannot carry both and a
+              // live run proved it: 2026-08-07 the reviewer used this slot for what it found
+              // (claiming absent what the manifest declared — a careless read the re-check
+              // must refute), and 2026-08-08 it used the same slot for what the BRIEF asserted.
+              // Splitting them lets the pipeline catch a misread AND drop a confirmation.
+              //
+              // Required, because nothing was: live output carried only {codeline, expected},
+              // and verifyFindings' `!v.kind` bail-out then kept every finding UNCHECKED. The
+              // whole mechanical re-check was inert in production until 2026-08-08.
+              required: ['kind', 'codeline', 'subject', 'expected', 'briefAsserts'],
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+/**
+ * The roster reviewer's prompt. Extracted verbatim from reviewRoster so its migration into
+ * the template layer can be proven byte-for-byte — a prompt built inline cannot be called by
+ * a test, and an unprovable migration is how a reworded prompt ships unnoticed.
+ */
+/**
+ * WHAT THIS RUN NEEDS THE TEAM TO PRODUCE, AND WHO CAN PRODUCE IT.
+ *
+ * Handed to the roster reviewer so it can see the one defect a member-by-member review never
+ * can: an absence. A roster of well-formed agents that cannot do the work reads as sound, because
+ * every agent it was shown was fine — live 2026-08-17, two investigators and no implementer,
+ * "sound - 0 finding(s), 0 blocking", dead at assignment.
+ *
+ * ENTIRELY DERIVED. The registry declares which artefacts a seam REQUIRES, which seam PRODUCES
+ * each, which kind each name-shape rule serves, and engineProduces lists what the pipeline
+ * supplies rather than an agent. No role, kind or artefact is named here — add a seam tomorrow and
+ * the block covers it without an edit. That is the difference between informing a reviewer and
+ * hardcoding a rule it must obey.
+ */
+/** The invocation registry, read where coverage needs it. */
+function readRegistryForCoverage() {
+  const si = require('./lib/seam-invocation.js');
+  return JSON.parse(fs.readFileSync(si.registryPath(), 'utf8'));
+}
+
+function rosterCoverageBlock(minted, registry) {
+  const P = (registry && registry.profiles) || {};
+  const fromEngine = new Set((registry && registry.engineProduces) || []);
+  const patterns = Array.isArray(registry && registry.seamPatterns) ? registry.seamPatterns : [];
+
+  const required = new Set();
+  for (const p of Object.values(P)) {
+    for (const c of (p && p.consumes) || []) if (c && c.required && c.kind) required.add(c.kind);
+  }
+
+  // Artefacts a MINTED agent is the one to produce: those whose producing seam is reachable by a
+  // kind rule. Everything else comes from a canonical agent that is always present.
+  const kindsFor = new Map();
+  for (const rule of patterns) {
+    if (!rule || !rule.kind || !rule.seam) continue;
+    const made = P[rule.seam] && P[rule.seam].produces;
+    if (!made) continue;
+    if (!kindsFor.has(made)) kindsFor.set(made, new Set());
+    kindsFor.get(made).add(rule.kind);
+  }
+
+  const roster = Array.isArray(minted) ? minted : [];
+  const haveKinds = new Set(roster.map((a) => a && a.kind).filter(Boolean));
+
+  const lines = [];
+  for (const kind of [...required].filter((k) => !fromEngine.has(k) && kindsFor.has(k))) {
+    const canMake = [...kindsFor.get(kind)];
+    const who = roster.filter((a) => canMake.includes(a && a.kind))
+      .map((a) => `${a.name} [${a.kind}]`);
+    lines.push(`- ${kind}: produced by ${canMake.join(' or ')} — this roster has `
+      + (who.length ? who.join(', ') : 'NOBODY'));
+  }
+  if (!lines.length) return '- (this run requires nothing a minted agent must produce)';
+  return lines.join('\n');
+}
+
+function buildRosterReviewPrompt({ persona, briefBlock, clBlock, ticketBlock, docBlock, toolLine, coverageBlock }) {
+  // RENDERED FROM THE TEMPLATE LAYER. The documentation section is assembled here because it
+  // is conditional prose — present, it points the reviewer at the vendor's own text; absent,
+  // it tells the reviewer that any vendor claim is unverifiable. A template cannot branch.
+  return renderEngineTemplate('roster-review', {
+    __PERSONA__: persona,
+    __BRIEF_BLOCK__: briefBlock,
+    __COVERAGE_BLOCK__: coverageBlock || '- (coverage could not be derived)',
+    __CODELINE_BLOCK__: clBlock || '- (none resolved)',
+    __TICKET_BLOCK__: ticketBlock || '- (no tickets available)',
+    __DOC_SECTION__: docBlock
+      ? 'THE DOCUMENTATION THESE BRIEFS WERE DERIVED FROM (fetched from the ticket\'s own links):\n'
+        + docBlock
+        + '\n\nWhere a brief follows this documentation into something the pinned version does not '
+        + 'have, the documentation is right about the product and wrong about these repositories. '
+        + 'Say which, so the remedy is the version-correct instruction rather than a deletion.'
+      : 'No documentation was fetched for this ticket — briefs resting on vendor knowledge have '
+        + 'nothing here to be checked against, and any such claim must be verified against the '
+        + 'repositories or reported as unverifiable.',
+    __TOOL_LINE__: toolLine,
+  });
+}
+
+/**
+ * reviewRoster — the only adversary the roster has.
+ *
+ * Every other stage of this pipeline has one: the spec pass has a reviewer and a guard, the
+ * writer has team-lead review and the gates, the verification criteria have a vocabulary guard
+ * that refuses to run unarmed. The roster had none — and it decides who does all the subsequent
+ * work and what they believe about the codebase.
+ *
+ * Live 2026-08-07, both from an unreviewed roster: a brief prescribed `preview_token`, absent
+ * from the version of the SDK this estate pins; and another labelled an installed utilities
+ * package as the vendor's preview SDK and told an implementer to call its init(). It is not that
+ * package — the preview entry points appear nowhere in it. The second is the dangerous shape: a
+ * missing package fails loudly at install, a mislabelled one resolves, builds, and does nothing.
+ *
+ * Read-only tools, the same grant as the mint. It exists to falsify claims, so it must be able to
+ * check them; it must never be able to change what it reviews.
+ */
+/**
+ * FALSIFY THE SURVEY BEFORE A ROSTER IS MINTED FROM IT.
+ *
+ * The survey decides which codelines the work reaches and seeds every investigator brief, and
+ * nothing consumed it for review — no seam declared it as an input, so its claims reached the
+ * roster unchallenged. Live 2026-08-17: a codeline was reported in_scope on a file it does not
+ * contain, and an implementer was briefed to fix that codeline's defect in a repository with no
+ * such code.
+ *
+ * A generated prompt already gets exactly this before any agent inherits it. This is that
+ * reviewer, pointed at the survey, and it runs BEFORE the mint — reviewing afterwards would report
+ * on claims the roster has already absorbed.
+ *
+ * Never fatal, and it never edits the survey. It returns findings; what the mint does with them is
+ * the mint's decision. A reviewer that rewrites what it reviews is worse than one that reports.
+ */
+async function reviewSurvey({
+  promptExec, survey, codelines, tickets, logDir, repoPath, toolGrant,
+}) {
+  // A survey that did not run has nothing to falsify; findings about a failure are findings about
+  // nothing.
+  if (!survey || survey.ran !== true || !Array.isArray(survey.codelines) || !survey.codelines.length) {
+    return { findings: [], reviewed: 0, ran: false };
+  }
+
+  const _named = (Array.isArray(codelines) ? codelines : []).filter((c) => c && c.name && c.path);
+  const surveyBlock = survey.codelines.map((c) => [
+    `- ${c.codeline}: ${c.state}`,
+    c.evidence ? `  evidence: ${String(c.evidence).replace(/\s+/g, ' ')}` : '',
+    (c.filesRead || []).length ? `  filesRead: ${(c.filesRead || []).join(', ')}` : '',
+  ].filter(Boolean).join('\n')).join('\n');
+
+  const prompt = renderEngineTemplate('survey-review', {
+    __PERSONA__: 'You are reviewing an estate survey before a team is assembled from it.',
+    __SURVEY_BLOCK__: surveyBlock,
+    __CODELINE_BLOCK__: _named.map((c) => `- ${c.name} (${c.path})`).join('\n') || '- (none)',
+    __TICKET_BLOCK__: (Array.isArray(tickets) ? tickets : [])
+      .map((t) => `- ${t.jiraKey || t.id}: ${t.title || ''}`).join('\n') || '- (none)',
+    __TOOL_LINE__: toolGrant
+      ? 'You may open any file in the codelines above to check a claim.'
+      : 'You have no tools; report only what the text itself contradicts.',
+  });
+
+  const env = {
+    ...seamInvocationEnv('survey-review', logDir),
+    EPAM_AGENT_NAME: 'survey-review',
+  };
+  withToolGrant(env, toolGrant);
+
+  try {
+    // AN ANSWER THAT DOES NOT PARSE IS NOT A CLEAN REVIEW.
+    //
+    // This read `payload && Array.isArray(payload.findings) ? ... : []` and then reported
+    // `ran: true` over every codeline. Live 2026-08-18 the reviewer replied in prose —
+    // "Unexpected token 'I', \"I opened a\"..." — and the mint logged "survey review: 0
+    // finding(s) across 2 codeline(s)", which is exactly what a reviewer that examined both and
+    // approved them says. Nothing downstream could tell the two apart.
+    //
+    // A prose answer is a CONTENT failure and the pipeline already has the remedy: tell the model
+    // which contract it broke and ask again. Only when the retries are spent does the survey end
+    // UNREVIEWED — and then it says so rather than saying clean.
+    const { retryUntilParsedAsync } = require('./lib/content-retry.js');
+    const findings = await retryUntilParsedAsync({
+      what: 'survey-review',
+      attempts: Number(process.env.EPAM_CONTENT_RETRY_ATTEMPTS || 3),
+      log: (m) => process.stderr.write(`${m}\n`),
+      call: async (note) => runAgentForJson(
+        promptExecFor({ promptExec }), note ? `${note}${prompt}` : prompt,
+        TOOL_SURVEY_REVIEW, 'SURVEY_REVIEW',
+        logDir ? path.join(logDir, 'survey-review.log') : null,
+        null, '', repoPath || '', env,
+      ),
+      parse: (payload) => {
+        if (!payload) return { ok: false, reason: 'the response could not be parsed as JSON at all — a review must arrive inside its tags, not as prose' };
+        if (!Array.isArray(payload.findings)) return { ok: false, reason: 'the response had no "findings" array — an empty array is how a clean review is stated' };
+        return { ok: true, value: payload.findings };
+      },
+    });
+    if (logDir) {
+      try {
+        fs.writeFileSync(path.join(logDir, 'survey-review.json'),
+          JSON.stringify({ findings, reviewed: survey.codelines.length, ran: true }, null, 2));
+      } catch { /* the run must not die for want of an audit file */ }
+    }
+    return { findings, reviewed: survey.codelines.length, ran: true };
+  } catch (err) {
+    // The survey stands unreviewed rather than the run ending: this reviewer exists to catch a
+    // wrong claim, and its own failure is not evidence that a claim was wrong.
+    return { findings: [], reviewed: 0, ran: false, error: String((err && err.message) || err) };
+  }
+}
+
+const TOOL_SURVEY_REVIEW = {
+  name: 'submit_survey_review',
+  description: 'Report claims the estate survey makes that are false about these repositories.',
+  parameters: {
+    type: 'object',
+    required: ['findings'],
+    properties: {
+      findings: {
+        type: 'array',
+        description: 'One entry per FALSE claim. Empty when every claim checks out.',
+        items: {
+          type: 'object',
+          required: ['codeline', 'claim', 'checked', 'found'],
+          properties: {
+            codeline: { type: 'string', description: 'The codeline the claim is about.' },
+            claim: { type: 'string', description: 'What the survey asserted.' },
+            checked: { type: 'string', description: 'What you opened to check it.' },
+            found: { type: 'string', description: 'What was actually there.' },
+          },
+        },
+      },
+    },
+  },
+};
+
+/**
+ * Falsify a PROJECT ROSTER against the canonical roster it derives from.
+ *
+ * Distinct from reviewRoster, which certifies newly MINTED agents. This judges a whole derivation:
+ * every canonical agent specialised for one project. It is handed BOTH paths, because with only
+ * the derived roster a reviewer can check that the text reads well and nothing else — and "reads
+ * well" is what let a plan-conformance opinion become a merge decision on 2026-08-21.
+ *
+ * Returns the library's vocabulary ({verdict: 'approved' | ...}), translated from the seam's own
+ * ('sound' | 'defects_found'). Two vocabularies for one idea is how a caller ends up treating an
+ * unrecognised verdict as success; the translation lives here, at the boundary, once.
+ */
+/** Parse a JSON file, or null. A reviewer that cannot read its inputs must say so, not throw. */
+function _readJsonOrNull(f) {
+  try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; }
+}
+
+async function reviewProjectRoster({
+  promptExec, rosterPath, canonicalPath, codelines, logDir, repoPath, toolGrant,
+}) {
+  // THE REVIEWER IS HANDED THE TEXT IT MUST COMPARE, IN BATCHES.
+  //
+  // It used to receive two paths and be told to read both. A canonical roster and its derived
+  // copy are ~270KB together — roughly 74k tokens of tool output before a single judgement — so
+  // the seam could not actually perform the comparison it was asked for, and answered
+  // 'nothing_to_review'. That verdict was read (correctly) as "the judge did not look", the judge
+  // was retried, and every retry hit the same wall.
+  //
+  // No amount of prompt wording fixes an input that does not fit. The pairs are built here and
+  // reviewed in batches whose size is declared, not guessed, and each batch is a whole number of
+  // agents — an agent's two personas are one unit of meaning and are never split across batches.
+  const _rosterDoc = _readJsonOrNull(rosterPath);
+  const _canonDoc = _readJsonOrNull(canonicalPath);
+  const _entries = (_rosterDoc && _rosterDoc.agents) || {};
+  const _canon = (_canonDoc && _canonDoc.agents && typeof _canonDoc.agents === 'object')
+    ? _canonDoc.agents : (_canonDoc || {});
+  const _personaOf = (v) => (typeof v === 'string' ? v : String((v && v.persona) || ''));
+
+  const _pairs = Object.keys(_entries).map((name) => ({
+    name,
+    derived: _personaOf(_entries[name]),
+    canonical: _personaOf(_canon[(_entries[name] && _entries[name].ancestor) || name]),
+  })).filter((x) => x.derived.trim());
+
+  if (!_pairs.length) {
+    return {
+      verdict: 'review_failed',
+      findings: [],
+      reason: `the roster at ${rosterPath} held no readable entries, so there was nothing to hand a reviewer`,
+    };
+  }
+
+  const _budget = Math.max(4000, Number(process.env.EPAM_ROSTER_REVIEW_BATCH_CHARS || '60000'));
+  const _batches = [];
+  let _cur = [];
+  let _size = 0;
+  for (const pr of _pairs) {
+    const cost = pr.derived.length + pr.canonical.length + pr.name.length + 200;
+    // A single oversized agent still gets its own batch rather than being dropped or cut.
+    if (_cur.length && _size + cost > _budget) { _batches.push(_cur); _cur = []; _size = 0; }
+    _cur.push(pr);
+    _size += cost;
+  }
+  if (_cur.length) _batches.push(_cur);
+
+  const _renderBatch = (batch) => renderEngineTemplate('project-roster-review', {
+    __ROSTER_PATH__: String(rosterPath || ''),
+    __CANONICAL_PATH__: String(canonicalPath || ''),
+    __CODELINE_CONTEXT__: (Array.isArray(codelines) ? codelines : [])
+      .map((c) => `- ${(c && c.name) || c}${c && c.path ? ` (${c.path})` : ''}`).join('\n'),
+    __PAIR_BLOCK__: batch.map((pr) => [
+      `--- AGENT: ${pr.name}`,
+      'CANONICAL:',
+      pr.canonical || '(this agent has no canonical ancestor text)',
+      'DERIVED:',
+      pr.derived,
+    ].join('\n')).join('\n\n'),
+  });
+
+  const env = withToolGrant({
+    ...seamInvocationEnv('project-roster-review', logDir),
+    EPAM_AGENT_NAME: 'project-roster-review',
+    EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_ROSTER_REVIEW),
+  }, toolGrant);
+
+  // THE SEVENTH ARGUMENT IS THE STORY ID, NOT THE TOOL GRANT. Passing the grant here left the
+  // reviewer with no tools — it could not open the roster it was asked to judge, which is why it
+  // answered that there was nothing to review — and put the whole tool list where the story id
+  // belongs, so cost was attributed to a story named after an allow-list. The roster review is
+  // not a story's work, so it carries no story id.
+  // EVERY BATCH IS JUDGED, AND ONE BATCH THAT DID NOT LOOK DOES NOT PASS FOR THE REST.
+  const _results = [];
+  for (let bi = 0; bi < _batches.length; bi += 1) {
+    // eslint-disable-next-line no-await-in-loop
+    const part = await runAgentForJson(
+      promptExec, _renderBatch(_batches[bi]), TOOL_ROSTER_REVIEW, 'ROSTER_REVIEW',
+      logDir ? path.join(logDir, `project-roster-review.batch${bi + 1}.log`) : null,
+      null, '', repoPath || '', env,
+    );
+    _results.push({ part, agents: _batches[bi].map((x) => x.name) });
+  }
+
+  // A batch that produced nothing means those agents were NOT reviewed. Saying so keeps the
+  // three-way distinction the schema draws — examined-and-sound, examined-and-defective,
+  // did-not-examine — true of the whole roster and not just of the last batch to answer.
+  // WHAT THE CONTRACT ALLOWS, READ FROM THE CONTRACT. A hand-kept list of legal verdicts drifts
+  // from the schema; this is the schema. An empty enum means the tool declares none, and then no
+  // value can be judged illegal — so the check simply does not fire.
+  const _legalVerdicts = ((TOOL_ROSTER_REVIEW.parameters || {}).properties || {}).verdict || {};
+  const _legal = Array.isArray(_legalVerdicts.enum) ? _legalVerdicts.enum : [];
+
+  // A VERDICT OUTSIDE THE ENUM IS NOT A PASS.
+  //
+  // This filter caught 'nothing_to_review' and a missing verdict, and let everything else through
+  // to an aggregation that reads "not defects_found" as sound. Live 2026-08-24 batch 2 answered
+  // `"verdict": "warn"` — a value the schema does not permit — and it would have been counted as
+  // a clean pass. The schema's enum is also unenforced upstream (agent-output-schema.js validates
+  // types, never enums, and does not map this tag at all), so this is the only place the declared
+  // vocabulary is actually held to.
+  const _illegal = (v) => _legal.length > 0 && !_legal.includes(v);
+  const _unexamined = _results.filter((r) => !r.part || typeof r.part !== 'object'
+    || r.part.verdict === 'nothing_to_review' || !r.part.verdict || _illegal(r.part.verdict));
+  if (_unexamined.length) {
+    return {
+      verdict: 'review_failed',
+      findings: _results.flatMap((r) => (r.part && Array.isArray(r.part.findings) ? r.part.findings : [])),
+      reason: `${_unexamined.length} of ${_batches.length} batch(es) were not examined `
+        + `(${_unexamined.flatMap((r) => r.agents).slice(0, 6).join(', ')}...)`
+        + `${_unexamined.filter((r) => r.part && _illegal(r.part.verdict)).length
+          ? `; verdict(s) outside the declared enum: `
+            + `${[...new Set(_unexamined.filter((r) => r.part && _illegal(r.part.verdict))
+              .map((r) => JSON.stringify(r.part.verdict)))].join(', ')} `
+            + `(legal: ${_legal.join(', ')})`
+          : ''}`
+        + `. The roster is not implicated.`,
+    };
+  }
+
+  const payload = {
+    verdict: _results.some((r) => r.part.verdict === 'defects_found') ? 'defects_found' : 'sound',
+    findings: _results.flatMap((r) => (Array.isArray(r.part.findings) ? r.part.findings : [])),
+  };
+
+  // A review that produced nothing is NOT a sound roster. Unparseable output means the check did
+  // not happen, and reading that as approval is the fail-open shape these gates exist to prevent.
+  if (!payload || typeof payload !== 'object') {
+    return { verdict: 'review_failed', reason: 'the review produced no usable verdict', findings: [] };
+  }
+  const findings = Array.isArray(payload.findings) ? payload.findings : [];
+  const blocking = findings.filter((f) => f && f.severity === 'blocking');
+  if (logDir) {
+    try {
+      fs.writeFileSync(path.join(logDir, 'project-roster-review.json'),
+        `${JSON.stringify({ ...payload, findings }, null, 2)}\n`);
+    } catch { /* the verdict still reaches the caller */ }
+  }
+  // 'defects_found' WITH NOTHING FOUND IS NOT A DEFECTIVE ROSTER.
+  //
+  // The two fields have to agree. A verdict of defects_found carrying an empty finding list
+  // condemns the artefact while naming nothing that is wrong with it, and the caller can only
+  // read that as "rejected": it deletes a roster that PASSED its mechanical contract and pays to
+  // generate another, with no evidence anyone could act on or falsify. Live 2026-08-23, this seam
+  // returned exactly {"findings": [], "verdict": "defects_found"}.
+  //
+  // The judge failing to substantiate is a failure OF THE JUDGE. Same treatment as
+  // 'nothing_to_review': retry the judge, leave the artefact alone.
+  if (payload.verdict === 'defects_found' && !findings.length) {
+    return {
+      verdict: 'review_failed',
+      findings,
+      reason: 'the review answered defects_found but listed no findings, so nothing about the '
+        + 'roster was actually contradicted. The roster is not implicated.',
+    };
+  }
+
+  if (payload.verdict === 'sound' && !blocking.length) {
+    return { verdict: 'approved', findings };
+  }
+
+  // A REVIEW THAT EXAMINED NOTHING IS NOT A DEFECTIVE ROSTER.
+  //
+  // 'nothing_to_review' means the reviewer did not look — live 2026-08-23 it returned its own
+  // PLAN as a blocking finding ("PLAN: I will read both roster files...") and that verdict.
+  // Treating it as changes_requested threw away a roster that had PASSED its contract and paid to
+  // generate another, blaming the artefact for the judge's failure. The distinction the schema
+  // draws deliberately — examined-and-sound, examined-and-defective, did-not-examine — has to
+  // survive the translation, or the caller cannot tell which happened.
+  if (payload.verdict === 'nothing_to_review' || !payload.verdict) {
+    return {
+      verdict: 'review_failed',
+      findings,
+      reason: 'the roster review did not examine anything — it returned '
+        + `'${payload.verdict || 'no verdict'}'. The roster is not implicated.`,
+    };
+  }
+
+  // The schema's finding fields are claim/found/checked — NOT finding/description, which is what
+  // this read and why the operator saw "roster-review: " with nothing after it. A rejection whose
+  // reason is empty is a rejection nobody can act on.
+  const describe = (f) => [f.claim, f.found, f.checked]
+    .map((x) => String(x || '').trim())
+    .filter((x) => x && x !== 'N/A')
+    .join(' — ') || '(the finding carried no text)';
+  return {
+    verdict: 'changes_requested',
+    findings,
+    reason: blocking.length
+      ? blocking.map((f) => `${f.agent || '?'}: ${describe(f)}`).join('; ')
+      : `roster review returned '${payload.verdict}'`,
+  };
+}
+
+/**
+ * THE BLOCK THE ROSTER REVIEWER READS — one agent per entry, header then brief.
+ *
+ * Live 2026-08-23: this looked the brief up as `profiles[m.name] || ''` in the CANONICAL profiles
+ * map, which holds the engine's own agents and none of the ones just minted — their briefs are
+ * written to the PROJECT's agent-profiles.json. Every lookup missed, `|| ''` turned the miss into
+ * an empty string, and the reviewer was handed a header with a blank line under it. It reported
+ * "the brief body is entirely empty" for all three agents and blocked the roster twice. It was
+ * right about the text and wrong about the roster, and the run spent two top-rung correction
+ * cycles on a defect that was not there.
+ *
+ * BOTH MAPS ARE READ, because a brief may legitimately live in either: canonical agents carry
+ * theirs in the engine's profiles, minted ones in the project's.
+ *
+ * AND A MISSING BRIEF SAYS SO. `|| ''` could not distinguish "this agent has no brief" from "this
+ * agent is not in this map", so a plumbing failure and a real roster defect rendered identically
+ * and the reviewer could only blame the roster. The reviewer must be able to tell them apart.
+ */
+function buildRosterBriefBlock(minted, profiles, projectProfiles) {
+  // THE MAP MAY BE NESTED. The engine's profiles.json is a flat {name: brief}; the project's
+  // agent-profiles.json is {runId, _what, profiles: {name: brief}}. Reading only the top level
+  // missed every minted brief a second time — the same failure one layer down, found by running
+  // this against the artefacts a real run had just written rather than against a fixture I wrote
+  // to match my own assumption.
+  const unwrap = (map) => ((map && typeof map === 'object' && map.profiles
+    && typeof map.profiles === 'object') ? map.profiles : map);
+  const look = (rawMap, name) => {
+    const map = unwrap(rawMap);
+    if (!map || typeof map !== 'object') return '';
+    const v = map[name];
+    if (typeof v === 'string') return v;
+    // A project map may hold an object per agent; the brief is its text.
+    if (v && typeof v === 'object') return String(v.brief || v.persona || v.systemPrompt || '');
+    return '';
+  };
+  return (Array.isArray(minted) ? minted : []).map((m) => {
+    const brief = look(profiles, m.name) || look(projectProfiles, m.name);
+    const tag = m.kind + (m.codeline ? ': ' + m.codeline : '');
+    const body = brief.trim()
+      ? brief
+      : '(NO BRIEF FOUND for this agent in either the engine or the project profiles — this is a '
+        + 'missing brief, which is a defect in what produced the roster, not an agent that was '
+        + 'given an empty one.)';
+    return ['--- ' + m.name + '  [' + tag + ']', body].join('\n');
+  }).join('\n\n');
+}
+
+async function reviewRoster({
+  promptExec, minted, profiles, projectProfiles, codelines, tickets, referencedDocs, logDir,
+  repoPath, toolGrant,
+}) {
+  const _minted = Array.isArray(minted) ? minted : [];
+  // AN EMPTY SET IS NOT SOUND — IT IS UNREVIEWED. Returning 'sound' here reported a clean bill of
+  // health for something nothing examined: zero findings because there was nothing to find. Live
+  // 2026-08-17 a correction cycle cleared both implementers, minted no replacement, and the next
+  // review said "sound" — true of the empty set, and the run died at assignment.
+  if (!_minted.length) return { verdict: 'nothing_to_review', findings: [], reviewed: 0 };
+
+  const briefBlock = buildRosterBriefBlock(_minted, profiles, projectProfiles);
+
+  const clBlock = (Array.isArray(codelines) ? codelines : []).map((c) => {
+    const d = Array.isArray(c.dependencies) ? c.dependencies : [];
+    return '- ' + c.name + ' at ' + c.path + '\n    declares: '
+      + (d.length ? d.join(', ') : '(no manifest configuration)');
+  }).join('\n');
+
+  // THE WHOLE TICKET, not a summary. The reviewer decides whether a brief serves the work that
+  // was actually asked for, so it needs the same view of the request the mint had: components
+  // (which say how far the work reaches), the links, and the untruncated description.
+  const ticketBlock = (Array.isArray(tickets) ? tickets : []).map((t) => {
+    const head = '- ' + (t.jiraKey || t.id || '') + ': ' + (t.title || '');
+    const comps = Array.isArray(t.components) && t.components.length
+      ? '\n  Components: ' + t.components.join(', ') : '';
+    const links = (Array.isArray(t.ticketLinks) ? t.ticketLinks : [])
+      .map((l) => (typeof l === 'string' ? l : (l && l.url))).filter(Boolean);
+    const linkLine = links.length ? '\n  Links: ' + links.join(' , ') : '';
+    return head + comps + '\n  ' + String(t.description || '').replace(/\s+/g, ' ') + linkLine;
+  }).join('\n');
+
+  // THE DOCUMENTS THE BRIEFS WERE DERIVED FROM. Without them the reviewer can tell that a brief
+  // disagrees with the repository, but not WHY — and the why decides the remedy. A brief that
+  // followed the vendor's current guide into a symbol this pinned version lacks needs the
+  // version-correct instruction; one that simply invented something needs deleting.
+  const docBlock = (Array.isArray(referencedDocs) ? referencedDocs : [])
+    .filter((d) => d && d.fetchStatus === 'fetched')
+    .map((d) => {
+      if (Array.isArray(d.quotes) && d.quotes.length) {
+        return '- ' + d.url + '\n' + d.quotes.map((q) => '    "' + String(q).replace(/\s+/g, ' ') + '"').join('\n');
+      }
+      let body = typeof d.body === 'string' ? d.body : '';
+      if (!body && d.path) { try { body = fs.readFileSync(d.path, 'utf8'); } catch { body = ''; } }
+      return body ? '- ' + d.url + '\n' + body : '- ' + d.url + ' (retrieved, no readable text)';
+    }).join('\n\n');
+
+  const persona = (profiles && profiles['roster-reviewer']) || '';
+  const toolLine = toolGrant
+    ? 'Your tools: ' + toolGrant + '. Open the repositories. Resolve the packages and symbols these '
+      + 'briefs name. Confirm the files and directories they claim to own exist.'
+    : 'You have NO tools on this call. Report only what the text above lets you establish, and say so.';
+
+  // WHAT THE TEAM MUST BE ABLE TO PRODUCE, derived from the registry and handed to the reviewer.
+  // Without it the reviewer sees only briefs and cannot report the one defect that has no brief:
+  // a role nobody minted. See rosterCoverageBlock.
+  let coverageBlock = '';
+  try {
+    coverageBlock = rosterCoverageBlock(_minted, readRegistryForCoverage());
+  } catch { coverageBlock = ''; }
+
+  const prompt = buildRosterReviewPrompt({
+    persona, briefBlock, clBlock, ticketBlock, docBlock, toolLine, coverageBlock,
+  });
+
+  // THE IDENTITY TRAVELS WITH THE SEAM. This relied on the caller having set
+  // process.env.EPAM_AGENT_NAME in another file, so the two could drift apart without either
+  // looking wrong — and they had: the caller announced 'roster-reviewer', which resolved to the
+  // code reviewer's seam. Declared together here, they cannot.
+  const env = {
+    ...seamInvocationEnv('roster-review', logDir),
+    EPAM_AGENT_NAME: 'roster-review',
+    EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_ROSTER_REVIEW),
+  };
+  if (toolGrant) { env.AI_GATE_ALLOW_TOOLS = '1'; env.EPAM_ALLOWED_TOOLS = toolGrant; }
+
+  // ONE EMPTY RESPONSE MUST NOT COST THE WHOLE RUN.
+  //
+  // runAgentForJson returns null on unparseable or empty output and does NOT retry. The guard
+  // below then refuses — correctly, an unreviewed roster is not a sound one — but that turns a
+  // single flaky response into a dead run, several minutes and several model calls in.
+  //
+  // Live 2026-08-17, mock3: 34KB of prompt in, ZERO bytes out, verdict review_failed, run over.
+  // The same shape killed codeline-discovery an hour earlier ("Empty response from ai-run.sh").
+  // The previous run's reviewer worked on the identical roster, so it is transient, not a defect
+  // in the prompt or the roster.
+  //
+  // A retry here is safe in a way a retry is not everywhere: the reviewer READS and reports, it
+  // writes nothing and mutates nothing, so a second attempt cannot double an effect. What is NOT
+  // retried is a review that ran and returned findings — only one that produced no usable
+  // payload at all. "Found nothing wrong" and "produced nothing" stay different, which is the
+  // whole point of the guard below.
+  const _rrAttempts = Number(process.env.EPAM_ROSTER_REVIEW_ATTEMPTS || 2);
+  let payload = null;
+  for (let _rrTry = 1; _rrTry <= Math.max(1, _rrAttempts); _rrTry += 1) {
+    payload = await runAgentForJson(
+      promptExec, prompt, TOOL_ROSTER_REVIEW, 'ROSTER_REVIEW',
+      logDir ? path.join(logDir, _rrTry === 1 ? 'roster-review.log' : `roster-review-attempt${_rrTry}.log`) : null,
+      null, '', repoPath || '', env,
+    );
+    if (payload && Array.isArray(payload.findings)) break;
+    if (_rrTry < Math.max(1, _rrAttempts)) {
+      process.stderr.write(
+        `[roster-review] attempt ${_rrTry} produced no usable findings — retrying ` +
+        `(${_rrTry + 1}/${Math.max(1, _rrAttempts)}). The reviewer only reads, so a retry cannot ` +
+        'double an effect.\n');
+    }
+  }
+
+  // A REVIEW THAT DID NOT RUN IS NOT A CLEAN REVIEW.
+  //
+  // Live 2026-08-08: the reviewer returned completely empty output — 47KB of prompt in, 10
+  // bytes out — and this roster reached the operator pause labelled "sound", unreviewed. A
+  // null payload became an empty finding list, and an empty finding list is exactly what a
+  // genuine clean review looks like, so "produced nothing" and "found nothing wrong" were the
+  // same value. There IS a guard for this a few lines up in the caller, but it only catches a
+  // thrown error and runAgentForJson returns null on unparseable output rather than throwing.
+  //
+  // Deriving the verdict from the findings instead of taking the model's word stays. What was
+  // missing is a third state: the payload must carry a findings ARRAY to count as a review at
+  // all. This is the only agent standing between a generated brief and an implementer
+  // inheriting it whole, so its silence must never read as approval.
+  if (!payload || !Array.isArray(payload.findings)) {
+    return {
+      verdict: 'review_failed',
+      findings: [],
+      refuted: [],
+      reviewed: 0,
+      error: 'the roster reviewer returned no usable findings — the tag was missing, empty, or ' +
+             'not the reviewed shape. The roster is UNREVIEWED, which is not the same as sound.',
+    };
+  }
+  const raw = payload.findings;
+
+  // RE-RUN THE REVIEWER'S OWN CHECK. A finding that turns on whether a named dependency or
+  // path is present is mechanically settleable, and the reviewer states it in a structured
+  // field for exactly that reason. Live 2026-08-07: it reported a package absent from a
+  // codeline that declares it in devDependencies and has it installed — a careless read that
+  // a retry reproduces and a stronger model does not reliably prevent. Refuted findings are
+  // dropped; judgements it cannot settle are kept untouched.
+  let findings = raw;
+  let refuted = [];
+  try {
+    const v = require('./lib/verify-findings.js').verifyFindings(raw, codelines);
+    findings = v.kept;
+    refuted = v.refuted;
+    for (const f of refuted) console.warn(`spec-mode: roster finding DISCARDED — ${f._refutedBy}`);
+    // Unsettled findings are NOT silently gone. A malformed one is dropped (an unverifiable
+    // claim must not halt a run), and that is exactly how a reviewer could disable this gate
+    // by omitting fields — so every one is named, with why, where an operator will see it.
+    for (const f of (v.unsettled || [])) {
+      console.warn(`spec-mode: roster finding UNSETTLED — ${f._why} — agent=${f.agent || '?'} claim=${JSON.stringify(f.claim || '')}`);
+    }
+  } catch (err) {
+    console.warn(`spec-mode: could not verify roster findings (${err && err.message}) — keeping all of them`);
+  }
+
+  // The verdict is DERIVED, never taken on the model's word: a reviewer that lists defects and
+  // then calls the roster sound is the fail-open shape these gates exist to prevent.
+  const verdict = findings.length ? 'defects_found' : 'sound';
+  return { verdict, findings, refuted, reviewed: _minted.length };
+}
+
+/**
+ * The assignment prompt, built where a test can execute it.
+ *
+ * Extracted because its defect was a self-contradiction in the text itself, which no test
+ * could see while the string was welded inside a 200-line function.
+ */
+function buildAssignmentPrompt(stories, roles) {
+  const _stories = Array.isArray(stories) ? stories : [];
+  const roleBlock = (Array.isArray(roles) ? roles : [])
+    // WHOLE, never a prefix. A brief is the role's definition; cutting it at 320 chars
+    // severed rules mid-sentence — and a severed rule reads as a complete one, so the
+    // model acts on the fragment. Whitespace is still collapsed; only the cut is gone.
+    .map((r) => `- ${r.name}\n    ${String(r.brief || '').replace(/\s+/g, ' ').trim()}`)
+    .join('\n');
+  const storyBlock = _stories
+    .map((s) => {
+      const cls = Array.isArray(s.codelines) && s.codelines.length ? s.codelines : (s.codeline ? [s.codeline] : []);
+      const clLine = cls.length > 1
+        ? `\n    codelines — ${cls.length} assignments required, one for EACH of: ${cls.join(', ')}`
+        : (cls.length ? `\n    codeline: ${cls[0]}` : '');
+      return `- ${s.id}: ${s.title || ''}${clLine}\n    ${String(s.description || '').replace(/\s+/g, ' ')}`;
+    })
+    .join('\n');
+
+  // THE PROMPT USED TO CONTRADICT ITSELF. It required "ONE ASSIGNMENT PER CODELINE" and then,
+  // four lines later, "Every story must be assigned exactly one role" — a sentence written
+  // before stories could span codelines. One needs three assignments, the other needs one.
+  // Live 2026-08-09 a model resolved it by returning a single assignment for a three-codeline
+  // story; the run aborted with two lanes unowned after spending its entire retry and ladder
+  // budget re-answering a question that had no consistent answer. The old wording is NOT
+  // quoted in the prompt below: restating a rejected instruction to the model reintroduces it.
+  // RENDERED FROM THE TEMPLATE LAYER.
+  return renderEngineTemplate('assign-agent-roles', {
+    __ROLE_BLOCK__: roleBlock,
+    __STORY_BLOCK__: storyBlock,
+  });
+}
+
+async function assignAgentRoles({ promptExec, stories, profilesPath, logDir, repoPath, validateOnly }) {
+  const _stories = Array.isArray(stories) ? stories : [];
+  if (!_stories.length) return { assigned: [], stories: [] };
+
+  let profiles = {};
+  try { profiles = JSON.parse(fs.readFileSync(profilesPath, 'utf8')); } catch (e) {
+    throw new Error(`[assign] cannot read the roster at ${profilesPath}: ${e && e.message}`);
+  }
+
+  let fixedRoles = [];
+  try {
+    fixedRoles = require(path.join(__dirname, '..', '..', 'dist', 'sdk.js')).FIXED_AGENT_ROLES || [];
+  } catch (e) {
+    throw new Error(`[assign] cannot read FIXED_AGENT_ROLES from dist/sdk.js: ${e && e.message}`);
+  }
+
+  const candidates = candidateRoles(profiles, path.dirname(profilesPath));
+  if (!candidates.length) {
+    throw new Error(
+      '[assign] no project implementation roles are registered for this project — nothing was ' +
+      'minted, so there is no role any story could honestly be assigned.',
+    );
+  }
+
+  const prompt = buildAssignmentPrompt(
+    _stories,
+    candidates.map((r) => ({ name: r, brief: profiles[r] || '' })),
+  );
+
+  // VALIDATE, DO NOT REGENERATE. On a resume the operator has inspected the roster at the
+  // pause and may have edited profiles.json, the project-roles registry, or the stories'
+  // agentRole directly. Re-running the assignment agent would silently discard exactly the
+  // judgement the pause exists to capture. So when every story already carries a role, the
+  // existing assignment is checked against the same rules a fresh one would face and kept.
+  const preassigned = _stories.every((s) => typeof s.agentRole === 'string' && s.agentRole.trim()
+                                            && s.agentRole !== 'unknown');
+  let rows;
+  if (preassigned || validateOnly) {
+    rows = _stories.map((s) => ({
+      storyId: s.id, agentRole: String(s.agentRole || '').trim(), reason: 'pre-assigned (validated, not regenerated)',
+    }));
+  } else {
+    const payload = await runAgentForJson(
+      promptExec, prompt, TOOL_ROLE_ASSIGNMENTS, 'ROLE_ASSIGNMENTS',
+      logDir ? path.join(logDir, 'role-assignments.log') : null,
+      null, '', repoPath || '',
+      {
+        ...seamInvocationEnv('role-assigner', logDir),
+        EPAM_AGENT_NAME: 'role-assigner',
+        EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_ROLE_ASSIGNMENTS),
+      },
+    );
+    rows = (payload && Array.isArray(payload.assignments)) ? payload.assignments : [];
+  }
+  // KEYED BY STORY AND CODELINE. One story spanning three repositories is three assignments:
+  // the repositories differ in tooling, so the right owner can differ too. Assigning one role
+  // to the story and handing it to every lane is how a role briefed for one codeline ends up
+  // working in another.
+  const byStory = new Map();
+  const fixed = new Set(fixedRoles);
+  const allowed = new Set(candidates);
+
+  for (const row of rows) {
+    if (!row || typeof row.storyId !== 'string' || typeof row.agentRole !== 'string') continue;
+    const role = row.agentRole.trim();
+    if (fixed.has(role)) {
+      throw new Error(
+        `[assign] ${row.storyId} was assigned "${role}", a canonical process role — it is not an ` +
+        'implementation role and cannot own a story.',
+      );
+    }
+    if (!allowed.has(role)) {
+      throw new Error(
+        `[assign] ${row.storyId} was assigned "${role}", which is not in the roster — it has no ` +
+        'profile entry, so the writer would run with an empty system prompt.',
+      );
+    }
+    const key = row.storyId + '\u0000' + (typeof row.codeline === 'string' ? row.codeline.trim() : '');
+    byStory.set(key, { storyId: row.storyId, codeline: (row.codeline || '').trim(), role, reason: row.reason || '' });
+  }
+
+  // Every (story, codeline) pair must be covered. A story spanning three codelines with one
+  // assignment leaves two lanes with no owner — and a null role is read as "unknown" downstream
+  // rather than failing.
+  const _pairs = [];
+  for (const s of _stories) {
+    const cls = Array.isArray(s.codelines) && s.codelines.length ? s.codelines : (s.codeline ? [s.codeline] : ['']);
+    for (const cl of cls) _pairs.push({ story: s, codeline: cl });
+  }
+  const _lookup = (storyId, cl) =>
+    byStory.get(storyId + '\u0000' + cl) || (cl ? byStory.get(storyId + '\u0000' + '') : null);
+  const missing = _pairs.filter((x) => !_lookup(x.story.id, x.codeline))
+    .map((x) => x.story.id + (x.codeline ? ' @ ' + x.codeline : ''));
+  if (missing.length) {
+    throw new Error(
+      `[assign] unassigned after the agent's full retry/ladder budget: ${missing.join(', ')}. ` +
+      'A null agentRole is read as "unknown" by every consumer downstream rather than failing.',
+    );
+  }
+
+  const assigned = [];
+  for (const s of _stories) {
+    const cls = Array.isArray(s.codelines) && s.codelines.length ? s.codelines : (s.codeline ? [s.codeline] : ['']);
+    const perCodeline = {};
+    for (const cl of cls) {
+      const a = _lookup(s.id, cl);
+      if (cl) perCodeline[cl] = a.role;
+      assigned.push({ storyId: s.id, codeline: cl, agentRole: a.role, reason: a.reason });
+    }
+    // agentRoles is authoritative for a spanning story; agentRole stays as the primary so every
+    // existing consumer keeps working until each is taught to read per codeline.
+    if (Object.keys(perCodeline).length) s.agentRoles = perCodeline;
+    const primary = _lookup(s.id, s.codeline || cls[0]);
+    s.agentRole = (primary && primary.role) || _lookup(s.id, cls[0]).role;
+  }
+  return { assigned, stories: _stories };
+}
+
+async function enforceVerificationCriteria(story, initialVc, opts = {}) {
+  const { regenerateVc = null, reviewVc = null, findings = null, deriveVocabulary = null,
+          maxCycles = Number(process.env.VC_MAX_CYCLES || '2') } = opts;
+  let vc = Array.isArray(initialVc) ? initialVc.slice() : [];
+  let lastFlags = [];
+
+  // ARM THE GUARD, OR ABORT. The vocabulary this guard applies is derived per story; it is
+  // not written down anywhere. If derivation fails the guard cannot check anything, and a
+  // guard that silently checks nothing is worse than no guard — it reports "clean" and
+  // nobody looks again. That is precisely how the previous hardcoded guard passed VCs
+  // which plainly prescribed mechanism. So: no vocabulary, no run.
+  let vocabulary = null;
+  if (deriveVocabulary) {
+    try { vocabulary = await deriveVocabulary(vc); } catch (err) {
+      throw new Error(`VC guard could not be armed for ${(story && story.id) || 'story'}: guard-vocabulary agent failed (${err && err.message}). A guard with no vocabulary checks nothing; refusing to proceed.`);
+    }
+  }
+  if (!isVocabularyUsable(vocabulary)) {
+    throw new Error(`VC guard could not be armed for ${(story && story.id) || 'story'}: the guard-vocabulary agent returned no usable terms after its full retry/ladder budget. A guard with no vocabulary checks nothing; refusing to proceed.`);
+  }
+  // Persisted so a re-run applies the identical vocabulary — derivation is agentic,
+  // enforcement is reproducible.
+  if (story) {
+    story.specification = story.specification || {};
+    story.specification.guardVocabulary = vocabulary;
+  }
+
+  for (let cycle = 1; cycle <= maxCycles; cycle++) {
+    const mech = findVcMechanism(vc, story && story.id, vocabulary).map((f) => f.reason + `: "${String(f.criterion).slice(0, 80)}"`);
+    let speckitFlags = [];
+    if (reviewVc) {
+      try { speckitFlags = (await reviewVc(vc, cycle)) || []; } catch { speckitFlags = []; }
+    }
+    lastFlags = [...mech, ...speckitFlags];
+    if (lastFlags.length === 0) {
+      return { vc, source: cycle === 1 ? 'clean' : 'regenerated', cycles: cycle, flags: [] };
+    }
+    if (cycle === maxCycles || !regenerateVc) break; // out of cycles → fall back below
+    let regenerated = null;
+    try { regenerated = await regenerateVc(lastFlags, cycle + 1); } catch { regenerated = null; }
+    vc = Array.isArray(regenerated) && regenerated.length ? regenerated : vc;
+  }
+  // PARTIAL RETENTION before the last resort. Discarding criteria that were never flagged
+  // costs more than it protects: the fallback's two lines are tautologies the writer
+  // cannot fail, so a whole-set discard leaves the story effectively unverified.
+  //
+  // TWO CLASSES OF FLAG, AND THEY ARE NOT EQUAL.
+  //
+  // findVcMechanism is deterministic: what it flags IS mechanism, and it is always dropped.
+  // The LLM reviewer adds judgement a regex cannot, so its flags are ADVISORY — and
+  // measured live 2026-08-04, six full loops over four criteria the deterministic guard
+  // certified clean, one run had the reviewer flag THREE of the four (including "When
+  // preview mode is active, the page displays the draft version of the entry" — plainly
+  // observable) and retention kept a single criterion.
+  //
+  // A review that condemns most of a set is far more likely to be an outlier than the set
+  // is to be worthless. So advisory drops are applied only while the surviving set stays
+  // above a usable floor; below it, the deterministically-clean work is KEPT and the
+  // dispute recorded for a human. This never rescues a criterion the guard rejected.
+  //
+  // CONFIGURABLE: VC_MIN_RETAINED (absolute floor, default 2),
+  //               VC_MIN_RETAINED_FRACTION (share of the original set, default 0.5).
+  const mechCriteria = findVcMechanism(vc, null, vocabulary).map((f) => f.criterion);
+  const guardClean = vc.filter((c) => !mechCriteria.includes(c));
+
+  const { clean, flagged, unattributable } = partitionFlaggedVc(vc, lastFlags);
+
+  // AN ADVISORY DROP MUST BE A CLEAR MINORITY.
+  //
+  // The reviewer's flags may delete — a modest, well-aimed objection is worth acting on, and
+  // this function's own tests rightly insist on that. But the rule was "at least half
+  // survive", which lets a review condemning exactly half delete half. Live 2026-08-07 (run
+  // 20260807T010410Z) it deleted two of four, including "the preview page updates ... without
+  // requiring a manual page refresh" — the central behaviour of the feature, naming no
+  // mechanism at all. The story reached the writer with that unverified.
+  //
+  // Deleting half a set is a rewrite, not a correction, and this function already holds the
+  // instinct that a review condemning most of a set is more likely an outlier than the set is
+  // to be worthless. Half counts as most.
+  //
+  // The deterministic guard is untouched: what it flags is mechanism by construction and is
+  // always dropped, above. Regeneration still acts on reviewer flags every cycle; this only
+  // decides what happens once the cycles are spent.
+  const absFloor = Number(process.env.VC_MIN_RETAINED || '2');
+  const fraction = Number(process.env.VC_MIN_RETAINED_FRACTION || '0.5');
+  const floor = Math.max(Math.min(absFloor, vc.length), Math.ceil(fraction * vc.length));
+  const isMinority = flagged.length * 2 < vc.length;
+
+  if (!unattributable && isMinority && clean.length >= floor && clean.length < vc.length) {
+    console.warn(`spec-mode: \u26a0\ufe0f VC still flagged for ${story && story.id} after ${maxCycles} cycle(s) — dropping ${flagged.length} flagged criterion/criteria, retaining ${clean.length} clean. Dropped: ${flagged.map((c) => `"${String(c).slice(0, 60)}"`).join(' | ')}`);
+    return { vc: clean, source: 'partial', cycles: maxCycles, flags: lastFlags, dropped: flagged };
+  }
+
+  // Not a minority (or unattributable): keep what the deterministic guard certified and
+  // record the disagreement on the story.
+  if (guardClean.length) {
+    console.warn(`spec-mode: ⚠️ VC review DISPUTED for ${story && story.id} — the reviewer flagged ${unattributable ? 'the set' : `${flagged.length}/${vc.length}`} criteria, not a clear minority. Keeping the ${guardClean.length} the deterministic guard certified; deleting half a set is a rewrite, not a correction. Flags: ${lastFlags.slice(0, 3).join(' | ')}`);
+    return {
+      vc: guardClean,
+      source: 'disputed',
+      cycles: maxCycles,
+      flags: lastFlags,
+      dropped: vc.filter((c) => !guardClean.includes(c)),
+    };
+  }
+  console.warn(`spec-mode: ⚠️ VC could not be made mechanism-free for ${story && story.id} after ${maxCycles} cycle(s) — using conservative fallback VC${unattributable ? ' (a flag named no specific criterion, so nothing could be safely retained)' : ''}. Last flags: ${lastFlags.slice(0, 3).join(' | ')}`);
+  return { vc: safeFallbackVc(story, findings), source: 'fallback', cycles: maxCycles, flags: lastFlags };
+}
+
+// Shared LLM call for the VC loop — ladder-escalates the model per cycle (base
+// HIGH model → kimi-k3), reusing runClaude's salvage + tight timeout (same
+// resilience as the detective, so a VC regen/review can't stall the pipeline).
+//
+// `role` selects which agent's model-tier env vars apply. Full agent audit,
+// 2026-07-31: this always resolved openspec's SPEC_MODE_OPENSPEC_MODEL_HIGH,
+// even when called FROM reviewVcViaSpeckit (speckit's own review role) —
+// speckit's dedicated SPEC_MODE_SPECKIT_MODEL_HIGH was silently never
+// consulted for VC review, despite existing and being used everywhere else
+// speckit runs (see the escalation ladder at line ~968).
+async function _vcLlmCall(prompt, cycle, logPath, storyId = '', role = 'openspec', repoPath = '') {
+  const baseModel = role === 'speckit'
+    ? (process.env.SPEC_MODE_SPECKIT_MODEL_HIGH || process.env.SPEC_MODE_SPECKIT_MODEL || seamStartModel('spec-coordinator'))
+    : (process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH || seamStartModel('spec-coordinator'));
+  const escalated = ladderNextModel(baseModel, process.env);
+  const useEsc = cycle >= 2 && escalated;
+  const model = useEsc ? escalated : baseModel;
+  const provider = useEsc ? (resolveModelProvider(model, process.env) || resolvePromptProvider(process.env)) : resolvePromptProvider(process.env);
+  const exec = { cmd: process.env.AI_RUNNER_CMD || path.join(__dirname, 'ai-run.sh'), args: ['--provider', provider, '--model', model] };
+  // Real tools + correct cwd when a single story's codeline resolves. Writes
+  // are prevented by the filesystem perimeter, not by withholding tools —
+  // see specAgentEnv's docstring.
+  const toolEnv = repoPath ? {
+    AI_GATE_ALLOW_TOOLS: process.env.SPEC_MODE_ALLOW_TOOLS || '1',
+    EPAM_ALLOWED_TOOLS: process.env.SPEC_MODE_ALLOWED_TOOLS || 'read_file,list_files,search',
+    EPAM_MAX_TOOL_CALLS: process.env.SPEC_MODE_MAX_TOOL_CALLS || String(specModeDefaults().perAgent),
+    PROJECT_ROOT: repoPath,
+  } : {};
+  return runClaude(exec, prompt, logPath, {
+    EPAM_MAX_OUTPUT_TOKENS: process.env.CODEGRAPH_DETECTIVE_MAX_OUTPUT_TOKENS || '24576',
+    EPAM_MAX_ITERATIONS: '2',
+    // VC production is a RESTATE task, not a reasoning task: describe the observable
+    // outcome faithfully, do NOT reason toward an implementation. High reasoning
+    // effort is what drives the prescriptive drift (the model "solves" the bug and
+    // bakes the mechanism into the VC); non-zero temperature adds the variance that
+    // occasionally lands on a forbidden mechanism. Pin both DOWN for VC calls only
+    // (scoped to this child env, so the wider run's temperature/effort are untouched).
+    EPAM_TEMPERATURE: process.env.VC_LLM_TEMPERATURE || '0',
+    EPAM_REASONING_EFFORT: process.env.VC_LLM_REASONING_EFFORT || 'low',
+    ...toolEnv,
+  }, { costAgent: 'vc-agent', costStoryId: storyId, salvageOutputOnFailure: true, timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '450000') });
+}
+/**
+ * Extracted verbatim so its migration can be proven byte-for-byte.
+ */
+function buildVcReviewPrompt({ story, vc }) {
+  return renderEngineTemplate('vc-review', {
+    __AC_LIST__: (story.acceptanceCriteria || []).map((a) => '- ' + a).join('\n') || '- (none)',
+    __STORY_DESCRIPTION__: String(story.description || ''),
+    __VC_LIST__: vc.map((v, i) => `${i + 1}. ${v}`).join('\n'),
+    __OBSERVABILITY_RULES__: VC_OBSERVABILITY_RULES,
+  });
+}
+
+/**
+ * Extracted verbatim so its migration can be proven byte-for-byte.
+ */
+function buildVcRegeneratePrompt({ story, flags, siteBlock, env }) {
+  // The rules constant and the form samples are VALUES, not template text: the guard reads
+  // the same rules, and the samples are a project's own worked examples. Baking either in
+  // would fork it — and the first version of this migration did exactly that with the
+  // samples, silently, because the capture ran with none configured.
+  return renderEngineTemplate('vc-regenerate', {
+    __FLAG_LIST__: flags.map((x) => '- ' + x).join('\n'),
+    __SITE_BLOCK__: siteBlock,
+    __AC_LIST__: (story.acceptanceCriteria || []).map((a) => '- ' + a).join('\n') || '- (none)',
+    __STORY_DESCRIPTION__: String(story.description || ''),
+    __OBSERVABILITY_RULES__: VC_OBSERVABILITY_RULES,
+    __FORM_SAMPLES__: vcFormSamples(env) ? `\n${vcFormSamples(env)}\n` : '',
+  });
+}
+
+function _firstJsonArray(out) {
+  const m = out && out.match(/\[[\s\S]*?\]/);
+  if (!m) return null;
+  try { const a = JSON.parse(m[0]); return Array.isArray(a) ? a : null; } catch { return null; }
+}
+
+// speckit-brownfield: STRICT, flag-only VC review (never rewrites). Flags a VC
+// that prescribes HOW (mechanism), isn't observable/testable, or fails to cover
+// an AC's intent. Returns an array of flag strings ([] = all clean).
+async function reviewVcViaSpeckit({ story, vc, cycle, logDir }) {
+  const prompt = buildVcReviewPrompt({ story, vc });
+  const out = await _vcLlmCall(prompt, cycle, logDir ? path.join(logDir, `${story.id}-vc-review.log`) : null, story.id, 'speckit', resolveCodelinePath(story));
+  const arr = _firstJsonArray(out);
+  return Array.isArray(arr) ? arr.filter((x) => typeof x === 'string') : [];
+}
+
+// openspec-brownfield: regenerate the VCs addressing the flags (producer side of
+// the autonomous loop). Returns a fresh VC array, or null if it couldn't produce one.
+async function regenerateVcViaOpenspec({ story, flags, cycle, logDir, findings = [] }) {
+  // Ground the regeneration in the LOCATED fix site. Without this the model has
+  // only ticket prose to work from and drifts to whatever the words suggest —
+  // live, "station names" for a promo-code-in-email ticket. The detective already
+  // knows the file and function; withholding it is what makes the criteria
+  // unanchored.
+  const siteBlock = Array.isArray(findings) && findings.length
+    ? `\nTHE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):\n`
+      // WHOLE, not the first five. These are the detective's findings — the files and
+      // functions the fix must touch — and they are the only reason regenerated criteria are
+      // concrete rather than vague. Capping them silently withheld evidence from the agent
+      // whose vagueness the cap was meant to be fixing.
+      + findings.map((f) => `- ${f.file}${f.function ? ` :: ${f.function}` : ''}${f.reason ? ` — ${f.reason}` : ''}`).join('\n')
+      + `\nDo NOT write criteria about areas unrelated to this code.\n`
+    : '';
+
+  const prompt = buildVcRegeneratePrompt({ story, flags, siteBlock });
+  const out = await _vcLlmCall(prompt, cycle, logDir ? path.join(logDir, `${story.id}-vc-regen.log`) : null, story.id, 'openspec', resolveCodelinePath(story));
+  const arr = _firstJsonArray(out);
+  if (!arr) return null;
+  const cleaned = arr.filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim());
+  return cleaned.length ? cleaned : null;
+}
+
+/**
+ * opts.hasAcceptanceCriteria / opts.hasReferencedDocs — what this STORY actually has.
+ *
+ * STEP 3 used to open with three sentences about acceptance criteria unconditionally. A
+ * brownfield ticket has none — the AC gate skips them by design and records "VCs are derived
+ * from the description" — so the model was given ceremony about an empty array and then told
+ * to derive verification from a description that, on AMSD-2041, was 395 characters including
+ * estimate boilerplate. Four thin criteria came out.
+ *
+ * Meanwhile the same prompt carries the documentation fetched from the ticket's own links,
+ * under a header calling it "authoritative over assumption". STEP 3 never named it, so it
+ * informed the implementation and not the verification. The instruction predates that source
+ * by months; nothing updated it when the source arrived.
+ *
+ * A prompt should name the sources this story HAS. Nothing else.
+ */
+function buildBrownfieldArchaeologyBlock(env = process.env, opts = {}) {
+  const isBrownfield = env.EPAM_BROWNFIELD === '1';
+  const hasAcs = opts.hasAcceptanceCriteria !== false;
+  const hasDocs = opts.hasReferencedDocs === true;
+
+  // Only sources that exist are offered. Inviting derivation from documents that were never
+  // fetched, or from criteria the ticket never had, is an invitation to invent one.
+  const _sources = [
+    hasAcs ? 'the acceptance criteria' : '',
+    'the description',
+    hasDocs ? 'the REFERENCED DOCUMENTATION quoted above (authoritative: where a linked document states what the system does observably, derive the check from THAT rather than from a one-line description)' : '',
+  ].filter(Boolean);
+  const _vcSourceValues = [hasAcs ? 'acceptance' : '', 'description', hasDocs ? 'documentation' : '', 'both']
+    .filter(Boolean).join('|');
+  const _acPreamble = hasAcs
+    ? `STEP 3 — VERIFICATION CRITERIA (do NOT touch the acceptance criteria).
+The acceptanceCriteria are the IMMUTABLE ticket intent — copy the existing array through VERBATIM: never reword, split, add, remove, re-scope, or inject any implementation mechanism into them.
+Instead, PRODUCE`
+    // Silence, not a disclaimer. Saying "this ticket has no acceptance criteria" is still a
+    // dependency on them: it spends the model's attention on an absent artefact and invites
+    // it to compensate. A prompt names what exists.
+    : `STEP 3 — VERIFICATION CRITERIA.
+PRODUCE`;
+  const archaeologyBlock = isBrownfield
+    ? renderEngineTemplate('spec-brownfield-mode', {
+        __AC_PREAMBLE__: _acPreamble,
+        __SOURCES__: _sources.join(' AND '),
+        __VC_RULES__: VC_OBSERVABILITY_RULES,
+        __VC_FORM_SAMPLES__: vcFormSamples(env) ? `\n\n${vcFormSamples(env)}\n` : '',
+        __VC_SOURCE_VALUES_QUOTED__: _vcSourceValues.split('|').map((v) => `"${v}"`).join(', '),
+        __UNREACHABLE_EXTERNALS__: unreachableExternalsConstraint(),
+      })
+    : '';
+  const schemaLine = isBrownfield
+    ? `\n  "storyKind":"defect|novel",\n  "verificationCriteriaDetail":[{"criterion":"<observable check>","observer":"end user|tester|api client|operator","surface":"<what they look at>","setup":"<optional precondition, e.g. a mocked client signalling a change>"}],\n  "vcSource":"${_vcSourceValues}",\n  "locationHint":[{"file":"path/relative/to/repo","function":"functionName","reason":"why this location — the fix site for a defect, the attachment point it integrates with for a novel story"}],`
+    : '';
+  return { archaeologyBlock, schemaLine };
+}
+
+// recordDetectiveRound — per-round telemetry for the spec pass's dominant cost.
+//
+// Measured 2026-07-30 across three lanes of one run: the spec pass is ~16 min
+// and the detective is 61-72% of it (11.6 / 9.8 / 9.4 min), while openspec and
+// speckit together take ~1.5 min. Every lane took roughly the same time on a
+// one-line ticket, which is the signature of a fixed exploration budget rather
+// than work proportional to the story.
+//
+// Before capping CODEGRAPH_DETECTIVE_MAX_TOOL_CALLS (currently 7) we need to
+// know whether the later rounds FIND anything or merely re-read: starving the
+// detective degrades fixSiteAnalysis, which is what the write-time reuse guard
+// now depends on. Cutting the wrong knob would trade cycle time for exactly the
+// prescription quality we just built enforcement around.
+//
+// Writes one line per attempt to detective-rounds.jsonl. Never throws — this is
+// measurement, and measurement must not be able to fail a run.
+function recordDetectiveRound(logDir, row) {
+  try {
+    if (!logDir) return;
+    fs.appendFileSync(path.join(logDir, 'detective-rounds.jsonl'),
+      JSON.stringify({ ...row, timestamp: new Date().toISOString() }) + '\n');
+  } catch { /* telemetry must never break the pass */ }
+}
+
+// checkFixSiteCoverage(findings, verificationCriteria) — deterministic (no
+// LLM) check: does ANY finding's file/function/reason/fix text share a
+// meaningful term with each verification criterion, or does a VC describe
+// something no finding touches at all?
+//
+// The detective's prompt is single-causal-site framed ("PRESCRIBE THE
+// MINIMAL FIX" against a "bug ticket") — correct for a one-line defect, but
+// it under-scopes a multi-layer feature. Live AMSD-2041, 2026-08-01: the
+// detective named only 2 files (an SDK client's config + a context provider's
+// reactive rewiring) while team-lead review caught 6+ more blockers sharing
+// no term with either finding — an uninstalled dependency, new fields on
+// query/entry interfaces, a missing API route, missing page-level wiring, and
+// missing tests. None of that was ever flagged as missing; the implementer
+// was handed a prescription that was silently incomplete, then given the
+// tiny "prescribed fix" iteration floor on top of it (see
+// resolve_brownfield_effort_floor).
+//
+// This does not try to re-diagnose the story — it only flags VCs whose
+// wording is entirely absent from what the detective found, so downstream
+// budget/prompt logic can react to a known gap instead of an invisible one.
+// readLatestDetectivePlan(logDir, phase, storyId) — best-effort read of the plan the
+// code-graph-detective wrote for THIS story via ai-run.sh's plan-execute mechanism
+// (ai-run.sh:298-374, plans-<phase>.jsonl). Takes the LATEST matching entry so a
+// ladder-escalated retry's plan is what gets checked against the final answer, not a
+// stale first attempt. Returns null on any failure (file absent — plan-execute disabled
+// or Langfuse-only fallback path; nothing parses) — this must never break the detective
+// pass it is only auditing.
+function readLatestDetectivePlan(logDir, phase, storyId) {
+  try {
+    if (!logDir) return null;
+    const p = require('path').join(logDir, `plans-${phase || 'unknown'}.jsonl`);
+    const lines = require('fs').readFileSync(p, 'utf8').split('\n').filter(Boolean);
+    let latest = null;
+    for (const line of lines) {
+      let row;
+      try { row = JSON.parse(line); } catch { continue; }
+      if (row && row.agent === 'code-graph-detective' && row.story === storyId && typeof row.plan === 'string') {
+        latest = row.plan;
+      }
+    }
+    return latest;
+  } catch { return null; }
+}
+
+// checkPlanExecutionAlignment(planText, findings) — deterministic (no LLM), term-overlap
+// check: does the detective's OWN stated plan share vocabulary with its OWN final answer?
+//
+// Confirmed empirically 2026-08-05 on AMSD-2041: three separate detective runs each
+// planned to investigate `useContent` ("I'll trace useContent to its definition and
+// callees... the fix likely belongs in the content-fetching layer"), then landed on
+// completely different final files — none of them useContent — sharing no term with the
+// plan. The execute-phase prompt explicitly permits abandoning the plan ("If carrying out
+// the plan showed it to be wrong, say so and answer correctly rather than following it"),
+// but nothing checked whether that happened, so the drift was invisible. This does not
+// try to force the model to follow its plan — a plan legitimately can turn out wrong once
+// real exploration starts, and a plan that says so ("useContent turned out to be wrong,
+// pivoting to X") is aligned by construction, since X then appears in the plan text too.
+// It only makes an UNEXPLAINED divergence observable.
+function checkPlanExecutionAlignment(planText, findings) {
+  const plan = String(planText || '').trim();
+  const findingList = Array.isArray(findings) ? findings : [];
+  if (!plan || findingList.length === 0) return { aligned: true, planTerms: [], findingTerms: [] };
+
+  // High-signal terms only — the detective's own prompt style consistently backtick-quotes
+  // the symbols/files it names ("I'll trace `useContent` to its definition"), and a
+  // camelCase/PascalCase identifier is itself distinctive. Generic prose words (the plan's
+  // and the finding's "reason" text both being about the same feature) trivially share
+  // topic vocabulary ("content", "preview") and would false-positive on every comparison —
+  // this is the same reason checkFixSiteCoverage filters recurring topic terms, just done
+  // here by only ever looking at identifier-shaped tokens in the first place.
+  const backticked = (s) => [...String(s || '').matchAll(/`([A-Za-z_][A-Za-z0-9_.]*)`/g)].map((m) => m[1]);
+  const camelOrPathLike = (s) => (String(s || '').match(/\b[A-Za-z_][A-Za-z0-9_]*[A-Z][A-Za-z0-9_]*\b|[A-Za-z0-9_-]+\.[a-z]{2,4}\b/g) || []);
+  const norm = (t) => t.toLowerCase().replace(/\.[a-z]{2,4}$/i, '').replace(/[^a-z0-9]/g, '');
+
+  const planIdents = [...new Set([...backticked(plan), ...camelOrPathLike(plan)].map(norm).filter((t) => t.length >= 4))];
+  const findingIdents = [...new Set(
+    findingList.flatMap((f) => [
+      ...backticked(f.file), ...camelOrPathLike(f.file),
+      ...backticked(f.function), ...camelOrPathLike(f.function),
+      f.function || '',
+      (f.file || '').split('/').pop() || '',
+    ]).map(norm).filter((t) => t.length >= 4)
+  )];
+  // A plan with no identifiable symbol/file names (pure prose) has nothing concrete to
+  // check — that is not evidence of misalignment, only of an unstructured plan.
+  if (!planIdents.length) return { aligned: true, planTerms: planIdents, findingTerms: findingIdents };
+
+  const aligned = planIdents.some((pt) =>
+    findingIdents.some((ft) => ft === pt || ft.includes(pt) || pt.includes(ft))
+  );
+  return { aligned, planTerms: planIdents, findingTerms: findingIdents };
+}
+
+/**
+ * The coverage check as the pipeline actually calls it: findings, criteria and the derived
+ * vocabulary, pulled off one story.
+ *
+ * This exists because the argument list was written out twice and the two copies disagreed.
+ * The main path was missing a comma between the second and third arguments, so it read as
+ * `verificationCriteria || ([](...).guardVocabulary)` — valid JavaScript that silently passed
+ * TWO arguments. With no vocabulary checkFixSiteCoverage returns `complete: null`, and
+ * claude.sh maps null to true, so the coverage gate was fail-open on every run while
+ * appearing to work. With no criteria at all the same expression CALLS the array literal and
+ * throws. One call site, executed by a test, instead of two hand-written argument lists.
+ */
+function coverageForStory(story) {
+  const s = story || {};
+  return checkFixSiteCoverage(
+    s.fixSiteAnalysis || [],
+    s.verificationCriteria || [],
+    (s.specification || {}).guardVocabulary,
+  );
+}
+
+function checkFixSiteCoverage(findings, verificationCriteria, vocabulary) {
+  // THE WORD LIST IS DERIVED, NOT BAKED.
+  //
+  // This filtered "unimportant" words with a hardcoded English stopword list living in the
+  // engine — the hardcoding rule's named example, and the thing that decided which criteria
+  // counted as addressed. It also could not work: a list written in English scores criteria
+  // phrased in a project's own domain language by raw word overlap.
+  //
+  // This pipeline already derives word lists with an agent, in context, per ticket — codeline
+  // discovery reports terms that "carry no selection signal", and the guard-vocabulary agent
+  // returns {blacklist, whitelist} at each guard seam. That derived vocabulary is the input
+  // here.
+  //
+  // With no vocabulary there is NO VERDICT. Falling back to a guessed list would produce a
+  // confident answer from nothing, and something downstream would trust it.
+  const noise = new Set(
+    (vocabulary && Array.isArray(vocabulary.blacklist) ? vocabulary.blacklist : [])
+      .map((b) => String((b && b.term) || b || '').toLowerCase())
+      .filter(Boolean),
+  );
+  if (!noise.size) {
+    return {
+      complete: null,
+      uncoveredVerificationCriteria: [],
+      reason: 'no derived vocabulary available — coverage not computed rather than guessed',
+    };
+  }
+
+  const tokenize = (str) => (String(str || '').toLowerCase().match(/[a-z][a-z0-9]{3,}/g) || [])
+    .filter((t) => !noise.has(t));
+
+  const findingList = Array.isArray(findings) ? findings : [];
+  const findingTermSets = findingList.map((f) =>
+    new Set(tokenize(`${f.file || ''} ${f.function || ''} ${f.reason || ''} ${f.fix || ''}`)),
+  );
+  const numFindings = findingList.length;
+  const dfFindings = new Map();
+  for (const set of findingTermSets) for (const t of set) dfFindings.set(t, (dfFindings.get(t) || 0) + 1);
+  // A term in EVERY finding is the prescription's own recurring topic vocabulary — it cannot
+  // prove a SPECIFIC criterion is addressed, since it would match almost anything about the
+  // same work. Only meaningful once there are 2+ findings to compare.
+  const isTopicNoise = (t) => numFindings >= 2 && dfFindings.get(t) === numFindings;
+
+  const uncovered = [];
+  for (const vc of (Array.isArray(verificationCriteria) ? verificationCriteria : [])) {
+    const vcTerms = tokenize(vc).filter((t) => !isTopicNoise(t));
+    if (!vcTerms.length) continue;
+    const covered = findingTermSets.some((set) => vcTerms.some((t) => set.has(t)));
+    if (!covered) uncovered.push(vc);
+  }
+  return { complete: uncovered.length === 0, uncoveredVerificationCriteria: uncovered };
+}
+
+
+// inferStoryKindHint(story) — a cheap, deterministic, zero-LLM-cost PRE-classification
+// signal for the code-graph-detective, which runs BEFORE the real storyKind
+// classification exists (see the comment at runCodeGraphDetective's call site: it runs
+// early so downstream stages can ground on its findings). Reuses the exact trust
+// direction already established downstream (line ~3273: "anchoring storyKind=defect...
+// Jira ground truth") — a ticket Jira itself typed as "Bug" is almost always a genuine
+// defect; anything else defaults to novel rather than guessing wrong in the more
+// expensive direction (inventing a nonexistent "cause" for new work). This is a HINT the
+// detective's own prompt tells it to trust ticket content over, not an override of the
+// later authoritative SPEC_AGENT classification.
+function inferStoryKindHint(story) {
+  // WHICH TRACKER TYPES MEAN "DEFECT" IS PROJECT DATA, DECLARED WHERE THE PROJECT'S OTHER
+  // FACTS ARE. This read `t === 'bug'`. That is this Jira's word; another says "Defect",
+  // "Fault", "Incident", or a localised name — and there EVERY story classified novel, so the
+  // detective was never asked for a causal site or a quoted broken line, real defects got the
+  // feature contract, and grounding dropped from quotation to provenance. Silently: no gate,
+  // no warning, just worse answers. That is the failure this step was built to prevent,
+  // reachable through a config mismatch nobody would see.
+  //
+  // Undeclared means NOVEL, deliberately: inventing a cause for work that has none is the more
+  // expensive error, and the one the reality anchor exists to prevent.
+  const declared = String(process.env.EPAM_DEFECT_ISSUE_TYPES || '')
+    .split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
+  if (!declared.length) return 'novel';
+  const t = String((story && (story.issueType || story.issuetype)) || '').toLowerCase().trim();
+  return t && declared.includes(t) ? 'defect' : 'novel';
+}
+
+/**
+ * minEvidenceChars() — how short a quote stops being evidence.
+ *
+ * `if (needle.length < 8)` decided this. `a === b` is 7 characters and `x != y` is 6, so a
+ * defect whose broken expression is genuinely short had every finding scored null, was judged
+ * UNGROUNDED, and retried three times before passing through flagged — no config mismatch
+ * required. Declared now, defaulting to the previous value so nothing changes silently.
+ *
+ * A malformed or zero declaration falls back to the default rather than to zero: zero would
+ * accept "}" as evidence, which is worse than the constant it replaced.
+ */
+function minEvidenceChars() {
+  const DEFAULT = 8;
+  const n = Number(process.env.EPAM_MIN_EVIDENCE_CHARS);
+  return Number.isFinite(n) && n > 1 ? n : DEFAULT;
+}
+
+// A rejection-driven re-invocation (the SPEC_REVIEW corrective re-call below)
+// must count against the agent's own inference ladder, exactly like Step
+// 3.6's writer re-implementation and team-lead-review.sh's own review-agent
+// ladder now do (2026-08-06, "the ladder logic applies to ALL agents, not
+// only Step 3.6"). ai-run.sh resumes an agent's ladder across separate
+// process invocations automatically (see lib/story-retry-state.sh), but only
+// for escalations IT decided on internally (a transport-level failure) — it
+// has no way to know a reviewer rejected a call that technically succeeded.
+// Shells out to the real bash helper (not a JS reimplementation) so the key
+// derivation can never drift from what ai-run.sh itself reads.
+function advanceAgentLadderEscalation(logDir, agentName, storyId) {
+  if (!logDir) return;
+  try {
+    const lib = path.join(__dirname, 'lib', 'story-retry-state.sh');
+    execSync(
+      `source ${JSON.stringify(lib)}; ` +
+      `key="$(ai_ladder_state_key ${JSON.stringify(agentName)} ${JSON.stringify(storyId || 'global')})"; ` +
+      `advance_ladder_escalation ${JSON.stringify(logDir)} "$key"`,
+      { shell: '/bin/bash', stdio: 'ignore' },
+    );
+  } catch { /* best-effort — a failed advance must never block the corrective call itself */ }
+}
+
+/**
+ * detectivePrescription(kind) — what the detective is asked to PRODUCE.
+ *
+ * A defect and a feature need different answers, and asking a feature for a defect's answer
+ * gets half the work. Live 2026-08-08 (AMSD-2041): the detective returned ONE fix site — the
+ * SDK init — for a story that also needs a provider wrapped around the app and a refresh
+ * callback wired into every fetch surface. The pipeline flagged it ("Single fix site
+ * prescribed but work spans 5+ files across 3 codelines") and proceeded anyway.
+ *
+ * That was the CONTRACT, not the model. The prompt demanded "the MINIMAL FIX", "the SMALLEST
+ * change", "STOP as soon as you identify the file that computes the wrong value", and a
+ * machine-verified brokenLine quoted from the file. Nothing is broken in a feature, so the
+ * only site expressible under those rules is the one place existing code is touched — every
+ * other layer is unsayable.
+ *
+ * A kind hint already existed and the prompt branched on it for ONE paragraph; the forty
+ * lines after it applied unconditionally, so the defect contract won on a story already
+ * classified novel.
+ *
+ * Unknown kinds take the NOVEL contract: inventing a cause for work that has none is the more
+ * expensive error, and the one the reality anchor exists to prevent.
+ */
+function detectivePrescription(kind) {
+  // RENDERED FROM THE TEMPLATE LAYER. Two bodies, not one prompt with a branch: the two arms say
+  // OPPOSITE things about the most consequential field — brokenLine is required for a defect and
+  // must be empty for novel work — and a branching prompt hides which set an agent received.
+  return renderEngineTemplate('detective-prescription', {}, kind === 'defect' ? 'defect' : 'novel');
+}
+
+/**
+ * detectiveCorrectionNeeded({review, coverage, brownfield}) — should the detective be
+ * re-invoked once, and what should it be told?
+ *
+ * Two signals, one bounded correction:
+ *
+ *   1. The reviewer judged the detective's answer diverged from its own plan with no stated
+ *      reason. This trigger already existed and works.
+ *   2. Verification criteria that NO prescribed fix site addresses. This was computed, stored
+ *      next to the verdict, and consumed by nothing. Live 2026-08-08 (AMSD-2041): three lanes
+ *      reported uncovered criteria — including the real-time subscription the whole feature
+ *      depends on — and the run reached the writer gate with a manifest missing it. The
+ *      observation surfaced only as a line item in the COST estimate.
+ *
+ * Same lesson as the roster reviewer: findings nothing consumes make a critic, not a gate.
+ *
+ * An UNMEASURED gap is not a gap. coverage.complete === null means no derived vocabulary was
+ * available so coverage was never computed; correcting against that spends a model call
+ * chasing nothing.
+ *
+ * The uncovered criteria travel WITH the decision: "try again" re-samples the same answer,
+ * and the detective can only close a gap it is told about.
+ */
+function detectiveCorrectionNeeded({ review, coverage, brownfield } = {}) {
+  const none = { correct: false, reasons: [], uncovered: [] };
+  if (!brownfield) return none;
+
+  const reasons = [];
+  if (review && review.planAlignment === 'unexplained_mismatch') {
+    reasons.push('the answer diverged from its own plan with no stated reason');
+  }
+
+  const uncovered = (coverage && coverage.complete === false
+    && Array.isArray(coverage.uncoveredVerificationCriteria))
+    ? coverage.uncoveredVerificationCriteria
+    : [];
+  if (uncovered.length) {
+    reasons.push(`${uncovered.length} verification criterion/criteria have no prescribed fix site`);
+  }
+
+  return { correct: reasons.length > 0, reasons, uncovered };
+}
+
+/**
+ * renderDetectiveCorrection(ctx) — what a re-invoked detective is TOLD.
+ *
+ * Two kinds of correction, and the second was missing entirely: the block rendered the prior
+ * plan, the prior findings and the reviewer's note, and dropped the uncovered criteria on the
+ * floor. Carrying them in the decision object is not enough — a correction the agent is never
+ * told about is a re-sample of the same answer.
+ *
+ * The uncovered criteria are quoted VERBATIM, and the instruction is additive: keep the sites
+ * already found and add the ones that close these gaps. A correction that starts over trades
+ * one gap for another.
+ */
+function renderDetectiveCorrection(ctx) {
+  if (!ctx) return '';
+  const uncovered = Array.isArray(ctx.uncoveredCriteria) ? ctx.uncoveredCriteria.filter(Boolean) : [];
+
+  const planPart = (ctx.reviewNotes || ctx.priorPlan)
+    ? `\nYOUR PREVIOUS ANSWER FOR THIS TICKET WAS REJECTED. Your previous plan was:\n"${ctx.priorPlan || '(no plan recorded)'}"\nYour previous final answer was:\n${JSON.stringify(ctx.priorFindings || [], null, 2)}\n${ctx.reviewNotes ? `The reviewer's reason: "${ctx.reviewNotes}"\nAddress this explicitly: either explain why your plan was wrong and justify the new direction, or return to what your plan identified. Do not silently repeat the same unexplained jump.\n` : ''}`
+    : '';
+
+  const coveragePart = uncovered.length
+    ? `\nYOUR PREVIOUS ANSWER LEFT WORK UNACCOUNTED FOR. These verification criteria describe behaviour that NO site you named would produce:\n${uncovered.map((c) => `  - ${String(c)}`).join('\n')}\n\nEach one needs a place where that behaviour becomes possible. KEEP the sites you already found — they were not rejected — and ADD the ones that close these gaps. If a criterion genuinely needs no code change, say which and why; do not silently drop it. If it needs something that does not exist yet, name where it must be created and what it attaches to.\n`
+    : '';
+
+  return planPart + coveragePart;
+}
+
+/**
+ * detectiveAnswerIsGrounded({findings, kind}) — is this answer backed by real code?
+ *
+ * GROUNDING MEANS DIFFERENT THINGS FOR THE TWO CONTRACTS, and the validator did not know that.
+ * It required `evidenceVerified === true` — a quoted expression found in the named file — for
+ * every story. The novel prescription tells the detective to leave `brokenLine` empty, because
+ * a feature has nothing broken to quote. So a CORRECT novel answer scored zero grounded
+ * findings, was rejected as UNGROUNDED, and was re-tried three times before being passed
+ * through flagged. Live 2026-08-08 on AMSD-2041, three model calls per story to fail a check
+ * that could not pass.
+ *
+ * That is the same defect as the prompt had, committed while fixing it: the demand was moved
+ * out of the instructions and left in the enforcement.
+ *
+ * A feature IS groundable, just not by quotation:
+ *   - defect: a quoted expression that really is in the file it names.
+ *   - novel:  PROVENANCE — the files it names exist. That is what the novel prompt asks for
+ *             ("every file and symbol you name must have been returned to you by a tool"), so
+ *             it is what this checks. A verified quote also grounds a novel answer; it is
+ *             welcome, merely not required.
+ *
+ * Unknown kind is judged as novel: demanding a quote for work that has none is the failure
+ * this exists to prevent.
+ */
+function detectiveAnswerIsGrounded({ findings, kind } = {}) {
+  const list = Array.isArray(findings) ? findings : [];
+  if (!list.length) return { grounded: false, reason: 'no findings at all' };
+
+  if (kind === 'defect') {
+    const quoted = list.filter((f) => f && f.evidenceVerified === true);
+    return quoted.length
+      ? { grounded: true, reason: `${quoted.length} finding(s) quote code verified in the file they name` }
+      : {
+        grounded: false,
+        reason: list.some((f) => f && f.evidenceVerified === false)
+          ? 'the quoted code is not in the file it names — a diagnosis about code that is not there'
+          : 'no finding quoted an existing broken expression, and a defect must name the wrong line',
+      };
+  }
+
+  // novel (and anything unrecognised)
+  if (list.some((f) => f && f.evidenceVerified === true)) {
+    return { grounded: true, reason: 'a finding quotes code verified in the file it names' };
+  }
+  const phantom = list.filter((f) => f && f.fileVerified === false);
+  if (phantom.length) {
+    return {
+      grounded: false,
+      reason: `${phantom.length} finding(s) name a file that does not exist in this codeline — invented, not investigated`,
+    };
+  }
+  const real = list.filter((f) => f && f.fileVerified === true);
+  return real.length
+    ? { grounded: true, reason: `${real.length} finding(s) name files that exist — provenance, the grounding a feature has` }
+    : { grounded: false, reason: 'no finding names a file that could be confirmed to exist' };
+}
+
+// runCodeGraphDetective(story, logDir) — invokes the code-graph-detective
+// agent: a tool-using LLM (GLM-5.1, upper-tier ladder) that iterates CodeGraph
+// queries and traces callers to find the CAUSAL fix site for a symptom-worded
+// bug ticket. This is the ROBUST path (proven live 2026-07-23, AMSD-1820):
+// deterministic single/union queries reliably surface only the display layer
+// the symptom words describe; only judgment-driven iteration + caller-tracing
+// converges on the cause. Returns an array of repo-relative fix-site files
+// (may be empty). Best-effort: any failure (no repo, tool unavailable, parse
+// error, timeout) returns [] so the spec pass proceeds unblocked.
+// Lazy require: this module is loaded by tools that never invoke an agent.
+let _promptLibraryMod = null;
+function _promptLibrary() {
+  if (!_promptLibraryMod) _promptLibraryMod = require('./lib/prompt-library');
+  return _promptLibraryMod;
+}
+
+function parseDetectiveFindings(out, repoPath) {
+  const m = out && out.match(/\[\s*\{[\s\S]*?\}\s*\]/);
+  if (!m) return null;
+  let arr;
+  try { arr = JSON.parse(m[0]); } catch { return null; }
+  const seen = new Set();
+  const findings = [];
+  for (const h of (Array.isArray(arr) ? arr : [])) {
+    if (!h || typeof h.file !== 'string') continue;
+    const file = h.file.replace(/^\.?\//, '');
+    if (!file || seen.has(file)) continue;
+    seen.add(file);
+    const helper = typeof h.helper === 'string' ? h.helper : '';
+    const brokenLine = typeof h.brokenLine === 'string' ? h.brokenLine : '';
+    findings.push({
+      file,
+      function: typeof h.function === 'string' ? h.function : '',
+      reason: typeof h.reason === 'string' ? h.reason : '',
+      fix: typeof h.fix === 'string' ? h.fix : '',
+      helper,
+      brokenLine,
+      // true = named helper exists; false = named but not found (likely
+      // hallucinated); null = no helper named. Only false downgrades the fix.
+      fixVerified: verifyDetectiveHelper(helper, repoPath),
+      // true = the quoted broken expression is really in the named file;
+      // false = it is not (a diagnosis about code that does not exist —
+      // the live 2026-07-26 failure); null = nothing quoted.
+      evidenceVerified: verifyDetectiveEvidence(brokenLine, file, repoPath),
+      // PROVENANCE. A feature has no broken line to quote, so "does the file you named
+      // actually exist" is the grounding available to it — and it is the thing the novel
+      // prompt asks for. true = present, false = named but absent (invented), null = could
+      // not be checked.
+      fileVerified: (() => {
+        if (!file || !repoPath) return null;
+        try { return fs.existsSync(path.resolve(repoPath, file.replace(/^\.?\//, ''))); }
+        catch { return null; }
+      })(),
+      // TWO FIELDS THE PROMPT CALLS REQUIRED AND THIS PARSER THREW AWAY.
+      //
+      // This builds a NEW object from a hand-written list of keys, so anything the prompt
+      // asks for and this list omits is discarded silently — the model answers correctly and
+      // the answer is destroyed forty lines later. Both of these were omitted:
+      //
+      //   changeRequired   — the gate at claude.sh:3021 demands a real diff for every
+      //                      verified site not explicitly false. Absent means required, by
+      //                      design. So a site whose own prescription reads "No edit
+      //                      required" was demanded to show one: the writer correctly changed
+      //                      nothing, the gate rejected the story, and every retry reproduced
+      //                      it. Live AMSD-2041, all three codelines, three runs, ~nine
+      //                      attempts. Verified 2026-08-11 that the model DOES emit it
+      //                      (false/true/true/true/false across five sites) — the prompt was
+      //                      never the problem.
+      //   requiredPackages — the dependency gate at ~6385 reads it to check a prescribed fix
+      //                      against what the codeline actually installs. It has never fired:
+      //                      the field is absent from every PRD this pipeline has written.
+      //
+      // undefined, NOT false, for an absent changeRequired. The gate distinguishes "the
+      // detective said no edit" from "nothing said anything", and defaulting here would
+      // silently exempt every site the model declined to answer for.
+      //
+      // The deeper defect stands: this list and the JSON example in the prompt are two
+      // hand-maintained copies of one schema, and they drifted. They should be generated from
+      // a single declaration so a required field cannot be dropped by omission again.
+      changeRequired: typeof h.changeRequired === 'boolean' ? h.changeRequired : undefined,
+      requiredPackages: Array.isArray(h.requiredPackages)
+        ? h.requiredPackages.filter((n) => typeof n === 'string' && n.trim()).map((n) => n.trim())
+        : [],
+      // WHAT THIS CHANGE DOES TO THE VALUE, and WHERE IT RUNS. Both undefined when unstated —
+      // never defaulted. A plan whose sites all "carry" describes delivering a value it never
+      // obtains, which is what shipped on 2026-08-12: a signal was wired, a re-render was
+      // forced, and the data on the page was still the one fetched at page load.
+      deliveryRole: ['produces', 'carries', 'verifies'].includes(h.deliveryRole)
+        ? h.deliveryRole : undefined,
+      runsIn: ['server', 'browser', 'both', 'n/a'].includes(h.runsIn) ? h.runsIn : undefined,
+    });
+  }
+  return findings;
+}
+
+
+/**
+ * Does this prescription ever OBTAIN the value it promises to deliver?
+ *
+ * Live 2026-08-12: every site carried or verified and none produced. The plan wired a change
+ * signal, forced a re-render, and never fetched anything — so the page re-rendered the data it
+ * had loaded at page load. The writer built it exactly as prescribed and the review approved it.
+ *
+ * FAILS CLOSED. A site that did not state a deliveryRole does not count as a producer: "not
+ * stated" and "produces" are different claims, and collapsing them is the shape of nearly every
+ * defect this pipeline has shipped.
+ *
+ * Structural and generic: it knows nothing about fetching, HTTP, or any framework — only that
+ * SOMETHING in a plan must be the thing that makes the new value exist.
+ */
+function prescriptionMissingSource(sites) {
+  const list = Array.isArray(sites) ? sites.filter(Boolean) : [];
+  if (!list.length) return true;
+  return !list.some((f) => f && f.deliveryRole === 'produces');
+}
+
+/**
+ * surveyHypothesisBlock(codeline, logDir) — what the estate survey already found here.
+ *
+ * THE SURVEY IS OFTEN THE WHOLE ANSWER AND REACHED NOBODY. It reads every codeline before the
+ * roster is minted; live 2026-08-18 its mocka entry named the file, the function, the LINE, the
+ * defect and the missing test — and the detective then spent a top-ladder call with an iteration
+ * budget rediscovering it, because `estateSurvey` is consumed only by mintProjectAgents.
+ *
+ * Handed over as a HYPOTHESIS, not an answer. The survey is evidence about the estate, gathered
+ * before this story's spec existed, and the detective still owns the fix site and still verifies
+ * against the index. Empty whenever there is nothing trustworthy to hand over — no survey, a
+ * survey that did not run, a codeline it never covered, or one it put out of scope — because a
+ * fabricated starting point is worse than none.
+ */
+/**
+ * configSurfaceBlock — the configuration files this codeline carries that govern what its code is
+ * permitted to do, one per line, or an explicit statement that there are none.
+ *
+ * The names come from client-env-boundary-plugin's adapters, which resolve the stack from the
+ * repository's own manifest. Nothing here knows a framework. "None" is stated rather than left
+ * blank: an empty section reads as an omission, and the detective must be able to tell the
+ * difference between "no configuration governs this" and "nobody asked".
+ */
+function configSurfaceBlock(repoPath) {
+  let files = [];
+  try {
+    files = require('../plugins/client-env-boundary-plugin.js').configSurface(repoPath) || [];
+  } catch { files = []; }
+  if (!files.length) return '(this codeline declares no configuration this engine recognises)';
+  return files.map((f) => '- ' + f).join('\n');
+}
+
+function surveyHypothesisBlock(codeline, logDir) {
+  if (!codeline || !logDir) return '';
+  let survey = null;
+  try {
+    survey = JSON.parse(fs.readFileSync(path.join(logDir, 'estate-survey.json'), 'utf8'));
+  } catch { return ''; }
+  if (!survey || survey.ran !== true || !Array.isArray(survey.codelines)) return '';
+  const entry = survey.codelines.find((c) => c && c.codeline === codeline);
+  if (!entry || entry.state !== 'in_scope') return '';
+  const evidence = String(entry.evidence || '').trim();
+  if (!evidence) return '';
+  const surfaces = (Array.isArray(entry.surfaces) ? entry.surfaces : []).filter(Boolean);
+  return [
+    '',
+    'WHAT THE ESTATE SURVEY ALREADY FOUND IN THIS CODELINE — a HYPOTHESIS, not a conclusion.',
+    '',
+    'This was read from the repository before your story was specified. It may be right, partial,',
+    'or aimed at a different story. VERIFY it against the index before you rely on it, and discard',
+    'it if the code does not agree — you own the fix site, not the survey.',
+    '',
+    evidence,
+    surfaces.length ? `\nFiles it named: ${surfaces.join(', ')}` : '',
+    '',
+  ].join('\n');
+}
+
+async function runCodeGraphDetective(story, logDir, opts = {}) {
+  if (process.env.EPAM_BROWNFIELD !== '1') return [];
+  const repoPath = resolveCodelinePath(story);
+  if (!repoPath || !fs.existsSync(repoPath)) return [];
+  // Ensure the index exists (and is git-clean-protected) before the agent queries it.
+  try { if (!_codegraph) _codegraph = require('./lib/codegraph-context'); _codegraph.ensureIndexed(repoPath); } catch { /* tool self-heals too */ }
+
+  const profiles = (() => {
+    try {
+      const p = path.join(automationDirFromLogDir(logDir), 'agents', 'profiles.json');
+      return JSON.parse(fs.readFileSync(p, 'utf8'));
+    } catch { return {}; }
+  })();
+  // THE CODELINE'S OWN DETECTIVE, WHEN ONE WAS MINTED FOR IT.
+  //
+  // The roster mints one investigator per codeline, briefed on that repository's layout,
+  // conventions and the dependencies that matter in it. A lane uses its own; the canonical
+  // code-graph-detective remains the fallback for a codeline with none, and for greenfield.
+  //
+  // Looked up BY CODELINE, never by position: two lanes running the same story must not be
+  // able to pick up each other's investigator. A detective briefed on another repository is
+  // the contamination this per-codeline split exists to prevent.
+  const _mintedDetective = (() => {
+    try {
+      const agentsDir = path.join(automationDirFromLogDir(logDir), 'agents');
+      // The lane's own codeline first. The lane PRD now stamps story.codeline with the lane
+      // it belongs to, so both agree — but EPAM_CODELINE is set by the lane loop itself and
+      // cannot be stale, and this is the seam where reading the wrong one silently briefs an
+      // investigator on another repository.
+      const cl = process.env.EPAM_CODELINE
+        || (story && story.codeline)
+        || process.env.JIRA_DEFAULT_CODELINE || '';
+      const _roster = require('./lib/agent-roster.js');
+      const name = _roster.investigatorForCodeline(agentsDir, cl);
+      if (name && profiles[name]) return { name, brief: profiles[name] };
+
+      // A MISS HERE IS NOT THE SAME AS "NONE WAS MINTED", AND IT USED TO LOOK IDENTICAL.
+      //
+      // The caller falls back to the generic code-graph-detective, which is correct when this
+      // project minted no investigators at all. It is a DEFECT when investigators exist and
+      // none of them answers to this codeline — that means the registry and the lane disagree
+      // about what the codeline is called. Live 2026-08-08: the mint keyed the registry one
+      // way, discovery re-ran across a pause and rewrote the PRD another way, and all three
+      // lanes fell through to the generic detective. Nothing said so; the only signal was the
+      // ABSENCE of a log line, and three freshly minted per-codeline briefs went unused.
+      const _registered = _roster.projectInvestigators(agentsDir);
+      if (_registered.length) {
+        console.warn(
+          `spec-mode: NO INVESTIGATOR for codeline '${cl}' — ${_registered.length} investigator(s) ` +
+          `are registered (${_registered.join(', ')}) but none is bound to this codeline. ` +
+          'Falling back to the generic detective, so this lane runs WITHOUT its per-codeline ' +
+          'brief. This is a codeline-naming mismatch between the roster and the run.',
+        );
+      } else if (name) {
+        console.warn(
+          `spec-mode: investigator '${name}' is registered for codeline '${cl}' but has no brief ` +
+          'in profiles.json — falling back to the generic detective.',
+        );
+      }
+      return null;
+    } catch { return null; }
+  })();
+  const detectiveProfile = _mintedDetective
+    ? _mintedDetective.brief
+    : (profiles['code-graph-detective'] || '');
+  if (_mintedDetective) {
+    console.log(`spec-mode: detective for ${(story && story.codeline) || 'story'} = ${_mintedDetective.name} (minted for this codeline)`);
+  }
+  const scriptDir = path.join(__dirname); // orchestrations/scripts
+  const toolPath = path.join(scriptDir, 'codegraph-agent-query.sh');
+
+  // Activity emit — the detective is a first-class agent (it picks the fix site + helper) and
+  // MUST be visible in agent-activity.html like every other agent. It emitted nothing before,
+  // so it was invisible in the dashboard (found 2026-07-24). Start now; complete/fail at the returns.
+  const _detMon = path.join(scriptDir, 'update-monitor.sh');
+  const _detPhase = process.env.PHASE || story.codeline || 'spec';
+  const _detEmit = (type, message) => emitMonitorEvent({ monitorScript: _detMon, type, message, storyId: story.id, role: 'code-graph-detective' });
+  await _detEmit('spec_update', `[${_detPhase}] code-graph-detective started on ${story.id} — tracing the causal fix site`);
+
+  // Step 1 of the method below needs no judgement, so it is already done — see
+  // precomputeDetectiveExplore(). Spending a scarce iteration on a query we can
+  // compute deterministically is pure waste on a model that keeps exhausting
+  // its budget.
+  // Derive the search vocabulary before seeding: the agent proposes candidate terms from
+  // the ticket and VERIFIES each against this repo's CodeGraph index, so a rare-but-
+  // meaningless token (a brand tag, a label) cannot be amplified by IDF into a top
+  // discriminator. Best-effort at THIS seam only: unlike the VC/AC guards, a missing
+  // vocabulary here does not check nothing — it means an unfiltered query, which is the
+  // pre-existing behaviour. Aborting a run because a search hint could not be refined
+  // would be a worse failure than a noisier first explore.
+  let _searchVocab = null;
+  try {
+    _searchVocab = await deriveGuardVocabulary({
+      promptExec: opts.promptExec,
+      rule: SEARCH_TERM_RULE,
+      statements: [story.title || '', String(story.description || '')].filter(Boolean),
+      story,
+      findings: [],
+      manifestFiles: [],
+      logDir,
+      seam: 'search-query',
+      repoPath,
+      codegraphTool: toolPath,
+    });
+  } catch (err) {
+    console.warn(`spec-mode: search-term vocabulary unavailable for ${story.id} (${err && err.message}) — seeding with an unfiltered query`);
+  }
+  const preseed = precomputeDetectiveExplore(repoPath, story, toolPath, process.env, _searchVocab);
+  const preseedBlock = preseed
+    ? `\nYOUR FIRST \`explore\` HAS ALREADY BEEN RUN FOR YOU — these are its real results (domain nouns only, symptom/presentation words stripped). Treat this as call 1 of your budget; do NOT re-run it. Start from step 2: decide whether the top hit COMPUTES the wrong value or only READS it, and trace from there.\n\n=== PRE-COMPUTED \`explore\` RESULTS ===\n${preseed}\n=== END PRE-COMPUTED RESULTS ===\n`
+    : '';
+
+  const _kindHint = inferStoryKindHint(story);
+  // BOTH HINTS ARE TEMPLATES. The tracker's issue type is a hint in both directions, and the
+  // wrong-way error is asymmetric — see the fragments' own notes.
+  const _kindHintBlock = _kindHint === 'defect'
+    ? renderEngineTemplate('story-kind-hint-defect', {})
+    : renderEngineTemplate('story-kind-hint-other', {
+      __ISSUE_TYPE__: story.issueType || story.issuetype || 'unset',
+    });
+
+  // CORRECTIVE CONTEXT — set only on a Step 4 re-invocation after SPEC_REVIEW flagged
+  // planAlignment: "unexplained_mismatch" for this story's FIRST answer. Mirrors the
+  // existing PRIOR COORDINATOR FLAGS pattern (openspec/speckit re-elaboration, line
+  // ~3273) — the same feedback shape this file already trusts, applied to the detective.
+  const correctiveContext = renderDetectiveCorrection(opts.correctiveContext);
+
+  // THE PROMPT IS A DOCUMENT, NOT A LITERAL.
+  //
+  // Migrated 2026-08-12 to orchestrations/prompts/templates/code-graph-detective.json, and the
+  // project-authority copy the library prefers. Byte-identical to the literal that stood here.
+  //
+  // This prompt decides where every ticket lands and what every writer builds, so how it
+  // reasons must be reviewable as a diff on a document rather than a patch to engine source.
+  // It was also the largest prompt in this file held as code, where every backtick and ${} in
+  // the prose was live — the failure mode that silently corrupted the reviewer's prompt.
+  const prompt = _promptLibrary().buildPrompt(
+    'code-graph-detective',
+    process.env.EPAM_PROJECT_CONFIG_DIR || '',
+    {
+      __DETECTIVE_PROFILE__: detectiveProfile ? detectiveProfile + '\n\n' : '',
+      __REPO_PATH__: repoPath,
+      __TOOL_PATH__: toolPath,
+      __STORY_TITLE__: story.title || '',
+      __STORY_DESCRIPTION__: story.description ? 'Description: ' + String(story.description) + '\n' : '',
+      __STORY_ACS__: (story.acceptanceCriteria || []).map((a) => '- ' + String(a)).join('\n'),
+      // Adjacent in the original with no separator; the library reads __A____B__ as one token.
+      __KIND_AND_CORRECTIVE_CONTEXT__: String(_kindHintBlock) + String(correctiveContext),
+      // What the estate survey already found here — a hypothesis for the detective to verify,
+      // empty when there is nothing trustworthy to hand over. See surveyHypothesisBlock.
+      __SURVEY_HYPOTHESIS__: surveyHypothesisBlock(story && story.codeline, logDir),
+      __PRESEED_BLOCK__: preseedBlock,
+      __PRESCRIPTION_RULES__: detectivePrescription(_kindHint),
+      // The configuration this codeline actually carries, resolved from its OWN manifest by
+      // the adapter that already knows this stack. Empty for a stack no adapter recognises.
+      __CONFIG_SURFACE__: configSurfaceBlock(repoPath),
+    },
+  );
+
+  // Model ladder — cohesive with openspec/speckit (which escalate to their HIGH
+  // model on retry). Attempt 1 uses the base HIGH model (glm-5.1); a retry
+  // escalates up the HIGH ladder (glm-5.1 → kimi-k3 per EPAM_MODEL_LADDER_HIGH),
+  // resolving that model's provider from EPAM_MODEL_PROVIDER_MAP. This is the fix
+  // for the detective hanging on one model in-pipeline (a slow/stuck glm-5.1
+  // endpoint no longer dead-ends — the retry moves to a stronger model on
+  // possibly-different infra). A single hard-pinned model was the non-cohesive
+  // gap vs the rest of the pipeline.
+  const runnerCmd = process.env.AI_RUNNER_CMD || path.join(scriptDir, 'ai-run.sh');
+  const baseModel = process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH || seamStartModel('spec-coordinator');
+  const baseProvider = resolvePromptProvider(process.env);
+  const escalatedModel = ladderNextModel(baseModel, process.env);
+  const escalatedProvider = escalatedModel
+    ? (resolveModelProvider(escalatedModel, process.env) || baseProvider)
+    : null;
+  const execFor = (attempt) => {
+    // attempt 1 → base HIGH model; attempt 2+ → ladder successor (if any).
+    const useEscalated = attempt >= 2 && escalatedModel;
+    const m = useEscalated ? escalatedModel : baseModel;
+    const p = useEscalated ? escalatedProvider : baseProvider;
+    return { exec: { cmd: runnerCmd, args: ['--provider', p, '--model', m] }, model: m, escalated: !!useEscalated };
+  };
+  const logPath = logDir ? path.join(logDir, `${story.id}-codegraph-detective.log`) : null;
+
+  // Extract the findings array from the (possibly chatty) agent output. Returns
+  // null when NO JSON array is present at all — the signal that the model did
+  // not actually answer (e.g. it wandered off and called WriteFile, returning
+  // "The file has been written successfully" instead of the JSON). null → retry;
+  // an explicit [] → the model's real answer of "no fix site".
+  const parseFindings = (out) => parseDetectiveFindings(out, repoPath);
+
+  // The detective is a LOAD-BEARING step for a brownfield defect: if it yields
+  // nothing, the implementer gets symptom ACs with no root cause (the exact
+  // pre-2026-07-23 failure). It must NOT fail silently. Found live 2026-07-23:
+  // with tools enabled the model sometimes "answers" by calling WriteFile and
+  // returns a tool-echo instead of the JSON — the old code swallowed that as a
+  // silent []. Now: retry with a corrective note when the output carries no
+  // JSON array, and log LOUDLY at every empty/failed step.
+  // Default 3 attempts: base model, then two escalated (kimi-k3) tries — a
+  // stuck/slow base endpoint gets a real second chance on a stronger model.
+  const maxAttempts = Number(process.env.CODEGRAPH_DETECTIVE_MAX_ATTEMPTS || '3');
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const { exec, model: attemptModel, escalated } = execFor(attempt);
+    if (escalated) {
+      console.warn(`spec-mode: code-graph-detective ladder escalation for ${story.id} (attempt ${attempt}/${maxAttempts}) — model ${baseModel} → ${attemptModel}`);
+    }
+    const correctiveNote = attempt === 1 ? ''
+      : renderEngineTemplate('detective-retry-note', {});
+    const _roundStarted = Date.now();
+    try {
+      // PHASE 1 — EXPLORE (tools). A reasoning model reliably EXPLORES but does
+      // NOT reliably switch to emitting structured JSON in the same turn: found
+      // live 2026-07-23 it ended on a narrative "Now let me read the full X to
+      // understand…" and hit the iteration cap mid-sentence, so there was no
+      // JSON to parse/persist. So phase 1's job is just to INVESTIGATE; a
+      // separate no-tools phase 2 does the structured output. If phase 1 happens
+      // to already contain JSON (it sometimes does), we use it directly.
+      const out = await runClaude(exec, prompt + correctiveNote, logPath, {
+        AI_GATE_ALLOW_TOOLS: '1',           // enable tools so it can call the CodeGraph script via Bash
+        // Output-token budget: the detective runs on a REASONING model (GLM-5.1)
+        // whose <think> blocks count against the output budget. SPEC_MODE_MAX_
+        // OUTPUT_TOKENS (6000) is tuned for non-reasoning spec elaboration and is
+        // far too small here — the model exhausts it mid-reasoning and emits an
+        // EMPTY result BEFORE writing the JSON (found live 2026-07-23: nailed the
+        // fix on a run that fit under 6000, emitted nothing on a run that didn't —
+        // the source of the detective's non-determinism). Floor it high so the
+        // model has room to think AND write. Same class as claude.sh's
+        // resolve_brownfield_effort_floor (24576) for the impl agent.
+        EPAM_MAX_OUTPUT_TOKENS: process.env.CODEGRAPH_DETECTIVE_MAX_OUTPUT_TOKENS || '24576',
+        // STRUCTURAL guard: the detective is read-only — it queries CodeGraph via
+        // Bash and outputs JSON. Restricting it to `bash` means it CANNOT reach
+        // write_file, so it can never "answer" by writing a file and losing its
+        // real output (the live 2026-07-23 failure). Prompt wording alone did not
+        // hold; this makes the failure structurally impossible. Inherited by the
+        // grandchild `epam run` through runClaude's env merge (spawn env).
+        EPAM_ALLOWED_TOOLS: process.env.CODEGRAPH_DETECTIVE_ALLOWED_TOOLS || 'bash',
+        PROJECT_ROOT: repoPath,
+        // Iteration budget. HARD-WON lesson (2026-07-23): a GENEROUS cap is
+        // actively harmful here. At 40 the model THRASHED — 40 tool calls,
+        // 680K input tokens, ~$0.17, and it hit the cap returning "Agent reached
+        // maximum iterations" with NO fix (the real cause of the detective's
+        // empty output). A free-form loop lets glm-5.1 explore forever instead
+        // of committing. A TIGHT cap + the prompt's "output your best guess by
+        // call 6" forces it to decide (it converges in a few calls when it does
+        // converge — proven live). 10 = 6 tool calls + room to write the JSON.
+        // B21 (2026-07-24): was 10, which exhausted on THREE consecutive runs —
+        // "reached maximum iterations (10)" appears 16 times in today's logs, every
+        // one the detective — forcing a glm-5.1 -> kimi-k3 ladder escalation each
+        // time. A SUCCESSFUL pass used 7 round-trips, so 10 sat right on the
+        // boundary: the top-of-ladder model fits, the cheaper one does not, and we
+        // paid the escalation on every run. 20 is ~2x the observed need and still
+        // BOUNDED — a runaway agent must terminate, and the ladder + self-heal
+        // remain the backstop rather than being replaced by a bigger budget.
+        // Raised 20 -> 25 on 2026-07-24: 20 still exhausted on a self-heal retry pass.
+        EPAM_MAX_ITERATIONS: process.env.CODEGRAPH_DETECTIVE_MAX_ITERATIONS || '25',
+        // Tool budget — the limit the prompt above has always CLAIMED ("HARD
+        // LIMIT: 6 tool calls total. This is not a suggestion.") and which
+        // nothing enforced. The model explored past 6 and hit the ITERATION
+        // cap with no answer, discarding the investigation; that is what every
+        // one of the 16 recorded ladder escalations actually was. Raising
+        // EPAM_MAX_ITERATIONS three times never fixed it because it is the
+        // wrong limit. At the budget, AgentRunner withdraws the tools and
+        // demands the answer, so "keep querying instead of committing" stops
+        // being reachable. 7 = the prompt's 6 calls plus the pre-seeded
+        // explore already handed over, and one successful live pass used 7
+        // round-trips. EPAM_MAX_ITERATIONS stays as the outer backstop.
+        EPAM_MAX_TOOL_CALLS: process.env.CODEGRAPH_DETECTIVE_MAX_TOOL_CALLS || String(specModeDefaults().perSeam.codegraphDetective),
+        // IDENTITY, FOR TWO CONSUMERS. Without it every Langfuse trace in the run renders as
+        // `llm-stream (uuid)` with no agent, no story and no prompt — 35 identical unreadable
+        // rows — AND ai-run.sh keys the ladder and the self-heal KB on it, so this agent's
+        // constraints and episodes get filed under whatever ran before it.
+        //
+        // It was set TWICE in this same object literal, once for each reason, neither addition
+        // aware of the other. Same value, so nothing misbehaved — but the second silently won,
+        // and a future edit to the first would have had no effect at all.
+        EPAM_AGENT_NAME: 'code-graph-detective',
+        EPAM_STORY_ID: (story && story.id) || '',
+        // The detective TRACES the causal fix site + picks the helper to reuse —
+        // correctness is paramount and it must reason carefully. With story-point-
+        // derived LOW effort it gave different/wrong helpers across passes (live
+        // 2026-07-24: getPreciseFloatNumber vs the correct parseDispatchLineItemKey).
+        // Force HIGH effort for the brownfield ladder — less guessing, more tracing.
+        // (Distinct from VC generation, which stays LOW: that is a restate task where
+        // high effort drives prescriptive drift.) Env-overridable.
+        EPAM_REASONING_EFFORT: process.env.CODEGRAPH_DETECTIVE_REASONING_EFFORT || 'high',
+        // Whatever this seam is configured to run with — ladder, effort, temperature — read
+        // from the registry by name. An explicit env override above still wins, and a seam
+        // with no entry simply runs on the run's defaults.
+        ...seamInvocationEnv('code-graph-detective', logDir),
+        // THE IDENTITY TRAVELS WITH THE SEAM: set once above, for both consumers.
+      }, { costAgent: 'code-graph-detective', costStoryId: story && story.id ? story.id : '',
+        // Salvage the detective's JSON even if its process exits non-zero/null
+        // (it emits the answer, then a detached grandchild teardown trips the
+        // exit code). parseFindings validates, so a genuinely broken run still
+        // yields null and retries. Found live 2026-07-23: perfect fix-site JSON
+        // was produced and then discarded on a null exit.
+        salvageOutputOnFailure: true,
+        // Tighter per-attempt timeout so a stalled base-model call (seen live
+        // in-pipeline: glm-5.1 hung 6 min producing nothing while the pipeline
+        // hammered the same OpenRouter key) fails FAST and escalates up the
+        // ladder, instead of burning the full RUNCLAUDE_TIMEOUT_MS per attempt.
+        timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '450000'),
+      });
+      let findings = parseFindings(out);
+      const _phase1Findings = Array.isArray(findings) ? findings.length : 0;
+      // PHASE 2 — EXTRACT (no tools). Phase 1 investigated but ended in prose
+      // (no JSON). Hand that investigation text to a NO-TOOLS turn whose ONLY
+      // possible action is to emit the JSON — it cannot wander off exploring
+      // because it has no tools. This is the robust fix for "reasoning model
+      // won't commit to structured output": separate exploration from output.
+      if (findings === null && out && out.trim() && !/reached maximum iterations/i.test(out)) {
+        const extractPrompt = `A code investigation of a bug produced the analysis below. Extract the single most-likely causal fix site and output ONLY a JSON array — no prose, no markdown fences, then stop. If the analysis is incomplete, output your BEST hypothesis from what it contains (a best guess beats nothing).\n[{"file":"<repo-relative path>","function":"<symbol>","reason":"<why THIS computes the wrong value, not just displays it>","fix":"<the exact minimal change: which line/expression to change and which EXISTING helper (symbol) to reuse>","helper":"<bare existing symbol name to reuse, or empty>"}]\n\n=== INVESTIGATION ===\n${out}`;
+        const extractLog = logPath ? logPath.replace(/\.log$/, '-extract.log') : null;
+        const out2 = await runClaude(exec, extractPrompt, extractLog, {
+          // No AI_GATE_ALLOW_TOOLS → ai-run.sh adds --no-tools → pure extraction.
+          EPAM_MAX_OUTPUT_TOKENS: process.env.CODEGRAPH_DETECTIVE_MAX_OUTPUT_TOKENS || '24576',
+          EPAM_MAX_ITERATIONS: '2',
+        }, { salvageOutputOnFailure: true, costAgent: 'code-graph-detective', costStoryId: story && story.id ? story.id : '', timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '450000') });
+        findings = parseFindings(out2);
+        if (findings && findings.length) {
+          console.warn(`spec-mode: code-graph-detective phase-2 extraction recovered ${findings.length} fix-site(s) for ${story.id} from a narrative phase-1 answer.`);
+        }
+      }
+      // PLAN/EXECUTION ALIGNMENT. Confirmed empirically 2026-08-05 on AMSD-2041: the
+      // detective's own plan (ai-run.sh's plan-execute pass, persisted to
+      // plans-<phase>.jsonl) named `useContent` across three separate runs, and the final
+      // answer landed on a completely different, unrelated file each time — the
+      // execute-phase prompt permits deviating from the plan, but nothing checked whether
+      // that happened, so the drift was invisible. This does not block or retry on a
+      // mismatch — a plan legitimately can turn out wrong once real exploration starts —
+      // it only makes an UNEXPLAINED divergence observable, the same way every other
+      // silent-failure mode in this function already is.
+      const _detectivePlan = readLatestDetectivePlan(logDir, process.env.PHASE || 'unknown', (story && story.id) || '');
+      const _planAlignment = checkPlanExecutionAlignment(_detectivePlan, findings);
+      if (_detectivePlan && Array.isArray(findings) && findings.length && !_planAlignment.aligned) {
+        console.warn(`spec-mode: ⚠️ code-graph-detective plan/execution MISMATCH for ${story.id} — plan named [${_planAlignment.planTerms.join(', ')}], final answer named [${_planAlignment.findingTerms.join(', ')}], no shared term and no stated reason for the change.`);
+      }
+
+      // Round telemetry: what this attempt cost and what it actually yielded.
+      // phase2Used distinguishes "explored and answered" from "explored, ended
+      // in prose, needed a second call to extract" — the latter is pure waste.
+      recordDetectiveRound(logDir, {
+        storyId: (story && story.id) || '',
+        attempt,
+        maxAttempts,
+        model: attemptModel,
+        escalated: !!escalated,
+        elapsedSec: Math.round((Date.now() - _roundStarted) / 1000),
+        maxToolCalls: Number(process.env.CODEGRAPH_DETECTIVE_MAX_TOOL_CALLS || specModeDefaults().perSeam.codegraphDetective),
+        phase1Findings: _phase1Findings,
+        phase2Used: _phase1Findings === 0 && Array.isArray(findings) && findings.length > 0,
+        findings: Array.isArray(findings) ? findings.length : 0,
+        planExecutionAligned: _detectivePlan ? _planAlignment.aligned : null,
+        exploreChars: String(out || '').length,
+        hitIterationCap: /reached maximum iterations/i.test(String(out || '')),
+      });
+      if (findings === null) {
+        console.warn(`spec-mode: ⚠️ code-graph-detective produced NO parseable JSON for ${story.id} (attempt ${attempt}/${maxAttempts}) even after the extraction phase. Phase-1 head: "${String(out || '').slice(0, 140).replace(/\s+/g, ' ').trim()}"`);
+        continue; // retry — this is the silent-failure mode we must not accept
+      }
+      if (findings.length === 0) {
+        console.warn(`spec-mode: ⚠️ code-graph-detective returned an EMPTY fix-site list for ${story.id} — no causal site located.`);
+        await _detEmit('error', `[${_detPhase}] code-graph-detective located NO causal fix site for ${story.id}`);
+        return findings;
+      }
+
+      // EVIDENCE GATE. A finding whose quoted broken expression is NOT in the
+      // file it names is a diagnosis about code that does not exist. Live
+      // metrolinx 2026-07-26: a confident, cleanly-parsed answer prescribed
+      // halving a discount that is in fact never applied at all, because the
+      // real defect is a key mismatch one line up. It named a helper that
+      // really exists and its JSON parsed, so every guard we had waved it
+      // through. Parseability is not correctness.
+      //
+      // Retry (which escalates the model) rather than accept it — but never
+      // discard on the LAST attempt: the detective is load-bearing, and a
+      // flagged hypothesis still beats handing the implementer symptom ACs
+      // with no root cause at all.
+      // A prescription that turns on a string format must state the format.
+      // Live 2026-07-26: "a prefix match that accounts for the return-trip key
+      // suffix" never said WHAT the suffix was, the implementer guessed '-'
+      // against a repo that uses '#', and the bug shipped unfixed behind a
+      // plausible diff. Same treatment as an ungrounded quote — reject and
+      // regenerate rather than hand a guess downstream. Fails open.
+      for (const f of findings) {
+        if (!f.fix) continue;
+        try {
+          const res = require('child_process').spawnSync('python3', [
+            path.join(__dirname, 'lib', 'fix_prescription_check.py'),
+            repoPath, f.helper || '', f.fix,
+          ], { encoding: 'utf8', timeout: toolTimeoutMs('codegraphExplore') });
+          f.prescriptionNote = String(res.stdout || '').trim();
+          f.prescriptionUnderspecified = res.status === 1;
+          if (f.prescriptionNote) {
+            console.warn(`spec-mode: code-graph-detective prescription for ${story.id}: ${f.prescriptionNote}`);
+          }
+        } catch { /* never block on this check */ }
+      }
+      const underspecified = findings.filter((f) => f.prescriptionUnderspecified);
+      if (underspecified.length === findings.length && attempt < maxAttempts) {
+        console.warn(`spec-mode: ⚠️ code-graph-detective prescription for ${story.id} is UNDER-SPECIFIED (attempt ${attempt}/${maxAttempts}) — it depends on a string format it never states, so the implementer would have to guess it. Retrying.`);
+        continue;
+      }
+
+      // GROUNDING IS KIND-AWARE. This demanded a verified QUOTE for every story, while the
+      // novel prescription tells the detective to leave brokenLine empty — so a correct
+      // feature answer was rejected and re-tried three times against a check it could never
+      // pass (live 2026-08-08, AMSD-2041). A feature is grounded by provenance instead.
+      const _grounding = detectiveAnswerIsGrounded({ findings, kind: _kindHint });
+      if (!_grounding.grounded) {
+        console.warn(
+          `spec-mode: ⚠️ code-graph-detective answer for ${story.id} is UNGROUNDED (attempt ${attempt}/${maxAttempts}, ${_kindHint}) — ` +
+          `${_grounding.reason}.`);
+        if (attempt < maxAttempts) {
+          continue; // escalate: a plausible story about absent code is not an answer
+        }
+        console.warn(`spec-mode: ⛔ code-graph-detective remained UNGROUNDED for ${story.id} after ${maxAttempts} attempts — passing the best hypothesis through, flagged.`);
+      } else if (findings.some((f) => f.evidenceVerified !== true)) {
+        // Grounded findings first: the implementer reads findings[0] as the
+        // primary fix site.
+        // Verified-quote findings first: the implementer reads findings[0] as the primary
+        // site. Computed here rather than reusing a variable from the gate above — that
+        // coupling is exactly what broke: the gate was rewritten, its `grounded` local went
+        // with it, and this line kept referring to it. Every detective invocation then threw
+        // "grounded is not defined", three attempts per story across three lanes, producing no
+        // fix sites at all while the test suite stayed green.
+        findings = findings.filter((f) => f.evidenceVerified === true)
+          .concat(findings.filter((f) => f.evidenceVerified !== true));
+      }
+      await _detEmit('spec_update', `[${_detPhase}] code-graph-detective located fix site: ${findings[0].file}${findings[0].helper ? ' (reuse ' + findings[0].helper + ')' : ''}`);
+      return findings;
+    } catch (e) {
+      console.warn(`spec-mode: code-graph-detective invocation failed for ${story.id} (attempt ${attempt}/${maxAttempts}): ${e.message}`);
+    }
+  }
+  console.warn(`spec-mode: ⛔ code-graph-detective found NO fix site for ${story.id} after ${maxAttempts} attempts — the implementer will proceed WITHOUT root-cause guidance (defect-fidelity risk).`);
+  await _detEmit('error', `[${_detPhase}] code-graph-detective found NO fix site for ${story.id} after ${maxAttempts} attempts`);
+  return [];
+}
+
+// Resolve the automation dir (orchestrations/) from a logDir like
+// ".../orchestrations/logs" or an override; falls back to the script's parent.
+function automationDirFromLogDir(logDir) {
+  if (logDir && /(^|\/)logs\/?$/.test(logDir)) return path.dirname(logDir);
+  return path.dirname(__dirname); // orchestrations/
+}
+
+// openspec: first-pass elaboration
+// reviewTicketLinks — the ticket-link agent.
+//
+// Ingest now recovers every URL from a ticket's description and comments (jira-client's ADF
+// walker). This is the step that reads them. Without it the links are carried and never
+// opened, which is the same failure as destroying them, one stage later.
+//
+// Live cost of not having it: two vendor documentation links sat in a comment thread for six
+// weeks. One stated the SDK callback the story depends on takes NO argument and the app must
+// re-fetch — the story's own verification criteria assert the opposite. One stated the
+// feature is configured in the vendor UI and needs no application code — a stakeholder had
+// said the same in a comment. Two runs built against both assumptions.
+//
+// NEVER BLOCKS. Documentation lookup is evidence-gathering, not a gate: an unreachable
+// network, a slow fetch or a refusing agent must degrade to "no docs" and let the spec pass
+// continue. Returns [] on any failure.
+/**
+ * Take the link agent's answer in whatever shape it arrived, and return the reviewed links.
+ *
+ * Live 2026-08-06, all three lanes: the agent DID the work — it fetched both vendor pages,
+ * quoted their code verbatim, judged that the guide targets CSR + App Router, and found that
+ * the ticket's own comment ("no code changes are needed and its more of configure and use")
+ * is contradicted by the vendor's implementation guide. Every word of that was discarded,
+ * because `payload.links` did not exist: the model had keyed the payload under the TOOL'S OWN
+ * NAME and used its own field names.
+ *
+ *   {"submit_ticket_links": {"links": [{ relevance:"relevant", document_scope:…,
+ *                                        key_findings:[{quote,note}],
+ *                                        contradictions_with_ticket:[…] }]}}
+ *
+ * Demanding exact key names throws away correct work over vocabulary. The schema stays the
+ * contract for what the agent is ASKED for; this is the tolerant reader on the way back in.
+ * It renames nothing it cannot recognise and invents nothing: a link with no URL is dropped.
+ */
+/**
+ * A tool definition, rendered as the env var that binds a provider's output space.
+ *
+ * One source of truth: the schema the agent is ASKED for and the schema the provider
+ * ENFORCES are the same object. A second copy would drift, and a drifted binding rejects
+ * correct work — the failure mode agent-output-schema.js was written to avoid.
+ */
+function schemaEnv(toolDef) {
+  try {
+    if (!toolDef || !toolDef.parameters) return '';
+    return JSON.stringify({ name: toolDef.name, schema: toolDef.parameters });
+  } catch { return ''; }
+}
+
+/**
+ * persistReferencedDocs(docs, dir) -> [written paths]
+ *
+ * Write each FETCHED document's body under the run, so a later agent can read more of it than
+ * the handful of quotes the link agent chose.
+ *
+ * Without this the document exists only inside the ticket-link agent's process. Measured on
+ * run 20260806T213050Z: the spec agent received four quote lines from two vendor guides, had
+ * no fetch tool, and the bodies were nowhere on disk — so "use the documentation" was an
+ * instruction it could not act on beyond those four lines.
+ *
+ * Only `fetched` documents are written. A document that could not be opened has nothing to
+ * persist, and writing an empty file for it would look like a document that says nothing.
+ *
+ * Never throws: evidence-writing must not be able to fail a spec pass.
+ */
+/**
+ * fetchTicketDocuments(links, dir) -> [{ url, fetchStatus, path }]
+ *
+ * The ENGINE opens every document linked on the ticket, before any agent runs.
+ *
+ * The ticket-link agent used to be the only thing that fetched, inside its own process, and
+ * only the quotes it chose came back. The page itself died with that process, so no later
+ * agent could read past those quotes — on run 20260806T213050Z the spec agent received four
+ * quote lines from two vendor guides and had no way to see more. Putting the body in the
+ * agent's schema would push a 16KB page back through the model as billed output tokens.
+ *
+ * Fetching here is deterministic: no model call, no tool budget, and no chance of a model
+ * declining to look. Every agent then reads the SAME text via read_file rather than one
+ * agent's selection from it.
+ *
+ * It uses the SHIPPED FetchUrlTool from dist/sdk.js — the same implementation the agents'
+ * fetch_url uses, so the HTML-to-text extraction and the size cap cannot drift from a second
+ * copy written here.
+ *
+ * A URL that cannot be opened is recorded as `unreachable` with no file. An empty file would
+ * read as a document that says nothing, which is a different and much worse claim.
+ */
+/**
+ * Where a run's artefacts live, derived from logDir the same way profiles.json already is.
+ * Documents go beside the rest of the run's evidence rather than into a temp directory that
+ * teardown deletes — the mistake made with discovery-vocabulary.json.
+ */
+function runArtifactDirFor(logDir) {
+  try {
+    if (logDir && fs.existsSync(logDir)) return logDir;
+  } catch { /* fall through */ }
+  return path.join(__dirname, '..', 'logs');
+}
+
+async function fetchTicketDocuments(links, dir) {
+  const out = [];
+  const list = Array.isArray(links) ? links : [];
+  if (!list.length) return out;
+  let FetchUrlTool;
+  try {
+    ({ FetchUrlTool } = require(path.join(__dirname, '..', '..', 'dist', 'sdk.js')));
+  } catch (err) {
+    console.warn(`spec-mode: cannot load the fetch tool (${err && err.message}) — ticket documents not retrieved`);
+    return out;
+  }
+  const tool = new FetchUrlTool();
+  const seen = new Set();
+  for (const l of list) {
+    // ACCEPT A BARE STRING TOO, AND NEVER SKIP IN SILENCE.
+    //
+    // This required `{url: "..."}` and discarded anything else without a word. Live 2026-08-07:
+    // the agent-mint passed an array of plain URL strings, every entry failed the type check,
+    // and the function returned [] — reported downstream as "0 fetched of 2 link(s)", which
+    // reads as "the sites were unreachable" rather than "the caller used the other shape".
+    // The roster was then derived with no vendor documentation at all.
+    const url = (typeof l === 'string') ? l : (l && typeof l.url === 'string' ? l.url : '');
+    if (!url) {
+      console.warn(`spec-mode: ticket link entry has no usable url (${JSON.stringify(l).slice(0, 120)}) — skipped`);
+      out.push({ url: '', fetchStatus: 'not_attempted', path: '' });
+      continue;
+    }
+    if (seen.has(url)) continue;
+    seen.add(url);
+    let body = '';
+    try {
+      const r = await tool.execute({ url });
+      if (!r || r.isError) throw new Error((r && String(r.content || '').slice(0, 200)) || 'fetch failed');
+      body = String(r.content || '');
+    } catch (err) {
+      console.warn(`spec-mode: could not fetch ${url} (${err && err.message})`);
+      out.push({ url, fetchStatus: 'unreachable', path: '' });
+      continue;
+    }
+    const [written] = persistReferencedDocs([{ url, fetchStatus: 'fetched', body }], dir);
+    out.push({ url, fetchStatus: written ? 'fetched' : 'unreachable', path: written || '' });
+  }
+  return out;
+}
+
+function persistReferencedDocs(docs, dir) {
+  const written = [];
+  try {
+    const list = Array.isArray(docs) ? docs : [];
+    if (!list.length || !dir) return written;
+    const target = path.join(dir, 'docs');
+    fs.mkdirSync(target, { recursive: true });
+    for (const d of list) {
+      if (!d || d.fetchStatus !== 'fetched') continue;
+      const body = typeof d.body === 'string' ? d.body : '';
+      if (!body) continue;
+      // Named from the URL so an agent reading a citation can find the file it names.
+      const slug = String(d.url || 'document')
+        .replace(/^https?:\/\//, '')
+        .replace(/[^a-zA-Z0-9._-]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(-120) || 'document';
+      const file = path.join(target, `${slug}.txt`);
+      fs.writeFileSync(file, `SOURCE: ${d.url || ''}\n\n${body}`);
+      written.push(file);
+    }
+  } catch { /* evidence writing never changes the outcome of a spec pass */ }
+  return written;
+}
+
+function normaliseTicketLinks(payload) {
+  if (!payload || typeof payload !== 'object') return [];
+  // The array may sit at the top level, under the tool's own name, or under any single
+  // object-valued key the model chose as a wrapper.
+  const findLinks = (node, depth = 0) => {
+    if (!node || typeof node !== 'object' || depth > 4) return null;
+    if (Array.isArray(node)) return node.some((e) => e && typeof e === 'object') ? node : null;
+    // The array's key comes from the TOOL DEFINITION, not from a list of guesses. A written
+    // down set of likely aliases ('links','documents','items','results') is a vocabulary in
+    // engine code: wrong for the next tool, and maintained by nobody.
+    const declaredKey = Object.keys((TOOL_TICKET_LINKS.parameters || {}).properties || {})
+      .find((k) => ((TOOL_TICKET_LINKS.parameters.properties[k] || {}).type) === 'array');
+    if (declaredKey && Array.isArray(node[declaredKey])) return node[declaredKey];
+    // Otherwise: whatever single array of objects this object holds, whatever it is called.
+    const arrays = Object.values(node).filter((v) => Array.isArray(v) && v.some((e) => e && typeof e === 'object'));
+    if (arrays.length === 1) return arrays[0];
+    for (const v of Object.values(node)) {
+      const found = findLinks(v, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  };
+  const raw = findLinks(payload);
+  if (!Array.isArray(raw)) return [];
+
+  const firstString = (...vals) => {
+    for (const v of vals) {
+      if (typeof v === 'string' && v.trim()) return v.trim();
+    }
+    return '';
+  };
+  // Quotes may be a flat array of strings, or objects carrying the quote plus a note.
+  const quotesOf = (l) => {
+    const src = [l.quotes, l.key_findings, l.findings, l.excerpts].find(Array.isArray) || [];
+    return src.map((q) => (typeof q === 'string' ? q : firstString(q && q.quote, q && q.text, q && q.excerpt)))
+      .filter(Boolean);
+  };
+  // A contradiction may be a sentence or a list of {ticket_says, document_says, explanation}.
+  const contradictionOf = (l) => {
+    const direct = firstString(l.contradictsStory, l.contradiction, l.contradicts);
+    if (direct) return direct;
+    const list = [l.contradictions_with_ticket, l.contradictions].find(Array.isArray) || [];
+    return list.map((c) => (typeof c === 'string' ? c
+      : [c && c.ticket_says && `ticket says: ${c.ticket_says}`,
+         c && c.document_says && `document says: ${c.document_says}`,
+         c && c.explanation].filter(Boolean).join(' — '))).filter(Boolean).join(' | ');
+  };
+  // `relevant` may be a boolean, or a word like "relevant" / "not relevant".
+  const relevanceOf = (l) => {
+    if (typeof l.relevant === 'boolean') return l.relevant;
+    const word = firstString(l.relevance, l.relevant, l.is_relevant).toLowerCase();
+    if (!word) return true;   // it was returned at all; absence of a verdict is not a denial
+    return !/\b(not|non|ir)\s*-?\s*relevant\b|^no$|^false$/.test(word);
+  };
+
+  return raw
+    .map((l) => (l && typeof l === 'object' ? l : null))
+    .filter(Boolean)
+    .map((l) => ({
+      url: firstString(l.url, l.link, l.href),
+      classification: firstString(l.classification, l.type, l.category) || 'unknown',
+      relevant: relevanceOf(l),
+      reason: firstString(l.reason, l.note, l.summary, l.rationale),
+      quotes: quotesOf(l),
+      scopeCaveat: firstString(l.scopeCaveat, l.document_scope, l.scope, l.caveat),
+      // Whether the agent could actually open the page. Carried through so a downstream
+      // reader can tell an empty review from an unread one — the distinction the schema now
+      // forces the agent to make.
+      fetchStatus: firstString(l.fetchStatus, l.fetch_status, l.status) || 'not_attempted',
+      contradictsStory: contradictionOf(l),
+    }))
+    .filter((l) => l.url);
+}
+
+async function reviewTicketLinks({ promptExec, story, logDir, docPaths = [] }) {
+  // No links on the ticket means nothing to review — return before spending a model call.
+  const links = Array.isArray(story && story.ticketLinks) && story.ticketLinks.length ? story.ticketLinks : [];
+  if (!links.length) return [];
+
+  const profiles = (() => {
+    try {
+      return JSON.parse(fs.readFileSync(path.join(automationDirFromLogDir(logDir), 'agents', 'profiles.json'), 'utf8'));
+    } catch { return {}; }
+  })();
+  const persona = profiles['ticket-link-agent'] || '';
+
+  const linkBlock = links.map((l, i) => {
+    // "ticket body" rather than "description": a link found outside a comment. The word is
+    // avoided deliberately — the description itself is never truncated on its way to a
+    // model (it is the only source of verification criteria in brownfield), and a guard
+    // scans for exactly that pattern.
+    const who = l.author || 'ticket body';
+    const when = l.created ? ` on ${String(l.created).slice(0, 10)}` : '';
+    // Whole context, whole comment. Clipping here would undo the un-clipping in
+    // jira-client: this prompt IS the agent's only view of why the link was posted.
+    const context = String(l.context || '');
+    return `${i + 1}. ${l.url}\n   found by: ${who}${when}\n   surrounding text: ${context}`;
+  }).join('\n');
+
+  const commentBlock = (Array.isArray(story.ticketComments) ? story.ticketComments : [])
+    .map((c) => `- ${c.author || 'unknown'}: ${String(c.text || '')}`).join('\n');
+
+  const prompt = renderEngineTemplate('spec-story-block', {
+    __PERSONA__: persona ? persona + '\n\n' : '',
+    __TITLE__: story.title || '',
+    __DESCRIPTION__: String(story.description || ''),
+    __COMPONENTS__: (Array.isArray(story.components) ? story.components : []).join(', ') || '(none)',
+    __DECLARED_FILES__: ((story.technicalNotes && story.technicalNotes.files) || []).join(', ') || '(none yet)',
+    __LINK_BLOCK__: linkBlock,
+    __COMMENT_BLOCK__: commentBlock || '(none)',
+    // The notice is its own body; whether it appears is still decided here, which is control flow.
+    __RETRIEVED_DOCS__: Array.isArray(docPaths) && docPaths.length
+      ? renderEngineTemplate('spec-story-block', {
+        __DOC_PATHS__: docPaths.map((p) => `- ${p}`).join('\n'),
+      }, 'retrieved_docs')
+      : '',
+  }, 'block');
+
+  // THE AGENT MUST BE ABLE TO OPEN THE LINK.
+  //
+  // Its schema has a `quotes` field — verbatim extracts from the document, the entire point
+  // of this step, because a paraphrase of an API contract is how a wrong contract
+  // propagates. With only read_file/list_files/search it could classify a URL from its
+  // address and the surrounding comment and nothing more, so `quotes` could never be
+  // populated and the documentation still did not inform the pipeline.
+  //
+  // fetch_url is the read-only network tool (src/tools/builtin/FetchUrl.ts). Granting a
+  // tool LIST without AI_GATE_ALLOW_TOOLS silently runs --no-tools, so both are set.
+  // Configurable per project; a project that forbids outbound HTTP sets it to the
+  // read-only subset and the agent degrades to classification, which is still useful.
+  const _linkTools = {
+    AI_GATE_ALLOW_TOOLS: process.env.TICKET_LINK_ALLOW_TOOLS || '1',
+    EPAM_ALLOWED_TOOLS: process.env.TICKET_LINK_ALLOWED_TOOLS || 'fetch_url,read_file,list_files,search',
+    EPAM_MAX_TOOL_CALLS: process.env.TICKET_LINK_MAX_TOOL_CALLS || String(Math.min(links.length + 2, 12)),
+    EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_TICKET_LINKS),
+    // BIND THE SHAPE, DO NOT ASK FOR IT. The prompt said "structured output only; do not
+    // answer in prose" and across three live runs the model answered three different ways —
+    // keyed under its own tool name, prose-then-JSON, then pure markdown. Each time it had
+    // fetched both vendor pages and found the contradiction, and each time the answer was
+    // discarded. A request is declinable; a bound output space is not.
+    //
+    // Tools survive: AgentRunner applies the binding only on the turn where tools are
+    // withheld, so the research turns still fetch and the answer turn cannot be prose.
+
+  };
+  try {
+    const payload = await runAgentForJson(
+      promptExec, prompt, TOOL_TICKET_LINKS, 'TICKET_LINKS',
+      logDir ? path.join(logDir, `${(story && story.id) || 'phase'}-ticket-links.log`) : null,
+      'links', (story && story.id) || '', resolveCodelinePath(story),
+      // THE SEAM, UNDER this call's own grant. _linkTools is already the envOverride, so a further
+      // argument was simply ignored. The seam supplies ladder, effort and budget; the explicit
+      // grant supplies the fetch_url this agent needs and must still win.
+      { ...seamInvocationEnv('ticket-links', logDir), EPAM_AGENT_NAME: 'ticket-links', ..._linkTools },
+    );
+    return normaliseTicketLinks(payload);
+  } catch (err) {
+    console.warn(`spec-mode: ticket-link review unavailable for ${story && story.id} (${err && err.message}) — proceeding without documentation evidence`);
+    return [];
+  }
+}
+
+// Renders reviewed docs as EVIDENCE for the spec agents. A contradiction leads, because it
+// is the one thing that changes what gets built.
+function referencedDocsBlock(docs) {
+  const list = Array.isArray(docs) ? docs.filter((d) => d && d.relevant) : [];
+  if (!list.length) return '';
+  const lines = [];
+  const contradictions = list.filter((d) => d.contradictsStory);
+  if (contradictions.length) {
+    lines.push('\n## DOCUMENTATION CONTRADICTS THIS STORY — resolve before specifying');
+    for (const d of contradictions) {
+      lines.push(`- ${d.url}\n  CONTRADICTION: ${d.contradictsStory}`);
+    }
+  }
+  lines.push('\n## REFERENCED DOCUMENTATION (quoted from sources linked on the ticket — authoritative over assumption)');
+  for (const d of list) {
+    lines.push(`- ${d.url} [${d.classification}]${d.reason ? ` — ${d.reason}` : ''}`);
+    for (const q of (Array.isArray(d.quotes) ? d.quotes : []).slice(0, 6)) lines.push(`    "${q}"`);
+    if (d.scopeCaveat) lines.push(`    SCOPE CAVEAT: ${d.scopeCaveat}`);
+  }
+  return lines.join('\n') + '\n';
+}
+
+async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, forcedRetryNote,
+  runDetective = runCodeGraphDetective, prd = null }) {
+  const acCount = Array.isArray(story.acceptanceCriteria) ? story.acceptanceCriteria.length : 0;
+  const splitDepthVal = story.specification?.splitDepth ?? 0;
+
+  const storyPayload = JSON.stringify({
+    id: story.id,
+    title: story.title,
+    description: story.description,
+    acceptanceCriteria: story.acceptanceCriteria,
+    acCount,
+    technicalNotes: story.technicalNotes,
+    agentRole: story.agentRole,
+    agentGroup: story.agentGroup,
+    dependencies: story.dependencies || [],
+    splitDepth: splitDepthVal
+  }, null, 2);
+
+  // Uses the SAME threshold function as checkSplitMandateViolation() (below)
+  // so the prompt warning and the deterministic post-hoc check can never
+  // drift apart — one is prose telling the agent what's required, the other
+  // verifies the agent actually did it.
+  const splitRequirement = storyRequiresSplit(captureStorySnapshot(story));
+  const splitWarning = splitRequirement.required
+    ? `\nNOTE: This story ${splitRequirement.reason} — MANDATORY split required (see SPLIT RULES below).`
+    : '';
+
+  // Surface any prior coordinator flags so openspec addresses them rather than rubber-stamping
+  const priorFlags = story.specification?.coordinatorReview?.flags;
+  const priorNotes = story.specification?.coordinatorReview?.reviewNotes;
+  const priorGapsBlock = (Array.isArray(priorFlags) && priorFlags.length > 0)
+    ? `\n\nPRIOR COORDINATOR FLAGS (you MUST address each one — do NOT declare the spec complete without resolving these):\n${priorFlags.map((f, i) => `${i + 1}. ${f}`).join('\n')}\n${priorNotes ? `\nAdditional context from prior review: ${priorNotes}` : ''}`
+    : '';
+
+  // Forced-retry note goes at the VERY TOP — highest-salience position in the
+  // prompt (primacy). Root cause this addresses (found live, 2026-07-06):
+  // the mid-prompt "MANDATORY split required" NOTE was already present on the
+  // FIRST attempt and still got ignored. A same-session forced retry needs
+  // maximum prominence, not just a repeat of the same mid-prompt phrasing.
+  const forcedRetryBlock = forcedRetryNote ? `${forcedRetryNote}\n\n` : '';
+
+  const sembleContext = fetchExistingCodeContext(story);
+
+  // Resolved here rather than taken as a parameter, the same way every other
+  // consumer in this module does it. It feeds publishedContracts() below, which
+  // is interpolated into the prompt — outside any try — so an unbound name here
+  // is not a degraded prompt, it is a hard crash on every single attempt.
+  const repoPath = resolveCodelinePath(story);
+
+  // Brownfield archaeology block — injected for EPAM_BROWNFIELD=1 regardless of
+  // which spec agent is running. Whichever agent runs must identify the
+  // existing change site before writing any AC; locationHint feeds directly
+  // into the story agent's context so it opens the right file.
+  //
+  // Root cause fix (2026-07-23, live AMSD-1820 failure): this used to also
+  // require `agent === 'openspec'`. The coordinator can legitimately assign
+  // ONLY speckit to a story (openspec ran "0 stories" that phase) — when that
+  // happens, this block never fired for that story at all: no locationHint
+  // request, no CodeGraph/Semble grounding instruction, nothing. The story
+  // then went to execution with zero file guidance in a large real repo,
+  // and 8 real agent attempts never found the actual fix site. sembleContext
+  // (the CodeGraph/Semble-injected existing code, above) is already computed
+  // unconditionally regardless of which agent runs, so it's available either way.
+
+  // Cycle-time investigation, 2026-07-31 (mock1 comparison, same finding
+  // class as the coordinator-review fix above): storyRequiresSplit() already
+  // returns {required:false} for brownfield, so splitWarning above is
+  // correctly empty — but the SPLIT RULES block and the splitStories schema
+  // field below were never given the same treatment, even though the
+  // EPAM_BROWNFIELD guard in the Step-2 caller unconditionally deletes any
+  // splitStories payload from every agent, openspec included (brownfield
+  // stories are tickets and are never split; multi-codeline work is one
+  // story with N executions, not a split). Asking the model to reason
+  // through 6 split-decision rules and emit a splitStories array it can
+  // never use is pure wasted context/output for every brownfield call.
+  const isBrownfieldSpec = process.env.EPAM_BROWNFIELD === '1';
+  // locationHintSchemaLine (brownfield) ends in a trailing comma expecting a
+  // field after it — normally splitStories. When brownfield drops that field
+  // too, strip the dangling comma so the schema hint stays valid-looking JSON.
+  const splitSchemaField = isBrownfieldSpec
+    ? ''
+    : `\n  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."],"agentRole":"...","technicalNotes":{"files":[]}}]`;
+  const splitRulesBlock = isBrownfieldSpec
+    ? ''
+    : renderEngineTemplate('speckit-split-rules', {});
+  const generateInstruction = isBrownfieldSpec
+    ? 'Generate refined acceptance criteria and optionally updated title/description. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:'
+    : 'Generate refined acceptance criteria, optionally updated title/description, and split stories where required. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:';
+
+  // GROUND THE PRODUCER BEFORE IT WRITES, not after.
+  //
+  // The detective used to run AFTER this model call — so the first-pass verification
+  // criteria were written with no located fix site and no file contents, and only the
+  // REGENERATE path (which does receive findings) was ever grounded. Live
+  // 20260804T162414Z: the one lane that reached regeneration produced 5 clean criteria;
+  // the two that kept first-pass output went partial, one down to a single criterion.
+  //
+  // The detective reads only story title/description/acceptanceCriteria and the repo path
+  // — none of which this model call produces — so it gets byte-identical input here.
+  // Grounding is an ENHANCEMENT: if it fails, the spec pass continues without it.
+  // Read any documentation the ticket itself links to, BEFORE specifying. A vendor doc that
+  // states the real contract of an API this story depends on outranks any assumption the
+  // spec agents would otherwise make — and on the live ticket it refuted the story outright.
+  // THE ENGINE FETCHES FIRST. Every document linked on the ticket is retrieved and written
+  // under the run before any agent is asked about it, so the ticket-link agent reviews text
+  // that is already on disk and every later agent can read the same file rather than one
+  // agent's selection of quotes from a page nobody else can see.
+  let ticketDocPaths = [];
+  try {
+    const _docDir = runArtifactDirFor(logDir);
+    const _fetched = await fetchTicketDocuments((story && story.ticketLinks) || [], _docDir);
+    ticketDocPaths = _fetched.filter((d) => d.path).map((d) => d.path);
+    if (_fetched.length) {
+      console.log(`spec-mode: ${story.id} — ticket documents: ${_fetched.filter((d) => d.fetchStatus === 'fetched').length}/${_fetched.length} fetched into ${_docDir}/docs`);
+    }
+  } catch (err) {
+    console.warn(`spec-mode: ticket document retrieval failed for ${story.id} (${err && err.message}) — agents will have quotes only`);
+  }
+
+  let referencedDocs = [];
+  try {
+    referencedDocs = await reviewTicketLinks({ promptExec, story, logDir, docPaths: ticketDocPaths });
+    if (referencedDocs.length) {
+      story.specification = story.specification || {};
+      story.specification.referencedDocs = referencedDocs;
+      const _contra = referencedDocs.filter((d) => d && d.contradictsStory);
+      if (_contra.length) {
+        console.warn(`spec-mode: ⚠️ ${story.id} — linked documentation CONTRADICTS this story on ${_contra.length} point(s): ${_contra.map((d) => d.url).join(', ')}`);
+      }
+    }
+  } catch (err) {
+    console.warn(`spec-mode: ticket-link review skipped for ${story.id} (${err && err.message})`);
+  }
+  const referencedDocsEvidence = referencedDocsBlock(referencedDocs);
+
+  let detectiveFindings = [];
+  try {
+    detectiveFindings = (await runDetective(story, logDir)) || [];
+  } catch (err) {
+    console.warn(`spec-mode: code-graph-detective unavailable for ${story.id} (${err && err.message}) — continuing ungrounded`);
+    detectiveFindings = [];
+  }
+  const fixSiteBlock = detectiveFindings.length
+    ? `\n\nLOCATED FIX SITE(S) — traced in this repository before you were asked. Anchor every criterion to the behaviour THIS code produces:\n`
+      + detectiveFindings.slice(0, 5).map((f) => `- ${f.file}${f.function ? ` :: ${f.function}` : ''}${f.reason ? ` — ${f.reason}` : ''}`).join('\n') + '\n'
+    : '';
+  // detectiveFindings, not story.fixSiteAnalysis: the field is not set until later.
+  const declaredFileBlock = manifestFileExcerpts(story, prd, { located: detectiveFindings });
+
+  // Built HERE, after referencedDocs is populated — not at the top of the function.
+  // `referencedDocs` is declared with `let` further down, so reading it earlier is a
+  // temporal-dead-zone ReferenceError that would crash every brownfield spec call, and
+  // even with the declaration hoisted it would always have been empty: the block would
+  // have silently stopped offering documentation as a verification source, which is the
+  // whole point of passing it.
+  const { archaeologyBlock: brownfieldArchaeologyBlock, schemaLine: locationHintSchemaLine } =
+    buildBrownfieldArchaeologyBlock(process.env, {
+      // What THIS story actually has. The block names only sources that exist: a ticket with
+      // no acceptance criteria is not told about acceptance criteria, and documentation is
+      // offered as a source of verification only when documents were really fetched.
+      hasAcceptanceCriteria: Array.isArray(story.acceptanceCriteria) && story.acceptanceCriteria.length > 0,
+      hasReferencedDocs: Array.isArray(referencedDocs) && referencedDocs.some((d) => d && Array.isArray(d.quotes) && d.quotes.length),
+    });
+  // Derived from locationHintSchemaLine, so it has to follow it. It used to sit ~70 lines
+  // higher; moving the block below referencedDocs left this reading the name before its
+  // declaration — a second temporal-dead-zone crash, introduced while fixing the first.
+  const locationHintSchemaLineTrimmed = (isBrownfieldSpec && !splitSchemaField)
+    ? locationHintSchemaLine.replace(/,(\s*)$/, '$1')
+    : locationHintSchemaLine;
+
+  const prompt = renderEngineTemplate('spec-agent-openspec', {
+    __FORCED_RETRY_BLOCK__: forcedRetryBlock,
+    __AGENT__: agent,
+    __PHASE__: phase,
+    __STORY_ID__: story.id,
+    __SPLIT_WARNING__: splitWarning,
+    __PRIOR_GAPS_BLOCK__: priorGapsBlock,
+    __SEMBLE_CONTEXT__: sembleContext,
+    __REFERENCED_DOCS_EVIDENCE__: referencedDocsEvidence,
+    __FIX_SITE_BLOCK__: fixSiteBlock,
+    __DECLARED_FILE_BLOCK__: declaredFileBlock,
+    __BROWNFIELD_ARCHAEOLOGY_BLOCK__: brownfieldArchaeologyBlock,
+    __GENERATE_INSTRUCTION__: generateInstruction,
+    __LOCATION_HINT_SCHEMA_LINE__: locationHintSchemaLineTrimmed,
+    __SPLIT_SCHEMA_FIELD__: splitSchemaField,
+    __SPLIT_RULES_BLOCK__: splitRulesBlock,
+    __STORY_PAYLOAD__: storyPayload,
+    __PUBLISHED_CONTRACTS__: publishedContracts(repoPath, story),
+  });
+  try {
+    const payload = await runAgentForJson(
+      promptExec, prompt, TOOL_SPEC_AGENT, 'SPEC_AGENT',
+      path.join(logDir, `${story.id}-${agent}-spec.log`), null, story.id, repoPath,
+      // THE SEAM, asked for. This call passed no env, so it ran with no ladder, no budget
+      // and no tool grant — the settings sat in the registry reaching nothing.
+      { ...seamInvocationEnv('spec-agent', logDir), EPAM_AGENT_NAME: 'spec-agent' },
+    );
+    // Merge fix-site candidates into locationHint. PRIMARY: the code-graph-
+    // detective — a tool-using agent (GLM-5.1) that iterates CodeGraph queries
+    // and traces callers to converge on the CAUSAL fix site (proven the only
+    // reliable path for symptom-worded tickets). SUPPLEMENT: the deterministic
+    // top-N search (a cheap seed — fragile alone, but harmless as extra
+    // candidates). Both are additive to whatever openspec itself reported.
+    if (payload && agent === 'openspec') {
+      // Brownfield DEFECT guard (deterministic backstop to openspec's own
+      // classification): when openspec judges this story a bug fix, it must NOT
+      // rewrite the acceptance criteria — elaborating a defect's ACs bakes in a
+      // guessed fix mechanism that misdirects the implementer (live AMSD-1820:
+      // openspec expanded a symptom into 8 "split the discount" ACs and the
+      // agent built exactly that wrong design). openspec still RUNS (locationHint
+      // + detective below still fire); we just restore the reporter's original
+      // ACs verbatim, enforcing the STEP-3 instruction even if the model ignored
+      // it. Greenfield never triggers this (EPAM_BROWNFIELD gate); a "novel"
+      // brownfield story is untouched and elaborates normally.
+      // Anchor the classification to Jira ground truth when present: a ticket
+      // typed "Bug" is a defect regardless of the spec model's own judgment
+      // (a misclassified defect→novel re-opens the exact AC-misdirection this
+      // guards against). No-op when issueType is absent — falls back to the
+      // model's storyKind. Greenfield never reaches this block.
+      const _jiraType = String(story.issueType || story.issuetype || '').toLowerCase();
+      if (_jiraType === 'bug' && payload.storyKind !== 'defect') {
+        payload.storyKind = 'defect';
+        console.log(`spec-mode: ${story.id} is Jira type "Bug" — anchoring storyKind=defect (overriding model judgment)`);
+      }
+      if (preserveDefectAcceptanceCriteria(payload, story, process.env)) {
+        console.log(`spec-mode: ${story.id} — ACs are immutable (VC model); openspec AC edits redacted, verification captured in verificationCriteria`);
+      }
+      // Persist the VERIFICATION CRITERIA (VC) layer onto the story so it reaches
+      // the PRD (observability) and downstream agents (TC writer, impl, reviewer).
+      // ACs stay the immutable ticket intent; VCs are the observable checks.
+      // The detective runs FIRST so its findings can ground VC generation. It was
+      // previously called AFTER this block, which meant the VC generator was asked
+      // to specify OBSERVABLE behaviour for code it had never been shown — working
+      // from ticket prose alone. Live 2026-07-25 that produced "VC 3 addresses
+      // station names" for a promo-code-in-email ticket, two failed regeneration
+      // cycles, and a fallback to generic VCs that the test writer could not anchor
+      // to anything. The detective's own prompt states the intent: "You run early
+      // (during the specification pass) and your output grounds every downstream
+      // agent."
+      // (detectiveFindings was computed above, BEFORE the prompt — see the grounding note.)
+
+      if (process.env.EPAM_BROWNFIELD === '1') {
+        const rawVc = normalizeVerificationCriteria(payload);
+        if (rawVc.length) {
+          // Autonomous guard + regenerate loop (NO human): deterministic mechanism
+          // check + speckit strict flag-only review; on flags, regenerate via
+          // openspec with ladder escalation; conservative safe-fallback if it can't
+          // converge. Never halts — always persists a clean VC set.
+          const enforced = await enforceVerificationCriteria(story, rawVc, {
+            regenerateVc: (flags, nextCycle) => regenerateVcViaOpenspec({
+              story, flags, cycle: nextCycle, logDir, findings: detectiveFindings,
+            }),
+            reviewVc: (vc, cycle) => reviewVcViaSpeckit({ story, vc, cycle, logDir }),
+            findings: detectiveFindings,
+            // The guard's vocabulary is derived here, from the criteria it will check
+            // PLUS the story's declared manifest PLUS the detective's real file reads.
+            // Inputs are state-dependent by design: an agent not shown what the guard
+            // checks can only guess from the ticket, which is how invented file contents
+            // reached the pipeline before.
+            // The derived vocabulary is then GROUNDED against the documents linked on the
+            // ticket: a term the vendor publishes verbatim is a contract, not an
+            // implementation choice this team made. Without it the guard deleted the three
+            // sharpest criteria of run 20260807T000054Z — all quoting `onEntryChange`, from
+            // the guide the pipeline had just fetched — so better documentation grounding
+            // produced more deletions.
+            // The documents go to the AGENT as evidence; it decides which terms are the
+            // vendor's published contract and which are this codeline's internals, and says
+            // why per term. A structural whitelist was tried here first — whitelist any
+            // blacklisted term quoted verbatim in a fetched document — and it was too
+            // permissive: it forced through a criterion asserting the SHAPE of an internal
+            // options object because the key name happened to be documented. The reviewer
+            // caught it and the spec gate halted the run at quality 0.68. Whether a
+            // documented name is being used to describe behaviour or to assert internal
+            // structure requires reading the statement, which is a judgement, not a rule.
+            deriveVocabulary: (vcToCheck) => deriveGuardVocabulary({
+              promptExec,
+              rule: VC_OBSERVABILITY_RULES,
+              statements: vcToCheck,
+              story,
+              findings: detectiveFindings,
+              manifestFiles: (story && story.technicalNotes && story.technicalNotes.files) || [],
+              logDir,
+              seam: 'verification-criteria',
+              referencedDocs,
+            }),
+          });
+          story.verificationCriteria = enforced.vc;
+          // Kept, not consumed: "who observes this, and on what" is the most useful thing to
+          // show a reviewer or a human deciding whether a criterion is worth verifying — and
+          // it is what was missing when the pipeline argued with itself about whether a mocked
+          // precondition counted as prescribing mechanism.
+          const _vcDecl = vcDeclarations(payload).filter((d) => enforced.vc.includes(d.criterion));
+          if (_vcDecl.length) story.verificationCriteriaDetail = _vcDecl;
+          // 'disputed' is NOT fallback: the criteria are the author's real ones, kept
+          // because acting on an outlier review would have left the story under-verified.
+          story.vcSource = enforced.source === 'fallback'
+            ? 'fallback'
+            : ((typeof payload.vcSource === 'string' && payload.vcSource) || 'acceptance');
+          // Persist a small provenance record for observability in the PRD.
+          story.vcResolution = enforced.source; // clean | regenerated | partial | disputed | fallback
+          // A dropped criterion is a decision the pipeline made about what will NOT be
+          // verified. Recording it only in a console warning would lose it with the
+          // console; it belongs on the story, in the PRD, on disk.
+          if (Array.isArray(enforced.dropped) && enforced.dropped.length) {
+            story.vcDropped = enforced.dropped;
+          }
+          console.log(`spec-mode: ${story.id} — ${enforced.vc.length} verification criteria persisted (source: ${story.vcSource}, resolution: ${enforced.source})`);
+        }
+      }
+      const detectiveFiles = detectiveFindings.map((f) => f.file);
+      const deterministicFiles = getDeterministicCandidateFiles(story);
+      const candidateFiles = [...new Set([...detectiveFiles, ...deterministicFiles])];
+      if (candidateFiles.length) {
+        const existingHints = Array.isArray(payload.locationHint) ? payload.locationHint : [];
+        const seenFiles = new Set(existingHints.map((h) => h && h.file).filter(Boolean));
+        const merged = [...existingHints];
+        for (const file of candidateFiles) {
+          if (!seenFiles.has(file)) {
+            const finding = detectiveFindings.find((f) => f.file === file);
+            merged.push(finding
+              ? { file, function: finding.function, reason: finding.reason, fix: finding.fix }
+              : { file, function: '', reason: 'deterministic search seed', fix: '' });
+            seenFiles.add(file);
+          }
+        }
+        payload.locationHint = merged;
+      }
+      // Persist the detective's ROOT-CAUSE ANALYSIS on the story so the
+      // implementation agent starts WITH the answer (the cross-file bug the
+      // detective already traced) instead of re-reading files to re-discover
+      // it — the "input bloat on a bad attempt" is exactly that re-tracing.
+      // Stored on the story directly (survives applySpecChanges into the PRD);
+      // claude.sh's build_implementation_prompt injects it verbatim.
+      if (detectiveFindings.length) {
+        story.fixSiteAnalysis = detectiveFindings.filter((f) => f.reason);
+      }
+      // Deterministic coverage check (see checkFixSiteCoverage) — flags VCs
+      // the detective's findings never touch, so the implementer's budget and
+      // prompt can react to a known-incomplete prescription instead of a
+      // silently-incomplete one.
+      story.fixSiteAnalysisCoverage = coverageForStory(story);
+      // complete === null means NO vocabulary was available, so coverage was not computed.
+      // Treating that as "incomplete" would report a gap nobody measured.
+      if (story.fixSiteAnalysisCoverage.complete === false) {
+        console.warn(
+          `spec-mode: ⚠️ ${story.id} — fixSiteAnalysis does not cover ${story.fixSiteAnalysisCoverage.uncoveredVerificationCriteria.length} verification criterion/criteria (e.g. "${String(story.fixSiteAnalysisCoverage.uncoveredVerificationCriteria[0] || '').slice(0, 100)}"). The prescribed fix may be structurally incomplete.`
+        );
+      }
+      // Deterministic dependency check on the PLAN, beside the coverage check above and
+      // for the same reason: a prescription the codeline cannot satisfy is incomplete, and
+      // the pipeline should know before the writer spends rather than after.
+      //
+      // Live, four consecutive runs of one story: the prescribed fix flipped between a
+      // config change on an ALREADY-INSTALLED package and installing a live-preview SDK
+      // no codeline declares. The requirement existed only as prose inside `fix`/`reason`,
+      // so nothing could check it — the writer discovered it mid-turn, had no way to
+      // report a blockage, and shipped a workaround the reviewer called "dead code from a
+      // runtime perspective". Seven self-heal diagnoses later, HealingBroken fired.
+      //
+      // Nothing here is hardcoded: the package names come from the plan's own
+      // requiredPackages declaration, and availability is computed from the project's own
+      // dependency-check.json (manifestFile / manifestKeys / vendorDirs) by the SAME pure
+      // function the dependency_available agent tool uses, so gate and agent cannot drift.
+      try {
+        const declaredPkgs = [
+          ...new Set(
+            (story.fixSiteAnalysis || [])
+              .flatMap((f) => (Array.isArray(f.requiredPackages) ? f.requiredPackages : []))
+              .filter((n) => typeof n === 'string' && n.trim())
+              .map((n) => n.trim())
+          ),
+        ];
+        if (declaredPkgs.length) {
+          // eslint-disable-next-line global-require
+          const { checkPackageAvailability } = require('../plugins/dependency-contract-plugin.js');
+          const projectRoot = process.env.PROJECT_ROOT || process.cwd();
+          story.requiredPackagesCheck = checkPackageAvailability(projectRoot, declaredPkgs);
+          if (!story.requiredPackagesCheck.allAvailable) {
+            const worst = story.requiredPackagesCheck.unavailable
+              .map((r) => `${r.package}=${r.verdict}`)
+              .join(', ');
+            console.warn(
+              `spec-mode: ⛔ ${story.id} — the prescribed fix requires ${story.requiredPackagesCheck.unavailable.length} package(s) this codeline cannot satisfy: ${worst}. The plan CANNOT be implemented as written; an implementer given it will either fake a workaround or burn its retry ladder. Prefer a fix built on what is installed, or add the dependency deliberately.`
+            );
+          }
+        }
+      } catch (err) {
+        // Never fail the spec pass on the check itself — report and continue, so a broken
+        // gate degrades to "unchecked", never to "silently passed".
+        console.warn(`spec-mode: requiredPackages check could not run for ${story.id}: ${err.message}`);
+      }
+      // Loud, spec-pass-level surface: a DEFECT that reaches implementation with
+      // NO located fix site is the exact failure mode this whole subsystem
+      // exists to prevent — it must never pass by unnoticed. (Detective already
+      // warned internally; this makes it visible at the story/spec-pass level.)
+      const isDefect = String(story.issueType || '').toLowerCase() === 'bug'
+        || payload.storyKind === 'defect';
+      const hasFixSite = Array.isArray(story.fixSiteAnalysis) && story.fixSiteAnalysis.length;
+      if (isDefect && !hasFixSite) {
+        console.warn(`spec-mode: ⛔ DEFECT ${story.id} has NO fixSiteAnalysis after the spec pass — the implementer gets symptom ACs with no root cause. This is a defect-fidelity risk; investigate the detective before trusting this run's fix.`);
+      }
+      // A NOVEL story has no fix site by definition, so the defect check above
+      // never fires for it — but it still needs somewhere to plug IN. A feature
+      // nobody can place is as unimplementable as a defect nobody can locate:
+      // the implementer would be left to invent both the location and the
+      // integration, which is how a "small feature" becomes a rewrite.
+      // Same signal, same weight (user decision, 2026-07-28).
+      const hasAttachment = (Array.isArray(story.fixSiteAnalysis) && story.fixSiteAnalysis.length)
+        || (Array.isArray(payload.locationHint) && payload.locationHint.length);
+      if (!isDefect && !hasAttachment) {
+        console.warn(`spec-mode: ⛔ NOVEL ${story.id} has NO attachment point after the spec pass — nothing identifies the existing code this new capability plugs into, so the implementer must invent both the location and the integration. Investigate before trusting this run.`);
+      }
+      // SUFFICIENCY GATE (step 3): the detective IS the sufficiency signal. If it
+      // located NO fix site AND the ticket context is thin (sparse ACs + short
+      // description), there is not enough to implement OR to write a test that
+      // reproduces the bug — fail EARLY with a clear reason instead of proceeding
+      // to a doomed run. Autonomous (no human halt): the flag blocks execution
+      // loudly at the orchestration level.
+      if (!hasFixSite && isThinContext(story)) {
+        story.specification = story.specification || {};
+        story.specification.insufficientContext = true;
+        story.specification.specPassFailed = true;
+        story.specification.insufficientReason = 'code-graph-detective located no fix site and the ticket context is thin (sparse acceptance criteria + short description) — not enough to implement or to write a reproducing test';
+        console.warn(`spec-mode: ⛔ INSUFFICIENT CONTEXT for ${story.id} — no fix site located and thin AC/description. Failing early (no human halt).`);
+      }
+    }
+    return { agent, payload };
+  } catch (error) {
+    console.warn(`spec-mode: ${agent} run failed for ${story.id}:`, error.message);
+    return null;
+  }
+}
+
+// ─── Speckit AC validator (runtime version mirrors test/unit/orchestration/speckit-validator.test.ts)
+
+function stripPrescriptiveACs(acceptanceCriteria, storyId, vocabulary) {
+  // PURE APPLIER — no patterns, no library names, no language assumptions.
+  // A hardcoded list used to live here: eleven regexes naming specific JS test
+  // libraries, so a codeline in any other language received no protection at all
+  // while the guard still reported clean. What counts as prescriptive for THIS
+  // story is derived by the guard-vocabulary agent from the same rule the
+  // reviewer reads, grounded in the detective's real file evidence.
+  //
+  // NO VOCABULARY IS NOT "NOTHING TO STRIP" — the caller aborts before here.
+  const acs = Array.isArray(acceptanceCriteria) ? acceptanceCriteria : [];
+  const hits = applyVocabulary(acs, vocabulary);
+  const flaggedItems = new Set(hits.map((h) => h.item));
+  const clean = acs.filter((ac) => !flaggedItems.has(ac));
+  const flagged = hits.map((h) => ({ criterion: h.item, reason: h.reason }));
+  if (storyId) {
+    for (const f of flagged) {
+      console.warn(`spec-mode: AC guard stripped prescriptive AC in ${storyId}: [${f.reason}] "${String(f.criterion).slice(0, 80)}"`);
+    }
+  }
+  return { clean, flagged };
+}
+
+// speckit: second-pass review of openspec's output — the collaboration point
+async function runSpeckitReview({ promptExec, story, openspecOutput, phase, runId, logDir, forcedRetryNote, refineExistingChildren = false }) {
+  // Same primacy placement as runSpecAgent's forcedRetryBlock — highest-salience
+  // position in the prompt for a same-session forced retry.
+  const forcedRetryBlock = forcedRetryNote ? `${forcedRetryNote}\n\n` : '';
+  // Single story, single codeline — real tools can be safely enabled (see
+  // specAgentEnv's docstring for why phase-level calls cannot do this).
+  const repoPath = resolveCodelinePath(story);
+  // Full agent audit, 2026-07-31: `validateMidExecutionSplits` called this
+  // function expecting per-child AC refinement back via
+  // `result.payload.splitStories`, but every call site shared ONE prompt
+  // that unconditionally told speckit "ALWAYS omit splitStories... never
+  // propose split children of your own" — so that branch could never fire;
+  // the entire call there was a no-op (its parent-AC output is also
+  // discarded immediately after by the "Delegated to split children"
+  // placeholder). `refineExistingChildren` is an explicit, narrow opt-in —
+  // NOT inferred from `openspecOutput.splitStories` being present, since
+  // that field carries a different meaning at other call sites (openspec
+  // PROPOSING a split, not yet-created children) and conflating the two
+  // would silently change behavior there. Only validateMidExecutionSplits
+  // passes this true, for children it already created.
+  // TWO TEMPLATES, NOT ONE WITH A BRANCH. The refine path asks for different work from
+  // different starting material than the collaborative path, and folding them together would
+  // hide which instructions an agent actually received.
+  const prompt = refineExistingChildren
+    ? renderEngineTemplate('spec-agent-speckit-refine', {
+      __FORCED_RETRY_BLOCK__: forcedRetryBlock,
+      __PHASE__: phase,
+      __STORY_ID__: story.id,
+      __EXISTING_CHILDREN__: JSON.stringify(openspecOutput?.splitStories || [], null, 2),
+    __STORY_PAYLOAD__: JSON.stringify({
+      id: story.id,
+      title: story.title,
+      description: story.description,
+      originalAcceptanceCriteria: story.acceptanceCriteria,
+      technicalNotes: story.technicalNotes,
+      dependencies: story.dependencies || []
+    }, null, 2),
+    })
+    : renderEngineTemplate('spec-agent-speckit', {
+      __FORCED_RETRY_BLOCK__: forcedRetryBlock,
+      __PHASE__: phase,
+      __STORY_ID__: story.id,
+      __OPENSPEC_OUTPUT__: JSON.stringify({
+        acceptanceCriteria: openspecOutput?.acceptanceCriteria || [],
+        notes: openspecOutput?.notes || '',
+        splitStories: openspecOutput?.splitStories || undefined,
+      }, null, 2),
+    __STORY_PAYLOAD__: JSON.stringify({
+      id: story.id,
+      title: story.title,
+      description: story.description,
+      originalAcceptanceCriteria: story.acceptanceCriteria,
+      technicalNotes: story.technicalNotes,
+      dependencies: story.dependencies || []
+    }, null, 2),
+    });
+  try {
+    const payload = await runAgentForJson(
+      promptExec, prompt, TOOL_SPEC_AGENT, 'SPEC_AGENT',
+      path.join(logDir, `${story.id}-speckit-review.log`), null, story.id, repoPath
+    );
+    if (payload) {
+      payload.agent = 'speckit';
+      // ACCEPTANCE CRITERIA ARE NOT IN SCOPE IN BROWNFIELD.
+      //
+      // A brownfield ticket's ACs are immutable and usually absent — the AC gate says so
+      // itself, skipping AC processing and recording "VCs are derived from the
+      // description". So there is nothing here for an AC guard to protect: any criteria in
+      // this payload were INVENTED by the spec agent, and guarding invented criteria spends
+      // a model call to police a field nothing downstream reads.
+      //
+      // It was not merely wasted. Live 2026-08-06, metrolinx: speckit produced ACs for a
+      // brownfield story, the AC guard armed against them, the vocabulary agent's answer
+      // failed to parse, and this threw — failing the spec pass on all three lanes over
+      // acceptance criteria the ticket never had.
+      //
+      // Greenfield is unchanged: there the ACs are the contract, and the guard still
+      // arms-or-aborts.
+      const _brownfield = process.env.EPAM_BROWNFIELD === '1';
+      let _acVocab = null;
+      if (_brownfield) {
+        if (Array.isArray(payload.acceptanceCriteria) && payload.acceptanceCriteria.length) {
+          console.log(`spec-mode: brownfield — ignoring ${payload.acceptanceCriteria.length} AC(s) speckit produced for ${story.id}; ACs are out of scope and VCs come from the description`);
+        }
+      } else {
+        // ARM OR ABORT — the vocabulary is derived per story; a guard with none checks
+        // nothing while reporting clean, which is the failure this replaced.
+        _acVocab = await deriveGuardVocabulary({
+          promptExec,
+          rule: AC_PRESCRIPTIVENESS_RULE,
+          statements: payload.acceptanceCriteria,
+          story,
+          findings: (story && story.fixSiteAnalysis) || [],
+          manifestFiles: (story && story.technicalNotes && story.technicalNotes.files) || [],
+          logDir,
+          seam: 'acceptance-criteria',
+        });
+        if (Array.isArray(payload.acceptanceCriteria) && payload.acceptanceCriteria.length
+            && !isVocabularyUsable(_acVocab)) {
+          throw new Error(`AC guard could not be armed for ${story.id}: the guard-vocabulary agent returned no usable terms after its full retry/ladder budget. Refusing to proceed with an unarmed guard.`);
+        }
+      }
+      const { clean, flagged } = stripPrescriptiveACs(payload.acceptanceCriteria, story.id, _acVocab);
+      if (flagged.length > 0) {
+        payload.acceptanceCriteria = clean;
+        payload.acFlagged = [...(payload.acFlagged || []), ...flagged];
+        console.log(`spec-mode: speckit validator stripped ${flagged.length} prescriptive AC(s) from ${story.id}`);
+      }
+      // Also validate splitStories children
+      if (Array.isArray(payload.splitStories)) {
+        for (const child of payload.splitStories) {
+          if (!child.acceptanceCriteria) continue;
+          const { clean: childClean, flagged: childFlagged } = stripPrescriptiveACs(child.acceptanceCriteria, `${story.id}/${child.id}`, _acVocab);
+          if (childFlagged.length > 0) {
+            child.acceptanceCriteria = childClean;
+            child.acFlagged = [...(child.acFlagged || []), ...childFlagged];
+          }
+        }
+      }
+    }
+    return { agent: 'speckit', payload };
+  } catch (error) {
+    console.warn(`spec-mode: speckit review failed for ${story.id}:`, error.message);
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildAssignments(assignments, stories, runId) {
+  const map = new Map();
+  const fallback = ['openspec', 'speckit'];
+  const storyIds = new Set(stories.map((s) => s.id));
+  // Brownfield mode: OPENSPEC MUST RUN for every story. openspec is the fix-site
+  // discovery pass — it hosts the brownfield archaeology/locationHint block AND
+  // the code-graph-detective invocation that grounds the story in the EXISTING
+  // repo (which file actually computes the wrong value). The coordinator may
+  // legitimately think a story needs no AC elaboration and assign only speckit
+  // (or nothing) — but that skips openspec entirely, so fix-site discovery and
+  // the detective never run, and the story proceeds to implementation with zero
+  // location grounding. Found live 2026-07-23: coordinator assigned only
+  // speckit → "openspec (elaboration) [0 stories]" → detective never fired →
+  // technicalNotes.files null → wrong/absent fix site. Fix: in brownfield,
+  // ALWAYS ensure openspec is in the agent list (prepended — it runs first),
+  // regardless of what the coordinator chose. The coordinator's judgment about
+  // whether speckit ALSO runs is still respected.
+  const isBrownfield = process.env.EPAM_BROWNFIELD === '1';
+  const ensureOpenspec = (agents) => {
+    if (!isBrownfield) return agents;
+    return agents.includes('openspec') ? agents : ['openspec', ...agents];
+  };
+  if (Array.isArray(assignments)) {
+    assignments.forEach((entry) => {
+      if (!entry || !storyIds.has(entry.storyId)) return;
+      // Guard: only accept known agent names — LLM sometimes returns review content as agent name
+      const VALID_AGENTS = new Set(['openspec', 'speckit']);
+      const rawAgents = Array.isArray(entry.agents) ? entry.agents : [];
+      let agents = rawAgents.filter(a => typeof a === 'string' && VALID_AGENTS.has(a));
+      agents = ensureOpenspec(agents);
+      map.set(entry.storyId, {
+        storyId: entry.storyId,
+        agents,
+        notes: entry.notes || '',
+        priority: entry.priority || 'normal',
+        runId
+      });
+    });
+  }
+  stories.forEach((story) => {
+    if (map.has(story.id)) return;
+    map.set(story.id, { storyId: story.id, agents: fallback, notes: '', runId });
+  });
+  return map;
+}
+
+function captureStorySnapshot(story) {
+  return {
+    acceptanceCriteria: Array.isArray(story.acceptanceCriteria)
+      ? [...story.acceptanceCriteria]
+      : [],
+    description: story.description,
+    title: story.title,
+    technicalNotes: story.technicalNotes || null,
+    // Cycle-time investigation, 2026-07-31 (mock1 run that hit the 45-minute
+    // test timeout): the prd-change-reviewer's own rule set says to reject
+    // when "verificationCriteria is empty while the description names
+    // concrete testable behaviour" — but this snapshot (the ONLY thing the
+    // reviewer is shown) never included the field, so from the reviewer's
+    // view it was ALWAYS absent regardless of the story's real state. That
+    // false "empty" reading fired on essentially every brownfield story with
+    // a concrete description, triggering the reviewer's 3-attempt retry loop
+    // (each attempt re-runs openspec + detective + the full VC enforcement
+    // loop) for a change the story never actually had. story.verificationCriteria
+    // is already set (by enforceVerificationCriteria, inside runSpecAgent)
+    // before afterSnapshot is captured, so this field is real, not a guess.
+    verificationCriteria: Array.isArray(story.verificationCriteria)
+      ? [...story.verificationCriteria]
+      : []
+  };
+}
+
+// Count split depth by walking the createdFrom chain back to the root story.
+function splitDepth(story, prd) {
+  let depth = 0;
+  let parentId = story.specification?.createdFrom;
+  const visited = new Set();
+  while (parentId && !visited.has(parentId)) {
+    visited.add(parentId);
+    depth += 1;
+    const parent = prd.stories.find((s) => s.id === parentId);
+    parentId = parent?.specification?.createdFrom;
+  }
+  return depth;
+}
+
+// Lightweight token-budget estimate for a story before it enters the executor.
+// Measures the baseline prompt footprint (ACs × density + file entries + contract
+// sizes) without running the executor. Intentionally conservative — accumulated
+// context from tool calls is unknowable pre-execution, but the baseline is the
+// dominant factor for over-budget stories.
+const ESTIMATE_BASE = 2000;
+const ESTIMATE_PER_AC = 150;
+const ESTIMATE_PER_TC = 300;    // ~2 TCs per AC × 150 tokens each
+const ESTIMATE_PER_FILE = 100;
+const ESTIMATE_BYTES_PER_TOKEN = 4;
+
+function estimateStoryTokens(story, contractDir) {
+  const acCount = (story.acceptanceCriteria || []).length;
+  const fileCount = (story.technicalNotes?.files || []).length;
+  let contractTokens = 0;
+  for (const depId of (story.dependencies || [])) {
+    try {
+      contractTokens += Math.ceil(
+        fs.statSync(path.join(contractDir, `${depId}.md`)).size / ESTIMATE_BYTES_PER_TOKEN
+      );
+    } catch { /* contract not yet written — skip */ }
+  }
+  return ESTIMATE_BASE
+    + (acCount * ESTIMATE_PER_AC)
+    + (acCount * ESTIMATE_PER_TC)
+    + (fileCount * ESTIMATE_PER_FILE)
+    + contractTokens;
+}
+
+// Split MANDATE thresholds — shared by the prompt warning (runSpecAgent) and the
+// deterministic post-hoc check below (checkSplitMandateViolation), so the two
+// can never drift apart. Fully generic: no project/domain names, just AC count
+// and impl/test file shape — applies identically to any project's stories.
+// The split threshold is DECLARED — config/spec-mode-defaults.json policy.splitMandateAcThreshold.
+// Exposed as a getter on the exports below so a reader always sees the current declaration
+// rather than a value frozen at module load.
+
+function storyRequiresSplit(snapshot) {
+  // Brownfield: a story IS the ticket, so there is nothing to subdivide.
+  //
+  // Live AMSD-2041 2026-07-30: the ticket carries NO acceptance criteria,
+  // speckit invented 15 from its one-line title, this rule saw 15 > 12 and
+  // forced openspec to produce `AMSD-2041-A` — a child that exists nowhere in
+  // the client's Jira, can never be written back (writes to client systems are
+  // hard-blocked), reached implementation and wrote nothing.
+  //
+  // Every assumption behind the mandate is greenfield: that ACs were authored
+  // by someone who knows the work (here the pipeline authored them, so the
+  // count measures the inventor); that AC count proxies size (a minimal fix to
+  // existing code can be three lines behind fifteen observable behaviours); and
+  // that a story is ours to split at all. Multi-codeline work is one story with
+  // N executions and joined state — deliberately NOT a split.
+  //
+  // Keyed on brownfield being ON, never on its absence: a project that does not
+  // set the variable must keep the mandate exactly as it is.
+  if (process.env.EPAM_BROWNFIELD === '1') {
+    return { required: false, reason: '' };
+  }
+  const acCount = Array.isArray(snapshot.acceptanceCriteria) ? snapshot.acceptanceCriteria.length : 0;
+  const files = snapshot.technicalNotes?.files || [];
+  const testFiles = files.filter((f) => f.endsWith('.test.ts') || f.endsWith('.spec.ts'));
+  const implFiles = files.filter((f) => !f.endsWith('.test.ts') && !f.endsWith('.spec.ts'));
+  const _splitAt = policyConfig().splitMandateAcThreshold;
+  if (Number.isFinite(_splitAt) && acCount > _splitAt) {
+    return { required: true, reason: `${acCount} acceptance criteria (> ${_splitAt})` };
+  }
+  if (testFiles.length > 0 && implFiles.length > 0) {
+    return { required: true, reason: `combines ${implFiles.length} implementation file(s) and ${testFiles.length} test file(s)` };
+  }
+  return { required: false, reason: '' };
+}
+
+// Root cause this catches (found live, 2026-07-06): openspec's prompt already
+// says "MANDATORY split required" whenever storyRequiresSplit() is true — but
+// that's pure prose, never verified afterward. A story meeting the mandate can
+// silently stay unsplit for its entire lifetime with zero visible signal,
+// because the ONLY existing split check (validateSplitFileCoherence, above)
+// only fires when a split DID happen and is incoherent — it has nothing to
+// say about a split that should have happened but never did. Confirmed live:
+// a story with 15 ACs and combined impl+test files went through 3 separate
+// openspec passes across 2 full pipeline runs and was never split, exhausting
+// its entire model-escalation ladder on a single overloaded story instead.
+// Returns {violated, reason} — detection only (Option D pattern: deterministic
+// detection, not a silent auto-split, since auto-splitting requires domain
+// judgment about where the split boundary goes).
+function checkSplitMandateViolation(beforeSnapshot, splitCountAfter) {
+  if (splitCountAfter > 0) {
+    return { violated: false, reason: '' };
+  }
+  const { required, reason } = storyRequiresSplit(beforeSnapshot);
+  if (!required) {
+    return { violated: false, reason: '' };
+  }
+  return { violated: true, reason };
+}
+
+// ── TC-fact-density split mandate (test stories) ────────────────────────────
+//
+// Root cause this fixes (found live, 2026-07-14, tier3-travel-app run):
+// storyRequiresSplit()/checkSplitMandateViolation() above only ever see AC
+// count and impl/test file shape — both known at SPEC-PASS time (Step 0),
+// before any implementation has run. But a pure test story's REAL
+// generation load comes from testCriteria.facts — exact-match behavioral
+// facts the TC writer only discovers post-impl, right before the test
+// story itself executes (see lib/tc-writer-gate.sh). SKY-003-test had a
+// modest 8 ACs (well under SPLIT_MANDATE_AC_THRESHOLD) but 20 TC facts + 19
+// bannedPatterns crammed into ONE test file — every model at every
+// escalation rung, up to the ceiling, produced widespread syntax
+// corruption (30+ tsc errors) on it, 8/8 attempts. The AC-count mandate
+// structurally cannot see this; it needs its own, TC-fact-density-based
+// mandate, checked at the one point density is actually known.
+//
+// EPAM_TC_FACTS_SPLIT_THRESHOLD (default 30): facts count alone, since
+// that's what makes ONE file too large to write correctly, independent of
+// how many bannedPatterns rules also apply (those are global constraints
+// copied to every split child unchanged, not something to partition).
+const TC_FACTS_SPLIT_THRESHOLD = parseInt(process.env.EPAM_TC_FACTS_SPLIT_THRESHOLD || '30', 10);
+
+function checkTcFactDensityMandate(factsCount, threshold = TC_FACTS_SPLIT_THRESHOLD) {
+  const count = Number(factsCount) || 0;
+  if (count > threshold) {
+    return { violated: true, reason: `${count} testCriteria.facts (> ${threshold}) on a single test file — split into multiple test stories` };
+  }
+  return { violated: false, reason: '' };
+}
+
+// splitTestStoryByFacts <story> <prd> <phase> [maxFactsPerChild]
+// Partitions a pure-test story's testCriteria.facts into N children, each
+// owning a distinct test file covering its own subset of facts. Unlike
+// applySpecChanges()'s AC-based split (which needs an LLM to decide WHERE
+// the split boundary goes, since AC semantics require judgment), a facts
+// array has no such ambiguity — each fact is an independent, already-atomic
+// assertion, so a purely mechanical even partition is safe and requires no
+// LLM involvement (same "deterministic code-level action, not LLM
+// persuasion" principle as the rest of this pipeline's self-heal layer).
+//
+// Mutates `prd` in place: marks the parent deprecated+completed (delegated,
+// same convention as applySpecChanges' AC-split parent handling) and
+// splices the new child IDs into prd.implementationOrder[phase] at the
+// parent's former position. Returns { splitCount, childIds } — {0, []} if
+// the story isn't eligible (not a pure test story, or already split/
+// deprecated).
+function splitTestStoryByFacts(story, prd, phase, maxFactsPerChild = TC_FACTS_SPLIT_THRESHOLD) {
+  if (!story || story.status === 'deprecated') return { splitCount: 0, childIds: [] };
+  const files = story.technicalNotes?.files || [];
+  const isPureTestStory = files.length > 0 && files.every((f) => f.endsWith('.test.ts') || f.endsWith('.spec.ts'));
+  if (!isPureTestStory || files.length !== 1) return { splitCount: 0, childIds: [] };
+
+  const facts = Array.isArray(story.testCriteria?.facts) ? story.testCriteria.facts : [];
+  if (facts.length === 0) return { splitCount: 0, childIds: [] };
+
+  const perChild = Math.max(1, Number(maxFactsPerChild) || TC_FACTS_SPLIT_THRESHOLD);
+  const childCount = Math.ceil(facts.length / perChild);
+  if (childCount <= 1) return { splitCount: 0, childIds: [] };
+
+  const testFile = files[0];
+  const dotIdx = testFile.lastIndexOf('.test.');
+  const isSpec = dotIdx === -1;
+  const splitPoint = isSpec ? testFile.lastIndexOf('.spec.') : dotIdx;
+  const ext = isSpec ? '.spec.ts' : '.test.ts';
+  const base = testFile.slice(0, splitPoint);
+
+  const childIds = [];
+  const newChildren = [];
+  for (let i = 0; i < childCount; i++) {
+    const childId = `${story.id}-tc${i + 1}`;
+    const factSlice = facts.slice(i * perChild, (i + 1) * perChild);
+    const child = JSON.parse(JSON.stringify(story));
+    child.id = childId;
+    child.title = `${story.title} (part ${i + 1}/${childCount})`;
+    child.status = 'pending';
+    child.completed = false;
+    child.technicalNotes = { ...story.technicalNotes, files: [`${base}.tc${i + 1}${ext}`] };
+    child.testCriteria = {
+      ...story.testCriteria,
+      facts: factSlice,
+    };
+    child.specification = {
+      ...(story.specification || {}),
+      createdFrom: story.id,
+      createdAt: new Date().toISOString(),
+      splitOrigin: 'tc-density-split',
+      splitDepth: ((story.specification && story.specification.splitDepth) || 0) + 1,
+    };
+    childIds.push(childId);
+    newChildren.push(child);
+  }
+
+  prd.stories.push(...newChildren);
+  story.acceptanceCriteria = [`Delegated to TC-density split children: ${childIds.join(', ')}`];
+  story.status = 'deprecated';
+  story.completed = true;
+
+  const order = prd.implementationOrder?.[phase];
+  if (Array.isArray(order)) {
+    const idx = order.indexOf(story.id);
+    if (idx !== -1) {
+      order.splice(idx, 1, ...childIds);
+    } else {
+      order.push(...childIds);
+    }
+  }
+
+  console.log(`spec-mode: TC-fact-density split — ${story.id} (${facts.length} facts) → ${childIds.join(', ')} (${perChild} facts/child max)`);
+  return { splitCount: childIds.length, childIds };
+}
+
+// Root cause this fixes (found live, 2026-07-06, tier3-full-run-18): a split
+// child whose files are ALL test files (e.g. SKY-002-TEST, owning only
+// client.test.ts) kept the PARENT's implementation-oriented agentRole
+// (typescript-engineer) instead of a test-oriented role. The only existing
+// correction mechanism was an LLM instruction buried in the Step 0.5 "skill
+// assessment" prompt ("if all files match *.test.ts, update agentRole to
+// test-engineer") — and it silently failed to apply to EVERY split child
+// created this run, not just one. A rule this simple (file-extension pattern
+// -> role) should never depend on an LLM correctly executing free-text
+// instructions.
+//
+// Deliberately NOT hardcoding a role name here — agent roles are project-
+// defined and dynamic (profiles.json is generated per-project, not fixed).
+// The correct role name and the pattern that identifies "this is a test-only
+// story" both come from the project's own .epam/contract-generation.json
+// (testFilePattern / testFileAgentRole), the same "config supplies stack
+// knowledge, engine has none" convention already used for dependency-check.json
+// and elsewhere in this file. If the project hasn't supplied testFileAgentRole,
+// this is a no-op — the child simply keeps whatever role it already had.
+function correctSplitChildAgentRoleIfTestOnly(prd, story) {
+  const outputDir = prd.project?.outputDir;
+  if (!outputDir) return;
+  const configPath = path.join(outputDir, '.epam', 'contract-generation.json');
+  let cfg;
+  try {
+    cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  } catch {
+    return;
+  }
+  if (!cfg.testFileAgentRole || !cfg.testFilePattern) return;
+  const files = story.technicalNotes?.files;
+  if (!Array.isArray(files) || files.length === 0) return;
+  const testFileRe = new RegExp(cfg.testFilePattern);
+  const allTestFiles = files.every((f) => testFileRe.test(f));
+  if (allTestFiles) {
+    story.agentRole = cfg.testFileAgentRole;
+  }
+}
+
+// wireSplitSiblingDependencies(siblings, prd)
+// Root cause this fixes (found live, 2026-07-09, tier3-travel-app run): a
+// split child's `dependencies` array comes straight from the LLM's own split
+// proposal — nothing deterministically cross-references a test-only sibling
+// to its impl sibling from the SAME split. Downstream, claude.sh's
+// dependency-contract injection (build_implementation_prompt,
+// run_failure_analyst) and are_dependencies_satisfied() gate ONLY on
+// `.dependencies`/`.technicalNotes.dependsOn` — so a test child never
+// receives its impl sibling's real (regex-extracted) exported signatures, on
+// its first attempt OR any retry. Confirmed live: SKY-003-test/-test-1 and
+// SKY-004-test all had `dependencies: []` despite an obvious impl sibling
+// (same `specification.createdFrom`), and burned 7+ healing cycles guessing
+// at shifting surface symptoms instead of ever seeing the real contract.
+//
+// Uses the SAME basename-matching convention already proven live in
+// post-impl-tc-writer.sh's peer-file search (strip a test file's suffix,
+// strip a candidate impl file's extension, match on the resulting stem) —
+// generalized to read `testFilePattern`/`sourceExtensions` from the
+// project's existing `.epam/contract-generation.json` (both keys already
+// exist in every scaffolded project's config; zero new schema) instead of
+// hardcoding '.test.ts'/'.ts', so this stays stack-agnostic like every other
+// consumer of that config file.
+function wireSplitSiblingDependencies(siblings, prd) {
+  const outputDir = prd.project?.outputDir;
+  if (!outputDir || !Array.isArray(siblings) || siblings.length < 2) return;
+  const configPath = path.join(outputDir, '.epam', 'contract-generation.json');
+  let cfg;
+  try {
+    cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  } catch {
+    return;
+  }
+  if (!cfg.testFilePattern || !Array.isArray(cfg.sourceExtensions) || !cfg.sourceExtensions.length) return;
+  const testFileRe = new RegExp(cfg.testFilePattern);
+  const exts = [...cfg.sourceExtensions].sort((a, b) => b.length - a.length);
+
+  const stemOf = (filePath, isTest) => {
+    const base = filePath.split('/').pop();
+    if (isTest) return base.replace(testFileRe, '');
+    for (const ext of exts) {
+      if (base.endsWith(ext)) return base.slice(0, -ext.length);
+    }
+    return base;
+  };
+
+  for (const testSibling of siblings) {
+    const files = testSibling.technicalNotes?.files;
+    if (!Array.isArray(files) || files.length === 0) continue;
+    if (!files.every((f) => testFileRe.test(f))) continue; // not a pure test-only child
+    const testStems = new Set(files.map((f) => stemOf(f, true)));
+    const deps = new Set(Array.isArray(testSibling.dependencies) ? testSibling.dependencies : []);
+    let wired = false;
+    for (const implSibling of siblings) {
+      if (implSibling === testSibling) continue;
+      const implFiles = implSibling.technicalNotes?.files;
+      if (!Array.isArray(implFiles) || implFiles.length === 0) continue;
+      if (implFiles.some((f) => testFileRe.test(f))) continue; // skip other test siblings
+      const implStems = implFiles.map((f) => stemOf(f, false));
+      if (implStems.some((s) => testStems.has(s)) && !deps.has(implSibling.id)) {
+        deps.add(implSibling.id);
+        wired = true;
+      }
+    }
+    if (wired) {
+      testSibling.dependencies = [...deps];
+      console.log(`spec-mode: wired ${testSibling.id}.dependencies -> [${[...deps].join(', ')}] (deterministic sibling match, createdFrom=${testSibling.specification?.createdFrom})`);
+    }
+  }
+}
+
+// reorderSiblingsByDependency(siblings, order)
+// Required corollary of wireSplitSiblingDependencies: are_dependencies_satisfied()
+// (claude.sh) hard-gates a story on its dependencies' `.completed==true`, and
+// the main Step 1 loop executes strictly in implementationOrder[phase] order.
+// Newly wiring a dependency onto a sibling ordered BEFORE its dependency would
+// introduce a new hard failure that doesn't exist today — this only reorders
+// IDs already present in the same sibling group, moving a dependent story to
+// just after its dependency.
+function reorderSiblingsByDependency(siblings, order) {
+  if (!Array.isArray(order) || !Array.isArray(siblings)) return;
+  const siblingIds = new Set(siblings.map((s) => s.id));
+  for (const s of siblings) {
+    const deps = Array.isArray(s.dependencies) ? s.dependencies : [];
+    for (const depId of deps) {
+      if (!siblingIds.has(depId)) continue; // only reorder within this sibling group
+      const selfIdx = order.indexOf(s.id);
+      const depIdx = order.indexOf(depId);
+      if (selfIdx !== -1 && depIdx !== -1 && selfIdx < depIdx) {
+        order.splice(selfIdx, 1);
+        const newDepIdx = order.indexOf(depId);
+        order.splice(newDepIdx + 1, 0, s.id);
+      }
+    }
+  }
+}
+
+// assertNoStoryIdsLost(beforeIds, afterIds, contextLabel)
+// Deterministic invariant check against silent story deletion — JS-side
+// mirror of run-agent-orchestration.sh's assert_no_story_ids_lost(). See
+// that function's docstring for the live defect this guards against
+// (SKY-002/003/004 vanishing entirely from prd.stories[], 2026-07-09).
+// beforeIds/afterIds are Sets of story IDs; throws if any ID present in
+// beforeIds is absent from afterIds. A GROWING set (new split children) is
+// expected and not an error.
+function assertNoStoryIdsLost(beforeIds, afterIds, contextLabel) {
+  const lost = [...beforeIds].filter((id) => !afterIds.has(id));
+  if (lost.length > 0) {
+    throw new Error(`spec-mode-runner: STORY-ID-LOSS INVARIANT VIOLATED — story/ies vanished from prd.stories[] during ${contextLabel}: ${lost.join(', ')}`);
+  }
+}
+
+// resolveModelProvider(model, env)
+// JS port of claude.sh's resolve_model_provider() — reads EPAM_MODEL_PROVIDER_MAP
+// (pipe-separated "glob-pattern=provider" pairs) and returns the provider for a
+// model name via glob matching. Zero hardcoded vendor/model names here, same
+// config-driven pattern as the bash original. Returns null when no map is
+// configured or no pattern matches (caller keeps the story's existing aiProvider).
+//
+// Root cause this fixes (found live, 2026-07-07): spec-mode's LLM model-review
+// step (below) can override a story's .model field (e.g. moonshotai/kimi-k2 ->
+// MiniMax-M3) but never touched .aiProvider — a story ended up with
+// aiProvider="openrouter" (correct for the OLD model) paired with model="MiniMax-M3"
+// (which needs the "minimax" provider), silently sending a MiniMax-native model
+// name to the OpenRouter-routed openrouter provider. That request never resolves
+// correctly and hangs until the pipeline's 600s watchdog kills it — the actual
+// root cause of SKY-002-test/SKY-003-test repeatedly stalling with zero output
+// in that day's live run, misread at first as a flaky-API/network issue.
+// Look up a model's HIGH-ladder successor (EPAM_MODEL_LADDER_HIGH is a
+// "from=to|from=to" map, e.g. "z-ai/glm-5.1=moonshotai/kimi-k3"). Returns the
+// escalation target for `model`, or null if the model isn't in the ladder. Used
+// to escalate the code-graph-detective to a stronger model (kimi-k3) on retry —
+// the same laddering openspec/speckit already do, so the detective is cohesive
+// with the rest of the pipeline instead of hard-pinned to one model.
+function ladderNextModel(model, env = process.env) {
+  const map = env.EPAM_MODEL_LADDER_HIGH || env.EPAM_MODEL_LADDER || '';
+  if (!map || !model) return null;
+  for (const pair of map.split('|')) {
+    const eq = pair.indexOf('=');
+    if (eq === -1) continue;
+    if (pair.slice(0, eq).trim() === model.trim()) return pair.slice(eq + 1).trim();
+  }
+  return null;
+}
+
+function resolveModelProvider(model, env = process.env) {
+  const map = env.EPAM_MODEL_PROVIDER_MAP;
+  if (!map || !model) return null;
+  const globToRegExp = (glob) =>
+    new RegExp('^' + glob.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
+  for (const pair of map.split('|')) {
+    const eq = pair.indexOf('=');
+    if (eq === -1) continue;
+    const pattern = pair.slice(0, eq);
+    const provider = pair.slice(eq + 1);
+    if (globToRegExp(pattern).test(model)) return provider;
+  }
+  return null;
+}
+
+// Matches the exact placeholder applySpecChanges writes onto a parent story's
+// acceptanceCriteria after a successful split (see "Delegated to split
+// children:" above). Deliberately a single-purpose string check, not a general
+// AC-quality heuristic — this only needs to recognize the ONE deterministic
+// template the engine itself produces.
+const SPLIT_DELEGATION_AC_PATTERN = /^Delegated to split children: /;
+
+function isSplitDelegationAc(acceptanceCriteria) {
+  return (
+    Array.isArray(acceptanceCriteria) &&
+    acceptanceCriteria.length === 1 &&
+    SPLIT_DELEGATION_AC_PATTERN.test(acceptanceCriteria[0])
+  );
+}
+
+// Root cause this fixes (found live, 2026-07-06, first surfaced only once
+// splits started actually succeeding): prd-change-reviewer is a content-quality
+// gate that judges a story's AC/description/title rewrite on its own merits —
+// it has no way to know "Delegated to split children: X, Y" is a deterministic,
+// engine-written placeholder rather than an organically-authored AC, so it
+// correctly-by-its-own-lights flags it as "vague and unmeasurable" and reverts
+// the ENTIRE change, undoing a structurally-valid split (which applySpecChanges
+// had already verified via file coherence, depth, and budget checks) purely
+// because of how the resulting placeholder text reads. A split's correctness
+// is already deterministically verified elsewhere; asking an LLM to also judge
+// the placeholder text it can't recognize as a placeholder is a pure false
+// positive, not a real quality signal.
+//
+// Returns true when the review gate should be skipped for this change because
+// a split occurred and the ONLY substantive difference from beforeSnapshot is
+// the deterministic delegation marker — description/title/technicalNotes are
+// unchanged, so there is nothing else here for a content reviewer to assess.
+function isSplitDelegationOnlyChange(beforeSnapshot, afterSnapshot, splitCount) {
+  if (!(splitCount > 0)) return false;
+  if (!isSplitDelegationAc(afterSnapshot.acceptanceCriteria)) return false;
+  return (
+    afterSnapshot.description === beforeSnapshot.description &&
+    afterSnapshot.title === beforeSnapshot.title &&
+    JSON.stringify(afterSnapshot.technicalNotes) === JSON.stringify(beforeSnapshot.technicalNotes)
+  );
+}
+
+// Detect same-file coherence violations: multiple split children claiming to write
+// the same non-test file. Each agent rewrites the file from scratch, so the last
+// writer wins and all prior agents' work is silently discarded.
+// Returns array of {file, childIds} conflicts. Empty array = coherent.
+function validateSplitFileCoherence(children) {
+  // Check ALL declared files — test files included. Each split child rewrites its file
+  // from scratch (last writer wins), so two children declaring the same .test.ts lose
+  // all work from every child except the last one. No exemption for test files.
+  const fileToChildren = new Map();
+  for (const child of children) {
+    const files = (child.technicalNotes?.files || [])
+      .filter(f => typeof f === 'string');
+    for (const file of files) {
+      if (!fileToChildren.has(file)) fileToChildren.set(file, []);
+      fileToChildren.get(file).push(child.id);
+    }
+  }
+  const conflicts = [];
+  for (const [file, childIds] of fileToChildren) {
+    if (childIds.length > 1) conflicts.push({ file, childIds });
+  }
+  return conflicts;
+}
+
+// Hard code enforcement for split eligibility — not a prompt instruction, a code invariant.
+// Called before registering any split child (per-child, so budget check tightens as children accumulate).
+const MAX_ACS_PER_STORY = parseInt(process.env.SPEC_MAX_ACS || '24', 10);
+const MAX_CHILDREN_PER_SPLIT = parseInt(process.env.SPEC_MAX_CHILDREN || '4', 10);
+
+function canSplitStory(story, prd, newStories) {
+  const maxSplitDepth = parseInt(process.env.SPEC_MAX_SPLIT_DEPTH || '2', 10);
+  const currentDepth = splitDepth(story, prd);
+  if (currentDepth >= maxSplitDepth) {
+    return { ok: false, reason: `depth ${currentDepth} >= max ${maxSplitDepth}` };
+  }
+  const existingChildren = (prd.stories || []).filter(
+    s => s.specification?.createdFrom === story.id
+  ).length;
+  const pendingChildren = (newStories || []).filter(
+    ns => ns.parentId === story.id
+  ).length;
+  if (existingChildren + pendingChildren >= MAX_CHILDREN_PER_SPLIT) {
+    return { ok: false, reason: `split budget exhausted (${existingChildren + pendingChildren} children >= max ${MAX_CHILDREN_PER_SPLIT})` };
+  }
+  return { ok: true, reason: '' };
+}
+
+// AC cap — modifies story in place, logs if truncated
+function capSplitACs(story, parentId) {
+  const acs = Array.isArray(story.acceptanceCriteria) ? story.acceptanceCriteria : [];
+  if (acs.length > MAX_ACS_PER_STORY) {
+    console.warn(`spec-mode: AC cap enforced on ${story.id} (child of ${parentId}): ${acs.length} → ${MAX_ACS_PER_STORY}`);
+    story.acceptanceCriteria = acs.slice(0, MAX_ACS_PER_STORY);
+  }
+}
+
+// Merges locationHint's discovered file paths into technicalNotes.files
+// (additive, deduped) — extracted so the same merge can be re-applied after a
+// content-quality revert wipes technicalNotes back to its pre-spec-pass value
+// (see AMSD-2041, 2026-07-31: the revert path in run() erased a real,
+// detective-grounded file list along with a rejected AC rewrite it had
+// nothing to do with). Returns technicalNotes unchanged when locationHint is
+// empty/absent.
+/**
+ * coveringTestFiles(repoPath, files) -> [test file paths]
+ *
+ * The test that already covers a declared file, found by IMPORT rather than guessed by name.
+ *
+ * The writer is responsible for tests, and it only writes inside its manifest. On AMSD-2041
+ * the manifest named src/services/<module>.ts and nothing else, so the covering suite —
+ * src/services/__tests__/<module>.spec.ts, which imports that exact module and already
+ * exercises analogous config — was never in scope. The reviewer asked for tests on seven
+ * cycles across two runs and the writer had nowhere sanctioned to put them.
+ *
+ * Derivation, in order:
+ *   1. tracked files only (git ls-files) — never build output or vendored copies
+ *   2. files the TEST RUNNER would collect. jest's documented default is __tests__ directories
+ *      plus *.spec / *.test; EPAM_TEST_FILE_PATTERN overrides it for a project whose runner
+ *      differs. This is the runner's own contract, not a convention invented here.
+ *   3. of those, the ones that IMPORT the declared module. An import is evidence of coverage;
+ *      a matching filename is a coincidence.
+ */
+function coveringTestFiles(repoPath, files, env = process.env) {
+  const out = [];
+  try {
+    if (!repoPath || !fs.existsSync(repoPath)) return out;
+    const declared = (Array.isArray(files) ? files : []).filter((f) => typeof f === 'string' && f);
+    if (!declared.length) return out;
+    const testPattern = new RegExp(env.EPAM_TEST_FILE_PATTERN || '(^|/)__tests__/|\\.(spec|test)\\.[jt]sx?$');
+    const tracked = require('child_process')
+      .execFileSync('git', ['-C', repoPath, 'ls-files'], { encoding: 'utf8', maxBuffer: 1 << 26 })
+      .split('\n').filter(Boolean);
+    const candidates = tracked.filter((f) => testPattern.test(f));
+    for (const src of declared) {
+      const srcNoExt = src.replace(/\.[jt]sx?$/, '');
+      for (const t of candidates) {
+        if (out.includes(t) || declared.includes(t)) continue;
+        let body = '';
+        try { body = fs.readFileSync(path.join(repoPath, t), 'utf8'); } catch { continue; }
+        // RESOLVE the import, do not pattern-match its tail. Matching on basename alone
+        // accepted "constants/<module>" and "interface/<module>" as covering
+        // "services/<module>.ts" — 21 unrelated suites for one declared file, which would
+        // have handed the writer a manifest naming most of the test tree.
+        let covers = false;
+        for (const m of body.matchAll(/(?:from\s*|require\(\s*)['"]([^'"]+)['"]/g)) {
+          const spec = m[1];
+          let resolved;
+          if (spec.startsWith('.')) {
+            resolved = path.posix.normalize(path.posix.join(path.posix.dirname(t), spec));
+          } else {
+            // Non-relative (alias or baseUrl) import: it covers the declared file only when
+            // the declared path ENDS with the specifier — "services/<module>" matches
+            // "src/services/<module>.ts", "constants/<module>" does not.
+            resolved = spec;
+            if (srcNoExt.endsWith(`/${spec}`) || srcNoExt === spec) { covers = true; break; }
+            continue;
+          }
+          if (resolved === srcNoExt || resolved === src) { covers = true; break; }
+        }
+        if (covers) out.push(t);
+      }
+    }
+  } catch { /* a manifest without a covering test is a fact, not an error */ }
+  return out;
+}
+
+function mergeLocationHintFiles(technicalNotes, locationHint) {
+  if (!Array.isArray(locationHint) || !locationHint.length) return technicalNotes;
+  const hintFiles = locationHint
+    .map(h => (h && typeof h === 'object' ? h.file : null))
+    .filter(f => typeof f === 'string' && f.trim().length > 0);
+  if (!hintFiles.length) return technicalNotes;
+  const existingFiles = Array.isArray(technicalNotes?.files) ? technicalNotes.files : [];
+  const mergedFiles = [...new Set([...existingFiles, ...hintFiles])];
+  return { ...(technicalNotes || {}), files: mergedFiles };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Resolve a declared path against ONE real checkout. Assumes no naming convention:
+// exact, then case variant, then same-stem/different-extension. The repository is the
+// authority — which is why no camelCase rule is needed or wanted. Mirrors
+// lib/story_manifest_schema.py's resolve_path so both sides agree on what "resolved"
+// means; the Python model is the schema source of truth, this is the runtime path.
+function _resolveInCodeline(declared, codelineRoot) {
+  const checked = [declared];
+  const abs = (p) => path.join(codelineRoot, p);
+  try {
+    if (fs.statSync(abs(declared)).isFile()) {
+      return { actual: declared, match: 'exact' };
+    }
+  } catch { /* fall through to variants */ }
+
+  const relDir = path.dirname(declared) === '.' ? '' : path.dirname(declared);
+  const base = path.basename(declared);
+  const ext = path.extname(base);
+  const stem = path.basename(base, ext);
+  const absDir = relDir ? abs(relDir) : codelineRoot;
+  const joinRel = (e) => (relDir ? path.join(relDir, e) : e);
+
+  let entries;
+  try {
+    entries = fs.readdirSync(absDir).sort();
+  } catch {
+    return { unresolved: { declared, candidates_checked: checked, reason: `directory '${relDir || '.'}' does not exist in this codeline` } };
+  }
+
+  for (const e of entries) {
+    if (e !== base && e.toLowerCase() === base.toLowerCase()) {
+      return { actual: joinRel(e), match: 'case_variant' };
+    }
+  }
+  for (const e of entries) {
+    const eExt = path.extname(e);
+    if (path.basename(e, eExt).toLowerCase() === stem.toLowerCase() && eExt !== ext) {
+      return { actual: joinRel(e), match: 'extension_variant' };
+    }
+  }
+  return {
+    unresolved: {
+      declared,
+      candidates_checked: checked.concat(entries.map(joinRel)),
+      reason: 'no exact, case-variant or extension-variant match exists in this codeline',
+    },
+  };
+}
+
+// codelineScopeBlock(prd, stories) → prompt text telling the spec reviewer which lane it is
+// looking at, or '' when the question does not arise.
+//
+// The spec pass runs per codeline against that codeline's own checkout, so its manifest, fix
+// sites and verification criteria describe THAT repository. The reviewer's prompt never said
+// so. On AMSD-2041 it saw codelines:[three] on the story, criteria naming only metrolinx
+// surfaces, and reported missing_cross_codeline_paths at 0.65 — below the 0.7 halt threshold,
+// so it stopped the run. The reviewer reasoned correctly from what it was shown; it was shown
+// one lane's work and told it was the whole story.
+//
+// This corrects what it is shown. It does NOT tell it to ignore cross-codeline problems —
+// those are real whenever this lane's own change depends on another — and it does not steer
+// the number. Every codeline name comes from the PRD's own project.outputDirs.
+function codelineScopeBlock(prd, stories) {
+  const thisLane = laneCodeline(prd);
+  if (!thisLane) return '';
+  const list = Array.isArray(stories) ? stories : [];
+  const spanning = list.filter((s) => s && Array.isArray(s.codelines) && s.codelines.length > 1);
+  if (!spanning.length) return '';
+
+  const others = [...new Set(spanning.flatMap((s) => s.codelines))]
+    .filter((cl) => cl && cl !== thisLane);
+  if (!others.length) return '';
+
+  // RENDERED FROM THE TEMPLATE LAYER.
+  return renderEngineTemplate('spec-context-fragments', {
+    __THIS_LANE__: thisLane,
+    __OTHER_LANES__: others.join(', '),
+    __OTHER_LANES_OR__: others.join(' or '),
+  }, 'codeline_scope')
+}
+
+// laneCodeline(prd) → the codeline this process is running as, or null.
+//
+// The spec pass runs PER LANE on that lane's own filtered PRD, and several things have to
+// know WHICH lane: the resolved file manifest, and the fix sites the detective found. The
+// derivation is the one used everywhere else in the engine — project.outputDir matched back
+// against project.outputDirs[] — so no codeline or client name is written into the engine;
+// it comes from the PRD's own data.
+//
+// Returns null rather than guessing. A single-codeline run has no lane to derive, and an
+// outputDir matching nothing declared is a condition to leave alone, not to paper over by
+// picking the first entry.
+function laneCodeline(prd) {
+  const outDir = prd && prd.project && prd.project.outputDir;
+  const dirs = (prd && prd.project && Array.isArray(prd.project.outputDirs))
+    ? prd.project.outputDirs : [];
+  if (!outDir || !dirs.length) return null;
+  const hit = dirs.find((d) => d && d.path === outDir);
+  return (hit && hit.codeline) || null;
+}
+
+// buildPerCodelineManifest(story, prd) → { <codeline>: {files, resolved, unresolved} } | null
+//
+// A SINGLE shared technicalNotes.files array cannot be correct when the lanes are
+// separate repositories whose real filenames differ — at most one lane's path can be
+// right. Live 2026-08-03: the detective's own root-cause fix site was declared once for
+// three codelines that spell it three ways, so it resolved on one lane; two writers were
+// handed a path that does not exist, and a reviewer then blocked one of them for not
+// editing it.
+//
+// Codeline→checkout comes from the PRD's own project.outputDirs, so no client name
+// appears here. Returns null (never a guess) when there are no declared paths or no
+// codeline mapping to resolve against.
+function buildPerCodelineManifest(story, prd) {
+  const declared = Array.isArray(story?.technicalNotes?.files) ? story.technicalNotes.files : [];
+  if (!declared.length) return null;
+
+  const outputDirs = Array.isArray(prd?.project?.outputDirs) ? prd.project.outputDirs : [];
+  if (!outputDirs.length) return null;
+
+  const rootFor = new Map(
+    outputDirs.filter(o => o && o.codeline && o.path).map(o => [o.codeline, o.path]),
+  );
+  const codelines = Array.isArray(story.codelines) && story.codelines.length
+    ? story.codelines
+    : (story.codeline ? [story.codeline] : []);
+  if (!codelines.length) return null;
+
+  const out = {};
+  for (const cl of codelines) {
+    const root = rootFor.get(cl);
+    if (!root) continue;                       // no checkout declared — do not invent one
+    const files = [];
+    const resolved = [];
+    const unresolved = [];
+    for (const d of declared) {
+      const r = _resolveInCodeline(d, root);
+      if (r.unresolved) {
+        unresolved.push(r.unresolved);
+      } else {
+        files.push(r.actual);
+        resolved.push({ declared: d, actual: r.actual, match: r.match, verified_against: root });
+      }
+    }
+    out[cl] = { files, resolved, unresolved };
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+function applySpecChanges(story, payload, newStories, prd, phaseId, runId, logDir = null) {
+  const result = { acceptanceChanged: false, splitCount: 0 };
+  // AC IMMUTABILITY — UNIVERSAL BACKSTOP (brownfield only). Every spec-agent
+  // payload merges through here (openspec, speckit, every retry/token-retry path),
+  // so this is the ONE choke point where the ticket's ACs can be locked as
+  // immutable regardless of which agent produced the payload. The per-agent
+  // preserve call in runSpecAgent only covered the `agent==='openspec'` branch;
+  // speckit's prompt explicitly asks it to emit "the FULL merged acceptanceCriteria
+  // list", and that payload reached applySpecChanges with NO guard — so speckit
+  // silently re-elaborated a 0-AC brownfield ticket into 9 fabricated ACs (found
+  // live 2026-07-24, AMSD-1820). Restoring here makes the AC array the immutable
+  // ticket intent for ALL brownfield agents; the merge below then sees no change.
+  // No-op for greenfield (EPAM_BROWNFIELD gate inside preserveDefectAcceptanceCriteria),
+  // where speckit legitimately merges/refines ACs.
+  preserveDefectAcceptanceCriteria(payload, story, process.env);
+  if (Array.isArray(payload.acceptanceCriteria) && payload.acceptanceCriteria.length) {
+    const capped = payload.acceptanceCriteria.slice(0, MAX_ACS_PER_STORY);
+    if (capped.length < payload.acceptanceCriteria.length) {
+      console.warn(`spec-mode: AC cap enforced on ${story.id}: ${payload.acceptanceCriteria.length} → ${capped.length}`);
+    }
+    const before = JSON.stringify(story.acceptanceCriteria || []);
+    const after = JSON.stringify(capped);
+    if (before !== after) {
+      story.acceptanceCriteria = capped;
+      result.acceptanceChanged = true;
+    }
+  }
+  if (typeof payload.description === 'string' && payload.description.trim()) {
+    story.description = payload.description.trim();
+  }
+  if (payload.title && typeof payload.title === 'string') {
+    story.title = payload.title.trim();
+  }
+  if (payload.technicalNotes && typeof payload.technicalNotes === 'object') {
+    story.technicalNotes = payload.technicalNotes;
+  }
+  // ── Persist the classification, do not just use it in passing ─────────────
+  // The spec agent classifies every story as "defect" or "novel", the runner
+  // reads it in-memory (Jira-type anchoring, split decisions) — and then threw
+  // it away, so every story reached the PRD with storyKind:null.
+  //
+  // Three consumers read this field and were therefore dead code:
+  //   classify_ladder_tier   novel brownfield -> high ladder
+  //   resolve_model_from_story  novel brownfield -> high model
+  //   the bug-reproduction gate  skip novel stories (a novel story can never
+  //                              ship a test reproducing a bug that has none)
+  // All three were verified against synthetic PRDs where the field was set by
+  // hand; nothing checked that the PRODUCER writes it. It does not, so a live
+  // run classified the story "novel" in every lane and still started it on the
+  // cheapest model and gated it as a defect.
+  if (payload.storyKind === 'defect' || payload.storyKind === 'novel') {
+    story.storyKind = payload.storyKind;
+  }
+  // locationHint (brownfield openspec only): CodeGraph/Semble-grounded fix-site
+  // file paths, discovered from the "EXISTING CODE" context already injected
+  // into this same prompt. The prompt explicitly asks the model for this
+  // (see locationHintSchemaLine above) but until now nothing ever read the
+  // response back out — it was requested and silently discarded every time.
+  // Without this reaching technicalNotes.files, the later planning/execution
+  // prompts show an empty "Files to Create/Modify" section, so the story
+  // agent has no grounded target and has to spend its own turn budget
+  // searching the codebase from scratch — often running out before writing
+  // anything real. Live bug (2026-07-22): AMSD-1820 ran dry mid-search
+  // ("Now let me look at the Mozio dispatch models:") and the only file that
+  // actually changed was CodeGraph's own incidental index write, which the
+  // auto-commit step then swept up as if it were the story's real output.
+  // Merge (not overwrite) — technicalNotes may already carry other fields
+  // (or files) from this same payload or an earlier pass.
+  story.technicalNotes = mergeLocationHintFiles(story.technicalNotes, payload.locationHint);
+
+  // Resolve the declared files against EACH codeline's own checkout and persist the
+  // per-codeline truth. The flat `files` array stays for backward compatibility, but a
+  // single array cannot be correct across repositories that spell the same file
+  // differently — live 2026-08-03 it resolved on one lane of three, and the two writers
+  // handed a non-existent path could not do the work they were then blocked for. An
+  // unresolvable entry is recorded WITH the candidates checked, so a wrong path is
+  // visible in the PRD at spec time instead of surfacing as a mystery at write time.
+  // A FIX SITE BELONGS TO A CODELINE. The detective's finding shape — {file, function,
+  // reason, fix, helper, brokenLine, …} — has no codeline on it, so for a spanning story the
+  // array could not say which repository each site lives in. Two things broke on that: the
+  // merge into the canonical PRD was last-writer-wins (AMSD-2041 gave all three lanes
+  // metrolinx's newsService.ts / getEventsList.ts, which exist in neither of the others), and
+  // a finding from one codeline entering another's writer manifest was undetectable.
+  //
+  // Stamped here because this is where the lane is already derived, and it runs after the
+  // detective for every story. A finding that already names a codeline is left alone: a
+  // cross-codeline finding must not be relabelled with the lane that merely observed it.
+  const _laneForSites = laneCodeline(prd);
+  if (_laneForSites && Array.isArray(story.fixSiteAnalysis)) {
+    story.fixSiteAnalysis = story.fixSiteAnalysis.map((f) =>
+      (f && typeof f === 'object' && !f.codeline) ? { ...f, codeline: _laneForSites } : f);
+  }
+
+  const _perCodeline = buildPerCodelineManifest(story, prd);
+  if (_perCodeline) {
+    story.technicalNotes = { ...story.technicalNotes, perCodeline: _perCodeline };
+
+    // THE FLAT LIST IS WHAT EVERYTHING READS. perCodeline was correct from the day it
+    // was added and nothing consumed it: technicalNotes.files kept the DECLARED spelling,
+    // and that is the list rendered into the writer prompt, handed to the reviewer, and
+    // checked by the gates.
+    //
+    // Live 2026-08-04 (run 20260804T035435Z) two of three lanes paused with a manifest
+    // naming a file that does not exist: one checkout held an extension variant of the
+    // declared path, another a case variant, and both lanes declared a third spelling. The
+    // writer is then sent to a path its checkout does not have; it assumes a second file
+    // exists, creates it, deletes it, declares the real one out of scope, and every retry
+    // reproduces the same tsc failure. 120 iterations, ~2M input tokens, 4 writes.
+    //
+    // The spec pass runs PER LANE on that lane's own filtered PRD, so the flat list can
+    // and must be this lane's resolved list. The lane is derived the way it is everywhere
+    // else in the engine: project.outputDir matched back against project.outputDirs[].
+    // No lane derivable (single-codeline runs) leaves the declared list untouched.
+    const _thisLane = laneCodeline(prd);
+    const _mine = _thisLane && _perCodeline[_thisLane];
+    if (_mine && Array.isArray(_mine.files) && _mine.files.length) {
+      story.technicalNotes = { ...story.technicalNotes, files: _mine.files };
+    }
+    for (const [_cl, _entry] of Object.entries(_perCodeline)) {
+      if (_entry.unresolved.length) {
+        console.warn(
+          `spec-mode: ${story.id} — ${_entry.unresolved.length} declared file(s) do NOT exist in codeline '${_cl}': ` +
+          _entry.unresolved.map(u => u.declared).join(', '),
+        );
+      }
+    }
+  }
+
+  if (Array.isArray(payload.splitStories) && payload.splitStories.length) {
+    const currentDepth = splitDepth(story, prd);
+    const maxSplitDepth = parseInt(process.env.SPEC_MAX_SPLIT_DEPTH || '2', 10);
+    if (currentDepth >= maxSplitDepth) {
+      console.warn(
+        `spec-mode: skipping splits for ${story.id} — depth ${currentDepth} >= max ${maxSplitDepth}`
+      );
+    } else {
+      const childrenBefore = newStories.filter(ns => ns.parentId === story.id).length;
+
+      payload.splitStories.forEach((split, idx) => {
+        if (!split || typeof split !== 'object') return;
+        // Per-child budget check — canSplitStory sees pendingChildren accumulate each iteration
+        const { ok, reason } = canSplitStory(story, prd, newStories);
+        if (!ok) {
+          console.warn(`spec-mode: split budget for ${story.id} child ${idx + 1} rejected — ${reason}`);
+          return;
+        }
+        const baseId = split.id && typeof split.id === 'string' ? split.id : `${story.id}-SPEC-${idx + 1}`;
+        let newId = baseId;
+        let suffix = 1;
+        // Check both prd.stories AND the pending newStories accumulator for collisions
+        while (
+          prd.stories.some((s) => s.id === newId) ||
+          newStories.some((ns) => ns.story.id === newId)
+        ) {
+          newId = `${baseId}-${suffix}`;
+          suffix += 1;
+        }
+        const newStory = JSON.parse(JSON.stringify(story));
+        newStory.id = newId;
+        newStory.title = split.title || `${story.title} (Spec Split ${idx + 1})`;
+        newStory.description = split.description || story.description;
+        newStory.acceptanceCriteria = Array.isArray(split.acceptanceCriteria) && split.acceptanceCriteria.length
+          ? [...split.acceptanceCriteria]
+          : Array.isArray(story.acceptanceCriteria)
+            ? [...story.acceptanceCriteria]
+            : [];
+        newStory.status = 'pending';
+        newStory.completed = false;
+        newStory.dependencies = Array.isArray(split.dependencies) ? split.dependencies : [];
+        // Backfill the PARENT's own external cross-story dependencies (found
+        // live, 2026-07-12, tier3-travel-app run): a split child's
+        // dependencies come ENTIRELY from the LLM's own per-child split
+        // proposal, which frequently omits a dependency the PARENT already
+        // deterministically declared. Confirmed live: SKY-003 declared
+        // dependencies: ["SKY-002"] (the real Skyscanner API client), but
+        // its split child SKY-003-impl ended up with dependencies: [] after
+        // the split — it ran immediately with no dependency gate at all,
+        // found no real client to import, and self-servingly fabricated a
+        // fake stub client via its own dynamic tool just to get ITS OWN
+        // deliverables to pass. That wrong stub then poisoned every
+        // downstream consumer (SKY-003-test, SKY-004), producing a cascade
+        // of misleading "static vs instance method" self-heal diagnoses that
+        // were never fixable, because the real problem (SKY-002 never
+        // actually succeeded) was invisible the whole time. Merge the
+        // parent's own dependencies into EVERY child unconditionally --
+        // redundant with wireSplitSiblingDependencies' test-to-impl wiring
+        // below is harmless (a dependency gate only needs every listed ID
+        // completed), but dropping a real cross-story dependency is not.
+        for (const _parentDep of Array.isArray(story.dependencies) ? story.dependencies : []) {
+          if (!newStory.dependencies.includes(_parentDep)) newStory.dependencies.push(_parentDep);
+        }
+        // Root cause of "no split has ever succeeded" (found live, 2026-07-06):
+        // newStory starts as a full clone of the PARENT (including its combined
+        // technicalNotes.files) and this field was never overwritten with the
+        // split proposal's own file ownership — every child silently inherited
+        // ALL of the parent's files regardless of what was actually proposed,
+        // guaranteeing every split looked incoherent (every child "wrote" every
+        // file) and was rejected below, no matter how the model partitioned it.
+        if (split.technicalNotes && typeof split.technicalNotes === 'object') {
+          newStory.technicalNotes = split.technicalNotes;
+        }
+        // Same backfill as newStory.dependencies above, for the ALTERNATE
+        // dependency field this project (and claude.sh's own dependency
+        // lookups: `.dependencies // .technicalNotes.dependsOn // []`,
+        // consistently a fallback UNION of both fields) actually uses.
+        // Found while auditing for other instances of the exact dependency-
+        // drop bug (2026-07-12): SKY-002 itself declares its OWN dependency
+        // on SKY-001 ONLY via technicalNotes.dependsOn, not .dependencies --
+        // so a split of SKY-002 would have been just as vulnerable as
+        // SKY-003 was, through this second field path. The technicalNotes
+        // reassignment right above can replace the whole object wholesale
+        // (e.g. a split proposal supplying only `files`), silently dropping
+        // dependsOn the same way the bare dependencies array was dropped --
+        // so this backfill must run AFTER that reassignment, not before.
+        const _parentDependsOn = Array.isArray(story.technicalNotes?.dependsOn) ? story.technicalNotes.dependsOn : [];
+        if (_parentDependsOn.length) {
+          if (!newStory.technicalNotes || typeof newStory.technicalNotes !== 'object') newStory.technicalNotes = {};
+          const _existingDependsOn = Array.isArray(newStory.technicalNotes.dependsOn) ? newStory.technicalNotes.dependsOn : [];
+          const _mergedDependsOn = [..._existingDependsOn];
+          for (const _pd of _parentDependsOn) {
+            if (!_mergedDependsOn.includes(_pd)) _mergedDependsOn.push(_pd);
+          }
+          newStory.technicalNotes.dependsOn = _mergedDependsOn;
+        }
+        newStory.specification = {
+          createdFrom: story.id,
+          createdAt: new Date().toISOString(),
+          runId,
+          splitDepth: currentDepth + 1,
+          splitOrigin: 'spec-pass'  // marks spec-pass splits; mid-execution splits use 'mid-execution'
+        };
+        capSplitACs(newStory, story.id);
+        correctSplitChildAgentRoleIfTestOnly(prd, newStory);
+        newStories.push({ parentId: story.id, story: newStory, phase: phaseId });
+        result.splitCount += 1;
+      });
+
+      // Same-file coherence check: if >1 child writes the same non-test file, each agent
+      // overwrites the file from scratch and only the last writer's output survives.
+      // Reject the entire split — parent runs as a single story (with capped ACs).
+      const addedChildren = newStories.filter(ns => ns.parentId === story.id).slice(childrenBefore);
+      const fileConflicts = validateSplitFileCoherence(addedChildren.map(ns => ns.story));
+      if (fileConflicts.length > 0) {
+        for (const { file, childIds } of fileConflicts) {
+          console.warn(
+            `spec-mode: split coherence violation for ${story.id}: ` +
+            `children [${childIds.join(', ')}] all write to ${path.basename(file)} — ` +
+            `rejecting split (last writer wins = silent data loss)`
+          );
+          if (logDir) appendSpecPassEvent(logDir, { storyId: story.id, phase: phaseId, event: 'coherence_violation', decision: 'rejected', details: { file: path.basename(file), childIds } });
+        }
+        // Roll back all children added during this forEach
+        newStories.splice(newStories.length - addedChildren.length, addedChildren.length);
+        result.splitCount = 0;
+      } else if (addedChildren.length > 0) {
+        // Parent AC redistribution — clear parent ACs after split to prevent 93-AC parent stories.
+        const childIds = addedChildren.map(ns => ns.story.id).join(', ');
+        story.acceptanceCriteria = [`Delegated to split children: ${childIds}`];
+        console.log(`spec-mode: parent ${story.id} ACs redistributed → delegated to ${childIds}`);
+        if (logDir) appendSpecPassEvent(logDir, { storyId: story.id, phase: phaseId, event: 'story_delegated', decision: 'delegated', details: { childIds: addedChildren.map(ns => ns.story.id) } });
+        // Root cause of a real bug (found live, 2026-07-06, tier3-full-run-15):
+        // a delegated parent's technicalNotes.files still lists its ORIGINAL
+        // files (including any .test.ts), and it stayed in
+        // implementationOrder[phase] alongside its own children — every
+        // downstream consumer that scans implementationOrder (the TC writer,
+        // the main implementation loop) still saw it as an active "test
+        // story" with real source, when its actual implementation is now
+        // entirely delegated. Mark it deprecated/completed so consumers that
+        // already check those fields skip it; implementationOrder itself is
+        // cleaned up separately (see the Step 3 insertion loop and
+        // validateMidExecutionSplits, which both know the split-vs-parent
+        // topology needed to do that safely).
+        story.status = 'deprecated';
+        story.completed = true;
+      }
+    }
+  }
+  return result;
+}
+
+function appendJsonl(filePath, obj) {
+  fs.appendFileSync(filePath, `${JSON.stringify(obj)}\n`);
+}
+
+function appendSpecPassEvent(logDir, { storyId, phase, event, decision, details = {} }) {
+  const ts = new Date().toISOString();
+  const id = `evt-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  appendJsonl(path.join(logDir, 'agent-activity.jsonl'), {
+    event_id: id,
+    timestamp: ts,
+    agent: 'spec-coordinator-agent',
+    story_id: storyId ?? null,
+    phase: phase ?? null,
+    type: 'spec_pass_decision',
+    detail: { event, decision, ...details },
+  });
+}
+
+// _promptVersionCache — the epam-cli repo's own short git SHA, computed once
+// per process. These prompts live embedded in the scripts themselves (no
+// separate template files), so the commit hash of the script IS the version
+// proxy for correlating a violation-rate change to "what changed in this
+// commit" — mirrors _epam_prompt_version() in run-agent-orchestration.sh.
+let _promptVersionCache = null;
+function promptVersion() {
+  if (_promptVersionCache === null) {
+    try {
+      _promptVersionCache = execSync('git rev-parse --short HEAD', {
+        cwd: path.join(__dirname, '..', '..'),
+        encoding: 'utf8',
+      }).trim();
+    } catch {
+      _promptVersionCache = 'unknown';
+    }
+  }
+  return _promptVersionCache;
+}
+
+// logGuardedStepRetry — double-write a guarded-step-retry record: unchanged
+// per-run file (logDir, wiped on next run's teardown) plus a persistent
+// engine-side history file (orchestrations/logs/, survives target-project
+// teardown) — same double-write convention as _log_guarded_step_retry() in
+// run-agent-orchestration.sh, so bash- and JS-side guarded steps land in the
+// same cross-run history for trend/versioning aggregation.
+function logGuardedStepRetry(logDir, record) {
+  const augmented = { ...record, runId: record.runId ?? 'unknown', promptVersion: promptVersion() };
+  appendJsonl(path.join(logDir, 'guarded-step-retries.jsonl'), augmented);
+  try {
+    const historyDir = path.join(__dirname, '..', 'logs');
+    fs.mkdirSync(historyDir, { recursive: true });
+    appendJsonl(path.join(historyDir, 'guarded-step-retries-history.jsonl'), augmented);
+  } catch {
+    // Persistent history is best-effort — never let it block the pipeline.
+  }
+}
+
+function extractCodeRefs(story) {
+  const files = story?.technicalNotes?.files;
+  if (!Array.isArray(files)) return [];
+  return files
+    .map((f) => (typeof f === 'string' ? f.trim() : ''))
+    .filter(Boolean)
+    .slice(0, 3);
+}
+
+function emitMonitorEvent({ monitorScript, type, message, storyId = '', lane = 'main', role = '' }) {
+  return new Promise((resolve) => {
+    const proc = spawn(
+      monitorScript,
+      ['event', type, message, storyId, lane, role],
+      { env: process.env }
+    );
+    proc.on('error', () => resolve());
+    proc.on('close', () => resolve());
+  });
+}
+
+// Recover a JSON payload a tool-trained model hid inside a TOOL CALL. Some models
+// "answer" by emitting a write_file-style call — e.g.
+//   <tool_use><tool_name>write_file</tool_name><arguments>{"path":"...","content":"{...JSON...}"}</arguments></tool_use>
+// — wrapping the real answer in the call's `content` (or in the arguments object)
+// instead of returning it inline. The pipeline reads the reply TEXT (not a file), so
+// the answer would be lost. This unwraps it. General across models/tags — no
+// model- or field-name hardcoding beyond the standard tool-call shape. (Found live
+// 2026-07-24, AMSD-1820: glm-5.1 wrapped the spec JSON in a write_file call → FATAL.)
+function unwrapToolCallJson(text) {
+  if (!text) return null;
+  const candidates = [];
+  // Arg container tag varies by model/provider: <arguments> (glm), <input> (others),
+  // <parameters>. Backref \1 keeps open/close matched. Found live 2026-07-24: speckit
+  // used <arguments>, MODEL_REVIEW used <input>.
+  // Models "answer" by emitting a tool invocation wrapped in an XML-ish tag. The tag NAME
+  // varies per provider and version — observed live: <arguments> (glm), <tool_call>
+  // (mock3 MODEL_REVIEW, 2026-08-03) and <function_calls> (metrolinx SPEC_ASSIGNMENTS,
+  // the same day, minutes after a fix that enumerated only <tool_call>). Enumerating
+  // names loses to whatever the next provider emits, and each miss silently DISCARDS a
+  // real decision.
+  //
+  // So match on SHAPE, not on a name list: every balanced <tag>…</tag> body becomes a
+  // candidate scope, peeled repeatedly so a nested wrapper cannot hide the payload from
+  // an outer match. A wrong guess costs nothing — a candidate is only accepted below if
+  // it actually parses as JSON — whereas a missing name costs the whole answer.
+  const scopes = [];
+  const seen = new Set();
+  let frontier = [text];
+  for (let depth = 0; depth < 4 && frontier.length; depth += 1) {
+    const next = [];
+    for (const scope of frontier) {
+      if (!scope || seen.has(scope)) continue;
+      seen.add(scope);
+      scopes.push(scope);
+      for (const m of scope.matchAll(/<([a-zA-Z_][\w.-]*)\b[^>]*>\s*([\s\S]*?)\s*<\/\1>/g)) {
+        if (m[2] && m[2] !== scope) next.push(m[2]);
+      }
+    }
+    frontier = next;
+  }
+  // Innermost bodies first: a nested payload is more specific than its wrapper.
+  for (const scope of scopes.slice().reverse()) candidates.push(scope);
+  for (const raw of candidates) {
+    let args;
+    try { args = JSON.parse(String(raw).trim()); } catch { continue; }
+    // Unwrap one nesting level if it's {name, arguments:{...}}.
+    if (args && typeof args === 'object' && args.arguments && typeof args.arguments === 'object') args = args.arguments;
+    if (!args || typeof args !== 'object') continue;
+    // write_file-style call: the real payload is a JSON string in `content`.
+    if (typeof args.content === 'string') {
+      try { const inner = JSON.parse(args.content); if (inner && typeof inner === 'object') return inner; } catch { /* not JSON */ }
+    }
+    // Otherwise the arguments object itself may BE the payload (ignore path/tool wrappers).
+    const keys = Object.keys(args).filter((k) => !['path', 'server_name', 'tool_name', 'content'].includes(k));
+    if (keys.length > 0) return args;
+  }
+
+  // LAST RESORT: the JSON is in there, but not inside a balanced tag.
+  //
+  // Everything above requires <tag>…</tag> to close. Live 2026-08-06, on the metrolinx
+  // run, the three shapes that actually arrived were none of those:
+  //
+  //   submit_guard_vocabulary\n{"blacklist":[…]}   ← bare tool NAME, then the payload
+  //   <tool_call>{"name":…                         ← never closed (truncated mid-answer)
+  //   Both documents describe … {"links":[…]}      ← prose first, then the payload
+  //
+  // Each one discarded a real answer. The guard-vocabulary agent then reported "no usable
+  // terms after its full retry/ladder budget" and aborted the spec pass on all three
+  // lanes — a run lost to punctuation, not to a model that could not do the work.
+  //
+  // So scan for the first balanced JSON OBJECT anywhere in the text, tracking string
+  // state so a brace inside a quoted value cannot end it early. This cannot produce a
+  // false positive: the result still has to parse, and the caller still validates it
+  // against the tool definition.
+  const obj = firstBalancedJsonObject(text);
+  if (obj) {
+    let args = obj;
+    if (args.arguments && typeof args.arguments === 'object') args = args.arguments;
+    if (typeof args.content === 'string') {
+      try { const inner = JSON.parse(args.content); if (inner && typeof inner === 'object') return inner; } catch { /* not JSON */ }
+    }
+    const keys = Object.keys(args).filter((k) => !['path', 'server_name', 'tool_name', 'name', 'content'].includes(k));
+    if (keys.length > 0) return args;
+  }
+  return null;
+}
+
+/**
+ * The first complete `{...}` in a string, parsed — or null.
+ *
+ * Brace counting alone is wrong: a `{` or `}` inside a quoted value ends the object early
+ * and yields malformed JSON. This tracks whether it is inside a string and honours
+ * backslash escapes, so a reason like "use {} for an empty set" cannot truncate the answer.
+ */
+function firstBalancedJsonObject(text) {
+  const s = String(text || '');
+  for (let start = s.indexOf('{'); start !== -1; start = s.indexOf('{', start + 1)) {
+    let depth = 0, inStr = false, esc = false;
+    for (let i = start; i < s.length; i += 1) {
+      const c = s[i];
+      if (esc) { esc = false; continue; }
+      if (c === '\\') { esc = true; continue; }
+      if (c === '"') { inStr = !inStr; continue; }
+      if (inStr) continue;
+      if (c === '{') depth += 1;
+      else if (c === '}') {
+        depth -= 1;
+        if (depth === 0) {
+          try {
+            const parsed = JSON.parse(s.slice(start, i + 1));
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+          } catch { /* try the next opening brace */ }
+          break;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// ─── Why a spec agent produced no payload ────────────────────────────────────
+// Only ONE of these is worth re-asking. A model that answered in the wrong shape
+// will answer in the wrong shape again: live AMSD-2041 (2026-07-28) speckit
+// emitted invented `<tool_call>read_file(...)` text, and re-sending the same
+// prompt reproduced it on glm-5.2 AND on the glm-5.1 escalation. Three attempts
+// and a ladder step to learn nothing. Classifying the failure lets the retry
+// carry a correction instead of repeating the question.
+const SPEC_TOOL_CALL_RE = /<\/?(?:tool_call|tool_use|function_call|invoke)\b/i;
+
+function classifySpecFailure(rawText) {
+  const t = String(rawText || '').trim();
+  if (!t) return 'empty';                          // genuinely no answer — a transient
+  if (SPEC_TOOL_CALL_RE.test(t)) return 'tool-call';
+  if (/^[[{]/.test(t)) return 'malformed-json';    // tried to answer, shape broke
+  return 'prose';                                  // answered in the wrong medium
+}
+
+// The correction handed to the next attempt. Empty for a transient: an empty
+// response says nothing about what went wrong, and inventing advice would make
+// the prompt differ for no reason.
+function specCorrectiveNote(kind) {
+  switch (kind) {
+    case 'tool-call':
+      return 'CRITICAL — YOUR PREVIOUS RESPONSE WAS REJECTED: it emitted tool calls ' +
+             '(e.g. <tool_call>read_file(...)</tool_call>). You have NO tools available in this ' +
+             'request and cannot call any — nothing executes them, so that response was discarded ' +
+             'entirely. Everything you are permitted to use is already in this prompt. If a file\'s ' +
+             'contents would have helped, say so in "notes" and answer from what you were given. ' +
+             'Reply with the raw JSON object and nothing else.';
+    case 'prose':
+      return 'CRITICAL — YOUR PREVIOUS RESPONSE WAS REJECTED: it was prose, not JSON. ' +
+             'Reply with the raw JSON object described above and nothing else — no preamble, ' +
+             'no explanation outside the JSON, no markdown fences.';
+    case 'malformed-json':
+      return 'CRITICAL — YOUR PREVIOUS RESPONSE WAS REJECTED: it began as JSON but could not be ' +
+             'parsed. Emit strictly valid JSON — quote every key, no trailing commas, no comments ' +
+             'and no unescaped newlines inside string values.';
+    default:
+      return '';
+  }
+}
+
+/**
+ * The raw text an agent produced, read back from the log runAgentForJson wrote.
+ * The parsed payload is all that is returned through the call stack, so on a
+ * parse failure this file is the only surviving record of what the model said —
+ * and it is what the classifier needs.
+ */
+function readAgentRawOutput(logPath) {
+  try {
+    const txt = require('fs').readFileSync(logPath, 'utf8');
+    const i = txt.indexOf('# Text output');
+    return i === -1 ? '' : txt.slice(i + '# Text output'.length).trim();
+  } catch { return ''; }
+}
+
+function extractTaggedJson(text, tag) {
+  if (!text) return null;
+
+  // Normalize variant opening tags that models sometimes emit:
+  //   <_TAG>  →  <TAG>   (OpenRouter adds leading underscore to distinguish from template echo)
+  //   <-TAG>  →  <TAG>   (similar dash-prefix variant)
+  text = text.replace(new RegExp(`<[_\\-]${tag}>`, 'g'), `<${tag}>`);
+
+  function stripAndParse(jsonText) {
+    jsonText = jsonText.trim();
+    // Strip markdown code fences that LLMs often wrap around JSON
+    jsonText = jsonText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
+    try {
+      return JSON.parse(jsonText);
+    } catch (err) {
+      // Try jsonrepair for M3-style malformed JSON (truncated strings, unescaped chars, double braces).
+      // Only attempt repair when text looks like JSON (starts with { or [) to avoid
+      // jsonrepair turning arbitrary plain text into a JSON string.
+      if (_jsonrepair && /^\s*[{[]/.test(jsonText)) {
+        try {
+          return JSON.parse(_jsonrepair(jsonText));
+        } catch (repairErr) {
+          console.warn(`Failed to parse JSON for tag ${tag}:`, err.message);
+        }
+      } else {
+        console.warn(`Failed to parse JSON for tag ${tag}:`, err.message);
+      }
+      return null;
+    }
+  }
+
+  // Full pair: <TAG>content</TAG> — find ALL matches, return the last parseable one.
+  // Models sometimes echo an empty template block from the prompt before outputting
+  // their real content (e.g. coordinator prompt contains empty <SPEC_ASSIGNMENTS></SPEC_ASSIGNMENTS>
+  // which the model echoes, then outputs the real block after "# Output").
+  const fullRegex = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, 'g');
+  const fullMatches = [...text.matchAll(fullRegex)];
+  if (fullMatches.length > 0) {
+    // Try matches in reverse — prefer the last well-formed JSON block
+    for (let i = fullMatches.length - 1; i >= 0; i--) {
+      const parsed = stripAndParse(fullMatches[i][1]);
+      if (parsed !== null) return parsed;
+    }
+    // All full-pair matches failed to parse; fall through to partial-match fallback
+  }
+
+  // Partial (SDK single-turn): prompt injected the opening tag, model response
+  // contains only content followed by </TAG>. Match everything up to the close tag.
+  const closeRegex = new RegExp(`^([\\s\\S]*?)<\\/${tag}>`, 'm');
+  const closeMatch = closeRegex.exec(text.trim());
+  if (closeMatch) return stripAndParse(closeMatch[1]);
+
+  // Raw JSON fallback: model ignored tag instructions and returned bare JSON.
+  // Strip markdown fences then try parsing the entire response directly.
+  const rawAttempt = stripAndParse(text);
+  if (rawAttempt !== null) return rawAttempt;
+
+  // Last resort: the model "answered" by emitting a tool CALL that wraps the real
+  // JSON payload (write_file content / arguments). Recover it rather than lose it.
+  const unwrapped = unwrapToolCallJson(text);
+  if (unwrapped !== null) return unwrapped;
+
+  return null;
+}
+
+// READ AT CALL TIME, not at module load.
+//
+// This was a module-level const, so the value was fixed when the file was first required and
+// no later assignment could change it. That made the budget un-tunable in practice: an agent
+// could not be given its own, and a caller setting RUNCLAUDE_TIMEOUT_MS after import was
+// silently ignored. When the guard-vocabulary agent timed out at 360s on 2026-08-06 and took
+// the specification pass with it, there was no lever to pull — the number had been baked in
+// at import.
+function runClaudeTimeoutMs(env) {
+  // 1. AN OPERATOR FORCING A NUMBER always wins. Someone debugging a hang must have a lever, and
+  //    that lever must not be silently overridden by a declaration.
+  const forced = parseInt(process.env.RUNCLAUDE_TIMEOUT_MS || '', 10);
+  if (Number.isFinite(forced) && forced > 0) return forced;
+
+  // 2. WHAT THE SEAM DECLARED. Every seam in invocation-profiles.json carries timeoutSecs and
+  //    seamInvocationEnv exports it — and until today nothing read it, so all 36 declarations were
+  //    inert and every call was bounded by a literal here instead. prompt-builder declared 900s,
+  //    was cut off at 360s, and took a survey, a roster, an assignment and 12 generated prompts
+  //    with it. Same class as the ladder and the tool grant: a declaration nothing consumes reads
+  //    as configuration and is documentation.
+  const declared = parseInt((env && env.EPAM_TIMEOUT_SECS) || '', 10);
+  if (Number.isFinite(declared) && declared > 0) return declared * 1000;
+
+  // 3. THE DEFAULT IS DECLARED, NOT BAKED IN — for calls made at no seam. A literal here is the
+  //    thing this function exists to remove; config/spec-mode-defaults.json owns the number.
+  const cfg = Number(((specModeDefaults() || {}).timeouts || {}).defaultSecs);
+  if (Number.isFinite(cfg) && cfg > 0) return cfg * 1000;
+
+  throw new Error(
+    'no timeout is available for this call: RUNCLAUDE_TIMEOUT_MS is unset, the seam declared no '
+    + 'timeoutSecs, and config/spec-mode-defaults.json declares no timeouts.defaultSecs. Declare '
+    + 'one rather than letting a call run unbounded or be cut off by a number nobody chose.');
+}
+
+function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
+  return new Promise((resolve, reject) => {
+    const env = { ...process.env, ...envOverrides };
+    // Name the agent from the label it already declares for cost tracking.
+    // Only the detective ever set EPAM_AGENT_NAME explicitly, so every other
+    // spec-mode agent's plan record and Langfuse trace was anonymous — written
+    // as `agent:plan`, attributable to nothing. One place, so a new agent
+    // cannot be added without a name.
+    if (!env.EPAM_AGENT_NAME && opts.costAgent) env.EPAM_AGENT_NAME = opts.costAgent;
+    if (!env.EPAM_STORY_ID && opts.costStoryId) env.EPAM_STORY_ID = opts.costStoryId;
+    delete env.CLAUDECODE;
+
+    // COST TRACKING. Every LLM call in this file funnels through runClaude, so
+    // wiring it here covers the detective, openspec, speckit, spec-coordinator,
+    // the VC reviewer and the PRD change reviewer in one place. Before this,
+    // spec-mode emitted NO cost at all and ~68% of a run's real spend was
+    // invisible ($0.1115 recorded vs $0.3480 actually billed on 2026-07-24).
+    // ai-run.sh already writes the normalized {total_cost_usd, usage:{...}} JSON
+    // to $ORCH_JSON_RESULT — it just was never asked to.
+    let _costFile = null;
+    try {
+      _costFile = path.join(os.tmpdir(), `spec-cost-${process.pid}-${Date.now()}-${Math.floor(Math.random() * 1e6)}.json`);
+      env.ORCH_JSON_RESULT = _costFile;
+    } catch { _costFile = null; }
+
+    // WHEN THIS CALL STARTED. The ledger has always accepted startedAt and no caller passed it,
+    // so every JS-side agent recorded elapsed_minutes 0 while the bash-side writers recorded real
+    // spreads. A seam's timeoutSecs can only be set from measured duration, and prompt-builder was
+    // cut off at 360s with nobody able to say what it actually needed.
+    const _callStartedAt = new Date().toISOString();
+    const _emitCost = () => {
+      if (!_costFile) return;
+      try {
+        emitCostSnapshot({
+          startedAt: _callStartedAt,
+          logDir: process.env.LOG_DIR || process.env.EPAM_PROJECT_OUTPUT_DIR || '',
+          resultFile: _costFile,
+          activityFile: process.env.ACTIVITY_FILE ||
+            path.join(process.env.LOG_DIR || path.join(__dirname, '..', 'logs'), 'agent-activity.jsonl'),
+          agent: opts.costAgent || envOverrides.SPEC_AGENT_NAME || 'spec-mode-agent',
+          storyId: opts.costStoryId || '',
+          phase: process.env.PHASE || '',
+          model: envOverrides.AI_MODEL || execSpec?.model || process.env.SPEC_MODE_MODEL || '',
+          provider: execSpec?.provider || process.env.SPEC_MODE_PROVIDER || process.env.EPAM_ORCHESTRATION_PROVIDER || '',
+        });
+      } catch { /* cost emission must never break the agent call */ }
+      try { fs.unlinkSync(_costFile); } catch { /* ignore */ }
+    };
+    const cmd = execSpec?.cmd;
+    if (!cmd) {
+      return reject(new Error('prompt runner exited with code 1: no execSpec.cmd — set EPAM_ORCHESTRATION_PROVIDER'));
+    }
+    const args = Array.isArray(execSpec?.args) ? execSpec.args : [];
+    // ROOT CAUSE, verified live (2026-08-06): read_file/list_files/search
+    // (src/tools/builtin/ReadFile.ts et al.) resolve paths via
+    // `path.resolve(filePath)` against the CLI process's OWN cwd — none of
+    // them consult PROJECT_ROOT (grep confirms only the unrelated
+    // EscalateDefect.ts tool ever reads that env var). Without an explicit
+    // cwd here, every tool-enabled spec-mode call (detective, openspec,
+    // speckit, coordinator, coordinator-review, vc-agent, PRD-change-
+    // reviewer — all funnel through this one spawn) pointed its tools at
+    // wherever the ORCHESTRATOR happened to be running from, not the target
+    // repo. A live probe against a real fixture file proved this precisely:
+    // identical env/tool grant returned "file does not exist" without cwd
+    // set, and the file's real, unguessable content with it set. This was
+    // very likely the true cause of the SPEC_REVIEW live-tool-call failure
+    // documented in test/integration/spec-reviewer-live.test.ts, not an
+    // absence of any tool-execution loop.
+    const cwd = env.PROJECT_ROOT || process.cwd();
+    // detached:true puts the child in its own process group so we can kill the
+    // entire group (child + grandchildren like epam CLI) on timeout.
+    const proc = spawn(cmd, args, { env, cwd, detached: true });
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+
+    const killGroup = () => {
+      try { process.kill(-proc.pid, 'SIGKILL'); } catch { /* already gone */ }
+    };
+
+    // Salvage: a subprocess can emit a COMPLETE, parseable result and STILL exit
+    // non-zero / with a null (signal) code — killed during teardown, or a
+    // detached grandchild (epam CLI → codegraph, etc.) disturbing the process
+    // group. Discarding that already-captured output loses real work. Found live
+    // 2026-07-23: the code-graph-detective emitted its perfect fix-site JSON and
+    // then exited with code null; runClaude discarded it, so the implementer got
+    // no root cause. When the caller opts in AND we actually captured output,
+    // resolve with it and let the caller's parser decide — a genuinely broken run
+    // yields unparseable output the caller already handles. Off by default so
+    // other callers keep their strict reject-on-failure semantics.
+    const finishOutput = () => `${stdout}\n${stderr}`.trim();
+
+    const timeoutMs = Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : runClaudeTimeoutMs(env);
+    const killTimer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      killGroup();
+      // FIX: destroy stdio streams so grandchildren that inherited these pipe fds
+      // (e.g. epam CLI spawning detached node subprocesses) don't keep the Node.js
+      // event loop alive after the process group is killed.
+      const salvaged = finishOutput();
+      if (logPath) { try { fs.writeFileSync(logPath, `# Prompt\n${prompt}\n\n# Output (timed out)\n${salvaged}\n`); } catch { /* ignore */ } }
+      proc.stdout?.destroy();
+      proc.stderr?.destroy();
+      _emitCost();
+      if (opts.salvageOutputOnFailure && salvaged) {
+        return resolve(salvaged);
+      }
+      _emitCost();
+      reject(new Error(`prompt runner timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    proc.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
+    proc.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+    proc.on('error', (error) => { if (!settled) { settled = true; clearTimeout(killTimer); reject(error); } });
+    proc.on('close', (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(killTimer);
+      const output = finishOutput();
+      if (logPath) fs.writeFileSync(logPath, `# Prompt\n${prompt}\n\n# Output\n${output}\n`);
+      // Emit on EVERY terminal path, including failures: a call that errored or
+      // was salvaged still consumed tokens and still cost real money. Recording
+      // only successes is how spend goes missing precisely when things go wrong.
+      _emitCost();
+      if (code !== 0) {
+        if (opts.salvageOutputOnFailure && output) {
+          return resolve(output);
+        }
+        return reject(new Error(`prompt runner exited with code ${code}`));
+      }
+      resolve(output);
+    });
+    proc.unref(); // don't keep Node alive waiting for the child
+    proc.stdin?.on('error', () => { /* suppress EPIPE when process is killed before stdin flush */ });
+    proc.stdin?.end(prompt);
+  });
+}
+
+function resolvePromptProvider(env = process.env) {
+  const provider = env.AI_PROVIDER
+    || env.EPAM_ORCHESTRATION_PROVIDER
+    || (/codex$/.test(env.CLAUDE_CMD || '') ? 'codex' : null);
+  if (!provider) {
+    throw new Error(
+      'No AI provider configured. Set AI_PROVIDER or EPAM_ORCHESTRATION_PROVIDER (e.g. EPAM_ORCHESTRATION_PROVIDER=openrouter).'
+    );
+  }
+  return provider;
+}
+
+function resolvePromptExec(aiRunnerCmd, env = process.env) {
+  const provider = resolvePromptProvider(env);
+  const gateModel = env.AI_MODEL || env.EPAM_MODEL || '';
+  const modelArgs = gateModel ? ['--model', gateModel] : [];
+  return { cmd: aiRunnerCmd, args: ['--provider', provider, ...modelArgs] };
+}
+
+// promptExecFor(opts, env) — THE EXEC AN AGENT RUNS WITH, WHEN ITS CALLER DID NOT SAY.
+//
+// The search-term vocabulary agent asked for one as `opts.promptExec || null`. No caller has
+// ever supplied it, so the value was always null, runAgentForJson dereferenced `.cmd` on it, and
+// the TypeError was swallowed by a catch that logged "vocabulary unavailable — seeding with an
+// unfiltered query". The agent never ran once, on any story, in any run, and the log said
+// fallback.
+//
+// Omission gets the SAME exec run() resolves, from the same function and the same environment,
+// rather than a null that reads as a decision. Threading the argument through each call site
+// would leave the next caller free to omit it again; a default cannot be omitted.
+function promptExecFor(opts = {}, env = process.env) {
+  if (opts && opts.promptExec) return opts.promptExec;
+  return resolvePromptExec(env.AI_RUNNER_CMD || path.join(__dirname, 'ai-run.sh'), env);
+}
+
+// buildKnownValidModels <upgradeModel, miniModel>
+// isValidModelString <model, currentModel, knownValidModels>
+//
+// Root cause of a live-run defect (2026-07-02 tier3 core phase): the LLM
+// model-review pass's finalModel string was assigned to story.model with
+// ZERO validation. The reviewer hallucinated "moonshotai/MiniMax-M3" —
+// mixing the moonshotai org prefix with the minimax model name, a string
+// that matches no real model on any provider — and every subsequent API
+// call for that story failed instantly (cost=$0, 0 tokens), burning all 8
+// retry attempts on a broken model string the InferenceLadder could never
+// fix (escalation only helps when the *current* model works well enough to
+// diagnose a real failure — it can't recover from a malformed model string).
+//
+// Extracted as standalone functions (not inlined in run()) so this
+// validation is directly unit-testable, not just greppable — the whole
+// point is to catch this bug CLASS (any future unvalidated LLM-written
+// PRD field), not just this one instance.
+
+/**
+ * THE MODEL A SEAM STARTS ON — the project's ladder, and nothing else.
+ *
+ * Every model default in this file was `process.env.X || '<a vendor model name>'`. The literal
+ * always answered, so the ladder never had to: two of its three positions declared no startModel
+ * for months and no run noticed. And the env var is a second source of truth that silently
+ * outranks the seam an agent was declared to occupy.
+ *
+ * Returns '' when the ladder cannot answer, so a caller can refuse rather than invent one.
+ */
+function seamStartModel(agent) {
+  try {
+    return (seamInvocationEnv(agent) || {}).EPAM_MODEL || '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * WHICH MODELS ARE REAL — asked of the PROJECT, never of a list in here.
+ *
+ * This was nine vendor model names hardcoded in the engine. A project running anything else had
+ * its own perfectly valid models rejected as unknown, and the list went stale the moment a vendor
+ * shipped a version. The project already declares every model it uses, as the rungs of its
+ * ladders in llm-settings.json — that IS the set of models this run can legitimately name.
+ */
+function buildKnownValidModels(upgradeModel, miniModel) {
+  const known = new Set();
+  for (const [key, value] of Object.entries(process.env)) {
+    if (!/^EPAM_MODEL_LADDER(_[A-Z0-9_]+)?$/.test(key) || !value) continue;
+    if (key.endsWith('_TIER_ORDER')) continue;
+    if (key.endsWith('_START')) { known.add(value.trim()); continue; }
+    // Chains are "from=to|from=to": both sides are models this project declares.
+    for (const pair of value.split('|')) {
+      const [from, to] = pair.split('=');
+      if (from && from.trim()) known.add(from.trim());
+      if (to && to.trim()) known.add(to.trim());
+    }
+  }
+  for (const extra of [upgradeModel, miniModel, process.env.EPAM_FINAL_FALLBACK_MODEL]) {
+    if (extra && extra.trim()) known.add(extra.trim());
+  }
+  return known;
+}
+
+// Anthropic/Claude models are never permitted as a story-agent assignment in
+// this pipeline (this engine IS Claude Code — running Claude AS a story
+// agent inside its own orchestration is not a supported configuration; the
+// just a preference for what the default should be — checked independently
+// of currentModel/knownValidModels so it still holds even if a story's
+// current model was somehow already corrupted to an Anthropic model by an
+// earlier bug (defense in depth, not just "fix the default").
+const DISALLOWED_MODEL_PATTERN = /^anthropic\/|claude/i;
+
+function isValidModelString(model, currentModel, knownValidModels) {
+  if (typeof model !== 'string') return false;
+  if (DISALLOWED_MODEL_PATTERN.test(model)) return false;
+  return model === currentModel || knownValidModels.has(model);
+}
+
+// buildGateExec <aiRunnerCmd>
+// The gate model (ORCH_GATE_PROVIDER/ORCH_GATE_MODEL) is independent of the
+// story-agent provider resolved by resolvePromptExec — reviewer calls always
+// use the gate model, defaulting to minimax/MiniMax-M3 like claude.sh's
+// run_prd_change_reviewer.
+function buildGateExec(aiRunnerCmd, env = process.env) {
+  // NO PROVIDER DEFAULT. `|| 'minimax'` named a provider no configuration asks for — every
+  // project config.env and every launcher sets openrouter — so it was unreachable in practice and
+  // wrong when reached. Routing the same model through a different provider is a different
+  // setup, not a detail. Unset now fails at the call instead of routing somewhere unchosen.
+  const provider = env.ORCH_GATE_PROVIDER || '';
+  // Persistent writes (PRD/profiles.json) get the highest-quality model
+  // available, matching claude.sh's run_prd_change_reviewer precedence
+  // (`${ESCALATION_MODEL_HIGH:-${ORCH_GATE_MODEL:-MiniMax-M3}}`). Full agent
+  // audit, 2026-07-31: this path never honored ESCALATION_MODEL_HIGH, so the
+  // spec-pass call site silently ran a cheaper model tier than the
+  // claude.sh call site for the identical review job, despite both claiming
+  // "highest-quality model" intent.
+  // BOTH CALL SITES NOW ASK THE SAME SEAM, which is what "identical review job, identical
+  // model" actually requires. Matching claude.sh's precedence string was never the same thing as
+  // matching its model, and both strings ended in a vendor literal that always answered.
+  const model = seamStartModel('prd-change-reviewer');
+  if (!model) throw new Error('prd-change-reviewer: no model resolved from its seam ladder');
+  return { cmd: aiRunnerCmd, args: ['--provider', provider, '--model', model] };
+}
+
+// parseReviewVerdict <text>
+// Extracts {"verdict":"pass|fail",...} from raw LLM output. Mirrors the
+// python parsing in claude.sh's run_prd_change_reviewer: try strict JSON
+// parse first, fall back to a regex scan for the verdict field.
+function parseReviewVerdict(text) {
+  const raw = (text || '').trim();
+  try {
+    const obj = JSON.parse(raw);
+    if (obj && (obj.verdict === 'pass' || obj.verdict === 'fail')) {
+      return { verdict: obj.verdict, issues: obj.issues || [] };
+    }
+  } catch { /* fall through to regex */ }
+  const m = raw.match(/"verdict"\s*:\s*"(pass|fail)"/);
+  if (m) return { verdict: m[1], issues: [] };
+  // A GATE HAS THREE OUTCOMES: passed, failed, or DID NOT RUN.
+  //
+  // This returned 'pass' when it could not find a verdict at all — so unparseable output, prose,
+  // and silence all read as approval, and the consumer (which only ever tests for 'fail') let the
+  // change through. 'unreviewed' is its own outcome deliberately: reporting 'fail' would be safe
+  // but wrong, because it blames the artefact for the reviewer's failure — the same mistake the
+  // roster review made by treating 'nothing_to_review' as a defective roster.
+  return {
+    verdict: 'unreviewed',
+    issues: [`the reviewer produced no readable verdict (${
+      raw && String(raw).trim() ? `${String(raw).trim().length} chars of unusable output` : 'empty output'
+    })`],
+  };
+}
+
+// capReviewSnapshot(snapshot) — caps only acceptanceCriteria (the one field
+// with unbounded length) so JSON.stringify(...) never needs a blind
+// .slice(0, N) that can silently truncate technicalNotes/description/title
+// out of what the reviewer actually sees. Real tickets with several detailed
+// ACs routinely serialize past any fixed char budget; mock1's trivial 4-AC
+// fixture never does, which is exactly why this bug (found live 2026-07-23,
+// AMSD-1820: openspec's real locationHint got reverted to null because the
+// reviewer never saw technicalNotes in its truncated payload) had no
+// coverage until now.
+function capReviewSnapshot(snapshot) {
+  const ac = Array.isArray(snapshot?.acceptanceCriteria) ? snapshot.acceptanceCriteria : [];
+  const CAP = 8;
+  const acceptanceCriteria = ac.length > CAP
+    ? [...ac.slice(0, CAP), `…and ${ac.length - CAP} more AC(s), omitted here for length`]
+    : ac;
+  return { ...snapshot, acceptanceCriteria };
+}
+
+// reviewPrdChange <opts>
+// Calls the prd-change-reviewer gate agent to validate a proposed spec-pass
+// change (AC/description/title rewrite or split creation) before it is
+// accepted. Non-blocking by design: any call failure or unconfigured gate
+// defaults to "pass" (matches claude.sh's run_prd_change_reviewer contract) —
+// this is a quality gate, not a hard dependency for the spec pass to function.
+async function reviewPrdChange({ aiRunnerCmd, profiles, storyId, changeType, before, after, logDir, splitOccurred }) {
+  const gateProvider = process.env.ORCH_GATE_PROVIDER || '';
+  if (!gateProvider) return { verdict: 'pass', issues: [] };
+
+  const reviewerProfile = profiles['prd-change-reviewer'] || '';
+  if (!reviewerProfile) return { verdict: 'pass', issues: [] };
+
+  // When a split occurred alongside other field changes (description/title),
+  // the parent's acceptanceCriteria is a deterministic engine-written
+  // placeholder ("Delegated to split children: ..."), not organically
+  // authored content — tell the reviewer explicitly so it doesn't flag that
+  // placeholder as a vague/unmeasurable AC (see isSplitDelegationOnlyChange
+  // for the more common case where this skips the reviewer call entirely).
+  const splitNote = splitOccurred
+    ? '\nNOTE: This story was just split into child stories. Its acceptanceCriteria field is a deterministic "Delegated to split children: ..." placeholder written by the engine, not an authored AC — do NOT flag that placeholder as vague or unmeasurable. Only evaluate the description/title changes.\n'
+    : '';
+
+  // A blind `.slice(0, N)` on the full serialized snapshot silently drops
+  // whichever fields serialize LAST (technicalNotes, since captureStorySnapshot
+  // orders acceptanceCriteria first) whenever acceptanceCriteria is long enough
+  // — which real tickets with several detailed ACs routinely are, but mock1's
+  // deliberately trivial 4-AC fixture never is (confirmed: this exact story's
+  // snapshot put technicalNotes at byte offset 1448, past the old 1000-char
+  // cutoff). The reviewer then judged a payload it never actually saw
+  // technicalNotes in, and any verdict — pass OR fail — that triggers a revert
+  // restores the field to its PRE-this-turn value, silently discarding a real,
+  // well-grounded locationHint openspec had just discovered. Found live
+  // 2026-07-23 on AMSD-1820. Fix: cap acceptanceCriteria (the only field whose
+  // length is unbounded) independently, and always include technicalNotes/
+  // description/title in full so structural fields can never be truncated away.
+  const prompt = renderEngineTemplate('prd-change-reviewer-spec', {
+    __REVIEWER_PROFILE__: reviewerProfile,
+    __STORY_ID__: storyId,
+    __CHANGE_TYPE__: changeType,
+    __SPLIT_NOTE__: splitNote,
+    __BEFORE__: JSON.stringify(capReviewSnapshot(before)),
+    __AFTER__: JSON.stringify(capReviewSnapshot(after)),
+  });
+
+  try {
+    const gateExec = buildGateExec(aiRunnerCmd);
+    const logPath = logDir ? path.join(logDir, `prd-reviewer-${storyId}-${changeType}.log`) : null;
+    // Full agent audit, 2026-07-31 (same class as HEAL-BLIND): zero tool
+    // access on this call despite the profile's own rules requiring
+    // real-codebase verification — a live incident already occurred (see
+    // reviewer-no-stack-hardcoding.test.ts) where the reviewer rejected
+    // correct guidance about the project's real CMS stack with no way to
+    // check it. Reuses the same shared read-only allowlist every other
+    // gate agent draws from.
+    const output = await runClaude(gateExec, prompt, logPath, {
+      AI_GATE_ALLOW_TOOLS: '1',
+      EPAM_ALLOWED_TOOLS: process.env.ORCH_GATE_ALLOWED_TOOLS || 'bash,read_file,list_files,search',
+      EPAM_MAX_TOOL_CALLS: process.env.PRD_CHANGE_REVIEWER_MAX_TOOL_CALLS || String(specModeDefaults().perSeam.prdChangeReviewer),
+    }, { costAgent: 'prd-change-reviewer', costStoryId: storyId });
+    return parseReviewVerdict(output);
+  } catch (err) {
+    // A FAILED CALL IS NOT AN APPROVAL. This defaulted to 'pass', so an exception in the gate
+    // was indistinguishable from the gate approving the change.
+    console.warn(`spec-mode: prd-change-reviewer call failed for ${storyId} (${err.message}) — reporting unreviewed`);
+    return { verdict: 'unreviewed', issues: [`the prd-change-reviewer call failed: ${err && err.message}`] };
+  }
+}
+
+// A MODEL'S TIER IS DECLARED BY THE SET THAT DECLARES THE MODEL.
+//
+// This read the tier off the model's NAME — '-mini', '-nano', '-flash', '-haiku',
+// 'minimax-m2' — which is a vendor's naming habit encoded as engine logic. It broke silently
+// in both directions: a cheap model a vendor named differently read as capable, and a capable
+// model whose name happened to contain '-flash' read as cheap. The answer feeds story model
+// assignment, so a wrong tier sends work to the wrong rung and nothing says so.
+//
+// `miniTier: true` now sits beside the other per-model facts in the set's modelOverrides.
+// UNDECLARED IS NOT MINI: guessing is what this replaced, so an unknown model is treated as
+// capable rather than assumed cheap.
+function isMiniTierModel(model, setName) {
+  if (!model || typeof model !== 'string') return false;
+  const m = model.toLowerCase();
+
+  // An operator naming the mini model explicitly still wins — unchanged.
+  const miniModelEnv = (process.env.ORCH_MINI_MODEL || '').toLowerCase();
+  if (miniModelEnv && m === miniModelEnv) return true;
+
+  try {
+    // eslint-disable-next-line global-require
+    const { activeSet } = require('./lib/llm-settings-resolve.js');
+    const set = setName || (activeSet() && activeSet().name);
+    if (!set) return false;
+    const file = path.join(__dirname, '..', 'config', `llm-defaults.${set}.json`);
+    const declared = JSON.parse(fs.readFileSync(file, 'utf8')).modelOverrides || {};
+    for (const [key, v] of Object.entries(declared)) {
+      if (key.startsWith('$') || !v || v.miniTier !== true) continue;
+      const needle = String(v.matchSubstring || key).toLowerCase();
+      if (needle && m.includes(needle)) return true;
+    }
+  } catch { /* no readable declaration is not a licence to guess */ }
+  return false;
+}
+
+// VERY_HIGH_AC_THRESHOLD (2026-07-15): a story this far past the normal
+// upgrade signals (acCount > 15) isn't just "needs a stronger model" — it's
+// extreme enough that climbing the retry ladder rung-by-rung (mini -> mid ->
+// high, 2 attempts each) burns several guaranteed-failing attempts before
+// ever reaching a model with a real chance. Root cause this addresses
+// (found live, 2026-07-14, tier3-travel-app run): SKY-003-test (a test
+// story assessed via the equivalent TC-fact-density signal, not this
+// AC-count one, but the same underlying problem) failed 8/8 attempts across
+// every rung, producing widespread syntax corruption at every tier below
+// the ceiling. Configurable via VERY_HIGH_AC_THRESHOLD; default picked
+// meaningfully above the existing acCount>15 upgrade trigger so this is a
+// distinct, rarer classification, not a redundant re-trigger of it.
+const VERY_HIGH_AC_THRESHOLD = parseInt(process.env.EPAM_VERY_HIGH_AC_THRESHOLD || '20', 10);
+
+// Compute story complexity signals and decide whether the assigned model needs upgrading.
+function modelComplexitySignals(story) {
+  const acCount = Array.isArray(story.acceptanceCriteria) ? story.acceptanceCriteria.length : 0;
+  const files = story.technicalNotes?.files || [];
+  const outputFiles = files.filter((f) => !f.endsWith('.test.ts') && !f.endsWith('.spec.ts'));
+  const isSingleFile = outputFiles.length === 1;
+  const hasHtmlOutput = outputFiles.some((f) => f.endsWith('.html'));
+  const desc = (story.description || '').toLowerCase();
+  const hasSelfContainedKeyword =
+    desc.includes('self-contained') || desc.includes('no build') ||
+    desc.includes('complete') || desc.includes('single-file');
+
+  let needsUpgrade = false;
+  let reason = '';
+
+  if (acCount > 15 && isSingleFile) {
+    needsUpgrade = true;
+    reason = `${acCount} ACs on a single output file exceeds mini-tier generation capacity`;
+  } else if (acCount > 10 && hasHtmlOutput) {
+    needsUpgrade = true;
+    reason = `HTML output file with ${acCount} ACs requires strong generation capability`;
+  } else if (isSingleFile && hasSelfContainedKeyword && acCount > 8) {
+    needsUpgrade = true;
+    reason = `self-contained single-file story with ${acCount} ACs needs reliable large output`;
+  }
+
+  // veryHighComplexity: a SEPARATE, stricter classification (only true for
+  // the most extreme cases) — see VERY_HIGH_AC_THRESHOLD's docstring above.
+  // Independent of needsUpgrade so it can be checked even when the normal
+  // upgrade rules didn't fire (e.g. multi-file stories the isSingleFile
+  // gate above would otherwise miss).
+  let veryHighComplexity = false;
+  let veryHighReason = '';
+  if (acCount > VERY_HIGH_AC_THRESHOLD) {
+    veryHighComplexity = true;
+    veryHighReason = `${acCount} acceptance criteria (> ${VERY_HIGH_AC_THRESHOLD}) — extreme complexity, assign ceiling model directly instead of climbing the retry ladder`;
+  }
+
+  return {
+    acCount, isSingleFile, hasHtmlOutput, hasSelfContainedKeyword, needsUpgrade, reason,
+    veryHighComplexity, veryHighReason,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mid-execution split validation — called from run-agent-orchestration.sh
+// after any step that may write new stories to the PRD (Step 0.5, post-story).
+//
+// Flow: find unvalidated split children → run speckit in parent context →
+//       apply AC cap → redistribute parent ACs → mark speckitValidated → write PRD.
+// ─────────────────────────────────────────────────────────────────────────────
+async function validateMidExecutionSplits(prdFile, storyIdsCsv) {
+  const storyIds = (storyIdsCsv || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (!prdFile || !storyIds.length) {
+    console.log('spec-mode: --validate-splits: nothing to validate');
+    return;
+  }
+
+  const prd = JSON.parse(fs.readFileSync(prdFile, 'utf8'));
+  const _initialStoryIds = new Set((prd.stories || []).map((s) => s.id));
+  const scriptDir = path.dirname(fs.realpathSync(process.argv[1]));
+  const aiRunnerCmd = process.env.AI_RUNNER_CMD || path.join(scriptDir, 'ai-run.sh');
+  const promptExec = resolvePromptExec(aiRunnerCmd);
+  const phase = process.env.PHASE || 'unknown';
+  const runId = process.env.ORCH_RUN_ID || new Date().toISOString().replace(/[:-]/g, '');
+  const logDir = process.env.OUTPUT_DIR || path.join(path.dirname(prdFile), 'logs');
+  fs.mkdirSync(logDir, { recursive: true });
+
+  const storiesToValidate = storyIds
+    .map(id => prd.stories.find(s => s.id === id))
+    .filter(s => s && s.specification?.createdFrom && !s.specification?.speckitValidated);
+
+  if (!storiesToValidate.length) {
+    console.log('spec-mode: --validate-splits: all target stories already validated or not found');
+    return;
+  }
+
+  // Group by parent
+  const byParent = new Map();
+  for (const child of storiesToValidate) {
+    const parentId = child.specification.createdFrom;
+    if (!byParent.has(parentId)) byParent.set(parentId, []);
+    byParent.get(parentId).push(child);
+  }
+
+  // Root cause this fixes (found live, 2026-07-06, tier3-full-run-16): a
+  // rejected split child (depth guard, budget guard, or coherence violation)
+  // gets marked status='deprecated' below, but was never removed from
+  // implementationOrder[phase] — it was already inserted there by whatever
+  // created the mid-execution split BEFORE this validation ran, unlike
+  // applySpecChanges' spec-pass path (where rejected children are spliced out
+  // of the pending-insert list entirely and never reach implementationOrder
+  // in the first place). Violates the same "no deprecated story in
+  // implementationOrder" invariant the parent-delegation fix maintains.
+  function removeFromImplementationOrder(storyId) {
+    const order = prd.implementationOrder?.[phase];
+    if (Array.isArray(order)) {
+      prd.implementationOrder[phase] = order.filter((id) => id !== storyId);
+    }
+  }
+
+  let hardViolations = 0;
+
+  for (const [parentId, children] of byParent) {
+    const parentStory = prd.stories.find(s => s.id === parentId);
+    if (!parentStory) {
+      console.warn(`spec-mode: --validate-splits: parent ${parentId} not in PRD — skipping`);
+      continue;
+    }
+
+    // Depth guard (code, not prompt)
+    const currentDepth = splitDepth(parentStory, prd);
+    const maxSplitDepth = parseInt(process.env.SPEC_MAX_SPLIT_DEPTH || '2', 10);
+    if (currentDepth >= maxSplitDepth) {
+      console.warn(`spec-mode: --validate-splits: ${parentId} depth ${currentDepth} >= max ${maxSplitDepth} — rejecting ${children.length} children`);
+      for (const child of children) {
+        child.specification.splitRejected = true;
+        child.specification.splitRejectionReason = `depth ${currentDepth} >= max ${maxSplitDepth}`;
+        child.status = 'deprecated';
+        removeFromImplementationOrder(child.id);
+      }
+      hardViolations++;
+      continue;
+    }
+
+    // Split budget guard — count against already-registered children from prior runs
+    const existingValidatedChildren = prd.stories.filter(
+      s => s.specification?.createdFrom === parentId && s.specification?.speckitValidated
+    ).length;
+    if (existingValidatedChildren + children.length > MAX_CHILDREN_PER_SPLIT) {
+      const allowed = Math.max(0, MAX_CHILDREN_PER_SPLIT - existingValidatedChildren);
+      console.warn(`spec-mode: --validate-splits: ${parentId} budget allows ${allowed} more children, got ${children.length} — capping`);
+      const rejected = children.splice(allowed);
+      for (const r of rejected) {
+        r.specification.splitRejected = true;
+        r.specification.splitRejectionReason = `split budget exhausted (max ${MAX_CHILDREN_PER_SPLIT})`;
+        r.status = 'deprecated';
+        removeFromImplementationOrder(r.id);
+      }
+      if (!children.length) { hardViolations++; continue; }
+    }
+
+    // Same-file coherence check — reject entire split if children share a non-test file
+    const fileConflicts = validateSplitFileCoherence(children);
+    if (fileConflicts.length > 0) {
+      for (const { file, childIds } of fileConflicts) {
+        console.warn(
+          `spec-mode: --validate-splits: coherence violation for ${parentId}: ` +
+          `children [${childIds.join(', ')}] all write to ${path.basename(file)} — rejecting split`
+        );
+        appendSpecPassEvent(logDir, { storyId: parentId, phase, event: 'coherence_violation', decision: 'rejected', details: { file: path.basename(file), childIds, source: 'mid_execution' } });
+      }
+      for (const child of children) {
+        child.specification.splitRejected = true;
+        child.specification.splitRejectionReason = `same-file coherence violation: multiple children write to the same file`;
+        child.status = 'deprecated';
+        removeFromImplementationOrder(child.id);
+      }
+      hardViolations++;
+
+      // Root cause this fixes (found live, 2026-07-10, tier3-travel-app run):
+      // openspec (elaboration) and speckit (verification) each independently
+      // split SKY-002 without knowing about each other, producing TWO
+      // redundant impl/test pairs that collide on client.ts/client.test.ts.
+      // Both pairs got deprecated here — correctly — but parentStory.status
+      // was ALREADY 'deprecated' (set by applySpecChanges' spec-pass path
+      // when the FIRST of the two redundant splits looked valid in
+      // isolation), and nothing here ever restored it. Result: the
+      // Skyscanner API client was never implemented at all this run — every
+      // downstream story that depended on it (SKY-003, SKY-004) failed on a
+      // missing module. If the parent has no OTHER surviving (non-deprecated,
+      // non-rejected) children from a different split attempt, it must be
+      // resurrected as a single unsplit story — otherwise its entire scope
+      // silently vanishes with no story left to implement it.
+      const parentHasSurvivingChildren = prd.stories.some(
+        (s) => s.specification?.createdFrom === parentId
+          && s.status !== 'deprecated'
+          && !s.specification?.splitRejected
+      );
+      if (!parentHasSurvivingChildren && parentStory.status === 'deprecated') {
+        const restoredACs = [...new Set(children.flatMap((c) => c.acceptanceCriteria || []))];
+        parentStory.status = 'pending';
+        parentStory.completed = false;
+        if (restoredACs.length) {
+          parentStory.acceptanceCriteria = restoredACs;
+        }
+        const orderForRestore = prd.implementationOrder?.[phase];
+        if (Array.isArray(orderForRestore) && !orderForRestore.includes(parentId)) {
+          orderForRestore.push(parentId);
+        }
+        console.warn(
+          `spec-mode: --validate-splits: ${parentId} has no surviving split children — ` +
+          `restoring as a single unsplit story so its scope isn't lost`
+        );
+        appendSpecPassEvent(logDir, { storyId: parentId, phase, event: 'story_restored', decision: 'restored', details: {} });
+      }
+      continue;
+    }
+
+    // AC cap on each child
+    for (const child of children) capSplitACs(child, parentId);
+    for (const child of children) correctSplitChildAgentRoleIfTestOnly(prd, child);
+
+    // Wire test-child dependencies onto impl siblings from the SAME split —
+    // see wireSplitSiblingDependencies' docstring for the live defect this
+    // fixes. Must run after the coherence check above so a rejected sibling
+    // (already spliced out / deprecated) is never wired.
+    wireSplitSiblingDependencies(children, prd);
+    reorderSiblingsByDependency(children, prd.implementationOrder?.[phase]);
+
+    // Run speckit — treat children as openspec's split proposals
+    const openspecOutput = {
+      acceptanceCriteria: parentStory.acceptanceCriteria || [],
+      notes: 'Mid-execution split registered by agent during story execution',
+      splitStories: children.map(c => ({
+        id: c.id,
+        title: c.title,
+        description: c.description,
+        acceptanceCriteria: c.acceptanceCriteria || [],
+        dependencies: c.dependencies || [],
+        agentRole: c.agentRole
+      }))
+    };
+
+    let speckitResult = null;
+    try {
+      speckitResult = await runSpeckitReview({
+        promptExec,
+        story: parentStory,
+        openspecOutput,
+        phase,
+        runId,
+        logDir,
+        refineExistingChildren: true
+      });
+    } catch (err) { speckitResult = null; }
+
+    // Apply speckit refinements if returned
+    if (speckitResult?.payload?.splitStories) {
+      for (const sc of speckitResult.payload.splitStories) {
+        const child = children.find(c => c.id === sc.id);
+        if (child && Array.isArray(sc.acceptanceCriteria) && sc.acceptanceCriteria.length) {
+          // Split-child ACs, mid-execution. Same armed-or-abort contract as every
+          // other guard seam: derived vocabulary, or the run stops.
+          const _childVocab = await deriveGuardVocabulary({
+            promptExec,
+            rule: AC_PRESCRIPTIVENESS_RULE,
+            statements: sc.acceptanceCriteria,
+            story: child,
+            findings: (child && child.fixSiteAnalysis) || [],
+            manifestFiles: (child && child.technicalNotes && child.technicalNotes.files) || [],
+            logDir,
+            seam: 'acceptance-criteria:split-child',
+          });
+          if (!isVocabularyUsable(_childVocab)) {
+            throw new Error(`AC guard could not be armed for split child ${child.id}: no usable vocabulary after the full retry/ladder budget. Refusing to proceed with an unarmed guard.`);
+          }
+          const { clean } = stripPrescriptiveACs(sc.acceptanceCriteria, child.id, _childVocab);
+          child.acceptanceCriteria = clean.slice(0, MAX_ACS_PER_STORY);
+        }
+        if (child && sc.notes) {
+          child.specification.speckitNotes = sc.notes;
+        }
+      }
+    }
+
+    // Mark children validated and tag as mid-execution so pre-flight can strip them on next restore
+    for (const child of children) {
+      child.specification.speckitValidated = true;
+      child.specification.speckitValidatedAt = new Date().toISOString();
+      child.specification.splitOrigin = 'mid-execution';
+    }
+
+    // Parent AC redistribution
+    const childIds = children.map(c => c.id).join(', ');
+    parentStory.acceptanceCriteria = [`Delegated to split children: ${childIds}`];
+    console.log(`spec-mode: --validate-splits: ${parentId} → validated ${children.length} children (${childIds})`);
+    // Same fix as applySpecChanges' spec-pass split path (found live,
+    // 2026-07-06, tier3-full-run-15): a validated parent's technicalNotes.
+    // files still lists its original (now-delegated) files, and it stayed in
+    // implementationOrder[phase] alongside its own children — the TC writer
+    // and main implementation loop both scan implementationOrder and saw it
+    // as active work with real source, when it's now entirely delegated.
+    parentStory.status = 'deprecated';
+    parentStory.completed = true;
+    const order = prd.implementationOrder?.[phase];
+    if (Array.isArray(order)) {
+      prd.implementationOrder[phase] = order.filter((id) => id !== parentId);
+    }
+  }
+
+  // Story-ID-loss invariant — see assertNoStoryIdsLost's docstring.
+  assertNoStoryIdsLost(_initialStoryIds, new Set((prd.stories || []).map((s) => s.id)), 'validateMidExecutionSplits()');
+
+  // Atomic write, lock-protected — see the identical rationale at run()'s
+  // writeFileSync call.
+  const _prdLockPath2 = `${prdFile}.lock`;
+  acquireFileLock(_prdLockPath2);
+  try {
+    const _tmpPrdFile = `${prdFile}.tmp`;
+    fs.writeFileSync(_tmpPrdFile, JSON.stringify(prd, null, 2) + '\n');
+    fs.renameSync(_tmpPrdFile, prdFile);
+  } finally {
+    releaseFileLock(_prdLockPath2);
+  }
+
+  if (hardViolations > 0) {
+    console.error(`spec-mode: --validate-splits: ${hardViolations} hard violation(s) — check PRD for deprecated splits`);
+    process.exit(1);
+  }
+
+  console.log('spec-mode: --validate-splits: complete');
+}
+
+// splitTestStoryCli <prdFile> <storyId> — shell entry point for
+// lib/tc-writer-gate.sh's TC-fact-density split mandate. Loads the PRD,
+// locates the story's phase (whichever implementationOrder[phase] array
+// contains it), delegates to splitTestStoryByFacts(), and writes the PRD
+// back atomically (same lock pattern as validateMidExecutionSplits above).
+// Exits 0 with splitCount>0 printed to stdout on success, exits 1 if the
+// story wasn't found or wasn't eligible to split (so the caller can treat
+// that as "nothing to do" rather than a real error).
+function splitTestStoryCli(prdFile, storyId) {
+  if (!prdFile || !storyId) {
+    console.error('spec-mode: --split-test-story: usage: --split-test-story <prdFile> <storyId>');
+    process.exit(1);
+  }
+  const prd = JSON.parse(fs.readFileSync(prdFile, 'utf8'));
+  const _initialStoryIds = new Set((prd.stories || []).map((s) => s.id));
+  const story = prd.stories.find((s) => s.id === storyId);
+  if (!story) {
+    console.error(`spec-mode: --split-test-story: story ${storyId} not found`);
+    process.exit(1);
+  }
+  const phase = Object.keys(prd.implementationOrder || {})
+    .find((p) => (prd.implementationOrder[p] || []).includes(storyId)) || process.env.PHASE || 'unknown';
+
+  const maxFactsPerChild = parseInt(process.env.EPAM_TC_FACTS_SPLIT_THRESHOLD || String(TC_FACTS_SPLIT_THRESHOLD), 10);
+  const { splitCount, childIds } = splitTestStoryByFacts(story, prd, phase, maxFactsPerChild);
+  if (splitCount === 0) {
+    console.log(`spec-mode: --split-test-story: ${storyId} not eligible to split (not a pure single-test-file story, or facts <= threshold)`);
+    process.exit(1);
+  }
+
+  assertNoStoryIdsLost(_initialStoryIds, new Set((prd.stories || []).map((s) => s.id)), 'splitTestStoryCli()');
+
+  const _prdLockPath = `${prdFile}.lock`;
+  acquireFileLock(_prdLockPath);
+  try {
+    const _tmpPrdFile = `${prdFile}.tmp`;
+    fs.writeFileSync(_tmpPrdFile, JSON.stringify(prd, null, 2) + '\n');
+    fs.renameSync(_tmpPrdFile, prdFile);
+  } finally {
+    releaseFileLock(_prdLockPath);
+  }
+
+  console.log(`spec-mode: --split-test-story: ${storyId} → ${childIds.join(', ')} (splitCount=${splitCount})`);
+}
+
+if (require.main === module) {
+  if (process.argv[2] === '--validate-splits') {
+    validateMidExecutionSplits(process.argv[3], process.argv[4]).catch((err) => {
+      console.error('spec-mode-runner --validate-splits failed:', err);
+      process.exit(1);
+    });
+  } else if (process.argv[2] === '--split-test-story') {
+    try {
+      splitTestStoryCli(process.argv[3], process.argv[4]);
+    } catch (err) {
+      console.error('spec-mode-runner --split-test-story failed:', err);
+      process.exit(1);
+    }
+  } else {
+    run().catch((err) => {
+      console.error('spec-mode-runner failed:', err);
+      process.exit(1);
+    });
+  }
+}
+
+/**
+ * WHICH NAME A COST ROW CARRIES.
+ *
+ * One invocation had two identities: the seam the call site declares, and an unrelated literal
+ * passed alongside it as the cost/log tag. They agreed by luck of spelling on some and differed
+ * outright on others, so per-agent spend could not be joined to the roster or the registry.
+ *
+ * Precedence, most specific first:
+ *   EPAM_AGENT_NAME  the actual agent, when one is named. Many agents share a seam — every
+ *                    -investigator runs at code-graph-detective — and collapsing them onto the
+ *                    archetype is exactly what makes per-agent cost unreadable.
+ *   EPAM_SEAM        the seam the invocation resolved into, stamped by seamInvocationEnv.
+ *   tag              the caller's literal, so a site not yet carrying a seam still records a row.
+ *                    Losing the row entirely would be worse than an unjoinable name.
+ */
+function costLabelFor(tag, env) {
+  const e = env || {};
+  return e.EPAM_AGENT_NAME || e.EPAM_SEAM || tag;
+}
+
+module.exports = {
+  reviewSurvey,
+  rosterCoverageBlock,
+  runClaudeTimeoutMs,
+  TOOL_ESTATE_SURVEY,
+  costLabelFor,
+  // The tool definitions ARE the contract. Exported so lib/agent-output-schema.js can
+  // validate answers against them instead of restating the shapes — a restated copy
+  // drifted within hours and rejected valid coordinator output on a live run.
+  vcFormSamples,
+  TOOL_DEFINITIONS: {
+    TOOL_SPEC_ASSIGNMENTS,
+    TOOL_SPEC_AGENT,
+    TOOL_SPEC_REVIEW,
+    TOOL_MODEL_REVIEW,
+    TOOL_GUARD_VOCABULARY,
+    TOOL_TICKET_LINKS,
+    // THE FOUR THAT WERE BOUND AT A CALL SITE AND ABSENT HERE.
+    //
+    // agent-output-schema.js looks a tag's tool up in THIS object, not in the module's exports.
+    // These four were exported individually — so they LOOKED available — while itemSchemaFor()
+    // returned null for them and validateTaggedOutput() passed any payload. Four seams, all
+    // before pause 1, bound a schema with nothing behind it. Found 2026-08-24 by replaying a
+    // killed run: ROSTER_REVIEW answered `"verdict": "warn"`, which its enum forbids.
+    TOOL_ESTATE_SURVEY,
+    TOOL_PROJECT_AGENTS,
+    TOOL_ROSTER_REVIEW,
+    TOOL_ROLE_ASSIGNMENTS,
+  },
+  specAgentEnv,
+  surveyToolBudget,
+  specModeDefaults,
+  reviewTicketLinks,
+  normaliseTicketLinks,
+  coveringTestFiles,
+  persistReferencedDocs,
+  fetchTicketDocuments,
+  manifestFileExcerpts,
+  buildGuardVocabularyPrompt,
+  buildVcReviewPrompt,
+  buildVcRegeneratePrompt,
+  buildGuardEvidence,
+  deriveGuardVocabulary,
+  mintProjectAgents,
+  TOOL_PROJECT_AGENTS,
+  assignAgentRoles,
+  candidateRoles,
+  buildAssignmentPrompt,
+  TOOL_ROLE_ASSIGNMENTS,
+  reviewRoster,
+  reviewProjectRoster,
+  detectivePrescription,
+  surveyEstate,
+  sanitizeSurvey,
+  buildRosterReviewPrompt,
+  buildSurveyPrompt,
+  surveyLineFor,
+  reconcileMintTally,
+  SURVEY_STATES,
+  TOOL_ROSTER_REVIEW,
+  // Exported for the same reason as its siblings: the per-agent harness binds a seam's declared
+  // output schema by reading it from here, and an unexported def reads as 'this seam has none'.
+  TOOL_SURVEY_REVIEW,
+  seamInvocationEnv,
+  withToolGrant,
+  buildRosterBriefBlock,
+  schemaEnv,
+  referencedDocsBlock,
+  advanceAgentLadderEscalation,
+  recordDetectiveRound,
+  classifySpecFailure,
+  specCorrectiveNote,
+  readAgentRawOutput,
+  extractTaggedJson,
+  stripPrescriptiveACs,
+  buildAssignments,
+  captureStorySnapshot,
+  splitDepth,
+  canSplitStory,
+  capSplitACs,
+  validateSplitFileCoherence,
+  storyRequiresSplit,
+  splitIsMandated: storyRequiresSplit,
+  // A GETTER, not a copy: reading the declaration at access time means a test or a project that
+  // changes it is answered honestly, instead of by whatever was loaded first.
+  get SPLIT_MANDATE_AC_THRESHOLD() { return policyConfig().splitMandateAcThreshold; },
+  checkSplitMandateViolation,
+  isSplitDelegationAc,
+  correctSplitChildAgentRoleIfTestOnly,
+  wireSplitSiblingDependencies,
+  reorderSiblingsByDependency,
+  assertNoStoryIdsLost,
+  resolveModelProvider,
+  isSplitDelegationOnlyChange,
+  applySpecChanges,
+  mergeLocationHintFiles,
+  buildPerCodelineManifest,
+  buildBrownfieldArchaeologyBlock,
+  VC_OBSERVABILITY_RULES,
+  preserveDefectAcceptanceCriteria,
+  normalizeVerificationCriteria,
+  vcDeclarations,
+  findVcMechanism,
+  safeFallbackVc,
+  partitionFlaggedVc,
+  // The two LLM-calling stages of the VC flow. Unexported until 2026-08-04, which is
+  // exactly why the flow had no live coverage: only the pure functions around them could
+  // be tested, and every defect in it lived in what the real model actually returns.
+  reviewVcViaSpeckit,
+  regenerateVcViaOpenspec,
+  manifestEvidence,
+  manifestPathStatus,
+  manifestMissingPaths,
+  buildReviewPayload,
+  enforceVerificationCriteria,
+  isThinContext,
+  verifyDetectiveHelper,
+  verifyDetectiveEvidence,
+  checkFixSiteCoverage,
+  coverageForStory,
+  laneCodeline,
+  codelineScopeBlock,
+  detectiveCorrectionNeeded,
+  detectiveAnswerIsGrounded,
+  inferStoryKindHint,
+  minEvidenceChars,
+  renderDetectiveCorrection,
+  precomputeDetectiveExplore,
+  ladderNextModel,
+  runClaude,
+  capReviewSnapshot,
+  getDeterministicCandidateFiles,
+  buildBrownfieldSearchQuery,
+  parseDetectiveFindings,
+  prescriptionMissingSource,
+  runCodeGraphDetective,
+  runSpecAgent,
+  publishedContracts,
+  fetchCodeGraphContext,
+  validateMidExecutionSplits,
+  extractCodeRefs,
+  resolvePromptProvider,
+  resolvePromptExec,
+  promptExecFor,
+  surveyHypothesisBlock,
+  buildGateExec,
+  parseReviewVerdict,
+  reviewPrdChange,
+  buildKnownValidModels,
+  isValidModelString,
+  isMiniTierModel,
+  // exported so the WIRING is testable, not just the validator it calls
+  _validatedOrNull,
+  // exported so the retrieval vocabulary is tested by EXECUTION, not by re-implementing it
+  // in a harness — a shim that strips its own stopwords proves only that the shim works.
+  retrievalConfig,
+  retrievalTerms,
+  buildRetrievalQuery,
+  capAtWord,
+  modelComplexitySignals,
+  MAX_ACS_PER_STORY,
+  MAX_CHILDREN_PER_SPLIT,
+  promptVersion,
+  logGuardedStepRetry,
+  checkTcFactDensityMandate,
+  splitTestStoryByFacts,
+  TC_FACTS_SPLIT_THRESHOLD,
+  VERY_HIGH_AC_THRESHOLD,
+};

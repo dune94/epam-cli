@@ -1,0 +1,23 @@
+### model identifiers — every matching line
+
+orchestrations/scripts/test/test-epam-providers.sh:249:      "model": "qwen/qwen3-coder",
+orchestrations/scripts/test/test-epam-providers.sh:316:    RESOLVED_MODEL="qwen/qwen3-coder"
+orchestrations/scripts/test/test-epam-providers.sh:363:  "model": "qwen/qwen3-coder-30b-a3b-instruct",
+orchestrations/scripts/test/test-epam-providers.sh:377:airun_result=$(bash "$AIRUN_SCRIPT" --provider qwen --model "qwen/qwen3-coder-30b-a3b-instruct" \
+orchestrations/scripts/test/test-epam-providers.sh:389:    AI_PROVIDER=qwen AI_MODEL='qwen/qwen3-coder-30b-a3b-instruct' \
+orchestrations/scripts/test/test-epam-providers.sh:392:    bash '$AIRUN_SCRIPT' --provider qwen --model 'qwen/qwen3-coder-30b-a3b-instruct' <<< 'implement slugify'
+src/cli/repl/DataConfig.ts:84:    defaultModel: 'qwen/qwen3.7-plus',
+src/cli/repl/DataConfig.ts:86:      { id: 'qwen/qwen3.7-max',                 desc: 'Qwen3.7 Max agentic flagship', price: '$1.25/$3.75' },
+src/cli/repl/DataConfig.ts:87:      { id: 'qwen/qwen3.7-plus',                desc: 'Qwen3.7 Plus (default)',    price: '$0.40/$1.60' },
+src/cli/repl/DataConfig.ts:88:      { id: 'qwen/qwen3.6-flash',               desc: 'Qwen3.6 Flash fast & cheap', price: '$0.1875/$1.125' },
+src/cli/repl/DataConfig.ts:89:      { id: 'qwen/qwen3-coder',                 desc: 'Qwen3 Coder 480B',          price: '$0.22/$1.80' },
+src/cli/repl/DataConfig.ts:90:      { id: 'qwen/qwen-2.5-72b-instruct',       desc: 'Qwen 2.5 72B (legacy)',     price: '$0.40/$1.60' },
+src/cli/repl/DataConfig.ts:91:      { id: 'qwen/qwen-2.5-7b-instruct',        desc: 'Qwen 2.5 7B compact',      price: '$0.04/$0.12' },
+src/cli/repl/DataConfig.ts:92:      { id: 'qwen/qwq-32b',                     desc: 'QwQ 32B reasoning',         price: '$0.20/$0.60' },
+src/cli/repl/DataConfig.ts:93:      { id: 'qwen/qwen3-235b-a22b',             desc: 'Qwen3 235B MoE flagship',   price: '$0.60/$2.40' },
+src/cli/repl/DataConfig.ts:94:      { id: 'qwen/qwen3-72b',                   desc: 'Qwen3 72B',                 price: '$0.40/$1.60' },
+src/cli/repl/DataConfig.ts:95:      { id: 'qwen/qwen3-32b',                   desc: 'Qwen3 32B',                 price: '$0.18/$0.90' },
+src/cli/repl/DataConfig.ts:96:      { id: 'qwen/qwen3-14b',                   desc: 'Qwen3 14B',                 price: '$0.10/$0.50' },
+src/cli/repl/DataConfig.ts:97:      { id: 'qwen/qwen3-8b',                    desc: 'Qwen3 8B',                  price: '$0.06/$0.30' },
+src/providers/qwen/QwenProvider.ts:160:  readonly defaultModel = 'qwen/qwen3-coder-30b-a3b-instruct';
+src/providers/minimax/MiniMaxProvider.ts:22:  readonly defaultModel = 'MiniMax-M2.5';

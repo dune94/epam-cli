@@ -8,8 +8,10 @@
     "",
     "Seeded 2026-08-20 from the first clean run of each scanner.",
     "  duplicatedLiterals — handlers/scan-duplicated-literals.js  (code restating a data-layer value)",
-    "  uncalibratedGuards — handlers/scan-uncalibrated-guards.js  (blocking function no test names)"
+    "  uncalibratedGuards — handlers/scan-uncalibrated-guards.js  (blocking function no test names)",
+    "  shellDefects       — handlers/scan-shell-defects.js  (shellcheck warning+ across every .sh)"
   ],
   "duplicatedLiterals": 10,
-  "uncalibratedGuards": 36
+  "uncalibratedGuards": 31,
+  "shellDefects": 0
 }

@@ -25,6 +25,7 @@
  * template through the REAL renderer. No fixture I invented can drift from what the caller sends.
  */
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -43,6 +44,12 @@ const asTheMintSupplies = (refusal?: string) => ({
   __PROJECT_CONTEXT__: 'Project config: /tmp/cfg\nTickets in scope: X-1: a ticket',
   __CODELINE_CONTEXT__: '- cl (/tmp/cl)',
   __PREVIOUS_REFUSAL__: refusalBlock(refusal, 'roster'),
+  // DERIVED THE WAY THE CALLER DERIVES IT, not copied. The seam field is judged against a closed
+  // list in the registry, and the prompt now carries that list; hand-writing a second copy here
+  // would drift from the first the moment a seam is added.
+  __DECLARED_SEAMS__: Object.keys(
+    JSON.parse(readFileSync(join(LIB, '..', '..', 'agents', 'invocation-profiles.json'), 'utf8')).profiles || {},
+  ).sort().map((x) => `- ${x}`).join('\n'),
 });
 
 describe('the value the caller really sends on attempt 1', () => {

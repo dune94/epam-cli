@@ -1,4 +1,4 @@
-    const p = JSON.parse(require('fs').readFileSync(process.argv[2],'utf8'));
+    const p = require('./_read-input.js').readJsonOrRefuse(process.argv[2], "the run's codeline scope");
     const dirs = p.project && p.project.outputDirs ? p.project.outputDirs : [];
     if (dirs.length > 0) {
       dirs.forEach(d => console.log(d.codeline + ':' + d.path));

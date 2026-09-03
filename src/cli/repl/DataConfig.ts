@@ -79,22 +79,12 @@ const BUILTIN_PROVIDERS: ProvidersConfig = {
       { id: 'gemini-1.5-flash-8b',       desc: 'Smallest',         price: '$0.0375/$0.15'},
     ],
   },
-  qwen: {
-    label: 'Alibaba Qwen',
-    defaultModel: 'qwen/qwen3.7-plus',
+  openrouter: {
+    label: 'OpenRouter',
+    // The first model this stack offers, rather than one named here: a default invented in
+    // code is exactly the hardcoding this project forbids.
+    defaultModel: 'deepseek/deepseek-r1',
     models: [
-      { id: 'qwen/qwen3.7-max',                 desc: 'Qwen3.7 Max agentic flagship', price: '$1.25/$3.75' },
-      { id: 'qwen/qwen3.7-plus',                desc: 'Qwen3.7 Plus (default)',    price: '$0.40/$1.60' },
-      { id: 'qwen/qwen3.6-flash',               desc: 'Qwen3.6 Flash fast & cheap', price: '$0.1875/$1.125' },
-      { id: 'qwen/qwen3-coder',                 desc: 'Qwen3 Coder 480B',          price: '$0.22/$1.80' },
-      { id: 'qwen/qwen-2.5-72b-instruct',       desc: 'Qwen 2.5 72B (legacy)',     price: '$0.40/$1.60' },
-      { id: 'qwen/qwen-2.5-7b-instruct',        desc: 'Qwen 2.5 7B compact',      price: '$0.04/$0.12' },
-      { id: 'qwen/qwq-32b',                     desc: 'QwQ 32B reasoning',         price: '$0.20/$0.60' },
-      { id: 'qwen/qwen3-235b-a22b',             desc: 'Qwen3 235B MoE flagship',   price: '$0.60/$2.40' },
-      { id: 'qwen/qwen3-72b',                   desc: 'Qwen3 72B',                 price: '$0.40/$1.60' },
-      { id: 'qwen/qwen3-32b',                   desc: 'Qwen3 32B',                 price: '$0.18/$0.90' },
-      { id: 'qwen/qwen3-14b',                   desc: 'Qwen3 14B',                 price: '$0.10/$0.50' },
-      { id: 'qwen/qwen3-8b',                    desc: 'Qwen3 8B',                  price: '$0.06/$0.30' },
       { id: 'deepseek/deepseek-r1',             desc: 'DeepSeek R1 reasoning',     price: '$0.55/$2.19' },
       { id: 'deepseek/deepseek-chat',           desc: 'DeepSeek V3 chat',          price: '$0.27/$1.10' },
       { id: 'meta-llama/llama-3.3-70b-instruct',desc: 'Llama 3.3 70B',            price: '$0.12/$0.12' },

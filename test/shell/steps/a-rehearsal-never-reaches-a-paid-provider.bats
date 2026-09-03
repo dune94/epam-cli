@@ -12,7 +12,13 @@
 
 setup() {
   REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../../.." && pwd)"
-  SCRIPT="${REPO_ROOT}/orchestrations/scripts/ai-run.sh"
+  # llm-handler.sh, not ai-run.sh: the provider-selection block moved when the pipeline's EIGHT
+  # independent paths to a vendor API were consolidated into one hub, and ai-run.sh became a shim
+  # carrying no logic. This test kept extracting from the shim, found nothing, and failed on its own
+  # vacuity guard — correctly, and into the void, because no runner executed .bats files at all.
+  # The guarantee it protects is that a rehearsal never reaches a paid provider, so it has been
+  # unverified since the move.
+  SCRIPT="${REPO_ROOT}/orchestrations/scripts/llm-handler.sh"
   WORK="${BATS_TEST_TMPDIR}/w"
   mkdir -p "$WORK"
 
@@ -41,22 +47,22 @@ run_block() {
   mkdir -p "$WORK/cassette"
   EPAM_REPLAY_CASSETTE_DIR="$WORK/cassette"
   export EPAM_REPLAY_CASSETTE_DIR
-  run_block "qwen" "anthropic,openai"
+  run_block "openrouter" "anthropic,openai"
   [ "$status" -eq 0 ]
   [ "${lines[0]}" = "replay" ]
   # THE NEGATIVE THAT MATTERS: the configured provider and its paid fallbacks are gone, not
   # merely ordered after replay. A fallback would be reached the moment a replay diverged.
   [ "${#lines[@]}" -eq 1 ]
-  [[ "$output" != *qwen* ]]
+  [[ "$output" != *openrouter* ]]
   [[ "$output" != *anthropic* ]]
   [[ "$output" != *openai* ]]
 }
 
 @test "with NO cassette, the configured providers are untouched" {
   unset EPAM_REPLAY_CASSETTE_DIR
-  run_block "qwen" "anthropic,openai"
+  run_block "openrouter" "anthropic,openai"
   [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "qwen" ]
+  [ "${lines[0]}" = "openrouter" ]
   [ "${lines[1]}" = "anthropic" ]
   [ "${lines[2]}" = "openai" ]
 }
@@ -66,10 +72,10 @@ run_block() {
   # operator asked for a rehearsal, and a typo'd path would silently bill them for a real one.
   EPAM_REPLAY_CASSETTE_DIR="$WORK/no-such-cassette"
   export EPAM_REPLAY_CASSETTE_DIR
-  run_block "qwen" "anthropic"
+  run_block "openrouter" "anthropic"
   [ "$status" -ne 0 ]
   grep -q "not a directory" "$WORK/err"
-  [[ "$output" != *qwen* ]]
+  [[ "$output" != *openrouter* ]]
 }
 
 @test "a run with no provider configured at all still rehearses" {

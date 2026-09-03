@@ -1,0 +1,5 @@
+{
+  "$why": "How long the pipeline waits for the observability backend, declared rather than written into lib/langfuse-emit.js where it was a literal 4000. Observability must never add latency to the call it observes, so this is deliberately short and the emit is fire-and-forget.",
+  "$whyNoEndpoint": "The backend's URL is NOT here. A host is a deployment fact, and naming one in engine config is the same hardcoding as naming it in engine code — config is not an exemption. It is declared as LANGFUSE_BASE_URL in the environment the run already loads, alongside the keys it must travel with; with no endpoint declared anywhere, tracing is off rather than pointed at a guess.",
+  "trace": { "timeoutMs": 4000 }
+}

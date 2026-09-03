@@ -1,0 +1,60 @@
+# refused: the generated prompt dropped placeholder(s) the template requires: __REVIEW_PROFILE__. The evidence they carry would silently never reach the agent.
+# template: code-review-cycle   attempt: 1/3
+# required placeholders: __ITERATION__, __PRIOR_CONTEXT__, __PROJECT_ROOT__, __REVIEW_PROFILE__, __STORY_ACS__, __STORY_AGENT__, __STORY_DESCRIPTION__, __STORY_DIFF__, __STORY_FILES__, __STORY_ID__, __STORY_TITLE__
+# ---------------- model reply below, verbatim ----------------
+## mock3 Review Profile
+
+**Project Structure:**
+This project consists of two independent codelines:
+- **mocka** (`/home/bradleyjerome/projects/mock3/mock-a`): Fare calculation logic. Tests with vitest, types with TypeScript strict mode.
+- **mockb** (`/home/bradleyjerome/projects/mock3/mock-b`): Schedule and departure board rendering. Tests with vitest, types with TypeScript strict mode.
+
+**Testing & Type Checking:**
+- Run tests: `npm run test` (vitest) within each codeline directory
+- Type check: TypeScript strict mode validation within each codeline directory
+- All changes must pass test suite and produce zero TypeScript errors
+
+**Critical Review Focus by Ticket:**
+
+**MOCK3-1 (mocka fare logic):**
+- Locate the exact comparison operator on the age boundary in `src/fares.ts` (is it `>`, `>=`, `<=`, or `<`?)
+- Verify test coverage includes the boundary case (age exactly 65) plus adjacent cases (64, 66)
+- Confirm the fare rule applies to the correct category and no other fares are affected
+- Check that the precedence and condition logic are correct if multiple fare rules exist
+
+**MOCK3-2 (mockb schedule rendering):**
+- Inspect the loop bounds in `src/schedule.ts` that render stops on the departure board
+- If `totalMinutes()` is used for indexing, verify it returns the correct count and doesn't cause off-by-one errors
+- Confirm the final stop is included in the rendered output (not omitted by an incorrect loop bound like `i < length - 1`)
+- Check array slicing, iteration indices, and any filtering that could skip elements
+
+**Evidence Standard:**
+Every issue requires exact evidence: the file and line number you read, or the test/command output that demonstrates the problem. Cite the actual comparison operator, loop bounds, or failing test. Unsupported claims are discarded.
+
+---
+REVIEW TASK (Iteration __ITERATION__): Story __STORY_ID__ — __STORY_TITLE__
+AGENT: __STORY_AGENT__
+
+DESCRIPTION: __STORY_DESCRIPTION__
+
+ACCEPTANCE CRITERIA:
+__STORY_ACS__
+
+RELEVANT FILES: __STORY_FILES__
+
+GIT DIFF:
+```diff
+__STORY_DIFF__
+```
+__PRIOR_CONTEXT__
+PROJECT ROOT: __PROJECT_ROOT__
+
+Review the implementation against each acceptance criterion.
+Check: TypeScript strict compliance, test coverage, error handling, security.
+
+Respond with ONLY a JSON object:
+{"verdict":"approved","issues":[],"summary":"..."}
+  OR
+{"verdict":"changes_requested","issues":[{"severity":"blocker|major|minor","file":"...","line":0,"description":"...","evidence":"<path>:<line> you read, or the command you ran and its result","suggestedFix":"..."}],"summary":"..."}
+
+Every issue MUST carry an `evidence` field: the exact thing you READ that establishes it — `<path>:<line>` you opened, or the command you ran and what it returned. Not a restatement of the claim, not a plan reference: what you looked at. An issue without evidence is DISCARDED before it reaches anyone, so an unsupported finding is worse than no finding — it costs you the issue. If a claim is about a library's API, the evidence is that library's installed types or source in this repository, and the installed contract beats the plan.

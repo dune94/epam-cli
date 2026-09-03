@@ -28,18 +28,35 @@ const LADDER = join(SCRIPTS, 'lib/seam-ladder.sh');
 const REGISTRY = join(ROOT, 'orchestrations/agents/invocation-profiles.json');
 const NODE = process.execPath;
 
-/** Apply a seam exactly as run_orch_prompt does, and report what the agent would run with. */
-function applied(agent: string): { rc: number; effort: string; tokens: string } {
+/**
+ * Apply a seam exactly as run_orch_prompt does, and report what the agent would run with.
+ *
+ * REASONING EFFORT IS NO LONGER PART OF THIS ANSWER, and that is a change of ownership rather
+ * than a loss. Until 2026-09-01 a seam declared a flat reasoningEffort, seam-invocation exported
+ * it, and next_ladder_step treated the rung's own configured level as a FLOOR — so the seam's
+ * value won whenever it was higher, which for 33 of 41 seams meant "high" on every rung. The
+ * ladder's cheap entry rung could never be cheap. Operator rule, same date: a seam is ASSIGNED to
+ * a ladder and does not renegotiate what that ladder costs, exactly as already settled for
+ * maxIterations.
+ *
+ * So effort is now the RUNG's, applied by claude.sh at call time from EPAM_RUNG<N>_REASONING_EFFORT.
+ * It is legitimately absent here, at seam-export time, and asserting on it would pin the defect.
+ *
+ * The defect this file exists for is untouched and still asserted: a minted agent that resolves a
+ * seam on paper and gets NOTHING at runtime. That is now proven by the model, the ladder chain and
+ * the token budget it receives — the things this layer genuinely owns.
+ */
+function applied(agent: string): { rc: number; model: string; ladder: string; tokens: string } {
   const r = spawnSync('bash', ['-c',
     `set -a; . ${JSON.stringify(join(SCRIPTS, 'lib/model-ladders.sh'))}; set +a
      export_model_ladders ${JSON.stringify(join(ROOT, 'orchestrations/projects/mock3/llm-settings.json'))} >/dev/null 2>&1
      . ${JSON.stringify(LADDER)}
      seam_ladder_export ${JSON.stringify(agent)} >/dev/null 2>&1; rc=$?
-     echo "rc=$rc effort=\${EPAM_REASONING_EFFORT:-NONE} tokens=\${EPAM_MAX_OUTPUT_TOKENS:-NONE}"`,
+     echo "rc=$rc model=\${EPAM_MODEL:-NONE} ladder=\${EPAM_MODEL_LADDER:-NONE} tokens=\${EPAM_MAX_OUTPUT_TOKENS:-NONE}"`,
   ], { encoding: 'utf8', env: { ...process.env, NODE_BIN: NODE } });
-  const m = /rc=(\d+) effort=(\S+) tokens=(\S+)/.exec(r.stdout.trim().split('\n').pop() || '');
+  const m = /rc=(\d+) model=(\S+) ladder=(\S+) tokens=(\S+)/.exec(r.stdout.trim().split('\n').pop() || '');
   expect(m, `no result for ${agent}: ${r.stdout}${r.stderr}`).toBeTruthy();
-  return { rc: Number(m![1]), effort: m![2], tokens: m![3] };
+  return { rc: Number(m![1]), model: m![2], ladder: m![3], tokens: m![4] };
 }
 
 describe('a minted agent gets the seam it resolves', () => {
@@ -48,7 +65,8 @@ describe('a minted agent gets the seam it resolves', () => {
     for (const agent of ['mocka-investigator', 'transit-logic-engineer', 'some-new-fixer']) {
       const got = applied(agent);
       expect(got.rc, `${agent} resolves a seam but the registry refused to apply it`).toBe(0);
-      expect(got.effort, `${agent} would run with no reasoning effort`).not.toBe('NONE');
+      expect(got.model, `${agent} would run with no model`).not.toBe('NONE');
+      expect(got.ladder, `${agent} would run with no ladder to climb`).not.toBe('NONE');
       expect(got.tokens, `${agent} would run with no output-token budget`).not.toBe('NONE');
     }
   });
@@ -59,7 +77,10 @@ describe('a minted agent gets the seam it resolves', () => {
     // ("generic minted worker") — an earlier fixture used one and read its own success as failure.
     const got = applied('zzz-matches-no-pattern');
     expect(got.rc, 'an unknown agent was silently given a seam').toBe(3);
-    expect(got.effort).toBe('NONE');
+    // Asserted on what this layer still supplies. The old check read EPAM_REASONING_EFFORT, which
+    // is now absent for EVERY agent — so it would pass here without proving anything.
+    expect(got.model, 'an unresolved agent was handed a model anyway').toBe('NONE');
+    expect(got.tokens, 'an unresolved agent was handed a token budget anyway').toBe('NONE');
   });
 
   it('apply and resolve agree — one resolution, not two', () => {
@@ -80,7 +101,8 @@ describe('a minted agent gets the seam it resolves', () => {
     for (const agent of exact.slice(0, 6)) {
       const got = applied(agent);
       expect(got.rc, `${agent} stopped resolving`).toBe(0);
-      expect(got.effort, `${agent} lost its reasoning effort`).not.toBe('NONE');
+      expect(got.model, `${agent} lost its model`).not.toBe('NONE');
+      expect(got.tokens, `${agent} lost its output-token budget`).not.toBe('NONE');
     }
   });
 
@@ -95,6 +117,7 @@ describe('a minted agent gets the seam it resolves', () => {
 
     const got = applied(novel);
     expect(got.rc, 'a never-before-seen minted name gets no configuration').toBe(0);
-    expect(got.effort).not.toBe('NONE');
+    expect(got.model, 'a never-before-seen minted name got no model').not.toBe('NONE');
+    expect(got.ladder, 'a never-before-seen minted name got no ladder').not.toBe('NONE');
   });
 });

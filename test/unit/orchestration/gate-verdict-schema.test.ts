@@ -26,6 +26,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { orchestratorSource } from '../../helpers/orchestrator-source';
 
 const HELPER = join(__dirname, '../../../orchestrations/scripts/lib/gate_verdict_schema.py');
 
@@ -117,8 +118,7 @@ describe('a gate verdict must be a real verdict', () => {
 });
 
 describe('the pipeline enforces it', () => {
-  const ORCH = require('node:fs').readFileSync(
-    join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+  const ORCH = orchestratorSource();
   // Bound by the function's own end, not a character count — the wrapper grew
   // when self-healing and schema validation were added, and a fixed window
   // measures the length of the code rather than its behaviour.
@@ -137,8 +137,7 @@ describe('the pipeline enforces it', () => {
 });
 
 describe('brownfield gates judge the change, not the codebase', () => {
-  const ORCH = require('node:fs').readFileSync(
-    join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+  const ORCH = orchestratorSource();
 
   it('every gate prompt carries the brownfield scope', () => {
     // On 2026-07-26 only TWO of six gates mentioned the code the run changed.

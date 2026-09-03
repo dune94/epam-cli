@@ -41,7 +41,9 @@ setup() {
 {
   "implementationOrder": { "core": ["S-1"] },
   "stories": [{
-    "id": "S-1", "title": "a story", "status": "completed", "completed": true,
+    "id": "S-1", "title": "a story",
+    "description": "the fare boundary excludes riders aged exactly 65",
+    "status": "completed", "completed": true,
     "agentRole": "impl-agent",
     "technicalNotes": { "files": ["src/a.ts"] },
     "acceptanceCriteria": ["it works"],
@@ -73,6 +75,15 @@ RUNNER
     # rather than the real one: the prompts are read from it too, so it is linked in, and the
     # repo is never written to by a test.
     export EPAM_PROJECT_CONFIG_DIR="$WORK/projectcfg"
+    # A REAL project config carries llm-settings.json, and the reviewer needs it to resolve the
+    # seam's ladder POSITION. Without it the run stops before invoking anything and the failure
+    # reads as the regression this file exists to reproduce. Copied from the shipped project
+    # rather than hand-written: a fixture that invents settings tests the fixture.
+    mkdir -p "$WORK/projectcfg"
+    cp "$REPO_ROOT/orchestrations/projects/mock3/llm-settings.json" "$WORK/projectcfg/" 2>/dev/null || true
+    cp -r "$REPO_ROOT/orchestrations/projects/mock3/prompts" "$WORK/projectcfg/" 2>/dev/null || true
+    cp "$REPO_ROOT/orchestrations/projects/mock3/prompt-agent-link.json" "$WORK/projectcfg/" 2>/dev/null || true
+
     mkdir -p "$EPAM_PROJECT_CONFIG_DIR"
     ln -sfn "$REPO_ROOT/orchestrations/projects/metrolinx/prompts" "$EPAM_PROJECT_CONFIG_DIR/prompts"
     "${NODE_BIN:-$HOME/.nvm/versions/node/v20.20.0/bin/node}" -e '
@@ -90,7 +101,18 @@ RUNNER
       "$REPO_ROOT/orchestrations/agents/profiles.canonical.json" \
       "$REPO_ROOT/orchestrations/scripts/lib/project-roster.js"
     export PHASE=core
+    # A real run always declares which stack it is on; the fixture did not, so the ladder
+    # resolver had neither a project settings file nor a set to fall back to.
+    export EPAM_PROVIDER_SET="$(jq -r .defaultSet "$REPO_ROOT/orchestrations/config/provider-sets.json")"
     export EPAM_MODEL=test-model
+    # THE TIER ORDER COMES FROM THE STACK NOW. Seams ask for a ladder POSITION (base|mid|top) and the
+    # order they index into used to live in each project's llm-settings.json. The 2026-08-25
+    # migration moved it to the active provider set, so this fixture's empty project dir left the
+    # reviewer unable to resolve 'top' and it stopped before invoking anything — reported as the very
+    # regression this file exists to reproduce. A real run always has the order; so does this now.
+    export EPAM_MODEL_LADDER_TIER_ORDER="$(jq -r '(.ladderTierOrder // []) | join(",")' \
+        "$REPO_ROOT/orchestrations/config/llm-defaults.$(jq -r .defaultSet \
+        "$REPO_ROOT/orchestrations/config/provider-sets.json").json")"
     export ORCH_GATE_MODEL=test-model
 
     # THE ENGINE ALWAYS PERSISTS A RUNG BEFORE REVIEW. claude.sh writes it on every attempt

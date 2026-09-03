@@ -15,9 +15,10 @@
  */
 'use strict';
 
-try {
-  const r = require(require('path').resolve(process.argv[2]));
-  process.stdout.write(String(Object.keys(r.profiles || r || {}).length));
-} catch {
-  process.stdout.write('0');
-}
+// A CORRUPT ROSTER IS NOT AN EMPTY ONE. This caught everything and wrote '0' — so a file that
+// could not be read, or was half-written by a step that died, answered exactly like a roster with
+// no agents in it. This guard exists to stop the mint being skipped when no roster is on disk;
+// answering 0 for an unreadable one waves through the case it was written to catch.
+const { readJsonOrRefuse } = require('./_read-input.js');
+const r = readJsonOrRefuse(process.argv[2], 'the minted roster');
+process.stdout.write(String(Object.keys((r && r.profiles) || r || {}).length));

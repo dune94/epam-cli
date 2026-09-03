@@ -30,9 +30,16 @@ import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+// LADDERS AND MODEL OVERRIDES MOVED TO THE STACK. The 2026-08-25 migration took them out of each
+// project's llm-settings.json and into config/llm-defaults.<set>.json — a ladder names MODELS and
+// a model belongs to a STACK. This file read the project copy, which now carries only a note
+// saying so, so every lookup came back empty. See test/support/llm-settings.ts.
+import { stackSettings, defaultStack } from '../../support/llm-settings'
+const REPO_ROOT_CFG = join(__dirname, '../../../orchestrations/config');
+
 const ROOT = join(__dirname, '../../..');
 const LIB = join(ROOT, 'orchestrations/scripts/lib/model-ladder-membership.sh');
-const SETTINGS = join(ROOT, 'orchestrations/projects/metrolinx/llm-settings.json');
+const SETTINGS = join(REPO_ROOT_CFG, `llm-defaults.${defaultStack()}.json`);
 
 /** Every model that is a rung of any tier the project declares. */
 function declaredRungs(): string[] {
@@ -117,14 +124,13 @@ describe('stories_with_unladdered_models', () => {
  * orchestrator, rather than a copy of its logic.
  */
 describe('the model coordinator reviewer rejects an off-ladder assignment', () => {
-  const ORCH = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
+  const MC_REVIEW = join(ROOT, 'orchestrations/scripts/lib/handlers/mc-review.py');
 
   function reviewerVerdict(assigned: string | null) {
-    const src = readFileSync(ORCH, 'utf8');
-    const start = src.indexOf("<< 'MC_REVIEW_PY'\n");
-    expect(start, 'MC_REVIEW_PY not found in the orchestrator').toBeGreaterThan(-1);
-    const bodyStart = start + "<< 'MC_REVIEW_PY'\n".length;
-    const body = src.slice(bodyStart, src.indexOf('\nMC_REVIEW_PY\n', bodyStart));
+    // THE HEREDOC IS A HANDLER NOW. The reviewer was an MC_REVIEW_PY heredoc inside the
+    // orchestrator; it moved to lib/handlers/mc-review.py with the same argv contract
+    // (before, after, settings). Lifting the heredoc reported the reviewer as MISSING rather
+    // than as relocated — and a reviewer reported missing is a gate reported unwired.
 
     const dir = mkdtempSync(join(tmpdir(), 'mc-review-'));
     try {
@@ -134,9 +140,7 @@ describe('the model coordinator reviewer rejects an off-ladder assignment', () =
       writeFileSync(before, JSON.stringify({ stories: [story], implementationOrder: { core: ['AMSD-2041'] } }));
       const afterStory = { ...story, ...(assigned === null ? {} : { model: assigned }) };
       writeFileSync(after, JSON.stringify({ stories: [afterStory], implementationOrder: { core: ['AMSD-2041'] } }));
-      const py = join(dir, 'review.py');
-      writeFileSync(py, body);
-      const res = spawnSync('python3', [py, before, after, SETTINGS], { encoding: 'utf8' });
+      const res = spawnSync('python3', [MC_REVIEW, before, after, SETTINGS], { encoding: 'utf8' });
       return { verdict: (res.stdout || '').trim(), err: res.stderr || '' };
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -162,16 +166,12 @@ describe('the model coordinator reviewer rejects an off-ladder assignment', () =
 
   it('refuses to approve when the ladder declaration cannot be read', () => {
     // UNKNOWN is not "fine": a missing settings file must not silently bless any model.
-    const src = readFileSync(ORCH, 'utf8');
-    const start = src.indexOf("<< 'MC_REVIEW_PY'\n") + "<< 'MC_REVIEW_PY'\n".length;
-    const body = src.slice(start, src.indexOf('\nMC_REVIEW_PY\n', start));
     const dir = mkdtempSync(join(tmpdir(), 'mc-review-none-'));
     try {
       const before = join(dir, 'b.json'); const after = join(dir, 'a.json');
       writeFileSync(before, JSON.stringify({ stories: [{ id: 'S1' }] }));
       writeFileSync(after, JSON.stringify({ stories: [{ id: 'S1', model: 'anything' }] }));
-      const py = join(dir, 'r.py'); writeFileSync(py, body);
-      const res = spawnSync('python3', [py, before, after, '/nonexistent/llm-settings.json'], { encoding: 'utf8' });
+      const res = spawnSync('python3', [MC_REVIEW, before, after, '/nonexistent/llm-settings.json'], { encoding: 'utf8' });
       expect((res.stdout || '').trim()).toBe('fail');
       expect(res.stderr).toMatch(/cannot read ladder declarations/);
     } finally {

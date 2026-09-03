@@ -20,6 +20,11 @@
 # project's own facts live.
 # ─────────────────────────────────────────────────────────────────────────────
 
+# `env` does not execute its command in every environment this suite runs in — on 2026-08-28
+# `env FOO=1 echo hello` produced no output and exited 0, so these assertions ran against
+# nothing and failed for a reason that had nothing to do with the pipeline.
+load "../helpers/env-run"
+
 setup() {
     REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
     SCRIPTS="$REPO_ROOT/orchestrations/scripts"
@@ -94,7 +99,7 @@ template_rendered_seams() {
       fs.writeFileSync(process.argv[2], JSON.stringify(src, null, 2));
     ' "$REPO_ROOT/orchestrations/projects/metrolinx/prompts/$id.json" "$proj/prompts/$id.json"
 
-    run env EPAM_PROJECT_CONFIG_DIR="$proj" "$NODE" -e '
+    run env_run EPAM_PROJECT_CONFIG_DIR="$proj" "$NODE" -e '
       const lib = require(process.argv[1]);
       const ep = require(process.argv[2]);
       const d = lib.loadProjectPrompt(process.argv[3], process.env.EPAM_PROJECT_CONFIG_DIR);
@@ -109,7 +114,7 @@ template_rendered_seams() {
 }
 
 @test "a BOOTSTRAP prompt still renders from the template — it runs before any copy exists" {
-    run env EPAM_PROJECT_CONFIG_DIR="$BATS_TEST_TMPDIR/empty" "$NODE" -e '
+    run env_run EPAM_PROJECT_CONFIG_DIR="$BATS_TEST_TMPDIR/empty" "$NODE" -e '
       const ep = require(process.argv[1]);
       try { ep.renderEngineTemplate("roster-specialisation", {}); process.stdout.write("rendered"); }
       catch (e) { process.stdout.write(e.message); }
@@ -120,7 +125,7 @@ template_rendered_seams() {
 }
 
 @test "a seam prompt with NO project declared refuses — it never falls back to the template" {
-    run env -u EPAM_PROJECT_CONFIG_DIR "$NODE" -e '
+    run env_run -u EPAM_PROJECT_CONFIG_DIR "$NODE" -e '
       const ep = require(process.argv[1]);
       try { ep.renderEngineTemplate("qa-sast-sentinel", {}); process.stdout.write("RENDERED"); }
       catch (e) { process.stdout.write(e.message); }

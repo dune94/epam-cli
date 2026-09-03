@@ -22,6 +22,15 @@
 # Exit 0 = the run completed (or --describe resolved cleanly).
 # Exit 1 = it could not be launched. Nothing is guessed: an unnamed or missing project is refused.
 
+
+# A launcher decides what a run costs. It does not get to do that untested.
+_scg_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/stage-coverage-gate.sh"
+# shellcheck source=/dev/null
+# THE WHOLE MAP, BEFORE ANY MONEY MOVES. A paid launcher measures EVERY stage against the project's
+# threshold here, and only then declares the run gated — which is what turns on the per-stage gates
+# for the rest of the run. Failing here costs nothing; failing mid-run costs everything spent so far.
+[ -f "$_scg_lib" ] && . "$_scg_lib" && require_all_stage_coverage || exit 1
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -82,9 +91,11 @@ if ! command -v load_env_file_safe >/dev/null 2>&1; then
   fail "lib/env-file.sh did not provide load_env_file_safe — refusing to launch with no project data"
 fi
 
-for _env in "$REPO_ROOT/.env" "$PROJECT_DIR/.env" "$PROJECT_DIR/config.env"; do
+for _env in "$REPO_ROOT/.env" "$PROJECT_DIR/.env"; do
   [ -f "$_env" ] && load_env_file_safe "$_env" preserve
 done
+# The project env is TWO files and the registry names them — see lib/env-file.sh.
+load_project_env "$PROJECT_DIR" preserve || exit 1
 
 export EPAM_PROJECT_CONFIG_DIR="$PROJECT_DIR"
 export PROJECT_NAME

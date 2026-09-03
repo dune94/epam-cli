@@ -1,22 +1,17 @@
 {
   "$why": [
-    "Moved out of vc-coverage-check.sh on 2026-08-15 (19 of 20).",
-    "",
-    "Asked once per criterion, so it is deliberately narrow: one requirement, one suite, one",
-    "yes or no with the covering case named. Widening it is how a coverage check turns into an",
-    "opinion about the tests in general."
+    "Generated from the vc-coverage template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
   ],
-  "body": "You are checking whether a test suite covers ONE specific requirement.\n\n## The requirement\n__VERIFICATION_CRITERION__\n\n## The test file (complete)\n```\n__TEST_SOURCE__\n```\n\nAnswer ONE question: does this test file contain a case that would FAIL if this\nrequirement were violated?\n\nJudge the ASSERTIONS, not the titles. A test whose name mentions the same words\nis irrelevant if it does not actually exercise the requirement — in particular a\nrequirement stating something must NOT happen is not covered by a test asserting\nthat it DOES happen, however similar the wording.\n\nOutput ONLY this JSON, nothing else:\n{\"covered\": true|false, \"case\": \"<the test case name that covers it, or empty>\", \"why\": \"<one sentence>\"}",
-  "description": "Decide whether a test suite covers ONE specific verification criterion.",
+  "authority": "project",
+  "body": "You are checking whether a test suite covers ONE specific requirement for the gotransit checkout flow.\n\n## Context for this project\n\nThis is a Next.js / React + TypeScript project. Tests are written in Jest and run via `npm test`. The component under test is in `src/components/pages/CheckoutPage`, with test specs in `src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx`.\n\nTest files in this project use the Jest + React Testing Library pattern. Look for test cases that use `render()`, `screen.getByRole()`, `screen.getByTestId()`, `userEvent`, and `expect()` assertions. Pay attention to form validation tests and email field behavior, as the checkout page handles sensitive customer data.\n\nThe ticket in scope is AMSD-1919: Go‑Checkout Page - Email & Confirm Email Case Sensitivity. Tests covering this requirement should verify email field behavior with respect to case handling in comparisons and validation.\n\n## The requirement\n__VERIFICATION_CRITERION__\n\n## The test file (complete)\n```\n__TEST_SOURCE__\n```\n\nAnswer ONE question: does this test file contain a case that would FAIL if this requirement were violated?\n\nJudge the ASSERTIONS, not the titles. A test whose name mentions the same words is irrelevant if it does not actually exercise the requirement — in particular a requirement stating something must NOT happen is not covered by a test asserting that it DOES happen, however similar the wording.\n\nOutput ONLY this JSON, nothing else:\n{\"covered\": true|false, \"case\": \"<the test case name that covers it, or empty>\", \"why\": \"<one sentence>\"}",
+  "derivedFromSha256": "79377c166256044a0c88d4179fdbfbc9d800d74e6cdd9ee4ecc0db817527f795",
+  "derivedFromVersion": 1,
   "id": "vc-coverage",
   "placeholders": [
     "__TEST_SOURCE__",
     "__VERIFICATION_CRITERION__"
   ],
-  "version": 1,
-  "seams": [
-    "vc-coverage"
-  ],
-  "derivedFromSha256": "0fafc6c338e518bf0e7ff734ef2f484ce696c7cbfc8ae424cdb8b4e4598545ff",
-  "authority": "project"
+  "mayBeEmpty": []
 }

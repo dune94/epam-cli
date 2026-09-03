@@ -1,0 +1,24 @@
+{
+  "$why": [
+    "Generated from the spec-story-block template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "__PERSONA__STORY\nTitle: __TITLE__\nDescription: __DESCRIPTION__\nComponents: __COMPONENTS__\nDeclared files: __DECLARED_FILES__\n\nLINKS FOUND IN THIS TICKET:\n__LINK_BLOCK__\n\nCOMMENT THREAD (context for judging relevance — a link's surrounding discussion often says why it was posted):\n__COMMENT_BLOCK__\n__RETRIEVED_DOCS__\n\nALREADY RETRIEVED — these documents have been fetched for you and written to disk. Read them\nwith read_file rather than fetching them again; the text is the same and it costs you nothing:\n__DOC_PATHS__\nA document listed here that you did not read is a document you cannot quote.\n\n---\n\n## Project Context for This Task\n\nThis project contains two independent codelines:\n- **mocka** (`mock-a/`): fare calculation and pricing logic\n- **mockb** (`mock-b/`): schedule and departure board rendering logic\n\nEach codeline uses TypeScript with vitest for testing. Investigation tasks in this project require verifying implementation details at their actual source before implementers make changes:\n\n- **For MOCK3-1 (Riders aged exactly 65 fare charge)**: The mocka-fares-investigator role must verify the exact comparison operator in `src/fares.ts` and confirm actual test coverage for age boundaries in the test files — do not assume survey findings without reading the code.\n\n- **For MOCK3-2 (Departure board omits final stop)**: The mockb-schedule-investigator role must confirm the loop bound and `totalMinutes()` indexing behavior in `src/schedule.ts` firsthand — off-by-one errors are common in stop rendering, and verifying the actual implementation prevents misdiagnosis.\n\nTest assertions with vitest: look for `.toBe()`, `.toEqual()`, `.toBeDefined()` patterns in test files to understand existing coverage and identify gaps.\n\nRun tests within each codeline: `npm test` or `vitest` from the respective directory to validate findings.",
+  "derivedFromSha256": "41b6c41e78b4fc06be6b740b6110f0fa2010ba754f4f9639fc3df7228b2e7b19",
+  "derivedFromVersion": 1,
+  "id": "spec-story-block",
+  "placeholders": [
+    "__COMMENT_BLOCK__",
+    "__COMPONENTS__",
+    "__DECLARED_FILES__",
+    "__DESCRIPTION__",
+    "__DOC_PATHS__",
+    "__LINK_BLOCK__",
+    "__PERSONA__",
+    "__RETRIEVED_DOCS__",
+    "__TITLE__"
+  ],
+  "mayBeEmpty": []
+}

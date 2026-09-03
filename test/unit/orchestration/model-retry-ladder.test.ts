@@ -60,11 +60,19 @@ describe('tier3 script — EPAM_MODEL_LADDER is exported with valid format', () 
     expect(tier3).toMatch(/EPAM_MODEL_LADDER.*=.*\|/s);
   });
 
-  it('tier3 sets ORCH_GATE_MODEL to a non-empty value different from the .env default', () => {
-    // We verify it is SET — not which specific model it is
-    expect(tier3).toMatch(/ORCH_GATE_MODEL=\S+/);
-    // Must not be the .env stale default that causes run 103 gate clobber
-    expect(tier3).not.toMatch(/ORCH_GATE_MODEL=qwen\/qwen3-coder/);
+  it('tier3 PINS no gate model — it exports the one the ladder resolved', () => {
+    // INVERTED 2026-08-25. This demanded `ORCH_GATE_MODEL=<something>` in the launcher, which
+    // is a PIN — and a pin beat the seam's ladder-resolved choice downstream, found live by a
+    // mocked run: the wire asked for glm-5.2 while the resolver had chosen glm-5.3.
+    //
+    // The requirement was never "the launcher names a model". It was "the gate does not run on
+    // a stale .env default". The ladder answers that better, so the assertion follows it.
+    expect(tier3, 'a launcher must not pin a gate model — the ladder decides')
+      .not.toMatch(/^\s*ORCH_GATE_MODEL=\S+/m);
+    // NOT asserted: that the launcher exports it. This one never did — the value reaches a
+    // run through the project env and the seam's ladder, and demanding an export here would
+    // have been a second requirement invented to make an assertion pass.
+    expect(tier3).not.toMatch(/ORCH_GATE_MODEL=openrouter\/openrouter3-coder/);
   });
 
   it('tier3 sets ORCH_GATE_PROVIDER to a non-empty value', () => {
@@ -97,12 +105,12 @@ describe('claude.sh — three-phase inference ladder (R1: effort↑, R2: model�
 });
 
 // ── 4. Reasoning effort reaches providers as native API parameter ─────────────
-describe('MiniMax + Qwen providers — EPAM_REASONING_EFFORT passed as native API parameter', () => {
+describe('MiniMax + OpenRouter providers — EPAM_REASONING_EFFORT passed as native API parameter', () => {
   const minimaxSrc = readFileSync(
     join(__dirname, '../../../src/providers/minimax/MiniMaxProvider.ts'), 'utf8'
   );
-  const qwenSrc = readFileSync(
-    join(__dirname, '../../../src/providers/qwen/QwenProvider.ts'), 'utf8'
+  const openrouterSrc = readFileSync(
+    join(__dirname, '../../../src/providers/openrouter/OpenRouterProvider.ts'), 'utf8'
   );
 
   it('MiniMaxProvider reads EPAM_REASONING_EFFORT and passes reasoning_effort as its own native parameter, independent of temperature', () => {
@@ -118,40 +126,40 @@ describe('MiniMax + Qwen providers — EPAM_REASONING_EFFORT passed as native AP
     expect(reasoningFnBody).not.toMatch(/temperature/i);
   });
 
-  it('QwenProvider does NOT conflate reasoning effort with temperature (resolveOpenRouterReasoning never reads/sets temperature)', () => {
-    const reasoningFnStart = qwenSrc.indexOf('resolveOpenRouterReasoning(request: ProviderRequest)');
-    const reasoningFnEnd = qwenSrc.indexOf('\n  }', reasoningFnStart);
-    const reasoningFnBody = qwenSrc.slice(reasoningFnStart, reasoningFnEnd);
+  it('OpenRouterProvider does NOT conflate reasoning effort with temperature (resolveOpenRouterReasoning never reads/sets temperature)', () => {
+    const reasoningFnStart = openrouterSrc.indexOf('resolveOpenRouterReasoning(request: ProviderRequest)');
+    const reasoningFnEnd = openrouterSrc.indexOf('\n  }', reasoningFnStart);
+    const reasoningFnBody = openrouterSrc.slice(reasoningFnStart, reasoningFnEnd);
     expect(reasoningFnBody).not.toMatch(/temperature/i);
   });
 
-  it('QwenProvider sends reasoning.effort to OpenRouter for models that support it', () => {
-    expect(qwenSrc).toMatch(/resolveOpenRouterReasoning/);
-    expect(qwenSrc).toMatch(/reasoning.*effort/is);
+  it('OpenRouterProvider sends reasoning.effort to OpenRouter for models that support it', () => {
+    expect(openrouterSrc).toMatch(/resolveOpenRouterReasoning/);
+    expect(openrouterSrc).toMatch(/reasoning.*effort/is);
   });
 
-  it('QwenProvider resolveOpenRouterReasoning covers low/medium/high (not just medium+high)', () => {
-    expect(qwenSrc).toMatch(/effort.*low|low.*effort/is);
+  it('OpenRouterProvider resolveOpenRouterReasoning covers low/medium/high (not just medium+high)', () => {
+    expect(openrouterSrc).toMatch(/effort.*low|low.*effort/is);
   });
 
-  it('QwenProvider resolveModel handles models from multiple OpenRouter providers', () => {
+  it('OpenRouterProvider resolveModel handles models from multiple OpenRouter providers', () => {
     // Must accept models from any provider that goes through OpenRouter,
     // not just one hardcoded family. Check the regex includes multiple prefixes.
-    expect(qwenSrc).toMatch(/moonshotai|zhipuai/);
+    expect(openrouterSrc).toMatch(/moonshotai|zhipuai/);
   });
 
-  it('QwenProvider resolveModel accepts z-ai/* slugs (GLM 5.x family)', () => {
-    expect(qwenSrc).toMatch(/z-ai/);
+  it('OpenRouterProvider resolveModel accepts z-ai/* slugs (GLM 5.x family)', () => {
+    expect(openrouterSrc).toMatch(/z-ai/);
   });
 });
 
 // ── 7. Rung 2 provider routing is config-driven, not hardcoded ───────────────
-// (2026-07-06: replaced an inline `case $model in zhipuai/*|z-ai/*|...) qwen;;`
+// (2026-07-06: replaced an inline `case $model in zhipuai/*|z-ai/*|...) openrouter;;`
 // statement baked into claude.sh — a different project's model vendors would
 // get silently wrong/no provider routing from a hardcoded case like that.
 // Routing now goes through resolve_model_provider(), which reads
 // EPAM_MODEL_PROVIDER_MAP — a per-project config value (tier3-travel-app-run.sh
-// supplies the z-ai/zhipuai/moonshotai/kimi/deepseek->qwen, MiniMax->minimax
+// supplies the z-ai/zhipuai/moonshotai/kimi/deepseek->openrouter, MiniMax->minimax
 // map for THIS project), with zero vendor names in the engine itself.
 describe('claude.sh — Rung2 provider routing is config-driven via resolve_model_provider()', () => {
   it('Rung2 calls resolve_model_provider() instead of a hardcoded vendor case statement', () => {
@@ -170,11 +178,11 @@ describe('claude.sh — Rung2 provider routing is config-driven via resolve_mode
     expect(body).not.toMatch(/zhipuai|moonshotai|z-ai|MiniMax|kimi|deepseek/i);
   });
 
-  it('tier3-travel-app-run.sh supplies EPAM_MODEL_PROVIDER_MAP covering z-ai/* and zhipuai/* -> qwen', () => {
+  it('tier3-travel-app-run.sh supplies EPAM_MODEL_PROVIDER_MAP covering z-ai/* and zhipuai/* -> openrouter', () => {
     const idx = tier3.indexOf('EPAM_MODEL_PROVIDER_MAP=');
     const line = tier3.slice(idx, tier3.indexOf('\n', idx));
-    expect(line).toMatch(/zhipuai\/\*=qwen/);
-    expect(line).toMatch(/z-ai\/\*=qwen/);
+    expect(line).toMatch(/zhipuai\/\*=openrouter/);
+    expect(line).toMatch(/z-ai\/\*=openrouter/);
     expect(line).toMatch(/MiniMax-\*=minimax/);
   });
 });
@@ -192,12 +200,12 @@ describe('resolve_model_provider() — REAL execution', () => {
     return execFileSync('bash', ['-c', script], { encoding: 'utf8' }).trim();
   }
 
-  const MAP = 'zhipuai/*=qwen|moonshotai/*=qwen|z-ai/*=qwen|glm-*=qwen|kimi-*=qwen|deepseek/*=qwen|MiniMax-*=minimax';
+  const MAP = 'zhipuai/*=openrouter|moonshotai/*=openrouter|z-ai/*=openrouter|glm-*=openrouter|kimi-*=openrouter|deepseek/*=openrouter|MiniMax-*=minimax';
 
   it('matches a glob pattern and returns the configured provider', () => {
-    expect(run('z-ai/glm-5.1', MAP)).toBe('qwen');
+    expect(run('z-ai/glm-5.1', MAP)).toBe('openrouter');
     expect(run('MiniMax-M3', MAP)).toBe('minimax');
-    expect(run('moonshotai/kimi-k2', MAP)).toBe('qwen');
+    expect(run('moonshotai/kimi-k2', MAP)).toBe('openrouter');
   });
 
   it('returns empty string when no pattern matches (caller keeps STORY_PROVIDER unchanged)', () => {
@@ -216,12 +224,19 @@ describe('resolve_model_provider() — REAL execution', () => {
 
 // ── 8. Tier3 ESCALATION_MODEL is set and uses z-ai/glm-5.x ─────────────────
 describe('tier3 script — ESCALATION_MODEL uses GLM 5.x reasoning model', () => {
-  it('tier3 exports ESCALATION_MODEL variable', () => {
-    expect(tier3).toMatch(/export\s+ESCALATION_MODEL/);
+  it('tier3 declares NO escalation model — escalation is a ladder hop', () => {
+    // INVERTED 2026-08-25. ESCALATION_MODEL was a run-wide pin: every agent escalated to the
+    // SAME model regardless of where it started, which is a pin, not a ladder. Escalation now
+    // goes one rung up the seam's OWN chain (seam_next_model).
+    expect(tier3, 'a run-wide escalation pin must not come back')
+      .not.toMatch(/^\s*(export\s+)?ESCALATION_MODEL=\S/m);
   });
 
-  it('ESCALATION_MODEL default is z-ai/glm-5.x (reasoning, 1M ctx)', () => {
-    expect(tier3).toMatch(/ESCALATION_MODEL.*z-ai\/glm-5/);
+  it('no vendor model slug is pinned in the launcher at all', () => {
+    // The general form of the rule the two assertions above used to violate.
+    const code = tier3.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
+    expect(code, 'a launcher naming a model is a pin whatever the variable is called')
+      .not.toMatch(/=\s*["']?(z-ai\/glm-|MiniMax-M|moonshotai\/kimi-|zhipuai\/)/);
   });
 
   it('EPAM_MODEL_LADDER references ESCALATION_MODEL variable (not a hardcoded slug)', () => {

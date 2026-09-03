@@ -1,0 +1,16 @@
+{
+  "id": "story-diff-not-inlined",
+  "authority": "template",
+  "_what": "What a reviewer is told in place of a diff too large to inline: that the change was not withheld, which files were excluded and why, the exact command to read any file, and that an unread file may not be assumed clean.",
+  "_why": "These sentences were written in team-lead-review.sh and substituted into __STORY_DIFF__ — model-facing instruction in a shell script, unreviewable in the prompt layer and unchangeable per project. The detector found it as an unexplained multi-line quoted string. Only the words live here; the byte count, the codeline root and the base revision are facts and arrive as values.",
+  "_bodies": "excluded — generated files were filtered out of the stat, so the reviewer must be told they are gated elsewhere rather than left to wonder. plain — nothing was filtered.",
+  "placeholders": [
+    "__DIFF_BYTES__",
+    "__PROJECT_ROOT__",
+    "__REV_BASE__"
+  ],
+  "bodies": {
+    "excluded": "[The change is __DIFF_BYTES__ bytes and is NOT inlined here. Generated files (lockfiles, snapshots) are excluded above and gated separately -- they are not review material. Read what you need:\n\n    git -C __PROJECT_ROOT__ diff __REV_BASE__ HEAD -- <path>\n\nReview every file listed. Do not assume a file you did not read is defect-free.]",
+    "plain": "[The change is __DIFF_BYTES__ bytes and is NOT inlined here. Read what you need:\n\n    git -C __PROJECT_ROOT__ diff __REV_BASE__ HEAD -- <path>\n\nReview every file listed. Do not assume a file you did not read is defect-free.]"
+  }
+}

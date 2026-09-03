@@ -178,6 +178,10 @@ validate_mid_execution_splits() {
 
     log "  [split-gate] Running speckit on mid-execution splits: $_new_split_ids"
     set +e
+    # Every line here forwards a value to the child process, and each expansion deliberately reads
+    # the OUTER value — which IS the value being forwarded. shellcheck is right about the shape and
+    # wrong about the intent; rewriting it risks silently dropping a credential the child needs.
+    # shellcheck disable=SC2097,SC2098
     PRD_FILE="$PRD_FILE" OUTPUT_DIR="$LOG_DIR" \
         AI_RUNNER_CMD="$AI_RUNNER_CMD" \
         EPAM_ORCHESTRATION_PROVIDER="${ORCH_GATE_PROVIDER:-${EPAM_ORCHESTRATION_PROVIDER:-}}" \
@@ -464,7 +468,7 @@ reset_brownfield_story_commit() {
 # config = never block" posture).
 _text_violates_anti_pattern() {
     local _text="$1"
-    local _rules_file="${EPAM_PROJECT_CONFIG_DIR:-}/anti-patterns.json"
+    local _rules_file="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/anti-patterns.json}"
     [ -f "$_rules_file" ] || return 0
 
     python3 "$SCRIPT_DIR/lib/handlers/story-text-rule-check.py" "$_rules_file" "$_text"
@@ -554,7 +558,8 @@ _persist_skill_note_simple() {
 # Best-effort: malformed/absent config is silently skipped, same posture as
 # every other loader in this file.
 _load_timeout_config() {
-    local _settings_file="${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json"
+    # :+ not :- — an unset config dir must yield an EMPTY path, never one at the filesystem root.
+    local _settings_file="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/llm-settings.json}"
     [ -f "$_settings_file" ] || return 0
 
     # `|| true` is load-bearing (found live, 2026-08-02): this runs under

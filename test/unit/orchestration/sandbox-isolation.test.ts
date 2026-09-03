@@ -17,7 +17,7 @@
  * in `.epam/dependency-check.json`'s "vendorDirs" read-only inside the
  * container — a kernel-enforced bind-mount permission the agent's own
  * process genuinely cannot undo, unlike chmod; (2) accept a configurable
- * target command so the SAME wrapper can front the `qwen`/`minimax`
+ * target command so the SAME wrapper can front the `openrouter`/`minimax`
  * provider branch (this project's actual providers), not just `claude`;
  * (3) derive the container's base image from `project.stack.language`/
  * `.runtime` — data the LLM-based `generatePrd()` pipeline (src/scaffold/
@@ -130,8 +130,8 @@ describe('sandbox-invoke.sh — REAL execution, vendor-dir mounts + configurable
   });
 
   it('appends passed-through args after the target command', () => {
-    const argv = run({ targetCmd: 'node /opt/epam-cli/dist/epam.js run', extraArgs: ['--provider', 'qwen'] });
-    expect(argv.slice(-5)).toEqual(['run', '--json', '-', '--provider', 'qwen']);
+    const argv = run({ targetCmd: 'node /opt/epam-cli/dist/epam.js run', extraArgs: ['--provider', 'openrouter'] });
+    expect(argv.slice(-5)).toEqual(['run', '--json', '-', '--provider', 'openrouter']);
   });
 });
 
@@ -180,8 +180,8 @@ describe('derive_sandbox_base_image — REAL execution (run-agent-orchestration.
 });
 
 describe('claude.sh epam-run branch — wired through the sandbox when active (static)', () => {
-  it('the copilot|openai|qwen|cursor|minimax branch checks EPAM_SANDBOX_IMAGE and swaps to $CLAUDE_CMD', () => {
-    const branchStart = claudeSrc.indexOf('copilot|openai|qwen|cursor|minimax)');
+  it('the copilot|openai|openrouter|cursor|minimax branch checks EPAM_SANDBOX_IMAGE and swaps to $CLAUDE_CMD', () => {
+    const branchStart = claudeSrc.indexOf('copilot|openai|openrouter|cursor|minimax)');
     expect(branchStart).toBeGreaterThan(-1);
     const branchEnd = claudeSrc.indexOf('\n            epam)', branchStart);
     const branchBody = claudeSrc.slice(branchStart, branchEnd);
@@ -196,7 +196,7 @@ describe('claude.sh epam-run branch — wired through the sandbox when active (s
   });
 
   it('EPAM_SANDBOX_TARGET_CMD is passed through to the invocation regardless of sandbox state (empty when not sandboxed)', () => {
-    const branchStart = claudeSrc.indexOf('copilot|openai|qwen|cursor|minimax)');
+    const branchStart = claudeSrc.indexOf('copilot|openai|openrouter|cursor|minimax)');
     const branchEnd = claudeSrc.indexOf('\n            epam)', branchStart);
     const branchBody = claudeSrc.slice(branchStart, branchEnd);
     expect(branchBody).toMatch(/EPAM_SANDBOX_TARGET_CMD="\$\{_epam_sandbox_target\}"/);

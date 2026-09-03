@@ -8,7 +8,7 @@
  * logic works against a fixture — they can't prove OpenRouter/MiniMax still
  * return cost data in the shape we expect, or that our pricing-table rates
  * are still accurate. This test hits the real APIs and checks:
- *   1. OpenRouter-routed models (via the qwen provider) report
+ *   1. OpenRouter-routed models (via the openrouter provider) report
  *      cost_is_estimate=false with a real, non-zero usage.cost.
  *   2. MiniMax (no real cost API) correctly falls back and reports
  *      cost_is_estimate=true, never silently claiming a real cost it
@@ -55,7 +55,7 @@ function runOnce(provider: string, model: string): RunJsonOutput {
 
 describe.skipIf(!hasOpenRouterKey)('real-cost-live — OpenRouter-routed models report real, non-estimated cost', () => {
   it('z-ai/glm-5.1 returns cost_is_estimate=false with real cost close to the pricing table', () => {
-    const result = runOnce('qwen', 'z-ai/glm-5.1');
+    const result = runOnce('openrouter', 'z-ai/glm-5.1');
     expect(result.cost_is_estimate).toBe(false);
     expect(result.cost_usd).toBeGreaterThan(0);
 
@@ -67,7 +67,7 @@ describe.skipIf(!hasOpenRouterKey)('real-cost-live — OpenRouter-routed models 
   });
 
   it('moonshotai/kimi-k2 returns cost_is_estimate=false with real cost close to the pricing table', () => {
-    const result = runOnce('qwen', 'moonshotai/kimi-k2');
+    const result = runOnce('openrouter', 'moonshotai/kimi-k2');
     expect(result.cost_is_estimate).toBe(false);
     expect(result.cost_usd).toBeGreaterThan(0);
 

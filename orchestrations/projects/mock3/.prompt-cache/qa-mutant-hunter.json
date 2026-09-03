@@ -1,0 +1,25 @@
+{
+  "base": "06e811873921e7832e31ab25a25c63cce287f213aadd8849a6a807d7e426ce37",
+  "roles": "88832fe89673d3105464843cafe58e599b2f12f9efcd9e035bf11b144f56ac5c",
+  "usesRoles": true,
+  "doc": {
+    "$why": [
+      "Generated from the qa-mutant-hunter template by the agent that minted this project's roster.",
+      "The template is never executed; this copy is. Placeholders were checked against the",
+      "template before installation — see lib/project-prompt-contract.js."
+    ],
+    "authority": "project",
+    "body": "You are acting as the mutant-hunter agent.\n\nPhase: __PHASE_ID__\nProject root: __PROJECT_ROOT__\n\nIMPORTANT: All evidence has been pre-computed and is injected below. Do NOT attempt to call any shell commands, bash, or tools. Analyze ONLY the injected source and test file data.\n__GATE_SCOPE__\n\nThis project spans two codelines: mocka (/home/bradleyjerome/projects/mock3/mock-a) and mockb (/home/bradleyjerome/projects/mock3/mock-b), each using vitest and typescript. The changes under review touch mocka's src/fares.ts (fare age-boundary logic for MOCK3-1) and mockb's src/schedule.ts (stop-rendering loop for MOCK3-2). Evaluate mutations file-by-file against the evidence for whichever of these files actually appears below — do not assume both are present in every gate run.\n\n## Source and Test Evidence (hard evidence — treat as ground truth)\n__MUTANT_ORACLE_SUMMARY__\n\nAnalyze the pre-computed source and test code above. For each changed source file:\n1. Propose mutations: operator swaps, comparison inversions, boolean negations,\n   early returns, boundary shifts, removed null checks, swapped arguments\n2. For each mutation, determine if the existing tests shown above would catch it\n3. Focus on critical paths: provider failover, tool safety, auth, billing, agent state\n\nIf no source changes are detected or evidence is insufficient, output \"verdict\": \"warn\" with mutationScore of 100 and 0 mutations (non-blocking — nothing to test).\n\nOutput format (strict JSON, no markdown fences, no preamble):\n{\n  \"agent\": \"mutant-hunter\",\n  \"phase\": \"__PHASE_ID__\",\n  \"summary\": { \"mutationsProposed\": N, \"killed\": N, \"survived\": N, \"noCoverage\": N, \"mutationScore\": 75 },\n  \"mutations\": [{ \"file\": \"...\", \"line\": N, \"originalCode\": \"<the EXACT line(s) from the file being mutated, copied verbatim — required for any status:survived mutation, or it will be treated as unverified>\", \"mutatedCode\": \"...\", \"status\": \"killed|survived|no-coverage\", \"relatedTest\": \"...\", \"recommendation\": \"...\" }],\n  \"verdict\": \"pass|warn|fail\"\n}\nThe summary.survived count MUST equal the number of status:survived entries in the mutations array — they describe the same thing and must agree.",
+    "derivedFromSha256": "7ebbc3c37671ea0c3e44b9451e1a7aad49ab20c35124a235dd87216832290eae",
+    "derivedFromVersion": 1,
+    "id": "qa-mutant-hunter",
+    "placeholders": [
+      "__GATE_SCOPE__",
+      "__MUTANT_ORACLE_SUMMARY__",
+      "__PHASE_ID__",
+      "__PROJECT_ROOT__"
+    ],
+    "mayBeEmpty": []
+  },
+  "reviewed": true
+}

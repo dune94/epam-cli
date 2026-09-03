@@ -1,0 +1,112 @@
+{
+  "_what": "WHICH FILES EACH PIPELINE STAGE RUNS. Read by lib/handlers/stage-coverage.js, which every stage calls through lib/stage-coverage-gate.sh before it does anything. A stage below the coverage its project demands does not run.",
+  "_allCodeIsInPlay": "Every file under `roots` belongs to exactly ONE stage, so the stage line totals equal the project line total. A file assigned to no stage is measured by nothing and gated by nothing — the audit fails rather than excluding it quietly. Patterns are regular expressions against the repo-relative path, matched in declaration order; the first stage to claim a file owns it.",
+  "_policyLivesWithTheProject": "thresholdPercent and blocker are NOT here. How much cover a project demands before it spends is that project's decision, declared in its own coverage-policy.json.",
+  "roots": [
+    "orchestrations/scripts"
+  ],
+  "extensions": [
+    ".js",
+    ".sh",
+    ".ts"
+  ],
+  "excludePattern": "node_modules|/archived/|/\\.parked/|/\\.venv|/dist/",
+  "stages": {
+    "launch": [
+      "^orchestrations/scripts/(tier[0-9].*|orchestrate|run-agent-orchestration|run-bounded|kill-tier3-run)\\.sh$",
+      "^orchestrations/scripts/(mock-epam-run|run-suite-sharded|run-shell-tests|run-hello-world.*|run-travel-app-test)\\.sh$",
+      "^orchestrations/scripts/lib/(flags|node-bin|build-freshness|dist-freshness|free-run-guard|contamination-exit)\\.sh$",
+      "^orchestrations/scripts/lib/orchestration-[a-z-]+\\\\.sh$"
+    ],
+    "ingest": [
+      "^orchestrations/scripts/(ingest-jira-tickets|contextualize-stories)\\.sh$",
+      "^orchestrations/scripts/lib/(jira-client|jira-adapter|webhook-queue)\\.js$",
+      "^orchestrations/scripts/(synthesize-prd-from-jira)\\.js$",
+      "^orchestrations/scripts/lib/handlers/(fetch-tracker-issues|run-jira-pipeline|ac-gate.*|lint-ac|filtered-prd|prd-.*)\\.(js|py)$",
+      "^orchestrations/scripts/(prd-remediate|load-phase-graph|sync-monitor-stories)\\.sh$",
+      "^orchestrations/scripts/lib/handlers/(work-items-from-prd|json-array-length)\\.js$"
+    ],
+    "discovery": [
+      "^orchestrations/scripts/lib/codeline-.*\\.(js|sh)$",
+      "^orchestrations/scripts/(index-codelines|resolve-codeline-scope)\\.sh$",
+      "^orchestrations/scripts/lib/(codegraph-context|semble-context|tfidf|ecosystem-registry)\\.js$",
+      "^orchestrations/scripts/lib/handlers/(codeline-.*|cl-.*|secondary-codeline-dirs|apply-codeline-scope)\\.js$",
+      "^orchestrations/scripts/(codegraph-.*|ripgrep-search|resolve-package-symbol)\\.sh$",
+      "^orchestrations/scripts/lib/(brownfield-context)\\.js$",
+      "^orchestrations/scripts/lib/handlers/(package-symbol-resolve|repo-exclude-patterns|testable-source)\\.js$"
+    ],
+    "mint": [
+      "^orchestrations/scripts/(mint-agents-step|mock-estate-seed)\\.js$",
+      "^orchestrations/scripts/lib/(project-roster|agent-roster|agent-kinds|agent-inputs|agent-io|prompt-.*|project-prompt-.*)\\.js$",
+      "^orchestrations/scripts/lib/handlers/(roster-size|agent-skills|bridge-profile|seam-.*)\\.(js|py)$",
+      "^orchestrations/scripts/lib/(agent-io|agent-role-preflight|agent-output-schema)\\.(js|sh)$",
+      "^orchestrations/scripts/lib/handlers/(stack-facts|ladder-models|ladder-providers|model-settings)\\.js$"
+    ],
+    "spec": [
+      "^orchestrations/scripts/spec-mode-runner\\.js$",
+      "^orchestrations/scripts/lib/(story-merge|story-guards|story-outputs|story-retry-state|verify-findings|guard-vocabulary)\\.(js|sh)$",
+      "^orchestrations/scripts/lib/handlers/(spec-.*|story-.*|tc-.*|work-items-from-prd|spanning-stories-incomplete)\\.(js|py)$",
+      "^orchestrations/scripts/lib/(evidence-windows|failure-signature|fix-plan|constraint-sanity)\\.(js|sh)$",
+      "^orchestrations/scripts/lib/handlers/(resume-spec-output-present|check-remediation-register)\\.js$"
+    ],
+    "cpa": [
+      "^orchestrations/scripts/lib/(cpa-inference|constraint-compiler)\\.js$",
+      "^orchestrations/scripts/(estimate-stories|update-cost-forecasts)\\.sh$",
+      "^orchestrations/scripts/lib/handlers/(cpa-.*|model-.*|phase-cost-total|token-cost|scaled-timeout-secs)\\.(js|py)$"
+    ],
+    "writer": [
+      "^orchestrations/scripts/(claude|ai-run|llm-handler|writer-retest|post-impl-tc-writer|brownfield-repro-test-writer|update-invalidated-tests)\\.sh$",
+      "^orchestrations/scripts/lib/(llm-call|content-retry|agent-invoke|agent-ladder|agent-tools|runner-settings|model-ladder.*|model-ladders|llm-settings-resolve|seam-invocation|seam-model|orch-prompt|engine-prompt|prompt-library)\\.(js|sh)$",
+      "^orchestrations/scripts/(copilot|cursor|openai|merge-worktree|scaffold-.*|reset-to-baseline)\\.sh$",
+      "^orchestrations/scripts/lib/(git-ops|jq-vals|gate-tools|deps-install)\\.sh$",
+      "^orchestrations/scripts/lib/handlers/(install-plan|introduced-deps|lockfile-sync|package-engines-node|merge-lane-into-canonical|rebuild-cross-contract)\\.js$"
+    ],
+    "gates": [
+      "^orchestrations/scripts/(team-lead-review|code-review-cycle|vc-coverage-check|test-engine)\\.sh$",
+      "^orchestrations/scripts/lib/(gate-verdicts|tc-writer-gate|ac-gate|eslint-baseline-gate|vc-coverage-findings|codeline-write-perimeter|stage-coverage-gate)\\.(js|sh)$",
+      "^orchestrations/scripts/lib/handlers/(stage-coverage|review|sast-.*|semgrep-.*|mutant|fuzz-.*|perf|vc-.*|plan-review-json|code-review-json|team-lead-review-json|findings-grounded|rg-.*|rgd-diff|pfa-.*)\\.(js|py)$",
+      "^orchestrations/scripts/(brownfield-coverage-gate|brownfield-repro-test-gate|check-phase-gate|check-dependencies|scan-secrets|worktree-health-check)\\.sh$",
+      "^orchestrations/scripts/lib/(coupled-pair-gate|plan-fidelity-gate|pre-run-reset-gate|preflight|lint-staged-scope)\\.(js|sh)$",
+      "^orchestrations/scripts/lib/handlers/(scan-duplicated-literals|scan-uncalibrated-guards)\\.js$"
+    ],
+    "selfheal": [
+      "^orchestrations/scripts/(agent-attempt-analyst|detective-rerun-step)\\.(sh|js)$",
+      "^orchestrations/scripts/lib/(self-heal|kb-.*|healing.*)\\.(js|sh)$",
+      "^orchestrations/scripts/lib/handlers/(.*-analyst.*|last-fa-diagnosis|healing-event-count|compute-retry-extension-evidence|retry-extension-parsed|run-story-recovery-analyst)\\.(js|py)$",
+      "^orchestrations/scripts/(detective-rerun|provider-cutover)\\.sh$",
+      "^orchestrations/scripts/lib/(halt-recovery)\\.sh$"
+    ],
+    "reset": [
+      "^orchestrations/scripts/(pre-run-reset|brownfield-preflight-reset|archive-run-artifacts|reset-cost-test)\\.sh$",
+      "^orchestrations/scripts/lib/(engine-paths|env-file|project-config|phase-exit|spend-probe|codeline-scope)\\.sh$"
+    ],
+    "reporting": [
+      "^orchestrations/scripts/(dashboard.*|generate-.*|update-monitor|ack-message|snapshot-watch|cassette-export|kb-replay|control-plane)\\.(sh|js)$",
+      "^orchestrations/scripts/lib/(cost-emitter|langfuse-emit|agent-reply-log|cassette-store|activity.*)\\.js$",
+      "^orchestrations/scripts/lib/handlers/(emit-cost|.*-report.*|run-narrative-build|qa-report-build|diff-view-manifest-record|phase-story-summary)\\.(js|py)$",
+      "^orchestrations/scripts/(list-messages|receive-messages|send-message|validate-dashboards|verify-dashboards)\\.sh$",
+      "^orchestrations/scripts/lib/(cost-ledger|cost-record)\\.sh$"
+    ],
+    "preflight": [
+      "^orchestrations/scripts/(preflight.*|hardcoding-audit|agent-check|mock-expectations|mock1-paused-run|rehearse)\\.(sh|js)$",
+      "^orchestrations/scripts/tools/.*$",
+      "^orchestrations/scripts/(test-epam-providers)\\.sh$",
+      "^orchestrations/scripts/lib/handlers/(_read-input)\\.js$"
+    ]
+  },
+  "_whatIsExcluded": "node_modules is vendored, dist is build output, archived and .parked are not source. NOTHING ELSE. An exclusion is a denominator choice, and a denominator I choose is one I can flatter — /tools/ was excluded here for one commit and that was already one too many.",
+  "_howOwnershipIsDecided": "Declared, in order, and matched first-wins. A derivation was tried and discarded: attributing a file to the nearest preceding step_emit put 140 files in step-18 because that is where their name first appears in the orchestrator, which is arbitrary. A bad derivation is an invented denominator wearing a derivation's clothes. These are the stages the pipeline actually performs, and the audit proves every file lands in exactly one.",
+  "_whyNoCatchAll": "The last pattern was ^orchestrations/scripts/.*$ — a catch-all, so no file could ever be unassigned and the completeness check could never fail. A check that cannot fail is not a check; it is a denominator arranged to flatter. Every stage now claims files deliberately, and an unclaimed file is a real finding: nobody has said which stage runs it, so nothing gates it.",
+  "$scope": "src/ is OUT OF SCOPE (operator decision 2026-08-31). It is the epam CLI — a separate product from the orchestration pipeline. The pipeline executes dist/epam.js, so src/ is not dead, but it is not what this coverage baseline governs. Removing it from roots keeps the invariant intact: every line under the declared roots belongs to exactly one stage, and stage lines still equal project lines.",
+  "_whichInstrumentMeasuresWhat": "A report can only go stale against files it actually contains. lcov.info holds no shell and lcov.shell.info holds no JavaScript, so judging every file against the OLDER of the two made one .sh edit demand a full JS re-measure — hundreds of seconds, for a report that never covered the edited file. Declared here rather than in the handler because `extensions` is already declared here, and the two must not be able to disagree. An extension listed in `extensions` but in no instrument is refused: nothing measures it, so nothing can vouch for it.",
+  "instruments": {
+    "coverage/lcov.info": [
+      ".js",
+      ".ts"
+    ],
+    "coverage/lcov.shell.info": [
+      ".sh"
+    ]
+  },
+  "_launchLibraries": "Inline blocks extracted from run-agent-orchestration.sh so they can be called by a test live in lib/orchestration-*.sh. They are launch code wherever they sit: moving a line into a library must not move it into another stage, or the refactor would flatter one stage at another expense while ALL CODE IS IN PLAY quietly stopped being true."
+}

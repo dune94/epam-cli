@@ -1,0 +1,22 @@
+{
+  "_what": "What each codeline IS and what an agent working inside it needs to know that the source does not say. Produced by the codeline-discovery agent during THIS run and rewritten every run — never accumulated, so nothing here is older than the run that wrote it. The engine splits this per codeline into each worktree's .epam/.",
+  "_shape": "Codeline names are TOP-LEVEL keys, because the engine extracts one with jq '.[$cl]'. Nesting them under another key parses fine and yields nothing for every codeline.",
+  "mocka": {
+    "path": "/home/bradleyjerome/projects/mock3/mock-a",
+    "facts": [
+      {
+        "text": "Tests run with `vitest run`; lint is a no-op; build is `tsc --noEmit` (type-check only, no emitted artifact).",
+        "source": "package.json scripts: {\"test\": \"vitest run\", \"lint\": \"echo no-lint-configured\", \"build\": \"tsc --noEmit\"}"
+      }
+    ]
+  },
+  "mockb": {
+    "path": "/home/bradleyjerome/projects/mock3/mock-b",
+    "facts": [
+      {
+        "text": "Tests run with `vitest run`; lint is a no-op; build is `tsc --noEmit` (type-check only, no emitted artifact).",
+        "source": "package.json scripts: {\"test\": \"vitest run\", \"lint\": \"echo no-lint-configured\", \"build\": \"tsc --noEmit\"}"
+      }
+    ]
+  }
+}

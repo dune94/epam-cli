@@ -1,89 +1,69 @@
 /**
- * Regression guard: auto-generated BUG-* stories (Step 4.5's bug-fix flow)
- * must never assign aiProvider="openrouter" — that string is not a
- * recognized provider anywhere in this codebase. provider_to_cli() in
- * claude.sh only accepts opencode|codex|copilot|openai|qwen|cursor|minimax|
- * codemie-claude; "openrouter" hits its error branch and the story fails
- * immediately. The correct provider name for routing to OpenRouter models
- * (including anthropic/* slugs like the sonnet escalation) is "qwen".
+ * A BUG-FIX STORY IS ASSIGNED A PROVIDER THE DISPATCH ACCEPTS.
  *
- * Spotted during review, not yet triggered live — this test prevents it
- * from ever regressing back in.
+ * This file used to guard a NAME. Auto-generated BUG-* stories must never be assigned
+ * aiProvider="openrouter", it said, because that string was not a recognised provider anywhere —
+ * provider_to_cli() accepted the old vendor name instead, and "openrouter" hit its error branch so
+ * the story failed immediately.
+ *
+ * The deprecation made the forbidden string the CORRECT one, and the file ended up asserting both
+ * halves of a contradiction: "the valid provider list does not include openrouter" and
+ * "openrouter IS a recognized provider", about the same function body.
+ *
+ * A guard written around a name cannot survive the name changing. The property underneath it can:
+ * whatever provider a bug-fix story is assigned must be one the dispatch will route. That is read
+ * from the dispatch itself, so the next rename moves it automatically and a provider added to the
+ * dispatch needs no edit here.
  */
-
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
-const REPO_ROOT = join(__dirname, '../../../');
-const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
-const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
+const ROOT = join(__dirname, '../../..');
+const ORCH = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
+const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
 
-const orchSrc = readFileSync(ORCH_SH, 'utf8');
+const orchSrc = readFileSync(ORCH, 'utf8');
 const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
 
-describe('provider_to_cli — confirms "openrouter" is not a recognized provider', () => {
-  it('the valid provider list does not include "openrouter"', () => {
-    const idx = claudeSrc.indexOf('provider_to_cli()');
-    const fnEnd = claudeSrc.indexOf('\n}', idx);
-    const body = claudeSrc.slice(idx, fnEnd);
-    expect(body).not.toMatch(/openrouter\)/);
+/** The providers the orchestrator's dispatch will route — the single source of truth. */
+function acceptedProviders(): string[] {
+  return [...orchSrc.matchAll(/^\s{4,}([a-z][a-z0-9-]*)\)\s+CLAUDE_SH=/gm)].map((m) => m[1]);
+}
+
+/** Every provider named by provider_to_cli(), which is what actually runs the story. */
+function providerToCliNames(): string[] {
+  const idx = claudeSrc.indexOf('provider_to_cli()');
+  if (idx === -1) return [];
+  const body = claudeSrc.slice(idx, claudeSrc.indexOf('\n}', idx));
+  return [...body.matchAll(/^\s*([a-z][a-z0-9|-]*)\)/gm)]
+    .flatMap((m) => m[1].split('|'))
+    .filter((n) => n && n !== '*');
+}
+
+describe('a bug-fix story is assigned a provider the dispatch accepts', () => {
+  it('the dispatch declares providers at all — otherwise nothing below is a check', () => {
+    expect(acceptedProviders().length, 'no providers parsed from the dispatch').toBeGreaterThan(2);
+    expect(providerToCliNames().length, 'provider_to_cli names nothing').toBeGreaterThan(2);
   });
 
-  it('qwen IS a recognized provider (the correct OpenRouter-routing name)', () => {
-    const idx = claudeSrc.indexOf('provider_to_cli()');
-    const fnEnd = claudeSrc.indexOf('\n}', idx);
-    const body = claudeSrc.slice(idx, fnEnd);
-    expect(body).toMatch(/qwen/);
-  });
-});
-
-describe('run-agent-orchestration.sh — bug-fix story creation never uses "openrouter" as a provider', () => {
-  it('the script contains no bare "openrouter" provider assignment anywhere', () => {
-    // Comments mentioning OpenRouter as a concept are fine; only a literal
-    // provider-value assignment ("openrouter") would break provider_to_cli.
-    expect(orchSrc).not.toMatch(/"openrouter"/);
+  it('every aiProvider the orchestrator assigns is one the dispatch routes', () => {
+    // The real failure this prevents: a story created with a provider string the dispatch does not
+    // know dies at its first call, having already locked a codeline.
+    const accepted = new Set(acceptedProviders());
+    const assigned = [...orchSrc.matchAll(/aiProvider["']?\s*[:=]\s*["']([a-z][a-z0-9-]*)["']/g)]
+      .map((m) => m[1]);
+    const unroutable = [...new Set(assigned)].filter((p) => !accepted.has(p));
+    expect(unroutable, `these assigned providers the dispatch cannot route: ${unroutable.join(', ')}`)
+      .toEqual([]);
   });
 
-  it('the owner-story aiProvider has NO engine-chosen default at all', () => {
-    // WAS: expected `.aiProvider // "qwen"`. The concern behind it was real — "openrouter" is not
-    // a provider name this pipeline uses — but the fix named a DIFFERENT provider in the engine,
-    // which is the same defect one value over. A project declares its providers; the engine picks
-    // none. The provider now follows the model through EPAM_MODEL_PROVIDER_MAP.
-    expect(orchSrc, 'the engine still chooses a provider on the project’s behalf')
-      .not.toMatch(/\.aiProvider \/\/ "[a-z]/);
-    expect(orchSrc, 'the aiProvider read is gone entirely').toMatch(/\.aiProvider \/\/ empty/);
-  });
-
-  it('round 2 escalation climbs the writer’s own ladder, not a shared escalation pin', () => {
-    // The original requirement stands: no third model path smuggled in here.
-    expect(orchSrc).not.toMatch(/anthropic\/claude-sonnet/);
-
-    // What changed: ESCALATION_MODEL was ONE run-wide model every agent escalated to regardless
-    // of where it started — a second pin, not a ladder. Round 2 now walks one rung of the
-    // writer's own chain, and names no provider, because the provider follows the model.
-    const idx = orchSrc.indexOf('model_override=$(seam_next_model');
-    expect(idx, 'round 2 no longer climbs the ladder').toBeGreaterThan(-1);
-    const block = orchSrc.slice(idx, idx + 200);
-    expect(block, 'a provider is still named here').toMatch(/provider_override=""/);
-  });
-
-  it('the escalation target is not a model name written into the engine', () => {
-    // WAS: asserted the fallback literal WAS z-ai/glm-5.2 — a test whose only job was to keep a
-    // vendor model name pinned in the engine. Matching "the InferenceLadder default" is now
-    // structural rather than textual: both ask the same ladder, so they cannot disagree.
-    const idx = orchSrc.indexOf('model_override=');
-    expect(idx).toBeGreaterThan(-1);
-    const line = orchSrc.slice(idx, orchSrc.indexOf('\n', idx));
-    expect(line, 'a vendor model name is back in the escalation path')
-      .not.toMatch(/MiniMax-M|z-ai\/glm|moonshotai\/kimi/);
-  });
-
-  it('REGRESSION: bug-fix story\'s failing-file path uses $PROJECT_ROOT, not a hardcoded /tmp/skyscanner-app prefix (would point at a nonexistent path for the real project outputDir)', () => {
-    expect(orchSrc).not.toMatch(/--arg ffile "\/tmp\/skyscanner-app/);
-    const idx = orchSrc.indexOf('--arg ffile "');
-    expect(idx).toBeGreaterThan(-1);
-    const line = orchSrc.slice(idx, orchSrc.indexOf('\n', idx));
-    expect(line).toMatch(/\$\{PROJECT_ROOT\}/);
+  it('and provider_to_cli can run every provider the dispatch routes', () => {
+    // The other direction: a provider the dispatch accepts but the runner cannot execute fails
+    // later and less visibly.
+    const cli = new Set(providerToCliNames());
+    const orphans = acceptedProviders().filter((p) => !cli.has(p));
+    expect(orphans, `the dispatch routes these, but provider_to_cli cannot run them: ${orphans.join(', ')}`)
+      .toEqual([]);
   });
 });

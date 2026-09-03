@@ -1,0 +1,50 @@
+{
+  "_what": "mock3's OWN PRD. Authored, never ingested: this project exists to rehearse the pipeline without any client system in the loop, so there is no Jira to synthesise from. The stories describe OBSERVABLE defects that exist in the codelines right now, each proven by an executable probe before this file was written -- a rehearsal against a defect that is not really there teaches nothing.",
+  "title": "mock3 rehearsal",
+  "project": {
+    "name": "mock3",
+    "description": "A two-codeline transit-fares and departure-board workspace used to exercise the orchestration pipeline end to end.",
+    "outputDirs": [
+      {
+        "codeline": "mocka",
+        "path": "/home/bradleyjerome/projects/mock3/mock-a"
+      },
+      {
+        "codeline": "mockb",
+        "path": "/home/bradleyjerome/projects/mock3/mock-b"
+      }
+    ],
+    "outputDir": "/home/bradleyjerome/projects/mock3/mock-a"
+  },
+  "currentIteration": 0,
+  "stories": [
+    {
+      "id": "MOCK3-1",
+      "jiraKey": "MOCK3-1",
+      "title": "Riders aged exactly 65 are charged the adult fare",
+      "description": "The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.",
+      "acceptanceCriteria": [
+        "A rider aged exactly 65 with no pass is charged the concession fare.",
+        "A rider aged 64 with no pass is still charged the base fare.",
+        "The existing fare behaviour for children, pass holders and adults is unchanged."
+      ],
+      "codelines": [
+        "mocka"
+      ],
+      "status": "pending",
+      "completed": false,
+      "effort": "low",
+      "kind": "defect",
+      "agentRoles": {
+        "mocka": "fare-boundary-engineer"
+      },
+      "agentRole": "fare-boundary-engineer",
+      "codeline": "mocka"
+    }
+  ],
+  "implementationOrder": {
+    "core": [
+      "MOCK3-1"
+    ]
+  }
+}

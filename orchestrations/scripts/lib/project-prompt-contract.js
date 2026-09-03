@@ -87,7 +87,76 @@ function checkGeneratedPrompt(template, generated) {
     return { ok: false, reason: `declares placeholder(s) it never uses: ${orphan.join(', ')}` };
   }
 
+  // 4. THE OUTPUT CONTRACT MUST SURVIVE GENERATION.
+  //
+  // A generated prompt may specialise anything about HOW an agent works — this project's
+  // codelines, its stack, its tools. It may not change what an ANSWER looks like, because the
+  // consumer that reads the answer was not regenerated with it.
+  //
+  // Checked because two real generations shipped without it. prompt-review lost
+  // <PROMPT_REVIEW>{"falseClaims": []}</PROMPT_REVIEW> while lib/prompt-review.js parses exactly
+  // that tag, so the reviewer's answer could never be read. skill-assessment-prephase lost every
+  // output key and came back half the length. Both are the run-8 shape: the agent obeys its
+  // prompt and the engine reads something else, and nothing can say which side is wrong.
+  //
+  // ADDITIONS ARE FINE. Only a LOSS is refused: the consumer still reads what the template
+  // promised, so dropping it is what breaks.
+  const tplBody = String((template && template.body) || Object.values((template && template.bodies) || {}).join('\n') || '');
+  const genBody = generated.body;
+
+  // Response tags — <PROMPT_REVIEW>, <SPEC_AGENT> — are how a consumer finds the answer at all.
+  // A RESPONSE TAG IS PAIRED. A VALUE PLACEHOLDER IS NOT.
+  //
+  // This took every <UPPERCASE> in the body. skill-assessment-prephase's instructions contain an
+  // example JSONL record — {"timestamp":"<ISO8601>", ...} — where <ISO8601> is a TYPE placeholder
+  // inside an illustration, not a marker any consumer looks for. The guard demanded the generated
+  // prompt reproduce it verbatim, the generator legitimately rephrased the example, and mock3
+  // run 9 exhausted all three attempts and failed the step after 29 prompts had succeeded.
+  //
+  // A tag a consumer parses always wraps something: <PROMPT_REVIEW>…</PROMPT_REVIEW>. Across all
+  // 117 templates that separates them exactly — 4 paired (DISCOVERY_VOCABULARY, MODEL_REVIEW,
+  // PROMPT_REVIEW, SPEC_REVIEW), 1 unpaired (ISO8601). So pairing is the discriminator, and it is
+  // derived from the template rather than an exception list that would go stale.
+  const tplTags = [...new Set(tplBody.match(/<[A-Z][A-Z0-9_]+>/g) || [])]
+    .filter((t) => tplBody.includes(`</${t.slice(1, -1)}>`))
+    .flatMap((t) => [t, `</${t.slice(1, -1)}>`]);
+  const lostTags = tplTags.filter((t) => !genBody.includes(t));
+  if (lostTags.length) {
+    return {
+      ok: false,
+      reason: `the generated prompt dropped the output tag(s) the template states: ${lostTags.join(', ')}. `
+        + 'The consumer looks for exactly that marker, so the answer would be unreadable however '
+        + 'good it is.',
+    };
+  }
+
+  // Field names the template states as part of its response shape.
+  const tplKeys = outputFieldsIn(tplBody);
+  const lostKeys = tplKeys.filter((k) => !genBody.includes(k));
+  if (lostKeys.length) {
+    return {
+      ok: false,
+      reason: `the generated prompt dropped output field(s) the template states: ${lostKeys.join(', ')}. `
+        + 'The consumer still reads them, so the agent would answer a shape nothing accepts.',
+    };
+  }
+
   return { ok: true, reason: '' };
+}
+
+/**
+ * THE RESPONSE-SHAPE FIELD NAMES A TEMPLATE STATES.
+ *
+ * Defined once and exported, because two places need the same answer: this contract check, which
+ * REFUSES a generated prompt that lost a field, and the generator prompt, which must be TOLD the
+ * fields so it can keep them. Judging an agent against a list it was never shown is how
+ * skill-assessment-prephase came back missing timestamp, phase_id, agent_role, event,
+ * skill_category, context and added_by — the generator prompt gave placeholders their own section
+ * and an explicit list, and gave output fields one clause in the middle of a sentence.
+ */
+function outputFieldsIn(body) {
+  return [...new Set((String(body == null ? '' : body).match(/"([a-zA-Z][a-zA-Z0-9_]*)"\s*:/g) || [])
+    .map((m) => m.replace(/[":\s]/g, '')))];
 }
 
 /**
@@ -123,7 +192,26 @@ function buildGeneratedDoc(template, generatedBody) {
     // prompt-agent-link now reads the registry directly, so nothing consumes this field. Writing
     // it anyway would only invite the drift back.
     placeholders: placeholdersIn(body),
+    // THE DECLARATION TRAVELS WITH THE COPY THAT IS EXECUTED.
+    //
+    // mayBeEmpty says a placeholder may legitimately render blank — no prior gaps on a first pass,
+    // no fix sites before discovery, no forced retry on attempt one. The TEMPLATE declared it and
+    // this doc did not carry it, so every generated prompt lost the protection and the renderer
+    // refused at runtime on a block that was supposed to be empty.
+    //
+    // Live 2026-08-27, run 20260827T125654Z: the pipeline reached the specification pass for the
+    // first time and died there deterministically —
+    //   prompt 'spec-agent-openspec' was given EMPTY values for: __DECLARED_FILE_BLOCK__,
+    //   __FIX_SITE_BLOCK__, __FORCED_RETRY_BLOCK__, __PRIOR_GAPS_BLOCK__, …
+    // Three retries changed nothing because no model was ever asked anything, and both lanes
+    // halted. guard-vocabulary's template declared two and its generated copy carried none.
+    //
+    // FILTERED TO WHAT THIS BODY ACTUALLY HAS. A declaration naming a placeholder the generated
+    // text does not contain protects nothing and would only mislead the next reader — the same
+    // drift that removed the `seams` field above.
+    mayBeEmpty: (Array.isArray(template.mayBeEmpty) ? template.mayBeEmpty : [])
+      .filter((ph) => body.includes(ph)),
   };
 }
 
-module.exports = { checkGeneratedPrompt, buildGeneratedDoc, placeholdersIn };
+module.exports = { checkGeneratedPrompt, buildGeneratedDoc, placeholdersIn, outputFieldsIn };

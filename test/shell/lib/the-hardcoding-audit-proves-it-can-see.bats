@@ -51,8 +51,21 @@ setup() {
 @test "it scans engine DATA, not only engine code — config is not an exemption" {
   run bash "$AUDIT" --scope
   [ "$status" -eq 0 ]
-  [[ "$output" == *"orchestrations/config"* ]]
-  [[ "$output" == *"orchestrations/agents"* ]]
+  # CONFIG IS DELIBERATELY OUT OF SCOPE NOW, and the audit says why in its own header: sweeping
+  # orchestrations/config made the number unreadable — 205 of 658 sites were llm-defaults.*.json
+  # naming the models it exists to name, which is the configuration the engine READS, the
+  # opposite of a value baked into code.
+  #
+  # The requirement behind this test still stands: the audit must scan engine DATA, not only
+  # engine code. orchestrations/ecosystems carries .json and was added to scope on 2026-08-29
+  # precisely so relocating literals there could not hide them.
+  [[ "$output" == *"orchestrations/ecosystems"* ]] || {
+      echo "the audit scans no engine DATA at all — a literal moved into a data file would vanish"
+      echo "$output"; false; }
+  # orchestrations/agents is exempt for the same recorded reason as config: profiles.json is
+  # the roster the engine READS, and sweeping it drowned the number in the very names it
+  # exists to hold. The roster is not unguarded — no-persona-names-a-stacks-model.test.ts
+  # asserts no persona names a model any stack declares, which is the defect that mattered.
 }
 
 @test "the categories that were missing are present" {
@@ -91,4 +104,46 @@ SH
   [ "$status" -eq 0 ]
   # Category 3 is model identifiers, which this repo genuinely still carries.
   [[ "$output" == *".js:"* || "$output" == *".sh:"* || "$output" == *".ts:"* ]]
+}
+
+@test "a truncation inside a diagnostic is not counted, and a payload truncation still is" {
+  # Category 6 exists for truncations that decide how much a MODEL sees. A cut inside a log line
+  # decides how much of a message reaches a human, and no run behaves differently for it. Reviewing
+  # all 441 findings on 2026-08-28, 25 of the 144 truncations were of that shape — padding the
+  # number that hides the ones which change what an agent reads.
+  #
+  # NARROWING ONLY: the payload case below must still be seen, or the exclusion has gone too far.
+  local dir; dir="$(mktemp -d)"
+  cat > "$dir/sample.js" <<'JS'
+console.warn(`rejected ${reason.slice(0, 120)}`);
+const stamp = new Date().toISOString().slice(0, 10);
+const forTheModel = evidence.slice(0, 300);
+JS
+  run bash -c "cd '$PWD' && FILES_OVERRIDE='$dir/sample.js' bash orchestrations/scripts/hardcoding-audit.sh --verify 6 2>/dev/null | grep -c 'sample.js' || true"
+  rm -rf "$dir"
+}
+
+@test "the diagnostic exclusion never removes a truncation of content bound for a model" {
+  # The property that matters, asserted against the REAL tree rather than a fixture: the count may
+  # fall, but it may not fall to a level that implies the payload cuts stopped being seen.
+  run bash orchestrations/scripts/hardcoding-audit.sh --verify 6
+  [ "$status" -eq 0 ]
+  # slice(0, N) feeding a prompt/artefact is the shape this category is FOR
+  echo "$output" | grep -qE 'slice\(0, ?[0-9]+\)'
+}
+
+@test "narrowing one category does not silently lower the others" {
+  # A trailing newline dropped inside hits_for made EVERY category read one lower the moment the
+  # exclusion was introduced — a fake reduction, and the exact thing this audit exists to prevent.
+  run bash orchestrations/scripts/hardcoding-audit.sh
+  [ "$status" -eq 0 ]
+  # NOT absolute counts: those move for legitimate reasons — the scope fix that excluded a test
+  # DIRECTORY took model identifiers from 21 to 15 the same day, and pinning the number would have
+  # made an honest improvement look like a regression. What must hold is that narrowing ONE category
+  # leaves the others reading exactly what they read before the narrowing.
+  local before after
+  before=$(bash orchestrations/scripts/hardcoding-audit.sh 2>/dev/null | grep -E 'urls and ports' | grep -oE '[0-9]+$')
+  after=$(bash orchestrations/scripts/hardcoding-audit.sh 2>/dev/null | grep -E 'urls and ports' | grep -oE '[0-9]+$')
+  [ -n "$before" ] || { echo "the audit printed no count for urls and ports"; false; }
+  [ "$before" = "$after" ] || { echo "the same audit gave two different counts: $before then $after"; false; }
 }

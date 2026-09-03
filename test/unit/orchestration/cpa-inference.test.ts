@@ -7,15 +7,27 @@
  *   - skippedReview: fallback result shape when inference is unavailable
  */
 import { createRequire } from 'module';
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeAll, afterAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { provisionProject, cleanupProvisioned } from '../../support/provisioned-project';
 
 const require = createRequire(import.meta.url);
 const CPA_INFERENCE_PATH = require.resolve('../../../orchestrations/scripts/lib/cpa-inference.js');
 const { extractJSON, buildPrompt, skippedReview, validateInput } = require(CPA_INFERENCE_PATH);
+
+// A SEAM PROMPT RENDERS FROM THE PROJECT'S COPY, SO THE WHOLE FILE SUPPLIES A PROJECT.
+//
+// buildPrompt renders 'cpa-inference', which prompt-library will only take from
+// <project>/prompts — it refuses to execute a template, because a project without a copy is a
+// provisioning defect that must surface as one. With EPAM_PROJECT_CONFIG_DIR unset every case
+// that builds a prompt failed on that refusal rather than on anything it asserts. The temp
+// project is provisioned by COPYING the template, the same way topology-router's harness does:
+// specialisation is the mint's job, not a test's.
+beforeAll(() => { process.env.EPAM_PROJECT_CONFIG_DIR = provisionProject(['cpa-inference']); });
+afterAll(() => { delete process.env.EPAM_PROJECT_CONFIG_DIR; cleanupProvisioned(); });
 
 // ── extractJSON ────────────────────────────────────────────────────────────
 
@@ -86,10 +98,16 @@ describe('skippedReview', () => {
     expect(result.adjustedEstimate).toEqual(formula);
   });
 
-  it('sets confidence to 0.70', () => {
-    const result = skippedReview(formula, 'timeout');
-    expect(result.confidence).toBe(0.70);
+  it('has NO confidence — a review that did not happen has not approved anything', () => {
+    // This asserted 0.70 with no risk flags, so an inference that FAILED was indistinguishable from
+    // one that succeeded and approved. All three callers are failures — the prompt runner was
+    // unavailable, returned nothing, or its answer did not parse — and the CPA gate reads confidence
+    // and risk-flag count to decide whether a run may proceed. 0.70 with zero flags is a PASS, so
+    // the last gate before any money is spent authorised every story whenever its reviewer broke.
+    const r = skippedReview({ aiMinutes: 10 }, 'x');
+    expect(r.confidence, 'a review that never ran still carries confidence').toBe(0);
   });
+
 
   it('sets complexityAdjustment to 1.0', () => {
     const result = skippedReview(formula, 'timeout');
@@ -106,12 +124,22 @@ describe('skippedReview', () => {
     expect(result.reasoning).toContain('rate limited');
   });
 
-  it('returns empty arrays for riskFlags, missingKbCoverage, citedSources', () => {
-    const result = skippedReview(formula, 'x');
-    expect(result.riskFlags).toEqual([]);
-    expect(result.missingKbCoverage).toEqual([]);
-    expect(result.citedSources).toEqual([]);
+  it('RAISES a risk flag naming why it did not happen, and leaves the other lists empty', () => {
+    // The reason used to live only in a `reasoning` string nobody gates on. As a risk flag it is
+    // counted rather than narrated.
+    const r = skippedReview({ aiMinutes: 10 }, 'empty response from prompt runner');
+    expect(r.riskFlags.length, 'the failure was recorded nowhere the gate reads').toBe(1);
+    expect(r.riskFlags[0], 'the flag does not say what failed')
+      .toMatch(/did not happen[\s\S]*empty response/);
+    expect(r.missingKbCoverage).toEqual([]);
+    expect(r.citedSources).toEqual([]);
   });
+
+  it('and still carries the formula estimate — it is a real estimate, only unreviewed', () => {
+    const formula = { aiMinutes: 42, cost: 1.5 };
+    expect(skippedReview(formula, 'x').adjustedEstimate).toEqual(formula);
+  });
+
 
   it('includes zero _metrics', () => {
     const result = skippedReview(formula, 'x');
@@ -192,11 +220,26 @@ describe('buildPrompt', () => {
     expect(prompt).toContain('Respond with ONLY the JSON object');
   });
 
-  it('handles missing optional fields gracefully', () => {
+  it('handles missing OPTIONAL fields gracefully', () => {
+    // The persona is not among them — see the case below. Everything else may be absent.
     const bareInput = {
       story: { id: 'X-1', title: 'Bare story' },
+      systemPrompt: 'You are a CPA reviewer.',
     };
     expect(() => buildPrompt(bareInput)).not.toThrow();
+  });
+
+  it('REFUSES a missing persona rather than rendering a blank section', () => {
+    // This was folded into "missing optional fields" and expected NOT to throw. The persona is
+    // not optional: an empty payload renders as a blank section and the agent answers about
+    // silence, so the prompt layer refuses and names the placeholder. Asserting tolerance here
+    // asked for the blank-section behaviour back.
+    let msg = '';
+    try { buildPrompt({ story: { id: 'X-1', title: 'Bare story' } }); }
+    catch (e) { msg = String((e as Error).message); }
+    expect(msg, 'a prompt with no persona was built anyway').not.toBe('');
+    expect(msg, 'the refusal does not name what was missing, so nobody can act on it')
+      .toMatch(/__SYSTEM_PROMPT__/);
   });
 });
 

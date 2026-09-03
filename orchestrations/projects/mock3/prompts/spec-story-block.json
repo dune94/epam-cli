@@ -1,23 +1,45 @@
 {
   "$why": [
-    "Generated from the spec-story-block template by the agent that minted this project's roster.",
-    "The template is never executed; this copy is. Placeholders were checked against the",
-    "template before installation — see lib/project-prompt-contract.js."
+    "Moved out of spec-mode-runner.js on 2026-08-16. The labelled STORY block handed to the spec",
+    "agents, and the retrieved-documents notice that goes with it.",
+    "",
+    "TWO BODIES, because the notice is a prompt in its own right and was nested inside one of the",
+    "outer block's interpolations. A first attempt mapped every ${...} to a placeholder and",
+    "produced a template that looked complete while that paragraph stayed in the script — it",
+    "passed a syntax check and a module load without complaint. A half-migration is the failure",
+    "this whole exercise exists to end."
   ],
-  "authority": "project",
-  "body": "You are __PERSONA__.\n\n## Story\n\n**Title:** __TITLE__\n\n**Description:** __DESCRIPTION__\n\n## Scope\n\n**Components:**\n\n__COMPONENTS__\n\n**Declared files:**\n\n__DECLARED_FILES__\n\n## Links\n\n__LINK_BLOCK__\n\n## Comments\n\n__COMMENT_BLOCK__\n\n## Project notes\n\nBoth codelines in scope (mocka, mockb) use vitest and typescript. The tickets in scope are boundary / off-by-one bugs in pure TypeScript modules with no external dependencies. Pay attention to comparison operators (`>` vs `>=`) and loop bounds that skip the final element. Rely on the investigators' findings rather than re-deriving them.\n\n## Retrieved documents\n\n__RETRIEVED_DOCS__\n\n__DOC_PATHS__",
-  "derivedFromSha256": "372ceec07f5d6c695b43581ceea5399ba5e650a4a58d3dfca5e1fc088bf64b9e",
-  "derivedFromVersion": 1,
+  "description": "The labelled story block handed to a spec agent, and its retrieved-documents notice.",
   "id": "spec-story-block",
+  "seams": [
+    "ticket-links"
+  ],
   "placeholders": [
-    "__COMMENT_BLOCK__",
+    "__PERSONA__",
+    "__TITLE__",
+    "__DESCRIPTION__",
     "__COMPONENTS__",
     "__DECLARED_FILES__",
-    "__DESCRIPTION__",
-    "__DOC_PATHS__",
     "__LINK_BLOCK__",
-    "__PERSONA__",
+    "__COMMENT_BLOCK__",
     "__RETRIEVED_DOCS__",
-    "__TITLE__"
-  ]
+    "__DOC_PATHS__"
+  ],
+  "version": 1,
+  "bodies": {
+    "block": "__PERSONA__STORY\nTitle: __TITLE__\nDescription: __DESCRIPTION__\nComponents: __COMPONENTS__\nDeclared files: __DECLARED_FILES__\n\nLINKS FOUND IN THIS TICKET:\n__LINK_BLOCK__\n\nCOMMENT THREAD (context for judging relevance — a link's surrounding discussion often says why it was posted):\n__COMMENT_BLOCK__\n__RETRIEVED_DOCS__",
+    "retrieved_docs": "\nALREADY RETRIEVED — these documents have been fetched for you and written to disk. Read them\nwith read_file rather than fetching them again; the text is the same and it costs you nothing:\n__DOC_PATHS__\nA document listed here that you did not read is a document you cannot quote.\n"
+  },
+  "mayBeEmpty": [
+    "__DOC_PATHS__",
+    "__RETRIEVED_DOCS__",
+    "__COMMENT_BLOCK__"
+  ],
+  "$mayBeEmptyWhy": {
+    "__DOC_PATHS__": "reviewTicketLinks defaults docPaths to [], and the caller passes ticketDocPaths which is empty whenever no document was fetched — including when retrieval FAILED, a path that logs \"agents will have quotes only\" and carries on. Undeclared, the renderer threw, the caller swallowed it in a try/catch, and the whole ticket-link review silently did not happen.",
+    "__RETRIEVED_DOCS__": "same condition: no documents retrieved is ordinary, not a failed lookup.",
+    "__COMMENT_BLOCK__": "a ticket with no comments is ordinary."
+  },
+  "derivedFromSha256": "372ceec07f5d6c695b43581ceea5399ba5e650a4a58d3dfca5e1fc088bf64b9e",
+  "authority": "project"
 }

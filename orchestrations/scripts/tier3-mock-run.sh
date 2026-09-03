@@ -23,6 +23,30 @@
 # like every other tier3 script inherits its config from sourced .env files —
 # nothing is hardcoded here that would diverge per mock scenario.
 # ──────────────────────────────────────────────────────────────────────────────
+
+# THIS RUN SPENDS NOTHING, AND SAYS SO BEFORE ANYTHING ELSE READS IT.
+#
+# free-run-guard.sh substitutes a placeholder for every key-shaped variable and then re-checks in a
+# child process, refusing to launch while a real vendor key is still reachable. It is armed by this
+# one declaration — and until now NOTHING in the tree set it. Not a launcher, not a project env
+# file: the only matches were in the guard's own unit test. So the seal had never fired in a real
+# invocation, and every mock run executed with live credentials reachable, protected only by the
+# base URL pointing at MockServer. The registry already says that is not enough: "A free rehearsal
+# that can reach a paid vendor is not a free rehearsal."
+#
+# IT IS FIRST IN THE FILE because the coverage gate below asks whether this run can spend before
+# deciding whether to halt on a shortfall. A declaration made after the thing that reads it is not
+# a declaration.
+export EPAM_FREE_RUN=1
+
+# A launcher decides what a run costs. It does not get to do that untested.
+_scg_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/stage-coverage-gate.sh"
+# shellcheck source=/dev/null
+# THE WHOLE MAP, BEFORE ANY MONEY MOVES. A paid launcher measures EVERY stage against the project's
+# threshold here, and only then declares the run gated — which is what turns on the per-stage gates
+# for the rest of the run. Failing here costs nothing; failing mid-run costs everything spent so far.
+[ -f "$_scg_lib" ] && . "$_scg_lib" && require_all_stage_coverage || exit 1
+
 set -euo pipefail
 
 # ── setsid process-group isolation — identical to the real launcher ──────────
@@ -39,6 +63,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # shellcheck source=lib/project-config.sh
 . "$SCRIPT_DIR/lib/project-config.sh"
+# load_project_env lives here — the launcher resolved a project config dir and never read what
+# was inside it, so the active set's config.<set>.env never reached the run.
+. "$SCRIPT_DIR/lib/env-file.sh"
 
 # One identifier for the whole run, so the run folder, traces and archive agree.
 export ORCH_RUN_ID="${ORCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
@@ -70,12 +97,16 @@ fail()    {
 PRD_ARG=""
 PROJECT_ROOT_ARG=""
 PHASE_ARG=""
+# WHICH PROJECT, when the PRD cannot say. A Jira run's PRD is synthesized during ingest at the very
+# path given to --prd, so there is nothing to read at launch. Same flag orchestrate.sh already takes.
+PROJECT_ARG=""
 while [[ $# -gt 0 ]]; do
   case $1 in
     --prd)          PRD_ARG="$2"; shift 2 ;;
     --project-root)  PROJECT_ROOT_ARG="$2"; shift 2 ;;
+    --project)      PROJECT_ARG="$2"; shift 2 ;;
     --phase)        PHASE_ARG="$2"; shift 2 ;;
-    *)              fail "Unknown argument: $1. Usage: --prd <path> --project-root <path> --phase <phase>" ;;
+    *)              fail "Unknown argument: $1. Usage: --prd <path> --project-root <path> --phase <phase> [--project <name>]" ;;
   esac
 done
 [ -z "$PRD_ARG" ] && fail "--prd <path> is required"
@@ -111,15 +142,22 @@ LOG_FILE="/tmp/tier3-mock-run-$(date +%Y%m%dT%H%M%S)-$$.log"
 #
 # A PRD that names no project is refused rather than guessed: guessing is precisely how a run ends
 # up configured from a project nobody chose.
-_prd_project="$("${NODE_BIN:-node}" -e '
-  const prd = require(process.argv[1]);
-  const name = prd && prd.project && prd.project.name;
-  process.stdout.write(typeof name === "string" ? name.trim() : "");
-' "$PRD_ARG" 2>/dev/null || printf '')"
-[ -z "$_prd_project" ] && fail "the PRD at $PRD_ARG names no project (project.name), so there is no configuration to load for it"
+_prd_project="$(resolve_run_project "$PRD_ARG" "$PROJECT_ARG")" || exit 1
 _epam_cfg_dir="$(project_config_dir "$_prd_project" "$REPO_ROOT")" || exit 1
 export EPAM_PROJECT_CONFIG_DIR="$_epam_cfg_dir"
 info "Project config: $EPAM_PROJECT_CONFIG_DIR"
+
+# THE PROJECT'S OWN ENV — WITHOUT THIS THE STACK SELECTION NEVER REACHES THE RUN.
+#
+# This launcher resolved the project config DIR and then never loaded the env inside it, so
+# config.env and the active set's config.<set>.env were both ignored. run-agent-orchestration.sh
+# then loaded the repo .env in preserve mode, and because nothing had set the provider yet, that
+# file's stale EPAM_ORCHESTRATION_PROVIDER=openrouter won. Launched with EPAM_PROVIDER_SET=claude, the
+# 2026-08-26 mock3 run reached estate-survey on provider 'openrouter', failed three attempts on a
+# ladder it should never have been on, and aborted the mint.
+#
+# preserve, so an operator variable given on the command line still outranks the files.
+load_project_env "$_epam_cfg_dir" preserve || fail "project env for $_prd_project could not be loaded"
 
 # ── THE TEST PERIMETER ───────────────────────────────────────────────────────
 #

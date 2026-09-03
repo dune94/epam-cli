@@ -1,0 +1,22 @@
+{
+  "$why": [
+    "Generated from the roster-review template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "__PERSONA__\n\nThis project (mock3) consists of two independent TypeScript codelines using vitest:\n- mocka: Fare calculation and comparison logic in src/fares.ts\n- mockb: Schedule rendering and loop logic in src/schedule.ts\n\nThese modules are independent — issues and fixes are scoped to individual codelines. Both require TypeScript type safety and must pass their existing vitest assertions.\n\nTHE ROSTER JUST MINTED FOR THIS PROJECT — review it, both as individual briefs and AS A TEAM.\n\nWHAT THIS RUN NEEDS THE TEAM TO PRODUCE, and who in this roster can produce it:\n__COVERAGE_BLOCK__\n\nA roster can be made entirely of well-formed agents and still be unable to do the work. Where a\nline above says NOBODY, no one in this roster can produce something the run requires — that is a\ndefect of the ROSTER, and it is invisible to reading briefs one at a time, because an absent role\nhas no brief to find fault with. Report it as a blocking finding naming what cannot be produced\nand what kind of role would produce it.\n\nNow review every brief below:\n\n__BRIEF_BLOCK__\n\nTHE CODELINES THESE BRIEFS DESCRIBE, and what each one declares:\n__CODELINE_BLOCK__\n\nTHE WORK THE PROJECT WAS ASKED TO DO:\n__TICKET_BLOCK__\n\n__DOC_SECTION__\n\n__TOOL_LINE__\n\nTHE PIPELINE STAGES THAT RUN ALONGSIDE THIS ROSTER:\n\nIn this project, validation runs through TypeScript type checking and vitest unit testing on each codeline. A brief that assigns investigation to a detective role and implementation to a fixer role, deferring final validation to the pipeline, is describing the workflow correctly — these stages will run after implementation completes.\n\n__PIPELINE_STAGES__\n\nA ROSTER IS NOT THE WHOLE PIPELINE. A brief may correctly defer work to a stage above rather than\nto a role beside it, and a brief that tells its implementer to leave such work alone is describing\nthe pipeline accurately, not inventing cover. Check any such claim against the list above before\ncalling it false: the absence of a matching ROLE is not evidence when the brief named a STAGE.\n\nWhere the list above does not contain the stage a brief names, that IS a finding, and a blocking\none — the implementer has been told to rely on something that will never run.\n\nReturn every defect you can evidence, and nothing you cannot.\n\nWhere a finding turns on whether a named dependency or path is present in a codeline, fill in\nthe verification field as well as writing the prose. The pipeline re-runs that exact check\nagainst the repository and DISCARDS any finding the check refutes — so a careless reading\ncosts nothing, and a correct one is confirmed independently of how convincingly you argued it.",
+  "derivedFromSha256": "578aca5dff1fb373f32d614f3dccf5a48c8a3ba7633fb9b0f1f6f55dbb92f7b3",
+  "derivedFromVersion": 1,
+  "id": "roster-review",
+  "placeholders": [
+    "__BRIEF_BLOCK__",
+    "__CODELINE_BLOCK__",
+    "__COVERAGE_BLOCK__",
+    "__DOC_SECTION__",
+    "__PERSONA__",
+    "__PIPELINE_STAGES__",
+    "__TICKET_BLOCK__",
+    "__TOOL_LINE__"
+  ]
+}

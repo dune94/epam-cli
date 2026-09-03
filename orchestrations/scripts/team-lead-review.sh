@@ -15,12 +15,20 @@
 
 set -euo pipefail
 
+# RUNNING IS OPT-IN — the guard mock-expectations.js and agent-check.js already carry, for the same
+# reason: a file that EXECUTES on import cannot be unit tested, so its functions get copied into test
+# harnesses as strings. bash then attributes every traced line to that string, so this file's tests
+# exist, pass, and are invisible to every coverage collector.
+#
+# `return` outside a function succeeds only in a sourced file, which is how the two are told apart.
+if (return 0 2>/dev/null); then _TLR_SOURCED=1; else _TLR_SOURCED=0; fi
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
-MAGENTA='\033[0;35m'
+export MAGENTA='\033[0;35m'
 NC='\033[0m'
 
 log()     { echo -e "${CYAN}[REVIEW]${NC} $1"; }
@@ -29,13 +37,18 @@ warning() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error()   { echo -e "${RED}[FAIL]${NC} $1" >&2; }
 
 # Parse arguments
+# Sourced: there are no arguments to validate, and no run to refuse.
+if [ "$_TLR_SOURCED" = 0 ]; then
 if [ $# -lt 1 ]; then
     error "Missing required argument PHASE_ID"
     echo "Usage: $0 <PHASE_ID>" >&2
     exit 1
 fi
+fi
 
-PHASE_ID=$1
+# `${1:-}` so a sourced file does not trip `set -u`. Executed, the validation above has already
+# guaranteed the argument is there, so this reads exactly as it did.
+PHASE_ID="${1:-}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 # Respect the caller's PROJECT_ROOT/PRD_FILE (exported by run-agent-orchestration.sh)
@@ -50,6 +63,10 @@ REVIEW_LOG="${REVIEW_LOG:-$AUTOMATION_DIR/logs/code-reviews.jsonl}"
 # AGENT_PROFILES_FILE default any more: that default named the engine's own roster.
 # shellcheck source=lib/roster-read.sh
 . "$SCRIPT_DIR/lib/roster-read.sh"
+# shellcheck source=lib/review-criteria.sh
+. "$SCRIPT_DIR/lib/review-criteria.sh"
+# shellcheck source=lib/render-engine-prompt.sh
+. "$SCRIPT_DIR/lib/render-engine-prompt.sh"
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
 # shellcheck source=lib/agent-invoke.sh
 source "$SCRIPT_DIR/lib/agent-invoke.sh"
@@ -84,7 +101,7 @@ if [ -f "$_ml_lib" ]; then
     # shellcheck source=lib/model-ladders.sh
     . "$_ml_lib" || true
     command -v export_model_ladders >/dev/null 2>&1 \
-        && export_model_ladders "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json}" || true
+        && export_model_ladders "${EPAM_LLM_SETTINGS_FILE:-${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/llm-settings.json}}" || true
 fi
 command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "$_SEAM_NAME"
 
@@ -128,7 +145,10 @@ source "$SCRIPT_DIR/lib/jq-vals.sh"
 # seam's ARCHETYPE declares. The literal that stood here overrode that silently — the reviewer asked
 # for its tier and then ignored the answer, so the declaration selected nothing. An operator value
 # still wins; what is gone is the default no configuration could remove.
-ORCH_GATE_MODEL="${ORCH_GATE_MODEL:-${EPAM_MODEL:-}}"
+# THE SEAM'S LADDER, not a run-wide pin. ORCH_GATE_MODEL reached every seam that could not
+# resolve a model itself, and .env pinned it to z-ai/glm-5.2 — which is why a mockserver run
+# asked for an OpenRouter model. Empty when the ladder cannot answer, so callers refuse.
+_TLR_MODEL="${EPAM_MODEL:-$(seam_model_or_fail "team-lead-review" 2>/dev/null || true)}"
 
 # Look up a model's HIGH-ladder successor (EPAM_MODEL_LADDER_HIGH is "from=to|...",
 # e.g. "z-ai/glm-5.1=moonshotai/kimi-k3"). Same laddering the detective + spec
@@ -160,13 +180,16 @@ _ladder_next_model() {
         case "$_pair" in "${_m}="*) echo "${_pair#*=}"; return 0 ;; esac
     done
 }
-# Resolve a model's provider via EPAM_MODEL_PROVIDER_MAP (glob patterns like moonshotai/*=qwen).
+# Resolve a model's provider via EPAM_MODEL_PROVIDER_MAP (glob patterns like moonshotai/*=openrouter).
 _provider_for_model() {
     local _m="$1" _map="${EPAM_MODEL_PROVIDER_MAP:-}" _pair _pat _prov
     [ -z "$_map" ] && { echo "${EPAM_ORCHESTRATION_PROVIDER:-claude}"; return; }
     IFS='|' read -ra _pairs <<< "$_map"
     for _pair in "${_pairs[@]}"; do
         _pat="${_pair%%=*}"; _prov="${_pair#*=}"
+        # The pattern is a GLOB from the provider map and must stay unquoted: quoting it would match the
+        # literal characters, and no mapping would ever fire.
+        # shellcheck disable=SC2254
         case "$_m" in $_pat) echo "$_prov"; return ;; esac
     done
     echo "${EPAM_ORCHESTRATION_PROVIDER:-claude}"
@@ -296,7 +319,7 @@ run_review_prompt() {
         jq -cn \
             --arg ts "$(date -Iseconds)" \
             --arg phase "${_phase_id:-}" \
-            --arg model "${ORCH_GATE_MODEL:-}" \
+            --arg model "${_TLR_MODEL:-}" \
             --arg provider "${EPAM_ORCHESTRATION_PROVIDER:-}" \
             --argjson cost "${_cost:-0}" \
             --argjson tin "${_tin:-0}" \
@@ -346,6 +369,9 @@ run_review_prompt() {
     return 0
 }
 
+# Sourced: the functions above are the deliverable; the review itself is not run.
+if [ "$_TLR_SOURCED" = 1 ]; then return 0; fi
+
 _reviewed_count=0
 # shellcheck disable=SC1090
 [ -f "$SCRIPT_DIR/lib/story-outputs.sh" ] && . "$SCRIPT_DIR/lib/story-outputs.sh"
@@ -371,7 +397,7 @@ echo ""
 
 # Track review results
 declare -a ISSUES=()
-TOTAL_FILES_CHANGED=0
+export TOTAL_FILES_CHANGED=0
 
 # Review each story
 while IFS= read -r story_id; do
@@ -384,8 +410,18 @@ while IFS= read -r story_id; do
         '.stories[] | select(.id == $id) | .title' "$PRD_FILE")
     STORY_AGENT=$(jq -r --arg id "$story_id" \
         '.stories[] | select(.id == $id) | .agentRole // "unknown"' "$PRD_FILE")
+    # These are forwarded to the child process invoked below. shellcheck cannot see the consumer,
+    # so it reports them unused; removing them would take the values away from the child.
+    # shellcheck disable=SC2034
     STORY_COMPLETED=$(jq -r --arg id "$story_id" \
         '.stories[] | select(.id == $id) | .completed' "$PRD_FILE")
+    # AFTER the assignment, never inside its continuation. This export sat between the `jq \` and
+    # its filter, so jq received `export STORY_COMPLETED` as its arguments and the filter line ran
+    # as a shell command — "command not found", and STORY_COMPLETED never got a value. Introduced
+    # by 0d754d49 while clearing shellcheck warnings, and invisible to both `bash -n` and shellcheck
+    # because it is syntactically valid. Live 2026-09-03: the reviewer produced no verdict eight
+    # cycles in a row and Step 3.6 halted the phase.
+    export STORY_COMPLETED
 
     # B26 — review keys on CHANGES, not on `completed`.
     #
@@ -560,14 +596,20 @@ while IFS= read -r story_id; do
                 # it can, and asking is better evidence than a window someone else chose.
                 _diff_stat=$(git -C "$PROJECT_ROOT" diff --stat "$_rev_base" HEAD -- . \
                     "${_diff_excludes[@]+"${_diff_excludes[@]}"}" 2>/dev/null || true)
+                # THE WORDS LIVE IN THE TEMPLATE LAYER. This block used to be written here and
+                # substituted into __STORY_DIFF__ — model-facing instruction inside a shell
+                # script, unreviewable in the prompt layer and unchangeable per project. Only
+                # the FACTS are assembled here; the sentences are prompts/templates/.
+                _sdni_vals=$(mktemp)
+                "${NODE_BIN:-node}" -e '"'"'
+                  const v = { __DIFF_BYTES__: process.argv[1], __PROJECT_ROOT__: process.argv[2],
+                              __REV_BASE__: process.argv[3] };
+                  process.stdout.write(JSON.stringify(v));
+                '"'"' "${_diff_bytes}" "${PROJECT_ROOT}" "${_rev_base}" > "$_sdni_vals"
                 STORY_DIFF="${_diff_stat}
 
-[The change is ${_diff_bytes} bytes and is NOT inlined here. Generated files (lockfiles, snapshots)
-are excluded above and gated separately -- they are not review material. Read what you need:
-
-    git -C ${PROJECT_ROOT} diff ${_rev_base} HEAD -- <path>
-
-Review every file listed. Do not assume a file you did not read is defect-free.]"
+$(render_engine_prompt story-diff-not-inlined "$_sdni_vals" excluded)"
+                rm -f "$_sdni_vals"
             else
                 STORY_DIFF="$_diff_full"
             fi
@@ -630,7 +672,8 @@ Review every file listed. Do not assume a file you did not read is defect-free.]
 
     _review_fix_analysis_block=$([ -n "$STORY_FIX_ANALYSIS" ] && printf '\nROOT CAUSE ANALYSIS & PRESCRIBED MINIMAL FIX (from prior code investigation — the plan of record the implementer was given):\n%s\n\nThe acceptance criteria describe the desired BEHAVIOR to verify; they are NOT a blueprint. The correct implementation is the minimal fix above. Judge the diff against BOTH.\n' "$STORY_FIX_ANALYSIS" || true)
     _review_uncovered_block=$([ -n "$STORY_UNCOVERED_VC" ] && printf '\n%s\n' "$STORY_UNCOVERED_VC" || true)
-    _review_vc_block=$([ -n "$STORY_VC" ] && printf '\nVERIFICATION CRITERIA (the observable checks this change MUST satisfy — judge the diff against every one):\n%s\n' "$STORY_VC" || true)
+    # ONE BUILDER, SHARED WITH code-review-cycle.sh — see lib/review-criteria.sh.
+    _review_vc_block=$(review_vc_block "$story_id" "$PRD_FILE")
     _review_codegraph_block=$([ -n "$_review_codegraph_tool" ] && printf '\nEXISTING-CODE TOOL (call the codegraph_query tool directly, NOT via Bash, to check whether a helper already exists before accepting hand-rolled logic):\n  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter (symbol + import path)\n  codegraph_query(mode="query", args="<SymbolName>")        # exact definition site\n' || true)
     _review_learned_block=$([ -n "$_review_kb" ] && printf '\nLEARNED REVIEW RULES (from prior runs — apply these):\n%s\n' "$_review_kb" || true)
 
@@ -691,7 +734,7 @@ Review every file listed. Do not assume a file you did not read is defect-free.]
         --arg prior_review "${_review_prior_block:-}" \
         '{"__REVIEW_PROFILE__":$profile,"__BLOCKER_DISCIPLINE__":$blocker,
           "__TEST_OWNERSHIP__":$ownership,"__STORY_ID__":$story_id,"__STORY_TITLE__":$title,
-          "__STORY_DESC__":$desc,"__STORY_ACS__":$acs,"__STORY_DIFF__":$diff,
+          "__STORY_DESC__":$desc,"__STORY_DIFF__":$diff,
           "__STORY_FILES__":$files,"__TEST_FILES__":$test_files,"__PROJECT_ROOT__":$project_root,
           "__FIX_ANALYSIS_BLOCK__":$fix_analysis,"__UNCOVERED_VC_BLOCK__":$uncovered,
           "__VC_BLOCK__":$vc,"__CODEGRAPH_TOOL_BLOCK__":$codegraph,
@@ -766,9 +809,9 @@ Review every file listed. Do not assume a file you did not read is defect-free.]
     REVIEW_OUTPUT=$(run_review_prompt "$REVIEW_PROMPT" "$_rung_model" "$_rung_provider" 2>&1 | tee -a "$REVIEW_OUTPUT_FILE")
     _review_rc=${PIPESTATUS[0]}
     if [ -z "$(printf '%s' "$REVIEW_OUTPUT" | tr -d '[:space:]')" ]; then
-        warning "  review-agent produced NO OUTPUT AT ALL (rc=${_review_rc}, model=${ORCH_GATE_MODEL:-?}, provider=${EPAM_ORCHESTRATION_PROVIDER:-?})"
+        warning "  review-agent produced NO OUTPUT AT ALL (rc=${_review_rc}, model=${_TLR_MODEL:-?}, provider=${EPAM_ORCHESTRATION_PROVIDER:-?})"
         printf '[team-lead-review] EMPTY RESULT rc=%s model=%s provider=%s story=%s at %s\n' \
-            "${_review_rc}" "${ORCH_GATE_MODEL:-?}" "${EPAM_ORCHESTRATION_PROVIDER:-?}" "$story_id" "$(date -Is)" \
+            "${_review_rc}" "${_TLR_MODEL:-?}" "${EPAM_ORCHESTRATION_PROVIDER:-?}" "$story_id" "$(date -Is)" \
             >> "$REVIEW_OUTPUT_FILE" 2>/dev/null || true
     fi
 

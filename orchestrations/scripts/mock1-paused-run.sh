@@ -40,10 +40,6 @@ if [ -z "$PROJECT_CONFIG_DIR" ]; then
   )
   PROJECT_CONFIG_DIR="${PROJECT_CONFIG_DIR//\$REPO_ROOT/$REPO_ROOT}"
 fi
-if [ -z "$PROJECT_CONFIG_DIR" ] || [ ! -d "$PROJECT_CONFIG_DIR" ]; then
-  echo "[mock1-paused] cannot determine the mock project config dir — set EPAM_PROJECT_CONFIG_DIR" >&2
-  exit 2
-fi
 MOCK_JIRA_SERVER="$REPO_ROOT/test/fixtures/mock-pipeline/mock-jira-server.js"
 NODE_BIN="${NODE_BIN:-$HOME/.nvm/versions/node/v20.20.0/bin/node}"
 command -v "$NODE_BIN" >/dev/null 2>&1 || NODE_BIN="$(command -v node)"
@@ -99,6 +95,25 @@ case "${1:-}" in
   * ) echo "unknown option '$1'" >&2; exit 2 ;;
 esac
 
+# THE PROJECT IS RESOLVED AFTER PARSING, because most modes do not need one.
+#
+# This check ran FIRST, so --where, --list, --seed and every bad-argument refusal died on it — and
+# those three modes exist precisely to be usable WITHOUT starting a run: --where reports a location
+# without creating anything, --seed builds only the fixture with no Jira stub, no pipeline and no
+# spend. The whole script was unusable, because the default it derived no longer exists: it scraped
+# tier3-mock-run.sh for `EPAM_PROJECT_CONFIG_DIR="${EPAM_PROJECT_CONFIG_DIR:-...}"`, and that
+# launcher now resolves the directory from the PRD it is given. The derivation meant to stop the two
+# drifting drifted, silently, and left this script refusing every invocation.
+#
+# A run still needs a project, and says so. The modes that do not, no longer pay for it.
+# --seed IS NOT EXEMPT, though it spends nothing: its sources live with the project
+# ($PROJECT_CONFIG_DIR/seed), deliberately, because a seed file written by a heredoc here would be a
+# project fact inside the pipeline that cannot be opened, linted or type-checked where it sits.
+if [ -z "$PROJECT_CONFIG_DIR" ] || [ ! -d "$PROJECT_CONFIG_DIR" ]; then
+  echo "[mock1-paused] cannot determine the mock project config dir — set EPAM_PROJECT_CONFIG_DIR" >&2
+  exit 2
+fi
+
 # ── Run identity ─────────────────────────────────────────────────────────────
 # On a resume the run id is GIVEN; on a start it is minted here and announced before
 # anything happens, so the operator has a handle even if the run later dies.
@@ -117,6 +132,8 @@ WORKSPACE="${SEED_ONLY_DIR:-$MOCK_WORKSPACE_ROOT/$ORCH_RUN_ID/workspace}"
 CODELINE_ROOT="$WORKSPACE/codelines"
 CLONE="$CODELINE_ROOT/mock-hello-world"
 SYNTH_PRD="$WORKSPACE/synthesized-prd.json"
+# The PRD above does not exist yet — ingest writes it — so the project is declared, not read.
+MOCK_PROJECT="hello-dolly"
 
 echo ""
 echo "════════════════════════════════════════════════════════════════════"
@@ -217,7 +234,6 @@ start_jira || exit 1
 echo "[mock1-paused] mock Jira on 127.0.0.1:${JIRA_PORT}"
 
 # ── Launch ───────────────────────────────────────────────────────────────────
-# Production agent routing (qwen/glm), identical to the vitest mock — a run that
 # exercises a provider path production does not use proves nothing.
 export JIRA_PIPELINE=1
 export JIRA_URL="http://127.0.0.1:${JIRA_PORT}"
@@ -231,8 +247,10 @@ export JIRA_CODELINE_ROOT="$CODELINE_ROOT"
 export JIRA_BASELINE_BRANCH="main"
 export AGENT_PROFILES_FILE="$REPO_ROOT/orchestrations/agents/profiles.json"
 export EPAM_DANGEROUS_SKIP_APPROVAL=1
-export ORCH_GATE_PROVIDER="qwen"
-export SPEC_MODE_PROVIDER="qwen"
+# PROVIDER PINS REMOVED 2026-08-25. These were exported here as "openrouter", and a launcher export
+# is already-set, so it OUTRANKED anything hello-dolly declared — which is why the project had
+# no config.env at all. Both now come from its config.<set>.env, chosen by EPAM_PROVIDER_SET,
+# exactly as every other project resolves them.
 # export SPEC_MODE_OPENSPEC_MODEL="z-ai/glm-5.2"   # removed 2026-08-25: the ladder decides
 # export SPEC_MODE_SPECKIT_MODEL="z-ai/glm-5.1"   # removed 2026-08-25: the ladder decides
 # export SPEC_MODE_MODEL="z-ai/glm-5.2"   # removed 2026-08-25: the ladder decides
@@ -246,7 +264,7 @@ else
 fi
 
 bash "$SCRIPT_DIR/tier3-mock-run.sh" \
-  --prd "$SYNTH_PRD" --project-root "$CLONE" --phase core
+  --prd "$SYNTH_PRD" --project "$MOCK_PROJECT" --project-root "$CLONE" --phase core
 _exit=$?
 
 echo ""

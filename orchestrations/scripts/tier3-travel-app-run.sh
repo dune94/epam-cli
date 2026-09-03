@@ -21,6 +21,15 @@
 # Usage:
 #   MINIMAX_API_KEY=<key> OPENROUTER_API_KEY=<key> bash orchestrations/scripts/tier3-travel-app-run.sh
 # ──────────────────────────────────────────────────────────────────────────────
+
+# A launcher decides what a run costs. It does not get to do that untested.
+_scg_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/stage-coverage-gate.sh"
+# shellcheck source=/dev/null
+# THE WHOLE MAP, BEFORE ANY MONEY MOVES. A paid launcher measures EVERY stage against the project's
+# threshold here, and only then declares the run gated — which is what turns on the per-stage gates
+# for the rest of the run. Failing here costs nothing; failing mid-run costs everything spent so far.
+[ -f "$_scg_lib" ] && . "$_scg_lib" && require_all_stage_coverage || exit 1
+
 set -euo pipefail
 
 # Run this whole script — and everything it forks (run-agent-orchestration.sh,
@@ -44,6 +53,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # shellcheck source=lib/project-config.sh
 . "$SCRIPT_DIR/lib/project-config.sh"
+# The run's spend figure comes from the ACTIVE SET, not a vendor hardcoded here.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/spend-probe.sh" 2>/dev/null || true
+
 # Config files are DATA: load them without executing them. See lib/env-file.sh.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/env-file.sh"
 LOG_FILE="/tmp/tier3-travel-app-run-$(date +%Y%m%dT%H%M%S).log"
@@ -109,9 +121,7 @@ fi
 cd "$REPO_ROOT"
 
 # Capture spend baseline
-_usage_before=$(curl -s "https://openrouter.ai/api/v1/auth/key" \
-  -H "Authorization: Bearer $OPENROUTER_API_KEY" 2>/dev/null | \
-  node -e "process.stdout.write(''+JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).data.usage)" 2>/dev/null || echo "0")
+_usage_before="$(spend_probe_read)"
 info "OpenRouter usage before: \$$_usage_before"
 # Also into $LOG_FILE: the line above goes to stdout, which is the launch log
 # that pre-run-reset deletes. The run report is generated from $LOG_FILE, so a
@@ -170,8 +180,8 @@ _epam_project_cfg="$(project_config_dir skyscanner "$REPO_ROOT")" || exit 1
 # config layer, and lets the literals below go.
 #
 # `preserve`: anything already exported (an operator override, the outer .env) still wins.
-if [ -f "$_epam_project_cfg/config.env" ]; then
-    load_env_file_safe "$_epam_project_cfg/config.env" preserve
+if [ -d "$_epam_project_cfg" ]; then
+    load_project_env "$_epam_project_cfg" preserve || exit 1
 fi
 mkdir -p "$OUTPUT_DIR/.epam"
 for _m in dependency-check.json contract-generation.json known-fixes.json; do
@@ -202,9 +212,9 @@ export EPAM_API_KEY_OPENROUTER="$OPENROUTER_API_KEY"
 # implementation. Directly explained a real misdiagnosis (SKY-002-test-1's
 # casing-typo import bug called a "default vs named export mismatch" —
 # wrong — burning a full 8-attempt ladder escalation on the wrong fix).
-export ORCH_GATE_PROVIDER="qwen"
-export EPAM_ORCHESTRATION_PROVIDER="qwen"
-# Escalation model: GLM 5.2 for Rung 2/3 (reasoning model, 1M ctx; routes via OpenRouter/qwen provider)
+export ORCH_GATE_PROVIDER="openrouter"
+export EPAM_ORCHESTRATION_PROVIDER="openrouter"
+# Escalation model: GLM 5.2 for Rung 2/3 (reasoning model, 1M ctx; routes via OpenRouter/openrouter provider)
 # HIGH tier: stronger/pricier model than the medium-tier ESCALATION_MODEL.
 # claude.sh's classify_ladder_tier() dynamically decides medium vs high per
 # story from its own recorded failure history (story-failures.jsonl) — never
@@ -237,7 +247,7 @@ export EPAM_TEMPERATURE="0"
 # model (the HIGH ladder tier) for spec-mode's own decisions, since there's no
 # later opportunity to escalate a bad split/elaboration call the way there is
 # for implementation.
-export SPEC_MODE_PROVIDER="qwen"
+export SPEC_MODE_PROVIDER="openrouter"
 export SPEC_MODE_OPENSPEC_MODEL="${SPEC_MODE_OPENSPEC_MODEL:-${ESCALATION_MODEL_HIGH}}"
 export SPEC_MODE_SPECKIT_MODEL="${SPEC_MODE_SPECKIT_MODEL:-${ESCALATION_MODEL_HIGH}}"
 export SPEC_MODE_MODEL="${SPEC_MODE_MODEL:-${ESCALATION_MODEL_HIGH}}"
@@ -254,14 +264,21 @@ export SPEC_MODE_MODEL="${SPEC_MODE_MODEL:-${ESCALATION_MODEL_HIGH}}"
 # .js extension to a relative import) across every rung and exhausted all 8
 # attempts still on kimi-k2, then aborted — a mechanical, easily-fixed mistake
 # that likely would have resolved in 1-2 attempts on a stronger model.
-export EPAM_MODEL_LADDER_MEDIUM="${EPAM_MODEL_LADDER_MEDIUM:-MiniMax-M2.5=MiniMax-M3|MiniMax-M3=${ESCALATION_MODEL}|zhipuai/glm-z1-32b=${ESCALATION_MODEL}|zhipuai/glm-z1-9b=${ESCALATION_MODEL}|${ESCALATION_MODEL}=${ESCALATION_MODEL_HIGH}}"
-export EPAM_MODEL_LADDER_HIGH="${EPAM_MODEL_LADDER_HIGH:-MiniMax-M2.5=MiniMax-M3|MiniMax-M3=${ESCALATION_MODEL_HIGH}|zhipuai/glm-z1-32b=${ESCALATION_MODEL_HIGH}|zhipuai/glm-z1-9b=${ESCALATION_MODEL_HIGH}|${ESCALATION_MODEL}=${ESCALATION_MODEL_HIGH}|${ESCALATION_MODEL_HIGH}=moonshotai/kimi-k3}"
+# LADDER PINS REMOVED 2026-08-25. These outranked the project's own declaration:
+# model-ladders.sh treats an already-set chain as an operator override. They had also
+# rotted — they interpolate ${ESCALATION_MODEL}, which config stopped setting when the
+# ladder took over, so the chain resolved to hops with EMPTY destinations
+# ("MiniMax-M3=") and that malformed chain still won. The ladder is declared in the
+# project's llm-settings.json; a runtime override is still possible by exporting the
+# variable before launch.
+# export EPAM_MODEL_LADDER_MEDIUM="${EPAM_MODEL_LADDER_MEDIUM:-MiniMax-M2.5=MiniMax-M3|MiniMax-M3=${ESCALATION_MODEL}|zhipuai/glm-z1-32b=${ESCALATION_MODEL}|zhipuai/glm-z1-9b=${ESCALATION_MODEL}|${ESCALATION_MODEL}=${ESCALATION_MODEL_HIGH}}"
+# export EPAM_MODEL_LADDER_HIGH="${EPAM_MODEL_LADDER_HIGH:-MiniMax-M2.5=MiniMax-M3|MiniMax-M3=${ESCALATION_MODEL_HIGH}|zhipuai/glm-z1-32b=${ESCALATION_MODEL_HIGH}|zhipuai/glm-z1-9b=${ESCALATION_MODEL_HIGH}|${ESCALATION_MODEL}=${ESCALATION_MODEL_HIGH}|${ESCALATION_MODEL_HIGH}=moonshotai/kimi-k3}"
 # Back-compat: EPAM_MODEL_LADDER (no suffix) still works as an override that
 # forces BOTH tiers to the same ladder — set it explicitly to opt out of the
 # medium/high split.
 export EPAM_MODEL_LADDER="${EPAM_MODEL_LADDER:-}"
 # Final fallback: used at R3 when the story model was never escalated at R2
-export EPAM_FINAL_FALLBACK_PROVIDER="${EPAM_FINAL_FALLBACK_PROVIDER:-qwen}"
+export EPAM_FINAL_FALLBACK_PROVIDER="${EPAM_FINAL_FALLBACK_PROVIDER:-openrouter}"
 # Dynamic retry-extension coordinator (2026-07-12): shipped disabled at
 # first, same rollout discipline as the DeepEval groundedness check --
 # prove it via fixture tests and observe it advisory-only before letting it
@@ -276,10 +293,10 @@ export EPAM_RETRY_EXTENSION_MAX="${EPAM_RETRY_EXTENSION_MAX:-2}"
 # Model-to-provider routing for post-escalation model steps (consumed by
 # claude.sh's resolve_model_provider() — zero vendor names hardcoded in the
 # engine itself, see that function's comment). This project routes every
-# OpenRouter-hosted vendor through the "qwen" provider umbrella; MiniMax
+# OpenRouter-hosted vendor through the "openrouter" provider umbrella; MiniMax
 # direct-API models route through "minimax". A project using different model
 # vendors/providers would supply a different map here.
-export EPAM_MODEL_PROVIDER_MAP="${EPAM_MODEL_PROVIDER_MAP:-zhipuai/*=qwen|moonshotai/*=qwen|z-ai/*=qwen|glm-*=qwen|kimi-*=qwen|deepseek/*=qwen|MiniMax-*=minimax}"
+export EPAM_MODEL_PROVIDER_MAP="${EPAM_MODEL_PROVIDER_MAP:-zhipuai/*=openrouter|moonshotai/*=openrouter|z-ai/*=openrouter|glm-*=openrouter|kimi-*=openrouter|deepseek/*=openrouter|MiniMax-*=minimax}"
 # MiniMax runtime settings
 export MINIMAX_TOOL_TIMEOUT_MS="${MINIMAX_TOOL_TIMEOUT_MS:-15000}"
 export PRD_FILE
@@ -443,9 +460,7 @@ run_phase "scaffold"
 run_phase "core"
 
 # Report spend
-_usage_after=$(curl -s "https://openrouter.ai/api/v1/auth/key" \
-  -H "Authorization: Bearer $OPENROUTER_API_KEY" 2>/dev/null | \
-  node -e "process.stdout.write(''+JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).data.usage)" 2>/dev/null || echo "0")
+_usage_after="$(spend_probe_read)"
 _spent=$(node -e "console.log(($_usage_after-$_usage_before).toFixed(4))" 2>/dev/null || echo "?")
 info "OpenRouter usage after: \$$_usage_after"
 # Also into $LOG_FILE: the line above goes to stdout, which is the launch log

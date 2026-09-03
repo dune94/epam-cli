@@ -21,5 +21,8 @@
     "__STORY_ID__",
     "__TITLE__",
     "__FILES__"
+  ],
+  "mayBeEmpty": [
+    "__ACCEPTANCE_CRITERIA__"
   ]
 }

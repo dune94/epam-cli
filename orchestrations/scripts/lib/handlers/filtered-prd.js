@@ -1,12 +1,14 @@
       const fs  = require('fs');
-      const prd = JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+      const prd = require('./_read-input.js').readJsonOrRefuse(process.argv[2], 'the PRD', { expect: 'object' });
       const cl  = process.argv[4], dcl = process.env.JIRA_DEFAULT_CODELINE||'';
       // A story may SPAN codelines. codelines[] is authoritative when present:
       // the story stays whole and participates in each lane's execution, rather
       // than being partitioned into exactly one. Without this it matches no
       // partition, appears in zero filtered PRDs, and is silently dropped from
       // the run — which is how a [GO, UP, MX] ticket reached ingest and died.
-      const stories = prd.stories.filter(s =>
+      // The top-level shape is checked on read; a PRD that parsed but carries no stories array
+      // still reaches here, and `.filter` on undefined is a node internal thrown mid-run.
+      const stories = (prd.stories || []).filter(s =>
         (Array.isArray(s.codelines) && s.codelines.length
           ? s.codelines.includes(cl)
           : (s.codeline === cl || (!s.codeline && cl === dcl)))

@@ -1,0 +1,47 @@
+name: Publish amsd-pipeline to npm
+
+# Fires on any version tag push (the same v* tags install.sh --ref already expects to find), plus
+# a manual dispatch so a tag pushed BEFORE this workflow existed (it will not retroactively fire)
+# can still be published once, by hand, from the Actions tab.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'npm version to publish (e.g. 1.9.0, no leading v)'
+        required: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      # SINGLE POINT OF MAINTENANCE: orchestrations-installer/install.sh is the source of truth,
+      # copied in here rather than duplicated in git. See npm-package/sync-install-sh.sh.
+      - name: Sync install.sh into the npm package
+        run: npm run npm-package:sync
+
+      - name: Set package version from the trigger
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          npm --prefix npm-package/amsd-pipeline version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Publish
+        working-directory: npm-package/amsd-pipeline
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

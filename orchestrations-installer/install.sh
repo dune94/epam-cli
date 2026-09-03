@@ -71,16 +71,18 @@ done
 #
 # "we then have to be able to safely uninstall without affecting dev environment" (operator,
 # 2026-09-03). STRUCTURALLY incapable of touching the dev environment, not merely unlikely to:
-# isolated_project_name() always produces "epam-<suffix>-<number>"; the real hand-run dev stack
-# uses docker compose's own directory-basename default ("epam-cli", no numeric suffix) because it
-# was never brought up with a -p flag at all. Those two shapes cannot collide — verified live
-# against real Docker, not assumed: the dev stack's actual volumes/networks/project name were
-# confirmed completely distinct from an isolated install's.
+# isolated_project_name() always produces "test-install-amsd-pipeline-<suffix>-<number>"; the real
+# hand-run dev stack names itself "dev-amsd-pipeline"/"dev-amsd-pipeline-launch" via each compose
+# file's own top-level `name:` key. Those two prefixes cannot collide — verified live against real
+# Docker, not assumed: the dev stack's actual volumes/networks/project name were confirmed
+# completely distinct from an isolated install's.
 #
 # NEVER THE FILES. Run evidence and .env live under $ROOT (or --dest) either way — uninstall
-# removes containers, the network and the volumes for THIS install's own project names, and
-# reports that the directory itself was left alone, in case an operator was about to `rm -rf` it
-# on the assumption uninstall already did.
+# removes containers, the network, the volumes AND any images built for THIS install's own project
+# (never a shared base image — `--rmi local` only removes images built by this compose file, not
+# pulled ones), then prunes now-dangling build layers left behind by `--build`, and reports that
+# the directory itself was left alone, in case an operator was about to `rm -rf` it on the
+# assumption uninstall already did.
 if [ "$UNINSTALL" = "1" ]; then
     _head "Uninstall"
     _UN_ROOT="$ROOT"
@@ -109,11 +111,15 @@ if [ "$UNINSTALL" = "1" ]; then
         _UN_COMPOSE="$_UN_ROOT/$_UN_FILE"
         if [ -f "$_UN_COMPOSE" ]; then
             if (cd "$(dirname "$_UN_COMPOSE")" && container_compose \
-                    -f "$(basename "$_UN_COMPOSE")" -p "$_UN_PROJECT" down -v --remove-orphans) >/dev/null 2>&1; then
-                _ok "removed $_UN_PROJECT (containers, network, volumes)"
+                    -f "$(basename "$_UN_COMPOSE")" -p "$_UN_PROJECT" down -v --remove-orphans --rmi local) >/dev/null 2>&1; then
+                _ok "removed $_UN_PROJECT (containers, network, volumes, images)"
             else
                 _ok "$_UN_PROJECT: nothing to remove or already gone"
             fi
+            # SCOPED PRUNE, never a bare `docker system prune` — that would also sweep up the dev
+            # environment's own dangling layers. Compose stamps every image it builds with this
+            # label, so filtering on it prunes only leftovers this exact project could have made.
+            "$CONTAINER_RUNTIME" image prune -f --filter "label=com.docker.compose.project=$_UN_PROJECT" >/dev/null 2>&1 || true
         fi
     done
     _ok "files under $_UN_ROOT were NOT touched — remove the directory yourself when you are done with it"

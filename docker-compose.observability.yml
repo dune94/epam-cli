@@ -1,4 +1,9 @@
 version: '3.8'
+# name: the DEV project identity — a hand-run `docker compose up` here (no -p flag) would
+# otherwise default to the directory basename ("epam-cli"). Naming it explicitly is what lets
+# install.sh's isolated "test-install-amsd-pipeline-*" project names (lib/isolated-compose-
+# identity.sh) be STRUCTURALLY unable to collide with this one, by construction, not by luck.
+name: dev-amsd-pipeline
 # Slim observability stack: Langfuse + agent-monitor only.
 # Avoids the full epam-cli stack (no hydra/kratos/backend-stub).
 #

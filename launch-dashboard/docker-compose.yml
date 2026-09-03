@@ -7,6 +7,10 @@
 #
 # The container-to-host boundary is ./spool, bind-mounted below. The containers never receive host
 # privileges — no docker socket, no ssh key.
+#
+# name: the DEV project identity — see docker-compose.observability.yml for why this must be
+# named explicitly rather than left to compose's directory-basename default.
+name: dev-amsd-pipeline-launch
 services:
   launch-api:
     build: ./backend

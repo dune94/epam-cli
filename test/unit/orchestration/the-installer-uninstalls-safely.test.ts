@@ -6,13 +6,14 @@ import path from 'node:path';
 
 /**
  * --uninstall MUST BE STRUCTURALLY INCAPABLE OF TOUCHING THE DEV ENVIRONMENT — not merely
- * unlikely to, by construction. Confirmed live 2026-09-03: the real hand-run dev observability
- * stack uses the project name "epam-cli" (docker compose's own directory-basename default, no
- * numeric suffix); isolated_project_name() always produces "epam-<suffix>-<number>". Those shapes
- * cannot collide, so a `docker compose -p <computed-name> down` can never resolve to the dev
- * stack's own containers, network, or volumes — verified directly against Docker's real project
- * namespacing (docker volume ls / docker network inspect showed completely distinct names and
- * subnets for the dev stack vs. a test install, with zero code needed to make that true).
+ * unlikely to, by construction. Confirmed live 2026-09-03: the real hand-run dev stacks declare
+ * their own literal project names ("dev-amsd-pipeline" / "dev-amsd-pipeline-launch", via each
+ * compose file's top-level `name:` key); isolated_project_name() always produces
+ * "test-install-amsd-pipeline-<suffix>-<number>". Those prefixes cannot collide, so a
+ * `docker compose -p <computed-name> down` can never resolve to the dev stack's own containers,
+ * network, or volumes — verified directly against Docker's real project namespacing (docker
+ * volume ls / docker network inspect showed completely distinct names and subnets for the dev
+ * stack vs. a test install, with zero code needed to make that true).
  *
  * --uninstall removes ONLY the docker footprint (containers, network, volumes) of the install at
  * $ROOT (or --dest) — never the files on disk. Run evidence and .env live under a directory that
@@ -59,22 +60,24 @@ describe('install.sh --uninstall', () => {
     const r = run(f, ['--uninstall']);
     const log = fs.readFileSync(f.log, 'utf8');
     expect(log, `docker was never invoked:\n${r.stdout}${r.stderr}`).toMatch(/compose/);
-    expect(log, 'no -p (project) scoping reached the down command').toMatch(/-p\s+epam-obs-\d+/);
-    expect(log, 'no -p (project) scoping reached the down command').toMatch(/-p\s+epam-launch-\d+/);
+    expect(log, 'no -p (project) scoping reached the down command').toMatch(/-p\s+test-install-amsd-pipeline-obs-\d+/);
+    expect(log, 'no -p (project) scoping reached the down command').toMatch(/-p\s+test-install-amsd-pipeline-launch-\d+/);
     expect(log, 'volumes must be removed too, or a re-install inherits stale data').toMatch(/down.*-v|-v.*down/);
+    expect(log, 'locally-built images must be removed too, or a re-install inherits a stale build').toMatch(/--rmi\s+local/);
   });
 
-  it('the computed project name can never match the dev environment\'s own shape ("epam-cli", no numeric suffix)', () => {
+  it('the computed project name can never match the dev environment\'s own shape ("dev-amsd-pipeline*", no numeric suffix)', () => {
     const f = fixture();
     run(f, ['--uninstall']);
     const log = fs.readFileSync(f.log, 'utf8');
-    // Every -p argument captured must match the isolated shape, never the bare "epam-cli" a
-    // hand-run `docker compose up` (no -p flag) would default to.
+    // Every -p argument captured must match the isolated shape, never the literal "dev-amsd-
+    // pipeline"/"dev-amsd-pipeline-launch" names the hand-run dev compose files declare.
     const projects = [...log.matchAll(/-p\s+(\S+)/g)].map((m) => m[1]);
     expect(projects.length).toBeGreaterThan(0);
     for (const p of projects) {
-      expect(p, `a -p value did not match the isolated shape: ${p}`).toMatch(/^epam-(obs|launch)-\d+$/);
-      expect(p).not.toBe('epam-cli');
+      expect(p, `a -p value did not match the isolated shape: ${p}`).toMatch(/^test-install-amsd-pipeline-(obs|launch)-\d+$/);
+      expect(p).not.toBe('dev-amsd-pipeline');
+      expect(p).not.toBe('dev-amsd-pipeline-launch');
     }
   });
 
@@ -120,7 +123,7 @@ describe('install.sh --uninstall', () => {
     const f = fixture();
     const r = run(f, ['--uninstall']);
     const out = `${r.stdout}${r.stderr}`;
-    expect(out).toMatch(/epam-obs-\d+/);
-    expect(out).toMatch(/epam-launch-\d+/);
+    expect(out).toMatch(/test-install-amsd-pipeline-obs-\d+/);
+    expect(out).toMatch(/test-install-amsd-pipeline-launch-\d+/);
   });
 });

@@ -12,10 +12,16 @@
 # would make "is this the same install as before" unanswerable from the outside.
 
 # isolated_project_name <root> <suffix>
+#
+# Prefixed "test-install-amsd-pipeline-" — every install.sh-managed stack is, by definition, an
+# INSTALL (never the hand-run dev checkout, which never calls this function and instead carries its
+# own literal "dev-amsd-pipeline"/"dev-amsd-pipeline-launch" project names via each compose file's
+# top-level `name:` key). The two prefixes can never collide by construction, which is what makes
+# `install.sh --uninstall` structurally incapable of touching the dev environment.
 isolated_project_name() {
     local _root="$1" _suffix="$2" _h
     _h=$(printf '%s' "$_root" | cksum | cut -d' ' -f1)
-    printf 'epam-%s-%s' "$_suffix" "$((_h % 1000000))"
+    printf 'test-install-amsd-pipeline-%s-%s' "$_suffix" "$((_h % 1000000))"
 }
 
 # isolated_subnet_candidates <root>

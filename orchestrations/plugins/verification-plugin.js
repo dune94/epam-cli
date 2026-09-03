@@ -259,6 +259,18 @@ function detectTests(projectRoot) {
       return {
         test: {
           command: `${runner} ${named}`,
+          // RUN ONLY WHAT THE STORY OWNS.
+          //
+          // Without this claude.sh falls back to the whole suite, and its own comment says so: "A
+          // project that declares neither runs its whole suite, which is correct and never silent."
+          // Live 2026-09-02 (AMSD-1919): validating ONE line in CheckoutForm.tsx ran all 746 suites
+          // / 3,385 tests, pinned the run at 10,731MB of an 11,264MB cap with 15 jest workers at
+          // ~700-780MB each, and stretched a ~70-second suite past 10 minutes under constant
+          // reclaim. The story's own suite is a single file.
+          //
+          // Built from the SAME runner and script the full command uses, so there is no second
+          // guess at the tool's name. `--` passes the file list through npm/yarn/pnpm to the runner.
+          scopedCommand: `${runner} ${named} -- {files}`,
           testFilePattern: '\\.(test|spec)\\.[jt]sx?$',
           // A failing SUITE is the stable identity, not a test name: runners report the suite
           // path consistently and individual case names churn. Subtracting on this is what lets

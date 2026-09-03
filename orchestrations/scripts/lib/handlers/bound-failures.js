@@ -84,12 +84,34 @@ function bound(projectRoot, text, section, limit) {
     keptUntil = end;
     kept = i + 1;
   }
-  if (kept === 0) {                                 // even one entry exceeds the window
-    keptUntil = (starts.length > 1 ? starts[1] : lines.length);
+  // A SINGLE ENTRY BIGGER THAN THE WINDOW IS THE NORMAL CASE, NOT THE EDGE.
+  //
+  // This branch used to set keptUntil = lines.length — the WHOLE file — so one failing suite in a
+  // large run was passed through untouched. That is precisely what production produces: live
+  // 2026-09-02 (AMSD-1919) the suite reported "1 failed, 3359 passed" and this handler returned
+  // 2,607,030 characters, giving the analyst a ~1,141,382-token prompt against a 1,000,000 limit.
+  // It was never caught because the test used forty entries and never reached this branch.
+  //
+  // Here the entry genuinely cannot be kept whole. Cutting it is the lesser harm: an oversized
+  // prompt cannot be answered by ANY model, so "whole entries or nothing" would choose nothing.
+  // The cut is stated, so the analyst is never left guessing what it was not shown.
+  let truncatedEntry = false;
+  if (kept === 0) {
+    keptUntil = Math.min(starts[0] + limit, lines.length);
     kept = 1;
+    truncatedEntry = true;
   }
   const dropped = starts.length - kept;
-  const head = lines.slice(0, keptUntil).join('\n').replace(/\s+$/, '');
+  // FROM THE FIRST FAILURE, NOT FROM THE TOP. Everything before it is the runner's preamble and
+  // the passing suites — thousands of lines of noise that crowded out the failure itself.
+  const head = lines.slice(starts[0], keptUntil).join('\n').replace(/\s+$/, '');
+  if (truncatedEntry) {
+    const note = `\n\n[... this failure exceeds the declared window (failureExcerptLines in `
+      + `config/evidence-windows.json) and was cut after ${limit} lines`
+      + (dropped > 0 ? `; ${dropped} further failing entr${dropped === 1 ? 'y' : 'ies'} not shown` : '')
+      + ']';
+    return head + note;
+  }
   if (dropped <= 0) return head;
   return `${head}\n\n[... ${dropped} further failing entr${dropped === 1 ? 'y' : 'ies'} not shown — `
     + `the window is declared as failureExcerptLines in config/evidence-windows.json]`;

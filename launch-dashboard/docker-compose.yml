@@ -1,0 +1,34 @@
+# The launch dashboard. Deliberately separate from docker-compose.observability.yml: this is the
+# non-technical surface, and it must be installable without Langfuse, Grafana or ClickHouse.
+#
+# THE PIPELINE IS NOT HERE. It runs on the host, and so does the runner that starts it:
+#
+#     node launch-dashboard/backend/src/runner-host.js
+#
+# The container-to-host boundary is ./spool, bind-mounted below. The containers never receive host
+# privileges — no docker socket, no ssh key.
+services:
+  launch-api:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      # Both are REQUIRED and the server refuses to start without them. LAUNCH_PASSWORD gates a
+      # button that spends real money; EPAM_PROVIDER_SET must never be guessed.
+      LAUNCH_PASSWORD: ${LAUNCH_PASSWORD:?set LAUNCH_PASSWORD in .env}
+      EPAM_PROVIDER_SET: ${EPAM_PROVIDER_SET:?set EPAM_PROVIDER_SET in .env}
+      EPAM_CODE_LEVEL: ${EPAM_CODE_LEVEL:-}
+    volumes:
+      - ./data:/data          # runs.db — history survives a restart
+      - ./spool:/spool        # the only channel to the host runner
+    # Bounded, because a client install must not kill the machine. Sized for an API that lists rows.
+    mem_limit: 256m
+    memswap_limit: 256m
+
+  launch-ui:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on: [launch-api]
+    ports:
+      - "${LAUNCH_UI_PORT:-8099}:80"
+    mem_limit: 128m
+    memswap_limit: 128m

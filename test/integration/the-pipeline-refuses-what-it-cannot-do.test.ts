@@ -130,13 +130,23 @@ describe('the pipeline refuses what it cannot do', () => {
  */
 describe('the baseline cache, with real inputs', () => {
   const REPO2 = path.resolve(__dirname, '../..');
-  const CODELINE = '/home/bradleyjerome/projects/metrolinx/next.gotransit.com';
+  // DERIVED FROM THE PRD, never a machine path: a test that names one laptop and one client is
+  // not a test of the pipeline, and hardcoding is what the engine itself is forbidden to do.
+  const projectsDir = path.join(REPO2, 'orchestrations/projects');
+  let CODELINE = '';
+  for (const project of fs.readdirSync(projectsDir)) {
+    const prdPath = path.join(projectsDir, project, 'prd.json');
+    if (!fs.existsSync(prdPath)) continue;
+    let j: any;
+    try { j = JSON.parse(fs.readFileSync(prdPath, 'utf8')); } catch { continue; }
+    const dirs = (j.project && j.project.outputDirs) || [];
+    const hit = dirs.find((d: any) => d && d.path && fs.existsSync(path.join(d.path, '.git')));
+    if (hit) { CODELINE = hit.path; break; }
+  }
+  if (!CODELINE) throw new Error('no PRD points at a checked-out codeline — driven by real inputs');
   const gate = path.join(REPO2, 'orchestrations/scripts/lib/tsc-baseline-gate.sh');
 
   it('writes a baseline-failures cache for section=test', () => {
-    if (!fs.existsSync(path.join(CODELINE, '.git'))) {
-      throw new Error(`real codeline missing at ${CODELINE} — this test needs it`);
-    }
     const sha = execFileSync('git', ['-C', CODELINE, 'rev-parse', 'origin/develop'], { encoding: 'utf8' }).trim();
     expect(sha, 'could not resolve the real baseline').toMatch(/^[0-9a-f]{40}$/);
 

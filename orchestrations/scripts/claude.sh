@@ -5770,38 +5770,31 @@ _project_test_command() {
 
 # This story's declared files that the PROJECT recognises as test files, space separated.
 _project_owned_test_files() {
-    local _root="$1" _sid="$2" _prd="$3"
-    local _plugin="${AUTOMATION_DIR}/plugins/verification-plugin.js"
-    local _node="${NODE_CMD:-${NODE_BIN:-node}}"
-    [ -f "$_plugin" ] && [ -f "$_prd" ] || return 0
-    "$_node" -e '
-      const fs = require("fs");
-      const p = require(process.argv[1]);
-      const [, , , root, sid, prdPath] = process.argv;
-      let prd; try { prd = JSON.parse(fs.readFileSync(prdPath, "utf8")); } catch { process.exit(0); }
-      const s = (prd.stories || []).find((x) => x && x.id === sid);
-      const files = (s && s.technicalNotes && s.technicalNotes.files) || [];
-      const owned = files.filter((f) => p.isTestFile(root, f) === true);
-      if (owned.length) console.log(owned.join(" "));
-    ' "$_plugin" "$_root" "$_sid" "$_prd" 2>/dev/null
+    # THE PLUGIN ANSWERS THIS. Both of these used to be node programs written inside bash
+    # single-quoted strings — unrunnable on their own, untestable, with stderr sent to /dev/null.
+    # The first one destructured its arguments one position too far, so it read the STORY ID as the
+    # repo root and got undefined for the PRD; readFileSync(undefined) threw, the catch exited 0,
+    # and it printed nothing for every story of every project since it was written. Nothing failed
+    # visibly: claude.sh scopes verification only when this returns files, so external verification
+    # always ran the whole suite (live 2026-09-02: 746 suites / 3,385 tests and 10,731MB to validate
+    # one line).
+    #
+    # _verification_plugin_call is the ONE generic invoker. Adding a capability is a function in the
+    # plugin and a call here — never another program embedded in a string.
+    local _out
+    _out=$(_verification_plugin_call ownedTestFiles "$1" "$2" "$3") || return 0
+    [ "$_out" = "unknown" ] && return 0      # no declared convention: cannot answer, so scope nothing
+    printf '%s' "$_out"
 }
 
-# The declared scoped-run command with {files} substituted, or empty when undeclared.
 _project_scoped_test_command() {
-    # _files_joined, not _files: this is a SPACE-JOINED STRING substituted into {files}, while
-    # another function in this file uses _files as an array. One name for two shapes reads as a
-    # bug even when it is not, and shellcheck cannot tell them apart either.
-    local _root="$1" _files_joined="$2"
-    local _plugin="${AUTOMATION_DIR}/plugins/verification-plugin.js"
-    local _node="${NODE_CMD:-${NODE_BIN:-node}}"
-    [ -f "$_plugin" ] || return 0
-    "$_node" -e '
-      const p = require(process.argv[1]);
-      const m = p.readTestManifest(process.argv[2]);
-      if (!m || !m.ok) process.exit(0);
-      const tpl = m.manifest && m.manifest.test && m.manifest.test.scopedCommand;
-      if (typeof tpl === "string" && tpl.trim()) console.log(tpl.replace(/\{files\}/g, process.argv[3]));
-    ' "$_plugin" "$_root" "$_files_joined" 2>/dev/null
+    # The template is the project's own declaration (.epam/verification.json test.scopedCommand);
+    # the plugin substitutes the file list. Empty when undeclared, so the caller runs the full
+    # suite — correct, and never silent.
+    local _out
+    _out=$(_verification_plugin_call scopedTestCommand "$1" "$2") || return 0
+    [ "$_out" = "unknown" ] && return 0
+    printf '%s' "$_out"
 }
 
 run_tsc_verification() {

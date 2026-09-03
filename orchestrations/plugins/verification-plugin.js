@@ -453,6 +453,52 @@ const verifyTypecheckTool = {
   },
 };
 
+/**
+ * WHICH TEST FILES DOES THIS STORY OWN.
+ *
+ * Lived as a node script written inside a bash single-quoted string in claude.sh. That is not a
+ * program anyone can run, test, or read a stack trace from, and its stderr went to /dev/null — so
+ * when it destructured `const [, , , root, sid, prdPath]` while the caller passed the args one
+ * position earlier, `root` received the STORY ID, `prdPath` was undefined, readFileSync(undefined)
+ * threw, the catch exited 0, and it printed nothing. For every story of every project, since it was
+ * written.
+ *
+ * Nothing failed visibly. claude.sh scopes verification only when this returns files, so external
+ * verification always ran the WHOLE suite: live 2026-09-02 (AMSD-1919) one line in CheckoutForm.tsx
+ * ran 746 suites / 3,385 tests, 15 jest workers at ~700-780MB, pinning the run at 10,731MB of an
+ * 11,264MB cap. The story had declared its own spec file all along.
+ *
+ * It belongs here because deciding what a test file IS is this plugin's job already (isTestFile
+ * reads the project's declared testFilePattern). The engine asks; it holds no convention.
+ *
+ * Returns a space-joined list, '' when the story owns none, and null when the project declares no
+ * convention — null is "cannot answer", never "no test files".
+ */
+function ownedTestFiles(projectRoot, storyId, prdPath) {
+  let prd;
+  try { prd = JSON.parse(readFileSync(prdPath, 'utf8')); } catch { return null; }
+  const story = ((prd && prd.stories) || []).find((s) => s && s.id === storyId);
+  const files = (story && story.technicalNotes && story.technicalNotes.files) || [];
+  if (isTestFile(projectRoot, 'probe.spec.ts') === null) return null;   // no declared convention
+  return files.filter((f) => isTestFile(projectRoot, f) === true).join(' ');
+}
+
+/**
+ * THE PROJECT'S OWN COMMAND FOR RUNNING JUST THOSE FILES.
+ *
+ * Same story: an inline node script in claude.sh. The template is the project's declaration
+ * (.epam/verification.json test.scopedCommand, e.g. "npm run test -- {files}"); this only
+ * substitutes. Empty when the project declares none, so the caller runs the full suite — which is
+ * correct and, unlike the failure above, never silent.
+ */
+function scopedTestCommand(projectRoot, filesJoined) {
+  if (!filesJoined || !String(filesJoined).trim()) return '';
+  const m = readTestManifest(projectRoot);
+  const tpl = m && m.ok && m.manifest && m.manifest.test && m.manifest.test.scopedCommand;
+  if (typeof tpl !== 'string' || !tpl.trim()) return '';
+  return tpl.replace(/\{files\}/g, String(filesJoined));
+}
+
 module.exports = {
   pluginApiVersion: PLUGIN_API_VERSION,
   tools: [verifyTypecheckTool],
@@ -466,6 +512,8 @@ module.exports = {
   parseFailures,
   newFailures,
   isTestFile,
+  ownedTestFiles,
+  scopedTestCommand,
   repoHasTests,
   MANIFEST_REL,
 };

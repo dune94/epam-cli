@@ -129,12 +129,21 @@ run_review_prompt() {
         echo '{"verdict":"approved","issues":[]}'
         return 0
     fi
+    # NO VENDOR GUESS. --provider "${EPAM_ORCHESTRATION_PROVIDER:-claude}" forced "claude"
+    # whenever EPAM_ORCHESTRATION_PROVIDER was unset — redundant, because AI_RUNNER_CMD is
+    # ai-run.sh -> llm-handler.sh, which re-derives PRIMARY_PROVIDER from the active set when no
+    # flag is given. Passing --provider "" would be WORSE than omitting the flag: llm-handler.sh's
+    # own arg parsing (`--provider) PRIMARY_PROVIDER="${2:-}"`) would overwrite its own
+    # already-correctly-resolved value with empty and fall to a cruder basename guess — so the
+    # flag is included only when there is a real value to pass.
+    local _crc_provider_flag=()
+    [ -n "${EPAM_ORCHESTRATION_PROVIDER:-}" ] && _crc_provider_flag=(--provider "$EPAM_ORCHESTRATION_PROVIDER")
     echo "$prompt_text" | \
         AI_MODEL="$_CRC_MODEL" \
         CLAUDE_CMD="${CLAUDE_CMD:-claude}" \
         EPAM_CLI="${EPAM_CLI:-epam}" \
         EPAM_MAX_OUTPUT_TOKENS="${CODE_REVIEW_MAX_OUTPUT_TOKENS:-32768}" \
-        "$AI_RUNNER_CMD" --provider "${EPAM_ORCHESTRATION_PROVIDER:-claude}" \
+        "$AI_RUNNER_CMD" "${_crc_provider_flag[@]}" \
             --model "$_CRC_MODEL" 2>&1
 }
 

@@ -181,9 +181,15 @@ _ladder_next_model() {
     done
 }
 # Resolve a model's provider via EPAM_MODEL_PROVIDER_MAP (glob patterns like moonshotai/*=openrouter).
+#
+# NO VENDOR GUESS on either exit. Both used to fall to "claude" when EPAM_ORCHESTRATION_PROVIDER
+# was also unset (change-log/SEAM-CONSISTENCY-ANALYSIS.md, TIER 2 — invoke_agent's own --provider
+# handling already omits an empty flag rather than forwarding it, so an empty return here is safe:
+# `[ -n "$_provider" ] && _args+=(--provider "$_provider")`, agent-invoke.sh). An empty return
+# means "no override" — the runner beneath invoke_agent resolves the active set on its own.
 _provider_for_model() {
     local _m="$1" _map="${EPAM_MODEL_PROVIDER_MAP:-}" _pair _pat _prov
-    [ -z "$_map" ] && { echo "${EPAM_ORCHESTRATION_PROVIDER:-claude}"; return; }
+    [ -z "$_map" ] && { echo "${EPAM_ORCHESTRATION_PROVIDER:-}"; return; }
     IFS='|' read -ra _pairs <<< "$_map"
     for _pair in "${_pairs[@]}"; do
         _pat="${_pair%%=*}"; _prov="${_pair#*=}"
@@ -192,7 +198,7 @@ _provider_for_model() {
         # shellcheck disable=SC2254
         case "$_m" in $_pat) echo "$_prov"; return ;; esac
     done
-    echo "${EPAM_ORCHESTRATION_PROVIDER:-claude}"
+    echo "${EPAM_ORCHESTRATION_PROVIDER:-}"
 }
 
 # Invoke the review-agent LLM for a single story, with ladder escalation + a

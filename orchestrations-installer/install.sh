@@ -51,11 +51,12 @@ CONTAINER_RUNTIME="${EPAM_CONTAINER_RUNTIME:-}"
 # without it can never be replayed, because the turns were never captured. Off by default — 2.36GB
 # of images is not a silent opt-in — but the consequence is one-way, so it is STATED either way.
 REPLAY_MODE="${EPAM_REPLAY:-off}"
-DEST=""; REF=""
+DEST=""; REF=""; REPO_URL=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --dest)      DEST="${2:-}"; shift 2 ;;
         --ref)       REF="${2:-}"; shift 2 ;;
+        --repo)      REPO_URL="${2:-}"; shift 2 ;;
         --stack)     STACK="${2:-}"; shift 2 ;;
         --no-docker) USE_DOCKER=no; shift ;;
         --docker)    USE_DOCKER=yes; shift ;;
@@ -72,27 +73,55 @@ done
 # excluded, not filtered by a list that can miss one — proven this same repo: a raw tar shipped 8
 # live credentials that git archive does not even see.
 #
-# INSTALLER_DIR NEVER MOVES. Every lib/*.sh this script sources still comes from where THIS install.sh
-# lives, regardless of --dest — the archived copy that lands inside DEST is inert bystander content,
-# same as it always has been. What --dest changes is $ROOT: everything below (.env, dist/, the
-# compose files, the manifest) now addresses the freshly-packaged tree instead of wherever this
-# script happened to be sitting.
+# INSTALLER_DIR NORMALLY NEVER MOVES. Every lib/*.sh this script sources still comes from where
+# THIS install.sh lives, regardless of --dest — the archived copy that lands inside DEST is inert
+# bystander content, same as it always has been. What --dest changes is $ROOT: everything below
+# (.env, dist/, the compose files, the manifest) now addresses the freshly-packaged tree instead of
+# wherever this script happened to be sitting.
+#
+# THE ONE EXCEPTION: a bare install.sh with no lib/ directory next to it (obtained alone — npx, a
+# raw single-file download) self-clones below, and INSTALLER_DIR is repointed at that fresh clone's
+# own orchestrations-installer/ — the only tree that is guaranteed to actually have the lib files
+# this script is about to source.
 if [ -n "$DEST" ]; then
     _head "Packaging"
-    if ! git -C "$INSTALLER_DIR" rev-parse --git-dir >/dev/null 2>&1; then
-        _bad "--dest requires running install.sh from inside a git checkout of this repo — none found at $INSTALLER_DIR"
-        exit 1
-    fi
-    # THE REPO ROOT, NOT WHEREVER install.sh HAPPENS TO LIVE. `git archive` scopes its output to
-    # the CURRENT WORKING TREE'S SUBDIRECTORY, not the whole repo — running it with `-C
-    # $INSTALLER_DIR` (orchestrations-installer/, a SUBDIRECTORY) archived only install.sh and
-    # lib/, silently dropping the entire rest of the pipeline. Caught by actually running the
-    # packaged result and watching the very next step fail with "no provider-sets.json", not by
-    # reading the git-archive docs and assuming.
-    _GIT_ROOT="$(git -C "$INSTALLER_DIR" rev-parse --show-toplevel 2>/dev/null)"
-    if [ -z "$_GIT_ROOT" ]; then
-        _bad "could not resolve the repo root from $INSTALLER_DIR"
-        exit 1
+    if git -C "$INSTALLER_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+        # THE REPO ROOT, NOT WHEREVER install.sh HAPPENS TO LIVE. `git archive` scopes its output
+        # to the CURRENT WORKING TREE'S SUBDIRECTORY, not the whole repo — running it with `-C
+        # $INSTALLER_DIR` (orchestrations-installer/, a SUBDIRECTORY) archived only install.sh and
+        # lib/, silently dropping the entire rest of the pipeline. Caught by actually running the
+        # packaged result and watching the very next step fail with "no provider-sets.json", not by
+        # reading the git-archive docs and assuming.
+        _GIT_ROOT="$(git -C "$INSTALLER_DIR" rev-parse --show-toplevel 2>/dev/null)"
+        if [ -z "$_GIT_ROOT" ]; then
+            _bad "could not resolve the repo root from $INSTALLER_DIR"
+            exit 1
+        fi
+    else
+        # NOTHING PRE-EXISTING REQUIRED. The only thing anyone needs to have obtained is
+        # install.sh ITSELF — however (npx, a raw download, a shared drive) — everything else,
+        # including the clone, happens here. This is what makes "for other people, not just me,
+        # and no local to use" actually true: someone with only this one file and git+node on PATH
+        # gets a full working install, no separate `git clone` step for them to run by hand.
+        #
+        # PUBLIC HTTPS, so no credential is needed to obtain it — the repo is public. --repo (or
+        # EPAM_REPO) overrides for a fork or a private mirror.
+        _REPO_URL="${REPO_URL:-${EPAM_REPO:-https://github.com/dune94/epam-cli.git}}"
+        _CLONE_DIR="$(mktemp -d)" || { _bad "could not create a temp directory to clone into"; exit 1; }
+        if ! git clone --quiet "$_REPO_URL" "$_CLONE_DIR" 2>&1; then
+            _bad "could not clone $_REPO_URL — check network access, or pass --repo for a different URL"
+            exit 1
+        fi
+        _ok "cloned $_REPO_URL"
+        _GIT_ROOT="$_CLONE_DIR"
+        # INSTALLER_DIR NOW MOVES — the one exception to the rule stated below. A bare install.sh
+        # obtained alone (npx, a raw single-file download) has no lib/ directory sitting next to
+        # it at all; every lib/*.sh source below would fail "No such file or directory" otherwise.
+        # The freshly-cloned tree has a complete, version-consistent copy of everything install.sh
+        # needs, so it becomes the new INSTALLER_DIR.
+        if [ -d "$_CLONE_DIR/orchestrations-installer/lib" ]; then
+            INSTALLER_DIR="$_CLONE_DIR/orchestrations-installer"
+        fi
     fi
     _PKG_REF="${REF:-HEAD}"
     # FETCH FIRST: a colleague packaging a release just tagged by someone else may not have it yet.
@@ -442,14 +471,53 @@ runtime_up() {
 # docker-compose.yml at the repo root — only the named files below. It ended in `|| true`, so the
 # failure was swallowed and the installer reported "docker is up" having started nothing.
 COMPOSE_FILE="${EPAM_COMPOSE_FILE:-$ROOT/docker-compose.observability.yml}"
+# ISOLATED FROM EVERY OTHER INSTALL ON THIS MACHINE, DETERMINISTICALLY — never a human hand-picking
+# a free subnet. The compose file's own default (EPAM_OBS_SUBNET:-172.31.0.0/16) is a FIXED
+# constant: two installs, or this exact install colliding with an already-running dev checkout on
+# that same default, hit "Pool overlaps with other one on this address space" — the launch-dashboard
+# section already had this fix; the observability stack never did.
+. "$INSTALLER_DIR/lib/isolated-compose-identity.sh"
+_OBS_PROJECT="$(isolated_project_name "$ROOT" obs)"
 compose_up() {
     if [ ! -f "$COMPOSE_FILE" ]; then
         _bad "compose file not found: $COMPOSE_FILE"; FAILED=1; return 1
     fi
-    if ! (cd "$ROOT" && container_compose -f "$COMPOSE_FILE" up -d >/dev/null 2>&1); then
-        _bad "$CONTAINER_RUNTIME compose failed for $COMPOSE_FILE — the services are NOT running"; FAILED=1
+    local _up=1 _log _subnet _i=0
+    _log="$(mktemp)"
+    for _subnet in $(isolated_subnet_candidates "$ROOT"); do
+        # ATTEMPT 0 KEEPS THE WELL-KNOWN PORTS EXACTLY (offset 0) — a normal single-install machine
+        # sees no change at all, still :3100, :8092, :8123, :3001. Only a genuine collision (this
+        # exact stack already running, or a second install) steps to the next attempt's offset, so
+        # no manual port flag is ever required for this to just work.
+        local _off=$((_i * 10))
+        if (cd "$ROOT" && EPAM_OBS_SUBNET="$_subnet" \
+                EPAM_OBS_CLICKHOUSE_PORT=$((8123 + _off)) \
+                EPAM_OBS_LANGFUSE_PORT=$((3100 + _off)) \
+                EPAM_OBS_DASHBOARD_PORT=$((8092 + _off)) \
+                EPAM_OBS_GRAFANA_PORT=$((3001 + _off)) \
+                container_compose -f "$COMPOSE_FILE" -p "$_OBS_PROJECT" up -d) >"$_log" 2>&1; then
+            _up=0
+            break
+        fi
+        # ONLY RETRY ON A SUBNET OR PORT COLLISION — any other failure would fail identically on
+        # every candidate, burning through all of them and hiding the real error behind repeats.
+        grep -qiE 'overlap|pool|port is already allocated|address already in use' "$_log" || break
+        # TEAR DOWN BEFORE THE NEXT ATTEMPT. A failed `up -d` still CREATES whatever services it
+        # got to before the failing one — found live: postgres/redis/clickhouse started fine on
+        # attempt 0, agent-monitor's port collision failed the overall command, and attempt 1's
+        # NEW port env was silently ignored for the already-Created containers, which stayed bound
+        # to attempt 0's (colliding) ports. Compose does not cleanly re-resolve an already-created
+        # container's config from new env vars on a later `up` — each attempt needs a clean slate.
+        (cd "$ROOT" && container_compose -f "$COMPOSE_FILE" -p "$_OBS_PROJECT" down) >/dev/null 2>&1 || true
+        _i=$((_i + 1))
+    done
+    if [ "$_up" != "0" ]; then
+        _bad "$CONTAINER_RUNTIME compose failed for $COMPOSE_FILE — the services are NOT running: $(tail -3 "$_log" 2>/dev/null)"
+        FAILED=1
+        rm -f "$_log" 2>/dev/null
         return 1
     fi
+    rm -f "$_log" 2>/dev/null
     return 0
 }
 case "$USE_DOCKER" in
@@ -519,20 +587,33 @@ else
         _warn "no container runtime is running — launch dashboard unavailable, THE PIPELINE STILL RUNS"
     else
         # ISOLATED FROM EVERY OTHER INSTALL ON THIS MACHINE, DETERMINISTICALLY. Two checkouts (a
-        # dev tree and a dogfood copy, say) must both be able to run at once. Retries ONLY on a
-        # subnet collision — any other failure (a bad Dockerfile, a missing image) would fail
-        # identically on every candidate, burning through all of them and hiding the real error
-        # behind four repeats of it.
+        # dev tree and a dogfood copy, say) must both be able to run at once. Retries on a subnet
+        # OR a port collision — found live, both are real: a second install's observability stack
+        # hit the subnet default, and THIS stack hit LAUNCH_UI_PORT's default (8099) already held
+        # by an earlier install on the same machine. Attempt 0 keeps the .env-declared port exactly
+        # (no surprise for an operator who set one deliberately); only a genuine collision steps to
+        # the next offset. Any OTHER failure (a bad Dockerfile, a missing image) would fail
+        # identically on every candidate, burning through all of them and hiding the real error.
         _LD_UP=1
         _LD_LOG="$(mktemp)"
-        _LD_SUBNET=""
+        _LD_SUBNET=""; _LD_I=0
         for _LD_SUBNET in $(isolated_subnet_candidates "$ROOT"); do
-            if (cd "$LAUNCH_DIR" && LAUNCH_SUBNET="$_LD_SUBNET" container_compose \
-                    -f "$LAUNCH_COMPOSE" -p "$_LD_PROJECT" up -d --build) >"$_LD_LOG" 2>&1; then
+            _LD_TRY_PORT=$((_LD_PORT + _LD_I * 10))
+            if (cd "$LAUNCH_DIR" && LAUNCH_SUBNET="$_LD_SUBNET" LAUNCH_UI_PORT="$_LD_TRY_PORT" \
+                    container_compose -f "$LAUNCH_COMPOSE" -p "$_LD_PROJECT" up -d --build) >"$_LD_LOG" 2>&1; then
                 _LD_UP=0
+                _LD_PORT="$_LD_TRY_PORT"
+                _LD_HEALTH_URL="http://localhost:${_LD_PORT}/api/health"
                 break
             fi
-            grep -qi 'overlap\|pool' "$_LD_LOG" || break
+            grep -qiE 'overlap|pool|port is already allocated|address already in use' "$_LD_LOG" || break
+            # TEAR DOWN BEFORE THE NEXT ATTEMPT — same fix as the observability stack's retry
+            # loop: a failed `up -d` can still CREATE containers attached to the failed attempt's
+            # network/port before the failure, and compose does not cleanly re-attach an
+            # already-created container to a DIFFERENT network or port on a later `up`. Each
+            # attempt needs a clean slate.
+            (cd "$LAUNCH_DIR" && container_compose -f "$LAUNCH_COMPOSE" -p "$_LD_PROJECT" down) >/dev/null 2>&1 || true
+            _LD_I=$((_LD_I + 1))
         done
 
         if [ "$_LD_UP" = "1" ]; then

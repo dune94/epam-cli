@@ -44,11 +44,13 @@ function fixture(runtimes: string[]) {
   fs.copyFileSync(INSTALLER, path.join(dir, 'orchestrations-installer/install.sh'));
   fs.chmodSync(path.join(dir, 'orchestrations-installer/install.sh'), 0o755);
 
-  // the shared resolver the installer is expected to consult
-  const libSrc = path.join(REPO, 'orchestrations-installer/lib/container-runtime.sh');
+  // the shared resolvers the installer is expected to consult
   fs.mkdirSync(path.join(dir, 'orchestrations-installer/lib'), { recursive: true });
-  if (fs.existsSync(libSrc)) {
-    fs.copyFileSync(libSrc, path.join(dir, 'orchestrations-installer/lib/container-runtime.sh'));
+  for (const f of ['container-runtime.sh', 'isolated-compose-identity.sh']) {
+    const libSrc = path.join(REPO, 'orchestrations-installer/lib', f);
+    if (fs.existsSync(libSrc)) {
+      fs.copyFileSync(libSrc, path.join(dir, 'orchestrations-installer/lib', f));
+    }
   }
   for (const f of ['provider-sets.json', 'llm-defaults.claude.json']) {
     const src = path.join(REPO, 'orchestrations/config', f);

@@ -172,7 +172,7 @@ describe('provider-swap-unsafe scanner', () => {
 });
 
 describe('provider-swap-unsafe scanner, against the real tree', () => {
-  it('finds exactly 1 — every routing seam fixed, only the display-only site remains', () => {
+  it('finds exactly 0 — every routing seam fixed, including the display-only site', () => {
     // 17 by hand -> 16 excluding tier2-free-run.sh (not a defect) -> 12 after
     // run-agent-orchestration.sh's 4 ORCH_GATE_PROVIDER sites -> 8 after claude.sh's 4
     // STORY_PROVIDER sites -> 6 after the tier3 launchers' EPAM_FINAL_FALLBACK_PROVIDER default
@@ -181,7 +181,9 @@ describe('provider-swap-unsafe scanner, against the real tree', () => {
     // -> 2 after code-review-cycle.sh and team-lead-review.sh's three EPAM_ORCHESTRATION_PROVIDER
     // sites -> 1 after brownfield-repro-test-writer.sh's SPEC_MODE_PROVIDER (all TIER 2 —
     // already re-validated downstream by llm-handler.sh / invoke_agent, fixed anyway to remove
-    // the redundant, competing vendor literal).
+    // the redundant, competing vendor literal) -> 0 after update-monitor.sh's story_start PROVIDER
+    // (TIER 3 — dashboard display only, never routes a call, but a caller that passed no provider
+    // still had the dashboard confidently report "claude").
     //
     // Fixing the TIER 1 group also surfaced and fixed a real regression risk in its own
     // mechanism: ladder-providers.js's routable-list computation never considered a set's
@@ -197,12 +199,9 @@ describe('provider-swap-unsafe scanner, against the real tree', () => {
     // catch this, because the result is still valid bash, just a DIFFERENT command (the pipe fed
     // a bare assignment instead of cpa-inference.js). Found by running the real test suite, not
     // by reading the diff: the-cpa-pass-gates-before-the-run.test.ts went from 19/20 to 15/20.
-    //
-    // The one remaining: update-monitor.sh's PROVIDER — TIER 3, dashboard display only, never
-    // routes a call. Not yet fixed.
     const r = run(ROOT);
     const lines = r.out.trim().split('\n').filter(Boolean);
-    expect(lines.length, `found:\n${r.out}`).toBe(1);
+    expect(lines.length, `found:\n${r.out}`).toBe(0);
   });
 
   it('no longer flags any of the fixed files', () => {
@@ -215,11 +214,7 @@ describe('provider-swap-unsafe scanner, against the real tree', () => {
     expect(r.out).not.toMatch(/code-review-cycle\.sh/);
     expect(r.out).not.toMatch(/team-lead-review\.sh/);
     expect(r.out).not.toMatch(/brownfield-repro-test-writer\.sh/);
-  });
-
-  it('names the one remaining seam: the display-only update-monitor.sh', () => {
-    const r = run(ROOT);
-    expect(r.out).toMatch(/update-monitor\.sh:132\tPROVIDER\tclaude/);
+    expect(r.out).not.toMatch(/update-monitor\.sh/);
   });
 
   it('does NOT flag tier2-free-run.sh — a standalone free-tier test harness, not a real seam', () => {

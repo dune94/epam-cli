@@ -172,38 +172,52 @@ describe('provider-swap-unsafe scanner', () => {
 });
 
 describe('provider-swap-unsafe scanner, against the real tree', () => {
-  it('finds exactly 6 — every TIER 1 (genuinely unprotected) site fixed 2026-09-03', () => {
+  it('finds exactly 5 — every TIER 1 site fixed, plus CPA_PROVIDER (TIER 2) 2026-09-03', () => {
     // 17 by hand -> 16 excluding tier2-free-run.sh (not a defect) -> 12 after
     // run-agent-orchestration.sh's 4 ORCH_GATE_PROVIDER sites -> 8 after claude.sh's 4
     // STORY_PROVIDER sites -> 6 after tier3-skyscanner-app-run.sh and tier3-travel-app-run.sh's
-    // EPAM_FINAL_FALLBACK_PROVIDER default. All were TIER 1: epam run --provider and
-    // provider_to_cli() both bypass EPAM_PROVIDER_SET entirely (confirmed by grep across src/).
+    // EPAM_FINAL_FALLBACK_PROVIDER default (all TIER 1: epam run --provider and provider_to_cli()
+    // both bypass EPAM_PROVIDER_SET entirely, confirmed by grep across src/) -> 5 after
+    // contextualize-stories.sh's CPA_PROVIDER (TIER 2 — already re-validated downstream by
+    // llm-handler.sh, but fixed anyway to remove the redundant, competing "openrouter" default).
     //
-    // Fixing this last group also surfaced and fixed a real regression risk in the FIRST group's
-    // own mechanism: ladder-providers.js's routable-list computation never considered a set's
-    // declared $credentials, only its runners — so under EPAM_PROVIDER_SET=openrouter (these two
-    // projects' real operating set), resolve_primary_provider() would have SILENTLY SUBSTITUTED
-    // a correct, deliberate roster choice of aiProvider: "minimax" to "claude", the opposite of
-    // what that mechanism exists to protect. See ladder-providers-honours-credentials.test.ts.
+    // Fixing the TIER 1 group also surfaced and fixed a real regression risk in its own
+    // mechanism: ladder-providers.js's routable-list computation never considered a set's
+    // declared $credentials, only its runners — so under EPAM_PROVIDER_SET=openrouter (the
+    // skyscanner/travel-app projects' real operating set), resolve_primary_provider() would have
+    // SILENTLY SUBSTITUTED a correct, deliberate roster choice of aiProvider: "minimax" to
+    // "claude", the opposite of what that mechanism exists to protect. See
+    // ladder-providers-honours-credentials.test.ts.
     //
-    // The remaining 6 are TIER 2 (already re-validated by llm-handler.sh downstream) or TIER 3
-    // (update-monitor.sh — dashboard display only, never routes a call).
+    // The CPA_PROVIDER fix ALSO caught a real bug in itself: the first version of the edit placed
+    // an explanatory comment mid-way through a `\`-continued shell command. A `#` on a line inside
+    // a continuation terminates it unless that comment line ALSO ends in `\` — bash -n cannot
+    // catch this, because the result is still valid bash, just a DIFFERENT command (the pipe fed
+    // a bare assignment instead of cpa-inference.js). Found by running the real test suite, not
+    // by reading the diff: the-cpa-pass-gates-before-the-run.test.ts went from 19/20 to 15/20.
+    //
+    // The remaining 5 are TIER 2 (already re-validated by llm-handler.sh downstream:
+    // SPEC_MODE_PROVIDER, EPAM_ORCHESTRATION_PROVIDER x3) or TIER 3 (update-monitor.sh —
+    // dashboard display only, never routes a call).
     const r = run(ROOT);
     const lines = r.out.trim().split('\n').filter(Boolean);
-    expect(lines.length, `found:\n${r.out}`).toBe(6);
+    expect(lines.length, `found:\n${r.out}`).toBe(5);
   });
 
-  it('no longer flags run-agent-orchestration.sh, claude.sh, or the tier3 skyscanner/travel-app launchers', () => {
+  it('no longer flags run-agent-orchestration.sh, claude.sh, the tier3 launchers, or contextualize-stories.sh', () => {
     const r = run(ROOT);
     expect(r.out).not.toMatch(/run-agent-orchestration\.sh/);
     expect(r.out).not.toMatch(/claude\.sh/);
     expect(r.out).not.toMatch(/tier3-skyscanner-app-run\.sh/);
     expect(r.out).not.toMatch(/tier3-travel-app-run\.sh/);
+    expect(r.out).not.toMatch(/contextualize-stories\.sh/);
   });
 
-  it('names the worst of what remains: CPA_PROVIDER (always-reachable) and the assignment form', () => {
+  it('names what remains: the three EPAM_ORCHESTRATION_PROVIDER sites and the display-only one', () => {
     const r = run(ROOT);
-    expect(r.out).toMatch(/contextualize-stories\.sh:783\tCPA_PROVIDER\topenrouter/);
+    expect(r.out).toMatch(/code-review-cycle\.sh:137\tEPAM_ORCHESTRATION_PROVIDER\tclaude/);
+    expect(r.out).toMatch(/team-lead-review\.sh:186\tEPAM_ORCHESTRATION_PROVIDER\tclaude/);
+    expect(r.out).toMatch(/team-lead-review\.sh:195\tEPAM_ORCHESTRATION_PROVIDER\tclaude/);
     expect(r.out).toMatch(/update-monitor\.sh:132\tPROVIDER\tclaude/);
   });
 

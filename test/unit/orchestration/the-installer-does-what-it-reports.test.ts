@@ -221,3 +221,84 @@ describe('the installer completes an install', () => {
     expect(body, 'an API key reached project config').not.toMatch(/sk-must-not-appear/);
   });
 });
+
+/**
+ * THE INSTALL RECORDS WHAT IT IS — runtime, replay, mode.
+ *
+ * Plan §5.1a: the container runtime is DECLARED (docker | podman), never inferred. Podman is the
+ * Windows default because Docker Desktop needs a paid subscription above 250 employees or $10M
+ * revenue — a procurement conversation, not a technical preference, is what stalls a rollout.
+ *
+ * Plan §5.1c: replay is a config option. Langfuse is the RECORDER, not a dashboard: a run executed
+ * without it can never be replayed, and the loss is one-way — the turns were never captured.
+ *
+ * Both must be WRITTEN DOWN. An install whose mode can only be inferred from which containers
+ * happen to be running is an install nobody can reason about later.
+ */
+describe('the install records what it is', () => {
+  const manifestOf = (dir: string) => {
+    const p = path.join(dir, 'install-manifest.json');
+    return fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : null;
+  };
+
+  const install = (dir: string, env: Record<string, string> = {}, args = ['--no-docker']) =>
+    spawnSync('bash', [path.join(dir, 'install.sh'), ...args],
+      { cwd: dir, encoding: 'utf8', timeout: 120_000,
+        env: { ...process.env, EPAM_NONINTERACTIVE: '1', ...env } });
+
+  it('writes an install manifest naming the stack, runtime and replay mode', () => {
+    const dir = fixture();
+    const r = install(dir);
+    const m = manifestOf(dir);
+    expect(m, `no install-manifest.json. installer said:\n${(r.stdout ?? '').slice(-500)}`).toBeTruthy();
+    expect(m.stack).toBeTruthy();
+    expect(m.containerRuntime).toBeTruthy();
+    expect(m.replay).toBeTruthy();
+    expect(m.installedAt).toBeTruthy();
+  });
+
+  it('honours a declared container runtime rather than inferring one', () => {
+    const dir = fixture();
+    install(dir, { EPAM_CONTAINER_RUNTIME: 'podman' });
+    expect(manifestOf(dir).containerRuntime).toBe('podman');
+  });
+
+  it('REPORTS the runtime it will use, so it is never a silent assumption', () => {
+    const dir = fixture();
+    const out = `${install(dir, { EPAM_CONTAINER_RUNTIME: 'podman' }).stdout ?? ''}`;
+    expect(out).toMatch(/podman/i);
+  });
+
+  it('replay defaults to off, and says what that costs', () => {
+    // Off is the right default — 2.36GB of images for a recorder is not a silent opt-in. But the
+    // consequence is one-way and must be stated: runs made now can never be replayed later.
+    const dir = fixture();
+    const out = `${install(dir).stdout ?? ''}`;
+    expect(manifestOf(dir).replay).toBe('off');
+    expect(out, 'replay: off must state that runs will not be replayable')
+      .toMatch(/replay.*(off|not be replay|cannot be replay)/i);
+  });
+
+  it('replay: on demands the Langfuse keys, because recording without them is silent', () => {
+    // LangfuseTracer.ts:30 gates on BOTH keys. A fresh install has empty volumes, so no project and
+    // no keys exist — and tracing is silently off while the containers run and capture nothing.
+    const dir = fixture();
+    const r = install(dir, { EPAM_REPLAY: 'on', LANGFUSE_SECRET_KEY: '', LANGFUSE_PUBLIC_KEY: '' });
+    const out = `${r.stdout ?? ''}${r.stderr ?? ''}`;
+    expect(out, 'replay: on with no keys must be reported, not silently recording nothing')
+      .toMatch(/LANGFUSE_SECRET_KEY|LANGFUSE_PUBLIC_KEY|langfuse.*key/i);
+    // NAMING IT IS NOT ENOUGH. Mentioning the keys stays true whether the install fails or passes,
+    // so an earlier version of this test could not tell those apart — changing _bad to _ok left it
+    // green. The plan requires a FAILURE here, because the loss is one-way: a run executed without
+    // recording can never be replayed, and nothing recovers it afterwards.
+    expect(r.status, 'replay: on with no keys must FAIL the install, not warn').not.toBe(0);
+  });
+
+  it('rejects a runtime it does not support rather than falling back to one', () => {
+    const dir = fixture();
+    const r = install(dir, { EPAM_CONTAINER_RUNTIME: 'containerd' });
+    const out = `${r.stdout ?? ''}${r.stderr ?? ''}`;
+    expect(out).toMatch(/containerd/);
+    expect(r.status, 'an unsupported runtime must fail the install').not.toBe(0);
+  });
+});

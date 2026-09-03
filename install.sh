@@ -23,6 +23,18 @@ _bad()  { printf '\033[0;31m  ✗\033[0m %s\n' "$*" >&2; }
 _head() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 
 STACK=""; USE_DOCKER=auto; CHECK_ONLY=0; FAILED=0
+
+# THE CONTAINER RUNTIME IS DECLARED, NEVER INFERRED (plan §5.1a).
+#
+# Podman is the default on Windows because Docker Desktop needs a paid subscription above 250
+# employees or $10M revenue. A procurement conversation, not a technical preference, is what stalls
+# a rollout — and Podman on Windows runs on WSL2 too, so this is not a fourth platform.
+CONTAINER_RUNTIME="${EPAM_CONTAINER_RUNTIME:-}"
+
+# REPLAY IS A CONFIG OPTION (plan §5.1c). Langfuse is the RECORDER, not a dashboard: a run executed
+# without it can never be replayed, because the turns were never captured. Off by default — 2.36GB
+# of images is not a silent opt-in — but the consequence is one-way, so it is STATED either way.
+REPLAY_MODE="${EPAM_REPLAY:-off}"
 while [ $# -gt 0 ]; do
     case "$1" in
         --stack)     STACK="${2:-}"; shift 2 ;;
@@ -240,6 +252,52 @@ else
     _ok "no project selected (set EPAM_PROJECT to configure one)"
 fi
 
+# ── Container runtime ─────────────────────────────────────────────────────────
+_head "Container runtime"
+if [ -z "$CONTAINER_RUNTIME" ]; then
+    # Discovered in a declared order, and REPORTED — never assumed. Same pattern as
+    # lib/sandbox-invoke.sh, which already does `for _rt in docker podman`.
+    for _rt in docker podman; do
+        command -v "$_rt" >/dev/null 2>&1 && { CONTAINER_RUNTIME="$_rt"; break; }
+    done
+    CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-none}"
+    _ok "runtime: $CONTAINER_RUNTIME (discovered)"
+else
+    case "$CONTAINER_RUNTIME" in
+        docker|podman)
+            _ok "runtime: $CONTAINER_RUNTIME (declared)" ;;
+        *)
+            # No fallback. A runtime this installer cannot drive must fail here, not surface later
+            # as a compose command that does nothing.
+            _bad "unsupported container runtime '$CONTAINER_RUNTIME' — expected docker or podman"
+            FAILED=1 ;;
+    esac
+fi
+
+# ── Replay ────────────────────────────────────────────────────────────────────
+_head "Replay"
+case "$REPLAY_MODE" in
+    off)
+        # The cost is one-way and must be stated: nothing recorded now can be replayed later.
+        _ok "replay: off — runs will NOT be replayable (no Langfuse recorder installed)" ;;
+    on)
+        _ok "replay: on — Langfuse records every run so it can be replayed for \$0"
+        # LangfuseTracer.ts:30 gates on BOTH keys. A fresh install has empty volumes, so no project
+        # and no keys exist — and recording is silently off while the containers run and capture
+        # nothing. That is the one case where a warning is not enough.
+        _lf_missing=""
+        [ -z "${LANGFUSE_SECRET_KEY:-}" ] && _lf_missing="$_lf_missing LANGFUSE_SECRET_KEY"
+        [ -z "${LANGFUSE_PUBLIC_KEY:-}" ] && _lf_missing="$_lf_missing LANGFUSE_PUBLIC_KEY"
+        if [ -n "$_lf_missing" ]; then
+            _bad "replay: on but missing:$_lf_missing — nothing would be recorded, and a run not recorded can never be replayed"
+            FAILED=1
+        else
+            _ok "Langfuse keys present — recording is active" ;
+        fi ;;
+    *)
+        _bad "unknown replay mode '$REPLAY_MODE' — expected on or off"; FAILED=1 ;;
+esac
+
 # ── Dashboards: OPTIONAL, and never a reason to fail ────────────────────────
 _head "Dashboards (optional)"
 docker_up() { command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; }
@@ -269,6 +327,24 @@ case "$USE_DOCKER" in
 esac
 
 # ── The command people will actually type ───────────────────────────────────
+# ── What this install IS ──────────────────────────────────────────────────────
+# An install whose mode can only be inferred from which containers happen to be running is an
+# install nobody can reason about later. install.sh --check reads this rather than re-deriving.
+if [ "$CHECK_ONLY" = "0" ]; then
+    cat > "$ROOT/install-manifest.json" <<MANIFEST
+{
+  "stack": "${STACK}",
+  "runner": "${RUNNER}",
+  "containerRuntime": "${CONTAINER_RUNTIME}",
+  "dashboards": "${USE_DOCKER}",
+  "replay": "${REPLAY_MODE}",
+  "project": "${EPAM_PROJECT:-}",
+  "installedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "installRoot": "${ROOT}"
+}
+MANIFEST
+fi
+
 _head "Result"
 if [ "$FAILED" = "1" ]; then
     _bad "install incomplete — fix the items marked ✗ above"

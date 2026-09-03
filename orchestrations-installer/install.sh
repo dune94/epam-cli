@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # install.sh — set this machine up to run the pipeline.
 #
-#   ./install.sh                      install for the default stack, with dashboards if docker is up
+#   ./orchestrations-installer/install.sh                      install for the default stack, with dashboards if docker is up
 #   ./install.sh --stack codemie      install for a specific stack
 #   ./install.sh --no-docker          skip dashboards entirely
 #   ./install.sh --check              verify an existing install, change nothing
@@ -13,7 +13,16 @@
 # script names none of them — adding a stack is a config edit, not an edit here.
 set -uo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# THE INSTALLER LIVES IN ITS OWN FOLDER; ROOT IS THE TREE IT INSTALLS.
+#
+# All 17 uses of $ROOT below address the install TREE — .env, dist/, orchestrations/, the compose
+# file, the manifest. Resolving ROOT from this script's own directory would point every one of them
+# inside orchestrations-installer/ and the install would silently configure the wrong tree.
+#
+# INSTALLER_DIR is separate and is only for this folder's own files, so the two can never be
+# confused by a later edit.
+INSTALLER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$INSTALLER_DIR/.." && pwd)"
 CONFIG="$ROOT/orchestrations/config"
 NODE_BIN="${NODE_BIN:-node}"
 
@@ -257,9 +266,9 @@ _head "Container runtime"
 # ONE RESOLVER, ASKED — not a third copy of the rule. The installer, dashboard-health-check.sh and
 # pre-run-reset.sh each had their own idea of which runtime to use, and only this one had ever
 # heard of podman.
-_CR_LIB="$ROOT/orchestrations/scripts/lib/container-runtime.sh"
+_CR_LIB="$INSTALLER_DIR/lib/container-runtime.sh"
 if [ -f "$_CR_LIB" ]; then
-    # shellcheck source=orchestrations/scripts/lib/container-runtime.sh
+    # shellcheck source=orchestrations-installer/lib/container-runtime.sh
     . "$_CR_LIB"
 else
     _bad "missing $_CR_LIB — this tree cannot resolve a container runtime"; FAILED=1

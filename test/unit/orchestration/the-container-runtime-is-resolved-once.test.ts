@@ -20,7 +20,7 @@ import path from 'node:path';
  * holding their own idea of what a test file is.
  */
 const REPO = path.resolve(__dirname, '../../..');
-const LIB = path.join(REPO, 'orchestrations/scripts/lib/container-runtime.sh');
+const LIB = path.join(REPO, 'orchestrations-installer/lib/container-runtime.sh');
 
 /** A fake runtime on PATH, so nothing here depends on what this machine happens to have. */
 function fakeRuntime(name: string) {

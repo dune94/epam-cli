@@ -24,22 +24,23 @@ import path from 'node:path';
  * These tests EXECUTE install.sh against a fixture tree and assert what lands on disk.
  */
 const REPO = path.resolve(__dirname, '../../..');
-const INSTALLER = path.join(REPO, 'install.sh');
+const INSTALLER = path.join(REPO, 'orchestrations-installer/install.sh');
 
 /** A minimal tree with the shape install.sh reads, so the test never touches the real repo. */
 function fixture() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'installer-'));
   fs.mkdirSync(path.join(dir, 'orchestrations/config'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'dist'), { recursive: true });
-  fs.copyFileSync(INSTALLER, path.join(dir, 'install.sh'));
-  fs.chmodSync(path.join(dir, 'install.sh'), 0o755);
+  fs.mkdirSync(path.join(dir, 'orchestrations-installer'), { recursive: true });
+  fs.copyFileSync(INSTALLER, path.join(dir, 'orchestrations-installer/install.sh'));
+  fs.chmodSync(path.join(dir, 'orchestrations-installer/install.sh'), 0o755);
 
   // THE SHARED RESOLVER SHIPS, so the fixture carries it. install.sh sources
-  // orchestrations/scripts/lib/container-runtime.sh rather than restating docker-or-podman a third
+  // orchestrations-installer/lib/container-runtime.sh rather than restating docker-or-podman a third
   // time; a fixture without it is not a tree anyone would ever install from.
-  fs.mkdirSync(path.join(dir, 'orchestrations/scripts/lib'), { recursive: true });
-  fs.copyFileSync(path.join(REPO, 'orchestrations/scripts/lib/container-runtime.sh'),
-    path.join(dir, 'orchestrations/scripts/lib/container-runtime.sh'));
+  fs.mkdirSync(path.join(dir, 'orchestrations-installer/lib'), { recursive: true });
+  fs.copyFileSync(path.join(REPO, 'orchestrations-installer/lib/container-runtime.sh'),
+    path.join(dir, 'orchestrations-installer/lib/container-runtime.sh'));
 
   // the declarations install.sh reads, copied from the real ones so the shapes cannot drift
   for (const f of ['provider-sets.json', 'llm-defaults.claude.json']) {
@@ -52,7 +53,7 @@ function fixture() {
 }
 
 const run = (dir: string, args: string[] = []) =>
-  spawnSync('bash', [path.join(dir, 'install.sh'), ...args],
+  spawnSync('bash', [path.join(dir, 'orchestrations-installer/install.sh'), ...args],
     { cwd: dir, encoding: 'utf8', timeout: 120_000, env: { ...process.env, EPAM_NONINTERACTIVE: '1' } });
 
 describe('the installer', () => {
@@ -182,7 +183,7 @@ describe('the installer completes an install', () => {
     const dir = fixture();
     fs.writeFileSync(path.join(dir, 'dist/epam.js'), `#!/usr/bin/env node\n${'// bundled\n'.repeat(6000)}`);
     const binDir = path.join(dir, 'bin');
-    const r = spawnSync('bash', [path.join(dir, 'install.sh'), '--no-docker'],
+    const r = spawnSync('bash', [path.join(dir, 'orchestrations-installer/install.sh'), '--no-docker'],
       { cwd: dir, encoding: 'utf8', timeout: 120_000,
         env: { ...process.env, EPAM_NONINTERACTIVE: '1', EPAM_BIN_DIR: binDir } });
     const out = `${r.stdout ?? ''}${r.stderr ?? ''}`;
@@ -196,7 +197,7 @@ describe('the installer completes an install', () => {
   it('records the Jira answers it is given, since it cannot derive them', () => {
     const dir = fixture();
     fs.mkdirSync(path.join(dir, 'orchestrations/projects/demo'), { recursive: true });
-    const r = spawnSync('bash', [path.join(dir, 'install.sh'), '--no-docker'],
+    const r = spawnSync('bash', [path.join(dir, 'orchestrations-installer/install.sh'), '--no-docker'],
       { cwd: dir, encoding: 'utf8', timeout: 120_000,
         env: { ...process.env, EPAM_NONINTERACTIVE: '1',
                EPAM_PROJECT: 'demo',
@@ -215,7 +216,7 @@ describe('the installer completes an install', () => {
   it('never writes a credential into project config — secrets live in .env alone', () => {
     const dir = fixture();
     fs.mkdirSync(path.join(dir, 'orchestrations/projects/demo'), { recursive: true });
-    spawnSync('bash', [path.join(dir, 'install.sh'), '--no-docker'],
+    spawnSync('bash', [path.join(dir, 'orchestrations-installer/install.sh'), '--no-docker'],
       { cwd: dir, encoding: 'utf8', timeout: 120_000,
         env: { ...process.env, EPAM_NONINTERACTIVE: '1', EPAM_PROJECT: 'demo',
                JIRA_URL: 'https://example.atlassian.net', JIRA_PROJECT_KEY: 'DEMO',
@@ -249,7 +250,7 @@ describe('the install records what it is', () => {
   };
 
   const install = (dir: string, env: Record<string, string> = {}, args = ['--no-docker']) =>
-    spawnSync('bash', [path.join(dir, 'install.sh'), ...args],
+    spawnSync('bash', [path.join(dir, 'orchestrations-installer/install.sh'), ...args],
       { cwd: dir, encoding: 'utf8', timeout: 120_000,
         env: { ...process.env, EPAM_NONINTERACTIVE: '1', ...env } });
 

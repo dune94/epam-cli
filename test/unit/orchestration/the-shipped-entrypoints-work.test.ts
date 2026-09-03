@@ -11,7 +11,7 @@ import { join } from 'node:path'
 // Both are checked by EXECUTION. An entrypoint asserted by reading its source is the one thing
 // that must never be — it is the file where a syntax error costs a person their first ten minutes.
 const REPO = process.cwd()
-const INSTALL = join(REPO, 'install.sh')
+const INSTALL = join(REPO, 'orchestrations-installer/install.sh')
 const PIPELINE = join(REPO, 'orchestrations/scripts/pipeline')
 
 function run(cmd: string, args: string[]) {

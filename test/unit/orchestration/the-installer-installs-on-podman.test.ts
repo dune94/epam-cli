@@ -25,7 +25,7 @@ import path from 'node:path';
  * binary was actually asked to bring the services up.
  */
 const REPO = path.resolve(__dirname, '../../..');
-const INSTALLER = path.join(REPO, 'install.sh');
+const INSTALLER = path.join(REPO, 'orchestrations-installer/install.sh');
 
 /**
  * A fixture tree plus a stub-binary directory placed FIRST on PATH.
@@ -40,14 +40,15 @@ function fixture(runtimes: string[]) {
   fs.mkdirSync(path.join(dir, 'orchestrations/config'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'dist'), { recursive: true });
   fs.mkdirSync(bin, { recursive: true });
-  fs.copyFileSync(INSTALLER, path.join(dir, 'install.sh'));
-  fs.chmodSync(path.join(dir, 'install.sh'), 0o755);
+  fs.mkdirSync(path.join(dir, 'orchestrations-installer'), { recursive: true });
+  fs.copyFileSync(INSTALLER, path.join(dir, 'orchestrations-installer/install.sh'));
+  fs.chmodSync(path.join(dir, 'orchestrations-installer/install.sh'), 0o755);
 
   // the shared resolver the installer is expected to consult
-  const libSrc = path.join(REPO, 'orchestrations/scripts/lib/container-runtime.sh');
-  fs.mkdirSync(path.join(dir, 'orchestrations/scripts/lib'), { recursive: true });
+  const libSrc = path.join(REPO, 'orchestrations-installer/lib/container-runtime.sh');
+  fs.mkdirSync(path.join(dir, 'orchestrations-installer/lib'), { recursive: true });
   if (fs.existsSync(libSrc)) {
-    fs.copyFileSync(libSrc, path.join(dir, 'orchestrations/scripts/lib/container-runtime.sh'));
+    fs.copyFileSync(libSrc, path.join(dir, 'orchestrations-installer/lib/container-runtime.sh'));
   }
   for (const f of ['provider-sets.json', 'llm-defaults.claude.json']) {
     const src = path.join(REPO, 'orchestrations/config', f);
@@ -79,7 +80,7 @@ const logOf = (dir: string, rt: string) => {
  * the real runtimes because they come first.
  */
 const run = (f: { dir: string; bin: string }, args: string[], env: Record<string, string> = {}) =>
-  spawnSync('bash', [path.join(f.dir, 'install.sh'), ...args], {
+  spawnSync('bash', [path.join(f.dir, 'orchestrations-installer/install.sh'), ...args], {
     cwd: f.dir, encoding: 'utf8', timeout: 120_000,
     // EPAM_BIN_DIR STAYS IN THE FIXTURE. Without it the installer writes a real shim into
     // ~/.local/bin/epam pointing at this temp tree, and deleting the tree leaves the operator's

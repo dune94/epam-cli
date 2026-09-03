@@ -414,8 +414,14 @@ while IFS= read -r story_id; do
     # so it reports them unused; removing them would take the values away from the child.
     # shellcheck disable=SC2034
     STORY_COMPLETED=$(jq -r --arg id "$story_id" \
-    export STORY_COMPLETED
         '.stories[] | select(.id == $id) | .completed' "$PRD_FILE")
+    # AFTER the assignment, never inside its continuation. This export sat between the `jq \` and
+    # its filter, so jq received `export STORY_COMPLETED` as its arguments and the filter line ran
+    # as a shell command — "command not found", and STORY_COMPLETED never got a value. Introduced
+    # by 0d754d49 while clearing shellcheck warnings, and invisible to both `bash -n` and shellcheck
+    # because it is syntactically valid. Live 2026-09-03: the reviewer produced no verdict eight
+    # cycles in a row and Step 3.6 halted the phase.
+    export STORY_COMPLETED
 
     # B26 — review keys on CHANGES, not on `completed`.
     #

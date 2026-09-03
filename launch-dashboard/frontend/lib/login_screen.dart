@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'theme.dart';
 import 'api.dart';
+import 'config.dart';
+import 'session.dart';
 
 /// A shared password, and the name of whoever is asking.
 ///
@@ -30,6 +32,9 @@ class _LoginScreenState extends State<LoginScreen> {
     final api = Api(widget.apiBase, _password.text);
     try {
       await api.listRuns();                       // the cheapest call that proves the password
+      // SAVED ONLY AFTER THE SERVER ACCEPTED IT, so a rejected password is never persisted and
+      // then replayed on the next refresh.
+      Session.save(_password.text, _who.text.trim());
       widget.onAuthenticated(api, _who.text.trim());
     } on ApiException catch (e) {
       setState(() => _error = e.status == 401 ? 'that password was not accepted' : e.message);
@@ -47,7 +52,7 @@ class _LoginScreenState extends State<LoginScreen> {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 380),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text('epam · run dashboard', style: Theme.of(context).textTheme.titleLarge),
+            Text(appTitle, style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 28),
             TextField(
               controller: _who,

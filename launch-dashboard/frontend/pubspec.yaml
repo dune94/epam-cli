@@ -10,6 +10,9 @@ dependencies:
   flutter:
     sdk: flutter
   http: ^1.2.0
+  # localStorage, so a refresh does not log you out. The modern replacement for dart:html;
+  # it is an SDK-aligned package, not a plugin, so there is nothing to register.
+  web: ^1.1.0
 
 flutter:
   uses-material-design: true

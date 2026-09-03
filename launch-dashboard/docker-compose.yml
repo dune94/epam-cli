@@ -11,6 +11,18 @@ services:
   launch-api:
     build: ./backend
     restart: unless-stopped
+    # THE CONTAINER WRITES AS THE HOST OWNER OF THE BIND MOUNTS.
+    #
+    # The image creates an `epam` user (uid 100) and chowns /data and /spool — and a bind mount
+    # REPLACES those directories with the host's, owned by whoever ran the installer. The chown in
+    # the Dockerfile applies to a directory the mount then hides, so the API died on every start
+    # with "unable to open database file" and simply restarted forever.
+    #
+    # ./spool cannot become a named volume: it is the boundary the HOST runner reads and writes, so
+    # a host process must own it. Aligning the container's uid with the host's is what makes one
+    # directory writable by both. Still non-root, and overridable for a host where the installing
+    # user is not 1000.
+    user: "${LAUNCH_UID:-1000}:${LAUNCH_GID:-1000}"
     environment:
       # Both are REQUIRED and the server refuses to start without them. LAUNCH_PASSWORD gates a
       # button that spends real money; EPAM_PROVIDER_SET must never be guessed.
@@ -25,10 +37,31 @@ services:
     memswap_limit: 256m
 
   launch-ui:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        # Compiled INTO the bundle, so changing the title needs a rebuild of this image — that is
+        # what --dart-define means. Empty is fine: config.dart then shows project-neutral wording.
+        APP_TITLE: ${LAUNCH_TITLE:-}
     restart: unless-stopped
     depends_on: [launch-api]
     ports:
       - "${LAUNCH_UI_PORT:-8099}:80"
     mem_limit: 128m
     memswap_limit: 128m
+
+# THE SUBNET IS DECLARED, because a busy daemon will not hand one out.
+#
+# Docker allocates compose networks from a default pool of /16s under 172.16.0.0/12. On a machine
+# that has created and destroyed many stacks — worktree runs each get their own project network —
+# the daemon reports "all predefined address pools have been fully subnetted" even after the idle
+# networks are removed: the allocation is not released until the daemon restarts, and restarting it
+# bounces every unrelated container on the box.
+#
+# Declaring the subnet skips the allocator entirely. It is overridable, so a machine where this
+# range is genuinely taken can move it without editing this file.
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${LAUNCH_SUBNET:-172.30.0.0/16}

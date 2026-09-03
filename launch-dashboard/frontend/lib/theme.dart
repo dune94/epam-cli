@@ -34,20 +34,37 @@ ThemeData buildTheme() {
       bodySmall: TextStyle(color: Palette.muted, fontSize: 12),
       titleLarge: TextStyle(color: Palette.green, fontSize: 18, fontWeight: FontWeight.w600),
     ),
+    // THE INPUT READS AS GREEN AT REST, not only once focused.
+    //
+    // Palette.border is a near-black grey: against this background the ticket field had no visible
+    // edge at all until it was clicked, so the one control the whole screen exists for did not look
+    // like a control. Resting is the dim green and focus is the bright one, which keeps a visible
+    // focus change rather than trading the border problem for a focus problem.
     inputDecorationTheme: const InputDecorationTheme(
       filled: true,
       fillColor: Palette.surface,
-      border: OutlineInputBorder(borderSide: BorderSide(color: Palette.border)),
-      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Palette.border)),
-      focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Palette.green)),
+      border: OutlineInputBorder(borderSide: BorderSide(color: Palette.greenDim)),
+      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Palette.greenDim)),
+      focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Palette.green, width: 2)),
       labelStyle: TextStyle(color: Palette.muted),
     ),
+    // GREEN OUTLINES, SO AN UNCHECKED BOX IS STILL VISIBLY A BOX.
+    //
+    // These two decide whether a run pauses for a human — the most consequential choice on the
+    // screen — and unchecked they were a dark square on a dark ground.
     checkboxTheme: CheckboxThemeData(
       fillColor: WidgetStateProperty.resolveWith(
         (s) => s.contains(WidgetState.selected) ? Palette.green : Palette.surface,
       ),
       checkColor: const WidgetStatePropertyAll(Palette.bg),
-      side: const BorderSide(color: Palette.border),
+      // Brighter when ticked, dim when not: the outline is always green, and the state is still
+      // legible without relying on the fill alone.
+      side: WidgetStateBorderSide.resolveWith(
+        (s) => BorderSide(
+          color: s.contains(WidgetState.selected) ? Palette.green : Palette.greenDim,
+          width: 2,
+        ),
+      ),
     ),
   );
 }

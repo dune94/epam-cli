@@ -2,13 +2,20 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'theme.dart';
 import 'api.dart';
+import 'config.dart';
 import 'status_dot.dart';
 
 /// The grid, and the one form that starts a run.
 class DashboardScreen extends StatefulWidget {
   final Api api;
   final String who;
-  const DashboardScreen({super.key, required this.api, required this.who});
+  final VoidCallback onLogout;
+  const DashboardScreen({
+    super.key,
+    required this.api,
+    required this.who,
+    required this.onLogout,
+  });
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -22,6 +29,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String? _error;
   bool _saving = false;
   Timer? _poll;
+  Timer? _retry;
+  /// True only when the API did not answer at all — distinct from an error it DID answer with.
+  bool _offline = false;
 
   @override
   void initState() {
@@ -33,16 +43,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   @override
-  void dispose() { _poll?.cancel(); super.dispose(); }
+  void dispose() { _poll?.cancel(); _retry?.cancel(); super.dispose(); }
+
+  /// A DEAD API IS RETRIED, NOT REPORTED AND ABANDONED.
+  ///
+  /// "API offline" appeared while the nginx container was being recreated — a gap of a few seconds
+  /// — and then stayed on screen until someone reloaded the page, because the next poll was five
+  /// seconds away and quiet polls never cleared the message. An outage the operator has to
+  /// hand-clear is indistinguishable from one that never ended.
+  ///
+  /// While unreachable, this retries every three seconds and recovers on its own. The banner says
+  /// it is retrying rather than implying nothing is happening, and the last known rows stay on
+  /// screen throughout: an empty grid would claim there are no runs, which is a different and
+  /// wrong statement.
+  void _scheduleRetry() {
+    _retry?.cancel();
+    _retry = Timer(const Duration(seconds: 3), () => _refresh(quiet: true));
+  }
 
   Future<void> _refresh({bool quiet = false}) async {
     try {
       final rows = await widget.api.listRuns();
-      if (mounted) setState(() { _runs = rows; if (!quiet) _error = null; });
+      _retry?.cancel();
+      _retry = null;
+      // RECOVERY CLEARS THE BANNER even on a quiet poll. Clearing only on a loud refresh is what
+      // left the offline message up after the API came back.
+      if (mounted) {
+        setState(() {
+          _runs = rows;
+          _offline = false;
+          if (!quiet || _error != null) _error = null;
+        });
+      }
+      return;
+    } on ApiException catch (e) {
+      // THE SERVER ANSWERED, so this is not an outage and retrying every three seconds would only
+      // repeat a refusal. It is reported and left alone.
+      if (mounted) setState(() { _offline = false; _error = e.message; });
     } catch (e) {
-      // A failed poll must not wipe the grid: showing nothing implies no runs exist, which is a
-      // different and wrong statement. Keep the last known rows and say the refresh failed.
-      if (mounted && !quiet) setState(() => _error = 'refresh failed: $e');
+      // UNREACHABLE: no response at all. The grid keeps its last known rows — an empty grid would
+      // claim there are no runs, which is a different and wrong statement — and the retry runs
+      // until it comes back.
+      if (mounted) setState(() { _offline = true; _error = null; });
+      _scheduleRetry();
     }
   }
 
@@ -69,12 +112,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
         padding: const EdgeInsets.all(20),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Text('epam · run dashboard', style: Theme.of(context).textTheme.titleLarge),
+            Text(appTitle, style: Theme.of(context).textTheme.titleLarge),
             const Spacer(),
             Text(widget.who, style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(width: 14),
+            // IF THERE IS A LOGIN THERE IS A LOGOUT. It also clears the stored password, which is
+            // the only way to remove it from this browser short of clearing site data.
+            TextButton(
+              onPressed: widget.onLogout,
+              style: TextButton.styleFrom(foregroundColor: Palette.muted),
+              child: const Text('log out'),
+            ),
           ]),
           const SizedBox(height: 18),
           _newRunForm(),
+          if (_offline) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Palette.surface,
+                border: Border.all(color: Palette.amber),
+              ),
+              // AMBER, NOT RED: nothing has failed, the page simply cannot reach the API yet and is
+              // still trying. Red is reserved for a run that actually failed.
+              child: const Text(
+                'api unreachable — retrying every 3s, the rows below are the last known state',
+                style: TextStyle(color: Palette.amber),
+              ),
+            ),
+          ],
           if (_error != null) ...[
             const SizedBox(height: 12),
             Container(

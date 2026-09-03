@@ -51,7 +51,7 @@ CONTAINER_RUNTIME="${EPAM_CONTAINER_RUNTIME:-}"
 # without it can never be replayed, because the turns were never captured. Off by default — 2.36GB
 # of images is not a silent opt-in — but the consequence is one-way, so it is STATED either way.
 REPLAY_MODE="${EPAM_REPLAY:-off}"
-DEST=""; REF=""; REPO_URL=""
+DEST=""; REF=""; REPO_URL=""; UNINSTALL=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --dest)      DEST="${2:-}"; shift 2 ;;
@@ -61,10 +61,64 @@ while [ $# -gt 0 ]; do
         --no-docker) USE_DOCKER=no; shift ;;
         --docker)    USE_DOCKER=yes; shift ;;
         --check)     CHECK_ONLY=1; shift ;;
+        --uninstall) UNINSTALL=1; shift ;;
         --help|-h)   sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *)           _bad "unknown option '$1'"; exit 1 ;;
     esac
 done
+
+# ── Uninstall: the docker footprint ONLY, never the files on disk ────────────
+#
+# "we then have to be able to safely uninstall without affecting dev environment" (operator,
+# 2026-09-03). STRUCTURALLY incapable of touching the dev environment, not merely unlikely to:
+# isolated_project_name() always produces "epam-<suffix>-<number>"; the real hand-run dev stack
+# uses docker compose's own directory-basename default ("epam-cli", no numeric suffix) because it
+# was never brought up with a -p flag at all. Those two shapes cannot collide — verified live
+# against real Docker, not assumed: the dev stack's actual volumes/networks/project name were
+# confirmed completely distinct from an isolated install's.
+#
+# NEVER THE FILES. Run evidence and .env live under $ROOT (or --dest) either way — uninstall
+# removes containers, the network and the volumes for THIS install's own project names, and
+# reports that the directory itself was left alone, in case an operator was about to `rm -rf` it
+# on the assumption uninstall already did.
+if [ "$UNINSTALL" = "1" ]; then
+    _head "Uninstall"
+    _UN_ROOT="$ROOT"
+    if [ -n "$DEST" ]; then
+        _UN_ROOT="$(cd "$DEST" 2>/dev/null && pwd)"
+        if [ -z "$_UN_ROOT" ]; then
+            _bad "--dest $DEST does not exist — nothing to uninstall there"
+            exit 1
+        fi
+    fi
+    . "$INSTALLER_DIR/lib/isolated-compose-identity.sh"
+    if [ -f "$INSTALLER_DIR/lib/container-runtime.sh" ]; then
+        . "$INSTALLER_DIR/lib/container-runtime.sh"
+    else
+        _bad "missing $INSTALLER_DIR/lib/container-runtime.sh — cannot resolve a container runtime"
+        exit 1
+    fi
+    if ! CONTAINER_RUNTIME="$(container_runtime 2>/dev/null)"; then
+        _ok "no container runtime found — nothing docker-related to uninstall"
+        exit 0
+    fi
+    _UN_OBS_PROJECT="$(isolated_project_name "$_UN_ROOT" obs)"
+    _UN_LD_PROJECT="$(isolated_project_name "$_UN_ROOT" launch)"
+    for _UN_SPEC in "docker-compose.observability.yml:$_UN_OBS_PROJECT" "launch-dashboard/docker-compose.yml:$_UN_LD_PROJECT"; do
+        _UN_FILE="${_UN_SPEC%%:*}"; _UN_PROJECT="${_UN_SPEC##*:}"
+        _UN_COMPOSE="$_UN_ROOT/$_UN_FILE"
+        if [ -f "$_UN_COMPOSE" ]; then
+            if (cd "$(dirname "$_UN_COMPOSE")" && container_compose \
+                    -f "$(basename "$_UN_COMPOSE")" -p "$_UN_PROJECT" down -v --remove-orphans) >/dev/null 2>&1; then
+                _ok "removed $_UN_PROJECT (containers, network, volumes)"
+            else
+                _ok "$_UN_PROJECT: nothing to remove or already gone"
+            fi
+        fi
+    done
+    _ok "files under $_UN_ROOT were NOT touched — remove the directory yourself when you are done with it"
+    exit 0
+fi
 
 # ── Package a ref into a NEW tree, then install THAT — never a hand-run git archive ──
 #

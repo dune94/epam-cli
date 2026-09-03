@@ -24,6 +24,21 @@ orchestrations/logs/quality-summary.json
 orchestrations/logs/progress.txt
 orchestrations/logs/messages/
 
+# ORCHESTRATION LOGS, COMPREHENSIVELY, GOING FORWARD. Found 2026-09-03: only the specific
+# patterns above were ever excluded, so 5,268 files under orchestrations/logs/ ended up tracked in
+# this repo's history — many of them genuinely shaped like real run evidence (agent-mint.json,
+# .rejection-AMSD-1919, agent-io/AMSD-1919/fix-plan), not app code that happened to live there.
+# This does NOT rewrite that existing history or untrack anything already committed — it only
+# stops a NEW accidental commit from repeating the same mistake.
+#
+# orchestrations/logs/archive/ is the one deliberate exception: a preserved historical record of
+# past incidents and successful runs (see project memory: "Never Rewrite Run Evidence",
+# "Preserve Successful Run Evidence — never discard for disk space"), meant to keep growing with
+# FUTURE deliberate additions, not just the ones already tracked.
+orchestrations/logs/*
+!orchestrations/logs/archive/
+!orchestrations/logs/archive/**
+
 # OS files
 .DS_Store
 Thumbs.db

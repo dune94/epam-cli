@@ -103,7 +103,23 @@ if [ -n "$DEST" ]; then
     fi
     mkdir -p "$DEST" || { _bad "could not create $DEST"; exit 1; }
     DEST="$(cd "$DEST" && pwd)"
-    if ! git -C "$_GIT_ROOT" archive "$_PKG_REF" | tar -x -C "$DEST"; then
+    # AN UPDATE MUST NEVER DESTROY RUN EVIDENCE. Extracting the ref straight over an EXISTING
+    # install would overwrite whatever that ref's git history holds at orchestrations/logs/ (5,268
+    # tracked files there, several genuinely real run evidence) — silently discarding a colleague's
+    # actual run history on every re-run. run-state-paths.json declares what an update must never
+    # touch; a first install into an empty $DEST is unaffected either way.
+    _RUN_STATE_EXCLUDES=()
+    if [ -f "$INSTALLER_DIR/run-state-paths.json" ]; then
+        . "$INSTALLER_DIR/lib/preserve-run-state.sh"
+        while IFS= read -r _excl; do
+            [ -n "$_excl" ] && _RUN_STATE_EXCLUDES+=("$_excl")
+        done < <(run_state_exclude_args "$INSTALLER_DIR/run-state-paths.json")
+    fi
+    # The ${arr[@]+"${arr[@]}"} form, not bare "${arr[@]}": bash <4.4 (macOS ships 3.2 by default,
+    # GPLv3 licensing) throws "unbound variable" under `set -u` expanding an empty array the plain
+    # way. This form is safe on every bash this installer might run under.
+    if ! git -C "$_GIT_ROOT" archive "$_PKG_REF" \
+            | tar -x -C "$DEST" "${_RUN_STATE_EXCLUDES[@]+"${_RUN_STATE_EXCLUDES[@]}"}"; then
         _bad "packaging '$_PKG_REF' into $DEST failed"
         exit 1
     fi

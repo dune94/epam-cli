@@ -77,37 +77,122 @@ _head "Credentials"
 if [ -f "$ROOT/.env" ]; then
     _ok ".env present"
 else
-    if [ "$CHECK_ONLY" = "0" ] && [ -f "$ROOT/.env.sample" ]; then
-        cp "$ROOT/.env.sample" "$ROOT/.env"; _warn ".env created from .env.sample — fill it in before running"
-    else
+    # THE TEMPLATE IS NAMED .env.example. This read .env.sample — a file that does not exist and
+    # never has — guarded by `[ -f ]`, so the guard was false, the copy never happened, and NOTHING
+    # WAS SAID. The operator was then told to fill in a file the installer had not created.
+    #
+    # Resolved from a declared list so a rename cannot silently reintroduce the same no-op, and an
+    # ABSENT template is reported by name rather than passed over.
+    _tpl=""
+    for _c in "$ROOT/.env.example" "$ROOT/.env.sample"; do
+        [ -f "$_c" ] && { _tpl="$_c"; break; }
+    done
+    if [ "$CHECK_ONLY" = "1" ]; then
         _bad ".env is missing"; FAILED=1
+    elif [ -n "$_tpl" ]; then
+        cp "$_tpl" "$ROOT/.env"
+        _warn ".env created from $(basename "$_tpl") — FILL IT IN before running"
+    else
+        _bad "no .env and no template (.env.example) to create one from"; FAILED=1
     fi
 fi
 
 # ── Build ───────────────────────────────────────────────────────────────────
 _head "Build"
-if [ "$CHECK_ONLY" = "1" ]; then
-    [ -f "$ROOT/dist/epam.js" ] && _ok "dist/epam.js present" || { _bad "not built — run without --check"; FAILED=1; }
+# A PACKAGED INSTALL HAS NO src/. That is the artefact this installer exists to install: dist/ and
+# orchestrations/ without the CLI source (§1.4 of the packaging plan). `npm run build` runs tsup,
+# which needs src/ AND the dev dependencies — a client tree has neither, so building
+# unconditionally fails at the one step that cannot be skipped.
+#
+# The rule: build when there is source to build FROM, verify otherwise, and SAY WHICH HAPPENED.
+# Never silently skip; never fail on a tree that is already complete.
+#
+# EXISTENCE IS NOT A BUILD, either way. `[ -f dist/epam.js ]` passes on a 188-byte stub, so the old
+# check reported success for a tree that could not run. The threshold sits far below any real
+# bundle and far above any stub.
+_dist="$ROOT/dist/epam.js"
+_min_bytes="${EPAM_MIN_DIST_BYTES:-51200}"
+
+# WHETHER dist/epam.js MATTERS DEPENDS ON THE STACK, and the stack declares it.
+#
+# claude.sh:1649-1650 routes copilot|openai|openrouter|cursor|minimax|epam to $EPAM_CLI
+# (dist/epam.js), and `claude` to $CLAUDE_CMD. Every provider set declares `claude` or
+# `codemie-claude` as its runner, so on those stacks dist/epam.js is NEVER executed — which is why
+# this repo runs green with a 188-byte "Hello, World!" stub in dist/.
+#
+# So a hard failure here would refuse an install that works. It is reported instead, with what it
+# means, and only FAILS when the stack actually routes to the epam CLI. The check that matters for
+# every stack — is the declared RUNNER on PATH — already runs above.
+_verify_dist() {
+    local _needs_epam=0
+    case "$RUNNER" in
+        epam|"") _needs_epam=1 ;;
+    esac
+
+    if [ ! -f "$_dist" ]; then
+        if [ "$_needs_epam" = "1" ]; then
+            _bad "dist/epam.js is missing and the '$STACK' stack needs it"; FAILED=1; return 1
+        fi
+        _warn "dist/epam.js is absent — not needed by the '$STACK' stack (runner: $RUNNER)"
+        return 0
+    fi
+
+    _size=$(wc -c < "$_dist" 2>/dev/null | tr -d ' ')
+    if [ "${_size:-0}" -lt "$_min_bytes" ]; then
+        if [ "$_needs_epam" = "1" ]; then
+            _bad "dist/epam.js is only ${_size} bytes — that is a stub, not a build, and the '$STACK' stack needs it"
+            FAILED=1; return 1
+        fi
+        _warn "dist/epam.js is a ${_size}-byte stub — harmless for the '$STACK' stack (runner: $RUNNER), but it is not a build"
+        return 0
+    fi
+    _ok "dist/epam.js present (${_size} bytes)"
+    return 0
+}
+
+if [ ! -d "$ROOT/src" ]; then
+    # The packaged case. Stated explicitly so nobody reads "ok" and assumes a build happened here.
+    _ok "packaged install — no src/, using the shipped pre-built bundle"
+    _verify_dist
+elif [ "$CHECK_ONLY" = "1" ]; then
+    _verify_dist
 else
     if [ ! -d "$ROOT/node_modules" ]; then
         _warn "installing dependencies (this takes a minute)"
         (cd "$ROOT" && npm install --silent) || { _bad "npm install failed"; FAILED=1; }
     else _ok "node_modules present"; fi
-    (cd "$ROOT" && npm run build --silent >/dev/null 2>&1) && _ok "built dist/epam.js" || { _bad "build failed — run 'npm run build' to see why"; FAILED=1; }
+    if (cd "$ROOT" && npm run build --silent >/dev/null 2>&1); then
+        _verify_dist
+    else
+        _bad "build failed — run 'npm run build' to see why"; FAILED=1
+    fi
 fi
 
 # ── Dashboards: OPTIONAL, and never a reason to fail ────────────────────────
 _head "Dashboards (optional)"
 docker_up() { command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; }
+
+# THE COMPOSE FILE IS NAMED. This ran `docker compose up -d` with no -f, and there is no
+# docker-compose.yml at the repo root — only the named files below. It ended in `|| true`, so the
+# failure was swallowed and the installer reported "docker is up" having started nothing.
+COMPOSE_FILE="${EPAM_COMPOSE_FILE:-$ROOT/docker-compose.observability.yml}"
+compose_up() {
+    if [ ! -f "$COMPOSE_FILE" ]; then
+        _bad "compose file not found: $COMPOSE_FILE"; FAILED=1; return 1
+    fi
+    if ! (cd "$ROOT" && docker compose -f "$COMPOSE_FILE" up -d >/dev/null 2>&1); then
+        _bad "docker compose failed for $COMPOSE_FILE — the services are NOT running"; FAILED=1
+        return 1
+    fi
+    return 0
+}
 case "$USE_DOCKER" in
     no)  _ok "skipped (--no-docker) — the pipeline runs without them" ;;
     yes) if docker_up; then
-             [ "$CHECK_ONLY" = "1" ] || (cd "$ROOT" && docker compose up -d >/dev/null 2>&1) || true
-             _ok "docker is up"
+             if [ "$CHECK_ONLY" = "1" ] || compose_up; then _ok "docker is up — services started"; fi
          else _bad "--docker was requested but docker is not running"; FAILED=1; fi ;;
     auto) if docker_up; then
-             [ "$CHECK_ONLY" = "1" ] || (cd "$ROOT" && docker compose up -d >/dev/null 2>&1) || true
-             _ok "docker is up — dashboards available"
+             if [ "$CHECK_ONLY" = "1" ] || compose_up; then _ok "docker is up — dashboards available"; fi
          else _warn "docker is not running — dashboards unavailable, THE PIPELINE STILL RUNS"; fi ;;
 esac
 

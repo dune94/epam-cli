@@ -260,6 +260,73 @@ individually skippable. Worth reconciling — the comment currently overstates t
    `docker-compose.epam-cli.yml:23` while `pre-run-reset.sh:52` uses
    `docker-compose.observability.yml` — see Open Questions.
 
+### 2.5 DECISION (2026-09-03, annotated against tag v1.6)
+
+**Decided: one script owns every docker verb; preflight asks for an OUTCOME, not a transport;
+the installer writes a declared mode.** This supersedes the loose "gate it on an env var" idea —
+see the caveat at the end, which is the whole reason for the shape.
+
+#### What already exists (verified at v1.6, not assumed)
+
+| piece | state |
+|---|---|
+| `lib/dashboard-ensure.sh` → `ensure_dashboards_up` | **the seam already exists**; `preflight-check.sh:330` calls it rather than docker |
+| `dashboard-health-check.sh` | already the only script that runs `docker ps` / `docker compose restart` |
+| `preflight-check.sh` checks 2, 3, 4 | **leak** — they `curl` the dashboard directly, bypassing the seam. This is what makes preflight docker-aware |
+| compose file split | `dashboard-health-check.sh:23` uses `docker-compose.epam-cli.yml`; `pre-run-reset.sh:52` uses `docker-compose.observability.yml`. Two scripts, two files, one intent (§2.4 item 6) |
+| engine | `claude.sh`, `orchestrations/plugins/`, `src/` contain **zero** docker references |
+
+So this is consolidation, not new construction. The seam is half-built and leaks in three places.
+
+#### The design
+
+**1. One script, one compose file, every docker verb.**
+`up` / `health` / `restart` / `down`. Nothing else in the tree invokes `docker`. Fixing the
+two-compose-file split (§2.4 item 6) falls out of this rather than being separate work.
+
+**2. Preflight asks for an outcome; the mode decides the transport.**
+Checks 2-4 currently ask "does `$DASH/build-info.json` return fresh JSON over HTTP". The real
+question is "is the dashboard data fresh", and that data is a FILE that a HOST process
+(`snapshot-watch.js`) writes to `orchestrations/dashboards/live/build-info.json`. So:
+
+    with-docker     -> the docker script answers over HTTP
+    without-docker  -> the same check asserts the file on disk
+
+Same guarantee, different transport. Note this also means check 5 (`snapshot-watch.js` running)
+belongs in BOTH modes — it is a host process and has nothing to do with docker. It was listed with
+the container checks in §2.3; that grouping is wrong and the packaging work should split it out.
+
+**3. The installer writes the mode and provisions accordingly.**
+`--with-docker` builds and starts the services and records `with-docker`; otherwise it records
+`without-docker` and never offers them. Per §2.4 item 5 the installer must not offer the unused
+half of `docker-compose.epam-cli.yml` (hydra, kratos, login-ui, mailhog, backend-stub) at all —
+and because the two compose files **collide on host port 3001**, offering both is actively harmful.
+
+#### THE CAVEAT THAT DRIVES THE SHAPE
+
+**A flag that makes checks vanish is how a gate becomes decoration.** In `without-docker` the
+container checks must report `n/a (no-docker install)` — never print nothing. On 2026-09-02/03 this
+pipeline produced three separate defects whose only symptom was a check that quietly did nothing:
+
+  - `_project_owned_test_files` returned empty for every story ever (argv off by one), so
+    verification silently ran the whole suite
+  - the baseline gate deleted its cache and continued with no subtraction
+  - the reviewer could not run at all and returned no verdict for eight cycles
+
+Each looked exactly like "nothing to report". A skipped check that prints nothing is
+indistinguishable from a passing one, and that is the failure mode this install mode must not
+reintroduce. See [[feedback_no_silent_failure_mechanisms]] and
+[[feedback_a_gate_must_have_its_verdict_read]].
+
+#### Still open, carried from §2.3
+
+`lib/preflight.sh:38-39` claims the preflight is "deliberately not skippable by an env var", while
+checks 1-6 are individually skippable via `EPAM_PREFLIGHT_ENVIRONMENT=0`. The mode work is where
+that contradiction gets reconciled — a declared mode is honest, an env var that silently disables
+six checks is not.
+
+---
+
 ---
 
 ## 3. Config surface for a one-line executor
@@ -442,6 +509,50 @@ entirely. **I would not represent Git Bash as supported.** Note also that the `s
 Git Bash run would *start* and only lose killability, which is the worst failure mode: it looks
 supported until you need to stop it.
 
+### 4.4 DECISION — THE RUNTIME IS ALWAYS LINUX (2026-09-03, against tag v1.6)
+
+**One rule: the pipeline runs on Linux everywhere. Only the front door changes per platform.**
+
+| Platform | Runtime | Front door |
+|---|---|---|
+| Linux / WSL2 Ubuntu | native | `install.sh` |
+| Windows | **WSL2** (mandatory, §4.3) | `install.ps1` -> checks/installs WSL2, then calls `install.sh` inside it |
+| **macOS** | **a Linux VM / partition** | the Mac-side script provisions it, then calls `install.sh` inside it |
+
+npm installs cleanly on all three — the package is not the problem. The RUNTIME is, because the
+pipeline is bash and POSIX process semantics, not Node.
+
+#### Why macOS cannot run this natively — measured in this tree at v1.6
+
+    flock        49 sites    not present in macOS base at all
+    /proc/       20 sites    DOES NOT EXIST on macOS, and has no equivalent
+    setsid       29 sites    not present in macOS base
+    mapfile      34 sites    require bash 4+; macOS ships bash 3.2
+    declare -A   22 sites    same
+    process sub 110 sites    fine under bash 4
+
+The bash-4 and `timeout` items are a `brew install bash coreutils` away. `flock`, `setsid` and
+`/proc` are not. `kill-tier3-run.sh` reads `/proc/<pid>/environ` to find orphaned BILLING processes
+and `llm-handler.sh:204-216` reads `/proc/$PPID/cmdline` to derive the agent name — there is no
+macOS port of that, only a rewrite.
+
+So macOS is the SAME SHAPE as native Windows, and gets the same answer: do not run it natively,
+run it in Linux.
+
+#### The Apple Silicon nuance, stated so nobody hits it late
+
+On Intel Macs a Linux partition is literal. **On Apple Silicon it is a VM** — UTM, Lima/Colima, or
+Parallels — because those machines do not dual-boot Linux the way Intel ones did. Same principle,
+different mechanism, and the install guide must say so plainly. The failure mode otherwise is an
+operator `brew install`-ing their way toward a native Mac run and discovering `flock` three hours
+in, which is exactly the class of late, silent surprise this packaging work exists to remove.
+
+Note the Docker tension: a Linux VM is a reasonable macOS answer, but it must not be confused with
+the `with-docker` / `without-docker` install mode (§2.5). The VM is the RUNTIME; docker inside it is
+still optional. A Mac user choosing `without-docker` still needs the Linux VM.
+
+---
+
 ---
 
 ## 5. The proposed design
@@ -483,6 +594,71 @@ Build steps, in order: clean checkout at a tag → `npm ci` → `npm run build` 
 `node_modules` to the runtime closure → `git archive` the declared `include` set → overlay `dist/`
 and the pruned modules → strip source maps (§5.0.7) → template the config files → generate the
 checksum manifest → create the archives.
+
+#### 5.0.1b DECISION — npm IS the packaging format (2026-09-03, against tag v1.6)
+
+**"Tarball or npm" is a false choice: `npm pack` produces a tarball.** The artefact is
+`epam-cli-<version>.tgz`, installed offline with `npm install -g ./epam-cli-<version>.tgz`. No
+registry, no network for the package itself, and npm semantics for free.
+
+##### What npm gives us, verified at v1.6 rather than assumed
+
+| | evidence |
+|---|---|
+| `epam` on PATH with no wiring | `package.json` already declares `bin: {epam, epam-cli} -> ./dist/epam.js` |
+| **no `node_modules` shipping or pruning** | 29 runtime deps; npm resolves them at install. This deletes an entire open question from §5.0.1 |
+| version, integrity, upgrade, uninstall | built in |
+| identical on PowerShell and WSL | npm behaves the same on both |
+| gitignored secrets excluded | npm falls back to `.gitignore` when no `.npmignore`; `.env` and `orchestrations/jira/.env` are both ignored (checked) |
+
+##### THE BLOCKER, MEASURED: npm pack SILENTLY DROPS SYMLINKS
+
+Run in a scratch package with a file symlink and a directory symlink, both listed in `files`:
+
+    created:  ./link.txt -> sub/target.txt      ./dirlink -> sub
+    tarball:  package/package.json
+              package/sub/target.txt
+    result:   link.txt : MISSING from package
+              dirlink  : MISSING from package
+
+**Not followed, not converted — absent, with no warning.** (For contrast, plain `tar czf`
+preserves symlinks as symlinks; that was measured too, §5.0.3.)
+
+This is not academic. The three shipped symlinks are how the dashboard reads live data:
+
+    orchestrations/dashboards/logs          -> ../logs
+    orchestrations/dashboards/profiles.json -> ../agents/profiles.json
+    orchestrations/dashboards/prd.json      -> ../prd.json
+
+Ship via npm unchanged and the dashboard renders nothing, with no error — the exact silent-failure
+shape being removed everywhere else in this pipeline.
+
+##### The resolution: DECLARE the symlinks, do not ship them
+
+`release-manifest.json` already proposes a `symlinks` section (§5.0.1). The installer creates them
+as a post-install step. Nothing is lost; the manifest becomes the source of truth instead of the
+archive, which is the better property anyway — a symlink in a tarball is invisible to review, a
+symlink in a manifest is not.
+
+The installer must then VERIFY each link resolves and fail loudly if not. An absent dashboard
+symlink and a broken one look identical from the HTTP side.
+
+##### Two conditions before this is safe
+
+1. **`files` must be extended.** It is `["dist/","TOOL_REGISTRY.md"]` today, which ships **none** of
+   `orchestrations/` — the pipeline itself. This is what makes the manifest-driven build (§5.0.1)
+   mandatory rather than tidy: `files` is generated from `release-manifest.json`, never hand-listed.
+
+2. **npm packs from the WORKING TREE, not from git.** The `git archive` guarantee in §5.0.1 — that
+   an untracked credential file physically cannot be emitted — is LOST with npm. Gitignored files
+   are still excluded, but an untracked-and-unignored file WOULD ship. Required mitigations:
+   build from a clean checkout of the tag, and gate the release on `npm pack --dry-run` output
+   being diffed against the declared manifest, failing on any file the manifest does not name.
+
+   Note `orchestrations/projects/metrolinx/config.env` is TRACKED and ships either way. It carries
+   no credentials (it points at a separate `SECRETS_FILE`) but does carry a client Jira URL, a
+   project key, and a machine path `JIRA_CODELINE_ROOT=/home/...`. It is a TEMPLATING candidate,
+   not a secrecy one.
 
 #### 5.0.2 Versioning
 
@@ -657,6 +833,64 @@ the ~150 loose files at repo root (`session.md` alone is 4.2 MB).
 work product, including `prd.json` (21 KB of client requirements), `codeline-facts.json` and
 `manifest.json`. **No client's project directory should ship in a release given to another client.**
 Ship one neutral project *template*; `mock3` at 692 KB excluding `runs/` is the natural basis.
+
+#### 5.0.6b DECISION — CREDENTIALS ARE GENERATED PER INSTALL, NEVER SHIPPED
+(2026-09-03, prompted by a GitGuardian alert on the v1.6 merge)
+
+##### What was flagged, and what it actually is
+
+GitGuardian reported a generic password on the merge to master. Traced: it is
+`docker-compose.observability.yml:61`
+
+    DATABASE_URL: postgres://epam:epam_dev@postgres:5432/epam
+
+a URI with embedded credentials — the classic generic-password shape. The full set across the two
+compose files:
+
+    POSTGRES_PASSWORD  epam_dev
+    DATABASE_URL       postgres://epam:epam_dev@postgres:5432/epam
+    NEXTAUTH_SECRET    langfuse-dev-secret-change-in-production
+    SALT               langfuse-dev-salt-change-in-production
+    (langfuse key)     sk-lf-epam-dev
+    (jwt secret)       dev-jwt-secret-change-in-production
+
+**Provenance, checked rather than assumed:** introduced in `5248ece3`, the INITIAL COMMIT. The
+v1.6 merge commit touched no compose file, and `epam_dev` was already present on `origin/master~1`.
+The merge re-triggered a scan; it did not introduce anything.
+
+**Exposure today: low.** These authenticate a Postgres and a Langfuse reachable only on the compose
+network. Several are literally named `change-in-production`.
+
+##### Why it still matters, and this is the packaging point
+
+**They ship.** Every client install would carry the SAME Postgres password and the SAME Langfuse
+`NEXTAUTH_SECRET` and `SALT`. Identical secrets across every deployment is a genuine weakness the
+moment this leaves one workstation — and it is exactly the kind of thing a client security review
+finds first.
+
+##### Decided
+
+1. **No credential literal ships.** The compose files become `.template` with placeholders, per the
+   `templated` section of `release-manifest.json` (§5.0.1).
+2. **The installer GENERATES them per install** — random Postgres password, random
+   `NEXTAUTH_SECRET`, random `SALT` — writes them to the install's own `.env`, and renders the
+   compose file from the template. Nothing is shared between two installs.
+3. **The release build FAILS on a credential literal.** A scan runs over the packed artefact, not
+   over a diff, and refuses to publish. See the scanner note below — the scan must cover URIs with
+   embedded credentials, not just key prefixes.
+4. Only relevant when observability is opted into (§5.1c). MVP ships none of these services, so
+   MVP ships none of these credentials — which is a further argument for the opt-in default.
+
+##### A SCANNER LESSON, recorded because I got this wrong
+
+Before committing 329 files I ran a secret scan and reported it clear. That scan looked for
+`sk-[A-Za-z0-9]{20,}`, `ghp_[A-Za-z0-9]{20,}` and `-----BEGIN ... PRIVATE KEY`. **It could never
+have found `postgres://epam:epam_dev@host`** — no prefix, no key shape, just a URI.
+
+"Clear" was true of the patterns checked and false as the claim I made. The release scanner must
+cover at least: URIs with `user:pass@`, `PASSWORD`/`SECRET`/`SALT`/`TOKEN` assigned a literal value,
+and key prefixes — and it must state which patterns it checked, so the next person reads a scope
+rather than a verdict.
 
 #### 5.0.7 Size
 
@@ -851,6 +1085,218 @@ defaulted value is **printed** in the summary, not silently assumed.
 The install is **not** "ready" until the dry run passes. `install.sh` currently prints "ready" after
 a file-existence check.
 
+### 5.1a DECISION — THE CONTAINER RUNTIME IS DECLARED; PODMAN IS THE WINDOWS DEFAULT
+(2026-09-03, against tag v1.6)
+
+#### Podman is already first-class in this codebase
+
+Verified, not assumed:
+
+    run-agent-orchestration.sh:4075   for _rt in docker podman; do
+    lib/sandbox-invoke.sh:42          for _rt in docker podman; do
+                                      ...both error clearly when neither is present
+
+So the detection pattern already exists and is the one to extend. **The gap is compose: 5
+`docker compose` invocations, 0 podman.**
+
+#### Why Podman is the better DEFAULT for Windows client installs
+
+  - **Licensing.** Docker Desktop needs a paid subscription for companies over 250 employees or
+    $10M revenue. Podman Desktop is Apache-2.0. This is the practical difference that stalls a
+    rollout at exactly the organisations this is sold into — a technical preference is not what
+    blocks an install, a procurement conversation is.
+  - **Same runtime story.** Podman on Windows also runs on WSL2, so §4.4 is unchanged: Linux is the
+    runtime, Podman is a different engine on it. This is NOT a fourth platform.
+  - **Rootless by default** — better security for something executing agent-generated code.
+  - **`docker` shim** — Podman ships an alias, so most existing invocations work unchanged.
+
+#### DECIDED
+
+The container runtime is a DECLARED install option, `docker` or `podman`, detected the way
+`sandbox-invoke.sh` already does it. **Podman is the default on Windows**; either is accepted on
+Linux. The choice is recorded in `install-manifest.json` alongside the docker/no-docker mode, and
+preflight REPORTS which runtime it found rather than inferring one silently.
+
+#### THE THING THAT MUST BE TESTED, NOT ASSUMED
+
+**Rootless Podman uses user-namespace UID mapping.** A file written by the containerised backend
+into the spool appears on the host owned by a MAPPED uid, not the operator's. The entire
+container-to-host boundary in §5.5 is that shared directory: the host runner must read what the
+container writes, and the container must read the status the runner writes back.
+
+Solvable — `--userns=keep-id`, or `:U` / `:z` mount flags — but it is the difference between an
+install that works and a permissions puzzle discovered by a client. **Verify the spool round-trip
+under rootless Podman before shipping**: write a request as the container user, read it as the host
+user, write a status back, read it from the container.
+
+The same concern applies with more force to the write perimeter (`chmod a-w`, 49 sites) if the
+pipeline is ever containerised (§5.1b/C option b). A write perimeter that silently does nothing
+under UID mapping is worse than none, because it looks enforced.
+
+#### Concrete work item
+
+Replace the 5 `docker compose` call sites with a single runtime-aware invocation, resolved once:
+
+    docker  -> docker compose
+    podman  -> podman compose  (v4.7+), else podman-compose
+
+This belongs in the same one-script consolidation §2.5 already requires, so it is one change and not
+two.
+
+### 5.1b DECISIONS — WSL mechanism, launch dashboard, docker-only rollout
+(2026-09-03, against tag v1.6)
+
+#### A. PowerShell CAN install into WSL — the mechanism, and the five things that bite
+
+    wsl --status                                   # present?
+    wsl -l -v                                      # which distros, which version
+    wsl --install -d Ubuntu                        # install (admin; usually a reboot)
+    wsl -d <distro> -- bash -lc "npm install -g /path/epam-cli-<v>.tgz"
+
+Files cross both ways: `\\wsl$\<distro>\...` from Windows, `/mnt/c/...` from inside.
+
+**The five failure modes, each of which turns a working installer into a support ticket:**
+
+1. **`wsl --install` needs admin and usually a reboot.** So `install.ps1` cannot be one
+   uninterrupted script: check -> maybe elevate -> maybe reboot -> RESUME. For a non-technical user
+   the resume must be automatic or unmissable, or the install simply stops there.
+2. **Node must be installed INSIDE WSL.** A Windows Node is invisible to it, and this project pins
+   Node 20 — the classic silently-half-working omission.
+3. **Install into the WSL filesystem, never `/mnt/c`.** `/mnt/c` has no reliable execute bits and
+   much slower I/O; every shell script here needs `+x`, so a `/mnt/c` install yields a pile of
+   "permission denied" at run time.
+4. **Line endings.** Anything arriving via a Windows checkout or text-mode copy can be CRLF, and
+   `#!/usr/bin/env bash\r` fails with a baffling error. The npm-tarball route largely avoids this,
+   which is a further point in its favour (§5.0.1b).
+5. **Distro identity.** `wsl -d Ubuntu` assumes a name; real machines have `Ubuntu-22.04`,
+   `Ubuntu-24.04`, or several. Enumerate with `wsl -l -v` and pick or ask — never assume.
+
+NOT YET EXECUTED: this mechanism is asserted from documentation, not run — this workstation is
+Linux. Verify on one Windows box before it reaches a client: `wsl --status`, `wsl -l -v`, then a
+throwaway `npm install -g` of the packed tarball inside the distro.
+
+#### B. A SEPARATE LAUNCH DASHBOARD IS REQUIRED (agreed)
+
+The non-technical audience does not install the pipeline. They need to start a run and see what
+happened. **This is a NEW surface, deliberately not the existing dashboard** (`agent-monitor`,
+:8092), which is an operator/debug view: it exposes prompts, costs, agent internals and raw logs.
+
+    existing dashboard  -> operator view, keep as-is, technical users
+    launch dashboard    -> pick a ticket, start a run, see the outcome
+
+Blocked by a real gap, already recorded at §6.2: **the control plane cannot start a run.** Until
+that exists, the non-technical tier cannot ship at all — so the launch API is on the CRITICAL PATH,
+not a nice-to-have.
+
+Three policy questions that must be answered before it is exposed, because they are not
+engineering choices:
+
+  1. WHO PAYS. A click spends real money on a shared key. Today every guardrail is launcher-side
+     (`--yes`, preflight, an operator watching). None of it exists behind an API.
+  2. SHARED HOST OR PER USER. Shared is far simpler to operate and is where run evidence
+     accumulates — but concurrent runs on one box is exactly what exhausted 14GB on 2026-09-02.
+  3. OUTCOME OR FULL VIEW. "Here is the branch, the test, and the review verdict" may be the whole
+     requirement, and is a fraction of the work of making the operator dashboard client-safe.
+
+#### C. DOCKER-ONLY ROLLOUT — viable, but the two meanings must not be conflated
+
+Agreed in principle: **Ubuntu docker (docker engine on Linux) is the trusted target; Docker Desktop
+on Windows is not.** That is the right call — Desktop adds licensing and corporate friction, and its
+backend is WSL2 anyway, so it is WSL2 with extra steps.
+
+**But "docker-only installer" means one of two very different things:**
+
+| | what runs where | implication |
+|---|---|---|
+| **(a) services in docker, pipeline on the host** | nginx/langfuse/grafana containerised; the engine is bash on Ubuntu | this is the existing `with-docker` mode (§2.5). Low risk, already designed |
+| **(b) the pipeline ITSELF in a container** | one image carrying engine + Node 20 + python3 + jq + git | far better for non-technical rollout: one image, one command, no Node pinning, no npm, no WSL filesystem traps |
+
+(b) is the stronger rollout story and brings its own requirements, none of them blocking but all of
+them real:
+
+  - the **client codeline must be bind-mounted** into the container, and git identity plus
+    credentials must reach it
+  - **the write perimeter must survive the mount.** `chmod a-w` at 49 sites is the enforcement
+    mechanism; container UID mapping vs host ownership decides whether it works or silently does
+    nothing — and a write perimeter that silently does nothing is worse than none
+  - `/proc`, `flock`, `setsid`, process groups all work normally inside a Linux container, so the
+    §4.4 portability problem disappears entirely for this route
+  - it does NOT remove the need for the `without-docker` mode for technical users who want the
+    engine on their own box
+
+OPEN: which of (a) or (b) is the rollout artefact. (b) is recommended for the non-technical tier;
+(a) remains right for a technical local install.
+
+### 5.1c DECISION — REPLAY IS A CONFIG OPTION; OBSERVABILITY SPLITS IN TWO
+(2026-09-03. SUPERSEDES the earlier "drop Langfuse from MVP" note, which was wrong.)
+
+#### The correction
+
+An earlier version of this section recommended dropping Langfuse from MVP as "fail-open reporting
+nobody looks at". **That was wrong.** Langfuse is not a dashboard — it is the RECORDER that makes a
+run replayable. The dependency splits cleanly:
+
+    RECORD   needs Langfuse LIVE during the run   (it captures every turn)
+    EXPORT   needs Langfuse                       (cassette-export.js reads traces out of it)
+    REPLAY   needs only the cassette DIRECTORY on disk
+
+`llm-handler.sh:459` states it: *"The cassette directory IS the switch. There is no separate replay
+mode flag."* Four cassettes already exist under `orchestrations/cassettes/`.
+
+**The consequence is one-way.** A run executed without Langfuse recording can never be replayed
+afterwards — the turns were never captured. The cost is not recoverable later.
+
+Why that matters, in the words of `lib/cassette-store.js`:
+
+> Every bug that killed a run this month was plumbing — an unbound variable, a function used and
+> never imported, an env var handed the wrong directory. None of them needed a model to find, and
+> all of them cost real tokens to find, because the only way to exercise the pipeline end to end was
+> to run it against paid APIs.
+
+That is exactly the loop that burned four paid runs on 2026-09-02.
+
+#### DECIDED: replay is a config option, not a hidden consequence
+
+The install asks one question and records the answer:
+
+    replay: on    -> Langfuse + clickhouse + postgres installed and running.
+                     Every run is recorded and can be exported to a cassette and replayed for $0.
+                     Cost: ~2.36GB of images, and their memory share (§5.4b).
+
+    replay: off   -> none of those installed. Runs are cheaper and lighter, and are NOT replayable.
+                     Stated at install and at preflight, every time — never inferred.
+
+Grafana stays separately optional: it is genuinely only a view, consumes no recording duty, and
+nothing depends on it. Redis is never installed — it has no dependent since the worker was removed.
+
+    replay on   : langfuse + clickhouse + postgres     ~2.36GB
+    grafana     : optional view                          647MB
+    redis       : never                                   58MB
+
+#### The keys, and why they cannot be left to a human
+
+Recording activates only when BOTH are present (`LangfuseTracer.ts:30`):
+
+    LANGFUSE_SECRET_KEY    required
+    LANGFUSE_PUBLIC_KEY    required
+    LANGFUSE_BASE_URL      defaults to http://localhost:3100
+    LANGFUSE_ENABLED=0     explicit off switch
+
+They are a project API key pair issued INSIDE Langfuse. A fresh install has empty volumes, so no
+org, no project, and therefore no keys — and `hasKeys` is false, so recording is silently off while
+2.36GB of containers run and capture nothing.
+
+**With `replay: on` the installer MUST provision them**, using Langfuse v2 `LANGFUSE_INIT_*` to seed
+org/project/keys on first boot and writing the pair into the install's `.env`. Verify against the
+pinned `langfuse/langfuse:2`.
+
+**And preflight must FAIL, not warn, when `replay: on` and the keys are absent.** A run that is not
+being recorded is a run that can never be replayed, and the operator cannot discover that later —
+by then the turns are gone. This is the one place where a warning is not enough.
+
+(The hardcoded `sk-lf-epam-dev` in the compose file is one of the literals §5.0.6b requires to
+become per-install generated.)
+
 ### 5.2 Executor
 
 **Build on `orchestrations/scripts/pipeline`**, which already implements the shape: derives the
@@ -960,6 +1406,151 @@ versioned tarball plus `install-manifest.json`, and the manifest is what `--chec
 
 **Do not** attempt phases 5-6 before 0-2. A Windows failure on top of an unproven Linux baseline
 gives two candidate causes for every symptom.
+
+---
+
+## 5.4b MEMORY CONTROLS — A CLIENT INSTALL MUST NOT KILL THE MACHINE
+(2026-09-03, required by the operator)
+
+### 5.4b.1 The evidence, from this workstation on 2026-09-02
+
+A 14GB WSL2 box was exhausted and had to be restarted, taking the terminal, docker and the session
+with it. Two causes, both still present in what would ship today:
+
+  - **six observability containers with no memory limit of any kind.** ClickHouse sizes its caches
+    from what it can see, so it takes what the box has.
+  - **`npm test` is bare `jest`**, which defaults to `nproc - 1` workers with no per-worker heap
+    cap. On this 16-core box that is 15 workers measured at 695-783MB each: **~11GB to validate a
+    one-line change**, and the run sat at 10,731MB of an 11,264MB cap for ten minutes under constant
+    reclaim.
+
+### 5.4b.2 What is actually shipped today — measured, not assumed
+
+| | state |
+|---|---|
+| memory limits in any shipped compose file | **zero** (`observability.yml`, `epam-cli.yml`, the override) |
+| the override file | **GENERATED** every run by `pre-run-reset.sh:165` — hand-added limits are silently overwritten at the next launch |
+| anything bounding the pipeline process | **nothing.** `run-bounded.sh` exists and NO launcher calls it |
+
+The generated-override point is worth stating plainly: adding `mem_limit` to that file by hand looks
+like it works and lasts exactly until the next run. The limits must go in the GENERATOR.
+
+### 5.4b.3 Required, in order of leverage
+
+**1. Cap the test workers. Biggest single lever, pure config, zero risk.**
+`--maxWorkers` is a stack fact, so it belongs with the other stack facts in the ecosystem provider
+(`orchestrations/ecosystems/package-json.js`) alongside `command` and `scopedCommand`. 15 workers ->
+4 takes the suite from ~11GB to under 3GB. **This is a candidate for the pipeline itself, not only
+for packaging** — it would have prevented today's crash on this machine.
+
+**2. Bound the containers IN THE GENERATOR, sized from the host.**
+Limits go into `pre-run-reset.sh`'s heredoc (or the base compose), computed as a SHARE OF TOTAL RAM
+READ AT LAUNCH — never fixed numbers. A client box may have 8GB or 64GB; `clickhouse: 2g` is wrong
+on both. Same rule already recorded for `run-bounded.sh`: bound the share, never a constant.
+
+**3. Bound the pipeline process, and be honest when it cannot be.**
+`run-bounded.sh` uses `systemd-run --user --scope`, which needs a systemd USER BUS — absent on this
+machine until `loginctl enable-linger` was run, and not assumable on a client box. So:
+  - portable floor: `NODE_OPTIONS=--max-old-space-size` plus the worker cap (works everywhere)
+  - enhancement: the cgroup scope where a user bus exists
+  - and it must SAY when it cannot bound. `run-bounded.sh` today gates on `command -v systemd-run`
+    — the BINARY, which is always present — so it printed a confident ceiling, exec-ed, failed on
+    the bus and ran NOTHING. Probe the bus, never the binary.
+
+**4. Preflight must refuse a host that is too small.**
+Read total RAM and fail with a number. Today the failure mode was a WSL restart that killed the
+terminal, docker and the session. On a client machine that is the first impression, and it is
+entirely preventable by one check that already has a home.
+
+### 5.4b.4 Note for the containerised-pipeline option (§5.1b/C)
+
+If the pipeline is ever containerised, `docker run --memory` gives item 3 for free and portably —
+no systemd bus, no cgroup delegation, no per-platform branch. That is a genuine argument for (b)
+that has nothing to do with packaging convenience, and it should be weighed when (b) is revisited
+after MVP.
+
+---
+
+## 5.5 LAUNCH DASHBOARD — DESIGN (2026-09-03, decided with the operator)
+
+A NEW surface for the non-technical tier. Deliberately not the existing operator dashboard
+(agent-monitor, :8092), which exposes prompts, costs, agent internals and raw logs.
+
+### 5.5.1 What it does
+
+    New run  ->  enter a Jira ticket id  ->  Save
+             ->  appears in a grid with all previous runs
+             ->  status starts pending, progresses, green dot while running
+
+Nothing else. No prompts, no costs, no agent internals.
+
+### 5.5.2 Decided
+
+| Question | Decision |
+|---|---|
+| Concurrency | **Reject while busy.** UI refuses to create a run and says why |
+| Stop | **Yes — a stop button** |
+| Access | **Simple shared password** |
+| In-progress display | **Green dot + current stage name** |
+| Front end | **Flutter (web)**, dark background, bright green foreground |
+| Back end | **thin Node**, JSON over HTTP |
+| Hosting | **FE and BE both in docker** |
+
+### 5.5.3 THE ARCHITECTURAL PROBLEM, and the chosen answer
+
+The BE is containerised; the pipeline runs ON THE HOST (§5.1b/C, MVP keeps it there). A container
+cannot exec a host process, so "press Save -> launch" needs a mechanism. Options considered:
+mount the docker socket (only helps if the pipeline is containerised too, and grants
+root-equivalent access), SSH from container to host (key management to solve what a directory
+solves without credentials), or run the BE on the host (simplest, but one uncontainerised piece).
+
+**CHOSEN: a spool directory plus a host-side runner.**
+
+    Flutter FE (container, nginx)
+        |  JSON over HTTP
+    Node BE (container)  --writes-->  /spool/requests/<id>.json   [bind mount]
+                         <--reads---  /spool/status/<id>.json
+                                              ^
+                                              |
+    host-side runner (systemd unit or loop)  --launches-->  tier3-metrolinx-run.sh
+
+Why this one:
+  - the container never receives host privileges; the trust boundary is ONE directory
+  - the runner owns the lock, so "reject while busy" is enforced where the truth is, not in the API
+  - stop and busy-check become file operations; the API never handles PIDs or process groups
+  - it queues naturally if the policy is ever relaxed from reject-while-busy
+
+### 5.5.4 Every input already exists on disk — verified at v1.6
+
+| The UI needs | Source | Verified |
+|---|---|---|
+| current stage name | `orchestrations/logs/step-status.json` — 30 steps of `{id,label,status,detail}` plus `updatedAt`; the step whose `status` is `running` IS the stage name | read |
+| run list for the grid | `orchestrations/projects/<project>/runs/<runId>/` directories | listed |
+| final verdict | `orchestrations/logs/phase-gates.jsonl` (the GO / NO-GO decision) | present |
+| cost, if ever shown | `orchestrations/logs/phase-cost.jsonl` | present |
+| stop | `kill-tier3-run.sh` — kills by process group (`ps -o pgid=`) | read |
+| busy | the run's systemd scope / `/tmp/tier3-*.pid` | observed |
+
+So the BE is genuinely thin: it writes a request, lists directories, reads two JSON files, and
+returns them. It computes nothing the pipeline does not already record.
+
+**One caveat that must shape the BE:** `step-status.json` is a SINGLE global file, overwritten per
+run — it describes the CURRENT run, not history. The BE must correlate it with the active run id
+and must not present it as the status of a completed run. History comes from the `runs/` directories
+and `phase-gates.jsonl`.
+
+### 5.5.5 Requirements that follow from the day this was designed
+
+  - **A failed run must say so in the grid.** "Pending" that silently never advances is the same
+    silent-failure shape removed elsewhere; a stale `updatedAt` is a FAILED run, not a running one.
+  - **The shared password gates creation, not viewing** — cost is spent on create.
+  - **Every run records who requested it**, even with a shared password, because the next question
+    after "why is this expensive" is "who ran it".
+
+### 5.5.6 Still blocked
+
+The launch path itself does not exist (§6.2). The spool directory and host runner ARE that missing
+piece — this design is the answer to §6.2, not a consumer of it.
 
 ---
 

@@ -352,6 +352,95 @@ case "$USE_DOCKER" in
          else _warn "no container runtime is running — dashboards unavailable, THE PIPELINE STILL RUNS"; fi ;;
 esac
 
+# ── Launch dashboard: OPTIONAL, and must be genuinely UP when it claims to be ─
+# THIS CANNOT DEPEND ON A HUMAN OR AN LLM DOING IT BY HAND. A rebuild-and-restart done manually
+# once is a rebuild-and-restart that must be done manually every time — this makes it the same
+# re-run of install.sh as everything else above.
+#
+# `docker compose up -d` alone does NOT rebuild an image from changed source; it recreates
+# containers from whatever image already exists. --build closes that. And `up -d` exiting 0 means
+# containers were CREATED, not that the service inside is ready to answer a request — closed by
+# actually polling the health endpoint below rather than trusting the exit code.
+_head "Launch dashboard (optional)"
+LAUNCH_DIR="$ROOT/launch-dashboard"
+LAUNCH_COMPOSE="$LAUNCH_DIR/docker-compose.yml"
+LAUNCH_HEALTH_TRIES="${EPAM_LAUNCH_HEALTH_TRIES:-30}"
+LAUNCH_HEALTH_INTERVAL="${EPAM_LAUNCH_HEALTH_INTERVAL:-1}"
+LAUNCH_STATUS=absent
+
+if [ ! -f "$LAUNCH_COMPOSE" ]; then
+    _ok "not present in this tree — nothing to provision"
+elif [ "$USE_DOCKER" = "no" ]; then
+    LAUNCH_STATUS=skipped
+    _ok "skipped (--no-docker)"
+else
+    . "$INSTALLER_DIR/lib/wait-for-health.sh"
+    . "$INSTALLER_DIR/lib/isolated-compose-identity.sh"
+
+    # A REAL PASSWORD IS A DECISION ONLY A HUMAN MAKES — never synthesized here. Mirrors the root
+    # .env handling: copy the template so there is something to fill in, never invent a secret.
+    if [ ! -f "$LAUNCH_DIR/.env" ]; then
+        if [ -f "$LAUNCH_DIR/.env.example" ]; then
+            cp "$LAUNCH_DIR/.env.example" "$LAUNCH_DIR/.env"
+            _warn "launch-dashboard/.env created from .env.example — FILL IN LAUNCH_PASSWORD before it can start"
+        else
+            _bad "launch-dashboard/.env is missing and there is no .env.example to create one from"
+            FAILED=1
+        fi
+    fi
+
+    _LD_PORT="$(grep -E '^LAUNCH_UI_PORT=' "$LAUNCH_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2)"
+    _LD_PORT="${_LD_PORT:-8099}"
+    _LD_PROJECT="$(isolated_project_name "$ROOT" launch)"
+    _LD_HEALTH_URL="http://localhost:${_LD_PORT}/api/health"
+
+    if [ ! -f "$LAUNCH_DIR/.env" ]; then
+        LAUNCH_STATUS=failed
+    elif [ "$CHECK_ONLY" = "1" ]; then
+        if wait_for_health "$_LD_HEALTH_URL" 3 1; then
+            LAUNCH_STATUS=up
+            _ok "up at $_LD_HEALTH_URL (project: $_LD_PROJECT)"
+        else
+            LAUNCH_STATUS=not-answering
+            _warn "not answering at $_LD_HEALTH_URL"
+        fi
+    elif ! runtime_up; then
+        LAUNCH_STATUS=no-runtime
+        _warn "no container runtime is running — launch dashboard unavailable, THE PIPELINE STILL RUNS"
+    else
+        # ISOLATED FROM EVERY OTHER INSTALL ON THIS MACHINE, DETERMINISTICALLY. Two checkouts (a
+        # dev tree and a dogfood copy, say) must both be able to run at once. Retries ONLY on a
+        # subnet collision — any other failure (a bad Dockerfile, a missing image) would fail
+        # identically on every candidate, burning through all of them and hiding the real error
+        # behind four repeats of it.
+        _LD_UP=1
+        _LD_LOG="$(mktemp)"
+        _LD_SUBNET=""
+        for _LD_SUBNET in $(isolated_subnet_candidates "$ROOT"); do
+            if (cd "$LAUNCH_DIR" && LAUNCH_SUBNET="$_LD_SUBNET" container_compose \
+                    -f "$LAUNCH_COMPOSE" -p "$_LD_PROJECT" up -d --build) >"$_LD_LOG" 2>&1; then
+                _LD_UP=0
+                break
+            fi
+            grep -qi 'overlap\|pool' "$_LD_LOG" || break
+        done
+
+        if [ "$_LD_UP" = "1" ]; then
+            LAUNCH_STATUS=failed
+            _bad "launch dashboard failed to start: $(tail -3 "$_LD_LOG" 2>/dev/null)"
+            FAILED=1
+        elif wait_for_health "$_LD_HEALTH_URL" "$LAUNCH_HEALTH_TRIES" "$LAUNCH_HEALTH_INTERVAL"; then
+            LAUNCH_STATUS=up
+            _ok "up and healthy at $_LD_HEALTH_URL (project: $_LD_PROJECT, subnet: $_LD_SUBNET)"
+        else
+            LAUNCH_STATUS=unhealthy
+            _bad "containers started but never answered healthy at $_LD_HEALTH_URL"
+            FAILED=1
+        fi
+        rm -f "$_LD_LOG" 2>/dev/null
+    fi
+fi
+
 # ── The command people will actually type ───────────────────────────────────
 # ── What this install IS ──────────────────────────────────────────────────────
 # An install whose mode can only be inferred from which containers happen to be running is an
@@ -366,7 +455,8 @@ if [ "$CHECK_ONLY" = "0" ]; then
   "replay": "${REPLAY_MODE}",
   "project": "${EPAM_PROJECT:-}",
   "installedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "installRoot": "${ROOT}"
+  "installRoot": "${ROOT}",
+  "launchDashboard": "${LAUNCH_STATUS}"
 }
 MANIFEST
 fi

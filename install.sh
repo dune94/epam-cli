@@ -254,24 +254,35 @@ fi
 
 # ── Container runtime ─────────────────────────────────────────────────────────
 _head "Container runtime"
-if [ -z "$CONTAINER_RUNTIME" ]; then
-    # Discovered in a declared order, and REPORTED — never assumed. Same pattern as
-    # lib/sandbox-invoke.sh, which already does `for _rt in docker podman`.
-    for _rt in docker podman; do
-        command -v "$_rt" >/dev/null 2>&1 && { CONTAINER_RUNTIME="$_rt"; break; }
-    done
-    CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-none}"
-    _ok "runtime: $CONTAINER_RUNTIME (discovered)"
+# ONE RESOLVER, ASKED — not a third copy of the rule. The installer, dashboard-health-check.sh and
+# pre-run-reset.sh each had their own idea of which runtime to use, and only this one had ever
+# heard of podman.
+_CR_LIB="$ROOT/orchestrations/scripts/lib/container-runtime.sh"
+if [ -f "$_CR_LIB" ]; then
+    # shellcheck source=orchestrations/scripts/lib/container-runtime.sh
+    . "$_CR_LIB"
 else
-    case "$CONTAINER_RUNTIME" in
-        docker|podman)
-            _ok "runtime: $CONTAINER_RUNTIME (declared)" ;;
-        *)
-            # No fallback. A runtime this installer cannot drive must fail here, not surface later
-            # as a compose command that does nothing.
-            _bad "unsupported container runtime '$CONTAINER_RUNTIME' — expected docker or podman"
-            FAILED=1 ;;
-    esac
+    _bad "missing $_CR_LIB — this tree cannot resolve a container runtime"; FAILED=1
+fi
+
+_CR_DECLARED="$CONTAINER_RUNTIME"
+if CONTAINER_RUNTIME="$(container_runtime 2>&1)"; then
+    if [ -n "$_CR_DECLARED" ]; then _ok "runtime: $CONTAINER_RUNTIME (declared)"
+    else                            _ok "runtime: $CONTAINER_RUNTIME (discovered)"
+    fi
+else
+    # The resolver's own message says WHICH runtimes it looked for, so it is reported verbatim
+    # rather than restated here in words that could drift from the declaration.
+    _CR_WHY="$CONTAINER_RUNTIME"
+    CONTAINER_RUNTIME=none
+    if [ -n "$_CR_DECLARED" ]; then
+        # A runtime the installer cannot drive must fail HERE, not surface later as a compose
+        # command that does nothing.
+        _bad "$_CR_WHY"; FAILED=1
+    else
+        # Nothing installed is not a failure: --no-docker is a supported install.
+        _ok "runtime: none — no container runtime found, the pipeline still runs"
+    fi
 fi
 
 # ── Replay ────────────────────────────────────────────────────────────────────
@@ -300,7 +311,13 @@ esac
 
 # ── Dashboards: OPTIONAL, and never a reason to fail ────────────────────────
 _head "Dashboards (optional)"
-docker_up() { command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; }
+# THE PROBE ASKS THE RESOLVED RUNTIME. It said `docker` literally, so on a podman-only machine the
+# installer announced "runtime: podman" and then started nothing — the report and the behaviour
+# disagreeing, which is this file's recurring defect.
+runtime_up() {
+    [ "$CONTAINER_RUNTIME" = "none" ] && return 1
+    command -v "$CONTAINER_RUNTIME" >/dev/null 2>&1 && "$CONTAINER_RUNTIME" info >/dev/null 2>&1
+}
 
 # THE COMPOSE FILE IS NAMED. This ran `docker compose up -d` with no -f, and there is no
 # docker-compose.yml at the repo root — only the named files below. It ended in `|| true`, so the
@@ -310,20 +327,20 @@ compose_up() {
     if [ ! -f "$COMPOSE_FILE" ]; then
         _bad "compose file not found: $COMPOSE_FILE"; FAILED=1; return 1
     fi
-    if ! (cd "$ROOT" && docker compose -f "$COMPOSE_FILE" up -d >/dev/null 2>&1); then
-        _bad "docker compose failed for $COMPOSE_FILE — the services are NOT running"; FAILED=1
+    if ! (cd "$ROOT" && container_compose -f "$COMPOSE_FILE" up -d >/dev/null 2>&1); then
+        _bad "$CONTAINER_RUNTIME compose failed for $COMPOSE_FILE — the services are NOT running"; FAILED=1
         return 1
     fi
     return 0
 }
 case "$USE_DOCKER" in
     no)  _ok "skipped (--no-docker) — the pipeline runs without them" ;;
-    yes) if docker_up; then
-             if [ "$CHECK_ONLY" = "1" ] || compose_up; then _ok "docker is up — services started"; fi
-         else _bad "--docker was requested but docker is not running"; FAILED=1; fi ;;
-    auto) if docker_up; then
-             if [ "$CHECK_ONLY" = "1" ] || compose_up; then _ok "docker is up — dashboards available"; fi
-         else _warn "docker is not running — dashboards unavailable, THE PIPELINE STILL RUNS"; fi ;;
+    yes) if runtime_up; then
+             if [ "$CHECK_ONLY" = "1" ] || compose_up; then _ok "$CONTAINER_RUNTIME is up — services started"; fi
+         else _bad "--docker was requested but no container runtime is running (resolved: $CONTAINER_RUNTIME)"; FAILED=1; fi ;;
+    auto) if runtime_up; then
+             if [ "$CHECK_ONLY" = "1" ] || compose_up; then _ok "$CONTAINER_RUNTIME is up — dashboards available"; fi
+         else _warn "no container runtime is running — dashboards unavailable, THE PIPELINE STILL RUNS"; fi ;;
 esac
 
 # ── The command people will actually type ───────────────────────────────────

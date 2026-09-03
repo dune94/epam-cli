@@ -34,6 +34,13 @@ function fixture() {
   fs.copyFileSync(INSTALLER, path.join(dir, 'install.sh'));
   fs.chmodSync(path.join(dir, 'install.sh'), 0o755);
 
+  // THE SHARED RESOLVER SHIPS, so the fixture carries it. install.sh sources
+  // orchestrations/scripts/lib/container-runtime.sh rather than restating docker-or-podman a third
+  // time; a fixture without it is not a tree anyone would ever install from.
+  fs.mkdirSync(path.join(dir, 'orchestrations/scripts/lib'), { recursive: true });
+  fs.copyFileSync(path.join(REPO, 'orchestrations/scripts/lib/container-runtime.sh'),
+    path.join(dir, 'orchestrations/scripts/lib/container-runtime.sh'));
+
   // the declarations install.sh reads, copied from the real ones so the shapes cannot drift
   for (const f of ['provider-sets.json', 'llm-defaults.claude.json']) {
     const src = path.join(REPO, 'orchestrations/config', f);

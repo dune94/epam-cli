@@ -130,6 +130,25 @@ describe('the installer provisions launch-dashboard', () => {
     expect(log, 'up -d is missing').toMatch(/\bup\b.*-d\b|-d\b.*\bup\b/);
   });
 
+  it('pre-creates data/ and spool/ as the host user BEFORE compose ever sees them', async () => {
+    // Found live 2026-09-03 against a genuinely fresh install: without this, Docker auto-creates
+    // an absent bind-mount source itself, AS ROOT — and launch-api's own `user: 1000:1000` then
+    // cannot write its database file to it. "unable to open database file", crash-looping.
+    const port = 18106;
+    await serveHealth(port);
+    const f = fixture({ port });
+    fs.rmSync(path.join(f.dir, 'launch-dashboard/data'), { recursive: true, force: true });
+    fs.rmSync(path.join(f.dir, 'launch-dashboard/spool'), { recursive: true, force: true });
+    await run(f, ['--docker'], { EPAM_CONTAINER_RUNTIME: 'docker' });
+    for (const sub of ['data', 'spool']) {
+      const p = path.join(f.dir, 'launch-dashboard', sub);
+      expect(fs.existsSync(p), `${sub}/ was never created`).toBe(true);
+      // Created by the (unprivileged, test-running) host process — never by a root-owned
+      // container's bind-mount auto-creation, which is exactly the bug this guards against.
+      expect(fs.statSync(p).uid, `${sub}/ is not owned by the invoking user`).toBe(process.getuid?.());
+    }
+  });
+
   it('names an isolated compose project — never the bare directory name', async () => {
     const port = 18102;
     await serveHealth(port);

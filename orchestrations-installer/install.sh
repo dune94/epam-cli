@@ -666,6 +666,17 @@ else
         fi
     fi
 
+    # PRE-CREATE THE BIND-MOUNT SOURCES, AS THE HOST USER, BEFORE DOCKER EVER SEES THEM.
+    #
+    # The compose file's own comment above (services.launch-api) already names this exact trap: a
+    # bind mount onto a directory that doesn't exist yet gets auto-created BY DOCKER, as root — and
+    # launch-api's own `user: "${LAUNCH_UID:-1000}:..."` then cannot write to it. Found live
+    # 2026-09-03 against a genuinely fresh install: "unable to open database file", launch-api
+    # crash-looping, nginx's launch-ui reporting "host not found in upstream" as a downstream
+    # symptom of the crash — same bug CLASS as the dashboards live/ directory fixed above, here for
+    # ./data and ./spool specifically.
+    mkdir -p "$LAUNCH_DIR/data" "$LAUNCH_DIR/spool"
+
     _LD_PORT="$(grep -E '^LAUNCH_UI_PORT=' "$LAUNCH_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2)"
     _LD_PORT="${_LD_PORT:-8099}"
     _LD_PROJECT="$(isolated_project_name "$ROOT" launch)"

@@ -172,25 +172,29 @@ describe('provider-swap-unsafe scanner', () => {
 });
 
 describe('provider-swap-unsafe scanner, against the real tree', () => {
-  it('finds exactly 12 — 16 minus the 4 ORCH_GATE_PROVIDER sites fixed 2026-09-03', () => {
-    // 17 verified by hand -> 16 after excluding tier2-free-run.sh (not a defect) -> 12 after
-    // run-agent-orchestration.sh's 4 gate sites were wired to resolve_primary_provider(). These
-    // were TIER 1 (genuinely unprotected: epam run --provider talks to the compiled CLI directly,
-    // which has zero EPAM_PROVIDER_SET awareness — confirmed by grep across src/).
+  it('finds exactly 8 — TIER 1 (genuinely unprotected) fully fixed 2026-09-03', () => {
+    // 17 by hand -> 16 excluding tier2-free-run.sh (not a defect) -> 12 after
+    // run-agent-orchestration.sh's 4 ORCH_GATE_PROVIDER sites -> 8 after claude.sh's 4
+    // STORY_PROVIDER sites (resolve_provider_settings() plus 3 downstream reads). Both groups
+    // were TIER 1: epam run --provider and provider_to_cli() both bypass EPAM_PROVIDER_SET
+    // entirely (confirmed by grep across src/, and by reading provider_to_cli()'s own case
+    // statement — codex/claude/codemie-claude spawn a binary directly, no set awareness at all).
+    // The remaining 8 are TIER 2 (already re-validated by llm-handler.sh downstream) or TIER 3
+    // (update-monitor.sh — dashboard display only, never routes a call).
     const r = run(ROOT);
     const lines = r.out.trim().split('\n').filter(Boolean);
-    expect(lines.length, `found:\n${r.out}`).toBe(12);
+    expect(lines.length, `found:\n${r.out}`).toBe(8);
   });
 
-  it('no longer flags run-agent-orchestration.sh — fixed, not just reduced elsewhere', () => {
+  it('no longer flags run-agent-orchestration.sh or claude.sh — fixed, not just reduced elsewhere', () => {
     const r = run(ROOT);
     expect(r.out).not.toMatch(/run-agent-orchestration\.sh/);
+    expect(r.out).not.toMatch(/claude\.sh/);
   });
 
-  it('names the worst three from the analysis: CPA_PROVIDER, STORY_PROVIDER:-codex, the assignment form', () => {
+  it('names the worst of what remains: CPA_PROVIDER (always-reachable) and the assignment form', () => {
     const r = run(ROOT);
     expect(r.out).toMatch(/contextualize-stories\.sh:783\tCPA_PROVIDER\topenrouter/);
-    expect(r.out).toMatch(/claude\.sh:1632\tSTORY_PROVIDER\tcodex/);
     expect(r.out).toMatch(/update-monitor\.sh:132\tPROVIDER\tclaude/);
   });
 

@@ -46,6 +46,12 @@ import { tmpdir } from 'node:os';
 
 const CLAUDE = join(__dirname, '../../../orchestrations/scripts/claude.sh');
 const SRC = readFileSync(CLAUDE, 'utf8');
+// resolve_provider_settings() now calls resolve_primary_provider() (2026-09-03, see
+// change-log/SEAM-CONSISTENCY-ANALYSIS.md) — a real dependency in a separate sourced file, not
+// something fnText()'s single-function extraction can see. Sourced by absolute path so it works
+// regardless of where the reconstructed script below actually lives.
+const RESOLVE_PRIMARY_PROVIDER_LIB =
+  join(__dirname, '../../../orchestrations/scripts/lib/resolve-primary-provider.sh');
 
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
@@ -74,6 +80,7 @@ set -uo pipefail
 PRD_FILE=${JSON.stringify(prd)}
 MAIN_PRD_FILE=${JSON.stringify(prd)}
 log(){ :; }; warning(){ :; }; error(){ :; }
+. ${JSON.stringify(RESOLVE_PRIMARY_PROVIDER_LIB)}
 ${fnText('resolve_model_provider')}
 ${fnText('resolve_provider_settings')}
 ${fnText('provider_to_cli')}

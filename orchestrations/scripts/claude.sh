@@ -3,6 +3,13 @@
 # The run's spend figure comes from the ACTIVE SET, not a vendor hardcoded here.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/spend-probe.sh" 2>/dev/null || true
 
+# STORY_PROVIDER's own default was "codex" — a vendor no provider set can select — reached
+# whenever the roster left a story's aiProvider unassigned. See
+# change-log/SEAM-CONSISTENCY-ANALYSIS.md. provider_to_cli("codex") spawns a `codex` binary
+# directly, which does not exist on a claude-only machine; other vendors route to the compiled
+# epam CLI, which has no EPAM_PROVIDER_SET awareness at all.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/resolve-primary-provider.sh"
+
 # How much evidence each agent is shown, by name — see config/evidence-windows.json.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/evidence-windows.sh" 2>/dev/null || true
 
@@ -1622,14 +1629,22 @@ resolve_dynamic_constitution() {
 
 # resolve_provider_settings <story_id>
 # Reads aiProvider from the story and sets STORY_PROVIDER global.
-# Values: opencode | codex | epam | provider aliases (default: codex)
+# Values: opencode | codex | epam | provider aliases (default: whatever the active set can route)
+#
+# THE ROSTER'S CHOICE IS VALIDATED, NOT JUST DEFAULTED. This is the exact incident
+# ladder-providers.js's own comment records: "the prd-model-coordinator writes an aiProvider into
+# every story, and until 2026-08-28 its persona named {minimax, openrouter} in prose. On the
+# claude stack that is a provider nothing can route." resolve_primary_provider() is what catches
+# that — an assigned-but-unroutable value is replaced by one the active set CAN route, announced,
+# never silently. An unassigned story used to default to "codex" unconditionally: a vendor no
+# provider set can select, and whose binary does not exist on a claude-only machine.
 resolve_provider_settings() {
     local story_id="$1"
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
     STORY_PROVIDER=$(jq -r --arg id "$story_id" \
-        '.stories[] | select(.id == $id) | .aiProvider // "codex"' \
+        '.stories[] | select(.id == $id) | .aiProvider // empty' \
         "$prd_target" 2>/dev/null | head -1)
-    STORY_PROVIDER="${STORY_PROVIDER:-codex}"
+    STORY_PROVIDER="$(resolve_primary_provider "${STORY_PROVIDER:-}")"
     log "  Provider[$STORY_PROVIDER] -> CLI=$(provider_to_cli "$STORY_PROVIDER")"
 }
 
@@ -1874,10 +1889,27 @@ check_prerequisites() {
     if command -v "$CLAUDE_CMD" &> /dev/null; then
         : # claude is available — all paths work
     else
-        # Only fatal if stories are configured to use the claude provider
-        if grep -q '"aiProvider"' "${PRD_FILE:-/dev/null}" 2>/dev/null && \
-           jq -e '.stories[].aiProvider // "codex" | select(. == "claude" or . == "codemie-claude")' \
-               "${PRD_FILE:-/dev/null}" >/dev/null 2>&1; then
+        # TWO INDEPENDENT WAYS A STORY CAN NEED CLAUDE, both checked — this used to check only
+        # the second and assumed "codex" for the first, so a PRD where every story leaves
+        # aiProvider unset (the normal case) short-circuited straight to "OK, no story needs
+        # claude" on the SAME machine where every unassigned story is about to resolve to claude.
+        #
+        # 1. THE ACTIVE SET'S OWN DEFAULT. What resolve_provider_settings() gives an UNASSIGNED
+        #    story is exactly what resolve_primary_provider resolves with no candidate — if that
+        #    is claude-family, every unassigned story needs the CLI, full stop.
+        _default_needs_claude=0
+        case "$(resolve_primary_provider)" in
+            claude|codemie-claude) _default_needs_claude=1 ;;
+        esac
+        # 2. AN EXPLICIT PER-STORY OVERRIDE. A story can name claude/codemie-claude even when the
+        #    set's own default is something else, as long as the active set can route it — the
+        #    same routability question resolve_primary_provider answers for the DEFAULT case, but
+        #    jq cannot call a bash function, so this stays a direct field check. `// empty`, not
+        #    `// "codex"`: an unset field is genuinely unset, not a second, competing default.
+        if [ "$_default_needs_claude" = "1" ] || \
+           { grep -q '"aiProvider"' "${PRD_FILE:-/dev/null}" 2>/dev/null && \
+             jq -e '.stories[].aiProvider // empty | select(. == "claude" or . == "codemie-claude")' \
+                 "${PRD_FILE:-/dev/null}" >/dev/null 2>&1; }; then
             error "Claude CLI not found. Expected command: $CLAUDE_CMD"
             error "Install Claude Code CLI or set CLAUDE_CMD environment variable"
             exit 1
@@ -9438,7 +9470,8 @@ implement_story() {
         unset EPAM_TEMPERATURE
     fi
     # For epam-run providers, prd.json .model field overrides effort-based model
-    case "${STORY_PROVIDER:-codex}" in
+    STORY_PROVIDER="$(resolve_primary_provider "${STORY_PROVIDER:-}")"
+    case "$STORY_PROVIDER" in
         codex) resolve_codex_model_settings "$story_id" ;;
         copilot|openai|openrouter|cursor|minimax) resolve_model_from_story "$story_id" ;;
     esac
@@ -9518,7 +9551,8 @@ implement_story() {
     RUNNER_FLAGS=()
     apply_runner_settings "$(basename "${CLAUDE_CMD:-}")" "${EPAM_PROJECT_CONFIG_DIR:-}" || true
     local story_cli
-    story_cli=$(provider_to_cli "${STORY_PROVIDER:-codex}")
+    STORY_PROVIDER="$(resolve_primary_provider "${STORY_PROVIDER:-}")"
+    story_cli=$(provider_to_cli "$STORY_PROVIDER")
 
     # Planning phase: when plannerModel is set, run one planning invocation first.
     # The returned plan is injected into every execution attempt as fixed context.
@@ -10148,7 +10182,8 @@ $_kb_section"
         local _timeout_prefix=()
         [ -n "${EPAM_STORY_TIMEOUT_SECS:-}" ] && _timeout_prefix=(timeout "$EPAM_STORY_TIMEOUT_SECS")
 
-        case "${STORY_PROVIDER:-codex}" in
+        STORY_PROVIDER="$(resolve_primary_provider "${STORY_PROVIDER:-}")"
+        case "$STORY_PROVIDER" in
             opencode)
                 # OpenCode: pass prompt via temp file (prompts can exceed arg limits)
                 # --format json emits JSONL stream; we normalize it after

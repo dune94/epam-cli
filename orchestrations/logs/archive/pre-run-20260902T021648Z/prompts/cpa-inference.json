@@ -1,0 +1,19 @@
+{
+  "$why": [
+    "Generated from the cpa-inference template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "Context for the gotransit project (next.gotransit.com):\n- Tech stack: Next.js, React, TypeScript\n- Forms use react-hook-form library\n- Testing: Jest via `npm run test`; pretest step runs `npm run build:config`\n- Code quality: lint-staged hooks on pre-commit; branch names must match `^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$`\n- The ticket AMSD-1919 requires fixing case sensitivity in email validation (CheckoutForm.tsx ~line 307)\n\n__SYSTEM_PROMPT__\n\n---\n\n__SECTIONS__\n\n---\n\nRespond with ONLY the JSON object as specified in your instructions. No prose, no markdown fences.",
+  "derivedFromSha256": "57120c129bde372daffdd0c3678a56752e78d8a9e708194db1ffab96c9dc7828",
+  "derivedFromVersion": 1,
+  "id": "cpa-inference",
+  "placeholders": [
+    "__SECTIONS__",
+    "__SYSTEM_PROMPT__"
+  ],
+  "mayBeEmpty": [
+    "__SYSTEM_PROMPT__"
+  ]
+}

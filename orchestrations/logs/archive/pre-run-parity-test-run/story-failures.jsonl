@@ -1,2 +1,1 @@
-{"storyId":"MOCK3-1","failureClass":"unknown","model":"claude-haiku-4-5-20251001","attempt":0,"exitCode":1,"rawBytes":0,"outputTokens":1394,"maxIterations":12,"timestamp":"2026-08-28T19:53:08Z"}
-{"storyId":"MOCK3-2","failureClass":"unknown","model":"claude-haiku-4-5-20251001","attempt":0,"exitCode":1,"rawBytes":0,"outputTokens":1530,"maxIterations":19,"timestamp":"2026-08-28T19:53:10Z"}
+{"storyId":"AMSD-1919","failureClass":"unknown","model":"claude-haiku-4-5-20251001","attempt":0,"exitCode":1,"rawBytes":0,"outputTokens":4715,"maxIterations":16,"timestamp":"2026-09-03T00:12:01Z"}

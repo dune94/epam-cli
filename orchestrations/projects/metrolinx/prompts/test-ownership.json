@@ -1,0 +1,14 @@
+{
+  "$why": [
+    "Generated from the test-ownership template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "## Tests are NOT your job this turn\nA dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix to the CheckoutPage component for the email case sensitivity issue.\n\nThis project runs tests via `npm test` (Jest). The existing spec file at `src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx` will be extended by the test-writer agent after your fix, and your change will be reviewed separately from those tests.\n\nThis is not a suggestion you can trade against a review comment: the reviewer has been given the same rule and will not reject you for absent tests. If a prior review comment appears to demand a test, it is stale — resolve it by making the fix correct, and say in your final message that test authorship belongs to the test-writer.\n\nAdding a test here wastes your turn budget and has caused repeated failures. Your pre-commit hooks (husky) will run lint-staged, but they enforce branch naming and commit message format — not test presence.\n\n## Test authorship is NOT this agent's responsibility\nThe implementer you are reviewing was explicitly forbidden to write, edit or create any test file (*.test.*, *.spec.*, __tests__/). A dedicated test-writer agent runs after the fix commits and owns that work, and its output is reviewed separately.\n\nTherefore: NEVER raise a blocker, or any finding, for absent or insufficient tests on the implementer's change. It could not have satisfied it, so the story cannot progress — that is an unwinnable gate, and it has cost whole runs.\n\nJudge the FIX: does it address the email case sensitivity root cause in the CheckoutPage, is it the smallest change that does so, does it preserve what the existing code guaranteed. Test coverage is checked elsewhere via `npm test` and by the test-writer's own review of the spec file at `src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx`.",
+  "derivedFromSha256": "718d345b313ca29f806483c8edb402501ed9adff35cc839900684adcad79594b",
+  "derivedFromVersion": 1,
+  "id": "test-ownership",
+  "placeholders": [],
+  "mayBeEmpty": []
+}

@@ -1,0 +1,25 @@
+{
+  "base": "957a00ff77feb409220cc71938edeba9d7f6e3c3cb1537568e4cfbf48e98eb4f",
+  "roles": "cba40c8d074c4d64c77797ecd197364528d4ecd811556b555399fa30d17d8b6b",
+  "usesRoles": false,
+  "doc": {
+    "$why": [
+      "Generated from the cpa-inference template by the agent that minted this project's roster.",
+      "The template is never executed; this copy is. Placeholders were checked against the",
+      "template before installation — see lib/project-prompt-contract.js."
+    ],
+    "authority": "project",
+    "body": "__SYSTEM_PROMPT__\n\n---\n\n__SECTIONS__\n\n---\n\nRespond with ONLY the JSON object as specified in your instructions. No prose, no markdown fences.",
+    "derivedFromSha256": "57120c129bde372daffdd0c3678a56752e78d8a9e708194db1ffab96c9dc7828",
+    "derivedFromVersion": 1,
+    "id": "cpa-inference",
+    "placeholders": [
+      "__SECTIONS__",
+      "__SYSTEM_PROMPT__"
+    ],
+    "mayBeEmpty": [
+      "__SYSTEM_PROMPT__"
+    ]
+  },
+  "reviewed": true
+}

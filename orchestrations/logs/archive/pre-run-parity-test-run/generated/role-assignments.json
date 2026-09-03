@@ -1,14 +1,8 @@
 [
   {
-    "storyId": "MOCK3-1",
-    "codeline": "mocka",
-    "agentRole": "fare-rules-engineer",
-    "reason": "pre-assigned (validated, not regenerated)"
-  },
-  {
-    "storyId": "MOCK3-2",
-    "codeline": "mockb",
-    "agentRole": "schedule-display-engineer",
+    "storyId": "AMSD-1919",
+    "codeline": "gotransit",
+    "agentRole": "checkout-form-engineer",
     "reason": "pre-assigned (validated, not regenerated)"
   }
 ]

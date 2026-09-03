@@ -1,10 +1,10 @@
 {
   "minted": [
     {
-      "name": "checkout-forms-engineer",
+      "name": "checkout-form-engineer",
       "kind": "implementer",
       "codeline": "",
-      "rationale": "The ticket AMSD-1919 requires an actual code change to CheckoutForm.tsx's confirmEmail validate rule, and since none of the pre-existing named roles are scoped to this project, a dedicated implementer with ownership of the CheckoutPage form files is required to author the fix.",
+      "rationale": "AMSD-1919 requires an actual code change to the case-sensitive confirmEmail validate rule at CheckoutForm.tsx's TRM774 check, and only an implementer can write that fix into the react-hook-form validation logic.",
       "surfaces": [
         "profiles.json",
         "kb",
@@ -13,10 +13,10 @@
       ]
     },
     {
-      "name": "checkout-flow-detective",
+      "name": "checkout-form-detective",
       "kind": "investigator",
       "codeline": "gotransit",
-      "rationale": "AMSD-1919's fix site and its existing test scaffolding both live in CheckoutForm.tsx and CheckoutForm.spec.tsx, so the implementer needs a confirmed map of the validate rule, its line numbers, and the surrounding form/test conventions before touching either file.",
+      "rationale": "The survey's findings about CheckoutForm.tsx's TRM774 comparison and CheckoutForm.spec.tsx's test gaps are leads from a single limited pass and must be re-verified against the live gotransit repository before the implementer relies on them.",
       "surfaces": [
         "profiles.json",
         "kb",
@@ -28,18 +28,13 @@
   "rejected": [],
   "unchanged": [],
   "projectRoles": [
-    "checkout-forms-engineer"
+    "checkout-form-engineer"
   ],
   "projectInvestigators": [
-    "checkout-flow-detective"
+    "checkout-form-detective"
   ],
-  "rejectedAcrossAttempts": [
-    {
-      "name": "checkout-flow-detective",
-      "reason": "brief names 1 path(s) that do not exist in codeline 'gotransit': __tests__/CheckoutForm.spec.tsx"
-    }
-  ],
-  "proposed": 3,
-  "attempts": 2,
+  "proposed": 2,
+  "rejectedAcrossAttempts": [],
+  "attempts": 1,
   "protectedRoles": 21
 }

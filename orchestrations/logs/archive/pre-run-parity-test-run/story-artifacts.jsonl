@@ -1,6 +1,1 @@
-{"storyId":"MOCK3-1","phase":"core","status":"attempt","elapsedMinutes":0.31,"costUsd":0.0368469,"turns":4,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-28T19:53:07Z"}
-{"storyId":"MOCK3-2","phase":"core","status":"attempt","elapsedMinutes":0.35,"costUsd":0.025118900000000003,"turns":4,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-28T19:53:09Z"}
-{"storyId":"MOCK3-2","phase":"core","status":"attempt","elapsedMinutes":0.65,"costUsd":0.05339540000000001,"turns":6,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-28T19:54:17Z"}
-{"storyId":"MOCK3-2","phase":"core","status":"completed","elapsedMinutes":1.51,"costUsd":0.05339540000000001,"turns":6,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-28T19:54:18Z"}
-{"storyId":"MOCK3-1","phase":"core","status":"attempt","elapsedMinutes":0.93,"costUsd":0.0835722,"turns":13,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-28T19:54:31Z"}
-{"storyId":"MOCK3-1","phase":"core","status":"completed","elapsedMinutes":1.76,"costUsd":0.0835722,"turns":13,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-28T19:54:33Z"}
+{"storyId":"AMSD-1919","phase":"core","status":"attempt","elapsedMinutes":1.40,"costUsd":0.16477290000000003,"turns":14,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-09-03T00:08:40Z"}

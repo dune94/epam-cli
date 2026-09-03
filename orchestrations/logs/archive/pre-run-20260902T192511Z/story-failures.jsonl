@@ -1,0 +1,3 @@
+{"storyId":"AMSD-1919","failureClass":"unknown","model":"claude-haiku-4-5-20251001","attempt":0,"exitCode":1,"rawBytes":0,"outputTokens":3070,"maxIterations":16,"timestamp":"2026-09-02T19:15:14Z"}
+{"storyId":"AMSD-1919","failureClass":"unknown","model":"claude-haiku-4-5-20251001","attempt":1,"exitCode":1,"rawBytes":0,"outputTokens":0,"maxIterations":16,"timestamp":"2026-09-02T19:17:52Z"}
+{"storyId":"AMSD-1919","failureClass":"unknown","model":"claude-sonnet-5","attempt":2,"exitCode":1,"rawBytes":0,"outputTokens":0,"maxIterations":21,"timestamp":"2026-09-02T19:20:15Z"}

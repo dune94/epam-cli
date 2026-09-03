@@ -1,0 +1,11 @@
+{"storyId":"AMSD-1919","failureClass":"unknown","model":"claude-sonnet-5","attempt":0,"exitCode":1,"rawBytes":0,"outputTokens":516,"maxIterations":16,"timestamp":"2026-09-02T11:36:12Z"}
+{"storyId":"AMSD-1919","failureClass":"unknown","model":"claude-sonnet-5","attempt":0,"exitCode":1,"rawBytes":0,"outputTokens":1326,"maxIterations":16,"timestamp":"2026-09-02T11:42:14Z"}
+{"storyId":"AMSD-1919","failureClass":"unknown","model":"claude-sonnet-5","attempt":1,"exitCode":1,"rawBytes":0,"outputTokens":0,"maxIterations":16,"timestamp":"2026-09-02T11:44:49Z"}
+{"storyId":"AMSD-1919","failureClass":"unknown","model":"claude-opus-5","attempt":2,"exitCode":1,"rawBytes":0,"outputTokens":0,"maxIterations":21,"timestamp":"2026-09-02T11:47:17Z"}
+{"storyId":"AMSD-1919","failureClass":"unknown","model":"claude-opus-5","attempt":3,"exitCode":1,"rawBytes":0,"outputTokens":0,"maxIterations":26,"timestamp":"2026-09-02T11:49:42Z"}
+{"storyId":"AMSD-1919","failureClass":"unknown","model":"claude-opus-5","attempt":4,"exitCode":1,"rawBytes":0,"outputTokens":0,"maxIterations":31,"timestamp":"2026-09-02T11:51:58Z"}
+{"storyId":"AMSD-1919","failureClass":"unknown","model":"claude-opus-5","attempt":5,"exitCode":1,"rawBytes":0,"outputTokens":0,"maxIterations":36,"timestamp":"2026-09-02T11:54:13Z"}
+{"storyId":"AMSD-1919","failureClass":"unknown","model":"claude-opus-5","attempt":6,"exitCode":1,"rawBytes":0,"outputTokens":0,"maxIterations":41,"timestamp":"2026-09-02T11:56:29Z"}
+{"storyId":"AMSD-1919","failureClass":"unknown","model":"claude-opus-5","attempt":7,"exitCode":1,"rawBytes":0,"outputTokens":0,"maxIterations":46,"timestamp":"2026-09-02T11:58:43Z"}
+{"storyId":"AMSD-1919","failureClass":"unknown","model":"claude-opus-5","attempt":8,"exitCode":1,"rawBytes":0,"outputTokens":0,"maxIterations":51,"timestamp":"2026-09-02T12:01:19Z"}
+{"storyId":"AMSD-1919","failureClass":"unknown","model":"claude-opus-5","attempt":9,"exitCode":1,"rawBytes":0,"outputTokens":0,"maxIterations":56,"timestamp":"2026-09-02T12:03:47Z"}

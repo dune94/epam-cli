@@ -1,0 +1,28 @@
+{
+  "$why": [
+    "Generated from the spec-story-block template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "__PERSONA__STORY\nTitle: __TITLE__\nDescription: __DESCRIPTION__\nComponents: __COMPONENTS__\nDeclared files: __DECLARED_FILES__\n\nLINKS FOUND IN THIS TICKET:\n__LINK_BLOCK__\n\nCOMMENT THREAD (context for judging relevance — a link's surrounding discussion often says why it was posted):\n__COMMENT_BLOCK__\n__RETRIEVED_DOCS__\n\nALREADY RETRIEVED — these documents have been fetched for you and written to disk. Read them\nwith read_file rather than fetching them again; the text is the same and it costs you nothing:\n__DOC_PATHS__\nA document listed here that you did not read is a document you cannot quote.\n\nThis ticket concerns the Go-Checkout page (`src/components/pages/CheckoutPage`) in the gotransit codeline. When you touch email/confirm-email validation logic, plan to extend the existing spec at `src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx` and run it with `npm test` (jest). Note that a pre-commit hook enforces the branch naming pattern `^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$` and a commit-msg hook runs commitlint on your commit message — plan branch and commit naming accordingly.",
+  "derivedFromSha256": "41b6c41e78b4fc06be6b740b6110f0fa2010ba754f4f9639fc3df7228b2e7b19",
+  "derivedFromVersion": 1,
+  "id": "spec-story-block",
+  "placeholders": [
+    "__COMMENT_BLOCK__",
+    "__COMPONENTS__",
+    "__DECLARED_FILES__",
+    "__DESCRIPTION__",
+    "__DOC_PATHS__",
+    "__LINK_BLOCK__",
+    "__PERSONA__",
+    "__RETRIEVED_DOCS__",
+    "__TITLE__"
+  ],
+  "mayBeEmpty": [
+    "__DOC_PATHS__",
+    "__RETRIEVED_DOCS__",
+    "__COMMENT_BLOCK__"
+  ]
+}

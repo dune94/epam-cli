@@ -1,0 +1,20 @@
+{
+  "$why": [
+    "Generated from the prd-model-coordinator template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "__PROFILE__\n\nPRD file: __MC_PRD_TARGET__\nPhase: __MC_PHASE__\n\nAssign model, aiProvider, and reasoningEffort to every pending story in this phase that is missing one or more of these fields. Write the updated PRD back to the file, then emit the JSON summary.\n\nPERMITTED MODELS — the only model names this run can route, in ladder order. The FIRST is the\nopening model: default to it when a story has no assignment.\n__MC_PERMITTED_MODELS__\n\nPERMITTED PROVIDERS — the only provider names this run can route:\n__MC_PERMITTED_PROVIDERS__\n\n---\n\n## Project Context: goTransit (Metrolinx)\n\nThis specialization targets the goTransit Next.js/React application. The scope is ticket AMSD-1919: email and confirm email case sensitivity in the checkout flow.\n\n**Codebase:**\n- TypeScript + React with Next.js framework\n- Component under focus: src/components/pages/CheckoutPage\n- Form management: react-hook-form\n- Tests: Jest via `npm test`; existing spec at src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx\n- Pre-commit hooks enforce branch pattern (^(feature|bugfix|tech|release|hotfix)/...) and commitlint validation\n\n**Story Context for Model Assignment:**\nStories in this phase likely address email validation, field normalization, and confirmation logic in the checkout. Consider the complexity of email case-sensitivity handling, form state management, and test coverage needs when assigning models and reasoning effort.",
+  "derivedFromSha256": "7abfcf6673982674306927872d7278c6f606a13a88e67a1caf8852886479a836",
+  "derivedFromVersion": 1,
+  "id": "prd-model-coordinator",
+  "placeholders": [
+    "__MC_PERMITTED_MODELS__",
+    "__MC_PERMITTED_PROVIDERS__",
+    "__MC_PHASE__",
+    "__MC_PRD_TARGET__",
+    "__PROFILE__"
+  ],
+  "mayBeEmpty": []
+}

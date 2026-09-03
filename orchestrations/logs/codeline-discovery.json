@@ -3,23 +3,19 @@
     {
       "name": "gotransit",
       "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
-      "reason": "Implements the Go-Checkout page's Email and Confirm Email fields, including the exact case-sensitive comparison the ticket describes.",
-      "evidence": "src/components/pages/CheckoutPage/CheckoutForm.tsx:306 — `validate: (value: string) => { if (email && value && value !== email) { return t(\"TRM774\"); } }` — a strict `!==` comparison with no case normalization, matching the ticket's description of an email-casing mismatch on the Checkout page's Email/Confirm Email fields.",
+      "reason": "Implements the GO Transit checkout page's confirm-email validation, where the reported case-sensitive mismatch actually lives.",
+      "evidence": "src/components/pages/CheckoutPage/CheckoutForm.tsx:306 `validate: (value: string) => { if (email && value && value !== email) { return t(\"TRM774\"); } }` — a raw case-sensitive `!==` comparison between the email and confirmEmail fields",
       "facts": [
         {
-          "text": "Tests run via `jest` (npm run test); `test:coverage-check` runs `jest --coverage` after `npm run build:config`.",
-          "source": "package.json scripts: \"test\": \"jest\", \"pretest:coverage-check\": \"npm run build:config\", \"test:coverage-check\": \"jest --coverage\""
+          "text": "Tests run via `jest` (`npm test`), and the component under fix has an existing spec file at src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx to extend.",
+          "source": "package.json: \"test\": \"jest\"; presence of __tests__/CheckoutForm.spec.tsx alongside CheckoutForm.tsx"
         },
         {
-          "text": "A pre-commit hook (husky) runs `npx lint-staged` and then rejects the commit unless the current branch name matches `^(feature|bugfix|tech|release|hotfix)\\/[a-zA-Z0-9.-]+(\\/[a-z0-9-]+)?$`.",
-          "source": ".husky/pre-commit"
-        },
-        {
-          "text": "lint-staged runs `npm run check-types` on any staged .ts/.tsx file, plus eslint and prettier --write on staged .ts/.js/.tsx/.jsx files.",
-          "source": ".lintstagedrc.js"
+          "text": "A pre-commit hook (husky) runs lint-staged and rejects the commit unless the current branch name matches ^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$, and a commit-msg hook runs commitlint on the message.",
+          "source": ".husky/pre-commit (branch name regex check) and .husky/commit-msg (`npx --no-install commitlint --edit \"$1\"`)"
         }
       ],
-      "modelName": "nextgotransit"
+      "modelName": "nextgotransitcom"
     }
   ]
 }

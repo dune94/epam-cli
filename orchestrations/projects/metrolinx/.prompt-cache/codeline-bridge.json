@@ -1,0 +1,26 @@
+{
+  "base": "4b0eabd5c851b3d2a2abeb4b018c2a036535b015b16c9135b5cd8853b401e1b6",
+  "roles": "cba40c8d074c4d64c77797ecd197364528d4ecd811556b555399fa30d17d8b6b",
+  "usesRoles": false,
+  "doc": {
+    "$why": [
+      "Generated from the codeline-bridge template by the agent that minted this project's roster.",
+      "The template is never executed; this copy is. Placeholders were checked against the",
+      "template before installation — see lib/project-prompt-contract.js."
+    ],
+    "authority": "project",
+    "body": "__BRIDGE_PROFILE__\n\n## Variables for this run\n\n- BRIDGE_SRC_CODELINE: __BCL__\n- BRIDGE_SRC_DIR: __BWT__\n- BRIDGE_OUT_FILE: __BRIDGE_OUT__\n- BRIDGE_PRD_FILE: __BPRD__\n\nExtract the exported API surface from the '__BCL__' codeline files and write the cross-codeline contract to __BRIDGE_OUT__.\n\n## Project context for this extraction\n\nThis is the `gotransit` Next.js + TypeScript codeline at `/home/bradleyjerome/projects/metrolinx/next.gotransit.com`. The ticket in scope is AMSD-1919 (Go‑Checkout Page — Email & Confirm Email case sensitivity), and the surface the survey verified in this codeline is `src/components/pages/CheckoutPage`.\n\nWhen reading the '__BCL__' codeline files under __BWT__ to derive the contract, note the following about how this codebase is actually laid out — record what you observe, never what you assume:\n\n- Source lives under `src/`; page-level React components live under `src/components/pages/<PageName>/`, with their tests colocated in a sibling `__tests__/` directory (e.g. `src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx` next to `CheckoutForm.tsx`). When you report a symbol's location, use the repo-relative path in that form.\n- The exported surface of a component directory is usually re-exported through an index barrel; if one exists, treat the barrel as the authoritative public surface for that directory and note which symbols are only reachable via deep import.\n- This is TypeScript. For each exported symbol, capture the real type information the file states — prop interfaces/types, exported type aliases and enums — not a prose paraphrase. Exported types are as much a part of the contract as exported functions and components.\n- Forms in this codeline are built on `react-hook-form` (with `@hookform/error-message`) and validation on `joi`; user-facing strings go through `next-i18next` / `react-i18next` / `i18next`. If an exported symbol's contract depends on one of these (a schema it exports, a control/register prop it expects, a translation key namespace it requires), state that dependency explicitly — a later lane consuming this contract cannot infer it from the signature alone.\n- Record only what the files actually export. Do not list internal helpers that are not exported, and do not invent a symbol, prop, path or type that you did not read in the source.\n\nVerification commands available in this codeline, should you need to confirm that a symbol resolves or that the surface type-checks: `npm test` (jest) for tests, and the project's `typescript` toolchain for type checking. Do not run builds or write to files other than __BRIDGE_OUT__.",
+    "derivedFromSha256": "ac6209cc602f168e39ad8e6459ba79e96693037da4798d4b4719e1d64a772eed",
+    "derivedFromVersion": 1,
+    "id": "codeline-bridge",
+    "placeholders": [
+      "__BCL__",
+      "__BPRD__",
+      "__BRIDGE_OUT__",
+      "__BRIDGE_PROFILE__",
+      "__BWT__"
+    ],
+    "mayBeEmpty": []
+  },
+  "reviewed": true
+}

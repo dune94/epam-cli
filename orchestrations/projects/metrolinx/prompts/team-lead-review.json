@@ -1,0 +1,39 @@
+{
+  "$why": [
+    "Generated from the team-lead-review template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "__REVIEW_PROFILE__\n\n---\nREVIEW TASK: Story __STORY_ID__ — __STORY_TITLE__\n\nDESCRIPTION:\n__STORY_DESC__\n\nACCEPTANCE CRITERIA:\n__VC_BLOCK__\n__UNCOVERED_VC_BLOCK__\n__FIX_ANALYSIS_BLOCK__\n__BLOCKER_DISCIPLINE__\n\nRELEVANT FILES (fix files + the reproducing test the pipeline shipped — review BOTH): __STORY_FILES__ __TEST_FILES__\n\nGIT DIFF (recent changes):\n```diff\n__STORY_DIFF__\n```\n\nPROJECT ROOT: __PROJECT_ROOT__\n__CODEGRAPH_TOOL_BLOCK__\n\nCREDENTIALS. Call scan_secrets with the diff above before you finish. It reports values that\nhave been PASTED INTO the code — a quoted, long, high-entropy literal assigned to a\ncredential-shaped name. It deliberately does NOT report references (an identifier, a member\nexpression, a process.env read), because those are the correct practice: a pasted key is always\na literal, so nothing real is missed by ignoring them.\n\n  scan_secrets(diff=\"<the GIT DIFF above>\")\n\nJudge what it returns; it does not block anything. A finding is a blocker — a credential in\nsource is not fixable after the fact once committed. An empty result is not proof of safety on\nits own, so if the diff introduces configuration you can still say so in your own words.\n\nThis check used to run at commit time and matched `name: value` on shape alone. On 2026-08-09\nit refused a correct commit for `management_token: SOME_SERVICE_API_TOKEN` — an\nenvironment-derived identifier — and had never caught a real leak. It is yours now because you\nhave the diff and can tell the two apart.\n\nReview the implementation against each acceptance criterion above.\nCheck: TypeScript strict compliance, error handling, security (OWASP).\n__TEST_OWNERSHIP__\n\nThis story (AMSD-1919) concerns email/confirm-email case-sensitivity handling on the Go-Checkout\npage, in the src/components/pages/CheckoutPage surface — the validation logic lives in\nCheckoutForm.tsx and its existing spec is CheckoutForm.spec.tsx. Do not assume from this prompt\nwhere in that file the case-sensitivity comparison lives or what it currently does — a prior\ninvestigation pass flagged a candidate location and comparison behavior, but that lead has not\nbeen independently confirmed against the live repository. Verify the actual validation rule and\nits location yourself by reading the diff and the file under PROJECT_ROOT before judging whether\nthe fix addresses the described case-sensitivity issue at its root, rather than treating any\nspecific line or check name as already established.\n\nCONCISION & REUSE (blocker-level checks):\n- If the change addresses the symptom but NOT the prescribed root cause above (e.g. adds new code paths the bug never reaches), that is a 'blocker' — request changes.\n- If a MORE CONCISE change (fewer lines) would achieve the same acceptance criteria, request changes and name the smaller change. Fewer lines of code is always better.\n- If the diff hand-rolls logic that an EXISTING function/helper already provides (verify with the tool above), that is a 'blocker' — request changes and name the helper to reuse instead.\n- Do NOT approve an over-engineered fix just because it satisfies the AC wording.\n\nTEST COVERAGE VERIFICATION (grounded, not a visual skim — found live 2026-08-03,\nObserved live: the reviewer claimed 2 of 3 required test scenarios were missing,\nTWICE in a row, against a diff that unambiguously contained all 3 as clearly-\nnamed `it(...)` blocks — a real, reproducible failure to verify a claim the\ntools below could have confirmed in one call):\n- Before flagging ANY acceptance-criteria test scenario as missing or absent, use\n  the search tool to grep the diff above (or read_file on the test file under\n  PROJECT_ROOT) for an `it(`/`test(` block whose name or body plausibly covers\n  that scenario. A large diff is easy to skim past a matching block — search for\n  it, do not judge from a visual read alone.\n- If your search finds a plausible match, do NOT flag that scenario as missing —\n  if the test's assertions are wrong or incomplete, say so specifically (quote\n  the test name and what it fails to assert); 'missing' and 'inadequate' are\n  different findings and must not be conflated.\n- If your search finds nothing, name the exact search you ran (tool + query) in\n  the issue description, so a genuinely absent test is distinguishable from an\n  unverified guess.\n- Tests in this project run via `jest` (`npm test`); the reproducing test for this fix should\n  extend the existing src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx rather\n  than introducing a parallel spec file.\nDo NOT read from external URLs.\n__LEARNED_RULES_BLOCK__\n__PROJECT_TOOLS_BLOCK__\n\nRespond with ONLY a JSON object (no markdown fences):\n{\"verdict\":\"approved\",\"issues\":[],\"summary\":\"...\"}\n  OR\n{\"verdict\":\"changes_requested\",\"issues\":[{\"severity\":\"blocker|major|minor\",\"file\":\"...\",\"line\":0,\"description\":\"...\",\"suggestedFix\":\"...\"}],\"summary\":\"...\"}\n\nA 'blocker' issue MUST be fixed before merge. 'major' should be fixed. 'minor' is optional.\n\nEvery issue MUST carry an `evidence` field: the exact thing you READ that establishes it — `<path>:<line>` you opened, or the command you ran and what it returned. Not a restatement of the claim, not a plan reference: what you looked at. An issue without evidence is DISCARDED before it reaches anyone, so an unsupported finding is worse than no finding — it costs you the issue. If a claim is about a library's API, the evidence is that library's installed types or source in this repository, and the installed contract beats the plan.\n\n\n__PRIOR_REVIEW__\nCONSISTENCY WITH YOUR OWN PREVIOUS VERDICTS\n\nIf you raised a blocker on an earlier iteration and the code that caused it has not changed, that\nblocker still stands: raise it again, and do NOT approve. Dropping a finding is a decision that the\nfinding was wrong — if you now believe that, say so explicitly and give the evidence that changed\nyour mind. Silence is not resolution, and an approval that follows an unresolved blocker is the one\noutcome this pipeline cannot detect for itself.\n\nIf the code HAS changed, judge the change on its merits: a previous blocker is not a permanent one.\n\n\nACCOUNT FOR EVERY VERIFICATION CRITERION. Alongside the verdict, emit `vcAssessment`: one entry per criterion listed above, `{\"criterion\":\"<the criterion, restated>\",\"met\":true|false,\"evidence\":\"<path>:<line> you opened, or the command you ran and what it returned>\"}`. An approval that names no criterion cannot be checked by anyone afterwards. Do NOT approve while marking a criterion unmet — that contradiction is rejected automatically and costs you the review.",
+  "derivedFromSha256": "30759f83f3ad5ae045ecc7b435ba629be79598fe723a0f99017289f6ba46d359",
+  "derivedFromVersion": 2,
+  "id": "team-lead-review",
+  "placeholders": [
+    "__BLOCKER_DISCIPLINE__",
+    "__CODEGRAPH_TOOL_BLOCK__",
+    "__FIX_ANALYSIS_BLOCK__",
+    "__LEARNED_RULES_BLOCK__",
+    "__PRIOR_REVIEW__",
+    "__PROJECT_ROOT__",
+    "__PROJECT_TOOLS_BLOCK__",
+    "__REVIEW_PROFILE__",
+    "__STORY_DESC__",
+    "__STORY_DIFF__",
+    "__STORY_FILES__",
+    "__STORY_ID__",
+    "__STORY_TITLE__",
+    "__TEST_FILES__",
+    "__TEST_OWNERSHIP__",
+    "__UNCOVERED_VC_BLOCK__",
+    "__VC_BLOCK__"
+  ],
+  "mayBeEmpty": [
+    "__LEARNED_RULES_BLOCK__",
+    "__PRIOR_REVIEW__",
+    "__UNCOVERED_VC_BLOCK__",
+    "__FIX_ANALYSIS_BLOCK__",
+    "__TEST_FILES__",
+    "__PROJECT_TOOLS_BLOCK__"
+  ]
+}

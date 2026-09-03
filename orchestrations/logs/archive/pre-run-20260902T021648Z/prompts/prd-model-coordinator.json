@@ -1,0 +1,20 @@
+{
+  "$why": [
+    "Generated from the prd-model-coordinator template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "__PROFILE__\n\nPRD file: __MC_PRD_TARGET__\nPhase: __MC_PHASE__\n\nAssign model, aiProvider, and reasoningEffort to every pending story in this phase that is missing one or more of these fields. Write the updated PRD back to the file, then emit the JSON summary.\n\nPERMITTED MODELS — the only model names this run can route, in ladder order. The FIRST is the\nopening model: default to it when a story has no assignment.\n__MC_PERMITTED_MODELS__\n\nPERMITTED PROVIDERS — the only provider names this run can route:\n__MC_PERMITTED_PROVIDERS__\n\n## Project Context: Metrolinx gotransit (Next.js TypeScript)\n\n**Ticket in scope:** AMSD-1919 — case-sensitivity fix for confirmEmail validation in CheckoutForm.tsx (~line 307)\n\n**Key stack facts for reasoning assignment:**\n- Next.js with TypeScript, React, react-hook-form for validation\n- Jest for testing (`npm run test`)\n- Coverage via `npm run test:coverage-check` (requires `npm run build:config` pretest)\n- Monorepo pattern with @metrolinx/cx-shared dependency\n- Checkout flow components in src/components/pages/CheckoutPage\n- Requires implementer with write access to make the fix\n\n**Git convention (enforced by pre-commit hook):**\n- Branch name pattern: `^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$`\n- Current branch (bugfix/AI-AMSD-2041) is valid\n\n**Assignment guidance:**\nStories involving form validation edge cases, email handling, or checkout UX changes benefit from reasoning-capable models. Prefer deeper reasoning effort for case-sensitivity and validation logic refinement work.",
+  "derivedFromSha256": "7abfcf6673982674306927872d7278c6f606a13a88e67a1caf8852886479a836",
+  "derivedFromVersion": 1,
+  "id": "prd-model-coordinator",
+  "placeholders": [
+    "__MC_PERMITTED_MODELS__",
+    "__MC_PERMITTED_PROVIDERS__",
+    "__MC_PHASE__",
+    "__MC_PRD_TARGET__",
+    "__PROFILE__"
+  ],
+  "mayBeEmpty": []
+}

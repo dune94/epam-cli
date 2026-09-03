@@ -1,0 +1,21 @@
+{
+  "_what": "What each codeline IS and what an agent working inside it needs to know that the source does not say. Produced by the codeline-discovery agent during THIS run and rewritten every run — never accumulated, so nothing here is older than the run that wrote it. The engine splits this per codeline into each worktree's .epam/.",
+  "_shape": "Codeline names are TOP-LEVEL keys, because the engine extracts one with jq '.[$cl]'. Nesting them under another key parses fine and yields nothing for every codeline.",
+  "gotransit": {
+    "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
+    "facts": [
+      {
+        "text": "Tests run via `npm run test` (jest); `npm run test:coverage-check` runs `jest --coverage` and depends on `pretest:coverage-check` running `npm run build:config` first.",
+        "source": "next.gotransit.com/package.json scripts: \"test\": \"jest\", \"pretest:coverage-check\": \"npm run build:config\", \"test:coverage-check\": \"jest --coverage\""
+      },
+      {
+        "text": "Build requires `build:config` and `download:uniform-manifest` to run before `next build` (prebuild/build scripts chain).",
+        "source": "next.gotransit.com/package.json scripts: \"prebuild\": \"npm run build:config\", \"build\": \"node -v && npm run clean-temp && npm run download:uniform-manifest && next build && ...\""
+      },
+      {
+        "text": "Existing tests already cover this file: CheckoutForm.spec.tsx, CheckoutFormContainer.spec.tsx, and Checkout.spec.tsx.",
+        "source": "next.gotransit.com/src/components/pages/CheckoutPage/__tests__/{CheckoutForm.spec.tsx,CheckoutFormContainer.spec.tsx,Checkout.spec.tsx}"
+      }
+    ]
+  }
+}

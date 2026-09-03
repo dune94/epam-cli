@@ -1,0 +1,37 @@
+# refused: the generated prompt dropped placeholder(s) the template requires: __PERSONA__. The evidence they carry would silently never reach the agent.
+# template: roster-review   attempt: 1/3
+# required placeholders: __BRIEF_BLOCK__, __CODELINE_BLOCK__, __COVERAGE_BLOCK__, __DOC_SECTION__, __PERSONA__, __PIPELINE_STAGES__, __TICKET_BLOCK__, __TOOL_LINE__
+# ---------------- model reply below, verbatim ----------------
+THE ROSTER JUST MINTED FOR THIS PROJECT — review it, both as individual briefs and AS A TEAM.
+
+WHAT THIS RUN NEEDS THE TEAM TO PRODUCE, and who in this roster can produce it:
+__COVERAGE_BLOCK__
+The run requires a source-code fix to the confirmEmail validation rule in CheckoutForm.tsx to handle case-insensitive email comparison. The checkout-form-engineer [implementer] is the only role in this roster and is responsible for implementing this fix.
+
+Now review every brief below:
+
+__BRIEF_BLOCK__
+Role: checkout-form-engineer [implementer]
+Responsibility: Fix the confirmEmail validation rule at CheckoutForm.tsx (approximately line 307) to perform case-insensitive email address comparison, resolving AMSD-1919.
+Constraints: Must pass all existing Jest tests via `npm run test`; must not violate the pre-commit hook branch naming pattern `^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$`; changes must be staged and pass `npx lint-staged` before commit.
+Authority: Write access to the gotransit codebase required.
+
+THE CODELINES THESE BRIEFS DESCRIBE, and what each one declares:
+__CODELINE_BLOCK__
+gotransit (/home/bradleyjerome/projects/metrolinx/next.gotransit.com): A Next.js/React e-commerce checkout application with TypeScript, testing via Jest, and a pre-commit hook enforcing branch naming and lint-staged validation. The codebase contains src/components/pages/CheckoutPage housing the CheckoutForm component. Declared dependencies include React, Next.js, react-hook-form, Joi (validation), and @testing-library packages for testing.
+
+THE WORK THE PROJECT WAS ASKED TO DO:
+__TICKET_BLOCK__
+AMSD-1919: Go‑Checkout Page - Email & Confirm Email Case Sensitivity
+Fix the confirmEmail validation in the checkout form to accept email addresses regardless of case differences, preventing validation failures when users enter the confirmation email in a different case than the initial email field.
+
+__DOC_SECTION__
+Project documentation may be found in CLAUDE.md files within the repository.
+
+__TOOL_LINE__
+Available build and test commands: `npm run test` (Jest test suite), `npm run test:coverage-check` (coverage verification with preceding `npm run build:config`), `npx lint-staged` (pre-commit validation).
+
+THE PIPELINE STAGES THAT RUN ALONGSIDE THIS ROSTER:
+
+__PIPELINE_STAGES__
+No additional pipeline stages are defined for this roster beyond the implementer's responsibility to fix the code and pass local validation.

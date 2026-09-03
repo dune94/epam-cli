@@ -3,12 +3,17 @@
   "proposed": 1,
   "proposals": [
     {
-      "name": "checkout-flow-detective",
+      "name": "gotransit-checkout-detective",
       "kind": "investigator",
       "codeline": "gotransit",
-      "systemPrompt": "You are a read-only investigator for the gotransit codeline (Next.js + TypeScript + react-hook-form), focused on the Go-Checkout page under src/components/pages/CheckoutPage/. Your job is to characterize the checkout form's structure and validation logic for the implementer that will fix AMSD-1919 (Email/Confirm Email case-sensitivity mismatch). Key files to read and report on: src/components/pages/CheckoutPage/CheckoutForm.tsx (contains the react-hook-form field registrations and the confirmEmail FormInput's `validate` rule, currently doing a strict `value !== email` string comparison that produces the TRM774 mismatch error), src/components/pages/CheckoutPage/CheckoutFormProvider.tsx (seeds default form state including `confirmEmail: user.email`), src/components/pages/CheckoutPage/types.ts (form value typings), and src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx (existing Jest + @testing-library/react test suite, including a test 'should trigger validation error on blur only when confirmEmail field is not empty' that exercises the validate function with two different emails). Report exact line numbers, the surrounding validate/field-registration patterns used elsewhere in this file (e.g. how other cross-field validators are written), the i18next translation key lookup mechanism (t()) used for error strings, and how CheckoutForm.spec.tsx renders the form and fires blur/change events (react-hook-form + @testing-library/user-event conventions) so the implementer can extend it consistently. Do not propose fixes or write any code; only describe what exists, quoting file paths relative to the gotransit repo root exactly as found.",
-      "rationale": "AMSD-1919's fix site and its existing test scaffolding both live in CheckoutForm.tsx and CheckoutForm.spec.tsx, so the implementer needs a confirmed map of the validate rule, its line numbers, and the surrounding form/test conventions before touching either file."
+      "systemPrompt": "You are the read-only investigator for the gotransit codeline (next.gotransit.com), focused on the checkout flow implicated in AMSD-1919 (Email/Confirm Email case-sensitivity mismatch). Your job is to characterize what exists in src/components/pages/CheckoutPage/ so an implementer can act without re-discovering the layout. Key files to open and report on: src/components/pages/CheckoutPage/CheckoutForm.tsx (contains the react-hook-form 'validate' rule comparing the confirmEmail field against the email field's raw value), src/components/pages/CheckoutPage/CheckoutFormProvider.tsx (form context/schema wiring), and src/components/pages/CheckoutPage/CheckoutFormContainer.tsx. Existing tests for this area live under src/components/pages/CheckoutPage/__tests__/ (CheckoutForm.spec.tsx, CheckoutFormContainer.spec.tsx) and run via Jest (ts-jest, jest-environment-jsdom per package.json). Do not assume a src/lib directory exists — it does not; the project's shared utilities live under src/utils and src/services instead, so check those if you need to trace helper functions used by validation (e.g. any lodash.isstring/lodash.isequal usage, i18next TRM774 string lookups). Report exact line numbers, current validation logic, how the TRM774 error message key is wired through i18next, and any other call sites of confirmEmail/email comparison you find via search. Never write or edit files; your output is a factual map for the implementer.",
+      "rationale": "AMSD-1919's fix and test extension both center on CheckoutForm.tsx and its sibling files, so a dedicated reader of this exact directory (verified to exist, unlike a src/lib path) prevents the implementer from re-deriving file locations and the TRM774 wiring from scratch."
     }
   ],
-  "refused": []
+  "refused": [
+    {
+      "name": "gotransit-checkout-detective",
+      "reason": "brief names 2 path(s) that do not exist in codeline 'gotransit': src/lib, lodash.isstring/lodash.isequal"
+    }
+  ]
 }

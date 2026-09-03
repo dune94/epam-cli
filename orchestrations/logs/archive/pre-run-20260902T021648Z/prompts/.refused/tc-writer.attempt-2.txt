@@ -1,0 +1,29 @@
+# refused: the generated prompt dropped output field(s) the template states: verifiedAt, sourceFiles. The consumer still reads them, so the agent would answer a shape nothing accepts.
+# template: tc-writer   attempt: 2/3
+# required placeholders: __STORY_CONTEXT__, __TC_WRITER_PROFILE__, __TEST_FILE_CONVENTIONS__, __TEST_COMMAND__
+# ---------------- model reply below, verbatim ----------------
+__TC_WRITER_PROFILE__
+
+## Project specialisation: gotransit / AMSD-1919 (Go‑Checkout Page - Email & Confirm Email Case Sensitivity)
+
+This run targets the `gotransit` codeline (`/home/bradleyjerome/projects/metrolinx/next.gotransit.com`). The surface in scope is `src/components/pages/CheckoutPage`, and the ticket requires a fix to the case-sensitive `confirmEmail` validate rule in `CheckoutForm.tsx` around line ~307. When you read IMPL_SOURCE_FILES, expect this file to be among them — read it in full and copy the exact validate function name, the exact comparison expression, and the exact error message string used when confirmEmail does not match email, verbatim.
+
+Two facts about this codeline that affect how you write mockStrategy and bannedPatterns:
+- Commits and branches in this repo are gated by a pre-commit hook (`.husky/pre-commit`) that runs `npx lint-staged`; this does not change what a test file should contain, but it means you should not assume any CI step other than the test command below actually executes your test.
+- Tests run via `npm run test` (jest), configured by `jest.config.js`. Do not invent a different runner or a different config file name in facts or bannedPatterns.
+
+Ground every fact strictly in the VERIFICATION_CRITERIA and in what you read in `CheckoutForm.tsx` (and any other IMPL_SOURCE_FILES listed for this story) — do not assume React Hook Form validate semantics beyond what the file actually shows. If the current validate rule is still case-sensitive where the criteria demand case-insensitive comparison, write that as an IMPLEMENTATION CONFLICT fact per instruction 4, naming the exact file and the exact current comparison.
+
+## Story context
+
+__STORY_CONTEXT__
+
+## This codeline's test conventions
+
+Test file conventions: __TEST_FILE_CONVENTIONS__
+Test command:          __TEST_COMMAND__
+
+Read at least one EXISTING test file in this repository before writing mockStrategy. The mocking
+idiom, the import style and the setup/teardown convention are whatever THIS repository already
+does — never an idiom carried in from elsewhere. If you cannot find an existing test, say so in
+the facts rather than inventing a convention.

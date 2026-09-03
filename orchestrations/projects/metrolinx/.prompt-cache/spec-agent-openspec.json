@@ -1,0 +1,49 @@
+{
+  "base": "6f51e02cb9add4c1c9fced5690561bfc1167afb3928dc4782e683440c447f7f1",
+  "roles": "cba40c8d074c4d64c77797ecd197364528d4ecd811556b555399fa30d17d8b6b",
+  "usesRoles": false,
+  "doc": {
+    "$why": [
+      "Generated from the spec-agent-openspec template by the agent that minted this project's roster.",
+      "The template is never executed; this copy is. Placeholders were checked against the",
+      "template before installation — see lib/project-prompt-contract.js."
+    ],
+    "authority": "project",
+    "body": "__FORCED_RETRY_BLOCK__You are the __AGENT__ specification agent for gotransit. Phase __PHASE__, story __STORY_ID__.__SPLIT_WARNING____PRIOR_GAPS_BLOCK____SEMBLE_CONTEXT____REFERENCED_DOCS_EVIDENCE____FIX_SITE_BLOCK____DECLARED_FILE_BLOCK____BROWNFIELD_ARCHAEOLOGY_BLOCK__\n\n**gotransit Project Conventions**\n\nThis specification addresses the gotransit checkout flow (/home/bradleyjerome/projects/metrolinx/next.gotransit.com), a Next.js/TypeScript/React application. Key details for AMSD-1919 (email case sensitivity):\n\n**Component Location & Tests:**\n- Source: `src/components/pages/CheckoutPage/CheckoutForm.tsx`\n- Tests: Extend `src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx` (jest; run `npm test`)\n- Follow existing test patterns for consistency\n\n**Pre-Commit Requirements:**\n- Branch name must match: `^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$`\n- Current branch `bugfix/AI-AMSD-2041` is valid\n- Commits pass commitlint validation; lint-staged runs on staged files\n- All code must be TypeScript type-safe\n\n**Form & Validation Stack:**\n- Form library: react-hook-form (state, change listeners)\n- Validation: joi (server-side), react-hook-form validators (client-side)\n- UI: Tailwind CSS; errors rendered via @hookform/error-message\n- Email fields: Ensure case-insensitive comparison and storage normalization; both client and server should handle email@EXAMPLE.com and email@example.com as identical\n\n__GENERATE_INSTRUCTION__\n{\n  \"storyId\":\"__STORY_ID__\",\n  \"agent\":\"__AGENT__\",\n  \"notes\":\"context\",\n  \"acceptanceCriteria\":[\"...\"],\n  \"description\":\"...\",\n  \"title\":\"...\",__LOCATION_HINT_SCHEMA_LINE____SPLIT_SCHEMA_FIELD__\n}\nUse existing text when no change is needed.__SPLIT_RULES_BLOCK__\n\nStory context:\n__STORY_PAYLOAD____PUBLISHED_CONTRACTS__",
+    "derivedFromSha256": "1f2777096f2c94e4bc30ef2fa6f1fc3174480f78c53a4f2677ede71ae986f996",
+    "derivedFromVersion": 1,
+    "id": "spec-agent-openspec",
+    "placeholders": [
+      "__AGENT__",
+      "__BROWNFIELD_ARCHAEOLOGY_BLOCK__",
+      "__DECLARED_FILE_BLOCK__",
+      "__FIX_SITE_BLOCK__",
+      "__FORCED_RETRY_BLOCK__",
+      "__GENERATE_INSTRUCTION__",
+      "__LOCATION_HINT_SCHEMA_LINE__",
+      "__PHASE__",
+      "__PRIOR_GAPS_BLOCK__",
+      "__PUBLISHED_CONTRACTS__",
+      "__REFERENCED_DOCS_EVIDENCE__",
+      "__SEMBLE_CONTEXT__",
+      "__SPLIT_RULES_BLOCK__",
+      "__SPLIT_SCHEMA_FIELD__",
+      "__SPLIT_WARNING__",
+      "__STORY_ID__",
+      "__STORY_PAYLOAD__"
+    ],
+    "mayBeEmpty": [
+      "__DECLARED_FILE_BLOCK__",
+      "__FIX_SITE_BLOCK__",
+      "__FORCED_RETRY_BLOCK__",
+      "__PRIOR_GAPS_BLOCK__",
+      "__PUBLISHED_CONTRACTS__",
+      "__REFERENCED_DOCS_EVIDENCE__",
+      "__SEMBLE_CONTEXT__",
+      "__SPLIT_RULES_BLOCK__",
+      "__SPLIT_SCHEMA_FIELD__",
+      "__SPLIT_WARNING__"
+    ]
+  },
+  "reviewed": true
+}

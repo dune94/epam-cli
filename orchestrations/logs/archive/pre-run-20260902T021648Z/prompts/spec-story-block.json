@@ -1,0 +1,28 @@
+{
+  "$why": [
+    "Generated from the spec-story-block template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "__PERSONA__STORY\nTitle: __TITLE__\nDescription: __DESCRIPTION__\nComponents: __COMPONENTS__\nDeclared files: __DECLARED_FILES__\n\nLINKS FOUND IN THIS TICKET:\n__LINK_BLOCK__\n\nCOMMENT THREAD (context for judging relevance — a link's surrounding discussion often says why it was posted):\n__COMMENT_BLOCK__\n__RETRIEVED_DOCS__\n\nALREADY RETRIEVED — these documents have been fetched for you and written to disk. Read them\nwith read_file rather than fetching them again; the text is the same and it costs you nothing:\n__DOC_PATHS__\nA document listed here that you did not read is a document you cannot quote.\n\n## Project context: gotransit (next.gotransit.com)\n\n**Component location:** src/components/pages/CheckoutPage\n\n**Testing workflow:**\n- Run tests: `npm run test` (Jest configured by jest.config.js)\n- Coverage check: `npm run test:coverage-check` (runs `jest --coverage` with pretest step `npm run build:config`)\n- Use testing libraries: @testing-library/react, @testing-library/user-event\n- Jest environment: jest-environment-jsdom for React component tests\n\n**Key dependencies for form & email handling:**\n- react-hook-form: Form state management and validation\n- Joi: Schema validation (imported in this codebase)\n- Email validation uses the form libraries or Joi validators\n\n**Pre-commit & deployment:**\n- Pre-commit hook runs `npx lint-staged` and enforces branch naming: `^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$`\n- Current branch: `bugfix/AI-AMSD-2041` (matches expected pattern for commits)\n\n**Case sensitivity considerations for this stack:**\n- Email fields in web forms are typically normalized (lowercase) for comparison/storage\n- React Hook Form and Joi validators may need explicit normalization rules\n- Database/backend email lookups often require case-insensitive comparison; frontend validation should align with backend behavior\n- HTML form inputs with `type=\"email\"` have browser-level validation but do not normalize case\n- Check if confirm email field compares strings directly (case-sensitive) or through normalized comparison\n\n**Build & type-check:**\n- TypeScript is configured; check tsconfig.json for strict mode settings\n- Tailwind CSS is the styling framework; check src/components/pages/CheckoutPage for className patterns\n- Next.js is the framework; server-side validation may differ from client-side",
+  "derivedFromSha256": "41b6c41e78b4fc06be6b740b6110f0fa2010ba754f4f9639fc3df7228b2e7b19",
+  "derivedFromVersion": 1,
+  "id": "spec-story-block",
+  "placeholders": [
+    "__COMMENT_BLOCK__",
+    "__COMPONENTS__",
+    "__DECLARED_FILES__",
+    "__DESCRIPTION__",
+    "__DOC_PATHS__",
+    "__LINK_BLOCK__",
+    "__PERSONA__",
+    "__RETRIEVED_DOCS__",
+    "__TITLE__"
+  ],
+  "mayBeEmpty": [
+    "__DOC_PATHS__",
+    "__RETRIEVED_DOCS__",
+    "__COMMENT_BLOCK__"
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "model": "claude-haiku-4-5-20251001",
+  "provider": "minimax",
+  "reasoningEffort": "medium",
+  "temperature": "",
+  "maxIterations": "16",
+  "maxOutputTokens": "24576"
+}

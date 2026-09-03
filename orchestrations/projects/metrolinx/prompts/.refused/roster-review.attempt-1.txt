@@ -1,0 +1,50 @@
+# refused: the generated prompt dropped placeholder(s) the template requires: __PERSONA__. The evidence they carry would silently never reach the agent.
+# template: roster-review   attempt: 1/3
+# required placeholders: __BRIEF_BLOCK__, __CODELINE_BLOCK__, __COVERAGE_BLOCK__, __DOC_SECTION__, __PERSONA__, __PIPELINE_STAGES__, __TICKET_BLOCK__, __TOOL_LINE__
+# ---------------- model reply below, verbatim ----------------
+THE METROLINX GOTRANSIT CHECKOUT FORM TEAM — reviewing the roster for AMSD-1919 (Go‑Checkout Page - Email & Confirm Email Case Sensitivity). This is a case-sensitivity bug fix in the email validation logic of CheckoutForm, a React component using react-hook-form for validation. The team has two roles: one to investigate and verify the existing code and test coverage, one to implement the validation fix.
+
+WHAT THIS RUN NEEDS THE TEAM TO PRODUCE, and who in this roster can produce it:
+__COVERAGE_BLOCK__
+
+A roster can be made entirely of well-formed agents and still be unable to do the work. Where a
+line above says NOBODY, no one in this roster can produce something the run requires — that is a
+defect of the ROSTER, and it is invisible to reading briefs one at a time, because an absent role
+has no brief to find fault with. Report it as a blocking finding naming what cannot be produced
+and what kind of role would produce it.
+
+Now review every brief below:
+
+__BRIEF_BLOCK__
+
+THE CODELINES THESE BRIEFS DESCRIBE, and what each one declares:
+
+gotransit (/home/bradleyjerome/projects/metrolinx/next.gotransit.com) — a Next.js application with react-hook-form and TypeScript. The checkout form component is at src/components/pages/CheckoutPage/CheckoutForm.tsx. The codebase enforces branch naming with husky pre-commit hooks (pattern: ^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$), runs tests via `npm test` (jest), and uses commitlint to validate commit messages. Tests for CheckoutForm exist at src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx alongside the component. The component's TRM774 email validation check is the target of this fix.
+
+__CODELINE_BLOCK__
+
+THE WORK THE PROJECT WAS ASKED TO DO:
+__TICKET_BLOCK__
+
+__DOC_SECTION__
+
+__TOOL_LINE__
+
+THE PIPELINE STAGES THAT RUN ALONGSIDE THIS ROSTER:
+
+__PIPELINE_STAGES__
+
+A ROSTER IS NOT THE WHOLE PIPELINE. A brief may correctly defer work to a stage above rather than
+to a role beside it, and a brief that tells its implementer to leave such work alone is describing
+the pipeline accurately, not inventing cover. Check any such claim against the list above before
+calling it false: the absence of a matching ROLE is not evidence when the brief named a STAGE.
+
+Where the list above does not contain the stage a brief names, that IS a finding, and a blocking
+one — the implementer has been told to rely on something that will never run.
+
+Return every defect you can evidence, and nothing you cannot.
+
+Where a finding turns on whether a named dependency or path is present in a codeline, fill in
+the verification field as well as writing the prose. The pipeline re-runs that exact check
+against the repository and DISCARDS any finding the check refutes — so a careless reading
+costs nothing, and a correct one is confirmed independently of how convincingly you argued it.

@@ -1,0 +1,19 @@
+{
+  "$why": [
+    "Generated from the prd-change-summarizer-text template by the agent that minted this project's roster.",
+    "The template is never executed; this copy is. Placeholders were checked against the",
+    "template before installation — see lib/project-prompt-contract.js."
+  ],
+  "authority": "project",
+  "body": "You are working on the metrolinx gotransit project (next.gotransit.com), a Next.js/React TypeScript application. The ticket AMSD-1919 focuses on email validation case-sensitivity in CheckoutForm.tsx (approximately line 307), specifically fixing the confirmEmail validation rule. The codebase uses Jest for testing (`npm run test`) and enforces branch naming patterns: (feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?. Pre-commit hooks run lint-staged validation.\n\nYou are a PRD change summarizer. A __CHANGE_TYPE__ for story __STORY_ID__ was REJECTED by the change reviewer for these reasons:\n__ISSUES__\n\nORIGINAL TEXT:\n__REJECTED_TEXT__\n\nRewrite the text to fix ONLY the issues listed above, preserving the original actionable rule. Requirements: no reference to any specific story ID; start with an imperative verb (Use, Always, Never, Prefer, Avoid); under 200 characters; end on a complete sentence; no markdown, no headers, no commentary.\n\nEmit ONLY the corrected text — nothing else.",
+  "derivedFromSha256": "77c4744c10b3f37fcbcd5ef14a83c2c053c75d9d827b197446cd430ffca7d224",
+  "derivedFromVersion": 1,
+  "id": "prd-change-summarizer-text",
+  "placeholders": [
+    "__CHANGE_TYPE__",
+    "__ISSUES__",
+    "__REJECTED_TEXT__",
+    "__STORY_ID__"
+  ],
+  "mayBeEmpty": []
+}

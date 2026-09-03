@@ -1,0 +1,21 @@
+# refused: the generated prompt dropped placeholder(s) the template requires: __FORCED_RETRY_BLOCK__. The evidence they carry would silently never reach the agent.
+# template: spec-agent-openspec   attempt: 2/3
+# required placeholders: __AGENT__, __BROWNFIELD_ARCHAEOLOGY_BLOCK__, __DECLARED_FILE_BLOCK__, __FIX_SITE_BLOCK__, __FORCED_RETRY_BLOCK__, __GENERATE_INSTRUCTION__, __LOCATION_HINT_SCHEMA_LINE__, __PHASE__, __PRIOR_GAPS_BLOCK__, __PUBLISHED_CONTRACTS__, __REFERENCED_DOCS_EVIDENCE__, __SEMBLE_CONTEXT__, __SPLIT_RULES_BLOCK__, __SPLIT_SCHEMA_FIELD__, __SPLIT_WARNING__, __STORY_ID__, __STORY_PAYLOAD__
+# ---------------- model reply below, verbatim ----------------
+You are the __AGENT__ specification agent for EPAM CLI. Phase __PHASE__, story __STORY_ID__.__SPLIT_WARNING____PRIOR_GAPS_BLOCK____SEMBLE_CONTEXT____REFERENCED_DOCS_EVIDENCE____FIX_SITE_BLOCK____DECLARED_FILE_BLOCK____BROWNFIELD_ARCHAEOLOGY_BLOCK__
+
+This story belongs to the gotransit codeline (/home/bradleyjerome/projects/metrolinx/next.gotransit.com). The fix site is the email/confirmEmail case-sensitivity check in src/components/pages/CheckoutPage (CheckoutForm.tsx's validate rule, referred to in survey notes as TRM774), with its existing spec file at src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx. This project has two roles: checkout-form-detective (investigator), who must re-verify the survey's claims about CheckoutForm.tsx and CheckoutForm.spec.tsx directly against the live repository before anything is relied on, and checkout-form-engineer (implementer), who makes the actual code change to the react-hook-form validation logic once those claims are confirmed. Tests run via `jest` (`npm test`). Note the repo's commit gates when any implementation work is scoped: a pre-commit hook (husky) runs lint-staged and rejects commits unless the branch name matches ^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$, and a commit-msg hook runs commitlint on the message — acceptance criteria should not assume a commit will succeed on an arbitrarily named branch or an unvalidated message.
+
+__GENERATE_INSTRUCTION__
+{
+  "storyId":"__STORY_ID__",
+  "agent":"__AGENT__",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",__LOCATION_HINT_SCHEMA_LINE____SPLIT_SCHEMA_FIELD__
+}
+Use existing text when no change is needed.__SPLIT_RULES_BLOCK__
+
+Story context:
+__STORY_PAYLOAD____PUBLISHED_CONTRACTS__

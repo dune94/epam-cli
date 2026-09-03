@@ -1,8 +1,8 @@
 {
-  "id": "jira-sourced-1788294560024",
+  "id": "jira-sourced-1788315875626",
   "title": "metrolinx",
   "version": "1.0.0",
-  "lastUpdated": "2026-09-01",
+  "lastUpdated": "2026-09-02",
   "source": "jira",
   "sourceProject": "AMSD",
   "project": {
@@ -25,13 +25,13 @@
     {
       "id": "AMSD-1919",
       "jiraKey": "AMSD-1919",
-      "title": "Go‑Checkout Page - Email & Confirm Email Case Sensitivity",
-      "description": "  \n  On the  Go‑Checkout  page related to the  Email  and  Confirm Email  fields. When the same email is entered but with different letter casing (e.g., uppercase in one field and lowercase in the other), the system flags it as a mismatch. \n\nemail comparisons are case‑insensitive. It should not give error message for same email address regardless it is upper case or lower case.",
+      "title": "Go-Checkout Page - Email & Confirm Email Case Sensitivity",
+      "description": "On the Go-Checkout page, the Email and Confirm Email fields are compared case-sensitively, so entering the same address with different letter casing (e.g. Name@Example.com vs name@example.com) incorrectly triggers a mismatch error. The comparison in CheckoutForm.tsx's confirmEmail validate rule must treat email addresses as equal regardless of casing, while still correctly flagging genuinely different addresses.",
       "acceptanceCriteria": [],
       "codeline": "gotransit",
-      "status": "pending",
-      "completed": false,
-      "agentRole": "checkout-forms-engineer",
+      "status": "completed",
+      "completed": true,
+      "agentRole": "checkout-form-engineer",
       "agentGroup": "main",
       "effort": "medium",
       "estimate": null,
@@ -85,8 +85,289 @@
         }
       ],
       "agentRoles": {
-        "gotransit": "checkout-forms-engineer"
-      }
+        "gotransit": "checkout-form-engineer"
+      },
+      "specification": {
+        "guardVocabulary": {
+          "blacklist": [
+            {
+              "term": "trm774",
+              "reason": "internal i18n/error-message key from the validate rule, not the rendered text a tester observes",
+              "kind": "internal_structure"
+            },
+            {
+              "term": "validate rule",
+              "reason": "names the react-hook-form validation mechanism (HOW), not an observable outcome",
+              "kind": "implementation_noun"
+            },
+            {
+              "term": "watched email value",
+              "reason": "internal react-hook-form watch() mechanism feeding the comparison, not the observable surface",
+              "kind": "internal_structure"
+            },
+            {
+              "term": "case-sensitive string comparison",
+              "reason": "names the internal comparison algorithm that produces the verdict, prescribing HOW rather than asserting the observable result",
+              "kind": "implementation_noun"
+            },
+            {
+              "term": "checkoutformprovider",
+              "reason": "internal component that seeds form defaults; not part of the user-facing surface",
+              "kind": "internal_structure"
+            },
+            {
+              "term": "icheckoutformvalues",
+              "reason": "internal TypeScript type/data structure behind the form, not the rendered surface",
+              "kind": "internal_structure"
+            },
+            {
+              "term": "getconfirmemail",
+              "reason": "internal test helper/selector, not an end-user observable",
+              "kind": "internal_structure"
+            },
+            {
+              "term": "getemail",
+              "reason": "internal test helper/selector, not an end-user observable",
+              "kind": "internal_structure"
+            },
+            {
+              "term": "react-hook-form",
+              "reason": "names the form library/mechanism used to implement validation (HOW), not what a user observes",
+              "kind": "implementation_noun"
+            },
+            {
+              "term": "onblur mode",
+              "reason": "internal form-library configuration governing when validation runs, not an observable outcome",
+              "kind": "implementation_noun"
+            },
+            {
+              "term": "tolowercase",
+              "reason": "names a normalization implementation call, prescribing HOW the comparison should be made",
+              "kind": "construction_verb"
+            },
+            {
+              "term": "touppercase",
+              "reason": "names a normalization implementation call, prescribing HOW the comparison should be made",
+              "kind": "construction_verb"
+            },
+            {
+              "term": "matches the email field",
+              "reason": "cross-comparison phrasing that presumes a shared derivation/mechanism between the two fields instead of asserting the confirm-email field's state on its own",
+              "kind": "cross_comparison"
+            },
+            {
+              "term": "equals the email field",
+              "reason": "cross-comparison phrasing that presumes a shared derivation/mechanism between the two fields instead of asserting the confirm-email field's state on its own",
+              "kind": "cross_comparison"
+            }
+          ],
+          "whitelist": [
+            {
+              "term": "email field",
+              "reason": "user-facing form field named in the ticket, part of the observable surface"
+            },
+            {
+              "term": "confirm email field",
+              "reason": "user-facing form field named in the ticket, part of the observable surface"
+            },
+            {
+              "term": "validation error",
+              "reason": "observable UI state a tester perceives"
+            },
+            {
+              "term": "mismatch error message",
+              "reason": "observable rendered text a tester perceives"
+            },
+            {
+              "term": "submit action",
+              "reason": "observable, user-triggered checkout form action"
+            },
+            {
+              "term": "checkout form",
+              "reason": "the ticket's named user-facing surface (Go-Checkout page)"
+            },
+            {
+              "term": "focus",
+              "reason": "observable user interaction (moving focus away) that is part of the black-box test steps"
+            }
+          ]
+        },
+        "runId": "20260902T022134Z",
+        "assignedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "coordinatorNotes": "",
+        "status": "completed",
+        "updatedAt": "2026-09-02T10:40:06.499Z",
+        "appliedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "agentContributions": [
+          {
+            "agent": "openspec",
+            "applied": true,
+            "notes": "Fix site confirmed at src/components/pages/CheckoutPage/CheckoutForm.tsx CheckoutForm's confirmEmail FormInput validate rule (~lines 305-309), which does a case-sensitive string comparison against the watched email value. CheckoutFormProvider.tsx and types.ts do not normalize case, so this is the sole point producing the false mismatch. Existing spec CheckoutForm.spec.tsx already exposes getEmail()/getConfirmEmail() helpers and exercises onBlur validation, so the new case-insensitivity scenario extends that suite rather than introducing new test scaffolding. Contentstack is not involved in this flow (translation strings only), so no external-service mocking boundary applies here.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-09-02T10:38:26.906Z"
+          },
+          {
+            "agent": "speckit",
+            "applied": true,
+            "notes": "Openspec supplied no acceptance criteria (empty array), only notes correctly pinpointing the fix site (CheckoutForm.tsx confirmEmail validate rule, ~lines 305-309: `if (email && value && value !== email) return t(\"TRM774\")`). I built the full AC set from scratch since there was nothing to refine, covering: the core case-insensitive match scenario (domain-only and local-part-only casing variants), the negative case (genuinely different addresses still flagged), re-validation clearing an existing error when Email is edited to match, submission payload integrity (casing as typed must NOT be silently normalized/lowercased for downstream use — only the comparison logic changes), and regression coverage for existing empty-field behavior (required-rule and comparison-skip-when-either-field-empty) so the fix doesn't accidentally change unrelated validation paths. Flagged two edge cases (whitespace-insensitivity, Unicode casing) as out-of-scope-per-description but worth a quick sanity check during implementation. All criteria are Given/When/Then observable-outcome statements verifiable via the rendered form's error text and field values — none reference mocks, imports, or specific libraries.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-09-02T10:40:06.499Z"
+          }
+        ]
+      },
+      "verificationCriteria": [
+        "When the user types the same email address into the Email field in lowercase and into the Confirm Email field in uppercase (or any differing casing) and moves focus away, the Confirm Email field shows no validation error.",
+        "When the user types the same email address into the Email field in uppercase and into the Confirm Email field in lowercase and moves focus away, the Confirm Email field shows no validation error.",
+        "When the user types genuinely different email addresses into the Email and Confirm Email fields (regardless of casing) and moves focus away, the Confirm Email field still shows the existing mismatch error message.",
+        "With matching-but-differently-cased email and confirm-email values entered, the checkout form's submit action is not blocked by a confirm-email mismatch error."
+      ],
+      "verificationCriteriaDetail": [
+        {
+          "criterion": "When the user types the same email address into the Email field in lowercase and into the Confirm Email field in uppercase (or any differing casing) and moves focus away, the Confirm Email field shows no validation error.",
+          "observer": "end user",
+          "surface": "rendered Go-Checkout page, Confirm Email field validation message area",
+          "setup": ""
+        },
+        {
+          "criterion": "When the user types the same email address into the Email field in uppercase and into the Confirm Email field in lowercase and moves focus away, the Confirm Email field shows no validation error.",
+          "observer": "end user",
+          "surface": "rendered Go-Checkout page, Confirm Email field validation message area",
+          "setup": ""
+        },
+        {
+          "criterion": "When the user types genuinely different email addresses into the Email and Confirm Email fields (regardless of casing) and moves focus away, the Confirm Email field still shows the existing mismatch error message.",
+          "observer": "end user",
+          "surface": "rendered Go-Checkout page, Confirm Email field validation message area",
+          "setup": ""
+        },
+        {
+          "criterion": "With matching-but-differently-cased email and confirm-email values entered, the checkout form's submit action is not blocked by a confirm-email mismatch error.",
+          "observer": "tester",
+          "surface": "rendered Go-Checkout page, form submit button state and absence of validation-error testid for the confirm email field",
+          "setup": ""
+        }
+      ],
+      "vcSource": "acceptance",
+      "vcResolution": "clean",
+      "fixSiteAnalysis": [
+        {
+          "file": "src/components/pages/CheckoutPage/CheckoutForm.tsx",
+          "function": "CheckoutForm",
+          "reason": "This is the site that COMPUTES the mismatch verdict: the confirmEmail FormInput's react-hook-form `validate` rule (lines 305-309) performs the case-sensitive string comparison between the typed confirmEmail value and the watched `email` value, and returns t(\"TRM774\") when they differ. No other module compares the two fields — CheckoutFormProvider.tsx only seeds defaults (email/confirmEmail both set verbatim from user.email, lines 46-59, no normalization) and types.ts (ICheckoutFormValues, lines 3-10) is plain `string` fields with no transform. So the wrong boolean originates here, not downstream.",
+          "fix": "In src/components/pages/CheckoutPage/CheckoutForm.tsx, change the single comparison expression inside the confirmEmail `validate` rule (line 306) from `value !== email` to a case-insensitive comparison: `if (email && value && value.toLowerCase() !== email.toLowerCase()) {`. Nothing else changes — keep the same `t(\"TRM774\")` return and the surrounding truthiness guards. No existing repo helper performs email case-folding (none surfaced by the index), so use the built-in String.prototype.toLowerCase rather than adding a new util. Do NOT mutate the stored form values or add a normalization layer in CheckoutFormProvider.tsx/types.ts — the user's original casing must still be submitted.",
+          "helper": "",
+          "brokenLine": "if (email && value && value !== email) {",
+          "fixVerified": null,
+          "evidenceVerified": true,
+          "fileVerified": true,
+          "changeRequired": true,
+          "requiredPackages": [],
+          "deliveryRole": "produces",
+          "runsIn": "browser",
+          "prescriptionNote": "",
+          "prescriptionUnderspecified": false,
+          "codeline": "gotransit"
+        },
+        {
+          "file": "src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx",
+          "function": "CheckoutForm.spec",
+          "reason": "Existing spec for this component (helpers getEmail()/getConfirmEmail() at lines 107-108 already target the two fields, and the suite exercises blur-triggered validation via the provider's mode:\"onBlur\"). It currently has no case-difference scenario, so the regression is uncovered; it needs a new test asserting no TRM774 error when the same address is entered with differing casing.",
+          "fix": "Add one test that types e.g. \"User@Example.com\" into getEmail() and \"user@example.com\" into getConfirmEmail(), blurs, and asserts screen.queryByText(\"TRM774\") is null (mirroring the existing getAllValidationErrors()/blur pattern already used in this file). Reuse the existing getEmail/getConfirmEmail/getAllValidationErrors helpers in this spec; do not add new render harnesses.",
+          "helper": "getConfirmEmail",
+          "brokenLine": "const getConfirmEmail = () => screen.getByLabelText(\"TRM772\");",
+          "fixVerified": true,
+          "evidenceVerified": true,
+          "fileVerified": true,
+          "changeRequired": true,
+          "requiredPackages": [],
+          "deliveryRole": "verifies",
+          "runsIn": "n/a",
+          "prescriptionNote": "",
+          "prescriptionUnderspecified": false,
+          "codeline": "gotransit"
+        }
+      ],
+      "fixSiteAnalysisCoverage": {
+        "complete": true,
+        "uncoveredVerificationCriteria": []
+      },
+      "storyKind": "defect",
+      "technicalNotes": {
+        "files": [
+          "src/components/pages/CheckoutPage/CheckoutForm.tsx",
+          "src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx",
+          "src/components/componentMappers/CheckoutPageComponentMapper.tsx",
+          "src/components/componentMappers/PurchaseConfirmationPageComponentMapper.tsx",
+          "src/components/pages/CheckoutPage/CheckoutPage.tsx"
+        ],
+        "perCodeline": {
+          "gotransit": {
+            "files": [
+              "src/components/pages/CheckoutPage/CheckoutForm.tsx",
+              "src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx",
+              "src/components/componentMappers/CheckoutPageComponentMapper.tsx",
+              "src/components/componentMappers/PurchaseConfirmationPageComponentMapper.tsx",
+              "src/components/pages/CheckoutPage/CheckoutPage.tsx"
+            ],
+            "resolved": [
+              {
+                "declared": "src/components/pages/CheckoutPage/CheckoutForm.tsx",
+                "actual": "src/components/pages/CheckoutPage/CheckoutForm.tsx",
+                "match": "exact",
+                "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+              },
+              {
+                "declared": "src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx",
+                "actual": "src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx",
+                "match": "exact",
+                "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+              },
+              {
+                "declared": "src/components/componentMappers/CheckoutPageComponentMapper.tsx",
+                "actual": "src/components/componentMappers/CheckoutPageComponentMapper.tsx",
+                "match": "exact",
+                "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+              },
+              {
+                "declared": "src/components/componentMappers/PurchaseConfirmationPageComponentMapper.tsx",
+                "actual": "src/components/componentMappers/PurchaseConfirmationPageComponentMapper.tsx",
+                "match": "exact",
+                "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+              },
+              {
+                "declared": "src/components/pages/CheckoutPage/CheckoutPage.tsx",
+                "actual": "src/components/pages/CheckoutPage/CheckoutPage.tsx",
+                "match": "exact",
+                "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+              }
+            ],
+            "unresolved": []
+          }
+        }
+      },
+      "estimatedAiMinutes": 15,
+      "estimatedCost": 0.1355,
+      "estimatedTokens": 228340,
+      "estimatedTurns": 4,
+      "estimatedHours": 0.25,
+      "cpaEffortTier": "high",
+      "cpaConfidence": 0.88,
+      "cpaGate": "review",
+      "ladderTier": "high",
+      "cpaIterationEstimate": 1,
+      "model": "claude-haiku-4-5-20251001",
+      "aiProvider": "minimax",
+      "reasoningEffort": "medium",
+      "completedAt": "2026-09-03T01:14:54+00:00",
+      "actualCost": 0.33276999999999995
     }
   ],
   "currentIteration": 1

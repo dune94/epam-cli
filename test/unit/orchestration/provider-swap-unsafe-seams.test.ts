@@ -172,15 +172,16 @@ describe('provider-swap-unsafe scanner', () => {
 });
 
 describe('provider-swap-unsafe scanner, against the real tree', () => {
-  it('finds exactly 2 — every routing seam fixed, only display-only and always-reachable remain', () => {
+  it('finds exactly 1 — every routing seam fixed, only the display-only site remains', () => {
     // 17 by hand -> 16 excluding tier2-free-run.sh (not a defect) -> 12 after
     // run-agent-orchestration.sh's 4 ORCH_GATE_PROVIDER sites -> 8 after claude.sh's 4
     // STORY_PROVIDER sites -> 6 after the tier3 launchers' EPAM_FINAL_FALLBACK_PROVIDER default
     // (all TIER 1: epam run --provider and provider_to_cli() both bypass EPAM_PROVIDER_SET
     // entirely, confirmed by grep across src/) -> 5 after contextualize-stories.sh's CPA_PROVIDER
     // -> 2 after code-review-cycle.sh and team-lead-review.sh's three EPAM_ORCHESTRATION_PROVIDER
-    // sites (all TIER 2 — already re-validated downstream by llm-handler.sh / invoke_agent, fixed
-    // anyway to remove the redundant, competing vendor literal).
+    // sites -> 1 after brownfield-repro-test-writer.sh's SPEC_MODE_PROVIDER (all TIER 2 —
+    // already re-validated downstream by llm-handler.sh / invoke_agent, fixed anyway to remove
+    // the redundant, competing vendor literal).
     //
     // Fixing the TIER 1 group also surfaced and fixed a real regression risk in its own
     // mechanism: ladder-providers.js's routable-list computation never considered a set's
@@ -197,15 +198,14 @@ describe('provider-swap-unsafe scanner, against the real tree', () => {
     // a bare assignment instead of cpa-inference.js). Found by running the real test suite, not
     // by reading the diff: the-cpa-pass-gates-before-the-run.test.ts went from 19/20 to 15/20.
     //
-    // The remaining 2: SPEC_MODE_PROVIDER (TIER 2, always-reachable — same shape as CPA_PROVIDER,
-    // not yet fixed) and update-monitor.sh's PROVIDER (TIER 3, dashboard display only, never
-    // routes a call).
+    // The one remaining: update-monitor.sh's PROVIDER — TIER 3, dashboard display only, never
+    // routes a call. Not yet fixed.
     const r = run(ROOT);
     const lines = r.out.trim().split('\n').filter(Boolean);
-    expect(lines.length, `found:\n${r.out}`).toBe(2);
+    expect(lines.length, `found:\n${r.out}`).toBe(1);
   });
 
-  it('no longer flags run-agent-orchestration.sh, claude.sh, the tier3 launchers, contextualize-stories.sh, code-review-cycle.sh, or team-lead-review.sh', () => {
+  it('no longer flags any of the fixed files', () => {
     const r = run(ROOT);
     expect(r.out).not.toMatch(/run-agent-orchestration\.sh/);
     expect(r.out).not.toMatch(/claude\.sh/);
@@ -214,11 +214,11 @@ describe('provider-swap-unsafe scanner, against the real tree', () => {
     expect(r.out).not.toMatch(/contextualize-stories\.sh/);
     expect(r.out).not.toMatch(/code-review-cycle\.sh/);
     expect(r.out).not.toMatch(/team-lead-review\.sh/);
+    expect(r.out).not.toMatch(/brownfield-repro-test-writer\.sh/);
   });
 
-  it('names what remains: SPEC_MODE_PROVIDER and the display-only update-monitor.sh', () => {
+  it('names the one remaining seam: the display-only update-monitor.sh', () => {
     const r = run(ROOT);
-    expect(r.out).toMatch(/brownfield-repro-test-writer\.sh:497\tSPEC_MODE_PROVIDER\topenrouter/);
     expect(r.out).toMatch(/update-monitor\.sh:132\tPROVIDER\tclaude/);
   });
 

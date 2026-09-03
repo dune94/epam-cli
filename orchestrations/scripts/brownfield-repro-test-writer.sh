@@ -494,7 +494,11 @@ _provider_for_model() {
 # retry (ladder up the HIGH ladder on escalation), and on a no-file/max-iter failure run the
 # reusable agent-attempt-analyst to diagnose WHY and prepend a tailored corrective directive
 # to the next attempt — instead of blindly re-running the same prompt.
-_base_provider="${SPEC_MODE_PROVIDER:-${EPAM_ORCHESTRATION_PROVIDER:-openrouter}}"
+# NO VENDOR GUESS. This forced "openrouter" whenever SPEC_MODE_PROVIDER and
+# EPAM_ORCHESTRATION_PROVIDER were both unset (change-log/SEAM-CONSISTENCY-ANALYSIS.md, TIER 2) —
+# redundant, because AI_RUNNER_CMD is ai-run.sh -> llm-handler.sh, which re-derives
+# PRIMARY_PROVIDER from the active set when no --provider flag is given.
+_base_provider="${SPEC_MODE_PROVIDER:-${EPAM_ORCHESTRATION_PROVIDER:-}}"
 # THE SEAM DECIDES, NOT THIS FILE. seam_ladder_export (line ~61) sets EPAM_MODEL to the first rung
 # of the chain this seam's archetype declares. The literal that stood here overrode that silently:
 # the seam asked for its ladder, and the answer was thrown away one variable later, so changing the
@@ -701,6 +705,14 @@ for _attempt in $(seq 1 "$_max_attempts"); do
     # success while the agent ran unconstrained. Worse: the Pillar 3 digest covers
     # EPAM_MAX_ITERATIONS, so in a REAL run ai-run.sh would have detected the drift
     # and ABORTED every retry. Found by the induced-failure test, not by a run.
+    #
+    # THE FLAG IS CONDITIONAL. Passing --provider "" would be WORSE than omitting it:
+    # llm-handler.sh's own arg parsing (`--provider) PRIMARY_PROVIDER="${2:-}"`) would overwrite
+    # its already-correctly-resolved value with an explicit empty string and fall to a cruder
+    # basename guess — the same risk already found for run-agent-orchestration.sh's epam run
+    # --provider (change-log/SEAM-CONSISTENCY-ANALYSIS.md).
+    _srw_provider_flag=()
+    [ -n "$_provider" ] && _srw_provider_flag=(--provider "$_provider")
     { printf '%s' "$_prompt"; [ -n "$_typecheck_feedback" ] && printf '%s' "$_typecheck_feedback"; [ -n "$_assertion_feedback" ] && printf '%s' "$_assertion_feedback"; } | \
       AI_GATE_ALLOW_TOOLS=1 \
       EPAM_DANGEROUS_SKIP_APPROVAL=1 \
@@ -708,7 +720,7 @@ for _attempt in $(seq 1 "$_max_attempts"); do
       EPAM_MAX_ITERATIONS="${EPAM_MAX_ITERATIONS:-${REPRO_TEST_WRITER_MAX_ITERATIONS:-30}}" \
       EPAM_MAX_OUTPUT_TOKENS="${EPAM_MAX_OUTPUT_TOKENS:-${REPRO_TEST_WRITER_MAX_OUTPUT_TOKENS:-32768}}" \
       AI_MODEL="$_model" \
-      bash "$AI_RUNNER_CMD" --provider "$_provider" --model "$_model" > "$_writer_log" 2>&1 || true
+      bash "$AI_RUNNER_CMD" "${_srw_provider_flag[@]}" --model "$_model" > "$_writer_log" 2>&1 || true
 
     # A file existing is NOT success. The agent can (and live, on 2026-07-24, DID)
     # write a test with a syntax error; committing it both proves nothing and

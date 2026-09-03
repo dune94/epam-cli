@@ -778,9 +778,22 @@ while IFS= read -r sid; do
   # to the formula with a 20% markup — an estimate that looks like every other estimate.
   _cpa_err="$(mktemp "${TMPDIR:-/tmp}/cpa-err-XXXXXX")"
   t_start=$(date +%s%3N)
+  # NO VENDOR GUESS. AI_PROVIDER used to force "openrouter" whenever CPA_PROVIDER and AI_PROVIDER
+  # were both unset — CPA_PROVIDER is assigned nowhere in the tree, so that was not a fallback, it
+  # was the only path (change-log/SEAM-CONSISTENCY-ANALYSIS.md). cpa-inference.js's own default is
+  # already empty (its comment: "llm-handler.sh resolves the provider from the ACTIVE SET when it
+  # is not told one, so empty is the correct answer") — this line existed only to override that
+  # correct default with a wrong one. An explicit CPA_PROVIDER or inherited AI_PROVIDER is still
+  # respected; there is simply no third, hardcoded rung below them.
+  #
+  # THE COMMENT SITS HERE, NOT MID-CONTINUATION: a `#` on a line inside a `\`-continued sequence
+  # terminates the continuation right there unless that comment line ALSO ends in `\` — a real bug
+  # caught by execution, not by `bash -n` (the result is still valid bash, just a DIFFERENT
+  # command: the pipe fed a bare assignment instead of cpa-inference.js, which then ran with no
+  # stdin at all and "inference returned empty" fired on every call, not just the unset case).
   cpa_raw=$(echo "$inference_input" | \
     CLAUDE_CMD="${CLAUDE_CMD:-claude}" \
-    AI_PROVIDER="${CPA_PROVIDER:-${AI_PROVIDER:-openrouter}}" \
+    AI_PROVIDER="${CPA_PROVIDER:-${AI_PROVIDER:-}}" \
     AI_MODEL="${CPA_MODEL:-${AI_MODEL:-${EPAM_MODEL:-}}}" \
     "$NODE_CMD" "$LIB_DIR/cpa-inference.js" 2>"$_cpa_err" || echo "")
   t_end=$(date +%s%3N)

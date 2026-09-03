@@ -1,0 +1,9 @@
+{
+  "name": "epam-launch-dashboard-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "description": "Thin API for the launch dashboard. Zero runtime dependencies by design.",
+  "main": "src/server.js"
+}

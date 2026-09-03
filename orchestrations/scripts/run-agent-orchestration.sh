@@ -3,6 +3,12 @@
 # A service URL has one home: config/services.json, read through this helper.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/service-urls.sh" 2>/dev/null || true
 
+# THE SET DECIDES which provider a gate call actually reaches — see
+# change-log/SEAM-CONSISTENCY-ANALYSIS.md. epam run --provider talks directly to the compiled CLI,
+# which has no EPAM_PROVIDER_SET awareness at all (confirmed: grep across src/ turns up nothing),
+# so unlike calls that route through llm-handler.sh, nothing downstream re-validates this one.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/resolve-primary-provider.sh"
+
 # How much evidence each agent is shown, by name — see config/evidence-windows.json.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/evidence-windows.sh" 2>/dev/null || true
 
@@ -8282,8 +8288,9 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
                 # file) without also adding AI_GATE_ALLOW_TOOLS=1, it will
                 # silently lose tool access the same way codeline-bridge-agent
                 # did. See gate-finding-analyst-dual-mechanism.test.ts.
+                _gate_provider="$(resolve_primary_provider "${ORCH_GATE_PROVIDER:-}")"
                 _lga_raw="$(echo "$_lga_prompt" | \
-                    timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-openrouter}" \
+                    timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run ${_gate_provider:+--provider "$_gate_provider"} \
                         --model "${_lga_model}" \
                         --json - 2>>"$_lint_rem_log" || echo "")"
                 if [ -n "$_lga_raw" ]; then
@@ -8333,8 +8340,9 @@ if m:
                         _lrem_prompt="$(render_engine_prompt agent-retry-prefix "$_rp_vals" lint_remediator)"
                         rm -f "$_rp_vals"
                     fi
+                    _gate_provider="$(resolve_primary_provider "${ORCH_GATE_PROVIDER:-}")"
                     _lrem_raw="$(echo "$_lrem_prompt" | \
-                        timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-openrouter}" \
+                        timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run ${_gate_provider:+--provider "$_gate_provider"} \
                             --model "${_lrem_model}" \
                             --json - 2>>"$_lint_rem_log" || echo "")"
                     if [ -n "$_lrem_raw" ]; then
@@ -8357,14 +8365,16 @@ if m:
 
                 # Agent 3: profile-augmentor — 1 retry on empty output
                 info "  [lint-gate:augmentor] Recording lint anti-pattern in profile..."
+                _gate_provider="$(resolve_primary_provider "${ORCH_GATE_PROVIDER:-}")"
                 _laug_raw="$(echo "$_lint_finding_raw" | \
-                    timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-openrouter}" \
+                    timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run ${_gate_provider:+--provider "$_gate_provider"} \
                         --model "$(seam_model_or_fail "gate-finding-analyst")" \
                         --json - 2>>"$_lint_rem_log" || echo "")"
                 if [ -z "$_laug_raw" ]; then
                     warning "  [lint-gate:augmentor] attempt 1 returned no output — retrying"
+                    _gate_provider="$(resolve_primary_provider "${ORCH_GATE_PROVIDER:-}")"
                     echo "$_lint_finding_raw" | \
-                        timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-openrouter}" \
+                        timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run ${_gate_provider:+--provider "$_gate_provider"} \
                             --model "$(seam_model_or_fail "story-ac-remediator")" \
                             --json - 2>>"$_lint_rem_log" || true
                 fi

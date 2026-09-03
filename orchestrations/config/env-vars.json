@@ -1,0 +1,10 @@
+{
+  "$comment": "Root .env vars NO provider set owns — those come straight from provider-sets.json's own credentials and need no separate declaration. Each of these is scoped to one FEATURE, never universally required: a project using none of these features needs none of them filled in. install.sh's generated .env.example reads this file; a var added here needs no installer edit.",
+  "vars": [
+    { "name": "JIRA_EMAIL", "feature": "Jira ticket ingestion (a project with EPAM_PROJECT set)" },
+    { "name": "JIRA_TOKEN", "feature": "Jira ticket ingestion (a project with EPAM_PROJECT set)" },
+    { "name": "LANGFUSE_SECRET_KEY", "feature": "replay (--replay on / EPAM_REPLAY=on) — already checked separately by the installer's own Replay step" },
+    { "name": "LANGFUSE_PUBLIC_KEY", "feature": "replay (--replay on / EPAM_REPLAY=on) — already checked separately by the installer's own Replay step" },
+    { "name": "GITHUB_PERSONAL_ACCESS_TOKEN", "feature": "GitHub-hosted codelines via the copilot provider (src/providers/copilot/CopilotProvider.ts)" }
+  ]
+}

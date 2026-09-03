@@ -1,0 +1,18 @@
+name: epam_launch_dashboard
+description: Create a run from a Jira ticket, watch it, stop it. Nothing else.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.0
+  # localStorage, so a refresh does not log you out. The modern replacement for dart:html;
+  # it is an SDK-aligned package, not a plugin, so there is nothing to register.
+  web: ^1.1.0
+
+flutter:
+  uses-material-design: true

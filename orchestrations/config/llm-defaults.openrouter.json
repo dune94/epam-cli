@@ -230,5 +230,11 @@
       "unsetEnv": []
     }
   },
-  "$whyRunners": "THE SWAP MUST NOT INHERIT THE PREVIOUS STACK'S RUNNER. apply_runner_settings is called with the BASENAME of CLAUDE_CMD, which is 'claude' under every set, so a set declaring no runner by that name resolves nothing and the flags, env and scrubs of whatever ran before are simply carried over. claude, codemie and mockserver each declared one; this set did not, which made hot swap 2 the one stack that silently kept another stack's settings."
+  "$whyRunners": "THE SWAP MUST NOT INHERIT THE PREVIOUS STACK'S RUNNER. apply_runner_settings is called with the BASENAME of CLAUDE_CMD, which is 'claude' under every set, so a set declaring no runner by that name resolves nothing and the flags, env and scrubs of whatever ran before are simply carried over. claude, codemie and mockserver each declared one; this set did not, which made hot swap 2 the one stack that silently kept another stack's settings.",
+  "finalFallback": {
+    "$why": "Applies after ladder exhaustion. The other 3 sets (claude, codemie, mockserver) all declare one; this set previously did not, an undocumented inconsistency (change-log/SEAM-CONSISTENCY-ANALYSIS.md Section 6). Routed WITHIN this set rather than escaping to paid claude: unlike mockserver (which is a no-pay mock endpoint by construction regardless of the provider string it declares — see its own finalFallback.$why), this is the live production openrouter/minimax stack, where a provider:\"claude\" fallback would be a real, unnoticed charge on a different vendor's account. MiniMax-M3 is chosen because it is a genuinely different model family from the top rung of every ladder here (high and highest both top out at moonshotai/kimi-k3, medium at z-ai/glm-5.3), so it is a real second answer rather than a retry of the model that just failed — mirroring the claude/codemie sets' own stated reasoning for choosing sonnet-5 over their own top rungs.",
+    "$whyNotYetLive": "As of this writing, nothing in the runtime ladder-exhaustion path (llm-handler.sh, claude.sh, brownfield-repro-test-writer.sh) reads finalFallback — exhaustion retries the same rung instead. agent-check.js's dry-run cost estimator is the only reader, and even there this is unreachable while any ladder tier has a startModel (all of them do). Declared for correctness and for whenever that wiring exists, not because a run can reach this today.",
+    "model": "MiniMax-M3",
+    "provider": "openrouter"
+  }
 }

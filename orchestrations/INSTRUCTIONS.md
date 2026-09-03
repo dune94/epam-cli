@@ -255,7 +255,7 @@ Open in a browser (serve via the `agent-monitor` Docker service on port 8092):
 
 ## Adding a New CLI Provider
 
-1. Add a case to `provider_to_cli()` in `claude.sh` returning the binary name
+1. Add the provider to `known` and `cliBinary` in `orchestrations/config/providers.json` — `cliBinary`'s value is either the vendor's own binary name, or the sentinel `"$EPAM_CLI"` if it runs through the shared epam CLI. `provider_to_cli()` in `claude.sh` reads this; no code change needed here.
 2. Add a dispatch case in the story execution block of `claude.sh` with the invocation pattern
 3. Add a normalization case in `normalize_provider_json()` if the output format differs from Claude's JSON
 4. If the provider needs a dedicated wrapper script, clone `claude.sh` and update `CLAUDE_CMD` default

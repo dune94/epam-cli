@@ -3,6 +3,13 @@
 # The run's spend figure comes from the ACTIVE SET, not a vendor hardcoded here.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/spend-probe.sh" 2>/dev/null || true
 
+# STORY_PROVIDER's own default was "codex" — a vendor no provider set can select — reached
+# whenever the roster left a story's aiProvider unassigned. See
+# change-log/SEAM-CONSISTENCY-ANALYSIS.md. provider_to_cli("codex") spawns a `codex` binary
+# directly, which does not exist on a claude-only machine; other vendors route to the compiled
+# epam CLI, which has no EPAM_PROVIDER_SET awareness at all.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/resolve-primary-provider.sh"
+
 # How much evidence each agent is shown, by name — see config/evidence-windows.json.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/evidence-windows.sh" 2>/dev/null || true
 
@@ -1622,37 +1629,48 @@ resolve_dynamic_constitution() {
 
 # resolve_provider_settings <story_id>
 # Reads aiProvider from the story and sets STORY_PROVIDER global.
-# Values: opencode | codex | epam | provider aliases (default: codex)
+# Values: opencode | codex | epam | provider aliases (default: whatever the active set can route)
+#
+# THE ROSTER'S CHOICE IS VALIDATED, NOT JUST DEFAULTED. This is the exact incident
+# ladder-providers.js's own comment records: "the prd-model-coordinator writes an aiProvider into
+# every story, and until 2026-08-28 its persona named {minimax, openrouter} in prose. On the
+# claude stack that is a provider nothing can route." resolve_primary_provider() is what catches
+# that — an assigned-but-unroutable value is replaced by one the active set CAN route, announced,
+# never silently. An unassigned story used to default to "codex" unconditionally: a vendor no
+# provider set can select, and whose binary does not exist on a claude-only machine.
 resolve_provider_settings() {
     local story_id="$1"
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
     STORY_PROVIDER=$(jq -r --arg id "$story_id" \
-        '.stories[] | select(.id == $id) | .aiProvider // "codex"' \
+        '.stories[] | select(.id == $id) | .aiProvider // empty' \
         "$prd_target" 2>/dev/null | head -1)
-    STORY_PROVIDER="${STORY_PROVIDER:-codex}"
+    STORY_PROVIDER="$(resolve_primary_provider "${STORY_PROVIDER:-}")"
     log "  Provider[$STORY_PROVIDER] -> CLI=$(provider_to_cli "$STORY_PROVIDER")"
 }
 
 # provider_to_cli <provider>
 # Returns the CLI binary name for a given aiProvider value.
 # Exits with an error for unknown providers — no silent Claude fallback.
+#
+# The mapping lives in providers.json's `cliBinary`, not here — see
+# change-log/SEAM-CONSISTENCY-ANALYSIS.md Section 5. This used to be a hardcoded `case`
+# statement naming every vendor, a second, independently-maintained list next to
+# providers.json's `known` — the two could (and did) drift.
 provider_to_cli() {
-    case "$1" in
-        opencode)                    echo "opencode" ;;
-        codex)                       echo "codex" ;;
-        codemie-claude)              echo "codemie-claude" ;;
-        # Plain Claude Code. Added 2026-08-25 for the mockserver set, which runs it
-        # redirected at MockServer via ANTHROPIC_BASE_URL. It was previously listed in
-        # providers.json with NO case arm — a PRD could name it, pass the gate, and die
-        # here at runtime. Now it is genuinely accepted, so the gate and the engine agree.
-        claude)                      echo "claude" ;;
-        copilot|openai|openrouter|cursor|minimax)  echo "$EPAM_CLI" ;;
-        epam)                        echo "$EPAM_CLI" ;;
-        *)
-            error "Unknown aiProvider '$1' — set aiProvider in prd.json to one of: opencode|codex|copilot|openai|openrouter|cursor|minimax|codemie-claude|claude"
-            return 1
-            ;;
-    esac
+    local _providers_json="${PROVIDERS_JSON:-$SCRIPT_DIR/../config/providers.json}"
+    local cli
+    cli=$(jq -r --arg p "$1" '.cliBinary[$p] // empty' "$_providers_json" 2>/dev/null)
+    if [ -z "$cli" ]; then
+        local known
+        known=$(jq -r '.known | join("|")' "$_providers_json" 2>/dev/null)
+        error "Unknown aiProvider '$1' — set aiProvider in prd.json to one of: ${known:-see config/providers.json}"
+        return 1
+    fi
+    if [ "$cli" = '$EPAM_CLI' ]; then
+        echo "$EPAM_CLI"
+    else
+        echo "$cli"
+    fi
 }
 
 # normalize_provider_json <provider> <raw_jsonl_file> <out_json_file>
@@ -1874,10 +1892,27 @@ check_prerequisites() {
     if command -v "$CLAUDE_CMD" &> /dev/null; then
         : # claude is available — all paths work
     else
-        # Only fatal if stories are configured to use the claude provider
-        if grep -q '"aiProvider"' "${PRD_FILE:-/dev/null}" 2>/dev/null && \
-           jq -e '.stories[].aiProvider // "codex" | select(. == "claude" or . == "codemie-claude")' \
-               "${PRD_FILE:-/dev/null}" >/dev/null 2>&1; then
+        # TWO INDEPENDENT WAYS A STORY CAN NEED CLAUDE, both checked — this used to check only
+        # the second and assumed "codex" for the first, so a PRD where every story leaves
+        # aiProvider unset (the normal case) short-circuited straight to "OK, no story needs
+        # claude" on the SAME machine where every unassigned story is about to resolve to claude.
+        #
+        # 1. THE ACTIVE SET'S OWN DEFAULT. What resolve_provider_settings() gives an UNASSIGNED
+        #    story is exactly what resolve_primary_provider resolves with no candidate — if that
+        #    is claude-family, every unassigned story needs the CLI, full stop.
+        _default_needs_claude=0
+        case "$(resolve_primary_provider)" in
+            claude|codemie-claude) _default_needs_claude=1 ;;
+        esac
+        # 2. AN EXPLICIT PER-STORY OVERRIDE. A story can name claude/codemie-claude even when the
+        #    set's own default is something else, as long as the active set can route it — the
+        #    same routability question resolve_primary_provider answers for the DEFAULT case, but
+        #    jq cannot call a bash function, so this stays a direct field check. `// empty`, not
+        #    `// "codex"`: an unset field is genuinely unset, not a second, competing default.
+        if [ "$_default_needs_claude" = "1" ] || \
+           { grep -q '"aiProvider"' "${PRD_FILE:-/dev/null}" 2>/dev/null && \
+             jq -e '.stories[].aiProvider // empty | select(. == "claude" or . == "codemie-claude")' \
+                 "${PRD_FILE:-/dev/null}" >/dev/null 2>&1; }; then
             error "Claude CLI not found. Expected command: $CLAUDE_CMD"
             error "Install Claude Code CLI or set CLAUDE_CMD environment variable"
             exit 1
@@ -9399,6 +9434,24 @@ implement_story() {
     export STORY_ITERATION_BUMP_TOTAL
     local _persisted_model
     _persisted_model="$(read_story_retry_model "$LOG_DIR" "$story_id")"
+    # A PERSISTED RUNG FROM A DIFFERENT PROVIDER SET IS NOT A RUNG TO RESUME. See
+    # change-log/SEAM-CONSISTENCY-ANALYSIS.md — an operator swaps EPAM_PROVIDER_SET because a
+    # provider ran out of tokens mid-run, and the persisted model name (e.g. "MiniMax-M3") is
+    # meaningless once the set changes: it names a vendor's own namespace, not a portable model
+    # id. Trusting it under a DIFFERENT set pairs a valid new-set provider with a model name that
+    # provider has never heard of — the same "model and provider are one decision" defect this
+    # file already fixed once for a different cause (2026-08-18), reintroduced here by a swap
+    # instead of a missed re-derivation.
+    #
+    # An EMPTY persisted set is NOT evidence of a mismatch — it means this state predates the
+    # marker (a run in flight when this shipped) or the launch itself declares no set. Either way
+    # there is nothing to contradict, so the existing model is still trusted, exactly as before.
+    local _persisted_set
+    _persisted_set="$(read_story_retry_provider_set "$LOG_DIR" "$story_id")"
+    if [ -n "$_persisted_set" ] && [ "$_persisted_set" != "${EPAM_PROVIDER_SET:-}" ]; then
+        log "  [InferenceLadder] $story_id: persisted rung '$_persisted_model' was chosen under set '$_persisted_set', but this launch is '${EPAM_PROVIDER_SET:-<none>}' — discarding it and starting this set's own ladder from the top"
+        _persisted_model=""
+    fi
     if [ -n "$_persisted_model" ] && [ "$_persisted_model" != "${STORY_MODEL:-}" ]; then
         log "  [InferenceLadder] $story_id resuming on '$_persisted_model' (escalated in an earlier invocation; PRD model is '${STORY_MODEL:-}')"
         STORY_MODEL="$_persisted_model"
@@ -9438,7 +9491,8 @@ implement_story() {
         unset EPAM_TEMPERATURE
     fi
     # For epam-run providers, prd.json .model field overrides effort-based model
-    case "${STORY_PROVIDER:-codex}" in
+    STORY_PROVIDER="$(resolve_primary_provider "${STORY_PROVIDER:-}")"
+    case "$STORY_PROVIDER" in
         codex) resolve_codex_model_settings "$story_id" ;;
         copilot|openai|openrouter|cursor|minimax) resolve_model_from_story "$story_id" ;;
     esac
@@ -9518,7 +9572,8 @@ implement_story() {
     RUNNER_FLAGS=()
     apply_runner_settings "$(basename "${CLAUDE_CMD:-}")" "${EPAM_PROJECT_CONFIG_DIR:-}" || true
     local story_cli
-    story_cli=$(provider_to_cli "${STORY_PROVIDER:-codex}")
+    STORY_PROVIDER="$(resolve_primary_provider "${STORY_PROVIDER:-}")"
+    story_cli=$(provider_to_cli "$STORY_PROVIDER")
 
     # Planning phase: when plannerModel is set, run one planning invocation first.
     # The returned plan is injected into every execution attempt as fixed context.
@@ -10148,7 +10203,8 @@ $_kb_section"
         local _timeout_prefix=()
         [ -n "${EPAM_STORY_TIMEOUT_SECS:-}" ] && _timeout_prefix=(timeout "$EPAM_STORY_TIMEOUT_SECS")
 
-        case "${STORY_PROVIDER:-codex}" in
+        STORY_PROVIDER="$(resolve_primary_provider "${STORY_PROVIDER:-}")"
+        case "$STORY_PROVIDER" in
             opencode)
                 # OpenCode: pass prompt via temp file (prompts can exceed arg limits)
                 # --format json emits JSONL stream; we normalize it after
@@ -10759,6 +10815,10 @@ $_kb_section"
             if ! _coupled_pair_gate_for_story "$story_id" "$output_file"; then
                 write_story_retry_count "$LOG_DIR" "$story_id" "$retry_count"
                 write_story_retry_model "$LOG_DIR" "$story_id" "${STORY_MODEL:-}"
+                # Persisted ALONGSIDE the model — see change-log/SEAM-CONSISTENCY-ANALYSIS.md.
+                # A resume must know WHICH set chose this model, or a swap between invocations
+                # leaves a rung name (e.g. MiniMax-M3) meaningless under the new set.
+                write_story_retry_provider_set "$LOG_DIR" "$story_id" "${EPAM_PROVIDER_SET:-}"
                 write_story_iteration_bump "$LOG_DIR" "$story_id" "${STORY_ITERATION_BUMP_TOTAL:-0}"
                 rm -f "$(_rung_snapshot_path "$story_id")" 2>/dev/null || true
                 update_monitor_status "retry" "$story_id" "Coupled file pair had more than one author"
@@ -10773,6 +10833,10 @@ $_kb_section"
             # rung is only a proxy for WHICH MODEL RUNS. Persisting one without the other is
             # what made the ladder restart its climb on every re-invocation.
             write_story_retry_model "$LOG_DIR" "$story_id" "${STORY_MODEL:-}"
+            # Persisted ALONGSIDE the model — see change-log/SEAM-CONSISTENCY-ANALYSIS.md.
+            # A resume must know WHICH set chose this model, or a swap between invocations
+            # leaves a rung name (e.g. MiniMax-M3) meaningless under the new set.
+            write_story_retry_provider_set "$LOG_DIR" "$story_id" "${EPAM_PROVIDER_SET:-}"
             write_story_iteration_bump "$LOG_DIR" "$story_id" "${STORY_ITERATION_BUMP_TOTAL:-0}"
             post_completion_message "$story_id" "completed"
             return 0
@@ -11030,6 +11094,10 @@ Apply the above diagnosis AND fix the deterministic check violation — both mus
             # rung is only a proxy for WHICH MODEL RUNS. Persisting one without the other is
             # what made the ladder restart its climb on every re-invocation.
             write_story_retry_model "$LOG_DIR" "$story_id" "${STORY_MODEL:-}"
+            # Persisted ALONGSIDE the model — see change-log/SEAM-CONSISTENCY-ANALYSIS.md.
+            # A resume must know WHICH set chose this model, or a swap between invocations
+            # leaves a rung name (e.g. MiniMax-M3) meaningless under the new set.
+            write_story_retry_provider_set "$LOG_DIR" "$story_id" "${EPAM_PROVIDER_SET:-}"
             write_story_iteration_bump "$LOG_DIR" "$story_id" "${STORY_ITERATION_BUMP_TOTAL:-0}"
             if [ $retry_count -le $MAX_RETRIES ]; then
                 warning "$story_cli failed, retrying in ${RETRY_DELAY}s..."

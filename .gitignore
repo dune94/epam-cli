@@ -103,3 +103,4 @@ __pycache__/
 # specific cassette is a deliberate decision about client content, not a default.
 orchestrations/cassettes/
 agent-replies/
+install-manifest.json

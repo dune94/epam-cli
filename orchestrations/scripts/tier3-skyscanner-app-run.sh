@@ -56,6 +56,12 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # The run's spend figure comes from the ACTIVE SET, not a vendor hardcoded here.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/spend-probe.sh" 2>/dev/null || true
 
+# The ladder-exhaustion fallback provider must ALSO follow the active set — see
+# change-log/SEAM-CONSISTENCY-ANALYSIS.md. This launcher previously hardcoded openrouter
+# unconditionally, so this project could not hot-swap: the fallback stayed openrouter even after
+# EPAM_PROVIDER_SET changed.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/resolve-primary-provider.sh"
+
 # Config files are DATA: load them without executing them. See lib/env-file.sh.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/env-file.sh"
 LOG_FILE="/tmp/tier3-skyscanner-app-run-$(date +%Y%m%dT%H%M%S).log"
@@ -293,7 +299,8 @@ export SPEC_MODE_MAX_OUTPUT_TOKENS="${SPEC_MODE_MAX_OUTPUT_TOKENS:-16384}"
 # medium/high split.
 export EPAM_MODEL_LADDER="${EPAM_MODEL_LADDER:-}"
 # Final fallback: used at R3 when the story model was never escalated at R2
-export EPAM_FINAL_FALLBACK_PROVIDER="${EPAM_FINAL_FALLBACK_PROVIDER:-openrouter}"
+EPAM_FINAL_FALLBACK_PROVIDER="$(resolve_primary_provider "${EPAM_FINAL_FALLBACK_PROVIDER:-}")"
+export EPAM_FINAL_FALLBACK_PROVIDER
 # Dynamic retry-extension coordinator (2026-07-12): ships DISABLED by
 # default, same rollout discipline as the DeepEval groundedness check --
 # prove it via fixture tests and observe it advisory-only before letting it

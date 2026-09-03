@@ -20,21 +20,17 @@ const providers = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/prov
 const claudeSrc = readFileSync(join(ROOT, 'orchestrations/scripts/claude.sh'), 'utf8');
 
 /**
- * The providers the engine ADVERTISES — read from provider_to_cli()'s own error message, which
- * is its statement of what a PRD may assign.
+ * The providers the engine ADVERTISES — read from providers.json's own `cliBinary`, which is
+ * now provider_to_cli()'s (claude.sh) single declared source
+ * (change-log/SEAM-CONSISTENCY-ANALYSIS.md Section 5 removed the hardcoded `case` statement this
+ * used to scrape the error message of).
  *
- * NOT every case arm. `epam` is an arm mapping to $EPAM_CLI — the same target as
- * copilot/openai/openrouter/cursor/minimax. It names the RUNNER, not a vendor, nothing assigns it,
- * and the engine does not advertise it. Deriving from arms treated that vestige as a supported
- * provider and put it in the gate.
+ * `epam` is deliberately absent from `cliBinary`: it named the RUNNER ($EPAM_CLI), not a vendor,
+ * nothing assigns it, and the engine does not advertise it.
  */
 function acceptedByEngine(): string[] {
-  const start = claudeSrc.indexOf('provider_to_cli() {');
-  expect(start, 'provider_to_cli is gone — this test would assert nothing').toBeGreaterThan(-1);
-  const body = claudeSrc.slice(start, claudeSrc.indexOf('\n}', start));
-  const m = body.match(/one of: ([a-z|0-9-]+)/);
-  expect(m, 'provider_to_cli no longer states what a PRD may assign').toBeTruthy();
-  return (m as RegExpMatchArray)[1].split('|').filter(Boolean);
+  expect(claudeSrc, 'provider_to_cli is gone — this test would assert nothing').toMatch(/provider_to_cli\(\)\s*{/);
+  return Object.keys(providers.cliBinary || {});
 }
 
 describe('a declared provider is known', () => {

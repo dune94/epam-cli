@@ -1,0 +1,2 @@
+src/components/pages/CheckoutPage/CheckoutForm.tsx
+src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx

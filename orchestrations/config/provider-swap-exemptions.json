@@ -1,0 +1,13 @@
+{
+  "$comment": "Seams scan-provider-swap-unsafe.js does NOT count as swap-unsafe, because the hardcoded vendor is not a defect at that specific site. Read, never listed inside the scanner: adding an entry here is a real decision that shows up in review, not a threshold tuned inside code.",
+  "$careful": "This list may only exempt a seam PROVEN deliberate and permanent, never merely inconvenient to fix. Each entry requires file, line, var and literal — an EXACT match, so a scanner cannot silently exempt a NEW finding at a different line, or the same variable defaulting to a different vendor, just because the filename matches. A test asserts the scanner still finds every other instance of the same shape; narrowing this list is how a scanner comes to report clean while the class it exists to catch is still there.",
+  "exemptions": [
+    {
+      "file": "orchestrations/scripts/tier2-free-run.sh",
+      "line": 56,
+      "var": "FREE_PROVIDER",
+      "literal": "openrouter",
+      "why": "A standalone test harness for OpenRouter's free-tier models specifically, run against its own throwaway PRD (hello-world-prd.json) — unrelated to any client run's EPAM_PROVIDER_SET. change-log/SEAM-CONSISTENCY-ANALYSIS.md (2026-09-03) originally counted this among the 17 swap-unsafe seams; it does not belong there. Hardcoding openrouter here is the entire point of the script, the same way a plugin is allowed a stack fact that engine code is not."
+    }
+  ]
+}

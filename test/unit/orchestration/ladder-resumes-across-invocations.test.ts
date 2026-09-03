@@ -116,16 +116,23 @@ describe('claude.sh persists retry_count at both exit paths (structural — the 
   it('persists before the retry sleep, so a killed/timed-out attempt keeps its rung', () => {
     // Two call sites exist (success path + iteration path); this one is the
     // LATER one in the file — see the sibling test for the success-path site.
+    //
+    // WINDOW WIDENED 800 -> 1000 (2026-09-03): write_story_retry_provider_set() now sits between
+    // this call and the target regex — a real, wanted addition (see
+    // change-log/SEAM-CONSISTENCY-ANALYSIS.md, resume must know which set chose a persisted
+    // rung), not slack added to make a fragile test pass. 1000 leaves ~130 chars of headroom
+    // over the measured distance rather than being sized to the exact byte count.
     const idx = SRC.lastIndexOf('write_story_retry_count "$LOG_DIR" "$story_id" "$retry_count"');
     expect(idx, 'no persistence call found in the retry-iteration path at all').toBeGreaterThan(-1);
-    const after = SRC.slice(idx, idx + 800);
+    const after = SRC.slice(idx, idx + 1000);
     expect(after).toMatch(/if \[ \$retry_count -le \$MAX_RETRIES \]; then/);
   });
 
   it('persists on the success return, so a review rejection after a first-try success still resumes correctly', () => {
+    // WINDOW WIDENED 800 -> 1000 (2026-09-03) for the same reason as the sibling test above.
     const successIdx = SRC.indexOf('post_completion_message "$story_id" "completed"');
     expect(successIdx).toBeGreaterThan(-1);
-    const before = SRC.slice(Math.max(0, successIdx - 800), successIdx);
+    const before = SRC.slice(Math.max(0, successIdx - 1000), successIdx);
     expect(before).toMatch(/write_story_retry_count "\$LOG_DIR" "\$story_id" "\$retry_count"/);
   });
 });

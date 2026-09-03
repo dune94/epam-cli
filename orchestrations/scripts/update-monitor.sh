@@ -129,7 +129,12 @@ EOF
     LANE="$2"
     ROLE="$3"
     TITLE="${4:-}"
-    PROVIDER="${5:-claude}"
+    # NO VENDOR GUESS. This is DISPLAY ONLY — written into agent-status.json /
+    # agent-activity.jsonl for the dashboard, never used to route a call
+    # (change-log/SEAM-CONSISTENCY-ANALYSIS.md, TIER 3) — but a caller that passed no provider
+    # still had the dashboard confidently report "claude", which is wrong whenever the real run
+    # used anything else. Empty is the honest answer when nothing was told.
+    PROVIDER="${5:-}"
     MODEL="${6:-}"
 
     MONITOR_DATA=$(echo "$MONITOR_DATA" | jq \

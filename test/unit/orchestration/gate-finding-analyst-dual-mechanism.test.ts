@@ -35,8 +35,16 @@ describe('gate-finding-analyst — lint-gate variant', () => {
   }
 
   it('still calls epam run directly (not through ai-run.sh, not through run_orch_prompt)', () => {
+    // The --provider VALUE changed 2026-09-03 (see change-log/SEAM-CONSISTENCY-ANALYSIS.md):
+    // this call used to hardcode ${ORCH_GATE_PROVIDER:-openrouter}, which bypassed
+    // EPAM_PROVIDER_SET entirely — src/ has no awareness of it at all, so nothing downstream
+    // caught a stale or wrong vendor the way llm-handler.sh's own resolve_primary_provider()
+    // does for calls that route through it. The flag is now conditional
+    // (${_gate_provider:+--provider "$_gate_provider"}, resolved just above this call) so an
+    // unroutable value is corrected and an unset one omits the flag rather than passing "" —
+    // but the architectural fact this test protects is unchanged: epam run direct, not ai-run.sh.
     const site = callStatement();
-    expect(site).toMatch(/timeout "\$\{EPAM_GATE_TIMEOUT_SECS:-1200\}" epam run --provider/);
+    expect(site).toMatch(/timeout "\$\{EPAM_GATE_TIMEOUT_SECS:-1200\}" epam run \$\{_gate_provider:\+--provider "\$_gate_provider"\}/);
     expect(site).not.toMatch(/ai-run\.sh/);
   });
 

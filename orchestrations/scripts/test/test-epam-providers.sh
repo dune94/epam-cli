@@ -49,6 +49,8 @@ _result=$(
         awk "/^provider_to_cli\(\)/{found=1} found{print; if(/^\}$/){exit}}" "$SCRIPT" > /tmp/_ptc.sh
         CLAUDE_CMD=claude
         EPAM_CLI=epam
+        SCRIPT_DIR="'"$SCRIPTS_DIR"'"
+        error() { echo "$*" >&2; }
         source /tmp/_ptc.sh
         echo "copilot=$(provider_to_cli copilot)"
         echo "openai=$(provider_to_cli openai)"

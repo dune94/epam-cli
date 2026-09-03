@@ -21,24 +21,23 @@ import { join } from 'path';
 
 const ROOT = join(__dirname, '../../..');
 const ORCH = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
-const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
+const PROVIDERS_JSON = join(ROOT, 'orchestrations/config/providers.json');
 
 const orchSrc = readFileSync(ORCH, 'utf8');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
+const providers = JSON.parse(readFileSync(PROVIDERS_JSON, 'utf8'));
 
 /** The providers the orchestrator's dispatch will route — the single source of truth. */
 function acceptedProviders(): string[] {
   return [...orchSrc.matchAll(/^\s{4,}([a-z][a-z0-9-]*)\)\s+CLAUDE_SH=/gm)].map((m) => m[1]);
 }
 
-/** Every provider named by provider_to_cli(), which is what actually runs the story. */
+/**
+ * Every provider provider_to_cli() (claude.sh) can run — read from providers.json's
+ * `cliBinary`, its single declared source since change-log/SEAM-CONSISTENCY-ANALYSIS.md
+ * Section 5 removed the hardcoded `case` statement this used to scrape from source text.
+ */
 function providerToCliNames(): string[] {
-  const idx = claudeSrc.indexOf('provider_to_cli()');
-  if (idx === -1) return [];
-  const body = claudeSrc.slice(idx, claudeSrc.indexOf('\n}', idx));
-  return [...body.matchAll(/^\s*([a-z][a-z0-9|-]*)\)/gm)]
-    .flatMap((m) => m[1].split('|'))
-    .filter((n) => n && n !== '*');
+  return Object.keys(providers.cliBinary || {});
 }
 
 describe('a bug-fix story is assigned a provider the dispatch accepts', () => {

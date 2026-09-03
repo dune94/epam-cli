@@ -1651,23 +1651,26 @@ resolve_provider_settings() {
 # provider_to_cli <provider>
 # Returns the CLI binary name for a given aiProvider value.
 # Exits with an error for unknown providers — no silent Claude fallback.
+#
+# The mapping lives in providers.json's `cliBinary`, not here — see
+# change-log/SEAM-CONSISTENCY-ANALYSIS.md Section 5. This used to be a hardcoded `case`
+# statement naming every vendor, a second, independently-maintained list next to
+# providers.json's `known` — the two could (and did) drift.
 provider_to_cli() {
-    case "$1" in
-        opencode)                    echo "opencode" ;;
-        codex)                       echo "codex" ;;
-        codemie-claude)              echo "codemie-claude" ;;
-        # Plain Claude Code. Added 2026-08-25 for the mockserver set, which runs it
-        # redirected at MockServer via ANTHROPIC_BASE_URL. It was previously listed in
-        # providers.json with NO case arm — a PRD could name it, pass the gate, and die
-        # here at runtime. Now it is genuinely accepted, so the gate and the engine agree.
-        claude)                      echo "claude" ;;
-        copilot|openai|openrouter|cursor|minimax)  echo "$EPAM_CLI" ;;
-        epam)                        echo "$EPAM_CLI" ;;
-        *)
-            error "Unknown aiProvider '$1' — set aiProvider in prd.json to one of: opencode|codex|copilot|openai|openrouter|cursor|minimax|codemie-claude|claude"
-            return 1
-            ;;
-    esac
+    local _providers_json="${PROVIDERS_JSON:-$SCRIPT_DIR/../config/providers.json}"
+    local cli
+    cli=$(jq -r --arg p "$1" '.cliBinary[$p] // empty' "$_providers_json" 2>/dev/null)
+    if [ -z "$cli" ]; then
+        local known
+        known=$(jq -r '.known | join("|")' "$_providers_json" 2>/dev/null)
+        error "Unknown aiProvider '$1' — set aiProvider in prd.json to one of: ${known:-see config/providers.json}"
+        return 1
+    fi
+    if [ "$cli" = '$EPAM_CLI' ]; then
+        echo "$EPAM_CLI"
+    else
+        echo "$cli"
+    fi
 }
 
 # normalize_provider_json <provider> <raw_jsonl_file> <out_json_file>

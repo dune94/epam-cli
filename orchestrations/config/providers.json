@@ -43,5 +43,17 @@
     "failed",
     "deprecated"
   ],
+  "$cliBinaryComment": "The CLI binary provider_to_cli() (claude.sh) runs for a given aiProvider. A literal binary name means that vendor has its own dedicated runner script; the sentinel \"$EPAM_CLI\" means it runs through the epam CLI itself (the shared runner for providers without a standalone script — copilot/openai/openrouter/cursor/minimax all resolve to the same $EPAM_CLI value, which defaults to \"epam\" but is overridable). Every key here MUST also appear in `known` — see $knownDrift.",
+  "cliBinary": {
+    "opencode": "opencode",
+    "codex": "codex",
+    "codemie-claude": "codemie-claude",
+    "claude": "claude",
+    "copilot": "$EPAM_CLI",
+    "openai": "$EPAM_CLI",
+    "openrouter": "$EPAM_CLI",
+    "cursor": "$EPAM_CLI",
+    "minimax": "$EPAM_CLI"
+  },
   "$knownDrift": "known must match the list provider_to_cli() ADVERTISES in its own error message — that is the engine's statement of what a PRD may assign. 'epam' was removed 2026-08-25: it is a vestigial case arm mapping to $EPAM_CLI, the same target as copilot/openai/openrouter/cursor/minimax, it names the RUNNER rather than a vendor, nothing assigns it, and the engine does not advertise it. codemie-claude and copilot were ADDED for the opposite reason: both are advertised and accepted, and preflight would have rejected a PRD assigning them. 'anthropic', 'claude' and 'gemini' were removed the same day for the INVERSE reason: they were listed with no case arm at all, so a PRD assigning them passed the gate and died at runtime. brownfield-test-prd.json already assigned \"claude\" and would have failed mid-run; it now fails at preflight, before anything is spent."
 }

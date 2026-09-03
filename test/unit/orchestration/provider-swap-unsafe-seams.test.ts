@@ -172,10 +172,19 @@ describe('provider-swap-unsafe scanner', () => {
 });
 
 describe('provider-swap-unsafe scanner, against the real tree', () => {
-  it('finds exactly 16 — the 17 the analysis verified by hand, minus tier2-free-run.sh (exempt)', () => {
+  it('finds exactly 12 — 16 minus the 4 ORCH_GATE_PROVIDER sites fixed 2026-09-03', () => {
+    // 17 verified by hand -> 16 after excluding tier2-free-run.sh (not a defect) -> 12 after
+    // run-agent-orchestration.sh's 4 gate sites were wired to resolve_primary_provider(). These
+    // were TIER 1 (genuinely unprotected: epam run --provider talks to the compiled CLI directly,
+    // which has zero EPAM_PROVIDER_SET awareness — confirmed by grep across src/).
     const r = run(ROOT);
     const lines = r.out.trim().split('\n').filter(Boolean);
-    expect(lines.length, `found:\n${r.out}`).toBe(16);
+    expect(lines.length, `found:\n${r.out}`).toBe(12);
+  });
+
+  it('no longer flags run-agent-orchestration.sh — fixed, not just reduced elsewhere', () => {
+    const r = run(ROOT);
+    expect(r.out).not.toMatch(/run-agent-orchestration\.sh/);
   });
 
   it('names the worst three from the analysis: CPA_PROVIDER, STORY_PROVIDER:-codex, the assignment form', () => {

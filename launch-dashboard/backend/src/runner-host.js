@@ -25,6 +25,15 @@ const script = process.env.EPAM_LAUNCHER
   ?? path.join(process.env.EPAM_HOME ?? process.cwd(), 'orchestrations/scripts/tier3-metrolinx-run.sh');
 const cwd = process.env.EPAM_HOME ?? process.cwd();
 
+// LANGFUSE, EXPLICITLY PASSED THROUGH — not inherited (see the "environment is built, not
+// inherited" note above). Absent means tracing simply does not activate downstream
+// (wrapWithTracing degrades to the untraced provider when these are unset), not a launch failure:
+// a client install without Langfuse configured must still be able to run.
+const langfuseEnv = {};
+for (const k of ['LANGFUSE_SECRET_KEY', 'LANGFUSE_PUBLIC_KEY', 'LANGFUSE_BASE_URL']) {
+  if (process.env[k]) langfuseEnv[k] = process.env[k];
+}
+
 const launcher = createLauncher({
   script,
   cwd,
@@ -33,13 +42,15 @@ const launcher = createLauncher({
   // floor — it works with no systemd user bus, which cannot be assumed on a client box.
   extraEnv: {
     NODE_OPTIONS: process.env.EPAM_NODE_OPTIONS ?? '--max-old-space-size=4096',
+    ...langfuseEnv,
   },
   onOutput: (line) => process.stdout.write(`[pipeline] ${line}\n`),
 });
 
+// NO providerSet HERE ANYMORE. It used to be a single value fixed for every launch this runner
+// would ever make; each spooled REQUEST now declares its own (runner.js reads req.providerSet).
 const runner = createRunner({
   spoolDir: cfg.spoolDir,
-  providerSet: cfg.providerSet,
   launcher,
   dry,
 });

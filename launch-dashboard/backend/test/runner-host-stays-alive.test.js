@@ -54,7 +54,6 @@ test('runner-host keeps watching instead of exiting the moment it starts', async
       SPOOL_DIR: path.join(dir, 'spool'),
       EPAM_HOME: dir,
       LAUNCH_PASSWORD: 'test-password',
-      EPAM_PROVIDER_SET: 'claude',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -81,7 +80,13 @@ test('runner-host keeps watching instead of exiting the moment it starts', async
     const id = 'aaaaaaaa-0000-4000-8000-000000000001';
     fs.writeFileSync(
       path.join(dir, 'spool', 'requests', `${id}.json`),
-      JSON.stringify({ id, ticket: 'TEST-1', requestedBy: 'test', pauseAfterMint: 0, pauseBeforeWriter: 0 }));
+      JSON.stringify({
+        id, ticket: 'TEST-1', requestedBy: 'test', pauseAfterMint: 0, pauseBeforeWriter: 0,
+        // providerSet is REQUIRED now — a request without one fails immediately (runner.js), which
+        // would satisfy the bare "some status got written" check below without proving the watcher
+        // ever reached the real --dry launch path this test means to exercise.
+        providerSet: 'claude',
+      }));
 
     let status = null;
     for (let i = 0; i < 60 && status === null; i += 1) {
@@ -92,6 +97,8 @@ test('runner-host keeps watching instead of exiting the moment it starts', async
       }
     }
     assert.ok(status, `the running watcher never picked up a spooled request. Output:\n${out}`);
+    assert.equal(status.status, 'dry-run',
+      `expected the --dry launch path, got ${status.status}: ${status.detail}`);
   } finally {
     child.kill('SIGKILL');
   }

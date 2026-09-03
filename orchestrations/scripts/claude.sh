@@ -9431,6 +9431,24 @@ implement_story() {
     export STORY_ITERATION_BUMP_TOTAL
     local _persisted_model
     _persisted_model="$(read_story_retry_model "$LOG_DIR" "$story_id")"
+    # A PERSISTED RUNG FROM A DIFFERENT PROVIDER SET IS NOT A RUNG TO RESUME. See
+    # change-log/SEAM-CONSISTENCY-ANALYSIS.md — an operator swaps EPAM_PROVIDER_SET because a
+    # provider ran out of tokens mid-run, and the persisted model name (e.g. "MiniMax-M3") is
+    # meaningless once the set changes: it names a vendor's own namespace, not a portable model
+    # id. Trusting it under a DIFFERENT set pairs a valid new-set provider with a model name that
+    # provider has never heard of — the same "model and provider are one decision" defect this
+    # file already fixed once for a different cause (2026-08-18), reintroduced here by a swap
+    # instead of a missed re-derivation.
+    #
+    # An EMPTY persisted set is NOT evidence of a mismatch — it means this state predates the
+    # marker (a run in flight when this shipped) or the launch itself declares no set. Either way
+    # there is nothing to contradict, so the existing model is still trusted, exactly as before.
+    local _persisted_set
+    _persisted_set="$(read_story_retry_provider_set "$LOG_DIR" "$story_id")"
+    if [ -n "$_persisted_set" ] && [ "$_persisted_set" != "${EPAM_PROVIDER_SET:-}" ]; then
+        log "  [InferenceLadder] $story_id: persisted rung '$_persisted_model' was chosen under set '$_persisted_set', but this launch is '${EPAM_PROVIDER_SET:-<none>}' — discarding it and starting this set's own ladder from the top"
+        _persisted_model=""
+    fi
     if [ -n "$_persisted_model" ] && [ "$_persisted_model" != "${STORY_MODEL:-}" ]; then
         log "  [InferenceLadder] $story_id resuming on '$_persisted_model' (escalated in an earlier invocation; PRD model is '${STORY_MODEL:-}')"
         STORY_MODEL="$_persisted_model"
@@ -10794,6 +10812,10 @@ $_kb_section"
             if ! _coupled_pair_gate_for_story "$story_id" "$output_file"; then
                 write_story_retry_count "$LOG_DIR" "$story_id" "$retry_count"
                 write_story_retry_model "$LOG_DIR" "$story_id" "${STORY_MODEL:-}"
+                # Persisted ALONGSIDE the model — see change-log/SEAM-CONSISTENCY-ANALYSIS.md.
+                # A resume must know WHICH set chose this model, or a swap between invocations
+                # leaves a rung name (e.g. MiniMax-M3) meaningless under the new set.
+                write_story_retry_provider_set "$LOG_DIR" "$story_id" "${EPAM_PROVIDER_SET:-}"
                 write_story_iteration_bump "$LOG_DIR" "$story_id" "${STORY_ITERATION_BUMP_TOTAL:-0}"
                 rm -f "$(_rung_snapshot_path "$story_id")" 2>/dev/null || true
                 update_monitor_status "retry" "$story_id" "Coupled file pair had more than one author"
@@ -10808,6 +10830,10 @@ $_kb_section"
             # rung is only a proxy for WHICH MODEL RUNS. Persisting one without the other is
             # what made the ladder restart its climb on every re-invocation.
             write_story_retry_model "$LOG_DIR" "$story_id" "${STORY_MODEL:-}"
+            # Persisted ALONGSIDE the model — see change-log/SEAM-CONSISTENCY-ANALYSIS.md.
+            # A resume must know WHICH set chose this model, or a swap between invocations
+            # leaves a rung name (e.g. MiniMax-M3) meaningless under the new set.
+            write_story_retry_provider_set "$LOG_DIR" "$story_id" "${EPAM_PROVIDER_SET:-}"
             write_story_iteration_bump "$LOG_DIR" "$story_id" "${STORY_ITERATION_BUMP_TOTAL:-0}"
             post_completion_message "$story_id" "completed"
             return 0
@@ -11065,6 +11091,10 @@ Apply the above diagnosis AND fix the deterministic check violation — both mus
             # rung is only a proxy for WHICH MODEL RUNS. Persisting one without the other is
             # what made the ladder restart its climb on every re-invocation.
             write_story_retry_model "$LOG_DIR" "$story_id" "${STORY_MODEL:-}"
+            # Persisted ALONGSIDE the model — see change-log/SEAM-CONSISTENCY-ANALYSIS.md.
+            # A resume must know WHICH set chose this model, or a swap between invocations
+            # leaves a rung name (e.g. MiniMax-M3) meaningless under the new set.
+            write_story_retry_provider_set "$LOG_DIR" "$story_id" "${EPAM_PROVIDER_SET:-}"
             write_story_iteration_bump "$LOG_DIR" "$story_id" "${STORY_ITERATION_BUMP_TOTAL:-0}"
             if [ $retry_count -le $MAX_RETRIES ]; then
                 warning "$story_cli failed, retrying in ${RETRY_DELAY}s..."

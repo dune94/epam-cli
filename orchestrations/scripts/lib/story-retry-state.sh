@@ -107,6 +107,46 @@ write_story_retry_model() {
     printf '%s' "$model" > "$f" 2>/dev/null || true
 }
 
+_story_retry_provider_set_file() {
+    local log_dir="$1" story_id="$2"
+    echo "$(_story_retry_state_dir "$log_dir")/${story_id}.provider-set"
+}
+
+# read_story_retry_provider_set <log_dir> <story_id>
+# WHICH EPAM_PROVIDER_SET was active when the persisted model was chosen, or "" if none recorded.
+#
+# read_story_retry_model() persists a model NAME with no notion of which provider set chose it.
+# "MiniMax-M3" is meaningless once EPAM_PROVIDER_SET has moved from openrouter to claude between
+# two invocations — the operator swapped because a provider ran out of tokens, exactly the
+# scenario hot-swap exists for — but nothing recorded that the set had changed, so a resume
+# trusted a rung from a vendor namespace the CURRENT set has never heard of. The caller compares
+# this against the CURRENT EPAM_PROVIDER_SET before trusting the persisted model at all.
+read_story_retry_provider_set() {
+    local log_dir="$1" story_id="$2"
+    local f
+    f="$(_story_retry_provider_set_file "$log_dir" "$story_id")"
+    if [ -f "$f" ]; then
+        local v
+        v="$(tr -d '\n\r' < "$f" 2>/dev/null)"
+        printf '%s' "$v"
+    else
+        printf ''
+    fi
+}
+
+write_story_retry_provider_set() {
+    local log_dir="$1" story_id="$2" set_name="$3"
+    # Never persist an empty set: a run with no declared set has expressed no preference, and a
+    # blank marker read back later must not be mistaken for "recorded, and empty" — it must read
+    # exactly as "nothing recorded", matching write_story_retry_model's own rule.
+    [ -n "$set_name" ] || return 0
+    local dir f
+    dir="$(_story_retry_state_dir "$log_dir")"
+    mkdir -p "$dir" 2>/dev/null || true
+    f="$(_story_retry_provider_set_file "$log_dir" "$story_id")"
+    printf '%s' "$set_name" > "$f" 2>/dev/null || true
+}
+
 _story_retry_bump_file() {
     local log_dir="$1" story_id="$2"
     echo "$(_story_retry_state_dir "$log_dir")/${story_id}.iterbump"

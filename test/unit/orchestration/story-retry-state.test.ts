@@ -196,3 +196,54 @@ describe('advance_story_retry_rung — the real fix: a review rejection must cli
     expect(r.stdout.trim(), 'mutant should regress to 0, proving the real function does NOT').toBe('0');
   });
 });
+
+describe('read_story_retry_provider_set / write_story_retry_provider_set', () => {
+  // WHICH SET produced a persisted ladder rung, so a resume can tell whether that rung still
+  // means anything. read_story_retry_model() persists a MODEL NAME with no notion of which
+  // provider set chose it — "MiniMax-M3" is meaningless once EPAM_PROVIDER_SET has moved from
+  // openrouter to claude between two invocations, but nothing recorded that it moved. Found
+  // 2026-09-03 while confirming the hot-swap requirement extends to resume, per
+  // change-log/SEAM-CONSISTENCY-ANALYSIS.md.
+  it('returns empty for a story with no persisted set', () => {
+    const d = newLogDir();
+    const { out } = run(`read_story_retry_provider_set ${JSON.stringify(d)} S-1`);
+    expect(out.trim()).toBe('');
+  });
+
+  it('returns the persisted value after a write', () => {
+    const d = newLogDir();
+    const { out } = run(`
+      write_story_retry_provider_set ${JSON.stringify(d)} S-1 openrouter
+      read_story_retry_provider_set ${JSON.stringify(d)} S-1
+    `);
+    expect(out.trim()).toBe('openrouter');
+  });
+
+  it('is scoped per story', () => {
+    const d = newLogDir();
+    const { out } = run(`
+      write_story_retry_provider_set ${JSON.stringify(d)} S-1 openrouter
+      read_story_retry_provider_set ${JSON.stringify(d)} S-2
+    `);
+    expect(out.trim()).toBe('');
+  });
+
+  it('never persists an empty set — a run with no declared set leaves no marker to misread later', () => {
+    // Checking the READ result alone is vacuous here: an empty file and a missing file both
+    // read back as ''. The real assertion is that no file was created at all — caught by
+    // mutation testing: removing the empty-string guard left this passing on the read-back
+    // check alone, because the write still landed on disk, just empty.
+    const d = newLogDir();
+    run(`write_story_retry_provider_set ${JSON.stringify(d)} S-1 ""`);
+    const f = join(d, 'story-retry-state', 'S-1.provider-set');
+    expect(existsSync(f), 'an empty set was persisted as a file, not skipped').toBe(false);
+  });
+
+  it('creates the actual artifact on disk with the exact value', () => {
+    const d = newLogDir();
+    run(`write_story_retry_provider_set ${JSON.stringify(d)} S-1 codemie`);
+    const f = join(d, 'story-retry-state', 'S-1.provider-set');
+    expect(existsSync(f), 'state file was never written').toBe(true);
+    expect(readFileSync(f, 'utf8').trim()).toBe('codemie');
+  });
+});

@@ -149,7 +149,11 @@ describe('the installer provisions launch-dashboard', () => {
     expect(log).toMatch(/LAUNCH_SUBNET=172\.\d+\.0\.0\/16/);
   });
 
-  it('creates launch-dashboard/.env from its template when absent, never inventing a password', async () => {
+  it('creates launch-dashboard/.env from its template when absent, WITH a generated LAUNCH_PASSWORD so it starts unattended', async () => {
+    // Operator decision 2026-09-03: a blank LAUNCH_PASSWORD used to mean install.sh warned, then
+    // attempted `up -d` anyway and hit compose's `${LAUNCH_PASSWORD:?...}` hard-fail — a known
+    // condition surfacing as a crash. LAUNCH_PASSWORD gates a loopback-only local UI, a different
+    // risk class from a vendor/API credential, so it is generated rather than left blank.
     const port = 18104;
     await serveHealth(port);
     const f = fixture({ port });
@@ -158,7 +162,20 @@ describe('the installer provisions launch-dashboard', () => {
     const envPath = path.join(f.dir, 'launch-dashboard/.env');
     expect(fs.existsSync(envPath), 'no .env was created from the template').toBe(true);
     const body = fs.readFileSync(envPath, 'utf8');
-    expect(body, 'a password was invented rather than left for the operator').toMatch(/LAUNCH_PASSWORD=\s*$|LAUNCH_PASSWORD=\n/m);
+    const lines = body.match(/^LAUNCH_PASSWORD=.*$/gm) ?? [];
+    expect(lines.length, `expected exactly one LAUNCH_PASSWORD= line, found ${lines.length}:\n${body}`).toBe(1);
+    expect(lines[0], 'LAUNCH_PASSWORD was left blank instead of generated').not.toBe('LAUNCH_PASSWORD=');
+    expect(lines[0].slice('LAUNCH_PASSWORD='.length).length, 'generated password looks too short to be real').toBeGreaterThan(10);
+  });
+
+  it('skips starting (never crashes into compose\'s hard-fail) when .env already exists with LAUNCH_PASSWORD left blank', async () => {
+    const f = fixture({ port: 18105 });
+    fs.writeFileSync(path.join(f.dir, 'launch-dashboard/.env'), 'LAUNCH_PASSWORD=\nLAUNCH_UI_PORT=18105\n');
+    const r = await run(f, ['--docker'], { EPAM_CONTAINER_RUNTIME: 'docker' });
+    expect(r.out, 'did not warn about the blank password').toMatch(/LAUNCH_PASSWORD/);
+    const dockerLog = path.join(f.dir, 'docker.log');
+    const log = fs.existsSync(dockerLog) ? fs.readFileSync(dockerLog, 'utf8') : '';
+    expect(log, 'attempted to bring the launch dashboard up despite a known-blank password').not.toMatch(/launch-dashboard.*up -d|up -d.*--build/);
   });
 
   it('FAILS the install when neither .env nor a template exists — never silently proceeds', async () => {

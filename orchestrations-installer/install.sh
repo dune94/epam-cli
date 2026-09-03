@@ -519,6 +519,24 @@ esac
 
 # ── Dashboards: OPTIONAL, and never a reason to fail ────────────────────────
 _head "Dashboards (optional)"
+
+# BUILD BEFORE UP, OR THE HEALTHCHECK FAILS BY CONSTRUCTION. orchestrations/dashboards/live/ is
+# gitignored — eleventy's own build output, never tracked — so on every fresh install it starts
+# EMPTY. agent-monitor's healthcheck probes `/`, nginx has no index and autoindex is off, so a
+# brand-new install was 403-unhealthy FOREVER regardless of docker, subnet or port: found live
+# 2026-09-03, grafana (depends_on agent-monitor: condition service_healthy) never even started —
+# stuck at "Created". Only a completed pipeline run (or this build) ever populated live/ before.
+#
+# Only when there is something to build FROM (src/ present, same test the Build section above
+# uses) — a packaged, src/-less install ships no eleventy at all.
+if [ -d "$ROOT/src" ] && [ -f "$ROOT/package.json" ]; then
+    if (cd "$ROOT" && npm run dashboards:build --silent >/dev/null 2>&1); then
+        _ok "dashboards built — agent-monitor has real content to serve"
+    else
+        _warn "dashboards:build failed — agent-monitor's healthcheck may fail until a run populates it"
+    fi
+fi
+
 # THE PROBE ASKS THE RESOLVED RUNTIME. It said `docker` literally, so on a podman-only machine the
 # installer announced "runtime: podman" and then started nothing — the report and the behaviour
 # disagreeing, which is this file's recurring defect.
@@ -615,12 +633,33 @@ else
     . "$INSTALLER_DIR/lib/wait-for-health.sh"
     . "$INSTALLER_DIR/lib/isolated-compose-identity.sh"
 
-    # A REAL PASSWORD IS A DECISION ONLY A HUMAN MAKES — never synthesized here. Mirrors the root
-    # .env handling: copy the template so there is something to fill in, never invent a secret.
+    # A VENDOR/API CREDENTIAL IS A DECISION ONLY A HUMAN MAKES — never synthesized (see the root
+    # .env handling: copy the template, never invent a secret). LAUNCH_PASSWORD is a DIFFERENT
+    # risk class: it gates a loopback-only local UI, not a billed vendor account or a shared
+    # system — a blank one previously meant install.sh already knew this stack could not start
+    # (it had just written this exact warning) and then attempted `up -d` anyway, hard-failing on
+    # compose's `${LAUNCH_PASSWORD:?...}` interpolation instead of the warning it already gave.
+    # Operator decision 2026-09-03: generate one so the dashboard starts unattended; changeable
+    # any time by editing launch-dashboard/.env directly.
     if [ ! -f "$LAUNCH_DIR/.env" ]; then
         if [ -f "$LAUNCH_DIR/.env.example" ]; then
             cp "$LAUNCH_DIR/.env.example" "$LAUNCH_DIR/.env"
-            _warn "launch-dashboard/.env created from .env.example — FILL IN LAUNCH_PASSWORD before it can start"
+            _GENERATED_PW="$("$NODE_BIN" -e 'process.stdout.write(require("crypto").randomBytes(18).toString("base64url"))' 2>/dev/null)"
+            if [ -n "$_GENERATED_PW" ]; then
+                # REPLACE the template's blank line in place — never append a second
+                # LAUNCH_PASSWORD= key. Both parse fine (bash sourcing takes the last one) but a
+                # duplicate key is a needless trap for whoever reads this file by hand next.
+                if grep -q '^LAUNCH_PASSWORD=' "$LAUNCH_DIR/.env"; then
+                    _LD_TMP="$(mktemp)"
+                    sed "s|^LAUNCH_PASSWORD=.*|LAUNCH_PASSWORD=$_GENERATED_PW|" "$LAUNCH_DIR/.env" > "$_LD_TMP" \
+                        && mv "$_LD_TMP" "$LAUNCH_DIR/.env"
+                else
+                    printf '\nLAUNCH_PASSWORD=%s\n' "$_GENERATED_PW" >> "$LAUNCH_DIR/.env"
+                fi
+                _ok "launch-dashboard/.env created with a generated LAUNCH_PASSWORD (edit the file to change it)"
+            else
+                _warn "launch-dashboard/.env created from .env.example — FILL IN LAUNCH_PASSWORD before it can start"
+            fi
         else
             _bad "launch-dashboard/.env is missing and there is no .env.example to create one from"
             FAILED=1
@@ -632,8 +671,15 @@ else
     _LD_PROJECT="$(isolated_project_name "$ROOT" launch)"
     _LD_HEALTH_URL="http://localhost:${_LD_PORT}/api/health"
 
+    _LD_PW="$(grep -E '^LAUNCH_PASSWORD=' "$LAUNCH_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2-)"
     if [ ! -f "$LAUNCH_DIR/.env" ]; then
         LAUNCH_STATUS=failed
+    elif [ -z "$_LD_PW" ] && [ "$CHECK_ONLY" != "1" ]; then
+        # KNOWN ALREADY, NEVER A SURPRISE CRASH. A .env from before LAUNCH_PASSWORD was
+        # auto-generated (or one an operator deliberately blanked) still fails compose's
+        # `${LAUNCH_PASSWORD:?...}` interpolation — skip the attempt instead of hitting it.
+        LAUNCH_STATUS=failed
+        _warn "launch-dashboard/.env has no LAUNCH_PASSWORD — skipping start; set one and re-run to bring it up"
     elif [ "$CHECK_ONLY" = "1" ]; then
         if wait_for_health "$_LD_HEALTH_URL" 3 1; then
             LAUNCH_STATUS=up

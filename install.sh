@@ -70,6 +70,19 @@ RUNNER="$("$NODE_BIN" -e '
 if [ -n "$RUNNER" ]; then
     if command -v "$RUNNER" >/dev/null 2>&1; then _ok "$RUNNER (the '$STACK' runner)"
     else _bad "'$RUNNER' is not on PATH — the '$STACK' stack cannot run without it"; FAILED=1; fi
+
+# PYTHON IS A RUNTIME DEPENDENCY, not an optional extra: 88 handlers under
+# orchestrations/scripts/lib/handlers are executed with it.
+#
+# Measured, because the assumption was bigger than the truth: every import across all 88 is
+# stdlib, plus one LOCAL module (_testfile, imported by siblings in the same directory). So there
+# is no venv to provision, no pip install, no requirements.txt — the interpreter is the whole
+# requirement, and checking for it is the whole job.
+if command -v python3 >/dev/null 2>&1; then
+    _ok "python3 ($(python3 -V 2>&1 | awk '{print $2}')) — 88 handlers need it"
+else
+    _bad "python3 is not on PATH — 88 pipeline handlers cannot run without it"; FAILED=1
+fi
 fi
 
 # ── Credentials: what this stack needs, from what it declares ───────────────
@@ -166,6 +179,65 @@ else
     else
         _bad "build failed — run 'npm run build' to see why"; FAILED=1
     fi
+fi
+
+# ── The `epam` shim ───────────────────────────────────────────────────────────
+# THE SHIM MUST POINT AT THIS INSTALL. The one found on the development machine reads
+#     exec node /home/<someone>/projects/ai/epam-cli/dist/epam.js "$@"
+# which is correct for exactly one checkout and wrong for every install. The path is computed here,
+# at install time, from where this script actually is.
+_head "Command"
+BIN_DIR="${EPAM_BIN_DIR:-$HOME/.local/bin}"
+if [ "$CHECK_ONLY" = "1" ]; then
+    if [ -x "$BIN_DIR/epam" ]; then _ok "epam shim present at $BIN_DIR/epam"
+    else _warn "no epam shim at $BIN_DIR/epam"; fi
+else
+    mkdir -p "$BIN_DIR"
+    printf '#!/usr/bin/env bash\nexec node "%s/dist/epam.js" "$@"\n' "$ROOT" > "$BIN_DIR/epam"
+    chmod +x "$BIN_DIR/epam"
+    _ok "epam shim written to $BIN_DIR/epam -> $ROOT/dist/epam.js"
+    case ":$PATH:" in
+        *":$BIN_DIR:"*) : ;;
+        # Said, never done silently: editing a shell profile behind an operator is a surprise, and
+        # a shim that is not on PATH is a shim that does nothing.
+        *) _warn "$BIN_DIR is not on PATH — add it:  export PATH=\"$BIN_DIR:\$PATH\"" ;;
+    esac
+fi
+
+# ── Project config: the three things that cannot be derived ───────────────────
+# JIRA_URL, JIRA_PROJECT_KEY and JIRA_CODELINE_ROOT are answers, not defaults — nothing in the tree
+# can infer which Jira site, which project, or where the codelines live.
+#
+# NON-SECRET VALUES ONLY. Credentials live in one .env, owned by the operator. This never prompts
+# for a token, never echoes one, and never writes one into project config: one file, one owner, one
+# place to look.
+_head "Project"
+EPAM_PROJECT="${EPAM_PROJECT:-}"
+if [ -n "$EPAM_PROJECT" ] && [ -d "$ROOT/orchestrations/projects/$EPAM_PROJECT" ]; then
+    _cfg="$ROOT/orchestrations/projects/$EPAM_PROJECT/config.env"
+    if [ "$CHECK_ONLY" = "1" ]; then
+        [ -f "$_cfg" ] && _ok "config.env present for '$EPAM_PROJECT'" || _warn "no config.env for '$EPAM_PROJECT'"
+    else
+        _missing=""
+        for _v in JIRA_URL JIRA_PROJECT_KEY JIRA_CODELINE_ROOT; do
+            eval "_val=\${$_v:-}"
+            [ -z "$_val" ] && _missing="$_missing $_v"
+        done
+        if [ -n "$_missing" ]; then
+            _warn "project '$EPAM_PROJECT' not configured — missing:$_missing"
+        else
+            {
+                echo "# Written by install.sh. NON-SECRET VALUES ONLY — credentials live in .env."
+                echo "PROJECT_NAME=$EPAM_PROJECT"
+                echo "JIRA_URL=$JIRA_URL"
+                echo "JIRA_PROJECT_KEY=$JIRA_PROJECT_KEY"
+                echo "JIRA_CODELINE_ROOT=$JIRA_CODELINE_ROOT"
+            } > "$_cfg"
+            _ok "wrote $_cfg (JIRA_URL, JIRA_PROJECT_KEY, JIRA_CODELINE_ROOT)"
+        fi
+    fi
+else
+    _ok "no project selected (set EPAM_PROJECT to configure one)"
 fi
 
 # ── Dashboards: OPTIONAL, and never a reason to fail ────────────────────────

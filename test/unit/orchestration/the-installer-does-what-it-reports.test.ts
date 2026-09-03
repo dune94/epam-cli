@@ -149,3 +149,75 @@ describe('the installer on a packaged tree (no src/)', () => {
     expect(out, 'a stub bundle went unmentioned').toMatch(/stub/i);
   });
 });
+
+/**
+ * THE THREE REMAINING DEFECTS from the packaging plan's list.
+ *
+ * #5 no `epam` PATH shim — the one on this machine hardcodes an absolute repo path, so it is
+ *    correct for exactly one checkout and wrong for every install.
+ * #6 the installer never asks for or writes JIRA_URL, JIRA_PROJECT_KEY or JIRA_CODELINE_ROOT,
+ *    which are the three things it cannot derive and the operator cannot guess.
+ * #7 88 python handlers, and no check that python3 exists.
+ *
+ * On #7 the plan said "no Python env setup, though 88 handlers need it", implying a venv. Measured:
+ * every import across all 88 is stdlib, plus one LOCAL module (`_testfile`, imported by siblings in
+ * the same directory). So the requirement is the INTERPRETER, nothing more — a much smaller job
+ * than the plan assumed, and worth checking before building a venv nobody needs.
+ */
+describe('the installer completes an install', () => {
+  it('checks python3, because 88 handlers are executed with it', () => {
+    const dir = fixture();
+    const out = `${run(dir, ['--no-docker']).stdout ?? ''}`;
+    expect(out, 'python3 is never checked, yet 88 handlers need it').toMatch(/python/i);
+  });
+
+  it('creates an epam shim that points at THIS install, not a hardcoded path', () => {
+    const dir = fixture();
+    fs.writeFileSync(path.join(dir, 'dist/epam.js'), `#!/usr/bin/env node\n${'// bundled\n'.repeat(6000)}`);
+    const binDir = path.join(dir, 'bin');
+    const r = spawnSync('bash', [path.join(dir, 'install.sh'), '--no-docker'],
+      { cwd: dir, encoding: 'utf8', timeout: 120_000,
+        env: { ...process.env, EPAM_NONINTERACTIVE: '1', EPAM_BIN_DIR: binDir } });
+    const out = `${r.stdout ?? ''}${r.stderr ?? ''}`;
+    const shim = path.join(binDir, 'epam');
+    expect(fs.existsSync(shim), `no shim was created. installer said:\n${out.slice(-500)}`).toBe(true);
+    const body = fs.readFileSync(shim, 'utf8');
+    expect(body, 'the shim points somewhere other than this install').toContain(dir);
+    expect((fs.statSync(shim).mode & 0o111) !== 0, 'the shim is not executable').toBe(true);
+  });
+
+  it('records the Jira answers it is given, since it cannot derive them', () => {
+    const dir = fixture();
+    fs.mkdirSync(path.join(dir, 'orchestrations/projects/demo'), { recursive: true });
+    const r = spawnSync('bash', [path.join(dir, 'install.sh'), '--no-docker'],
+      { cwd: dir, encoding: 'utf8', timeout: 120_000,
+        env: { ...process.env, EPAM_NONINTERACTIVE: '1',
+               EPAM_PROJECT: 'demo',
+               JIRA_URL: 'https://example.atlassian.net',
+               JIRA_PROJECT_KEY: 'DEMO',
+               JIRA_CODELINE_ROOT: dir } });
+    const cfg = path.join(dir, 'orchestrations/projects/demo/config.env');
+    const out = `${r.stdout ?? ''}${r.stderr ?? ''}`;
+    expect(fs.existsSync(cfg), `no config.env written. installer said:\n${out.slice(-500)}`).toBe(true);
+    const body = fs.readFileSync(cfg, 'utf8');
+    expect(body).toMatch(/JIRA_URL=https:\/\/example\.atlassian\.net/);
+    expect(body).toMatch(/JIRA_PROJECT_KEY=DEMO/);
+    expect(body).toMatch(new RegExp(`JIRA_CODELINE_ROOT=${dir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+  });
+
+  it('never writes a credential into project config — secrets live in .env alone', () => {
+    const dir = fixture();
+    fs.mkdirSync(path.join(dir, 'orchestrations/projects/demo'), { recursive: true });
+    spawnSync('bash', [path.join(dir, 'install.sh'), '--no-docker'],
+      { cwd: dir, encoding: 'utf8', timeout: 120_000,
+        env: { ...process.env, EPAM_NONINTERACTIVE: '1', EPAM_PROJECT: 'demo',
+               JIRA_URL: 'https://example.atlassian.net', JIRA_PROJECT_KEY: 'DEMO',
+               JIRA_CODELINE_ROOT: dir,
+               JIRA_TOKEN: 'should-never-be-written', ANTHROPIC_API_KEY: 'sk-must-not-appear' } });
+    const cfg = path.join(dir, 'orchestrations/projects/demo/config.env');
+    if (!fs.existsSync(cfg)) return;      // covered by the previous test
+    const body = fs.readFileSync(cfg, 'utf8');
+    expect(body, 'a token reached project config').not.toMatch(/should-never-be-written/);
+    expect(body, 'an API key reached project config').not.toMatch(/sk-must-not-appear/);
+  });
+});

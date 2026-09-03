@@ -5,6 +5,13 @@
 #   ./install.sh --stack codemie      install for a specific stack
 #   ./install.sh --no-docker          skip dashboards entirely
 #   ./install.sh --check              verify an existing install, change nothing
+#   ./install.sh --dest ~/somewhere --ref v1.7   package that ref into a NEW tree, then install it
+#
+# --dest IS THE WHOLE POINT FOR ANYONE WHO IS NOT THIS CHECKOUT. Without it, install.sh only ever
+# configures the tree it is already sitting inside — which presupposes the code already arrived by
+# some means nobody ever automated. A colleague with repo access runs ONE command, from their own
+# clone, naming a tagged commit on the shared remote: no manual git archive, no manual re-provision,
+# no LLM standing in for either.
 #
 # DOCKER IS OPTIONAL, ALWAYS. The dashboards are observability; the pipeline runs without them.
 # An installer that fails because a container is missing teaches people to skip the installer.
@@ -44,16 +51,66 @@ CONTAINER_RUNTIME="${EPAM_CONTAINER_RUNTIME:-}"
 # without it can never be replayed, because the turns were never captured. Off by default — 2.36GB
 # of images is not a silent opt-in — but the consequence is one-way, so it is STATED either way.
 REPLAY_MODE="${EPAM_REPLAY:-off}"
+DEST=""; REF=""
 while [ $# -gt 0 ]; do
     case "$1" in
+        --dest)      DEST="${2:-}"; shift 2 ;;
+        --ref)       REF="${2:-}"; shift 2 ;;
         --stack)     STACK="${2:-}"; shift 2 ;;
         --no-docker) USE_DOCKER=no; shift ;;
         --docker)    USE_DOCKER=yes; shift ;;
         --check)     CHECK_ONLY=1; shift ;;
-        --help|-h)   sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        --help|-h)   sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *)           _bad "unknown option '$1'"; exit 1 ;;
     esac
 done
+
+# ── Package a ref into a NEW tree, then install THAT — never a hand-run git archive ──
+#
+# THE SOURCE OF TRUTH IS THE GIT COMMIT, never a manual copy. `git archive` reads only tracked,
+# committed content: untracked and gitignored files (real credentials among them) are structurally
+# excluded, not filtered by a list that can miss one — proven this same repo: a raw tar shipped 8
+# live credentials that git archive does not even see.
+#
+# INSTALLER_DIR NEVER MOVES. Every lib/*.sh this script sources still comes from where THIS install.sh
+# lives, regardless of --dest — the archived copy that lands inside DEST is inert bystander content,
+# same as it always has been. What --dest changes is $ROOT: everything below (.env, dist/, the
+# compose files, the manifest) now addresses the freshly-packaged tree instead of wherever this
+# script happened to be sitting.
+if [ -n "$DEST" ]; then
+    _head "Packaging"
+    if ! git -C "$INSTALLER_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+        _bad "--dest requires running install.sh from inside a git checkout of this repo — none found at $INSTALLER_DIR"
+        exit 1
+    fi
+    # THE REPO ROOT, NOT WHEREVER install.sh HAPPENS TO LIVE. `git archive` scopes its output to
+    # the CURRENT WORKING TREE'S SUBDIRECTORY, not the whole repo — running it with `-C
+    # $INSTALLER_DIR` (orchestrations-installer/, a SUBDIRECTORY) archived only install.sh and
+    # lib/, silently dropping the entire rest of the pipeline. Caught by actually running the
+    # packaged result and watching the very next step fail with "no provider-sets.json", not by
+    # reading the git-archive docs and assuming.
+    _GIT_ROOT="$(git -C "$INSTALLER_DIR" rev-parse --show-toplevel 2>/dev/null)"
+    if [ -z "$_GIT_ROOT" ]; then
+        _bad "could not resolve the repo root from $INSTALLER_DIR"
+        exit 1
+    fi
+    _PKG_REF="${REF:-HEAD}"
+    # FETCH FIRST: a colleague packaging a release just tagged by someone else may not have it yet.
+    git -C "$_GIT_ROOT" fetch --tags --quiet >/dev/null 2>&1 || true
+    if ! git -C "$_GIT_ROOT" rev-parse --verify "${_PKG_REF}^{commit}" >/dev/null 2>&1; then
+        _bad "ref '$_PKG_REF' does not exist in this checkout, even after fetching tags"
+        exit 1
+    fi
+    mkdir -p "$DEST" || { _bad "could not create $DEST"; exit 1; }
+    DEST="$(cd "$DEST" && pwd)"
+    if ! git -C "$_GIT_ROOT" archive "$_PKG_REF" | tar -x -C "$DEST"; then
+        _bad "packaging '$_PKG_REF' into $DEST failed"
+        exit 1
+    fi
+    _ok "packaged $_PKG_REF into $DEST"
+    ROOT="$DEST"
+    CONFIG="$ROOT/orchestrations/config"
+fi
 
 # ── What stacks exist, and which is default? Read, never listed here. ────────
 [ -f "$CONFIG/provider-sets.json" ] || { _bad "no provider-sets.json — is this the repo root?"; exit 1; }

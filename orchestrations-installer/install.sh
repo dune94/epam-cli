@@ -108,6 +108,21 @@ fi
 
 # ── Credentials: what this stack needs, from what it declares ───────────────
 _head "Credentials"
+# .env.example IS GENERATED, never hand-maintained — it went stale in both directions: this repo's
+# root template never mentioned openrouter's own required OPENROUTER_API_KEY/MINIMAX_API_KEY
+# (declared in provider-sets.json, absent from what an operator was told to fill in), and
+# launch-dashboard's template kept calling EPAM_PROVIDER_SET "REQUIRED" long after that requirement
+# was removed from config.js. Regenerated every install so it cannot drift stale again — .env
+# itself is never touched, only the template.
+if [ "$CHECK_ONLY" = "0" ] && [ -f "$CONFIG/provider-sets.json" ]; then
+    . "$INSTALLER_DIR/lib/generate-env-example.sh"
+    if generate_env_example "$CONFIG/provider-sets.json" "$CONFIG/env-vars.json" "$ROOT/.env.example" 2>/dev/null; then
+        _ok ".env.example regenerated from provider-sets.json"
+    else
+        _warn "could not regenerate .env.example — using whatever is already there"
+    fi
+fi
+
 if [ -f "$ROOT/.env" ]; then
     _ok ".env present"
 else
@@ -128,6 +143,28 @@ else
         _warn ".env created from $(basename "$_tpl") — FILL IT IN before running"
     else
         _bad "no .env and no template (.env.example) to create one from"; FAILED=1
+    fi
+fi
+
+# EXISTENCE IS NOT SUFFICIENCY — the same defect class already fixed for dist/epam.js
+# ("EXISTENCE IS NOT A BUILD, either way"). A copied-but-unfilled .env (still holding the empty
+# placeholders the template ships with) reported "present" and nothing more, so a stack's own
+# REQUIRED credential could sit empty all the way to the first paid call before anyone noticed.
+if [ -f "$ROOT/.env" ] && [ -f "$ROOT/orchestrations/scripts/lib/set-credentials.sh" ]; then
+    _missing_creds="$(
+        set -a; . "$ROOT/.env" 2>/dev/null; set +a
+        . "$ROOT/orchestrations/scripts/lib/set-credentials.sh"
+        while IFS=$'\t' read -r _c_env _c_from _c_req; do
+            [ "$_c_req" = "1" ] || continue
+            eval "_c_val=\${$_c_from:-}"
+            [ -z "$_c_val" ] && printf '%s ' "$_c_from"
+        done < <(EPAM_PROVIDER_SET="$STACK" _set_credentials_decl 2>/dev/null)
+    )"
+    if [ -n "$(printf '%s' "$_missing_creds" | tr -d '[:space:]')" ]; then
+        _bad "the '$STACK' stack needs these, still empty in .env: $_missing_creds"
+        FAILED=1
+    else
+        _ok "required '$STACK' credentials are filled in"
     fi
 fi
 

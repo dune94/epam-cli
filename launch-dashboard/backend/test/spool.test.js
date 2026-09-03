@@ -28,14 +28,25 @@ describe('the spool', () => {
 
   test('a request lands as a complete, parseable file the runner can act on', () => {
     spool.init(dir);
-    spool.writeRequest(dir, { id: 'r1', ticket: 'AMSD-1919', requestedBy: 'alice' });
+    spool.writeRequest(dir, { id: 'r1', ticket: 'AMSD-1919', requestedBy: 'alice', providerSet: 'claude' });
     const p = path.join(dir, 'requests', 'r1.json');
     assert.ok(fs.existsSync(p), 'no request file written');
     const j = JSON.parse(fs.readFileSync(p, 'utf8'));
     assert.equal(j.id, 'r1');
     assert.equal(j.ticket, 'AMSD-1919');
     assert.equal(j.requestedBy, 'alice');
+    assert.equal(j.providerSet, 'claude', 'the runner needs to know which set to launch');
     assert.ok(j.requestedAt, 'the runner needs to know how old a request is');
+  });
+
+  test('refuses a request with no providerSet — the runner must never guess a vendor', () => {
+    spool.init(dir);
+    assert.throws(
+      () => spool.writeRequest(dir, { id: 'r1', ticket: 'AMSD-1919', requestedBy: 'alice' }),
+      /provider/i,
+    );
+    assert.ok(!fs.existsSync(path.join(dir, 'requests', 'r1.json')),
+      'a rejected request must not be written');
   });
 
   test('writes ATOMICALLY — a runner must never read a half-written request', () => {
@@ -49,10 +60,10 @@ describe('the spool', () => {
     spool.init(dir);
     const target = path.join(dir, 'requests', 'r1.json');
 
-    spool.writeRequest(dir, { id: 'r1', ticket: 'AMSD-1919', requestedBy: 'alice' });
+    spool.writeRequest(dir, { id: 'r1', ticket: 'AMSD-1919', requestedBy: 'alice', providerSet: 'claude' });
     const firstInode = fs.statSync(target).ino;
 
-    spool.writeRequest(dir, { id: 'r1', ticket: 'AMSD-1920', requestedBy: 'alice' });
+    spool.writeRequest(dir, { id: 'r1', ticket: 'AMSD-1920', requestedBy: 'alice', providerSet: 'claude' });
     const secondInode = fs.statSync(target).ino;
 
     assert.notEqual(secondInode, firstInode,

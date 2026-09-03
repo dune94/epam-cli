@@ -29,6 +29,7 @@ describe('pause and resume', () => {
     const db = store.open(dbFile());
     const run = store.createRun(db, {
       ticket: 'AMSD-1919', requestedBy: 'alice', pauseAfterMint: true, pauseBeforeWriter: true,
+      providerSet: 'claude',
     });
     assert.equal(run.pauseAfterMint, 1);
     assert.equal(run.pauseBeforeWriter, 1);
@@ -36,22 +37,22 @@ describe('pause and resume', () => {
 
   test('pauses default to off when not asked for', () => {
     const db = store.open(dbFile());
-    const run = store.createRun(db, { ticket: 'A-1', requestedBy: 'alice' });
+    const run = store.createRun(db, { ticket: 'A-1', requestedBy: 'alice', providerSet: 'claude' });
     assert.equal(run.pauseAfterMint, 0);
     assert.equal(run.pauseBeforeWriter, 0);
   });
 
   test('a PAUSED run does not hold the machine — the process has exited', () => {
     const db = store.open(dbFile());
-    const first = store.createRun(db, { ticket: 'A-1', requestedBy: 'alice', pauseBeforeWriter: true });
+    const first = store.createRun(db, { ticket: 'A-1', requestedBy: 'alice', pauseBeforeWriter: true, providerSet: 'claude' });
     store.updateProgress(db, first.id, { status: 'paused', runId: '20260903T010438Z' });
     // another run may start: nothing is running
-    assert.doesNotThrow(() => store.createRun(db, { ticket: 'A-2', requestedBy: 'bob' }));
+    assert.doesNotThrow(() => store.createRun(db, { ticket: 'A-2', requestedBy: 'bob', providerSet: 'claude' }));
   });
 
   test('a paused run keeps the pipeline runId, without which it cannot be resumed', () => {
     const db = store.open(dbFile());
-    const run = store.createRun(db, { ticket: 'A-1', requestedBy: 'alice', pauseAfterMint: true });
+    const run = store.createRun(db, { ticket: 'A-1', requestedBy: 'alice', pauseAfterMint: true, providerSet: 'claude' });
     store.updateProgress(db, run.id, { status: 'paused', runId: '20260903T010438Z' });
     assert.equal(store.getRun(db, run.id).runId, '20260903T010438Z');
   });
@@ -60,7 +61,7 @@ describe('pause and resume', () => {
     // History must show both: the paused attempt and the resume. Mutating the original row would
     // erase the fact that a human was asked and answered.
     const db = store.open(dbFile());
-    const first = store.createRun(db, { ticket: 'A-1', requestedBy: 'alice', pauseBeforeWriter: true });
+    const first = store.createRun(db, { ticket: 'A-1', requestedBy: 'alice', pauseBeforeWriter: true, providerSet: 'claude' });
     store.updateProgress(db, first.id, { status: 'paused', runId: '20260903T010438Z' });
 
     const resumed = store.resumeRun(db, first.id, { requestedBy: 'bob' });
@@ -73,7 +74,7 @@ describe('pause and resume', () => {
 
   test('refuses to resume a run that is not paused', () => {
     const db = store.open(dbFile());
-    const run = store.createRun(db, { ticket: 'A-1', requestedBy: 'alice' });
+    const run = store.createRun(db, { ticket: 'A-1', requestedBy: 'alice', providerSet: 'claude' });
     assert.throws(() => store.resumeRun(db, run.id, { requestedBy: 'bob' }), /paused/i);
   });
 
@@ -81,16 +82,16 @@ describe('pause and resume', () => {
     // Without EPAM_RESUME_RUN the launch would start a FRESH run, which on a brownfield defect
     // resets the codeline and discards committed work. Live 2026-09-02: exactly that happened.
     const db = store.open(dbFile());
-    const run = store.createRun(db, { ticket: 'A-1', requestedBy: 'alice' });
+    const run = store.createRun(db, { ticket: 'A-1', requestedBy: 'alice', providerSet: 'claude' });
     store.updateProgress(db, run.id, { status: 'paused' });
     assert.throws(() => store.resumeRun(db, run.id, { requestedBy: 'bob' }), /runId|resume/i);
   });
 
   test('a resume is refused while something else is actually running', () => {
     const db = store.open(dbFile());
-    const first = store.createRun(db, { ticket: 'A-1', requestedBy: 'alice' });
+    const first = store.createRun(db, { ticket: 'A-1', requestedBy: 'alice', providerSet: 'claude' });
     store.updateProgress(db, first.id, { status: 'paused', runId: 'R1' });
-    store.createRun(db, { ticket: 'A-2', requestedBy: 'bob' });   // now busy
+    store.createRun(db, { ticket: 'A-2', requestedBy: 'bob', providerSet: 'claude' });   // now busy
     assert.throws(() => store.resumeRun(db, first.id, { requestedBy: 'carol' }), /busy|active/i);
   });
 });

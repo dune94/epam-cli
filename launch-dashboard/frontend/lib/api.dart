@@ -14,6 +14,7 @@ class Run {
   final String? runId;
   final String? detail;
   final String? codeLevel;
+  final String? providerSet;
   final bool pauseAfterMint;
   final bool pauseBeforeWriter;
   final String createdAt;
@@ -28,6 +29,7 @@ class Run {
         runId = j['runId'] as String?,
         detail = j['detail'] as String?,
         codeLevel = j['codeLevel'] as String?,
+        providerSet = j['providerSet'] as String?,
         pauseAfterMint = (j['pauseAfterMint'] ?? 0) == 1,
         pauseBeforeWriter = (j['pauseBeforeWriter'] ?? 0) == 1,
         createdAt = (j['createdAt'] ?? '') as String,
@@ -43,6 +45,16 @@ class Run {
   bool get canResume => isPaused && (runId?.isNotEmpty ?? false);
   bool get canReplay => isFinished;
   bool get canStop => isActive;
+}
+
+/// One entry from GET /api/provider-sets — read live from orchestrations/config/provider-sets.json,
+/// never a hardcoded list, so a 5th set added there needs no change here.
+class ProviderSetInfo {
+  final String name;
+  final String description;
+  ProviderSetInfo.fromJson(Map<String, dynamic> j)
+      : name = j['name'] as String,
+        description = (j['description'] ?? '') as String;
 }
 
 class ApiException implements Exception {
@@ -71,9 +83,18 @@ class Api {
         .toList();
   }
 
+  Future<List<ProviderSetInfo>> listProviderSets() async {
+    final r = await http.get(Uri.parse('$base/api/provider-sets'), headers: _headers);
+    _check(r);
+    return (jsonDecode(r.body) as List)
+        .map((e) => ProviderSetInfo.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<Run> createRun({
     required String ticket,
     required String requestedBy,
+    required String providerSet,
     bool pauseAfterMint = false,
     bool pauseBeforeWriter = false,
   }) async {
@@ -82,6 +103,7 @@ class Api {
         body: jsonEncode({
           'ticket': ticket,
           'requestedBy': requestedBy,
+          'providerSet': providerSet,
           'pauseAfterMint': pauseAfterMint,
           'pauseBeforeWriter': pauseBeforeWriter,
         }));
@@ -92,12 +114,15 @@ class Api {
   Future<void> stop(String id) async =>
       _check(await http.post(Uri.parse('$base/api/runs/$id/stop'), headers: _headers));
 
-  Future<Run> resume(String id, String by) => _post('$base/api/runs/$id/resume', by);
+  /// providerSet is OPTIONAL: absent continues with the paused run's own set (never a guess — a
+  /// carry-forward of a choice already made). Given, it is a swap.
+  Future<Run> resume(String id, String by, {String? providerSet}) =>
+      _post('$base/api/runs/$id/resume', by, extra: providerSet == null ? null : { 'providerSet': providerSet });
   Future<Run> replay(String id, String by) => _post('$base/api/runs/$id/replay', by);
 
-  Future<Run> _post(String url, String requestedBy) async {
+  Future<Run> _post(String url, String requestedBy, {Map<String, dynamic>? extra}) async {
     final r = await http.post(Uri.parse(url),
-        headers: _headers, body: jsonEncode({'requestedBy': requestedBy}));
+        headers: _headers, body: jsonEncode({'requestedBy': requestedBy, ...?extra}));
     _check(r);
     return Run.fromJson(jsonDecode(r.body) as Map<String, dynamic>);
   }

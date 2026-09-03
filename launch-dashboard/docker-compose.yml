@@ -24,14 +24,19 @@ services:
     # user is not 1000.
     user: "${LAUNCH_UID:-1000}:${LAUNCH_GID:-1000}"
     environment:
-      # Both are REQUIRED and the server refuses to start without them. LAUNCH_PASSWORD gates a
-      # button that spends real money; EPAM_PROVIDER_SET must never be guessed.
+      # REQUIRED — the server refuses to start without it. Gates a button that spends real money.
       LAUNCH_PASSWORD: ${LAUNCH_PASSWORD:?set LAUNCH_PASSWORD in .env}
-      EPAM_PROVIDER_SET: ${EPAM_PROVIDER_SET:?set EPAM_PROVIDER_SET in .env}
       EPAM_CODE_LEVEL: ${EPAM_CODE_LEVEL:-}
+      # THE OPERATOR PICKS THE PROVIDER SET PER LAUNCH NOW — no server-wide EPAM_PROVIDER_SET.
+      # This is where the picker's OWN options come from, read once at startup (provider-sets.js);
+      # a mount, not a value, so a set added upstream needs no rebuild here.
+      PROVIDER_SETS_FILE: /orchestrations-config/provider-sets.json
     volumes:
       - ./data:/data          # runs.db — history survives a restart
       - ./spool:/spool        # the only channel to the host runner
+      # READ-ONLY: the API lists provider sets, it must never be able to edit the pipeline's own
+      # declaration of them.
+      - ../orchestrations/config:/orchestrations-config:ro
     # Bounded, because a client install must not kill the machine. Sized for an API that lists rows.
     mem_limit: 256m
     memswap_limit: 256m

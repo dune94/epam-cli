@@ -26,6 +26,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _pauseAfterMint = false;
   bool _pauseBeforeWriter = false;
   List<Run> _runs = [];
+  List<ProviderSetInfo> _providerSets = [];
+  /// NO PRESELECTION, EVER. A guessed vendor is how MiniMax reached a claude run — the same rule
+  /// applies here: the operator must choose explicitly, every time, or Save stays blocked.
+  String? _providerSet;
   String? _error;
   bool _saving = false;
   Timer? _poll;
@@ -37,9 +41,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _refresh();
+    _loadProviderSets();
     // The grid is a live view of something that takes minutes. Polling is enough — a websocket
     // would be a dependency and a reconnection story for a five-second refresh.
     _poll = Timer.periodic(const Duration(seconds: 5), (_) => _refresh(quiet: true));
+  }
+
+  Future<void> _loadProviderSets() async {
+    try {
+      final sets = await widget.api.listProviderSets();
+      if (mounted) setState(() => _providerSets = sets);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (_) {
+      // Same "unreachable, not wrong" treatment as _refresh: the periodic poll's retry logic will
+      // eventually reach the API again and _refresh's own offline banner already says so. Nothing
+      // else to do here but try once more shortly.
+      Future.delayed(const Duration(seconds: 3), _loadProviderSets);
+    }
   }
 
   @override
@@ -178,7 +197,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           const SizedBox(width: 12),
           FilledButton(
-            onPressed: (_saving || _somethingRunning) ? null : _create,
+            onPressed: (_saving || _somethingRunning || _providerSet == null) ? null : _create,
             style: FilledButton.styleFrom(
               backgroundColor: Palette.green, foregroundColor: Palette.bg),
             child: const Text('save'),
@@ -186,6 +205,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ]),
         const SizedBox(height: 6),
         Row(children: [
+          _providerSetDropdown(
+            value: _providerSet,
+            options: _providerSets,
+            onChanged: (v) => setState(() => _providerSet = v),
+          ),
+          const SizedBox(width: 18),
           _check('pause after roster mint', _pauseAfterMint,
               (v) => setState(() => _pauseAfterMint = v)),
           const SizedBox(width: 18),
@@ -199,8 +224,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
             padding: EdgeInsets.only(top: 6),
             child: Text('a run is in progress — one at a time',
                 style: TextStyle(color: Palette.muted, fontSize: 12)),
+          )
+        else if (_providerSet == null && _providerSets.isNotEmpty)
+          const Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: Text('choose a provider set — never guessed',
+                style: TextStyle(color: Palette.muted, fontSize: 12)),
           ),
       ]),
+    );
+  }
+
+  /// [value] null means "nothing chosen" — the caller decides what that means (blocks Save on the
+  /// new-launch form; means "keep the paused run's own set" in the resume dialog).
+  Widget _providerSetDropdown({
+    required String? value,
+    required List<ProviderSetInfo> options,
+    required ValueChanged<String?> onChanged,
+    String? unselectedLabel,
+  }) {
+    return DropdownButton<String>(
+      value: value,
+      hint: Text(unselectedLabel ?? 'provider set', style: const TextStyle(fontSize: 12)),
+      items: options
+          .map((s) => DropdownMenuItem(
+                value: s.name,
+                child: Text(s.name, style: const TextStyle(fontSize: 12)),
+              ))
+          .toList(),
+      onChanged: options.isEmpty ? null : onChanged,
     );
   }
 
@@ -214,13 +266,55 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _create() async {
     final t = _ticket.text.trim();
     if (t.isEmpty) { setState(() => _error = 'a jira ticket id is required'); return; }
+    final ps = _providerSet;
+    if (ps == null) { setState(() => _error = 'a provider set is required'); return; }
     await _act(() async {
       await widget.api.createRun(
-        ticket: t, requestedBy: widget.who,
+        ticket: t, requestedBy: widget.who, providerSet: ps,
         pauseAfterMint: _pauseAfterMint, pauseBeforeWriter: _pauseBeforeWriter,
       );
       _ticket.clear();
+      setState(() => _providerSet = null); // no carry-over — the next launch chooses again
     });
+  }
+
+  /// Resume's picker excludes mockserver: the no-pay rehearsal set is never a live-run swap
+  /// target, so an operator cannot land a real, paused run on the mock endpoint by mistake.
+  List<ProviderSetInfo> get _resumeSafeProviderSets =>
+      _providerSets.where((s) => s.name != 'mockserver').toList();
+
+  /// Show params, get explicit confirmation, THEN act — the same rule that gates every launch.
+  /// Pre-selected to the paused run's OWN set: continuing unchanged is one click, a swap is a
+  /// second one, and no vendor is ever silently guessed.
+  Future<void> _confirmResume(Run r) async {
+    String? chosen = r.providerSet;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text('resume ${r.ticket}'),
+          content: Row(mainAxisSize: MainAxisSize.min, children: [
+            const Text('provider set:', style: TextStyle(fontSize: 12)),
+            const SizedBox(width: 10),
+            _providerSetDropdown(
+              value: chosen,
+              options: _resumeSafeProviderSets,
+              unselectedLabel: 'choose a set',
+              onChanged: (v) => setDialogState(() => chosen = v),
+            ),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('cancel')),
+            FilledButton(
+              onPressed: chosen == null ? null : () => Navigator.pop(ctx, true),
+              child: const Text('resume'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true) return;
+    await _act(() async { await widget.api.resume(r.id, widget.who, providerSet: chosen); });
   }
 
   Widget _grid() {
@@ -244,6 +338,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: Text(r.requestedBy, style: Theme.of(context).textTheme.bodySmall)),
         SizedBox(width: 100,
           child: Text(r.codeLevel ?? '', style: Theme.of(context).textTheme.bodySmall)),
+        SizedBox(width: 100,
+          child: Text(r.providerSet ?? '', style: Theme.of(context).textTheme.bodySmall)),
         Expanded(
           child: Text(
             [
@@ -258,7 +354,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (r.canStop) _action('stop', () => widget.api.stop(r.id), Palette.red),
         // Resume is offered only when the runId exists. Without it a resume would start a FRESH
         // run and reset the codeline, so the button is absent rather than allowed to fail.
-        if (r.canResume) _action('resume', () async { await widget.api.resume(r.id, widget.who); }),
+        // Opens a dialog rather than firing immediately: the operator confirms (or swaps) the
+        // provider set every time, the same "show params, get explicit confirmation" rule as a
+        // new launch.
+        if (r.canResume)
+          Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: OutlinedButton(
+              onPressed: _saving ? null : () => _confirmResume(r),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Palette.green, side: const BorderSide(color: Palette.green),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                minimumSize: Size.zero),
+              child: const Text('resume', style: TextStyle(fontSize: 12)),
+            ),
+          ),
         if (r.canReplay) _action('replay', () async { await widget.api.replay(r.id, widget.who); }),
       ]),
     );

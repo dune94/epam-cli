@@ -29,6 +29,20 @@ import crypto from 'node:crypto';
  */
 const ACTIVE = ['pending', 'running', 'stopping'];
 
+/**
+ * NO ALTER-TABLE CONVENTION EXISTED BEFORE THIS. providerSet was added after the table was
+ * already shipping, so a DB created by an earlier version of this app is missing the column.
+ * `PRAGMA table_info` + a conditional `ALTER TABLE ADD COLUMN` is the whole migration: nullable
+ * at the SQL level (an old row predates this feature and showing it with no recorded set is
+ * honest), with "required" enforced at the JS layer in createRun for rows going forward.
+ */
+function migrate(db) {
+  const cols = db.prepare('PRAGMA table_info(runs)').all().map((c) => c.name);
+  if (!cols.includes('providerSet')) {
+    db.exec('ALTER TABLE runs ADD COLUMN providerSet TEXT');
+  }
+}
+
 function open(file) {
   const db = new DatabaseSync(file);
   db.exec(`
@@ -46,11 +60,13 @@ function open(file) {
       resumeRunId  TEXT,
       replayOf     TEXT,
       codeLevel    TEXT,
+      providerSet  TEXT,
       createdAt    TEXT NOT NULL,
       updatedAt    TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS runs_created ON runs (createdAt DESC);
   `);
+  migrate(db);
   return db;
 }
 
@@ -73,9 +89,14 @@ function activeRun(db) {
  */
 function createRun(db, { ticket, requestedBy, pauseAfterMint = false, pauseBeforeWriter = false,
                         resumeOf = null, resumeRunId = null, replayOf = null,
-                        codeLevel = null, detail = null }) {
+                        codeLevel = null, detail = null, providerSet = null }) {
   if (!ticket || !String(ticket).trim()) throw new Error('a run needs a ticket id');
   if (!requestedBy || !String(requestedBy).trim()) throw new Error('a run needs a requester');
+  // NO VENDOR DEFAULT, EVER — matching config.js/runner-args.js. A guessed provider is how
+  // MiniMax reached a claude run. Refuse rather than launch on the operator's behalf.
+  if (!providerSet || !String(providerSet).trim()) {
+    throw new Error('a run needs a provider set — refusing to guess a vendor');
+  }
 
   const busy = activeRun(db);
   if (busy) {
@@ -102,16 +123,17 @@ function createRun(db, { ticket, requestedBy, pauseAfterMint = false, pauseBefor
     resumeRunId,
     replayOf,
     codeLevel,
+    providerSet: String(providerSet).trim(),
     createdAt: nowIso(),
     updatedAt: nowIso(),
   };
   db.prepare(`INSERT INTO runs
       (id,ticket,requestedBy,status,stage,runId,detail,pauseAfterMint,pauseBeforeWriter,
-       resumeOf,resumeRunId,replayOf,codeLevel,createdAt,updatedAt)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+       resumeOf,resumeRunId,replayOf,codeLevel,providerSet,createdAt,updatedAt)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(row.id, row.ticket, row.requestedBy, row.status, row.stage, row.runId, row.detail,
          row.pauseAfterMint, row.pauseBeforeWriter, row.resumeOf, row.resumeRunId,
-         row.replayOf, row.codeLevel, row.createdAt, row.updatedAt);
+         row.replayOf, row.codeLevel, row.providerSet, row.createdAt, row.updatedAt);
   return row;
 }
 
@@ -143,7 +165,14 @@ function finishRun(db, id, status, detail) {
  * WITHOUT it starts a FRESH run, and on a brownfield defect a fresh run resets the codeline to
  * baseline and discards committed work. That happened live on 2026-09-02 and cost the run.
  */
-function resumeRun(db, id, { requestedBy }) {
+/**
+ * `providerSet` is OPTIONAL here, unlike createRun: absent means "continue with the same set this
+ * run already declared" — not a guess, a carry-forward of a choice already made. Given, it is a
+ * SWAP, validated against the resume-safe subset only: mockserver (the no-pay rehearsal set) is
+ * never offered as a live-run swap target, so an operator cannot land a real run on the mock
+ * endpoint by mistake.
+ */
+function resumeRun(db, id, { requestedBy, providerSet = null }) {
   const paused = getRun(db, id);
   if (!paused) throw new Error(`no such run: ${id}`);
   if (paused.status !== 'paused') {
@@ -155,6 +184,12 @@ function resumeRun(db, id, { requestedBy }) {
       + 'EPAM_RESUME_RUN would start a FRESH run and reset the codeline.',
     );
   }
+  const nextProviderSet = providerSet ? String(providerSet).trim() : paused.providerSet;
+  if (providerSet && String(providerSet).trim() === 'mockserver') {
+    throw new Error(
+      'cannot resume into mockserver — the no-pay rehearsal set is never a live-run swap target',
+    );
+  }
   return createRun(db, {
     ticket: paused.ticket,
     requestedBy,
@@ -162,6 +197,7 @@ function resumeRun(db, id, { requestedBy }) {
     pauseBeforeWriter: !!paused.pauseBeforeWriter,
     resumeOf: paused.id,
     resumeRunId: paused.runId,
+    providerSet: nextProviderSet,
   });
 }
 
@@ -197,6 +233,9 @@ function replayRun(db, id, { requestedBy, currentCodeLevel = null }) {
     pauseBeforeWriter: !!orig.pauseBeforeWriter,
     replayOf: orig.id,
     codeLevel: orig.codeLevel,
+    // NO OVERRIDE ACCEPTED, unlike resume. "no manipulations, otherwise it is not repeatable and
+    // replayable" (operator, 2026-09-02) — a replay reproduces the original exactly.
+    providerSet: orig.providerSet,
     detail,
   });
 }

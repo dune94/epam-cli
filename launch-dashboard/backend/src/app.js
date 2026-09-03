@@ -12,6 +12,7 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import * as store from './runs-store.js';
 import * as spool from './spool.js';
+import { listProviderSets } from './provider-sets.js';
 
 const json = (res, code, body) => {
   const s = JSON.stringify(body ?? null);
@@ -73,6 +74,10 @@ function createApp({ dbFile, spoolDir, password, codeLevel = null }) {
         return json(res, 200, store.listRuns(db));
       }
 
+      if (p === '/api/provider-sets' && req.method === 'GET') {
+        return json(res, 200, listProviderSets());
+      }
+
       if (p === '/api/runs' && req.method === 'POST') {
         const body = await readBody(req);
         if (!body.ticket || !String(body.ticket).trim()) {
@@ -85,6 +90,7 @@ function createApp({ dbFile, spoolDir, password, codeLevel = null }) {
             requestedBy: body.requestedBy || 'unknown',
             pauseAfterMint: !!body.pauseAfterMint,
             pauseBeforeWriter: !!body.pauseBeforeWriter,
+            providerSet: body.providerSet,
             codeLevel,
           });
         } catch (e) {
@@ -113,7 +119,9 @@ function createApp({ dbFile, spoolDir, password, codeLevel = null }) {
         let created;
         try {
           created = m[2] === 'resume'
-            ? store.resumeRun(db, m[1], { requestedBy })
+            // providerSet is OPTIONAL on resume: absent continues with the paused run's own set.
+            ? store.resumeRun(db, m[1], { requestedBy, providerSet: body.providerSet })
+            // NEVER accepted on replay — a replay reproduces the original exactly, no override.
             : store.replayRun(db, m[1], { requestedBy, currentCodeLevel: codeLevel });
         } catch (e) {
           if (e.code === 'BUSY' || /busy|active/i.test(e.message)) {

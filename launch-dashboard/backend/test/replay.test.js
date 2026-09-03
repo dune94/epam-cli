@@ -26,7 +26,7 @@ const succeed = (db, run, codeLevel = 'v1.6') => {
 describe('replay', () => {
   test('a run records the code level it ran against', () => {
     const db = store.open(dbFile());
-    const run = store.createRun(db, { ticket: 'AMSD-1919', requestedBy: 'alice', codeLevel: 'v1.6' });
+    const run = store.createRun(db, { ticket: 'AMSD-1919', requestedBy: 'alice', codeLevel: 'v1.6', providerSet: 'claude' });
     assert.equal(run.codeLevel, 'v1.6');
   });
 
@@ -35,6 +35,7 @@ describe('replay', () => {
     const orig = store.createRun(db, {
       ticket: 'AMSD-1919', requestedBy: 'alice',
       pauseAfterMint: true, pauseBeforeWriter: false, codeLevel: 'v1.6',
+      providerSet: 'claude',
     });
     succeed(db, orig);
 
@@ -51,7 +52,7 @@ describe('replay', () => {
     // A resume continues a checkpoint; a replay starts over. Carrying resumeRunId into a replay
     // would silently continue the original instead of reproducing it.
     const db = store.open(dbFile());
-    const orig = store.createRun(db, { ticket: 'A-1', requestedBy: 'alice', codeLevel: 'v1.6' });
+    const orig = store.createRun(db, { ticket: 'A-1', requestedBy: 'alice', codeLevel: 'v1.6', providerSet: 'claude' });
     succeed(db, orig);
     const replay = store.replayRun(db, orig.id, { requestedBy: 'bob' });
     assert.equal(replay.resumeRunId, null, 'a replay must not resume the original');
@@ -60,7 +61,7 @@ describe('replay', () => {
 
   test('both runs remain in history — a replay does not overwrite what it reproduces', () => {
     const db = store.open(dbFile());
-    const orig = store.createRun(db, { ticket: 'A-1', requestedBy: 'alice', codeLevel: 'v1.6' });
+    const orig = store.createRun(db, { ticket: 'A-1', requestedBy: 'alice', codeLevel: 'v1.6', providerSet: 'claude' });
     succeed(db, orig);
     store.replayRun(db, orig.id, { requestedBy: 'bob' });
     assert.equal(store.listRuns(db).length, 2);
@@ -68,13 +69,13 @@ describe('replay', () => {
 
   test('refuses to replay a run that did not finish', () => {
     const db = store.open(dbFile());
-    const run = store.createRun(db, { ticket: 'A-1', requestedBy: 'alice', codeLevel: 'v1.6' });
+    const run = store.createRun(db, { ticket: 'A-1', requestedBy: 'alice', codeLevel: 'v1.6', providerSet: 'claude' });
     assert.throws(() => store.replayRun(db, run.id, { requestedBy: 'bob' }), /finish|complete|succeed/i);
   });
 
   test('a FAILED run is replayable too — reproducing a failure is the point of a bug report', () => {
     const db = store.open(dbFile());
-    const run = store.createRun(db, { ticket: 'A-1', requestedBy: 'alice', codeLevel: 'v1.6' });
+    const run = store.createRun(db, { ticket: 'A-1', requestedBy: 'alice', codeLevel: 'v1.6', providerSet: 'claude' });
     store.finishRun(db, run.id, 'failed');
     assert.doesNotThrow(() => store.replayRun(db, run.id, { requestedBy: 'bob' }));
   });
@@ -83,7 +84,7 @@ describe('replay', () => {
     // The most dangerous replay is one that LOOKS identical. If the installed pipeline is no longer
     // the level the original ran on, the caller must be told rather than discovering it in the diff.
     const db = store.open(dbFile());
-    const orig = store.createRun(db, { ticket: 'A-1', requestedBy: 'alice', codeLevel: 'v1.6' });
+    const orig = store.createRun(db, { ticket: 'A-1', requestedBy: 'alice', codeLevel: 'v1.6', providerSet: 'claude' });
     succeed(db, orig);
     const replay = store.replayRun(db, orig.id, { requestedBy: 'bob', currentCodeLevel: 'v1.7' });
     assert.equal(replay.codeLevel, 'v1.6', 'the replay still targets the original level');
@@ -93,9 +94,9 @@ describe('replay', () => {
 
   test('refuses to replay while something is running', () => {
     const db = store.open(dbFile());
-    const orig = store.createRun(db, { ticket: 'A-1', requestedBy: 'alice', codeLevel: 'v1.6' });
+    const orig = store.createRun(db, { ticket: 'A-1', requestedBy: 'alice', codeLevel: 'v1.6', providerSet: 'claude' });
     succeed(db, orig);
-    store.createRun(db, { ticket: 'A-2', requestedBy: 'bob' });
+    store.createRun(db, { ticket: 'A-2', requestedBy: 'bob', providerSet: 'claude' });
     assert.throws(() => store.replayRun(db, orig.id, { requestedBy: 'carol' }), /busy|active/i);
   });
 });

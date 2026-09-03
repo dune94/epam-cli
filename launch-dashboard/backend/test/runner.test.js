@@ -29,14 +29,14 @@ beforeEach(() => {
 });
 
 const request = (id, extra = {}) =>
-  spool.writeRequest(dir, { id, ticket: 'AMSD-1919', requestedBy: 'alice', ...extra });
+  spool.writeRequest(dir, { id, ticket: 'AMSD-1919', requestedBy: 'alice', providerSet: 'claude', ...extra });
 
 const statusOf = (id) => spool.readStatus(dir, id);
 
 describe('the runner', () => {
   test('picks up a spooled request and launches it', async () => {
     request('r1');
-    const runner = createRunner({ spoolDir: dir, providerSet: 'claude', launcher: stubLauncher });
+    const runner = createRunner({ spoolDir: dir, launcher: stubLauncher });
     await runner.tick();
     assert.equal(launches.length, 1, 'the request was not launched');
     assert.equal(launches[0].req.ticket, 'AMSD-1919');
@@ -44,7 +44,7 @@ describe('the runner', () => {
 
   test('hands the launcher an ENVIRONMENT, and argv carrying only --yes', async () => {
     request('r1', { pauseBeforeWriter: true });
-    const runner = createRunner({ spoolDir: dir, providerSet: 'claude', launcher: stubLauncher });
+    const runner = createRunner({ spoolDir: dir, launcher: stubLauncher });
     await runner.tick();
     const { env, argv } = launches[0];
     assert.equal(env.EPAM_PROVIDER_SET, 'claude');
@@ -54,7 +54,7 @@ describe('the runner', () => {
 
   test('writes a status the API can read, from the moment it claims the request', async () => {
     request('r1');
-    const runner = createRunner({ spoolDir: dir, providerSet: 'claude', launcher: stubLauncher });
+    const runner = createRunner({ spoolDir: dir, launcher: stubLauncher });
     await runner.tick();
     const s = statusOf('r1');
     assert.ok(s, 'no status written, so the grid would show pending forever');
@@ -73,14 +73,14 @@ describe('the runner', () => {
       inFlight -= 1;
       return { code: 0, runId: 'R' };
     };
-    const runner = createRunner({ spoolDir: dir, providerSet: 'claude', launcher: slow });
+    const runner = createRunner({ spoolDir: dir, launcher: slow });
     await Promise.all([runner.tick(), runner.tick()]);
     assert.equal(maxSeen, 1, 'two runs were launched concurrently');
   });
 
   test('claims a request so a second tick does not launch it twice', async () => {
     request('r1');
-    const runner = createRunner({ spoolDir: dir, providerSet: 'claude', launcher: stubLauncher });
+    const runner = createRunner({ spoolDir: dir, launcher: stubLauncher });
     await runner.tick();
     await runner.tick();
     assert.equal(launches.length, 1, 'the same request was launched twice');
@@ -89,7 +89,7 @@ describe('the runner', () => {
   test('a failed launch is recorded as failed, never left pending', async () => {
     request('r1');
     const failing = async () => { throw new Error('launcher blew up'); };
-    const runner = createRunner({ spoolDir: dir, providerSet: 'claude', launcher: failing });
+    const runner = createRunner({ spoolDir: dir, launcher: failing });
     await runner.tick();
     const s = statusOf('r1');
     assert.equal(s.status, 'failed');
@@ -99,7 +99,7 @@ describe('the runner', () => {
   test('a non-zero exit is failed, not succeeded', async () => {
     request('r1');
     const runner = createRunner({
-      spoolDir: dir, providerSet: 'claude',
+      spoolDir: dir,
       launcher: async () => ({ code: 1, runId: 'R1' }),
     });
     await runner.tick();
@@ -109,7 +109,7 @@ describe('the runner', () => {
   test('a paused exit is recorded as paused WITH its runId, or it can never be resumed', async () => {
     request('r1', { pauseBeforeWriter: true });
     const runner = createRunner({
-      spoolDir: dir, providerSet: 'claude',
+      spoolDir: dir,
       launcher: async () => ({ code: 0, runId: '20260903T010438Z', paused: true }),
     });
     await runner.tick();
@@ -122,7 +122,7 @@ describe('the runner', () => {
     request('r1');
     let stopped = false;
     const runner = createRunner({
-      spoolDir: dir, providerSet: 'claude',
+      spoolDir: dir,
       launcher: async (req, env, argv, ctl) => {
         spool.writeStop(dir, 'r1');
         await ctl.waitForStop();
@@ -139,7 +139,7 @@ describe('the runner', () => {
     request('r1');
     let launched = false;
     const runner = createRunner({
-      spoolDir: dir, providerSet: 'claude', dry: true,
+      spoolDir: dir, dry: true,
       launcher: async () => { launched = true; return { code: 0 }; },
     });
     await runner.tick();
@@ -149,7 +149,27 @@ describe('the runner', () => {
     assert.ok(s.detail.includes('EPAM_PROVIDER_SET'), 'a dry run must show what it would have launched');
   });
 
-  test('refuses to run at all with no provider set — never guesses a vendor', () => {
-    assert.throws(() => createRunner({ spoolDir: dir, launcher: stubLauncher }), /provider set/i);
+  test('the provider set actually launched is the REQUEST\'s own, not a fixed server default', async () => {
+    // The whole point of this change: providerSet is no longer a single value baked into the
+    // runner at startup. Two requests, two different declared sets, in the SAME runner instance.
+    request('r1', { providerSet: 'openrouter' });
+    const runner = createRunner({ spoolDir: dir, launcher: stubLauncher });
+    await runner.tick();
+    assert.equal(launches[0].env.EPAM_PROVIDER_SET, 'openrouter');
+  });
+
+  test('a malformed request with no providerSet fails LOUDLY, never guesses a vendor', async () => {
+    // spool.writeRequest() already refuses to write one — this is the defensive fallback for a
+    // request that reached the spool some other way (e.g. a pre-migration leftover on disk).
+    fs.writeFileSync(
+      path.join(dir, 'requests', 'r1.json'),
+      JSON.stringify({ id: 'r1', ticket: 'AMSD-1919', requestedBy: 'alice' }),
+    );
+    const runner = createRunner({ spoolDir: dir, launcher: stubLauncher });
+    await runner.tick();
+    assert.equal(launches.length, 0, 'a request with no provider set must never be launched');
+    const s = statusOf('r1');
+    assert.equal(s.status, 'failed');
+    assert.match(s.detail, /provider/i);
   });
 });

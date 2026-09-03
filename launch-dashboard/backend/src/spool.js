@@ -56,9 +56,15 @@ function writeAtomic(target, data) {
  * and discards committed work. That happened live on 2026-09-02.
  */
 function writeRequest(dir, { id, ticket, requestedBy, pauseAfterMint = false,
-                             pauseBeforeWriter = false, resumeRunId = null, codeLevel = null }) {
+                             pauseBeforeWriter = false, resumeRunId = null, codeLevel = null,
+                             providerSet = null }) {
   const safe = safeId(id);
   if (!ticket || !String(ticket).trim()) throw new Error('a request needs a ticket');
+  // NO VENDOR DEFAULT, EVER — matching runs-store.js/config.js. The runner has nothing else to go
+  // on but this file, so a missing providerSet here would force it to guess.
+  if (!providerSet || !String(providerSet).trim()) {
+    throw new Error('a request needs a provider set — refusing to guess a vendor');
+  }
   const body = {
     id: safe,
     ticket: String(ticket).trim(),
@@ -67,6 +73,7 @@ function writeRequest(dir, { id, ticket, requestedBy, pauseAfterMint = false,
     pauseBeforeWriter: !!pauseBeforeWriter,
     resumeRunId,
     codeLevel,
+    providerSet: String(providerSet).trim(),
     requestedAt: new Date().toISOString(),
   };
   writeAtomic(path.join(dir, REQUESTS, `${safe}.json`), `${JSON.stringify(body, null, 2)}\n`);

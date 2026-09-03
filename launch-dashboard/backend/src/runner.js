@@ -27,15 +27,15 @@ function writeStatus(dir, id, body) {
   fs.renameSync(tmp, target);
 }
 
-function createRunner({ spoolDir, providerSet, launcher, dry = false, pollMs = 1000,
+function createRunner({ spoolDir, launcher, dry = false, pollMs = 1000,
                        // Default FALSE: the only production caller is a daemon whose sole job is this
                        // timer. An embedding caller that must not have its event loop held open can
                        // opt in, but that is the unusual case and it should have to say so.
                        unrefPoll = false }) {
-  // NO VENDOR DEFAULT. A guessed provider is how MiniMax reached a claude run.
-  if (!providerSet || !String(providerSet).trim()) {
-    throw new Error('the runner needs a provider set — refusing to guess a vendor');
-  }
+  // NO SERVER-WIDE providerSet ANYMORE. It used to be fixed once at startup for every launch this
+  // runner would ever make; now every REQUEST declares its own (enforced by spool.writeRequest),
+  // and tick() reads it per-request below. A vendor is still never guessed — a request that
+  // somehow has none fails LOUDLY, per-request, rather than the whole runner refusing to exist.
   if (typeof launcher !== 'function') throw new Error('the runner needs a launcher');
 
   spool.init(spoolDir);
@@ -84,6 +84,19 @@ function createRunner({ spoolDir, providerSet, launcher, dry = false, pollMs = 1
         return null;
       }
 
+      // THE REQUEST'S OWN SET, not a fixed server default. spool.writeRequest() already refuses
+      // to write one without a providerSet — this check is the defensive fallback for a request
+      // that reached the spool file some other way (e.g. left over from before this field
+      // existed). Failing THIS ONE request, rather than throwing out of tick() and stalling every
+      // future request behind it, is deliberate: one bad file must not take the runner down.
+      if (!req.providerSet || !String(req.providerSet).trim()) {
+        writeStatus(spoolDir, id, {
+          status: 'failed',
+          detail: 'no provider set on this request — refusing to guess a vendor',
+        });
+        return { id, failed: true };
+      }
+      const providerSet = req.providerSet;
       const env = buildLaunchEnv(req, { providerSet });
       const argv = buildLaunchArgv(req, { providerSet });
 

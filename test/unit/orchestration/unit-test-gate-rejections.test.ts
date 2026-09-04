@@ -134,6 +134,7 @@ function runGate(p: ReturnType<typeof project>, env: Record<string, string> = {}
      ${'SCRIPT_DIR=' + JSON.stringify(join(__dirname, '../../../orchestrations/scripts'))}
      ${'NODE_BIN=' + JSON.stringify(process.execPath)}
      step_emit() { :; }
+     ${'. ' + JSON.stringify(join(__dirname, '../../../orchestrations/scripts/lib/bounded-exec.sh'))}
      ${'AUTOMATION_DIR=' + JSON.stringify(join(__dirname, '../../../orchestrations'))}
      ${'NODE_CMD=' + JSON.stringify(process.execPath)}
      ${lift('_run_project_verification')}

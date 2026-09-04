@@ -6381,19 +6381,21 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
       __TOOL_PATH__: toolPath,
       __STORY_TITLE__: story.title || '',
       __STORY_DESCRIPTION__: story.description ? 'Description: ' + String(story.description) + '\n' : '',
-      // THE DETECTIVE DECIDES WHICH CODE THE STORY IS ABOUT, so what the story must SATISFY is
-      // evidence it needs. This value was computed and supplied for at least two runs against a
-      // template with no slot for it, so prompt-library dropped it with a stderr warning nobody
-      // read — live 2026-09-04. The template now declares __STORY_ACS__.
+      // NO __STORY_ACS__. It used to be computed and supplied here, and the detective template
+      // has no placeholder for it, so prompt-library dropped it every run with a stderr warning
+      // nobody read: "'code-graph-detective' was given values it does not use: __STORY_ACS__"
+      // (live 2026-09-04, and at least the run before it).
       //
-      // The heading travels WITH the value, exactly as __STORY_DESCRIPTION__ does above: absent
-      // criteria must not leave a bare heading implying evidence that is not there. A brownfield
-      // story legitimately has thin or no acceptance criteria — it is judged on verification
-      // criteria — so empty is a real state, declared in the template's mayBeEmpty.
-      __STORY_ACS__: (story.acceptanceCriteria || []).length
-        ? 'Acceptance criteria:\n'
-          + (story.acceptanceCriteria || []).map((a) => '- ' + String(a)).join('\n') + '\n'
-        : '',
+      // The value is removed rather than the template given a slot, because the template's
+      // omission is DELIBERATE. Operator ruling, 2026-09-01 (run 20260901T224029Z, AMSD-1919):
+      // a brownfield detective must not take acceptance criteria as an input at all — the ticket
+      // class it exists to serve does not have meaningful ones, it reasons from the description
+      // and the survey hypothesis, and an empty "Acceptance criteria:" heading is worse than no
+      // heading. That ruling is pinned by
+      // test/unit/orchestration/the-detective-runs-on-a-brownfield-defect.test.ts.
+      //
+      // So this half of the seam was simply never updated to match. Computing evidence for a
+      // consumer that has been told not to want it is the defect; the drop was correct.
       // Adjacent in the original with no separator; the library reads __A____B__ as one token.
       __KIND_AND_CORRECTIVE_CONTEXT__: String(_kindHintBlock) + String(correctiveContext),
       // What the estate survey already found here — a hypothesis for the detective to verify,

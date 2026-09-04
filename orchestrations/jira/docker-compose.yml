@@ -65,6 +65,16 @@ volumes:
   postgres-data:
   jira-data:
 
+# NAMING THE SUBNET SKIPS THE POOL SEARCH ENTIRELY — the same rule as
+# docker-compose.observability.yml. An allocated subnet fails on a host whose default pools are
+# exhausted, and that happens without every range being in use: the daemon does not reliably
+# release a removed network's pool, and "docker network prune" does not recover it. Measured
+# 2026-09-04 on a host with seven networks and free /16s, where "docker network create" failed and
+# the same create WITH --subnet succeeded. A named subnet is served from the request and never
+# consults the pool. Overridable for a machine where this range is genuinely in use.
 networks:
   jira-net:
     driver: bridge
+    ipam:
+      config:
+        - subnet: ${EPAM_JIRA_SUBNET:-172.27.0.0/16}

@@ -78,6 +78,50 @@ const CASES = composeFiles().flatMap((file) =>
     .filter((s) => DEFINES_A_CONTAINER(s.keys))
     .map((s) => ({ file, name: s.name, keys: s.keys })));
 
+/**
+ * AND EVERY STACK MUST BE ABLE TO START ON A HOST WHOSE ADDRESS POOL IS EXHAUSTED.
+ *
+ * Measured on this host, 2026-09-04: SEVEN networks held subnets, several /16s in docker's default
+ * range were visibly free, and `docker network create probe` still failed with
+ *
+ *     all predefined address pools have been fully subnetted
+ *
+ * The daemon does not reliably release a removed network's pool, and `docker network prune` did
+ * not recover it. A `--subnet` request is served from the request itself and never consults the
+ * pool, so it SUCCEEDS on exactly the host where an allocated one fails — proven both ways before
+ * this was written.
+ *
+ * docker-compose.observability.yml has named its subnet since 2026-09-03 and says why: it "is the
+ * reason an install succeeds on a corporate laptop with the VPN up — which is the normal case, not
+ * the exception". The same reasoning applies to every stack this repo ships, and three of them had
+ * not been given it.
+ *
+ * The rule is derived, not a list: a file that DEFINES a container must name a subnet. An override
+ * that only adds volumes or limits defines none and needs none.
+ */
+describe('every stack this repo ships names its own subnet', () => {
+  const files = composeFiles().filter((f) => servicesOf(f).some((s) => DEFINES_A_CONTAINER(s.keys)));
+
+  it('there are container-defining compose files to check', () => {
+    expect(files.length).toBeGreaterThan(2);
+  });
+
+  it.each(files)('%s', (file) => {
+    expect(readFileSync(join(REPO, file), 'utf8'), [
+      `${file} names no subnet, so compose asks docker to allocate one from its default pools.`,
+      'On a host whose pools are exhausted — which happens without every /16 being in use, because',
+      'the daemon does not reliably release a removed network\'s — the stack cannot start at all.',
+      'Declare it the way docker-compose.observability.yml does:',
+      '',
+      '  networks:',
+      '    default:',
+      '      ipam:',
+      '        config:',
+      '          - subnet: ${SOME_OVERRIDE:-172.X.0.0/16}',
+    ].join('\n')).toMatch(/subnet:/);
+  });
+});
+
 describe('every container this repo declares carries a memory bound', () => {
   it('compose files and services were actually parsed — otherwise every case is vacuous', () => {
     expect(composeFiles().length, 'no compose files found under git').toBeGreaterThan(0);

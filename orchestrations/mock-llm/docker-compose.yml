@@ -1,3 +1,22 @@
+# NAMING THE SUBNET SKIPS THE POOL SEARCH ENTIRELY — the same rule, and the same wording, as
+# docker-compose.observability.yml.
+#
+# This file declared no network, so compose asked docker to allocate one from its default pools.
+# Measured on this host 2026-09-04: SEVEN networks held subnets, several /16s in the default range
+# were visibly free, and `docker network create` still failed with "all predefined address pools
+# have been fully subnetted" — the daemon does not always release a removed network's pool. A
+# `--subnet` request is served from the request itself and never consults the pool, so it succeeds
+# on exactly the host where an allocated one fails. Proven both ways before this was written.
+#
+# That is why the observability stack installs on a corporate laptop with the VPN up while this
+# would not have. Overridable for a machine where the range is genuinely in use; install.sh
+# already derives a free one per destination (lib/isolated-compose-identity.sh).
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${EPAM_MOCK_SUBNET:-172.29.0.0/16}
+
 services:
   # MOCKSERVER — what the `mockserver` provider set actually talks to.
   #

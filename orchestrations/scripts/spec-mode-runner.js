@@ -6381,7 +6381,19 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
       __TOOL_PATH__: toolPath,
       __STORY_TITLE__: story.title || '',
       __STORY_DESCRIPTION__: story.description ? 'Description: ' + String(story.description) + '\n' : '',
-      __STORY_ACS__: (story.acceptanceCriteria || []).map((a) => '- ' + String(a)).join('\n'),
+      // THE DETECTIVE DECIDES WHICH CODE THE STORY IS ABOUT, so what the story must SATISFY is
+      // evidence it needs. This value was computed and supplied for at least two runs against a
+      // template with no slot for it, so prompt-library dropped it with a stderr warning nobody
+      // read — live 2026-09-04. The template now declares __STORY_ACS__.
+      //
+      // The heading travels WITH the value, exactly as __STORY_DESCRIPTION__ does above: absent
+      // criteria must not leave a bare heading implying evidence that is not there. A brownfield
+      // story legitimately has thin or no acceptance criteria — it is judged on verification
+      // criteria — so empty is a real state, declared in the template's mayBeEmpty.
+      __STORY_ACS__: (story.acceptanceCriteria || []).length
+        ? 'Acceptance criteria:\n'
+          + (story.acceptanceCriteria || []).map((a) => '- ' + String(a)).join('\n') + '\n'
+        : '',
       // Adjacent in the original with no separator; the library reads __A____B__ as one token.
       __KIND_AND_CORRECTIVE_CONTEXT__: String(_kindHintBlock) + String(correctiveContext),
       // What the estate survey already found here — a hypothesis for the detective to verify,

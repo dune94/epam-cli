@@ -315,6 +315,51 @@ async function buildProjectPrompts({
     throw new Error(`[prompt-builder] unknown mode '${mode}' — expected 'copy' or 'generate'`);
   }
 
+  // ── A MULTI-PART TEMPLATE CANNOT SURVIVE GENERATION, SO IT IS NOT GENERATED ────────────────
+  //
+  // A template may declare several named bodies, and each consumer renders ONE by name:
+  //
+  //     renderEngineTemplate('spec-story-block', {...}, 'retrieved_docs')
+  //
+  // Generation had no concept of that. templateBodyText() joins every part into one string, the
+  // model rewrites the join, and buildGeneratedDoc writes a single `body`. The installed copy
+  // therefore has no parts at all and declares the UNION of every part's placeholders.
+  //
+  // What that does to a consumer asking for a part:
+  //   - where its values do not cover the union, the render is REFUSED. Live 2026-09-04:
+  //       "ticket-link review skipped (prompt 'spec-story-block' is missing values for:
+  //        __COMMENT_BLOCK__, __COMPONENTS__, ... __TITLE__)"
+  //     after the review had already fetched 4 of 4 linked documents, which then never reached
+  //     the run;
+  //   - where they DO cover it, there is no error at all and the agent is silently handed every
+  //     part concatenated — several prompts glued together. That is the worse half, and it was
+  //     invisible.
+  //
+  // 18 seam-declared templates are multi-part, including story-writer, spec-agent, the failure
+  // analyst and the QA gates. None of them has ever been correctly specialised: the specialised
+  // text was only ever delivered as an unusable merge. So copying them verbatim is not a loss of
+  // a working capability — it replaces a corrupt merge with the correct parts, costs 18 fewer
+  // model calls, and shortens the mint.
+  //
+  // Per-part generation is the richer answer and remains open: this is the decision that makes
+  // the parts correct now, and it is reversible.
+  const _multiPart = (id) => {
+    try {
+      const t = readJson(path.join(templatesDir, `${id}.json`));
+      return t && t.bodies && typeof t.bodies === 'object'
+        && Object.values(t.bodies).filter((b) => typeof b === 'string').length > 1;
+    } catch { return false; }
+  };
+  const _movedToVerbatim = generated.filter(_multiPart);
+  if (_movedToVerbatim.length) {
+    generated = generated.filter((id) => !_multiPart(id));
+    copyVerbatim = [...copyVerbatim, ..._movedToVerbatim];
+    // Said out loud: a provisioning decision nobody can see is one nobody can reverse.
+    log(`[prompt-builder] ${_movedToVerbatim.length} multi-part template(s) are copied verbatim `
+      + 'rather than generated — generation flattens their named bodies into one, which hands a '
+      + `consumer every part at once: ${_movedToVerbatim.join(', ')}`);
+  }
+
   // EVERY DECLARED TEMPLATE MUST EXIST BEFORE ANYTHING IS WRITTEN. Discovering a missing one
   // halfway through leaves the project partially provisioned, which starts and then dies.
   for (const id of [...copyVerbatim, ...generated]) {

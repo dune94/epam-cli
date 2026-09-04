@@ -93,48 +93,75 @@ describe('the launch carries the operator\'s answer, including "no"', () => {
   });
 });
 
+/**
+ * THE RECEIVER, NOT THE CALLER — and the first version of this file got that wrong.
+ *
+ * It executed config.env with `set -a; . file`, which EXPANDS `${VAR:-1}`. The pipeline does not
+ * source these files: lib/env-file.sh loads them as DATA, without evaluating, precisely so a bare
+ * `cd` or a command substitution in a config file cannot run. So the test passed against a shell
+ * feature the real loader does not have, and the `"${VAR:-1}"` form it blessed would have been
+ * stored as the literal seven-character string — is_truthy reads that as FALSE, silently removing
+ * both pauses from every launch that is not the dashboard.
+ *
+ * What actually makes the operator's answer win is PRESERVE mode, which the loader already had:
+ * a key already set in the environment is skipped entirely. So the project file keeps a plain
+ * `=1` and the fix lives where it belongs — buildLaunchEnv exporting the answer, including "no".
+ */
 describe('a project default yields to the launch that already decided', () => {
   const configs = projectConfigs();
+  const LOADER = join(REPO, 'orchestrations/scripts/lib/env-file.sh');
 
   it('there are project configs to check', () => {
     expect(configs.length, 'no project config.env found — the cases below would be vacuous')
       .toBeGreaterThan(0);
   });
 
-  // THE RECEIVER, NOT THE CALLER: execute the real config.env with the variable already exported,
-  // exactly as the launcher does, and read back what survived.
-  it.each(configs)('$project/config.env keeps a value the launch already set', ({ file }) => {
-    const declared = PAUSE_VARS.filter((v) =>
-      new RegExp(`^\\s*(export\\s+)?${v}=`, 'm').test(readFileSync(file, 'utf8')));
-    if (declared.length === 0) return;   // this project states no opinion; nothing to override
-
+  /** Load a config the way the PIPELINE loads it, and read back what survived. */
+  function throughRealLoader(file: string, exported: Record<string, string>): string {
     const dir = mkdtempSync(join(tmpdir(), 'pause-default-'));
     try {
       const probe = join(dir, 'probe.sh');
       writeFileSync(probe, [
-        '#!/bin/bash',
-        // The operator said NO. The project file must not talk them out of it.
-        ...declared.map((v) => `export ${v}=0`),
-        `set -a; . ${JSON.stringify(file)} >/dev/null 2>&1 || true; set +a`,
-        ...declared.map((v) => `printf '%s=%s\\n' ${v} "\${${v}:-<unset>}"`),
+        '#!/bin/bash', 'set -uo pipefail',
+        `. ${JSON.stringify(LOADER)}`,
+        ...Object.entries(exported).map(([k, v]) => `export ${k}=${JSON.stringify(v)}`),
+        // preserve: the mode every launcher actually uses (load_project_env ... preserve).
+        `load_env_file_safe ${JSON.stringify(file)} preserve`,
+        ...PAUSE_VARS.map((v) => `printf '%s=[%s]\n' ${v} "\${${v}:-<unset>}"`),
       ].join('\n'));
+      return execFileSync('bash', [probe], { encoding: 'utf8', timeout: 30_000, cwd: dir });
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  }
 
-      const out = execFileSync('bash', [probe], {
-        encoding: 'utf8', timeout: 30_000,
-        // config.env may reference the run's own environment; give it a sane cwd and nothing else.
-        cwd: dir, env: { ...process.env },
-      });
+  it.each(configs)('$project keeps the launch\'s answer', ({ file }) => {
+    const declared = PAUSE_VARS.filter((v) =>
+      new RegExp(`^\\s*(export\\s+)?${v}=`, 'm').test(readFileSync(file, 'utf8')));
+    if (declared.length === 0) return;
 
-      for (const v of declared) {
-        expect(out, [
-          `${v} was reset by this project's config.env after the launch had already set it to 0.`,
-          'A project default must be a DEFAULT — `VAR="${VAR:-1}"`, not `VAR=1`. As written, the',
-          'dashboard can turn a pause ON and can never turn it OFF, which is the live 2026-09-04',
-          'report: "I set neither yet the run paused".',
-        ].join('\n')).toContain(`${v}=0`);
-      }
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
+    const out = throughRealLoader(file, Object.fromEntries(declared.map((v) => [v, '0'])));
+    for (const v of declared) {
+      expect(out, [
+        `${v} did not survive the project config load. The operator said no and the project file`,
+        'talked them out of it — the live 2026-09-04 report, "I set neither yet the run paused".',
+      ].join('\n')).toContain(`${v}=[0]`);
+    }
+  });
+
+  it.each(configs)('$project still supplies its own default when the launch says nothing', ({ file }) => {
+    // THE HALF THE FIRST VERSION OF THIS FILE BROKE. A `"${VAR:-1}"` form is stored LITERALLY by
+    // this loader, so an unset variable became the string "${VAR:-1}" and is_truthy read it as
+    // false — both pauses silently gone on every CLI launch.
+    const declared = PAUSE_VARS.filter((v) =>
+      new RegExp(`^\\s*(export\\s+)?${v}=`, 'm').test(readFileSync(file, 'utf8')));
+    if (declared.length === 0) return;
+
+    const out = throughRealLoader(file, {});
+    for (const v of declared) {
+      expect(out, [
+        `${v} was loaded as something other than a usable value with nothing exported.`,
+        'A config file is DATA to this loader — it is never evaluated — so a shell-expansion form',
+        'is stored verbatim and every truthiness test on it fails.',
+      ].join('\n')).toMatch(new RegExp(`${v}=\\[(0|1|true|false)\\]`));
     }
   });
 });

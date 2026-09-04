@@ -235,6 +235,8 @@ fi
 # runs, which is the point of parity.
 if [ -n "${JIRA_CODELINE_ROOT:-}" ] && [ -d "${JIRA_CODELINE_ROOT}" ]; then
   info "Predictable teardown: resetting codelines to last verified baseline..."
+  . "$SCRIPT_DIR/lib/codeline-scope.sh"
+  require_codeline_root "the brownfield codeline reset" || exit 1
   for _cl_dir in "$JIRA_CODELINE_ROOT"/*/; do
     [ -d "${_cl_dir}.git" ] || continue
     bash "$SCRIPT_DIR/brownfield-preflight-reset.sh" "${_cl_dir%/}" || true

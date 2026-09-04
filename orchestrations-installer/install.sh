@@ -665,6 +665,22 @@ compose_up() {
         printf 'OBS_LANGFUSE_PORT=%s\n' "$((3100 + _off))"
         printf 'OBS_DASHBOARD_PORT=%s\n' "$((8092 + _off))"
         printf 'OBS_GRAFANA_PORT=%s\n' "$((3001 + _off))"
+        # THE REHEARSAL SERVER'S IDENTITY, resolved here and started nowhere.
+        #
+        # llm-defaults.mockserver.json points all 40 seams at MockServer, and until now nothing in
+        # the installer knew it existed: `grep -c mock install.sh` was zero. So the only running
+        # instance belonged to whichever tree someone had hand-started it from — on 2026-09-04 a
+        # TEST install was about to rehearse against the DEV checkout's container — and
+        # pipeline-services.sh --stop, the operator's "pause everything", left a JVM running.
+        #
+        # RESOLVED, NOT STARTED: a rehearsal is an occasional act, and a permanently running
+        # MockServer is memory held for a run nobody asked for. `--start --mock` brings it up, and
+        # `--stop` always takes it down, using exactly the identity recorded here.
+        #
+        # The subnet sequence is seeded with a DIFFERENT string from the observability stack's, so
+        # the two cannot deterministically pick the same range on the same destination.
+        printf 'MOCK_PROJECT=%s\n' "$(isolated_project_name "$ROOT" mock)"
+        printf 'MOCK_SUBNET=%s\n' "$(isolated_subnet_candidates "$ROOT-mock" | head -1)"
     } > "$ROOT/.pipeline-services-state.env"
     rm -f "$_log" 2>/dev/null
     return 0

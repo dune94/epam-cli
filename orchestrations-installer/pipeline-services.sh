@@ -23,6 +23,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$HERE/.."
 NODE_BIN="${NODE_BIN:-node}"
 ACTION=""
+WANT_MOCK=0
 DEST=""
 
 _ok()   { printf '\033[0;32m  ✓\033[0m %s\n' "$*"; }
@@ -34,6 +35,11 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --start)  ACTION=start; shift ;;
         --stop)   ACTION=stop; shift ;;
+        # THE REHEARSAL SERVER IS ASKED FOR, NEVER ASSUMED. MockServer is a JVM, and a free
+        # rehearsal is an occasional act — starting it on every --start would make every install
+        # pay for it permanently. A --stop always stops it, because "pause everything" must mean
+        # everything.
+        --mock)   WANT_MOCK=1; shift ;;
         --dest)   DEST="${2:-}"; shift 2 ;;
         --help|-h)
             sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
@@ -58,6 +64,7 @@ STATE_FILE="$ROOT/.pipeline-services-state.env"
 LAUNCH_DIR="$ROOT/launch-dashboard"
 OBS_COMPOSE="$ROOT/docker-compose.observability.yml"
 LAUNCH_COMPOSE="$LAUNCH_DIR/docker-compose.yml"
+MOCK_COMPOSE="$ROOT/orchestrations/mock-llm/docker-compose.yml"
 
 if [ ! -f "$STATE_FILE" ]; then
     _bad "no $STATE_FILE — this install has never brought its docker stacks up successfully (run install.sh first)"
@@ -82,7 +89,7 @@ case "$ACTION" in
 stop)
     _head "Stopping"
     if CONTAINER_RUNTIME="$(container_runtime 2>/dev/null)"; then
-        for _SPEC in "$OBS_COMPOSE:${OBS_PROJECT:-}" "$LAUNCH_COMPOSE:${LAUNCH_PROJECT:-}"; do
+        for _SPEC in "$OBS_COMPOSE:${OBS_PROJECT:-}" "$LAUNCH_COMPOSE:${LAUNCH_PROJECT:-}" "$MOCK_COMPOSE:${MOCK_PROJECT:-}"; do
             _FILE="${_SPEC%%:*}"; _PROJECT="${_SPEC##*:}"
             [ -f "$_FILE" ] || continue
             [ -n "$_PROJECT" ] || { _warn "no saved project name for $_FILE — was it ever brought up?"; continue; }
@@ -135,6 +142,24 @@ start)
                 _ok "$OBS_PROJECT is up (subnet: ${OBS_SUBNET:-default})"
             else
                 _bad "failed to bring $OBS_PROJECT back up"
+                FAILED=1
+            fi
+        fi
+        # ASKED FOR EXPLICITLY (--mock). The identity comes from the state file the install
+        # wrote, exactly like the two stacks above: a re-decided project name is one the next
+        # --stop cannot find, and a re-decided subnet fails on a host whose docker address pools
+        # are exhausted (which happens with free ranges still visible — see the compose header).
+        if [ "${WANT_MOCK:-0}" = "1" ]; then
+            if [ ! -f "$MOCK_COMPOSE" ]; then
+                _warn "no mock stack in this install ($MOCK_COMPOSE) — nothing to start"
+            elif [ -z "${MOCK_PROJECT:-}" ]; then
+                _bad "this install recorded no MOCK_PROJECT — refusing to invent one, because a stop could not then find what a start created. Re-run install.sh to resolve it."
+                FAILED=1
+            elif (cd "$ROOT/orchestrations/mock-llm" && EPAM_MOCK_SUBNET="${MOCK_SUBNET:-}" \
+                    container_compose -f "docker-compose.yml" -p "$MOCK_PROJECT" up -d) >/dev/null 2>&1; then
+                _ok "$MOCK_PROJECT is up (subnet: ${MOCK_SUBNET:-default}) — the rehearsal server"
+            else
+                _bad "failed to bring $MOCK_PROJECT up"
                 FAILED=1
             fi
         fi

@@ -55,3 +55,48 @@ describe('a trace carries what was said', () => {
     expect('output' in g).toBe(false);
   });
 });
+
+/**
+ * THE TRACE ITSELF MUST CARRY THE WORDS, NOT ONLY ITS NESTED GENERATION.
+ *
+ * Langfuse renders a trace's OWN input/output in the trace list and header. The generation carried
+ * both and the trace carried neither, so every trace read as empty — an operator opening Langfuse
+ * saw rows with nothing in them and had to click into each generation to find the text.
+ *
+ * Reported live 2026-09-04 against pipeline-tests-18, on a run whose traces were otherwise landing
+ * correctly and grouped into their session: "Traces have no input or output in langfuse."
+ */
+describe('the trace carries the words too, not just the generation nested inside it', () => {
+  const traceOf = (f: any) =>
+    buildIngestionBody(f).batch.find((e: any) => e.type === 'trace-create').body;
+
+  const CALL = {
+    agent: 'roster-review', storyId: 'S1', phase: 'core', provider: 'claude',
+    model: 'claude-sonnet-5', turns: 1, rung: 0,
+    startedAt: new Date(Date.now() - 1000).toISOString(), endedAt: new Date().toISOString(),
+    input: 'the prompt that was sent', output: 'the reply that came back',
+    costUsd: 0.01, tokensIn: 10, tokensOut: 20,
+  };
+
+  it('puts the prompt on the trace, so the trace list is not a wall of empty rows', () => {
+    expect(traceOf(CALL).input, 'the trace renders empty in Langfuse — the words are only on the generation')
+      .toBe('the prompt that was sent');
+  });
+
+  it('puts the reply on the trace as well', () => {
+    expect(traceOf(CALL).output).toBe('the reply that came back');
+  });
+
+  it('the generation still carries both — the trace is additional, never a replacement', () => {
+    const g = buildIngestionBody(CALL).batch.find((e: any) => e.type === 'generation-create').body;
+    expect(g.input).toBe('the prompt that was sent');
+    expect(g.output).toBe('the reply that came back');
+  });
+
+  it('a call with no words recorded leaves them absent rather than empty-stringing them', () => {
+    // Absent is honest ("nothing was captured"); "" reads as "the model was sent nothing".
+    const t = traceOf({ ...CALL, input: undefined, output: undefined });
+    expect(t.input).toBeUndefined();
+    expect(t.output).toBeUndefined();
+  });
+});

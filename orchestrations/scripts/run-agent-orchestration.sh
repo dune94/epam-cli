@@ -806,8 +806,22 @@ print_step_checklist() {
             COND)   color="$CYAN" ;;
             *)      color="$NC" ;;
         esac
+        # A SWITCH ONLY MEANS SOMETHING ON A ROW THAT IS ACTUALLY OFF.
+        #
+        # The reason was printed unconditionally, and for the skip-toggle rows it is the variable
+        # that DISABLES the step — so a running gate rendered as
+        #     5      Regression guard          ACTIVE (SKIP_REGRESSION_GUARD=true)
+        # which reads as "skipped, here is the proof". Eleven rows did this on every run: the
+        # status was computed and correct, and the text beside it contradicted the status.
+        #
+        # By SHAPE, not by a list of rows: several rows pass the resolved MODEL here, which is the
+        # most useful thing on the line and must survive. `NAME=value` is a switch; a model name
+        # never looks like one. So a switch is shown only when the row is not ACTIVE.
         local reason_str=""
-        [ -n "$reason" ] && reason_str=" (${reason})"
+        if [ -n "$reason" ] \
+           && { [ "$planned" != "ACTIVE" ] || ! printf '%s' "$reason" | grep -qE '^[A-Za-z_][A-Za-z0-9_]*='; }; then
+            reason_str=" (${reason})"
+        fi
         printf "  %-6s %-32s " "$step" "$name"
         echo -e "${color}${planned}${reason_str}${NC}"
     }
@@ -5517,8 +5531,28 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
         if [ $_rg_rc -ne 0 ]; then
             step_emit "5" "fail" "Step 5: Regression guard"
             error "Step 5: Regression guard FAILED — tests red in all ${_rg_max} attempt(s) before phase '$PHASE' starts"
-            error "  The failure survived every attempt, so it is reproducible, not a flake."
+            # SAY WHAT WAS ACTUALLY OBSERVED, NOT WHAT WOULD BE CONVENIENT TO CONCLUDE.
+            #
+            # This line used to read, unconditionally: "The failure survived every attempt, so it
+            # is reproducible, not a flake." On 2026-09-04 that was FALSE. Every attempt failed,
+            # but not on the same tests — attempt 1 failed one suite, attempts 2 and 3 failed two —
+            # and it is precisely that disagreement that stopped RG-DELTA tolerating the baseline.
+            # The guard had the evidence of instability in its hand and reported the opposite.
+            #
+            # `_rg_tolerated=0` after a pattern was configured means the intersection was judged
+            # UNSTABLE, so the distinction is already computed; it was simply never said.
+            if [ -n "${_rg_pattern:-}" ]; then
+                error "  Every attempt failed, but they did NOT agree on WHICH tests failed."
+                error "  An unstable failing set cannot be told from a real regression, so it is not tolerated."
+                error "  Attempts that disagree usually mean interference, not broken code — most often the"
+                error "  suite competing with itself for the machine. Compare the attempt logs below."
+            else
+                error "  The failure survived every attempt."
+            fi
             error "  See: $_rg_log"
+            for _rg_i in $(seq 2 "$_rg_max"); do
+                [ -f "${_rg_log%.log}-attempt-${_rg_i}.log" ] && error "       ${_rg_log%.log}-attempt-${_rg_i}.log"
+            done
             # NAME THE MECHANISM THAT WOULD HAVE TOLERATED THIS.
             #
             # Operator policy is that brownfield INHERITS pre-existing failures and is not expected

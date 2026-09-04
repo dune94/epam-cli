@@ -73,7 +73,20 @@ require_stage_coverage() {
     # every stage against the project's threshold, and a real launch cannot skip pre-flight. Turning
     # it on by hand only turns enforcement ON.
     if [ "${EPAM_COVERAGE_GATED:-0}" != "1" ]; then
-        echo "[coverage-gate] $_stage: no pre-flight has gated this run — standing down" >&2
+        # SAID ONCE PER RUN, NOT ONCE PER STAGE.
+        #
+        # This is a property of the RUN — pre-flight either gated it or did not — so repeating it
+        # for every one of ~14 stages says nothing new fourteen times. It also reads as a fault
+        # the operator should act on, when it is a state, and it buries whatever real message
+        # lands next to it.
+        #
+        # Behaviour is unchanged: the gate still stands down and still returns 0 for every stage.
+        # Only the announcement is deduplicated, and it is still ANNOUNCED — silence here would
+        # let an operator believe coverage was being enforced when it was not.
+        if [ "${_COVERAGE_STANDDOWN_SAID:-0}" != "1" ]; then
+            _COVERAGE_STANDDOWN_SAID=1
+            echo "[coverage-gate] no pre-flight has gated this run — standing down for every stage (first asked by: $_stage)" >&2
+        fi
         return 0
     fi
 

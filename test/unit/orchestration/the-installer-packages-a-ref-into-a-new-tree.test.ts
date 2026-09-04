@@ -43,10 +43,17 @@ function fixtureRepo() {
   const installerSrc = fs.readFileSync(path.join(REPO, INSTALLER_REL), 'utf8');
   fs.writeFileSync(path.join(dir, INSTALLER_REL), installerSrc);
   fs.chmodSync(path.join(dir, INSTALLER_REL), 0o755);
-  for (const f of ['container-runtime.sh', 'wait-for-health.sh', 'isolated-compose-identity.sh', 'generate-env-example.sh', 'preserve-run-state.sh']) {
+  for (const f of ['container-runtime.sh', 'wait-for-health.sh', 'isolated-compose-identity.sh', 'generate-env-example.sh', 'preserve-run-state.sh', 'preserve-operator-config.sh']) {
     fs.copyFileSync(path.join(REPO, 'orchestrations-installer/lib', f), path.join(dir, 'orchestrations-installer/lib', f));
   }
   fs.copyFileSync(path.join(REPO, 'orchestrations-installer/run-state-paths.json'), path.join(dir, 'orchestrations-installer/run-state-paths.json'));
+  fs.copyFileSync(path.join(REPO, 'orchestrations-installer/operator-config-paths.json'), path.join(dir, 'orchestrations-installer/operator-config-paths.json'));
+  fs.mkdirSync(path.join(dir, 'orchestrations/projects/acme'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'orchestrations/projects/acme/config.env'), 'JIRA_CODELINE_ROOT=/original/path\n');
+  fs.mkdirSync(path.join(dir, 'orchestrations/agents/kb'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'orchestrations/agents/kb/healing-events.jsonl'), '{"v":1}\n');
+  fs.writeFileSync(path.join(dir, 'phase-cost.jsonl'), '{"v":1}\n');
+  fs.writeFileSync(path.join(dir, 'orchestrations/config/model-pricing.json'), '{"v":1}\n');
   for (const f of ['provider-sets.json', 'llm-defaults.claude.json', 'env-vars.json']) {
     const src = path.join(REPO, 'orchestrations/config', f);
     if (fs.existsSync(src)) fs.copyFileSync(src, path.join(dir, 'orchestrations/config', f));
@@ -70,6 +77,9 @@ function addSecondVersion(repoDir: string) {
   fs.writeFileSync(path.join(repoDir, 'a-real-pipeline-file.txt'), 'version 2 of the app code\n');
   fs.mkdirSync(path.join(repoDir, 'orchestrations/logs'), { recursive: true });
   fs.writeFileSync(path.join(repoDir, 'orchestrations/logs/committed-fixture.json'), 'from v2.0 of the ref');
+  fs.writeFileSync(path.join(repoDir, 'orchestrations/agents/kb/healing-events.jsonl'), '{"v":"2 from ref"}\n');
+  fs.writeFileSync(path.join(repoDir, 'phase-cost.jsonl'), '{"v":"2 from ref"}\n');
+  fs.writeFileSync(path.join(repoDir, 'orchestrations/config/model-pricing.json'), '{"v":"2 from ref"}\n');
   git(repoDir, ['add', '-A']);
   git(repoDir, ['commit', '-q', '-m', 'v2']);
   git(repoDir, ['tag', 'v2.0-test']);
@@ -184,5 +194,85 @@ describe('install.sh --dest packages a ref into a NEW tree', () => {
     // A file that exists ONLY on this install, nowhere in git history — still there.
     expect(fs.existsSync(path.join(dest, 'orchestrations/logs/only-this-colleague-has-this.json')),
       'a file with no counterpart in the ref was deleted by the update').toBe(true);
+  });
+
+  it('AN UPDATE never destroys accumulated phase-cost.jsonl or per-agent KB either', () => {
+    // Same run-state class as orchestrations/logs, at paths OUTSIDE it: root phase-cost.jsonl
+    // (real accumulated cost data — visible as modified in this repo's own git status on every
+    // real run) and orchestrations/agents/kb (accumulated learning state, never a rebuild
+    // artifact). "And logs cannot be destroyed on updates either" (operator, 2026-09-03).
+    const repo = fixtureRepo();
+    const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'installer-update-kb-dest-'));
+
+    run(repo, ['--dest', dest, '--ref', 'v1.0-test', '--no-docker']);
+    // Excluded paths are skipped on EVERY extraction, first install included (same as
+    // orchestrations/logs above) — the accumulated content only ever comes from actually using
+    // the install, never from the ref's own git history.
+    fs.writeFileSync(path.join(dest, 'phase-cost.jsonl'), '{"real":"accumulated cost data"}\n');
+    fs.mkdirSync(path.join(dest, 'orchestrations/agents/kb'), { recursive: true });
+    fs.writeFileSync(path.join(dest, 'orchestrations/agents/kb/healing-events.jsonl'), '{"real":"accumulated kb"}\n');
+
+    addSecondVersion(repo);
+    const out = run(repo, ['--dest', dest, '--ref', 'v2.0-test', '--no-docker']);
+
+    expect(fs.readFileSync(path.join(dest, 'phase-cost.jsonl'), 'utf8'),
+      `phase-cost.jsonl was overwritten by the update:\n${out.slice(-800)}`).toContain('accumulated cost data');
+    expect(fs.readFileSync(path.join(dest, 'orchestrations/agents/kb/healing-events.jsonl'), 'utf8'),
+      'orchestrations/agents/kb was overwritten by the update').toContain('accumulated kb');
+  });
+
+  it('AN UPDATE never overwrites an operator\'s existing project config.env either', () => {
+    // Found 2026-09-03: JIRA_CODELINE_ROOT is a per-INSTALL operator setting (e.g. pointed at a
+    // test copy of the codelines). A DIFFERENT mechanism from run-state-paths.json's excludes on
+    // purpose — proven by the second half of this test: a blanket exclude would ALSO block a
+    // brand-new project's config.env from ever being extracted, which must still work.
+    const repo = fixtureRepo();
+    const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'installer-update-opcfg-dest-'));
+
+    run(repo, ['--dest', dest, '--ref', 'v1.0-test', '--no-docker']);
+    expect(fs.readFileSync(path.join(dest, 'orchestrations/projects/acme/config.env'), 'utf8'))
+      .toContain('/original/path');
+
+    // The operator edits it locally — exactly what pointing at a test-copy codeline root is.
+    fs.writeFileSync(path.join(dest, 'orchestrations/projects/acme/config.env'),
+      'JIRA_CODELINE_ROOT=/operator/edited/test/path\n');
+
+    // A newer ref ships a DIFFERENT committed value at the same path, AND a whole new project.
+    fs.writeFileSync(path.join(repo, 'orchestrations/projects/acme/config.env'), 'JIRA_CODELINE_ROOT=/whatever/head/says/now\n');
+    fs.mkdirSync(path.join(repo, 'orchestrations/projects/newproj'), { recursive: true });
+    fs.writeFileSync(path.join(repo, 'orchestrations/projects/newproj/config.env'), 'JIRA_CODELINE_ROOT=/newproj/default\n');
+    addSecondVersion(repo);
+    const out = run(repo, ['--dest', dest, '--ref', 'v2.0-test', '--no-docker']);
+
+    // The operator's edit survived the update — the ref's own committed value did NOT win.
+    expect(fs.readFileSync(path.join(dest, 'orchestrations/projects/acme/config.env'), 'utf8'),
+      `operator's config.env edit was overwritten by the update:\n${out.slice(-800)}`)
+      .toContain('/operator/edited/test/path');
+
+    // A project that did not exist before IS still created by the update — this is what proves
+    // the mechanism is "preserve if existing", never a blanket exclude that would break this.
+    expect(fs.existsSync(path.join(dest, 'orchestrations/projects/newproj/config.env')),
+      'a brand-new project\'s config.env was never extracted at all').toBe(true);
+    expect(fs.readFileSync(path.join(dest, 'orchestrations/projects/newproj/config.env'), 'utf8'))
+      .toContain('/newproj/default');
+  });
+
+  it('an operator edit to an engine-wide config file (e.g. model-pricing.json) also survives an update', () => {
+    // Not just per-project config.env — "Not just this file" (operator, 2026-09-03). These five
+    // are DIFFERENT in one respect: this codebase's own maintainers also add to them over time (a
+    // new model price), so preserving an edit here is a deliberate tradeoff, not a pure win — but
+    // it is what was asked for: "all changeable-configs must be omitted after first install."
+    const repo = fixtureRepo();
+    const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'installer-update-enginecfg-dest-'));
+
+    run(repo, ['--dest', dest, '--ref', 'v1.0-test', '--no-docker']);
+    fs.writeFileSync(path.join(dest, 'orchestrations/config/model-pricing.json'), '{"operator":"edited this locally"}\n');
+
+    addSecondVersion(repo);
+    const out = run(repo, ['--dest', dest, '--ref', 'v2.0-test', '--no-docker']);
+
+    expect(fs.readFileSync(path.join(dest, 'orchestrations/config/model-pricing.json'), 'utf8'),
+      `operator's model-pricing.json edit was overwritten by the update:\n${out.slice(-800)}`)
+      .toContain('edited this locally');
   });
 });

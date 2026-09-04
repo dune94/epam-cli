@@ -82,7 +82,31 @@ function fixture(opts: { withCompose?: boolean; withEnvExample?: boolean; port?:
 exit 0
 `);
   fs.chmodSync(path.join(bin, 'docker'), 0o755);
-  return { dir, bin, log };
+
+  // A stub runner-host.js: writes its own PID to a marker file, then stays alive (a real event
+  // loop, same as the real one's setInterval poll) until killed. Proves install.sh's own
+  // spawn/idempotency/stop logic without needing the real one's spool-watching behavior.
+  fs.mkdirSync(path.join(dir, 'launch-dashboard/backend/src'), { recursive: true });
+  const runnerHostMarker = path.join(dir, 'runner-host-started.marker');
+  fs.writeFileSync(path.join(dir, 'launch-dashboard/backend/src/runner-host.js'), `
+const fs = require('fs');
+fs.appendFileSync(${JSON.stringify(runnerHostMarker)}, process.pid + '\\n');
+setInterval(() => {}, 60000);
+`);
+
+  // ANY test whose install reaches LAUNCH_STATUS=up now also spawns this real daemon — not just
+  // the tests that mean to test it. Every fixture() call registers its own cleanup regardless of
+  // whether that specific test cares, or a real process leaks onto the host for every OTHER test
+  // in this file that happens to get the dashboard healthy. Read lazily: the pidfile does not
+  // exist yet at fixture-creation time, only after install.sh has actually run.
+  cleanups.push(() => {
+    const pidfile = path.join(dir, 'launch-dashboard/.runner-host.pid');
+    if (!fs.existsSync(pidfile)) return;
+    const pid = Number(fs.readFileSync(pidfile, 'utf8').trim());
+    if (pid > 0) { try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ } }
+  });
+
+  return { dir, bin, log, runnerHostMarker };
 }
 
 const run = (f: { dir: string; bin: string }, args: string[], env: Record<string, string> = {}) =>
@@ -177,14 +201,18 @@ describe('the installer provisions launch-dashboard', () => {
     await serveHealth(port);
     const f = fixture({ port });
     fs.rmSync(path.join(f.dir, 'launch-dashboard/.env'));
-    await run(f, ['--docker'], { EPAM_CONTAINER_RUNTIME: 'docker' });
+    const r = await run(f, ['--docker'], { EPAM_CONTAINER_RUNTIME: 'docker' });
     const envPath = path.join(f.dir, 'launch-dashboard/.env');
     expect(fs.existsSync(envPath), 'no .env was created from the template').toBe(true);
     const body = fs.readFileSync(envPath, 'utf8');
     const lines = body.match(/^LAUNCH_PASSWORD=.*$/gm) ?? [];
     expect(lines.length, `expected exactly one LAUNCH_PASSWORD= line, found ${lines.length}:\n${body}`).toBe(1);
     expect(lines[0], 'LAUNCH_PASSWORD was left blank instead of generated').not.toBe('LAUNCH_PASSWORD=');
-    expect(lines[0].slice('LAUNCH_PASSWORD='.length).length, 'generated password looks too short to be real').toBeGreaterThan(10);
+    const generated = lines[0].slice('LAUNCH_PASSWORD='.length);
+    expect(generated.length, 'generated password looks too short to be real').toBeGreaterThan(10);
+    // MUST BE SHOWN TO THE OPERATOR, not file-only — the only prior way to learn it was to
+    // already know to go read launch-dashboard/.env by hand.
+    expect(r.out, `the generated password was never printed to the operator:\n${r.out}`).toContain(generated);
   });
 
   it('skips starting (never crashes into compose\'s hard-fail) when .env already exists with LAUNCH_PASSWORD left blank', async () => {
@@ -261,6 +289,16 @@ exit 0
     expect(subnets[0], 'the retry used the SAME subnet again instead of the next candidate')
       .not.toBe(subnets[1]);
     expect(r.status, `install did not recover from the collision:\n${r.out}`).toBe(0);
+
+    // DB DATA (Langfuse's postgres/clickhouse, this stack's own launch-api sqlite volume) MUST
+    // SURVIVE a retry's teardown. The teardown between attempts uses a bare `down` — never `-v` —
+    // specifically so a collision-triggered retry can never be the thing that deletes real data;
+    // only an explicit `install.sh --uninstall` does that (see the-installer-uninstalls-safely).
+    const downCalls = (log.match(/^ARGV:.*\bdown\b.*$/gm) || []);
+    expect(downCalls.length, `expected a teardown between retry attempts:\n${log}`).toBeGreaterThan(0);
+    for (const call of downCalls) {
+      expect(call, `a non-uninstall down call carried -v, which would delete volumes:\n${call}`).not.toMatch(/(^|\s)-v(\s|$)/);
+    }
   });
 
   it('does NOT retry on a failure that is not a subnet collision — burning through every candidate would hide the real error', async () => {
@@ -300,5 +338,68 @@ exit 0
     const log = fs.existsSync(f.log) ? fs.readFileSync(f.log, 'utf8') : '';
     expect(log, `--check must not rebuild or restart anything:\n${log}`).not.toMatch(/compose/);
     expect(r.out).toMatch(/up at/i);
+  });
+});
+
+describe('install.sh starts and stops runner-host.js (the process that launches pipeline runs)', () => {
+  // "the install script must start all services" (operator, 2026-09-04) — a saved launch request
+  // previously sat "pending" forever because nothing ever started the process that polls for it.
+  // A REAL node process is spawned here (a stub runner-host.js, not the real one) — proving
+  // install.sh's own spawn/idempotency/stop logic, not just that some string appears in its output.
+
+  it('starts it once the dashboard is genuinely up, writes a pidfile to a real running process', async () => {
+    const port = 18111;
+    await serveHealth(port);
+    const f = fixture({ port });
+    const r = await run(f, ['--docker'], { EPAM_CONTAINER_RUNTIME: 'docker' });
+    expect(r.out, `runner-host section missing or failed:\n${r.out}`).toMatch(/Runner host/);
+    expect(r.out).toMatch(/started \(pid/);
+    const pidfile = path.join(f.dir, 'launch-dashboard/.runner-host.pid');
+    expect(fs.existsSync(pidfile), 'no pidfile written').toBe(true);
+    const pid = Number(fs.readFileSync(pidfile, 'utf8').trim());
+    expect(pid).toBeGreaterThan(0);
+    let alive = false;
+    try { process.kill(pid, 0); alive = true; } catch { alive = false; }
+    cleanups.push(() => { try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ } });
+    expect(alive, 'pidfile does not point at a real running process').toBe(true);
+    expect(fs.existsSync(f.runnerHostMarker), 'the stub runner-host.js was never actually executed').toBe(true);
+  });
+
+  it('is idempotent — a second install.sh run does not spawn a second runner-host', async () => {
+    const port = 18112;
+    await serveHealth(port);
+    const f = fixture({ port });
+    await run(f, ['--docker'], { EPAM_CONTAINER_RUNTIME: 'docker' });
+    const pidfile = path.join(f.dir, 'launch-dashboard/.runner-host.pid');
+    const firstPid = fs.readFileSync(pidfile, 'utf8').trim();
+    cleanups.push(() => { try { process.kill(Number(firstPid), 'SIGKILL'); } catch { /* already gone */ } });
+
+    const r2 = await run(f, ['--docker'], { EPAM_CONTAINER_RUNTIME: 'docker' });
+    expect(r2.out, `did not report already running:\n${r2.out}`).toMatch(/already running/);
+    const secondPid = fs.readFileSync(pidfile, 'utf8').trim();
+    expect(secondPid, 'a second runner-host was spawned instead of reusing the first').toBe(firstPid);
+    const markerLines = fs.readFileSync(f.runnerHostMarker, 'utf8').trim().split('\n').filter(Boolean);
+    expect(markerLines.length, `runner-host.js was executed more than once:\n${markerLines.join(',')}`).toBe(1);
+  });
+
+  it('--uninstall stops it and removes the pidfile', async () => {
+    const port = 18113;
+    await serveHealth(port);
+    const f = fixture({ port });
+    await run(f, ['--docker'], { EPAM_CONTAINER_RUNTIME: 'docker' });
+    const pidfile = path.join(f.dir, 'launch-dashboard/.runner-host.pid');
+    const pid = Number(fs.readFileSync(pidfile, 'utf8').trim());
+    cleanups.push(() => { try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ } });
+
+    const r = await run(f, ['--uninstall'], { EPAM_CONTAINER_RUNTIME: 'docker' });
+    expect(r.out, `uninstall did not report stopping it:\n${r.out}`).toMatch(/stopped runner-host/);
+    expect(fs.existsSync(pidfile), 'pidfile was not removed').toBe(false);
+
+    let alive = true;
+    for (let i = 0; i < 20 && alive; i++) {
+      await new Promise((res) => setTimeout(res, 50));
+      try { process.kill(pid, 0); } catch { alive = false; }
+    }
+    expect(alive, 'the process was not actually killed by --uninstall').toBe(false);
   });
 });

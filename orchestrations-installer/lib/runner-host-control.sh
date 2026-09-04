@@ -120,7 +120,42 @@ stop_runner_host() {
     local _pid
     _pid="$(cat "$_pidfile" 2>/dev/null)"
     if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
+        # A STOP THAT ONLY ASKS IS NOT A STOP.
+        #
+        # This sent SIGTERM, deleted the pidfile and returned 0 without ever looking to see whether
+        # the process died. Two consequences, and the visible one is much the smaller:
+        #
+        #   - the flake: a caller that checks liveness the moment this returns is right to
+        #     disbelieve it. Measured 2026-09-04, 1 failure in 8 runs under CPU contention.
+        #   - THE REAL DEFECT: the pidfile was removed whether or not the kill took effect, and
+        #     "stopped runner-host" was printed either way. A wedged or slow daemon therefore
+        #     survived with NOTHING on disk pointing at it — and start_runner_host uses exactly
+        #     that pidfile to decide whether one is already running. The next --start spawned a
+        #     SECOND daemon on the SAME spool. Both would claim the next request, and the runner's
+        #     lock is per-process and cannot see a sibling: two pipeline runs from one operator
+        #     click, on real credentials.
+        #
+        # So: ask, WAIT, escalate, and only then report. ~3s of SIGTERM to let it close cleanly
+        # (it has a handler that stops its timers), then SIGKILL, then confirm.
         kill "$_pid" 2>/dev/null
+        local _i
+        for _i in $(seq 1 30); do
+            kill -0 "$_pid" 2>/dev/null || break
+            sleep 0.1
+        done
+        if kill -0 "$_pid" 2>/dev/null; then
+            kill -9 "$_pid" 2>/dev/null
+            for _i in $(seq 1 20); do
+                kill -0 "$_pid" 2>/dev/null || break
+                sleep 0.1
+            done
+        fi
+        if kill -0 "$_pid" 2>/dev/null; then
+            # THE PIDFILE STAYS. It is the only record that this process exists; removing it here
+            # is what lets a second daemon be spawned alongside the one we could not kill.
+            echo "[runner-host] pid $_pid did not die after SIGTERM and SIGKILL — leaving the pidfile in place so a second daemon is not started beside it" >&2
+            return 1
+        fi
         rm -f "$_pidfile" "$_envfile"
         return 0
     fi

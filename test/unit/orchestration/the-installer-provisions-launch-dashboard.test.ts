@@ -73,6 +73,13 @@ function fixture(opts: { withCompose?: boolean; withEnvExample?: boolean; port?:
     }
   }
 
+  // THE ROOT .env — a SEPARATE file from launch-dashboard/.env, where LANGFUSE_SECRET_KEY/
+  // PUBLIC_KEY actually live (.env.example's own declared shape). Found live 2026-09-04, real
+  // Langfuse traces never appearing for any launch-dashboard-triggered run: start_runner_host()
+  // sourced ONLY launch-dashboard/.env, never this file, so the daemon's own langfuse-passthrough
+  // logic (runner-host.js) always found the vars unset and never forwarded them to a launch.
+  fs.writeFileSync(path.join(dir, '.env'), 'LANGFUSE_SECRET_KEY=sk-test-1234\nLANGFUSE_PUBLIC_KEY=pk-test-1234\n');
+
   // Stub docker: logs its full invocation (argv AND the env vars this feature depends on), exits 0
   // instantly — a real docker build/up takes real time and this test is about the ORCHESTRATION
   // logic around it, not about actually building an image.
@@ -99,6 +106,7 @@ fs.appendFileSync(${JSON.stringify(runnerHostMarker)}, JSON.stringify({
   LAUNCH_PASSWORD: process.env.LAUNCH_PASSWORD || null,
   SPOOL_DIR: process.env.SPOOL_DIR || null,
   RUNS_DB: process.env.RUNS_DB || null,
+  LANGFUSE_SECRET_KEY: process.env.LANGFUSE_SECRET_KEY || null,
 }) + '\\n');
 setInterval(() => {}, 60000);
 `);
@@ -382,6 +390,25 @@ describe('install.sh starts and stops runner-host.js (the process that launches 
     // bind-mount paths — meaningless, and unwritable, for a bare host process.
     expect(seen.SPOOL_DIR, 'SPOOL_DIR was left at its container-only default').toBe(path.join(f.dir, 'launch-dashboard/spool'));
     expect(seen.RUNS_DB, 'RUNS_DB was left at its container-only default').toBe(path.join(f.dir, 'launch-dashboard/data/runs.db'));
+  });
+
+  it('LANGFUSE_SECRET_KEY from the ROOT .env reaches the daemon — a separate file from launch-dashboard/.env', async () => {
+    // Confirmed live 2026-09-04, pipeline-tests-10: a real launch-dashboard-triggered run produced
+    // zero Langfuse traces despite LANGFUSE_SECRET_KEY/PUBLIC_KEY being correctly filled in at the
+    // ROOT .env — start_runner_host() only ever sourced launch-dashboard/.env, a DIFFERENT file
+    // that has no Langfuse keys at all (they are not even in its own .env.example template).
+    const port = 18113;
+    await serveHealth(port);
+    const f = fixture({ port });
+    await run(f, ['--docker'], { EPAM_CONTAINER_RUNTIME: 'docker' });
+    const pidfile = path.join(f.dir, 'launch-dashboard/.runner-host.pid');
+    const pid = Number(fs.readFileSync(pidfile, 'utf8').trim());
+    cleanups.push(() => { try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ } });
+
+    const seen = JSON.parse(fs.readFileSync(f.runnerHostMarker, 'utf8').trim().split('\n')[0]);
+    expect(seen.LANGFUSE_SECRET_KEY,
+      'LANGFUSE_SECRET_KEY from the root .env never reached the daemon — every launch-dashboard run traces to nothing')
+      .toBe('sk-test-1234');
   });
 
   it('is idempotent — a second install.sh run does not spawn a second runner-host', async () => {

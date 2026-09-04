@@ -411,6 +411,47 @@ describe('install.sh starts and stops runner-host.js (the process that launches 
       .toBe('sk-test-1234');
   });
 
+  it('RE-RUNNING install.sh picks up a CHANGED .env — a daemon holding stale credentials is restarted', async () => {
+    // THE INSTALLER MUST BE ABLE TO DELIVER A WORKING DAEMON, and re-running it is the only
+    // sanctioned way to fix an environment (operator, 2026-09-04: "installer must do all
+    // restarts"). start_runner_host() returned "already running" whenever a live process owned the
+    // pidfile and never looked at WHAT that process was running with — so a daemon started before
+    // the operator filled in .env kept its empty values forever, and no amount of re-running
+    // install.sh could fix it.
+    //
+    // Live pipeline-tests-11: install.sh creates .env from .env.example (blank), starts
+    // runner-host, and the operator then fills in LANGFUSE_SECRET_KEY/PUBLIC_KEY. The daemon held
+    // "" for both, so runner-host.js's langfuse passthrough forwarded nothing and every
+    // launch-dashboard run traced to nothing — with the installer reporting a clean, healthy
+    // install the whole time.
+    const port = 18114;
+    await serveHealth(port);
+    const f = fixture({ port });
+
+    // First install: the operator has not filled in the key yet (blank, as .env.example ships it).
+    fs.writeFileSync(path.join(f.dir, '.env'), 'LANGFUSE_SECRET_KEY=\nLANGFUSE_PUBLIC_KEY=\n');
+    await run(f, ['--docker'], { EPAM_CONTAINER_RUNTIME: 'docker' });
+    const firstPid = Number(fs.readFileSync(path.join(f.dir, 'launch-dashboard/.runner-host.pid'), 'utf8').trim());
+    cleanups.push(() => { try { process.kill(firstPid, 'SIGKILL'); } catch { /* already gone */ } });
+    const before = JSON.parse(fs.readFileSync(f.runnerHostMarker, 'utf8').trim().split('\n').pop()!);
+    expect(before.LANGFUSE_SECRET_KEY, 'precondition: the first daemon should hold no key').toBeFalsy();
+
+    // The operator fills it in and re-runs the installer — the ONLY sanctioned repair path.
+    fs.writeFileSync(path.join(f.dir, '.env'), 'LANGFUSE_SECRET_KEY=sk-filled-in-later\nLANGFUSE_PUBLIC_KEY=pk-filled-in-later\n');
+    await run(f, ['--docker'], { EPAM_CONTAINER_RUNTIME: 'docker' });
+    const secondPid = Number(fs.readFileSync(path.join(f.dir, 'launch-dashboard/.runner-host.pid'), 'utf8').trim());
+    cleanups.push(() => { try { process.kill(secondPid, 'SIGKILL'); } catch { /* already gone */ } });
+
+    const after = JSON.parse(fs.readFileSync(f.runnerHostMarker, 'utf8').trim().split('\n').pop()!);
+    expect(after.LANGFUSE_SECRET_KEY,
+      're-running install.sh left a daemon running with the credentials it started with — the installer cannot repair its own environment')
+      .toBe('sk-filled-in-later');
+    // ...and the stale process is genuinely gone, not merely superseded by a second one.
+    let staleAlive = false;
+    try { process.kill(firstPid, 0); staleAlive = true; } catch { staleAlive = false; }
+    expect(staleAlive, 'the stale daemon is still running alongside the new one').toBe(false);
+  });
+
   it('is idempotent — a second install.sh run does not spawn a second runner-host', async () => {
     const port = 18112;
     await serveHealth(port);

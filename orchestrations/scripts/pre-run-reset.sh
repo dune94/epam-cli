@@ -63,6 +63,38 @@ _identity_lib="$REPO_ROOT/orchestrations-installer/lib/isolated-compose-identity
 [ -f "$_identity_lib" ] && . "$_identity_lib" || { echo "[pre-run-reset] missing $_identity_lib — cannot resolve the observability project name" >&2; exit 1; }
 OBS_PROJECT="$(isolated_project_name "$REPO_ROOT" obs)"
 
+# THE SAME SUBNET AND PORTS install.sh ACTUALLY GOT, never docker-compose.observability.yml's own
+# bare defaults (${EPAM_OBS_SUBNET:-172.31.0.0/16} etc). Even restarting the RIGHT project (above)
+# still failed: `down` (no -v, run by nothing here, but true of any earlier stop/start too) removes
+# the network, and a later `up`/`--force-recreate` with no EPAM_OBS_SUBNET at all resolves to the
+# compose file's default — which, for an isolated install, is NOT the subnet the network was
+# actually created with. Confirmed live 2026-09-04 against pipeline-tests-7: `docker network
+# inspect test-install-amsd-pipeline-obs-925946_default` reported subnet 172.25.0.0/16; this
+# script's own restart command (no EPAM_OBS_SUBNET set) resolved to 172.31.0.0/16 — a mismatch
+# that makes --force-recreate fail with "container ... is not connected to the network
+# test-install-amsd-pipeline-obs-925946_default", exit 1, every time, for every install other than
+# the hand-run dev checkout.
+#
+# install.sh already persists exactly these 5 values to .pipeline-services-state.env on every
+# successful bring-up, for precisely this reason ("so a LATER command against the same install can
+# reuse the same identity instead of re-rolling a different one" — install.sh's own comment).
+# pipeline-services.sh --start already reads it back the same way. This is the identical bug class
+# the OBS_PROJECT fix above already covered, just for subnet/ports instead of project name.
+#
+# WHY DEV NEVER SAW THIS: dev's own checkout has no .pipeline-services-state.env (never brought up
+# through install.sh's isolated path), so BOTH its original hand-run `up -d` and this restart
+# consistently fall back to the SAME bare default — no mismatch, no failure.
+#
+# Overridable (B29: same no-repo-pollution rule as COMPOSE_OVERRIDE) so a test can point this at a
+# throwaway file instead of the repo's own real state file.
+_STATE_FILE="${PIPELINE_SERVICES_STATE_FILE:-$REPO_ROOT/.pipeline-services-state.env}"
+if [ -f "$_STATE_FILE" ]; then
+  set -a
+  # shellcheck source=/dev/null
+  . "$_STATE_FILE"
+  set +a
+fi
+
 COMPOSE_BASE="$REPO_ROOT/docker-compose.observability.yml"
 # B29: overridable so a TEST can point this at a throwaway path. Hardcoding it
 # meant any test invoking this script rewrote the repo's own git-tracked override
@@ -210,7 +242,12 @@ sed -i "s|alias /prd-dir/[^;]*;|alias /prd-dir/${PRD_BASENAME};|" \
 # Skipped only when asked. A run never sets this, so the live path is unchanged.
 if [ "${EPAM_SKIP_CONTAINER_RESTART:-0}" = "1" ]; then
   info "  Container restart skipped (EPAM_SKIP_CONTAINER_RESTART=1)"
-elif docker compose \
+elif EPAM_OBS_SUBNET="${OBS_SUBNET:-}" \
+     EPAM_OBS_CLICKHOUSE_PORT="${OBS_CLICKHOUSE_PORT:-}" \
+     EPAM_OBS_LANGFUSE_PORT="${OBS_LANGFUSE_PORT:-}" \
+     EPAM_OBS_DASHBOARD_PORT="${OBS_DASHBOARD_PORT:-}" \
+     EPAM_OBS_GRAFANA_PORT="${OBS_GRAFANA_PORT:-}" \
+     docker compose \
      -f "$COMPOSE_BASE" \
      -f "$COMPOSE_OVERRIDE" \
      -p "$OBS_PROJECT" \

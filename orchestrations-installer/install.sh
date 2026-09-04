@@ -820,8 +820,20 @@ if [ "$LAUNCH_STATUS" = "up" ]; then
         # that shell's own process image with the daemon, so nothing is left holding the pipe open.
         _RH_DAEMONIZE="setsid"
         command -v setsid >/dev/null 2>&1 || _RH_DAEMONIZE=""
+        # launch-dashboard/.env MUST BE SOURCED HERE. Docker Compose auto-loads a .env file next
+        # to the compose file into the CONTAINER's environment; a bare host process gets none of
+        # that for free. Found live: runner-host.js's own config.js hard-requires LAUNCH_PASSWORD
+        # from process.env ("gates a button that spends real money") and crashed instantly with it
+        # unset, even though the value was sitting right there in the file the whole time.
+        # SPOOL_DIR's default ('/spool') is the CONTAINER's bind-mount path — correct for
+        # launch-api running inside docker, meaningless for a bare host process. Found live, right
+        # after the LAUNCH_PASSWORD fix above stopped masking it: EACCES on mkdir '/spool/requests'
+        # (no permission to create a directory at the filesystem root). The real, same, host
+        # directory this container has bind-mounted as /spool is $LAUNCH_DIR/spool.
         ( exec </dev/null >>"$_RH_LOG" 2>&1
-          cd "$ROOT" && EPAM_HOME="$ROOT" exec $_RH_DAEMONIZE "$NODE_BIN" "$LAUNCH_DIR/backend/src/runner-host.js" ) &
+          cd "$ROOT" && set -a && . "$LAUNCH_DIR/.env" 2>/dev/null; set +a
+          EPAM_HOME="$ROOT" SPOOL_DIR="$LAUNCH_DIR/spool" RUNS_DB="$LAUNCH_DIR/data/runs.db" \
+              exec $_RH_DAEMONIZE "$NODE_BIN" "$LAUNCH_DIR/backend/src/runner-host.js" ) &
         echo $! > "$_RH_PIDFILE"
         sleep 0.3
         _RH_NEW_PID="$(cat "$_RH_PIDFILE" 2>/dev/null)"

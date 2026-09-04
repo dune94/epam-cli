@@ -137,3 +137,57 @@ describe('pipeline-health.sh', () => {
     expect(r.stdout).toMatch(/healthy — ready to launch|runnable, with warnings/);
   });
 });
+
+/**
+ * A HEALTH CHECK THAT ONLY CHECKS DAEMONS IS HALF A HEALTH CHECK.
+ *
+ * This script proved runner-host and snapshot-watch were alive and never asked whether the services
+ * they exist to serve actually answer. Three operator-facing breakages got through it in one day,
+ * each found by a human opening a browser: the dashboard serving 404 for /prd.json ("data offline"),
+ * Langfuse and Grafana probed on the compose defaults instead of this install's isolated ports, and
+ * nginx unable to serve /logs/*. Every one is a single curl.
+ *
+ * THE SERVICE LIST IS DERIVED from config/services.json, never named in the script — a service added
+ * there tomorrow is probed tomorrow. Required-vs-optional is derived too: a service that declares a
+ * stateVar is one this install allocates a port for, so it is part of the stack and must answer.
+ */
+describe('pipeline-health probes the declared service endpoints, not just the daemons', () => {
+  const HEALTH = fs.readFileSync(path.join(REPO, SCRIPT_REL), 'utf8');
+  const SERVICES = JSON.parse(
+    fs.readFileSync(path.join(REPO, 'orchestrations/config/services.json'), 'utf8'),
+  ).services as Record<string, Record<string, string>>;
+
+  it('names no service in the script — the registry is the source', () => {
+    const code = HEALTH.split('\n').filter((l) => !l.trim().startsWith('#')).join('\n');
+    // 'dashboard' survives as the ONE derived sub-probe (its /logs and /prd.json mounts), which is
+    // a property of that endpoint's content, not a second list of services.
+    for (const name of Object.keys(SERVICES).filter((n) => n !== 'dashboard')) {
+      expect(code, `${name} is spelled in the script — add it to services.json instead`)
+        .not.toContain(`"${name}"`);
+    }
+  });
+
+  it('resolves endpoints through service_url, so an isolated install is probed on ITS ports', () => {
+    expect(HEALTH, 'a literal URL would pass against a service nobody is using')
+      .toMatch(/service_url/);
+    expect(HEALTH).toMatch(/service-urls\.sh/);
+  });
+
+  it('probes the dashboard MOUNTS, not only that nginx answers on /', () => {
+    // Both were broken while / returned 200 — that is exactly how "data offline" reached a human.
+    expect(HEALTH).toMatch(/\/logs\/agent-status\.json/);
+    expect(HEALTH).toMatch(/\/prd\.json/);
+  });
+
+  it('does not fail a run over a trace sink the stack can never write to', () => {
+    // Langfuse traces come from wrapWithTracing inside the epam CLI; a runner that shells out to a
+    // vendor CLI never reaches it. Declared per runner as emitsTraces.
+    expect(HEALTH).toMatch(/emitsTraces/);
+  });
+
+  it('install.sh runs it as a post-install step — the last word of an install is a probe, not a report', () => {
+    const installer = fs.readFileSync(path.join(REPO, 'orchestrations-installer/install.sh'), 'utf8');
+    expect(installer, 'an installer that only reports on its own steps is reporting on itself')
+      .toMatch(/pipeline-health\.sh/);
+  });
+});

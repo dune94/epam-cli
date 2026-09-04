@@ -185,13 +185,23 @@ export EPAM_PROJECT_OUTPUT_DIR="$LOG_DIR"
 # nothing was actually wrong.
 #
 # /prd-dir is the only part that genuinely needs the file, so that is the only part now conditional.
-if [ "$PRD_PRESENT" = "0" ]; then
-  info "Configuring agent-monitor to serve this run's logs (no PRD yet — ingest writes it)..."
-else
-info "Configuring agent-monitor to serve: $(basename "$PRD_FILE")..."
-
+# THE PRD'S DIRECTORY IS KNOWABLE EVEN WHEN THE FILE IS NOT THERE YET, and mounting it is the whole
+# reason this is a DIRECTORY mount rather than a file mount: a file appearing inside a mounted
+# directory is visible immediately, with no container restart.
+#
+# Conditioning the /prd-dir mount on the file already existing was half a fix. On a fresh install
+# the PRD does not exist when this runs — ingest writes it minutes LATER — so the mount was skipped,
+# nothing re-mounted afterwards, and nginx served 404 for /prd.json for the whole run. The dashboard
+# showed "data offline" against a perfectly healthy run (live 2026-09-04, pipeline-tests-13).
 PRD_DIR="$(dirname "$PRD_FILE")"
 PRD_BASENAME="$(basename "$PRD_FILE")"
+# The directory itself must exist to be mounted; docker would otherwise create it as root.
+mkdir -p "$PRD_DIR" 2>/dev/null || true
+
+if [ "$PRD_PRESENT" = "0" ]; then
+  info "Configuring agent-monitor to serve $PRD_BASENAME (written by ingest during this run) and this run's logs..."
+else
+info "Configuring agent-monitor to serve: $(basename "$PRD_FILE")..."
 
 # Ensure the PRD file is world-readable so nginx (non-root) can serve it
 chmod o+r "$PRD_FILE"
@@ -224,19 +234,17 @@ fi   # end: the PRD-only half (pointer files, chmod, nginx alias below)
   echo "services:"
   echo "  agent-monitor:"
   echo "    volumes:"
-  [ "$PRD_PRESENT" = "1" ] && echo "      - ${PRD_DIR}:/prd-dir:ro"
+  echo "      - ${PRD_DIR}:/prd-dir:ro"
   echo "      - ${LOG_DIR}:/logs-dir:ro"
 } > "$COMPOSE_OVERRIDE"
 
 # nginx.conf's /prd.json alias basename must match whatever PRD was passed —
 # patch it in place (truncate-write via sed -i, not atomic rename, so this
 # single-file mount for nginx.conf itself is not subject to the same bug).
-# Only meaningful when there IS a PRD; with none, the alias keeps whatever it had and /prd.json
-# simply 404s until ingest writes one and the next reset re-points it.
-if [ "$PRD_PRESENT" = "1" ]; then
-  sed -i "s|alias /prd-dir/[^;]*;|alias /prd-dir/${PRD_BASENAME};|" \
-    "$REPO_ROOT/orchestrations/dashboards/nginx.conf"
-fi
+# Pointed whether or not the file exists yet: the basename is known from --prd, and the alias must
+# already be correct when ingest writes the file into the mounted directory mid-run.
+sed -i "s|alias /prd-dir/[^;]*;|alias /prd-dir/${PRD_BASENAME};|" \
+  "$REPO_ROOT/orchestrations/dashboards/nginx.conf"
 
 # --force-recreate, not just `up -d`: nginx.conf itself is STILL a single-
 # FILE bind mount (the sed -i just above rewrites it via a new inode, same as
@@ -271,7 +279,7 @@ elif EPAM_OBS_SUBNET="${OBS_SUBNET:-}" \
   if [ "$PRD_PRESENT" = "1" ]; then
     success "agent-monitor restarted → /prd-dir = $PRD_DIR (serving $PRD_BASENAME), /logs-dir = $LOG_DIR"
   else
-    success "agent-monitor restarted → /logs-dir = $LOG_DIR (no /prd-dir yet — ingest writes the PRD)"
+    success "agent-monitor restarted → /prd-dir = $PRD_DIR (serving $PRD_BASENAME once ingest writes it), /logs-dir = $LOG_DIR"
   fi
 else
   info "  Docker not available or agent-monitor not running — skipping container restart"

@@ -13,6 +13,7 @@ import crypto from 'node:crypto';
 import * as store from './runs-store.js';
 import * as spool from './spool.js';
 import { listProviderSets } from './provider-sets.js';
+import { syncActiveRunsFromSpool } from './status-sync.js';
 
 const json = (res, code, body) => {
   const s = JSON.stringify(body ?? null);
@@ -69,6 +70,15 @@ function createApp({ dbFile, spoolDir, password, codeLevel = null }) {
 
       const given = (req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
       if (!passwordMatches(given, password)) return json(res, 401, { error: 'unauthorized' });
+
+      // THE ROWS THE GRID READS MUST REFLECT WHAT THE RUNNER ACTUALLY DID. runner.js writes real
+      // progress and terminal status to spool/status/<id>.json — the only channel from the host
+      // back to this container — and nothing ever read it back, so a row stayed 'pending' for the
+      // rest of its life however the run ended. That is both a blind operator ("no updates at all
+      // pending and no info for user") and a stuck machine: the busy-check reads this same table,
+      // so a run that died hours ago still refuses every new save. At most one row is active, so
+      // this is one small file read per request.
+      syncActiveRunsFromSpool(db, spoolDir);
 
       if (p === '/api/runs' && req.method === 'GET') {
         return json(res, 200, store.listRuns(db));

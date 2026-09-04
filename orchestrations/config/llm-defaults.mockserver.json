@@ -1,6 +1,6 @@
 {
-  "$comment": "THE MOCKSERVER PROVIDER SET — the CodeMie stack, answered by MockServer instead of a model. Same ladders and same budgets, so a rehearsal exercises the chain a paid run would climb; only the ENDPOINT differs.",
-  "$proven": "2026-08-25: plain `claude` honours ANTHROPIC_BASE_URL, reaches MockServer (POST /v1/messages in its request log) and PARSES the SSE it serves — is_error:false, result:'OK', stop_reason:'end_turn', RC=0.",
+  "$comment": "THE MOCKSERVER PROVIDER SET \u2014 the CodeMie stack, answered by MockServer instead of a model. Same ladders and same budgets, so a rehearsal exercises the chain a paid run would climb; only the ENDPOINT differs.",
+  "$proven": "2026-08-25: plain `claude` honours ANTHROPIC_BASE_URL, reaches MockServer (POST /v1/messages in its request log) and PARSES the SSE it serves \u2014 is_error:false, result:'OK', stop_reason:'end_turn', RC=0.",
   "$whyNotTheWrapper": "This runs PLAIN `claude`, not codemie-claude. The wrapper's --base-url selects an SSO PROFILE rather than redirecting, and fails with 'SSO credentials not found' for any URL it has no credentials for. A mocked run must authenticate against NOTHING, so it bypasses the wrapper entirely.",
   "$whyTheSameLadders": "Deliberately identical to the codemie set. A rehearsal on different models proves the harness, not the run. Sharing the ladder means a mocked run climbs the chain a paid run would.",
   "ladderTierOrder": [
@@ -10,7 +10,7 @@
   ],
   "ladders": {
     "medium": {
-      "$why": "Enters cheap and tops out at Sonnet-5. A `mid` seam never reaches Opus: 14 seams resolve here, and measured turn counts are p50 4, p90 24 — work that does not need a frontier model.",
+      "$why": "Enters cheap and tops out at Sonnet-5. A `mid` seam never reaches Opus: 14 seams resolve here, and measured turn counts are p50 4, p90 24 \u2014 work that does not need a frontier model.",
       "startModel": "claude-haiku-4-5-20251001",
       "modelLadder": [
         {
@@ -95,9 +95,9 @@
     }
   },
   "modelOverrides": {
-    "$whyAutoCompress": "150000 against a 200000 window is an OVERFLOW GUARD near the ceiling, never a token-saving device: compaction rewrites the prefix and destroys the prompt cache. Measured input is p50 13.3k, p90 19k, max 25.9k — about 13% of the window — so this should never fire. If it does, something has gone wrong upstream and that is worth knowing.",
+    "$whyAutoCompress": "150000 against a 200000 window is an OVERFLOW GUARD near the ceiling, never a token-saving device: compaction rewrites the prefix and destroys the prompt cache. Measured input is p50 13.3k, p90 19k, max 25.9k \u2014 about 13% of the window \u2014 so this should never fire. If it does, something has gone wrong upstream and that is worth knowing.",
     "$whyNoTemperature": "codemie-claude exposes no temperature flag and Claude Code has no supported lever for it. Declaring one would be decoration. Deliberation is controlled by reasoningEffort and thinking instead.",
-    "$whyAdaptive": "Thinking is held STABLE per model. Anthropic's docs list effort and thinking-parameter changes as cache invalidators, so a config that changes between attempts discards the cache every retry — the opposite of what a 1h TTL is for.",
+    "$whyAdaptive": "Thinking is held STABLE per model. Anthropic's docs list effort and thinking-parameter changes as cache invalidators, so a config that changes between attempts discards the cache every retry \u2014 the opposite of what a 1h TTL is for.",
     "claude-haiku-4-5": {
       "matchOn": "model",
       "matchSubstring": "claude-haiku-4-5",
@@ -135,12 +135,12 @@
       "maxOutputTokens": 64000,
       "charsPerToken": 4
     },
-    "$miniTierWhy": "miniTier marks the cheap, fast rung — the models that are quick but limited in generation capacity. It was decided in engine code by sniffing vendor naming habits (-mini, -flash, -haiku, minimax-m2), which breaks in both directions: a cheap model named differently read as capable, and a capable model containing -flash read as cheap. The set that declares the model declares its tier.",
+    "$miniTierWhy": "miniTier marks the cheap, fast rung \u2014 the models that are quick but limited in generation capacity. It was decided in engine code by sniffing vendor naming habits (-mini, -flash, -haiku, minimax-m2), which breaks in both directions: a cheap model named differently read as capable, and a capable model containing -flash read as cheap. The set that declares the model declares its tier.",
     "$whyCharsPerToken": "INPUT CAPACITY IN CHARACTERS. autoCompressAt is the models input ceiling in TOKENS; callers that must size a payload measure it in characters. The ratio belongs with the model, because it is a property of that models tokenizer, not of any caller. Declared so a caller derives its budget instead of inventing one: the roster review carried a literal 60000 in code, which split a 276KB roster into six calls and failed the whole review whenever any one of them answered off-schema."
   },
   "finalFallback": {
-    "$why": "Applies after ladder exhaustion. The PROVIDER is plain `claude`, not codemie-claude, matching every other call this set makes — see $whyNotTheWrapper. That is CORRECT, not a paid escape: this set never talks to real Anthropic. runners.claude below declares ANTHROPIC_BASE_URL redirecting to MockServer and unsetEnv scrubbing every other vendor's credentials, and that redirect applies to every call routed under this set's own provider:\"claude\", finalFallback included — it never has a real endpoint to reach. Mockserver is a mock-LLM, no-pay testing mechanism by construction, not merely by convention (change-log/SEAM-CONSISTENCY-ANALYSIS.md Section 6, corrected 2026-09-03: the prior wording here mischaracterized this as an unresolved paid-escape risk).",
-    "$whyNotYetLive": "As of this writing, nothing in the runtime ladder-exhaustion path (llm-handler.sh, claude.sh, brownfield-repro-test-writer.sh) reads finalFallback — exhaustion retries the same rung instead. agent-check.js's dry-run cost estimator is the only reader, and even there this is unreachable while any ladder tier has a startModel (all of them do). Declared for correctness and for whenever that wiring exists.",
+    "$why": "Applies after ladder exhaustion. The PROVIDER is plain `claude`, not codemie-claude, matching every other call this set makes \u2014 see $whyNotTheWrapper. That is CORRECT, not a paid escape: this set never talks to real Anthropic. runners.claude below declares ANTHROPIC_BASE_URL redirecting to MockServer and unsetEnv scrubbing every other vendor's credentials, and that redirect applies to every call routed under this set's own provider:\"claude\", finalFallback included \u2014 it never has a real endpoint to reach. Mockserver is a mock-LLM, no-pay testing mechanism by construction, not merely by convention (change-log/SEAM-CONSISTENCY-ANALYSIS.md Section 6, corrected 2026-09-03: the prior wording here mischaracterized this as an unresolved paid-escape risk).",
+    "$whyNotYetLive": "As of this writing, nothing in the runtime ladder-exhaustion path (llm-handler.sh, claude.sh, brownfield-repro-test-writer.sh) reads finalFallback \u2014 exhaustion retries the same rung instead. agent-check.js's dry-run cost estimator is the only reader, and even there this is unreachable while any ladder tier has a startModel (all of them do). Declared for correctness and for whenever that wiring exists.",
     "model": "claude-sonnet-5",
     "provider": "claude"
   },
@@ -160,7 +160,7 @@
       "$whyNoTurnCap": "maxIterations is deliberately absent. It binds the ReAct loop in src/agent/AgentRunner.ts, which only the `epam run` arm enters; a --print call has no turn cap and the loop is Claude Code's own. Declaring one here would name a knob nothing can turn.",
       "$whyNoOutputCap": "maxOutputTokens is deliberately unmapped: the installed CLI documents no flag or env for it. It stays declared in modelOverrides so the intent is visible, and is not routed anywhere pretending to work.",
       "$whyEnvKept": "ANTHROPIC_BASE_URL is a real, load-bearing env var: it is the mock redirect. It was declared here and never exported, so a free run would have looked redirected and reached the paid endpoint.",
-      "$whyNoSilentFlag": "-s is codemie-claude's silent flag and plain `claude` REJECTS it: `echo x | claude -s --print` exits 1 with \"error: unknown option '-s'\". Proven by running it, 2026-08-26, after a --help probe proved nothing (--help and --version short-circuit before option validation, so an invalid flag exits 0 there too). With -s declared, the hub passed it to plain claude, the call failed, and the arm's 2>/dev/null hid the reason — codeline-discovery reported only 'Empty response from ai-run.sh' and the mock3 run aborted with 'codeline scope could not be resolved'. The codemie runner keeps -s: codemie-claude --help documents it as -s, --silent.",
+      "$whyNoSilentFlag": "-s is codemie-claude's silent flag and plain `claude` REJECTS it: `echo x | claude -s --print` exits 1 with \"error: unknown option '-s'\". Proven by running it, 2026-08-26, after a --help probe proved nothing (--help and --version short-circuit before option validation, so an invalid flag exits 0 there too). With -s declared, the hub passed it to plain claude, the call failed, and the arm's 2>/dev/null hid the reason \u2014 codeline-discovery reported only 'Empty response from ai-run.sh' and the mock3 run aborted with 'codeline scope could not be resolved'. The codemie runner keeps -s: codemie-claude --help documents it as -s, --silent.",
       "unsetEnv": [
         "CODEMIE_API_KEY",
         "CODEMIE_AUTH_TOKEN",
@@ -205,9 +205,11 @@
         "OPENROUTER_KEY",
         "OPENROUTER_TOKEN"
       ],
-      "$whyUnsetEnv": "A REHEARSAL MUST NOT BE ABLE TO SPEND SOMEWHERE ELSE. Under this set the writer once ran provider=minimax with MINIMAX_API_KEY present: the mockBaseUrl redirect covers Anthropic traffic and nothing else, so any other vendor's credential is a live route out. Those are removed. ANTHROPIC_API_KEY and CLAUDE_* are deliberately NOT removed: Claude Code falls back to the OAuth credentials on disk when it finds no key, and that bills for real — the exact inversion this is meant to prevent, recorded in seam-the-subscription-pays-not-the-api-key. The operator's fake key stays, and the redirect is what makes it harmless. The vendors come from llm-channel.json's credentialPattern, so one added there is covered without editing this."
+      "$whyUnsetEnv": "A REHEARSAL MUST NOT BE ABLE TO SPEND SOMEWHERE ELSE. Under this set the writer once ran provider=minimax with MINIMAX_API_KEY present: the mockBaseUrl redirect covers Anthropic traffic and nothing else, so any other vendor's credential is a live route out. Those are removed. ANTHROPIC_API_KEY and CLAUDE_* are deliberately NOT removed: Claude Code falls back to the OAuth credentials on disk when it finds no key, and that bills for real \u2014 the exact inversion this is meant to prevent, recorded in seam-the-subscription-pays-not-the-api-key. The operator's fake key stays, and the redirect is what makes it harmless. The vendors come from llm-channel.json's credentialPattern, so one added there is covered without editing this.",
+      "emitsTraces": false,
+      "$emitsTraces": "Whether model calls made through this runner reach Langfuse. Traces are written by wrapWithTracing (src/observability/TracedProvider.ts), which only runs inside the epam CLI. A runner that shells out to a vendor CLI (claude, codemie-claude) never reaches it, so the observability preflight must not demand Langfuse for it \u2014 gating a run on a service nothing writes to aborts healthy launches (live 2026-09-04)."
     }
   },
   "mockBaseUrl": "http://localhost:1080",
-  "$mockBaseUrl": "Where MockServer listens. Declared here so no script spells it — the same rule every other value in this layer follows."
+  "$mockBaseUrl": "Where MockServer listens. Declared here so no script spells it \u2014 the same rule every other value in this layer follows."
 }

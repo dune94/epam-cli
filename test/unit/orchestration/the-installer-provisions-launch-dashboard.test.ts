@@ -52,7 +52,7 @@ function fixture(opts: { withCompose?: boolean; withEnvExample?: boolean; port?:
   fs.mkdirSync(path.join(dir, 'orchestrations-installer/lib'), { recursive: true });
   fs.copyFileSync(INSTALLER, path.join(dir, 'orchestrations-installer/install.sh'));
   fs.chmodSync(path.join(dir, 'orchestrations-installer/install.sh'), 0o755);
-  for (const f of ['container-runtime.sh', 'wait-for-health.sh', 'isolated-compose-identity.sh']) {
+  for (const f of ['container-runtime.sh', 'wait-for-health.sh', 'isolated-compose-identity.sh', 'runner-host-control.sh']) {
     fs.copyFileSync(path.join(REPO, 'orchestrations-installer/lib', f),
       path.join(dir, 'orchestrations-installer/lib', f));
   }
@@ -201,11 +201,13 @@ describe('the installer provisions launch-dashboard', () => {
     expect(log).toMatch(/LAUNCH_SUBNET=172\.\d+\.0\.0\/16/);
   });
 
-  it('creates launch-dashboard/.env from its template when absent, WITH a generated LAUNCH_PASSWORD so it starts unattended', async () => {
-    // Operator decision 2026-09-03: a blank LAUNCH_PASSWORD used to mean install.sh warned, then
-    // attempted `up -d` anyway and hit compose's `${LAUNCH_PASSWORD:?...}` hard-fail — a known
-    // condition surfacing as a crash. LAUNCH_PASSWORD gates a loopback-only local UI, a different
-    // risk class from a vendor/API credential, so it is generated rather than left blank.
+  it('creates launch-dashboard/.env from its template when absent, WITH the fixed default LAUNCH_PASSWORD so it starts unattended', async () => {
+    // Operator decision 2026-09-04, superseding the earlier random-generation decision: a random
+    // value made every install's password unknowable without reading the file, and desynced from
+    // the live process the moment a NEWER .env got copied in (a running container keeps whatever
+    // password it started with in memory) — the only fix was a manual docker restart, discovered
+    // live. A fixed, known default removes the ambiguity; the operator changes it via the
+    // dashboard's own change-password flow, not by hoping a generated value matches reality.
     const port = 18104;
     await serveHealth(port);
     const f = fixture({ port });
@@ -216,12 +218,10 @@ describe('the installer provisions launch-dashboard', () => {
     const body = fs.readFileSync(envPath, 'utf8');
     const lines = body.match(/^LAUNCH_PASSWORD=.*$/gm) ?? [];
     expect(lines.length, `expected exactly one LAUNCH_PASSWORD= line, found ${lines.length}:\n${body}`).toBe(1);
-    expect(lines[0], 'LAUNCH_PASSWORD was left blank instead of generated').not.toBe('LAUNCH_PASSWORD=');
-    const generated = lines[0].slice('LAUNCH_PASSWORD='.length);
-    expect(generated.length, 'generated password looks too short to be real').toBeGreaterThan(10);
-    // MUST BE SHOWN TO THE OPERATOR, not file-only — the only prior way to learn it was to
-    // already know to go read launch-dashboard/.env by hand.
-    expect(r.out, `the generated password was never printed to the operator:\n${r.out}`).toContain(generated);
+    expect(lines[0], 'LAUNCH_PASSWORD was not set to the fixed default').toBe('LAUNCH_PASSWORD=abcd1234');
+    // MUST BE SHOWN TO THE OPERATOR, not file-only.
+    expect(r.out, `the default password was never printed to the operator:\n${r.out}`).toContain('abcd1234');
+    expect(r.out, 'did not tell the operator to change it').toMatch(/change/i);
   });
 
   it('skips starting (never crashes into compose\'s hard-fail) when .env already exists with LAUNCH_PASSWORD left blank', async () => {

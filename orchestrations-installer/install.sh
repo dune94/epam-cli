@@ -93,6 +93,18 @@ if [ "$UNINSTALL" = "1" ]; then
             exit 1
         fi
     fi
+    # STOP THE RUNNER HOST FIRST — it is NOT docker-related (a plain host process), so it must not
+    # be skipped by the "no container runtime, nothing to uninstall" exit below.
+    _UN_RH_PIDFILE="$_UN_ROOT/launch-dashboard/.runner-host.pid"
+    if [ -f "$_UN_RH_PIDFILE" ]; then
+        _UN_RH_PID="$(cat "$_UN_RH_PIDFILE" 2>/dev/null)"
+        if [ -n "$_UN_RH_PID" ] && kill -0 "$_UN_RH_PID" 2>/dev/null; then
+            kill "$_UN_RH_PID" 2>/dev/null
+            _ok "stopped runner-host (pid $_UN_RH_PID)"
+        fi
+        rm -f "$_UN_RH_PIDFILE"
+    fi
+
     . "$INSTALLER_DIR/lib/isolated-compose-identity.sh"
     if [ -f "$INSTALLER_DIR/lib/container-runtime.sh" ]; then
         . "$INSTALLER_DIR/lib/container-runtime.sh"
@@ -675,7 +687,13 @@ else
                 else
                     printf '\nLAUNCH_PASSWORD=%s\n' "$_GENERATED_PW" >> "$LAUNCH_DIR/.env"
                 fi
-                _ok "launch-dashboard/.env created with a generated LAUNCH_PASSWORD (edit the file to change it)"
+                _ok "launch-dashboard/.env created with a generated LAUNCH_PASSWORD"
+                # SHOWN ONCE, HERE — otherwise the only way to learn it is to already know to go
+                # read the file by hand, which is exactly the gap an operator hit live: the
+                # dashboard was up and healthy with no way to log into it from the install output
+                # alone. Also saved in launch-dashboard/.env for every time after this one.
+                printf '      LAUNCH_PASSWORD: %s\n' "$_GENERATED_PW"
+                printf '      (also saved in launch-dashboard/.env — edit that file to change it)\n'
             else
                 _warn "launch-dashboard/.env created from .env.example — FILL IN LAUNCH_PASSWORD before it can start"
             fi
@@ -766,6 +784,56 @@ else
         fi
         rm -f "$_LD_LOG" 2>/dev/null
     fi
+fi
+
+# ── Runner host: what actually launches a pipeline run from the dashboard ────
+# "the install script must start all services" (operator, 2026-09-04) — a saved launch request
+# sat "pending" forever with nothing polling for it, because nothing ever started this.
+#
+# NOT DOCKERIZED, DELIBERATELY — same as runner-host.js's own header says: "a container cannot
+# exec a host process." It spawns the pipeline's real launcher on the HOST, which needs git access
+# to the codeline root, the claude/codemie-claude CLI's host auth (~/.claude — a container has none
+# of this unless it were bind-mounted in), and host git credentials for anything that pushes.
+# Containerizing the poll loop alone is easy (the spool it watches is already bind-mounted into
+# launch-api); containerizing what it SPAWNS on a hit would mean containerizing the whole pipeline.
+_head "Runner host (launches pipeline runs the dashboard queues)"
+if [ "$LAUNCH_STATUS" = "up" ]; then
+    _RH_PIDFILE="$LAUNCH_DIR/.runner-host.pid"
+    _RH_LOG="$LAUNCH_DIR/.runner-host.log"
+    _RH_OLD_PID=""
+    [ -f "$_RH_PIDFILE" ] && _RH_OLD_PID="$(cat "$_RH_PIDFILE" 2>/dev/null)"
+    if [ -n "$_RH_OLD_PID" ] && kill -0 "$_RH_OLD_PID" 2>/dev/null; then
+        _ok "already running (pid $_RH_OLD_PID)"
+    else
+        # setsid, NEVER nohup — found live: nohup here made install.sh hang forever whenever its
+        # own stdio is piped (any parent that captures its output, including this test suite).
+        # setsid fully detaches into a new session (immune to SIGHUP by construction, survives the
+        # launching shell/terminal closing — the WSL-restart case this exists for). Falls back to
+        # a plain backgrounded process on a host with no setsid (macOS ships none by default).
+        #
+        # `</dev/null >>log 2>&1` on the command ALONE was still not enough — the daemon kept the
+        # pipe to install.sh's own stdout open regardless (Node's spawn() never saw 'close', even
+        # though every byte of real output arrived and install.sh itself had long since exited).
+        # bash forking a background job inherits ALL open fds, not just 0/1/2; a plain per-command
+        # redirect only dup2's those three. `exec` with no command applies the redirect to the
+        # CURRENT shell — including whatever else it inherited — before the second `exec` replaces
+        # that shell's own process image with the daemon, so nothing is left holding the pipe open.
+        _RH_DAEMONIZE="setsid"
+        command -v setsid >/dev/null 2>&1 || _RH_DAEMONIZE=""
+        ( exec </dev/null >>"$_RH_LOG" 2>&1
+          cd "$ROOT" && EPAM_HOME="$ROOT" exec $_RH_DAEMONIZE "$NODE_BIN" "$LAUNCH_DIR/backend/src/runner-host.js" ) &
+        echo $! > "$_RH_PIDFILE"
+        sleep 0.3
+        _RH_NEW_PID="$(cat "$_RH_PIDFILE" 2>/dev/null)"
+        if [ -n "$_RH_NEW_PID" ] && kill -0 "$_RH_NEW_PID" 2>/dev/null; then
+            _ok "started (pid $_RH_NEW_PID, log: $_RH_LOG)"
+        else
+            _bad "runner-host failed to start — see $_RH_LOG"
+            FAILED=1
+        fi
+    fi
+else
+    _ok "skipped — launch dashboard status is '$LAUNCH_STATUS', nothing to poll for"
 fi
 
 # ── The command people will actually type ───────────────────────────────────

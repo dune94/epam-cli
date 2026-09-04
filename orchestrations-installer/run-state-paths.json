@@ -4,6 +4,9 @@
     "orchestrations/logs",
     "orchestrations/projects/*/runs",
     "launch-dashboard/data",
-    "launch-dashboard/spool"
+    "launch-dashboard/spool",
+    "phase-cost.jsonl",
+    "orchestrations/agents/kb",
+    "orchestrations/projects/*/kb"
   ]
 }

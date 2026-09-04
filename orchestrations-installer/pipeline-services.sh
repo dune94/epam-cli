@@ -74,6 +74,7 @@ else
     exit 1
 fi
 . "$HERE/lib/runner-host-control.sh"
+. "$HERE/lib/snapshot-watch-control.sh"
 
 FAILED=0
 
@@ -105,6 +106,16 @@ stop)
         fi
     else
         _ok "runner-host: nothing to stop or already gone"
+    fi
+    if [ -f "$ROOT/orchestrations/dashboards/.snapshot-watch.pid" ]; then
+        _SW_PID="$(cat "$ROOT/orchestrations/dashboards/.snapshot-watch.pid" 2>/dev/null)"
+        if stop_snapshot_watch "$ROOT" && [ -n "$_SW_PID" ]; then
+            _ok "stopped snapshot-watch (pid $_SW_PID)"
+        else
+            _ok "snapshot-watch: nothing to stop or already gone"
+        fi
+    else
+        _ok "snapshot-watch: nothing to stop or already gone"
     fi
     ;;
 
@@ -139,6 +150,9 @@ start)
     fi
     if [ -f "$LAUNCH_DIR/backend/src/runner-host.js" ]; then
         start_runner_host "$ROOT" "$LAUNCH_DIR" || FAILED=1
+    fi
+    if [ -f "$ROOT/orchestrations/scripts/snapshot-watch.js" ]; then
+        start_snapshot_watch "$ROOT" || FAILED=1
     fi
     ;;
 esac

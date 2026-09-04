@@ -248,6 +248,37 @@ else
     printf '      (set EPAM_PROJECT=<name> once a project directory exists under orchestrations/projects/)\n'
 fi
 
+# ── Host daemons: runner-host.js and snapshot-watch.js ──────────────────────
+# Both are host processes install.sh/pipeline-services.sh start — neither runs in docker. Without
+# runner-host.js, a run saved through the dashboard just sits "pending" forever, nothing polling
+# for it. Without snapshot-watch.js, a launched run's own pre-flight HARD FAILS 3 checks
+# immediately (confirmed live 2026-09-04: "3 check(s) FAILED — DO NOT run pipeline") — this is not
+# optional the way docker/dashboards are elsewhere in this script.
+_head "Host daemons"
+_daemon_alive() {
+    local _pidfile="$1"
+    [ -f "$_pidfile" ] || return 1
+    local _pid
+    _pid="$(cat "$_pidfile" 2>/dev/null)"
+    [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null
+}
+if [ -f "$ROOT/launch-dashboard/backend/src/runner-host.js" ]; then
+    if _daemon_alive "$ROOT/launch-dashboard/.runner-host.pid"; then
+        _ok "runner-host.js is running"
+    else
+        _bad "runner-host.js is NOT running — a run saved through the dashboard will sit 'pending' forever"
+        _fix "bash orchestrations-installer/pipeline-services.sh --start"
+    fi
+fi
+if [ -f "$ROOT/orchestrations/scripts/snapshot-watch.js" ]; then
+    if _daemon_alive "$ROOT/orchestrations/dashboards/.snapshot-watch.pid"; then
+        _ok "snapshot-watch.js is running"
+    else
+        _bad "snapshot-watch.js is NOT running — a launched run's own pre-flight will hard-fail"
+        _fix "bash orchestrations-installer/pipeline-services.sh --start"
+    fi
+fi
+
 # ── epam shim ────────────────────────────────────────────────────────────
 _head "epam command"
 _SHIM="$HOME/.local/bin/epam"

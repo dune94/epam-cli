@@ -143,6 +143,17 @@ function buildIngestionBody(f, ids) {
         name,
         // Absent stays absent: an empty sessionId is not a session.
         ...(session ? { sessionId: session } : {}),
+        // THE WORDS GO ON THE TRACE TOO, not only on the generation nested inside it. Langfuse
+        // renders a trace's OWN input/output in the trace list and header — the generation carried
+        // both and the trace carried neither, so every row read as empty and an operator had to
+        // open each generation to find the text. Reported live 2026-09-04, pipeline-tests-18, on
+        // traces that were otherwise landing correctly and grouped into their session.
+        //
+        // Spread conditionally, so a call with nothing captured leaves these ABSENT rather than
+        // empty-stringed: absent reads as "nothing was recorded", "" reads as "the model was sent
+        // nothing", and those are different claims.
+        ...(f.input === undefined || f.input === null ? {} : { input: f.input }),
+        ...(f.output === undefined || f.output === null ? {} : { output: f.output }),
         userId: f.storyId || undefined,
         metadata: {
           phase: f.phase || '',

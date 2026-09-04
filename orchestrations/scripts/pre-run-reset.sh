@@ -296,6 +296,17 @@ for f in "${CLEARABLE_LOGS[@]}"; do
     cp "$fp" "$ARCHIVE_DIR/$f"
     : > "$fp"
     ARCHIVED=$((ARCHIVED+1))
+  else
+    # THIS LOOP USED TO ONLY TRUNCATE — a file that had never been created (a genuinely fresh
+    # project, or one that has simply never had a self-heal event) stayed ABSENT, not empty. That
+    # distinction was invisible to a human ("healing-events.jsonl is empty/absent — clean slate"
+    # treats them the same) but not to nginx: agent-monitor serves LOG_DIR at /logs-dir, and a
+    # request for a path that was never written gets a 404, not an empty 200 — which
+    # preflight-check.sh's own next check (`curl -sf .../logs/healing-events.jsonl`) treats as a
+    # hard failure and refuses to launch. Confirmed live 2026-09-04, pipeline-tests-9's first-ever
+    # clean run to reach this exact point: every earlier run had failed at an EARLIER gate, which
+    # is exactly why a truly-fresh-install file had never been requested through nginx before.
+    : > "$fp"
   fi
 done
 

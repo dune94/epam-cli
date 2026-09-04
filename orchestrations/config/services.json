@@ -4,16 +4,19 @@
     "dashboard": {
       "url": "http://localhost:8092",
       "env": "EPAM_DASHBOARD_URL",
+      "stateVar": "OBS_DASHBOARD_PORT",
       "description": "agent-monitor dashboard (nginx container serving live run logs)"
     },
     "langfuse": {
       "url": "http://localhost:3100",
       "env": "LANGFUSE_BASE_URL",
+      "stateVar": "OBS_LANGFUSE_PORT",
       "description": "LLM tracing — the observability preflight aborts a run when this is not serving"
     },
     "grafana": {
       "url": "http://localhost:3001",
       "env": "EPAM_GRAFANA_URL",
+      "stateVar": "OBS_GRAFANA_PORT",
       "description": "metrics dashboards — also checked by the observability preflight"
     },
     "storyApi": {

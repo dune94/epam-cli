@@ -173,8 +173,9 @@ EPAM CLI v1 uses a **bridge model** for provider authentication (see [DEC-005](.
 Self-hosted Langfuse captures every LLM call with full tracing:
 
 ```bash
-# Start infrastructure (includes Langfuse + ClickHouse)
-docker compose -f docker-compose.epam-cli.yml up -d
+# Start infrastructure (includes Langfuse + ClickHouse) — done automatically by
+# orchestrations-installer/install.sh (or npx amsd-pipeline); by hand instead:
+docker compose -f docker-compose.observability.yml up -d
 
 # Enable tracing in your session
 export LANGFUSE_SECRET_KEY=sk-lf-epam-dev
@@ -236,6 +237,18 @@ By default, `.mcp.json` ships with example servers disabled to avoid startup noi
 - npm
 
 ## Install
+
+No git commands, no manual clone — installs the full orchestration pipeline (self-clones, packages
+the ref, provisions docker in isolation, starts the launch dashboard):
+
+```bash
+npx amsd-pipeline --dest ~/amsd-pipeline
+```
+
+Run `npx amsd-pipeline --help` for flags (`--dest`, `--ref`, `--uninstall`, `--no-docker`, ...).
+
+Already working from a checkout of this repo, or want the CLI (`epam`) itself rather than the full
+orchestration install:
 
 ```bash
 git clone https://github.com/dune94/epam-cli.git

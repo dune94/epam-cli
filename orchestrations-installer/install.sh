@@ -257,8 +257,22 @@ if [ -n "$DEST" ]; then
         run_state_ensure_dirs "$INSTALLER_DIR/run-state-paths.json" "$DEST"
     fi
     _ok "packaged $_PKG_REF into $DEST"
+    # THE VERSION ACTUALLY INSTALLED, resolved from the ref that was packaged — never a literal.
+    # The dashboard shows this per run as the "code level", and it is the only answer an operator
+    # has to "what version is this box on". It came from EPAM_CODE_LEVEL hardcoded in
+    # launch-dashboard/.env.example and copied verbatim into every install ever made, so every
+    # install on every version reported the same frozen string.
+    _CODE_LEVEL="$(git -C "$_GIT_ROOT" describe --tags --exact-match "$_PKG_REF" 2>/dev/null \
+                   || git -C "$_GIT_ROOT" describe --tags --always "$_PKG_REF" 2>/dev/null \
+                   || printf '%s' "$_PKG_REF")"
     ROOT="$DEST"
     CONFIG="$ROOT/orchestrations/config"
+fi
+
+# AN IN-PLACE INSTALL RESOLVES ITS VERSION THE SAME WAY — from the tree it is installing, so the
+# answer is a fact about that tree rather than about how the installer was invoked.
+if [ -z "${_CODE_LEVEL:-}" ]; then
+    _CODE_LEVEL="$(git -C "$ROOT" describe --tags --always 2>/dev/null || printf 'unknown')"
 fi
 
 # ── What stacks exist, and which is default? Read, never listed here. ────────
@@ -694,6 +708,23 @@ LAUNCH_HEALTH_TRIES="${EPAM_LAUNCH_HEALTH_TRIES:-30}"
 LAUNCH_HEALTH_INTERVAL="${EPAM_LAUNCH_HEALTH_INTERVAL:-1}"
 LAUNCH_STATUS=absent
 
+# THE CODE LEVEL IS STAMPED WHETHER OR NOT DOCKER IS IN PLAY, and on EVERY install — it is a fact
+# about this tree, not a setting and not a property of the dashboard stack. Stamped before the
+# docker branch below so --no-docker installs are labelled correctly too, and re-stamped every
+# time because the normal way an operator seeds launch-dashboard/.env is copying it forward from
+# their previous install, which carries that install's version with it.
+_stamp_code_level() {
+    local _f="$1"
+    [ -f "$_f" ] || return 0
+    if grep -q '^EPAM_CODE_LEVEL=' "$_f"; then
+        local _t; _t="$(mktemp)"
+        sed "s|^EPAM_CODE_LEVEL=.*|EPAM_CODE_LEVEL=${_CODE_LEVEL}|" "$_f" > "$_t" && mv "$_t" "$_f"
+    else
+        printf '\nEPAM_CODE_LEVEL=%s\n' "$_CODE_LEVEL" >> "$_f"
+    fi
+}
+_stamp_code_level "$LAUNCH_DIR/.env"
+
 if [ ! -f "$LAUNCH_COMPOSE" ]; then
     _ok "not present in this tree — nothing to provision"
 elif [ "$USE_DOCKER" = "no" ]; then
@@ -732,6 +763,7 @@ else
             else
                 printf '\nLAUNCH_PASSWORD=%s\n' "$_DEFAULT_LAUNCH_PW" >> "$LAUNCH_DIR/.env"
             fi
+            _stamp_code_level "$LAUNCH_DIR/.env"
             _ok "launch-dashboard/.env created with the default LAUNCH_PASSWORD"
             printf '      LAUNCH_PASSWORD: %s\n' "$_DEFAULT_LAUNCH_PW"
             printf '      CHANGE THIS after your first login — it is the same on every fresh install.\n'
@@ -864,9 +896,36 @@ if [ "$CHECK_ONLY" = "0" ]; then
   "project": "${EPAM_PROJECT:-}",
   "installedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "installRoot": "${ROOT}",
+  "version": "${_CODE_LEVEL}",
   "launchDashboard": "${LAUNCH_STATUS}"
 }
 MANIFEST
+fi
+
+# ── Post-install health check — PROVE IT, do not just report having done it ──
+#
+# An installer that finishes its own steps and declares "ready" is reporting on ITSELF. Every
+# operator-facing breakage on 2026-09-04 got past exactly that: the install did each step correctly
+# and said ready, while the dashboard served 404 for /prd.json, Langfuse was probed on the wrong
+# port, and a daemon held credentials nobody had filled in. A human opening a browser was the test.
+#
+# pipeline-health.sh already asks the RIGHT question — "can an operator launch a run from here,
+# right now" — and probes the real endpoints. Running it here makes that the last word of every
+# install, which is what the operator asked for: "why can't pipeline-health be used to detect all of
+# these issues ... a post-install step to check pipeline health is best practice."
+#
+# ADVISORY, NOT FATAL. It reports on things an install legitimately cannot settle (no PRD ingested
+# yet, an optional service nobody runs), so its verdict is surfaced and the install's own FAILED
+# state is left to stand on its own. Skipped for --check (which IS a verification already) and when
+# the install has already failed, where a second wall of red helps nobody.
+if [ "$CHECK_ONLY" != "1" ] && [ "$FAILED" != "1" ] && [ -f "$INSTALLER_DIR/pipeline-health.sh" ]; then
+    _head "Post-install health check"
+    if bash "$INSTALLER_DIR/pipeline-health.sh" 2>&1 | sed 's/^/  /'; then
+        _ok "health check passed"
+    else
+        _warn "health check reported problems above — the install itself completed, but this machine is not ready to launch"
+        _warn "re-run it any time: bash orchestrations-installer/pipeline-health.sh"
+    fi
 fi
 
 _head "Result"

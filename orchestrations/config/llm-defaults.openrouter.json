@@ -1,6 +1,6 @@
 {
-  "$comment": "THE OPENROUTER/MINIMAX PROVIDER SET. Set-SPECIFIC declarations only — which models, which ladders, which runner. Set-INDEPENDENT budgets (effortTiers, roleOverrides, outputTokenFloors) stay in llm-defaults.json and are shared by every set, so swapping providers never changes how much budget a tier gets.",
-  "$provenance": "ladders, ladderTierOrder and modelOverrides were MOVED VERBATIM from projects/metrolinx/llm-settings.json on 2026-08-25 — generated from that file, not retyped. metrolinx is the live client codeline, so its chain is the one the openrouter stack keeps. mock3, hello-dolly and skyscanner previously topped out at glm-5.2/5.1 and now inherit glm-5.3: a deliberate convergence, recorded here rather than discovered later.",
+  "$comment": "THE OPENROUTER/MINIMAX PROVIDER SET. Set-SPECIFIC declarations only \u2014 which models, which ladders, which runner. Set-INDEPENDENT budgets (effortTiers, roleOverrides, outputTokenFloors) stay in llm-defaults.json and are shared by every set, so swapping providers never changes how much budget a tier gets.",
+  "$provenance": "ladders, ladderTierOrder and modelOverrides were MOVED VERBATIM from projects/metrolinx/llm-settings.json on 2026-08-25 \u2014 generated from that file, not retyped. metrolinx is the live client codeline, so its chain is the one the openrouter stack keeps. mock3, hello-dolly and skyscanner previously topped out at glm-5.2/5.1 and now inherit glm-5.3: a deliberate convergence, recorded here rather than discovered later.",
   "ladderTierOrder": [
     "medium",
     "high",
@@ -76,7 +76,7 @@
         }
       ],
       "startModel": "MiniMax-M2.7-highspeed",
-      "_why": "M2.5 is legacy. M2.7 scores materially higher on multi-file and long-horizon work (NL2Repo 26.6 -> 39.8, MLE Bench Lite +15pts) and the -highspeed variant is documented as producing IDENTICAL results, only faster — so it is a free latency win, not a quality trade. The chain ends at glm-5.3 rather than 5.2 because 5.3's gains concentrate in agent-shaped tasks, which is what a seam that has already escalated twice is struggling with."
+      "_why": "M2.5 is legacy. M2.7 scores materially higher on multi-file and long-horizon work (NL2Repo 26.6 -> 39.8, MLE Bench Lite +15pts) and the -highspeed variant is documented as producing IDENTICAL results, only faster \u2014 so it is a free latency win, not a quality trade. The chain ends at glm-5.3 rather than 5.2 because 5.3's gains concentrate in agent-shaped tasks, which is what a seam that has already escalated twice is struggling with."
     },
     "highest": {
       "modelLadder": [
@@ -122,7 +122,7 @@
         }
       ],
       "startModel": "z-ai/glm-5.3",
-      "_why": "glm-5.3 shares 5.2's base model; every gain is post-training on executable environments and long-horizon tasks — Terminal-Bench 3.0 4.6 -> 28.3, DeepSWE 46.2 -> 66.9, SWE-Marathon 19.4 -> 42.5. It also reaches a higher score with ~22% FEWER output tokens on hard work, which offsets most of the 45% higher per-token price. All vendor-reported: no independent reproduction exists yet."
+      "_why": "glm-5.3 shares 5.2's base model; every gain is post-training on executable environments and long-horizon tasks \u2014 Terminal-Bench 3.0 4.6 -> 28.3, DeepSWE 46.2 -> 66.9, SWE-Marathon 19.4 -> 42.5. It also reaches a higher score with ~22% FEWER output tokens on hard work, which offsets most of the 45% higher per-token price. All vendor-reported: no independent reproduction exists yet."
     }
   },
   "modelOverrides": {
@@ -190,7 +190,7 @@
     "minimax-m2.7": {
       "matchOn": "model",
       "matchSubstring": "MiniMax-M2.7",
-      "_why": "Replaces MiniMax-M2.5 as the medium tier's start. maxIterations is 90, not M2.5's 45: 45 was the outlier in this file (M3 120, glm 120, kimi-k3 150) and M2.7's advantage is precisely on the long-horizon work that needs room to converge — capping the stronger model at the weaker one's budget would throw the upgrade away. autoCompressAt is 150000 against a 204800 context: compaction destroys the cacheable prefix, so it must be an overflow guard near the ceiling, never a token-saving device. Substring is 'MiniMax-M2.7' so it matches the -highspeed variant too.",
+      "_why": "Replaces MiniMax-M2.5 as the medium tier's start. maxIterations is 90, not M2.5's 45: 45 was the outlier in this file (M3 120, glm 120, kimi-k3 150) and M2.7's advantage is precisely on the long-horizon work that needs room to converge \u2014 capping the stronger model at the weaker one's budget would throw the upgrade away. autoCompressAt is 150000 against a 204800 context: compaction destroys the cacheable prefix, so it must be an overflow guard near the ceiling, never a token-saving device. Substring is 'MiniMax-M2.7' so it matches the -highspeed variant too.",
       "reasoningEffort": "medium",
       "maxIterations": 90,
       "autoCompressAt": 150000,
@@ -203,7 +203,7 @@
     "glm-5.3": {
       "matchOn": "model",
       "matchSubstring": "glm-5.3",
-      "_why": "Mirrors glm-5.2's sampling (same base model, so temperature/topP carry over) with more iteration room at 150, because this is now the highest tier's start and has only ONE rung above it. autoCompressAt raised to 300000 against a 1048576 context — 5.2's 180000 was conservative and every compaction destroys the cache. providerOrder is Z.AI because OpenRouter lists exactly one endpoint for this model; copying 5.2's CoreWeave pin would have failed every call.",
+      "_why": "Mirrors glm-5.2's sampling (same base model, so temperature/topP carry over) with more iteration room at 150, because this is now the highest tier's start and has only ONE rung above it. autoCompressAt raised to 300000 against a 1048576 context \u2014 5.2's 180000 was conservative and every compaction destroys the cache. providerOrder is Z.AI because OpenRouter lists exactly one endpoint for this model; copying 5.2's CoreWeave pin would have failed every call.",
       "reasoningEffort": "high",
       "maxIterations": 150,
       "autoCompressAt": 300000,
@@ -214,7 +214,7 @@
       ],
       "charsPerToken": 4
     },
-    "$miniTierWhy": "miniTier marks the cheap, fast rung — the models that are quick but limited in generation capacity. It was decided in engine code by sniffing vendor naming habits (-mini, -flash, -haiku, minimax-m2), which breaks in both directions: a cheap model named differently read as capable, and a capable model containing -flash read as cheap. The set that declares the model declares its tier.",
+    "$miniTierWhy": "miniTier marks the cheap, fast rung \u2014 the models that are quick but limited in generation capacity. It was decided in engine code by sniffing vendor naming habits (-mini, -flash, -haiku, minimax-m2), which breaks in both directions: a cheap model named differently read as capable, and a capable model containing -flash read as cheap. The set that declares the model declares its tier.",
     "$whyCharsPerToken": "INPUT CAPACITY IN CHARACTERS. autoCompressAt is the models input ceiling in TOKENS; callers that must size a payload measure it in characters. The ratio belongs with the model, because it is a property of that models tokenizer, not of any caller. Declared so a caller derives its budget instead of inventing one: the roster review carried a literal 60000 in code, which split a 276KB roster into six calls and failed the whole review whenever any one of them answered off-schema."
   },
   "runners": {
@@ -226,14 +226,16 @@
         "--effort": "reasoningEffort",
         "--autocompact": "autoCompressAt"
       },
-      "$whyNoUnsetEnv": "Deliberately empty. Scrubbing ANTHROPIC_API_KEY sends Claude Code to the OAuth credentials on disk and bills for real — recorded in seam-the-subscription-pays-not-the-api-key. This stack authenticates with OPENROUTER_API_KEY and has no reason to take anything away.",
-      "unsetEnv": []
+      "$whyNoUnsetEnv": "Deliberately empty. Scrubbing ANTHROPIC_API_KEY sends Claude Code to the OAuth credentials on disk and bills for real \u2014 recorded in seam-the-subscription-pays-not-the-api-key. This stack authenticates with OPENROUTER_API_KEY and has no reason to take anything away.",
+      "unsetEnv": [],
+      "emitsTraces": false,
+      "$emitsTraces": "Whether model calls made through this runner reach Langfuse. Traces are written by wrapWithTracing (src/observability/TracedProvider.ts), which only runs inside the epam CLI. A runner that shells out to a vendor CLI (claude, codemie-claude) never reaches it, so the observability preflight must not demand Langfuse for it \u2014 gating a run on a service nothing writes to aborts healthy launches (live 2026-09-04)."
     }
   },
   "$whyRunners": "THE SWAP MUST NOT INHERIT THE PREVIOUS STACK'S RUNNER. apply_runner_settings is called with the BASENAME of CLAUDE_CMD, which is 'claude' under every set, so a set declaring no runner by that name resolves nothing and the flags, env and scrubs of whatever ran before are simply carried over. claude, codemie and mockserver each declared one; this set did not, which made hot swap 2 the one stack that silently kept another stack's settings.",
   "finalFallback": {
-    "$why": "Applies after ladder exhaustion. The other 3 sets (claude, codemie, mockserver) all declare one; this set previously did not, an undocumented inconsistency (change-log/SEAM-CONSISTENCY-ANALYSIS.md Section 6). Routed WITHIN this set rather than escaping to paid claude: unlike mockserver (which is a no-pay mock endpoint by construction regardless of the provider string it declares — see its own finalFallback.$why), this is the live production openrouter/minimax stack, where a provider:\"claude\" fallback would be a real, unnoticed charge on a different vendor's account. MiniMax-M3 is chosen because it is a genuinely different model family from the top rung of every ladder here (high and highest both top out at moonshotai/kimi-k3, medium at z-ai/glm-5.3), so it is a real second answer rather than a retry of the model that just failed — mirroring the claude/codemie sets' own stated reasoning for choosing sonnet-5 over their own top rungs.",
-    "$whyNotYetLive": "As of this writing, nothing in the runtime ladder-exhaustion path (llm-handler.sh, claude.sh, brownfield-repro-test-writer.sh) reads finalFallback — exhaustion retries the same rung instead. agent-check.js's dry-run cost estimator is the only reader, and even there this is unreachable while any ladder tier has a startModel (all of them do). Declared for correctness and for whenever that wiring exists, not because a run can reach this today.",
+    "$why": "Applies after ladder exhaustion. The other 3 sets (claude, codemie, mockserver) all declare one; this set previously did not, an undocumented inconsistency (change-log/SEAM-CONSISTENCY-ANALYSIS.md Section 6). Routed WITHIN this set rather than escaping to paid claude: unlike mockserver (which is a no-pay mock endpoint by construction regardless of the provider string it declares \u2014 see its own finalFallback.$why), this is the live production openrouter/minimax stack, where a provider:\"claude\" fallback would be a real, unnoticed charge on a different vendor's account. MiniMax-M3 is chosen because it is a genuinely different model family from the top rung of every ladder here (high and highest both top out at moonshotai/kimi-k3, medium at z-ai/glm-5.3), so it is a real second answer rather than a retry of the model that just failed \u2014 mirroring the claude/codemie sets' own stated reasoning for choosing sonnet-5 over their own top rungs.",
+    "$whyNotYetLive": "As of this writing, nothing in the runtime ladder-exhaustion path (llm-handler.sh, claude.sh, brownfield-repro-test-writer.sh) reads finalFallback \u2014 exhaustion retries the same rung instead. agent-check.js's dry-run cost estimator is the only reader, and even there this is unreachable while any ladder tier has a startModel (all of them do). Declared for correctness and for whenever that wiring exists, not because a run can reach this today.",
     "model": "MiniMax-M3",
     "provider": "openrouter"
   }

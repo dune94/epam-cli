@@ -63,6 +63,12 @@ function fixtureRepo() {
   // A REAL pipeline file at the ROOT, sibling to (not inside) orchestrations-installer/ — this is
   // exactly what the subdirectory-scoping bug silently dropped.
   fs.writeFileSync(path.join(dir, 'a-real-pipeline-file.txt'), 'this must survive packaging\n');
+  // A launch-dashboard/.env carrying a STALE code level — exactly how a real one arrives: the
+  // template ships a literal, and an operator seeds a new install by copying the file forward from
+  // their last one, bringing that install's version with it.
+  fs.mkdirSync(path.join(dir, 'launch-dashboard'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'launch-dashboard/.env'),
+    'LAUNCH_PASSWORD=test\nEPAM_CODE_LEVEL=some-previous-version\n');
 
   git(dir, ['add', '-A']);
   git(dir, ['commit', '-q', '-m', 'initial']);
@@ -255,6 +261,59 @@ describe('install.sh --dest packages a ref into a NEW tree', () => {
       'a brand-new project\'s config.env was never extracted at all').toBe(true);
     expect(fs.readFileSync(path.join(dest, 'orchestrations/projects/newproj/config.env'), 'utf8'))
       .toContain('/newproj/default');
+  });
+
+  it('THE CODE LEVEL IS THE VERSION ACTUALLY INSTALLED — never a literal carried in the template', () => {
+    // The dashboard shows a "code level" per run, and it is the operator's only answer to "what
+    // version is this box on". It came from EPAM_CODE_LEVEL, hardcoded as "v1.6" in
+    // launch-dashboard/.env.example and copied verbatim into every install ever made since —
+    // so every install, on every version, reported v1.6. Reported by the operator repeatedly
+    // ("for the 10th time - the ui says v.1.6"), across installs that were v1.13 through v1.20.
+    //
+    // It is a FACT ABOUT THE INSTALL, not an operator setting: it must be the ref that was
+    // actually packaged, and it must be re-stamped on every install, because an existing .env
+    // (copied forward from a previous install, which is the normal way an operator seeds one)
+    // carries the previous answer.
+    // THE EXPECTATION IS DERIVED FROM THE REF WE INSTALLED, never re-typed: a literal here would
+    // pass just as happily against a value the installer invented.
+    const repo = fixtureRepo();
+    const ref = 'v1.0-test';
+    const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'installer-codelevel-'));
+    run(repo, ['--dest', dest, '--ref', ref, '--no-docker']);
+
+    const ldEnv = path.join(dest, 'launch-dashboard/.env');
+    expect(fs.existsSync(ldEnv), 'no launch-dashboard/.env was created').toBe(true);
+    const body = fs.readFileSync(ldEnv, 'utf8');
+    const line = (body.match(/^EPAM_CODE_LEVEL=.*$/m) ?? [''])[0];
+    expect(line, `EPAM_CODE_LEVEL does not name the installed ref:\n${body}`).toBe(`EPAM_CODE_LEVEL=${ref}`);
+    expect(body.match(/^EPAM_CODE_LEVEL=/gm)?.length, 'duplicate EPAM_CODE_LEVEL keys').toBe(1);
+  });
+
+  it('re-installing a DIFFERENT ref re-stamps the code level — a seeded .env does not pin it forever', () => {
+    // The exact live shape: an operator seeds launch-dashboard/.env by copying it from their last
+    // install (documented as the supported flow), so it arrives carrying that install's version.
+    const repo = fixtureRepo();
+    const firstRef = 'v1.0-test';
+    const secondRef = 'v2.0-test';
+    const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'installer-codelevel-restamp-'));
+    run(repo, ['--dest', dest, '--ref', firstRef, '--no-docker']);
+    addSecondVersion(repo);
+    run(repo, ['--dest', dest, '--ref', secondRef, '--no-docker']);
+
+    const body = fs.readFileSync(path.join(dest, 'launch-dashboard/.env'), 'utf8');
+    expect((body.match(/^EPAM_CODE_LEVEL=.*$/m) ?? [''])[0],
+      'the second install still reports the first install\'s version')
+      .toBe(`EPAM_CODE_LEVEL=${secondRef}`);
+  });
+
+  it('the install manifest records the version too — "what is this box on" must be answerable without guessing', () => {
+    const repo = fixtureRepo();
+    const ref = 'v1.0-test';
+    const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'installer-manifest-version-'));
+    run(repo, ['--dest', dest, '--ref', ref, '--no-docker']);
+    const manifest = JSON.parse(fs.readFileSync(path.join(dest, 'install-manifest.json'), 'utf8'));
+    expect(manifest.version, `install-manifest.json records no version:\n${JSON.stringify(manifest, null, 2)}`)
+      .toBe(ref);
   });
 
   it('a FRESH install creates orchestrations/logs and orchestrations/agents/kb even though they are excluded from extraction', () => {

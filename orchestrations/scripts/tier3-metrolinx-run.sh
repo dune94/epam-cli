@@ -472,7 +472,35 @@ echo ""
 # Grafana answers 302 (redirect to login) when healthy, so any 2xx/3xx passes.
 # Fails LOUD and aborts: discovering this mid-run is exactly what happened.
 # OBSERVABILITY_PREFLIGHT=0 to bypass deliberately.
-if [ "${OBSERVABILITY_PREFLIGHT:-1}" = "1" ]; then
+# ONLY GATE ON WHAT THIS STACK CAN ACTUALLY PRODUCE.
+#
+# Langfuse traces are written by wrapWithTracing (src/observability/TracedProvider.ts), which only
+# runs inside the epam CLI. Every declared runner shells out to a vendor CLI (claude,
+# codemie-claude) instead, so none of them reach that code and none can emit a trace — no matter
+# how Langfuse is configured. This gate demanded Langfuse anyway and aborted the launch "before any
+# spend" over a service nothing writes to. Live 2026-09-04: healthy runs refused on a healthy
+# install, and Langfuse showing no traces afterwards was the CORRECT behaviour of the stack, not a
+# fault to chase.
+#
+# DECLARED, NOT INFERRED: each runner in llm-defaults.<set>.json carries emitsTraces. A runner that
+# does route through the epam CLI sets it true and gets the gate back, with no edit here.
+_traces_expected=0
+if [ -f "$CONFIG_DIR/provider-sets.json" ] 2>/dev/null || [ -n "${ORCH_CONFIG_DIR:-}" ]; then :; fi
+_traces_expected="$("$NODE_BIN" -e '
+  const fs = require("fs"), path = require("path");
+  try {
+    const reg = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    const set = reg.sets[process.argv[2]];
+    if (!set) { process.stdout.write("0"); process.exit(0); }
+    const s = JSON.parse(fs.readFileSync(path.join(path.dirname(process.argv[1]), set.settingsFile), "utf8"));
+    const any = Object.values(s.runners || {}).some((r) => r && r.emitsTraces === true);
+    process.stdout.write(any ? "1" : "0");
+  } catch { process.stdout.write("0"); }
+' "$SCRIPT_DIR/../config/provider-sets.json" "${EPAM_PROVIDER_SET:-}" 2>/dev/null || echo 0)"
+
+if [ "${OBSERVABILITY_PREFLIGHT:-1}" = "1" ] && [ "$_traces_expected" != "1" ]; then
+  info "Observability preflight: skipped — the '${EPAM_PROVIDER_SET:-default}' stack's runner does not emit Langfuse traces (declared: emitsTraces=false), so there is nothing for Langfuse to receive."
+elif [ "${OBSERVABILITY_PREFLIGHT:-1}" = "1" ]; then
   info "Observability preflight: verifying Langfuse and Grafana are serving..."
   _obs_failed=""
   _obs_check() {

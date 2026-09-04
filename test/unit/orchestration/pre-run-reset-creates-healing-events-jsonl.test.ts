@@ -75,3 +75,48 @@ describe('pre-run-reset.sh guarantees healing-events.jsonl EXISTS after every re
     }
   });
 });
+
+/**
+ * /prd-dir MUST BE MOUNTED EVEN WHEN THE PRD DOES NOT EXIST YET.
+ *
+ * On a fresh install the PRD does not exist when pre-run-reset.sh runs — ingest writes it minutes
+ * LATER, during the same run. Conditioning the mount on the file already being there meant it was
+ * skipped, nothing re-mounted afterwards, and nginx served 404 for /prd.json for the whole run:
+ * the dashboard read "data offline" against a perfectly healthy run (live 2026-09-04,
+ * pipeline-tests-13, monitor.html).
+ *
+ * A DIRECTORY mount is exactly what makes this work — a file appearing inside one is visible
+ * immediately, with no container restart. That is already why this is a directory mount and not a
+ * file mount; the PRD's parent directory is knowable from --prd whether or not the file is there.
+ */
+describe('the compose override mounts /prd-dir whether or not the PRD exists yet', () => {
+  function overrideAfterReset(opts: { withPrd: boolean }) {
+    const logDir = mkdtempSync(join(tmpdir(), 'prr-prddir-logs-'));
+    dirs.push(logDir);
+    const prdDir = mkdtempSync(join(tmpdir(), 'prr-prddir-'));
+    dirs.push(prdDir);
+    const prd = join(prdDir, 'prd.json');
+    if (opts.withPrd) writeFileSync(prd, JSON.stringify({ stories: [] }));
+    const overrideDir = mkdtempSync(join(tmpdir(), 'prr-prddir-ovr-'));
+    dirs.push(overrideDir);
+    const override = join(overrideDir, 'override.yml');
+    execFileSync('bash', [RESET, '--prd', prd, '--log-dir', logDir], {
+      encoding: 'utf8',
+      env: { ...process.env, EPAM_SKIP_CONTAINER_RESTART: '1', COMPOSE_OVERRIDE: override },
+    });
+    return { body: readFileSync(override, 'utf8'), prdDir, logDir };
+  }
+
+  it('mounts /prd-dir when the PRD is absent — ingest writes it into the mounted directory mid-run', () => {
+    const { body, prdDir, logDir } = overrideAfterReset({ withPrd: false });
+    expect(body, `/prd-dir was not mounted, so /prd.json 404s all run:\n${body}`)
+      .toContain(`${prdDir}:/prd-dir:ro`);
+    expect(body).toContain(`${logDir}:/logs-dir:ro`);
+  });
+
+  it('mounts both when the PRD is present — unchanged behaviour', () => {
+    const { body, prdDir, logDir } = overrideAfterReset({ withPrd: true });
+    expect(body).toContain(`${prdDir}:/prd-dir:ro`);
+    expect(body).toContain(`${logDir}:/logs-dir:ro`);
+  });
+});

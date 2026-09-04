@@ -279,6 +279,111 @@ if [ -f "$ROOT/orchestrations/scripts/snapshot-watch.js" ]; then
     fi
 fi
 
+# ── Service endpoints — PROBED, not assumed from a container being "Up" ────
+#
+# THIS IS THE WHOLE POINT OF A HEALTH CHECK, and it was the missing half: this script proved the
+# DAEMONS were alive and never asked whether the services they exist to serve actually answer. Three
+# separate operator-facing breakages got through it in one day, each found by a human opening a
+# browser: the dashboard serving 404 for /prd.json ("data offline"), Langfuse and Grafana probed on
+# the wrong ports, and nginx unable to serve /logs/*. Every one is a single curl.
+#
+# THE LIST IS DERIVED FROM config/services.json, NEVER NAMED HERE. A service added there tomorrow
+# is probed tomorrow, rather than whenever someone remembers this file — the same rule the rest of
+# this pipeline is held to. Endpoints resolve through service_url(), so an ISOLATED install is
+# probed on the ports IT actually got; a literal would pass against a service nobody is using.
+#
+# REQUIRED vs OPTIONAL is derived too, not guessed: a service that declares a stateVar is one this
+# install allocates a port for — it is part of the stack and must answer. One without is external
+# (a story API, a graph browser someone may or may not run) and is reported, never failed.
+_head "Service endpoints"
+_SVC_LIB="$ROOT/orchestrations/scripts/lib/service-urls.sh"
+_SVC_CFG="$CONFIG/services.json"
+if [ ! -f "$_SVC_LIB" ] || [ ! -f "$_SVC_CFG" ]; then
+    _warn "no service registry in this tree — cannot probe endpoints"
+else
+    # shellcheck source=/dev/null
+    . "$_SVC_LIB"
+
+    # Does THIS stack's runner emit Langfuse traces? Declared per runner (emitsTraces), because
+    # traces are written by wrapWithTracing inside the epam CLI and a runner that shells out to a
+    # vendor CLI never reaches it. Used below to decide whether a trace sink being down is a
+    # failure or simply irrelevant here.
+    _EMITS="$("$NODE_BIN" -e '
+      const fs = require("fs"), path = require("path");
+      try {
+        const reg = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+        const set = reg.sets[process.argv[2]];
+        if (!set) { process.stdout.write("0"); process.exit(0); }
+        const s = JSON.parse(fs.readFileSync(path.join(path.dirname(process.argv[1]), set.settingsFile), "utf8"));
+        process.stdout.write(Object.values(s.runners || {}).some((r) => r && r.emitsTraces === true) ? "1" : "0");
+      } catch { process.stdout.write("0"); }
+    ' "$CONFIG/provider-sets.json" "${STACK:-}" 2>/dev/null || echo 0)"
+
+    _probe_code() {
+        curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$1" 2>/dev/null || echo 000
+    }
+
+    # name<TAB>required<TAB>tracesink — every declared service, in declaration order.
+    while IFS="$(printf '\t')" read -r _svc _required _tracesink; do
+        [ -n "$_svc" ] || continue
+        _url="$(service_url "$_svc" 2>/dev/null || true)"
+        if [ -z "$_url" ]; then
+            _warn "$_svc: declared in services.json but no endpoint resolved"
+            continue
+        fi
+        _code="$(_probe_code "$_url")"
+        case "$_code" in
+            2??|3??) _ok "$_svc: serving (HTTP $_code) — $_url" ;;
+            *)
+                if [ "$_tracesink" = "1" ] && [ "$_EMITS" != "1" ]; then
+                    _warn "$_svc: not serving at $_url — not required here, the '$STACK' stack's runner emits no traces"
+                elif [ "$_required" = "1" ]; then
+                    _bad "$_svc: NOT serving (HTTP $_code) at $_url — this install allocates a port for it, so it is part of the stack"
+                    _fix "bash orchestrations-installer/install.sh --dest \"$ROOT\"   # the installer owns the restarts"
+                else
+                    _warn "$_svc: not serving at $_url — optional (this install allocates no port for it)"
+                fi ;;
+        esac
+    done <<EOF
+$("$NODE_BIN" -e '
+  const fs = require("fs");
+  const j = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+  for (const [name, svc] of Object.entries(j.services || {})) {
+    const required = svc.stateVar ? "1" : "0";
+    // A trace sink is identified by the env var it declares, not by its name — the same value
+    // TracedProvider itself reads. Nothing here spells a service name.
+    const traceSink = /^LANGFUSE_/.test(String(svc.env || "")) ? "1" : "0";
+    process.stdout.write([name, required, traceSink].join("\t") + "\n");
+  }
+' "$_SVC_CFG" 2>/dev/null)
+EOF
+
+    # THE MOUNTS, NOT JUST THE SERVER. A dashboard answering on / proves the container is up; it
+    # says nothing about whether this run's PRD and log directories are mounted INTO it, which is
+    # what every panel actually reads. Both were broken while / returned 200 — "data offline" on a
+    # healthy install. Derived from the same registry entry, never a second URL literal.
+    _DASH_URL="$(service_url dashboard 2>/dev/null || true)"
+    if [ -n "$_DASH_URL" ]; then
+        _lc="$(_probe_code "$_DASH_URL/logs/agent-status.json")"
+        case "$_lc" in
+            2??|3??) _ok "dashboard /logs mount: serving (HTTP $_lc)" ;;
+            *) _bad "dashboard /logs mount: NOT serving (HTTP $_lc) — agent-activity.html and health.html have nothing to read"
+               _fix "bash orchestrations/scripts/pre-run-reset.sh --prd <prd> --log-dir <dir>" ;;
+        esac
+        _pc="$(_probe_code "$_DASH_URL/prd.json")"
+        case "$_pc" in
+            2??|3??) _ok "dashboard /prd.json: serving (HTTP $_pc)" ;;
+            404)     _warn "dashboard /prd.json: 404 — no PRD ingested yet (normal before the first run); dashboards read 'data offline' until one exists" ;;
+            *)       _bad "dashboard /prd.json: NOT serving (HTTP $_pc) — the /prd-dir mount is wrong, every dashboard shows 'data offline'"
+                     _fix "bash orchestrations-installer/install.sh --dest \"$ROOT\"" ;;
+        esac
+    fi
+
+    if [ "$_EMITS" != "1" ]; then
+        _warn "langfuse will stay EMPTY on the '$STACK' stack BY DESIGN — its runner shells out to a vendor CLI and never reaches the tracing layer (declared: emitsTraces=false)"
+    fi
+fi
+
 # ── epam shim ────────────────────────────────────────────────────────────
 _head "epam command"
 _SHIM="$HOME/.local/bin/epam"

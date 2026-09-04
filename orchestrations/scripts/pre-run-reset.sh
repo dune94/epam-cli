@@ -49,6 +49,20 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # a port, instead of the 20+ copies these URLs used to have across the pipeline.
 . "$(dirname "${BASH_SOURCE[0]}")/lib/service-urls.sh"
 
+# THE SAME PROJECT NAME install.sh ACTUALLY USED, never compose's own default resolution.
+# install.sh (lib/isolated-compose-identity.sh) brings a TEST install's observability stack up as
+# "test-install-amsd-pipeline-obs-<hash>" — a project name this script's own restart command never
+# knew about until now, so it resolved to whatever compose falls back to with no -p (the compose
+# file's declared `name:`, or the directory basename) and silently restarted the WRONG project's
+# agent-monitor — for any install other than the hand-run dev checkout, always. Found live
+# 2026-09-04: every real run against a fresh install hard-failed pre-flight on
+# "nginx /logs/healing-events.jsonl not reachable", because the container that actually got
+# recreated was never the one the run's own dashboard/log mounts point at.
+_identity_lib="$REPO_ROOT/orchestrations-installer/lib/isolated-compose-identity.sh"
+# shellcheck source=/dev/null
+[ -f "$_identity_lib" ] && . "$_identity_lib" || { echo "[pre-run-reset] missing $_identity_lib — cannot resolve the observability project name" >&2; exit 1; }
+OBS_PROJECT="$(isolated_project_name "$REPO_ROOT" obs)"
+
 COMPOSE_BASE="$REPO_ROOT/docker-compose.observability.yml"
 # B29: overridable so a TEST can point this at a throwaway path. Hardcoding it
 # meant any test invoking this script rewrote the repo's own git-tracked override
@@ -199,6 +213,7 @@ if [ "${EPAM_SKIP_CONTAINER_RESTART:-0}" = "1" ]; then
 elif docker compose \
      -f "$COMPOSE_BASE" \
      -f "$COMPOSE_OVERRIDE" \
+     -p "$OBS_PROJECT" \
      up -d --force-recreate agent-monitor 2>/dev/null; then
   success "agent-monitor restarted → /prd-dir = $PRD_DIR (serving $PRD_BASENAME), /logs-dir = $LOG_DIR"
 else

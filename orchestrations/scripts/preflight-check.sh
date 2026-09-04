@@ -133,6 +133,13 @@ fi
 echo "[ PRD integrity ]"
 if [[ -z "$PRD_FILE" ]]; then
   fail "No --prd specified (required for integrity gate)"
+elif [[ ! -f "$PRD_FILE" ]] && { [[ "$_prd_pending_ingest" == "1" ]] || [[ -n "$_codeline_root" ]]; }; then
+  # A PRD THAT DOES NOT EXIST YET IS NOT A FAILURE WHEN THE RUN CREATES IT.
+  #
+  # prd.json is REGENERATED every run (Jira ingest, or resolve-codeline-scope.sh for an authored
+  # PRD) and is no longer committed, so a fresh install legitimately has none at this point. This
+  # gate demanded the file anyway and refused every first launch on a clean install.
+  ok "no PRD on disk yet — this run creates it (ingest / scope resolution); integrity check deferred"
 elif [[ ! -f "$PRD_FILE" ]]; then
   fail "PRD not found: $PRD_FILE"
 else
@@ -191,6 +198,10 @@ fi
 echo "[ PRD file ]"
 if [[ -z "$PRD_FILE" ]]; then
   fail "No --prd specified"
+elif [[ ! -f "$PRD_FILE" ]] && { [[ "$_prd_pending_ingest" == "1" ]] || [[ -n "$_codeline_root" ]]; }; then
+  # Same reason as the integrity gate above: the run writes this file, so its absence here is the
+  # expected state of a fresh install, not a fault to refuse the launch over.
+  ok "PRD is written by this run (ingest / scope resolution) — file checks deferred"
 elif [[ ! -f "$PRD_FILE" ]]; then
   fail "PRD not found: $PRD_FILE"
 else

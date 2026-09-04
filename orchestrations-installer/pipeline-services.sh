@@ -145,6 +145,12 @@ start)
                 FAILED=1
             fi
         fi
+        # ONLY THE REHEARSAL SERVER, NAMED. `up -d` with no service starts EVERY service in the
+        # file, and this compose also holds mock-llm — a DIFFERENT mock on :4000 that no seam
+        # points at. Live 2026-09-04 it came up alongside MockServer and sat there unhealthy,
+        # which is noise an operator has to rule out. The provider set names MockServer and
+        # nothing else, so that is what --mock starts.
+        #
         # ASKED FOR EXPLICITLY (--mock). The identity comes from the state file the install
         # wrote, exactly like the two stacks above: a re-decided project name is one the next
         # --stop cannot find, and a re-decided subnet fails on a host whose docker address pools
@@ -156,7 +162,7 @@ start)
                 _bad "this install recorded no MOCK_PROJECT — refusing to invent one, because a stop could not then find what a start created. Re-run install.sh to resolve it."
                 FAILED=1
             elif (cd "$ROOT/orchestrations/mock-llm" && EPAM_MOCK_SUBNET="${MOCK_SUBNET:-}" \
-                    container_compose -f "docker-compose.yml" -p "$MOCK_PROJECT" up -d) >/dev/null 2>&1; then
+                    container_compose -f "docker-compose.yml" -p "$MOCK_PROJECT" up -d mockserver) >/dev/null 2>&1; then
                 _ok "$MOCK_PROJECT is up (subnet: ${MOCK_SUBNET:-default}) — the rehearsal server"
             else
                 _bad "failed to bring $MOCK_PROJECT up"

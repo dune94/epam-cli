@@ -126,6 +126,26 @@ describe('the installer owns the rehearsal service', () => {
       .toMatch(/EPAM_MOCK_SUBNET=172\.29\.0\.0\/16/);
   });
 
+  it('starts ONLY the rehearsal server, not every service in the file', () => {
+    // The first version of this said `up -d` with no service, which starts EVERY service in the
+    // compose file — including mock-llm, a DIFFERENT mock on :4000 that no seam points at. Live
+    // 2026-09-04 it came up beside MockServer and sat there unhealthy: noise an operator then has
+    // to rule out while diagnosing a rehearsal. The original test asserted the project and subnet
+    // and never asked WHICH service, so it passed.
+    const f = fixture();
+    writeState(f.dir);
+    const r = run(f, ['--start', '--mock']);
+    expect(r.status, `stderr: ${r.stderr}`).toBe(0);
+    const up = fs.readFileSync(f.dockerLog, 'utf8').split('\n')
+      .filter((l) => /ARGV:.*inst-mock-123456.*up\s+-d/.test(l));
+    expect(up.length, 'no up command for the mock stack was recorded').toBeGreaterThan(0);
+    expect(up.join('\n'), [
+      '--mock started the whole compose file rather than naming the rehearsal server. The provider',
+      'set points every seam at MockServer and at nothing else; mock-llm is a separate mock that',
+      'no seam uses.',
+    ].join('\n')).toMatch(/up\s+-d\s+mockserver/);
+  });
+
   it('an install with no saved mock identity says so rather than inventing one', () => {
     // Never re-decide: a guessed project name means the next stop cannot find what it started.
     const f = fixture();

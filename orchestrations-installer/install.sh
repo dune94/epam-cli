@@ -102,6 +102,13 @@ if [ "$UNINSTALL" = "1" ]; then
     if stop_runner_host "$_UN_ROOT/launch-dashboard" && [ -n "$_UN_RH_WAS_RUNNING" ]; then
         _ok "stopped runner-host (pid $_UN_RH_WAS_RUNNING)"
     fi
+    _UN_SW_PIDFILE="$_UN_ROOT/orchestrations/dashboards/.snapshot-watch.pid"
+    _UN_SW_WAS_RUNNING=""
+    [ -f "$_UN_SW_PIDFILE" ] && _UN_SW_WAS_RUNNING="$(cat "$_UN_SW_PIDFILE" 2>/dev/null)"
+    . "$INSTALLER_DIR/lib/snapshot-watch-control.sh"
+    if stop_snapshot_watch "$_UN_ROOT" && [ -n "$_UN_SW_WAS_RUNNING" ]; then
+        _ok "stopped snapshot-watch (pid $_UN_SW_WAS_RUNNING)"
+    fi
 
     . "$INSTALLER_DIR/lib/isolated-compose-identity.sh"
     if [ -f "$INSTALLER_DIR/lib/container-runtime.sh" ]; then
@@ -649,6 +656,19 @@ case "$USE_DOCKER" in
              if [ "$CHECK_ONLY" = "1" ] || compose_up; then _ok "$CONTAINER_RUNTIME is up — dashboards available"; fi
          else _warn "no container runtime is running — dashboards unavailable, THE PIPELINE STILL RUNS"; fi ;;
 esac
+
+# ── Snapshot watch: keeps agent-monitor's build-info.json fresh ─────────────
+# A HOST process, same class as runner-host.js: it writes orchestrations/dashboards/live/
+# build-info.json on the host filesystem, which agent-monitor's nginx container only reads via a
+# bind mount. Without it, a run's own pre-flight fails 3 checks every time — found live
+# 2026-09-04 against a genuinely fresh install ("snapshot-watch.js is NOT running").
+_head "Snapshot watch (keeps the dashboard's build-info.json fresh)"
+if [ "$CHECK_ONLY" != "1" ] && [ -f "$ROOT/orchestrations/scripts/snapshot-watch.js" ]; then
+    . "$INSTALLER_DIR/lib/snapshot-watch-control.sh"
+    start_snapshot_watch "$ROOT" || FAILED=1
+else
+    _ok "skipped"
+fi
 
 # ── Launch dashboard: OPTIONAL, and must be genuinely UP when it claims to be ─
 # THIS CANNOT DEPEND ON A HUMAN OR AN LLM DOING IT BY HAND. A rebuild-and-restart done manually

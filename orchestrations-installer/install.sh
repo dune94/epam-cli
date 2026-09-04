@@ -248,6 +248,14 @@ if [ -n "$DEST" ]; then
         restore_operator_config "$DEST" "$_OPCFG_TMP"
         rm -rf "$_OPCFG_TMP"
     fi
+    # THE EXCLUDES ABOVE MEAN TAR NEVER CREATES THESE PATHS, FRESH INSTALL INCLUDED — see
+    # run_state_ensure_dirs in lib/preserve-run-state.sh for why that is a real defect (root-owned
+    # orchestrations/logs, confirmed live 2026-09-04) and not just "nothing to restore yet". Created
+    # here, owned by the operator running this installer, before Docker or anything else can create
+    # one of them first under a different identity.
+    if [ -f "$INSTALLER_DIR/run-state-paths.json" ]; then
+        run_state_ensure_dirs "$INSTALLER_DIR/run-state-paths.json" "$DEST"
+    fi
     _ok "packaged $_PKG_REF into $DEST"
     ROOT="$DEST"
     CONFIG="$ROOT/orchestrations/config"

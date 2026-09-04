@@ -257,6 +257,52 @@ describe('install.sh --dest packages a ref into a NEW tree', () => {
       .toContain('/newproj/default');
   });
 
+  it('a FRESH install creates orchestrations/logs and orchestrations/agents/kb even though they are excluded from extraction', () => {
+    // THE ACTUAL DEFECT, confirmed live 2026-09-04 against a genuinely fresh install
+    // (pipeline-tests-8): run_state_exclude_args' --exclude means tar never creates these paths at
+    // all, fresh install included. Nothing else created orchestrations/logs either, so the FIRST
+    // thing to touch it was Docker's bind-mount for the dashboard's /logs-dir (pre-run-reset.sh's
+    // agent-monitor restart) — and since the Docker daemon runs as root, it auto-created the
+    // missing host directory as root:root. pre-run-reset.sh then could not create its own archive
+    // dir inside it and correctly refused to launch: "mkdir: cannot create directory
+    // '.../orchestrations/logs/archive': Permission denied".
+    //
+    // This is a FRESH install (no prior --dest into this destination) — the update-preserves-data
+    // tests above all seed the path with real data first; this one starts from nothing, which is
+    // exactly the case the old code assumed was "unaffected either way".
+    const repo = fixtureRepo();
+    const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'installer-freshdirs-dest-'));
+    const out = run(repo, ['--dest', dest, '--ref', 'v1.0-test', '--no-docker']);
+
+    for (const rel of ['orchestrations/logs', 'orchestrations/agents/kb']) {
+      const p = path.join(dest, rel);
+      expect(fs.existsSync(p), `${rel} does not exist after a fresh install:\n${out.slice(-800)}`).toBe(true);
+      expect(fs.statSync(p).isDirectory(), `${rel} exists but is not a directory`).toBe(true);
+    }
+
+    // NOT JUST EXISTS — WRITABLE BY THE INSTALLING USER. The bug was never "the path is missing" in
+    // the abstract; it is "whichever process gets there first owns it". Proving this ran as the
+    // current user, not root, is what proves the fix (not merely that SOMETHING eventually created
+    // it, which was already true via Docker before this fix).
+    const probe = path.join(dest, 'orchestrations/logs/.write-probe');
+    expect(() => fs.writeFileSync(probe, 'x')).not.toThrow();
+  });
+
+  it('a project glob path (orchestrations/projects/*/kb) is only created for a project that was actually extracted', () => {
+    // The glob must not fabricate a directory tree for a project that does not exist in this ref —
+    // that would be creating state for a project the operator never asked to install.
+    const repo = fixtureRepo();
+    const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'installer-freshdirs-glob-dest-'));
+    run(repo, ['--dest', dest, '--ref', 'v1.0-test', '--no-docker']);
+
+    // acme IS in the fixture ref (fixtureRepo() creates orchestrations/projects/acme) — its kb dir
+    // must exist.
+    expect(fs.existsSync(path.join(dest, 'orchestrations/projects/acme/kb'))).toBe(true);
+    // No OTHER project directory was fabricated.
+    const projectDirs = fs.readdirSync(path.join(dest, 'orchestrations/projects'));
+    expect(projectDirs.sort()).toEqual(['acme']);
+  });
+
   it('an operator edit to an engine-wide config file (e.g. model-pricing.json) also survives an update', () => {
     // Not just per-project config.env — "Not just this file" (operator, 2026-09-03). These five
     // are DIFFERENT in one respect: this codebase's own maintainers also add to them over time (a

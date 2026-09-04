@@ -26,7 +26,7 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { mkdtempSync, writeFileSync, rmSync, readFileSync, mkdirSync, copyFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, readFileSync, mkdirSync, copyFileSync, readdirSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -48,7 +48,34 @@ function dotEnv(): Record<string, string> {
 }
 
 const env = dotEnv();
-const BASE = (env.LANGFUSE_BASE_URL || 'http://localhost:3100').replace(/\/+$/, '');
+// THE FIRST CANDIDATE THAT ANSWERS, not a pinned port. This pinned :3100 — the compose default —
+// so it was red on every machine whose Langfuse is anywhere else, which is every isolated install.
+// Red for an environmental reason is noise that hides real failures: it sat here failing while the
+// actual tracing defect (no endpoint resolved at all, so no sessions ever appeared) went unnoticed.
+function backendAnswers(url: string): boolean {
+  try {
+    return execFileSync('curl', ['-s', '-o', '/dev/null', '-w', '%{http_code}', '-m', '3',
+      `${url}/api/public/health`], { encoding: 'utf8' }).trim().startsWith('2');
+  } catch { return false; }
+}
+const BASE = (() => {
+  const candidates: string[] = [];
+  if (env.LANGFUSE_BASE_URL) candidates.push(String(env.LANGFUSE_BASE_URL).replace(/\/+$/, ''));
+  try {
+    const root = '/home/bradleyjerome/projects/ai';
+    // Numerically: "pipeline-tests-9" sorts after "pipeline-tests-17" as a string.
+    for (const d of readdirSync(root)
+      .filter((x) => /^pipeline-tests-\d+$/.test(x))
+      .sort((a, b) => Number(b.split('-').pop()) - Number(a.split('-').pop()))) {
+      const f = join(root, d, '.pipeline-services-state.env');
+      if (!existsSync(f)) continue;
+      const m = readFileSync(f, 'utf8').match(/^OBS_LANGFUSE_PORT=(\d+)\s*$/m);
+      if (m) candidates.push(`http://localhost:${m[1]}`);
+    }
+  } catch { /* fall through to the declared default */ }
+  candidates.push('http://localhost:3100');
+  return candidates.find(backendAnswers) ?? candidates[0];
+})();
 const AUTH = 'Basic ' + Buffer.from(
   `${env.LANGFUSE_PUBLIC_KEY || ''}:${env.LANGFUSE_SECRET_KEY || ''}`).toString('base64');
 

@@ -204,13 +204,32 @@ if [ -n "$DEST" ]; then
             [ -n "$_excl" ] && _RUN_STATE_EXCLUDES+=("$_excl")
         done < <(run_state_exclude_args "$INSTALLER_DIR/run-state-paths.json")
     fi
+
+    # AN UPDATE MUST NEVER OVERWRITE AN OPERATOR'S EXISTING PROJECT CONFIG EITHER — a DIFFERENT
+    # mechanism from the excludes above, deliberately: a blanket exclude would also block a
+    # brand-new project's config.env from ever being extracted the first time a later ref adds
+    # one. Snapshot whatever already exists now, extract, then restore it over what the ref just
+    # wrote — so a first install (or a genuinely new project) is unaffected either way.
+    _OPCFG_TMP=""
+    if [ -f "$INSTALLER_DIR/operator-config-paths.json" ]; then
+        . "$INSTALLER_DIR/lib/preserve-operator-config.sh"
+        _OPCFG_TMP="$(mktemp -d)"
+        snapshot_operator_config "$DEST" "$INSTALLER_DIR/operator-config-paths.json" "$_OPCFG_TMP"
+    fi
+
     # The ${arr[@]+"${arr[@]}"} form, not bare "${arr[@]}": bash <4.4 (macOS ships 3.2 by default,
     # GPLv3 licensing) throws "unbound variable" under `set -u` expanding an empty array the plain
     # way. This form is safe on every bash this installer might run under.
     if ! git -C "$_GIT_ROOT" archive "$_PKG_REF" \
             | tar -x -C "$DEST" "${_RUN_STATE_EXCLUDES[@]+"${_RUN_STATE_EXCLUDES[@]}"}"; then
         _bad "packaging '$_PKG_REF' into $DEST failed"
+        [ -n "$_OPCFG_TMP" ] && rm -rf "$_OPCFG_TMP"
         exit 1
+    fi
+
+    if [ -n "$_OPCFG_TMP" ]; then
+        restore_operator_config "$DEST" "$_OPCFG_TMP"
+        rm -rf "$_OPCFG_TMP"
     fi
     _ok "packaged $_PKG_REF into $DEST"
     ROOT="$DEST"

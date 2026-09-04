@@ -43,10 +43,13 @@ function fixtureRepo() {
   const installerSrc = fs.readFileSync(path.join(REPO, INSTALLER_REL), 'utf8');
   fs.writeFileSync(path.join(dir, INSTALLER_REL), installerSrc);
   fs.chmodSync(path.join(dir, INSTALLER_REL), 0o755);
-  for (const f of ['container-runtime.sh', 'wait-for-health.sh', 'isolated-compose-identity.sh', 'generate-env-example.sh', 'preserve-run-state.sh']) {
+  for (const f of ['container-runtime.sh', 'wait-for-health.sh', 'isolated-compose-identity.sh', 'generate-env-example.sh', 'preserve-run-state.sh', 'preserve-operator-config.sh']) {
     fs.copyFileSync(path.join(REPO, 'orchestrations-installer/lib', f), path.join(dir, 'orchestrations-installer/lib', f));
   }
   fs.copyFileSync(path.join(REPO, 'orchestrations-installer/run-state-paths.json'), path.join(dir, 'orchestrations-installer/run-state-paths.json'));
+  fs.copyFileSync(path.join(REPO, 'orchestrations-installer/operator-config-paths.json'), path.join(dir, 'orchestrations-installer/operator-config-paths.json'));
+  fs.mkdirSync(path.join(dir, 'orchestrations/projects/acme'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'orchestrations/projects/acme/config.env'), 'JIRA_CODELINE_ROOT=/original/path\n');
   for (const f of ['provider-sets.json', 'llm-defaults.claude.json', 'env-vars.json']) {
     const src = path.join(REPO, 'orchestrations/config', f);
     if (fs.existsSync(src)) fs.copyFileSync(src, path.join(dir, 'orchestrations/config', f));
@@ -184,5 +187,41 @@ describe('install.sh --dest packages a ref into a NEW tree', () => {
     // A file that exists ONLY on this install, nowhere in git history — still there.
     expect(fs.existsSync(path.join(dest, 'orchestrations/logs/only-this-colleague-has-this.json')),
       'a file with no counterpart in the ref was deleted by the update').toBe(true);
+  });
+
+  it('AN UPDATE never overwrites an operator\'s existing project config.env either', () => {
+    // Found 2026-09-03: JIRA_CODELINE_ROOT is a per-INSTALL operator setting (e.g. pointed at a
+    // test copy of the codelines). A DIFFERENT mechanism from run-state-paths.json's excludes on
+    // purpose — proven by the second half of this test: a blanket exclude would ALSO block a
+    // brand-new project's config.env from ever being extracted, which must still work.
+    const repo = fixtureRepo();
+    const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'installer-update-opcfg-dest-'));
+
+    run(repo, ['--dest', dest, '--ref', 'v1.0-test', '--no-docker']);
+    expect(fs.readFileSync(path.join(dest, 'orchestrations/projects/acme/config.env'), 'utf8'))
+      .toContain('/original/path');
+
+    // The operator edits it locally — exactly what pointing at a test-copy codeline root is.
+    fs.writeFileSync(path.join(dest, 'orchestrations/projects/acme/config.env'),
+      'JIRA_CODELINE_ROOT=/operator/edited/test/path\n');
+
+    // A newer ref ships a DIFFERENT committed value at the same path, AND a whole new project.
+    fs.writeFileSync(path.join(repo, 'orchestrations/projects/acme/config.env'), 'JIRA_CODELINE_ROOT=/whatever/head/says/now\n');
+    fs.mkdirSync(path.join(repo, 'orchestrations/projects/newproj'), { recursive: true });
+    fs.writeFileSync(path.join(repo, 'orchestrations/projects/newproj/config.env'), 'JIRA_CODELINE_ROOT=/newproj/default\n');
+    addSecondVersion(repo);
+    const out = run(repo, ['--dest', dest, '--ref', 'v2.0-test', '--no-docker']);
+
+    // The operator's edit survived the update — the ref's own committed value did NOT win.
+    expect(fs.readFileSync(path.join(dest, 'orchestrations/projects/acme/config.env'), 'utf8'),
+      `operator's config.env edit was overwritten by the update:\n${out.slice(-800)}`)
+      .toContain('/operator/edited/test/path');
+
+    // A project that did not exist before IS still created by the update — this is what proves
+    // the mechanism is "preserve if existing", never a blanket exclude that would break this.
+    expect(fs.existsSync(path.join(dest, 'orchestrations/projects/newproj/config.env')),
+      'a brand-new project\'s config.env was never extracted at all').toBe(true);
+    expect(fs.readFileSync(path.join(dest, 'orchestrations/projects/newproj/config.env'), 'utf8'))
+      .toContain('/newproj/default');
   });
 });
